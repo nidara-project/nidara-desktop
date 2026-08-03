@@ -144,7 +144,7 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
     // that comes out — the switch itself is the state, so ask it.
     startBtn.connect("clicked", () => startRecording(selectedMode, audioSwitch.active, onClose))
 
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: PANEL_W.sm })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, width_request: PANEL_W.sm })
     box.append(modeRow)
     box.append(new Gtk.Separator())
     box.append(audioRow)
@@ -254,7 +254,7 @@ function buildCCDetail(onClose: () => void): Gtk.Widget {
     const stopBtn = NidaraButton({ label: t("widget.screenrecord.stop"), variant: "primary" })
     stopBtn.hexpand = true
     stopBtn.connect("clicked", () => stopRecording())
-    const recBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: PANEL_W.sm })
+    const recBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, width_request: PANEL_W.sm })
     recBox.append(makeElapsedLabel())
     recBox.append(stopBtn)
     stack.add_named(recBox, "recording")
@@ -351,7 +351,7 @@ function saveDirRow(): Gtk.ListBoxRow {
         })
     })
 
-    const trailing = new Gtk.Box({ spacing: 10, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
+    const trailing = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
     trailing.append(pathLabel)
     trailing.append(chooseBtn)
     return createRow(t("widget.screenrecord.settings.save-to"), "", trailing)

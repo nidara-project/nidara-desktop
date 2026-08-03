@@ -3,7 +3,7 @@ import app from "ags/gtk4/app"
 import status from "../../core/Status"
 import {
     NidaraClamp, NidaraScrolled, NidaraSidebar, NidaraWindow,
-    NIDARA_WINDOW_RADIUS as WINDOW_RADIUS,
+    NIDARA_WINDOW_RADIUS as WINDOW_RADIUS, ROW_H_SINGLE, ROW_H_DOUBLE,
 } from "../../../lib/nidara-kit"
 
 // Page Imports
@@ -148,7 +148,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     }
 
     // ── Header breadcrumb (title, with a clickable parent for subpages) ─────────
-    const breadcrumb = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER, css_classes: ["nidara-window-breadcrumb"] })
+    const breadcrumb = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER, css_classes: ["nidara-window-breadcrumb"] })
     const updateBreadcrumb = (pageId: string) => {
         let c = breadcrumb.get_first_child()
         while (c) { breadcrumb.remove(c); c = breadcrumb.get_first_child() }
@@ -289,7 +289,7 @@ export default function Settings(monitor: Gdk.Monitor) {
             row.append(new Gtk.Label({ label: item.pageLabel, css_classes: ["search-result-chip"] }))
             row.append(new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 14, opacity: 0.4, css_classes: ["nd-icon"] }))
 
-            const lbr = new Gtk.ListBoxRow({ css_classes: ["nidara-row", "search-result-row"] })
+            const lbr = new Gtk.ListBoxRow({ css_classes: ["nidara-row", item.subtitle ? ROW_H_DOUBLE : ROW_H_SINGLE, "search-result-row"] })
             lbr.set_child(row)
             ;(lbr as any)._targetPageId = item.pageId
             searchResultsList.append(lbr)

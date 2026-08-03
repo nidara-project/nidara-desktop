@@ -28,11 +28,11 @@ export default function DockPage() {
         label: t("settings.dock.side-autohide-note"),
         css_classes: ["nidara-row-subtitle"],
         halign: Gtk.Align.START,
-        margin_start: 10,
+        margin_start: 20,
         // Footnote binds to the card above (NidaraList box is spacing:0); 8px = the
         // title→card attachment gap. See design-system.md.
         margin_top: 8,
-        margin_bottom: 6,
+        margin_bottom: 8,
         wrap: true,
         visible: dockSettings.position === 'left' || dockSettings.position === 'right',
     })

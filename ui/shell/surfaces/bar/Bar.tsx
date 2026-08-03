@@ -8,7 +8,8 @@ import { MorphRevealer } from "../../common/MorphRevealer"
 import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
 
-import SquircleContainer from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_INSET } from "../../common/SquircleContainer"
+import { RADIUS } from "../../../lib/tokens"
 import { CAPSULE_BORDER } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import appService from "../../core/AppService"
@@ -101,13 +102,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Measurement cache — populated after first layout; used to cap visible icons
   let cachedMaxIcons: number | null = null
   const capsuleRefs = new Map<string, Gtk.Widget>()
-  const expansionInner = new Gtk.Box({ margin_top: 10, margin_bottom: 10, margin_start: 14, margin_end: 14 })
+  const expansionInner = new Gtk.Box({ margin_top: 8, margin_bottom: 8, margin_start: 12, margin_end: 12 })
   // Pop animation (grow toward the anchor + fade) shared by every overlay —
   // the wrapper is the variable, so all the existing alignment/margin/region
   // code below operates on it transparently (animateLayout:false = Gtk.Bin).
   const expansionCapsule = new ScaleRevealer(SquircleContainer({
       child: expansionInner, gloss: true, useShellOpacity: true,
-      borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, radius: 20,
+      borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, radius: RADIUS.lg,
       css_classes: ["bar-expansion-panel"],
   }), { ...OVERLAY_POP, pivot: "top-center" })   // grows down from its bar capsule
   expansionCapsule.valign = Gtk.Align.START
@@ -458,8 +459,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       }
       // A flush panel reaches the capsule's inner edge horizontally (its scroll bar
       // has to live there); it keeps the vertical breathing room either way.
-      expansionInner.margin_start = flush ? 0 : 14
-      expansionInner.margin_end = flush ? 0 : 14
+      // GLASS_INSET, not 0: the capsule's VISIBLE edge is that far inside its own
+      // allocation (drawSquircle paints the glass in from the rect), so flush-to-rect
+      // hangs the content outside the shape — and puts a scroll lane's pill 2px nearer
+      // the curve than its clearance assumes, which is what clipped the clipboard bar.
+      expansionInner.margin_start = flush ? GLASS_INSET : 14
+      expansionInner.margin_end = flush ? GLASS_INSET : 14
       // Direct pill→pill switch (one click, no dismissal in between): the
       // capsule is still fully revealed at the PREVIOUS anchor's position, so
       // snap it to the hidden state first — otherwise the new content paints
@@ -626,7 +631,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (!w) continue
       const hasExpand = !!w.buildBarExpanded
       const hasCCDetail = !!w.buildCCDetail
-      const row = new Gtk.Box({ spacing: 10 })
+      const row = new Gtk.Box({ spacing: 12 })
       row.append(new Gtk.Image({ gicon: w.icon, pixel_size: 16, css_classes: ["nd-icon"] }))
       row.append(new Gtk.Label({ label: w.name, halign: Gtk.Align.START, hexpand: true }))
       const btn = new Gtk.Button({ child: row, css_classes: ["nidara-menu-row"], hexpand: true })

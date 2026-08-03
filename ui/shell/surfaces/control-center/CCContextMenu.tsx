@@ -6,6 +6,7 @@ import registry from "../../widgets/index"
 import Icons from "../../core/Icons"
 import { t } from "../../core/i18n"
 import SquircleContainer from "../../common/SquircleContainer"
+import { RADIUS } from "../../../lib/tokens"
 import { menuRow, menuSeparator } from "../../common/MenuRow"
 
 // Right-click context menu for CC tiles.
@@ -61,12 +62,12 @@ export function createCCContextMenu(opts: CCContextMenuOpts = {}): CCContextMenu
     const rows = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 2,
-        margin_top: 9, margin_bottom: 9, margin_start: 9, margin_end: 9,
+        margin_top: 8, margin_bottom: 8, margin_start: 12, margin_end: 12,
     })
 
     const card = SquircleContainer({
         child: rows,
-        radius: 20,
+        radius: RADIUS.lg,
         gloss: true,
         // Near-opaque: GTK can't blur a widget against sibling content on the same
         // surface, so the menu must occlude the tiles beneath it. useShellOpacity

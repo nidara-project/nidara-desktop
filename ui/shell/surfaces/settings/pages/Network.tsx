@@ -5,7 +5,7 @@ import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as Net from "../../../core/NetworkService"
 import type { VpnProfile } from "../../../core/NetworkService"
-import { NidaraButton } from "../../../../lib/nidara-kit"
+import { NidaraButton, ROW_H_SINGLE } from "../../../../lib/nidara-kit"
 import { attachTooltip } from "../../../common/Tooltip"
 import { safeDisconnect } from "../../../core/signals"
 
@@ -167,8 +167,8 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
 
         const popBox = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
-            spacing: 10,
-            margin_top: 14, margin_bottom: 14,
+            spacing: 12,
+            margin_top: 12, margin_bottom: 12,
             margin_start: 16, margin_end: 16,
             width_request: 260,
         })
@@ -402,7 +402,7 @@ export default function NetworkPage(nav?: SettingsNav) {
             css_classes: ["nidara-list-title"],
             halign: Gtk.Align.START,
             hexpand: true,
-            margin_start: 10,
+            margin_start: 20,
         })
         headerBox.append(groupTitleLabel)
         headerBox.append(scanBtn)
@@ -461,7 +461,7 @@ export default function NetworkPage(nav?: SettingsNav) {
             // visible whenever Wi-Fi is on — otherwise there's no way to scan for
             // the first network. Show an empty placeholder when nothing is found.
             if (aps.length === 0) {
-                const emptyRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
+                const emptyRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row", ROW_H_SINGLE] })
                 emptyRow.set_child(new Gtk.Label({
                     label: t("settings.network.ap.empty"),
                     css_classes: ["nidara-row-subtitle"],
@@ -516,7 +516,7 @@ export default function NetworkPage(nav?: SettingsNav) {
 
         Net.listVpnProfiles().then(profiles => {
             if (profiles.length === 0) {
-                const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
+                const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row", ROW_H_SINGLE] })
                 row.set_child(emptyVpn)
                 vpnList.append(row)
             } else {

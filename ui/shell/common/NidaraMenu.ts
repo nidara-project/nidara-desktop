@@ -65,7 +65,7 @@ export function renderMenuModel(
     })
 
     const makeRow = (label: string, onClick: () => void): Gtk.Button => {
-        const inner = new Gtk.Box({ spacing: 10 })
+        const inner = new Gtk.Box({ spacing: 12 })
         inner.append(new Gtk.Label({
             label, halign: Gtk.Align.START, hexpand: true, xalign: 0, ellipsize: 3, max_width_chars: 34,
             css_classes: ["nidara-menu-label"],

@@ -92,7 +92,7 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
     const ctrlBox = new Gtk.Box({ spacing: 12, halign: Gtk.Align.CENTER, hexpand: true })
     ctrlBox.append(prev); ctrlBox.append(play); ctrlBox.append(next)
 
-    const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3, valign: Gtk.Align.CENTER, hexpand: true })
+    const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, valign: Gtk.Align.CENTER, hexpand: true })
     textBox.append(titleLabel)
     textBox.append(artistLabel)
 
@@ -230,7 +230,7 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
 
     const root = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL, spacing: 12, hexpand: true,
-        margin_top: 6, margin_bottom: 6, margin_start: 6, margin_end: 6,
+        margin_top: 8, margin_bottom: 8, margin_start: 8, margin_end: 8,
     })
     if (widthRequest > 0) root.set_size_request(widthRequest, -1)
     // Order: artwork+title → progress (with times) → transport controls.

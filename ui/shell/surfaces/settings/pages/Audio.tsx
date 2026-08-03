@@ -17,13 +17,13 @@ function createDeviceRow(
 ): Gtk.ListBoxRow {
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 10,
+        spacing: 12,
         margin_start: 16, margin_end: 16,
-        margin_top: 14, margin_bottom: 14,
+        margin_top: 12, margin_bottom: 12,
     })
 
     // ── Header ────────────────────────────────────────────────────────────────
-    const header = new Gtk.Box({ spacing: 10 })
+    const header = new Gtk.Box({ spacing: 12 })
 
     header.append(new Gtk.Image({
         gicon: isMic ? Icons.mic : Icons.speaker,
@@ -103,13 +103,13 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
     // slider underneath.
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 10,
+        spacing: 12,
         margin_start: 16, margin_end: 16,
-        margin_top: 14, margin_bottom: 14,
+        margin_top: 12, margin_bottom: 12,
     })
 
     // ── Header ────────────────────────────────────────────────────────────────
-    const header = new Gtk.Box({ spacing: 10 })
+    const header = new Gtk.Box({ spacing: 12 })
     // Real app icon — NO nd-icon: that class recolours/inverts monochrome UI glyphs,
     // which mangles a full-colour app icon. Sized to match the device leading icon.
     header.append(new Gtk.Image({ icon_name: iconName, pixel_size: 24, valign: Gtk.Align.CENTER }))

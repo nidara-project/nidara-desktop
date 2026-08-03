@@ -37,7 +37,7 @@ export interface MenuRowOpts {
 const CHECK_KEY = "__nidaraMenuCheck"
 
 export function menuRow(opts: MenuRowOpts): Gtk.Button {
-    const inner = new Gtk.Box({ spacing: 10, halign: opts.center ? Gtk.Align.CENTER : Gtk.Align.FILL, hexpand: true })
+    const inner = new Gtk.Box({ spacing: 12, halign: opts.center ? Gtk.Align.CENTER : Gtk.Align.FILL, hexpand: true })
     if (opts.icon) {
         inner.append(new Gtk.Image({ gicon: opts.icon, pixel_size: 15, css_classes: opts.appIcon ? [] : ["nd-icon"], valign: Gtk.Align.CENTER }))
     }

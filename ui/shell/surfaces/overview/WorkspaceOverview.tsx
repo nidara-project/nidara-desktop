@@ -2,6 +2,7 @@ import { Gtk, Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import status, { ISLAND_OVERVIEW } from "../../core/Status"
 import SquircleContainer from "../../common/SquircleContainer"
+import { RADIUS } from "../../../lib/tokens"
 import { t } from "../../core/i18n"
 import { createSchematicMap } from "../../common/WorkspaceSchematic"
 import hs from "../../core/HyprlandState"
@@ -13,7 +14,7 @@ const WO_PREVIEW_WIDTH = 300
 // Glass recipe for the island container — exported so the bar's MorphRevealer
 // paints its interpolated Cairo clone with the exact same params and the
 // handoff at the morph's endpoints is pixel-perfect (see MorphRevealer.ts).
-export const WO_GLASS = { radius: 64, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
+export const WO_GLASS = { radius: RADIUS.xl, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
 
 export default function WorkspaceOverview() {
     const overview = new Gtk.Box({

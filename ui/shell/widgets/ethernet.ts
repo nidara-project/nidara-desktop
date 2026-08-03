@@ -60,7 +60,7 @@ function buildInfoPanel(): Gtk.Widget {
     const updateAll = () => { iface.update(); state.update(); ip.update(); speed.update() }
     updateAll()
 
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, hexpand: true, margin_top: 4 })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, hexpand: true, margin_top: 4 })
     box.append(iface.row)
     box.append(state.row)
     box.append(ip.row)

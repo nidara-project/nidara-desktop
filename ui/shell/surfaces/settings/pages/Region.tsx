@@ -49,7 +49,7 @@ export default function RegionPage() {
 
     const previewBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 6,
+        spacing: 8,
         halign: Gtk.Align.CENTER,
         css_classes: ["region-preview-box"],
         margin_bottom: 8,

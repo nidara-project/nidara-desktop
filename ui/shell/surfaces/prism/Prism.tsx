@@ -6,6 +6,7 @@ import Gio from "gi://Gio"
 import appService, { AppData } from "../../core/AppService"
 import status from "../../core/Status"
 import SquircleContainer from "../../common/SquircleContainer"
+import { RADIUS } from "../../../lib/tokens"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
@@ -54,7 +55,7 @@ function FileResultRow(uri: string, displayName: string, mimeType: string): Gtk.
 }
 
 function SeparatorRow(label: string): Gtk.ListBoxRow {
-    const box = new Gtk.Box({ margin_start: 14, margin_top: 4, margin_bottom: 2 })
+    const box = new Gtk.Box({ margin_start: 12, margin_top: 4, margin_bottom: 2 })
     box.append(new Gtk.Label({ label, css_classes: ["prism-section-label"], halign: Gtk.Align.START }))
     const row = new Gtk.ListBoxRow({ child: box, css_classes: ["prism-section-row"], selectable: false, activatable: false, focusable: false })
     return row
@@ -87,7 +88,7 @@ export default function Prism() {
     contentBox.append(searchContainer)
     contentBox.append(revealer)
 
-    const prismWrapper = SquircleContainer({ child: contentBox, radius: 32, n: 4.5, css_classes: ["prism-wrapper"], useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.15 } })
+    const prismWrapper = SquircleContainer({ child: contentBox, radius: RADIUS.xl, n: 4.5, css_classes: ["prism-wrapper"], useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.15 } })
 
     const clearList = () => {
         let child = resultsList.get_first_child()

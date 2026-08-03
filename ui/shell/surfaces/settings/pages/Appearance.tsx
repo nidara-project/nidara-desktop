@@ -140,7 +140,7 @@ export default function AppearancePage() {
     const fcGroup = listGroup(t("settings.appearance.group.theme"))
 
     // Accent Color Picker
-    const accentPicker = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
+    const accentPicker = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
     const accentButtons: Record<string, Gtk.Button> = {}
 
     Object.keys(ACCENT_PALETTE).forEach(key => {

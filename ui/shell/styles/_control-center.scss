@@ -302,7 +302,7 @@
     font-weight: $fw-bold;
     padding: 1px 6px;
     border-radius: 12px;
-    margin-left: 6px;
+    margin-left: $space-2;
 }
 
 /* Notification body — a touch more opaque than the shared dim token, since the glass
@@ -316,10 +316,13 @@
 .nc-group-ctrl-header {
     /* Background/border/radius now painted by SquircleContainer (shellOpacity, Cairo);
        only the outer margins remain here. Padding moved to the inner box (margin_*). */
-    margin-top: 12px;
-    margin-bottom: 6px;
-    margin-left: 8px;
-    margin-right: 8px;
+    // Binds DOWN to the group it labels: 8px is the shell-wide attachment gap
+    // (same as .nidara-list-title's margin-bottom), the 12px above is the
+    // group↔group gap. See design-system.md "Section headers bind DOWN".
+    margin-top: $space-3;
+    margin-bottom: $space-2;
+    margin-left: $space-2;
+    margin-right: $space-2;
 }
 
 .nc-group-header-name {

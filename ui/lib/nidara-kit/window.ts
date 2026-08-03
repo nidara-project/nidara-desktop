@@ -2,16 +2,16 @@ import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import { NidaraScrolled } from "./scrolled"
 import { NidaraSplitView, type NidaraSplitViewResult } from "./split-view"
+import { RADIUS } from "../tokens"
 
 /**
- * Chrome radii as numbers, mirroring the CSS tokens: the window is `glass(floating)`
- * = `--nidara-radius-lg`, the sidebar capsule is `material-card` = `--nidara-radius-md`.
- * They live here because Cairo and NidaraScrolled's geometry cannot read a CSS var —
- * a corner that clips has to be known in px. Move these if the tokens move; the
- * duplication is on the list for the design-token audit (tech-debt #47).
+ * Chrome radii, named for what they dress: the window is `glass(floating)` =
+ * `RADIUS.lg`, the sidebar capsule is `material-card` = `RADIUS.md`. The numbers
+ * themselves live in `lib/tokens.ts` (mirrored by `--nidara-radius-*`), which is
+ * where the ladder is documented — these are aliases, not a second source.
  */
-export const NIDARA_WINDOW_RADIUS = 24
-export const NIDARA_CARD_RADIUS = 16
+export const NIDARA_WINDOW_RADIUS = RADIUS.lg
+export const NIDARA_CARD_RADIUS = RADIUS.md
 
 export interface NidaraWindowOpts {
     app: any

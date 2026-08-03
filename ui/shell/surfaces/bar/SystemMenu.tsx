@@ -6,6 +6,7 @@ import status from "../../core/Status"
 import Icons from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import SquircleContainer from "../../common/SquircleContainer"
+import { RADIUS } from "../../../lib/tokens"
 import { t } from "../../core/i18n"
 
 // System menu dropdown (About / Settings / Lock / Suspend / Logout / Restart / Shutdown)
@@ -31,7 +32,12 @@ export function SystemMenuOverlay() {
   const menuBox = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
     spacing: 2,
-    margin_top: 10, margin_bottom: 10, margin_start: 10, margin_end: 10,
+    // The dense-panel padding (8 / 12), NOT a symmetric one: the row's hover fill
+    // spans this box, so this margin IS the gap between the hover and the card's
+    // edge. The bar's window menu gets 12 horizontally from `expansionInner`, and
+    // this menu had an idiosyncratic symmetric 10 that left its hover half as far
+    // from the glass (6px vs 12px, measured) — user-caught 2026-08-03.
+    margin_top: 8, margin_bottom: 8, margin_start: 12, margin_end: 12,
   })
 
   const makeRow = (ico: Gio.FileIcon, txt: string, _danger: boolean, cmd: () => void) => {
@@ -114,14 +120,18 @@ export function SystemMenuOverlay() {
     showPage(menuBox)
   })
 
-  const confirmBtnRow = new Gtk.Box({ spacing: 6, homogeneous: true, margin_top: 4 })
+  const confirmBtnRow = new Gtk.Box({ spacing: 8, homogeneous: true, margin_top: 4 })
   confirmBtnRow.append(confirmCancelBtn)
   confirmBtnRow.append(confirmActionBtn)
 
   const confirmBox = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
-    spacing: 10,
-    margin_top: 16, margin_bottom: 14, margin_start: 10, margin_end: 10,
+    spacing: 12,
+    // Horizontal matches menuBox: the confirm page swaps INTO the same card, so its
+    // content sits on the same axis as the menu rows it replaces. Vertical is
+    // symmetric — the 16/14 this used to be was a 2px optical nudge nobody wrote
+    // down, and the token sweep turned it into 16/12, a nudge nobody chose.
+    margin_top: 16, margin_bottom: 16, margin_start: 12, margin_end: 12,
     width_request: 210,
   })
   confirmBox.append(confirmIcon)
@@ -143,7 +153,7 @@ export function SystemMenuOverlay() {
 
   const squircleWrapper = SquircleContainer({
     child: pageHost,
-    radius: 24,
+    radius: RADIUS.lg,
     gloss: true,
     useShellOpacity: true,
     borderColor: { r: 1, g: 1, b: 1, a: 0.05 },

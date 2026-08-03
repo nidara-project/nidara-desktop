@@ -2,6 +2,7 @@ import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import SquircleContainer, { Shape } from "../../common/SquircleContainer"
+import { RADIUS } from "../../../lib/tokens"
 import { WidgetSize } from "./Types"
 
 /**
@@ -38,7 +39,7 @@ export function resolveIslandShape(size: WidgetSize, width: number, height: numb
         return { shape: Shape.DOCK_PILL, radius: height / 2 }
     } else {
         // 2x2: Squircle with Dock profile
-        return { shape: Shape.SQUIRCLE, radius: 32 }
+        return { shape: Shape.SQUIRCLE, radius: RADIUS.xl }
     }
 }
 

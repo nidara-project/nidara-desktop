@@ -96,7 +96,7 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
     const header = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, halign: Gtk.Align.CENTER })
     header.append(artDa); header.append(title); header.append(artist)
 
-    const controls = new Gtk.Box({ halign: Gtk.Align.CENTER, spacing: 18, margin_top: 4 })
+    const controls = new Gtk.Box({ halign: Gtk.Align.CENTER, spacing: 16, margin_top: 4 })
     const prevImg = new Gtk.Image({ gicon: Icons.skipBack,    pixel_size: 18 , css_classes: ["nd-icon"] })
     const playImg = new Gtk.Image({ gicon: Icons.play,        pixel_size: 18 , css_classes: ["nd-icon"] })
     const nextImg = new Gtk.Image({ gicon: Icons.skipForward, pixel_size: 18 , css_classes: ["nd-icon"] })
@@ -185,7 +185,7 @@ function buildWideContent(state: MediaState): Gtk.Widget {
 
     const row = new Gtk.Box({
         orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 10,
+        spacing: 12,
         halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER,
         hexpand: true, margin_start: 4, margin_end: 4,
     })

@@ -1,6 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import { drawSquircle, hexToFloatRgb } from "./DrawingUtils"
 import Theme from "../core/ThemeManager"
+import { RADIUS } from "../../lib/tokens"
 
 export enum Shape {
     SQUIRCLE,
@@ -77,6 +78,19 @@ interface SquircleContainerProps {
     getFill?: () => number
 }
 
+/**
+ * How far inside the widget rect the glass is actually painted, on every side —
+ * `drawSquircle`'s `inset`, the buffer that keeps the border stroke off the
+ * allocation edge.
+ *
+ * ⚠️ **The VISIBLE edge of a capsule is this far in from its allocation**, so a child
+ * laid out flush to the widget rect overhangs the glass by `GLASS_INSET`. Anything
+ * that has to line up with the curve — a flush panel's content margin, a scroll
+ * lane's corner clearance — must subtract it, or it silently sits outside the shape.
+ * That is what put the clipboard scroll pill on the panel's curve (2026-08-03).
+ */
+export const GLASS_INSET = 2.0
+
 /** Resolves a shape's actual paint params for an allocated size. CIRCLE/CAPSULE
  *  always collapse to a perfect arc sized to the smaller dimension (the curve
  *  must follow the shape's own footprint, not a caller's guessed radius);
@@ -97,7 +111,7 @@ export function resolveDrawParams(
 
 export default function SquircleContainer({
     child,
-    radius = 24,
+    radius = RADIUS.lg,
     gloss = false,
     css_classes = [],
     hexpand = false,
@@ -138,7 +152,7 @@ export default function SquircleContainer({
     })
 
     let isHovered = false
-    const techInset = inset !== undefined ? inset : 2.0
+    const techInset = inset !== undefined ? inset : GLASS_INSET
 
     if (useShellOpacity || chrome) {
         Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })

@@ -57,11 +57,11 @@ function buildAppIconDetailPage(app: AppData, syncRow: () => void): Gtk.Widget {
 function buildAppRow(app: AppData, nav: SettingsNav): Gtk.ListBoxRow {
     const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
     const box = new Gtk.Box({
-        spacing: 14,
-        margin_start: 14,
+        spacing: 16,
+        margin_start: 16,
         margin_end: 12,
-        margin_top: 10,
-        margin_bottom: 10,
+        margin_top: 12,
+        margin_bottom: 12,
     })
 
     const canonical = appService.getCanonicalIconName(app.icon ?? "")

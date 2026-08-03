@@ -2037,30 +2037,36 @@ Not a bug list — conscious tradeoffs to pay down opportunistically:
 3. **Don't refactor as a side-effect of an unrelated change** — drive-by fixes tend to be
    partial and create drift.
 
-### 47. The design tokens drifted — spacing and radii are several ladders, not one (2026-08-03) — NEXT SESSION
-Raised by the user while reviewing the scroll bar: *"parece que hemos puesto un valor distinto
-cada vez que hemos hecho algo, y ahora no cuadra en todos los sitios"* — and the specific catch
-was the bar-expansion capsule at radius **20** while windows are **24**. Correct on both counts.
-Measured, so the audit starts from data rather than a re-scan:
+### 47. Design-token audit — RADII DONE, TSX spacing still open (2026-08-03)
+Raised by the user reviewing the scroll bar: *"parece que hemos puesto un valor distinto cada
+vez que hemos hecho algo"* — the specific catch was the bar-expansion capsule at radius **20**
+while windows are **24**. Correct.
 
-**Radii — two unrelated ladders.** The CSS tokens are `xs 6 / sm 10 / md 16 / lg 24` (already
-not a clean 4-step: 6 and 10 are half-steps). The Cairo literals passed to
-`SquircleContainer`/`drawSquircle` are a *different* set — `16 / 20 / 24 / 32 / 64` — and two of
-them have **no token at all**: `20` in `surfaces/bar/Bar.tsx` (the expansion capsule, i.e. the
-clipboard/battery/screenshot panels) and `surfaces/control-center/CCContextMenu.tsx`. `24` in
-`SystemMenu.tsx` + `IslandGrid.tsx`, `32` in nine places (all four islands, NC capsules, app
-grid, Prism, BaseIsland), `64` in `WorkspaceOverview.tsx`, `16` in one NC header.
+**✅ Radii — closed.** One ladder in `ui/lib/tokens.ts` mirrored by `--nidara-radius-*`; zero
+radius literals left in TS/TSX; `64 → 32` (Workspace Overview), `20 → 24` (bar expansion + CC
+context menu), new `xl: 32`. Full rationale — including why the ladder is deliberately NOT on
+the 4px spacing scale and why `sm` is derived from the card inset — is in `design-system.md`
+under "Radii — ONE ladder".
 
-**Spacing — the 4px scale (`$space-1..10`, `_base.scss:133`) is declared but not enforced.**
-Off-scale pixel values in `styles/*.scss`, by frequency: `6px` ×20, `14px` ×11, `10px` ×8,
-`7px` ×4, `5px` ×7, `3px` ×7, `18px` ×2, `22px` ×2. (`1px`/`2px` ×14 are legitimate hairlines
-and borders — exclude them.) Note the shape of the offenders: almost all are *a multiple of 4
-plus 2*, i.e. a half-step that crept in one component at a time. `14` in particular is load-
-bearing right now — it is `Bar.tsx`'s expansion inset and `PANEL_PAD` in `widgets/clipboard.ts`,
-which must move together.
+**✅ Spacing, SCSS side — closed.** Only 8 of 43 margins were off-scale; swept to `$space-*`.
+Two size drifts fixed (`.agent-reset/.agent-send` 30→28, `.bar-popover-value` 38→40).
 
-**Scope for the audit:** decide one radius ladder that covers both CSS and Cairo (the Cairo
-sizes are large surfaces, the CSS ones are controls — they may legitimately be two *named*
-tiers of one scale, but they must be named and shared, not literals); then sweep the off-scale
-spacing. Do it as a single pass with the user, not opportunistically — the values are currently
-consistent *with each other* in several places, so half a sweep is worse than none.
+**🔴 Still open: the TSX side — 164 off-scale `margin_*`/`spacing` values across 30+ files.**
+`6 ×33, 10 ×66, 14 ×44, 18 ×7, 22 ×5` — every one of them `4n+2`, i.e. a complete second
+ladder used ~155 times, not noise. **Do not sweep it as a cleanup**: it changes the density of
+the entire shell at once, and it cannot be verified in one look.
+
+The finding that should drive it, and the reason the SCSS sweep deliberately left most padding
+alone: **most of these are not spacing at all, they are arithmetic toward a target box height.**
+`nidara-kit/row.ts` is the case that matters — the universal row is `margin_start/end: 16`
+(on scale) and `margin_top/bottom: 14` (off), and 14 is what lands a `$fs-small` row at ~48px,
+the standard list-row height. Same shape as `button.nidara-btn`'s `padding: 5px 14px`, whose own
+comment says it exists to hit the NidaraButton box height, and as the switch's `slider { margin:
+3px }` (24px trough − 18px slider). **The token for that layer is the HEIGHT (24 compact / 32
+control / ~48 row), not the padding.**
+
+**So the next pass settles the row/control heights FIRST**, then sweeps the ~155 remaining
+literals against those, rather than against an abstract "multiple of 4" that would silently
+restyle every row in Settings. Untouched on purpose and still correct: optical nudges on text
+(`_bar.scss` `margin-top: 5px`, `.rec-elapsed-big` 6/2) and derived sizes
+(`.accent-circle-btn` 30 = 24 swatch + 3+3 border).

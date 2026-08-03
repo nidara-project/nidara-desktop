@@ -67,11 +67,17 @@ export interface NidaraScrolledOpts {
     /** Keep the bar permanently visible instead of fading after idle. */
     alwaysVisible?: boolean
     /** Corner radius, px, of the surface whose edge this view sits flush against —
-     *  the token, not a guess: `--nidara-radius-lg` 24 for a window, `-md` 16 for a
-     *  card, 20 for a bar-expansion capsule. It sets how far the pill stops short of
+     *  the token, not a guess: `RADIUS.lg` (24) for a window and for a bar-expansion
+     *  capsule, `RADIUS.md` (16) for a card. It sets how far the pill stops short of
      *  the ends so a rounded corner cannot clip it. Default 0 = square edge, or a
      *  view that does not reach the surface's own edge. */
     cornerRadius?: number
+    /** How far the view is ALREADY indented from that corner, px — a panel that pads
+     *  its content has spent part of the clearance already, and without this the
+     *  corner allowance double-counts and the pill floats in dead space. Measure from
+     *  the VISIBLE glass edge (a Cairo `SquircleContainer` insets its shape 2px from
+     *  the widget rect). Default 0 = the view starts at the corner. */
+    cornerInset?: number
     /** Extra classes on the ScrolledWindow. */
     cssClasses?: string[]
 }
@@ -99,19 +105,35 @@ const CORNER_CLEAR = 4
 const EDGE_CLEAR = 4
 
 /**
- * How much height a corner of radius `r` eats at the pill's distance from the wall.
+ * Where the pill may start, given a corner of radius `r` and how far the view
+ * already sits inside that corner.
  *
  * A rounded corner clips whatever is drawn inside its arc, and the pill runs at
  * EDGE_CLEAR from the trailing wall, so the arc reaches
- * `r - sqrt(r² - (r - EDGE_CLEAR)²)` px in from the end of the lane. 4px covers a
- * card (radius-sm/md) and is wrong for a window: `glass(floating)` is radius-lg =
- * 24px, which eats 10.7px — reported as the Settings bar being cut off at the bottom.
- * Ceiled, and never below the 4px floor, which is also the value for a square edge.
+ * `r - sqrt(r² - (r - EDGE_CLEAR)²)` px in from the end of the lane — 10.7px for a
+ * radius-lg (24) corner, which is what cut off the Settings bar at the bottom.
+ *
+ * ⚠️ That expression is the point of TANGENCY, not a clearance: stopping exactly
+ * there leaves the pill's corner kissing the curve. It read as fine on windows only
+ * because a window's visible corner is drawn by Hyprland at `rounding_power 3.2` —
+ * a SQUIRCLE, which is squarer than a circle and leaves slack the maths never
+ * promised. Against a true circular arc there is none, and you see it: the bar
+ * expansion panel paints with `perfect: true` (real arcs, see drawSquircle) and
+ * going radius 20 → 24 in the token audit put the clipboard pill 1.27px off the
+ * curve — user-reported, 2026-08-03. So the pill keeps CORNER_CLEAR from the curve
+ * exactly as it keeps EDGE_CLEAR from the wall: one rule, every boundary.
+ *
+ * `inset` is what the VIEW is already indented from that corner (a panel that pads
+ * its content, e.g. the bar expansion's 10px minus the 2px glass inset = 8). Without
+ * it the clearance double-counts and the pill floats in dead space.
  */
-const cornerClearFor = (r: number) =>
+const cornerClearFor = (r: number, inset = 0) =>
     r <= EDGE_CLEAR
         ? CORNER_CLEAR
-        : Math.max(CORNER_CLEAR, Math.ceil(r - Math.sqrt(r * r - (r - EDGE_CLEAR) ** 2)))
+        : Math.max(
+            CORNER_CLEAR,
+            Math.ceil(r - Math.sqrt(r * r - (r - EDGE_CLEAR) ** 2)) + CORNER_CLEAR - inset,
+        )
 
 /** Vertical pill, in the lane's own coordinates. */
 function pillPath(cr: any, x: number, y: number, w: number, h: number) {
@@ -152,6 +174,7 @@ export function NidaraScrolled(opts: NidaraScrolledOpts): NidaraScrolledResult {
             lane,
             alwaysVisible: opts.alwaysVisible,
             cornerRadius: opts.cornerRadius,
+            cornerInset: opts.cornerInset,
         }),
         scrolled,
     }
@@ -165,11 +188,11 @@ export function NidaraScrolled(opts: NidaraScrolledOpts): NidaraScrolledResult {
  */
 export function attachScrollBar(
     scrolled: Gtk.ScrolledWindow,
-    opts: { lane?: number, alwaysVisible?: boolean, cornerRadius?: number } = {},
+    opts: { lane?: number, alwaysVisible?: boolean, cornerRadius?: number, cornerInset?: number } = {},
 ): Gtk.Widget {
     const lane = opts.lane ?? 12
     const alwaysVisible = opts.alwaysVisible ?? false
-    const cornerClear = cornerClearFor(opts.cornerRadius ?? 0)
+    const cornerClear = cornerClearFor(opts.cornerRadius ?? 0, opts.cornerInset ?? 0)
     // EXTERNAL, always: the point is that GTK never creates a scrollbar widget, so
     // there is no node left to grow toward the pointer.
     scrolled.vscrollbar_policy = Gtk.PolicyType.EXTERNAL

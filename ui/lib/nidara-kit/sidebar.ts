@@ -65,7 +65,7 @@ export function NidaraSidebar(
         const content = new Gtk.Box({
             spacing: 12,
             css_classes: ["nidara-sidebar-item"],
-            margin_start: 14, margin_end: 14,
+            margin_start: 12, margin_end: 12,
             valign: Gtk.Align.CENTER,
         })
         if (item.icon) {

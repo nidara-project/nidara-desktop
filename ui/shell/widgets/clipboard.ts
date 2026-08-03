@@ -3,9 +3,11 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { squircleThumb } from "../common/DrawingUtils"
+import { GLASS_INSET } from "../common/SquircleContainer"
 import { menuRow, menuSeparator } from "../common/MenuRow"
 import IconButton from "../common/IconButton"
 import { NidaraScrolled } from "../../lib/nidara-kit"
+import { RADIUS } from "../../lib/tokens"
 import { PANEL_W } from "../common/widget-kit"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
@@ -69,7 +71,14 @@ const MAX_ROWS = 200
 // What Bar.tsx gives every other expansion panel. We take it over (barExpandedFlush)
 // so the scroll can reach the panel edge, then re-apply it to the content — keep the
 // two in step or this panel drifts from every other one.
-const PANEL_PAD = 14
+const PANEL_PAD = 12
+
+// How far this panel's content already starts inside the capsule's VISIBLE corner:
+// Bar.tsx gives `expansionInner` a 10px top margin, measured from the widget rect,
+// and the glass itself is painted GLASS_INSET in from that rect. Feeds the scroll's
+// corner clearance — keep in step with Bar.tsx's margin if it moves.
+const PANEL_TOP_MARGIN = 8
+const PANEL_TOP_INSET = PANEL_TOP_MARGIN - GLASS_INSET
 
 async function listEntries(): Promise<ClipEntry[]> {
     try {
@@ -301,7 +310,7 @@ function buildClearFooter(refresh: () => void): Gtk.Widget {
         host.append(child)
     }
 
-    const confirmRow = new Gtk.Box({ spacing: 6, homogeneous: true })
+    const confirmRow = new Gtk.Box({ spacing: 8, homogeneous: true })
     const cancelBtn = new Gtk.Button({
         label: t("widget.clipboard.clear.cancel"),
         css_classes: ["nidara-menu-row", "nidara-confirm-secondary"], hexpand: true,
@@ -351,6 +360,13 @@ function buildClipboardContent(onClose: () => void): Gtk.Widget {
         minContentHeight: 60,
         maxContentHeight: 360,
         widthRequest: PANEL_W.xl + PANEL_PAD * 2,
+        // The panel is a `perfect: true` capsule — REAL circular arcs, which leave no
+        // slack at the tangent point the way a squircle does. This scroll is its first
+        // child, so its top runs into that corner: PANEL_TOP_INSET is how far in it
+        // already starts (Bar.tsx's 10px content margin, less SquircleContainer's 2px
+        // glass inset), and the rest of the clearance is the kit's.
+        cornerRadius: RADIUS.lg,
+        cornerInset: PANEL_TOP_INSET,
     })
 
     const sep = menuSeparator()

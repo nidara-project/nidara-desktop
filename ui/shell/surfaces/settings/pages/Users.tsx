@@ -3,7 +3,7 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
-import { showNidaraAlert, NidaraButton } from "../../../../lib/nidara-kit"
+import { showNidaraAlert, NidaraButton, ROW_H_SINGLE } from "../../../../lib/nidara-kit"
 import { getUsers, getCurrentUser, type User } from "../../../../lib/users"
 import { listGroup, createRow, createStackedRow, fieldWithActions, pageBox } from "../SettingsHelpers"
 import { showAvatarCropper } from "../../../common/AvatarCropper"
@@ -394,7 +394,7 @@ function buildUserRow(user: User, onRefresh: () => void): Gtk.ListBoxRow {
         })
     })
 
-    const inner = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16, margin_top: 10, margin_bottom: 10 })
+    const inner = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16, margin_top: 12, margin_bottom: 12 })
     inner.append(avatarImg)
     inner.append(nameBox)
     inner.append(adminLabel)
@@ -551,7 +551,7 @@ export default function UsersPage() {
 
         const others = getUsers().filter(u => u.username !== username)
         if (others.length === 0) {
-            const emptyRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
+            const emptyRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row", ROW_H_SINGLE] })
             emptyRow.set_child(new Gtk.Label({
                 label: t("settings.users.other.empty"),
                 css_classes: ["nidara-row-subtitle"],
@@ -568,12 +568,12 @@ export default function UsersPage() {
             css_classes: ["settings-action-row"],
             hexpand: true,
         })
-        const addInner = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16, margin_top: 10, margin_bottom: 10 })
+        const addInner = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16, margin_top: 12, margin_bottom: 12 })
         addInner.append(new Gtk.Image({ gicon: Icons.userRoundPlus, pixel_size: 20, opacity: 0.7 , css_classes: ["nd-icon"] }))
         addInner.append(new Gtk.Label({ label: t("settings.users.other.add"), css_classes: ["nidara-row-title"], halign: Gtk.Align.START }))
         addBtn.set_child(addInner)
         addBtn.connect("clicked", () => showAddUserDialog(windowOf(addBtn), rebuildOtherUsers))
-        const addRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
+        const addRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row", ROW_H_SINGLE] })
         addRow.set_child(addBtn)
         otherList.append(addRow)
     }

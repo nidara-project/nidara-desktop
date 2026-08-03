@@ -100,11 +100,11 @@ function buildControls(onClose: () => void): Gtk.Widget {
         return btn
     }
 
-    const actionRow = new Gtk.Box({ spacing: 6, homogeneous: true })
+    const actionRow = new Gtk.Box({ spacing: 8, homogeneous: true })
     actionRow.append(makeActionBtn("copy", t("widget.screenshot.action.copy"), "secondary"))
     actionRow.append(makeActionBtn("save", t("widget.screenshot.action.save"), "primary"))
 
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: PANEL_W.lg })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, width_request: PANEL_W.lg })
     box.append(modeRow)
     box.append(new Gtk.Separator())
     box.append(actionRow)

@@ -70,10 +70,24 @@ selection {
 /* Clickable text row in a list/menu (settings rows, CC rows, menu items). */
 .nidara-row {
     @include nidara-reset;
+    // `nidara-reset` clears background/border/shadow/outline but NOT padding, and
+    // Adwaita gives every `list > row` 2px of it. That 2px is invisible on its own
+    // and shifts the row's whole text column: measured 2026-08-03, a row title sat
+    // 18px inside a row whose content margin is 16, which is why the group header
+    // above the card could never be lined up with it by any round number.
+    padding: 0;
     border-radius: $nidara-radius-sm;
     margin: 1px 0;
     @include nidara-row-states;
 }
+
+/* The kit row's DECLARED height — 48 one text line, 72 two. Applied by NidaraRow /
+   NidaraStackedRow only (see rowHeightClass in nidara-kit/row.ts for why it is NOT on
+   `.nidara-row` itself: dense bar/CC panel rows wear that class with their own tighter
+   padding). `min-height`, not a size request — the row's own 1px margin would eat it.
+   Both are floors: a wrapping subtitle or a preview row grows past them. */
+.nidara-row--single { min-height: 48px; }
+.nidara-row--double { min-height: 72px; }
 
 /* Floating icon tile/button over a translucent panel (bar/dock/app-grid widgets,
    CC icon tiles). Hover raises a glass capsule (mode-aware fill + inner edge). */
@@ -150,7 +164,7 @@ selection {
         min-height: 0;
         // Spans exactly the row width now that the list carries the 12px inset — a
         // separator that stops short of the rows it separates reads as a third margin.
-        margin: 7px 0;
+        margin: $space-2 0;
         padding: 0;
         background: transparent;
         box-shadow: none;
@@ -550,7 +564,11 @@ dropdown > button {
     // same outer height instead of reading 2px shorter and cramped. Horizontal
     // 14px gives the same breathing room as a secondary button.
     padding: 4px 14px;
-    min-height: 0;
+    // Same 20px content floor as button.nidara-btn, for the same reason: without it
+    // the box is whatever the text line happens to measure, and it came out 31px
+    // against the button's 32 — measured live, `queryUI dropdown` 2026-08-03. The
+    // padding above was already chosen to match the button; this is the other half.
+    min-height: 20px;
     transition: border-color 0.15s ease, background 0.15s ease;
     // Same text as NidaraButton (size + weight). Set on the button — NOT the inner
     // label — so the Settings-only `$fse-*` em re-anchor (in _settings.scss, which
@@ -561,7 +579,7 @@ dropdown > button {
 
     // GTK4 CSS has no `spacing` property (that was GTK3-only).
     // Add a left margin on the label so icon and label have a gap.
-    > box > label { margin-left: 6px; }
+    > box > label { margin-left: $space-2; }
 
     label {
         color: var(--nidara-text);

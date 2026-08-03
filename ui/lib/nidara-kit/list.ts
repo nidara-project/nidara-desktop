@@ -43,7 +43,7 @@ export function NidaraList(
         box.append(new Gtk.Label({
             label: title.toUpperCase(),
             css_classes: ["nidara-list-title"],
-            halign: Gtk.Align.START, margin_start: 10,
+            halign: Gtk.Align.START, margin_start: 16,
         }))
     }
 
@@ -64,8 +64,8 @@ export function NidaraList(
             // Fills its column for the same reason a row subtitle does — see the note
             // in row.ts. A footer and the subtitles above it are the same kind of
             // prose sitting inches apart; they must break at the same edge.
-            halign: Gtk.Align.FILL, hexpand: true, xalign: 0, margin_start: 10,
-            margin_end: 10, wrap: true,
+            halign: Gtk.Align.FILL, hexpand: true, xalign: 0, margin_start: 16,
+            margin_end: 16, wrap: true,
         }))
     }
 

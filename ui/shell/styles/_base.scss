@@ -34,7 +34,12 @@
     --nidara-text-disabled: rgba(255, 255, 255, 0.3);
     --nidara-surface-strong: rgba(255, 255, 255, 0.3);
 
-    /* --- Geometry --- */
+    /* --- Geometry ---
+       MIRROR of `ui/lib/tokens.ts` RADIUS — Cairo cannot read a CSS var, so the
+       ladder exists in both places and they move TOGETHER. That file carries the
+       rationale (why the ladder is not on the 4px spacing scale, and why `sm` is
+       derived from the card inset rather than chosen). */
+    --nidara-radius-xl: 32px;
     --nidara-radius-lg: 24px;
     --nidara-radius-md: 16px;
     --nidara-radius-sm: 10px;
@@ -88,6 +93,7 @@ $nidara-bg: var(--nidara-bg);
 $nidara-surface: var(--nidara-surface);
 $nidara-text: var(--nidara-text);
 $nidara-text-dim: var(--nidara-text-dim);
+$nidara-radius-xl: var(--nidara-radius-xl);
 $nidara-radius-lg: var(--nidara-radius-lg);
 $nidara-radius-md: var(--nidara-radius-md);
 $nidara-radius-sm: var(--nidara-radius-sm);

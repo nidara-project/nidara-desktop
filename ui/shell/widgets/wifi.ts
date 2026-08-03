@@ -82,7 +82,7 @@ function buildInfoPanel(): Gtk.Widget {
     const updateAll = () => { ssid.update(); state.update(); ip.update() }
     updateAll()
 
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, hexpand: true, margin_top: 4 })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, hexpand: true, margin_top: 4 })
     box.append(ssid.row)
     box.append(state.row)
     box.append(ip.row)

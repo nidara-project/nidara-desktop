@@ -46,7 +46,7 @@ export const DOTS_ID = "dots"
 function dotsActivity(): IslandActivity {
     // spacing 10 (dots are small — the other activity forms use 8), 16px side
     // margins and halign CENTER: the bar capsule family standard.
-    const box = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
+    const box = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
     const dots: Gtk.Widget[] = []
     for (let i = 1; i <= WS_COUNT; i++) {
         const dot = makeWorkspaceDot(i)

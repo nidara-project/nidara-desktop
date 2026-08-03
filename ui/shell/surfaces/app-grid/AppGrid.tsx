@@ -13,6 +13,7 @@ import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
 import SquircleContainer from "../../common/SquircleContainer"
+import { RADIUS } from "../../../lib/tokens"
 import Theme from "../../core/ThemeManager"
 import Cairo from "gi://cairo"
 import shellActions from "../../core/ShellActions"
@@ -49,7 +50,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     })
     const searchBox = new Gtk.Box({
         css_classes: ["app-grid-search-box"],
-        spacing: 10,
+        spacing: 12,
         hexpand: true,
     })
     searchBox.append(new Gtk.Image({ gicon: Icons.search, pixel_size: 18, css_classes: ["app-grid-search-icon", "nd-icon"] }))
@@ -268,7 +269,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
 
     const squirclePanel = SquircleContainer({
         child: contentBox,
-        radius: 32,
+        radius: RADIUS.xl,
         gloss: true,
         useShellOpacity: true,
         inset: 2.0,
@@ -369,7 +370,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
 
         const item = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
-            spacing: 10,
+            spacing: 12,
             css_classes: ["app-grid-item"],
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.START,

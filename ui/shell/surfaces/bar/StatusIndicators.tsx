@@ -143,7 +143,7 @@ function buildBannerRow(ind: BarIndicator, s: IndicatorState): Gtk.Widget {
 }
 
 export function ccStatusBanner(): Gtk.Widget {
-    const list = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
+    const list = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
 
     // CAPSULE, not a fixed radius: it collapses to a perfect arc on the short
     // side whatever the row count works out to (resolveDrawParams), which is the

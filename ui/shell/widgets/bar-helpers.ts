@@ -41,7 +41,7 @@ export function makeExpandable(opts: {
     revealer.set_child(label)
 
     // Box only to host the revealer alongside the icon — no extra sizing
-    const box = new Gtk.Box({ spacing: 6 })
+    const box = new Gtk.Box({ spacing: 8 })
     box.append(icon)
     box.append(revealer)
 

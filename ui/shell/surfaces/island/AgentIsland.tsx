@@ -1,6 +1,7 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import SquircleContainer from "../../common/SquircleContainer"
+import { RADIUS } from "../../../lib/tokens"
 import { PANEL_W } from "../../common/widget-kit"
 import { NidaraButton, NidaraScrolled } from "../../../lib/nidara-kit"
 import { makePulseDots, pulseOpacity } from "../../common/PulseDots"
@@ -27,7 +28,7 @@ import { t } from "../../core/i18n"
 
 // Glass recipe for the expanded container — exported for ActivityIsland's
 // MorphRevealer (same contract as PLAYER_GLASS / WO_GLASS / BATTERY_GLASS).
-export const AGENT_GLASS = { radius: 32, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
+export const AGENT_GLASS = { radius: RADIUS.xl, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
 
 // 950 → "950", 5432 → "5.4k", 25310 → "25k". A long conversation must not push
 // the header title around.
@@ -99,7 +100,7 @@ function makeToolChip(): { row: Gtk.Widget; update: (tc: ToolCall) => void } {
     // halign START so the pill HUGS its label. Inside a bubble it could span the
     // full width harmlessly; bare on the glass, a full-width pill reads as a band
     // across the panel instead of as a marker on a line of prose.
-    const pill = new Gtk.Box({ css_classes: ["agent-tool-chip"], spacing: 6, halign: Gtk.Align.START })
+    const pill = new Gtk.Box({ css_classes: ["agent-tool-chip"], spacing: 8, halign: Gtk.Align.START })
     pill.append(dot)
     pill.append(label)
     // The narration that preceded this call, dimmed but at FULL SIZE, above it.
@@ -107,7 +108,7 @@ function makeToolChip(): { row: Gtk.Widget; update: (tc: ToolCall) => void } {
     // the most useful sentence of the run it came from — the point is to demote
     // it from answer to context, not to hide it or to shrink it into a caption.
     const interim = new Gtk.Label({ css_classes: ["agent-interim-text"], wrap: true, xalign: 0, halign: Gtk.Align.START, visible: false })
-    const row = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3 })
+    const row = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
     row.append(interim)
     row.append(pill)
     // A chip appears when the tool STARTS and only later learns its outcome, so
@@ -153,7 +154,7 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
     // 6, not the old 4: each entry is now a STEP (its narration plus the chip it
     // led to), not a bare pill in a stack, and the gap between steps is the only
     // thing grouping a sentence with the action it explains.
-    const toolsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, css_classes: ["agent-tool-chips"] })
+    const toolsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, css_classes: ["agent-tool-chips"] })
     // Abnormal end (provider error, daemon death, empty completion). Its own row,
     // not appended to the text: a turn that streamed half an answer and then died
     // must SHOW that it died.
@@ -168,7 +169,7 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
     // turn end paints it, which is why nobody caught it.
     const errorDot = new Gtk.Box({ css_classes: ["agent-error-dot"], valign: Gtk.Align.START })
     const errorText = new Gtk.Label({ css_classes: ["agent-error-text"], wrap: true, xalign: 0, halign: Gtk.Align.START })
-    const errorLabel = new Gtk.Box({ css_classes: ["agent-error-row"], spacing: 6, visible: false })
+    const errorLabel = new Gtk.Box({ css_classes: ["agent-error-row"], spacing: 8, visible: false })
     errorLabel.append(errorDot)
     errorLabel.append(errorText)
     // ── THE WORK IS NOT BUBBLED; ONLY THE ANSWER IS ──────────────────────────
@@ -195,7 +196,7 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
     // auto-scrolls to. Do not put the answer back on top.
     const bubble = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 6,
+        spacing: 8,
         halign: Gtk.Align.START,
         css_classes: ["agent-bubble", isUser ? "agent-bubble-user" : "agent-bubble-assistant"],
     })
@@ -207,7 +208,7 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
     // assistant's splits into work + answer.
     const row = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 6,
+        spacing: 8,
         halign: isUser ? Gtk.Align.END : Gtk.Align.FILL,
     })
     if (pulse) row.append(pulse.widget)
@@ -276,7 +277,7 @@ export default function AgentIsland() {
     header.append(resetBtn)
 
     // Transcript (configured state).
-    const listBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, css_classes: ["agent-transcript"] })
+    const listBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["agent-transcript"] })
     // Nothing is reserved for a gutter that appears and disappears: the bar must not
     // resize the chat when the transcript starts overflowing. The indicator rides the
     // transcript's own right padding (a RESERVED lane) and, being can_target false,
@@ -307,7 +308,7 @@ export default function AgentIsland() {
     entryBox.append(entry)
     entryBox.append(sendBtn)
 
-    const chatBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10 })
+    const chatBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
     chatBox.append(scrollerWidget)
     chatBox.append(entryBox)
 
@@ -319,7 +320,7 @@ export default function AgentIsland() {
     emptyBox.append(emptyLabel)
     emptyBox.append(emptyBtn)
 
-    const body = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10 })
+    const body = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
     body.append(chatBox)
     body.append(emptyBox)
 
@@ -327,7 +328,7 @@ export default function AgentIsland() {
         orientation: Gtk.Orientation.VERTICAL, spacing: 12,
         // margin_end 0 + a LANE-wider request: same outer glass as before, but the
         // right padding now lives INSIDE, where the scrollbar can use it.
-        margin_top: 14, margin_bottom: 14, margin_start: 16, margin_end: 0,
+        margin_top: 16, margin_bottom: 16, margin_start: 20, margin_end: 0,
         width_request: PANEL_W.full + LANE,
         css_classes: ["agent-panel"],
     })

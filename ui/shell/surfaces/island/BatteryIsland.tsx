@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import SquircleContainer from "../../common/SquircleContainer"
+import { RADIUS } from "../../../lib/tokens"
 import { PANEL_W } from "../../common/widget-kit"
 import { makeBatteryGlyph, batteryFrac } from "../../common/BatteryGlyph"
 import { t } from "../../core/i18n"
@@ -14,7 +15,7 @@ import AstalBattery from "gi://AstalBattery"
 //
 // Glass recipe exported for ActivityIsland's MorphRevealer, same contract as
 // PLAYER_GLASS / WO_GLASS.
-export const BATTERY_GLASS = { radius: 32, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
+export const BATTERY_GLASS = { radius: RADIUS.xl, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
 
 export default function BatteryIsland(): Gtk.Widget {
     const bat = AstalBattery.get_default()
@@ -41,7 +42,7 @@ export default function BatteryIsland(): Gtk.Widget {
 
     const inner = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL, spacing: 8,
-        margin_top: 18, margin_bottom: 18, margin_start: 22, margin_end: 22,
+        margin_top: 16, margin_bottom: 16, margin_start: 20, margin_end: 20,
         width_request: PANEL_W.lg,
     })
     inner.append(glyph)

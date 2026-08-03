@@ -188,7 +188,7 @@ export default function PowerPage() {
     const checkIcons = new Map<string, Gtk.Widget>()
 
     profiles.forEach(p => {
-        const rowContent = new Gtk.Box({ spacing: 16, margin_start: 16, margin_end: 16, margin_top: 14, margin_bottom: 14 })
+        const rowContent = new Gtk.Box({ spacing: 16, margin_start: 16, margin_end: 16, margin_top: 12, margin_bottom: 12 })
         rowContent.append(new Gtk.Image({ gicon: p.icon, pixel_size: 20, css_classes: ["sidebar-icon", "nd-icon"] }))
         rowContent.append(new Gtk.Label({ label: p.label, hexpand: true, halign: Gtk.Align.START, css_classes: ["nidara-row-title"] }))
         const checkIcon = buildSelectionCheck(16)
@@ -277,7 +277,7 @@ export default function PowerPage() {
         label: t("settings.power.lock-note"),
         css_classes: ["nidara-row-subtitle"],
         halign: Gtk.Align.START,
-        margin_start: 10,
+        margin_start: 20,
         // Footnote binds to the card ABOVE it (NidaraList box is now spacing:0);
         // 8px matches the title→card attachment gap. See design-system.md.
         margin_top: 8,

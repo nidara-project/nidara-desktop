@@ -20,6 +20,34 @@ export interface NidaraRowResult {
  *   const r = NidaraRow("Wi-Fi", "Connected", toggle)
  *   listBox.append(r)
  */
+/**
+ * The row's DECLARED height, as a class (`--single` 48px / `--double` 72px, both in
+ * `_components.scss`).
+ *
+ * The height is a token; the 14px vertical margin below is the leftover breathing
+ * room, not the thing that defines the box. Before this the height was whatever
+ * `14 + text + 14` happened to sum to, so the SAME one-line row measured **43px on
+ * Settings → Network and 47px on Appearance** (`ags request queryUI .nidara-row`,
+ * 2026-08-03) — not a bug anyone could point at, just lists that breathe differently
+ * from page to page, which is what the user reported.
+ *
+ * ⚠️ It lives on the KIT COMPONENT, not on the `.nidara-row` class, and that is
+ * deliberate: ~20 places build a bare `Gtk.ListBoxRow` wearing `.nidara-row` for the
+ * chrome only, and five of them are dense bar/CC panel rows (`widgets/volume.ts`,
+ * `bluetooth.ts`, `vpn.ts`) that bring their own tighter `10/14` padding. A blanket
+ * `.nidara-row { min-height: 48px }` would have added ~11px to every one of them. A
+ * hand-rolled row is opting out of the component and owns its own metrics.
+ *
+ * ⚠️ `min-height` in CSS, never `height_request`: `.nidara-row` carries `margin: 1px 0`,
+ * and a GTK4 CSS margin is drawn INSIDE the allocation a size request sets — the two
+ * fight and the margin wins (see design-system.md).
+ */
+export const ROW_H_SINGLE = "nidara-row--single"
+export const ROW_H_DOUBLE = "nidara-row--double"
+
+const rowHeightClass = (subtitle: string) =>
+    subtitle ? ROW_H_DOUBLE : ROW_H_SINGLE
+
 /** Title + optional subtitle, the text column shared by both row shapes. */
 function textColumn(label: string, subtitle: string, titleIcon?: Gtk.Widget): Gtk.Box {
     const text = new Gtk.Box({
@@ -31,7 +59,7 @@ function textColumn(label: string, subtitle: string, titleIcon?: Gtk.Widget): Gt
         halign: Gtk.Align.START, xalign: 0, wrap: true,
     })
     if (titleIcon) {
-        const titleLine = new Gtk.Box({ spacing: 6, halign: Gtk.Align.START })
+        const titleLine = new Gtk.Box({ spacing: 8, halign: Gtk.Align.START })
         titleLine.append(titleLabel)
         titleLine.append(titleIcon)
         text.append(titleLine)
@@ -72,15 +100,15 @@ export function NidaraStackedRow(
     extraClasses: string[] = [],
 ): Gtk.ListBoxRow {
     const box = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL, spacing: 10,
-        margin_start: 16, margin_end: 16, margin_top: 14, margin_bottom: 14,
+        orientation: Gtk.Orientation.VERTICAL, spacing: 12,
+        margin_start: 16, margin_end: 16, margin_top: 12, margin_bottom: 12,
     })
     box.append(textColumn(label, subtitle))
     if (control) {
         control.hexpand = true
         box.append(control)
     }
-    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row", ...extraClasses] })
+    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row", rowHeightClass(subtitle), ...extraClasses] })
     row.set_child(box)
     return row
 }
@@ -130,14 +158,14 @@ export function NidaraRow(
     // footer this is `line` itself, byte-identical to the original layout.
     let content: Gtk.Box = line
     if (footer) {
-        content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10 })
+        content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
         content.append(line)
         content.append(footer)
     }
     content.margin_start = 16; content.margin_end = 16
-    content.margin_top = 14; content.margin_bottom = 14
+    content.margin_top = 12; content.margin_bottom = 12
 
-    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row", ...extraClasses] })
+    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row", rowHeightClass(subtitle), ...extraClasses] })
     row.set_child(content)
     return row
 }

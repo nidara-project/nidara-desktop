@@ -11,6 +11,7 @@ import registry, { widgetAvailable, watchWidgetAvailability } from "../../widget
 import Icons from "../../core/Icons"
 import { t } from "../../core/i18n"
 import SquircleContainer, { Shape, resolveDrawParams } from "../../common/SquircleContainer"
+import { RADIUS } from "../../../lib/tokens"
 import { drawSquircle, hexToFloatRgb } from "../../common/DrawingUtils"
 import Theme from "../../core/ThemeManager"
 import { DANGER_HEX } from "../../../lib/status-colors"
@@ -323,7 +324,7 @@ export default function IslandGrid() {
         const cellH = rows * (UNIT + GAP) - GAP
 
         // Header: back button + title — lives inside the squircle for glass contrast
-        const backBtnChild = new Gtk.Box({ spacing: 6, margin_start: 8, margin_end: 8, margin_top: 12, margin_bottom: 12 })
+        const backBtnChild = new Gtk.Box({ spacing: 8, margin_start: 8, margin_end: 8, margin_top: 12, margin_bottom: 12 })
         backBtnChild.append(new Gtk.Image({ gicon: Icons.chevronLeft, pixel_size: 14, css_classes: ["nd-icon"] }))
         backBtnChild.append(new Gtk.Label({ label: w.name, css_classes: ["cc-detail-title"], halign: Gtk.Align.START }))
         const backBtn = new Gtk.Button({ child: backBtnChild, css_classes: ["cc-detail-back-btn"], halign: Gtk.Align.START, margin_start: 4, margin_top: 4 })
@@ -334,7 +335,7 @@ export default function IslandGrid() {
             orientation: Gtk.Orientation.VERTICAL,
             css_classes: ["cc-detail-panel"],
             hexpand: true,
-            margin_start: 8, margin_end: 8, margin_bottom: 10,
+            margin_start: 8, margin_end: 8, margin_bottom: 8,
         })
         panel.append(w.buildCCDetail(hideDetail))
 
@@ -355,7 +356,7 @@ export default function IslandGrid() {
             gloss: true,
             useShellOpacity: true,
             borderColor: { r: 1, g: 1, b: 1, a: 0.12 },
-            radius: 24,
+            radius: RADIUS.lg,
         })
         detailPage.append(detailIsland)
         mainStack.set_visible_child_name("detail")

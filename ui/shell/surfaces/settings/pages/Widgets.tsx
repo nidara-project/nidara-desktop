@@ -137,7 +137,7 @@ export default function WidgetsPage(nav: SettingsNav): Gtk.Widget {
     page.append(new Gtk.Label({
         label: t("settings.widgets.reorder-note"),
         css_classes: ["nidara-row-subtitle"],
-        wrap: true, halign: Gtk.Align.START, margin_start: 10,
+        wrap: true, halign: Gtk.Align.START, margin_start: 20,
     }))
 
     return page

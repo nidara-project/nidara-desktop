@@ -67,7 +67,7 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
 // ── CC detail: per-device output sliders + per-app stream sliders ─────────────
 
 function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_start: 14, margin_end: 14, margin_top: 10, margin_bottom: 10 })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_start: 12, margin_end: 12, margin_top: 8, margin_bottom: 8 })
 
     const header = new Gtk.Box({ spacing: 8 })
     header.append(new Gtk.Label({
@@ -120,7 +120,7 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
     // header (identity + mute) on top, slider underneath. A single horizontal line
     // is what this row used to be, and at CC width it squeezed the app name to
     // ~16 chars to make room for a slider that ended up too short to aim with.
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_start: 14, margin_end: 14, margin_top: 10, margin_bottom: 10 })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_start: 12, margin_end: 12, margin_top: 8, margin_bottom: 8 })
 
     const header = new Gtk.Box({ spacing: 8 })
     // Real app icon — NO `nd-icon`. That class is `-gtk-icon-filter: invert(1)`
@@ -164,20 +164,20 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
 
 function buildCCDetail(_onClose: () => void): Gtk.Widget {
     const audio = AstalWp.get_default()?.audio
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
 
     if (!audio) {
         box.append(new Gtk.Label({
             label: t("settings.audio.error.no-service"),
             css_classes: ["nidara-row-subtitle"],
-            margin_top: 12, margin_start: 14, halign: Gtk.Align.START,
+            margin_top: 12, margin_start: 12, halign: Gtk.Align.START,
         }))
         return box
     }
 
     const sectionLabel = (text: string) => new Gtk.Label({
         label: text, css_classes: ["cc-detail-section-label"],
-        halign: Gtk.Align.START, margin_start: 14, margin_top: 4,
+        halign: Gtk.Align.START, margin_start: 12, margin_top: 4,
     })
 
     const speakersList = new Gtk.ListBox({ css_classes: ["nidara-list"], selection_mode: Gtk.SelectionMode.NONE })
@@ -185,7 +185,7 @@ function buildCCDetail(_onClose: () => void): Gtk.Widget {
     const emptyStreams  = new Gtk.Label({
         label: t("settings.audio.no-apps"),
         css_classes: ["nidara-row-subtitle"],
-        margin_top: 8, margin_bottom: 8, margin_start: 14, halign: Gtk.Align.START,
+        margin_top: 8, margin_bottom: 8, margin_start: 12, halign: Gtk.Align.START,
     })
 
     const refreshSpeakers = () => {

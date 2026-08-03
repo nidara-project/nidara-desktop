@@ -17,7 +17,7 @@ function buildHorizontalSlider(
 ): Gtk.Widget {
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 10,
+        spacing: 12,
         css_classes: ["cc-atomic-slider-box-horizontal"],
         halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER,
         hexpand: true, vexpand: false,

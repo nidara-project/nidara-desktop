@@ -124,7 +124,7 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
         // the expansion capsule has no nested-submenu machinery, and at 5 fixed
         // workspaces a strip beats a submenu anyway.
         root.append(menuHeader(t("bar.window-menu.move-to")))
-        const wsRow = new Gtk.Box({ spacing: 6, css_classes: ["window-menu-ws-row"], margin_start: 8, margin_end: 8 })
+        const wsRow = new Gtk.Box({ spacing: 8, css_classes: ["window-menu-ws-row"], margin_start: 8, margin_end: 8 })
         for (let i = 1; i <= WORKSPACE_COUNT; i++) {
             const btn = new Gtk.Button({
                 label: String(i),

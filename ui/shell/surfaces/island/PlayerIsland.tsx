@@ -3,6 +3,7 @@ import GLib from "gi://GLib"
 import AstalMpris from "gi://AstalMpris"
 import GdkPixbuf from "gi://GdkPixbuf"
 import SquircleContainer from "../../common/SquircleContainer"
+import { RADIUS } from "../../../lib/tokens"
 import { createSquirclePath } from "../../common/DrawingUtils"
 import { PANEL_W } from "../../common/widget-kit"
 import { buildMediaDetailPanel } from "../../widgets/media"
@@ -33,13 +34,13 @@ import { safeDisconnect } from "../../core/signals"
 // Glass recipe for the expanded container — exported so ActivityIsland's
 // MorphRevealer paints its interpolated clone with the exact same params
 // (same contract as WorkspaceOverview's WO_GLASS).
-export const PLAYER_GLASS = { radius: 32, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
+export const PLAYER_GLASS = { radius: RADIUS.xl, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
 
 // ── Expanded mode surface ────────────────────────────────────────────────────
 
 export default function PlayerIsland() {
     const panel = buildMediaDetailPanel(PANEL_W.full)
-    const inner = new Gtk.Box({ margin_top: 14, margin_bottom: 14, margin_start: 18, margin_end: 18 })
+    const inner = new Gtk.Box({ margin_top: 16, margin_bottom: 16, margin_start: 20, margin_end: 20 })
     inner.append(panel)
     const squircle = SquircleContainer({
         child: inner,

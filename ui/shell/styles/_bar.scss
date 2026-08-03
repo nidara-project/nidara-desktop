@@ -324,8 +324,10 @@ window#nidara-bar-zone {
         background: transparent;
         border: none;
         box-shadow: none;
-        min-width: 30px;
-        min-height: 30px;
+        // 28px is the shell's icon-button box (settings-icon-btn, cc tiles) — this
+        // was the only one at 30.
+        min-width: 28px;
+        min-height: 28px;
         border-radius: var(--nidara-radius-pill);
         &:hover { background: var(--nidara-surface-hover); }
     }
@@ -522,7 +524,7 @@ window#nidara-bar-zone {
     font-size: $fs-small;
     font-weight: $fw-medium;
     color: var(--nidara-text);
-    min-width: 38px;
+    min-width: 40px;
 }
 
 .bar-popover-icon-btn {

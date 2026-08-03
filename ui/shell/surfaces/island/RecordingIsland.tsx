@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import SquircleContainer from "../../common/SquircleContainer"
+import { RADIUS } from "../../../lib/tokens"
 import { NidaraButton } from "../../../lib/nidara-kit/button"
 import { PANEL_W } from "../../common/widget-kit"
 import { t } from "../../core/i18n"
@@ -32,7 +33,7 @@ import { stopRecording } from "../../widgets/screenrecord"
 //
 // Glass recipe exported for ActivityIsland's MorphRevealer, same contract as
 // PLAYER_GLASS / BATTERY_GLASS.
-export const RECORDING_GLASS = { radius: 32, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
+export const RECORDING_GLASS = { radius: RADIUS.xl, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
 
 export default function RecordingIsland(): Gtk.Widget {
     const head = new Gtk.Box({ spacing: 8, halign: Gtk.Align.CENTER })
@@ -80,8 +81,8 @@ export default function RecordingIsland(): Gtk.Widget {
     stopBtn.connect("clicked", () => { void stopRecording() })
 
     const inner = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL, spacing: 10,
-        margin_top: 18, margin_bottom: 18, margin_start: 22, margin_end: 22,
+        orientation: Gtk.Orientation.VERTICAL, spacing: 12,
+        margin_top: 16, margin_bottom: 16, margin_start: 20, margin_end: 20,
         width_request: PANEL_W.sm,
     })
     inner.append(head)

@@ -331,7 +331,7 @@ export function makeVerticalFillTile(
 
     const iconImg = new Gtk.Image({
         gicon: getIcon(), pixel_size: 28, css_classes: ["nd-icon", "slider-fill-icon"],
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.END, margin_bottom: 22,
+        halign: Gtk.Align.CENTER, valign: Gtk.Align.END, margin_bottom: 24,
     })
     iconImg.set_can_target(false)
     if (iconSubscribe) {

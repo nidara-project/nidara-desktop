@@ -155,7 +155,8 @@ button.nidara-icon-btn.sidebar-toggle {
         background-color: var(--nidara-border);
         min-width: 1px;
         min-height: 1px;
-        margin: 5px 1px;
+        // 4px inset inside the 24px inner height leaves a 16px rule — both on scale.
+        margin: $space-1 1px;
     }
 }
 

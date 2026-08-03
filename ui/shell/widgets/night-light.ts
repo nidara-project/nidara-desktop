@@ -66,7 +66,7 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
         },
         debounce: 24,
     })
-    const tempRow = new Gtk.Box({ spacing: 8, margin_top: 6, margin_bottom: 6 })
+    const tempRow = new Gtk.Box({ spacing: 8, margin_top: 8, margin_bottom: 8 })
     tempRow.append(new Gtk.Image({ gicon: Icons.minus, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     tempRow.append(tempSlider)
     tempRow.append(new Gtk.Image({ gicon: Icons.plus, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
@@ -110,7 +110,7 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
 
     const from = timePicker(t("settings.appearance.night-light-from"), nightLight.scheduleFrom, (v) => nightLight.setScheduleFrom(v))
     const to   = timePicker(t("settings.appearance.night-light-to"),   nightLight.scheduleTo,   (v) => nightLight.setScheduleTo(v))
-    const timeRow = new Gtk.Box({ spacing: 16, margin_top: 6, margin_bottom: 6 })
+    const timeRow = new Gtk.Box({ spacing: 16, margin_top: 8, margin_bottom: 8 })
     timeRow.append(from.col)
     timeRow.append(to.col)
     timeRow.visible = nightLight.scheduleEnabled

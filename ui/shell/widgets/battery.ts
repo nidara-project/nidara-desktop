@@ -65,7 +65,7 @@ function buildSingle(): Gtk.Widget {
     const glyph = makeGlyph(28)   // same box the other tiles' icons get
     const pct = new Gtk.Label({ css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.CENTER })
 
-    const group = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3, halign: Gtk.Align.CENTER })
+    const group = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4, halign: Gtk.Align.CENTER })
     group.append(glyph)
     group.append(pct)
 
@@ -121,7 +121,7 @@ function buildSquare(): Gtk.Widget {
     const pct = new Gtk.Label({ css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.CENTER })
     const state = new Gtk.Label({ css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.CENTER })
 
-    const group = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, halign: Gtk.Align.CENTER })
+    const group = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, halign: Gtk.Align.CENTER })
     group.append(glyph)
     group.append(pct)
     group.append(state)
@@ -152,7 +152,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 
 // ── Info panel (shared by bar expansion + CC detail) ──────────────────────────
 function buildPanel(_onClose: () => void): Gtk.Widget {
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: PANEL_W.lg })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, width_request: PANEL_W.lg })
 
     if (!present()) {
         box.append(new Gtk.Label({

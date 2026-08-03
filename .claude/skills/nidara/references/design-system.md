@@ -106,7 +106,7 @@ adjustment, dragged by a `Gtk.GestureDrag`.
 | **Widths** | Pill **4px at rest → 8px hovered/dragging** = `$space-1`/`$space-2` on the project's 4px scale. Not free-hand numbers — the earlier 5/9 were, and the user caught it. Lane **12px** (`$space-3`), and it must stay ≥ 8 so an expanded pill never leaves the lane. |
 | **Hover** | The pill grows; **the hit lane never does.** That distinction IS tech-debt #15 — GTK grew the *hit area*, which is why it could eat a neighbouring button. Growth is safe on every surface precisely because the lane fits inside the content inset. A faint full-height track fades in with it (macOS shape), derived from the same CSS colour at low alpha. |
 | **Persistence** | Auto-hides everywhere, windows included: reveal on scroll or on pointer motion in the view, fade after 1.1s. One behaviour across the DE. |
-| **Corners** | The pill stops short of both ends so a rounded corner cannot clip it — and **how far is derived, not fixed**: an arc of radius `r` reaches `r - √(r² - (r - EDGE_CLEAR)²)` px in at the pill's distance from the wall. 4px is the floor (square edge, or a `radius-sm` card); a `radius-md` card needs 6, a bar capsule (20) needs 8, and a **window** — `glass(floating)` = `radius-lg` 24 — needs **11**. Pass `cornerRadius` with the surface's own token wherever the view runs flush into it; the Settings pages were reported clipped at the bottom because they inherited the 4px floor against a 24px corner. |
+| **Corners** | The pill keeps `CORNER_CLEAR` (4px) from the curve exactly as it keeps `EDGE_CLEAR` (4px) from the wall — **one rule, every boundary** — and how far that is comes from the arc, not from a table: `⌈r - √(r² - (r - 4)²)⌉ + 4`. So `radius-md` 16 → 10, `radius-lg` 24 → **15**. Pass `cornerRadius` with the surface's own token wherever the view runs flush into it, and `cornerInset` with however far the view already starts inside that corner (else the allowance double-counts and the pill floats in dead space). ⚠️ **The bare arc expression is TANGENCY, not clearance** — it was the formula until 2026-08-03 and looked fine only because a *window's* visible corner is Hyprland's `rounding_power 3.2` **squircle**, which is squarer than a circle and leaves slack the maths never promised. A Cairo capsule drawn `perfect: true` is real circular arcs and has none: moving the bar-expansion panel from radius 20 to 24 in the token audit left the clipboard pill 1.27px off the curve, and the user saw it immediately. |
 
 **`barExpandedFlush`** (`AtomicWidget`) is how a bar-expansion panel opts out of the 14px
 horizontal inset `Bar.tsx` gives every panel, so its scroll can reach the edge; the widget then
@@ -202,14 +202,106 @@ by user decision (2026-07-09), flagged to revisit.
 
 **Still exposed:** `surfaces/app-grid/AppGrid.tsx` filters its FlowBox in place — same latent bug.
 
-## Radii (capsule-first)
+## Radii — ONE ladder, in `ui/lib/tokens.ts` (audited 2026-08-03)
 
-- pill — `9999`
-- lg — `24`
-- md — `16`
-- sm — `10`
-- xs — `6`
-- Squircle 28% (n ≈ 3.2) — **only** for app-icon plates.
+`RADIUS` in `ui/lib/tokens.ts` is the source; `--nidara-radius-*` in `_base.scss` is a
+**mirror**, and both files say so. Cairo cannot read a CSS var — a corner that clips has
+to be known in px — so the duplication is deliberate and labelled. **There are no radius
+literals left in TS/TSX**; that is the invariant to re-check when adding a surface.
+
+| Token | px | What wears it |
+|---|---|---|
+| `xs` | 6 | chip, badge, segmented button |
+| `sm` | 10 | button, input, dropdown, list row |
+| `md` | 16 | card inside a window (settings group, sidebar capsule) |
+| `lg` | 24 | window chrome, and any floating popup of the shell — system menu, **bar expansion panel**, CC context menu |
+| `xl` | 32 | island / overlay directly on the wallpaper: all five island modes, app grid, Prism, NC cards, CC islands |
+| pill | 9999 | capsules |
+
+Squircle 28% (n ≈ 3.2) — **only** for app-icon plates.
+
+Three things this ladder is not, all of which came up in the audit:
+
+- **It is not the 4px spacing scale, and must not be "corrected" onto it.** Spacing is
+  additive (gaps sum down a column, so a shared divisor matters); a radius ladder is
+  multiplicative — what matters is the ratio between rungs. Material 3 ends its ladder on
+  28, Tailwind's has a 6. Ours runs ×1.67 ×1.60 ×1.50 ×1.33, decreasing and smooth.
+- **`sm` is derived, not chosen.** A `.nidara-row` sits 5px inside a `.nidara-list`
+  (1px border + 3px padding + 1px margin) and the concentric radius for a 16px card at
+  that inset is 11 — the 10 is that, rounded to the rung. Nested corners only stay
+  parallel while `inner = outer − inset` roughly holds, so **if you change the card's
+  padding you have to re-derive `sm`**, and vice versa.
+- **Radius does NOT scale with the surface.** The Workspace Overview is ~1684px wide, the
+  widest thing in the shell, and it sits at `xl` like a 200px recording island. It was 64
+  until the audit; it is also one of five modes morphing out of the same capsule through
+  `MorphRevealer`, which interpolates the radius, so an odd one out is visible in motion.
+
+⚠️ **Changing a rung has a second-order cost: it moves the scroll-pill corner clearance**
+(`⌈r − √(r² − (r−4)²)⌉ + 4`, see the NidaraScrolled spec above). Going 20 → 24 on the bar
+expansion panel is what put the clipboard pill on the curve. Whenever a radius moves, check
+who passes it as `cornerRadius`.
+
+## Spacing is TWO layers — only one of them is the 4px scale
+
+The 4px ladder (`$space-1..10`) governs **gaps between elements** — margins, box spacing,
+page padding. Those must be on it.
+
+It does **not** govern **a control's internal padding**, which is arithmetic toward a target
+box height. `button.nidara-btn` is `padding: 5px 14px` because 5 + 1px border + the line box
+lands on ~32px, and the `Gtk.DropDown` trigger next to it uses `padding: 4px 14px` because it
+carries a 2px border instead — both comments say so in `_components.scss`. The switch's
+`slider { margin: 3px }` is (24px trough − 18px slider) / 2. **The number that belongs on the
+scale is the resulting HEIGHT (24 compact / 32 control / ~48 row), not the padding.** Snapping
+those paddings to `$space-1` does not tidy anything; it resizes every control in the shell.
+
+Two more categories that are legitimately off-scale, both easy to "fix" wrongly:
+
+- **Optical nudges on text** — `valign: CENTER` centres against a label's allocation, not its
+  ink. These carry a comment and were settled against pixels; `design-system`'s own rule is
+  *measure, don't reason* (see "Optical vs geometric centring"). Leave them.
+- **Derived sizes** — `.accent-circle-btn` is `min-width: 30px` because it is a 24px swatch
+  plus a 3px ring on each side.
+
+When you add a control and reach for a padding value: pick the height first, then solve for the
+padding, and say so in a comment. (Audit state and what is still off-scale: tech-debt #47.)
+
+### Container padding — three tiers, by what the surface IS
+
+Swept 2026-08-03. Each step is +4, and horizontal is always +4 over vertical:
+
+| Surface | v / h | Who |
+|---|---|---|
+| **Dense panel** | **8 / 12** | bar expansion panels (incl. the window menu, which inherits `expansionInner`), the **system menu**, the CC context menu, CC/NC lists, `widgets/*` |
+| **Window row** | **12 / 16** | `NidaraRow`, and hand-rolled rows inside Settings |
+| **Island** | **16 / 20** | all five island modes |
+
+**Menus are NOT a separate tier** — an earlier version of this section claimed a symmetric `8/8`
+"menu tier" and it was wrong. It was invented to justify a blanket `sed`: `SystemMenu.tsx` held
+`10/10` (not the panel's `10/14`), so sweeping by NUMBER turned it into `8/8`, and the tier got
+written down afterwards to make that look deliberate. The user caught it from the pixels — a menu
+row's hover fill spans that box, so the margin **is** the gap between the hover and the card edge,
+and the system menu's sat **6px from the glass against the window menu's 12** (measured, both
+minus `GLASS_INSET`). Both are bar surfaces; both take `8 / 12`.
+
+Two rules out of that:
+- **Never sweep a spacing value by its NUMBER; sweep it by its ROLE.** Read what the box is.
+- **A tier you introduce to explain a change you already made is not a tier.** Derive it from what
+  the surfaces are, then check it against pixels.
+
+### Some off-scale numbers are an ALIGNMENT AXIS — check before "fixing" them
+
+Prism looks like drift (`.prism-search` `padding: 16px 22px`, `.prism-results-list` `6px 10px 10px`)
+and is not: a result row's text sits at list-padding `10` + row-padding `12` = **22**, and the search
+field's `22` puts its text on that same axis. The one genuinely wrong value there was a section
+label at `10 + 14 = 24`, 2px off its own rows — invisible as a number, visible as a ragged column.
+Before snapping a value, find out what it lines up with.
+
+⚠️ **`@mixin nidara-reset` does NOT clear `padding`** (it does background/border/shadow/outline),
+and Adwaita gives every `list > row` 2px of it. That 2px silently offsets a row's whole text
+column — measured 2026-08-03, a `.nidara-row-title` sat 18px inside a row whose content margin is
+16, which is why the group header above the card could never be aligned to it with any round
+number. `.nidara-row` now sets `padding: 0` explicitly. Suspect this on any Adwaita-derived node
+whose geometry is 2px off what the code says.
 
 ## Tokens
 
@@ -487,6 +579,18 @@ stair-stepped curves were clearly visible. So AA wins. The border/rim strokes
   the rect (gap ring against the compositor border) and `gloss` paints its own 1px specular
   rims regardless of `borderColor` — it reads as a double border no parameter can turn off
   (this bit the About window twice). Settings and About both use the CSS chrome.
+- **A capsule's VISIBLE edge is `GLASS_INSET` (2px) inside its allocation.** `drawSquircle`
+  paints the glass in from the widget rect so the border stroke never lands on the allocation
+  edge, which means **a child laid out flush to the rect overhangs the shape**. Nothing warns
+  you: it typechecks, it renders, and the overhang is invisible until something has to line up
+  with the curve. Two things bit at once here (2026-08-03, both user-caught): the bar's
+  `barExpandedFlush` set the content margin to `0` — flush to the rect, 2px outside the glass,
+  violating the written rule that a viewport reaches its *visible* inner edge — and that put the
+  clipboard's scroll pill 2px nearer the curve than its corner clearance assumed. At 2px from
+  the wall a radius-24 arc eats **14.4px**, not the 10.7px the 4px-distance maths predicts; the
+  pill was left with 0.6px and the user saw the curve under it on hover. **Subtract
+  `GLASS_INSET` (exported from `SquircleContainer`) whenever a child must meet the curve** —
+  flush margins, scroll `cornerInset`, anything measuring from the rect.
 - **Most icon glyphs cannot be CSS-recolored to an arbitrary colour — verify before assuming
   `color:` works on one.** GTK4 only recolours a `Gio.FileIcon` if its filename ends in
   `-symbolic` (see "The bar launcher mark" below) — that's the WHOLE mechanism, filename-gated,

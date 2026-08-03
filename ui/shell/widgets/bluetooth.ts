@@ -47,7 +47,7 @@ function buildDeviceList(): { box: Gtk.ListBox; refresh: () => void } {
             const empty = new Gtk.Label({
                 label: t("settings.bluetooth.no-devices"),
                 css_classes: ["nidara-row-subtitle"],
-                margin_top: 10, margin_bottom: 10, margin_start: 14, margin_end: 14,
+                margin_top: 8, margin_bottom: 8, margin_start: 12, margin_end: 12,
             })
             const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
             row.set_child(empty)
@@ -80,7 +80,7 @@ function buildDeviceList(): { box: Gtk.ListBox; refresh: () => void } {
                 if (dev.connected) BT.disconnectDevice(dev); else BT.connectDevice(dev)
             })
 
-            const inner = new Gtk.Box({ spacing: 8, margin_start: 14, margin_end: 14, margin_top: 10, margin_bottom: 10 })
+            const inner = new Gtk.Box({ spacing: 8, margin_start: 12, margin_end: 12, margin_top: 8, margin_bottom: 8 })
             inner.append(devImg); inner.append(nameLabel); inner.append(actionBtn)
 
             const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
