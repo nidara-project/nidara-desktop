@@ -62,8 +62,18 @@ the typelib on the **default** girepository path, so all three bundles just `imp
 - ⚠️ **Anything outside a declared region is not drawn at all** (hard GL scissor; an empty
   intersection cancels the element). The failure mode is "the surface vanished". `visible_region_
   clear()` is the escape hatch.
-- ⚠️ When the shell starts importing `gi://NidaraWl`, CI's **`@girs/` snapshot needs refreshing** or
-  typecheck fails on a type it has never seen — see `dev-workflow.md`.
+
+**From the shell, do not import the shim directly** — go through `common/VisibleRegion.ts`, which
+owns three decisions:
+
+- It imports the module **lazily and through a variable specifier**, never a string literal. A
+  literal makes `tsc` resolve `gi://NidaraWl` at compile time, and `@girs/` only has it once the
+  library is installed — so a literal would turn "optional at runtime" into "typecheck fails on any
+  machine that has not installed it", CI included until its `@girs/` snapshot is refreshed.
+- A missing or too-old shim degrades to full surfaces instead of taking the shell down.
+- `NIDARA_VISIBLE_REGION=0` disables the optimisation everywhere. Keep this working: the failure
+  mode above is a missing piece of desktop, so a user who hits it needs a bootable shell before they
+  can report anything, and `systemctl --user set-environment` is reachable from a TTY.
 
 ## Boot sequence
 

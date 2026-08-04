@@ -2049,6 +2049,52 @@ what it is currently showing. Order by risk — island (own layer, modes already
 dock (~200 px of margin for magnification and bubbles), then bar (its `Gtk.Overlay` overlays make the
 region hardest, and it is the one whose failure is most visible).
 
+#### ✅ 2026-08-04 (same day, later): the horizontal dock, MEASURED on the real shell
+
+Not synthetic any more. A/B on this machine (2560x1440@144, `damage` layer repainting at vsync, three
+rounds, order shuffled, `NIDARA_VISIBLE_REGION=0` as the only variable — the shell is restarted in
+both arms so map order and startup cost are identical):
+
+| damage 1600x700, ABOVE the dock (the everyday case) | GPU |
+|---|---|
+| no region (2560x1440 box) | 34.0 % |
+| region declared | **27.0 %** |
+
+**−7.0 points**, with non-overlapping ranges (33.2–34.8 vs 26.6–27.6). Idle without damage: 3.9 %.
+
+| damage 1600x340 landing ON the dock's strip | GPU | declared rect |
+|---|---|---|
+| no region | 30.5 % | — |
+| padding 260/200 | 23.4 % | 1586x366 |
+| padding 24/24 | **19.4 %** | 1234x130 |
+
+So the region is worth ~7 points either way, and **the padding alone was worth another 4**.
+
+🔑 **Three findings that make the dock's implementation smaller than it looked:**
+
+1. **The dock's tooltip AND its context menu are `Gtk.Popover`s** (`common/Tooltip.ts`,
+   `DockItem.tsx` — `renderMenuModel` only builds the ROWS, the popover is the dock's). Own Wayland
+   surfaces, so this region cannot clip them — which is also why the dock's layer rule needs
+   `blur_popups` on top of `blur`. The fat 260 px cross-padding was reserving room for something that
+   never paints in this surface; the magnified bulge is already inside the rect via `reach()`, and the
+   rect is already built at `totalMain + 500`. Padding is now 24/24, and the comment says why.
+2. **A menu being open is not a reason to give up.** Same reason: it paints elsewhere. The branch
+   now hands over the body rect instead of clearing. ⚠️ It needed its own cache key — sharing the
+   grid's would let a grid-open transition match a stale key and keep the dock's small rect, which
+   WOULD clip the grid.
+3. **A hidden dock can keep declaring its rect.** Auto-hide slides the LAYER (`applySlide` →
+   layer-shell bottom margin), not the content, and the region is buffer-local: the pill never moves
+   inside its own buffer. The auto-hide and fullscreen branches now declare the body rect too — they
+   only ever differed in INPUT.
+
+**Escape hatch, and how the A/B is run at all:** `NIDARA_VISIBLE_REGION=0` (read in
+`common/VisibleRegion.ts`) keeps every surface un-optimised. It exists because the failure mode is a
+missing piece of desktop, not a glitch — someone who hits it needs a bootable shell before they can
+report anything, and `systemctl --user set-environment` works from a TTY.
+
+Still to do, in order: the VERTICAL dock (`verticalAxis.buildInputRegion` declares nothing yet), the
+island, and the bar.
+
 ---
 
 ## Meta: how to interpret "tech debt" here

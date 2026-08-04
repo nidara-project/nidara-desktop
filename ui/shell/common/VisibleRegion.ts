@@ -1,3 +1,4 @@
+import GLib from "gi://GLib"
 import type Gdk from "gi://Gdk?version=4.0"
 
 /**
@@ -33,11 +34,28 @@ type Shim = {
 
 const SHIM_MODULE = "gi://NidaraWl"
 
+/**
+ * Escape hatch, and the only way to A/B the optimisation without two builds.
+ * `NIDARA_VISIBLE_REGION=0` keeps every surface un-optimised (full-box blur).
+ *
+ * It exists because of the failure mode above: if a surface ever declares a rect
+ * that does not cover what it paints, the symptom is a piece of the desktop
+ * MISSING — not a visual glitch someone can work around. Someone hitting that
+ * needs a way to boot a working shell before they can report anything, and
+ * `systemctl --user set-environment` is reachable from a TTY.
+ */
+const DISABLED = GLib.getenv("NIDARA_VISIBLE_REGION") === "0"
+
 let shim: Shim | null = null
 let loading = false
 
 function load() {
     if (shim || loading) return
+    if (DISABLED) {
+        loading = true
+        console.log("[VisibleRegion] disabled by NIDARA_VISIBLE_REGION=0 — full surfaces")
+        return
+    }
     loading = true
     // Specifier held in a variable ON PURPOSE. A literal makes tsc resolve the
     // module at compile time, and `@girs/` only has it once the .gir is installed
