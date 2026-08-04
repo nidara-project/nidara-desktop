@@ -2409,11 +2409,11 @@ Neither is a focus-grab quirk as such — they are what the catcher had been hid
 
 **What is left, and why it is not just more of the same:**
 
-- ⚠️ **The app grid owns `Gtk.Popover` context menus** (`AppGrid.tsx`), and popups take the SAME
-  single compositor grab slot. Migrating it means handling `cleared` as an EVICTION and re-acquiring
-  when the popover closes — not just closing, which is what the two migrated surfaces do. Its current
-  EXCLUSIVE↔ON_DEMAND dance (`DockCore.tsx`) exists for exactly this collision and cannot be deleted
-  until then.
+- **The app grid owns `Gtk.Popover` context menus** (`AppGrid.tsx`), and popups take the SAME single
+  compositor grab slot. **The blocker is now gone**: `FocusGrab.ts` suspends a lease when a popover
+  is what cleared it and retakes the grab on `closed` (2026-08-05, forced by the island's own media
+  source menu). What remains is ordinary migration work plus deciding what the app grid does about
+  the dock's `EXCLUSIVE`↔`ON_DEMAND` dance in `DockCore.tsx`, which exists for this same collision.
 - `core/InputYield` and `HyprlandState.afterGrabRelease` still exist for the `EXCLUSIVE` release
   race, and the app grid is now their last holder. Both migrated surfaces still route through
   `inputYield` (a yield drops the grab and brings the catcher back for the length of the truce), so

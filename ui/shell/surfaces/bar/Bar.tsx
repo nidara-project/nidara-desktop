@@ -649,8 +649,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // clamps pointer focus to the bar and a click on the capsule is swallowed by
       // the dismissal instead of reaching it — the island stops responding for as
       // long as a bar panel is open.
-      barGrabToken = acquireFocusGrab(
-        [win.get_native()?.get_surface() ?? null, islandWin.surface()], onBarGrabCleared)
+      barGrabToken = acquireFocusGrab([win, islandWin.win], onBarGrabCleared)
       // Which path took is otherwise INVISIBLE — both end with a working overlay, and
       // the fallback is only distinguishable by the bugs it brings back (the catcher
       // covering the desktop, focus refusals for computer-use). Log it once per open
@@ -679,8 +678,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // dismissal (see common/FocusGrab.ts). The catcher is only for when that fails.
   const syncIslandGrab = () => {
     const open = !!status.island_mode
-    const grabbed = islandWin.setModal(open, island.needsKeyboard(),
-      [win.get_native()?.get_surface() ?? null])
+    const grabbed = islandWin.setModal(open, island.needsKeyboard(), [win])
     islandWin.setCatcher(open && !grabbed, island.needsKeyboard() ? 0 : BAR_H)
   }
 

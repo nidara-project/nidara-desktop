@@ -60,14 +60,11 @@ export interface IslandWindowHandle {
     /** Root the revealers are anchored against — their `margin_top` is measured
      *  relative to this, exactly as it used to be against the bar's overlay. */
     root: () => Gtk.Widget
-    /** This window's Wayland surface, for the BAR to whitelist in its own focus
-     *  grab — the mirror of the `peers` it passes us. Null until mapped. */
-    surface: () => Gdk.Surface | null
     /** Take modality for an open island mode. `needsKeyboard` only decides the
      *  FALLBACK path — a compositor focus grab carries keyboard and pointer either
      *  way, so an ambient mode gets dismissal without EXCLUSIVE's side effects.
      *
-     *  `peers` are other surfaces of ours that must stay clickable THROUGH the
+     *  `peers` are other windows of ours that must stay clickable THROUGH the
      *  grab — in practice the bar's, so capsule-to-capsule switching stays one
      *  click. They are not a nicety: a press outside the whitelist is delivered to
      *  the grabbed surface and then dismisses, so it never reaches what you
@@ -75,7 +72,7 @@ export interface IslandWindowHandle {
      *
      *  Returns whether the compositor grab took, i.e. whether the caller can skip
      *  the catcher. */
-    setModal: (open: boolean, needsKeyboard: boolean, peers: (Gdk.Surface | null)[]) => boolean
+    setModal: (open: boolean, needsKeyboard: boolean, peers: (Gtk.Window | null)[]) => boolean
     /** Outside-click dismissal for the FALLBACK path only — when `setModal`
      *  returns false. It must live on this surface: a layer surface holding an
      *  EXCLUSIVE keyboard grab also receives the pointer in Hyprland, regardless of
@@ -341,7 +338,6 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     return {
         win,
         root: () => root,
-        surface: () => win.get_native()?.get_surface() ?? null,
         mount: (row, targets, mounted) => {
             hitTargets = targets
             revealers = mounted
@@ -376,7 +372,7 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
 
             if (want && !grabToken) {
                 grabToken = acquireFocusGrab(
-                    [win.get_native()?.get_surface() ?? null, ...peers],
+                    [win, ...peers],
                     () => {
                         grabToken = 0
                         // Close ONLY what this surface owns. An eviction can come from

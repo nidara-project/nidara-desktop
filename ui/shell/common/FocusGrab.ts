@@ -1,4 +1,5 @@
 import GLib from "gi://GLib"
+import { Gtk } from "ags/gtk4"
 import type Gdk from "gi://Gdk?version=4.0"
 
 /**
@@ -96,7 +97,7 @@ load()
 export function hasFocusGrab() { return shim !== null }
 
 /**
- * Who currently holds the single grab, as an opaque token. 0 = nobody.
+ * One caller's claim on the single grab, identified by an opaque token (0 = none).
  *
  * 🔑 THE ONE GRAB HAS TWO OWNERS. The shim keeps exactly one
  * `hyprland_focus_grab_v1` because the compositor has exactly one slot — but the
@@ -111,98 +112,185 @@ export function hasFocusGrab() { return shim !== null }
  *   4. …destroying the BAR's brand-new grab, while the bar still believes it holds
  *      one and keeps its catcher hidden → nothing dismisses on an outside click
  *
- * So a token, and a release that no-ops for anyone but the owner. The eviction in
+ * So a lease, and a release that no-ops for anyone but the owner. The eviction in
  * step 2 is real, though, and the evicted owner has to hear about it or it will
  * think it is still modal and never re-acquire — see `acquireFocusGrab`.
+ *
+ * A lease outlives the grab itself: a popup can take the slot without the owner
+ * losing its claim (see `onShimCleared`), which is the `suspended` state below.
  */
-let heldToken = 0
-let heldCleared: (() => void) | null = null
+type Lease = {
+    token: number
+    wins: Gtk.Window[]
+    onCleared: () => void
+    /** While SUSPENDED: the popup that took the slot, and our "closed" handler. */
+    popup: Gtk.Popover | null
+    popupId: number
+}
+
+/** Holding the compositor's grab. */
+let held: Lease | null = null
+/**
+ * Not holding it, but entitled to it back: an xdg-shell popup took the slot and
+ * we are waiting for it to close. See `onShimCleared`.
+ */
+let suspended: Lease | null = null
 let nextToken = 1
 
+const surfacesOf = (wins: Gtk.Window[]): Gdk.Surface[] =>
+    wins.map(w => w.get_native()?.get_surface() ?? null).filter((s): s is Gdk.Surface => s !== null)
+
+function takeGrab(lease: Lease): boolean {
+    const live = surfacesOf(lease.wins)
+    if (live.length === 0) return false
+    if (!shim!.focus_grab_acquire(live[0], () => onShimCleared(lease))) return false
+    for (const s of live.slice(1)) shim!.focus_grab_add_surface(s)
+    return true
+}
+
+function cancelSuspended(): Lease | null {
+    const l = suspended
+    if (!l) return null
+    if (l.popup && l.popupId) l.popup.disconnect(l.popupId)
+    l.popup = null
+    l.popupId = 0
+    suspended = null
+    return l
+}
+
 /**
- * Restrict keyboard and pointer to `surfaces` — a SET, not one surface.
+ * A popup that is up right now inside one of `wins`.
  *
- * 🔑 Pass every surface of ours that must stay clickable, not just the one that is
- * modal. On an outside press the compositor delivers the button to whatever holds
- * pointer focus — and the grab CLAMPS pointer focus to itself — and only then
- * clears the grab. So a press outside dismisses and does nothing else: it never
- * reaches the thing you clicked. A surface left out of the set is not "still
- * reachable, merely not modal", it is unreachable in one click. That is why the
- * island grabs the bar's surface alongside its own — capsule-to-capsule switching
- * has to survive without a catcher arranging it.
- *
- * `onCleared` fires when the COMPOSITOR takes the grab away, which happens for
- * three reasons that are indistinguishable from here: the user pressed outside,
- * a popup grab took the slot, or a layer surface mapped asking for keyboard
- * interactivity. Handle it as "I no longer hold input" — close if that is what
- * the surface should do, or re-acquire if it is still meant to be modal. It does
- * NOT fire for a `releaseFocusGrab()` we asked for.
- *
- * Returns 0 when the grab did not take (no shim, or the first surface is not
- * mapped yet), otherwise an ownership token to hand back to `releaseFocusGrab`.
- * The caller MUST fall back on 0 — a 0 with no fallback is a surface that
- * silently cannot be typed into. An EXTRA surface failing to join does not fail
- * the grab: what degrades then is one-click reach elsewhere, not modality.
- *
- * Acquiring while someone else holds the grab EVICTS them, here as in the
- * compositor. The previous owner's `onCleared` is invoked for it, once this
- * grab is established — because from that owner's side losing the slot to us is
- * indistinguishable from losing it to a popup, and it must not be left believing
- * it is still the modal surface (it would never re-acquire).
+ * 🔑 This is the only way to tell the compositor's THREE causes of `cleared`
+ * apart, and it is a GTK question rather than a Wayland one: xdg-shell popups
+ * take the same single grab slot we do, so a `Gtk.Popover` with `autohide` (the
+ * media source menu, GTK's own right-click menu on any `Gtk.Text`) evicts us
+ * simply by opening. The protocol tells us nothing about why, but our own widget
+ * tree knows whether one is on screen — a popover is a CHILD of the widget it is
+ * parented to (verified), so a walk finds it.
  */
-export function acquireFocusGrab(surfaces: (Gdk.Surface | null)[], onCleared: () => void): number {
+function openPopupIn(wins: Gtk.Window[]): Gtk.Popover | null {
+    const find = (w: Gtk.Widget): Gtk.Popover | null => {
+        for (let c = w.get_first_child(); c; c = c.get_next_sibling()) {
+            // The cast is the same `Gtk`-is-any-in-value-position gap the rest of the
+            // codebase lives with: instanceof against an untyped constructor does not
+            // narrow, so tsc still sees a Widget here.
+            if (c instanceof Gtk.Popover && (c.get_mapped() || c.get_visible())) return c as Gtk.Popover
+            const inner = find(c)
+            if (inner) return inner
+        }
+        return null
+    }
+    for (const w of wins) {
+        const found = find(w)
+        if (found) return found
+    }
+    return null
+}
+
+/**
+ * The compositor took our grab away. THREE causes, and the protocol does not say
+ * which: the user pressed outside (what we asked for), a popup took the slot, or a
+ * layer surface mapped asking for keyboard interactivity.
+ *
+ * We separate the popup case ourselves, because it is the one where closing would
+ * be wrong: opening a menu inside a surface must not dismiss the surface the menu
+ * belongs to. The island's media source selector and the right-click menu on the
+ * assistant's entry both did exactly that. Instead the lease is SUSPENDED and
+ * retaken when the popup closes — which is also what unblocks migrating the app
+ * grid, whose popovers are the reason it is still on the EXCLUSIVE dance.
+ */
+function onShimCleared(lease: Lease) {
+    if (held?.token !== lease.token) return   // stale: a grab we had already lost
+    held = null
+
+    const popup = openPopupIn(lease.wins)
+    if (popup) {
+        lease.popup = popup
+        lease.popupId = popup.connect("closed", () => onPopupClosed(lease))
+        suspended = lease
+        return
+    }
+    lease.onCleared()
+}
+
+function onPopupClosed(lease: Lease) {
+    if (suspended?.token !== lease.token) return
+    cancelSuspended()
+    // Somebody else legitimately took the slot while the popup was up, so we did
+    // lose input after all — tell the owner now, late but honestly.
+    if (held) { lease.onCleared(); return }
+    if (takeGrab(lease)) held = lease
+    else lease.onCleared()
+}
+
+/**
+ * Restrict keyboard and pointer to `wins` — a SET, not one window.
+ *
+ * 🔑 Pass every window of ours that must stay clickable, not just the modal one.
+ * On an outside press the compositor delivers the button to whatever holds pointer
+ * focus — and the grab CLAMPS pointer focus to itself — and only then clears. So a
+ * press outside dismisses and does nothing else: it never reaches the thing you
+ * clicked. A window left out of the set is not "still reachable, merely not modal",
+ * it is unreachable in one click. That is why the bar and the island each pass the
+ * other: their capsules live on different surfaces.
+ *
+ * Windows rather than surfaces, for two reasons: `win.get_native()?.get_surface()`
+ * comes back UNTYPED from the GIR, so passing a bare surface where the set was
+ * expected once type-checked cleanly and threw at runtime; and the widget tree is
+ * what lets us tell a popup eviction from a dismissal (see `openPopupIn`).
+ *
+ * `onCleared` means "I no longer hold input" — never "the user dismissed me". The
+ * popup case is handled here and does NOT reach it; what remains is an outside
+ * press or an eviction, and for both the honest answer is usually to close. It
+ * does not fire for a `releaseFocusGrab()` we asked for.
+ *
+ * Returns 0 when the grab did not take (no shim, or the first window is not mapped
+ * yet), otherwise an ownership token for `releaseFocusGrab`. The caller MUST fall
+ * back on 0 — a 0 with no fallback is a surface that silently cannot be typed
+ * into. An EXTRA window failing to join does not fail the grab: what degrades is
+ * one-click reach elsewhere, not modality.
+ *
+ * Acquiring while someone else holds EVICTS them, here as in the compositor, and
+ * their `onCleared` is invoked once this grab is established — an owner left
+ * believing it is still modal would never re-acquire.
+ */
+export function acquireFocusGrab(wins: (Gtk.Window | null)[], onCleared: () => void): number {
     if (!shim) return 0
-    // Defended rather than trusted: `win.get_native()?.get_surface()` comes back
-    // untyped from the GIR, so tsc will NOT catch a caller that passes a bare
-    // surface where the set is expected — it silently typed a crash as fine once.
-    if (!Array.isArray(surfaces)) surfaces = [surfaces as Gdk.Surface | null]
-    const live = surfaces.filter((s): s is Gdk.Surface => s !== null)
+    if (!Array.isArray(wins)) wins = [wins as Gtk.Window | null]
+    const live = wins.filter((w): w is Gtk.Window => w !== null)
     if (live.length === 0) return 0
 
-    const evicted = heldCleared
-    const token = nextToken++
-    const ok = shim.focus_grab_acquire(live[0], () => {
-        // A `cleared` that arrives for a grab we no longer own is not ours to act
-        // on: the shim's callback slot is per-grab, but a stale closure could still
-        // be in flight through the pump.
-        if (heldToken !== token) return
-        heldToken = 0
-        heldCleared = null
-        onCleared()
-    })
+    const lease: Lease = { token: nextToken++, wins: live, onCleared, popup: null, popupId: 0 }
+    const ok = takeGrab(lease)
+    // The shim drops the live grab BEFORE creating the new one, so a failure can
+    // mean either "refused before touching it" (our window is not mapped yet — the
+    // holder still holds) or "dropped it, then failed". Ask, rather than guess.
+    if (!ok && shim.focus_grab_active()) return 0
 
-    if (ok) {
-        heldToken = token
-        heldCleared = onCleared
-        for (const s of live.slice(1)) shim.focus_grab_add_surface(s)
-    } else if (shim.focus_grab_active()) {
-        // The shim refused before touching the live grab (our surface is not mapped
-        // yet), so the previous owner still holds it and nothing has changed.
-        return 0
-    } else {
-        // It got far enough to drop the old grab and then failed. Nobody holds one.
-        heldToken = 0
-        heldCleared = null
-    }
-
+    const evicted = [held, cancelSuspended()].filter((l): l is Lease => l !== null)
+    held = ok ? lease : null
     // Told AFTER the new state is in place, so a release() from inside the handler
-    // finds a token mismatch and cannot take down the grab we just took. Skipped
-    // when the same owner re-acquired: it would be telling a surface to dismiss
-    // itself for the grab it just asked for.
-    if (evicted && evicted !== heldCleared) evicted()
-    return ok ? token : 0
+    // finds a token mismatch and cannot take down the grab we just took. Skipped for
+    // the same owner re-acquiring: it would be telling a surface to dismiss itself
+    // for the grab it just asked for.
+    for (const l of evicted) if (l.onCleared !== onCleared) l.onCleared()
+    return ok ? lease.token : 0
 }
 
 /**
  * Hand input back. `token` is what `acquireFocusGrab` returned.
  *
  * A stale token is a NO-OP, deliberately and load-bearing: it is how the loser of
- * an eviction stops destroying the winner's grab (see `heldToken`). Callers can
- * therefore release unconditionally on close without tracking who won.
+ * an eviction stops destroying the winner's grab. Callers can therefore release
+ * unconditionally on close without tracking who won — including while a popup has
+ * us suspended, which cancels the pending re-acquire rather than leaking a grab
+ * onto a surface the caller has since closed.
  */
 export function releaseFocusGrab(token: number) {
-    if (!token || token !== heldToken) return
-    heldToken = 0
-    heldCleared = null
+    if (!token) return
+    if (suspended?.token === token) { cancelSuspended(); return }
+    if (held?.token !== token) return
+    held = null
     shim?.focus_grab_release()
 }

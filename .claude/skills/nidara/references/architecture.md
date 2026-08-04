@@ -173,8 +173,17 @@ popups use the same one.** A `Gtk.Popover` with `autohide` opening anywhere evic
 `cleared` has three indistinguishable causes — outside press, popup grab, or a layer surface mapping
 with interactivity ≠ NONE (`LayerSurface.cpp`, which still carries upstream's `TODO: use the new
 superb really very cool grab`). **Treat `cleared` as "I no longer hold input", never as "the user
-dismissed me"**, and re-acquire if the surface is still meant to be modal. This is also why the
-grab is not a drop-in for surfaces that own popovers.
+dismissed me".**
+
+🔑 **`FocusGrab.ts` separates the popup cause itself, and callers never see it.** The protocol says
+nothing about why, but our own widget tree does: a `Gtk.Popover` is a CHILD of the widget it is
+parented to, so on `cleared` it walks the lease's windows for a mapped popover. If it finds one the
+lease is **suspended** — not closed — and retaken on the popover's `closed`. Without that, opening a
+menu inside a surface dismisses the surface the menu belongs to: the island's media source selector
+(`widgets/media.ts`, `autohide: true`) and GTK's own right-click menu on the assistant's `Gtk.Text`
+both did exactly that. It also means `acquireFocusGrab` takes **`Gtk.Window`s, not `Gdk.Surface`s** —
+it needs the widget tree, and `get_native()?.get_surface()` is untyped from the GIR anyway (passing a
+bare surface where the set was expected once type-checked cleanly and threw at runtime).
 
 ⚠️ **The grab takes the pointer too** (`m_keyboard` *and* `m_pointer` are hardcoded true) — there is
 no pointer-only mode. Any surface that adopts it starts taking keyboard focus from the user's window,
