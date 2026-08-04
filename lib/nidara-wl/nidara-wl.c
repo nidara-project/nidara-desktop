@@ -17,6 +17,7 @@
 #include "ext-foreign-toplevel-list-v1-client-protocol.h"
 #include "ext-image-capture-source-v1-client-protocol.h"
 #include "ext-image-copy-capture-v1-client-protocol.h"
+#include "hyprland-focus-grab-v1-client-protocol.h"
 #include "hyprland-surface-v1-client-protocol.h"
 #include "hyprland-toplevel-mapping-v1-client-protocol.h"
 
@@ -48,6 +49,7 @@ static gboolean                        wl_ok = FALSE;
 static struct wl_display              *gdk_wl_display = NULL;
 static struct wl_event_queue          *shim_queue = NULL;
 static struct hyprland_surface_manager_v1 *surface_mgr = NULL;
+static struct hyprland_focus_grab_manager_v1 *focus_grab_mgr = NULL;
 static gboolean                        capture_supported = FALSE;
 
 static void
@@ -64,6 +66,10 @@ init_registry_global (void *data, struct wl_registry *registry, uint32_t name,
         surface_mgr = wl_registry_bind (registry, name,
                                         &hyprland_surface_manager_v1_interface, 2);
     }
+  else if (g_strcmp0 (interface,
+                      hyprland_focus_grab_manager_v1_interface.name) == 0)
+    focus_grab_mgr = wl_registry_bind (registry, name,
+                                       &hyprland_focus_grab_manager_v1_interface, 1);
   else if (g_strcmp0 (interface,
                       ext_image_copy_capture_manager_v1_interface.name) == 0)
     capture_supported = TRUE;
@@ -141,6 +147,12 @@ gboolean
 nidara_wl_has_capture (void)
 {
   return wl_ok && capture_supported;
+}
+
+gboolean
+nidara_wl_has_focus_grab (void)
+{
+  return wl_ok && focus_grab_mgr != NULL;
 }
 
 /* ======================================================================
@@ -258,6 +270,163 @@ nidara_wl_visible_region_clear (GdkSurface *surface)
 
   hyprland_surface_v1_set_visible_region (st->hypr_surface, NULL);
   wl_display_flush (gdk_wl_display);
+}
+
+/* ======================================================================
+ * Focus grab
+ *
+ * One grab at a time, on purpose: the compositor has exactly one slot
+ * (CSeatManager::m_seatGrab), so tracking more here would only invent state the
+ * compositor does not have.
+ * ====================================================================== */
+
+static struct hyprland_focus_grab_v1 *grab = NULL;
+static NidaraWlFocusGrabClearedFunc   grab_cleared_cb = NULL;
+static gpointer                       grab_cleared_data = NULL;
+static GDestroyNotify                 grab_cleared_destroy = NULL;
+static guint                          grab_pump_id = 0;
+
+/* Drop the local grab bookkeeping. `notify` runs the caller's GDestroyNotify;
+ * skip it when the destroy notify itself is what got us here. */
+static void
+grab_forget (gboolean notify)
+{
+  if (grab_pump_id)
+    {
+      g_source_remove (grab_pump_id);
+      grab_pump_id = 0;
+    }
+
+  if (grab)
+    {
+      hyprland_focus_grab_v1_destroy (grab);
+      grab = NULL;
+    }
+
+  GDestroyNotify destroy = grab_cleared_destroy;
+  gpointer       data    = grab_cleared_data;
+
+  grab_cleared_cb      = NULL;
+  grab_cleared_data    = NULL;
+  grab_cleared_destroy = NULL;
+
+  if (notify && destroy)
+    destroy (data);
+}
+
+static void
+grab_handle_cleared (void *data, struct hyprland_focus_grab_v1 *g)
+{
+  (void) data; (void) g;
+
+  /* Snapshot before tearing down: the callback is entitled to acquire a new grab
+   * from inside this call (a popup evicted us and the surface is still up), and
+   * it must not have its own state ripped out from under it afterwards. */
+  NidaraWlFocusGrabClearedFunc cb         = grab_cleared_cb;
+  gpointer                     cb_data    = grab_cleared_data;
+  GDestroyNotify               cb_destroy = grab_cleared_destroy;
+
+  grab_forget (FALSE);   /* FALSE: cb_data has to outlive the callback */
+
+  if (cb)
+    cb (cb_data);
+
+  /* Free the old data — unless the callback re-acquired carrying the very same
+   * pointer, in which case it is live again and freeing it would be a use-after-
+   * free on the next clear. */
+  if (cb_destroy && !(grab != NULL && grab_cleared_data == cb_data))
+    cb_destroy (cb_data);
+}
+
+static const struct hyprland_focus_grab_v1_listener grab_listener = {
+  .cleared = grab_handle_cleared,
+};
+
+/* Our objects live on a private queue, so nobody dispatches them for us.
+ *
+ * We deliberately do NOT read the socket: GDK owns that fd and reads it
+ * constantly, and wl_display_read_events() distributes to EVERY queue, ours
+ * included. So the event is already sitting in our queue by the time GDK has
+ * woken the main loop — all that is missing is dispatching it, which is what
+ * this does, without touching the fd or racing GDK's reader.
+ *
+ * A timer rather than a GSource because the honest alternatives are worse: a
+ * prepare() that always says "ready" turns the main loop into a spin, and a
+ * check() on the fd would race the very reader we are avoiding. It only runs
+ * while a grab is held (i.e. while a modal surface is open), and the cost of the
+ * interval is how long a dismissal can lag — three frames at worst. */
+#define GRAB_PUMP_MS 50
+
+static gboolean
+grab_pump (gpointer data)
+{
+  (void) data;
+
+  if (wl_display_dispatch_queue_pending (gdk_wl_display, shim_queue) < 0)
+    {
+      grab_forget (TRUE);
+      return G_SOURCE_REMOVE;
+    }
+
+  return grab ? G_SOURCE_CONTINUE : G_SOURCE_REMOVE;
+}
+
+gboolean
+nidara_wl_focus_grab_acquire (GdkSurface                   *surface,
+                              NidaraWlFocusGrabClearedFunc  cleared,
+                              gpointer                      user_data,
+                              GDestroyNotify                destroy)
+{
+  g_return_val_if_fail (GDK_IS_SURFACE (surface), FALSE);
+
+  if (!nidara_wl_has_focus_grab () || !GDK_IS_WAYLAND_SURFACE (surface))
+    return FALSE;
+
+  struct wl_surface *wls = gdk_wayland_surface_get_wl_surface (surface);
+  if (!wls)
+    return FALSE;   /* not mapped yet — there is no surface to grab for */
+
+  grab_forget (TRUE);
+
+  grab = hyprland_focus_grab_manager_v1_create_grab (focus_grab_mgr);
+  if (!grab)
+    return FALSE;
+
+  wl_proxy_set_queue ((struct wl_proxy *) grab, shim_queue);
+  hyprland_focus_grab_v1_add_listener (grab, &grab_listener, NULL);
+
+  grab_cleared_cb      = cleared;
+  grab_cleared_data    = user_data;
+  grab_cleared_destroy = destroy;
+
+  hyprland_focus_grab_v1_add_surface (grab, wls);
+  /* The grab starts here, in the compositor's handler for this request — not on
+   * the surface's next wl_surface.commit. That is the whole difference from
+   * set_visible_region above, and from layer-shell interactivity. */
+  hyprland_focus_grab_v1_commit (grab);
+  wl_display_flush (gdk_wl_display);
+
+  grab_pump_id = g_timeout_add (GRAB_PUMP_MS, grab_pump, NULL);
+  return TRUE;
+}
+
+void
+nidara_wl_focus_grab_release (void)
+{
+  if (!grab)
+    return;
+
+  /* Destroying the object removes the grab; there is no need to commit an empty
+   * whitelist first (CFocusGrab's destructor calls finish()). No `cleared` comes
+   * back for a release we asked for. */
+  grab_forget (TRUE);
+  wl_display_flush (gdk_wl_display);
+}
+
+gboolean
+nidara_wl_focus_grab_active (void)
+{
+  return grab != NULL;
 }
 
 /* ======================================================================

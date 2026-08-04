@@ -26,14 +26,15 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
 ## `lib/nidara-wl/` — the Wayland shim (the project's only native library)
 
 **Why it exists:** GJS cannot speak raw Wayland. `libwayland-client` has no introspection, and
-`gdk_wayland_surface_get_wl_surface` is `introspectable="0"` in `GdkWayland-4.0.gir`. Two things the
-shell needs are unreachable from TypeScript without a C shim, and they are the *same* shim, which is
-why one library carries both:
+`gdk_wayland_surface_get_wl_surface` is `introspectable="0"` in `GdkWayland-4.0.gir`. Several things
+the shell needs are unreachable from TypeScript without a C shim, and they are the *same* shim, which
+is why one library carries all of them — the packaging cost is paid once:
 
 | Capability | Protocol | What it unlocks |
 |---|---|---|
 | `capture_window()` → `GdkTexture` | `ext-image-copy-capture` + `ext-foreign-toplevel-image-capture-source` + `hyprland-toplevel-mapping` | Real window thumbnails (Overview, window switcher) |
 | `visible_region_*()` | `hyprland-surface-v1` **v2** | The layer-blur cost in `tech-debt.md` §46 |
+| `focus_grab_*()` | `hyprland-focus-grab-v1` | Keyboard without layer-shell EXCLUSIVE + compositor-side outside-click dismissal |
 
 Built by `lib/nidara-wl/build.sh` — plain `cc` + `wayland-scanner` + `g-ir-scanner`, deliberately no
 build system, same reasoning as `bin/nidara-input.c`. Installed to `/usr/lib/libnidara-wl.so*` with
@@ -85,6 +86,48 @@ what says "still moving"). 🔑 **Before wiring a region to the same call sites 
 region, re-read each one asking "can this arrive late?"** — a late input stamp costs a late click, a
 late visible stamp is a frame that is never drawn. That question is what found the notification
 banners' deliberately-deferred stamp in `NotificationPopups.tsx` (§46).
+
+### Focus grab — modality that the compositor enforces
+
+`focus_grab_*()` speaks `hyprland-focus-grab-v1`. From the shell go through
+**`common/FocusGrab.ts`** (same lazy-import / degrade / kill-switch contract as `VisibleRegion.ts`;
+the switch is `NIDARA_FOCUS_GRAB=0`). **Prism is the first and so far only surface on it** — the
+island and the app grid still use layer-shell EXCLUSIVE.
+
+What a grab replaces, all three verified in Hyprland 0.56's source:
+
+- **Keyboard without `EXCLUSIVE`.** `CFocusGrab` drives `CFocusState::rawSurfaceFocus` directly and
+  `setKeyboardFocus` never looks at layer interactivity, so a surface at `NONE` gets the keyboard.
+  🔑 That matters far beyond convenience: `EXCLUSIVE` is what puts a surface in
+  `m_exclusiveLSes`, and **that list makes Hyprland refuse to move window focus at all** — the sole
+  reason `core/InputYield` exists.
+- **Outside-click dismissal.** A press outside sets `m_hardInput` and re-runs the hit test
+  (`InputManager.cpp`); a surface the grab does not accept clears it. That is precisely the job of
+  the invisible full-screen `overlay-catcher` buttons — so a grabbing surface must **hide its
+  catcher and stop covering the desktop with its input region**, or the press lands on us, the grab
+  accepts it, and nothing dismisses.
+- **Release is not double-buffered.** Layer-shell interactivity applies on the surface's next commit
+  (the ~12 ms race `HyprlandState.afterGrabRelease` exists for). Destroying a grab takes effect when
+  the compositor reads the request. On release the compositor also refocuses the window the user came
+  from, honouring `input:follow_mouse` — we no longer do that by hand.
+
+⚠️ **There is exactly ONE grab slot compositor-wide** (`CSeatManager::m_seatGrab`) **and xdg-shell
+popups use the same one.** A `Gtk.Popover` with `autohide` opening anywhere evicts the grab. So
+`cleared` has three indistinguishable causes — outside press, popup grab, or a layer surface mapping
+with interactivity ≠ NONE (`LayerSurface.cpp`, which still carries upstream's `TODO: use the new
+superb really very cool grab`). **Treat `cleared` as "I no longer hold input", never as "the user
+dismissed me"**, and re-acquire if the surface is still meant to be modal. This is also why the
+grab is not a drop-in for surfaces that own popovers.
+
+⚠️ **The grab takes the pointer too** (`m_keyboard` *and* `m_pointer` are hardcoded true) — there is
+no pointer-only mode. Any surface that adopts it starts taking keyboard focus from the user's window,
+which is fine for Prism and a real behaviour change for a panel like the CC. It is also **not
+enforced during DnD** (`!dndActive()`), which matters for the dock's drag.
+
+⚠️ **Our objects live on a private `wl_event_queue`, so nothing dispatches `cleared` for us.** The
+shim pumps `wl_display_dispatch_queue_pending` on a 50 ms timer **while a grab is held** — it never
+reads the fd (GDK owns it, and `wl_display_read_events` already distributes to every queue). The
+interval is how long a dismissal can lag; it is not a polling loop for state.
 
 ## Boot sequence
 

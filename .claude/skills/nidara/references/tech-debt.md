@@ -2392,3 +2392,29 @@ twice over. (2) Any of the three that sizes to its content (title length, tray c
 §46 established that a resizing layer surface produces a visible grow artefact that is
 compositor-side and unfixable from the widget tree. Fixed-width surfaces avoid it and remove the
 flexibility that motivated the idea.
+
+### 53. Prism is on the focus grab, the island and the app grid are not (2026-08-04)
+
+`hyprland-focus-grab-v1` landed via `lib/nidara-wl` + `common/FocusGrab.ts`, and **Prism** is the
+first surface migrated: keyboard with layer-shell interactivity at `NONE`, no `overlay-catcher`, no
+screen-covering input region, dismissal done by the compositor. The mechanism and its traps are
+documented in `architecture.md` → "Focus grab".
+
+**The debt is the split.** Until the island's keyboard modes and the app grid move too:
+
+- The `overlay-catcher` buttons cannot be deleted — they still serve the CC, the NC, the system menu
+  and the bar expansion, none of which grabs.
+- `core/InputYield` and `HyprlandState.afterGrabRelease` cannot be deleted either: they exist for
+  the `EXCLUSIVE` release race, and the island still takes `EXCLUSIVE`. Prism no longer needs
+  them, but it is not the last holder.
+- Two mechanisms now express "this surface is modal". Do not add a third, and do not assume the
+  catcher's presence means a surface is un-grabbed — check `prismGrabIsCompositor`-style state.
+
+**The open design question before migrating the panels** (CC/NC/system menu): a grab takes the
+POINTER AND KEYBOARD — there is no pointer-only mode — so a grabbing CC would start taking keyboard
+focus away from the user's window, which it does not do today. That is a product decision, not a
+mechanical one. The island and the app grid have no such question: they already want the keyboard.
+
+⚠️ **The app grid is the one that needs care**, because it owns `Gtk.Popover` context menus and
+popups take the SAME single grab slot — migrating it means handling `cleared` from an eviction, not
+just from a dismissal.

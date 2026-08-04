@@ -6,6 +6,7 @@ import GLib from "gi://GLib"
 import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
 import { MorphRevealer } from "../../common/MorphRevealer"
 import { setVisibleRect } from "../../common/VisibleRegion"
+import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
 
@@ -244,6 +245,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   applyPanelHeights()
   onDockSettingsChanged(applyPanelHeights)
 
+  // True while PRISM's modality is held by a compositor focus grab rather than by
+  // layer-shell EXCLUSIVE + our own catcher (see syncKeyboardMode). It changes two
+  // things in this window: the catcher stays hidden, and the input region stops
+  // covering the desktop — the compositor dismisses on an outside press by itself,
+  // so covering the screen to notice that press is exactly the work being deleted.
+  let prismGrabIsCompositor = false
+
   const updateInputRegion = () => {
       const surface = win.get_native()?.get_surface()
       if (!surface) return
@@ -268,9 +276,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       region.unionRectangle({ x: 0, y: 0, width: Math.round(monGeo.width), height: 40 })
 
       const isAnyOpen = status.isAnyOverlayOpen
-      if (isAnyOpen && !status.cc_edit_mode) {
+      if (isAnyOpen && !status.cc_edit_mode && !prismGrabIsCompositor) {
           // Catcher region — covers everything below bar to intercept outside-click dismissal
-          // In edit mode we skip this so other windows remain interactive
+          // In edit mode we skip this so other windows remain interactive.
+          // Skipped under a compositor focus grab too, for the opposite reason: the
+          // dismissal happens ABOVE us, and a region covering the desktop would make
+          // the outside press land on our own surface — which the grab accepts, so
+          // nothing would dismiss at all.
           // @ts-ignore
           region.unionRectangle({ x: 0, y: 40, width: Math.round(monGeo.width), height: Math.round(monGeo.height - 40) })
       }
@@ -434,8 +446,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const setSystemMenuVisible = popToggle(systemMenu)
   const setPrismVisible = popToggle(prism)
 
+  // The catcher is this window's stand-in for "click outside closes". It is NOT
+  // wanted when the compositor is doing that job for us — and it must not merely be
+  // redundant then, it must be GONE: it is a full-window button, so leaving it up
+  // would swallow the very press the compositor needs to see outside our surface.
+  // Status's overlay setters are mutually exclusive, so `prism_open` here means
+  // Prism is the only thing open and the grab covers the whole open state.
+  const catcherWanted = () =>
+    status.isAnyOverlayOpen && !status.cc_edit_mode && !prismGrabIsCompositor
+
   const syncOverlays = () => {
-    catcher.set_visible(status.isAnyOverlayOpen && !status.cc_edit_mode)
+    catcher.set_visible(catcherWanted())
     setCCVisible(status.cc_open); setNCVisible(status.nc_open); setPrismVisible(status.prism_open); setSystemMenuVisible(status.system_menu_open)
     // Update immediately — reveal() flips visibility synchronously on open, so
     // the region calculation is accurate without waiting for a layout pass; the
@@ -477,8 +498,44 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const barGrabbing = () => status.prism_open
   const islandGrabbing = () => !!status.island_mode && island.needsKeyboard()
 
+  // The compositor took the grab away. Three causes, indistinguishable from here
+  // (see common/FocusGrab.ts): an outside press — the dismissal we asked for — a
+  // popup grab stealing the single slot, or a layer surface mapping with keyboard
+  // interactivity. Prism's answer is the same for all three: it is no longer the
+  // modal surface, so it closes. Closing re-enters syncKeyboardMode through
+  // notify::prism-open, which finds the flag already down and does not double-free.
+  const onPrismGrabCleared = () => {
+    prismGrabIsCompositor = false
+    if (status.prism_open) status.prism_open = false
+    else { syncOverlays(); updateInputRegion() }
+  }
+
   const syncKeyboardMode = () => {
-    Gtk4LayerShell.set_keyboard_mode(win, barGrabbing() && !inputYield.active
+    const want = barGrabbing() && !inputYield.active
+
+    // Preferred path: a compositor focus grab. It gives this surface the keyboard
+    // while its layer-shell interactivity stays NONE — which is the point, because
+    // EXCLUSIVE is what puts us in m_exclusiveLSes and makes Hyprland refuse to move
+    // window focus (the whole reason core/InputYield exists), and because the
+    // compositor then does the outside-click dismissal the catcher was faking.
+    // acquire() answers synchronously, so a session where the shim is missing or the
+    // compositor is too old falls back per-open rather than being decided at boot.
+    if (want && !prismGrabIsCompositor) {
+      prismGrabIsCompositor = acquireFocusGrab(win.get_native()?.get_surface() ?? null, onPrismGrabCleared)
+      // Which path took is otherwise INVISIBLE — both end with a typeable Prism,
+      // and the fallback is only distinguishable by the bugs it brings back (the
+      // catcher covering the desktop, focus refusals for computer-use). Log it once
+      // per open so a session on the slow path can be diagnosed from the log alone.
+      console.log(`[Bar] Prism modality: ${prismGrabIsCompositor ? "compositor focus grab" : "layer-shell EXCLUSIVE (fallback)"}`)
+    } else if (!want && prismGrabIsCompositor) {
+      prismGrabIsCompositor = false
+      releaseFocusGrab()
+    }
+
+    // Under a compositor grab the layer surface must stay NONE: asking for
+    // EXCLUSIVE as well would re-add us to m_exclusiveLSes and hand back the exact
+    // problem the grab removes, while gaining nothing — we already have the keyboard.
+    Gtk4LayerShell.set_keyboard_mode(win, want && !prismGrabIsCompositor
       ? Gtk4LayerShell.KeyboardMode.EXCLUSIVE
       : Gtk4LayerShell.KeyboardMode.NONE)
   }
@@ -622,18 +679,21 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   status.connect("notify::bar-expanded-id", () => {
       if (status.bar_expanded_id) showExpansion(status.bar_expanded_id)
       else hideExpansion()
-      catcher.set_visible(status.isAnyOverlayOpen && !status.cc_edit_mode)
+      catcher.set_visible(catcherWanted())
       updateInputRegion()
   })
   status.connect("notify::prism-open", () => {
-    syncOverlays() // Call syncOverlays to update visibility and input region
-    // EXCLUSIVE (not ON_DEMAND) so the compositor grants keyboard focus to the
-    // layer surface immediately on open — with ON_DEMAND Hyprland withholds focus
-    // until the pointer enters/clicks, so the search caret wouldn't blink (and you
-    // couldn't type) until you moved the mouse. Same choice as the app grid, which
-    // only drops to ON_DEMAND when a Gtk.Popover context menu needs focus; Prism
-    // has no popover, so it stays EXCLUSIVE the whole time it's open.
+    // ORDER MATTERS, and it is the reverse of what it was. syncKeyboardMode decides
+    // whether the compositor grab took, and BOTH the catcher and the input region
+    // are computed from that answer — running syncOverlays first would stamp a
+    // screen-covering region and show the catcher for a state that wants neither,
+    // with nothing scheduled to correct it.
+    //
+    // Fallback path (no shim / older compositor): EXCLUSIVE, not ON_DEMAND — with
+    // ON_DEMAND Hyprland withholds focus until the pointer enters or clicks, so the
+    // search caret wouldn't blink (and you couldn't type) until you moved the mouse.
     syncKeyboardMode()
+    syncOverlays() // visibility + input region, now with the grab state settled
   })
   
   syncOverlays()

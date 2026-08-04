@@ -32,6 +32,7 @@ PROTOCOLS=(
   "$WL_PROTO_DIR/staging/ext-image-copy-capture/ext-image-copy-capture-v1.xml"
   "$WL_PROTO_DIR/staging/ext-image-capture-source/ext-image-capture-source-v1.xml"
   "$WL_PROTO_DIR/staging/ext-foreign-toplevel-list/ext-foreign-toplevel-list-v1.xml"
+  "$HYPR_PROTO_DIR/hyprland-focus-grab-v1.xml"
   "$HYPR_PROTO_DIR/hyprland-surface-v1.xml"
   "$HYPR_PROTO_DIR/hyprland-toplevel-mapping-v1.xml"
   "$WLR_PROTO_DIR/wlr-foreign-toplevel-management-unstable-v1.xml"

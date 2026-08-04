@@ -17,6 +17,12 @@
  *     monitor-sized layers tax every repaint of every window. Declaring the region
  *     a surface actually paints recovers ~88% of that. See tech-debt §46.
  *
+ *  3. FOCUS GRAB (hyprland-focus-grab-v1). Keyboard focus for a layer surface
+ *     WITHOUT layer-shell's EXCLUSIVE interactivity, plus compositor-side
+ *     outside-click dismissal. Replaces two long-standing kludges: the full-screen
+ *     invisible "catcher" buttons, and the EXCLUSIVE/ON_DEMAND dance whose release
+ *     is double-buffered (core/InputYield, HyprlandState.afterGrabRelease).
+ *
  * Symbol prefix `nidara_wl`, namespace `NidaraWl` — from GJS:
  *
  *     import NidaraWl from "gi://NidaraWl";
@@ -194,5 +200,89 @@ gboolean nidara_wl_visible_region_commit (GdkSurface *surface);
  * a way the region does not describe yet.
  */
 void nidara_wl_visible_region_clear (GdkSurface *surface);
+
+/* ------------------------------------------------------------- focus grab */
+
+/**
+ * nidara_wl_has_focus_grab:
+ *
+ * Whether the compositor advertises hyprland_focus_grab_manager_v1.
+ *
+ * Returns: %TRUE if focus grabs are supported
+ */
+gboolean nidara_wl_has_focus_grab (void);
+
+/**
+ * NidaraWlFocusGrabClearedFunc:
+ * @user_data: the data passed to nidara_wl_focus_grab_acquire()
+ *
+ * Called when the compositor takes the grab away — see
+ * nidara_wl_focus_grab_acquire() for the three things that do that. It is NOT
+ * called when the grab is dropped by nidara_wl_focus_grab_release(): that path
+ * is the caller's own decision and it already knows.
+ */
+typedef void (*NidaraWlFocusGrabClearedFunc) (gpointer user_data);
+
+/**
+ * nidara_wl_focus_grab_acquire:
+ * @surface: the #GdkSurface that should own keyboard and pointer
+ * @cleared: (nullable) (scope notified) (closure user_data) (destroy destroy):
+ *   called when the compositor clears the grab
+ * @user_data: data for @cleared
+ * @destroy: (nullable): called when @user_data is no longer needed
+ *
+ * Restricts input to @surface. While the grab holds:
+ *
+ *  - @surface receives keyboard focus even with layer-shell interactivity NONE
+ *    (CFocusGrab drives CFocusState::rawSurfaceFocus directly, which does not
+ *    look at interactivity). This is the point: EXCLUSIVE is what puts a surface
+ *    in Hyprland's m_exclusiveLSes, and that list makes the compositor REFUSE to
+ *    move window focus at all — the reason core/InputYield had to exist.
+ *  - a pointer press outside @surface clears the grab and dismisses, without any
+ *    widget of ours having to cover the screen to notice it.
+ *  - the pointer merely MOVING outside is clamped to @surface, so nothing under
+ *    us gets phantom hover.
+ *  - on release the compositor refocuses the window the user came from, honouring
+ *    input:follow_mouse. We no longer do that by hand.
+ *
+ * ⚠️ There is exactly ONE grab slot in the compositor (CSeatManager::m_seatGrab)
+ * and xdg-shell popups use the SAME slot for their own grab. So a #GtkPopover
+ * with autohide opening anywhere in the process will evict this grab, and
+ * @cleared will fire. Three things clear a grab, and they are indistinguishable
+ * from the client side:
+ *
+ *   1. the user pressed outside @surface (the dismissal we want),
+ *   2. a popup grab took the slot,
+ *   3. a layer surface mapped with interactivity != NONE (LayerSurface.cpp).
+ *
+ * Treat @cleared as "you no longer hold input", not as "the user dismissed you",
+ * and re-acquire if the surface is still meant to be up.
+ *
+ * Acquiring while another grab of ours is live releases that one first.
+ *
+ * Returns: %TRUE if the grab reached the compositor. %FALSE means no support or
+ *   an unmapped surface — the caller must keep its old mechanism in that case.
+ */
+gboolean nidara_wl_focus_grab_acquire (GdkSurface                   *surface,
+                                       NidaraWlFocusGrabClearedFunc  cleared,
+                                       gpointer                      user_data,
+                                       GDestroyNotify                destroy);
+
+/**
+ * nidara_wl_focus_grab_release:
+ *
+ * Gives the grab back. Unlike dropping layer-shell keyboard interactivity — which
+ * is double-buffered and only applies on the surface's next commit, a ~12 ms race
+ * that cost us afterGrabRelease() — this takes effect when the compositor reads
+ * the request. No-op when nothing is held.
+ */
+void nidara_wl_focus_grab_release (void);
+
+/**
+ * nidara_wl_focus_grab_active:
+ *
+ * Returns: %TRUE while a grab acquired here is believed to be held
+ */
+gboolean nidara_wl_focus_grab_active (void);
 
 G_END_DECLS
