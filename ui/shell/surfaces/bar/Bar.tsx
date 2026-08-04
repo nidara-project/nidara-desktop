@@ -170,6 +170,26 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
   catcher.connect("clicked", dismissOverlays)
 
+  // An EMPTY stretch of the bar strip dismisses too — and neither of the other two
+  // mechanisms can do that, which is why the gap existed at all. The catcher is one
+  // full-window button, so covering the strip with it would swallow the capsule
+  // presses that make switching surfaces ONE click; and under a focus grab the strip
+  // belongs to the surface we whitelist, so the compositor rightly reads a press
+  // there as "inside" and accepts it. Only GTK can tell "a capsule" from "the bar
+  // around it": a capsule's own gesture CLAIMS the sequence, which cancels this
+  // bubble-phase one, so it fires exactly when the press hit no control. Both
+  // properties at once — the one-click switch AND dismissal — for the first time.
+  // (The same rule as every other desktop's chrome: an empty click in the menu bar
+  // / top bar / taskbar closes what is open.)
+  const barStripClick = new Gtk.GestureClick()
+  barStripClick.set_propagation_phase(Gtk.PropagationPhase.BUBBLE)
+  barStripClick.connect("pressed", () => {
+    // On PRESS, not release: that is when the compositor dismisses on the outside
+    // path, and the two gestures should not feel different.
+    if (status.isAnyOverlayOpen) dismissOverlays()
+  })
+  barBox.add_controller(barStripClick)
+
   masterOverlay.set_child(barBox)
   masterOverlay.add_overlay(catcher)       // behind panels, above bar base
   masterOverlay.add_overlay(expansionCapsule)  // above catcher, below major overlays

@@ -112,6 +112,15 @@ Acquiring while someone holds also **invokes the previous owner's `cleared`** �
 indistinguishable from a popup stealing the slot, and an owner left believing it is still modal never
 re-acquires.
 
+🔑 **The bar strip is INSIDE the grab, so dismissing there is GTK's job.** The whole point of
+whitelisting the bar is that a press on it is accepted — which also means the compositor will never
+dismiss for a press on the empty space between capsules. The catcher could not cover that space
+either (it is one full-window button; covering the strip would swallow the capsule presses that make
+switching one click). Only GTK can tell a capsule from the bar around it: a **bubble-phase
+`GestureClick` on `barBox`** fires only when no control claimed the sequence, and calls
+`dismissOverlays()`. Keep the three dismissal paths (catcher, `cleared`, strip gesture) sharing that
+one body so they cannot drift.
+
 ⚠️ **Scope each `cleared` handler to what its own surface owns.** The bar closes only its overlays,
 the island only `island_mode`; a handler reaching further would shut whatever the other surface just
 opened. The catchers, which see a real click rather than an eviction, keep the wider "close
