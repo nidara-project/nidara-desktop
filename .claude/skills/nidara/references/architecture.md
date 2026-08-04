@@ -116,10 +116,21 @@ re-acquires.
 whitelisting the bar is that a press on it is accepted — which also means the compositor will never
 dismiss for a press on the empty space between capsules. The catcher could not cover that space
 either (it is one full-window button; covering the strip would swallow the capsule presses that make
-switching one click). Only GTK can tell a capsule from the bar around it: a **bubble-phase
-`GestureClick` on `barBox`** fires only when no control claimed the sequence, and calls
-`dismissOverlays()`. Keep the three dismissal paths (catcher, `cleared`, strip gesture) sharing that
-one body so they cannot drift.
+switching one click). Only GTK can tell a capsule from the bar around it, via a **bubble-phase
+`GestureClick` on `masterOverlay`** that calls `dismissOverlays()`. Keep the three dismissal paths
+(catcher, `cleared`, strip gesture) sharing that one body so they cannot drift. Two traps in it:
+
+- ⚠️ **It cannot assume the control "claimed" the press.** `SquircleContainer`'s click gesture fires
+  on `pressed` and deliberately does NOT claim the sequence (a competing `GestureDrag` must be able
+  to cancel it — that is how banners swipe). So a bubble gesture runs **in addition to** the
+  capsule's, and dismissing unconditionally closes the panel the capsule opened one event earlier.
+  It has to ask what it hit: `pick()` the point and walk up to the overlay, skipping if anything on
+  the way carries a `Gtk.Gesture`. Asking the widget beats an allowlist of "the bar's background",
+  which rots silently every time the bar grows a widget.
+- ⚠️ **`masterOverlay`, not `barBox`.** `.bar-centerbox` carries `margin-top: 8px`, and a CSS margin
+  lies OUTSIDE the allocation: the bar window is 40px tall and `barBox` measures **y=8, h=32, x=8**
+  (`query_ui`), so the 8px bands above it and at both ends belong to the overlay behind it. They are
+  inside the input region and read as bar to the user.
 
 ⚠️ **Scope each `cleared` handler to what its own surface owns.** The bar closes only its overlays,
 the island only `island_mode`; a handler reaching further would shut whatever the other surface just
