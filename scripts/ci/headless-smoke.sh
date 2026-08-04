@@ -56,6 +56,7 @@ phase_deps() {
         pipewire wireplumber \
         nodejs npm gjs go \
         hyprland mesa dbus zstd seatd systemd \
+        wayland-protocols hyprland-protocols \
         grim jq librsvg \
         ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji
 
@@ -122,6 +123,19 @@ phase_deps() {
 # Phase: bundle — SCSS + ags bundle of the COMMITTED tree (as root)
 # ─────────────────────────────────────────────────────────────────────────────
 phase_bundle() {
+    # libnidara-wl first: the shell resolves `gi://NidaraWl` at import time, so a
+    # missing typelib is a boot failure, not a degraded feature.
+    log "libnidara-wl…"
+    local wl_build="$REPO/build/nidara-wl"
+    "$REPO/lib/nidara-wl/build.sh" "$wl_build" >/dev/null
+    install -Dm755 "$wl_build/libnidara-wl.so.0.0.0" /usr/lib/libnidara-wl.so.0.0.0
+    ln -sf libnidara-wl.so.0.0.0 /usr/lib/libnidara-wl.so.0
+    ln -sf libnidara-wl.so.0     /usr/lib/libnidara-wl.so
+    install -Dm644 "$wl_build/NidaraWl-1.0.typelib" \
+        /usr/lib/girepository-1.0/NidaraWl-1.0.typelib
+    ldconfig
+    log "libnidara-wl OK"
+
     cd "$REPO/ui/shell"
     log "npm install…"
     npm install

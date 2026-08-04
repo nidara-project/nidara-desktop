@@ -10,6 +10,7 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
 | UI framework | AGS v3 (Astal + Gnim JSX) |
 | Toolkit | GTK4 (pure — libadwaita fully removed) |
 | Wayland surfaces | gtk4-layer-shell (layer-shell protocol), `Gtk4SessionLock` (ext-session-lock-v1) |
+| Raw Wayland from GJS | **`lib/nidara-wl/`** — the project's own C+GIR shim (see below) |
 | Compositor | Hyprland ≥ 0.55 (config in **Lua**) |
 | Session manager | **uwsm** (manages the session as systemd units/scopes) |
 | Display manager | greetd (default; only installed if no other DM is enabled) |
@@ -21,6 +22,48 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
 | Qt look | Kvantum + qt5ct/qt6ct (synced from the theme engine) |
 
 `@girs/` (≈58 MB of auto-generated GI typings) is **git-ignored**; it only powers local typecheck and editor IntelliSense.
+
+## `lib/nidara-wl/` — the Wayland shim (the project's only native library)
+
+**Why it exists:** GJS cannot speak raw Wayland. `libwayland-client` has no introspection, and
+`gdk_wayland_surface_get_wl_surface` is `introspectable="0"` in `GdkWayland-4.0.gir`. Two things the
+shell needs are unreachable from TypeScript without a C shim, and they are the *same* shim, which is
+why one library carries both:
+
+| Capability | Protocol | What it unlocks |
+|---|---|---|
+| `capture_window()` → `GdkTexture` | `ext-image-copy-capture` + `ext-foreign-toplevel-image-capture-source` + `hyprland-toplevel-mapping` | Real window thumbnails (Overview, window switcher) |
+| `visible_region_*()` | `hyprland-surface-v1` **v2** | The layer-blur cost in `tech-debt.md` §46 |
+
+Built by `lib/nidara-wl/build.sh` — plain `cc` + `wayland-scanner` + `g-ir-scanner`, deliberately no
+build system, same reasoning as `bin/nidara-input.c`. Installed to `/usr/lib/libnidara-wl.so*` with
+the typelib on the **default** girepository path, so all three bundles just `import NidaraWl from
+"gi://NidaraWl"` with no `GI_TYPELIB_PATH`.
+
+**Facts worth not rediscovering** (all verified in Hyprland 0.56's source and on real hardware):
+
+- **Capturing a window that is NOT visible works, and costs one render pass.** Hyprland re-renders
+  the window on demand into an export framebuffer (`ScreenshareFrame.cpp`: `RPT_EXPORT` +
+  `renderWindow(...)`); it does **not** copy the client's last buffer, and it does **not** check
+  visibility. So a window on another workspace captures its last committed content. `misc:render_
+  unfocused_fps` is **not** needed — do not turn it on for thumbnails, that is continuous GPU work.
+- **Identity is exact, not guessed.** `hyprland-toplevel-mapping` returns the same window address
+  `hyprctl clients` reports, so a capture never has to be matched by title or class.
+- **Capture is async and parallel-friendly**: ~8-20 ms each, 4 windows in ~68 ms wall-clock. Each
+  capture runs on a worker thread with its **own** Wayland connection — it never touches GDK's event
+  queue. The visible-region side is the opposite: it rides GDK's connection (the surfaces are GDK's)
+  on a private `wl_event_queue`, and only ever sends requests.
+- **Captures come back at the window's real size** (~14 MB for 2560×1440). Always pass
+  `max_width`/`max_height`; the shim scales with cairo and hands back only the thumbnail.
+- ⚠️ **The visible region only applies on the next real `wl_surface.commit`.** A surface whose
+  content does not change may never commit, and `queue_draw()` alone is not enough — GTK skips the
+  frame when the render node is identical. `visible_region_commit()` returning `TRUE` means
+  *delivered*, not *in effect*. Declare the region as part of a change that repaints.
+- ⚠️ **Anything outside a declared region is not drawn at all** (hard GL scissor; an empty
+  intersection cancels the element). The failure mode is "the surface vanished". `visible_region_
+  clear()` is the escape hatch.
+- ⚠️ When the shell starts importing `gi://NidaraWl`, CI's **`@girs/` snapshot needs refreshing** or
+  typecheck fails on a type it has never seen — see `dev-workflow.md`.
 
 ## Boot sequence
 

@@ -245,7 +245,7 @@ PACMAN_DEPS="base-devel glib2-devel cmake meson ninja gobject-introspection vala
     jq curl slurp grim wf-recorder wl-clipboard cliphist mesa pam
     pipewire pipewire-audio pipewire-alsa pipewire-pulse wireplumber
     git nodejs npm gjs go
-    at-spi2-core wtype wlr-protocols wayland
+    at-spi2-core wtype wlr-protocols wayland wayland-protocols hyprland-protocols
     accountsservice greetd pavucontrol rust cargo
     hyprland hypridle hyprsunset uwsm power-profiles-daemon python-gobject
     kitty nautilus gnome-calculator
@@ -771,6 +771,25 @@ cc -O2 "$REPO_DIR/bin/nidara-input.c" "$VP_BUILD/wlr-virtual-pointer-unstable-v1
     -I"$VP_BUILD" $(pkg-config --cflags --libs wayland-client) -o "$VP_BUILD/nidara-input"
 sudo install -m755 "$VP_BUILD/nidara-input" /usr/bin/nidara-input
 rm -rf "$VP_BUILD"
+
+# libnidara-wl: the Wayland shim GJS cannot do without (window capture for real
+# thumbnails, hyprland-surface set_visible_region for the layer-blur cost). Built
+# the same way as nidara-input — no build system, just cc + wayland-scanner —
+# plus g-ir-scanner so `import NidaraWl from "gi://NidaraWl"` resolves.
+#
+# The typelib goes to the DEFAULT girepository path, so nothing has to set
+# GI_TYPELIB_PATH: the shell, the greeter and the lockscreen all find it.
+WL_BUILD="$(mktemp -d)"
+"$REPO_DIR/lib/nidara-wl/build.sh" "$WL_BUILD" >/dev/null
+sudo install -Dm755 "$WL_BUILD/libnidara-wl.so.0.0.0" /usr/lib/libnidara-wl.so.0.0.0
+sudo ln -sf libnidara-wl.so.0.0.0 /usr/lib/libnidara-wl.so.0
+sudo ln -sf libnidara-wl.so.0    /usr/lib/libnidara-wl.so
+sudo install -Dm644 "$WL_BUILD/NidaraWl-1.0.typelib" \
+    /usr/lib/girepository-1.0/NidaraWl-1.0.typelib
+sudo install -Dm644 "$WL_BUILD/NidaraWl-1.0.gir" \
+    /usr/share/gir-1.0/NidaraWl-1.0.gir
+sudo ldconfig
+rm -rf "$WL_BUILD"
 
 # systemd user unit — the shell respawns on crash instead of leaving a bare
 # compositor (see bin/nidara.service). NOT enabled by target: it's

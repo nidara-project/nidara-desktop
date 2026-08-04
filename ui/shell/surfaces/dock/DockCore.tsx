@@ -91,6 +91,8 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
     // Declared early so revealState() never hits a TDZ; assigned in their sections.
     let appGridPanelOpen = false
+    // Stays true through the close animation — see RevealState.appGridPainting.
+    let appGridPainting = false
     let fullscreenMode = false
 
     const unpinnedOpenOrder = new Map<string, number>()
@@ -215,7 +217,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
     const revealState = (): RevealState => ({
         isRevealed, slideCurrent, slideTarget, fullscreenMode, appGridPanelOpen,
-        menuOpenCount: menuState.openCount,
+        appGridPainting, menuOpenCount: menuState.openCount,
     })
 
     const setRevealed = (reveal: boolean) => {
@@ -1291,7 +1293,13 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     const closeAppGridPanel = () => {
         if (!appGridPanelOpen) return
         appGridPanelOpen = false
-        appGrid.setVisible(false)
+        // Set BEFORE the animation starts, cleared by its onDone: between those
+        // two points the grid is gone logically but still on screen.
+        appGridPainting = true
+        appGrid.setVisible(false, () => {
+            appGridPainting = false
+            axis.buildInputRegion(win, smoothedBarMain, revealState())
+        })
         appGrid.setActive(false)
         win.set_focus(null)
         win.set_focusable(false)

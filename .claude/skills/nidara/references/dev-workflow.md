@@ -125,6 +125,35 @@ cd ui/shell && npm run build            # SCSS + ags bundle
 ags request toggleAppGrid                # send an IPC command
 ```
 
+### Rebuilding the Wayland shim (`lib/nidara-wl/`)
+
+TSX changes reload with `Super+Shift+R`; the C shim does not. After editing `nidara-wl.c/.h` the
+library and typelib have to be rebuilt **and reinstalled system-wide** — the shell resolves
+`gi://NidaraWl` from the default girepository path, so a fresh build sitting in `lib/nidara-wl/build/`
+changes nothing until it is installed.
+
+```bash
+lib/nidara-wl/build.sh                    # → lib/nidara-wl/build/ (.so + .gir + .typelib)
+sudo install -Dm755 lib/nidara-wl/build/libnidara-wl.so.0.0.0 /usr/lib/libnidara-wl.so.0.0.0
+sudo ln -sf libnidara-wl.so.0.0.0 /usr/lib/libnidara-wl.so.0
+sudo ln -sf libnidara-wl.so.0     /usr/lib/libnidara-wl.so
+sudo install -Dm644 lib/nidara-wl/build/NidaraWl-1.0.typelib /usr/lib/girepository-1.0/
+sudo install -Dm644 lib/nidara-wl/build/NidaraWl-1.0.gir     /usr/share/gir-1.0/
+sudo ldconfig
+```
+
+To try it without installing (handy for a throwaway test script):
+
+```bash
+GI_TYPELIB_PATH=lib/nidara-wl/build LD_LIBRARY_PATH=lib/nidara-wl/build gjs -m test.js
+```
+
+⚠️ **Two things go stale silently.** The `.gir` in `/usr/share/gir-1.0/` is what `ags types -d .`
+reads to generate `@girs/NidaraWl-1.0` — skip installing it and the local typecheck reports the new
+API as nonexistent. And CI's typecheck uses the **`@girs/` snapshot from the `ci-assets` release**,
+which knows nothing about `NidaraWl` until a maintainer refreshes it; the first PR that imports the
+shim needs that refresh or typecheck fails on CI while passing locally.
+
 ### Adding a widget (auto-registration)
 
 Create ONE file in `ui/shell/widgets/` that default-exports a

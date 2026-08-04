@@ -17,10 +17,13 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import { DOCK_CONSTANTS, calculateDockItemMetrics } from "./DockPhysics"
 import { drawSquircle } from "../../common/DrawingUtils"
+import { setVisibleRect } from "../../common/VisibleRegion"
 import Theme from "../../core/ThemeManager"
 import inputYield from "../../core/InputYield"
 import { dockSettings, dockSideState } from "./state"
 import type { AnimState } from "./state"
+
+type Rect = { x: number, y: number, width: number, height: number }
 
 // Widgets the adapter builds; DockCore assembles them into the window.
 export interface AxisWidgets {
@@ -60,6 +63,11 @@ export interface RevealState {
     slideTarget: number
     fullscreenMode: boolean
     appGridPanelOpen: boolean
+    // The grid's CLOSE is animated, so the flag above goes false a whole
+    // animation before the grid stops painting. The blur region must follow what
+    // is being DRAWN, not what is logically open — declaring the dock's small
+    // rect early scissors the tail of the close.
+    appGridPainting: boolean
     menuOpenCount: number
 }
 
@@ -340,10 +348,37 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             // Apply only when the region's shape changed (see verticalAxis note). This
             // runs every frame during the autohide slide, so the region itself is only
             // built when the key changes — the hot path is integer math + a compare.
-            const apply = (key: string, set: () => void) => {
+            // `blur` defaults to null so every branch that does NOT pass one clears
+            // the declaration. That default is the safety property: a new dock state
+            // added later gets the un-optimised full surface, never a stale rect.
+            const apply = (key: string, set: () => void, blur: Rect | null = null) => {
                 if (key === lastRegionKey) return
                 lastRegionKey = key
                 set()
+                setBlurRect(blur)
+            }
+            // The BLUR region rides the same key/apply cycle as the input region —
+            // both answer "what is the dock right now", so computing them apart
+            // would let them drift, which is exactly the disagreement CROSS_PAD
+            // exists to prevent on the input side.
+            //
+            // It is NOT the same rectangle, though: the input region is what you can
+            // CLICK, the visible region is what gets DRAWN, and the dock paints well
+            // outside its hit area — shadow, tooltips, glass bubbles, context menu.
+            // Hence the padding, and hence "declare only at rest": every state that
+            // can paint something this rect does not describe clears it instead.
+            // A wrong region here does not degrade the dock, it ERASES it.
+            const BLUR_PAD_CROSS = 260   // tooltips + bubbles rise above the pill
+            const BLUR_PAD_MAIN = 200    // magnified icons + shadow spread sideways
+            const setBlurRect = (rect: Rect | null) => {
+                if (!rect) { setVisibleRect(surface, null); return }
+                const x = Math.max(0, rect.x - BLUR_PAD_MAIN)
+                const y = Math.max(0, rect.y - BLUR_PAD_CROSS)
+                setVisibleRect(surface, {
+                    x, y,
+                    width: Math.min(monMain - x, rect.width + BLUR_PAD_MAIN * 2),
+                    height: WIN_H - y,
+                })
             }
             const setRect = (rect: { x: number, y: number, width: number, height: number } | null) => () => {
                 const region = new Cairo.Region()
@@ -382,7 +417,10 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             const x = Math.round((monMain - width) / 2)
             const y = Math.floor(WIN_H - h)
             const height = WIN_H - y
-            apply(`body:${x},${y},${width},${height}`, setRect({ x, y, width, height }))
+            const painting = st.appGridPainting
+            apply(`body:${x},${y},${width},${height}:${painting ? 1 : 0}`,
+                  setRect({ x, y, width, height }),
+                  painting ? null : { x, y, width, height })
         },
 
         mainStart: (extent: number) => Math.max(0, (monMain - extent) / 2),

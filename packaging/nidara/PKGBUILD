@@ -64,7 +64,11 @@ depends=(
   # explicitly instead of relying on adwaita-icon-theme happening to depend on it
   papirus-icon-theme adwaita-icon-theme adwaita-cursors
 )
-makedepends=(nodejs npm wlr-protocols pkgconf)
+# wayland-protocols + hyprland-protocols supply the XML that wayland-scanner turns
+# into libnidara-wl's glue; gobject-introspection supplies g-ir-scanner, without
+# which the shell's `gi://NidaraWl` import has nothing to resolve.
+makedepends=(nodejs npm wlr-protocols wayland-protocols hyprland-protocols
+             gobject-introspection pkgconf)
 backup=(etc/xdg-desktop-portal/hyprland-portals.conf)
 options=(!debug)
 
@@ -110,6 +114,10 @@ build() {
   wayland-scanner private-code  "$xml" build/wlr-virtual-pointer-unstable-v1-protocol.c
   cc -O2 bin/nidara-input.c build/wlr-virtual-pointer-unstable-v1-protocol.c \
      -Ibuild $(pkg-config --cflags --libs wayland-client) -o build/nidara-input
+
+  # libnidara-wl: window capture + hyprland-surface visible region, reachable
+  # from GJS via introspection (mirrors install.sh §6)
+  lib/nidara-wl/build.sh "$srcdir/nidara-desktop-$pkgver/build/nidara-wl"
 }
 
 package() {
@@ -124,6 +132,19 @@ package() {
     install -Dm755 "bin/$b" "$pkgdir/usr/bin/$b"
   done
   install -Dm755 build/nidara-input "$pkgdir/usr/bin/nidara-input"
+
+  # libnidara-wl + its typelib. The typelib MUST land on the default
+  # girepository path: the three bundles import gi://NidaraWl with no
+  # GI_TYPELIB_PATH of their own, so a private location would resolve in a --dev
+  # checkout and fail for every packaged install.
+  install -Dm755 build/nidara-wl/libnidara-wl.so.0.0.0 \
+    "$pkgdir/usr/lib/libnidara-wl.so.0.0.0"
+  ln -sf libnidara-wl.so.0.0.0 "$pkgdir/usr/lib/libnidara-wl.so.0"
+  ln -sf libnidara-wl.so.0     "$pkgdir/usr/lib/libnidara-wl.so"
+  install -Dm644 build/nidara-wl/NidaraWl-1.0.typelib \
+    "$pkgdir/usr/lib/girepository-1.0/NidaraWl-1.0.typelib"
+  install -Dm644 build/nidara-wl/NidaraWl-1.0.gir \
+    "$pkgdir/usr/share/gir-1.0/NidaraWl-1.0.gir"
 
   # /usr/share/nidara — bundles, styles, assets, shared config
   install -Dm644 VERSION "$pkgdir/usr/share/nidara/VERSION"

@@ -37,7 +37,7 @@ export interface AppGridPanelHandle {
     handleKey: (keyval: number) => boolean
     setKeyboardModeCallback: (onExclusive: () => void, onDemand: () => void) => void
     setActive: (active: boolean) => void
-    setVisible: (open: boolean) => void
+    setVisible: (open: boolean, onDone?: () => void) => void
 }
 
 export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void): AppGridPanelHandle {
@@ -216,38 +216,15 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     scroll.height_request = scrollHeight
     scrollBox.hexpand = true
 
-    // ── Fade overlay ───────────────────────────────────────────────────────
+    // Still needed by the keyboard navigation below, not by any fade.
     const adj = scroll.get_vadjustment()
-    const FADE = 32
-    const fadeDA = new Gtk.DrawingArea({ hexpand: true, vexpand: true, can_target: false })
-    fadeDA.set_draw_func((_da: any, cr: any, w: number, h: number) => {
-        if (w <= 0 || h <= 0) return
-        const val   = adj.get_value()
-        const upper = adj.get_upper()
-        const page  = adj.get_page_size()
-        const [r, g, b] = Theme.chromeIsDark ? [0, 0, 0] : [1, 1, 1]   // shell skin — follows appearance pin
-        const a = Theme.overlayOpacity
-        cr.setOperator(2)
-        if (val > 0.5) {
-            const g1 = new Cairo.LinearGradient(0, 0, 0, FADE)
-            g1.addColorStopRGBA(0, r, g, b, a)
-            g1.addColorStopRGBA(1, r, g, b, 0)
-            cr.setSource(g1); cr.rectangle(0, 0, w, FADE); cr.fill()
-        }
-        if (val < upper - page - 0.5) {
-            const g2 = new Cairo.LinearGradient(0, h - FADE, 0, h)
-            g2.addColorStopRGBA(0, r, g, b, 0)
-            g2.addColorStopRGBA(1, r, g, b, a)
-            cr.setSource(g2); cr.rectangle(0, h - FADE, w, FADE); cr.fill()
-        }
-    })
-    adj.connect("value-changed", () => fadeDA.queue_draw())
-    adj.connect("changed",       () => fadeDA.queue_draw())
-    Theme.connect("changed",     () => { if (fadeDA.get_mapped()) fadeDA.queue_draw() })
 
+    // No scroll-edge fade here. It used to be a separate DrawingArea overlaid on
+    // the scroller, painting the chrome colour at overlayOpacity — which meant it
+    // was not part of the panel and did not follow the panel's close animation, so
+    // it visibly outlived it. The scrollbar already signals "there is more".
     const scrollOverlay = new Gtk.Overlay()
     scrollOverlay.set_child(scrollBox)
-    scrollOverlay.add_overlay(fadeDA)
 
     const gridArea = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
@@ -279,7 +256,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     // Shared overlay pop — same grow+fade as CC/NC/Prism. The docks call
     // setVisible() instead of toggling .visible directly so it animates.
     const panelPop = new ScaleRevealer(squirclePanel, { ...OVERLAY_POP, pivot: "center" })
-    const setVisible = (open: boolean) => panelPop.reveal(open)
+    const setVisible = (open: boolean, onDone?: () => void) => panelPop.reveal(open, onDone)
     contentBox.margin_top    = 28
     contentBox.margin_start  = 32
     contentBox.margin_end    = 32

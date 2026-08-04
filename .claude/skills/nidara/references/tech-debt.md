@@ -2031,6 +2031,24 @@ vanish** rather than degrade. There is exactly 1px of tolerance (`visibleRegion.
 Confirmed in the source and live: with a 1200x400 shape declared visible only over its left 400px,
 the other 800px — frame included — simply were not there.
 
+#### ✅ 2026-08-04: the blocker is gone — `lib/nidara-wl/` exists
+
+The C library described above is built and packaged (`install.sh`, PKGBUILD, headless smoke), and the
+region path is verified end-to-end **from GJS**: a 800x400 layer window declaring a 220x110 region
+draws only that patch. `hyprland_surface_manager_v1` advertises **v2** on Hyprland 0.56, so the
+request is live, not theoretical. See `architecture.md` → "`lib/nidara-wl/`".
+
+⚠️ **One trap found while wiring it, and it looks exactly like success:** the region only applies on
+the next real `wl_surface.commit`. The first A/B here showed *no clipping at all* with the request
+delivered and no error — the test window's content never changed, so GTK never committed.
+`gtk_widget_queue_draw()` alone does not force it. **Declare the region as part of a change that
+repaints**, and do not trust a `TRUE` return as proof it took effect.
+
+**What is left is the per-surface work, which was always the real cost:** each surface has to know
+what it is currently showing. Order by risk — island (own layer, modes already explicit state), then
+dock (~200 px of margin for magnification and bubbles), then bar (its `Gtk.Overlay` overlays make the
+region hardest, and it is the one whose failure is most visible).
+
 ---
 
 ## Meta: how to interpret "tech debt" here
