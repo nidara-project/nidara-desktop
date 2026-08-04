@@ -162,6 +162,13 @@ export function NotificationPopupsWidget() {
 
         box.append(revealer)
         entries.set(id, { revealer, capsule, order: orderSeq++, n })
+        // The stack just went from empty to occupied. The input stamp above can
+        // wait for its idle (a banner isn't clickable until it has grown in
+        // anyway), but the bar's VISIBLE region cannot: it declares only the bar
+        // strip while nothing else paints, and anything outside a declared region
+        // is not drawn at all — an idle late means a banner that never appears.
+        // Synchronous, and only ever in the safe direction (this clears it).
+        ;(box as any).onContentAppeared?.()
 
         // Retire the oldest banners past the cap.
         if (entries.size > MAX_VISIBLE) {

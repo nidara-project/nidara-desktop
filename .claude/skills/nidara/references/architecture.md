@@ -75,6 +75,17 @@ owns three decisions:
   mode above is a missing piece of desktop, so a user who hits it needs a bootable shell before they
   can report anything, and `systemctl --user set-environment` is reachable from a TTY.
 
+**Three surfaces declare a region today** — `DockAxis.ts` (horizontal dock), `IslandWindow.ts` and
+`Bar.tsx` — and they split into **two rules**. The dock knows its silhouette *before* it paints, so
+it declares in every state, hidden included. The island and the bar cannot: their content arrives
+through a `MorphRevealer`/`ScaleRevealer`, and a widget just made visible has no allocation until the
+next layout pass — so they declare **only at rest** and hand the whole surface back the instant
+anything is revealed or still animating (`get_visible()` is not enough on the way out; `tickId` is
+what says "still moving"). 🔑 **Before wiring a region to the same call sites that stamp the input
+region, re-read each one asking "can this arrive late?"** — a late input stamp costs a late click, a
+late visible stamp is a frame that is never drawn. That question is what found the notification
+banners' deliberately-deferred stamp in `NotificationPopups.tsx` (§46).
+
 ## Boot sequence
 
 1. Display manager (greetd by default) runs `/usr/bin/nidara` via `/usr/share/wayland-sessions/nidara.desktop`.

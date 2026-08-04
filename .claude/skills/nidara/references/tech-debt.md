@@ -1891,6 +1891,11 @@ Until then: **grep for `sameApp` before touching any of them.**
 `0 0 2560 1440`, **all three with blur**. Making the island resize itself was implemented, measured,
 and **reverted the same day**. Read the "what was ruled out" part before proposing it again.
 
+> **Status 2026-08-04: the three of them now declare a `set_visible_region`, measured at −7.0
+> (horizontal dock), −7.2 (island) and −6.9 (bar) GPU points each. The surfaces are still
+> monitor-sized — that is the point of the mechanism. What is left is the VERTICAL dock, which
+> declares nothing yet.**
+
 **The mechanism, because `ignore_alpha` makes it easy to guess wrong:** Hyprland charges layer blur
 by the surface's **BOX**, not by the pixels that end up visible. `ignore_alpha` decides what is SEEN
 blurred, not what is COMPUTED — it is cosmetic and buys nothing here. Cost ≈ *damaged area × number
@@ -2127,9 +2132,58 @@ visible one — it would be a chip that is not drawn for 400 ms. A pad wider tha
 does not. Every call site that stamps input has to be re-read with that question before it can be
 trusted to stamp blur too.
 
-Still to do: the **bar** (hardest — its overlays live inside its own window, so the region has to
-follow which overlay is open, and its failure is the most visible) and the **vertical dock**
-(`verticalAxis.buildInputRegion` declares nothing yet — mechanical, just the horizontal pattern).
+#### ✅ 2026-08-04: the BAR — the third and last monitor-sized layer
+
+The hard one on paper: every overlay in the shell lives inside this window (commandment #5), so the
+region has to follow which of them is open, and the failure mode is the most visible on the desktop.
+In practice the mechanism above made it small. Same harness, damage 1600x700 at y=200..900 (below the
+bar strip, above the dock's), dock and island declaring in BOTH arms:
+
+| | GPU |
+|---|---|
+| bar declares nothing | 19.3 % |
+| bar declares its strip | **12.4 %** |
+
+**−6.9 points**, ranges non-overlapping (18.9–19.7 vs 11.9–12.7). Declared rect **2560x64 = 4.4 %**
+of the box — the same order as the dock (−7.0) and the island (−7.2). Idle: 1.6 %.
+
+**Shape**: the island's rule, since the bar is in the island's situation, not the dock's — panels
+arrive through `ScaleRevealer`s and paint far outside the strip. So: declare `0,0 W x (strip+16)`
+only while nothing else in the window paints, hand the whole surface back otherwise. Full monitor
+WIDTH on purpose: the surface is that wide anyway, and it buys immunity to every capsule that resizes
+itself (window title, clock, tray). The height is where the entire 1440 → 64 win lives.
+
+🔑 **The "can this stamp be late?" audit found exactly one offender, and it was written in the code
+as a deliberate choice.** `NotificationPopups.tsx` defers its stamp to an idle *on purpose*, so it
+reads a settled allocation, reasoning that a banner is not clickable until it has grown in anyway.
+Correct for input, fatal for blur: a banner appended in one turn and declared an idle later is a
+banner that is **never drawn**. Fix is mechanical — appending fires a second, SYNCHRONOUS hook
+(`onContentAppeared`) that only ever clears the region; the deferred hook keeps owning input.
+`showExpansion` needed the same treatment (it makes the panel visible, then defers 16 ms to position
+and reveal it), and the `inputYield` early-return needed the region call the island's does: a yield
+changes who gets the CLICKS, not what is painted.
+
+🔑 **The predicate is WALKED off `masterOverlay`, not hand-listed** — a panel mounted there later is
+covered by construction. Three children are not panels and are documented at the call site: `barBox`
+(the strip itself), `catcher` (a click target that paints nothing — `.overlay-catcher` is
+`nidara-reset`), and `popups` (a container, `visible` whether or not it holds a banner — its
+CHILDREN are the content). **Skipping the catcher is not just tidiness**: it is what keeps the rect
+alive while an ISLAND mode is open. The catcher is shown for those, but the island paints on its own
+surface, so this window still shows only the strip — and a long-running activity (media, the
+assistant) is exactly when the saving is worth having. An earlier draft used
+`status.isAnyOverlayOpen` as a safety net and silently gave the optimisation away in that state.
+
+The rect is floored at `PANEL_TOP` rather than depending on the measurement, so the **first** stamp
+declares something instead of giving up until an overlay opens; the floor is right by construction
+(every panel in this window is positioned to start there). The real declaration rides the 300 ms
+opacity change — the shim only applies a region on a real commit, never on `queue_draw()` alone.
+
+Verified in the live session before measuring, one screenshot per state: rest, control centre, Prism,
+the expansion capsule (window menu) and a `notify-send` banner. All draw complete, all keep their
+blur.
+
+Still to do: the **vertical dock** (`verticalAxis.buildInputRegion` declares nothing yet — mechanical,
+just the horizontal pattern).
 
 ---
 
