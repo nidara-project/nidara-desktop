@@ -1891,10 +1891,11 @@ Until then: **grep for `sameApp` before touching any of them.**
 `0 0 2560 1440`, **all three with blur**. Making the island resize itself was implemented, measured,
 and **reverted the same day**. Read the "what was ruled out" part before proposing it again.
 
-> **Status 2026-08-04: the three of them now declare a `set_visible_region`, measured at −7.0
-> (horizontal dock), −7.2 (island) and −6.9 (bar) GPU points each. The surfaces are still
-> monitor-sized — that is the point of the mechanism. What is left is the VERTICAL dock, which
-> declares nothing yet.**
+> **Status 2026-08-04 — CLOSED. Every blurred surface declares a `set_visible_region`, each measured
+> on the real shell: horizontal dock −7.0, island −7.2, bar −6.9, vertical dock −7.9 GPU points. The
+> surfaces are still monitor-sized — that is the whole point of the mechanism. Kept here as the
+> record of what was ruled out (dynamic sizing, splitting a surface, `xray`) and of the two rules
+> that govern a region.**
 
 **The mechanism, because `ignore_alpha` makes it easy to guess wrong:** Hyprland charges layer blur
 by the surface's **BOX**, not by the pixels that end up visible. `ignore_alpha` decides what is SEEN
@@ -2182,8 +2183,38 @@ Verified in the live session before measuring, one screenshot per state: rest, c
 the expansion capsule (window menu) and a `notify-send` banner. All draw complete, all keep their
 blur.
 
-Still to do: the **vertical dock** (`verticalAxis.buildInputRegion` declares nothing yet — mechanical,
-just the horizontal pattern).
+#### ✅ 2026-08-04: the VERTICAL dock — the debt is CLOSED
+
+Mechanical, as predicted: `verticalAxis.buildInputRegion` now mirrors the horizontal one branch for
+branch (body rect computed before the branches, handed over by the fullscreen / auto-hide-trigger /
+menu branches, cleared for the yield and the app grid).
+
+| damage 1600x700 to the RIGHT of a left-side dock | GPU |
+|---|---|
+| no region | 20.8 % |
+| region declared | **12.9 %** |
+
+**−7.9 points**, ranges non-overlapping (20.3–21.2 vs 12.2–13.5). Declared rect **130x1252** — the
+biggest saving of the four surfaces.
+
+🔑 **The paying axis is SWAPPED, and it changes which padding is expensive.** Horizontally the
+surface is 2560x1440 to show a strip at the bottom, so the win is the height; vertically it is 2560
+wide to show a ~130px column, so the win is the WIDTH, and the tall rect (the ±250 main padding that
+was already in the input region) is nearly free — it only costs when damage lands inside a 130px
+column. Tightening it is a knob, not a fix; the horizontal axis' 260/200 → 24/24 experiment does not
+transfer, because there the padding was on the *wide* axis.
+
+⚠️ **The key-collision trap from #90 was already present here, latent.** Two branches (`appGridPanelOpen`
+and `menuOpenCount > 0`) both keyed `"null"`. Harmless while the key only guarded `set_input_region`,
+a real bug the moment a blur rect rides the same cycle: the menu branch declares the body rect, so a
+menu→grid transition would have matched the cached key and **scissored the app grid away**. Keys are
+now `grid` / `menu:<body>`.
+
+Verified live with the dock moved to the left: rest (full column, glass intact), app grid open (draws
+complete over the dock), auto-hide on→off (returns clean). Setting restored to `bottom` afterwards.
+
+**This closes §46's implementation.** All four blurred surfaces declare: horizontal dock −7.0,
+island −7.2, bar −6.9, vertical dock −7.9.
 
 ---
 

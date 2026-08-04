@@ -75,7 +75,7 @@ owns three decisions:
   mode above is a missing piece of desktop, so a user who hits it needs a bootable shell before they
   can report anything, and `systemctl --user set-environment` is reachable from a TTY.
 
-**Three surfaces declare a region today** — `DockAxis.ts` (horizontal dock), `IslandWindow.ts` and
+**Every blurred layer declares a region today** — `DockAxis.ts` (both axes), `IslandWindow.ts` and
 `Bar.tsx` — and they split into **two rules**. The dock knows its silhouette *before* it paints, so
 it declares in every state, hidden included. The island and the bar cannot: their content arrives
 through a `MorphRevealer`/`ScaleRevealer`, and a widget just made visible has no allocation until the

@@ -764,10 +764,50 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             // Apply only when the region's shape changed (see lastRegionKey note above).
             // Runs every frame during the autohide slide — the region is only built when
             // the key changes, so the hot path is integer math + a string compare.
-            const apply = (key: string, set: () => void) => {
+            // `blur` defaults to null, so a branch that does NOT pass one clears the
+            // declaration: a state added later gets the un-optimised full surface rather
+            // than a stale rect. Same contract as the horizontal axis.
+            const apply = (key: string, set: () => void, blur: Rect | null = null) => {
                 if (key === lastRegionKey) return
                 lastRegionKey = key
                 set()
+                setBlurRect(blur)
+            }
+            // Blur region: the mirror image of the horizontal axis (`tech-debt.md` §46),
+            // and the padding reasoning transfers unchanged — the tooltip and the context
+            // menu are `Gtk.Popover`s living in their own surfaces, the magnified bulge is
+            // already inside the rect via `peakIconCross` → `innerEdgeCross()`, and the
+            // main-axis slack is already in the body rect (PAD_MAIN below).
+            //
+            // 🔑 The axis that pays is swapped, though. Horizontally the surface is
+            // 2560x1440 to show a strip at the bottom, so the win is the HEIGHT; here it
+            // is 2560 wide to show a ~154px column, so the win is the WIDTH. That is why
+            // the generous ±250 main padding stays: it sits on the axis where the dock
+            // MOVES (items added, magnification, the bar re-centering), which is exactly
+            // where a rect that lags would erase icons — and it costs almost nothing next
+            // to the 2560 → 178 cut.
+            const BLUR_PAD_CROSS = 24
+            const BLUR_PAD_MAIN = 24
+            const setBlurRect = (rect: Rect | null) => {
+                if (!rect) { setVisibleRect(surface, null); return }
+                const y = Math.max(0, rect.y - BLUR_PAD_MAIN)
+                // Pin the OUTER edge to the screen wall (0 / WIN_W) with integers and pad
+                // only inward — same reason the input rect does: fractional geometry
+                // truncated by Cairo otherwise loses the last pixel column at the wall.
+                const x = position === 'left' ? 0 : Math.max(0, rect.x - BLUR_PAD_CROSS)
+                // Measured on the real shell (2560x1440@144, dock on the left, damage
+                // 1600x700 to the right of the column, 3 rounds, bar and island declaring
+                // in either branch): 20.8% → 12.9% GPU, −7.9 points for a 130x1252 rect.
+                // The biggest saving of the four surfaces, because the cut is the whole
+                // monitor WIDTH. The tall rect is the ±250 main padding and it is nearly
+                // free here — it only costs when damage lands inside a 130px column.
+                setVisibleRect(surface, {
+                    x, y,
+                    width: position === 'left'
+                        ? Math.min(WIN_W, rect.width + BLUR_PAD_CROSS)
+                        : WIN_W - x,
+                    height: Math.min(realizedMain - y, rect.height + BLUR_PAD_MAIN * 2),
+                })
             }
             const setRect = (rect: { x: number, y: number, width: number, height: number } | null) => () => {
                 const region = new Cairo.Region()
@@ -775,14 +815,40 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 if (rect) region.unionRectangle(rect)
                 surface.set_input_region(region)
             }
+            // The dock's silhouette in BUFFER coordinates, which is what the blur region
+            // speaks. Computed before the branches so each of them can hand it over
+            // instead of giving up.
+            //
+            // Width tracks the dock's current silhouette (pill at rest, pill+bulge on
+            // hover). CRITICAL: the strip must reach the screen edge EXACTLY. Geometry can
+            // be fractional (e.g. EXCLUSIVE_ZONE = pillHeight + screenGap), and Cairo
+            // truncates the rect to ints — so `x = WIN_W - pillW` (fractional) lost the
+            // last pixel column, dropping the cursor out of the region at the very wall
+            // (1px in worked, the wall didn't). Pin the outer edge to 0 / WIN_W with ints.
+            //
+            // 🔑 It stays valid while the dock is HIDDEN: `applySlide` moves the LAYER (the
+            // layer-shell side margin), not the content, and this rect is buffer-local —
+            // the pill never moves inside its own buffer, on screen or fully off it.
+            const pillW = innerEdgeCross()
+            const edgeX = position === 'left' ? 0 : Math.floor(WIN_W - pillW)
+            const width = position === 'left' ? Math.ceil(pillW) : WIN_W - edgeX
+            const ph = totalMain + DOCK_CONSTANTS.BASE_MARGIN * 2
+            const py = Math.max(0, Math.round(getGtkCenter(realizedMain) - ph / 2))
+            const PAD_MAIN = 250
+            const top = Math.max(0, py - PAD_MAIN)
+            const height = Math.round(Math.min(realizedMain - top, ph + PAD_MAIN * 2))
+            const body: Rect = { x: edgeX, y: top, width, height }
+            const bodyKey = `${edgeX},${top},${width},${height}`
+
             // Yielded for an agent action (core/InputYield): click-through, so a
             // synthetic click reaches the app rather than the open app grid — which
             // stamps the whole surface below. Its own key, so the restore recomputes
             // a different one and re-applies instead of matching a stale cache.
+            // No blur rect: the grid may be the thing painting.
             if (inputYield.active) { apply("yield", setRect(null)); return }
-            if (st.appGridPanelOpen) { apply("null", () => surface.set_input_region(null)); return }
+            if (st.appGridPanelOpen) { apply("grid", () => surface.set_input_region(null)); return }
             if (st.fullscreenMode && !st.appGridPanelOpen && !st.isRevealed) {
-                apply("empty", setRect(null)); return
+                apply(`fs:${bodyKey}`, setRect(null), body); return
             }
             const slideOff = Math.round(st.slideCurrent)
             if (dockSettings.autoHide && !st.isRevealed && slideOff >= this.hideDistance * 0.8) {
@@ -793,28 +859,25 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 // anchored to the screen edge, and run its outer edge THROUGH the surface's
                 // far edge (0 / WIN_W) so the boundary column is interior to the region, not
                 // its truncated edge (same principle as the magnification last-pixel fix).
+                // The band is INPUT only; what the surface paints is still the pill.
                 const BAND = 24
-                const edgeX = position === 'left' ? 0 : Math.max(0, WIN_W - slideOff - BAND)
-                const width = position === 'left' ? slideOff + BAND : WIN_W - edgeX
-                apply(`trig:${edgeX},${width},${realizedMain}`, setRect({ x: edgeX, y: 0, width, height: realizedMain })); return
+                const trigX = position === 'left' ? 0 : Math.max(0, WIN_W - slideOff - BAND)
+                const trigW = position === 'left' ? slideOff + BAND : WIN_W - trigX
+                apply(`trig:${trigX},${trigW},${realizedMain}:${bodyKey}`,
+                      setRect({ x: trigX, y: 0, width: trigW, height: realizedMain }), body); return
             }
-            if (st.menuOpenCount > 0) { apply("null", () => surface.set_input_region(null)); return }
-            // Width tracks the dock's current silhouette (pill at rest, pill+bulge on hover).
-            // CRITICAL: the strip must reach the screen edge EXACTLY. Geometry can be
-            // fractional (e.g. EXCLUSIVE_ZONE = pillHeight + screenGap), and Cairo truncates
-            // the rect to ints — so `x = WIN_W - pillW` (fractional) lost the last pixel
-            // column, dropping the cursor out of the region at the very wall (1px in worked,
-            // the wall didn't). Pin the outer edge to 0 / WIN_W with integers.
-            const pillW = innerEdgeCross()
-            const edgeX = position === 'left' ? 0 : Math.floor(WIN_W - pillW)
-            const width = position === 'left' ? Math.ceil(pillW) : WIN_W - edgeX
-            const ph = totalMain + DOCK_CONSTANTS.BASE_MARGIN * 2
-            const py = Math.max(0, Math.round(getGtkCenter(realizedMain) - ph / 2))
-            const PAD_MAIN = 250
-            const top = Math.max(0, py - PAD_MAIN)
-            const height = Math.min(realizedMain - top, ph + PAD_MAIN * 2)
-            apply(`body:${edgeX},${top},${width},${Math.round(height)}`,
-                setRect({ x: edgeX, y: top, width, height }))
+            // A menu is open. It paints in its OWN surface (Gtk.Popover — see the padding
+            // note above), so the dock still shows nothing but the pill and there is
+            // nothing to give up. ⚠️ Distinct key from the grid's — both used to be
+            // `"null"`, and sharing one would let a grid-open transition match the cached
+            // key and keep this small rect, which WOULD clip the grid.
+            if (st.menuOpenCount > 0) {
+                apply(`menu:${bodyKey}`, () => surface.set_input_region(null), body); return
+            }
+            const painting = st.appGridPainting
+            apply(`body:${bodyKey}:${painting ? 1 : 0}`,
+                  setRect(body),
+                  painting ? null : body)
         },
 
         mainStart: (extent: number) =>
