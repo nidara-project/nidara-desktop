@@ -131,6 +131,12 @@ switching one click). Only GTK can tell a capsule from the bar around it, via a 
   lies OUTSIDE the allocation: the bar window is 40px tall and `barBox` measures **y=8, h=32, x=8**
   (`query_ui`), so the 8px bands above it and at both ends belong to the overlay behind it. They are
   inside the input region and read as bar to the user.
+- 🔑 **It asks nothing about coordinates.** A `y < BAR_H` test works — GTK and layer-shell both speak
+  logical pixels, so display scaling does not move it — but it states the bar's height in the one
+  place with no business knowing it. The overlay structure already says what we mean: masterOverlay's
+  **child** is the bar, its **overlays** are the panels. So the walk records the last widget before
+  masterOverlay and dismisses when that is `barBox` or nothing at all. Geometry-free, and correct
+  wherever the bar sits or however tall it grows.
 
 ⚠️ **Scope each `cleared` handler to what its own surface owns.** The bar closes only its overlays,
 the island only `island_mode`; a handler reaching further would shut whatever the other surface just

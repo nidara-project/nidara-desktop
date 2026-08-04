@@ -170,30 +170,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
   catcher.connect("clicked", dismissOverlays)
 
-  masterOverlay.set_child(barBox)
-  masterOverlay.add_overlay(catcher)       // behind panels, above bar base
-  masterOverlay.add_overlay(expansionCapsule)  // above catcher, below major overlays
-  masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups); masterOverlay.add_overlay(systemMenu)
-  // (The island — capsule row + mode revealers — is mounted on its own surface
-  // further down, once `center` has been built. NOT on masterOverlay.)
-
-  cc.valign = Gtk.Align.START; cc.halign = Gtk.Align.END
-  nc.valign = Gtk.Align.START; nc.halign = Gtk.Align.END
-  prism.valign = Gtk.Align.CENTER; prism.halign = Gtk.Align.CENTER
-  popups.valign = Gtk.Align.START; popups.halign = Gtk.Align.END
-  // (Island revealers set their own top-anchored/centered alignment — see
-  // ActivityIsland's registerMode.)
-  // The wrapper MUST be aligned (its root keeps top-left margins inside): an
-  // unaligned overlay child FILLs the whole window and, sitting above the
-  // catcher, swallows the outside-clicks that should dismiss the menu.
-  systemMenu.valign = Gtk.Align.START; systemMenu.halign = Gtk.Align.START
-
-  // ── Panel geometry ──────────────────────────────────────────────────────
-  // Derived from the bar height and the dock's actual footprint (dock size is
-  // user-configurable) instead of hardcoded magic numbers.
-  const BAR_H = 40
-  catcher.margin_top = BAR_H    // keep the bar strip live while an overlay is open
-
   // An EMPTY stretch of the bar strip dismisses too — and neither of the other two
   // mechanisms can do it, which is why the gap existed at all. The catcher is one
   // full-window button, so covering the strip with it would swallow the capsule
@@ -219,9 +195,19 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // On masterOverlay rather than barBox, because `.bar-centerbox` carries
   // `margin-top: 8px` and a CSS margin lies OUTSIDE the allocation: the band between
   // the capsules and the screen edge is not barBox at all, it is the overlay behind
-  // it. It is inside the input region and it reads as bar to the user, so it has to
-  // dismiss. `y >= BAR_H` keeps us to the strip — below it is the panels' own
-  // territory and the compositor's.
+  // it. Measured on the live shell (`query_ui`): the window is 40px tall and barBox
+  // is y=8 h=32 x=8, so the same is true of the 8px at either end. All of it is
+  // inside the input region and all of it reads as bar.
+  //
+  // 🔑 It asks NO question about coordinates, deliberately. A `y < BAR_H` test would
+  // have worked — GTK and layer-shell both speak logical pixels, so display scaling
+  // does not move it — but it would have been the bar's height stated a fourth time,
+  // and the one place that has no business knowing it. The overlay's own structure
+  // already encodes what we mean: masterOverlay's child IS the bar, its overlays ARE
+  // the panels. So walk up from what the press hit and read that off. A press is
+  // ours to dismiss on when it reached this window and landed neither on a control
+  // nor on a panel — true wherever the bar sits, whatever it measures, and true as
+  // well for the strip we do not own at all when the catcher is up.
   const handlesPresses = (w: Gtk.Widget) => {
     const cs = w.observe_controllers()
     for (let i = 0, n = cs.get_n_items(); i < n; i++)
@@ -233,12 +219,44 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // On PRESS, not release: that is when the compositor dismisses on the outside
   // path, and the two gestures should not feel different.
   barStripClick.connect("pressed", (_g: any, _n: number, x: number, y: number) => {
-    if (!status.isAnyOverlayOpen || y >= BAR_H) return
-    for (let w = masterOverlay.pick(x, y, Gtk.PickFlags.DEFAULT); w && w !== masterOverlay; w = w.get_parent())
-      if (handlesPresses(w)) return
-    dismissOverlays()
+    if (!status.isAnyOverlayOpen) return
+    const hit = masterOverlay.pick(x, y, Gtk.PickFlags.DEFAULT)
+    if (!hit) return
+    // `owner` ends as the masterOverlay child the press belongs to, or null when it
+    // landed on the overlay's own background (the bands around barBox).
+    let owner: Gtk.Widget | null = null
+    for (let w: Gtk.Widget | null = hit; w && w !== masterOverlay; w = w.get_parent()) {
+      if (handlesPresses(w)) return    // a control owns this press — including the
+      owner = w                        // catcher, which dismisses on its own terms
+    }
+    if (owner === null || owner === barBox) dismissOverlays()
   })
   masterOverlay.add_controller(barStripClick)
+
+  masterOverlay.set_child(barBox)
+  masterOverlay.add_overlay(catcher)       // behind panels, above bar base
+  masterOverlay.add_overlay(expansionCapsule)  // above catcher, below major overlays
+  masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups); masterOverlay.add_overlay(systemMenu)
+  // (The island — capsule row + mode revealers — is mounted on its own surface
+  // further down, once `center` has been built. NOT on masterOverlay.)
+
+  cc.valign = Gtk.Align.START; cc.halign = Gtk.Align.END
+  nc.valign = Gtk.Align.START; nc.halign = Gtk.Align.END
+  prism.valign = Gtk.Align.CENTER; prism.halign = Gtk.Align.CENTER
+  popups.valign = Gtk.Align.START; popups.halign = Gtk.Align.END
+  // (Island revealers set their own top-anchored/centered alignment — see
+  // ActivityIsland's registerMode.)
+  // The wrapper MUST be aligned (its root keeps top-left margins inside): an
+  // unaligned overlay child FILLs the whole window and, sitting above the
+  // catcher, swallows the outside-clicks that should dismiss the menu.
+  systemMenu.valign = Gtk.Align.START; systemMenu.halign = Gtk.Align.START
+
+  // ── Panel geometry ──────────────────────────────────────────────────────
+  // Derived from the bar height and the dock's actual footprint (dock size is
+  // user-configurable) instead of hardcoded magic numbers.
+  const BAR_H = 40
+  catcher.margin_top = BAR_H    // keep the bar strip live while an overlay is open
+
   const PANEL_TOP = BAR_H + 8   // gap below the bar (8: same rhythm as the side gap)
   const SAFETY = 28
   const DOCK_VPAD = 20           // dock padding around its icons
@@ -326,7 +344,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
       // Bar strip (40px)
       // @ts-ignore
-      region.unionRectangle({ x: 0, y: 0, width: Math.round(monGeo.width), height: 40 })
+      region.unionRectangle({ x: 0, y: 0, width: Math.round(monGeo.width), height: BAR_H })
 
       const isAnyOpen = status.isAnyOverlayOpen
       if (isAnyOpen && !status.cc_edit_mode && !barGrabToken) {
@@ -337,7 +355,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           // the outside press land on our own surface — which the grab accepts, so
           // nothing would dismiss at all.
           // @ts-ignore
-          region.unionRectangle({ x: 0, y: 40, width: Math.round(monGeo.width), height: Math.round(monGeo.height - 40) })
+          region.unionRectangle({ x: 0, y: BAR_H, width: Math.round(monGeo.width), height: Math.round(monGeo.height - BAR_H) })
       }
 
       const addWidgetToRegion = (widget: Gtk.Widget) => {
@@ -1158,7 +1176,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     // Reserve the 40 px top strip for tiled windows (replaces the old nidara-bar-zone
     // spacer surface — see "Top zone reservation" above). Independent of the surface's
     // own height; the bar surface stays full-height for the CC/NC overlays.
-    Gtk4LayerShell.set_exclusive_zone(win, 40)
+    Gtk4LayerShell.set_exclusive_zone(win, BAR_H)
     Gtk4LayerShell.set_monitor(win, gdkmonitor)
     layerShellReady = true
   } catch (e) {
@@ -1254,7 +1272,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
                   barOverlayActive = false
                   Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
               }
-              Gtk4LayerShell.set_exclusive_zone(win, 40) // restore top reservation
+              Gtk4LayerShell.set_exclusive_zone(win, BAR_H) // restore top reservation
               win.set_opacity(1)
               // Bring the capsule back with the bar, and re-assert our level:
               // present() re-adds the surface to Hyprland's overlay list, and the
@@ -1308,7 +1326,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
                   status.island_mode = ""
                   islandWin.setShown(false)   // back to hidden-for-fullscreen
               } else {
-                  Gtk4LayerShell.set_exclusive_zone(win, 40) // restore top reservation
+                  Gtk4LayerShell.set_exclusive_zone(win, BAR_H) // restore top reservation
               }
           }
       } catch (e) { console.error("[Bar] setBarOverlayMode failed:", e) }
