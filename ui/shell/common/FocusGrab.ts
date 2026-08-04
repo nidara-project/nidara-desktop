@@ -96,6 +96,30 @@ load()
 export function hasFocusGrab() { return shim !== null }
 
 /**
+ * Who currently holds the single grab, as an opaque token. 0 = nobody.
+ *
+ * 🔑 THE ONE GRAB HAS TWO OWNERS. The shim keeps exactly one
+ * `hyprland_focus_grab_v1` because the compositor has exactly one slot — but the
+ * bar's window and the island's window ask for it INDEPENDENTLY. Without an
+ * owner, `release()` destroys *whatever grab exists*, not *the caller's*, and the
+ * interleaving that costs you a working desktop is ordinary:
+ *
+ *   1. an island mode is open, the island holds the grab
+ *   2. a bar panel opens; Status closes the island and the bar acquires — which
+ *      evicts the island's grab, correctly
+ *   3. the island's own notify handler then runs and calls release()
+ *   4. …destroying the BAR's brand-new grab, while the bar still believes it holds
+ *      one and keeps its catcher hidden → nothing dismisses on an outside click
+ *
+ * So a token, and a release that no-ops for anyone but the owner. The eviction in
+ * step 2 is real, though, and the evicted owner has to hear about it or it will
+ * think it is still modal and never re-acquire — see `acquireFocusGrab`.
+ */
+let heldToken = 0
+let heldCleared: (() => void) | null = null
+let nextToken = 1
+
+/**
  * Restrict keyboard and pointer to `surfaces` — a SET, not one surface.
  *
  * 🔑 Pass every surface of ours that must stay clickable, not just the one that is
@@ -114,26 +138,71 @@ export function hasFocusGrab() { return shim !== null }
  * the surface should do, or re-acquire if it is still meant to be modal. It does
  * NOT fire for a `releaseFocusGrab()` we asked for.
  *
- * Returns false when the grab did not take (no shim, or the first surface is not
- * mapped yet). The caller MUST then fall back — a false here with no fallback is
- * a surface that silently cannot be typed into. An EXTRA surface failing to join
- * does not fail the grab: what degrades then is one-click reach elsewhere, not
- * modality.
+ * Returns 0 when the grab did not take (no shim, or the first surface is not
+ * mapped yet), otherwise an ownership token to hand back to `releaseFocusGrab`.
+ * The caller MUST fall back on 0 — a 0 with no fallback is a surface that
+ * silently cannot be typed into. An EXTRA surface failing to join does not fail
+ * the grab: what degrades then is one-click reach elsewhere, not modality.
+ *
+ * Acquiring while someone else holds the grab EVICTS them, here as in the
+ * compositor. The previous owner's `onCleared` is invoked for it, once this
+ * grab is established — because from that owner's side losing the slot to us is
+ * indistinguishable from losing it to a popup, and it must not be left believing
+ * it is still the modal surface (it would never re-acquire).
  */
-export function acquireFocusGrab(surfaces: (Gdk.Surface | null)[], onCleared: () => void): boolean {
-    if (!shim) return false
+export function acquireFocusGrab(surfaces: (Gdk.Surface | null)[], onCleared: () => void): number {
+    if (!shim) return 0
     // Defended rather than trusted: `win.get_native()?.get_surface()` comes back
     // untyped from the GIR, so tsc will NOT catch a caller that passes a bare
     // surface where the set is expected — it silently typed a crash as fine once.
     if (!Array.isArray(surfaces)) surfaces = [surfaces as Gdk.Surface | null]
     const live = surfaces.filter((s): s is Gdk.Surface => s !== null)
-    if (live.length === 0) return false
-    if (!shim.focus_grab_acquire(live[0], onCleared)) return false
-    for (const s of live.slice(1)) shim.focus_grab_add_surface(s)
-    return true
+    if (live.length === 0) return 0
+
+    const evicted = heldCleared
+    const token = nextToken++
+    const ok = shim.focus_grab_acquire(live[0], () => {
+        // A `cleared` that arrives for a grab we no longer own is not ours to act
+        // on: the shim's callback slot is per-grab, but a stale closure could still
+        // be in flight through the pump.
+        if (heldToken !== token) return
+        heldToken = 0
+        heldCleared = null
+        onCleared()
+    })
+
+    if (ok) {
+        heldToken = token
+        heldCleared = onCleared
+        for (const s of live.slice(1)) shim.focus_grab_add_surface(s)
+    } else if (shim.focus_grab_active()) {
+        // The shim refused before touching the live grab (our surface is not mapped
+        // yet), so the previous owner still holds it and nothing has changed.
+        return 0
+    } else {
+        // It got far enough to drop the old grab and then failed. Nobody holds one.
+        heldToken = 0
+        heldCleared = null
+    }
+
+    // Told AFTER the new state is in place, so a release() from inside the handler
+    // finds a token mismatch and cannot take down the grab we just took. Skipped
+    // when the same owner re-acquired: it would be telling a surface to dismiss
+    // itself for the grab it just asked for.
+    if (evicted && evicted !== heldCleared) evicted()
+    return ok ? token : 0
 }
 
-/** Hand input back. Safe when nothing is held. */
-export function releaseFocusGrab() {
+/**
+ * Hand input back. `token` is what `acquireFocusGrab` returned.
+ *
+ * A stale token is a NO-OP, deliberately and load-bearing: it is how the loser of
+ * an eviction stops destroying the winner's grab (see `heldToken`). Callers can
+ * therefore release unconditionally on close without tracking who won.
+ */
+export function releaseFocusGrab(token: number) {
+    if (!token || token !== heldToken) return
+    heldToken = 0
+    heldCleared = null
     shim?.focus_grab_release()
 }

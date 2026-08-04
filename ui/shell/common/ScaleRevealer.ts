@@ -61,6 +61,19 @@ export class ScaleRevealer extends Gtk.Widget {
     morphFrom: number | null = null   // height-morph origin (see morphFromHeight)
     morphEased = 0
     morphTickId: number | null = null
+    /** Fires when this widget HAS an allocation, from the layout pass that gave
+     *  it one. Set by whoever stamps a Wayland input region from widget bounds.
+     *
+     *  🔑 A widget just made visible has NO allocation until the next layout pass,
+     *  so `reveal(true)` followed by a stamp in the same turn describes the panel
+     *  as ABSENT. That used to be invisible because the region also carried a
+     *  full-screen catcher rect that covered the panel by accident; under a
+     *  compositor focus grab there is no such rect, and the cost is no longer a
+     *  late click but a dismissal — the press misses our surface, the compositor
+     *  sees a surface outside the grab's whitelist and closes what you clicked on.
+     *  Hooking the allocation is what makes the stamp mechanical instead of a
+     *  deferred timeout hoping layout has happened. */
+    onAllocated: (() => void) | null = null
 
     constructor(child: Gtk.Widget, opts?: {
         duration?: number, durationIn?: number, durationOut?: number,
@@ -284,9 +297,16 @@ export class ScaleRevealer extends Gtk.Widget {
     // comes from the painted scale, not from squeezing the child's layout);
     // pass-through mode fills like a Gtk.Bin.
     vfunc_size_allocate(width: number, height: number, baseline: number) {
-        if (!this.animateLayout) { this.child.allocate(width, height, baseline, null); return }
-        const [, nat] = this.child.measure(Gtk.Orientation.VERTICAL, width)
-        this.child.allocate(width, nat, baseline, null)
+        if (this.animateLayout) {
+            const [, nat] = this.child.measure(Gtk.Orientation.VERTICAL, width)
+            this.child.allocate(width, nat, baseline, null)
+        } else {
+            this.child.allocate(width, height, baseline, null)
+        }
+        // After the child, so a listener measuring this subtree sees the final
+        // geometry. Our transform relative to the window was set before this vfunc
+        // ran, so compute_bounds() is already answering about THIS pass.
+        this.onAllocated?.()
     }
 
     vfunc_snapshot(snapshot: Gtk.Snapshot) {

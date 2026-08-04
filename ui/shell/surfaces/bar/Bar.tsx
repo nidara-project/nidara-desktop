@@ -249,12 +249,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   applyPanelHeights()
   onDockSettingsChanged(applyPanelHeights)
 
-  // True while THIS window's modality is held by a compositor focus grab rather
-  // than by our own catcher (see syncKeyboardMode). It changes two things here: the
-  // catcher stays hidden, and the input region stops covering the desktop — the
-  // compositor dismisses on an outside press by itself, so covering the screen to
-  // notice that press is exactly the work being deleted.
-  let barGrabIsCompositor = false
+  // Our ownership token while THIS window's modality is held by a compositor focus
+  // grab rather than by our own catcher (0 = not ours; see syncKeyboardMode). It
+  // changes two things here: the catcher stays hidden, and the input region stops
+  // covering the desktop — the compositor dismisses on an outside press by itself,
+  // so covering the screen to notice that press is exactly the work being deleted.
+  // A token and not a boolean because the ISLAND competes for the same single slot
+  // — see common/FocusGrab.ts.
+  let barGrabToken = 0
   let layerShellReady = false
 
   const updateInputRegion = () => {
@@ -281,7 +283,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       region.unionRectangle({ x: 0, y: 0, width: Math.round(monGeo.width), height: 40 })
 
       const isAnyOpen = status.isAnyOverlayOpen
-      if (isAnyOpen && !status.cc_edit_mode && !barGrabIsCompositor) {
+      if (isAnyOpen && !status.cc_edit_mode && !barGrabToken) {
           // Catcher region — covers everything below bar to intercept outside-click dismissal
           // In edit mode we skip this so other windows remain interactive.
           // Skipped under a compositor focus grab too, for the opposite reason: the
@@ -434,6 +436,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // drive updateInputRegion, so the popups widget calls back here whenever its
   // stack settles (banner grown in, or dismissed) to re-stamp the region.
   ;(popups as any).onStackChanged = updateInputRegion
+  // Every panel re-stamps from the layout pass that gave it an allocation. The
+  // synchronous stamp in syncOverlays() cannot see a panel that was revealed in
+  // the same turn — get_allocation() is a layout pass behind, and for a panel
+  // opening for the FIRST time there is no previous allocation to be stale about,
+  // so its rect is missing outright. Under the compositor focus grab that is not a
+  // late click: the press misses our surface, the compositor sees a surface outside
+  // the whitelist, and the panel dismisses as you click into it. (Before the grab
+  // the full-screen catcher rect covered the panel by accident, which is why this
+  // never showed.)
+  for (const p of [cc, nc, prism, systemMenu, expansionCapsule])
+    p.onAllocated = updateInputRegion
   // …and the visible region can NOT wait for that idle: a banner is appended in
   // one turn and painted in the next frame, so a region still describing the bar
   // strip would scissor it away entirely. This hook fires synchronously on
@@ -456,7 +469,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // redundant then, it must be GONE: it is a full-window button, so leaving it up
   // would swallow the very press the compositor needs to see outside our surface.
   const catcherWanted = () =>
-    status.isAnyOverlayOpen && !status.cc_edit_mode && !barGrabIsCompositor
+    status.isAnyOverlayOpen && !status.cc_edit_mode && !barGrabToken
 
   const syncOverlays = () => {
     // Before the visibility/region work below, because both are computed from
@@ -536,7 +549,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // all of its overlays. The app grid does (AppGrid.tsx) and that is precisely why
   // it has not been migrated — see tech-debt §53.
   const onBarGrabCleared = () => {
-    barGrabIsCompositor = false
+    barGrabToken = 0
     // Close ONLY what this window owns — deliberately NOT dismissOverlays(), which
     // also clears island_mode. An eviction can come from the ISLAND taking the
     // single slot for a mode the user just opened, and reaching that far would close
@@ -565,19 +578,23 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     // the outside-click dismissal the catcher was faking. acquire() answers
     // synchronously, so a session where the shim is missing or the compositor is too
     // old falls back per-open rather than being decided at boot.
-    if (want && !barGrabIsCompositor) {
-      // Just this surface: the bar's capsules live ON it, so they stay clickable
-      // through the grab with no peer to whitelist (unlike the island — see
-      // syncIslandGrab).
-      barGrabIsCompositor = acquireFocusGrab([win.get_native()?.get_surface() ?? null], onBarGrabCleared)
+    if (want && !barGrabToken) {
+      // The ISLAND's surface is whitelisted alongside ours, symmetrically to what
+      // syncIslandGrab does for us. Not a nicety: the island's capsule MOVED to its
+      // own surface (the documented exception to commandment #5), so leaving it out
+      // clamps pointer focus to the bar and a click on the capsule is swallowed by
+      // the dismissal instead of reaching it — the island stops responding for as
+      // long as a bar panel is open.
+      barGrabToken = acquireFocusGrab(
+        [win.get_native()?.get_surface() ?? null, islandWin.surface()], onBarGrabCleared)
       // Which path took is otherwise INVISIBLE — both end with a working overlay, and
       // the fallback is only distinguishable by the bugs it brings back (the catcher
       // covering the desktop, focus refusals for computer-use). Log it once per open
       // so a session on the slow path can be diagnosed from the log alone.
-      console.log(`[Bar] overlay modality: ${barGrabIsCompositor ? "compositor focus grab" : "catcher + layer-shell (fallback)"}`)
-    } else if (!want && barGrabIsCompositor) {
-      barGrabIsCompositor = false
-      releaseFocusGrab()
+      console.log(`[Bar] overlay modality: ${barGrabToken ? "compositor focus grab" : "catcher + layer-shell (fallback)"}`)
+    } else if (!want && barGrabToken) {
+      releaseFocusGrab(barGrabToken)
+      barGrabToken = 0
     }
 
     // Layer-shell keyboard is now ONLY the fallback, and only for Prism: it is the
@@ -587,7 +604,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     // never take EXCLUSIVE on the fallback path: they do not want the keyboard, they
     // want dismissal, and on that path the catcher is already providing it.
     Gtk4LayerShell.set_keyboard_mode(win,
-      status.prism_open && !inputYield.active && !barGrabIsCompositor
+      status.prism_open && !inputYield.active && !barGrabToken
         ? Gtk4LayerShell.KeyboardMode.EXCLUSIVE
         : Gtk4LayerShell.KeyboardMode.NONE)
   }

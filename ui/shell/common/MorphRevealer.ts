@@ -144,6 +144,11 @@ export class MorphRevealer extends Gtk.Widget {
     tickId: number | null = null
     fromSource = false    // latched per open: real capsule morph vs fallback pop
     activeGhost: Gtk.Widget | null = null  // latched per reveal(): the sourceGhost track to paint
+    /** Fires when this widget HAS an allocation — same contract and the same
+     *  reason as ScaleRevealer's (read the comment there): an input region
+     *  stamped at reveal() time describes a mode that has not been laid out yet,
+     *  and under a focus grab a click that misses our surface DISMISSES it. */
+    onAllocated: (() => void) | null = null
 
     constructor(child: Gtk.Widget, opts: {
         getSourceWidget: () => Gtk.Widget | null,
@@ -313,6 +318,7 @@ export class MorphRevealer extends Gtk.Widget {
             const [, gh] = ghost.measure(Gtk.Orientation.VERTICAL, -1)
             ghost.allocate(Math.max(1, gw), Math.max(1, gh), -1, null)
         }
+        this.onAllocated?.()
     }
 
     vfunc_snapshot(snapshot: Gtk.Snapshot) {

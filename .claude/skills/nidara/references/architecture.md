@@ -97,15 +97,33 @@ not** (it owns popovers — see below and `tech-debt.md` §53).
 🔑 **A grab whitelists a SET of surfaces, and you must pass every surface of yours that has to stay
 clickable — not just the modal one.** On an outside press the compositor delivers the button to
 whatever holds pointer focus, the grab CLAMPS pointer focus to itself, and only then clears. So a
-press outside the set dismisses and *does nothing else* — it never reaches what you clicked. That is
-why the island grabs the **bar's** surface alongside its own: capsule-to-capsule switching has to stay
-one click without a catcher arranging it. The bar needs no peer — its capsules live on the very
-surface it grabs.
+press outside the set dismisses and *does nothing else* — it never reaches what you clicked. **The
+bar and the island each whitelist the other**, symmetrically: the island's capsule lives on the
+island's surface (commandment #5's exception), so a bar panel grabbing only itself makes the whole
+island unclickable, and vice versa. Capsule-to-capsule switching has to stay one click without a
+catcher arranging it.
 
-⚠️ **Scope each `cleared` handler to what its own surface owns.** There is one slot, so the bar and
-the island can evict each other; a handler that closes more than its own state would shut whatever
-the other surface just opened. The bar closes only its overlays, the island only `island_mode` — and
-the catchers, which see a real click rather than an eviction, keep the wider "close everything".
+🔑 **One grab, two owners → `acquireFocusGrab` returns an ownership TOKEN and `releaseFocusGrab(token)`
+no-ops for anyone else.** The shim holds a single grab (the compositor has a single slot) but the bar
+and the island ask for it independently, so a bare `release()` destroys *whatever grab exists*: island
+mode open → bar panel opens and legitimately evicts it → the island's own close handler then runs and
+takes down the BAR's fresh grab, leaving the bar convinced it is modal with no grab and no catcher.
+Acquiring while someone holds also **invokes the previous owner's `cleared`** — an eviction is
+indistinguishable from a popup stealing the slot, and an owner left believing it is still modal never
+re-acquires.
+
+⚠️ **Scope each `cleared` handler to what its own surface owns.** The bar closes only its overlays,
+the island only `island_mode`; a handler reaching further would shut whatever the other surface just
+opened. The catchers, which see a real click rather than an eviction, keep the wider "close
+everything".
+
+⚠️ **An input region stamped in the same turn as `reveal(true)` describes the panel as ABSENT** — a
+widget just made visible has no allocation until the next layout pass. This is invisible without a
+grab (the catcher's hand-written full-screen rect covered it by accident) and fatal with one: the
+press misses our surface, the compositor sees a surface outside the whitelist, and the panel dismisses
+as you click into it. Both revealers therefore expose **`onAllocated`**, fired from
+`vfunc_size_allocate`, and the bar's panels + the island's modes re-stamp from it. Mechanical, not a
+deferred timeout hoping layout happened.
 
 What a grab replaces, all three verified in Hyprland 0.56's source:
 

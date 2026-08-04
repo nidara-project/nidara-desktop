@@ -2397,9 +2397,15 @@ flexibility that motivated the idea.
 
 `hyprland-focus-grab-v1` landed via `lib/nidara-wl` + `common/FocusGrab.ts`. **Migrated:** every
 overlay in the bar's window (CC, notification centre, system menu, Prism, bar expansion) under ONE
-grab on that surface, and the Activity Island under its own — which also whitelists the bar's surface
-so capsule switching stays one click. Both catchers are now fallback-only. Mechanism and traps in
-`architecture.md` → "Focus grab".
+grab on that surface, and the Activity Island under its own — and **each whitelists the other's
+surface**, so capsule switching stays one click in both directions. Both catchers are now
+fallback-only. Mechanism and traps in `architecture.md` → "Focus grab".
+
+The first live round produced three bugs worth knowing about, all fixed (2026-08-05) and all from the
+same two roots: **the single grab had two independent owners** (fixed with ownership tokens +
+notifying the evicted owner) and **removing the catcher removed the accidental full-screen input rect
+that was covering panels GTK had not laid out yet** (fixed with `onAllocated` on both revealers).
+Neither is a focus-grab quirk as such — they are what the catcher had been hiding.
 
 **What is left, and why it is not just more of the same:**
 

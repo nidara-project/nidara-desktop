@@ -60,6 +60,9 @@ export interface IslandWindowHandle {
     /** Root the revealers are anchored against — their `margin_top` is measured
      *  relative to this, exactly as it used to be against the bar's overlay. */
     root: () => Gtk.Widget
+    /** This window's Wayland surface, for the BAR to whitelist in its own focus
+     *  grab — the mirror of the `peers` it passes us. Null until mapped. */
+    surface: () => Gdk.Surface | null
     /** Take modality for an open island mode. `needsKeyboard` only decides the
      *  FALLBACK path — a compositor focus grab carries keyboard and pointer either
      *  way, so an ambient mode gets dismissal without EXCLUSIVE's side effects.
@@ -155,8 +158,12 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     const catcher = new Gtk.Button({ css_classes: ["overlay-catcher"], visible: false, hexpand: true, vexpand: true })
     catcher.connect("clicked", () => { status.island_mode = "" })
     let catcherTop: number | null = null   // null = off
-    // True while a compositor focus grab is doing the catcher's job — see setModal.
-    let grabIsCompositor = false
+    // Our ownership token for the compositor focus grab doing the catcher's job,
+    // 0 when we hold none — see setModal and common/FocusGrab.ts. A token rather
+    // than a boolean because the BAR grabs the same single slot: it can evict us
+    // between our own open and close, and a release we no longer own would take
+    // down ITS grab.
+    let grabToken = 0
 
     const updateInputRegion = () => {
         const surface = win.get_native()?.get_surface()
@@ -334,9 +341,19 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     return {
         win,
         root: () => root,
+        surface: () => win.get_native()?.get_surface() ?? null,
         mount: (row, targets, mounted) => {
             hitTargets = targets
             revealers = mounted
+            // A mode's rect enters the input region from the layout pass that
+            // gives the revealer an allocation — NOT from the turn that revealed
+            // it, where it still has none. Before the focus grab that gap was
+            // covered by the catcher's hand-written full-screen rect; without it,
+            // a click inside a freshly opened mode fell through to whatever was
+            // behind, which the compositor reads as a press outside the grab and
+            // dismisses. That is the "island doesn't take mouse input when it
+            // opens" symptom, and it lasted the whole 300ms morph.
+            for (const r of mounted) r.onAllocated = updateInputRegion
             root.add_overlay(row)
             // Between the capsule and the modes: later overlay children paint on
             // top, so the catcher must never sit above a revealed mode.
@@ -357,33 +374,33 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         setModal: (open, needsKeyboard, peers) => {
             const want = open && !inputYield.active
 
-            if (want && !grabIsCompositor) {
-                grabIsCompositor = acquireFocusGrab(
+            if (want && !grabToken) {
+                grabToken = acquireFocusGrab(
                     [win.get_native()?.get_surface() ?? null, ...peers],
                     () => {
-                        grabIsCompositor = false
+                        grabToken = 0
                         // Close ONLY what this surface owns. An eviction can come from
                         // the BAR taking the slot for one of its own overlays, and
                         // reaching further than island_mode would then close whatever
                         // the other surface just opened.
                         status.island_mode = ""
                     })
-                console.log(`[IslandWindow] modality: ${grabIsCompositor ? "compositor focus grab" : "catcher + layer-shell (fallback)"}`)
-            } else if (!want && grabIsCompositor) {
-                grabIsCompositor = false
-                releaseFocusGrab()
+                console.log(`[IslandWindow] modality: ${grabToken ? "compositor focus grab" : "catcher + layer-shell (fallback)"}`)
+            } else if (!want && grabToken) {
+                releaseFocusGrab(grabToken)
+                grabToken = 0
             }
 
             // EXCLUSIVE is the fallback only, and only where a mode actually types.
             // Under a grab the surface stays NONE — it already has the keyboard, and
             // asking for EXCLUSIVE would put us back in m_exclusiveLSes for nothing.
             try {
-                Gtk4LayerShell.set_keyboard_mode(win, needsKeyboard && want && !grabIsCompositor
+                Gtk4LayerShell.set_keyboard_mode(win, needsKeyboard && want && !grabToken
                     ? Gtk4LayerShell.KeyboardMode.EXCLUSIVE
                     : Gtk4LayerShell.KeyboardMode.NONE)
             } catch (e) { console.error("[IslandWindow] keyboard mode failed:", e) }
 
-            return grabIsCompositor
+            return grabToken !== 0
         },
         setCatcher: (open, topInset) => {
             catcherTop = open ? Math.max(0, Math.round(topInset)) : null
