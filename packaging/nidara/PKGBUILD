@@ -12,7 +12,7 @@
 # §6's file layout. First-time system/user setup (greetd, services, per-user
 # config seeding) is NOT packaging's job — see install.sh / nidara-setup.
 pkgname=nidara
-pkgver=0.5.0
+pkgver=0.6.0
 pkgrel=1
 pkgdesc="Nidara — a fluid, glassmorphic desktop environment (Hyprland + AGS/GTK4)"
 arch=(x86_64)
@@ -26,7 +26,11 @@ install=nidara.install
 # listed HERE for a bare `pacman -S nidara` to pull a working system.
 depends=(
   # compositor + session plumbing
-  hyprland hypridle hyprsunset uwsm greetd power-profiles-daemon polkit-gnome
+  # hyprland>=0.56: config/hypr/hyprland.lua's `glow` block is 0.56-only (added
+  # with the Assistant's focused-window glow). An older Hyprland parses the
+  # session config and rejects the unknown option, so this is a hard floor, not
+  # a preference — the README states the same number.
+  hyprland>=0.56 hypridle hyprsunset uwsm greetd power-profiles-daemon polkit-gnome
   # keyring: the Secret Service (org.freedesktop.secrets) the built-in Assistant
   # stores its API key in; libsecret provides the Secret-1 typelib the shell +
   # nidara-agent import (gi://Secret)

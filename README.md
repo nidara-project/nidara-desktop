@@ -29,14 +29,18 @@ so every clone is ready to be worked on by an agent out of the box.
 - **Compositor**: Hyprland (Wayland) — smooth animations, tiling + floating window management.
 - **Shell**: AGS v3 (TypeScript/TSX) — reactive, modular UI.
 - **Bar**: Live clock, workspaces, system tray, resource indicators, system menu with inline power actions.
+- **Activity Island**: A capsule at the center of the bar that morphs into whatever is happening — workspace dots at rest, then media playback, screen recording, a low-battery warning, or the built-in Assistant — and expands into a panel for it.
+- **Assistant**: A built-in AI assistant that lives in the Activity Island (`Super + A`). Bring your own key — Anthropic, OpenAI, Google or SpaceXAI — or run it fully local against Ollama or any OpenAI-compatible endpoint, no key needed. It can read and change Nidara's own settings for you; everything it is allowed to touch is a switch in **Settings → AI**.
 - **Dock**: Hover magnification with spring physics. Supports bottom, left, and right positions.
 - **App Launcher**: App grid with instant fuzzy search.
 - **Search**: Type-to-find overlay for apps and recent files (`Super + Space`).
 - **Control Center**: Volume (WirePlumber), brightness, Wi-Fi, Bluetooth, battery, MPRIS media.
 - **Notification Center**: Grouped notifications with inline actions.
+- **Clipboard history**: Recent copies — text *and* images — kept in a browsable panel, with per-entry delete.
+- **Screen recording**: Full screen or a region, MP4/MKV/WebM, with optional audio from desktop output or any microphone; a live indicator in the Activity Island while it runs.
 - **Settings**: Multi-page panel — Network, Bluetooth, Appearance, Display, Audio, Top Bar, Dock, Control Center, Gaming, Notifications, Accessibility, Apps, Devices, Power, Language & Region, Autostart, Users, AI, and About.
 - **Nidara Design System**: Dynamic accent colors, glassmorphism tokens, dark/light mode.
-- **AI-native**: An MCP server (`nidara-mcp`) lets a coding agent perceive and drive the live desktop; an in-repo agent skill and a PR-based contribution model are built for AI-authored improvements. Built with AI, operable by AI, improved by AI — see [Using an AI agent](#using-an-ai-agent-with-your-desktop) and [Contributing](#contributing).
+- **AI-native**: A built-in Assistant ships with the desktop, and an MCP server (`nidara-mcp`) lets any external coding agent perceive and drive the live desktop through the same official interface; an in-repo agent skill and a PR-based contribution model are built for AI-authored improvements. Built with AI, operable by AI, improved by AI — see [Using an AI agent](#using-an-ai-agent-with-your-desktop) and [Contributing](#contributing).
 - **Game Mode**: Steam games auto-move to a dedicated `gamespace` workspace (no blur/shadow/animations, `immediate` mode), optional library-art wallpaper and performance power profile; `Super + B` floats the bar above any fullscreen window.
 - **Login & Lock**: Custom AGS apps — a greetd-based greeter (`nidara-greeter`) and a lock screen (`nidara-lock`) built on `ext-session-lock-v1`, both sharing the Nidara look. The greeter is launched directly by greetd (no regreet); the lock screen uses no hyprlock.
 - **Idle management**: hypridle — configurable screen-off, lock, and suspend timers.
@@ -73,7 +77,7 @@ yet. Reports (and fixes) are the most valuable contribution you can make right n
 **❌ Not supported**
 
 - Derivatives with delayed or held-back packages (e.g. **Manjaro**) — Nidara pins
-  Hyprland ≥ 0.55 and builds its UI stack against current Arch libraries
+  Hyprland ≥ 0.56 and builds its UI stack against current Arch libraries
 - **VirtualBox** (no usable 3D acceleration for Wayland compositors)
 - X11 (Wayland-only by design), ARM
 
@@ -165,7 +169,7 @@ is available.
 
 User config lives in `~/.config/nidara/` and is **never overwritten** by updates.
 
-The Hyprland config is written in **Lua** (requires Hyprland ≥ 0.55). To customize
+The Hyprland config is written in **Lua** (requires Hyprland ≥ 0.56). To customize
 Hyprland (monitors, keyboard layout, startup apps, extra keybinds), edit:
 
 **`~/.config/nidara/hyprland-user.lua`**
@@ -194,6 +198,28 @@ hl.config({ general = { gaps_out = 16 } })
 > install), not in the Hyprland config.
 
 ### Using an AI agent with your desktop
+
+There are two ways in, and they share the same permission switches in **Settings → AI**.
+
+#### The built-in Assistant
+
+Press `Super + A` and the Activity Island turns into an assistant that already knows the
+desktop it lives in — ask it to change a setting, explain what something does, or find where an
+option lives, in plain language.
+
+It is **bring-your-own-key**. In **Settings → AI**, pick a provider — **Anthropic**, **OpenAI**,
+**Google** or **SpaceXAI** — and paste a key; Settings can fetch that provider's real model list
+so you pick from what actually exists. Prefer to keep everything on your machine? Choose
+**Ollama** or point it at any **OpenAI-compatible endpoint** and no key is needed at all. Your
+API key is stored in the desktop **keyring** (libsecret), never in a config file.
+
+What it is allowed to do is yours to set. Out of the box it can read Nidara's own state and
+change settings; reaching *outside* Nidara — perceiving or controlling other applications — is
+**off by default**, and so is letting it write the config files that can schedule commands. While
+it is granted control of your apps the bar shows a live indicator, and `Super + Shift + Escape`
+revokes it instantly.
+
+#### Bringing your own agent
 
 Nidara ships an **MCP server** (`nidara-mcp`, installed system-wide) that lets
 an AI agent see and control your running desktop through the official interface: discover and
@@ -242,6 +268,7 @@ off at any time, taking effect immediately.
 
 | Shortcut | Action |
 | :--- | :--- |
+| `Super + A` | Assistant (Activity Island) |
 | `Super + S` | Open Settings |
 | `Super + Space` | Search (apps & recent files) |
 | `Super + T` | Terminal (Kitty) |
@@ -299,11 +326,17 @@ nidara/
 │   ├── uwsm/                  # env / env-hyprland templates (toolkit & NVIDIA vars)
 │   └── wallpaper/             # Default wallpaper (shipped asset)
 ├── bin/                       # Installed binaries/launchers (→ /usr/bin, /usr/lib/systemd)
-│   ├── nidara          # Wayland session entry → /usr/bin/nidara
-│   ├── nidara-ui       # UI launcher (dev/system) → /usr/bin/nidara-ui
-│   ├── nidara-greeter        # Greeter launcher
-│   ├── nidara-lock           # Lock screen launcher (Super+L)
-│   └── nidara-game-mode      # Game mode toggle (Super+Shift+G)
+│   ├── nidara                 # Wayland session entry → /usr/bin/nidara
+│   ├── nidara-ui              # UI launcher (dev/system) → /usr/bin/nidara-ui
+│   ├── nidara-greeter         # Greeter launcher
+│   ├── nidara-lock            # Lock screen launcher (Super+L)
+│   ├── nidara-game-mode       # Game mode toggle (Super+Shift+G)
+│   ├── nidara-setup           # Idempotent first-time setup
+│   ├── nidara-update          # Update wrapper (pacman -Syu + setup + reload)
+│   ├── nidara-agent           # The built-in Assistant's daemon (Super+A)
+│   ├── nidara-mcp             # MCP server for external agents
+│   ├── nidara-a11y/-act       # AT-SPI perceive / act (computer use, opt-in)
+│   └── …                      # + portal, doctor, input, sleep hooks
 ├── scripts/                   # Repo tooling (not installed): i18n extract/apply, dev helpers
 ├── VERSION                    # Current version (semver)
 ├── install.sh                 # Provisioning script (system / --dev)
@@ -319,7 +352,7 @@ nidara/
     │   └── build/nidara    # Bundle output from `ags bundle` (gitignored)
     ├── greeter/               # Login screen (greetd + AstalGreet)
     ├── lockscreen/            # Lock screen (ext-session-lock-v1, shares greeter CSS)
-    └── lib/nidara-kit/        # GTK4 primitive widgets (no Adwaita): SplitView, Select, Button…
+    └── lib/nidara-kit/        # GTK4 primitive widgets (no Adwaita): SplitView, Scrolled, Button…
 ```
 
 The runtime architecture, IPC contract, persistence layout and design-system rules are documented in

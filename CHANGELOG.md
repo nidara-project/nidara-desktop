@@ -5,6 +5,89 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-08-04
+
+### Added
+
+- **The Assistant stopped talking about your desktop and started working on it.**
+  In 0.5.0 it could hold a conversation and flip a setting. It now reads Nidara's
+  own configuration, the shipped defaults and the shell log, so when you say
+  something is wrong it goes and looks instead of theorising — and, if you allow
+  it, it can edit the handful of files no service owns (your Hyprland overrides
+  and the idle timers) to add a keybind or change a timeout for you.
+
+  Writing is **off by default** and deliberately a separate switch from
+  everything else: those files exist to hold commands, so writing them schedules
+  commands for your next session. Everything it writes is plain text you can
+  read, and `~/.config/nidara/` becomes a **git repository** on its first write —
+  every change it makes is a commit you can inspect or roll back.
+
+  It also stopped forgetting. The conversation survives a shell reload, and it
+  answers questions about its own permissions accurately rather than describing
+  half of them.
+
+- **The Assistant can work in other applications — if you let it.** Previously it
+  was capable inside Nidara and blind outside it. It can now perceive and act on
+  third-party windows through the accessibility layer, which is what "open the
+  calculator and compute this" actually requires. Both halves — *seeing* and
+  *acting* — are **off by default** and are separate switches in Settings → AI.
+  `Super + Shift + Escape` still revokes everything instantly.
+
+- **You can see which window the Assistant is working in.** While it runs a turn,
+  the focused window's border glows. It was doing real work in somebody else's
+  window with nothing on screen to say so.
+
+- **Your clipboard keeps images.** Copying an image from a browser stored the
+  page's URL instead — every time — so no image ever reached the history. Images
+  are now kept alongside text, and the panel gained per-entry delete.
+
+- **Screen recording asks what you actually meant.** "Include audio" used to mean
+  *the default microphone*, which on most machines meant silence. You now choose
+  the source — your desktop's output or any specific microphone — and the format
+  (MP4, MKV or WebM).
+
+- **Scrollbars you can grab.** Long lists across the shell now show a scrollbar of
+  their own that stays a fixed width and can actually be dragged, instead of GTK's
+  overlay bar that grew as your pointer neared it and slid out from under the
+  button you were aiming for.
+
+### Changed
+
+- **Two switches left Settings → Top bar.** "Show the system menu" hid the only
+  graphical way to shut down, restart or log out, and "show the workspace
+  switcher" had quietly grown into a switch that also hid media, recording and
+  the Assistant — including the only indicator that says your screen is being
+  recorded. Both are gone; they read as preferences but were ways to lose a
+  capability. "Show the app title" stays.
+- **Settings rows stop crowding.** Rows that carried several controls were fitting
+  them into space built for one. Text fields now take the full width with their
+  buttons underneath, and pickers that show a value actually carry it.
+- **One radius ladder, one halo.** A sweep of the design system removed a second,
+  conflicting set of corner radii and the stray hover halos that came with it, so
+  menus, dropdowns and cards round and highlight the same way everywhere.
+- **The Assistant's chip and the battery glyph are drawn to the icon grid.** The
+  battery was the one bar icon painted by hand at a size picked by eye, which left
+  its capsule 9px wider than its neighbours; the player's chip showed square cover
+  art inside a circle.
+
+### Fixed
+
+- **An overlay no longer freezes the dock.** Opening a shell surface could leave
+  the dock unresponsive until something else took the pointer, and the error bar
+  stayed on screen after the event that raised it was gone.
+- **Settings pages keep their contents.** A page you stepped away from was torn
+  down as if it had been closed, so coming back to it showed a page that had
+  stopped updating.
+- **Applications are identified by what they are, not by what they look like.**
+  One app could appear under three different names across the dock, the app grid
+  and the window title, with only one of them working on each surface.
+- **The Activity Island's menus are blurred like everything else.** Moving the
+  island to its own layer left its player-source menu flat.
+- **A single clip stored in the wrong text encoding hid the other 749.** One
+  UTF-16 entry silently truncated the whole clipboard history.
+- **Three widgets' buttons were the right colour only by accident** — they
+  depended on where they happened to be rendered rather than on their own style.
+
 ## [0.5.0] — 2026-07-26
 
 ### Added
