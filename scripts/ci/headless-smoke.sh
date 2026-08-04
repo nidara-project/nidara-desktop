@@ -49,6 +49,8 @@ log() { echo "[smoke] $*"; }
 phase_deps() {
     log "pacman deps…"
     # -Syu (never bare -Sy): same partial-upgrade rationale as install.sh.
+    # wlr-protocols is for libnidara-wl, not for a wlr feature: see the PROTOCOLS
+    # list in lib/nidara-wl/build.sh for why the wlr XML has to be scanned too.
     pacman -Syu --needed --noconfirm \
         base-devel git cmake meson ninja vala gobject-introspection glib2-devel \
         gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 \
@@ -56,7 +58,7 @@ phase_deps() {
         pipewire wireplumber \
         nodejs npm gjs go \
         hyprland mesa dbus zstd seatd systemd \
-        wayland-protocols hyprland-protocols \
+        wayland-protocols hyprland-protocols wlr-protocols \
         grim jq librsvg \
         ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji
 
@@ -123,8 +125,10 @@ phase_deps() {
 # Phase: bundle — SCSS + ags bundle of the COMMITTED tree (as root)
 # ─────────────────────────────────────────────────────────────────────────────
 phase_bundle() {
-    # libnidara-wl first: the shell resolves `gi://NidaraWl` at import time, so a
-    # missing typelib is a boot failure, not a degraded feature.
+    # libnidara-wl first. The shell TOLERATES it missing (VisibleRegion.ts imports
+    # it lazily and falls back to full surfaces), so this is not about booting —
+    # it is so the smoke exercises the real path, and so a broken build.sh fails
+    # CI here instead of silently degrading every user's session.
     log "libnidara-wl…"
     local wl_build="$REPO/build/nidara-wl"
     "$REPO/lib/nidara-wl/build.sh" "$wl_build" >/dev/null
