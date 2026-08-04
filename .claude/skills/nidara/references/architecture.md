@@ -138,6 +138,21 @@ switching one click). Only GTK can tell a capsule from the bar around it, via a 
   masterOverlay and dismisses when that is `barBox` or nothing at all. Geometry-free, and correct
   wherever the bar sits or however tall it grows.
 
+⚠️ **A catcher up anywhere defeats the grab, including the OTHER surface's.** The bar's catcher was
+keyed off the bar's own grab, but `isAnyOverlayOpen` includes `island_mode` — so while an island mode
+was open the bar still covered the desktop, and since the island whitelists the bar, every "outside"
+press landed on a whitelisted surface. The compositor never saw a press outside the grab, so it never
+dismissed and never ran its own refocus: the catcher was silently still doing the job (measured
+2026-08-05, and it read as "the island restores focus and bar panels do not"). Any surface's grab
+must stand down EVERY catcher, not just its own.
+
+🔑 **A press outside the grab is delivered to the GRABBED SURFACE first.** Under a grab the compositor
+clamps pointer focus, so our window receives button presses at coordinates far outside anything we
+own — before the grab is cleared. Any "did the user press our chrome?" test must therefore be bounded
+by GEOMETRY as well as by widget identity: "the press hit no control of ours" is true of every
+outside click. Getting this wrong makes us dismiss the panel ourselves, which looks correct and is
+not: it takes the dismissal away from the compositor, and with it the refocus.
+
 ⚠️ **Scope each `cleared` handler to what its own surface owns.** The bar closes only its overlays,
 the island only `island_mode`; a handler reaching further would shut whatever the other surface just
 opened. The catchers, which see a real click rather than an eviction, keep the wider "close

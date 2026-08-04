@@ -220,6 +220,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // path, and the two gestures should not feel different.
   barStripClick.connect("pressed", (_g: any, _n: number, x: number, y: number) => {
     if (!status.isAnyOverlayOpen) return
+    // ⚠️ BOUNDED TO THE BAR ROW — and not for layout reasons. Under a focus grab the
+    // compositor CLAMPS pointer focus to the grabbed surface, so a press aimed at the
+    // desktop is delivered to THIS window, at its real coordinates, BEFORE the grab is
+    // cleared. Unbounded, "the press hit no control of ours" is true of every outside
+    // click, and we would dismiss the panel ourselves. That looks identical — the panel
+    // closes — but it robs the compositor of the dismissal and of the refocus that comes
+    // with it, so the window under the pointer never gets the keyboard back (measured).
+    // Taken from barBox rather than BAR_H so it tracks the row instead of restating its
+    // height; unmeasurable means stand down.
+    const [okBar, barRect] = barBox.compute_bounds(masterOverlay)
+    if (!okBar || y >= barRect.get_y() + barRect.get_height()) return
     const hit = masterOverlay.pick(x, y, Gtk.PickFlags.DEFAULT)
     if (!hit) return
     // `owner` ends as the masterOverlay child the press belongs to, or null when it
@@ -347,7 +358,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       region.unionRectangle({ x: 0, y: 0, width: Math.round(monGeo.width), height: BAR_H })
 
       const isAnyOpen = status.isAnyOverlayOpen
-      if (isAnyOpen && !status.cc_edit_mode && !barGrabToken) {
+      if (isAnyOpen && !status.cc_edit_mode && !barGrabToken && !islandGrabbed) {
           // Catcher region — covers everything below bar to intercept outside-click dismissal
           // In edit mode we skip this so other windows remain interactive.
           // Skipped under a compositor focus grab too, for the opposite reason: the
@@ -532,8 +543,18 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // wanted when the compositor is doing that job for us — and it must not merely be
   // redundant then, it must be GONE: it is a full-window button, so leaving it up
   // would swallow the very press the compositor needs to see outside our surface.
+  // `islandGrabbed` is NOT a detail: `isAnyOverlayOpen` includes `island_mode`, but the
+  // island grabs on ITS OWN surface, so keying the catcher off `barGrabToken` alone left
+  // this window covering the whole desktop whenever an island mode was open. And since
+  // the island's grab whitelists the bar, every "outside" press then landed on a
+  // whitelisted surface: the compositor never saw a press outside the grab, never
+  // dismissed, and never ran its own refocus — the catcher was quietly doing the job the
+  // grab was supposed to have taken over, which is exactly the harm documented on
+  // `catcherWanted` below. (Measured: dismissing an island mode left the window focused
+  // because the press never reached the compositor at all.)
+  let islandGrabbed = false
   const catcherWanted = () =>
-    status.isAnyOverlayOpen && !status.cc_edit_mode && !barGrabToken
+    status.isAnyOverlayOpen && !status.cc_edit_mode && !barGrabToken && !islandGrabbed
 
   const syncOverlays = () => {
     // Before the visibility/region work below, because both are computed from
@@ -680,6 +701,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     const open = !!status.island_mode
     const grabbed = islandWin.setModal(open, island.needsKeyboard(), [win])
     islandWin.setCatcher(open && !grabbed, island.needsKeyboard() ? 0 : BAR_H)
+    // Settle THIS window's catcher and region against the answer: they are computed
+    // from `islandGrabbed`, and syncOverlays ran before we knew it.
+    if (grabbed !== islandGrabbed) {
+      islandGrabbed = grabbed
+      catcher.set_visible(catcherWanted())
+      updateInputRegion()
+    }
   }
 
   inputYield.registerHolder(barGrabbing)
