@@ -2092,8 +2092,44 @@ So the region is worth ~7 points either way, and **the padding alone was worth a
 missing piece of desktop, not a glitch — someone who hits it needs a bootable shell before they can
 report anything, and `systemctl --user set-environment` works from a TTY.
 
-Still to do, in order: the VERTICAL dock (`verticalAxis.buildInputRegion` declares nothing yet), the
-island, and the bar.
+#### ✅ 2026-08-04: the ISLAND, the layer with the worst ratio
+
+Monitor-sized, blurred, and at rest it shows a ~750x64 capsule — **1.3 % of its own box**. Measured
+with the same harness, damage placed outside both the island's band and the dock's strip, and the
+dock's region active in BOTH arms so the delta is the island alone:
+
+| | GPU |
+|---|---|
+| island declares nothing | 26.6 % |
+| island declares its capsule | **19.4 %** |
+
+**−7.2 points**, ranges non-overlapping (26.3–27.1 vs 18.6–20.0).
+
+🔑 **The rule here is the OPPOSITE of the dock's, and the difference is the morph.** The dock knows
+its silhouette before it paints, so it can declare in every state. The island's expanded modes arrive
+through a `MorphRevealer`, and **a widget just made visible has no allocation until the next layout
+pass** (the `0,0 0x0` frame documented above — normal GTK, present in control builds too). A region
+computed at open time would describe the capsule alone while the mode paints outside it, and the mode
+would be scissored away *for as long as it stayed open*. So: **declare only while resting as the
+compact capsule; hand the whole surface back the moment anything is revealed or still animating**
+(`get_visible()` is not enough on the way out — a closing revealer is visible until its final tick,
+`tickId` is what says "still moving"). Resting is ~all of the time and is the expensive state anyway.
+
+🔑 **The two paddings are deliberately asymmetric (200 x / 16 y), and that asymmetry is what makes it
+safe.** The win is entirely in the HEIGHT — 1440 → 64. The horizontal is where the MOTION is: the
+capsule is centred, so anything changing its width slides it sideways, and one of those paths
+re-stamps **400 ms late** (`Bar.tsx` → `onBackgroundChanged`: a chip appearing does not resize the
+glass, so the `resize` hook never fires). Late is harmless for an input region and *fatal* for a
+visible one — it would be a chip that is not drawn for 400 ms. A pad wider than any such shift
+(three chips ≈ 150 px) retires that whole class of bug for almost no area.
+
+**General lesson for the bar, which is next:** an input region tolerates being late, a visible region
+does not. Every call site that stamps input has to be re-read with that question before it can be
+trusted to stamp blur too.
+
+Still to do: the **bar** (hardest — its overlays live inside its own window, so the region has to
+follow which overlay is open, and its failure is the most visible) and the **vertical dock**
+(`verticalAxis.buildInputRegion` declares nothing yet — mechanical, just the horizontal pattern).
 
 ---
 

@@ -4,6 +4,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import GLib from "gi://GLib"
 import { MorphRevealer } from "../../common/MorphRevealer"
+import { setVisibleRect } from "../../common/VisibleRegion"
 import status from "../../core/Status"
 import inputYield from "../../core/InputYield"
 
@@ -151,6 +152,9 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         // behind the Assistant — the exact clicks the yield exists to let through.
         if (inputYield.active) {
             surface.set_input_region(region)
+            // A yield changes who gets the CLICKS, not what is painted — the island
+            // is still on screen, so its blur region is computed the same way.
+            updateVisibleRegion()
             win.queue_draw()
             return
         }
@@ -187,7 +191,87 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             })
         }
         surface.set_input_region(region)
+        updateVisibleRegion()
         win.queue_draw()   // input regions are double-buffered: apply on next commit
+    }
+
+    // ── Blur cost: what this surface actually PAINTS ────────────────────────────
+    //
+    // This layer is the worst offender of the three (`tech-debt.md` §46): it is the
+    // monitor rect, it is blurred, and at rest it shows a ~300px capsule. Hyprland
+    // charges layer blur by the surface's BOX, so every repaint of every window
+    // anywhere on screen pays for all of it.
+    //
+    // 🔑 The rule is the opposite of the dock's, and the difference is the morph.
+    // The dock can declare its rect in every state because its silhouette is known
+    // before it paints. Here the expanded modes arrive through a MorphRevealer, and
+    // a widget that was just made visible has NO allocation until the next layout
+    // pass — so a region computed at open time would describe the capsule alone
+    // while the mode paints far outside it, and the mode would be SCISSORED AWAY
+    // for as long as it stayed open. (That one-frame `0,0 0x0` is documented in
+    // §46: it is normal GTK, it shows up in control builds too.)
+    //
+    // So: declare ONLY while resting as the compact capsule, and hand the whole
+    // surface back the instant anything is revealed or still animating. The resting
+    // state is ~all of the time and is exactly the expensive one; a mode being open
+    // is transient, the user is looking at it, and it is the risky half. The
+    // ordering is safe because we send the clear BEFORE the frame that paints the
+    // opening mode commits — Wayland applies surface state on commit, in request
+    // order, on the same connection.
+    // The two paddings are wildly different on purpose, and the asymmetry is the
+    // whole safety argument.
+    //
+    // VERTICAL is where the money is: this rect trades a 1440px-tall box for the
+    // bar row, and nothing else paints above or below it at rest (the chip badge
+    // overlaps its glyph, `--nidara-shadow-sm` spreads ≤3px). So keep it tight.
+    //
+    // HORIZONTAL is where the MOTION is, and where a tight rect would be a bug
+    // factory: the capsule is centred, so anything that changes its width slides
+    // it sideways, and one of those paths re-stamps 400ms LATE (`Bar.tsx` →
+    // `onBackgroundChanged`, because a chip appearing does not resize the glass
+    // and so never fires the `resize` hook). Late is harmless for an input region
+    // — a click arrives a moment late — but a visible region that lags is a chip
+    // that IS NOT DRAWN for 400ms. A pad wider than any such shift (three chips
+    // ≈ 150px) makes the whole class of late stamps a non-event, and it costs
+    // very little: the cut that matters is the height.
+    const BLUR_PAD_X = 200
+    const BLUR_PAD_Y = 16
+    let lastBlurKey = ""
+    const updateVisibleRegion = () => {
+        const surface = win.get_native()?.get_surface()
+        if (!surface) return
+        const set = (key: string, rect: { x: number, y: number, width: number, height: number } | null) => {
+            if (key === lastBlurKey) return
+            lastBlurKey = key
+            setVisibleRect(surface, rect)
+        }
+        // `get_visible()` alone is not enough on the way out: a closing revealer is
+        // still visible until its final tick, and tickId is the only thing that
+        // says "still moving".
+        if (revealers.some(r => r.get_visible() || r.tickId !== null)) { set("open", null); return }
+
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+        for (const w of hitTargets()) {
+            if (!w?.get_visible() || !w.get_mapped()) continue
+            const [ok, b] = w.compute_bounds(root)
+            if (!ok || b.get_width() <= 1 || b.get_height() <= 1) continue
+            x0 = Math.min(x0, b.get_x());                  y0 = Math.min(y0, b.get_y())
+            x1 = Math.max(x1, b.get_x() + b.get_width());  y1 = Math.max(y1, b.get_y() + b.get_height())
+        }
+        // Nothing measurable (first frames, capsule hidden): the un-optimised
+        // surface is always the safe answer.
+        if (!isFinite(x0)) { set("none", null); return }
+
+        // Clamp to the surface, which is the monitor rect MINUS any top offset —
+        // a rect past the buffer is intersected away, and an empty intersection
+        // cancels the element, i.e. the island disappears.
+        const surfH = Math.round(monGeo.height - topOffset)
+        const x = Math.max(0, Math.round(x0) - BLUR_PAD_X)
+        const y = Math.max(0, Math.round(y0) - BLUR_PAD_Y)
+        const width = Math.min(monGeo.width - x, Math.round(x1 - x0) + BLUR_PAD_X * 2)
+        const height = Math.min(surfH - y, Math.round(y1 - y0) + BLUR_PAD_Y * 2)
+        if (width <= 0 || height <= 0) { set("none", null); return }
+        set(`rest:${x},${y},${width},${height}`, { x, y, width, height })
     }
 
     // What the island actually COVERS, monitor-relative — capsule plus whichever
