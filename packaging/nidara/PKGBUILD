@@ -26,11 +26,13 @@ install=nidara.install
 # listed HERE for a bare `pacman -S nidara` to pull a working system.
 depends=(
   # compositor + session plumbing
-  # hyprland>=0.56: config/hypr/hyprland.lua's `glow` block is 0.56-only (added
+  # 'hyprland>=0.56': config/hypr/hyprland.lua's `glow` block is 0.56-only (added
   # with the Assistant's focused-window glow). An older Hyprland parses the
   # session config and rejects the unknown option, so this is a hard floor, not
   # a preference — the README states the same number.
-  hyprland>=0.56 hypridle hyprsunset uwsm greetd power-profiles-daemon polkit-gnome
+  # QUOTED, and it must stay that way: unquoted, bash reads `>` as a redirection,
+  # the depends=() array never closes and the whole PKGBUILD stops sourcing.
+  'hyprland>=0.56' hypridle hyprsunset uwsm greetd power-profiles-daemon polkit-gnome
   # keyring: the Secret Service (org.freedesktop.secrets) the built-in Assistant
   # stores its API key in; libsecret provides the Secret-1 typelib the shell +
   # nidara-agent import (gi://Secret)

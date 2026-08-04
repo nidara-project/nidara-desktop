@@ -54,6 +54,28 @@ jobs:
         working-directory: ui/shell
         run: npx --yes sass@1.97.3 --no-charset style.scss /tmp/style.css
 
+  pkgbuild:
+    name: PKGBUILD parses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # `bash -n` only, not a full makepkg: this catches the class that actually
+      # bit (v0.6.0, an unquoted `hyprland>=0.56` — bash read `>` as a
+      # redirection, the depends=() array never closed and the file stopped
+      # sourcing), and it needs no Arch container. A broken PKGBUILD breaks the
+      # LOCAL package build for every user, which is the path install.sh takes
+      # whenever nidara-repo does not yet serve the release — i.e. the first
+      # minutes of every release.
+      - name: bash -n packaging/nidara/PKGBUILD (must parse)
+        run: bash -n packaging/nidara/PKGBUILD
+      # depends=() must survive sourcing as a real array — a syntax error can
+      # truncate it silently rather than fail loudly.
+      - name: depends=() sources as a non-empty array
+        run: |
+          source <(sed -n '/^depends=(/,/^)/p' packaging/nidara/PKGBUILD)
+          echo "depends: ${#depends[@]}"
+          [ "${#depends[@]}" -ge 40 ] || { echo "::error::depends=() collapsed to ${#depends[@]}"; exit 1; }
+
   typecheck:
     name: Typecheck (tsc)
     runs-on: ubuntu-latest
