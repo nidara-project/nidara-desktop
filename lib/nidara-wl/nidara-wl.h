@@ -269,6 +269,29 @@ gboolean nidara_wl_focus_grab_acquire (GdkSurface                   *surface,
                                        GDestroyNotify                destroy);
 
 /**
+ * nidara_wl_focus_grab_add_surface:
+ * @surface: another #GdkSurface the live grab should accept
+ *
+ * Widens the active grab's whitelist. The protocol's whitelist is a SET, and this
+ * is the reason it is: a press inside any whitelisted surface is delivered
+ * normally and does NOT dismiss.
+ *
+ * 🔑 Why a surface that is merely adjacent needs to be in the set. On an outside
+ * press the compositor delivers the button to whatever holds pointer focus — and
+ * while a grab is up the pointer is CLAMPED to the grabbed surface — and only then
+ * clears the grab. So the press never reaches the thing you clicked: an outside
+ * click dismisses and does nothing else. When a second surface of ours is supposed
+ * to stay clickable through the grab (the bar strip, under the island's modes, so
+ * capsule-to-capsule switching stays ONE click), it has to be whitelisted rather
+ * than left outside.
+ *
+ * No-op when no grab is held. Takes effect immediately, like acquire.
+ *
+ * Returns: %TRUE if the widened whitelist reached the compositor
+ */
+gboolean nidara_wl_focus_grab_add_surface (GdkSurface *surface);
+
+/**
  * nidara_wl_focus_grab_release:
  *
  * Gives the grab back. Unlike dropping layer-shell keyboard interactivity — which

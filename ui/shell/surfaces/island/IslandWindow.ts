@@ -5,6 +5,7 @@ import Cairo from "gi://cairo"
 import GLib from "gi://GLib"
 import { MorphRevealer } from "../../common/MorphRevealer"
 import { setVisibleRect } from "../../common/VisibleRegion"
+import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import status from "../../core/Status"
 import inputYield from "../../core/InputYield"
 
@@ -59,13 +60,26 @@ export interface IslandWindowHandle {
     /** Root the revealers are anchored against — their `margin_top` is measured
      *  relative to this, exactly as it used to be against the bar's overlay. */
     root: () => Gtk.Widget
-    setKeyboardGrab: (grab: boolean) => void
-    /** Outside-click dismissal, which MUST live on this surface. A layer surface
-     *  holding an EXCLUSIVE keyboard grab also receives the pointer in Hyprland,
-     *  regardless of input regions — so while a `needsKeyboard` mode is open the
-     *  bar's own catcher never sees the click. That is why the overview and the
-     *  assistant stopped closing on outside click when the island moved out of
-     *  the bar's window, while the ambient player (no grab) kept working.
+    /** Take modality for an open island mode. `needsKeyboard` only decides the
+     *  FALLBACK path — a compositor focus grab carries keyboard and pointer either
+     *  way, so an ambient mode gets dismissal without EXCLUSIVE's side effects.
+     *
+     *  `peers` are other surfaces of ours that must stay clickable THROUGH the
+     *  grab — in practice the bar's, so capsule-to-capsule switching stays one
+     *  click. They are not a nicety: a press outside the whitelist is delivered to
+     *  the grabbed surface and then dismisses, so it never reaches what you
+     *  clicked (see common/FocusGrab.ts).
+     *
+     *  Returns whether the compositor grab took, i.e. whether the caller can skip
+     *  the catcher. */
+    setModal: (open: boolean, needsKeyboard: boolean, peers: (Gdk.Surface | null)[]) => boolean
+    /** Outside-click dismissal for the FALLBACK path only — when `setModal`
+     *  returns false. It must live on this surface: a layer surface holding an
+     *  EXCLUSIVE keyboard grab also receives the pointer in Hyprland, regardless of
+     *  input regions, so while a `needsKeyboard` mode is open the bar's own catcher
+     *  never sees the click. That is why the overview and the assistant stopped
+     *  closing on outside click when the island moved out of the bar's window,
+     *  while the ambient player (no grab) kept working.
      *  `topInset` keeps the bar strip live so clicking another bar capsule still
      *  switches surfaces in ONE click; pass 0 for grabbing modes, where those
      *  clicks cannot reach the bar anyway and should just dismiss. */
@@ -141,6 +155,8 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     const catcher = new Gtk.Button({ css_classes: ["overlay-catcher"], visible: false, hexpand: true, vexpand: true })
     catcher.connect("clicked", () => { status.island_mode = "" })
     let catcherTop: number | null = null   // null = off
+    // True while a compositor focus grab is doing the catcher's job — see setModal.
+    let grabIsCompositor = false
 
     const updateInputRegion = () => {
         const surface = win.get_native()?.get_surface()
@@ -338,12 +354,36 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
                 return GLib.SOURCE_REMOVE
             })
         },
-        setKeyboardGrab: (grab) => {
+        setModal: (open, needsKeyboard, peers) => {
+            const want = open && !inputYield.active
+
+            if (want && !grabIsCompositor) {
+                grabIsCompositor = acquireFocusGrab(
+                    [win.get_native()?.get_surface() ?? null, ...peers],
+                    () => {
+                        grabIsCompositor = false
+                        // Close ONLY what this surface owns. An eviction can come from
+                        // the BAR taking the slot for one of its own overlays, and
+                        // reaching further than island_mode would then close whatever
+                        // the other surface just opened.
+                        status.island_mode = ""
+                    })
+                console.log(`[IslandWindow] modality: ${grabIsCompositor ? "compositor focus grab" : "catcher + layer-shell (fallback)"}`)
+            } else if (!want && grabIsCompositor) {
+                grabIsCompositor = false
+                releaseFocusGrab()
+            }
+
+            // EXCLUSIVE is the fallback only, and only where a mode actually types.
+            // Under a grab the surface stays NONE — it already has the keyboard, and
+            // asking for EXCLUSIVE would put us back in m_exclusiveLSes for nothing.
             try {
-                Gtk4LayerShell.set_keyboard_mode(win, grab
+                Gtk4LayerShell.set_keyboard_mode(win, needsKeyboard && want && !grabIsCompositor
                     ? Gtk4LayerShell.KeyboardMode.EXCLUSIVE
                     : Gtk4LayerShell.KeyboardMode.NONE)
             } catch (e) { console.error("[IslandWindow] keyboard mode failed:", e) }
+
+            return grabIsCompositor
         },
         setCatcher: (open, topInset) => {
             catcherTop = open ? Math.max(0, Math.round(topInset)) : null

@@ -91,8 +91,21 @@ banners' deliberately-deferred stamp in `NotificationPopups.tsx` (§46).
 
 `focus_grab_*()` speaks `hyprland-focus-grab-v1`. From the shell go through
 **`common/FocusGrab.ts`** (same lazy-import / degrade / kill-switch contract as `VisibleRegion.ts`;
-the switch is `NIDARA_FOCUS_GRAB=0`). **Prism is the first and so far only surface on it** — the
-island and the app grid still use layer-shell EXCLUSIVE.
+the switch is `NIDARA_FOCUS_GRAB=0`). **The bar's overlays and the island are on it; the app grid is
+not** (it owns popovers — see below and `tech-debt.md` §53).
+
+🔑 **A grab whitelists a SET of surfaces, and you must pass every surface of yours that has to stay
+clickable — not just the modal one.** On an outside press the compositor delivers the button to
+whatever holds pointer focus, the grab CLAMPS pointer focus to itself, and only then clears. So a
+press outside the set dismisses and *does nothing else* — it never reaches what you clicked. That is
+why the island grabs the **bar's** surface alongside its own: capsule-to-capsule switching has to stay
+one click without a catcher arranging it. The bar needs no peer — its capsules live on the very
+surface it grabs.
+
+⚠️ **Scope each `cleared` handler to what its own surface owns.** There is one slot, so the bar and
+the island can evict each other; a handler that closes more than its own state would shut whatever
+the other surface just opened. The bar closes only its overlays, the island only `island_mode` — and
+the catchers, which see a real click rather than an eviction, keep the wider "close everything".
 
 What a grab replaces, all three verified in Hyprland 0.56's source:
 

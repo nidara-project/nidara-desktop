@@ -410,6 +410,27 @@ nidara_wl_focus_grab_acquire (GdkSurface                   *surface,
   return TRUE;
 }
 
+gboolean
+nidara_wl_focus_grab_add_surface (GdkSurface *surface)
+{
+  g_return_val_if_fail (GDK_IS_SURFACE (surface), FALSE);
+
+  if (!grab || !GDK_IS_WAYLAND_SURFACE (surface))
+    return FALSE;
+
+  struct wl_surface *wls = gdk_wayland_surface_get_wl_surface (surface);
+  if (!wls)
+    return FALSE;
+
+  /* Duplicate additions are ignored by the protocol, and committing again while
+   * the grab is already active only re-runs CFocusGrab::start() — which skips
+   * setGrab when m_grabActive and just re-checks focus. Safe to call repeatedly. */
+  hyprland_focus_grab_v1_add_surface (grab, wls);
+  hyprland_focus_grab_v1_commit (grab);
+  wl_display_flush (gdk_wl_display);
+  return TRUE;
+}
+
 void
 nidara_wl_focus_grab_release (void)
 {

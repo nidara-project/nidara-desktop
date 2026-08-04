@@ -2393,28 +2393,27 @@ twice over. (2) Any of the three that sizes to its content (title length, tray c
 compositor-side and unfixable from the widget tree. Fixed-width surfaces avoid it and remove the
 flexibility that motivated the idea.
 
-### 53. Prism is on the focus grab, the island and the app grid are not (2026-08-04)
+### 53. The bar and the island are on the focus grab, the app grid is not (2026-08-04)
 
-`hyprland-focus-grab-v1` landed via `lib/nidara-wl` + `common/FocusGrab.ts`, and **Prism** is the
-first surface migrated: keyboard with layer-shell interactivity at `NONE`, no `overlay-catcher`, no
-screen-covering input region, dismissal done by the compositor. The mechanism and its traps are
-documented in `architecture.md` → "Focus grab".
+`hyprland-focus-grab-v1` landed via `lib/nidara-wl` + `common/FocusGrab.ts`. **Migrated:** every
+overlay in the bar's window (CC, notification centre, system menu, Prism, bar expansion) under ONE
+grab on that surface, and the Activity Island under its own — which also whitelists the bar's surface
+so capsule switching stays one click. Both catchers are now fallback-only. Mechanism and traps in
+`architecture.md` → "Focus grab".
 
-**The debt is the split.** Until the island's keyboard modes and the app grid move too:
+**What is left, and why it is not just more of the same:**
 
-- The `overlay-catcher` buttons cannot be deleted — they still serve the CC, the NC, the system menu
-  and the bar expansion, none of which grabs.
-- `core/InputYield` and `HyprlandState.afterGrabRelease` cannot be deleted either: they exist for
-  the `EXCLUSIVE` release race, and the island still takes `EXCLUSIVE`. Prism no longer needs
-  them, but it is not the last holder.
-- Two mechanisms now express "this surface is modal". Do not add a third, and do not assume the
-  catcher's presence means a surface is un-grabbed — check `prismGrabIsCompositor`-style state.
+- ⚠️ **The app grid owns `Gtk.Popover` context menus** (`AppGrid.tsx`), and popups take the SAME
+  single compositor grab slot. Migrating it means handling `cleared` as an EVICTION and re-acquiring
+  when the popover closes — not just closing, which is what the two migrated surfaces do. Its current
+  EXCLUSIVE↔ON_DEMAND dance (`DockCore.tsx`) exists for exactly this collision and cannot be deleted
+  until then.
+- `core/InputYield` and `HyprlandState.afterGrabRelease` still exist for the `EXCLUSIVE` release
+  race, and the app grid is now their last holder. Both migrated surfaces still route through
+  `inputYield` (a yield drops the grab and brings the catcher back for the length of the truce), so
+  the module shrinks rather than disappears.
+- `cc_edit_mode` deliberately takes NO grab: it is the one open state that leaves the desktop
+  interactive, and a grab would take that away. Do not "fix" the inconsistency.
 
-**The open design question before migrating the panels** (CC/NC/system menu): a grab takes the
-POINTER AND KEYBOARD — there is no pointer-only mode — so a grabbing CC would start taking keyboard
-focus away from the user's window, which it does not do today. That is a product decision, not a
-mechanical one. The island and the app grid have no such question: they already want the keyboard.
-
-⚠️ **The app grid is the one that needs care**, because it owns `Gtk.Popover` context menus and
-popups take the SAME single grab slot — migrating it means handling `cleared` from an eviction, not
-just from a dismissal.
+**Do not migrate the dock's own menus.** They are popovers by design (the `#14` glass rows), so they
+are the *other* side of the slot collision, not a candidate.

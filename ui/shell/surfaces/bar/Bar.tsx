@@ -537,7 +537,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // it has not been migrated — see tech-debt §53.
   const onBarGrabCleared = () => {
     barGrabIsCompositor = false
-    dismissOverlays()
+    // Close ONLY what this window owns — deliberately NOT dismissOverlays(), which
+    // also clears island_mode. An eviction can come from the ISLAND taking the
+    // single slot for a mode the user just opened, and reaching that far would close
+    // it again. The catcher, which sees a real click rather than an eviction, keeps
+    // the wider behaviour.
+    if (!status.cc_edit_mode) {
+      status.cc_open = false; status.nc_open = false
+      status.prism_open = false; status.system_menu_open = false
+      status.bar_expanded_id = ""
+    }
     // dismissOverlays is a no-op in edit mode, and a closed overlay re-enters here
     // through its notify handler — but neither is guaranteed, so settle the catcher
     // and the region unconditionally rather than relying on a notify that may not fire.
@@ -557,7 +566,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     // synchronously, so a session where the shim is missing or the compositor is too
     // old falls back per-open rather than being decided at boot.
     if (want && !barGrabIsCompositor) {
-      barGrabIsCompositor = acquireFocusGrab(win.get_native()?.get_surface() ?? null, onBarGrabCleared)
+      // Just this surface: the bar's capsules live ON it, so they stay clickable
+      // through the grab with no peer to whitelist (unlike the island — see
+      // syncIslandGrab).
+      barGrabIsCompositor = acquireFocusGrab([win.get_native()?.get_surface() ?? null], onBarGrabCleared)
       // Which path took is otherwise INVISIBLE — both end with a working overlay, and
       // the fallback is only distinguishable by the bugs it brings back (the catcher
       // covering the desktop, focus refusals for computer-use). Log it once per open
@@ -579,7 +591,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
         ? Gtk4LayerShell.KeyboardMode.EXCLUSIVE
         : Gtk4LayerShell.KeyboardMode.NONE)
   }
-  const syncIslandGrab = () => islandWin.setKeyboardGrab(islandGrabbing() && !inputYield.active)
+  // The island is modal for ANY open mode, not just the keyboard-driven ones —
+  // an ambient player wants "click outside closes" exactly as much. It grabs the
+  // BAR's surface alongside its own so a click on another bar capsule still
+  // switches in one go; without that peer the press would be swallowed by the
+  // dismissal (see common/FocusGrab.ts). The catcher is only for when that fails.
+  const syncIslandGrab = () => {
+    const open = !!status.island_mode
+    const grabbed = islandWin.setModal(open, island.needsKeyboard(),
+      [win.get_native()?.get_surface() ?? null])
+    islandWin.setCatcher(open && !grabbed, island.needsKeyboard() ? 0 : BAR_H)
+  }
 
   inputYield.registerHolder(barGrabbing)
   inputYield.registerHolder(islandGrabbing)

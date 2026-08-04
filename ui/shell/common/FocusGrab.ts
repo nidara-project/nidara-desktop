@@ -34,6 +34,7 @@ type Shim = {
     init(): boolean
     has_focus_grab(): boolean
     focus_grab_acquire(surface: Gdk.Surface, cleared: (() => void) | null): boolean
+    focus_grab_add_surface(surface: Gdk.Surface): boolean
     focus_grab_release(): void
     focus_grab_active(): boolean
 }
@@ -71,6 +72,15 @@ function load() {
                 console.log("[FocusGrab] compositor has no hyprland-focus-grab-v1 — skipping")
                 return
             }
+            // The shell and libnidara-wl ship together, but they are installed
+            // separately (install.sh §6 / the PKGBUILD), so a checkout rebuilt without
+            // reinstalling the library is a real state — and the symptom would be a
+            // TypeError deep inside a grab rather than an honest degrade. Verify the
+            // whole surface we use, not just that the module loaded.
+            if (typeof wl.focus_grab_add_surface !== "function") {
+                console.log("[FocusGrab] libnidara-wl is older than this shell — reinstall it; using layer-shell grabs")
+                return
+            }
             shim = wl
             console.log("[FocusGrab] libnidara-wl ready")
         })
@@ -86,7 +96,16 @@ load()
 export function hasFocusGrab() { return shim !== null }
 
 /**
- * Restrict keyboard and pointer to `surface`.
+ * Restrict keyboard and pointer to `surfaces` — a SET, not one surface.
+ *
+ * 🔑 Pass every surface of ours that must stay clickable, not just the one that is
+ * modal. On an outside press the compositor delivers the button to whatever holds
+ * pointer focus — and the grab CLAMPS pointer focus to itself — and only then
+ * clears the grab. So a press outside dismisses and does nothing else: it never
+ * reaches the thing you clicked. A surface left out of the set is not "still
+ * reachable, merely not modal", it is unreachable in one click. That is why the
+ * island grabs the bar's surface alongside its own — capsule-to-capsule switching
+ * has to survive without a catcher arranging it.
  *
  * `onCleared` fires when the COMPOSITOR takes the grab away, which happens for
  * three reasons that are indistinguishable from here: the user pressed outside,
@@ -95,13 +114,23 @@ export function hasFocusGrab() { return shim !== null }
  * the surface should do, or re-acquire if it is still meant to be modal. It does
  * NOT fire for a `releaseFocusGrab()` we asked for.
  *
- * Returns false when the grab did not take (no shim, or the surface is not
+ * Returns false when the grab did not take (no shim, or the first surface is not
  * mapped yet). The caller MUST then fall back — a false here with no fallback is
- * a surface that silently cannot be typed into.
+ * a surface that silently cannot be typed into. An EXTRA surface failing to join
+ * does not fail the grab: what degrades then is one-click reach elsewhere, not
+ * modality.
  */
-export function acquireFocusGrab(surface: Gdk.Surface | null, onCleared: () => void): boolean {
-    if (!shim || !surface) return false
-    return shim.focus_grab_acquire(surface, onCleared)
+export function acquireFocusGrab(surfaces: (Gdk.Surface | null)[], onCleared: () => void): boolean {
+    if (!shim) return false
+    // Defended rather than trusted: `win.get_native()?.get_surface()` comes back
+    // untyped from the GIR, so tsc will NOT catch a caller that passes a bare
+    // surface where the set is expected — it silently typed a crash as fine once.
+    if (!Array.isArray(surfaces)) surfaces = [surfaces as Gdk.Surface | null]
+    const live = surfaces.filter((s): s is Gdk.Surface => s !== null)
+    if (live.length === 0) return false
+    if (!shim.focus_grab_acquire(live[0], onCleared)) return false
+    for (const s of live.slice(1)) shim.focus_grab_add_surface(s)
+    return true
 }
 
 /** Hand input back. Safe when nothing is held. */
