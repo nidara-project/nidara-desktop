@@ -1951,7 +1951,12 @@ somewhere in how the compositor presents a layer surface across a size change, a
 needs Hyprland-side instrumentation, not shell-side.
 
 **Separate bug found along the way (user-reported 2026-08-02) — FIXED the same day**, see
-`architecture.md`'s IslandWindow section and `HyprlandState.layerTop`.
+`architecture.md`'s IslandWindow section and `HyprlandState.layerTop`. That first fix read the bar's
+position once per `configreloaded`, which fixed the island going DOWN and left it stuck there when
+the error bar went away (user-reported 2026-08-04): Hyprland releases that reservation after a fade
+animation, on no event at all. Now measured on the event and then watched at 400ms **only while
+displaced** — the reasoning, the Hyprland source it rests on, and the layer-ordering rule that
+decides which surfaces can displace the bar are all in `architecture.md`.
 
 **So: do not re-propose "just make the layers smaller".** It is measured, it works, and it looks
 wrong. If the GPU cost is worth paying down, the mechanism has to be one that does not resize the
@@ -2110,3 +2115,95 @@ parametric: when the rows are rebuilt (dock and app grid rebuild per show, media
 whether the side is recomputed on move, and the destroy-time signal cleanup. Deliberately NOT done
 inside the token audit — refactoring three interactive surfaces belongs on its own branch with its
 own live check (rule 3 at the top of this file).
+
+### 50. The dock froze its reconciliation under any overlay — FIXED (2026-08-04)
+`DockCore.update()` began with `if (menuState.openCount > 0 || status.isAnyOverlayOpen) { needsUpdate
+= true; return }`. The menu half is real (rebuilding the item row under an open context menu shifts
+the tree the menu is anchored to — the "ghost menu"). The overlay half was a **perf guess from April
+2026** ("skips full update() cycle when isAnyOverlayOpen to reduce GPU/CPU load", commit `0484c5c7`)
+resting on the premise that an overlay consumes the screen. That premise was never true: CC, NC,
+search, the system menu, the island and a bar expansion all live in the BAR's window and none of them
+covers the dock — while the app grid, which does cover it, lives in the dock's own window and was
+never in this guard (§18).
+
+It became a user-visible bug the moment an overlay could stay open for minutes. `island_mode` counts
+as an overlay, and the Assistant holds it for a whole conversation, so **every app the agent launched
+got no dock icon until the user closed the island** (user-reported). Measured before the fix: open
+the CC → `ags request launchApp org.gnome.Calculator` → window on screen, no dock icon; close the CC
+→ icon appears. There was also a hidden 100ms retry loop for the whole time an overlay was open
+(`update()`'s `finally` re-arms whenever `needsUpdate` is set, and the re-run hit the same guard).
+
+Fixed by dropping the overlay clause; the `notify::cc-open`/`nc-open`/`prism-open`/`system-menu-open`/
+`island-mode` listeners went with it, since they existed ONLY to flush the update the guard had
+deferred. **Don't re-add an overlay guard here.** If dock rebuild cost ever needs paying down, the
+lever is the rebuild itself (`widgetCache`, create-before-destroy), not suppressing correctness while
+a surface the user is looking at is open.
+
+### 51. The island↔bar tracking is accepted as INTERIM — the owner wants a mechanical fix (2026-08-04)
+The watch in `Bar.tsx` is correct, costs nothing in a healthy session and is verified end to end
+(`architecture.md`), but the owner's call after seeing it is explicit: **it is still too much logic
+for what it buys**, and the direction to aim at is a mechanism that holds the island level *by
+construction* rather than shell code that notices and corrects. Recorded so nobody mistakes the
+current state for the intended end state.
+
+What has already been tried and must not be re-proposed as-is (measured, `architecture.md`):
+sharing the bar's `exclusive_zone`; `zone = 0` + `margin_top = -40` (perfect vertically, **50px
+off-centre horizontally with a side dock** — half the dock's own reservation, demoed live).
+
+The two avenues that are actually still open:
+
+1. **Upstream Hyprland: an event when a monitor's reserved area changes.** This is the missing
+   primitive and the honest fix — `arrangeLayersForMonitor` already knows the usable area changed,
+   and today nothing on the IPC socket says so, which is the ONLY reason the shell polls. With it,
+   the watch collapses into one `hs.connect(...)`. Nidara has landed upstream work before
+   (Aylur/astal#451), so this is a realistic PR rather than a wish.
+2. **`zone = 0` + negative margins cancelling OUR OWN reservations on all four edges.** Foreign
+   reservations (the error bar) then come for free from the compositor and only our own dock needs
+   bookkeeping — which the shell sets itself, so it is an event we own, not a poll. Two known
+   catches, both real: it relies on the bar being arranged BEFORE the dock (creation order, not
+   something Hyprland promises), and with `zone = 0` the compositor never tells the client where it
+   put the surface, so `occupiedRect` loses the position it exists to report.
+
+Considered and dead: making the island a Wayland **subsurface** of the bar (it would track the parent
+perfectly and for free, but a subsurface is composited as part of its parent's layer surface, which
+costs the island its own blur pass — the entire reason it is a separate surface at all).
+
+### 52. IDEA (owner, 2026-08-04, NOT a plan): split the bar into left/centre/right surfaces
+Floated as a possible future layer restructuring, also hoped to help the window-title truncation and
+the capsule count on the right. Recorded with the analysis so it is re-opened with the numbers rather
+than from scratch.
+
+**The blur win is in the HEIGHT, not in the split.** `nidara-bar` is 2560x1440 only because the
+overlays live inside its window (commandment 5). Evict them and the bar becomes a static 2560x48
+strip — which captures nearly all of the win §46 measures (full-screen blurred layer +5.9 pts vs
++0.4 for one sized to its content). Cutting that strip into three adds almost nothing on top. **So
+the two changes are independent, and only one of them pays: "overlays out of the bar's window" (with
+their surface MAPPED only while something is open — unmapping drops the blur pass entirely) is the
+move with measurable return; the three-way split has to justify itself on layout grounds alone.**
+
+**On layout it does not currently justify itself.** The three groups still share one 2560px row and
+still cannot overlap, so nothing about the title limit or `measureOverflow` gets easier — the
+arbitration merely moves from GTK (`CenterBox` + the `SizeGroup` that absorbs slack when the title
+grows) into shell code we write. That is trading mechanism for logic, against the owner's stated
+direction (§51). Letting a long title run under the island is already possible today inside one
+window via the bar's `masterOverlay`.
+
+**The strongest objection is the one the July island split already paid for: there is no ATOMIC
+COMMIT across two Wayland surfaces.** That is what killed splitting the island into capsule + modes
+(`handoff.c`, 2026-08-02): the small surface always presented first, so the handover showed a gap on
+open and doubled glass on close, and no ordering fixed it — the two commits land in different frames.
+Three bar surfaces have no *handover*, so that exact failure does not apply; what does apply is any
+change that must land in all three AT ONCE. And that is precisely the coupling this idea was meant to
+improve: truncating the window title requires knowing where the centre capsule ends, and the capsule's
+width moves on its own (a media title of a different length reshapes the pill with no page change).
+Today that is atomic — GTK allocates all three groups in one pass into one buffer. Split, the island
+would resize in one frame and the title's new limit in another, so the two would visibly collide or
+gap for a frame every time the music changes track. **The coupling that motivates the split is the
+coupling that makes it unsafe.**
+
+**Two further inherited hazards, both already paid for once.** (1) Only ONE of the three could hold the
+exclusive zone, so the other two would have to follow it — today's island↔bar divergence (§51),
+twice over. (2) Any of the three that sizes to its content (title length, tray count) resizes, and
+§46 established that a resizing layer surface produces a visible grow artefact that is
+compositor-side and unfixable from the widget tree. Fixed-width surfaces avoid it and remove the
+flexibility that motivated the idea.

@@ -106,7 +106,8 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     reserve (with zone 0 the bar's own 40px reservation would push the surface —
     and therefore the capsule — off the bar row).
     **The island FOLLOWS the bar's top edge** (`setTopOffset`, fed by
-    `HyprlandState.layerTop("nidara-bar")` on startup and on `config-reloaded`).
+    `HyprlandState.layerTop("nidara-bar", connector)` on startup, on
+    `config-reloaded`, and then on a 400ms watch that runs ONLY while displaced).
     The two surfaces answer to different rules on purpose — the bar's `zone = 40`
     both reserves space AND respects everyone else's reservations, the island's
     `-1` does neither — and that is right for each alone and wrong together: let
@@ -118,6 +119,63 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     the bar actually is needs no model of who reserves what. **Anything converting
     root-relative bounds to monitor-relative must add the offset** —
     `occupiedRect` does, and it is what stops the agent clicking under the island.
+
+    **Why it POLLS while displaced, and why that is not laziness** (2026-08-04, the
+    first version of this fix became its own bug: fix the config and the island
+    stayed down forever). Reading the position once per `configreloaded` is wrong
+    because the reservation is not released on that event. Hyprland's
+    `src/errorOverlay/Overlay.cpp` (v0.56.0): creating the error overlay calls
+    `updateReservedArea(true)` → `arrangeLayersForMonitor` immediately, but
+    `destroy()` only sets `m_queuedDestroy`; the release runs inside `draw()` and
+    only once the **fadeOut animation has ENDED** — an unknown number of frames
+    later, announced by no event, at a delay the user's animation config decides.
+    Nor is there anything client-side to hook: a layer surface is told about its
+    SIZE only, and the bar's never changes (anchored top/left/right with no bottom
+    anchor → client-chosen height), so a pure vertical move produces no `configure`.
+    Hence: measure on the event (twice — the overlay is CREATED from `draw()`, a
+    frame after the event, so the immediate read can legitimately still be stale),
+    then watch every 400ms **only while offset > 0**, stopping the moment the bar
+    comes home. A healthy session polls zero times; a broken-config session — by
+    definition degraded and being fixed right now — pays one `hyprctl layers` per
+    400ms. Verified end to end with a BOTTOM-layer surface reserving 60px:
+    bar 60 / island 0 → `hyprctl reload` → island 60 → kill the surface (no event
+    at all) → island back at 0 within 300ms.
+
+    **"Why not just share the bar's exclusive zone?" — TESTED AND REJECTED, with
+    numbers (2026-08-04, owner's question).** Two variants, both tried:
+    (a) *the same zone as the bar* (40) does not share anything — two surfaces
+    asking for 40 reserve 80 between them, and the island, arranged after the bar,
+    is positioned against a usable area the bar's own 40 has already been applied
+    to, so it lands 40px BELOW the bar rather than level with it.
+    (b) *`zone = 0` + `margin_top = -40`* (respect everyone, reserve nothing, then
+    cancel the bar's own reservation) is genuinely elegant on the vertical axis and
+    **works**: measured with a 60px reserving surface, the island tracked the bar to
+    y=60 and back to 0 with **no event, no polling and no shell code at all** — the
+    compositor did it. It dies on the HORIZONTAL axis. `zone = 0` means "respect ALL
+    reservations", and there is no way to say "respect only foreign ones" — so our
+    OWN dock counts. Measured with `dock.position = left`: `nidara-bar` at x=0
+    w=2560 (zone > 0, arranged before the dock, unaffected), `nidara-island` at
+    **x=100 w=2460**, capsule centre at 1053 instead of 1103 — **50px off the bar's
+    centre, permanently, for every side-dock user**. That is the same bug being
+    fixed here, moved to the other axis and from a rare state into the normal one.
+    Compensating with a negative left margin would mean tracking the dock's own
+    reservation (which changes with position, size and auto-hide) — more coupling
+    than the watch, and it fails in the NORMAL state when it drifts. A secondary
+    cost: with `zone = 0` the compositor never tells the client where it put the
+    surface, so `occupiedRect` would lose the truth it exists to report.
+    **Don't re-propose either variant.**
+
+    **Which layer can displace the bar** (cost an hour on 2026-08-04 — a probe on
+    OVERLAY, then on TOP, moved nothing). `arrangeLayersForMonitor` iterates the
+    four layer vectors in index order — BACKGROUND, BOTTOM, TOP, OVERLAY — running
+    the exclusive pass over each in turn, and each surface is positioned against
+    the `usableArea` **as it stands when its own vector's turn comes**. So only a
+    surface on a LOWER level (or an earlier entry within the same one) can push the
+    bar (TOP) down; a reserving OVERLAY surface reserves for windows but arrives
+    too late to move it. Hyprland's error bar is not a layer surface at all — it is
+    a monitor `RESERVED_DYNAMIC_TYPE_ERROR_BAR`, subtracted in
+    `logicalBoxMinusReserved()` before any layer is arranged, which is why it moves
+    the bar when a same-level layer surface would not.
 
     **Do not "optimise" this into a surface that resizes.** It was tried and
     reverted on 2026-08-02: shrinking it to a capsule-height strip when collapsed

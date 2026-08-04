@@ -534,7 +534,19 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
             }
             if (!tickId && menuState.openCount === 0) runUnifiedTick()
 
-            if (menuState.openCount > 0 || status.isAnyOverlayOpen) {
+            // Only a DOCK MENU freezes reconciliation: rebuilding the item row under
+            // an open context menu shifts the widget tree the menu is anchored to
+            // (the "ghost menu"). An open OVERLAY used to freeze it too — CC, NC,
+            // search, system menu, the island, a bar expansion — on the assumption
+            // that an overlay "consumes the screen" so the work was wasted. That was
+            // never true (they all live in the BAR's window and none of them covers
+            // the dock; the app grid, which does, lives in the dock's own window and
+            // was never in this guard), and it turned into a real bug the moment an
+            // overlay could stay open for minutes: the Assistant island holds
+            // `island_mode` for a whole conversation, so every app it launched got
+            // no dock icon until the user closed it (measured 2026-08-04: launch
+            // with the CC open → no icon; close the CC → icon).
+            if (menuState.openCount > 0) {
                 needsUpdate = true
                 return bar
             }
@@ -1058,14 +1070,9 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     const appStructConn = appService.connectStructural(pruneOrphanedPins)
     const pinnedConn = onPinnedChanged(throttledUpdate)
 
-    const overlayRecovery = () => { if (!status.isAnyOverlayOpen && needsUpdate) throttledUpdate() }
-    const statusConns = [
-        status.connect("notify::cc-open", overlayRecovery),
-        status.connect("notify::nc-open", overlayRecovery),
-        status.connect("notify::prism-open", overlayRecovery),
-        status.connect("notify::system-menu-open", overlayRecovery),
-        status.connect("notify::island-mode", overlayRecovery),
-    ]
+    // No overlay listeners here any more: they existed ONLY to flush the update
+    // that the overlay guard above had deferred, and nothing defers on an overlay
+    // now. The menu path retries on its own (see update()'s finally).
 
     const pConn = pointerBus.onButtonReleased(() => {
         isDndEnding = true
@@ -1184,7 +1191,6 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         clearPendingDragTimers()
         if (cConn) safeDisconnect(hs, cConn)
         safeDisconnect(Theme, themeConn)
-        for (const id of statusConns) safeDisconnect(status, id)
         try { if (aConn) aConn() } catch (e) {}
         try { if (pConn) pConn() } catch (e) {}
         try { if (dConn) dConn() } catch (e) {}

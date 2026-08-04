@@ -224,14 +224,28 @@ class HyprlandStateClass extends GObject.Object {
      *  Reading the bar's real position beats computing it from `reserved`: it is
      *  exact whatever did the pushing, and it needs no model of who reserves what.
      *  Setting the island to zone 0 is NOT the fix — it would respect the full
-     *  100px and land 40px below the bar instead of 60px above it. */
-    async layerTop(namespace: string): Promise<number | null> {
+     *  100px and land 40px below the bar instead of 60px above it.
+     *
+     *  `monitor` is the connector (DP-1): the error bar reserves on the FOCUSED
+     *  monitor only, so on a multi-head setup one bar moves and the others do not.
+     *  Without it the first surface found answers for all of them. The y is in
+     *  GLOBAL layout coordinates — subtract the monitor's own origin to get the
+     *  offset from its top edge.
+     *
+     *  There is no event for this. A layer surface only hears from the compositor
+     *  when its SIZE changes, and the bar's does not: it is anchored top/left/right
+     *  with no bottom anchor, so its height is client-chosen and a pure vertical
+     *  move is invisible client-side. Polling is the only instrument — which is why
+     *  callers should poll only while displaced (see Bar.tsx). */
+    async layerTop(namespace: string, monitor?: string): Promise<number | null> {
         try {
             const byMonitor = JSON.parse(await execAsync(["hyprctl", "layers", "-j"]))
-            for (const mon of Object.values<any>(byMonitor))
+            for (const [name, mon] of Object.entries<any>(byMonitor)) {
+                if (monitor && name !== monitor) continue
                 for (const level of Object.values<any>(mon?.levels ?? {}))
                     for (const l of level as any[])
                         if (l?.namespace === namespace) return l.y ?? 0
+            }
         } catch (e) { console.error("[HyprlandState] layerTop", namespace, e) }
         return null
     }

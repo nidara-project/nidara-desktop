@@ -576,13 +576,52 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // space ABOVE the bar (Hyprland's config-error bar), which slides the bar down
   // while the island's `exclusive_zone = -1` keeps it put, leaving the capsule
   // floating over the row it belongs to (user-caught 2026-08-02, reproduced with
-  // a reserving layer created before the shell). `configreloaded` is exactly when
-  // that bar appears and disappears, so it is the one event worth re-syncing on;
-  // the deferred first call waits for our own surface to exist to be measured.
+  // a reserving layer created before the shell).
+  //
+  // `configreloaded` is when that bar APPEARS, but it is NOT when it goes away,
+  // and reading the bar's position once on that event turned the fix into its own
+  // bug: fix the config and the island stayed down forever (user-caught
+  // 2026-08-04). Hyprland's own source says why (src/errorOverlay/Overlay.cpp,
+  // v0.56.0): creating the overlay reserves and re-arranges layers on the spot,
+  // but `destroy()` only sets `m_queuedDestroy` — the reservation is released, and
+  // the layers re-arranged, inside `draw()` and only once the fadeOut animation has
+  // ENDED. So the release lands an animation later than the event that caused it,
+  // on no event of its own, at a delay the user's animation config decides.
+  //
+  // Nothing client-side can see it either: a layer surface is only told about its
+  // SIZE, and the bar's never changes (top/left/right anchors, no bottom anchor →
+  // client-chosen height), so a pure vertical move produces no configure we could
+  // hook. Polling is the only instrument, so poll where it costs nothing: measure
+  // on the event, and then keep watching ONLY while displaced. A healthy session
+  // polls zero times; a broken-config session — already degraded, and being fixed
+  // right now — pays one `hyprctl layers` every 400 ms until the bar comes home.
+  const monY = monGeo.y   // layerTop is global; the island's margin is monitor-local
+  const monName = gdkmonitor.get_connector() ?? undefined
+  let islandWatch = 0
   const syncIslandToBar = () =>
-    hs.layerTop("nidara-bar").then(y => { if (y !== null) islandWin.setTopOffset(y) })
+    hs.layerTop("nidara-bar", monName).then(y => {
+      if (y === null) return
+      const offset = Math.max(0, y - monY)
+      islandWin.setTopOffset(offset)
+      if (offset > 0 && !islandWatch) {
+        islandWatch = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+          syncIslandToBar(); return GLib.SOURCE_CONTINUE
+        })
+      } else if (offset === 0 && islandWatch) {
+        GLib.source_remove(islandWatch); islandWatch = 0
+      }
+    })
+  // The deferred first call waits for our own surface to exist to be measured; it
+  // also covers a session that STARTS with a broken config (the error bar is up
+  // before the shell is, and no `configreloaded` will ever announce it).
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => { syncIslandToBar(); return GLib.SOURCE_REMOVE })
-  hs.connect("config-reloaded", syncIslandToBar)
+  // Two reads per reload, not one: the overlay is created from `draw()`, i.e. a
+  // frame AFTER the event, so the immediate read can legitimately still see the
+  // old position. The second one starts the watch, and from there the watch owns it.
+  hs.connect("config-reloaded", () => {
+    syncIslandToBar()
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => { syncIslandToBar(); return GLib.SOURCE_REMOVE })
+  })
   // The capsule is a CLICK TARGET living on a mostly click-through surface, so
   // its rect in the input region has to track its real size — and that size
   // moves on its own: the compact stack interpolates width when the fronting
