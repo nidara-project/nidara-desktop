@@ -773,7 +773,12 @@ sudo install -m755 "$VP_BUILD/nidara-input" /usr/bin/nidara-input
 rm -rf "$VP_BUILD"
 
 # libnidara-wl: the Wayland shim GJS cannot do without (window capture for real
-# thumbnails, hyprland-surface set_visible_region for the layer-blur cost). Built
+# thumbnails, hyprland-surface set_visible_region for the layer-blur cost, and
+# hyprland-focus-grab-v1 — which is MANDATORY since 2026-08-05, not an
+# enhancement: the full-screen catcher buttons that used to fake "click outside
+# closes" are gone, so without this library nothing dismisses. Hence the symbol
+# check after the install: a tree that builds an older shim must fail HERE, not
+# with a silent desktop.) Built
 # the same way as nidara-input — no build system, just cc + wayland-scanner —
 # plus g-ir-scanner so `import NidaraWl from "gi://NidaraWl"` resolves.
 #
@@ -789,6 +794,12 @@ sudo install -Dm644 "$WL_BUILD/NidaraWl-1.0.typelib" \
 sudo install -Dm644 "$WL_BUILD/NidaraWl-1.0.gir" \
     /usr/share/gir-1.0/NidaraWl-1.0.gir
 sudo ldconfig
+# The shim and the shell ship together but are separate artefacts, so "built from
+# an older tree" is a real state. Assert the API the shell now REQUIRES.
+if ! grep -q "focus_grab_acquire" "$WL_BUILD/NidaraWl-1.0.gir"; then
+    echo "FATAL: libnidara-wl built without focus_grab_* — outside-click dismissal would be dead." >&2
+    exit 1
+fi
 rm -rf "$WL_BUILD"
 
 # systemd user unit — the shell respawns on crash instead of leaving a bare
