@@ -2409,6 +2409,14 @@ Neither is a focus-grab quirk as such — they are what the catcher had been hid
 
 **What is left, and why it is not just more of the same:**
 
+- ⚠️ **The grid's workspace strip switches with a bare `focusWorkspace` and stays open**
+  (`AppGrid.tsx`), so the EXCLUSIVE drop — and Hyprland's `refocusLastWindow` with it — lands later,
+  when the grid closes. On an EMPTY target that drags the workspace back. `closeAppGridPanel` now
+  re-asserts the workspace through `focusWorkspaceOnGrabRelease` when nothing is focused there, the
+  same guard `WorkspaceOverview` carries. Written from the mechanism: **14 injected runs across five
+  variants did not reproduce it**, so treat it as a guard, not a closed bug — migrating the grid off
+  EXCLUSIVE removes the class outright, because `setGrab(nullptr)` refuses to refocus a window whose
+  workspace is not visible.
 - **The app grid owns `Gtk.Popover` context menus** (`AppGrid.tsx`), and popups take the SAME single
   compositor grab slot. **The blocker is now gone**: `FocusGrab.ts` suspends a lease when a popover
   is what cleared it and retakes the grab on `closed` (2026-08-05, forced by the island's own media

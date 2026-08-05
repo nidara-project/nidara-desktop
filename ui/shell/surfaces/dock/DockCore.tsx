@@ -1315,6 +1315,23 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
             // nothing but real pointer movement recovered it.
             Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
             axis.setExclusiveZone(win, (isRevealed && !dockSettings.autoHide) ? DOCK_CONSTANTS.EXCLUSIVE_ZONE : 0)
+            // …and `refocusLastWindow` is exactly what undoes a workspace switch made
+            // from the grid's own strip: with the target workspace EMPTY, the last
+            // window lives somewhere else, so focusing it DRAGS THAT WORKSPACE BACK and
+            // the user lands where they came from. Only empty targets bite — a window
+            // here absorbs the refocus — and the drop is double-buffered, so no
+            // ordering at this call site can win the race; `focusWorkspaceOnGrabRelease`
+            // waits for the compositor to announce it. `WorkspaceOverview` has carried
+            // this since the switch moved there; the grid's strip (AppGrid.tsx, which
+            // switches with a bare `focusWorkspace` and stays open) never did.
+            //
+            // ⚠️ Written from the MECHANISM, not from a reproduction: 14 injected runs
+            // across five variants (IPC switch, real strip click, three close delays,
+            // two outside-click closes) did not trigger it on this branch. It is a
+            // guard on a hazard the sibling surface already guards, not a verified fix
+            // — the structural answer is migrating the grid off EXCLUSIVE entirely
+            // (`tech-debt.md` §53, unblocked now that FocusGrab survives popovers).
+            if (!hs.focusedClient) hs.focusWorkspaceOnGrabRelease(hs.focusedWorkspaceId)
         }
         if (fullscreenMode && !cursorInDock) {
             setRevealed(false)
