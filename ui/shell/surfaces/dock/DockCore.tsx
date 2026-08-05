@@ -1316,22 +1316,34 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
             Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
             axis.setExclusiveZone(win, (isRevealed && !dockSettings.autoHide) ? DOCK_CONSTANTS.EXCLUSIVE_ZONE : 0)
             // …and `refocusLastWindow` is exactly what undoes a workspace switch made
-            // from the grid's own strip: with the target workspace EMPTY, the last
-            // window lives somewhere else, so focusing it DRAGS THAT WORKSPACE BACK and
-            // the user lands where they came from. Only empty targets bite — a window
-            // here absorbs the refocus — and the drop is double-buffered, so no
-            // ordering at this call site can win the race; `focusWorkspaceOnGrabRelease`
-            // waits for the compositor to announce it. `WorkspaceOverview` has carried
-            // this since the switch moved there; the grid's strip (AppGrid.tsx, which
-            // switches with a bare `focusWorkspace` and stays open) never did.
+            // from the grid's own strip: the last window lives on the workspace you came
+            // FROM, so focusing it DRAGS THAT WORKSPACE BACK and the user lands where
+            // they started. Reproduced 2026-08-05 (open grid from the dock, pick a
+            // workspace in the strip, close with the same dock button): 2 of 3 runs
+            // snapped back, which is the intermittency it gets reported with.
             //
-            // ⚠️ Written from the MECHANISM, not from a reproduction: 14 injected runs
-            // across five variants (IPC switch, real strip click, three close delays,
-            // two outside-click closes) did not trigger it on this branch. It is a
-            // guard on a hazard the sibling surface already guards, not a verified fix
-            // — the structural answer is migrating the grid off EXCLUSIVE entirely
-            // (`tech-debt.md` §53, unblocked now that FocusGrab survives popovers).
-            if (!hs.focusedClient) hs.focusWorkspaceOnGrabRelease(hs.focusedWorkspaceId)
+            // 🔑 A window on the TARGET does not save you, and that is the part worth
+            // understanding. Hyprland REFUSES to move window focus while a layer surface
+            // holds EXCLUSIVE (`m_exclusiveLSes` — the reason `core/InputYield` exists),
+            // so the strip's `focusWorkspace` moves the workspace and focuses NOTHING on
+            // it. The target is left with an unfocused window, `refocusLastWindow` still
+            // answers with the one we came from, and the switch is undone. Which is why
+            // this re-asserts UNCONDITIONALLY rather than only for an empty target as
+            // `focusWorkspaceOnGrabRelease`'s own comment suggests: that read predates
+            // the grid, whose grab is what breaks the "a window here absorbs it" case.
+            //
+            // The drop is double-buffered, so no ordering at this call site can win the
+            // race — `focusWorkspaceOnGrabRelease` waits for the compositor to announce
+            // it. Re-asserting the workspace we are already on is a no-op when nothing
+            // dragged (`binds:workspace_back_and_forth` is off by default; with it ON
+            // this would need the emptiness check back).
+            //
+            // The structural fix is migrating the grid off EXCLUSIVE (`tech-debt.md`
+            // §53, unblocked now that FocusGrab survives popovers): under a focus grab
+            // the switch would focus the target's window at switch time, and
+            // `setGrab(nullptr)` refuses to refocus a window whose workspace is not
+            // visible, so neither half of this could happen.
+            hs.focusWorkspaceOnGrabRelease(hs.focusedWorkspaceId)
         }
         if (fullscreenMode && !cursorInDock) {
             setRevealed(false)

@@ -2411,12 +2411,17 @@ Neither is a focus-grab quirk as such — they are what the catcher had been hid
 
 - ⚠️ **The grid's workspace strip switches with a bare `focusWorkspace` and stays open**
   (`AppGrid.tsx`), so the EXCLUSIVE drop — and Hyprland's `refocusLastWindow` with it — lands later,
-  when the grid closes. On an EMPTY target that drags the workspace back. `closeAppGridPanel` now
-  re-asserts the workspace through `focusWorkspaceOnGrabRelease` when nothing is focused there, the
-  same guard `WorkspaceOverview` carries. Written from the mechanism: **14 injected runs across five
-  variants did not reproduce it**, so treat it as a guard, not a closed bug — migrating the grid off
-  EXCLUSIVE removes the class outright, because `setGrab(nullptr)` refuses to refocus a window whose
-  workspace is not visible.
+  when the grid closes, and drags the workspace you came FROM back. Reproduced 2026-08-05 with the
+  reporter's exact gesture (open from the dock button, pick a workspace, close with the same button):
+  2 of 3 runs snapped back. 🔑 **A window on the target does not save you** — the read on
+  `focusWorkspaceOnGrabRelease` that "only empty targets bite" predates the grid. Hyprland refuses to
+  move window focus while a layer surface holds EXCLUSIVE, so the strip's switch focuses NOTHING on
+  the target and `refocusLastWindow` still answers with the old window. `closeAppGridPanel` therefore
+  re-asserts the workspace UNCONDITIONALLY via `focusWorkspaceOnGrabRelease` (6/6 fixed, and the
+  target's own window ends up focused, which it did not before). ⚠️ That re-assert is only a no-op
+  because `binds:workspace_back_and_forth` is off — with it on, the emptiness check has to come back.
+  Migrating the grid off EXCLUSIVE removes the class outright: the switch would focus the target at
+  switch time, and `setGrab(nullptr)` refuses to refocus a window whose workspace is not visible.
 - **The app grid owns `Gtk.Popover` context menus** (`AppGrid.tsx`), and popups take the SAME single
   compositor grab slot. **The blocker is now gone**: `FocusGrab.ts` suspends a lease when a popover
   is what cleared it and retakes the grab on `closed` (2026-08-05, forced by the island's own media
