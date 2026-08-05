@@ -153,6 +153,19 @@ by GEOMETRY as well as by widget identity: "the press hit no control of ours" is
 outside click. Getting this wrong makes us dismiss the panel ourselves, which looks correct and is
 not: it takes the dismissal away from the compositor, and with it the refocus.
 
+🔑 **Dropping a grab refocuses by POINTER, so give the keyboard back explicitly.**
+`CSeatManager::setGrab(nullptr)` honours `input:follow_mouse` (1 → `refocus()`), which means the
+window that gets the keyboard is whatever the mouse rests on. Measured 2026-08-05: dismiss onto a
+window and that window is focused; dismiss with the pointer over the wallpaper — by clicking there OR
+by pressing Esc while it merely sits there — and the session is left with NO active window. A plain
+desktop click with nothing open does not do that, so it is specific to dropping a grab, and working
+from the keyboard it costs you the window you were typing in on every dismissal. `FocusGrab.ts` calls
+`HyprlandState.restoreFocusAfterGrab()` whenever our machinery ends up holding nothing, with two
+guards that are the whole design: only when the compositor was left with **nothing** focused (never
+over the top of a window the user just clicked), and only on the workspace the user is **looking at**
+(focusing elsewhere drags the workspace along, so an empty workspace is allowed to stay empty). Timed
+off the compositor's own announcement via `afterGrabRelease`, not a delay.
+
 ⚠️ **Scope each `cleared` handler to what its own surface owns.** The bar closes only its overlays,
 the island only `island_mode`; a handler reaching further would shut whatever the other surface just
 opened. The catchers, which see a real click rather than an eviction, keep the wider "close

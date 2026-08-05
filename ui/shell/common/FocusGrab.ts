@@ -1,5 +1,6 @@
 import GLib from "gi://GLib"
 import { Gtk } from "ags/gtk4"
+import hs from "../core/HyprlandState"
 import type Gdk from "gi://Gdk?version=4.0"
 
 /**
@@ -200,6 +201,20 @@ function openPopupIn(wins: Gtk.Window[]): Gtk.Popover | null {
  * retaken when the popup closes — which is also what unblocks migrating the app
  * grid, whose popovers are the reason it is still on the EXCLUSIVE dance.
  */
+/**
+ * Our machinery just ended up holding nothing. Make sure the desktop still has a
+ * focused window: dropping a grab hands the keyboard to whatever the POINTER is
+ * over, which is nobody when it rests on the wallpaper — see
+ * `HyprlandState.restoreFocusAfterGrab` for the measurement and the two guards.
+ *
+ * Here rather than in each caller because it is a property of the grab itself: any
+ * surface that takes input away owes it back, whichever way it lets go.
+ */
+function repairFocusIfUnheld() {
+    if (held || suspended) return   // somebody still owns input; nothing was handed back
+    hs.restoreFocusAfterGrab()
+}
+
 function onShimCleared(lease: Lease) {
     if (held?.token !== lease.token) return   // stale: a grab we had already lost
     held = null
@@ -212,6 +227,7 @@ function onShimCleared(lease: Lease) {
         return
     }
     lease.onCleared()
+    repairFocusIfUnheld()
 }
 
 function onPopupClosed(lease: Lease) {
@@ -293,4 +309,5 @@ export function releaseFocusGrab(token: number) {
     if (held?.token !== token) return
     held = null
     shim?.focus_grab_release()
+    repairFocusIfUnheld()
 }

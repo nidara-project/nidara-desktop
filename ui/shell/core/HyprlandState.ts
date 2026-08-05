@@ -501,6 +501,38 @@ class HyprlandStateClass extends GObject.Object {
         this.afterGrabRelease(() => this.focusWorkspace(id))
     }
 
+    /** Hand the keyboard back to the window the user was working in, after one of our
+     *  surfaces let go of a compositor focus grab.
+     *
+     *  WHY IT IS NEEDED. Dropping the grab makes Hyprland refocus by POINTER
+     *  (`CSeatManager::setGrab(nullptr)` → `input:follow_mouse` = 1 → `refocus()`), so
+     *  where the mouse happens to rest decides who gets the keyboard. Measured
+     *  2026-08-05: dismiss a panel onto a window and that window is focused; dismiss it
+     *  with the pointer over the wallpaper — by clicking there OR by pressing Esc while
+     *  the pointer merely sits there — and the session is left with NO active window at
+     *  all. A plain desktop click with nothing open does not do that, so it is specific
+     *  to dropping a grab. Working from the keyboard, that means every dismissal
+     *  silently costs you the window you were typing in.
+     *
+     *  ⚠️ ONLY when the compositor was left with nothing focused. Refocusing over the
+     *  top of a window the user just clicked would be worse than the bug.
+     *
+     *  ⚠️ ONLY on the workspace the user is looking at — `focusedClient` guarantees
+     *  this (see it: it never answers with a window from the workspace you just left).
+     *  Focusing a window that lives elsewhere DRAGS THE WORKSPACE ALONG, so dismissing
+     *  a panel on an empty workspace would teleport the user off it. Nothing to focus
+     *  here means we leave it alone — an empty workspace is allowed to be empty.
+     *
+     *  Timed off the compositor's own announcement rather than a delay, because asking
+     *  for the release is not performing it — see `afterGrabRelease`. */
+    restoreFocusAfterGrab() {
+        this.afterGrabRelease(() => {
+            if (this.hl.focused_client) return   // the compositor found someone: leave it
+            const addr = (this.focusedClient as any)?.address
+            if (addr) this.focusWindow(addr)
+        })
+    }
+
     /** Run `cb` once the compositor has ANNOUNCED that a shell surface gave up its
      *  EXCLUSIVE keyboard grab — the generic half of `focusWorkspaceOnGrabRelease`
      *  (read its comment for the measurement this encodes). Any caller that has just
