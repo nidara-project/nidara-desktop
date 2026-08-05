@@ -2398,8 +2398,9 @@ flexibility that motivated the idea.
 `hyprland-focus-grab-v1` landed via `lib/nidara-wl` + `common/FocusGrab.ts`. **Migrated:** every
 overlay in the bar's window (CC, notification centre, system menu, Prism, bar expansion) under ONE
 grab on that surface, and the Activity Island under its own — and **each whitelists the other's
-surface**, so capsule switching stays one click in both directions. Both catchers are now
-fallback-only. Mechanism and traps in `architecture.md` → "Focus grab".
+surface**, so capsule switching stays one click in both directions. **Both catchers are GONE** (2026-08-05): `hyprland-focus-grab-v1` + libnidara-wl are a HARD
+REQUIREMENT now, and their absence is a loud `console.error` rather than a silent degrade — the
+user's call, so that a failure is seen instead of being quietly covered up. Mechanism and traps in `architecture.md` → "Focus grab".
 
 The first live round produced three bugs worth knowing about, all fixed (2026-08-05) and all from the
 same two roots: **the single grab had two independent owners** (fixed with ownership tokens +

@@ -73,17 +73,6 @@ export interface IslandWindowHandle {
      *  Returns whether the compositor grab took, i.e. whether the caller can skip
      *  the catcher. */
     setModal: (open: boolean, needsKeyboard: boolean, peers: (Gtk.Window | null)[]) => boolean
-    /** Outside-click dismissal for the FALLBACK path only — when `setModal`
-     *  returns false. It must live on this surface: a layer surface holding an
-     *  EXCLUSIVE keyboard grab also receives the pointer in Hyprland, regardless of
-     *  input regions, so while a `needsKeyboard` mode is open the bar's own catcher
-     *  never sees the click. That is why the overview and the assistant stopped
-     *  closing on outside click when the island moved out of the bar's window,
-     *  while the ambient player (no grab) kept working.
-     *  `topInset` keeps the bar strip live so clicking another bar capsule still
-     *  switches surfaces in ONE click; pass 0 for grabbing modes, where those
-     *  clicks cannot reach the bar anyway and should just dismiss. */
-    setCatcher: (open: boolean, topInset: number) => void
     /** Re-stamp the click-through mask: the capsule always, plus whatever mode
      *  is currently revealed. */
     updateInputRegion: () => void
@@ -151,10 +140,6 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     // root-relative and monitor-relative coordinates has to add it.
     let topOffset = 0
 
-    // Mirrors the bar's own catcher, on this surface — see setCatcher's doc.
-    const catcher = new Gtk.Button({ css_classes: ["overlay-catcher"], visible: false, hexpand: true, vexpand: true })
-    catcher.connect("clicked", () => { status.island_mode = "" })
-    let catcherTop: number | null = null   // null = off
     // Our ownership token for the compositor focus grab doing the catcher's job,
     // 0 when we hold none — see setModal and common/FocusGrab.ts. A token rather
     // than a boolean because the BAR grabs the same single slot: it can evict us
@@ -197,19 +182,6 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         // currently revealed.
         for (const t of hitTargets()) add(t)
         for (const r of revealers) add(r)
-        // The catcher's rect is stamped EXPLICITLY rather than measured: it is
-        // shown and stamped in the same turn, so its allocation is still a layout
-        // pass behind. (Same reason the bar unions its own catcher rect by hand.)
-        if (catcherTop !== null) {
-            // Height is the SURFACE's, not the monitor's: a top offset shortens us
-            // by that much, and a rect past the surface would just be clipped.
-            // @ts-ignore
-            region.unionRectangle({
-                x: 0, y: catcherTop,
-                width: Math.round(monGeo.width),
-                height: Math.round(monGeo.height - topOffset - catcherTop),
-            })
-        }
         surface.set_input_region(region)
         updateVisibleRegion()
         win.queue_draw()   // input regions are double-buffered: apply on next commit
@@ -351,9 +323,6 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             // opens" symptom, and it lasted the whole 300ms morph.
             for (const r of mounted) r.onAllocated = updateInputRegion
             root.add_overlay(row)
-            // Between the capsule and the modes: later overlay children paint on
-            // top, so the catcher must never sit above a revealed mode.
-            root.add_overlay(catcher)
             for (const r of mounted) root.add_overlay(r)
             // Present once, and stay mapped: the capsule is permanent furniture
             // now. Deferred like the bar's own present so the first frame has a
@@ -397,12 +366,6 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             } catch (e) { console.error("[IslandWindow] keyboard mode failed:", e) }
 
             return grabToken !== 0
-        },
-        setCatcher: (open, topInset) => {
-            catcherTop = open ? Math.max(0, Math.round(topInset)) : null
-            catcher.margin_top = catcherTop ?? 0
-            catcher.set_visible(open)
-            updateInputRegion()
         },
         updateInputRegion,
         setShown: (shown) => {

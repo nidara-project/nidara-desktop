@@ -71,7 +71,7 @@ function load() {
             const wl = (mod.default ?? mod) as unknown as Shim
             if (!wl.init()) throw new Error("init returned false")
             if (!wl.has_focus_grab()) {
-                console.log("[FocusGrab] compositor has no hyprland-focus-grab-v1 — skipping")
+                console.error("[FocusGrab] compositor has no hyprland-focus-grab-v1 — NOTHING will dismiss on an outside click. The catchers that used to cover this are gone (2026-08-05): the protocol is now a hard requirement.")
                 return
             }
             // The shell and libnidara-wl ship together, but they are installed
@@ -80,13 +80,13 @@ function load() {
             // TypeError deep inside a grab rather than an honest degrade. Verify the
             // whole surface we use, not just that the module loaded.
             if (typeof wl.focus_grab_add_surface !== "function") {
-                console.log("[FocusGrab] libnidara-wl is older than this shell — reinstall it; using layer-shell grabs")
+                console.error("[FocusGrab] libnidara-wl is OLDER than this shell — reinstall it (install.sh §6). Until then nothing will dismiss on an outside click: the catchers are gone.")
                 return
             }
             shim = wl
             console.log("[FocusGrab] libnidara-wl ready")
         })
-        .catch(e => console.log(`[FocusGrab] unavailable, using layer-shell grabs: ${e}`))
+        .catch(e => console.error(`[FocusGrab] libnidara-wl unavailable — outside-click dismissal is DEAD without it: ${e}`))
 }
 
 /** Start using the shim. Safe to call more than once; also runs on import. */
