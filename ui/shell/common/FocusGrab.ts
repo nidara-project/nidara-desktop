@@ -44,13 +44,17 @@ type Shim = {
 const SHIM_MODULE = "gi://NidaraWl"
 
 /**
- * Escape hatch, and the only way to A/B against the old EXCLUSIVE + catcher path
- * without two builds. `NIDARA_FOCUS_GRAB=0` keeps every surface on layer-shell
- * interactivity.
+ * Escape hatch. `NIDARA_FOCUS_GRAB=0` makes every `acquire` refuse.
  *
- * It earns its keep because the failure mode is modality: a grab that sticks
- * leaves a surface eating input the user cannot dismiss, and `systemctl --user
- * set-environment` is reachable from a TTY when the desktop is not.
+ * ⚠️ It is NOT a fallback any more — there is nothing left to fall back TO. Since
+ * the catchers were deleted (2026-08-05) this leaves the shell with no modality at
+ * all: panels do not dismiss on an outside click and Prism, the app grid and the
+ * island's keyboard modes cannot be typed into. Every surface says so on stderr.
+ *
+ * It still earns its keep for exactly one failure: a grab that STICKS leaves a
+ * surface eating input the user cannot dismiss, and a desktop you can dismiss
+ * nothing on still beats one you can do nothing on. `systemctl --user
+ * set-environment` is reachable from a TTY when the session is not.
  */
 const DISABLED = GLib.getenv("NIDARA_FOCUS_GRAB") === "0"
 
@@ -111,7 +115,7 @@ export function hasFocusGrab() { return shim !== null }
  *      evicts the island's grab, correctly
  *   3. the island's own notify handler then runs and calls release()
  *   4. …destroying the BAR's brand-new grab, while the bar still believes it holds
- *      one and keeps its catcher hidden → nothing dismisses on an outside click
+ *      one → nothing dismisses on an outside click, and nothing says why
  *
  * So a lease, and a release that no-ops for anyone but the owner. The eviction in
  * step 2 is real, though, and the evicted owner has to hear about it or it will

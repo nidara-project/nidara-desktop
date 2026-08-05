@@ -475,9 +475,9 @@ export function ActivityIsland() {
          *  mode is open (it is switched off by opacity alone, and clicking it
          *  closes the mode). The chips are not: while a mode is open they are
          *  faded to nothing, and leaving their rects stamped would put an
-         *  invisible dead patch in the bar where a click should reach the
-         *  dismiss catcher. Collapsed chips fall out on the caller's zero-size
-         *  guard. */
+         *  invisible dead patch in the bar: the compositor would read a press
+         *  there as INSIDE the grab and neither dismiss nor pass it on. Collapsed
+         *  chips fall out on the caller's zero-size guard. */
         hitTargets: () => indicatorRow.opacity === 0
             ? [capsule as Gtk.Widget]
             : [capsule as Gtk.Widget, ...[...chips.values()].map(c => c.hit)],

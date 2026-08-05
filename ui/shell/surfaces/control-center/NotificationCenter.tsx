@@ -439,10 +439,11 @@ export default function NotificationCenter() {
     const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, width_request: GRID_WIDTH + LANE, css_classes: ["nc-outer"] })
 
     // propagate_natural_height: the panel hugs its visible content (calendar +
-    // cards) instead of filling the bar→dock gap — empty column space would sit
-    // above the Bar's catcher and swallow the outside-clicks that dismiss the
-    // NC. max_content_height (set via setMaxHeight below) is the cap: past it
-    // the list scrolls.
+    // cards) instead of filling the bar→dock gap — empty column space would go
+    // into the Bar's input region, and the compositor would read the presses
+    // below the last card as INSIDE the grab instead of dismissing the NC.
+    // max_content_height (set via setMaxHeight below) is the cap: past it the
+    // list scrolls.
     // The scroll forces its child to the full viewport width (GRID_WIDTH + LANE). A
     // padding-right of LANE (in .nc-content-box) keeps the cards at GRID_WIDTH and leaves
     // the lane free on the right for the indicator — no reflow, no overlap.

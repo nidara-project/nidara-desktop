@@ -324,10 +324,17 @@ A `hyprctl` subprocess beats our own surface state by ~4 ms. Reordering the two 
 12 failures in 21 attempts; an idle tick between them changed nothing either.
 
 What works is waiting for the compositor to **announce** the release — that announcement is the same
-`activewindow` null above — which is what `HyprlandState.focusWorkspaceOnGrabRelease(id)` does, with
-an 80 ms fallback for the case where nothing was focused and no announcement is coming. Any surface
-that switches workspace *while closing* must use it; `focusWorkspace` is for surfaces that stay open
-(the app grid switches workspaces without releasing its grab, so it is unaffected).
+`activewindow` null above — which is what `HyprlandState.afterGrabRelease(cb)` does, with an 80 ms
+fallback for the case where nothing was focused and no announcement is coming.
+
+⚠️ **The workspace half of this is HISTORY (2026-08-05), the mechanism is not.** Every modal surface
+moved to `hyprland-focus-grab-v1`, whose release is *not* double-buffered and which never refused
+focus moves to begin with, so `focusWorkspaceOnGrabRelease` is deleted and
+`focusWorkspaceFromShell(id)` (the single door for the app grid's strip and the island's overview)
+just switches. `afterGrabRelease` stays, and still has two callers that genuinely need it —
+`restoreFocusAfterGrab` and `InputYield` below — because `refocus()` runs on the compositor's clock
+whether or not the request was buffered. Keep the measurement above: it is why nobody should
+"simplify" either of them into a timeout.
 
 ### The shell has to STEP OUT OF THE WAY for computer-use: `core/InputYield`
 
@@ -341,8 +348,9 @@ if (!g_pInputManager->m_exclusiveLSes.empty()) {
 }
 ```
 
-The Assistant island is `needsKeyboard: true`, so it holds an EXCLUSIVE grab the entire time the
-user is typing at it. Therefore, from inside the Assistant:
+The Assistant island holds a compositor focus grab the entire time it is open (as does every other
+modal surface — see `architecture.md` → "Focus grab"; the quote above is why the layer-shell
+`EXCLUSIVE` path it replaced was even worse). Therefore, from inside the Assistant:
 
 1. `focus_window <app>` is a **no-op**. Not slow, not racy — refused.
 2. `hyprctl activewindow` then correctly still names the old window, so every helper's focus check
@@ -350,17 +358,16 @@ user is typing at it. Therefore, from inside the Assistant:
    focus from the shell (`listWindows.focused`) instead: that only teaches the helper to approve an
    action that cannot land, and for the keyboard it is actively harmful — the keys genuinely belong
    to the island, so the text would be typed into the Assistant's own prompt box.
-3. Even with focus sorted, the click would be eaten: Hyprland routes the **pointer** to an
-   exclusive-grabbing surface regardless of its input region, and the island spans the whole
-   monitor (that is why it needs its own catcher — `IslandWindow.setCatcher`).
+3. Even with focus sorted, the click would be eaten: a grab **clamps pointer focus** to the grabbed
+   surface regardless of its input region, and the island spans the whole monitor.
 
 AT-SPI perception (`query_app`) and named actions (`do_app_action`) never look at focus, so those
 kept working throughout — which is why the failure looked like "the model is bad at clicking".
 
-**The fix is a scoped truce, `core/InputYield`.** `begin()` asks every grabbing surface to drop to
-`NONE` *and* stamp an EMPTY input region, waits for the compositor to announce the release
-(`hyprlandState.afterGrabRelease` — the release is double-buffered, see above), and only then lets
-the caller act. `end()` gives the grab back. Things to keep if you touch it:
+**The fix is a scoped truce, `core/InputYield`.** `begin()` asks every grabbing surface to RELEASE
+its focus grab *and* stamp an EMPTY input region, waits for the compositor to announce it
+(`hyprlandState.afterGrabRelease`), and only then lets the caller act. `end()` gives the grab back.
+Things to keep if you touch it:
 
 - **The helpers drive it, not the agent daemon** (`yieldInput begin|end`, spawned like `visual`).
   That way an external MCP client acting while the user has Prism or the app grid open is covered
@@ -375,9 +382,10 @@ the caller act. `end()` gives the grab back. Things to keep if you touch it:
   resolves immediately instead of paying the 80 ms release wait on every single action.
 - **A watchdog (15 s) restores everything** if a helper dies between `begin` and `end`. Without it
   a crash would leave the shell keyboard-less and click-through with no way back.
-- Restore to what the surface should hold **now**, not to what it held before: the app grid drops
-  to `ON_DEMAND` while a context-menu popover is open, and a blind restore to `EXCLUSIVE` would
-  break that menu.
+- Restore by RE-ACQUIRING, never by replaying a remembered layer-shell mode. This used to need care
+  (the app grid dropped to `ON_DEMAND` for the life of a context-menu popover, so a blind restore to
+  `EXCLUSIVE` broke the menu); now `acquireFocusGrab` is the only thing to redo, and FocusGrab owns
+  the popup case by suspending the lease.
 
 Sequence that works, and why (verified against `rawSurfaceFocus`, which touches only
 `m_focusSurface` — a layer-shell grab never clears `m_focusWindow`): `focusWindow` yields → focus
@@ -474,10 +482,12 @@ bug that looked like four different bugs (2026-07-26). Both halves are in Hyprla
   no-op when the pointer has not actually moved. So closing the app grid left the dock holding the
   keyboard, and *that* was the "poisoning" that made every other surface look broken afterwards.
 
-`ON_DEMAND` is legitimate in exactly one shape: **transiently, on a surface that already holds the
-keyboard**, because a `Gtk.Popover` cannot take focus from under an `EXCLUSIVE` grab (the app grid's
-context menu). It drops to `ON_DEMAND` for the life of the popover and climbs back to `EXCLUSIVE`. It
-is never a resting mode.
+🔴 **Since 2026-08-05 the rule is absolute: `NONE` is the ONLY value any shell surface ever sets,
+once, at init.** Modality comes from `hyprland-focus-grab-v1`, which needs no interactivity at all.
+The one exception that used to exist — dropping transiently to `ON_DEMAND` because a `Gtk.Popover`
+cannot take focus from under an `EXCLUSIVE` grab (the app grid's context menu) — is gone with the
+rest of the layer-shell path. If you are reaching for `set_keyboard_mode` outside a surface's setup,
+you are re-introducing `m_exclusiveLSes`.
 
 With every surface resting in `NONE`, the release is clean and measurable — `activewindow>>,`
 followed by `activewindow>><the window>` inside 1 ms, on all three grabbing surfaces (bar/Prism,
@@ -816,8 +826,8 @@ Two behaviours worth knowing: (1) the agent activity `isLive` = `busy || island_
 so closing the island mid-turn does NOT cancel (the pill keeps working) and reopening shows the same
 transcript; (2) **expand-on-finish** — when a turn ends with the desktop otherwise idle (`!isAnyOverlayOpen`),
 AgentService pops the island open so a background answer surfaces. Being the island's first TEXT mode,
-its `handleKey` claims only Escape (everything else falls through to the entry); the bar grants EXCLUSIVE
-keyboard while `needsKeyboard()`. The empty state (no provider) routes to Settings → AI.
+its `handleKey` claims only Escape (everything else falls through to the entry); the keyboard comes
+from the island's own focus grab, which it takes for any open mode. The empty state (no provider) routes to Settings → AI.
 
 **Bubble anatomy — an assistant turn is NOT one reply (2026-07-29).** A multi-step turn narrates
 between calls ("I'll check whether Nautilus is focused first"), and every provider does it. Measured
@@ -1281,8 +1291,9 @@ scrolling off-screen content, drag-and-drop / rubber-band selection / sliders):
   the target seconds after the helper exited, and the revealed panel stayed open indefinitely. But
   a hover is not a state we keep — it is a consequence of **which surface owns the pointer**, so
   the moment a full-screen shell region returns the app gets a pointer LEAVE and the popup closes.
-  That is exactly what the **Activity Island's dismissal catcher** does (`setCatcher(true, 0)` →
-  a rect from y=0 to the full monitor height), re-stamped by `InputYield`'s `end()`. Hence the
+  That is exactly what the **Activity Island's input region** does when it comes back, re-stamped by
+  `InputYield`'s `end()` (until 2026-08-05 the same job was done by a full-screen dismissal catcher;
+  the surface still owns the pointer either way). Hence the
   sequence the agent is taught: **`setIsland closed` → `hover_app` → `query_app` → `setIsland
   agent`**. And the second fact: **a Qt popup is as invisible as a GTK tooltip** — Telegram's emoji
   panel, open on screen, was absent from two independent walks of its tree (398 → 401 nodes, all
@@ -1427,7 +1438,7 @@ If you find yourself making a new overlay its own window, stop and ask why. The 
 **Move the capsule WITH the modes — this is load-bearing.** A first cut kept the capsule on the bar's surface. Two things went wrong: `compute_bounds` no longer resolved (it works inside one hierarchy only), forcing a coordinate bridge; and mid-morph both surfaces painted glass over the same pixels, so their blurs stacked and the transition showed a visible seam. One surface owning the shape end to end is what makes the morph what it was always meant to be — one object changing shape, not one dissolving into another. What the exception still costs, and what you inherit if you touch it:
 
 - **Two input regions, not one.** The island surface stamps the capsule (always — it is a click target on an otherwise click-through surface) plus whatever mode is revealed. **Re-stamp when the capsule RESIZES**, not just when a mode opens: the compact stack interpolates width when the fronting activity changes, and a different media title reshapes the pill with no page change. `Bar.tsx` hangs that off the capsule's glass `DrawingArea::resize`.
-- **An EXCLUSIVE keyboard grab also captures the POINTER — so the island needs its OWN catcher.** In Hyprland a layer surface holding `KeyboardMode.EXCLUSIVE` receives pointer events regardless of input regions. The bar's catcher therefore never sees an outside click while a `needsKeyboard` island mode is open, and the overview and the assistant simply stopped closing when the island moved out of the bar's window — while the ambient player, which takes no grab, kept working. The symptom points at input regions and the cause is the grab. `IslandWindow` owns a catcher of its own for exactly this; grabbing modes give it the full height (a bar-strip click cannot reach the bar anyway, so dismissing beats doing nothing), ambient modes inset it by `BAR_H` so capsule-to-capsule switching stays ONE click. Its rect is unioned into the region EXPLICITLY, not measured — it is shown and stamped in the same turn, so its allocation is a layout pass behind (the bar does the same for its own).
+- **A grab captures the POINTER, so the island's own surface owns its dismissal.** Whoever holds the grab receives the presses regardless of input regions, so a second surface cannot dismiss on its behalf. This first showed up under layer-shell `EXCLUSIVE`: only `needsKeyboard` modes grabbed, the bar's catcher therefore never saw an outside click while one was open, and the overview and the assistant stopped closing when the island moved out of the bar's window — while the ambient player, taking no grab, kept working. The symptom pointed at input regions and the cause was the grab. Today `IslandWindow` takes its own focus grab for EVERY open mode and whitelists the bar as a peer, which is what keeps capsule-to-capsule switching ONE click.
 - **Hiding is by NAME, in two places.** The surface is always mapped (the capsule is permanent furniture), so it must follow the bar out of sight explicitly, and both places filter windows by name.
   - **Fullscreen (`Bar.tsx`) — this one has teeth.** The bar only goes to opacity 0; since the capsule no longer rides its surface, without `islandWin.setShown(false)` it stays floating over the fullscreen window.
   - **Lock (`lockScreen`/`unlockScreen` in `app.ts`) — consistency, not a fix.** Under `ext-session-lock-v1` (the path Hyprland actually takes — the lockscreen logs `supported: true`) the compositor composites ONLY the lock surfaces, so nothing else is drawn regardless. It would only matter on `startFallback` (`ui/lockscreen/app.ts`), the plain OVERLAY layer-shell degradation used when the protocol is unsupported, which does not happen here. It is in the list because the agent pointer already sets that precedent one branch above ("paints on OVERLAY (above the lockscreen fallback)"), and leaving the island out would make it the only shell surface not covered by the convention.
@@ -1437,11 +1448,11 @@ If you find yourself making a new overlay its own window, stop and ask why. The 
 
 **Bar.tsx owns ALL overlay geometry**, not the surfaces themselves. `syncPanelMargins` in `Bar.tsx` sets each overlay's `margin_top`/`margin_start`/`margin_end` (and re-runs on dock-side changes); the surface modules just build content and align to a corner. Because each overlay is wrapped in a `ScaleRevealer`, **the wrapper IS the `cc`/`nc`/`systemMenu`/... variable**, so margins/alignment/input-region all operate on the wrapper transparently. Conventions: panels sit `8px` from the screen edge (flush with the bar capsules, which is a stronger visual reference than the tiling `gaps_out` grid beneath). Gotcha: **the system menu must dodge a left-side dock** (`margin_start += dock.width`) and CC/NC/popups dodge a right-side dock — because the **dock is its own layer-shell window stacked ABOVE the bar window**, so an un-dodged overlay slides under it. Don't move positioning logic back into a surface module.
 
-**Panels are content-sized — never force a wrapper's height.** Overlay panels sit ABOVE the catcher in the overlay stack, and GTK4 picking is geometric: a transparent Box still wins the pick. Any wrapper forced taller than its visible content (an old `height_request` on `nc`/`cc` did this) turns the empty remainder into a dead zone that swallows the outside-clicks that should dismiss the panel. Also remember `height_request` can only RAISE a minimum — it never caps, so it's the wrong tool for a height budget anyway. The vertical budget (bar→dock gap, `applyPanelHeights`) is pushed into the surface and enforced by an internal `Gtk.ScrolledWindow` with `propagate_natural_height: true` + `max_content_height` (NC does this via a `setMaxHeight` function attached to its returned widget, the same pattern as WorkspaceOverview's `onOpen`): the panel hugs its content until the list overflows, then scrolls.
+**Panels are content-sized — never force a wrapper's height.** The layer-shell input region is unioned from these allocations, so any wrapper forced taller than its visible content (an old `height_request` on `nc`/`cc` did this) puts the empty remainder into the region — and the compositor then reads a press there as INSIDE the grab instead of dismissing. It bit identically in the catcher era for a different reason (GTK4 picking is geometric, so a transparent Box above the catcher still won the pick): one bug, both mechanisms. Also remember `height_request` can only RAISE a minimum — it never caps, so it's the wrong tool for a height budget anyway. The vertical budget (bar→dock gap, `applyPanelHeights`) is pushed into the surface and enforced by an internal `Gtk.ScrolledWindow` with `propagate_natural_height: true` + `max_content_height` (NC does this via a `setMaxHeight` function attached to its returned widget, the same pattern as WorkspaceOverview's `onOpen`): the panel hugs its content until the list overflows, then scrolls.
 
-**Outside-click dismissal is the `catcher`** — an invisible `Gtk.Button` overlay in `Bar.tsx`, visible whenever `isAnyOverlayOpen` (except CC edit mode). It covers everything **below the bar strip only** (`margin_top = BAR_H`): the bar's capsules stay clickable while a surface is open, so clicking another capsule switches surfaces in ONE click (the capsule's toggle fires and Status's mutual exclusion closes the previous one). Don't extend the catcher over the bar — that regresses to the close-then-reopen double click. The pill guards in `Bar.tsx`/`AppTitle.tsx` check `cc_edit_mode` (pills inert while editing the CC), NOT `cc_open`.
+**Outside-click dismissal is the COMPOSITOR's**, via `hyprland-focus-grab-v1` (`common/FocusGrab.ts`; mechanism and traps in `architecture.md` → "Focus grab"). The invisible full-screen `overlay-catcher` buttons that used to fake it are deleted (2026-08-05) and there is no fallback — a refused grab is a loud `console.error`, not a degrade. The bar's capsules stay clickable while a surface is open because the bar's own surface is inside the grab's whitelist, so clicking another capsule switches in ONE click; a press on the EMPTY strip between capsules is inside the whitelist too, so that dismissal is GTK's job (a bubble-phase gesture on `masterOverlay`). The pill guards in `Bar.tsx`/`AppTitle.tsx` check `cc_edit_mode` (pills inert while editing the CC), NOT `cc_open`.
 
-**Input-region staleness gotcha (CC edit mode).** `updateInputRegion` reads `widget.get_allocation()`, which only reflects a size change **after the next layout pass**. Normally that's harmless because an open overlay is backed by the full-screen catcher rect — but in CC edit mode that rect is deliberately skipped (other windows stay interactive while editing), so the region is exactly the CC's rect. Toggling edit mode also *resizes* the CC (content-height grid ↔ full 8-row board + Done pill), so a naive allocation-based stamp uses the pre-toggle size and everything the grid grows into — the Done pill included — is click-through (clicks fall to whatever window is underneath). Three pieces make it correct, and all three matter:
+**Input-region staleness gotcha (CC edit mode).** `updateInputRegion` reads `widget.get_allocation()`, which only reflects a size change **after the next layout pass**. Nothing backs the region up any more (the full-screen catcher rect used to hide this by accident), so every panel needs an exact rect — and CC edit mode is the hardest case, because it is the one open state that takes NO grab at all (other windows stay interactive while editing), leaving the region as literally the only thing deciding what is clickable. Toggling edit mode also *resizes* the CC (content-height grid ↔ full 8-row board + Done pill), so a naive allocation-based stamp uses the pre-toggle size and everything the grid grows into — the Done pill included — is click-through (clicks fall to whatever window is underneath). Three pieces make it correct, and all three matter:
 
 1. **`measure()`, not just allocation**: in edit mode `updateInputRegion` unions the CC's *measured natural height* (reflects the resize synchronously) with its allocation, so the grown grid is clickable in the same frame.
 2. **`IslandGrid` flips `status.cc_edit_mode` AFTER its `rebuild()`** — measure() can only see the new size if the height requests were already updated when the notify fires. Keep that ordering.

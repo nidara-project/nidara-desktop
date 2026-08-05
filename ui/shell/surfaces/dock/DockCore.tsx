@@ -1002,8 +1002,10 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
             // for ANY interactivity != NONE the moment the surface maps
             // (LayerSurface.cpp onMap → GRABSFOCUS), so every shell reload left
             // the dock holding the keyboard with no focus widget — keys went
-            // nowhere until the user moved the mouse. See closeAppGridPanel for
-            // the release half of the same rule.
+            // nowhere until the user moved the mouse. This is the ONLY place this
+            // surface's keyboard interactivity is ever set: the app grid takes its
+            // modality from a compositor focus grab, which needs no interactivity at
+            // all, so NONE holds for the life of the session.
             Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
 
             axis.setupAnchors(win)
@@ -1228,62 +1230,34 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     }
 
     // ── Embedded AppGrid panel ────────────────────────────────────────────────
-    // The grid switches workspaces through HyprlandState, lending it this window's
-    // keyboard grab so the switch happens with the grab DOWN — see
-    // `focusWorkspaceFromShell` for why the order is the entire fix. Dropping to NONE
-    // rather than ON_DEMAND: NONE is the transition that actually leaves
-    // `m_exclusiveLSes` and hands the keyboard back (same reason the close path
-    // below uses it), and the grid is re-armed the moment the switch lands.
-    // Our ownership token while the grid's modality is a COMPOSITOR focus grab
-    // (`common/FocusGrab.ts`) rather than layer-shell EXCLUSIVE. 0 = the fallback
-    // path — an old compositor or a missing/stale libnidara-wl — which keeps every
-    // EXCLUSIVE quirk this file documents: the ON_DEMAND dance below, the focus
-    // refusal `core/InputYield` exists for, and the workspace-switch drag. The grid
-    // was the LAST surface on that path (tech-debt §53); it was held there by its
-    // context-menu popovers, which take the same single compositor grab slot, until
-    // FocusGrab learned to SUSPEND a lease for the life of a popup instead of
-    // treating the eviction as a dismissal.
+    // Our ownership token for the compositor focus grab that IS the grid's modality
+    // (`common/FocusGrab.ts`); 0 when we hold none, which is a broken grid rather
+    // than a slower one — there is no layer-shell fallback left. The grid was the
+    // LAST surface to migrate (it was held back by its context-menu popovers, which
+    // take the same single compositor grab slot) until FocusGrab learned to SUSPEND
+    // a lease for the life of a popup instead of treating the eviction as a
+    // dismissal.
     let appGridGrabToken = 0
 
-    const appGrid = AppGridPanel(gdkmonitor, () => closeAppGridPanel(), (id) =>
-        // Nothing to lend under a focus grab: it never refused to move window focus,
-        // which is the whole reason it replaces EXCLUSIVE here. The fallback still
-        // has to hand its grab over before switching — see focusWorkspaceFromShell.
-        hs.focusWorkspaceFromShell(id, appGridGrabToken ? undefined : {
-            drop:   () => { if (layerShellReady) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE) },
-            retake: () => { if (layerShellReady && appGridPanelOpen) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE) },
-        }))
+    // Through HyprlandState, never `hs.focusWorkspace` directly — the switch has to
+    // happen with the grab already handed over, and `focusWorkspaceFromShell` owns
+    // that order. Nothing to lend: a focus grab never refused to move window focus,
+    // which is exactly why it replaced EXCLUSIVE here.
+    const appGrid = AppGridPanel(gdkmonitor, () => closeAppGridPanel(),
+        (id) => hs.focusWorkspaceFromShell(id))
 
-    // FALLBACK ONLY now. A Gtk.Popover cannot take focus under an EXCLUSIVE grab, so
-    // on that path the grid drops to ON_DEMAND for the life of the popover and climbs
-    // back after. Under a focus grab the popup evicts us and FocusGrab suspends the
-    // lease until it closes, so there is nothing to do — and doing it anyway would put
-    // this surface back in `m_exclusiveLSes` for the life of a context menu.
-    appGrid.setKeyboardModeCallback(
-        () => { if (layerShellReady && !appGridGrabToken) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE) },
-        () => { if (layerShellReady && !appGridGrabToken) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND) }
-    )
-
-    // Step aside while an agent acts on another app (core/InputYield). Both paths must
-    // yield, for DIFFERENT reasons: EXCLUSIVE makes Hyprland refuse to move window
-    // focus at all, and a focus grab clamps pointer focus to this surface, so either
-    // way a synthetic click cannot reach the app it was aimed at. Only the grid ever
-    // grabs on this window — the resting dock is NONE — so this is a no-op otherwise.
+    // Step aside while an agent acts on another app (core/InputYield): the grab
+    // clamps pointer focus to this surface, so a synthetic click could not reach the
+    // app it was aimed at. Only the grid ever grabs on this window — the resting dock
+    // holds nothing — so this is a no-op otherwise.
     inputYield.registerHolder(() => appGridPanelOpen)
     inputYield.connect("notify::active", () => {
         if (!layerShellReady || !appGridPanelOpen) return
         if (inputYield.active) {
             releaseFocusGrab(appGridGrabToken)
             appGridGrabToken = 0
-            Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
         } else {
             appGridGrabToken = acquireFocusGrab([win], onGridGrabCleared)
-            // Restore to whatever the FALLBACK should be holding NOW: a context-menu
-            // popover left open still wants ON_DEMAND, so a blind EXCLUSIVE would break it.
-            if (!appGridGrabToken)
-                Gtk4LayerShell.set_keyboard_mode(win,
-                    revealState().menuOpenCount > 0 ? Gtk4LayerShell.KeyboardMode.ON_DEMAND
-                                                    : Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
         }
         axis.buildInputRegion(win, smoothedBarMain, revealState())
     })
@@ -1311,10 +1285,8 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         if (layerShellReady) {
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
             appGridGrabToken = acquireFocusGrab([win], onGridGrabCleared)
-            // Which path took is otherwise invisible — both end with a typable grid —
-            // and the fallback is only distinguishable by the bugs it brings back.
-            console.log(`[AppGrid] modality: ${appGridGrabToken ? "compositor focus grab" : "layer-shell EXCLUSIVE (fallback)"}`)
-            if (!appGridGrabToken) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
+            if (!appGridGrabToken)
+                console.error("[AppGrid] focus grab REFUSED — the grid has no modality: it cannot be typed into and nothing dismisses it.")
         }
         appGrid.setVisible(true)
         appGrid.onShow()
@@ -1354,14 +1326,9 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
             releaseFocusGrab(appGridGrabToken)
             appGridGrabToken = 0
-            // FALLBACK path: back to NONE, not ON_DEMAND — dropping EXCLUSIVE→NONE is the only
-            // transition where Hyprland hands the keyboard back (LayerSurface.cpp
-            // onCommit → rawSurfaceFocus(nullptr) + refocusLastWindow). The
-            // EXCLUSIVE→ON_DEMAND branch next to it only replays a mouse motion,
-            // which is a no-op when the pointer hasn't actually moved — so the
-            // dock kept the seat's keyboard focus after every app-grid close and
-            // nothing but real pointer movement recovered it.
-            Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
+            // Nothing to restore on layer-shell: this surface's interactivity is set
+            // to NONE once at init and never moved off it (see the setup above for
+            // why NONE and not ON_DEMAND). Releasing the grab is the whole close.
             axis.setExclusiveZone(win, (isRevealed && !dockSettings.autoHide) ? DOCK_CONSTANTS.EXCLUSIVE_ZONE : 0)
             // No workspace to re-assert here any more: the strip switches with the
             // grab already down (see `appGrid`'s constructor above), so this drop has

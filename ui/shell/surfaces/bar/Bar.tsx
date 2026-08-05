@@ -167,14 +167,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     status.cc_open = false; status.nc_open = false; status.prism_open = false; status.system_menu_open = false
     status.island_mode = ""; status.bar_expanded_id = ""
   }
-  // An EMPTY stretch of the bar strip dismisses too — and neither of the other two
-  // mechanisms can do it, which is why the gap existed at all. The catcher is one
-  // full-window button, so covering the strip with it would swallow the capsule
-  // presses that make switching surfaces ONE click; and under a focus grab the strip
-  // belongs to the surface we whitelist, so the compositor rightly reads a press
-  // there as "inside" and accepts it. Same dead zone, reached twice for unrelated
-  // reasons. (Every desktop's chrome dismisses on an empty click — menu bar, top
-  // bar, taskbar.)
+  // An EMPTY stretch of the bar strip dismisses too, and only GTK can do it. The
+  // compositor cannot: the strip belongs to the surface we whitelist, so a press
+  // there is rightly "inside" the grab and accepted. (The catchers could not either,
+  // for the opposite reason — one full-window button covering the strip would have
+  // swallowed the capsule presses that make switching surfaces ONE click. Same dead
+  // zone, unreachable by both mechanisms, which is why the gap existed at all.)
+  // Every desktop's chrome dismisses on an empty click — menu bar, top bar, taskbar.
   //
   // ⚠️ It must NOT assume the capsule "claimed" the press. `SquircleContainer`'s
   // click gesture fires on PRESSED and deliberately does not claim the sequence — a
@@ -203,8 +202,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // already encodes what we mean: masterOverlay's child IS the bar, its overlays ARE
   // the panels. So walk up from what the press hit and read that off. A press is
   // ours to dismiss on when it reached this window and landed neither on a control
-  // nor on a panel — true wherever the bar sits, whatever it measures, and true as
-  // well for the strip we do not own at all when the catcher is up.
+  // nor on a panel — true wherever the bar sits and whatever it measures.
   const handlesPresses = (w: Gtk.Widget) => {
     const cs = w.observe_controllers()
     for (let i = 0, n = cs.get_n_items(); i < n; i++)
@@ -234,15 +232,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     // landed on the overlay's own background (the bands around barBox).
     let owner: Gtk.Widget | null = null
     for (let w: Gtk.Widget | null = hit; w && w !== masterOverlay; w = w.get_parent()) {
-      if (handlesPresses(w)) return    // a control owns this press — including the
-      owner = w                        // catcher, which dismisses on its own terms
+      if (handlesPresses(w)) return    // a control owns this press
+      owner = w
     }
     if (owner === null || owner === barBox) dismissOverlays()
   })
   masterOverlay.add_controller(barStripClick)
 
   masterOverlay.set_child(barBox)
-  masterOverlay.add_overlay(expansionCapsule)  // above catcher, below major overlays
+  masterOverlay.add_overlay(expansionCapsule)  // below the major overlays
   masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups); masterOverlay.add_overlay(systemMenu)
   // (The island — capsule row + mode revealers — is mounted on its own surface
   // further down, once `center` has been built. NOT on masterOverlay.)
@@ -254,8 +252,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // (Island revealers set their own top-anchored/centered alignment — see
   // ActivityIsland's registerMode.)
   // The wrapper MUST be aligned (its root keeps top-left margins inside): an
-  // unaligned overlay child FILLs the whole window and, sitting above the
-  // catcher, swallows the outside-clicks that should dismiss the menu.
+  // unaligned overlay child FILLs the whole window, and since the input region is
+  // unioned from these allocations that stamps a region covering the screen — the
+  // compositor then reads every press as INSIDE the grab and never dismisses.
   systemMenu.valign = Gtk.Align.START; systemMenu.halign = Gtk.Align.START
 
   // ── Panel geometry ──────────────────────────────────────────────────────
@@ -304,11 +303,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   // Panels are CONTENT-sized, capped to the bar→dock budget — never forced
   // taller. The old approach (height_request on the wrappers) inflated the
-  // panels' invisible bounds past their visible content, and since panels sit
-  // ABOVE the catcher in the overlay stack, GTK's picking handed that dead
-  // area's clicks to a transparent Box instead of the catcher — outside-clicks
-  // below the CC's Edit pill / the NC's last card didn't dismiss. (It never
-  // capped anything anyway: a size request can only RAISE a widget's minimum.)
+  // panels' invisible bounds past their visible content, so that dead area went
+  // into the input region and the compositor read presses there as inside the
+  // grab — outside-clicks below the CC's Edit pill / the NC's last card didn't
+  // dismiss. (In the catcher era the same inflation stole those clicks from the
+  // catcher by sitting above it in the overlay stack: same bug, both mechanisms.
+  // It never capped anything anyway: a size request can only RAISE a minimum.)
   // NC takes the budget via its scroller's max_content_height (content-sized
   // until the list overflows, then it scrolls); CC needs no cap — its content
   // maxes out at the fixed 8-row board. Reactive to dock size.
@@ -319,13 +319,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   applyPanelHeights()
   onDockSettingsChanged(applyPanelHeights)
 
-  // Our ownership token while THIS window's modality is held by a compositor focus
-  // grab rather than by our own catcher (0 = not ours; see syncKeyboardMode). It
-  // changes two things here: the catcher stays hidden, and the input region stops
-  // covering the desktop — the compositor dismisses on an outside press by itself,
-  // so covering the screen to notice that press is exactly the work being deleted.
-  // A token and not a boolean because the ISLAND competes for the same single slot
-  // — see common/FocusGrab.ts.
+  // Our ownership token for the compositor focus grab that IS this window's
+  // modality (0 when we hold none; see syncKeyboardMode). A token and not a boolean
+  // because the ISLAND competes for the same single slot — see common/FocusGrab.ts.
+  // Note what it buys the input region: the compositor dismisses on an outside press
+  // by itself, so the region only ever describes what we PAINT. Covering the desktop
+  // to notice that press is exactly the work the protocol deleted.
   let barGrabToken = 0
   let layerShellReady = false
 
@@ -373,14 +372,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       }
       addWidgetToRegion(cc); addWidgetToRegion(nc); addWidgetToRegion(prism); addWidgetToRegion(systemMenu)
       // The island's revealers are NOT in this window any more — its surface
-      // stamps its own region (islandWin.updateInputRegion). Everything outside
-      // the island stays click-through there, so the catcher rect below still
-      // receives the outside-clicks that dismiss it.
+      // stamps its own region (islandWin.updateInputRegion), and everything
+      // outside the island stays click-through there.
       addWidgetToRegion(expansionCapsule)
 
-      // CC edit mode is the one state whose region is NOT backed by the
-      // full-screen catcher rect, so it must match the panel exactly — but
-      // toggling edit mode also resizes the CC, and get_allocation() lags a
+      // Every region here must match its panel EXACTLY: nothing backs it up, so a
+      // rect that is short eats nothing and a rect that is long steals the press
+      // the compositor needs to see outside us. CC edit mode is where that is
+      // hardest — toggling it resizes the CC, and get_allocation() lags a
       // layout pass behind. measure() reflects the resize immediately
       // (IslandGrid flips cc_edit_mode AFTER its rebuild for exactly this),
       // so union the measured natural height too: the grown grid + Done pill
@@ -445,17 +444,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   // Is anything in this window painting outside the bar strip right now? Walked
   // off masterOverlay rather than hand-listed, so a panel mounted here later is
-  // covered by construction instead of by someone remembering. Three children
+  // covered by construction instead of by someone remembering. Two children
   // are not panels:
   //  · barBox — the strip itself, i.e. the thing the rect describes.
-  //  · catcher — a click target that paints NOTHING (`.overlay-catcher` is
-  //    `nidara-reset`: no background, no border, no shadow). Skipping it is not
-  //    just an optimisation, it is what keeps the rect alive while an ISLAND
-  //    mode is open: the catcher is shown for those, but the island paints on
-  //    its own surface, so this window still shows only the strip — and a long
-  //    activity (media, the assistant) is exactly when the saving matters.
   //  · popups — a container, so it is `visible` whether or not it holds a
   //    banner. Its CHILDREN are the content, hence the emptiness test.
+  // An open ISLAND mode does not count either, and no longer needs excluding by
+  // hand: the island paints on its own surface, so nothing of it is a child here
+  // and this window still declares only the strip — and a long activity (media,
+  // the assistant) is exactly when that saving matters.
   // Everything else answers with `tickId` as well as `get_visible()`: a panel
   // closing is still visible until its final tick, and re-declaring the strip
   // one tick early would scissor away the tail of its own close animation.
@@ -534,13 +531,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const setSystemMenuVisible = popToggle(systemMenu)
   const setPrismVisible = popToggle(prism)
 
-  // The catcher is this window's stand-in for "click outside closes". It is NOT
-  // wanted when the compositor is doing that job for us — and it must not merely be
-  // redundant then, it must be GONE: it is a full-window button, so leaving it up
-  // would swallow the very press the compositor needs to see outside our surface.
-
   const syncOverlays = () => {
-    // Before the visibility/region work below, because both are computed from
+    // Before the visibility/region work below, because the region is computed from
     // whether the grab took (see syncKeyboardMode). It no-ops until layer-shell is
     // up, which is why it is safe from the construction-time call further down.
     syncKeyboardMode()
@@ -560,8 +552,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
   // Toggling edit mode RESIZES the CC (content-height grid ↔ full 8-row board
-  // + Done pill) while the full-screen catcher rect is skipped, so the region
-  // must track the panel's real size. The synchronous stamp handles the grow
+  // + Done pill), and nothing else backs the region up, so it must track the
+  // panel's real size. The synchronous stamp handles the grow
   // direction via measure() (see updateInputRegion); this deferred re-stamp
   // settles the shrink direction (leaving edit mode briefly over-covers, which
   // would eat clicks meant for windows under the vacated strip) once the
@@ -571,18 +563,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { updateInputRegion(); return GLib.SOURCE_REMOVE })
   })
 
-  // Modality for this window: a compositor focus grab when it is available, the
-  // catcher + layer-shell EXCLUSIVE otherwise. Reached through syncOverlays(),
-  // which calls it FIRST because the catcher and the input region are computed from
-  // its result; it guards on `layerShellReady` so the construction-time
-  // syncOverlays() cannot touch layer-shell before init_for_window.
-  // The island's keyboard-driven modes (overview cursor, agent entry) grab on
-  // THEIR OWN surface now — two surfaces must never both hold EXCLUSIVE, or the
-  // compositor picks one and the other silently stops receiving keys.
+  // Modality for this window is a compositor focus grab, and nothing else. Reached
+  // through syncOverlays(), which calls it FIRST because the input region is
+  // computed from its result; it guards on `layerShellReady` so the
+  // construction-time syncOverlays() cannot touch layer-shell before
+  // init_for_window. The island grabs on ITS OWN surface — there is exactly one
+  // grab slot compositor-wide, so the two must never want it at the same time.
   //
-  // Both grabs are also suspended while `inputYield` is active: an exclusive layer
-  // surface makes Hyprland REFUSE to move window focus at all, so computer-use
-  // cannot reach the app it was asked to drive until we let go (core/InputYield).
+  // Both grabs are suspended while `inputYield` is active: a grab clamps pointer
+  // focus to the grabbed surface, so computer-use cannot reach the app it was asked
+  // to drive until we let go (core/InputYield).
   // Which states want THIS window to own input. Note what it is not:
   //
   //  · NOT `isAnyOverlayOpen` — that includes `island_mode`, which lives on the
@@ -598,52 +588,51 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     (status.cc_open || status.nc_open || status.prism_open || status.system_menu_open
       || status.bar_expanded_id !== "") && !status.cc_edit_mode
   const barGrabbing = () => barModal()
-  const islandGrabbing = () => !!status.island_mode && island.needsKeyboard()
+  // ⚠️ ANY open island mode, not just the keyboard-driven ones. Under layer-shell
+  // only an EXCLUSIVE mode took input, so this used to read `island.needsKeyboard()`
+  // — but a focus grab clamps POINTER focus too, and syncIslandGrab takes one for
+  // every mode. Left narrow, an ambient mode (media, a running activity) would hold
+  // the pointer while inputYield reported nobody holding anything, and computer-use
+  // clicks would land on the island instead of the app they were aimed at.
+  const islandGrabbing = () => !!status.island_mode
 
   // The compositor took the grab away. Three causes, indistinguishable from here
   // (see common/FocusGrab.ts): an outside press — the dismissal we asked for — a
   // popup grab stealing the single slot, or a layer surface mapping with keyboard
-  // interactivity. Prism's answer is the same for all three: it is no longer the
-  // modal surface, so it closes. Closing re-enters syncKeyboardMode through
-  // notify::prism-open, which finds the flag already down and does not double-free.
-  // The compositor took the grab away. Three causes, indistinguishable from here
-  // (see common/FocusGrab.ts): an outside press — the dismissal we asked for — a
-  // popup grab stealing the single slot, or a layer surface mapping with keyboard
   // interactivity. This window's answer is the same for all three: whatever is open
-  // is no longer modal, so it closes, exactly as a catcher click would.
+  // is no longer modal, so it closes.
   //
   // Nothing in THIS window opens a popover, which is what makes one grab safe for
-  // all of its overlays. The app grid does (AppGrid.tsx) and that is precisely why
-  // it has not been migrated — see tech-debt §53.
+  // all of its overlays. The app grid does, and is migrated anyway: FocusGrab
+  // suspends the lease for the life of a popup rather than reading the eviction as
+  // a dismissal (see common/FocusGrab.ts and DockCore).
   const onBarGrabCleared = () => {
     barGrabToken = 0
     // Close ONLY what this window owns — deliberately NOT dismissOverlays(), which
     // also clears island_mode. An eviction can come from the ISLAND taking the
     // single slot for a mode the user just opened, and reaching that far would close
-    // it again. The catcher, which sees a real click rather than an eviction, keeps
-    // the wider behaviour.
+    // it again. The wider behaviour belongs to `dismissOverlays`, which runs off a
+    // REAL click on the bar strip rather than off an eviction.
     if (!status.cc_edit_mode) {
       status.cc_open = false; status.nc_open = false
       status.prism_open = false; status.system_menu_open = false
       status.bar_expanded_id = ""
     }
     // dismissOverlays is a no-op in edit mode, and a closed overlay re-enters here
-    // through its notify handler — but neither is guaranteed, so settle the catcher
-    // and the region unconditionally rather than relying on a notify that may not fire.
+    // through its notify handler — but neither is guaranteed, so settle the region
+    // unconditionally rather than relying on a notify that may not fire.
     updateInputRegion()
   }
 
+  // Named for what it used to switch. It no longer touches layer-shell keyboard
+  // interactivity at all: this surface is set to NONE once at init and stays there,
+  // because EXCLUSIVE is what puts us in m_exclusiveLSes and makes Hyprland refuse
+  // to move window focus (the whole reason core/InputYield exists), and the grab
+  // already carries the keyboard.
   const syncKeyboardMode = () => {
     if (!layerShellReady) return
     const want = barGrabbing() && !inputYield.active
 
-    // Preferred path: a compositor focus grab. It gives this surface input while its
-    // layer-shell interactivity stays NONE — which is the point, because EXCLUSIVE is
-    // what puts us in m_exclusiveLSes and makes Hyprland refuse to move window focus
-    // (the whole reason core/InputYield exists), and because the compositor then does
-    // the outside-click dismissal the catcher was faking. acquire() answers
-    // synchronously, so a session where the shim is missing or the compositor is too
-    // old falls back per-open rather than being decided at boot.
     if (want && !barGrabToken) {
       // The ISLAND's surface is whitelisted alongside ours, symmetrically to what
       // syncIslandGrab does for us. Not a nicety: the island's capsule MOVED to its
@@ -652,45 +641,35 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // the dismissal instead of reaching it — the island stops responding for as
       // long as a bar panel is open.
       barGrabToken = acquireFocusGrab([win, islandWin.win], onBarGrabCleared)
-      // Which path took is otherwise INVISIBLE — both end with a working overlay, and
-      // the fallback is only distinguishable by the bugs it brings back (the catcher
-      // covering the desktop, focus refusals for computer-use). Log it once per open
-      // so a session on the slow path can be diagnosed from the log alone.
-      console.log(`[Bar] overlay modality: ${barGrabToken ? "compositor focus grab" : "catcher + layer-shell (fallback)"}`)
+      // A refusal is not a degrade — there is no second mechanism left. Say what is
+      // broken and what it costs, once per open, so a session in that state can be
+      // diagnosed from the log alone instead of from the symptoms.
+      if (!barGrabToken)
+        console.error("[Bar] focus grab REFUSED — no modality: nothing dismisses these panels and Prism cannot be typed into.")
     } else if (!want && barGrabToken) {
       releaseFocusGrab(barGrabToken)
       barGrabToken = 0
     }
-
-    // Layer-shell keyboard is now ONLY the fallback, and only for Prism: it is the
-    // one overlay here with something to type into. Under a grab the surface must
-    // stay NONE — asking for EXCLUSIVE as well would re-add us to m_exclusiveLSes and
-    // hand back the exact problem the grab removes, for no gain. And the panels must
-    // never take EXCLUSIVE on the fallback path: they do not want the keyboard, they
-    // want dismissal, and on that path the catcher is already providing it.
-    Gtk4LayerShell.set_keyboard_mode(win,
-      status.prism_open && !inputYield.active && !barGrabToken
-        ? Gtk4LayerShell.KeyboardMode.EXCLUSIVE
-        : Gtk4LayerShell.KeyboardMode.NONE)
   }
   // The island is modal for ANY open mode, not just the keyboard-driven ones —
   // an ambient player wants "click outside closes" exactly as much. It grabs the
   // BAR's surface alongside its own so a click on another bar capsule still
   // switches in one go; without that peer the press would be swallowed by the
-  // dismissal (see common/FocusGrab.ts). There is no longer a fallback for when that
-  // fails — the compositor grab IS the mechanism (see FocusGrab's header), so a false
-  // here is a broken desktop and says so rather than degrading in silence.
+  // dismissal (see common/FocusGrab.ts). There is no fallback for when that fails —
+  // the compositor grab IS the mechanism (see FocusGrab's header), so a false here
+  // is a broken desktop and says so rather than degrading in silence.
   const syncIslandGrab = () => {
     const open = !!status.island_mode
-    if (!islandWin.setModal(open, island.needsKeyboard(), [win]) && open)
+    if (!islandWin.setModal(open, [win]) && open)
       console.error("[Bar] island modality: NO compositor focus grab — nothing will dismiss it")
   }
 
   inputYield.registerHolder(barGrabbing)
   inputYield.registerHolder(islandGrabbing)
   inputYield.connect("notify::active", () => {
-    // Yielding drops the grab, which brings the catcher back for as long as the
-    // truce lasts — an overlay left open must still be dismissable by clicking it.
+    // Yielding drops the grab, so for as long as the truce lasts an overlay left
+    // open is NOT dismissable by clicking outside — the agent owns the pointer, and
+    // the grab (with its dismissal) comes back when it hands it over.
     syncKeyboardMode()
     syncIslandGrab()
     updateInputRegion()
@@ -698,7 +677,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   })
 
   status.connect("notify::island-mode", () => {
-    // Immediately: the catcher and whatever Status's mutual exclusion just
+    // Immediately: our own grab and whatever Status's mutual exclusion just
     // closed. The island itself waits for its surface (below).
     syncOverlays()   // runs syncKeyboardMode first — see its body
     if (status.island_mode) {
@@ -710,13 +689,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // ordinary measurement; no deferred frame needed.
       island.syncAnchor(islandWin.root(), PANEL_TOP)
     }
-    // Outside-click dismissal has to be stamped on the ISLAND's surface: while a
-    // needsKeyboard mode holds the EXCLUSIVE grab, Hyprland routes the pointer to
-    // that surface too, so the bar's catcher never sees the click (which is why
-    // the overview and the assistant stopped closing, while the ambient player
-    // kept working). Grabbing modes take the full height — a bar-strip click
-    // can't reach the bar anyway, so dismissing beats doing nothing; ambient
-    // modes keep the strip live so capsule-to-capsule switching stays ONE click.
+    // The island's own surface owns its region: a grab clamps pointer focus to the
+    // grabbed surface, so while a mode is open every press is delivered THERE first
+    // and the bar never sees it. (Under the old catcher this is why the overview and
+    // the assistant stopped closing while the ambient player kept working: only the
+    // keyboard modes took the grab back then.) The bar strip stays reachable because
+    // the island whitelists it as a peer, which is what keeps capsule-to-capsule
+    // switching ONE click.
     syncIslandModes()
     syncIslandGrab()
     if (status.island_mode) island.onOpened()   // seed the mode's keyboard nav
@@ -828,12 +807,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       updateInputRegion()
   })
   status.connect("notify::prism-open", () => {
-    // Prism is the one overlay here that needs the KEYBOARD, not just modality. On
-    // the fallback path that means EXCLUSIVE, not ON_DEMAND — with ON_DEMAND
-    // Hyprland withholds focus until the pointer enters or clicks, so the search
-    // caret wouldn't blink (and you couldn't type) until you moved the mouse. Under
-    // a grab the question does not arise: the compositor hands over the keyboard
-    // without any layer-shell interactivity at all.
+    // Prism is the one overlay here that needs the KEYBOARD, not just modality —
+    // and it needs nothing special for it: the compositor hands the keyboard over
+    // with the grab, at no layer-shell interactivity at all.
     syncOverlays() // grab, then visibility + input region — in that order, inside
   })
   
@@ -1171,6 +1147,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
     // No bottom anchor — required for the exclusive zone to reserve only the top strip.
+    // The ONLY place this surface's keyboard interactivity is ever set. It stays NONE
+    // for the life of the session: modality comes from the compositor focus grab
+    // (syncKeyboardMode), and EXCLUSIVE would re-add us to m_exclusiveLSes for nothing.
     Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
     // Reserve the 40 px top strip for tiled windows (replaces the old nidara-bar-zone
     // spacer surface — see "Top zone reservation" above). Independent of the surface's

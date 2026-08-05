@@ -128,10 +128,6 @@ window#nidara-bar-zone {
     /* Full opacity for better contrast */
 }
 
-.overlay-catcher {
-    @include nidara-reset;
-}
-
 /* The system menu uses the universal .nidara-menu component (_components.scss). */
 
 // ── Inline confirmation view ──────────────────────────────────────────────────

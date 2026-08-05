@@ -475,9 +475,9 @@ export function attachSwipeDismiss(target: Gtk.Widget, swipeable: Swipeable, opt
 // One shared ghost layer per master overlay, created lazily on the first swipe
 // and cached on the overlay itself. add_overlay order = paint order, so a
 // late-added layer sits above every panel/banner. can_target keeps the
-// full-window Fixed invisible to picking (the catcher must keep seeing
-// outside-clicks); it never affects the layer-shell input region either —
-// that region is stamped explicitly from specific widgets in Bar.
+// full-window Fixed invisible to picking, so the bar-strip dismiss gesture still
+// reads what the press actually landed on; it never affects the layer-shell input
+// region either — that region is stamped explicitly from specific widgets in Bar.
 const ghostLayerFor = (overlay: Gtk.Overlay): Gtk.Fixed => {
     let layer = (overlay as any).__swipeGhostLayer as Gtk.Fixed | undefined
     if (!layer) {

@@ -1553,8 +1553,9 @@ nowhere near covering it). **This is not optional polish: source and island live
 surface, so the island's 5% glass does not hide — or blur — anything painted beside it.
 Anything left lit next to the capsule reads straight through the open island** (found the
 moment the chips shipped, 2026-08-01). Whatever is faded this way must also drop out of
-`IslandWindow`'s input-region stamp, or it leaves an invisible dead patch where a click
-should reach the dismiss catcher — which is why `mount` takes a hitTargets GETTER.
+`IslandWindow`'s input-region stamp, or it leaves an invisible dead patch: the compositor
+reads a press there as INSIDE the grab and neither dismisses nor passes it on — which is
+why `mount` takes a hitTargets GETTER.
 All bounds are
 `compute_bounds`-re-read every frame so bar relayouts can't leave a stale origin. Same `reveal(open, onDone?)` contract as
 `ScaleRevealer` (self-managed visibility, close-then-`onDone` for the input-region

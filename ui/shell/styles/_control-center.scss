@@ -4,10 +4,11 @@
    CONTROL CENTER - CLEAN GTK4 ARCHITECTURE
    ========================================================================== */
 
-/* NOTE: no keyboard focus rings here on purpose. The CC lives in the bar window
-   which only grants keyboard (ON_DEMAND) for prism_open, not cc_open — so the CC
-   never receives keyboard focus and is mouse/touch-only by design. Adding
-   :focus-visible rules here would be dead code. See the design-tokens rationale. */
+/* NOTE: no keyboard focus rings here on purpose. The CC is mouse/touch-only by
+   design: it has no focusable widget to land on, so it never takes keyboard focus
+   even though the bar's focus grab carries the keyboard for any open panel.
+   Adding :focus-visible rules here would be dead code. See the design-tokens
+   rationale. */
 
 /* --- Status banner (AI control) above the widgets --- */
 /* One .cc-status-row per active indicator (dot + text + a Stop button).

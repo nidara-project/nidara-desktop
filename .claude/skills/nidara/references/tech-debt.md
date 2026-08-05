@@ -876,9 +876,9 @@ answered wrongly:
 1. **The pointer never moves back.** `hyprctl cursorpos` reported the hover target
    (1207, 1308) still, seconds after `nidara-click` had exited. With the island
    CLOSED the panel stayed open indefinitely — user-confirmed on screen.
-2. **Opening the island closes it.** While a `needsKeyboard` island mode is open,
-   `Bar.tsx` calls `setCatcher(true, 0)`, and `IslandWindow.updateInputRegion`
-   stamps a dismissal rect from y=0 to the full monitor height. `InputYield`
+2. **Opening the island closes it.** While an island mode is open, its surface owns
+   the pointer and `IslandWindow.updateInputRegion` stamps what it covers (at the
+   time of this entry, a catcher rect from y=0 to the full monitor height). `InputYield`
    empties that region for the action and `Bar.tsx`'s `notify::active` handler
    re-stamps it at `end()` — so the app under the cursor gets a pointer LEAVE and
    the popup closes. **A hover is not a state we hold; it is a consequence of which
@@ -1416,9 +1416,9 @@ reusables are `nidara-*` in the kit, never per-surface classes.
 paths resolving through `MorphRevealer.top > … > GtkBox.agent-panel`. A snapshot-painted surface is
 still mapped at rest, so `core/UITree.ts` descends it fine. Do NOT "fix" the walk.
 
-**What actually happened, and it is a trap worth keeping:** `Bar.tsx` mounts an `overlay-catcher`
-that dismisses the island on any outside click — and typing `ags request queryUI` in a terminal
-requires clicking that terminal. The island was closing *before* the query ran, so `queryUI` correctly
+**What actually happened, and it is a trap worth keeping:** an outside click dismisses the island —
+and typing `ags request queryUI` in a terminal requires clicking that terminal. (At the time this was
+the `overlay-catcher`; since 2026-08-05 it is the compositor's focus grab. Same trap.) The island was closing *before* the query ran, so `queryUI` correctly
 reported `count: 0` for a surface that was no longer on screen. This is exactly the confusion the
 original entry warned about one line later, and it caught its own author twice more on 2026-07-25.
 
@@ -2165,14 +2165,14 @@ and reveal it), and the `inputYield` early-return needed the region call the isl
 changes who gets the CLICKS, not what is painted.
 
 🔑 **The predicate is WALKED off `masterOverlay`, not hand-listed** — a panel mounted there later is
-covered by construction. Three children are not panels and are documented at the call site: `barBox`
-(the strip itself), `catcher` (a click target that paints nothing — `.overlay-catcher` is
-`nidara-reset`), and `popups` (a container, `visible` whether or not it holds a banner — its
-CHILDREN are the content). **Skipping the catcher is not just tidiness**: it is what keeps the rect
-alive while an ISLAND mode is open. The catcher is shown for those, but the island paints on its own
-surface, so this window still shows only the strip — and a long-running activity (media, the
-assistant) is exactly when the saving is worth having. An earlier draft used
-`status.isAnyOverlayOpen` as a safety net and silently gave the optimisation away in that state.
+covered by construction. Two children are not panels and are documented at the call site: `barBox`
+(the strip itself) and `popups` (a container, `visible` whether or not it holds a banner — its
+CHILDREN are the content). An open ISLAND mode does not count either and no longer needs excluding by
+hand: the island paints on its own surface, so nothing of it is a child here and this window still
+declares only the strip — and a long-running activity (media, the assistant) is exactly when the
+saving is worth having. Two earlier drafts gave that optimisation away in exactly that state: one
+used `status.isAnyOverlayOpen` as a safety net, and the other had to skip the `overlay-catcher` by
+hand because it was shown for island modes (both are gone — the catchers were deleted 2026-08-05).
 
 The rect is floored at `PANEL_TOP` rather than depending on the measurement, so the **first** stamp
 declares something instead of giving up until an overlay opens; the floor is right by construction
@@ -2393,14 +2393,25 @@ twice over. (2) Any of the three that sizes to its content (title length, tray c
 compositor-side and unfixable from the widget tree. Fixed-width surfaces avoid it and remove the
 flexibility that motivated the idea.
 
-### 53. The bar and the island are on the focus grab, the app grid is not (2026-08-04)
+### 53. ✅ CLOSED — every modal surface is on the focus grab, and it is the ONLY mechanism (2026-08-05)
 
 `hyprland-focus-grab-v1` landed via `lib/nidara-wl` + `common/FocusGrab.ts`. **Migrated:** every
 overlay in the bar's window (CC, notification centre, system menu, Prism, bar expansion) under ONE
-grab on that surface, and the Activity Island under its own — and **each whitelists the other's
-surface**, so capsule switching stays one click in both directions. **Both catchers are GONE** (2026-08-05): `hyprland-focus-grab-v1` + libnidara-wl are a HARD
-REQUIREMENT now, and their absence is a loud `console.error` rather than a silent degrade — the
-user's call, so that a failure is seen instead of being quietly covered up. Mechanism and traps in `architecture.md` → "Focus grab".
+grab on that surface, the Activity Island under its own, and the app grid under the dock's — and the
+bar and island **whitelist each other's surface**, so capsule switching stays one click in both
+directions. **Both catchers are GONE, and so is the layer-shell `EXCLUSIVE`/`ON_DEMAND` path they
+backed** (2026-08-05): the protocol + libnidara-wl are a HARD REQUIREMENT, and their absence is a
+loud `console.error` rather than a silent degrade — the user's call, so that a failure is seen
+instead of being quietly covered up. Mechanism and traps in `architecture.md` → "Focus grab".
+
+⚠️ **Deleting the fallback was a second pass, and the half-migrated state in between was misleading**
+(2026-08-05). With the catchers gone but `EXCLUSIVE` still wired, the "fallback" gave the keyboard
+and no dismissal — working enough to look intentional. It also hid a real defect: `Bar.tsx`'s
+`islandGrabbing` still read `island.needsKeyboard()`, correct under `EXCLUSIVE` (only typing modes
+took input) and wrong under a grab (every mode takes one, and a grab clamps POINTER focus), so an
+ambient island mode held the pointer while `inputYield` reported no holder and computer-use clicks
+would land on the island. 🔑 **When a mechanism is replaced, the leftover branch is not free
+insurance — it is a second set of assumptions that stops being audited.**
 
 The first live round produced three bugs worth knowing about, all fixed (2026-08-05) and all from the
 same two roots: **the single grab had two independent owners** (fixed with ownership tokens +
@@ -2412,28 +2423,32 @@ Neither is a focus-grab quirk as such — they are what the catcher had been hid
 
 - **Workspace switching from a shell surface goes through ONE method**,
   `HyprlandState.focusWorkspaceFromShell` — the app grid's strip and the island's workspace overview
-  both call it, so they cannot drift apart again. 🔑 **Hand the grab over, THEN switch.** Hyprland
-  refuses to move window focus while a layer surface holds EXCLUSIVE, so switching first lands you on
-  a workspace with nothing focused, and the surface's later release makes `refocusLastWindow` answer
-  with the window you came from — dragging that workspace back over you. Measured closing the grid
-  from the dock button: `5 → 1 @425ms → 5 @454ms`. ⚠️ **A window on the target does not save you**
-  (the "only empty targets bite" read predates the grid), and correcting it afterwards is what the
-  user sees as the workspace animation setting off and changing its mind. With the grab down first
-  the switch focuses the target's own window and the release has nothing to drag: no round trip, and
-  the target ends up focused, which it never did before. A surface on a COMPOSITOR focus grab lends
-  nothing — that grab never refused focus moves in the first place.
-- ✅ **The app grid is migrated too (2026-08-05).** It was the last surface on layer-shell EXCLUSIVE,
-  held there by its `Gtk.Popover` context menus, which take the same single compositor grab slot —
-  unblocked once `FocusGrab` learned to SUSPEND a lease for the life of a popup. Verified by
-  injection: the grid takes the keyboard with the surface at NONE (`wtype` lands in its search
-  entry), a right-click menu no longer dismisses it and the lease is retaken when the menu closes,
-  an outside press dismisses and hands the window back, and the workspace strip switches cleanly.
-  The `EXCLUSIVE`↔`ON_DEMAND` dance survives ONLY as the fallback path (old compositor, or a
-  libnidara-wl older than the shell).
-- `core/InputYield` and `HyprlandState.afterGrabRelease` still exist for the `EXCLUSIVE` release
-  race, and the app grid is now their last holder. Both migrated surfaces still route through
-  `inputYield` (a yield drops the grab and brings the catcher back for the length of the truce), so
-  the module shrinks rather than disappears.
+  both call it, so they cannot drift apart again. It now just forwards to `focusWorkspace`, and is
+  kept as the single door rather than inlined. The history is worth having: under `EXCLUSIVE`
+  Hyprland refused to move window focus at all, so switching first landed you on a workspace with
+  nothing focused, and the surface's later release made `refocusLastWindow` answer with the window
+  you came from — dragging that workspace back over you (measured closing the grid from the dock
+  button: `5 → 1 @425ms → 5 @454ms`). ⚠️ **A window on the target did not save you** (the "only empty
+  targets bite" read predates the grid), and correcting it afterwards is what the user saw as the
+  workspace animation setting off and changing its mind. 🔑 The fix was ORDER — hand the grab over,
+  then switch — and a compositor focus grab has nothing to hand over, because it never refused focus
+  moves in the first place. That is why the `drop`/`retake` lending pair is gone.
+- ✅ **The app grid was the last surface to migrate.** It was held on layer-shell `EXCLUSIVE` by its
+  `Gtk.Popover` context menus, which take the same single compositor grab slot — unblocked once
+  `FocusGrab` learned to SUSPEND a lease for the life of a popup. Verified by injection: the grid
+  takes the keyboard with the surface at NONE (`wtype` lands in its search entry), a right-click menu
+  no longer dismisses it and the lease is retaken when the menu closes, an outside press dismisses
+  and hands the window back, and the workspace strip switches cleanly.
+- **All three surfaces now set layer-shell keyboard interactivity exactly ONCE, to `NONE`, at init**
+  (bar, island, dock). If you find yourself calling `set_keyboard_mode` anywhere else, that is the
+  bug: `EXCLUSIVE` re-adds the surface to `m_exclusiveLSes` and hands back the focus refusal the
+  grab exists to remove.
+- `core/InputYield` and `HyprlandState.afterGrabRelease` **do not die with the fallback**. A grab
+  clamps POINTER focus to the grabbed surface, so computer-use still cannot reach the app it was
+  aimed at until every holder lets go; all three surfaces route through `inputYield`, and a yield
+  now drops the grab outright (with its dismissal) for the length of the truce. `afterGrabRelease`
+  stays because `refocus()` runs on the compositor's clock, not ours — a focus-grab release is not
+  double-buffered, so what it waits for is the announcement, not the old ~12 ms commit race.
 - `cc_edit_mode` deliberately takes NO grab: it is the one open state that leaves the desktop
   interactive, and a grab would take that away. Do not "fix" the inconsistency.
 
