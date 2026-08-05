@@ -60,15 +60,14 @@ export default function WorkspaceOverview() {
     // CAPTURE-phase key controller owns navigation the same way Prism does.
     let navIdx = -1
 
-    // Closing the overview gives up the island's EXCLUSIVE keyboard grab, and Hyprland
-    // answers a grab release by refocusing the last window — which, on an EMPTY target,
-    // drags the workspace back and silently undoes the switch the user just made. The
-    // release is double-buffered and lands ~12 ms late, so no ordering here can win the
-    // race; `focusWorkspaceOnGrabRelease` waits for the compositor to announce it. The
-    // full measurement (and why the obvious fix does not work) is on that method.
+    // Close first, THEN switch — the same order the app grid now follows, through the
+    // same entry point (`focusWorkspaceFromShell`), so the two workspace switchers
+    // cannot drift apart again. No grab is lent: closing the island releases a
+    // COMPOSITOR focus grab, and unlike layer-shell EXCLUSIVE that one never made
+    // Hyprland refuse to move window focus, so there is nothing to wait for here.
     const switchToWorkspace = (id: number) => {
         status.island_mode = ""
-        hs.focusWorkspaceOnGrabRelease(id)
+        hs.focusWorkspaceFromShell(id)
     }
 
     // Each card carries the SAME state dot as the bar capsule (shared

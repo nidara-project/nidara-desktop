@@ -1227,7 +1227,17 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     }
 
     // ── Embedded AppGrid panel ────────────────────────────────────────────────
-    const appGrid = AppGridPanel(gdkmonitor, () => closeAppGridPanel())
+    // The grid switches workspaces through HyprlandState, lending it this window's
+    // keyboard grab so the switch happens with the grab DOWN — see
+    // `focusWorkspaceFromShell` for why the order is the entire fix. Dropping to NONE
+    // rather than ON_DEMAND: NONE is the transition that actually leaves
+    // `m_exclusiveLSes` and hands the keyboard back (same reason the close path
+    // below uses it), and the grid is re-armed the moment the switch lands.
+    const appGrid = AppGridPanel(gdkmonitor, () => closeAppGridPanel(), (id) =>
+        hs.focusWorkspaceFromShell(id, {
+            drop:   () => { if (layerShellReady) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE) },
+            retake: () => { if (layerShellReady && appGridPanelOpen) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE) },
+        }))
 
     // Only used WHILE the grid is open: a Gtk.Popover context menu can't take
     // focus under an EXCLUSIVE grab, so the grid drops to ON_DEMAND for the life
@@ -1315,35 +1325,10 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
             // nothing but real pointer movement recovered it.
             Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
             axis.setExclusiveZone(win, (isRevealed && !dockSettings.autoHide) ? DOCK_CONSTANTS.EXCLUSIVE_ZONE : 0)
-            // …and `refocusLastWindow` is exactly what undoes a workspace switch made
-            // from the grid's own strip: the last window lives on the workspace you came
-            // FROM, so focusing it DRAGS THAT WORKSPACE BACK and the user lands where
-            // they started. Reproduced 2026-08-05 (open grid from the dock, pick a
-            // workspace in the strip, close with the same dock button): 2 of 3 runs
-            // snapped back, which is the intermittency it gets reported with.
-            //
-            // 🔑 A window on the TARGET does not save you, and that is the part worth
-            // understanding. Hyprland REFUSES to move window focus while a layer surface
-            // holds EXCLUSIVE (`m_exclusiveLSes` — the reason `core/InputYield` exists),
-            // so the strip's `focusWorkspace` moves the workspace and focuses NOTHING on
-            // it. The target is left with an unfocused window, `refocusLastWindow` still
-            // answers with the one we came from, and the switch is undone. Which is why
-            // this re-asserts UNCONDITIONALLY rather than only for an empty target as
-            // `focusWorkspaceOnGrabRelease`'s own comment suggests: that read predates
-            // the grid, whose grab is what breaks the "a window here absorbs it" case.
-            //
-            // The drop is double-buffered, so no ordering at this call site can win the
-            // race — `focusWorkspaceOnGrabRelease` waits for the compositor to announce
-            // it. Re-asserting the workspace we are already on is a no-op when nothing
-            // dragged (`binds:workspace_back_and_forth` is off by default; with it ON
-            // this would need the emptiness check back).
-            //
-            // The structural fix is migrating the grid off EXCLUSIVE (`tech-debt.md`
-            // §53, unblocked now that FocusGrab survives popovers): under a focus grab
-            // the switch would focus the target's window at switch time, and
-            // `setGrab(nullptr)` refuses to refocus a window whose workspace is not
-            // visible, so neither half of this could happen.
-            hs.focusWorkspaceOnGrabRelease(hs.focusedWorkspaceId)
+            // No workspace to re-assert here any more: the strip switches with the
+            // grab already down (see `appGrid`'s constructor above), so this drop has
+            // nothing left to drag. Correcting it afterwards was what made the
+            // workspace animation set off and change its mind mid-flight.
         }
         if (fullscreenMode && !cursorInDock) {
             setRevealed(false)

@@ -2409,19 +2409,18 @@ Neither is a focus-grab quirk as such — they are what the catcher had been hid
 
 **What is left, and why it is not just more of the same:**
 
-- ⚠️ **The grid's workspace strip switches with a bare `focusWorkspace` and stays open**
-  (`AppGrid.tsx`), so the EXCLUSIVE drop — and Hyprland's `refocusLastWindow` with it — lands later,
-  when the grid closes, and drags the workspace you came FROM back. Reproduced 2026-08-05 with the
-  reporter's exact gesture (open from the dock button, pick a workspace, close with the same button):
-  2 of 3 runs snapped back. 🔑 **A window on the target does not save you** — the read on
-  `focusWorkspaceOnGrabRelease` that "only empty targets bite" predates the grid. Hyprland refuses to
-  move window focus while a layer surface holds EXCLUSIVE, so the strip's switch focuses NOTHING on
-  the target and `refocusLastWindow` still answers with the old window. `closeAppGridPanel` therefore
-  re-asserts the workspace UNCONDITIONALLY via `focusWorkspaceOnGrabRelease` (6/6 fixed, and the
-  target's own window ends up focused, which it did not before). ⚠️ That re-assert is only a no-op
-  because `binds:workspace_back_and_forth` is off — with it on, the emptiness check has to come back.
-  Migrating the grid off EXCLUSIVE removes the class outright: the switch would focus the target at
-  switch time, and `setGrab(nullptr)` refuses to refocus a window whose workspace is not visible.
+- **Workspace switching from a shell surface goes through ONE method**,
+  `HyprlandState.focusWorkspaceFromShell` — the app grid's strip and the island's workspace overview
+  both call it, so they cannot drift apart again. 🔑 **Hand the grab over, THEN switch.** Hyprland
+  refuses to move window focus while a layer surface holds EXCLUSIVE, so switching first lands you on
+  a workspace with nothing focused, and the surface's later release makes `refocusLastWindow` answer
+  with the window you came from — dragging that workspace back over you. Measured closing the grid
+  from the dock button: `5 → 1 @425ms → 5 @454ms`. ⚠️ **A window on the target does not save you**
+  (the "only empty targets bite" read predates the grid), and correcting it afterwards is what the
+  user sees as the workspace animation setting off and changing its mind. With the grab down first
+  the switch focuses the target's own window and the release has nothing to drag: no round trip, and
+  the target ends up focused, which it never did before. A surface on a COMPOSITOR focus grab lends
+  nothing — that grab never refused focus moves in the first place.
 - **The app grid owns `Gtk.Popover` context menus** (`AppGrid.tsx`), and popups take the SAME single
   compositor grab slot. **The blocker is now gone**: `FocusGrab.ts` suspends a lease when a popover
   is what cleared it and retakes the grab on `closed` (2026-08-05, forced by the island's own media

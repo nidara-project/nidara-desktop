@@ -497,8 +497,37 @@ class HyprlandStateClass extends GObject.Object {
      *  two calls cannot help (tried, measured, still 12/21 failures). Wait for the
      *  compositor to ANNOUNCE the release instead — that announcement is the
      *  `activewindow` null this class already reconciles (see `focusedClient`). */
-    focusWorkspaceOnGrabRelease(id: number) {
-        this.afterGrabRelease(() => this.focusWorkspace(id))
+    /**
+     * Switch workspace from one of OUR surfaces. The single entry point for it, so
+     * the app grid and the island's workspace overview cannot drift apart.
+     *
+     * 🔑 ORDER IS THE WHOLE FIX: hand the grab over, THEN switch. Hyprland refuses
+     * to move window focus while a layer surface holds EXCLUSIVE (`m_exclusiveLSes`,
+     * the rule `core/InputYield` exists for), so switching first lands you on a
+     * workspace with NOTHING focused — and when the surface later drops the grab,
+     * `refocusLastWindow` answers with the window you came from and drags that
+     * workspace back over you. Measured 2026-08-05, closing the app grid from the
+     * dock button: `5 → 1 @425ms → 5 @454ms`, i.e. a 29 ms round trip that reads as
+     * the workspace animation setting off and changing its mind.
+     *
+     * Correcting it afterwards is what produces that visible half-swing, so we do
+     * not: with the grab down first, the switch focuses the target's own window and
+     * the later release has nothing to drag (measured: no round trip at all, and the
+     * target ends up properly focused, which it never did before).
+     *
+     * `grab` is how a surface lends us its own keyboard grab — `drop` before,
+     * `retake` once the compositor has ANNOUNCED the release (it is double-buffered;
+     * see `afterGrabRelease`). Omit it when the caller holds no EXCLUSIVE grab: a
+     * compositor focus grab does not refuse focus moves, which is the whole reason
+     * `common/FocusGrab.ts` exists, so those surfaces just switch.
+     */
+    focusWorkspaceFromShell(id: number, grab?: { drop: () => void, retake: () => void }) {
+        if (!grab) return this.focusWorkspace(id)
+        grab.drop()
+        this.afterGrabRelease(() => {
+            this.focusWorkspace(id)
+            grab.retake()
+        })
     }
 
     /** Hand the keyboard back to the window the user was working in, after one of our
@@ -534,7 +563,7 @@ class HyprlandStateClass extends GObject.Object {
     }
 
     /** Run `cb` once the compositor has ANNOUNCED that a shell surface gave up its
-     *  EXCLUSIVE keyboard grab — the generic half of `focusWorkspaceOnGrabRelease`
+     *  EXCLUSIVE keyboard grab — the generic half of `focusWorkspaceFromShell`
      *  (read its comment for the measurement this encodes). Any caller that has just
      *  asked a surface to drop the grab and must not act until the compositor has
      *  actually applied it goes through here: the workspace switch above, and the

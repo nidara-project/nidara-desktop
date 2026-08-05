@@ -40,7 +40,16 @@ export interface AppGridPanelHandle {
     setVisible: (open: boolean, onDone?: () => void) => void
 }
 
-export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void): AppGridPanelHandle {
+export default function AppGridPanel(
+    monitor: Gdk.Monitor,
+    onClose: () => void,
+    /** Switch workspace WITHOUT this surface's keyboard grab undoing it — the dock
+     *  owns the grab, `HyprlandState.focusWorkspaceFromShell` owns the order. Never
+     *  call `hs.focusWorkspace` directly from here: switching while we hold
+     *  EXCLUSIVE focuses nothing on the target and drags the old workspace back when
+     *  the grid closes. */
+    switchWorkspace: (id: number) => void,
+): AppGridPanelHandle {
     // ── Search bar ─────────────────────────────────────────────────────────
     const searchEntry = new Gtk.Text({
         placeholder_text: t("app-grid.search.placeholder"),
@@ -141,7 +150,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         // Click: switch workspace and move keyboard focus here
         const click = new Gtk.GestureClick()
         click.connect("released", () => {
-            hs.focusWorkspace(i)
+            switchWorkspace(i)
             focusWsSlot(i)
         })
         itemBox.add_controller(click)
@@ -661,7 +670,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
                     return true
                 }
                 if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
-                    hs.focusWorkspace(wsNav)
+                    switchWorkspace(wsNav)
                     return true
                 }
                 // Backspace / printable char → back to search
