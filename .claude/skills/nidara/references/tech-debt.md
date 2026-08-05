@@ -2421,11 +2421,14 @@ Neither is a focus-grab quirk as such — they are what the catcher had been hid
   the switch focuses the target's own window and the release has nothing to drag: no round trip, and
   the target ends up focused, which it never did before. A surface on a COMPOSITOR focus grab lends
   nothing — that grab never refused focus moves in the first place.
-- **The app grid owns `Gtk.Popover` context menus** (`AppGrid.tsx`), and popups take the SAME single
-  compositor grab slot. **The blocker is now gone**: `FocusGrab.ts` suspends a lease when a popover
-  is what cleared it and retakes the grab on `closed` (2026-08-05, forced by the island's own media
-  source menu). What remains is ordinary migration work plus deciding what the app grid does about
-  the dock's `EXCLUSIVE`↔`ON_DEMAND` dance in `DockCore.tsx`, which exists for this same collision.
+- ✅ **The app grid is migrated too (2026-08-05).** It was the last surface on layer-shell EXCLUSIVE,
+  held there by its `Gtk.Popover` context menus, which take the same single compositor grab slot —
+  unblocked once `FocusGrab` learned to SUSPEND a lease for the life of a popup. Verified by
+  injection: the grid takes the keyboard with the surface at NONE (`wtype` lands in its search
+  entry), a right-click menu no longer dismisses it and the lease is retaken when the menu closes,
+  an outside press dismisses and hands the window back, and the workspace strip switches cleanly.
+  The `EXCLUSIVE`↔`ON_DEMAND` dance survives ONLY as the fallback path (old compositor, or a
+  libnidara-wl older than the shell).
 - `core/InputYield` and `HyprlandState.afterGrabRelease` still exist for the `EXCLUSIVE` release
   race, and the app grid is now their last holder. Both migrated surfaces still route through
   `inputYield` (a yield drops the grab and brings the catcher back for the length of the truce), so
