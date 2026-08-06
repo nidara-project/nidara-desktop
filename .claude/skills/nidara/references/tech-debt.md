@@ -2486,14 +2486,34 @@ until a surface says it is opening.
 being resized can still fail with `buffer_constraints`, and the shim does not retry. Nothing in
 flight resizes windows any more; a live switcher would.
 
-### 55. IDEA (owner, 2026-08-06, NOT a plan): the wallpaper as the workspace backdrop
+### 55. ✅ CLOSED — the wallpaper IS the workspace backdrop (2026-08-06)
 
-Today `WorkspaceSchematic`'s canvas paints a flat `rgba(0,0,0,0.3)` behind the tiles. The owner wants
-to evaluate using **the wallpaper actually in use** as that backdrop, for empty and occupied
-workspaces alike — an empty workspace would then read as the desktop it is, rather than a grey box.
+`WorkspaceSchematic`'s canvas painted a flat `rgba(0,0,0,0.3)`; it now paints the wallpaper actually
+in use, dimmed by `WP_SCRIM` and clipped to a proportional rounded rect. Mechanism and rules in
+`architecture.md` (the schematic's backdrop). Answering the cost question this entry opened with:
 
-**Open on cost, which is the whole question.** Decode/scale per tile per workspace is the naive
-version and it is the wrong one; `WallpaperManager`/awww already own a loaded image, so the first
-thing to establish is whether an existing texture can be reused (one `GdkTexture`, painted N times by
-GSK) rather than decoded again. Also note that whatever is chosen must stay one-shot — the continuous
-GPU rule (~40 %) applies here exactly as it does to captures.
+- **One decode for the whole shell**, shared by five overview cards and the app grid strip —
+  `WallpaperManager.preview`, bounded to 960px = **2.07 MB measured** (vs ~33 MB for the 4K
+  original), decoded **in a worker thread in 47 ms**. The naive per-tile decode was indeed the wrong
+  version; reusing awww's image was not possible (awww paints in the compositor, it hands nothing
+  back), so a bounded decode of our own is the answer.
+- **One-shot, so the continuous-GPU rule is not engaged**: it is a pixbuf painted by an existing
+  Cairo `draw_func`, not an animation.
+- Because it costs nothing *per surface*, it is deliberately **not opt-in** the way captures are.
+
+### 56. `_workspace.scss` (and 5 other partials) are UNSCOPED — commandment 2 is only two-thirds kept
+
+Found 2026-08-06 while checking whether the overview's layout could read its padding from GTK. The
+compiled `style.css` has `.wo-item`, `.wo-label` etc. as **global** rules. Scoped: `_agent-pointer`,
+`_app-grid`, `_bar`, `_dock`. Not scoped: `_base`, `_components`, `_control-center`, `_prism`,
+`_settings`, `_workspace`.
+
+Not urgent — the class names are distinctive enough that nothing is currently colliding — but it is a
+real violation of commandment 2, and the failure mode it invites is a rule leaking into the greeter
+or lockscreen sheets, which are separate bundles that load their own CSS.
+
+⚠️ **Whoever fixes it should know what it silently changes**: CSS resolves on an unrooted widget
+today *because* these rules are global. Any code that reads a styled value from a widget before it is
+in a tree (`get_style_context().get_padding()` on a probe) starts returning 0 the moment the rule is
+scoped. The overview deliberately does not depend on that read — see `architecture.md` — but a future
+caller might.

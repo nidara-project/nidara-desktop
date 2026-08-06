@@ -167,10 +167,22 @@ deliberately *not* a full-bleed Mission Control mode (user, 2026-08-04).
   `WorkspaceOverview(gdkmonitor)` — because the bar and its island are already built **once per
   monitor** (`createUI` in `app.ts`). Use `Gdk.Monitor.get_geometry()`: logical px, the same space
   the panel is laid out in.
-- 🔑 `WO_PANEL_PAD` / `WO_GRID_GAP` / `WO_CARD_CHROME` **mirror `styles/_workspace.scss`**, and that
-  file carries a comment pointing back — the same contract as `RADIUS` ↔ `--nidara-radius-*` (see
-  design-system.md), and for the same reason: a layout computed in JS cannot read a CSS padding.
-  Move them together. Drift is benign (the panel stops meeting its own margin) but silent.
+- 🔑 **The spacing it solves with is NOT declared in CSS — that is the point, do not "restore" it.**
+  `.workspace-overview` and `.wo-item` carry no padding; `WO_PANEL_PAD` / `WO_CARD_PAD` are applied
+  as GTK margins from `WorkspaceOverview.tsx`, which is also the file doing the arithmetic. A margin
+  inside a styled parent *is* a padding, so nothing moved (re-measured: 1348 / 1903 / 2543 / 3823,
+  identical to the CSS-padding version). **The general shape**: when a layout has to *solve* for a
+  spacing value, that value cannot live in the stylesheet — CSS keeps what it is uniquely good at
+  (fill, border, radius, states) and TS owns the number outright. Only `.wo-item`'s `border: 1px`
+  is still read from CSS, as `WO_CARD_BORDER`: a border is not a spacing token and does not move.
+- ⚠️ **The obvious alternative is a trap, and it was measured before being rejected.**
+  `get_style_context().get_padding()` resolves correctly *even on an unrooted, unrealized widget*
+  (verified 2026-08-06: returns 16/1 for `.wo-item` with no window at all), so "just ask GTK" looks
+  like the clean answer. It only works because `_workspace.scss` is currently **unscoped**. Scope it
+  under `window#…` — which commandment 2 says it should be — and a not-yet-rooted probe stops
+  matching, the read returns **0**, and the layout silently falls back to a stale constant. Giving
+  the probe the real ancestry only trades a mirror of numbers for a mirror of structure. Prefer
+  owning the number to querying for it whenever the query depends on selectors matching.
 - ⚠️ **The win is not uniform, so do not sell it as a scale factor**: 2560 → preview 449 (panel 2543),
   but 1920 → 321, barely above the old 300. Wide screens are where it pays; on a 1080p laptop the
   point is that it now *fits*. Verified against the real widget tree with an offscreen GTK probe

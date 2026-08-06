@@ -19,16 +19,30 @@ import { warmUp as warmUpCapture } from "../../core/WindowCapture"
 const WO_EDGE_MARGIN = 8
 
 /**
- * Chrome around the previews, in px. 🔑 These MIRROR `styles/_workspace.scss` and
- * the grid below, for the same reason `lib/tokens.ts` mirrors the radius ladder:
- * a layout computed in JS cannot read a CSS padding. `_workspace.scss` carries a
- * comment pointing back here — **move them together**. If they ever drift the
- * panel simply stops landing exactly `WO_EDGE_MARGIN` from the edge; nothing
- * breaks, but the intent is lost.
+ * Chrome around the previews, in px — and 🔑 **the only definition of these
+ * numbers anywhere**. They are applied as GTK margins from right here, not
+ * declared as CSS padding, precisely because the panel's width is *solved* from
+ * them: a layout computed in JS cannot read a CSS padding, so a padding in
+ * `_workspace.scss` would have to be mirrored here, and a mirror drifts silently.
+ *
+ * The tempting alternative was to ASK GTK (`get_style_context().get_padding()`
+ * resolves correctly even on an unrooted widget — verified 2026-08-06, it returns
+ * 16/1). It was rejected: it only works because `_workspace.scss` is currently
+ * UNSCOPED. Scope it under `window#…` — which commandment 2 says it should be —
+ * and a not-yet-rooted probe stops matching the selector, the read comes back 0,
+ * and the layout silently falls back to a stale constant. Replicating the real
+ * ancestry in the probe just trades a mirror of numbers for a mirror of
+ * structure. Owning the number outright has no such failure mode.
+ *
+ * `WO_CARD_BORDER` is the one thing still declared in CSS (`.wo-item`'s
+ * `border: 1px`) — a border is not a spacing token and does not move; if it ever
+ * did, the cost is 2px of edge margin, not a broken layout.
  */
-const WO_PANEL_PAD   = 32  // .workspace-overview padding ($space-8)
-const WO_GRID_GAP    = 16  // `list` column_spacing
-const WO_CARD_CHROME = 34  // .wo-item: 2×$space-4 padding + 2×1px border
+const WO_PANEL_PAD   = 32  // inset from the glass panel's edge to the card grid
+const WO_GRID_GAP    = 16  // between cards
+const WO_CARD_PAD    = 16  // inset from a card's border to its content
+const WO_CARD_BORDER = 1   // .wo-item border-width — mirrors CSS, see above
+const WO_CARD_CHROME = 2 * WO_CARD_PAD + 2 * WO_CARD_BORDER
 
 /** Below this a card is unreadable whatever the screen — a floor, not a target.
  *  Reaching it needs a monitor under ~900px wide, where the panel is the least
@@ -68,12 +82,21 @@ export const WO_GLASS = { radius: RADIUS.xl, n: 3.2, border: { r: 1, g: 1, b: 1,
 export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
     const previewWidth = previewWidthFor(gdkmonitor)
 
+    // The panel's inset is a MARGIN here, not a padding in `_workspace.scss`, so
+    // `previewWidthFor` and the layout are reading the same number rather than two
+    // copies of it. `.workspace-overview` paints nothing (the glass is the
+    // SquircleContainer wrapping it), so margin and padding are interchangeable
+    // for it: the squircle's DrawingArea fills the whole grid either way.
     const overview = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 32,
         css_classes: ["workspace-overview"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.CENTER,
+        margin_top: WO_PANEL_PAD,
+        margin_bottom: WO_PANEL_PAD,
+        margin_start: WO_PANEL_PAD,
+        margin_end: WO_PANEL_PAD,
     })
 
     const windowContent = new Gtk.Box({
@@ -142,18 +165,32 @@ export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
         })
         header.append(dot); header.append(label); header.append(count)
 
-        const itemBox = new Gtk.Box({
+        // `.wo-item` is the PAINTED box (fill, border, radius, hover/active
+        // states) and holds no spacing of its own. Its inset is the inner box's
+        // margin, set from WO_CARD_PAD — same number `previewWidthFor` solved
+        // with. Visually identical to the CSS padding it replaced: a margin
+        // inside a styled parent is a padding.
+        const content = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
             spacing: 12,
+            margin_top: WO_CARD_PAD,
+            margin_bottom: WO_CARD_PAD,
+            margin_start: WO_CARD_PAD,
+            margin_end: WO_CARD_PAD,
+        })
+        content.append(header); content.append(schematic.wrapper)
+
+        const itemBox = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
             css_classes: ["wo-item"],
             // The card's own chrome, not a guess: this used to ask for +24 while
-            // the CSS actually adds 34, so the request was dead — the natural
-            // width always won. Asking for the true figure keeps the request and
-            // the layout describing the same card.
+            // the real figure is 34, so the request was dead — the natural width
+            // always won. Asking for the true figure keeps the request and the
+            // layout describing the same card.
             width_request: previewWidth + WO_CARD_CHROME,
             hexpand: false
         })
-        itemBox.append(header); itemBox.append(schematic.wrapper)
+        itemBox.append(content)
 
         const btn = new Gtk.Button({ child: itemBox, css_classes: ["wo-btn"] })
         btn.set_focus_on_click(false)

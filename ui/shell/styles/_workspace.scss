@@ -11,23 +11,23 @@
 }
 
 /* --- Overview Panel ---
-   🔑 This padding and .wo-item's below are MIRRORED as numbers in
-   surfaces/overview/WorkspaceOverview.tsx (WO_PANEL_PAD / WO_CARD_CHROME): the
-   card size is solved from the MONITOR WIDTH so the panel lands 8px from each
-   edge, and a layout computed in JS cannot read a CSS padding (same contract as
-   lib/tokens.ts and the radius ladder). Change either one and change both, or the
-   panel quietly stops meeting its own margin. */
+   🔑 NO PADDING HERE, AND THAT IS DELIBERATE — do not "restore" it. The overview's
+   card size is SOLVED from the monitor width so the panel lands 8px from each
+   screen edge (previewWidthFor in surfaces/overview/WorkspaceOverview.tsx), and a
+   layout computed in JS cannot read a CSS padding. Declaring it here would mean
+   duplicating it there, and a mirror drifts silently. So this file owns what CSS
+   is uniquely good at — fill, border, radius, states — and the spacing is applied
+   as GTK margins from the one place that also does the arithmetic. */
 .workspace-overview {
     background: transparent;
     border: none;
-    padding: $space-8;
     box-shadow: none;
 }
 
-/* --- Workspace Items --- */
+/* --- Workspace Items ---
+   Inset comes from WO_CARD_PAD (a margin on the inner box); the border width
+   below is the one number the arithmetic still reads from CSS, as WO_CARD_BORDER. */
 .wo-item {
-    /* padding + the 1px border below = WO_CARD_CHROME (34) in WorkspaceOverview.tsx */
-    padding: $space-4;
     border-radius: $nidara-radius-lg;
     background-color: var(--nidara-surface-back);
     border: 1px solid var(--nidara-border);
