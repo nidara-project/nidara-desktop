@@ -2454,3 +2454,39 @@ Neither is a focus-grab quirk as such — they are what the catcher had been hid
 
 **Do not migrate the dock's own menus.** They are popovers by design (the `#14` glass rows), so they
 are the *other* side of the slot collision, not a candidate.
+
+### 54. The overview's tile geometry is STALE while its capture is FRESH (2026-08-06)
+
+Real thumbnails landed (`WindowCapture` + `WindowThumbnail`, see `architecture.md`), and they exposed
+a pre-existing bug that the flat schematic tiles hid.
+
+**Symptom (owner, in a live session):** resize a window under tiling and its thumbnail comes back
+**squashed**. The capture reflects reality — it is taken from the compositor at request time — but the
+tile it is painted into still has the old width/height, so a texture with the new aspect ratio is
+stretched into a box with the old one.
+
+**Where it comes from:** `WorkspaceSchematic.sync()` lays tiles out from `hs.clients`, and those are
+AstalHyprland's **cached** `Client` objects (`HyprlandState.ts`, `this.hl.get_clients()`). The
+authoritative read is `HyprlandState.getClientsJson()` — a one-shot `hyprctl clients -j`, described
+as such in that file. **This is the same lesson the window menu already learned: read window state
+from the JSON, never from the cached object.**
+
+⚠️ **Confirm the mechanism before redesigning anything** — measure a cached `Client`'s
+`width`/`height` against `hyprctl clients -j` for the same address after a resize. It is possible the
+cache is fine and the miss is a "changed" that never fires for a resize; those two have different
+fixes (re-read on sync vs. re-sync on the right signal), and the symptom is identical.
+
+Not a thumbnail regression: the stale geometry was always there, drawn as a rounded rectangle nobody
+could tell was the wrong size.
+
+### 55. IDEA (owner, 2026-08-06, NOT a plan): the wallpaper as the workspace backdrop
+
+Today `WorkspaceSchematic`'s canvas paints a flat `rgba(0,0,0,0.3)` behind the tiles. The owner wants
+to evaluate using **the wallpaper actually in use** as that backdrop, for empty and occupied
+workspaces alike — an empty workspace would then read as the desktop it is, rather than a grey box.
+
+**Open on cost, which is the whole question.** Decode/scale per tile per workspace is the naive
+version and it is the wrong one; `WallpaperManager`/awww already own a loaded image, so the first
+thing to establish is whether an existing texture can be reused (one `GdkTexture`, painted N times by
+GSK) rather than decoded again. Also note that whatever is chosen must stay one-shot — the continuous
+GPU rule (~40 %) applies here exactly as it does to captures.
