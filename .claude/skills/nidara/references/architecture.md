@@ -129,6 +129,33 @@ easy to get wrong there:
   draws the same schematic for its workspace strip at ~80 px, where a capture is mush and costs a
   render pass for nothing. Only the overview turns them on.
 
+**The schematic's backdrop is the real wallpaper** (2026-08-06), dimmed by `WP_SCRIM` (0.35) and
+clipped to a proportional rounded rect — same call GNOME, Mission Control and KDE's overview all
+make, and the tiles only read as *foreground* if the background is the desktop they sit on. Note the
+asymmetry with captures: this one is **not** opt-in, because unlike a capture it costs nothing per
+surface. There is exactly ONE decode in the shell, shared by all five overview cards and the app
+grid strip:
+
+- **`WallpaperManager.preview`** is a decoded copy bounded to `PREVIEW_MAX_W` (960 px) — a 4K
+  wallpaper is ~33 MB of pixels to draw something 300 px wide; the bound makes it ~2 MB (measured).
+  `warmPreview()` loads it through `Gio.File.read_async` → `Pixbuf.new_from_stream_at_scale_async`
+  (**decoded in a worker thread**: the synchronous loader is a ~50–100 ms main-loop stall, i.e. a
+  visible hitch in whatever animation is running when a surface opens), then emits **`"preview"`** —
+  a separate signal from `"changed"` precisely because the decode lands long after the wallpaper did.
+- `warmPreview()` **re-resolves the path from disk** (`resolveWallpaper("shell")`) on every call and
+  no-ops when path and cache agree, so it is safe to call anywhere. It has to work that way: the
+  wallpaper also changes behind this manager's back — gaming hero-art swaps it through
+  `hyprland.lua`, and `_current` is only a hint (awww owns the live one). Called at schematic build
+  time, from `SchematicHandle.refresh()` (surface opening), and by `WallpaperManager` itself after it
+  emits `"changed"`.
+- Cover-fit scaling goes through **`makeCoverFit()` in `common/DrawingUtils.ts`** — a closure holding
+  ONE painter's cached scaled copy. `scale_simple` allocates a new pixbuf, so scaling straight from a
+  `draw_func` re-allocates the image every frame; every consumer needs that guard, which is why it is
+  a shared primitive rather than a helper (`squircleThumb` uses the same one).
+- ⚠️ Painting a *pixbuf* in a Cairo `draw_func` is fine and does not contradict the rule above about
+  captures: the ban is on downloading a GPU **texture** back to the CPU per draw. A pixbuf is already
+  CPU-side, and the schematic's backdrop shares the canvas that paints the tiles.
+
 🔴 **Window GEOMETRY is the one piece of window state that no event announces — ask for it, do not
 listen for it (2026-08-06).** Hyprland's IPC has **no resize event, and none for a move inside a
 workspace either**: the whole `socket2` event list (0.56) carries `openwindow`, `closewindow`,

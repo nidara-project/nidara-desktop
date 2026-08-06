@@ -1,8 +1,12 @@
-import { Gtk } from "ags/gtk4"
+import { Gtk, Gdk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import appService from "../core/AppService"
 import hs, { bareAddr, type ClientGeometry } from "../core/HyprlandState"
 import { captureWindow } from "../core/WindowCapture"
+import Wallpaper from "../core/WallpaperManager"
+import { makeCoverFit } from "./DrawingUtils"
+import { safeDisconnect } from "../core/signals"
+import { RADIUS } from "../../lib/tokens"
 import { makeWindowThumbnail, type WindowThumbnail } from "./WindowThumbnail"
 
 export interface SchematicHandle {
@@ -33,6 +37,22 @@ export interface SchematicHandle {
  * per sliver in a heavily tiled workspace.
  */
 const THUMB_MIN_PX = 24
+
+/**
+ * How far the wallpaper backdrop is dimmed.
+ *
+ * It is not decoration: the window tiles are `--nidara-surface` (white at 0.08)
+ * and would vanish against a bright photo, and the whole point of the map is
+ * that windows read as foreground. Dark enough that the tiles and the card's
+ * accent border keep their contrast over ANY wallpaper, light enough that you can
+ * still tell which desktop you are looking at. Matches the flat 0.3 this
+ * replaced closely enough that nothing else in the card had to be re-tuned.
+ */
+const WP_SCRIM = 0.35
+
+/** Fallback when there is no usable wallpaper on disk: exactly what the
+ *  schematic painted before it had a backdrop at all. */
+const NO_WP_FILL = 0.3
 
 interface Tile { x: number; y: number; w: number; h: number }
 
@@ -97,10 +117,36 @@ export function createSchematicMap(wsId: number, width: number, options: Schemat
     let currentTiles: Tile[] = []
     let currentRadius   = 0
 
+    // One cached cover-fit copy per canvas: the schematic's box and the app grid
+    // strip's are different sizes, so they cannot share one scaled pixbuf, but
+    // they DO share the decode behind it (WallpaperManager.preview).
+    const coverFit = makeCoverFit()
+
     canvas.set_draw_func((da, cr, areaW, areaH) => {
         if (areaW <= 0 || areaH <= 0) return
-        // Dark background
-        cr.setSourceRGBA(0, 0, 0, 0.3)
+
+        // The backdrop is now a picture, so it needs a frame: a photo running
+        // into square corners inside a 24px-rounded card reads as a rendering
+        // bug. Concentric with `.wo-item` (radius lg, 16px of padding), and
+        // proportional so the app grid's 80px strip does not get lozenge corners.
+        const bgRadius = Math.min(RADIUS.sm, areaW * 0.06, areaH * 0.06)
+        cr.save()
+        roundedRect(cr, 0, 0, areaW, areaH, bgRadius)
+        cr.clip()
+
+        // The wallpaper itself, dimmed — the workspace map shows the desktop it
+        // is a map OF, which is what GNOME, Mission Control and KDE's overview
+        // all do. Until the decode lands (and if no image resolves at all) this
+        // falls back to the flat wash it used to be, so the card is never blank.
+        const wp = Wallpaper.preview
+        if (wp) {
+            const fit = coverFit(wp, areaW, areaH)
+            Gdk.cairo_set_source_pixbuf(cr, fit.pixbuf, fit.x, fit.y)
+            cr.paint()
+            cr.setSourceRGBA(0, 0, 0, WP_SCRIM)
+        } else {
+            cr.setSourceRGBA(0, 0, 0, NO_WP_FILL)
+        }
         cr.rectangle(0, 0, areaW, areaH)
         cr.fill()
 
@@ -112,7 +158,17 @@ export function createSchematicMap(wsId: number, width: number, options: Schemat
             roundedRect(cr, t.x, t.y, t.w, t.h, r)
             cr.fill()
         }
+        cr.restore()
     })
+
+    // The decode is asynchronous and the wallpaper can change while a surface is
+    // closed, so the canvas cannot just read it once at build time.
+    const wpId = Wallpaper.connect("preview", () => canvas.queue_draw())
+    canvas.connect("destroy", () => safeDisconnect(Wallpaper, wpId))
+    // Warm at build time — the shell is idle here, and every later call is free
+    // while the path and the cached copy agree. One decode is shared by every
+    // schematic in the shell (five overview cards + the app grid's strip).
+    Wallpaper.warmPreview()
 
     // lastW/lastH are remembered because a capture lands asynchronously, long after
     // the sync that sized the tile — and the icon has to be re-laid-out at that
@@ -334,6 +390,8 @@ export function createSchematicMap(wsId: number, width: number, options: Schemat
     return {
         wrapper: overlay,
         sync,
-        refresh: () => { armed = true; staleAll = true },
+        // The wallpaper is re-checked here too, not only on "changed": gaming
+        // hero-art swaps it through hyprland.lua, behind WallpaperManager's back.
+        refresh: () => { armed = true; staleAll = true; Wallpaper.warmPreview() },
     }
 }

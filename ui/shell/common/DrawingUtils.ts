@@ -217,6 +217,33 @@ export const drawSquircle = (
     }
 }
 
+/** Cover-fit scaling with the scaled copy CACHED, for painters that need an image
+ *  to fill a box exactly.
+ *
+ *  Cover-fit = scale so the SHORTER side fills, then centre-crop. `scale_simple`
+ *  allocates a whole new pixbuf, so calling it straight from a draw function
+ *  re-allocates the image on every frame — every consumer needs the same "only
+ *  when the box or the source actually changed" guard, which is what this closure
+ *  is. One instance per painter (it holds that painter's cached copy); the
+ *  returned function gives back the scaled pixbuf and the offset to paint it at.
+ *
+ *  Shared by `squircleThumb` and the workspace schematic's wallpaper backdrop. */
+export function makeCoverFit() {
+    let scaled: any = null
+    let src: any = null
+    let sw = 0, sh = 0
+    return (pixbuf: any, w: number, h: number) => {
+        const scale = Math.max(w / pixbuf.get_width(), h / pixbuf.get_height())
+        const nw = Math.max(1, Math.round(pixbuf.get_width() * scale))
+        const nh = Math.max(1, Math.round(pixbuf.get_height() * scale))
+        if (!scaled || src !== pixbuf || sw !== nw || sh !== nh) {
+            scaled = pixbuf.scale_simple(nw, nh, GdkPixbuf.InterpType.BILINEAR)
+            src = pixbuf; sw = nw; sh = nh
+        }
+        return { pixbuf: scaled, x: (w - nw) / 2, y: (h - nh) / 2 }
+    }
+}
+
 /** A squircle-clipped, cover-fit thumbnail of `pixbuf`, as a `Gtk.DrawingArea`.
  *
  *  Cover-fit (scale so the SHORTER side fills, then centre-crop) rather than
@@ -226,9 +253,9 @@ export const drawSquircle = (
  *  every other rounded surface here — GTK4 CSS `border-radius` does NOT clip a
  *  child's rendering, so this is Cairo's job, not the stylesheet's.
  *
- *  `scale_simple` allocates a whole new pixbuf, so the cover-fit copy is cached
- *  and only recomputed when the allocation actually changes — never call it from
- *  inside a draw function without that guard.
+ *  The cover-fit copy is cached by `makeCoverFit` and only recomputed when the
+ *  allocation actually changes — never scale from inside a draw function without
+ *  that guard.
  *
  *  Shared by the notification hero/thumb and the clipboard history rows. */
 export function squircleThumb(
@@ -239,16 +266,12 @@ export function squircleThumb(
     cssClass: string,
 ): Gtk.DrawingArea {
     const da = new Gtk.DrawingArea({ width_request: w, height_request: h, css_classes: [cssClass] })
-    let scaled: any = null
+    const coverFit = makeCoverFit()
     da.set_draw_func((_da: any, cr: any, dw: number, dh: number) => {
         if (dw <= 0 || dh <= 0) return
-        const scale = Math.max(dw / pixbuf.get_width(), dh / pixbuf.get_height())
-        const sw = Math.max(1, Math.round(pixbuf.get_width() * scale))
-        const sh = Math.max(1, Math.round(pixbuf.get_height() * scale))
-        if (!scaled || scaled.get_width() !== sw || scaled.get_height() !== sh)
-            scaled = pixbuf.scale_simple(sw, sh, GdkPixbuf.InterpType.BILINEAR)
+        const fit = coverFit(pixbuf, dw, dh)
         cr.save(); createSquirclePath(cr, 0, 0, dw, dh, radius, 3.2); cr.clip()
-        Gdk.cairo_set_source_pixbuf(cr, scaled, (dw - sw) / 2, (dh - sh) / 2); cr.paint(); cr.restore()
+        Gdk.cairo_set_source_pixbuf(cr, fit.pixbuf, fit.x, fit.y); cr.paint(); cr.restore()
     })
     return da
 }
