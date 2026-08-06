@@ -38,6 +38,19 @@
     background: transparent;
 }
 
+/* The app icon is BOTH the placeholder and the identity mark: the captured
+   texture lands behind it (common/WindowThumbnail.ts), so a slow or failed
+   capture leaves the tile exactly as it opened — nothing swaps, nothing jumps.
+   Once a texture lands the icon does NOT disappear, it shrinks to a badge on the
+   bottom edge (geometry in applyIconLayout): at this scale the content says which
+   DOCUMENT a tile is, and only the icon says which APP. Same call GNOME, macOS
+   Mission Control and KDE all make. */
+.wo-schematic-icon.has-thumb image {
+    /* The badge sits over arbitrary window content — light UIs, photos, video —
+       so it needs its own contrast floor rather than trusting the backdrop. */
+    -gtk-icon-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
 .wo-label {
     font-size: $fs-subtitle;
     font-weight: $fw-semibold;

@@ -8,6 +8,7 @@ import { createSchematicMap } from "../../common/WorkspaceSchematic"
 import hs from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
+import { warmUp as warmUpCapture } from "../../core/WindowCapture"
 
 const WO_PREVIEW_WIDTH = 300
 
@@ -52,7 +53,7 @@ export default function WorkspaceOverview() {
         valign: Gtk.Align.CENTER
     })
 
-    const slots = new Map<number, { itemBox: Gtk.Box, label: Gtk.Label, count: Gtk.Label, schematic: () => void }>()
+    const slots = new Map<number, { itemBox: Gtk.Box, label: Gtk.Label, count: Gtk.Label, schematic: () => void, refreshThumbs: () => void }>()
 
     // Keyboard-focused slot (1..WS_COUNT), -1 = keyboard nav idle. Set on open to
     // the active workspace; moved by ←/→; committed by Enter. Purely a visual
@@ -76,7 +77,7 @@ export default function WorkspaceOverview() {
     const cardDots: Gtk.Widget[] = []
 
     for (let i = 1; i <= WS_COUNT; i++) {
-        const schematic = createSchematicMap(i, WO_PREVIEW_WIDTH)
+        const schematic = createSchematicMap(i, WO_PREVIEW_WIDTH, { thumbnails: true })
         const dot = makeWorkspaceDot(i)
         dot.halign = Gtk.Align.CENTER
         dot.margin_bottom = 2
@@ -104,7 +105,7 @@ export default function WorkspaceOverview() {
         btn.set_focus_on_click(false)
         btn.connect("clicked", () => switchToWorkspace(i))
 
-        slots.set(i, { itemBox, label, count, schematic: schematic.sync })
+        slots.set(i, { itemBox, label, count, schematic: schematic.sync, refreshThumbs: schematic.refresh })
         const col = (i - 1) % WS_COUNT
         const row = Math.floor((i - 1) / WS_COUNT)
         list.attach(btn, col, row, 1, 1)
@@ -145,7 +146,12 @@ export default function WorkspaceOverview() {
     const changedId = hs.connect("changed", () => { if (isOpen()) syncAll() })
 
     status.connect("notify::island-mode", () => {
-        if (isOpen()) syncAll()
+        if (!isOpen()) return
+        // Thumbnails are captured once per open, never refreshed while the surface
+        // sits there: each capture is a compositor render pass, and re-running them
+        // on a timer is exactly the continuous GPU draw the animation budget bans.
+        slots.forEach(ctx => ctx.refreshThumbs())
+        syncAll()
     })
 
     windowContent.connect("unrealize", () => {
@@ -196,6 +202,10 @@ export default function WorkspaceOverview() {
     ;(windowContent as any).morphContent = overview
     ;(windowContent as any).morphGlass = overviewSquircle
     ;(windowContent as any).morphDots = cardDots
+
+    // Load the capture shim now, while the shell is idle, so the first Super+Tab
+    // does not pay the dynamic import on top of its captures.
+    warmUpCapture()
 
     GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
         syncAll()

@@ -87,6 +87,52 @@ region, re-read each one asking "can this arrive late?"** — a late input stamp
 late visible stamp is a frame that is never drawn. That question is what found the notification
 banners' deliberately-deferred stamp in `NotificationPopups.tsx` (§46).
 
+### Window capture — real thumbnails, one render pass each
+
+`capture_window()` is consumed through **`core/WindowCapture.ts`** (same lazy-import contract as
+`VisibleRegion.ts`; the kill switch is `NIDARA_WINDOW_CAPTURE=0`). It adds the two things a raw
+async call does not have: **de-duplication** (concurrent asks for one address share a capture) and a
+**concurrency cap of 4**, because each capture is a worker thread with its own Wayland connection and
+past four the compositor schedules them on its frame clock anyway.
+
+The painting side is **`common/WindowThumbnail.ts`** — a `Gtk.Widget` with `vfunc_snapshot` that
+does `append_texture()` inside a `Gsk.RoundedClipNode`. 🔑 **Do not paint captures in a Cairo
+`draw_func`**: `Gtk.DrawingArea` is CPU-side, so it would `download()` the texture out of the GPU on
+every draw — the exact cost the capture design exists to avoid. Rounding is a GSK clip, never a
+post-process, and the radius is passed per-sync because the schematic's is *derived*
+(Hyprland rounding × minimap scale); a fixed CSS radius drifts from the Cairo tile beneath as soon as
+the resolution changes, and the mismatch shows as tile colour at the corners.
+
+**The consumer today is the Workspace Overview**, via `common/WorkspaceSchematic.ts` — which already
+owned the per-window geometry, so thumbnails were an insertion, not a rewrite. Two rules that are
+easy to get wrong there:
+
+- **Capture on OPEN, never on a timer or on `changed`.** `sync()` runs on every HyprlandState
+  "changed" while the surface is open; a capture per event would turn a window drag into a render
+  pass per window per motion event. `SchematicHandle.refresh()` marks stale, the overview calls it on
+  `notify::island-mode`, and `sync()` consumes the flag once. Continuous refresh would also be the
+  continuous GPU draw the animation budget bans (~40 %, see the agent-glow finding).
+- **The app icon is the placeholder AND the identity mark, and the texture lands BEHIND it** (the
+  tile is a `Gtk.Overlay`: thumbnail as child, icon as overlay). So a slow or failed capture leaves
+  the tile exactly as it opened — nothing swaps in, nothing jumps. When a texture does arrive the
+  icon **does not disappear — it shrinks to a badge on the bottom edge** (`applyIconLayout`).
+  Removing it was the first cut and it was wrong: at thumbnail scale the content tells you which
+  DOCUMENT a tile is and only the icon tells you which APP (two Chrome windows are indistinguishable
+  at 150 px). GNOME, macOS Mission Control and KDE all keep it. Do not "clean it up".
+- **Thumbnails are opt-in per surface** (`SchematicOptions.thumbnails`, default OFF). The app grid
+  draws the same schematic for its workspace strip at ~80 px, where a capture is mush and costs a
+  render pass for nothing. Only the overview turns them on.
+
+🔴 **Window addresses do not have one format.** `hyprctl clients` and `ags request listWindows`
+report `"0x555b0a0cad80"`; the AstalHyprland client objects behind `hs.clients` report the same
+address as bare `"555b0a0cad80"`. `BigInt()` accepts the first and throws on the second, so feeding
+the shim from the wrong source captures **nothing, silently**. `WindowCapture.parseAddress()`
+normalises, and `HyprlandState.ts` has `bareAddr()` for the comparison direction — use them rather
+than parsing an address by hand.
+
+⚠️ **Never send a diagnosable failure to `console.debug` in GJS** — it is suppressed unless
+`G_MESSAGES_DEBUG` is set, which turns a broken feature into a silent one. `console.warn`.
+
 ### Focus grab — modality that the compositor enforces
 
 `focus_grab_*()` speaks `hyprland-focus-grab-v1`. From the shell go through

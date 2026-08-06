@@ -2,11 +2,24 @@ import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import appService from "../core/AppService"
 import hs from "../core/HyprlandState"
+import { captureWindow } from "../core/WindowCapture"
+import { makeWindowThumbnail, type WindowThumbnail } from "./WindowThumbnail"
 
 export interface SchematicHandle {
     wrapper: Gtk.Widget
     sync: () => void
+    /** Marks every thumbnail stale so the next sync() re-captures. Called when the
+     *  overview opens — captures are one-shot by design (one compositor render
+     *  pass each), so nothing refreshes them while the surface sits open. */
+    refresh: () => void
 }
+
+/**
+ * Below this the capture is unreadable mush and the app icon is doing all the
+ * identifying anyway — so we skip the render pass entirely rather than spend one
+ * per sliver in a heavily tiled workspace.
+ */
+const THUMB_MIN_PX = 24
 
 interface Tile { x: number; y: number; w: number; h: number }
 
@@ -20,7 +33,19 @@ function roundedRect(cr: any, x: number, y: number, w: number, h: number, r: num
     cr.closePath()
 }
 
-export function createSchematicMap(wsId: number, width: number): SchematicHandle {
+export interface SchematicOptions {
+    /**
+     * Capture real window content behind the icons. OFF by default and opt-in per
+     * surface, because a capture is a compositor render pass per window: the app
+     * grid's workspace strip draws the same schematic at ~80px wide, where a
+     * thumbnail is mush and the icon is doing the identifying anyway. Only the
+     * overview, whose cards are big enough to read, asks for them.
+     */
+    thumbnails?: boolean
+}
+
+export function createSchematicMap(wsId: number, width: number, options: SchematicOptions = {}): SchematicHandle {
+    const wantThumbnails = options.thumbnails ?? false
     const initialHeight = Math.round(width * (9 / 16))
 
     // Cairo canvas draws background + tile rectangles at exact pixel coords.
@@ -76,9 +101,80 @@ export function createSchematicMap(wsId: number, width: number): SchematicHandle
         }
     })
 
-    const winWidgets = new Map<string, { box: Gtk.Box; icon: Gtk.Image }>()
+    // lastW/lastH are remembered because a capture lands asynchronously, long after
+    // the sync that sized the tile — and the icon has to be re-laid-out at that
+    // moment, from placeholder to badge.
+    interface WinWidget { box: Gtk.Overlay; icon: Gtk.Image; thumb: WindowThumbnail; lastW: number; lastH: number }
+    const winWidgets = new Map<string, WinWidget>()
+
+    /**
+     * The app icon has TWO jobs and they want different geometry.
+     *
+     * With no thumbnail it is the placeholder: big and centred, carrying the whole
+     * tile. Once real content arrives it becomes a badge parked on the bottom edge
+     * — which is what GNOME, macOS Mission Control and KDE all do, and for the same
+     * reason: at this scale the content identifies the DOCUMENT, not the app. Two
+     * Chrome windows are indistinguishable at 150px; the icon is what tells them
+     * apart. Removing it entirely (the first cut of this) loses that.
+     */
+    const applyIconLayout = (widget: WinWidget, w: number, h: number) => {
+        if (widget.thumb.hasTexture()) {
+            widget.icon.valign = Gtk.Align.END
+            widget.icon.vexpand = false
+            widget.icon.margin_bottom = Math.max(2, Math.round(Math.min(w, h) * 0.06))
+            widget.icon.pixel_size = Math.round(Math.max(16, Math.min(28, Math.min(w, h) * 0.32)))
+            // Below this the badge would cover the content it is annotating.
+            widget.icon.visible = w > 40 && h > 40
+        } else {
+            widget.icon.valign = Gtk.Align.CENTER
+            widget.icon.vexpand = true
+            widget.icon.margin_bottom = 0
+            widget.icon.pixel_size = Math.min(w * 0.7, h * 0.7, 32)
+            widget.icon.visible = w > 12 && h > 12
+        }
+    }
+
+    // Addresses we have already asked the compositor for. A capture costs a render
+    // pass, and sync() runs on every HyprlandState "changed" while the overview is
+    // open — without this, dragging a window would re-capture every window on the
+    // workspace on every motion event.
+    const captured = new Set<string>()
+    let staleAll = true
+
+    const requestThumb = (address: string, widget: WinWidget, w: number, h: number, force: boolean) => {
+        if (!wantThumbnails) return
+        if (w < THUMB_MIN_PX || h < THUMB_MIN_PX) return
+        if (captured.has(address) && !force) return
+        captured.add(address)
+
+        // The capture is sized in DEVICE pixels: asking for the widget size on a
+        // 2x display would hand back a texture at half the resolution GSK then
+        // upscales, which looks softer than the placeholder it replaced.
+        const sf = overlay.get_scale_factor() || 1
+        captureWindow(address, Math.round(w * sf), Math.round(h * sf))
+            .then(texture => {
+                // The window may have closed, or the schematic rebuilt its widgets,
+                // while the capture was in flight.
+                if (winWidgets.get(address) !== widget) return
+                if (!texture) {
+                    // Leave it uncaptured so a later open can retry — a window that
+                    // was mid-close now is not permanently thumbnail-less.
+                    captured.delete(address)
+                    return
+                }
+                widget.thumb.setTexture(texture)
+                widget.box.add_css_class("has-thumb")
+                // Placeholder → badge, now that there is content underneath.
+                applyIconLayout(widget, widget.lastW, widget.lastH)
+            })
+            .catch(e => console.warn(`[Schematic] thumbnail ${address}: ${e}`))
+    }
 
     const sync = () => {
+        // Consumed once per sync so a "changed" storm mid-open does not re-capture
+        // on every event — only the sync that follows the open does.
+        const force = staleAll
+        staleAll = false
         const workspaces = hs.workspaces
         const monitors   = hs.monitors
         const clients    = hs.clients
@@ -121,13 +217,17 @@ export function createSchematicMap(wsId: number, width: number): SchematicHandle
         }))
         canvas.queue_draw()
 
-        // Icon widgets — transparent boxes with centered images
+        // Per-window widgets: the captured thumbnail with the app icon over it.
+        // The icon is NOT a fallback that gets replaced — it is what the tile opens
+        // with, and the texture arrives BEHIND it, so nothing jumps when a capture
+        // lands late (or never).
         const activeAddresses = new Set(wsClients.map((c: any) => c.address))
         winWidgets.forEach((_: any, addr: string) => {
             if (!activeAddresses.has(addr)) {
                 const w = winWidgets.get(addr)
                 if (w) iconFixed.remove(w.box)
                 winWidgets.delete(addr)
+                captured.delete(addr)
             }
         })
 
@@ -145,20 +245,30 @@ export function createSchematicMap(wsId: number, width: number): SchematicHandle
                     hexpand: true,
                     vexpand: true,
                 })
-                const box = new Gtk.Box({
+                const thumb = makeWindowThumbnail()
+                // Overlay, not Box: the thumbnail takes the full tile and the icon
+                // keeps its centered alignment on top of it.
+                const box = new Gtk.Overlay({
                     css_classes: ["wo-schematic-icon"],
                     can_focus: false,
                     focusable: false,
                 })
-                box.append(img)
+                box.set_child(thumb)
+                box.add_overlay(img)
                 iconFixed.put(box, x, y)
-                widget = { box, icon: img }
+                widget = { box, icon: img, thumb, lastW: w, lastH: h }
                 winWidgets.set(c.address, widget)
             } else {
                 iconFixed.move(widget.box, x, y)
             }
 
+            widget.lastW = w
+            widget.lastH = h
             widget.box.set_size_request(w, h)
+            // Same radius the Cairo tile beneath is using, clamped by this tile's
+            // own box so narrow slivers do not round into lozenges.
+            widget.thumb.setRadius(currentRadius)
+            requestThumb(c.address, widget, w, h, force)
 
             // Identity FIRST, icon second. Feeding `c.class` straight to the icon
             // theme makes this surface disagree with the dock about the same
@@ -186,10 +296,13 @@ export function createSchematicMap(wsId: number, width: number): SchematicHandle
                 widget.icon.set_from_icon_name(resolved)
             }
 
-            widget.icon.pixel_size = Math.min(w * 0.7, h * 0.7, 32)
-            widget.icon.visible = w > 12 && h > 12
+            applyIconLayout(widget, w, h)
         })
     }
 
-    return { wrapper: overlay, sync }
+    return {
+        wrapper: overlay,
+        sync,
+        refresh: () => { staleAll = true },
+    }
 }
