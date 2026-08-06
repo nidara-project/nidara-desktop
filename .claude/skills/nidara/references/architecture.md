@@ -112,6 +112,12 @@ easy to get wrong there:
   pass per window per motion event. `SchematicHandle.refresh()` marks stale, the overview calls it on
   `notify::island-mode`, and `sync()` consumes the flag once. Continuous refresh would also be the
   continuous GPU draw the animation budget bans (~40 %, see the agent-glow finding).
+  `refresh()` also **arms** capturing: nothing is captured until a surface says it is opening. The
+  overview lays its cards out once at startup (so the first Super+Tab has content to morph into) and
+  that pass used to fire a capture per window for a surface nobody was looking at — all of which
+  failed with `buffer_constraints`, because the shell was starting, its bar and dock were claiming
+  their exclusive zones, and every tiled window was being resized underneath the session that had
+  just advertised the old size.
 - **The app icon is the placeholder AND the identity mark, and the texture lands BEHIND it** (the
   tile is a `Gtk.Overlay`: thumbnail as child, icon as overlay). So a slow or failed capture leaves
   the tile exactly as it opened — nothing swaps in, nothing jumps. When a texture does arrive the
@@ -122,6 +128,32 @@ easy to get wrong there:
 - **Thumbnails are opt-in per surface** (`SchematicOptions.thumbnails`, default OFF). The app grid
   draws the same schematic for its workspace strip at ~80 px, where a capture is mush and costs a
   render pass for nothing. Only the overview turns them on.
+
+🔴 **Window GEOMETRY is the one piece of window state that no event announces — ask for it, do not
+listen for it (2026-08-06).** Hyprland's IPC has **no resize event, and none for a move inside a
+workspace either**: the whole `socket2` event list (0.56) carries `openwindow`, `closewindow`,
+`movewindow` (a *workspace* change, not a geometric one), `changefloatingmode`, `fullscreen`,
+`windowtitle`… and nothing for x/y/width/height. AstalHyprland therefore re-reads the client list on
+the events it *does* get, and `hs.clients` carries whatever geometry that last read happened to see.
+Two ways it goes wrong, and both were measured, not reasoned:
+
+- **Resize a window** and nothing at all fires — the cache keeps the old size until some unrelated
+  event (a title change is the usual one) re-syncs it by accident. That is why the symptom is
+  intermittent: with a spinner in a terminal the cache self-heals every second, without one it never
+  does.
+- **Close a window in a tiled workspace** and AstalHyprland removes that one client *without*
+  re-reading the rest (`hyprland.vala`, `case "closewindow"`), so every survivor keeps the size it
+  had while the closed window was still taking up room. Measured 2026-08-06: closing a third window
+  left Telegram cached at **858 px** wide when it was really **1722** — a thumbnail squashed into
+  half its width.
+
+**`HyprlandState.readGeometry()`** is the answer: one coalesced `hyprctl clients -j` returning
+`Map<bareAddress, {x,y,width,height}>`, passed into `SchematicHandle.sync(geom)` for that pass only.
+It is deliberately **not** cached state — a snapshot held anywhere would eventually be *older* than
+the cached objects it was meant to correct. `hs.clients` stays the right source for identity (class,
+`initialTitle`) and workspace, which do arrive by event. The overview re-asks on every pass it makes
+while open, and the read has to **land before the captures are requested**: the tile size is what the
+capture is sized to, and a capture is taken once per open.
 
 🔴 **Window addresses do not have one format.** `hyprctl clients` and `ags request listWindows`
 report `"0x555b0a0cad80"`; the AstalHyprland client objects behind `hs.clients` report the same

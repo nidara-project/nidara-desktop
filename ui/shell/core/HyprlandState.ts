@@ -19,7 +19,12 @@ const REFRESH_MIN_INTERVAL_MS = 60
 
 // AstalHyprland reports window addresses with and without the "0x" prefix depending
 // on where they came from — always compare bare (same convention as resolveWindow).
-const bareAddr = (s?: string) => (s ?? "").toLowerCase().replace(/^0x/, "")
+export const bareAddr = (s?: string) => (s ?? "").toLowerCase().replace(/^0x/, "")
+
+/** One window's live rect, in Hyprland (logical, monitor-absolute) coordinates. */
+export interface ClientGeom { x: number; y: number; width: number; height: number }
+/** readGeometry()'s snapshot: BARE address → rect. See readGeometry for why it exists. */
+export type ClientGeometry = Map<string, ClientGeom>
 
 class HyprlandStateClass extends GObject.Object {
     static {
@@ -38,6 +43,7 @@ class HyprlandStateClass extends GObject.Object {
     private _refreshPending = false
     private _lastRefreshUs = 0
     private _lastSig = ""
+    private _geomInFlight: Promise<ClientGeometry> | null = null
 
     // Hyprland announces "no active window" (`activewindow>>,` + `activewindowv2>>`)
     // when one of OUR OWN layer surfaces RELEASES an EXCLUSIVE keyboard grab — the
@@ -662,6 +668,42 @@ class HyprlandStateClass extends GObject.Object {
     async getClientJson(address: string): Promise<any | null> {
         const addr = address.startsWith("0x") ? address : "0x" + address
         return (await this.getClientsJson()).find((c: any) => c.address === addr) ?? null
+    }
+
+    /** Window position and size as of NOW, keyed by BARE address.
+     *
+     *  This is the one part of the window state that no amount of listening can
+     *  keep current: **Hyprland's IPC has no resize event, and none for a move
+     *  within a workspace either** (checked against the whole event list, 0.56 —
+     *  `movewindow` is a workspace change, not a geometric one). So `clients`
+     *  carries whatever x/y/width/height it happened to read at the last event
+     *  that DID re-sync the list — a title change, a window opening, a float
+     *  toggle — and after a plain resize it is simply wrong, with nothing to
+     *  subscribe to that would say so. `closewindow` compounds it: AstalHyprland
+     *  removes the one client and never re-reads, so every survivor of a close in
+     *  a tiled workspace keeps the size it had while the closed window was still
+     *  taking up room.
+     *
+     *  A surface that DRAWS window geometry therefore has to ask for it at the
+     *  moment it draws — `clients` stays the right source for identity (class,
+     *  initialTitle) and workspace, which do arrive by event. Coalesced: the
+     *  overview asks once for all its workspaces, and callers landing in the same
+     *  tick share one hyprctl. Empty map on failure (callers fall back to the
+     *  cached geometry, which is the best that is left). */
+    async readGeometry(): Promise<ClientGeometry> {
+        if (this._geomInFlight) return this._geomInFlight
+        const p = this.getClientsJson().then(list => {
+            if (this._geomInFlight === p) this._geomInFlight = null
+            const map: ClientGeometry = new Map()
+            for (const c of list) {
+                const at = c?.at, size = c?.size
+                if (!Array.isArray(at) || !Array.isArray(size)) continue
+                map.set(bareAddr(c.address), { x: at[0], y: at[1], width: size[0], height: size[1] })
+            }
+            return map
+        })
+        this._geomInFlight = p
+        return p
     }
 
     /** One-shot raw read of ALL workspaces from hyprctl (authoritative: carries the

@@ -2455,29 +2455,36 @@ Neither is a focus-grab quirk as such — they are what the catcher had been hid
 **Do not migrate the dock's own menus.** They are popovers by design (the `#14` glass rows), so they
 are the *other* side of the slot collision, not a candidate.
 
-### 54. The overview's tile geometry is STALE while its capture is FRESH (2026-08-06)
+### 54. ✅ CLOSED — the overview's tile geometry was STALE while its capture was FRESH (2026-08-06)
 
-Real thumbnails landed (`WindowCapture` + `WindowThumbnail`, see `architecture.md`), and they exposed
-a pre-existing bug that the flat schematic tiles hid.
+Real thumbnails landed (`WindowCapture` + `WindowThumbnail`) and exposed a pre-existing bug the flat
+schematic tiles had been hiding: resize a window under tiling and its thumbnail came back
+**squashed**, because the capture reflects reality and the tile it was painted into did not.
 
-**Symptom (owner, in a live session):** resize a window under tiling and its thumbnail comes back
-**squashed**. The capture reflects reality — it is taken from the compositor at request time — but the
-tile it is painted into still has the old width/height, so a texture with the new aspect ratio is
-stretched into a box with the old one.
+**This entry asked which of two causes it was — a stale cache, or a "changed" that never fires. It is
+neither, and both: they have one root, and it is that Hyprland emits NO event for a resize.** Not
+one. The whole `socket2` list (0.56) carries `movewindow` (a *workspace* change), `openwindow`,
+`closewindow`, `changefloatingmode`, `windowtitle`… and nothing geometric. So there was no signal to
+re-sync on, and the cached list held whatever the last unrelated event happened to leave behind.
+Measured, not reasoned: closing a third window on a tiled workspace left Telegram cached at **858 px**
+wide against a real **1722** — `closewindow` is the one window event AstalHyprland handles *without*
+re-reading the rest of the list.
 
-**Where it comes from:** `WorkspaceSchematic.sync()` lays tiles out from `hs.clients`, and those are
-AstalHyprland's **cached** `Client` objects (`HyprlandState.ts`, `this.hl.get_clients()`). The
-authoritative read is `HyprlandState.getClientsJson()` — a one-shot `hyprctl clients -j`, described
-as such in that file. **This is the same lesson the window menu already learned: read window state
-from the JSON, never from the cached object.**
+**Fix:** `HyprlandState.readGeometry()` — a coalesced one-shot `hyprctl clients -j` — handed to
+`SchematicHandle.sync(geom)` for that pass only, and awaited *before* the captures are requested (the
+tile size is what a capture is sized to). Deliberately not cached anywhere; the reasoning, including
+why a stored snapshot would eventually be *worse* than the cache it was meant to correct, is in
+`architecture.md` → "Window GEOMETRY is the one piece of window state that no event announces".
 
-⚠️ **Confirm the mechanism before redesigning anything** — measure a cached `Client`'s
-`width`/`height` against `hyprctl clients -j` for the same address after a resize. It is possible the
-cache is fine and the miss is a "changed" that never fires for a resize; those two have different
-fixes (re-read on sync vs. re-sync on the right signal), and the symptom is identical.
+Fixed alongside it: the overview's startup layout pass was firing a capture per window for a surface
+nobody was looking at, and every one failed with `buffer_constraints` — the shell was starting, its
+bar and dock were claiming their exclusive zones, and those windows were being resized underneath a
+session that had just advertised the old size. `refresh()` now arms capturing, so nothing captures
+until a surface says it is opening.
 
-Not a thumbnail regression: the stale geometry was always there, drawn as a rounded rectangle nobody
-could tell was the wrong size.
+⚠️ **Residual, not worth fixing until something asks for it:** a capture taken *while* a window is
+being resized can still fail with `buffer_constraints`, and the shim does not retry. Nothing in
+flight resizes windows any more; a live switcher would.
 
 ### 55. IDEA (owner, 2026-08-06, NOT a plan): the wallpaper as the workspace backdrop
 

@@ -1,16 +1,29 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import appService from "../core/AppService"
-import hs from "../core/HyprlandState"
+import hs, { bareAddr, type ClientGeometry } from "../core/HyprlandState"
 import { captureWindow } from "../core/WindowCapture"
 import { makeWindowThumbnail, type WindowThumbnail } from "./WindowThumbnail"
 
 export interface SchematicHandle {
     wrapper: Gtk.Widget
-    sync: () => void
-    /** Marks every thumbnail stale so the next sync() re-captures. Called when the
-     *  overview opens — captures are one-shot by design (one compositor render
-     *  pass each), so nothing refreshes them while the surface sits open. */
+    /**
+     * Lay the workspace out again.
+     *
+     * `geom` is an optional FRESH geometry snapshot (`hs.readGeometry()`), used in
+     * preference to the cached client objects for position and size only. Without
+     * it the layout is as good as the last event that re-synced the client list —
+     * which is NOT good enough for a surface that paints real window content into
+     * these tiles, because a resize emits no event at all (see readGeometry). Pass
+     * it wherever the tile is big enough for the error to show; the app grid's 80px
+     * strip is not that place, and one hyprctl per repaint is not free.
+     */
+    sync: (geom?: ClientGeometry) => void
+    /** "The surface is opening": marks every thumbnail stale so the next sync()
+     *  re-captures, and ARMS capturing in the first place. Captures are one-shot by
+     *  design (one compositor render pass each), so nothing refreshes them while the
+     *  surface sits open — and nothing captures at all until a surface says it is
+     *  about to be looked at. */
     refresh: () => void
 }
 
@@ -140,9 +153,17 @@ export function createSchematicMap(wsId: number, width: number, options: Schemat
     // workspace on every motion event.
     const captured = new Set<string>()
     let staleAll = true
+    // Nothing is captured until a surface has said it is opening (refresh()). The
+    // overview lays its cards out once at startup so the first Super+Tab has content
+    // to morph into — and that pass used to fire a capture per window, for a surface
+    // nobody was looking at. Every one of them failed, with reason `buffer_constraints`
+    // and for a reason worth keeping: the shell was starting, its bar and dock were
+    // claiming their exclusive zones, and so every tiled window was being RESIZED
+    // underneath the capture session that had just advertised the old size.
+    let armed = false
 
     const requestThumb = (address: string, widget: WinWidget, w: number, h: number, force: boolean) => {
-        if (!wantThumbnails) return
+        if (!wantThumbnails || !armed) return
         if (w < THUMB_MIN_PX || h < THUMB_MIN_PX) return
         if (captured.has(address) && !force) return
         captured.add(address)
@@ -170,11 +191,17 @@ export function createSchematicMap(wsId: number, width: number, options: Schemat
             .catch(e => console.warn(`[Schematic] thumbnail ${address}: ${e}`))
     }
 
-    const sync = () => {
+    const sync = (geom?: ClientGeometry) => {
         // Consumed once per sync so a "changed" storm mid-open does not re-capture
         // on every event — only the sync that follows the open does.
         const force = staleAll
         staleAll = false
+
+        // Position and size come from the caller's fresh snapshot when there is one.
+        // The cached Client object is the fallback and carries the same four fields,
+        // so this is a straight swap — it is just older, by however long it has been
+        // since an event last re-synced the list (a resize is not one, ever).
+        const rectOf = (c: any) => geom?.get(bareAddr(c.address)) ?? c
         const workspaces = hs.workspaces
         const monitors   = hs.monitors
         const clients    = hs.clients
@@ -209,12 +236,15 @@ export function createSchematicMap(wsId: number, width: number, options: Schemat
         currentRadius = HYPR_ROUNDING * 4 * scale
 
         // Cairo tiles — float coords so all inter-window gaps scale identically
-        currentTiles = wsClients.map((c: any) => ({
-            x: (c.x - monX) * scale,
-            y: (c.y - monY) * scale,
-            w: Math.max(1, c.width  * scale),
-            h: Math.max(1, c.height * scale),
-        }))
+        currentTiles = wsClients.map((c: any) => {
+            const r = rectOf(c)
+            return {
+                x: (r.x - monX) * scale,
+                y: (r.y - monY) * scale,
+                w: Math.max(1, r.width  * scale),
+                h: Math.max(1, r.height * scale),
+            }
+        })
         canvas.queue_draw()
 
         // Per-window widgets: the captured thumbnail with the app icon over it.
@@ -232,10 +262,11 @@ export function createSchematicMap(wsId: number, width: number, options: Schemat
         })
 
         wsClients.forEach((c: any) => {
-            const x = Math.round((c.x - monX) * scale)
-            const y = Math.round((c.y - monY) * scale)
-            const w = Math.max(2, Math.round(c.width  * scale))
-            const h = Math.max(2, Math.round(c.height * scale))
+            const r = rectOf(c)
+            const x = Math.round((r.x - monX) * scale)
+            const y = Math.round((r.y - monY) * scale)
+            const w = Math.max(2, Math.round(r.width  * scale))
+            const h = Math.max(2, Math.round(r.height * scale))
 
             let widget = winWidgets.get(c.address)
             if (!widget) {
@@ -303,6 +334,6 @@ export function createSchematicMap(wsId: number, width: number, options: Schemat
     return {
         wrapper: overlay,
         sync,
-        refresh: () => { staleAll = true },
+        refresh: () => { armed = true; staleAll = true },
     }
 }

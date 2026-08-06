@@ -5,7 +5,7 @@ import SquircleContainer from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/tokens"
 import { t } from "../../core/i18n"
 import { createSchematicMap } from "../../common/WorkspaceSchematic"
-import hs from "../../core/HyprlandState"
+import hs, { type ClientGeometry } from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
 import { warmUp as warmUpCapture } from "../../core/WindowCapture"
@@ -53,7 +53,7 @@ export default function WorkspaceOverview() {
         valign: Gtk.Align.CENTER
     })
 
-    const slots = new Map<number, { itemBox: Gtk.Box, label: Gtk.Label, count: Gtk.Label, schematic: () => void, refreshThumbs: () => void }>()
+    const slots = new Map<number, { itemBox: Gtk.Box, label: Gtk.Label, count: Gtk.Label, schematic: (geom?: ClientGeometry) => void, refreshThumbs: () => void }>()
 
     // Keyboard-focused slot (1..WS_COUNT), -1 = keyboard nav idle. Set on open to
     // the active workspace; moved by ←/→; committed by Enter. Purely a visual
@@ -111,7 +111,7 @@ export default function WorkspaceOverview() {
         list.attach(btn, col, row, 1, 1)
     }
 
-    const syncAll = () => {
+    const syncAll = (geom?: ClientGeometry) => {
         try {
             const focusedId = hs.focusedWorkspace?.id || 1
             // One pass over the client list instead of a filter per slot.
@@ -129,11 +129,27 @@ export default function WorkspaceOverview() {
                 const n = countByWs.get(i) ?? 0
                 ctx.count.label = n === 0 ? t("overview.empty") : (n === 1 ? `1 ${t("overview.window")}` : `${n} ${t("overview.windows")}`)
 
-                ctx.schematic()
+                ctx.schematic(geom)
             })
         } catch (e) {
             console.error(`[WO-Error] syncAll failed: ${e}`)
         }
+    }
+
+    /**
+     * The overview is the one surface whose tiles are big enough to be caught out
+     * by geometry that is a few events old — and, since the tiles now hold real
+     * captures, the one where being caught out means a squashed picture rather than
+     * a rectangle nobody could measure by eye. Hyprland announces no resize and no
+     * in-workspace move (`hs.readGeometry` has the full reasoning), so the layout is
+     * re-asked for here, on every pass, instead of trusted from the cached list.
+     *
+     * It has to land BEFORE the captures are requested, not alongside them: the tile
+     * size is what the capture is sized to, and a capture is taken once per open.
+     * One hyprctl per pass, only while the overview is open.
+     */
+    const syncAllFresh = () => {
+        hs.readGeometry().then(geom => { if (isOpen()) syncAll(geom) })
     }
 
 
@@ -143,7 +159,7 @@ export default function WorkspaceOverview() {
     // window each event (a real cost when "changed" storms — see tech-debt #11). The
     // overview is re-synced on open via notify::island-mode below.
     const isOpen = () => status.island_mode === ISLAND_OVERVIEW
-    const changedId = hs.connect("changed", () => { if (isOpen()) syncAll() })
+    const changedId = hs.connect("changed", () => { if (isOpen()) syncAllFresh() })
 
     status.connect("notify::island-mode", () => {
         if (!isOpen()) return
@@ -151,7 +167,7 @@ export default function WorkspaceOverview() {
         // sits there: each capture is a compositor render pass, and re-running them
         // on a timer is exactly the continuous GPU draw the animation budget bans.
         slots.forEach(ctx => ctx.refreshThumbs())
-        syncAll()
+        syncAllFresh()
     })
 
     windowContent.connect("unrealize", () => {
