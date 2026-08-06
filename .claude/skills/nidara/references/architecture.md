@@ -156,6 +156,26 @@ grid strip:
   captures: the ban is on downloading a GPU **texture** back to the CPU per draw. A pixbuf is already
   CPU-side, and the schematic's backdrop shares the canvas that paints the tiles.
 
+🔴 **The overview's card size is solved from the MONITOR, never hardcoded (2026-08-06).** It used to
+be a flat 300px preview — which made the panel a flat 1798px: only 70 % of a 2560 screen, and *wider
+than a 1600px laptop*, where it would simply have overflowed. `previewWidthFor(gdkmonitor)` in
+`WorkspaceOverview.tsx` solves `2·margin + 2·pad + (n−1)·gap + n·(preview + chrome) = monitorWidth`
+so the panel lands `WO_EDGE_MARGIN` (8px) from each edge. It stays a floating glass panel — this is
+deliberately *not* a full-bleed Mission Control mode (user, 2026-08-04).
+
+- The monitor comes down the constructor chain — `Bar(gdkmonitor)` → `ActivityIsland(gdkmonitor)` →
+  `WorkspaceOverview(gdkmonitor)` — because the bar and its island are already built **once per
+  monitor** (`createUI` in `app.ts`). Use `Gdk.Monitor.get_geometry()`: logical px, the same space
+  the panel is laid out in.
+- 🔑 `WO_PANEL_PAD` / `WO_GRID_GAP` / `WO_CARD_CHROME` **mirror `styles/_workspace.scss`**, and that
+  file carries a comment pointing back — the same contract as `RADIUS` ↔ `--nidara-radius-*` (see
+  design-system.md), and for the same reason: a layout computed in JS cannot read a CSS padding.
+  Move them together. Drift is benign (the panel stops meeting its own margin) but silent.
+- ⚠️ **The win is not uniform, so do not sell it as a scale factor**: 2560 → preview 449 (panel 2543),
+  but 1920 → 321, barely above the old 300. Wide screens are where it pays; on a 1080p laptop the
+  point is that it now *fits*. Verified against the real widget tree with an offscreen GTK probe
+  (Broadway backend, real `style.css`) at 1366/1920/2560/3840 — all land at 8.5px per side.
+
 🔴 **Window GEOMETRY is the one piece of window state that no event announces — ask for it, do not
 listen for it (2026-08-06).** Hyprland's IPC has **no resize event, and none for a move inside a
 workspace either**: the whole `socket2` event list (0.56) carries `openwindow`, `closewindow`,

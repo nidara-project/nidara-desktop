@@ -154,7 +154,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // stacked into a visible seam. The bar still owns the capsule's geometry (the
   // row below) — it just hands the widget over.
   const islandWin = IslandWindow(gdkmonitor)
-  const island = ActivityIsland()
+  const island = ActivityIsland(gdkmonitor)
   // Invisible below-bar button — dismisses any open overlay on outside click.
   // It deliberately does NOT cover the bar strip (margin_top set with the panel
   // geometry below): capsule clicks must reach the capsules so switching

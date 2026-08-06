@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import { Gtk, Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import SquircleContainer from "../../common/SquircleContainer"
 import { MorphRevealer, MorphGlass, MorphPair } from "../../common/MorphRevealer"
@@ -137,7 +137,11 @@ const CHIP_W = 32
  *  see the row's comment. */
 const CHIP_GAP = 8
 
-export function ActivityIsland() {
+/** `gdkmonitor` is the monitor this bar (and therefore this island) lives on.
+ *  Only the overview needs it today — its cards are sized as a fraction of the
+ *  screen rather than to a constant — but it is the island's own monitor, so it
+ *  belongs on the island's signature rather than being fetched from anywhere. */
+export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     // ── Compact state: one page per activity, in a morphing stack ────────────
     // The workspace dots are an activity too (priority 0, always live — see
     // IslandActivities' dotsActivity), so there is no separate dots page and no
@@ -427,7 +431,7 @@ export function ActivityIsland() {
 
     registerMode({
         id: ISLAND_OVERVIEW,
-        widget: WorkspaceOverview(),
+        widget: WorkspaceOverview(gdkmonitor),
         glass: () => ({ alpha: Theme.overlayOpacity, color: chromeGlassColor(), border: WO_GLASS.border, n: WO_GLASS.n, radius: WO_GLASS.radius }),
         needsKeyboard: true,
     })

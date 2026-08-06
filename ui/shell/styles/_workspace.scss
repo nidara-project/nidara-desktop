@@ -10,7 +10,13 @@
     // grow+fade, common/ScaleRevealer.ts) — no CSS opacity transition here.
 }
 
-/* --- Overview Panel --- */
+/* --- Overview Panel ---
+   🔑 This padding and .wo-item's below are MIRRORED as numbers in
+   surfaces/overview/WorkspaceOverview.tsx (WO_PANEL_PAD / WO_CARD_CHROME): the
+   card size is solved from the MONITOR WIDTH so the panel lands 8px from each
+   edge, and a layout computed in JS cannot read a CSS padding (same contract as
+   lib/tokens.ts and the radius ladder). Change either one and change both, or the
+   panel quietly stops meeting its own margin. */
 .workspace-overview {
     background: transparent;
     border: none;
@@ -20,6 +26,7 @@
 
 /* --- Workspace Items --- */
 .wo-item {
+    /* padding + the 1px border below = WO_CARD_CHROME (34) in WorkspaceOverview.tsx */
     padding: $space-4;
     border-radius: $nidara-radius-lg;
     background-color: var(--nidara-surface-back);

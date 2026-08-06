@@ -10,14 +10,64 @@ import { safeDisconnect } from "../../core/signals"
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
 import { warmUp as warmUpCapture } from "../../core/WindowCapture"
 
-const WO_PREVIEW_WIDTH = 300
+/**
+ * How close the panel comes to the screen edge. The overview stays a floating
+ * glass panel — this is NOT a full-bleed Mission Control mode — but it is the one
+ * surface whose whole job is to show you every window at once, so it takes
+ * essentially the whole width and leaves a hairline of wallpaper on each side.
+ */
+const WO_EDGE_MARGIN = 8
+
+/**
+ * Chrome around the previews, in px. 🔑 These MIRROR `styles/_workspace.scss` and
+ * the grid below, for the same reason `lib/tokens.ts` mirrors the radius ladder:
+ * a layout computed in JS cannot read a CSS padding. `_workspace.scss` carries a
+ * comment pointing back here — **move them together**. If they ever drift the
+ * panel simply stops landing exactly `WO_EDGE_MARGIN` from the edge; nothing
+ * breaks, but the intent is lost.
+ */
+const WO_PANEL_PAD   = 32  // .workspace-overview padding ($space-8)
+const WO_GRID_GAP    = 16  // `list` column_spacing
+const WO_CARD_CHROME = 34  // .wo-item: 2×$space-4 padding + 2×1px border
+
+/** Below this a card is unreadable whatever the screen — a floor, not a target.
+ *  Reaching it needs a monitor under ~900px wide, where the panel is the least
+ *  of anyone's problems. */
+const WO_PREVIEW_MIN = 120
+
+/**
+ * Card size comes FROM THE MONITOR, never from a constant.
+ *
+ * The previews used to be a hardcoded 300px, which made the panel a hardcoded
+ * 1798px: 70% of a 2560 screen (so the thumbnails were smaller than they needed
+ * to be), and WIDER THAN a 1600px laptop, where it would simply have overflowed.
+ * A capture you cannot read is a render pass spent for nothing, so the size is
+ * the feature — but the right size is a fraction of the screen, not a number.
+ *
+ * Solving `2·margin + 2·pad + (n−1)·gap + n·(preview + chrome) = monitorWidth`
+ * for `preview`. Measured against the real widget tree (offscreen GTK probe,
+ * 2026-08-06): 2560 → 449, panel 2543, 8px of wallpaper each side.
+ *
+ * ⚠️ The gain is NOT uniform: on a 1920 laptop the same formula gives 321, barely
+ * above the old 300. Wide screens are where this pays.
+ */
+function previewWidthFor(gdkmonitor: Gdk.Monitor): number {
+    // Logical pixels — GTK has already divided by the scale factor, which is the
+    // same space the panel is laid out in.
+    const monW = gdkmonitor.get_geometry().width
+    const chrome = 2 * WO_EDGE_MARGIN + 2 * WO_PANEL_PAD
+        + (WS_COUNT - 1) * WO_GRID_GAP + WS_COUNT * WO_CARD_CHROME
+    return Math.max(WO_PREVIEW_MIN, Math.floor((monW - chrome) / WS_COUNT))
+}
 
 // Glass recipe for the island container — exported so the bar's MorphRevealer
 // paints its interpolated Cairo clone with the exact same params and the
 // handoff at the morph's endpoints is pixel-perfect (see MorphRevealer.ts).
 export const WO_GLASS = { radius: RADIUS.xl, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
 
-export default function WorkspaceOverview() {
+export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
+    const previewWidth = previewWidthFor(gdkmonitor)
+
     const overview = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 32,
@@ -47,8 +97,8 @@ export default function WorkspaceOverview() {
     windowContent.append(overviewSquircle)
 
     const list = new Gtk.Grid({
-        column_spacing: 16,
-        row_spacing: 16,
+        column_spacing: WO_GRID_GAP,
+        row_spacing: WO_GRID_GAP,
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.CENTER
     })
@@ -77,7 +127,7 @@ export default function WorkspaceOverview() {
     const cardDots: Gtk.Widget[] = []
 
     for (let i = 1; i <= WS_COUNT; i++) {
-        const schematic = createSchematicMap(i, WO_PREVIEW_WIDTH, { thumbnails: true })
+        const schematic = createSchematicMap(i, previewWidth, { thumbnails: true })
         const dot = makeWorkspaceDot(i)
         dot.halign = Gtk.Align.CENTER
         dot.margin_bottom = 2
@@ -96,7 +146,11 @@ export default function WorkspaceOverview() {
             orientation: Gtk.Orientation.VERTICAL,
             spacing: 12,
             css_classes: ["wo-item"],
-            width_request: WO_PREVIEW_WIDTH + 24,
+            // The card's own chrome, not a guess: this used to ask for +24 while
+            // the CSS actually adds 34, so the request was dead — the natural
+            // width always won. Asking for the true figure keeps the request and
+            // the layout describing the same card.
+            width_request: previewWidth + WO_CARD_CHROME,
             hexpand: false
         })
         itemBox.append(header); itemBox.append(schematic.wrapper)
