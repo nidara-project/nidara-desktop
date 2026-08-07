@@ -750,3 +750,73 @@ button.settings-icon-btn {
         font-size: $fs-small;       // fixed px ramp — chrome must NOT reflow with the font picker
     }
 }
+
+/* ── Cross-window pieces, moved out of _control-center.scss (2026-08-07) ──────
+   These three lived there because that is where they were first needed, and they
+   worked everywhere only because that sheet was unscoped. They are rendered by
+   SHARED components and by Settings pages, so scoping the CC to the bar's window
+   would have silently unstyled them outside it. The kit is where a class used by
+   more than one window belongs. */
+
+/* The native Gtk.Scale trough inside a CC atomic — and inside Settings, which
+   reuses the same control (SettingsHelpers, Appearance, Audio) and AvatarCropper. */
+.cc-atomic-scale-native {
+    background: transparent;
+}
+
+/* 1×2 capsule slider (volume/brightness): % overlaid on top, icon at the bottom.
+   Both sit over the track/fill, so a soft shadow keeps them legible either way.
+   Painted by the one slider component, common/Slider.ts — every window. */
+.slider-fill-value {
+    font-size: $fs-small;
+    font-weight: $fw-bold;
+    font-variant-numeric: tabular-nums;
+    color: var(--nidara-text);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+/* Shared round glass icon button (see common/IconButton.ts). Single source of
+   truth for close/remove/collapse controls. Size is set inline per use; shape/icon/hover
+   are identical everywhere. NB: named -circle- to avoid the existing .nidara-icon-btn
+   in _settings.scss (the sidebar toggle), whose `button.` specificity would win. */
+.nidara-circle-btn {
+    /* Padding (not set_size_request) sizes the button to its glyph — crisp icon, circle
+       centred on it (same approach as the Settings close button). */
+    padding: 4px;
+    min-width: 0;
+    min-height: 0;
+    /* Same fill as the count badge (nc-badge-header): simple, unified, no special tokens. */
+    background: var(--nidara-surface-raised);
+    border: none;
+    border-radius: var(--nidara-radius-pill);
+    transition: background-color 0.15s #{$ease};
+
+    image { margin: 0; }
+
+    /* Neutral hover (e.g. the collapse chevron): brighter fill — no border (it left corner dots). */
+    &:hover { background: var(--nidara-surface-strong); }
+}
+
+/* Time spin buttons — Settings (Night Light schedule) AND the CC's night-light
+   widget (widgets/night-light.ts) render the same control in two windows.
+   Moved out of _settings.scss on 2026-08-07 when that sheet was scoped. */
+spinbutton.time-spin {
+    background: var(--nidara-surface);
+    border: 1px solid var(--nidara-border);
+    border-radius: var(--nidara-radius-sm);
+    box-shadow: none;
+    min-height: 32px;
+
+    text { min-width: 28px; }
+
+    button {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        min-width: 18px;
+        padding: 0;
+        color: var(--nidara-text-dim);
+
+        &:hover { color: var(--nidara-text); background: var(--nidara-surface-hover); }
+    }
+}

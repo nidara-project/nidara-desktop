@@ -2,125 +2,141 @@
 
 /* ==========================================================================
    WORKSPACE COCKPIT
-   ========================================================================== */
+   ==========================================================================
 
-.cockpit-window-content {
-    background: transparent;
-    // Show/hide animation comes from the bar's ScaleRevealer wrapper (GTK-side
-    // grow+fade, common/ScaleRevealer.ts) — no CSS opacity transition here.
-}
+   ⚠️ THIS FILE HAS TWO SCOPES, and the split is not cosmetic. The schematic is
+   drawn by `common/WorkspaceSchematic.ts`, which has TWO callers in TWO
+   different windows: the overview (an island mode → `#nidara-island`) and the
+   app grid's workspace strip (mounted in the DOCK's window → `#nidara-dock`;
+   there is no separate app-launcher window). Everything else here is the
+   overview's own furniture and belongs to the island alone.
 
-/* --- Overview Panel ---
-   🔑 NO PADDING HERE, AND THAT IS DELIBERATE — do not "restore" it. The overview's
-   card size is SOLVED from the monitor width so the panel lands 8px from each
-   screen edge (previewWidthFor in surfaces/overview/WorkspaceOverview.tsx), and a
-   layout computed in JS cannot read a CSS padding. Declaring it here would mean
-   duplicating it there, and a mirror drifts silently. So this file owns what CSS
-   is uniquely good at — fill, border, radius, states — and the spacing is applied
-   as GTK margins from the one place that also does the arithmetic. */
-.workspace-overview {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-}
+   So: put a `.wo-schematic-*` rule in the SHARED block, anything else in the
+   overview block. A schematic rule left in the island block silently stops
+   painting in the app grid — nothing errors, the strip just goes flat. */
 
-/* --- Workspace Items ---
-   Inset comes from WO_CARD_PAD (a margin on the inner box); the border width
-   below is the one number the arithmetic still reads from CSS, as WO_CARD_BORDER. */
-.wo-item {
-    border-radius: $nidara-radius-lg;
-    background-color: var(--nidara-surface-back);
-    border: 1px solid var(--nidara-border);
-    transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
+/* --- Shared: the schematic itself (island overview + app grid strip) ------ */
+#nidara-island, .nidara-island-window,
+#nidara-dock, .nidara-dock-window {
+    /* Cairo canvas reads 'color' to get the tile fill color */
+    .wo-schematic-canvas {
+        color: var(--nidara-surface);
+    }
 
-/* Cairo canvas reads 'color' to get the tile fill color */
-.wo-schematic-canvas {
-    color: var(--nidara-surface);
-}
+    /* Transparent overlay for icons only */
+    .wo-schematic-icons,
+    .wo-schematic-icon {
+        background: transparent;
+    }
 
-/* Transparent overlay for icons only */
-.wo-schematic-icons,
-.wo-schematic-icon {
-    background: transparent;
-}
-
-/* The app icon is BOTH the placeholder and the identity mark: the captured
-   texture lands behind it (common/WindowThumbnail.ts), so a slow or failed
-   capture leaves the tile exactly as it opened — nothing swaps, nothing jumps.
-   Once a texture lands the icon does NOT disappear, it shrinks to a badge on the
-   bottom edge (geometry in applyIconLayout): at this scale the content says which
-   DOCUMENT a tile is, and only the icon says which APP. Same call GNOME, macOS
-   Mission Control and KDE all make. */
-.wo-schematic-icon.has-thumb image {
-    /* The badge sits over arbitrary window content — light UIs, photos, video —
-       so it needs its own contrast floor rather than trusting the backdrop. */
-    -gtk-icon-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-}
-
-.wo-label {
-    font-size: $fs-subtitle;
-    font-weight: $fw-semibold;
-    color: var(--nidara-text);
-    transition: color 0.2s ease;
-
-    // NB: this file used Adwaita NAMED colors (@accent_bg_color) — they resolve
-    // to Adwaita's blue, never the user's accent token. Migrated to --nidara-*.
-    // Active state is shown by .wo-item.active (accent bg + border) — the label
-    // stays theme-coloured for legibility (never accent on text).
-    &.active {
-        color: var(--nidara-text);
+    /* The app icon is BOTH the placeholder and the identity mark: the captured
+       texture lands behind it (common/WindowThumbnail.ts), so a slow or failed
+       capture leaves the tile exactly as it opened — nothing swaps, nothing jumps.
+       Once a texture lands the icon does NOT disappear, it shrinks to a badge on the
+       bottom edge (geometry in applyIconLayout): at this scale the content says which
+       DOCUMENT a tile is, and only the icon says which APP. Same call GNOME, macOS
+       Mission Control and KDE all make. */
+    .wo-schematic-icon.has-thumb image {
+        /* The badge sits over arbitrary window content — light UIs, photos, video —
+           so it needs its own contrast floor rather than trusting the backdrop. */
+        -gtk-icon-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
     }
 }
 
-.wo-count {
-    font-size: $fs-caption;
-    font-weight: $fw-medium;
-    color: var(--nidara-text-dim);
-    margin-bottom: 8px;
-}
+/* --- Overview only: the panel and its cards (island window) -------------- */
+#nidara-island, .nidara-island-window {
+    .cockpit-window-content {
+        background: transparent;
+        // Show/hide animation comes from the bar's ScaleRevealer wrapper (GTK-side
+        // grow+fade, common/ScaleRevealer.ts) — no CSS opacity transition here.
+    }
 
-.wo-schematic-win {
-    background-color: var(--nidara-surface);
-}
-
-.wo-item.active {
-    background-color: rgba(var(--nidara-accent-rgb), 0.05);
-    border: 1px solid rgba(var(--nidara-accent-rgb), 0.6);
-}
-
-/* Keyboard cursor (←/→ navigation): stronger accent tint + solid accent border,
-   matching the app grid's .ws-strip-item.keyboard-focus language (no box-shadow
-   ring) so both overviews signal the keyboard cursor the same way. Layers over
-   .active (source-order wins at equal specificity) → the current ws reads as the
-   stronger, focused variant. */
-.wo-item.keyboard-focus {
-    background-color: rgba(var(--nidara-accent-rgb), 0.15);
-    border-color: var(--nidara-accent);
-}
-
-/* (.bar-ws-dot deleted — orphaned; the live bar dots are .workspace-dot in _bar.scss) */
-
-/* --- Buttons --- */
-.wo-btn {
-    @include nidara-reset;
-    padding: 0;
-    border-radius: $nidara-radius-lg;
-
-    &:focus,
-    &:active {
-        outline: none;
-        box-shadow: none;
+    /* --- Overview Panel ---
+       🔑 NO PADDING HERE, AND THAT IS DELIBERATE — do not "restore" it. The overview's
+       card size is SOLVED from the monitor width so the panel lands 8px from each
+       screen edge (previewWidthFor in surfaces/overview/WorkspaceOverview.tsx), and a
+       layout computed in JS cannot read a CSS padding. Declaring it here would mean
+       duplicating it there, and a mirror drifts silently. So this file owns what CSS
+       is uniquely good at — fill, border, radius, states — and the spacing is applied
+       as GTK margins from the one place that also does the arithmetic. */
+    .workspace-overview {
+        background: transparent;
         border: none;
+        box-shadow: none;
     }
 
-    &:hover .wo-item {
+    /* --- Workspace Items ---
+       Inset comes from WO_CARD_PAD (a margin on the inner box); the border width
+       below is the one number the arithmetic still reads from CSS, as WO_CARD_BORDER. */
+    .wo-item {
+        border-radius: $nidara-radius-lg;
         background-color: var(--nidara-surface-back);
-        border-color: var(--nidara-surface-hover);
+        border: 1px solid var(--nidara-border);
+        transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
 
+    .wo-label {
+        font-size: $fs-subtitle;
+        font-weight: $fw-semibold;
+        color: var(--nidara-text);
+        transition: color 0.2s ease;
+
+        // NB: this file used Adwaita NAMED colors (@accent_bg_color) — they resolve
+        // to Adwaita's blue, never the user's accent token. Migrated to --nidara-*.
+        // Active state is shown by .wo-item.active (accent bg + border) — the label
+        // stays theme-coloured for legibility (never accent on text).
         &.active {
-            background-color: rgba(var(--nidara-accent-rgb), 0.08);
-            border-color: rgba(var(--nidara-accent-rgb), 0.8);
+            color: var(--nidara-text);
+        }
+    }
+
+    .wo-count {
+        font-size: $fs-caption;
+        font-weight: $fw-medium;
+        color: var(--nidara-text-dim);
+        margin-bottom: 8px;
+    }
+
+    .wo-item.active {
+        background-color: rgba(var(--nidara-accent-rgb), 0.05);
+        border: 1px solid rgba(var(--nidara-accent-rgb), 0.6);
+    }
+
+    /* Keyboard cursor (←/→ navigation): stronger accent tint + solid accent border,
+       matching the app grid's .ws-strip-item.keyboard-focus language (no box-shadow
+       ring) so both overviews signal the keyboard cursor the same way. Layers over
+       .active (source-order wins at equal specificity) → the current ws reads as the
+       stronger, focused variant. */
+    .wo-item.keyboard-focus {
+        background-color: rgba(var(--nidara-accent-rgb), 0.15);
+        border-color: var(--nidara-accent);
+    }
+
+    /* (.bar-ws-dot deleted — orphaned; the live bar dots are .workspace-dot in _bar.scss)
+       (.wo-schematic-win deleted 2026-08-07 — orphaned; no widget has ever carried
+        that class, verified against every `wo-*` string in the source.) */
+
+    /* --- Buttons --- */
+    .wo-btn {
+        @include nidara-reset;
+        padding: 0;
+        border-radius: $nidara-radius-lg;
+
+        &:focus,
+        &:active {
+            outline: none;
+            box-shadow: none;
+            border: none;
+        }
+
+        &:hover .wo-item {
+            background-color: var(--nidara-surface-back);
+            border-color: var(--nidara-surface-hover);
+
+            &.active {
+                background-color: rgba(var(--nidara-accent-rgb), 0.08);
+                border-color: rgba(var(--nidara-accent-rgb), 0.8);
+            }
         }
     }
 }

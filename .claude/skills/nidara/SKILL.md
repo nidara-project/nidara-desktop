@@ -32,7 +32,11 @@ Each has its own `app.ts`, its own `package.json`, its own `ags bundle` invocati
 These are non-negotiable. Violating them produces bugs that are hard to debug because the symptoms don't point at the cause.
 
 1. **Never use `Adw.OverlaySplitView` in Settings** — use `NidaraSplitView` from `ui/lib/nidara-kit/`. Adw's version breaks capsule margins.
-2. **Never write unscoped global CSS** — every widget's CSS goes inside `window#name { … }`.
+2. **Never write unscoped global CSS** — a surface's CSS goes inside its window's selector
+   (`#nidara-bar, .nidara-bar-window` / `#nidara-island …` / `#nidara-dock …` /
+   `window.nidara-settings-window`). The design system's global layer is the sole exception:
+   `_base.scss` tokens, `_components.scss`'s shared kit, `_reset.scss`, `@keyframes`. Scope table and
+   the two traps in `references/design-system.md`.
 3. **Kill zombies before debugging.** A stuck terminal or "styles won't refresh" almost always means a zombie GJS is still drawing the dead UI. Run `killall gjs` before changing code in a loop.
 4. **`core/` never touches the UI.** All visibility changes flow through `Status.ts`. Widgets never flip each other directly.
 5. **Overlays live inside the Bar's window** via `Gtk.Overlay`, not in their own windows. This avoids Hyprland layer conflicts; that's why show/hide animations are GTK-side (`common/ScaleRevealer.ts`). **ONE documented exception: the Activity Island** (`surfaces/island/IslandWindow.ts`) — compact capsule AND expanded modes — which needs its own OVERLAY-level surface because a surface cannot blur its own siblings. Move the whole thing or nothing: splitting the capsule from its modes across two surfaces breaks `compute_bounds` and makes their blurs stack into a seam mid-morph. See `architecture.md`. Don't take it as licence: the exception exists only because compositor blur is physically unreachable otherwise.

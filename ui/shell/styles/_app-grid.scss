@@ -4,10 +4,15 @@
    APP GRID — Launchpad Style
    ========================================================================== */
 
-/* ── Window ── */
-window#nidara-app-launcher {
-    @include nidara-reset;
-}
+/* ── Window ──
+   ⚠️ The app grid has NO window of its own: the panel is a child of the DOCK's
+   window (`AppGridPanel` mounted from `DockCore.tsx`). The
+   `window#nidara-app-launcher { @include nidara-reset; }` block that used to sit
+   here was DEAD — no widget has ever carried that name — and the reset it wanted
+   is already applied to `#nidara-dock` in `_dock.scss`. Deleted 2026-08-07.
+
+   The rules below are still UNSCOPED; scoping them to `#nidara-dock` is the
+   remaining half of tech-debt §56. */
 
 /* ── Search bar ── */
 .app-grid-search-box {

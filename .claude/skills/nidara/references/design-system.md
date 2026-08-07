@@ -1607,7 +1607,30 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
 4. **Use `@mixin glass($level)`** (surface / raised / floating) instead of repeating ~20 glass blocks. *Currently underused — only 2 call sites; migrating the rest is open work (see `tech-debt.md`).*
 5. **`background-clip: padding-box` + `border: Npx solid transparent`** for "visual thickness ≠ real thickness" (avoids negative margins that break `GtkGizmo`).
 6. **No `transform: scale` or `transform: translate` on interactive widgets.** GTK respects them but they break hit-testing. Use `margin`, scale inside Cairo, or — for transient show/hide animations — a snapshot-time transform that ends at identity (see `ScaleRevealer` above). *(CSS transforms currently clean: 0 occurrences. Don't reintroduce them.)*
-7. **All component CSS wrapped in `window#name { … }`** — never global unscoped.
+7. **All SURFACE CSS wrapped in its window's selector** — never global unscoped. The exception is
+   deliberate and narrow: `_base.scss` (tokens on `*`, which must inherit into every window and
+   popover) and `_components.scss` (the shared widget kit — `entry`, `.nidara-*` — used by all of
+   them) are the design system's GLOBAL layer, plus `_reset.scss`'s neutralization and any
+   `@keyframes` (not scopable in CSS at all). Everything else names a window. Both spellings are in
+   use because both are set in TSX — id **and** class, and they differ:
+
+   | Window | Scope selector |
+   |---|---|
+   | Bar (+ CC, NC, Prism, system menu — commandment 5) | `#nidara-bar, .nidara-bar-window` |
+   | Activity Island (+ workspace overview) | `#nidara-island, .nidara-island-window` |
+   | Dock (**+ the app grid** — it has no window of its own) | `#nidara-dock, .nidara-dock-window` |
+   | Settings | `window.nidara-settings-window` |
+
+   ⚠️ **A shared widget spans scopes and must list them all.** `common/WorkspaceSchematic.ts` renders
+   into the island (overview) *and* the dock (app grid strip), so `_workspace.scss` carries two
+   blocks. Put a `.wo-schematic-*` rule in the island-only block and it silently stops painting in
+   the app grid — nothing errors, the strip just goes flat.
+
+   ⚠️ **Scoping changes what an unrooted widget resolves.** A probe that builds a widget outside a
+   matching window gets NO styling and reads 0 for everything, with no error. That is why
+   `scripts/dev/gtk-probe.js` takes `SCOPE=settings|bar|island|dock` — measured proof it matters: the
+   same dropdown row is 29px in the Settings window (which re-anchors control text to the relative
+   `$fse-*` ramp) and 28px in any other.
 
 ## When you're tempted to invent a new pattern
 

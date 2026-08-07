@@ -2501,19 +2501,47 @@ in use, dimmed by `WP_SCRIM` and clipped to a proportional rounded rect. Mechani
   Cairo `draw_func`, not an animation.
 - Because it costs nothing *per surface*, it is deliberately **not opt-in** the way captures are.
 
-### 56. `_workspace.scss` (and 5 other partials) are UNSCOPED — commandment 2 is only two-thirds kept
+### 56. ⚠️ PARTLY DONE (2026-08-07) — unscoped partials; commandment 2 was never two-thirds kept
 
-Found 2026-08-06 while checking whether the overview's layout could read its padding from GTK. The
-compiled `style.css` has `.wo-item`, `.wo-label` etc. as **global** rules. Scoped: `_agent-pointer`,
-`_app-grid`, `_bar`, `_dock`. Not scoped: `_base`, `_components`, `_control-center`, `_prism`,
-`_settings`, `_workspace`.
+**Done:** `_control-center` and `_prism` → the bar's window; `_settings` → its own; `_workspace` →
+**split across two** windows (see below). Plus three DEAD selectors deleted and the probe taught to
+pick a scope. **Left:** `_app-grid` (most of it) and the ~10 top-level rules that leak out of
+`_bar.scss` / `_dock.scss` — both need `#nidara-dock, .nidara-dock-window`.
 
-Not urgent — the class names are distinctive enough that nothing is currently colliding — but it is a
-real violation of commandment 2, and the failure mode it invites is a rule leaking into the greeter
-or lockscreen sheets, which are separate bundles that load their own CSS.
+**The original entry was wrong on three counts, and the corrections are the useful part:**
 
-⚠️ **Whoever fixes it should know what it silently changes**: CSS resolves on an unrooted widget
-today *because* these rules are global. Any code that reads a styled value from a widget before it is
-in a tree (`get_style_context().get_padding()` on a probe) starts returning 0 the moment the rule is
-scoped. The overview deliberately does not depend on that read — see `architecture.md` — but a future
-caller might.
+1. **Two of the six named files must STAY global, and are not debt.** `_base.scss` declares tokens on
+   `*` — scoping breaks custom-property inheritance into every other window and popover.
+   `_components.scss` is the shared widget kit (`entry`, `.nidara-*`) used by every shell window;
+   scoping means duplicating it per window name. Same for `_reset.scss` and any `@keyframes` (not
+   scopable in CSS at all). Commandment 2 now says so explicitly — it read as violated in six files,
+   which teaches an agent to ignore one of the ten rules.
+2. **The stated failure mode cannot happen.** It claimed a rule could leak "into the greeter or
+   lockscreen sheets". `ui/greeter/style.scss` has **zero** `@use`/`@import` — it is standalone, and
+   the lockscreen compiles that same file. No path exists. The real (and only preventive) risk is
+   collision *between shell surfaces*.
+3. **The scoped/unscoped split was inaccurate.** `_app-grid` and `_dock` were listed as scoped; both
+   have top-level global rules, and `_app-grid` is almost entirely global.
+
+**No live collision — verified rather than assumed.** Cross-referencing every class selector across
+the 11 partials, the only names declared in more than one file (`.linked`, `.nidara-row-title`,
+`.nidara-row-subtitle`) are all nested under a distinctive parent (`.cc-detail-panel`,
+`scrolledwindow.apps-list-scroll`). Nothing was overriding anything.
+
+🔑 **Three DEAD selectors fell out of mapping classes to windows** — each named a window that does not
+exist, so none had ever matched: `window#nidara-app-launcher` (`_app-grid`, plus two entries in
+`_reset`'s neutralization lists) and `window#nidara-dock-vertical` (`_dock`; both dock orientations
+are one window, `name: "nidara-dock"`). Also `.wo-schematic-win`, a rule for a class no widget
+carries. **The app grid has no window of its own** — its panel is a child of the DOCK's window — which
+is exactly why its scope is `#nidara-dock`.
+
+⚠️ **`_workspace.scss` needs TWO scopes and that is load-bearing.** `common/WorkspaceSchematic.ts`
+renders into the island (overview) *and* the dock (app grid strip). A `.wo-schematic-*` rule left in
+the island-only block silently stops painting in the strip.
+
+⚠️ **What scoping silently changes, and the fix that shipped with it**: CSS resolved on an unrooted
+widget *because* these rules were global. Anything reading a styled value from a widget outside a
+matching window (`get_style_context().get_padding()` on a probe) now returns 0 — **no error**.
+`scripts/dev/gtk-probe.js` therefore takes `SCOPE=settings|bar|island|dock` and prints it.
+Measured proof the hook is not cosmetic: the same dropdown row is **29px** under `SCOPE=settings` and
+**28px** anywhere else, because Settings re-anchors control text to the relative `$fse-*` ramp.

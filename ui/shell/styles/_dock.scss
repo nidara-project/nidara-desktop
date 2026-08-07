@@ -89,10 +89,11 @@ window.nidara-dock-window,
     // real drop shadow and this blurred layer are mutually exclusive.
     -gtk-icon-shadow: none;
 }
-/* ── Vertical Dock ───────────────────────────────────────────────────────── */
-window#nidara-dock-vertical {
-    background: transparent;
-}
+/* ── Vertical Dock ─────────────────────────────────────────────────────────
+   (`window#nidara-dock-vertical` deleted 2026-08-07 — DEAD: both orientations
+   are the same window, built once in DockCore with `name: "nidara-dock"`, so
+   that selector had never matched anything. The transparency it asked for is
+   already given by the `#nidara-dock` block at the top of this file.) */
 
 /* The dock context menu popover reuses the shared .nidara-menu-popover reset
    (_components.scss) — same glass-bubble surface as the app-grid context menu. */

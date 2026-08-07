@@ -1,102 +1,105 @@
 @use 'base' as *;
 
-.prism-box {
-    background: transparent;
-    // Single-panel Spotlight/Raycast layout: no outer padding — each section
-    // (search row, divider, results) manages its own so the divider is full-bleed.
-    padding: 0;
-}
+/* Prism lives inside the BAR window (Gtk.Overlay child, commandment 5). */
+#nidara-bar, .nidara-bar-window {
+    .prism-box {
+        background: transparent;
+        // Single-panel Spotlight/Raycast layout: no outer padding — each section
+        // (search row, divider, results) manages its own so the divider is full-bleed.
+        padding: 0;
+    }
 
-.prism-search-box {
-    // Seamless: the field sits directly on the glass panel (Spotlight/Raycast).
-    // No inner box, no border, no focus ring — the whole glass panel IS the
-    // focus surface, so there's no rounded rect to mismatch the Cairo squircle.
-    background: none;
-    border: none;
-    // The 22 is an ALIGNMENT AXIS, not a spacing value: a result row's text sits at
-    // 10 (.prism-results-list) + 12 (.prism-result-row) = 22, so the field's text and
-    // the results below it share one left edge. Move one, move all three.
-    padding: $space-4 22px;
-}
+    .prism-search-box {
+        // Seamless: the field sits directly on the glass panel (Spotlight/Raycast).
+        // No inner box, no border, no focus ring — the whole glass panel IS the
+        // focus surface, so there's no rounded rect to mismatch the Cairo squircle.
+        background: none;
+        border: none;
+        // The 22 is an ALIGNMENT AXIS, not a spacing value: a result row's text sits at
+        // 10 (.prism-results-list) + 12 (.prism-result-row) = 22, so the field's text and
+        // the results below it share one left edge. Move one, move all three.
+        padding: $space-4 22px;
+    }
 
-.prism-search-entry {
-    background: none;
-    color: var(--nidara-text);
-    font-size: $fs-title-3;
-    caret-color: var(--nidara-accent);
+    .prism-search-entry {
+        background: none;
+        color: var(--nidara-text);
+        font-size: $fs-title-3;
+        caret-color: var(--nidara-accent);
 
-    // Suppress the Gtk.Text's own default GTK focus outline — there is no ring
-    // in this design (the panel is the focus surface).
-    &:focus, &:focus-visible, &:focus-within { outline: none; box-shadow: none; }
-}
+        // Suppress the Gtk.Text's own default GTK focus outline — there is no ring
+        // in this design (the panel is the focus surface).
+        &:focus, &:focus-visible, &:focus-within { outline: none; box-shadow: none; }
+    }
 
-// Hairline between the search field and the results — only present when results
-// are revealed (it lives inside the revealer). Full-bleed, like macOS/Raycast.
-.prism-divider {
-    min-height: 1px;
-    background: var(--nidara-border);
-}
+    // Hairline between the search field and the results — only present when results
+    // are revealed (it lives inside the revealer). Full-bleed, like macOS/Raycast.
+    .prism-divider {
+        min-height: 1px;
+        background: var(--nidara-border);
+    }
 
-.prism-results-list {
-    background: transparent;
-    // Every gap from a row to its boundary reads 8px: the sides/bottom are 10 because
-    // SquircleContainer paints the glass 2px INSIDE the widget rect (GLASS_INSET), so
-    // 10 from the rect is 8 from the visible edge; the top is a true 8 to .prism-divider.
-    // The 10 is also the alignment axis above — see .prism-search-box.
-    padding: $space-2 10px 10px;
-}
+    .prism-results-list {
+        background: transparent;
+        // Every gap from a row to its boundary reads 8px: the sides/bottom are 10 because
+        // SquircleContainer paints the glass 2px INSIDE the widget rect (GLASS_INSET), so
+        // 10 from the rect is 8 from the visible edge; the top is a true 8 to .prism-divider.
+        // The 10 is also the alignment axis above — see .prism-search-box.
+        padding: $space-2 10px 10px;
+    }
 
-.prism-result-row {
-    background: transparent;
-    padding: $space-2 $space-3;
-    border-radius: $nidara-radius-sm;
-    transition: background 0.2s ease;
-}
+    .prism-result-row {
+        background: transparent;
+        padding: $space-2 $space-3;
+        border-radius: $nidara-radius-sm;
+        transition: background 0.2s ease;
+    }
 
-/* Hover = neutral; Selected (keyboard arrow nav) = accent, so the cursor is
-   clearly visible as you move through results. */
-.prism-result-row:hover {
-    background-color: var(--nidara-surface-hover);
-}
+    /* Hover = neutral; Selected (keyboard arrow nav) = accent, so the cursor is
+       clearly visible as you move through results. */
+    .prism-result-row:hover {
+        background-color: var(--nidara-surface-hover);
+    }
 
-.prism-result-row:selected {
-    background-color: var(--nidara-accent-10);
-}
+    .prism-result-row:selected {
+        background-color: var(--nidara-accent-10);
+    }
 
-/* Kill GTK's default focus rectangle on the list rows (it's the blue ring that
-   was bleeding onto section headers too). The keyboard-nav indicator is the
-   accent :selected background above — no ring needed on rows. */
-.prism-results-list row:focus,
-.prism-results-list row:focus-visible,
-.prism-results-list row:focus-within {
-    outline: none;
-    box-shadow: none;
-}
+    /* Kill GTK's default focus rectangle on the list rows (it's the blue ring that
+       was bleeding onto section headers too). The keyboard-nav indicator is the
+       accent :selected background above — no ring needed on rows. */
+    .prism-results-list row:focus,
+    .prism-results-list row:focus-visible,
+    .prism-results-list row:focus-within {
+        outline: none;
+        box-shadow: none;
+    }
 
-/* (.prism-result-icon deleted — it only ever set border-radius on a Gtk.Image, which
-   has no background of its own, and GTK4's border-radius does NOT clip a child's
-   rendering. It rounded nothing. Rounding a bitmap is squircleThumb()'s job.) */
+    /* (.prism-result-icon deleted — it only ever set border-radius on a Gtk.Image, which
+       has no background of its own, and GTK4's border-radius does NOT clip a child's
+       rendering. It rounded nothing. Rounding a bitmap is squircleThumb()'s job.) */
 
-.prism-result-title {
-    color: var(--nidara-text);
-    font-weight: $fw-medium;
-    font-size: $fs-subtitle;
-}
+    .prism-result-title {
+        color: var(--nidara-text);
+        font-weight: $fw-medium;
+        font-size: $fs-subtitle;
+    }
 
-.prism-result-description {
-    color: var(--nidara-text-disabled);
-    font-size: $fs-small;
-}
+    .prism-result-description {
+        color: var(--nidara-text-disabled);
+        font-size: $fs-small;
+    }
 
-.prism-section-row {
-    background: transparent;
-    padding: 0;
-}
+    .prism-section-row {
+        background: transparent;
+        padding: 0;
+    }
 
-.prism-section-label {
-    color: var(--nidara-text-dim);
-    font-size: $fs-caption;
-    font-weight: $fw-semibold;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    .prism-section-label {
+        color: var(--nidara-text-dim);
+        font-size: $fs-caption;
+        font-weight: $fw-semibold;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
 }

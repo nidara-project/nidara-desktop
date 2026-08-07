@@ -1,653 +1,630 @@
 @use 'base' as *;
 
-/* ==========================================================================
-   CONTROL CENTER - CLEAN GTK4 ARCHITECTURE
-   ========================================================================== */
-
-/* NOTE: no keyboard focus rings here on purpose. The CC is mouse/touch-only by
-   design: it has no focusable widget to land on, so it never takes keyboard focus
-   even though the bar's focus grab carries the keyboard for any open panel.
-   Adding :focus-visible rules here would be dead code. See the design-tokens
-   rationale. */
-
-/* --- Status banner (AI control) above the widgets --- */
-/* One .cc-status-row per active indicator (dot + text + a Stop button).
-   Collapsed to nothing by the widget when no indicator is active.
-
-   The CARD ITSELF IS CAIRO — a SquircleContainer built in StatusIndicators.tsx,
-   exactly like the tiles below it. No border and no padding here: both belong to
-   the painter (glass fill, 1.5px inner rim, 12px inset), and the background must
-   stay transparent so nothing paints a rectangle behind the squircle. It is
-   deliberately NOT given `.cc-island` (that class resets Adwaita defaults on any
-   descendant button and would flatten the NidaraButton — see the note there). It
-   used to be a CSS
-   `material-card` tinted danger-red on background AND border, under a red dot
-   and a red button — four reds on one small row, and a flat CSS box pasted over
-   a grid of Cairo glass. It read as "something has gone wrong, turn this off
-   NOW"; it is a notice (2026-08-02, user call).
-
-   MARGIN = the CC's block rhythm: 24px, the same air the Edit pill gets below
-   the grid (`editBtnWrapper.margin_top` in IslandGrid.tsx). 12px is the gap
-   BETWEEN TILES (GAP) — using it here made the card look stuck to the grid,
-   tighter than the panel's own internal spacing. Two scales, on purpose:
-   12 inside a block, 24 between blocks. */
-.cc-status-banner {
-    background-color: transparent;
-    margin-bottom: 24px;
-}
-/* The last pulsing dot in the shell, and deliberately so: it marks the agent
-   having JUST acted (a few seconds, ~pulseComputerAction) inside a surface that
-   only paints while open — not a minutes-long condition on an always-visible
-   layer, which is why the bar badge and the island dot are steady. Keyframe
-   defined here, next to its only user. */
-.cc-status-dot {
-    border-radius: var(--nidara-radius-pill);
-    background: var(--nidara-danger);
-    opacity: 0.7;
-
-    &.is-active {
-        opacity: 1;
-        animation: rec-pulse 1.4s ease-in-out infinite;
-    }
-}
-
 @keyframes rec-pulse {
     0%, 100% { opacity: 1; }
     50%      { opacity: 0.3; }
 }
 
-/* --- Island Body --- */
-.cc-island {
-    background-color: transparent;
+/* CC and NC live inside the BAR window (Gtk.Overlay children, commandment 5).
+   The @keyframes above stays global: CSS keyframes are not scopable, and SCSS
+   would emit an invalid nested at-rule. */
+#nidara-bar, .nidara-bar-window {
+    /* ==========================================================================
+       CONTROL CENTER - CLEAN GTK4 ARCHITECTURE
+       ========================================================================== */
 
-    // Reset Adwaita button defaults inside CC islands
-    button { @include nidara-reset; }
-}
+    /* NOTE: no keyboard focus rings here on purpose. The CC is mouse/touch-only by
+       design: it has no focusable widget to land on, so it never takes keyboard focus
+       even though the bar's focus grab carries the keyboard for any open panel.
+       Adding :focus-visible rules here would be dead code. See the design-tokens
+       rationale. */
 
-.cc-atomic-slider-box-horizontal {
-    background: transparent;
-}
+    /* --- Status banner (AI control) above the widgets --- */
+    /* One .cc-status-row per active indicator (dot + text + a Stop button).
+       Collapsed to nothing by the widget when no indicator is active.
 
-.cc-atomic-scale-native {
-    background: transparent;
-}
+       The CARD ITSELF IS CAIRO — a SquircleContainer built in StatusIndicators.tsx,
+       exactly like the tiles below it. No border and no padding here: both belong to
+       the painter (glass fill, 1.5px inner rim, 12px inset), and the background must
+       stay transparent so nothing paints a rectangle behind the squircle. It is
+       deliberately NOT given `.cc-island` (that class resets Adwaita defaults on any
+       descendant button and would flatten the NidaraButton — see the note there). It
+       used to be a CSS
+       `material-card` tinted danger-red on background AND border, under a red dot
+       and a red button — four reds on one small row, and a flat CSS box pasted over
+       a grid of Cairo glass. It read as "something has gone wrong, turn this off
+       NOW"; it is a notice (2026-08-02, user call).
 
-/* --- Media Widget --- */
-.cc-media-title-atomic {
-    font-size: $fs-small;
-    font-weight: $fw-bold;
-    color: var(--nidara-text);
-}
-
-.cc-media-artist-atomic {
-    font-size: $fs-caption;
-    font-weight: $fw-regular;
-    color: var(--nidara-text-dim);
-}
-
-.cc-media-btn-atomic {
-    color: var(--nidara-text);
-    background: transparent;
-    border: none;
-    // The theme inflates buttons well past the icon, leaving dead space above/below
-    // each glyph (the "space around the controls"). Hug the 18px icon with a tight
-    // 24px box so the transport row reads as one compact unit.
-    min-width: 24px;
-    min-height: 24px;
-    padding: 0;
-}
-
-.cc-media-play-btn {
-    background-color: var(--nidara-accent);
-    border-radius: var(--nidara-radius-pill);
-    color: var(--nidara-accent-fg);
-}
-
-.cc-media-time {
-    font-size: $fs-caption;
-    font-weight: $fw-medium;
-    color: var(--nidara-text-dim);
-    opacity: 0.7;
-}
-
-// (Removed dead .cc-media-progress GTK-scale rules — the media progress bar is a
-// Cairo-drawn slider via makeHSlider, so these never applied.)
-
-/* --- Connectivity Toggles (Capsule & Round) --- */
-.cc-island {
-    /* Wrapper button for 2x1 capsules */
-    .cc-capsule-btn {
+       MARGIN = the CC's block rhythm: 24px, the same air the Edit pill gets below
+       the grid (`editBtnWrapper.margin_top` in IslandGrid.tsx). 12px is the gap
+       BETWEEN TILES (GAP) — using it here made the card look stuck to the grid,
+       tighter than the panel's own internal spacing. Two scales, on purpose:
+       12 inside a block, 24 between blocks. */
+    .cc-status-banner {
         background-color: transparent;
-        border-radius: var(--nidara-radius-lg);
-        color: var(--nidara-text);
-        padding: 0;
+        margin-bottom: 24px;
     }
-
-    /* 1x1 Round Toggles */
-    .cc-atomic-round-btn {
+    /* The last pulsing dot in the shell, and deliberately so: it marks the agent
+       having JUST acted (a few seconds, ~pulseComputerAction) inside a surface that
+       only paints while open — not a minutes-long condition on an always-visible
+       layer, which is why the bar badge and the island dot are steady. Keyframe
+       defined here, next to its only user. */
+    .cc-status-dot {
         border-radius: var(--nidara-radius-pill);
-        color: var(--nidara-text);
+        background: var(--nidara-danger);
+        opacity: 0.7;
 
+        &.is-active {
+            opacity: 1;
+            animation: rec-pulse 1.4s ease-in-out infinite;
+        }
     }
 
-    /* Icon-only toggle nested inside a split capsule (see buildSplitCapsuleContent):
-       the surrounding .cc-atomic-icon-circle-bg box still paints the resting badge;
-       this button only needs the round clip + hover/press feedback so the icon
-       reads as its own tap target, distinct from the rest of the capsule (which
-       opens the detail panel). Two classes outrank the `.cc-island button` reset
-       above regardless of source order. */
-    .cc-split-icon-btn {
-        border-radius: var(--nidara-radius-pill);
-        color: var(--nidara-text);
-        @include nidara-tile-states;
+    /* --- Island Body --- */
+    .cc-island {
+        background-color: transparent;
+
+        // Reset Adwaita button defaults inside CC islands
+        button { @include nidara-reset; }
     }
-}
 
-/* 48x48 Circular Badge inside capsules (no override needed, is a box not a button) */
-.cc-atomic-icon-circle-bg {
-    background-color: var(--nidara-surface);
-    border-radius: var(--nidara-radius-pill);
-    color: var(--nidara-text);
-}
+    .cc-atomic-slider-box-horizontal {
+        background: transparent;
+    }
 
-/* --- Typographical Utilities for Toggles --- */
-.cc-atomic-label-bold {
-    font-size: $fs-small;
-    font-weight: $fw-bold;
-    color: var(--nidara-text);
-}
 
-.cc-atomic-label-dim {
-    font-size: $fs-caption;
-    // Pin the weight: without it the label inherits its parent's, so capsules
-    // wrapped in a cc-capsule-btn (bt, focus, dark_mode, night_light) rendered the
-    // subtitle heavier than the plain-box tiles (wifi, ethernet, …). 400 everywhere.
-    font-weight: $fw-regular;
-    color: var(--nidara-text-dim);
-}
-
-/* CPU/Memory metric: % inside the ring + CPU/RAM caption below */
-.resource-value {
-    font-size: $fs-small;
-    font-weight: $fw-bold;
-    color: var(--nidara-text);
-}
-
-.resource-caption {
-    font-size: $fs-caption;
-    font-weight: $fw-semibold;
-    letter-spacing: 0.04em;
-    color: var(--nidara-text-dim);
-}
-
-/* 1×2 capsule slider (volume/brightness): % overlaid on top, icon at the bottom.
-   Both sit over the track/fill, so a soft shadow keeps them legible either way. */
-.slider-fill-value {
-    font-size: $fs-small;
-    font-weight: $fw-bold;
-    font-variant-numeric: tabular-nums;
-    color: var(--nidara-text);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
-}
-
-// (.vpn-active-bg deleted — VPN's connected state now fills the whole capsule via
-// BaseIsland's getActive/watchActive, same as dark_mode/night_light/focus/bt.)
-
-// (.rec-active-bg/.rec-stop-icon/.rec-label/@keyframes rec-pulse-cc deleted —
-// recording's pulsing danger-red fill now paints the WHOLE capsule via
-// BaseIsland's getActive/activeColorHex/activeAlpha, same mechanism as
-// dark_mode/night_light/focus/bt/vpn. .rec-stop-icon was dead CSS anyway —
-// `color` never recolors a Gtk.Image icon, see design-system.md.)
-
-// Elapsed-timer subtitle while recording — tabular-nums so the digits don't
-// jitter as they tick up. (color is redundant with the label's own default dim,
-// kept explicit for clarity.)
-.rec-elapsed {
-    font-size: $fs-caption;
-    color: var(--nidara-text-dim);
-    font-variant-numeric: tabular-nums;
-}
-
-// The same clock as the hero of the detail page, where it is the whole content
-// above Stop rather than a subtitle. Plain text colour: the page is REACHED from
-// a tile that already says "recording", and a red number is just a number in a
-// colour that means danger — nothing here is dangerous. Red in this shell is for
-// the small status marks (island dot, CC badge) and for revocation, nowhere else.
-.rec-elapsed-big {
-    font-size: $fs-title-2;
-    font-weight: $fw-semibold;
-    color: var(--nidara-text);
-    font-variant-numeric: tabular-nums;
-    margin-top: 6px;
-    margin-bottom: 2px;
-}
-
-/* --- Edit Mode Controls --- */
-.cc-edit-pill {
-    label {
+    /* --- Media Widget --- */
+    .cc-media-title-atomic {
         font-size: $fs-small;
         font-weight: $fw-bold;
+        color: var(--nidara-text);
+    }
+
+    .cc-media-artist-atomic {
+        font-size: $fs-caption;
+        font-weight: $fw-regular;
         color: var(--nidara-text-dim);
     }
 
-    &:hover label {
+    .cc-media-btn-atomic {
+        color: var(--nidara-text);
+        background: transparent;
+        border: none;
+        // The theme inflates buttons well past the icon, leaving dead space above/below
+        // each glyph (the "space around the controls"). Hug the 18px icon with a tight
+        // 24px box so the transport row reads as one compact unit.
+        min-width: 24px;
+        min-height: 24px;
+        padding: 0;
+    }
+
+    .cc-media-play-btn {
+        background-color: var(--nidara-accent);
+        border-radius: var(--nidara-radius-pill);
+        color: var(--nidara-accent-fg);
+    }
+
+    .cc-media-time {
+        font-size: $fs-caption;
+        font-weight: $fw-medium;
+        color: var(--nidara-text-dim);
+        opacity: 0.7;
+    }
+
+    // (Removed dead .cc-media-progress GTK-scale rules — the media progress bar is a
+    // Cairo-drawn slider via makeHSlider, so these never applied.)
+
+    /* --- Connectivity Toggles (Capsule & Round) --- */
+    .cc-island {
+        /* Wrapper button for 2x1 capsules */
+        .cc-capsule-btn {
+            background-color: transparent;
+            border-radius: var(--nidara-radius-lg);
+            color: var(--nidara-text);
+            padding: 0;
+        }
+
+        /* 1x1 Round Toggles */
+        .cc-atomic-round-btn {
+            border-radius: var(--nidara-radius-pill);
+            color: var(--nidara-text);
+
+        }
+
+        /* Icon-only toggle nested inside a split capsule (see buildSplitCapsuleContent):
+           the surrounding .cc-atomic-icon-circle-bg box still paints the resting badge;
+           this button only needs the round clip + hover/press feedback so the icon
+           reads as its own tap target, distinct from the rest of the capsule (which
+           opens the detail panel). Two classes outrank the `.cc-island button` reset
+           above regardless of source order. */
+        .cc-split-icon-btn {
+            border-radius: var(--nidara-radius-pill);
+            color: var(--nidara-text);
+            @include nidara-tile-states;
+        }
+    }
+
+    /* 48x48 Circular Badge inside capsules (no override needed, is a box not a button) */
+    .cc-atomic-icon-circle-bg {
+        background-color: var(--nidara-surface);
+        border-radius: var(--nidara-radius-pill);
         color: var(--nidara-text);
     }
-}
 
-/* Shared round glass icon button (see common/IconButton.ts). Single source of
-   truth for close/remove/collapse controls. Size is set inline per use; shape/icon/hover
-   are identical everywhere. NB: named -circle- to avoid the existing .nidara-icon-btn
-   in _settings.scss (the sidebar toggle), whose `button.` specificity would win. */
-.nidara-circle-btn {
-    /* Padding (not set_size_request) sizes the button to its glyph — crisp icon, circle
-       centred on it (same approach as the Settings close button). */
-    padding: 4px;
-    min-width: 0;
-    min-height: 0;
-    /* Same fill as the count badge (nc-badge-header): simple, unified, no special tokens. */
-    background: var(--nidara-surface-raised);
-    border: none;
-    border-radius: var(--nidara-radius-pill);
-    transition: background-color 0.15s #{$ease};
+    /* --- Typographical Utilities for Toggles --- */
+    .cc-atomic-label-bold {
+        font-size: $fs-small;
+        font-weight: $fw-bold;
+        color: var(--nidara-text);
+    }
 
-    image { margin: 0; }
+    .cc-atomic-label-dim {
+        font-size: $fs-caption;
+        // Pin the weight: without it the label inherits its parent's, so capsules
+        // wrapped in a cc-capsule-btn (bt, focus, dark_mode, night_light) rendered the
+        // subtitle heavier than the plain-box tiles (wifi, ethernet, …). 400 everywhere.
+        font-weight: $fw-regular;
+        color: var(--nidara-text-dim);
+    }
 
-    /* Neutral hover (e.g. the collapse chevron): brighter fill — no border (it left corner dots). */
-    &:hover { background: var(--nidara-surface-strong); }
-}
+    /* CPU/Memory metric: % inside the ring + CPU/RAM caption below */
+    .resource-value {
+        font-size: $fs-small;
+        font-weight: $fw-bold;
+        color: var(--nidara-text);
+    }
 
-.cc-slot-placeholder {
-    background: var(--nidara-surface-strong);
-    border-radius: var(--nidara-radius-pill);
-}
+    .resource-caption {
+        font-size: $fs-caption;
+        font-weight: $fw-semibold;
+        letter-spacing: 0.04em;
+        color: var(--nidara-text-dim);
+    }
 
-.cc-drag-source {
-    opacity: 0;
-    transition: opacity 0.15s ease;
-}
 
-/* (.cc-drop-ghost deleted — the drag-ghost is now Cairo-painted in IslandGrid.tsx's
-   makeDropGhost, shaped per-widget via resolveIslandShape, not a generic CSS box.) */
+    // (.vpn-active-bg deleted — VPN's connected state now fills the whole capsule via
+    // BaseIsland's getActive/watchActive, same as dark_mode/night_light/focus/bt.)
 
-/* (.cc-resize-btn deleted — dead CSS from the pre-context-menu resize approach;
-   tile resizing lives in CCContextMenu.tsx since the 3-tier menu landed.) */
+    // (.rec-active-bg/.rec-stop-icon/.rec-label/@keyframes rec-pulse-cc deleted —
+    // recording's pulsing danger-red fill now paints the WHOLE capsule via
+    // BaseIsland's getActive/activeColorHex/activeAlpha, same mechanism as
+    // dark_mode/night_light/focus/bt/vpn. .rec-stop-icon was dead CSS anyway —
+    // `color` never recolors a Gtk.Image icon, see design-system.md.)
 
-/* --- Notifications: Steel Symmetry --- */
-.nc-capsule-item {
-    min-height: 80px;
-}
+    // Elapsed-timer subtitle while recording — tabular-nums so the digits don't
+    // jitter as they tick up. (color is redundant with the label's own default dim,
+    // kept explicit for clarity.)
+    .rec-elapsed {
+        font-size: $fs-caption;
+        color: var(--nidara-text-dim);
+        font-variant-numeric: tabular-nums;
+    }
 
-.nc-stack-card {
-    /* Overlap the ghost strip by 4px: the card's SquircleContainer has an inner inset, so
-       its fill stops short of the widget edge — without this overlap a gap shows. The ghost
-       bands overlap each other by the same 4px so both seams look identical. */
-    margin-bottom: -4px;
-}
+    // The same clock as the hero of the detail page, where it is the whole content
+    // above Stop rather than a subtitle. Plain text colour: the page is REACHED from
+    // a tile that already says "recording", and a red number is just a number in a
+    // colour that means danger — nothing here is dangerous. Red in this shell is for
+    // the small status marks (island dot, CC badge) and for revocation, nowhere else.
+    .rec-elapsed-big {
+        font-size: $fs-title-2;
+        font-weight: $fw-semibold;
+        color: var(--nidara-text);
+        font-variant-numeric: tabular-nums;
+        margin-top: 6px;
+        margin-bottom: 2px;
+    }
 
-.nc-group-with-ghost {
-    /* The ghost strip's height is already accounted for; claw back just a little so the
-       gap to the next notification stays comfortable for both 1- and 2-layer stacks.
-       min-height matches the negative margin: when the swipe/clear-all collapse animates
-       the group's content below 2px, the box would report a NEGATIVE min height (content
-       + margin) and GTK warns "sizes must be >= 0" once per group. The floor keeps the
-       reported size at exactly 0 on those last frames — visually identical. */
-    margin-bottom: -2px;
-    min-height: 2px;
-}
+    /* --- Edit Mode Controls --- */
+    .cc-edit-pill {
+        label {
+            font-size: $fs-small;
+            font-weight: $fw-bold;
+            color: var(--nidara-text-dim);
+        }
 
-.nc-badge-header {
-    background: var(--nidara-surface-raised);
-    color: var(--nidara-text);
-    font-size: $fs-mini;
-    font-weight: $fw-bold;
-    padding: 1px 6px;
-    // ~17px tall (11px glyph + 1px padding): the old 12 was already past half the
-    // height, i.e. a pill wearing a ladder value. Say what it is.
-    border-radius: var(--nidara-radius-pill);
-    margin-left: $space-2;
-}
+        &:hover label {
+            color: var(--nidara-text);
+        }
+    }
 
-/* Notification body — a touch more opaque than the shared dim token, since the glass
-   background washes out 0.6-alpha text. */
-.nc-notif-body {
-    font-size: $fs-caption;
-    font-weight: $fw-regular;
-    color: var(--nidara-text-secondary);
-}
+    /* (.nidara-circle-btn, .slider-fill-value and .cc-atomic-scale-native moved to
+       _components.scss on 2026-08-07 — they are rendered by SHARED components
+       (common/IconButton.ts, common/Slider.ts) and by Settings pages, so scoping this
+       file to the bar's window would have silently unstyled them there. A class used
+       outside one window belongs in the global kit, not in a surface sheet.) */
 
-.nc-group-ctrl-header {
-    /* Background/border/radius now painted by SquircleContainer (shellOpacity, Cairo);
-       only the outer margins remain here. Padding moved to the inner box (margin_*). */
-    // Binds DOWN to the group it labels: 8px is the shell-wide attachment gap
-    // (same as .nidara-list-title's margin-bottom), the 12px above is the
-    // group↔group gap. See design-system.md "Section headers bind DOWN".
-    margin-top: $space-3;
-    margin-bottom: $space-2;
-    margin-left: $space-2;
-    margin-right: $space-2;
-}
+    .cc-slot-placeholder {
+        background: var(--nidara-surface-strong);
+        border-radius: var(--nidara-radius-pill);
+    }
 
-.nc-group-header-name {
-    font-size: $fs-caption;
-    font-weight: $fw-bold;
-    color: var(--nidara-text);
-}
+    .cc-drag-source {
+        opacity: 0;
+        transition: opacity 0.15s ease;
+    }
 
-/* Calendar Cleanup */
-.nc-calendar-island {
-    calendar {
-        // color binds to --nidara-text via the global `calendar` neutralization in
-        // _reset.scss → day numbers AND the month/year header follow the pin.
-        background: none;
-        background-color: transparent;
-        border: none;
-        box-shadow: none;
+    /* (.cc-drop-ghost deleted — the drag-ghost is now Cairo-painted in IslandGrid.tsx's
+       makeDropGhost, shaped per-widget via resolveIslandShape, not a generic CSS box.) */
 
-        &.view, & header, & button {
+    /* (.cc-resize-btn deleted — dead CSS from the pre-context-menu resize approach;
+       tile resizing lives in CCContextMenu.tsx since the 3-tier menu landed.) */
+
+    /* --- Notifications: Steel Symmetry --- */
+    .nc-capsule-item {
+        min-height: 80px;
+    }
+
+    .nc-stack-card {
+        /* Overlap the ghost strip by 4px: the card's SquircleContainer has an inner inset, so
+           its fill stops short of the widget edge — without this overlap a gap shows. The ghost
+           bands overlap each other by the same 4px so both seams look identical. */
+        margin-bottom: -4px;
+    }
+
+    .nc-group-with-ghost {
+        /* The ghost strip's height is already accounted for; claw back just a little so the
+           gap to the next notification stays comfortable for both 1- and 2-layer stacks.
+           min-height matches the negative margin: when the swipe/clear-all collapse animates
+           the group's content below 2px, the box would report a NEGATIVE min height (content
+           + margin) and GTK warns "sizes must be >= 0" once per group. The floor keeps the
+           reported size at exactly 0 on those last frames — visually identical. */
+        margin-bottom: -2px;
+        min-height: 2px;
+    }
+
+    .nc-badge-header {
+        background: var(--nidara-surface-raised);
+        color: var(--nidara-text);
+        font-size: $fs-mini;
+        font-weight: $fw-bold;
+        padding: 1px 6px;
+        // ~17px tall (11px glyph + 1px padding): the old 12 was already past half the
+        // height, i.e. a pill wearing a ladder value. Say what it is.
+        border-radius: var(--nidara-radius-pill);
+        margin-left: $space-2;
+    }
+
+    /* Notification body — a touch more opaque than the shared dim token, since the glass
+       background washes out 0.6-alpha text. */
+    .nc-notif-body {
+        font-size: $fs-caption;
+        font-weight: $fw-regular;
+        color: var(--nidara-text-secondary);
+    }
+
+    .nc-group-ctrl-header {
+        /* Background/border/radius now painted by SquircleContainer (shellOpacity, Cairo);
+           only the outer margins remain here. Padding moved to the inner box (margin_*). */
+        // Binds DOWN to the group it labels: 8px is the shell-wide attachment gap
+        // (same as .nidara-list-title's margin-bottom), the 12px above is the
+        // group↔group gap. See design-system.md "Section headers bind DOWN".
+        margin-top: $space-3;
+        margin-bottom: $space-2;
+        margin-left: $space-2;
+        margin-right: $space-2;
+    }
+
+    .nc-group-header-name {
+        font-size: $fs-caption;
+        font-weight: $fw-bold;
+        color: var(--nidara-text);
+    }
+
+    /* Calendar Cleanup */
+    .nc-calendar-island {
+        calendar {
+            // color binds to --nidara-text via the global `calendar` neutralization in
+            // _reset.scss → day numbers AND the month/year header follow the pin.
             background: none;
             background-color: transparent;
             border: none;
-        }
-
-        // Day cells: Nidara accent on selection + today (GtkCalendar paints these
-        // with Adwaita's default blue otherwise). Column headers (.day-name) and week
-        // numbers (.week-number) are left to the normal text tokens.
-        grid label.day-name {
-            color: var(--nidara-text-dim);
-            font-weight: $fw-semibold;
-        }
-        // Kill Adwaita's blue focus ring on every day cell. GTK4 has NO `outline`
-        // shorthand — must use the longhand props or the ring survives.
-        grid label:not(.day-name):not(.week-number) {
-            border-radius: $nidara-radius-xs;
-            border: 1px solid transparent;
-            outline-style: none;
-            outline-width: 0;
-            outline-color: transparent;
             box-shadow: none;
-            transition: background 0.12s ease, color 0.12s ease;
-        }
-        grid label:focus,
-        grid label:focus-visible,
-        grid label:focus-within,
-        grid label:selected {
-            outline-style: none;
-            outline-width: 0;
-            outline-color: transparent;
-            box-shadow: none;
-            border-color: transparent;
-        }
-        grid label.other-month { color: var(--nidara-text-disabled); }
-        // "Today" (when not selected): faint accent-tinted cell, theme-coloured
-        // bold number (never accent on text).
-        grid label.today:not(:selected) {
-            background-color: var(--nidara-accent-10);
-            color: var(--nidara-text);
-            font-weight: $fw-bold;
-        }
-        grid label:selected {
-            background-color: var(--nidara-accent);
-            background-image: none;
-            color: var(--nidara-accent-fg);
-            font-weight: $fw-bold;
-        }
-    }
-}
 
-.nc-item-time {
-    font-size: $fs-caption;
-    font-weight: $fw-semibold;
-    color: var(--nidara-text-secondary);
-}
+            &.view, & header, & button {
+                background: none;
+                background-color: transparent;
+                border: none;
+            }
 
-.nc-action-row {
-    margin-right: 4px;
-}
-
-/* (.nc-right-col / .nc-badge-stacked deleted — controls moved onto the title line;
-   the dedicated right column shortened every text line, not just the title.) */
-
-/* Hover-revealed banner action capsules (background/border painted by SquircleContainer). */
-.nc-banner-action-label {
-    font-size: $fs-caption;
-    font-weight: $fw-semibold;
-    color: var(--nidara-text);
-}
-
-.nc-action-btn {
-    padding: 2px 8px;
-    min-height: 0;
-    min-width: 0;
-    background: transparent;
-    border: none;
-    border-radius: var(--nidara-radius-xs);
-    /* Solid text instead of accent — accent on glass reads poorly with some palettes. */
-    color: var(--nidara-text);
-    font-size: $fs-caption;
-    font-weight: $fw-semibold;
-    transition: background-color 0.15s #{$ease}, color 0.15s #{$ease};
-
-    label { padding: 0; margin: 0; }
-
-    &:hover {
-        background: var(--nidara-accent-10);
-    }
-
-    &:active {
-        background: var(--nidara-accent-30);
-    }
-}
-
-/* --- NC Global Layout --- */
-.nc-content-box {
-    padding: 0;
-    /* The scroll viewport is GRID_WIDTH + 8 (LANE in NotificationCenter.tsx). This padding
-       keeps the cards at GRID_WIDTH (no reflow/stretch) and frees the lane on the right
-       for the scroll indicator. */
-    padding-right: 8px;
-}
-
-/* The reserved LANE now hosts NidaraScrolled's indicator (.nidara-scroll-thumb in
-   _components.scss), not a GTK scrollbar — the view runs vscrollbar_policy EXTERNAL,
-   so no scrollbar node exists here to style. This retired tech-debt #15: the old
-   overlay slider widened on pointer PROXIMITY (GTK sets .hovering itself and
-   Adwaita's rule beat every override we could write) and ate the right edge of each
-   card's close ✕. Pinning it flush to the wall was mitigation; removing the widget
-   is the fix. Do NOT reintroduce `scrollbar` rules here. */
-
-.nc-empty {
-    /* Sits inside the same glass capsule as the clear-all pill — match its type. */
-    font-size: $fs-small;
-    font-weight: $fw-bold;
-    color: var(--nidara-text-dim);
-}
-
-.nc-clear-all-pill {
-    label {
-        font-size: $fs-small;
-        font-weight: $fw-bold;
-        color: var(--nidara-text-dim);
-    }
-
-    &:hover label { color: var(--nidara-text); }
-}
-
-
-/* --- CC Detail Strip --- */
-.cc-detail-back-btn {
-    background: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
-    border-radius: $nidara-radius-sm;
-    color: var(--nidara-text);
-    transition: background-color 0.15s ease, box-shadow 0.15s ease;
-
-    @include nidara-tile-states;
-}
-
-.cc-detail-sep {
-    background: var(--nidara-border);
-    min-height: 1px;
-    margin-left: 12px;
-    margin-right: 12px;
-}
-
-.cc-detail-title {
-    font-size: $fs-small;
-    font-weight: $fw-bold;
-    color: var(--nidara-text);
-    letter-spacing: 0.04em;
-}
-
-.cc-detail-section-label {
-    font-size: $fs-caption;
-    font-weight: $fw-bold;
-    color: var(--nidara-text-dim);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    opacity: 0.7;
-}
-
-/* --- CC Detail Panel — styles for content inside the squircle island --------- */
-.cc-detail-panel {
-
-    // Strip the boxed-card look: inside the detail panel a nidara-list sits flat
-    // on the island, not as a frosted card.
-    list.nidara-list,
-    list.boxed-list {
-        background: transparent;
-        background-image: none;
-        border: none;
-        box-shadow: none;
-        margin-bottom: 4px;
-        padding: 0;
-
-        row {
-            @include nidara-reset;
-            border-radius: $nidara-radius-sm;
-            margin: 1px 0;
-            @include nidara-row-states;
-            &:selected { background: transparent; }   // list rows aren't selectable
-        }
-    }
-
-    // Full-row click buttons (clipboard items)
-    button.settings-action-row {
-        @include nidara-reset;
-        border-radius: $nidara-radius-sm;
-        @include nidara-row-states;
-    }
-
-    // Primary action (VPN connect, screenshot save, start recording)
-    // The 6px vertical is NOT a gap: these carry `border: none`, so 6 lands on the same
-    // 32px control height as NidaraButton's 5px + 1px border. Keep them in step.
-    button.suggested-action {
-        background: var(--nidara-accent);
-        background-image: none;
-        color: var(--nidara-accent-fg);
-        border: none;
-        box-shadow: none;
-        border-radius: $nidara-radius-sm;
-        padding: 6px 14px;
-        font-size: $fs-small;
-        font-weight: $fw-semibold;
-
-        &:hover  { background: rgba(var(--nidara-accent-rgb), 0.82); }
-        &:active { background: rgba(var(--nidara-accent-rgb), 0.65); }
-    }
-
-    // Destructive action (VPN disconnect, stop recording)
-    button.destructive-action {
-        background: var(--nidara-danger);
-        background-image: none;
-        color: var(--nidara-accent-fg);
-        border: none;
-        box-shadow: none;
-        border-radius: $nidara-radius-sm;
-        padding: 6px 14px;
-        font-size: $fs-small;
-        font-weight: $fw-semibold;
-
-        &:hover  { background: rgba(var(--nidara-danger-rgb), 0.82); }
-        &:active { background: rgba(var(--nidara-danger-rgb), 0.65); }
-    }
-
-    // Flat button — NO author-side consumers left (the screenshot copy button and
-    // the set-default text link are both NidaraButtons now; the latter is
-    // ghost + compact). Kept as a defensive normalizer: GTK's own composite
-    // widgets can carry `.flat` internally (e.g. night-light's SpinButton), and
-    // without this they'd fall through to Adwaita's look inside the panel.
-    // Do not add `.flat` from page code — use NidaraButton({ variant: "ghost" }).
-    button.flat {
-        background: transparent;
-        background-image: none;
-        border: none;
-        box-shadow: none;
-        color: var(--nidara-text);
-        border-radius: $nidara-radius-sm;
-        padding: 4px 10px;
-        font-weight: $fw-medium;
-
-        &:hover  { background: var(--nidara-accent-10); }
-        &:active { background: rgba(var(--nidara-accent-rgb), 0.18); }
-    }
-
-    // (button.compact-btn deleted — its one consumer, the audio "set as default"
-    //  link, is now NidaraButton({ variant: "ghost", size: "compact" }); the size
-    //  lives in the kit, not in whatever panel the button happens to render in.)
-
-    // Mute toggles use the global button.settings-icon-btn (_components.scss).
-
-    // Linked mode-selector button groups (screenshot / screenrecord)
-    .linked {
-        > button {
-            background: var(--nidara-surface-back);
-            background-image: none;
-            border: 1px solid var(--nidara-border);
-            border-radius: $nidara-radius-sm;
-            box-shadow: none;
-            color: var(--nidara-text-dim);
-            font-size: $fs-small;
-            padding: 6px 0;
-
-            // Unselected: deepen neutrally on hover; accent stays for the selected
-            // (.suggested-action) segment only.
-            &:hover { background: var(--nidara-surface-hover); color: var(--nidara-text); }
-
-            &.suggested-action {
-                background: rgba(var(--nidara-accent-rgb), 0.18);
-                background-image: none;
-                border-color: rgba(var(--nidara-accent-rgb), 0.45);
+            // Day cells: Nidara accent on selection + today (GtkCalendar paints these
+            // with Adwaita's default blue otherwise). Column headers (.day-name) and week
+            // numbers (.week-number) are left to the normal text tokens.
+            grid label.day-name {
+                color: var(--nidara-text-dim);
+                font-weight: $fw-semibold;
+            }
+            // Kill Adwaita's blue focus ring on every day cell. GTK4 has NO `outline`
+            // shorthand — must use the longhand props or the ring survives.
+            grid label:not(.day-name):not(.week-number) {
+                border-radius: $nidara-radius-xs;
+                border: 1px solid transparent;
+                outline-style: none;
+                outline-width: 0;
+                outline-color: transparent;
+                box-shadow: none;
+                transition: background 0.12s ease, color 0.12s ease;
+            }
+            grid label:focus,
+            grid label:focus-visible,
+            grid label:focus-within,
+            grid label:selected {
+                outline-style: none;
+                outline-width: 0;
+                outline-color: transparent;
+                box-shadow: none;
+                border-color: transparent;
+            }
+            grid label.other-month { color: var(--nidara-text-disabled); }
+            // "Today" (when not selected): faint accent-tinted cell, theme-coloured
+            // bold number (never accent on text).
+            grid label.today:not(:selected) {
+                background-color: var(--nidara-accent-10);
                 color: var(--nidara-text);
                 font-weight: $fw-bold;
-
-                &:hover  { background: rgba(var(--nidara-accent-rgb), 0.26); }
-                &:active { background: rgba(var(--nidara-accent-rgb), 0.35); }
+            }
+            grid label:selected {
+                background-color: var(--nidara-accent);
+                background-image: none;
+                color: var(--nidara-accent-fg);
+                font-weight: $fw-bold;
             }
         }
     }
 
-    // Audio enable switch
-    switch {
-        &:checked slider { background: var(--nidara-thumb); }
-        &:checked       { background: var(--nidara-accent); }
-    }
-
-    // Default speaker badge
-    .accent-label {
-        color: var(--nidara-text);
-        background: rgba(var(--nidara-accent-rgb), 0.14);
-        border-radius: $nidara-radius-pill;
-        padding: 2px 8px;
+    .nc-item-time {
         font-size: $fs-caption;
         font-weight: $fw-semibold;
+        color: var(--nidara-text-secondary);
     }
 
-    .nidara-row-title    { font-size: $fs-small; color: var(--nidara-text); }
-    .nidara-row-subtitle { font-size: $fs-small; color: var(--nidara-text-dim); }
-    .slider-value-label   { color: var(--nidara-text-dim); font-size: $fs-small; font-variant-numeric: tabular-nums; }
+    .nc-action-row {
+        margin-right: 4px;
+    }
 
-    separator { background: var(--nidara-border); margin: 4px 0; min-height: 1px; }
+    /* (.nc-right-col / .nc-badge-stacked deleted — controls moved onto the title line;
+       the dedicated right column shortened every text line, not just the title.) */
+
+    /* Hover-revealed banner action capsules (background/border painted by SquircleContainer). */
+    .nc-banner-action-label {
+        font-size: $fs-caption;
+        font-weight: $fw-semibold;
+        color: var(--nidara-text);
+    }
+
+    .nc-action-btn {
+        padding: 2px 8px;
+        min-height: 0;
+        min-width: 0;
+        background: transparent;
+        border: none;
+        border-radius: var(--nidara-radius-xs);
+        /* Solid text instead of accent — accent on glass reads poorly with some palettes. */
+        color: var(--nidara-text);
+        font-size: $fs-caption;
+        font-weight: $fw-semibold;
+        transition: background-color 0.15s #{$ease}, color 0.15s #{$ease};
+
+        label { padding: 0; margin: 0; }
+
+        &:hover {
+            background: var(--nidara-accent-10);
+        }
+
+        &:active {
+            background: var(--nidara-accent-30);
+        }
+    }
+
+    /* --- NC Global Layout --- */
+    .nc-content-box {
+        padding: 0;
+        /* The scroll viewport is GRID_WIDTH + 8 (LANE in NotificationCenter.tsx). This padding
+           keeps the cards at GRID_WIDTH (no reflow/stretch) and frees the lane on the right
+           for the scroll indicator. */
+        padding-right: 8px;
+    }
+
+    /* The reserved LANE now hosts NidaraScrolled's indicator (.nidara-scroll-thumb in
+       _components.scss), not a GTK scrollbar — the view runs vscrollbar_policy EXTERNAL,
+       so no scrollbar node exists here to style. This retired tech-debt #15: the old
+       overlay slider widened on pointer PROXIMITY (GTK sets .hovering itself and
+       Adwaita's rule beat every override we could write) and ate the right edge of each
+       card's close ✕. Pinning it flush to the wall was mitigation; removing the widget
+       is the fix. Do NOT reintroduce `scrollbar` rules here. */
+
+    .nc-empty {
+        /* Sits inside the same glass capsule as the clear-all pill — match its type. */
+        font-size: $fs-small;
+        font-weight: $fw-bold;
+        color: var(--nidara-text-dim);
+    }
+
+    .nc-clear-all-pill {
+        label {
+            font-size: $fs-small;
+            font-weight: $fw-bold;
+            color: var(--nidara-text-dim);
+        }
+
+        &:hover label { color: var(--nidara-text); }
+    }
+
+
+    /* --- CC Detail Strip --- */
+    .cc-detail-back-btn {
+        background: transparent;
+        background-image: none;
+        border: none;
+        box-shadow: none;
+        border-radius: $nidara-radius-sm;
+        color: var(--nidara-text);
+        transition: background-color 0.15s ease, box-shadow 0.15s ease;
+
+        @include nidara-tile-states;
+    }
+
+    .cc-detail-sep {
+        background: var(--nidara-border);
+        min-height: 1px;
+        margin-left: 12px;
+        margin-right: 12px;
+    }
+
+    .cc-detail-title {
+        font-size: $fs-small;
+        font-weight: $fw-bold;
+        color: var(--nidara-text);
+        letter-spacing: 0.04em;
+    }
+
+    .cc-detail-section-label {
+        font-size: $fs-caption;
+        font-weight: $fw-bold;
+        color: var(--nidara-text-dim);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        opacity: 0.7;
+    }
+
+    /* --- CC Detail Panel — styles for content inside the squircle island --------- */
+    .cc-detail-panel {
+
+        // Strip the boxed-card look: inside the detail panel a nidara-list sits flat
+        // on the island, not as a frosted card.
+        list.nidara-list,
+        list.boxed-list {
+            background: transparent;
+            background-image: none;
+            border: none;
+            box-shadow: none;
+            margin-bottom: 4px;
+            padding: 0;
+
+            row {
+                @include nidara-reset;
+                border-radius: $nidara-radius-sm;
+                margin: 1px 0;
+                @include nidara-row-states;
+                &:selected { background: transparent; }   // list rows aren't selectable
+            }
+        }
+
+        // Full-row click buttons (clipboard items)
+        button.settings-action-row {
+            @include nidara-reset;
+            border-radius: $nidara-radius-sm;
+            @include nidara-row-states;
+        }
+
+        // Primary action (VPN connect, screenshot save, start recording)
+        // The 6px vertical is NOT a gap: these carry `border: none`, so 6 lands on the same
+        // 32px control height as NidaraButton's 5px + 1px border. Keep them in step.
+        button.suggested-action {
+            background: var(--nidara-accent);
+            background-image: none;
+            color: var(--nidara-accent-fg);
+            border: none;
+            box-shadow: none;
+            border-radius: $nidara-radius-sm;
+            padding: 6px 14px;
+            font-size: $fs-small;
+            font-weight: $fw-semibold;
+
+            &:hover  { background: rgba(var(--nidara-accent-rgb), 0.82); }
+            &:active { background: rgba(var(--nidara-accent-rgb), 0.65); }
+        }
+
+        // Destructive action (VPN disconnect, stop recording)
+        button.destructive-action {
+            background: var(--nidara-danger);
+            background-image: none;
+            color: var(--nidara-accent-fg);
+            border: none;
+            box-shadow: none;
+            border-radius: $nidara-radius-sm;
+            padding: 6px 14px;
+            font-size: $fs-small;
+            font-weight: $fw-semibold;
+
+            &:hover  { background: rgba(var(--nidara-danger-rgb), 0.82); }
+            &:active { background: rgba(var(--nidara-danger-rgb), 0.65); }
+        }
+
+        // Flat button — NO author-side consumers left (the screenshot copy button and
+        // the set-default text link are both NidaraButtons now; the latter is
+        // ghost + compact). Kept as a defensive normalizer: GTK's own composite
+        // widgets can carry `.flat` internally (e.g. night-light's SpinButton), and
+        // without this they'd fall through to Adwaita's look inside the panel.
+        // Do not add `.flat` from page code — use NidaraButton({ variant: "ghost" }).
+        button.flat {
+            background: transparent;
+            background-image: none;
+            border: none;
+            box-shadow: none;
+            color: var(--nidara-text);
+            border-radius: $nidara-radius-sm;
+            padding: 4px 10px;
+            font-weight: $fw-medium;
+
+            &:hover  { background: var(--nidara-accent-10); }
+            &:active { background: rgba(var(--nidara-accent-rgb), 0.18); }
+        }
+
+        // (button.compact-btn deleted — its one consumer, the audio "set as default"
+        //  link, is now NidaraButton({ variant: "ghost", size: "compact" }); the size
+        //  lives in the kit, not in whatever panel the button happens to render in.)
+
+        // Mute toggles use the global button.settings-icon-btn (_components.scss).
+
+        // Linked mode-selector button groups (screenshot / screenrecord)
+        .linked {
+            > button {
+                background: var(--nidara-surface-back);
+                background-image: none;
+                border: 1px solid var(--nidara-border);
+                border-radius: $nidara-radius-sm;
+                box-shadow: none;
+                color: var(--nidara-text-dim);
+                font-size: $fs-small;
+                padding: 6px 0;
+
+                // Unselected: deepen neutrally on hover; accent stays for the selected
+                // (.suggested-action) segment only.
+                &:hover { background: var(--nidara-surface-hover); color: var(--nidara-text); }
+
+                &.suggested-action {
+                    background: rgba(var(--nidara-accent-rgb), 0.18);
+                    background-image: none;
+                    border-color: rgba(var(--nidara-accent-rgb), 0.45);
+                    color: var(--nidara-text);
+                    font-weight: $fw-bold;
+
+                    &:hover  { background: rgba(var(--nidara-accent-rgb), 0.26); }
+                    &:active { background: rgba(var(--nidara-accent-rgb), 0.35); }
+                }
+            }
+        }
+
+        // Audio enable switch
+        switch {
+            &:checked slider { background: var(--nidara-thumb); }
+            &:checked       { background: var(--nidara-accent); }
+        }
+
+        // Default speaker badge
+        .accent-label {
+            color: var(--nidara-text);
+            background: rgba(var(--nidara-accent-rgb), 0.14);
+            border-radius: $nidara-radius-pill;
+            padding: 2px 8px;
+            font-size: $fs-caption;
+            font-weight: $fw-semibold;
+        }
+
+        .nidara-row-title    { font-size: $fs-small; color: var(--nidara-text); }
+        .nidara-row-subtitle { font-size: $fs-small; color: var(--nidara-text-dim); }
+        .slider-value-label   { color: var(--nidara-text-dim); font-size: $fs-small; font-variant-numeric: tabular-nums; }
+
+        separator { background: var(--nidara-border); margin: 4px 0; min-height: 1px; }
+    }
 }

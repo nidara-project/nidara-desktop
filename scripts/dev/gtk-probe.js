@@ -20,7 +20,15 @@
  * a PNG of the surface (via Gtk.WidgetPaintable + Gsk.CairoRenderer) that you can
  * measure pixel by pixel.
  *
- * Two env hooks make it an experiment rather than a dump:
+ * Three env hooks make it an experiment rather than a dump:
+ *   SCOPE=…       which shell WINDOW the specimen stands in: settings (default),
+ *                 bar, island or dock. ⚠️ NOT cosmetic — our sheets are scoped per
+ *                 window (`#nidara-bar …`, `window.nidara-settings-window`), so a
+ *                 specimen built in the wrong one matches NOTHING and every
+ *                 measurement comes back as if the widget were unstyled. There is no
+ *                 error for this: padding just reads 0. Pick the window your widget
+ *                 really lives in, and if a value looks suspiciously bare, suspect
+ *                 this first.
  *   EXTRA_CSS=…   loaded ABOVE style.css — "what if we also said this?"
  *   LOW_CSS=…     loaded at the THEME priority — stands in for Adwaita, so you can
  *                 test whether one of our declarations really beats the theme's.
@@ -38,6 +46,8 @@ import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import Gsk from "gi://Gsk"
+// `imports.system` does not exist under `gjs -m`; the module build is a real import.
+import system from "system"
 
 const OUT = ARGV[0] || "/tmp/nidara-probe"
 const REPO = GLib.getenv("NIDARA_REPO") || GLib.get_current_dir()
@@ -59,10 +69,28 @@ load(STYLE, Gtk.STYLE_PROVIDER_PRIORITY_USER + 10, true)
 const extraCss = GLib.getenv("EXTRA_CSS")
 if (extraCss) { load(extraCss, Gtk.STYLE_PROVIDER_PRIORITY_USER + 40); print(`[above style.css] ${extraCss}`) }
 
+// ── the scope ────────────────────────────────────────────────────────────────
+// A shell window is identified BOTH ways in our sheets — by id (`#nidara-bar`) and
+// by class (`.nidara-bar-window`) — and the two names differ, so carry both. The
+// dock's window hosts the app grid too (there is no app-launcher window).
+const SCOPES = {
+    settings: { name: "nidara-settings-window", cls: "nidara-settings-window" },
+    bar:      { name: "nidara-bar",             cls: "nidara-bar-window" },
+    island:   { name: "nidara-island",          cls: "nidara-island-window" },
+    dock:     { name: "nidara-dock",            cls: "nidara-dock-window" },
+}
+const scopeKey = GLib.getenv("SCOPE") || "settings"
+const scope = SCOPES[scopeKey]
+if (!scope) {
+    printerr(`[gtk-probe] unknown SCOPE "${scopeKey}" — pick one of: ${Object.keys(SCOPES).join(", ")}`)
+    system.exit(1)
+}
+print(`[scope] ${scopeKey} → window#${scope.name}.${scope.cls}`)
+
 // ── the specimen ─────────────────────────────────────────────────────────────
 // Mirrors NidaraDropDown (ui/lib/nidara-kit/scrolled.ts): our own list factory, the
 // fill on `.nidara-dropdown-item`, GTK's scroller adopted into an overlay.
-const win = new Gtk.Window({ default_width: 460, default_height: 260, css_classes: ["nidara-settings-window"] })
+const win = new Gtk.Window({ default_width: 460, default_height: 260, name: scope.name, css_classes: [scope.cls] })
 const page = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, margin_top: 40, margin_start: 40 })
 win.set_child(page)
 
