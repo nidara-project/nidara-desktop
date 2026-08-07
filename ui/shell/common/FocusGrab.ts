@@ -202,8 +202,9 @@ function openPopupIn(wins: Gtk.Window[]): Gtk.Popover | null {
  * be wrong: opening a menu inside a surface must not dismiss the surface the menu
  * belongs to. The island's media source selector and the right-click menu on the
  * assistant's entry both did exactly that. Instead the lease is SUSPENDED and
- * retaken when the popup closes — which is also what unblocks migrating the app
- * grid, whose popovers are the reason it is still on the EXCLUSIVE dance.
+ * retaken when the popup closes — which is also what let the app grid migrate at
+ * all: its context popovers were the one thing keeping it on layer-shell
+ * EXCLUSIVE, and suspending is what made a grab survive them (see DockCore).
  */
 /**
  * Our machinery just ended up holding nothing. Make sure the desktop still has a

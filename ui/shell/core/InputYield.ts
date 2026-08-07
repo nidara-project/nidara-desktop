@@ -6,35 +6,40 @@ import hyprlandState from "./HyprlandState"
  * INPUT YIELD — the shell stepping out of the way so computer-use can reach a
  * real window.
  *
- * The problem it solves is not ours to argue with, it is in the compositor.
+ * ⚠️ THIS MODULE SURVIVED THE FOCUS-GRAB MIGRATION, but its reason changed. Read
+ * the current one first; the history below explains why it is still here at all.
+ *
+ * WHY IT IS STILL NEEDED. A `hyprland-focus-grab-v1` grab CLAMPS POINTER FOCUS to
+ * the grabbed surface: the holder receives every press regardless of input
+ * regions (that clamp is exactly what buys us outside-click dismissal — see
+ * `common/FocusGrab.ts`). So while the Assistant island holds a grab — and it
+ * holds one for EVERY open mode, not just the typing ones — a synthetic click
+ * aimed at an app underneath lands on the island instead. The island spans the
+ * whole monitor, so there is nowhere for such a click to get through.
+ *
+ * WHAT IT USED TO BE, AND WHY THAT MATTERED MORE. Under layer-shell EXCLUSIVE the
+ * same surfaces also broke window focus outright:
  * `CFocusState::rawWindowFocus` (Hyprland 0.56, FocusState.cpp) returns EARLY
- * while any layer surface holds an EXCLUSIVE keyboard grab:
+ * while any layer surface is in `m_exclusiveLSes` ("Refusing a keyboard focus to
+ * a window because of an exclusive ls"), so `focusWindow` was a NO-OP — not a
+ * slow move, not a lie from `hyprctl activewindow`, simply refused. The helpers'
+ * "refused: X is not the focused window" was the guard reporting the truth. A
+ * focus grab drives `rawSurfaceFocus` instead and does NOT refuse focus moves, so
+ * that half of the problem is gone; the pointer clamp above is what remains.
+ * ⚠️ Do not read the fix below as EXCLUSIVE-era leftovers: no shell surface asks
+ * for EXCLUSIVE any more, and re-introducing one would bring the refusal back.
  *
- *     if (!g_pInputManager->m_exclusiveLSes.empty()) {
- *         Log::logger->log(Log::DEBUG, "Refusing a keyboard focus to a window
- *                                       because of an exclusive ls");
- *         return;
- *     }
- *
- * So while the Assistant island (or Prism, or the app grid) holds the keyboard,
- * `focusWindow` is a NO-OP — not a slow move, not a lie from `hyprctl
- * activewindow`, simply refused. The helpers' "refused: X is not the focused
- * window" was the guard reporting the truth. And Hyprland routes the POINTER to
- * an exclusive-grabbing surface too, regardless of its input region, so the
- * island — which spans the whole monitor — swallowed synthetic clicks before
- * they could reach the app underneath.
- *
- * Together that made every pointer/keyboard verb structurally dead from inside
+ * Either way, this made every pointer/keyboard verb structurally dead from inside
  * the Assistant, which is the one place they exist for. (AT-SPI perception and
  * named actions were unaffected: they never look at focus.)
  *
- * The fix is a scoped, per-action truce. `begin()` asks every grabbing surface
- * to drop to NONE and stamp an empty input region, waits for the compositor to
- * ANNOUNCE the release (it is double-buffered — see `afterGrabRelease`), and
- * only then lets the caller act; `end()` gives the grab back. It is driven from
- * the HELPERS via the `yieldInput` IPC rather than from the agent daemon, so an
- * external MCP client acting while the user happens to have Prism or the app
- * grid open is covered by the same mechanism.
+ * The fix is a scoped, per-action truce. `begin()` asks every grabbing surface to
+ * RELEASE its focus grab and stamp an empty input region, waits for the
+ * compositor to ANNOUNCE the release (see `afterGrabRelease`), and only then lets
+ * the caller act; `end()` gives the grab back. It is driven from the HELPERS via
+ * the `yieldInput` IPC rather than from the agent daemon, so an external MCP
+ * client acting while the user happens to have Prism or the app grid open is
+ * covered by the same mechanism.
  */
 
 // A helper that dies between begin() and end() must not leave the shell
@@ -58,8 +63,8 @@ class InputYieldClass extends GObject.Object {
     private _depth = 0
     private _watchdog = 0
 
-    /** Surfaces that CAN hold an EXCLUSIVE grab report whether they hold one right
-     *  now. Without this, every action would pay the release wait even with nothing
+    /** Surfaces that CAN hold a focus grab report whether they hold one right now.
+     *  Without this, every action would pay the release wait even with nothing
      *  open — the common case for an external MCP client. */
     private _holders = new Set<() => boolean>()
 
@@ -92,7 +97,7 @@ class InputYieldClass extends GObject.Object {
         if (!held) return Promise.resolve()
 
         this._active = true
-        this.notify("active")   // surfaces drop to NONE + stamp an empty region here
+        this.notify("active")   // surfaces release their grab + stamp an empty region here
         return new Promise<void>(resolve => hyprlandState.afterGrabRelease(() => resolve()))
     }
 

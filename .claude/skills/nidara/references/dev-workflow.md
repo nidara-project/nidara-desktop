@@ -696,7 +696,8 @@ ags request queryUI .agent-entry     # its `text` must be your question
 
 **Driving the island needs `wtype` directly.** No keyboard verb points at it: `nidara-type` demands an
 `<app>` and verifies focus via `hyprctl activewindow`, where a layer surface never appears. In agent
-mode the island holds an **EXCLUSIVE grab** (`Bar.tsx:366`), so synthetic keys reach it — which is also
+mode the island holds a **compositor focus grab** (`IslandWindow.ts`, via `common/FocusGrab.ts` — it
+takes one for every open mode), so synthetic keys reach it — which is also
 why hop 2 is mandatory: if the grab wasn't there, you just typed your question into the operator's own
 prompt. Clean up with the island **closed first**, then `ctrl+u` — an open island eats the clear.
 

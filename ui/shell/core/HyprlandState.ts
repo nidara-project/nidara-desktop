@@ -45,6 +45,11 @@ class HyprlandStateClass extends GObject.Object {
     private _lastSig = ""
     private _geomInFlight: Promise<ClientGeometry> | null = null
 
+    // ⚠️ BOTH HALVES OUTLIVED THE CAUSES BELOW — read to the end before simplifying.
+    // The two failures described here were EXCLUSIVE-era, and no shell surface asks
+    // for EXCLUSIVE any more (2026-08-06, `common/FocusGrab.ts`). What keeps the
+    // invariant load-bearing today is stated after them, and it is not a workaround.
+    //
     // Hyprland announces "no active window" (`activewindow>>,` + `activewindowv2>>`)
     // when one of OUR OWN layer surfaces RELEASES an EXCLUSIVE keyboard grab — the
     // island's overview and assistant, Prism, the app grid — and then never announces
@@ -74,6 +79,18 @@ class HyprlandStateClass extends GObject.Object {
     // open, `hyprctl activewindow` still named the ws1 terminal while ws4's own
     // `lastwindow` correctly named the browser. Hence the invariant below, which both
     // halves now share: THE FOCUSED WINDOW IS ALWAYS ON THE FOCUSED WORKSPACE.
+    //
+    // 🔑 WHY IT ALL STAYS, now that neither cause exists. The invariant stopped being
+    // a display patch and became the INPUT to the root fix:
+    //  · The remembered window is what `restoreFocusAfterGrab` hands the keyboard back
+    //    TO. Dropping a focus grab makes Hyprland refocus by POINTER, so a dismissal
+    //    with the cursor over the wallpaper still leaves the session with nothing
+    //    focused (measured 2026-08-05) — a different cause, same null, and without a
+    //    memory of who was focused there is nobody to restore.
+    //  · Validating the LIVE answer is that repair's correctness guard, not a
+    //    workaround for a lying compositor: focusing a window that lives on another
+    //    workspace DRAGS THAT WORKSPACE over the user. `restoreFocusAfterGrab` relies
+    //    on this accessor never handing it one (see its own ⚠️).
     private _lastFocusedAddr = ""
     private _focusFallback: AstalHyprland.Client | null = null
 
