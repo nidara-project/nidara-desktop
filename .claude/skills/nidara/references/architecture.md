@@ -415,6 +415,38 @@ hero-art swap, whose "previous wallpaper" state lives in the compositor process.
 Do **not** "simplify" this by passing `--no-cache` to the daemon: the cache is also what paints a
 monitor hot-plugged mid-session, which nothing else currently handles.
 
+### The lockscreen: who draws it, and what the shell is actually hiding from
+
+Under `ext-session-lock-v1` the compositor still composites, but the lockscreen's **content** comes
+from our own `nidara-lock` process (`ui/lockscreen/`): one GTK4 window per monitor, handed to
+`Gtk4SessionLock`'s `monitor` signal (`Lock.ts:52-56`). That is also why the lock paints its own
+`Gtk.Picture` wallpaper — awww's layer is not on screen behind it.
+
+**The protocol is stronger than it looks, and assuming otherwise has already cost a wrong comment**
+(verified against Hyprland 0.56 sources, 2026-08-07):
+
+- **Render**: `renderAllClientsForWorkspace` (`Renderer.cpp`) returns *before* drawing ANY layer —
+  background, bottom, top, overlay and popups alike — as soon as the lock client confirms
+  (`clientLocked()`) and `misc:session_lock_xray` is off. `renderLockscreen` then draws primer →
+  lock surface → and only layers whose `above_lock` rule is set, filtered in `renderLayer`.
+- **Input**: `ViewHitTester::layerSurfaceAt` skips every layer without **`above_lock == 2`** while
+  locked, and `InputManager` forces keyboard focus onto the lock surface *"regardless of layers"* —
+  so an interactive above-lock layer gets the pointer but never the keyboard.
+- Nidara sets `above_lock` **nowhere**. No layer of ours can appear over, or be clicked through,
+  a confirmed lockscreen. A layer being on OVERLAY buys it nothing here.
+
+So `hideForLock`/`showAfterLock` (`app.ts`) exist for the two gaps the protocol does *not* cover:
+the window **before** the lock surface is committed on every monitor (`bin/nidara-lock` calls
+`hideForLock` before it even launches the bundle — until then the session renders whole), and the
+**OVERLAY fallback** in `Lock.ts:59-80`, taken only when `Gtk4SessionLock.is_supported()` is false,
+where the lockscreen really is just another layer. Note the `nidara-lock` blur `layer_rule` in
+`hyprland.lua` applies to that fallback ONLY — a session-lock surface has no namespace.
+
+Also compositor-side, and easy to forget: **keybinds stay live while locked**, which is why
+`bin/nidara-lock` switches to the empty `lock` submap and why the media/brightness binds are
+explicitly marked `locked = true`. There is **no lockspace**: the workspace switch that used to
+precede the lock was dropped in `5c72f2c4` (2026-05-24) as redundant.
+
 ## Directory map (`ui/shell/`)
 
 Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026-06-11):
@@ -548,7 +580,10 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     capsule is permanent furniture, so there is no "closed" state to unmap into.
     It follows the bar out of sight instead — fullscreen hide and lock BOTH have
     to name `nidara-island` explicitly (`lockScreen`/`unlockScreen` in `app.ts`
-    filter by window name; forget it and the capsule floats over the lockscreen).
+    filter by window name; forget it and the capsule stays up through the
+    fullscreen hide, and through the window BEFORE the lockscreen confirms the
+    lock — not over the lockscreen itself, which no layer of ours can reach; see
+    the lockscreen note below).
     Consequences you inherit when touching it (two input regions, keyboard-grab
     collision, CSS scoped to BOTH windows, layer-order re-assertion) are listed
     in `state-and-ipc.md` under "Overlay placement".

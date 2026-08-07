@@ -980,9 +980,26 @@ app.start({
     })
     const lockScreen = () => {
       windows.forEach(w => {
-        // nidara-island carries the Activity Island's compact CAPSULE, not just
-        // its expanded modes — leave it out of this list and the capsule floats
-        // on top of the lockscreen (it sits on OVERLAY, above the lock surface).
+        // Why hide at all, when ext-session-lock-v1 already hides every layer?
+        // Because the protocol only covers the steady state. Hyprland's
+        // renderAllClientsForWorkspace returns BEFORE drawing any layer once the
+        // lock client has confirmed (`clientLocked()`), and only layers carrying
+        // the `above_lock` rule come back above the lock surface — Nidara sets
+        // that rule nowhere, so nothing of ours can outrank the lockscreen.
+        // Input matches: with the session locked the pointer hit-test skips
+        // every layer without `above_lock 2`, and keyboard focus is forced onto
+        // the lock surface. (Verified against Hyprland 0.56 sources 2026-08-07:
+        // Renderer.cpp renderAllClientsForWorkspace/renderLockscreen/renderLayer,
+        // ViewHitTester.cpp layerSurfaceAt, InputManager.cpp.)
+        //
+        // What IS ours to cover are the two gaps around that steady state:
+        //   1. bin/nidara-lock calls hideForLock BEFORE launching the bundle.
+        //      Until the lock surface is committed on every monitor the session
+        //      still renders whole — bar, dock and island included.
+        //   2. The OVERLAY fallback (Gtk4SessionLock unsupported), where the
+        //      lockscreen is just another OVERLAY layer competing with ours.
+        // nidara-island must be named explicitly: it carries the compact CAPSULE
+        // as well as the expanded modes, on its own surface since #53.
         if (w.name === "nidara-bar" || w.name === "nidara-dock" || w.name === "nidara-island") {
           try { w.hide() } catch (e) {}
         }
