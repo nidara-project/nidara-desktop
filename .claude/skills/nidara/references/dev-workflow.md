@@ -256,6 +256,55 @@ focused state is a live check.
 enough that a single number fits two readings; compare DELTAS between nodes measured in the
 same run — that rule is why the probe prints the pairs itself.
 
+### Measuring what a layer's blur costs (`scripts/dev/blur-arm.sh`)
+
+The harness behind `references/tech-debt.md` §46. Use it for any claim of the form "this surface's
+blur got cheaper" — the box ratio a surface declares is easy to read off `dumpState`, but it is not
+a GPU number and should never be quoted as one.
+
+One arm = one line. It restarts the shell, parks it on an empty workspace, starts a rectangle that
+damages the screen at the monitor's refresh rate (`blur-damage.js`, a BOTTOM layer painting a GSK
+color node), puts the shell in the state you name via `ags request`, samples `gpu_busy_percent` at
+20 Hz for 20 s, and prints mean/min/max plus the damage client's fps.
+
+```bash
+# arm A — the OLD code, checked out from a ref, as the ONLY variable
+REF=origin/main FILES=ui/shell/surfaces/island/IslandWindow.ts \
+  scripts/dev/blur-arm.sh "old: full surface" setIsland agent
+# arm B — the working tree, same scenario
+scripts/dev/blur-arm.sh "new: declared rect" setIsland agent
+# the floor: the same shell with nothing open
+scripts/dev/blur-arm.sh "floor"
+scripts/dev/blur-arm.sh --reset          # put back whatever a REF arm swapped in
+```
+
+Anything after the label goes to `ags request` verbatim, so any IPC action can be the scenario
+(`toggleCC`, `toggleAppGrid`, `setIsland overview`…). Knobs: `SECS`, `WS`, `SETTLE`, `DX/DY/DW/DH`.
+
+**Reading it:**
+
+- Run the arms **alternated** (A,B,B,A) — the machine drifts across a long sweep.
+- 🔑 **Check `fps=` on every arm.** It must be the monitor's rate. A throttled arm carried a
+  different load than its partner and means nothing; throw it out rather than averaging it in.
+- **Quote the delta AND the floor.** "Opening X now costs nothing" is a claim about the floor;
+  "X is 5 points cheaper" is a claim about the delta. They fail independently.
+- The number is tied to **where the damage sits**: §46's cost is the intersection of that rect with
+  the region a surface declares, so a surface whose region misses it measures as free. Say where it
+  was. (This is why the island's Assistant mode reads as free and its overview does not.)
+
+⚠️ **Three ways to get a confident wrong number**, all of them silent, all of them paid for:
+
+1. **Two arms agreeing.** The likeliest failure, and it looks exactly like "my change does nothing".
+   Every arm must state the tree it measures; the script restores a previous arm's swapped files when
+   an arm names no `REF`, because an arm that inherits the tree re-measures its predecessor
+   (2026-08-10: a pair read 8.9 vs 9.4 whose real numbers were 6.1 vs 1.1).
+2. **A short window.** The same arm read ~9 % at `SECS=4` and 6.1 % at `SECS=20` — a short sample
+   sits on the transient the state change itself causes and inflates each arm differently.
+3. **`pkill -f` matching the caller.** The stray-client kill lives inside the script for a reason:
+   `-f` matches whole command lines, so any shell whose argv merely *mentions* the damage file kills
+   itself. A caller that ran `chmod +x scripts/dev/blur-damage.js && …blur-arm.sh …` died on it
+   (exit 144, no output). Invoke the harness with a command line that does not name that file.
+
 ### Testing in a QEMU VM (installer / greeter / lockscreen)
 
 The paths CI cannot cover — `install.sh` on a virgin Arch, the greetd→greeter→login

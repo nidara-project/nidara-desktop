@@ -2441,7 +2441,9 @@ and numerically at the risky edge: sampling a column down through the player pan
 alpha reaches 0 at y≈236 against a region bottom of 278 — the 16px pad clears the shadow with room,
 so nothing is scissored mid-fade.
 
-**MEASURED in GPU points** with the harness above (damage 1600x700 at 480,200; empty workspace;
+**MEASURED in GPU points** with the harness above — which now **lives in the repo** as
+`scripts/dev/blur-arm.sh` + `blur-damage.js`, recipe and failure modes in `dev-workflow.md`, because
+it had been rebuilt from these notes twice (damage 1600x700 at 480,200; empty workspace;
 `gpu_busy_percent` at 20 Hz × 20 s; shell restarted per arm; **the only variable is
 `IslandWindow.ts`**, so dock and bar declare in both arms; every arm held 144.0 fps):
 
