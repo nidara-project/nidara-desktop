@@ -1,0 +1,114 @@
+// =============================================================================
+// NIDARA DESIGN SYSTEM — the mode-INDEPENDENT layer, shared by all bundles
+// =============================================================================
+//
+// `ui/lib/` is the code the three bundles share (shell, greeter, lockscreen).
+// Until now only TypeScript lived here: the greeter/lockscreen stylesheet
+// carried its OWN copy of the ramp, the radii and the palette, so every
+// design-system decision taken in the shell simply never reached the login and
+// lock screens — which is exactly how the date ended up at 13px next to an 88px
+// clock, two numbers nobody ever chose together.
+//
+// What belongs HERE is everything that does not depend on the light/dark mode:
+// the type ramp, the weights, the spacing scale, the motion curves and the
+// radius ladder. What stays in each bundle is the palette, because the shell
+// flips its tokens at runtime (`NidaraTheme.generateTokensCss`) and the
+// greeter/lockscreen are permanently dark glass.
+//
+// ⚠️ Nothing here may emit CSS at import time, and every comment is `//`
+// (silent) rather than `/* */` (which sass copies into the output). The SCSS
+// variables emit nothing by construction; the custom properties are wrapped in
+// a mixin so each bundle includes them inside its OWN `*` block instead of
+// getting a second one. That is what keeps the shell's compiled CSS identical
+// — verified by diffing style.css before and after this file was extracted.
+
+
+// =============================================================================
+// TYPOGRAPHY RAMP — one scale, no freestyle sizes
+// Static (never changes at runtime) → SCSS vars, compile to literals.
+// =============================================================================
+
+$fs-mini:     11px;  // status bar, tiny captions
+$fs-caption:  12px;  // metadata, tertiary labels
+$fs-small:    13px;  // secondary text
+$fs-body:     14px;  // body, control labels
+$fs-subtitle: 15px;  // emphasized body, subtitles
+$fs-title-3:  17px;  // card / dialog titles
+$fs-title-2:  22px;  // section headers
+$fs-title-1:  28px;  // large titles (rare in shell UI)
+
+// ── The DISPLAY register — deliberately NOT a rung of the ramp above ─────────
+// One consumer in the whole DE: the hero clock of the lockscreen and the
+// greeter. It is not "the ramp continued"; it is a different register, the same
+// way macOS, GNOME and Windows all set their lock clock outside the UI type
+// scale entirely. Naming it is the point — the number was freehand before, and
+// a freehand number is what stops a surface from moving with the system.
+//
+// $fw-display is the ONLY exception to the four weights below. A hairline is
+// what makes a clock at this size read as a clock rather than a headline; at
+// $fw-regular an 88px numeral is a slab. If a SECOND consumer ever appears,
+// that is the moment this becomes a ramp — not before.
+$fs-display:  88px;
+$fw-display:  200;
+
+// The only four weights. 300/800/900 are NOT part of the system.
+$fw-regular:  400;
+$fw-medium:   500;
+$fw-semibold: 600;
+$fw-bold:     700;
+
+$lh-tight: 1.2;  // titles
+$lh-body:  1.3;  // body
+
+// ── Spacing scale (4px base) ─────────────────────────────────────────────────
+// Gaps BETWEEN elements only. A control's internal padding is arithmetic toward
+// a target box height and is legitimately off this scale — see
+// design-system.md, "Spacing is TWO layers".
+$space-1:  4px;
+$space-2:  8px;
+$space-3:  12px;
+$space-4:  16px;
+$space-5:  20px;
+$space-6:  24px;
+$space-8:  32px;
+$space-10: 40px;
+
+// ── Motion (short, ease-out; never `transition: all`) ────────────────────────
+$ease:            cubic-bezier(0.4, 0, 0.2, 1);   // standard
+$ease-emphasized: cubic-bezier(0.2, 0, 0, 1);     // popovers/sheets
+$dur-fast: 100ms;  // hover
+$dur-base: 180ms;  // default state change
+$dur-slow: 260ms;  // popover/sheet open
+
+
+// =============================================================================
+// GEOMETRY — the radius ladder
+// MIRROR of `ui/lib/tokens.ts` RADIUS: Cairo cannot read a CSS var, so the
+// ladder exists as numbers there and as custom properties here, and the two move
+// TOGETHER. That file carries the rationale (why the ladder is not on the 4px
+// spacing scale, and why `sm` is derived from the card inset rather than
+// chosen).
+//
+// Emitted through a mixin so each consumer places it inside its own `*` block.
+// (--nidara-radius-squircle: 28% was deleted 2026-08-03 — zero consumers, and it
+// could not have had one: a percentage radius was meant for rounding art, but
+// GTK4 border-radius does not clip a child's rendering. That job is
+// squircleThumb()/Cairo.)
+// =============================================================================
+
+@mixin radius-vars {
+    --nidara-radius-xl: 32px;
+    --nidara-radius-lg: 24px;
+    --nidara-radius-md: 16px;
+    --nidara-radius-sm: 10px;
+    --nidara-radius-xs: 6px;
+    --nidara-radius-pill: 9999px;
+}
+
+// SCSS aliases so component files never spell out `var(--nidara-radius-*)`.
+$nidara-radius-xl: var(--nidara-radius-xl);
+$nidara-radius-lg: var(--nidara-radius-lg);
+$nidara-radius-md: var(--nidara-radius-md);
+$nidara-radius-sm: var(--nidara-radius-sm);
+$nidara-radius-xs: var(--nidara-radius-xs);
+$nidara-radius-pill: var(--nidara-radius-pill);

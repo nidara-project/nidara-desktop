@@ -211,9 +211,9 @@ separate job (a ratio of the bitmap's own size, painted by `squircleThumb()`), a
 are not rungs — see `tech-debt.md` #48 for the three that currently disagree. Cairo cannot read a CSS var — a corner that clips has
 to be known in px — so the duplication is deliberate and labelled. **There are no radius
 literals left in TS/TSX, nor in `ui/shell/styles/*.scss`** (use `$nidara-radius-*`, the SCSS
-alias of the same vars); that is the invariant to re-check when adding a surface. The greeter
-and lockscreen bundles carry their own standalone stylesheets and are NOT covered — they do
-not import the token layer at all (see `tech-debt.md`).
+alias of the same vars); that is the invariant to re-check when adding a surface. **Since
+2026-08-09 the greeter and lockscreen are covered too** — see "The design system reaches the
+greeter and the lockscreen" below.
 
 | Token | px | What wears it |
 |---|---|---|
@@ -774,10 +774,99 @@ of `border` seams identically (tried).
 The fix, applied to the greeter/lock pills in `ui/greeter/style.scss`: an
 explicit **even `min-height`** (vertical padding zero, so the shape comes from a
 number we control rather than font metrics) and a **radius one pixel under
-half**. Still a pill to the eye, but the arcs are joined by a 2px straight edge
-and never become tangent, at any scale. Any widget painting a backdrop inside
-such a pill (`ui/lockscreen/widget/GlassBackdrop.ts`) must clip to the SAME
-radius, or its fill spills past the border at the caps.
+half**. The arcs are then joined by a 2px straight edge and never become tangent,
+at any scale. Any widget painting a backdrop inside such a pill
+(`ui/lockscreen/widget/GlassBackdrop.ts`) must clip to the SAME radius, or its
+fill spills past the border at the caps.
+
+⚠️ **"Still a pill to the eye" was wishful — the straight edge IS visible, and
+the trade is not free.** Rendered and magnified 2026-08-09 with
+`scripts/dev/lock-probe.js` after the user reported a flat run on the caps and
+the note went down as "does not add up": on the 42px password field and unlock
+button, a 20px radius shows an unmistakable vertical run in the middle of each
+cap. Both readings were right, of different surfaces — **the LOCKSCREEN paints
+its capsules** (`GlassBackdrop` uses `min(w,h)/2`, a true pill, and its rim is a
+FILL rather than a border primitive, so it has neither defect), **the GREETER is
+still CSS** and wears the flat. So the honest state is: the CSS route has two
+failure modes and no good setting between them — a dot at exactly half, a flat
+segment one under — and the only shape that is actually a capsule is a painted
+one. Painting the greeter's capsules the way the lockscreen already paints its
+own is the open fix; do NOT relitigate the radius number, it has been tried from
+both sides.
+
+## The design system reaches the greeter and the lockscreen (2026-08-09)
+
+Before this, `ui/greeter/style.scss` — the sheet **shared** by the greeter and the
+lockscreen — opened with its own `* { }` block re-typing the radii and the palette, and
+carried eleven freehand `font-size` values with no ramp behind them. Nothing was broken; it
+had simply stopped moving. Every design-system decision taken in the shell had to be
+re-typed here to arrive, and none ever was, so the surfaces drifted one generation at a
+time. The tell was arithmetic: the date sat at **13px under an 88px clock**, a 1:6.8 ratio
+outside every system that ships a lock screen (macOS 1:4.8, iOS 1:4.4, Win11 1:3.7, GNOME
+1:3.4) — two numbers nobody had ever chosen together.
+
+**`ui/lib/styles/_tokens.scss` is now the mode-independent half of the system**, `@use`d by
+both `ui/shell/styles/_base.scss` (which `@forward`s it, so every `@use 'base' as *` keeps
+seeing the same names) and `ui/greeter/style.scss`. It holds the type ramp, the weights, the
+line heights, the spacing scale, the motion curves and the radius ladder.
+
+Three rules for extending it:
+
+- **Nothing in that file may emit CSS at import time**, and every comment is `//`, not
+  `/* */` (sass copies loud comments into the output). The radius custom properties go
+  through a **`@mixin radius-vars`** so each bundle includes them inside its OWN `*` block
+  instead of getting a second one. That is what let the extraction be verified the way a
+  pure refactor should be: compile `style.css` before and after and diff — the shell's came
+  back **identical but for comments**, zero declarations moved.
+- **What stays per-bundle is the PALETTE**, and for a real reason: the shell rewrites its
+  colour tokens at runtime per light/dark mode (`NidaraTheme.generateTokensCss`), while the
+  greeter and lockscreen are permanently dark glass over a wallpaper. So they take the
+  shell's **dark set** as literal values. They had been a near-miss copy of it — `0.70/0.45`
+  against the shell's `0.80/0.55`, and a local name (`--nidara-text-muted`) for what the
+  shell calls `-dim` — which made secondary text a step darker on the one surface with no
+  card behind it.
+- **A token with two representations gets labelled as a mirror, on both sides.** The glass
+  palette now lives as numbers in `ui/lib/tokens.ts` (`LOCK_GLASS`) because the lockscreen
+  PAINTS its capsules and Cairo/GSK cannot read a custom property — the same constraint that
+  produced the radius ladder's double life. What was wrong before was not the duplication,
+  it was that one half was three literals at the top of a painter with only a comment tying
+  them to the sheet.
+
+**The hero clock is the DISPLAY register, not a rung.** `$fs-display: 88px` / `$fw-display:
+200` are named and documented as having exactly one consumer in the DE. This is not the ramp
+continued — macOS, GNOME and Windows all set their lock clock outside the UI type scale too —
+and `$fw-display` is the single exception to the four weights. **If a second consumer ever
+appears, that is when it becomes a ramp; not before.** Everything else on these two surfaces
+lands on `$fs-*` exactly: eight of the eleven freehand sizes were already 12/13/14 and simply
+needed the token; only the hero block was genuinely off-system (date 13→`$fs-title-3`,
+username 20→`$fs-title-3`, both `$fw-semibold`).
+
+**Icons too.** The power bar asked the icon THEME for `system-shutdown-symbolic` /
+`system-reboot-symbolic` / `media-playback-pause-symbolic` — the same three actions the
+shell's system menu draws with `Icons.power` / `rotateCcw` / `moon`. On a clean Arch box that
+is Adwaita's art, so Nidara's own login and lock screens were the one place in the DE not
+using Nidara's icons (commandment 10). **`ui/lib/icons.ts`** resolves the shipped set for
+bundles that have no `core/`, by the same route `avatar.ts` already used
+(`NIDARA_SHELL_ROOT ?? /usr/share/nidara/ui/shell`), and falls back to the theme name rather
+than throwing — a missing icon must cost an icon, never the login screen. They are Lucide
+SVGs, not symbolic, so the consumer **must** add `nd-icon`; the sheet now carries that rule
+once instead of stapled to the avatar fallback.
+
+### Looking at these two surfaces: `scripts/dev/lock-probe.js`
+
+They are the only surfaces in the DE you cannot see while working on them — the shell
+reloads with `Super+Shift+R`, but seeing the lockscreen means locking the session you are
+editing from. That is why they drifted, and why a 2026-08-09 session ended with the *user*
+acting as the render loop and finding four defects by eye.
+
+`lock-probe.js` builds the real widget tree with the real stylesheet and writes a PNG, plus
+the bounds of the hero block and the measured date:clock ratio. Point `CSS=` at two builds
+for a before/after pair, and run it at least twice with different `BG=` — **legibility here
+is a question about the WALLPAPER**, and that is exactly what it caught: on a light backdrop
+the date, the clock and the username all wash out, because they are the only text on the
+screen with no glass behind it. Read its header before trusting a number: it does not show
+blur, the painted rim, or `:focus-visible`, and on a tiling compositor the window size is a
+request, so **crop from the bounds it prints, never from a remembered offset**.
 
 ## Cairo vs CSS
 

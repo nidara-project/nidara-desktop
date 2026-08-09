@@ -82,6 +82,36 @@ export const RADIUS = {
  */
 const cornerReach = (n: number) => Math.SQRT2 * (1 - Math.pow(2, -1 / n))
 
+
+/**
+ * The lockscreen / greeter GLASS, as premultiplied 0..1 components.
+ *
+ * ⚠️ MIRROR of `--nidara-glass`, `--nidara-glass-border` and
+ * `--nidara-glass-border-sm` in `ui/greeter/style.scss` — the two files move
+ * TOGETHER, exactly like RADIUS above and `--nidara-radius-*`.
+ *
+ * The duplication is not laziness, it is the same constraint twice: the greeter
+ * draws these capsules in CSS (it gets compositor blur from the
+ * `nidara-greeter` layer_rule), while the lockscreen has to PAINT them — under
+ * ext-session-lock-v1 the compositor draws nothing behind the lock surface, so
+ * `widget/GlassBackdrop.ts` blurs its own copy of the wallpaper. A Cairo/GSK
+ * painter cannot read a CSS custom property, so the values have to exist as
+ * numbers somewhere; what was wrong before is that "somewhere" was three
+ * hand-typed literals at the top of the painter, with nothing but a comment
+ * tying them to the stylesheet.
+ *
+ * These live in `ui/lib/` rather than in the lockscreen bundle because that is
+ * the half of the mirror both surfaces can see.
+ */
+export const LOCK_GLASS = {
+    /** Body fill, over the blurred backdrop. `--nidara-glass`. */
+    fill: { r: 18 / 255, g: 18 / 255, b: 28 / 255, a: 0.55 },
+    /** 1px rim, primary controls. `--nidara-glass-border`. */
+    rimStrong: { r: 1, g: 1, b: 1, a: 0.22 },
+    /** 1px rim, everything else — the shell's `--nidara-edge` colour exactly. */
+    rimSubtle: { r: 1, g: 1, b: 1, a: 0.14 },
+} as const
+
 export const rowInsetFor = (surfaceRadius: number, n: number = 3.2, rowRadius: number = RADIUS.sm) =>
     Math.max(4, Math.round((cornerReach(n) * surfaceRadius - cornerReach(2) * rowRadius) / cornerReach(2)))
 

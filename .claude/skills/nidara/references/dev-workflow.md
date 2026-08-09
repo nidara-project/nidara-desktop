@@ -125,6 +125,38 @@ cd ui/shell && npm run build            # SCSS + ags bundle
 ags request toggleAppGrid                # send an IPC command
 ```
 
+### ⚠️ The greeter and the lockscreen have NO dev mode — building them changes nothing
+
+`--dev` makes the SHELL run from the source tree (`bin/nidara-ui` sets
+`NIDARA_SHELL_ROOT` to `repo/ui/shell`), which is why `Super+Shift+R` is enough for it.
+**`bin/nidara-greeter` and `bin/nidara-lock` have no such branch**: both hardcode
+`/usr/share/nidara/ui/{greeter,lockscreen}/build/…`, and the lockscreen reads its CSS from
+the greeter's *installed* `style.css`. So `npm run build` in either bundle produces a
+perfectly good artifact that the running system never looks at.
+
+The failure mode is silent and reads as "my change didn't work": the bundle builds, the SCSS
+compiles, `git status` shows the edit, and the screen is identical (2026-08-09 — cost a round
+trip on the design-system pass). **Whenever you touch `ui/greeter/`, `ui/lockscreen/` or
+anything in `ui/lib/` they consume, the change is not testable until it is installed.** The
+three files `install.sh` copies (its lines ~725/727/740) are:
+
+```bash
+cd ui/greeter && npm run build && cd ../lockscreen && npm run build && cd ../..
+sudo cp ui/greeter/style.css            /usr/share/nidara/ui/greeter/
+sudo cp ui/greeter/build/nidara-greeter /usr/share/nidara/ui/greeter/build/
+sudo cp ui/lockscreen/build/nidara-lock /usr/share/nidara/ui/lockscreen/build/
+```
+
+Then: **the lockscreen** is seen by locking the session (`loginctl lock-session`) — cheap and
+reversible with your password. **The greeter** is not: seeing it means logging out or
+restarting `greetd`, which kills the session you are working in. Don't restart greetd to
+check a style change; look at it on the next login, in the VM, or offscreen with
+`scripts/dev/lock-probe.js` (which needs neither an install nor a session — it reads
+`ui/greeter/style.css` straight from the repo).
+
+Note the asymmetry this creates in a review: the greeter and the lockscreen **share one
+stylesheet**, so every greeter-visible change ships whether or not anyone looked at it.
+
 ### Rebuilding the Wayland shim (`lib/nidara-wl/`)
 
 TSX changes reload with `Super+Shift+R`; the C shim does not. After editing `nidara-wl.c/.h` the

@@ -1537,6 +1537,11 @@ These were paid down; the *rule* remains:
   7-line wrappers.
 - **Accent colors** live only in `ui/lib/accent.ts` — add/change them there.
 - **Greeter ↔ lockscreen ↔ shell** share `ui/lib/accent.ts` + `ui/lib/users.ts` + `ui/lib/wallpaper.ts`
+  + `ui/lib/avatar.ts`, and since 2026-08-09 (see #57) also **`ui/lib/styles/_tokens.scss`** (the
+  design system's mode-independent half — type ramp, spacing, motion, radius ladder),
+  **`ui/lib/tokens.ts`**'s `LOCK_GLASS` (the numeric half of the glass mirror the lockscreen's
+  painter needs) and **`ui/lib/icons.ts`** (the shipped icon set, for the two bundles with no
+  `core/`). Reach for `ui/lib` before copying anything into a bundle
   (Settings → Users consumes `users.ts` too — don't reintroduce a per-surface passwd parser);
   `lib/i18n.ts` stays separate per bundle on purpose (different config paths / superset).
   Both mini-catalogs (greeter 12 keys, lockscreen 7) cover the full 12-language set,
@@ -2262,9 +2267,13 @@ alignment axes (Prism's `22`).
 **What is genuinely left:**
 - **The bar capsule** — `Bar.tsx`'s `margin 14` and `_bar.scss`'s `padding: 6px 14px` are one
   unit; they move together or not at all, and moving them changes the bar's height.
-- **The greeter and lockscreen bundles**, which carry standalone stylesheets that never import
-  the token layer (11 literal paddings, 1 literal radius). Not reachable from `ui/shell`'s
-  tokens without giving those bundles the scale first — and only verifiable in a VM.
+- ~~**The greeter and lockscreen bundles**, which carry standalone stylesheets that never
+  import the token layer.~~ **DONE 2026-08-09 — see #57.** The prediction that it was "only
+  verifiable in a VM" was wrong twice over, and both corrections are worth carrying: the
+  *shell* half is verifiable by DIFFING the compiled CSS (a pure extraction must move zero
+  declarations, and it did), and the *greeter/lock* half by rendering the surface offscreen
+  (`scripts/dev/lock-probe.js`). The VM is still the gate for blur, the painted glass and the
+  session-lock protocol — but not for type, colour and spacing, which is what had drifted.
 
 ### 48. Art rounding is three unrelated numbers (2026-08-03)
 Found while closing #47, and deliberately NOT swept with it (see rule 3 above — don't refactor as
@@ -2517,9 +2526,14 @@ pick a scope. **Left:** `_app-grid` (most of it) and the ~10 top-level rules tha
    scopable in CSS at all). Commandment 2 now says so explicitly — it read as violated in six files,
    which teaches an agent to ignore one of the ten rules.
 2. **The stated failure mode cannot happen.** It claimed a rule could leak "into the greeter or
-   lockscreen sheets". `ui/greeter/style.scss` has **zero** `@use`/`@import` — it is standalone, and
-   the lockscreen compiles that same file. No path exists. The real (and only preventive) risk is
+   lockscreen sheets". `ui/greeter/style.scss` had **zero** `@use`/`@import` — it was standalone, and
+   the lockscreen compiles that same file. No path existed. The real (and only preventive) risk is
    collision *between shell surfaces*.
+   ⚠️ **Re-check this if you rely on it: since 2026-08-09 that sheet DOES `@use`** —
+   `ui/lib/styles/_tokens.scss` (see #57). The conclusion still holds, because that file emits
+   no CSS of its own (variables plus one mixin the consumer includes), but "standalone, no path
+   exists" is no longer the reason. The reason is now that the shared file is output-free, which
+   is an invariant somebody has to keep.
 3. **The scoped/unscoped split was inaccurate.** `_app-grid` and `_dock` were listed as scoped; both
    have top-level global rules, and `_app-grid` is almost entirely global.
 
@@ -2545,3 +2559,56 @@ matching window (`get_style_context().get_padding()` on a probe) now returns 0 �
 `scripts/dev/gtk-probe.js` therefore takes `SCOPE=settings|bar|island|dock` and prints it.
 Measured proof the hook is not cosmetic: the same dropdown row is **29px** under `SCOPE=settings` and
 **28px** anywhere else, because Settings re-anchors control text to the relative `$fse-*` ramp.
+
+
+### 57. ✅ CLOSED — the design system reaches the greeter and the lockscreen (2026-08-09)
+
+The debt closed by #47's leftover bullet. `ui/greeter/style.scss` (shared by both bundles) had
+its own `* { }` re-typing the radii and the palette, plus eleven freehand `font-size` values.
+The mechanism and the rules now live in `design-system.md` → "The design system reaches the
+greeter and the lockscreen"; what belongs HERE is what it cost and what it left open.
+
+**Shape of the change:** `ui/lib/styles/_tokens.scss` holds the mode-independent half of the
+system (type ramp, weights, line heights, spacing, motion, radius ladder).
+`ui/shell/styles/_base.scss` `@forward`s it — so every `@use 'base' as *` is untouched — and the
+greeter sheet `@use`s it. `ui/lib/tokens.ts` grew `LOCK_GLASS`, the numeric half of the glass
+mirror the lockscreen's painter needs. `ui/lib/icons.ts` gives the two `core/`-less bundles the
+shipped icon set. New instrument: `scripts/dev/lock-probe.js`.
+
+**Verified:** shell `style.css` diffed before/after → identical but for comments, zero
+declarations moved. Both bundles build; `ui/shell` typechecks. Offscreen renders of the greeter
+surface, dark and light backdrop, before and after.
+
+🔑 **The lesson worth keeping is about the SHAPE of the drift, not the fix.** Nothing here was
+broken and nothing had regressed — the surface had simply stopped moving, one shell decision at
+a time, for as long as arriving required somebody to re-type the value by hand. It was invisible
+in every individual diff and obvious in one ratio (13px date under an 88px clock). **When a
+surface has its own copy of a shared decision, "it looks fine" is not evidence; compare it to
+the system it is supposed to belong to.**
+
+**What this deliberately did NOT touch, and why:**
+- **Control-internal padding stayed literal.** Eleven of them, and they are height arithmetic
+  toward a target box (`min-height` + border + line box), not gaps — the two-layer rule in
+  `design-system.md`. Snapping them to `$space-*` would resize every control on both screens.
+- **The `450ms` card entrance stayed off the `$dur-*` ladder**, with a comment saying so: those
+  three time a control's state change, and this is a full-screen surface arriving. Only the
+  CURVE was freehand (plain `ease`, now `$ease`).
+- **The power bar's `4px 6px` inset stayed put.** It is the fill margin that keeps the buttons
+  inside the bar, and it was fixed by hand the day before after being briefly removed.
+
+**Left open (all pre-existing, now with evidence):**
+1. **The greeter's capsules should be PAINTED, like the lockscreen's already are.** The CSS pill
+   has two failure modes and nothing between them — a bright dot at exactly half-height, a
+   visible flat run one pixel under. Magnified proof in `design-system.md`'s tangency section.
+   This also happens to be the direction the whole surface wants: lifting the shell's glass
+   painters into `ui/lib` so the lock and greeter consume them rather than imitate them.
+2. **Bare text over a light wallpaper is illegible** — the date, the clock and the username are
+   the only text on either screen with no glass behind them, and the light-backdrop render makes
+   it plain. The obvious fix (a text shadow) is not obvious: an alpha above the greeter's
+   `ignore_alpha = 0.3` gets blurred backdrop behind it there and lands on sharp wallpaper on the
+   lock, so **the two screens would stop matching**. Needs a decision, not a patch.
+3. **`ui/greeter/style.css.map` is tracked while `style.css` is gitignored**
+   (`.gitignore:110`), so every build dirties the tree with the `.map`. Cosmetic, but it makes a
+   `git status` after a build look like it contains a change it does not.
+4. The greeter and lockscreen still **duplicate** `PowerBar.ts`, `Clock.ts` and their i18n
+   scaffolding; this pass added a fourth shared file (`icons.ts`) rather than merging them.

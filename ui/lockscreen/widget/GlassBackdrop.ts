@@ -2,6 +2,7 @@ import { Gtk, Gdk } from "ags/gtk4"
 import GObject from "gi://GObject"
 import Graphene from "gi://Graphene"
 import Gsk from "gi://Gsk"
+import { LOCK_GLASS } from "../../lib/tokens"
 
 // Backdrop blur for the lockscreen's glass elements (password field, power bar).
 //
@@ -58,13 +59,13 @@ const BLUR_RADIUS = BLUR_SIZE * Math.pow(2, BLUR_PASSES) * 2
 // class of problem — the same reason the shell paints its glass in Cairo
 // (common/GlassBubble.ts) instead of using CSS boxes.
 //
-// LOCKSTEP: these mirror --nidara-glass / --nidara-glass-border(-sm) in
-// ui/greeter/style.scss. The lock has no theme engine (fixed dark palette,
-// accent only reaches the focus ring, which stays in CSS), so they are literals
-// here. If the tokens change, change these.
-const GLASS_FILL = { r: 18 / 255, g: 18 / 255, b: 28 / 255, a: 0.55 }
-const RIM_STRONG = { r: 1, g: 1, b: 1, a: 0.22 }
-const RIM_SUBTLE = { r: 1, g: 1, b: 1, a: 0.14 }
+// The glass palette comes from ui/lib/tokens.ts, which is the numeric half of
+// the mirror whose CSS half is --nidara-glass / --nidara-glass-border(-sm) in
+// ui/greeter/style.scss. These used to be three literals typed out right here,
+// tied to the stylesheet by nothing but a comment. The lock has no theme engine
+// (fixed dark palette; the accent only reaches the rim on focus), so they stay
+// constants — but shared ones.
+const { fill: GLASS_FILL, rimStrong: RIM_STRONG, rimSubtle: RIM_SUBTLE } = LOCK_GLASS
 
 // Focus. The CSS used to draw TWO things on focus: a soft outer ring
 // (box-shadow, still CSS — it lives outside the capsule) and a solid accent

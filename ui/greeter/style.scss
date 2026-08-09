@@ -3,13 +3,36 @@
    No Adwaita to fight. No resets needed. Just define what we want.
    GTK4 CSS subset: no color-mix(), no rgba(var(), n), no filter. */
 
-// ── Design tokens ───────────────────────────────────────────────────────────
+// This sheet is SHARED by two bundles — `ui/greeter` and `ui/lockscreen` —
+// which is why every class is named `.greeter-*`. Anything lock-only is scoped
+// under `window.nidara-lock-window` at the bottom of the file. A change here
+// lands on the login screen too; both have to be looked at.
+//
+// ── Where the numbers come from ─────────────────────────────────────────────
+// The type ramp, the weights, the spacing scale, the motion curves and the
+// radius ladder are the SHELL'S, imported from `ui/lib/styles/_tokens.scss`.
+// They used to be re-typed here, which is how this surface silently fell a
+// generation behind the rest of the DE: the shell's ramp moved and nothing
+// forwarded the change (the date sat at 13px under an 88px clock, two numbers
+// nobody chose together). If a size here is not a `$fs-*`, it is a bug.
+@use '../lib/styles/tokens' as *;
+
+// ── Palette ─────────────────────────────────────────────────────────────────
+// The one thing that is legitimately local. The shell rewrites its colour
+// tokens at runtime per light/dark mode (NidaraTheme.generateTokensCss); these
+// two surfaces are permanently dark glass over the user's wallpaper, so the
+// values are fixed and the shell's DARK set is the right source for them.
 * {
   font-family: "Inter", sans-serif;
 
+  @include radius-vars;
+
   --nidara-accent:         #0088FF;
   // Pre-computed alpha variants — GTK4 CSS has no rgba(var(), n).
-  // Updated at runtime by loadAccentCss() when the user changes accent.
+  // LOCKSTEP with accentCssFor() in ui/lib/accent.ts, which overwrites this
+  // whole block at runtime once appearance.json is read: same names, same
+  // alphas. What is written here is the pre-load fallback (default blue), so
+  // the two lists must not drift apart.
   --nidara-accent-rgb:     0, 136, 255;
   --nidara-accent-10:      rgba(0, 136, 255, 0.10);
   --nidara-accent-15:      rgba(0, 136, 255, 0.15);
@@ -17,24 +40,46 @@
   --nidara-accent-30:      rgba(0, 136, 255, 0.30);
   --nidara-focus-ring:     rgba(0, 136, 255, 0.35);
 
+  // The shell's dark text ramp, verbatim (_base.scss). It used to be a
+  // near-miss copy — 0.70/0.45 against the shell's 0.80/0.55 — so secondary and
+  // dim text read a step darker here than anywhere else in the DE, on the one
+  // surface that sits directly on an arbitrary wallpaper with no card behind
+  // it. `-dim` is also the shell's name for it; `--nidara-text-muted` existed
+  // only in this file.
   --nidara-text:           rgba(255, 255, 255, 0.95);
-  --nidara-text-secondary: rgba(255, 255, 255, 0.70);
-  --nidara-text-muted:     rgba(255, 255, 255, 0.45);
+  --nidara-text-secondary: rgba(255, 255, 255, 0.8);
+  --nidara-text-dim:       rgba(255, 255, 255, 0.55);
 
+  // The lock/greeter GLASS. No shell equivalent by name and that is correct:
+  // the shell's capsules are painted in Cairo, not drawn by CSS, so it has no
+  // `--nidara-glass` token to inherit. What it does have is the same VALUES —
+  // `-border-sm` is the shell's `--nidara-edge` colour exactly.
+  //
+  // ⚠️ MIRRORED as numbers in `ui/lib/tokens.ts` (LOCK_GLASS), because the
+  // lockscreen paints these capsules itself (widget/GlassBackdrop.ts) and a
+  // Cairo painter cannot read a CSS custom property. Same deal as the radius
+  // ladder: two representations, one decision, they move together.
   --nidara-glass:          rgba(18, 18, 28, 0.55);
-  --nidara-glass-light:    rgba(255, 255, 255, 0.38);
   --nidara-glass-border:   rgba(255, 255, 255, 0.22);
   --nidara-glass-border-sm:rgba(255, 255, 255, 0.14);
 
-  --nidara-danger:         #ff6b6b;
   --nidara-warning:        #f3ba4b;
   --nidara-popup-bg:       rgba(14, 14, 22, 0.97);
 
-  --nidara-radius-lg:      24px;
-  --nidara-radius-md:      16px;
-  --nidara-radius-sm:      10px;
-  --nidara-radius-pill:    9999px;
+  // (--nidara-glass-light and --nidara-danger were declared here with zero
+  // consumers. The danger one could not have had any: see .greeter-error, which
+  // deliberately does NOT tint itself red.)
 }
+
+// ── Shipped icons ───────────────────────────────────────────────────────────
+// Same rule, same reason as the shell's _reset.scss: the Lucide SVGs we ship
+// are not symbolic icons (GTK only recolours a file whose name ends in
+// `-symbolic`), so they render black and get inverted to white here. The shell
+// makes this conditional because it has a light mode; these two surfaces are
+// permanently dark glass over the wallpaper, so the invert is unconditional.
+// Consumers: ui/lib/icons.ts (power bar, keyboard glyph) and the avatar
+// fallback in ui/lib/avatar.ts, which used to carry its own copy of this rule.
+.nd-icon { -gtk-icon-filter: invert(1); }
 
 // ── Window ─────────────────────────────────────────────────────────────────
 window,
@@ -47,17 +92,30 @@ window > contents {
 
 // ── Date / Clock ────────────────────────────────────────────────────────────
 .greeter-date {
-  font-size: 13px;
-  font-weight: 500;
+  // 13px under an 88px clock is a 1:6.8 ratio — outside every system that ships
+  // a lock screen (macOS 1:4.8, iOS 1:4.4, Win11 1:3.7, GNOME 1:3.4). At
+  // $fs-title-3 it reads as the clock's label instead of a caption stranded
+  // above it, and lands at macOS's 1:5.2.
+  //
+  // The tracking stays an ABSOLUTE 2px on purpose: as the size grows the same
+  // 2px is proportionally less (0.154em → 0.118em), which is the direction
+  // tracking should move. Uppercase + tracking is a small-caption device — it is
+  // why the next rung up ($fs-title-2, 22px) was rejected: at that size this
+  // line stops labelling the clock and starts competing with it.
+  font-size: $fs-title-3;
+  font-weight: $fw-semibold;
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--nidara-text);
 }
 
 .greeter-clock {
-  font-size: 88px;
-  font-weight: 200;
-  letter-spacing: -4px;
+  // The DISPLAY register, not a rung of the ramp — see _tokens.scss for why the
+  // hero clock is deliberately outside the UI type scale. Same pixels as before;
+  // the number simply has a name and a reason now.
+  font-size: $fs-display;
+  font-weight: $fw-display;
+  letter-spacing: -4px;  // −0.045em: display numerals want tight tracking
   color: var(--nidara-text);
 }
 
@@ -79,12 +137,16 @@ window > contents {
   background: rgba(255, 255, 255, 0.10);
   color: var(--nidara-text-secondary);
 }
-.greeter-avatar-fallback.nd-icon { -gtk-icon-filter: invert(1); }
+// (the invert itself is the shared `.nd-icon` rule at the top of this file)
 
 // ── Username ────────────────────────────────────────────────────────────────
 .greeter-username {
-  font-size: 20px;
-  font-weight: 600;
+  // Was a freehand 20px, between two rungs and on neither. $fs-title-3 is the
+  // card-title rung and this IS the card's title; it also puts the identity on
+  // the same size as the date, which is right — they are the two labels of the
+  // screen, in two different blocks that never appear side by side.
+  font-size: $fs-title-3;
+  font-weight: $fw-semibold;
   color: var(--nidara-text);
   letter-spacing: 0.2px;
 }
@@ -134,7 +196,7 @@ window > contents {
     border: none;
     min-height: 0;
     padding: 4px 8px;
-    color: var(--nidara-text-muted);
+    color: var(--nidara-text-dim);
     &:hover { color: var(--nidara-text-secondary); }
   }
 }
@@ -152,8 +214,8 @@ window > contents {
   color: var(--nidara-text);
   border-radius: 20px; // see .greeter-password: one under half, no arc tangency
   padding: 0 24px;
-  font-weight: 600;
-  font-size: 14px;
+  font-weight: $fw-semibold;
+  font-size: $fs-body;
   min-height: 40px;
   outline: none;
 
@@ -168,7 +230,7 @@ window > contents {
   &:disabled {
     background: var(--nidara-glass);
     border-color: var(--nidara-glass-border-sm);
-    color: var(--nidara-text-muted);
+    color: var(--nidara-text-dim);
   }
 
   spinner {
@@ -181,7 +243,11 @@ window > contents {
 // ── Card entrance (fade-in on map) ───────────────────────────────────────────
 .greeter-card {
   opacity: 0;
-  transition: opacity 450ms ease;
+  // 450ms is NOT on the $dur-* ladder and should not be snapped onto it: those
+  // three (100/180/260) time a control's state change, and this is a full-screen
+  // surface arriving. The CURVE is the system's, which is the part that was
+  // freehand — plain `ease` is not $ease.
+  transition: opacity 450ms $ease;
 }
 .greeter-card.greeter-card-shown {
   opacity: 1;
@@ -214,13 +280,13 @@ window > contents {
 // itself carry the error; the colour does not have to shout it.
 .greeter-error {
   color: var(--nidara-text);
-  font-size: 12px;
+  font-size: $fs-caption;
 }
 
 .greeter-caps {
   color: var(--nidara-warning);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: $fs-caption;
+  font-weight: $fw-medium;
   letter-spacing: 0.2px;
 }
 
@@ -260,7 +326,7 @@ dropdown > button {
 // Session selector — visible, medium weight
 dropdown.greeter-session-dropdown > button {
   color: var(--nidara-text-secondary);
-  font-size: 12px;
+  font-size: $fs-caption;
   padding: 4px 10px;
   border-radius: var(--nidara-radius-pill);
 
@@ -272,8 +338,8 @@ dropdown.greeter-session-dropdown > button {
 // min-height 18px + 3px vertical padding keep the bottom-pill buttons
 // (this, .greeter-power-btn) the exact same height.
 dropdown.locale-bar-dropdown > button {
-  color: var(--nidara-text-muted);
-  font-size: 12px;
+  color: var(--nidara-text-dim);
+  font-size: $fs-caption;
   padding: 3px 8px;
   min-height: 18px;
   border-radius: var(--nidara-radius-pill);
@@ -313,11 +379,11 @@ dropdown popover {
     background: transparent;
 
     > row {
-      border-radius: 6px;
+      border-radius: $nidara-radius-xs;
       padding: 6px 12px;
       min-height: 0;
       color: var(--nidara-text-secondary);
-      font-size: 13px;
+      font-size: $fs-small;
 
       &:hover    { background: rgba(255, 255, 255, 0.08); color: var(--nidara-text); }
       &:selected { background: var(--nidara-accent-15); color: var(--nidara-text); }
@@ -334,7 +400,7 @@ dropdown popover {
 }
 
 .locale-bar-icon {
-  color: var(--nidara-text-muted);
+  color: var(--nidara-text-dim);
   margin-right: 2px;
 }
 
@@ -372,7 +438,7 @@ dropdown popover {
   border-radius: var(--nidara-radius-pill);
   color: var(--nidara-text);
   padding: 0 16px;
-  font-size: 13px;
+  font-size: $fs-small;
   min-height: 22px; // lockstep with the locale-bar dropdowns next to it
   outline: none;
 

@@ -2,6 +2,17 @@
    NIDARA DESIGN SYSTEM - BASE TOKENS (V3000)
    ========================================================================== */
 
+// The mode-INDEPENDENT half of the system (type ramp, weights, spacing scale,
+// motion curves, radius ladder) lives in `ui/lib/styles/_tokens.scss` so the
+// greeter and lockscreen bundles consume the same decisions instead of their own
+// copies. It is forwarded from here, so every `@use 'base' as *` keeps seeing
+// `$fs-*`, `$space-*`, `$nidara-radius-*` … exactly as before.
+//
+// What stays in THIS file is what only the shell has: the colour tokens, which
+// NidaraTheme.ts rewrites at runtime per mode, and the Settings-only em ramp.
+@forward '../../lib/styles/tokens';
+@use '../../lib/styles/tokens' as *;
+
 * {
     /* --- Brand Colors (Dynamic) --- */
     /* Real values are injected by NidaraTheme.ts generateTokensCss (mode-aware).
@@ -34,20 +45,8 @@
     --nidara-text-disabled: rgba(255, 255, 255, 0.3);
     --nidara-surface-strong: rgba(255, 255, 255, 0.3);
 
-    /* --- Geometry ---
-       MIRROR of `ui/lib/tokens.ts` RADIUS — Cairo cannot read a CSS var, so the
-       ladder exists in both places and they move TOGETHER. That file carries the
-       rationale (why the ladder is not on the 4px spacing scale, and why `sm` is
-       derived from the card inset rather than chosen). */
-    --nidara-radius-xl: 32px;
-    --nidara-radius-lg: 24px;
-    --nidara-radius-md: 16px;
-    --nidara-radius-sm: 10px;
-    --nidara-radius-xs: 6px;
-    --nidara-radius-pill: 9999px;
-    /* (--nidara-radius-squircle: 28% deleted — zero consumers, and it could not have
-       had one: a percentage radius was meant for rounding art, but GTK4 border-radius
-       does not clip a child's rendering. That job is squircleThumb()/Cairo.) */
+    /* --- Geometry --- (the ladder + its rationale: ui/lib/styles/_tokens.scss) */
+    @include radius-vars;
 
     /* --- Semantic Colors --- */
     --nidara-danger: #ff3b30;
@@ -95,35 +94,8 @@ $nidara-bg: var(--nidara-bg);
 $nidara-surface: var(--nidara-surface);
 $nidara-text: var(--nidara-text);
 $nidara-text-dim: var(--nidara-text-dim);
-$nidara-radius-xl: var(--nidara-radius-xl);
-$nidara-radius-lg: var(--nidara-radius-lg);
-$nidara-radius-md: var(--nidara-radius-md);
-$nidara-radius-sm: var(--nidara-radius-sm);
-$nidara-radius-xs: var(--nidara-radius-xs);
-$nidara-radius-pill: var(--nidara-radius-pill);
-
-/* ==========================================================================
-   TYPOGRAPHY RAMP — one scale, no freestyle sizes
-   Static (never changes at runtime) → SCSS vars, compile to literals.
-   ========================================================================== */
-
-$fs-mini:     11px;  // status bar, tiny captions
-$fs-caption:  12px;  // metadata, tertiary labels
-$fs-small:    13px;  // secondary text
-$fs-body:     14px;  // body, control labels
-$fs-subtitle: 15px;  // emphasized body, subtitles
-$fs-title-3:  17px;  // card / dialog titles
-$fs-title-2:  22px;  // section headers
-$fs-title-1:  28px;  // large titles (rare in shell UI)
-
-// The only four weights. 300/800/900 are NOT part of the system.
-$fw-regular:  400;
-$fw-medium:   500;
-$fw-semibold: 600;
-$fw-bold:     700;
-
-$lh-tight: 1.2;  // titles
-$lh-body:  1.3;  // body
+/* ($nidara-radius-* and the whole $fs-/$fw-/$lh-/$space-/motion set are
+   forwarded from ui/lib/styles/_tokens.scss — same names, same values.) */
 
 /* Settings-only RELATIVE ramp (em). Same ratios as $fs-* but anchored to
    the toolkit base font, so the Settings font-SIZE picker scales the whole
@@ -137,23 +109,6 @@ $fse-subtitle: 1.07em;
 $fse-title-3:  1.21em;
 $fse-title-2:  1.57em;
 $fse-title-1:  2em;
-
-/* --- Spacing scale (4px base) --- */
-$space-1:  4px;
-$space-2:  8px;
-$space-3:  12px;
-$space-4:  16px;
-$space-5:  20px;
-$space-6:  24px;
-$space-8:  32px;
-$space-10: 40px;
-
-/* --- Motion (short, ease-out; never `transition: all`) --- */
-$ease:            cubic-bezier(0.4, 0, 0.2, 1);   // standard
-$ease-emphasized: cubic-bezier(0.2, 0, 0, 1);     // popovers/sheets
-$dur-fast: 100ms;  // hover
-$dur-base: 180ms;  // default state change
-$dur-slow: 260ms;  // popover/sheet open
 
 /* ==========================================================================
    MIXINS
