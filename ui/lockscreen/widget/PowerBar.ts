@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
+import { withGlassBackdrop } from "./GlassBackdrop"
 import { t } from "../lib/i18n"
 
 function PowerButton(icon: string, label: string, action: () => void): Gtk.Button {
@@ -22,5 +23,7 @@ export default function PowerBar(): Gtk.Widget {
   bar.append(PowerButton("system-shutdown-symbolic", t("shutdown"),
     () => execAsync(["systemctl", "poweroff"]).catch(console.error)))
 
-  return bar
+  // The bar's pill is the translucent part (the buttons themselves are accent
+  // and opaque), so the backdrop blur goes on the bar, not on each button.
+  return withGlassBackdrop(bar)
 }

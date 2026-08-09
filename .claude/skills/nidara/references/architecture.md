@@ -447,6 +447,34 @@ Also compositor-side, and easy to forget: **keybinds stay live while locked**, w
 explicitly marked `locked = true`. There is **no lockspace**: the workspace switch that used to
 precede the lock was dropped in `5c72f2c4` (2026-05-24) as redundant.
 
+#### The lockscreen's glass is blurred BY US, and that is not a shortcut
+
+`widget/GlassBackdrop.ts` paints a blurred copy of the wallpaper behind the password field and
+the power bar. Compositor blur is **unreachable** on a lock surface, and each escape route is
+closed by a different piece of Hyprland (0.56 sources; the third leg measured in a VM 2026-08-09,
+not deduced):
+
+- `misc:session_lock_blur` exists, but `renderdata.blur = PSESSIONLOCKBLUR && PSESSIONLOCKXRAY` —
+  and `xray` renders the **whole workspace** behind the lock (windows included) and disables the
+  black primer. It also blurs the *entire* surface: restricting blur to one widget needs
+  `ignore_alpha`, which is a LAYER rule a lock surface cannot carry.
+- Marking the wallpaper layer `above_lock` puts it **on top of** our UI: above-lock layers are
+  drawn *after* the lock surface (`Renderer.cpp:1655-1668`). There is no "below_lock".
+- Moving the UI onto an `above_lock = 2` layer renders and takes the pointer, but
+  `CFocusState::rawSurfaceFocus` (`FocusState.cpp:227`) refuses keyboard focus to every surface
+  that is not the lock surface — **measured**: the layer logged zero keys while locked, hyprlock
+  received all of them. `above_lock = 2` means render + pointer, never keyboard (arguably an
+  upstream inconsistency: the rule advertises input).
+
+hyprlock, swaylock and gtklock all blur their own copy for the same reason. Ours mirrors the
+compositor's pipeline so the material matches rather than resembles: `push_blur` for the gaussian,
+`push_color_matrix` for `contrast`/`brightness`/`vibrancy`, constants kept in lockstep with
+`blur { … }` in `hyprland.lua`. The blurred image is rendered **once** into a texture (blurring
+inside `vfunc_snapshot` would re-blur the wallpaper on every clock tick), and it is sampled in
+window coordinates so what shows through registers with the sharp wallpaper around it. The
+Kawase→gaussian radius mapping is an approximation between two algorithms — `BLUR_RADIUS` is the
+one constant to trim by eye if the lock's glass ever reads heavier than the bar's.
+
 ## Directory map (`ui/shell/`)
 
 Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026-06-11):

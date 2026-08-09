@@ -4,7 +4,8 @@ import GLib from "gi://GLib"
 // @ts-ignore
 import Gtk4SessionLock from "gi://Gtk4SessionLock"
 import { Lock, LockOverlay } from "./widget/Lock"
-import { accentCssFor } from "../lib/accent"
+import { accentCssFor, ACCENT_HEX, type AccentKey } from "../lib/accent"
+import { setAccentRim } from "./widget/GlassBackdrop"
 
 // Use our blank theme instead of Adwaita.
 GLib.setenv("GTK_THEME", "nidara", true)
@@ -19,6 +20,9 @@ function loadAccentCss(): string {
     const [ok, data] = GLib.file_get_contents(path)
     if (!ok) return ""
     const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))
+    // The capsules are painted, not CSS-drawn, so the painter needs the accent
+    // as a value — it cannot read a CSS custom property (see GlassBackdrop.ts).
+    setAccentRim(ACCENT_HEX[cfg.accent as AccentKey] ?? ACCENT_HEX.blue)
     return accentCssFor(cfg.accent as string | undefined)
   } catch {
     return ""

@@ -756,6 +756,29 @@ stair-stepped curves were clearly visible. So AA wins. The border/rim strokes
 (steps 2-3) still clip to the path so their inner AA can't spill outward. **Don't
 "fix" this back to NONE** thinking AA causes a halo — it was checked on real pixels.
 
+## A CSS pill at `--nidara-radius-pill` seams at the middle of each cap
+
+`--nidara-radius-pill` is `9999px`, and GTK clamps it to **exactly half the
+height**. That makes the two corner arcs of each side meet at a single tangent
+point with no straight segment between them, and GTK's border rendering leaves
+**one brighter pixel right in the middle of each cap** — a "dot" on the left and
+right edges of the capsule. Only bites CSS-drawn pills with a visible hairline
+border (Cairo capsules draw their own path and are unaffected).
+
+Reproduced offscreen 2026-08-09 (user-caught on the lockscreen): **visible at an
+odd height, clean at an even one**, because half of an odd height lands
+mid-pixel. Parity is not something we can guarantee — fractional display scaling
+turns any logical height into whatever it likes — and `box-shadow: inset` instead
+of `border` seams identically (tried).
+
+The fix, applied to the greeter/lock pills in `ui/greeter/style.scss`: an
+explicit **even `min-height`** (vertical padding zero, so the shape comes from a
+number we control rather than font metrics) and a **radius one pixel under
+half**. Still a pill to the eye, but the arcs are joined by a 2px straight edge
+and never become tangent, at any scale. Any widget painting a backdrop inside
+such a pill (`ui/lockscreen/widget/GlassBackdrop.ts`) must clip to the SAME
+radius, or its fill spills past the border at the caps.
+
 ## Cairo vs CSS
 
 - **CSS** for anything with states (hover/active/focus/drag).

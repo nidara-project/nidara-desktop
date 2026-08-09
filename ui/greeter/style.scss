@@ -95,14 +95,29 @@ window > contents {
 // so the outer node gets :focus-within, not :focus directly — use both.
 // GTK4's built-in fallback CSS draws a focus ring via `outline` (blue default).
 // We suppress it with `outline: none` and draw our own ring via `box-shadow`.
+// ── Why these pills do NOT use --nidara-radius-pill ──────────────────────────
+// `9999px` gets clamped by GTK to exactly half the height, which makes the two
+// corner arcs of each side meet at a single tangent point — with no straight
+// segment between them. At that junction GTK's border rendering leaves ONE
+// brighter pixel, right in the middle of each cap (user-caught 2026-08-09,
+// reproduced offscreen: visible at an odd height, clean at an even one, because
+// half of an odd height lands mid-pixel).
+//
+// Height parity is not something we can guarantee — fractional display scaling
+// turns any logical height into whatever it likes. So instead the radius stays
+// ONE PIXEL under half: still a pill to the eye, but the arcs are joined by a
+// 2px straight edge and never become tangent, at any scale. `min-height` is
+// explicit (and vertical padding zero) so the shape is derived from a number we
+// control, not from font metrics.
+// `box-shadow: inset` instead of `border` was tried first — same seam.
 .greeter-password {
   background: var(--nidara-glass);
   border: 1px solid var(--nidara-glass-border-sm);
-  border-radius: var(--nidara-radius-pill);
+  border-radius: 20px; // half of 42 (40 + 2 border), minus 1
   color: var(--nidara-text);
   caret-color: var(--nidara-text);
-  padding: 10px 16px;
-  min-height: 0;
+  padding: 0 16px;
+  min-height: 40px;
   outline: none;
 
   &:focus,
@@ -125,20 +140,35 @@ window > contents {
 }
 
 // ── Login / Unlock button ───────────────────────────────────────────────────
+// Glass, not accent. The accent is reserved for state — and here that means the
+// FOCUS RING specifically: with an accent-filled button the ring drew accent on
+// accent and you could not tell whether focus was on it. Both surfaces can
+// afford glass now: the greeter has compositor blur (hyprland-greeter.lua's
+// `nidara-greeter` layer_rule) and the lockscreen paints its own
+// (widget/GlassBackdrop.ts).
 .greeter-login-btn {
-  background: var(--nidara-accent);
-  color: #fff;
-  border-radius: var(--nidara-radius-pill);
-  padding: 10px 24px;
+  background: var(--nidara-glass);
+  border: 1px solid var(--nidara-glass-border);
+  color: var(--nidara-text);
+  border-radius: 20px; // see .greeter-password: one under half, no arc tangency
+  padding: 0 24px;
   font-weight: 600;
   font-size: 14px;
-  min-height: 0;
+  min-height: 40px;
+  outline: none;
 
-  &:hover  { background: var(--nidara-accent); }
-  &:active { background: var(--nidara-accent); }
+  &:hover  { background: rgba(255, 255, 255, 0.10); }
+  &:active { background: rgba(255, 255, 255, 0.16); }
+  &:focus,
+  &:focus-within {
+    outline: none;
+    border-color: var(--nidara-accent);
+    box-shadow: 0 0 0 2px var(--nidara-focus-ring);
+  }
   &:disabled {
-    background: var(--nidara-accent-30);
-    color: rgba(255, 255, 255, 0.5);
+    background: var(--nidara-glass);
+    border-color: var(--nidara-glass-border-sm);
+    color: var(--nidara-text-muted);
   }
 
   spinner {
@@ -178,8 +208,12 @@ window > contents {
 }
 
 // ── Error / Shake ────────────────────────────────────────────────────────────
+// Deliberately NOT --nidara-danger: this label sits directly on the user's
+// wallpaper (the card has no background), and a mid-red on a dark or reddish
+// image is the one colour that can vanish. The shake animation and the message
+// itself carry the error; the colour does not have to shout it.
 .greeter-error {
-  color: var(--nidara-danger);
+  color: var(--nidara-text);
   font-size: 12px;
 }
 
@@ -315,19 +349,59 @@ dropdown popover {
 .greeter-power-bar {
   background: var(--nidara-glass);
   border: 1px solid var(--nidara-glass-border-sm);
-  border-radius: var(--nidara-radius-pill);
+  border-radius: 15px; // see .greeter-password: one under half of 32
+  // The vertical padding is what keeps the buttons INSIDE the bar. Removing it
+  // (done briefly on 2026-08-09) makes them stretch to the bar's full height,
+  // so their hover and focus ring become the same capsule as the bar itself.
   padding: 4px 6px;
 }
 
+// The bar around them is already the glass surface, so the buttons are just
+// their content until you touch them — same reason as the login button: an
+// accent fill made the accent focus ring unreadable.
+// Full pill radius here, unlike the capsules above, and that is not an
+// inconsistency: the seam is a BORDER artifact. This button never draws a
+// visible border — hover and active are a plain background fill, which is a
+// single path with nothing to join — so `9999px` is safe and the hover reads as
+// a proper capsule instead of a rounded rectangle. Focus is the soft ring only,
+// no accent edge, for the same reason: an accent border would bring the seam
+// back on the one state where you are looking straight at it.
 .greeter-power-btn {
-  background: var(--nidara-accent);
+  background: transparent;
   border: none;
   border-radius: var(--nidara-radius-pill);
-  color: #fff;
-  padding: 3px 16px;
+  color: var(--nidara-text);
+  padding: 0 16px;
   font-size: 13px;
-  min-height: 18px; // lockstep with the locale-bar dropdowns next to it
+  min-height: 22px; // lockstep with the locale-bar dropdowns next to it
+  outline: none;
 
-  &:hover  { background: var(--nidara-accent); }
-  &:active { background: var(--nidara-accent); }
+  &:hover  { background: rgba(255, 255, 255, 0.10); }
+  &:active { background: rgba(255, 255, 255, 0.16); }
+  &:focus,
+  &:focus-within {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--nidara-focus-ring);
+  }
+}
+
+// ── Lockscreen only: the capsules are PAINTED, not CSS-drawn ────────────────
+// widget/GlassBackdrop.ts draws the blurred backdrop, the glass fill and the
+// 1px rim on a single rounded path, so the CSS must stop drawing its own box
+// underneath — otherwise both are stacked and the border seams again at the
+// middle of each cap (the very thing the painter exists to remove).
+//
+// Scoped to the lock window: the GREETER shares this stylesheet, has no
+// painter, and keeps the CSS glass (it gets its blur from the compositor, via
+// the `nidara-greeter` layer_rule in config/greetd/hyprland-greeter.lua).
+// The focus ring stays in CSS — it is drawn outside the capsule and never
+// touches the rim.
+window.nidara-lock-window {
+  .greeter-password,
+  .greeter-login-btn,
+  .greeter-power-bar {
+    background: transparent;
+    border-color: transparent;
+    border-radius: var(--nidara-radius-pill);
+  }
 }

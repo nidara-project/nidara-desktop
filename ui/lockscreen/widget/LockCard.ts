@@ -4,6 +4,7 @@ import GLib from "gi://GLib"
 import AstalAuth from "gi://AstalAuth"
 import { getCurrentUser } from "../../lib/users"
 import { makeAvatar } from "../../lib/avatar"
+import { withGlassBackdrop } from "./GlassBackdrop"
 import { t } from "../lib/i18n"
 
 export default function LockCard(onUnlock: () => void): Gtk.Widget {
@@ -83,9 +84,12 @@ export default function LockCard(onUnlock: () => void): Gtk.Widget {
     pam.connect("fail", (_: any, msg: string) => {
       console.error("[Lock] auth fail:", msg)
       showError(t("wrongPassword"))
+      // setLoading(false) FIRST: it re-enables the entry, and an insensitive
+      // widget cannot take focus — grab_focus() before it was a silent no-op,
+      // which is why a wrong password left you having to click or Tab back in.
+      setLoading(false)
       passwordEntry.set_text("")
       passwordEntry.grab_focus()
-      setLoading(false)
     })
 
     pam.connect("auth-prompt-hidden", () => { pam.supply_secret(password) })
@@ -109,8 +113,12 @@ export default function LockCard(onUnlock: () => void): Gtk.Widget {
 
   col.append(avatar.widget)
   col.append(usernameLabel)
-  col.append(passwordEntry)
-  col.append(unlockBtn)
+  // The entry is translucent (--nidara-glass): the compositor cannot blur what
+  // is behind a lock surface, so we paint the blurred wallpaper ourselves.
+  // Rim weights mirror what the CSS used to draw: --nidara-glass-border-sm on
+  // the entry, the stronger --nidara-glass-border on the primary button.
+  col.append(withGlassBackdrop(passwordEntry, "subtle", true))
+  col.append(withGlassBackdrop(unlockBtn, "strong", true))
   col.append(errorLabel)
 
   col.connect("map", () => {

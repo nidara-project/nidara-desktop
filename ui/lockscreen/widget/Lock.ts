@@ -5,17 +5,24 @@ import LockCard from "./LockCard"
 import PowerBar from "./PowerBar"
 import Clock from "./Clock"
 import { resolveWallpaper } from "../../lib/wallpaper"
+import { setBackdropSource } from "./GlassBackdrop"
 
 function buildWindow(onUnlock: () => void): Gtk.ApplicationWindow {
   const win = new Gtk.ApplicationWindow({
     application: app,
-    css_classes: ["greeter-window"],
+    // The second class scopes the "capsules are painted, not CSS-drawn"
+    // overrides to the lockscreen: the greeter shares this stylesheet but has
+    // no painter (it gets compositor blur and keeps the CSS glass).
+    css_classes: ["greeter-window", "nidara-lock-window"],
   })
 
   // The lockscreen runs inside the locked user's session, so its own config
   // dir is the right source — never getDefaultUser(), which points at the
   // first /etc/passwd user and reads the wrong home on multi-user machines.
   const wallpaperPath = resolveWallpaper("lockscreen")
+  // Same image the glass elements blur behind themselves — they must show the
+  // wallpaper that is actually on screen, not a second one.
+  setBackdropSource(wallpaperPath)
   const fill: Gtk.Widget = wallpaperPath
     ? (() => {
         const pic = new Gtk.Picture({ hexpand: true, vexpand: true, content_fit: Gtk.ContentFit.COVER })
