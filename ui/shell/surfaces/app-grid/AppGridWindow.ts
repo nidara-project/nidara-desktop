@@ -46,11 +46,13 @@ import hs from "../../core/HyprlandState"
 const NAMESPACE = "nidara-app-grid"
 
 // Enough to cover the squircle's soft Cairo edge and its drop shadow, which sit
-// outside the widget's allocation. The panel is centred and its size is fixed for
-// a given monitor, so unlike the island's rect this one never slides — no motion
-// budget to pad for, and the pop animation only ever paints INSIDE the final
-// allocation (OVERLAY_POP scales 0.97 → 1.0 at snapshot time, `animateLayout:
-// false`, so the allocation is the final one from the first frame).
+// outside the widget's allocation. Unlike the island's rect this one carries no
+// MOTION budget: the panel is centred, so it does not slide sideways under a late
+// stamp — and the pop animation only ever paints INSIDE the final allocation
+// (OVERLAY_POP scales 0.97 → 1.0 at snapshot time, `animateLayout: false`, so the
+// allocation is the final one from the first frame).
+// ⚠️ It does RESIZE, though — see the stamping note below. "Centred" is not
+// "fixed", and reading the first as the second is what left a stale input rect.
 const BLUR_PAD = 48
 
 export interface AppGridWindowHandle {
@@ -132,6 +134,7 @@ export function AppGridWindow(
     // the input rect is not, because padding what you can CLICK would put a 48px
     // dead ring around the panel that swallows the outside press that dismisses it.
     let lastBlurKey = ""
+    let lastInputKey = ""
     const stampRegions = (): boolean => {
         const surface = win.get_native()?.get_surface()
         if (!surface?.set_input_region) return false
@@ -158,7 +161,7 @@ export function AppGridWindow(
             // erases the grid), and an EMPTY one is the safe answer for INPUT (a
             // wrong rect there makes a monitor-sized surface eat every click on
             // screen). Opposite defaults, same principle: fail towards invisible.
-            surface.set_input_region(region)
+            if (lastInputKey !== "empty") { lastInputKey = "empty"; surface.set_input_region(region) }
             setBlur("none", null)
             win.queue_draw()
             return false
@@ -166,11 +169,18 @@ export function AppGridWindow(
 
         const bx = Math.round(b.get_x()), by = Math.round(b.get_y())
         const bw = Math.round(b.get_width()), bh = Math.round(b.get_height())
+        const inputKey = yielded ? "yield" : `${bx},${by},${bw},${bh}`
         if (!yielded) {
             // @ts-ignore  (same untyped Cairo.Region call as Bar.tsx / IslandWindow.ts)
             region.unionRectangle({ x: bx, y: by, width: bw, height: bh })
         }
-        surface.set_input_region(region)
+        // Dedupe both regions by key, so calling this more often than necessary is
+        // free. That is what lets the resize hook below be generous: a stamp that
+        // changes nothing must not reach `queue_draw`, or a caller on the frame
+        // clock would repaint the surface every frame — the expensive failure mode
+        // this whole mechanism exists to avoid.
+        const unchanged = inputKey === lastInputKey
+        if (!unchanged) { lastInputKey = inputKey; surface.set_input_region(region) }
 
         const x = Math.max(0, bx - BLUR_PAD)
         const y = Math.max(0, by - BLUR_PAD)
@@ -178,16 +188,26 @@ export function AppGridWindow(
         const height = Math.min(monGeo.height - y, bh + BLUR_PAD * 2)
         if (width <= 0 || height <= 0) setBlur("none", null)
         else setBlur(`panel:${x},${y},${width},${height}:${yielded ? 1 : 0}`, { x, y, width, height })
-        win.queue_draw()   // input regions are double-buffered: apply on next commit
+        // Input regions are double-buffered — they apply on the surface's next
+        // commit — so a stamp that changed something has to ride a repaint.
+        if (!unchanged) win.queue_draw()
         return true
     }
 
     // A window presented this frame has no allocation, so the first stamp cannot
     // describe anything (see `measurable` above). Ride the frame clock until it can,
     // then stop — this is NOT a per-frame region, which would be the expensive kind
-    // (a rect that changes every frame costs more than the box it saves). The panel's
-    // allocation is final from its first laid-out frame, so one good stamp is the
-    // whole job and `settled` only exists to not trust the very first one.
+    // (a rect that changes every frame costs more than the box it saves).
+    //
+    // ⚠️ Stopping is only safe because something else re-starts it. The first version
+    // stopped for good, on the reasoning that "the panel is centred at a fixed size,
+    // so the rect never slides" — which is FALSE: `filterApps` swaps the fixed-height
+    // scroller for the short no-results box, so a search that matches nothing shrinks
+    // the panel from ~738px to ~280px. The frozen INPUT rect then kept swallowing
+    // clicks over ~630px of visibly empty screen, where every other pixel dismisses
+    // (found 2026-08-09 by asking why the surface is still monitor-sized). The blur
+    // rect merely stayed too big, which is the harmless direction — the input rect is
+    // the one that misbehaves when stale.
     let stampTick = 0
     let settled = 0
     const stopStamping = () => {
@@ -203,6 +223,13 @@ export function AppGridWindow(
             return GLib.SOURCE_CONTINUE
         })
     }
+
+    // Any change to the panel's size re-opens the stamping window. Hooked on the
+    // squircle's own DrawingArea rather than on the no-results toggle that prompted
+    // it: `resize` fires for EVERY cause, including ones added later, and the
+    // key-dedupe above makes a stamp that changes nothing free. Same hook `Bar.tsx`
+    // uses to follow the island capsule.
+    panel.glassArea?.connect("resize", () => { if (status.app_grid_open) startStamping() })
 
     // ── Modality ──────────────────────────────────────────────────────────────
     //

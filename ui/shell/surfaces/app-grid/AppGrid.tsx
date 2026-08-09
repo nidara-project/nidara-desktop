@@ -33,6 +33,12 @@ const appsService = new AstalApps.Apps()
 
 export interface AppGridPanelHandle {
     widget: Gtk.Widget
+    /** The squircle's own `Gtk.DrawingArea` (`SquircleContainer`'s `glassArea`), so the
+     *  owning surface can re-stamp its regions when the panel RESIZES. It does resize:
+     *  `filterApps` swaps the fixed-height scroller for the short no-results box. Same
+     *  hook `Bar.tsx` uses on the island capsule, and generic — it fires for any future
+     *  cause too, not just that one. */
+    glassArea: Gtk.Widget | null
     onShow: () => void
     handleKey: (keyval: number) => boolean
     setActive: (active: boolean) => void
@@ -627,6 +633,7 @@ export default function AppGridPanel(
 
     return {
         widget: panelPop,
+        glassArea: (squirclePanel as any).glassArea ?? null,
         setVisible,
 
         onShow() {

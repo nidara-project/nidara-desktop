@@ -92,9 +92,20 @@ question "do I know what I paint before I paint it?".
   has the same no-allocation-yet problem, but two properties the island lacks let it declare
   anyway. Its revealer is `OVERLAY_POP` with `animateLayout: false`, so the allocation is the FINAL
   one from the first laid-out frame and the 0.97→1.0 pop paints strictly inside it; and the panel is
-  centred at a fixed size, so the rect never slides. It therefore rides the frame clock only until
-  the first measurable stamp (`add_tick_callback`, `settled >= 2`, then removed) instead of
+  centred, so it does not slide sideways under a late stamp. It therefore rides the frame clock only
+  until the first measurable stamp (`add_tick_callback`, `settled >= 2`, then removed) instead of
   re-declaring per frame — a region that changes every frame can cost more than the box it saves.
+  ⚠️ **Stopping is only safe because a hook re-starts it, and the first version had no hook.**
+  "Centred" was read as "fixed size", and the panel is not fixed: `filterApps` swaps the
+  fixed-height scroller for the short no-results box, so a search that matches nothing shrinks it
+  from ~738px to ~280px. The frozen INPUT rect then swallowed clicks over ~630px of visibly empty
+  screen — where every other pixel dismisses — while the blur rect merely stayed too big, which is
+  the harmless direction. The fix is a `resize` hook on the squircle's own `glassArea`
+  (`SquircleContainer` exposes it; `Bar.tsx` uses the same one for the island capsule), chosen over
+  hooking the no-results toggle because it fires for every cause including later ones, plus a
+  key-dedupe on BOTH regions so a stamp that changes nothing never reaches `queue_draw`.
+  🔑 **A region you stop maintaining needs a stated reason it can never go stale — and "it looks
+  fixed" is not one.**
   Closed, it is UNMAPPED, and an unmapped surface has no blur pass at all.
   ⚠️ Its two regions default in OPPOSITE directions while it cannot measure: **null (whole surface)
   for blur**, because a wrong rect there ERASES the grid, and **empty for input**, because a wrong
