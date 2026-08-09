@@ -47,6 +47,15 @@ function buildWindow(onUnlock: () => void): Gtk.ApplicationWindow {
 
   const overlay = new Gtk.Overlay()
   overlay.set_child(fill)
+
+  // Wallpaper scrim — the hero text has no glass behind it and vanishes on a
+  // light wallpaper. `can_target: false` is load-bearing: a full-size child of a
+  // Gtk.Overlay takes input by default, so without it this box would swallow
+  // every click meant for the card below.
+  const scrim = new Gtk.Box({ hexpand: true, vexpand: true, css_classes: ["greeter-scrim"] })
+  scrim.set_can_target(false)
+  overlay.add_overlay(scrim)
+
   overlay.add_overlay(clockWidget)
   overlay.add_overlay(lockCard)
   overlay.add_overlay(powerBar)

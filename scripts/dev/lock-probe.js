@@ -38,6 +38,9 @@
  *                `nidara-lock-window`, which is where the "capsules are painted,
  *                not CSS-drawn" overrides live — so in that scope the capsules
  *                correctly render as nothing. Default `greeter`.
+ *   EXTRA_CSS=<path>  a second sheet loaded ABOVE the first — "what if we also
+ *                said this?". How candidate treatments are compared without
+ *                editing the real stylesheet for each one.
  *   W, H         surface size (default 1280x800).
  *
  * ⚠️ TWO THINGS TO KNOW BEFORE READING A NUMBER OFF IT.
@@ -84,6 +87,14 @@ const provider = new Gtk.CssProvider()
 provider.load_from_path(CSS)
 Gtk.StyleContext.add_provider_for_display(display, provider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 10)
 print(`[css]   ${CSS}`)
+
+const EXTRA = GLib.getenv("EXTRA_CSS")
+if (EXTRA) {
+    const extra = new Gtk.CssProvider()
+    extra.load_from_path(EXTRA)
+    Gtk.StyleContext.add_provider_for_display(display, extra, Gtk.STYLE_PROVIDER_PRIORITY_USER + 40)
+    print(`[extra] ${EXTRA}`)
+}
 print(`[scope] ${SCOPE}   [bg] ${BG}`)
 
 // ── the specimen: Lock.ts's buildWindow(), minus the parts that need a session ──
@@ -181,6 +192,13 @@ for (const label of ["Suspender", "Reiniciar", "Apagar"]) {
 
 const overlay = new Gtk.Overlay()
 overlay.set_child(backdrop)
+// The wallpaper scrim, as both real surfaces build it — `can_target: false`
+// included, because that is what stops a full-size overlay child from swallowing
+// every click meant for the card. Shipped since 2026-08-09; it started life as an
+// env-gated candidate here, which is what EXTRA_CSS is for now.
+const scrim = new Gtk.Box({ hexpand: true, vexpand: true, css_classes: ["greeter-scrim"] })
+scrim.set_can_target(false)
+overlay.add_overlay(scrim)
 overlay.add_overlay(clockBox)
 overlay.add_overlay(card)
 overlay.add_overlay(powerBar)

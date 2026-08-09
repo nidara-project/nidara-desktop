@@ -852,6 +852,33 @@ than throwing — a missing icon must cost an icon, never the login screen. They
 SVGs, not symbolic, so the consumer **must** add `nd-icon`; the sheet now carries that rule
 once instead of stapled to the avatar fallback.
 
+### Bare text on the wallpaper: the scrim, and the 0.3 ceiling that governs it
+
+The hero date, the clock and the username are the only text on either screen with **no glass
+behind them**, and on a light wallpaper they do not dim — they vanish. Rendered on an
+87 %-luminance backdrop (2026-08-09), the entire hero block was gone.
+
+**The obvious fix was the weakest of five candidates.** A text shadow outlines the glyph
+without raising the contrast underneath it, so the hero went from invisible to *ghostly*. What
+works is a **scrim** lifting the background contrast plus a shadow doing the edge — which is
+also what the field does: GNOME, Windows 11 and iOS all scrim their lock wallpaper, macOS
+leans on a shadow with a slight dim, and none of the four leaves the text bare. The gradient
+is stronger at the ends (where the clock and the power bar live) and lighter through the
+middle, so the wallpaper survives where nothing has to be read over it.
+
+🔑 **The 0.28 peak is not a taste value — it is what keeps the two screens identical, and it
+is the single most useful number to know about this pair.** The greeter is a *transparent*
+layer over awww's wallpaper carrying `blur = true, ignore_alpha = 0.3`
+(`config/greetd/hyprland-greeter.lua`); the lockscreen paints its *own* wallpaper and gets no
+compositor blur at all. **So any pixel of ours above 0.3 alpha has blurred wallpaper behind it
+on the login screen and sharp wallpaper on the lock screen.** Two surfaces, one stylesheet,
+same declaration, different result — and nothing warns you. That ceiling is why the shadow
+cannot simply be made stronger (a convincing one wants 0.5–0.6), and it is the first thing to
+check before adding any translucent element to this sheet.
+
+⚠️ A full-size child of a `Gtk.Overlay` **takes input by default**. The scrim sets
+`can_target: false` in both bundles; without it, it swallows every click meant for the card.
+
 ### Looking at these two surfaces: `scripts/dev/lock-probe.js`
 
 They are the only surfaces in the DE you cannot see while working on them — the shell

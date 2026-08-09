@@ -2602,11 +2602,13 @@ the system it is supposed to belong to.**
    visible flat run one pixel under. Magnified proof in `design-system.md`'s tangency section.
    This also happens to be the direction the whole surface wants: lifting the shell's glass
    painters into `ui/lib` so the lock and greeter consume them rather than imitate them.
-2. **Bare text over a light wallpaper is illegible** — the date, the clock and the username are
-   the only text on either screen with no glass behind them, and the light-backdrop render makes
-   it plain. The obvious fix (a text shadow) is not obvious: an alpha above the greeter's
-   `ignore_alpha = 0.3` gets blurred backdrop behind it there and lands on sharp wallpaper on the
-   lock, so **the two screens would stop matching**. Needs a decision, not a patch.
+2. ~~**Bare text over a light wallpaper is illegible.**~~ ✅ **CLOSED 2026-08-09** — a
+   `.greeter-scrim` gradient plus a shadow on the three bare labels, everything peaking at 0.28
+   so the greeter's `ignore_alpha = 0.3` never triggers and both screens render the same. The
+   candidates were rendered rather than argued (`lock-probe.js`, 87 %-luminance backdrop), and
+   that settled it against the intuition: **the shadow alone was the WEAKEST of the five** — it
+   outlines the glyph without lifting the contrast under it, so the hero went from invisible to
+   ghostly. Mechanism and the 0.3 ceiling in `design-system.md`.
 3. **`ui/greeter/style.css.map` is tracked while `style.css` is gitignored**
    (`.gitignore:110`), so every build dirties the tree with the `.map`. Cosmetic, but it makes a
    `git status` after a build look like it contains a change it does not.

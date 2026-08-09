@@ -22,6 +22,14 @@ export default function Greeter(monitor: Gdk.Monitor) {
   const overlay = new Gtk.Overlay()
   overlay.set_child(fill)
 
+  // Wallpaper scrim — the hero text has no glass behind it and vanishes on a
+  // light wallpaper. `can_target: false` is load-bearing: a full-size child of a
+  // Gtk.Overlay takes input by default, so without it this box would swallow
+  // every click meant for the card below.
+  const scrim = new Gtk.Box({ hexpand: true, vexpand: true, css_classes: ["greeter-scrim"] })
+  scrim.set_can_target(false)
+  overlay.add_overlay(scrim)
+
   const clockWidget = Clock()
   clockWidget.halign = Gtk.Align.CENTER
   clockWidget.valign = Gtk.Align.START

@@ -90,7 +90,48 @@ window > contents {
   box-shadow: none;
 }
 
+// ── Wallpaper scrim ─────────────────────────────────────────────────────────
+// The date, the clock and the username are the ONLY text on either screen with
+// no glass behind them, and on a light wallpaper they do not merely dim — they
+// disappear (rendered on an 87 %-luminance backdrop with scripts/dev/lock-probe.js,
+// 2026-08-09: the whole hero block was gone). White text has no defence there.
+//
+// A shadow alone was the obvious answer and it was the WEAKEST of the five
+// candidates: it outlines the glyph without raising the background contrast, so
+// the hero went from invisible to ghostly. What works is lifting the contrast
+// underneath and then letting the shadow do the edge — hence both, here and on
+// the labels below.
+//
+// The gradient is stronger at the ends (date/clock at the top, power bar at the
+// bottom) and lighter through the middle, so the wallpaper survives where
+// nothing has to be read over it. GNOME, Windows 11 and iOS all scrim their lock
+// wallpaper; none of the four systems leaves the text bare.
+//
+// 🔑 THE 0.3 CEILING IS NOT A STYLE CHOICE, IT IS WHAT KEEPS THE TWO SCREENS
+// IDENTICAL. The greeter is a transparent layer over awww's wallpaper with
+// `blur = true, ignore_alpha = 0.3` (config/greetd/hyprland-greeter.lua); the
+// lockscreen paints its own wallpaper and gets no compositor blur at all. Any
+// pixel of ours ABOVE 0.3 therefore has blurred wallpaper behind it on the login
+// screen and sharp wallpaper on the lock screen. Everything here peaks at 0.28.
+// If a future value needs to go higher, it has to go higher on the lock's
+// painter too, or the screens stop matching.
+.greeter-scrim {
+  background-image: linear-gradient(to bottom,
+    rgba(0, 0, 0, 0.28) 0%,
+    rgba(0, 0, 0, 0.16) 34%,
+    rgba(0, 0, 0, 0.16) 66%,
+    rgba(0, 0, 0, 0.28) 100%);
+}
+
 // ── Date / Clock ────────────────────────────────────────────────────────────
+// The three bare-on-wallpaper labels share one shadow — see .greeter-scrim for
+// why it is capped at 0.28 and why it is not the whole fix.
+.greeter-date,
+.greeter-clock,
+.greeter-username {
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.28), 0 0 14px rgba(0, 0, 0, 0.26);
+}
+
 .greeter-date {
   // 13px under an 88px clock is a 1:6.8 ratio — outside every system that ships
   // a lock screen (macOS 1:4.8, iOS 1:4.4, Win11 1:3.7, GNOME 1:3.4). At
