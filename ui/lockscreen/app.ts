@@ -5,7 +5,7 @@ import GLib from "gi://GLib"
 import Gtk4SessionLock from "gi://Gtk4SessionLock"
 import { Lock, LockOverlay } from "./widget/Lock"
 import { accentCssFor, ACCENT_HEX, type AccentKey } from "../lib/accent"
-import { setAccentRim } from "./widget/GlassBackdrop"
+import { setAccentRim } from "../lib/glass-capsule"
 
 // Use our blank theme instead of Adwaita.
 GLib.setenv("GTK_THEME", "nidara", true)

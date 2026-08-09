@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
+import { withGlassCapsule } from "../../lib/glass-capsule"
 import { ndImageProps } from "../../lib/icons"
 import { t, onLocaleChange, type StringKey } from "../lib/i18n"
 
@@ -35,5 +36,9 @@ export default function PowerBar(): Gtk.Widget {
   bar.append(PowerButton(ACTION_ICONS.shutdown, "shutdown",
     () => execAsync(["systemctl", "poweroff"]).catch(console.error)))
 
-  return bar
+  // The bar's pill is the translucent surface; the buttons are only their
+  // content until you touch them. Wrapped WITHOUT followFocus on purpose: a
+  // container reports FOCUS_WITHIN whenever any child has focus, which would
+  // paint the whole bar accent when what is focused is one button inside it.
+  return withGlassCapsule(bar)
 }

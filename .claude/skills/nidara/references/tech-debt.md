@@ -2597,11 +2597,11 @@ the system it is supposed to belong to.**
   inside the bar, and it was fixed by hand the day before after being briefly removed.
 
 **Left open (all pre-existing, now with evidence):**
-1. **The greeter's capsules should be PAINTED, like the lockscreen's already are.** The CSS pill
-   has two failure modes and nothing between them — a bright dot at exactly half-height, a
-   visible flat run one pixel under. Magnified proof in `design-system.md`'s tangency section.
-   This also happens to be the direction the whole surface wants: lifting the shell's glass
-   painters into `ui/lib` so the lock and greeter consume them rather than imitate them.
+1. ~~**The greeter's capsules should be PAINTED.**~~ ✅ **DONE 2026-08-09** — the painter moved
+   to `ui/lib/glass-capsule.ts` with the backdrop OPTIONAL, and both bundles use it (entry,
+   primary button, power bar, plus the greeter's locale bar). The `window.nidara-lock-window`
+   CSS block is gone: there are no lock-only rules left. Doing it surfaced a real bug the lock
+   could never have shown — see `design-system.md`, "the rim has to be a RING".
 2. ~~**Bare text over a light wallpaper is illegible.**~~ ✅ **CLOSED 2026-08-09** — a
    `.greeter-scrim` gradient plus a shadow on the three bare labels, everything peaking at 0.28
    so the greeter's `ignore_alpha = 0.3` never triggers and both screens render the same. The
@@ -2614,3 +2614,28 @@ the system it is supposed to belong to.**
    `git status` after a build look like it contains a change it does not.
 4. The greeter and lockscreen still **duplicate** `PowerBar.ts`, `Clock.ts` and their i18n
    scaffolding; this pass added a fourth shared file (`icons.ts`) rather than merging them.
+
+
+### 58. `GlassCapsule` never unparents its child — teardown warning (2026-08-09)
+
+`ui/lib/glass-capsule.ts` parents its child by hand (`child.set_parent(this)`), and nothing
+ever unparents it, so GTK logs one line per capsule when the window goes away:
+
+```
+Gtk-WARNING: Finalizing NidaraGlassCapsule 0x…, but it still has children left:
+```
+
+Three per surface today (entry, button, power bar; four on the greeter with the locale bar).
+Pre-existing — it arrived with the painter on 2026-08-09 and only surfaced when
+`lock-probe.js` started building the capsules offscreen and closing the window in the same
+run. Consequence is a warning, not a leak the user can feel: both bundles are exiting when it
+fires (the lock quits after unlock, the greeter execs the session).
+
+The class ships a `destroyCapsule()` that does the unparent and **has no caller**. Its comment
+says a `vfunc_dispose` override is not an option because "GJS blocks JS vfuncs during
+disposal" — that claim is *asserted, not verified here*, and it is the thing to check first:
+if `vfunc_dispose` does run, it is the documented GTK4 answer and the whole item closes.
+Deliberately NOT fixed by trial and error, which is the failure mode this project keeps
+paying for. Whoever picks it up: confirm the GJS behaviour against its docs or a minimal
+reproducer, then either implement `vfunc_dispose` or wire `destroyCapsule()` to a real signal
+— and delete the dead method if the vfunc works.

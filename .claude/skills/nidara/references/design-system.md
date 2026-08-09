@@ -466,7 +466,18 @@ out on purpose, the exception belongs beside the blanket.
 
 🔑 **Focus is not one affordance.** A control styled as an INPUT (the dropdown trigger, the text
 inputs) shows keyboard focus as its 2px border going accent — no ring. A BUTTON shows a ring
-(`nidara-focus-ring`). One control must never show both.
+(`nidara-focus-ring`, now in `ui/lib/styles/_tokens.scss` so all three bundles share it). One
+control must never show both.
+
+The greeter and lockscreen broke this in both directions until 2026-08-09 and the symptom the
+user reported was neither rule: the focus just looked **dull**. The unlock button drew an
+accent border AND a halo (both affordances), and every ring on those two surfaces was
+`rgba(accent, 0.35)` rather than solid — a 35 % ring reads as "something is slightly different
+here" instead of "your keystrokes go here". **A tinted focus ring is not a softer focus ring,
+it is a weaker signal**; if it looks too loud at full strength, the control is wrong, not the
+alpha. On the lock the input's accent edge is the painted rim (`followFocus: true`), which is
+also why only the entry passes that flag — a container reports `FOCUS_WITHIN` for any child,
+so passing it on the power bar paints the whole bar accent when one button inside has focus.
 
 ### A vertical inset on a SCROLLABLE list is viewport, not air
 
@@ -779,6 +790,10 @@ at any scale. Any widget painting a backdrop inside such a pill
 (`ui/lockscreen/widget/GlassBackdrop.ts`) must clip to the SAME radius, or its
 fill spills past the border at the caps.
 
+✅ **CLOSED 2026-08-09 — both surfaces PAINT their capsules** (`ui/lib/glass-capsule.ts`,
+lifted out of the lockscreen bundle). Everything below is the record of why CSS could not do
+it, because the number was argued from both sides twice.
+
 ⚠️ **"Still a pill to the eye" was wishful — the straight edge IS visible, and
 the trade is not free.** Rendered and magnified 2026-08-09 with
 `scripts/dev/lock-probe.js` after the user reported a flat run on the caps and
@@ -851,6 +866,30 @@ bundles that have no `core/`, by the same route `avatar.ts` already used
 than throwing — a missing icon must cost an icon, never the login screen. They are Lucide
 SVGs, not symbolic, so the consumer **must** add `nd-icon`; the sheet now carries that rule
 once instead of stapled to the avatar fallback.
+
+### The capsule is PAINTED, on both surfaces — and the rim has to be a RING
+
+`ui/lib/glass-capsule.ts` (`withGlassCapsule`) is the one capsule of the greeter and the
+lockscreen. It draws the body inside a rounded clip at radius exactly `min(w,h)/2` — a true
+pill, which CSS cannot deliver (see the tangency section above: a dot at half, a flat run one
+under, no third setting) — and the rim as a **1px ring, filled through an even-odd Cairo path**,
+never stroked and never a border primitive.
+
+**The only difference between the two surfaces is where the pixels behind the glass come
+from, and that is a property of the compositor rather than a design decision.** The greeter is
+a transparent layer whose `layer_rule` blurs whatever is below, so it passes no backdrop and
+its body is fill-only. The lockscreen gets no compositor blur at all (`ext-session-lock-v1`
+blanks everything behind the lock surface), so it calls `setCapsuleBackdrop(wallpaper)` and the
+painter renders the blurred copy itself, once, into a texture.
+
+🔑 **The bug that asymmetry hid, and the reason the ring matters.** The first version filled
+the *whole* outer pill with the rim colour and painted the body over it. That is invisible for
+as long as the body is opaque — and on the lock it is, because the blurred texture covers the
+rim. The greeter paints no texture, so its body is a 55 % tint, and the rim came straight
+through: **the entire capsule rendered accent blue the moment it took focus.** It could not
+have been found by reading the code, and it was not in the lock's own rendering either. It
+appeared on the first offscreen render of the textureless case. When one consumer of a painter
+is opaque and another is not, render the transparent one.
 
 ### Bare text on the wallpaper: the scrim, and the 0.3 ceiling that governs it
 

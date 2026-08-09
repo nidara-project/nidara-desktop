@@ -1,6 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
-import { withGlassBackdrop } from "./GlassBackdrop"
+import { withGlassCapsule } from "../../lib/glass-capsule"
 import { ndImageProps } from "../../lib/icons"
 import { t } from "../lib/i18n"
 
@@ -36,5 +36,5 @@ export default function PowerBar(): Gtk.Widget {
 
   // The bar's pill is the translucent part (the buttons themselves are accent
   // and opaque), so the backdrop blur goes on the bar, not on each button.
-  return withGlassBackdrop(bar)
+  return withGlassCapsule(bar)
 }

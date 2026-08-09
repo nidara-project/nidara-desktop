@@ -19,14 +19,16 @@
  * gate for anything about the compositor, the session-lock protocol, or the
  * painted glass; see the maintainer skill's vm-test harness.
  *
- * ⚠️ WHAT THIS DOES NOT SHOW. The lockscreen PAINTS its capsules
- * (widget/GlassBackdrop.ts blurs its own copy of the wallpaper, because under
- * ext-session-lock-v1 the compositor draws nothing behind the lock surface), and
- * the greeter gets compositor blur from a layer_rule. Neither exists here: this
- * renders the surface as the CSS describes it, with a flat backdrop. So it
- * answers TYPE, COLOUR, SPACING and HIERARCHY — which is what falls out of sync
- * — and says nothing about blur, about the painted rim, or about focus rings
- * (`:focus-visible` does not match offscreen; see gtk-probe.js's known limit).
+ * ⚠️ WHAT THIS DOES NOT SHOW. Neither surface's BLUR: the lockscreen's own
+ * (ui/lib/glass-capsule.ts renders it from the wallpaper, because under
+ * ext-session-lock-v1 the compositor draws nothing behind the lock surface) is
+ * skipped here unless BG points at a real image, and the greeter's comes from a
+ * layer_rule that does not exist offscreen. Nor `:focus-visible`, which GTK only
+ * grants on keyboard traversal (see gtk-probe.js's known limit) — use `:focus`
+ * as the stand-in when the question is about the cascade.
+ *
+ * What it does answer: TYPE, COLOUR, SPACING, HIERARCHY, and — with PAINTER set
+ * — the capsule's SHAPE, which is what sent the last two rounds sideways.
  *
  * Env hooks:
  *   CSS=<path>   stylesheet to load (default ui/greeter/style.css). Point it at
@@ -41,6 +43,15 @@
  *   EXTRA_CSS=<path>  a second sheet loaded ABOVE the first — "what if we also
  *                said this?". How candidate treatments are compared without
  *                editing the real stylesheet for each one.
+ *   PAINTER=<path>  a BUNDLED ui/lib/glass-capsule.js. Without it the capsules
+ *                render as the CSS leaves them, which since 2026-08-09 is
+ *                nothing at all — both bundles paint them. So pass it whenever
+ *                the question is about the capsule rather than about type:
+ *                  npx --yes esbuild ui/lib/glass-capsule.ts --bundle \
+ *                    --format=esm --external:'gi://*' --outfile=/tmp/glass.js
+ *                (gjs cannot import TypeScript; the bundle is the whole reason
+ *                for the indirection. `--external:'gi://*'` keeps the GI imports
+ *                resolving at runtime.)
  *   W, H         surface size (default 1280x800).
  *
  * ⚠️ TWO THINGS TO KNOW BEFORE READING A NUMBER OFF IT.
@@ -96,6 +107,17 @@ if (EXTRA) {
     print(`[extra] ${EXTRA}`)
 }
 print(`[scope] ${SCOPE}   [bg] ${BG}`)
+// The painter, when a bundle was passed. `wrap` is the identity function
+// otherwise, so the specimen below reads the same either way.
+let wrap = (w) => w
+const PAINTER = GLib.getenv("PAINTER")
+if (PAINTER) {
+    const mod = await import(`file://${PAINTER}`)
+    if (GLib.file_test(BG, GLib.FileTest.EXISTS) && SCOPE === "lock") mod.setCapsuleBackdrop(BG)
+    wrap = (w, rim = "subtle", followFocus = false) => mod.withGlassCapsule(w, rim, followFocus)
+    print(`[painter] ${PAINTER}${SCOPE === "lock" ? " (with backdrop)" : ""}`)
+}
+
 
 // ── the specimen: Lock.ts's buildWindow(), minus the parts that need a session ──
 const classes = SCOPE === "lock" ? ["greeter-window", "nidara-lock-window"] : ["greeter-window"]
@@ -151,11 +173,11 @@ const entry = new Gtk.PasswordEntry({
     css_classes: ["greeter-password"], halign: Gtk.Align.CENTER,
     width_request: 280, margin_top: 20,
 })
-card.append(entry)
-card.append(new Gtk.Button({
+card.append(wrap(entry, "subtle", true))
+card.append(wrap(new Gtk.Button({
     label: "Desbloquear", css_classes: ["greeter-login-btn"],
     halign: Gtk.Align.CENTER, width_request: 280, margin_top: 8,
-}))
+}), "strong"))
 if (GLib.getenv("ERROR")) {
     card.append(new Gtk.Label({
         label: "Contraseña incorrecta", css_classes: ["greeter-error"],
@@ -199,9 +221,10 @@ overlay.set_child(backdrop)
 const scrim = new Gtk.Box({ hexpand: true, vexpand: true, css_classes: ["greeter-scrim"] })
 scrim.set_can_target(false)
 overlay.add_overlay(scrim)
+
 overlay.add_overlay(clockBox)
 overlay.add_overlay(card)
-overlay.add_overlay(powerBar)
+overlay.add_overlay(wrap(powerBar))
 win.set_child(overlay)
 
 // ── reporting ────────────────────────────────────────────────────────────────

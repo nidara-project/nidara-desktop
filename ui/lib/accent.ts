@@ -59,7 +59,6 @@ export function accentCssFor(accent: string | null | undefined): string {
     `  --nidara-accent-15:  rgba(${rgb}, 0.15);`,
     `  --nidara-accent-20:  rgba(${rgb}, 0.20);`,
     `  --nidara-accent-30:  rgba(${rgb}, 0.30);`,
-    `  --nidara-focus-ring: rgba(${rgb}, 0.35);`,
     `}`,
   ].join("\n")
 }

@@ -6,6 +6,7 @@ import { getUsers, type User } from "../../lib/users"
 import { greeterPrefs, savePrefs } from "../lib/greeter-prefs"
 import { makeAvatar } from "../../lib/avatar"
 import { greetdLogin, AuthError } from "../lib/greetd"
+import { withGlassCapsule } from "../../lib/glass-capsule"
 import { t, onLocaleChange } from "../lib/i18n"
 
 export default function LoginCard(): Gtk.Widget {
@@ -168,9 +169,14 @@ export default function LoginCard(): Gtk.Widget {
 
   col.append(avatar.widget)
   col.append(usernameLabel)
-  col.append(passwordEntry)
+  // Painted capsules, exactly as the lockscreen paints its own — see
+  // ui/lib/glass-capsule.ts. No backdrop source is set in this bundle, so the
+  // body is fill-only and the compositor supplies the blur behind it.
+  // followFocus only on the ENTRY: an input shows focus as its edge going
+  // accent, a button shows a ring, and no control shows both.
+  col.append(withGlassCapsule(passwordEntry, "subtle", true))
   col.append(capsLabel)
-  col.append(loginBtn)
+  col.append(withGlassCapsule(loginBtn, "strong", false))
   col.append(sessionDrp)
   col.append(errorLabel)
 

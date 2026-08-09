@@ -105,6 +105,21 @@ $dur-slow: 260ms;  // popover/sheet open
     --nidara-radius-pill: 9999px;
 }
 
+// ── Focus ────────────────────────────────────────────────────────────────────
+// FOCUS IS NOT ONE AFFORDANCE, and this mixin is only half of it. A control
+// styled as an INPUT shows keyboard focus as its own edge going accent — no
+// ring. A BUTTON shows this ring. One control must never show both: two
+// concentric accent shapes on one widget is what the rule exists to prevent.
+//
+// Solid accent, not a tinted halo. A 35 %-alpha ring reads as "something is
+// slightly different here" rather than "this is where your keystrokes go", which
+// is exactly how the greeter and lockscreen ended up with a focus state the user
+// described as dull (2026-08-09).
+@mixin nidara-focus-ring($offset: 2px) {
+    outline: 2px solid var(--nidara-accent);
+    outline-offset: $offset;
+}
+
 // SCSS aliases so component files never spell out `var(--nidara-radius-*)`.
 $nidara-radius-xl: var(--nidara-radius-xl);
 $nidara-radius-lg: var(--nidara-radius-lg);

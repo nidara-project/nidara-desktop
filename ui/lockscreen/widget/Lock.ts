@@ -5,7 +5,7 @@ import LockCard from "./LockCard"
 import PowerBar from "./PowerBar"
 import Clock from "./Clock"
 import { resolveWallpaper } from "../../lib/wallpaper"
-import { setBackdropSource } from "./GlassBackdrop"
+import { setCapsuleBackdrop } from "../../lib/glass-capsule"
 
 function buildWindow(onUnlock: () => void): Gtk.ApplicationWindow {
   const win = new Gtk.ApplicationWindow({
@@ -22,7 +22,7 @@ function buildWindow(onUnlock: () => void): Gtk.ApplicationWindow {
   const wallpaperPath = resolveWallpaper("lockscreen")
   // Same image the glass elements blur behind themselves — they must show the
   // wallpaper that is actually on screen, not a second one.
-  setBackdropSource(wallpaperPath)
+  setCapsuleBackdrop(wallpaperPath)
   const fill: Gtk.Widget = wallpaperPath
     ? (() => {
         const pic = new Gtk.Picture({ hexpand: true, vexpand: true, content_fit: Gtk.ContentFit.COVER })

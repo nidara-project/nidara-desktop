@@ -4,9 +4,16 @@
    GTK4 CSS subset: no color-mix(), no rgba(var(), n), no filter. */
 
 // This sheet is SHARED by two bundles — `ui/greeter` and `ui/lockscreen` —
-// which is why every class is named `.greeter-*`. Anything lock-only is scoped
-// under `window.nidara-lock-window` at the bottom of the file. A change here
-// lands on the login screen too; both have to be looked at.
+// which is why every class is named `.greeter-*`. A change here lands on the
+// login screen too; both have to be looked at.
+//
+// There are NO lock-only rules left. There used to be a
+// `window.nidara-lock-window { … }` block switching the CSS box off for the
+// three capsules, because only the lockscreen painted them. Both surfaces paint
+// them now (ui/lib/glass-capsule.ts), so the box is off for everyone and the
+// difference between the two screens is down to one thing: where the pixels
+// behind the glass come from. The class is still set on the window — keep it,
+// it is the hook if a genuine divergence ever appears.
 //
 // ── Where the numbers come from ─────────────────────────────────────────────
 // The type ramp, the weights, the spacing scale, the motion curves and the
@@ -38,7 +45,10 @@
   --nidara-accent-15:      rgba(0, 136, 255, 0.15);
   --nidara-accent-20:      rgba(0, 136, 255, 0.20);
   --nidara-accent-30:      rgba(0, 136, 255, 0.30);
-  --nidara-focus-ring:     rgba(0, 136, 255, 0.35);
+  // (--nidara-focus-ring, a 35 %-alpha accent halo, is GONE from both this block
+  // and accentCssFor(). It was the dull focus state; the ring is now solid
+  // accent via the shared `nidara-focus-ring` mixin, which reads
+  // --nidara-accent directly.)
 
   // The shell's dark text ramp, verbatim (_base.scss). It used to be a
   // near-miss copy — 0.70/0.45 against the shell's 0.80/0.55 — so secondary and
@@ -59,6 +69,10 @@
   // lockscreen paints these capsules itself (widget/GlassBackdrop.ts) and a
   // Cairo painter cannot read a CSS custom property. Same deal as the radius
   // ladder: two representations, one decision, they move together.
+  // ⚠️ These three are now consumed almost entirely by the PAINTER, through
+  // LOCK_GLASS in ui/lib/tokens.ts — the CSS copies below are what is left for
+  // the handful of surfaces still drawn by CSS (the avatar ring, the dropdown
+  // popovers, the separator). Change one, change the other.
   --nidara-glass:          rgba(18, 18, 28, 0.55);
   --nidara-glass-border:   rgba(255, 255, 255, 0.22);
   --nidara-glass-border-sm:rgba(255, 255, 255, 0.14);
@@ -193,30 +207,33 @@ window > contents {
 }
 
 // ── Password entry ─────────────────────────────────────────────────────────
-// GTK4 node for Gtk.PasswordEntry is `entry` (not passwordentry).
-// In GTK4 composite entries the keyboard focus lands on the inner `text` node,
-// so the outer node gets :focus-within, not :focus directly — use both.
-// GTK4's built-in fallback CSS draws a focus ring via `outline` (blue default).
-// We suppress it with `outline: none` and draw our own ring via `box-shadow`.
-// ── Why these pills do NOT use --nidara-radius-pill ──────────────────────────
-// `9999px` gets clamped by GTK to exactly half the height, which makes the two
-// corner arcs of each side meet at a single tangent point — with no straight
-// segment between them. At that junction GTK's border rendering leaves ONE
-// brighter pixel, right in the middle of each cap (user-caught 2026-08-09,
-// reproduced offscreen: visible at an odd height, clean at an even one, because
-// half of an odd height lands mid-pixel).
+// GTK4's node for Gtk.PasswordEntry is `entry` (not passwordentry), and in a
+// composite entry the keyboard focus lands on the inner `text` node — so the
+// outer widget gets :focus-within, never :focus. Both are matched below.
 //
-// Height parity is not something we can guarantee — fractional display scaling
-// turns any logical height into whatever it likes. So instead the radius stays
-// ONE PIXEL under half: still a pill to the eye, but the arcs are joined by a
-// 2px straight edge and never become tangent, at any scale. `min-height` is
-// explicit (and vertical padding zero) so the shape is derived from a number we
-// control, not from font metrics.
-// `box-shadow: inset` instead of `border` was tried first — same seam.
+// ── THE BOX IS PAINTED, NOT DRAWN HERE ───────────────────────────────────────
+// ui/lib/glass-capsule.ts paints the rim and the body on one rounded path, for
+// BOTH bundles, so this rule must not draw a box underneath: two stacked shapes
+// bring back the very seam the painter exists to remove.
+//
+// This replaces a run of increasingly awkward CSS workarounds, and the whole
+// dead end is worth keeping so nobody walks back into it. `--nidara-radius-pill`
+// (9999px) is clamped by GTK to exactly half the height, which makes each side's
+// two arcs meet at a single tangent point, and GTK's border rendering leaves ONE
+// brighter pixel right there — a "dot" in the middle of each cap. Backing the
+// radius off by one pixel removes the dot and replaces it with a 2px STRAIGHT
+// SEGMENT, which was shipped on the belief that it was invisible and is not: at
+// 9× it is unmistakable, and the user saw it at 1:1. `box-shadow: inset` instead
+// of `border` seams identically. There is no third setting — the failure is the
+// border primitive, not the number.
+//
+// FOCUS. An input shows focus as its own EDGE going accent, never as a ring
+// (see `nidara-focus-ring` in ui/lib/styles/_tokens.scss: one control must not
+// show both). The edge is the painted rim, so the painter owns this state too —
+// `withGlassCapsule(entry, "subtle", followFocus: true)` in both bundles.
 .greeter-password {
-  background: var(--nidara-glass);
-  border: 1px solid var(--nidara-glass-border-sm);
-  border-radius: 20px; // half of 42 (40 + 2 border), minus 1
+  background: transparent;
+  border: none;
   color: var(--nidara-text);
   caret-color: var(--nidara-text);
   padding: 0 16px;
@@ -224,11 +241,7 @@ window > contents {
   outline: none;
 
   &:focus,
-  &:focus-within {
-    outline: none;
-    border-color: var(--nidara-accent);
-    box-shadow: 0 0 0 2px var(--nidara-focus-ring);
-  }
+  &:focus-within { outline: none; }
 
   > text { color: var(--nidara-text); }
 
@@ -243,36 +256,34 @@ window > contents {
 }
 
 // ── Login / Unlock button ───────────────────────────────────────────────────
-// Glass, not accent. The accent is reserved for state — and here that means the
-// FOCUS RING specifically: with an accent-filled button the ring drew accent on
-// accent and you could not tell whether focus was on it. Both surfaces can
-// afford glass now: the greeter has compositor blur (hyprland-greeter.lua's
-// `nidara-greeter` layer_rule) and the lockscreen paints its own
-// (widget/GlassBackdrop.ts).
+// Glass, not accent: the accent is reserved for state, and on an accent-filled
+// button the accent focus ring drew accent on accent.
+//
+// The box is painted (see .greeter-password) — `withGlassCapsule(btn, "strong")`,
+// the heavier rim marking it as the primary control. Hover and active stay in
+// CSS: they are a plain fill with no border to seam, and they read on top of the
+// painted body.
+//
+// FOCUS: a BUTTON shows a ring, and only a ring. This used to draw an accent
+// border AND a 35 %-alpha halo — both of the affordances at once, and the halo so
+// faint the user read the state as "dull". Now it is the shell's own ring, solid
+// accent, and the capsule is wrapped with followFocus:false so the rim stays
+// neutral underneath it.
 .greeter-login-btn {
-  background: var(--nidara-glass);
-  border: 1px solid var(--nidara-glass-border);
+  background: transparent;
+  border: none;
   color: var(--nidara-text);
-  border-radius: 20px; // see .greeter-password: one under half, no arc tangency
   padding: 0 24px;
   font-weight: $fw-semibold;
   font-size: $fs-body;
   min-height: 40px;
   outline: none;
 
-  &:hover  { background: rgba(255, 255, 255, 0.10); }
-  &:active { background: rgba(255, 255, 255, 0.16); }
+  &:hover  { background: rgba(255, 255, 255, 0.10); border-radius: $nidara-radius-pill; }
+  &:active { background: rgba(255, 255, 255, 0.16); border-radius: $nidara-radius-pill; }
   &:focus,
-  &:focus-within {
-    outline: none;
-    border-color: var(--nidara-accent);
-    box-shadow: 0 0 0 2px var(--nidara-focus-ring);
-  }
-  &:disabled {
-    background: var(--nidara-glass);
-    border-color: var(--nidara-glass-border-sm);
-    color: var(--nidara-text-dim);
-  }
+  &:focus-within { @include nidara-focus-ring; }
+  &:disabled { color: var(--nidara-text-dim); }
 
   spinner {
     min-width: 14px;
@@ -358,10 +369,17 @@ dropdown > button {
   padding: 0;
 
   label { color: inherit; font-size: inherit; }
-  image { color: inherit; -gtk-icon-size: 10px; margin-start: 4px; }
+  // ⚠️ `margin-start` was declared on both of these and GTK4 CSS HAS NO SUCH
+  // PROPERTY — it logs "No property named margin-start" and does nothing. GTK4
+  // dropped the logical margin longhands; the physical `margin-left` is what
+  // exists. Removed rather than translated: it never applied, so translating it
+  // would ADD a 4px gap that has never shipped, on a control the greeter's
+  // dropdowns share. If the gap is wanted, that is a deliberate change with a
+  // render behind it, not a silent side effect of clearing a warning.
+  image { color: inherit; -gtk-icon-size: 10px; }
   // GtkDropDown's chevron is an `arrow` node, not `image` — uncapped it renders
   // at 16px and makes the combo visibly taller than its sibling buttons.
-  arrow { color: inherit; -gtk-icon-size: 10px; margin-start: 4px; }
+  arrow { color: inherit; -gtk-icon-size: 10px; }
 }
 
 // Session selector — visible, medium weight
@@ -433,11 +451,12 @@ dropdown popover {
 }
 
 // ── Locale bar ───────────────────────────────────────────────────────────────
+// Painted (see .greeter-power-bar). Same derivation for the inset: the painted
+// pill is 26/2 = 13, the dropdown buttons inside clamp to 18/2 = 9, so 4.
 .locale-bar {
-  background: var(--nidara-glass);
-  border: 1px solid var(--nidara-glass-border-sm);
-  border-radius: var(--nidara-radius-pill);
-  padding: 4px 10px;
+  background: transparent;
+  border: none;
+  padding: 4px;
 }
 
 .locale-bar-icon {
@@ -453,30 +472,48 @@ dropdown popover {
 }
 
 // ── Power bar ────────────────────────────────────────────────────────────────
+// Painted like the other two (see .greeter-password). The box is gone from CSS;
+// what is left is the INSET, and that number is derived, not chosen.
+//
+// A row's hover fill spans its container, so the container's padding IS the
+// fill's margin — and the goal is ONE gap: the fill should stand as far from the
+// corner's curve as it does from the straight edge. For circular corners
+// `rowInsetFor()` (ui/lib/tokens.ts) collapses to plain concentricity,
+// `outer − inner`: the painted bar is a true pill at 32/2 = 16, the button's own
+// pill clamps to 22/2 = 11, so the inset is 5 — on all four sides.
+//
+// It used to be `4px 6px`, which put the halo half again as wide at the ends as
+// at the top and bottom; the user saw it before anyone measured it. No menu
+// system runs a ratio like that (AppKit ~5/4, Windows 11 flyouts 4/4), and this
+// is the second time the same mistake has been caught by eye in this project —
+// the first was the shell's own menu rows.
+//
+// The height is unchanged: 22 + 5 + 5 = 32, exactly what 22 + 4 + 4 + 2·border
+// used to make. And the padding is still what keeps the buttons INSIDE the bar:
+// remove it (done briefly on 2026-08-09) and they stretch to full height, so
+// their hover becomes the same capsule as the bar itself.
 .greeter-power-bar {
-  background: var(--nidara-glass);
-  border: 1px solid var(--nidara-glass-border-sm);
-  border-radius: 15px; // see .greeter-password: one under half of 32
-  // The vertical padding is what keeps the buttons INSIDE the bar. Removing it
-  // (done briefly on 2026-08-09) makes them stretch to the bar's full height,
-  // so their hover and focus ring become the same capsule as the bar itself.
-  padding: 4px 6px;
+  background: transparent;
+  border: none;
+  padding: 5px;
 }
 
 // The bar around them is already the glass surface, so the buttons are just
-// their content until you touch them — same reason as the login button: an
-// accent fill made the accent focus ring unreadable.
-// Full pill radius here, unlike the capsules above, and that is not an
-// inconsistency: the seam is a BORDER artifact. This button never draws a
-// visible border — hover and active are a plain background fill, which is a
-// single path with nothing to join — so `9999px` is safe and the hover reads as
-// a proper capsule instead of a rounded rectangle. Focus is the soft ring only,
-// no accent edge, for the same reason: an accent border would bring the seam
-// back on the one state where you are looking straight at it.
+// their content until you touch them.
+//
+// Full pill radius here, unlike a CSS-drawn capsule, and that is not an
+// inconsistency: the seam is a BORDER artifact and this button never draws a
+// border — hover and active are a plain fill, a single path with nothing to
+// join — so `9999px` is safe and the hover reads as a proper capsule rather
+// than a rounded rectangle.
+//
+// FOCUS: the shell's ring, solid accent. It was a 35 %-alpha halo, which is what
+// the user meant by the focus on these buttons looking dull — see
+// `nidara-focus-ring` in ui/lib/styles/_tokens.scss.
 .greeter-power-btn {
   background: transparent;
   border: none;
-  border-radius: var(--nidara-radius-pill);
+  border-radius: $nidara-radius-pill;
   color: var(--nidara-text);
   padding: 0 16px;
   font-size: $fs-small;
@@ -486,29 +523,5 @@ dropdown popover {
   &:hover  { background: rgba(255, 255, 255, 0.10); }
   &:active { background: rgba(255, 255, 255, 0.16); }
   &:focus,
-  &:focus-within {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--nidara-focus-ring);
-  }
-}
-
-// ── Lockscreen only: the capsules are PAINTED, not CSS-drawn ────────────────
-// widget/GlassBackdrop.ts draws the blurred backdrop, the glass fill and the
-// 1px rim on a single rounded path, so the CSS must stop drawing its own box
-// underneath — otherwise both are stacked and the border seams again at the
-// middle of each cap (the very thing the painter exists to remove).
-//
-// Scoped to the lock window: the GREETER shares this stylesheet, has no
-// painter, and keeps the CSS glass (it gets its blur from the compositor, via
-// the `nidara-greeter` layer_rule in config/greetd/hyprland-greeter.lua).
-// The focus ring stays in CSS — it is drawn outside the capsule and never
-// touches the rim.
-window.nidara-lock-window {
-  .greeter-password,
-  .greeter-login-btn,
-  .greeter-power-bar {
-    background: transparent;
-    border-color: transparent;
-    border-radius: var(--nidara-radius-pill);
-  }
+  &:focus-within { @include nidara-focus-ring; }
 }

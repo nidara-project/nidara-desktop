@@ -4,7 +4,7 @@ import GLib from "gi://GLib"
 import AstalAuth from "gi://AstalAuth"
 import { getCurrentUser } from "../../lib/users"
 import { makeAvatar } from "../../lib/avatar"
-import { withGlassBackdrop } from "./GlassBackdrop"
+import { withGlassCapsule } from "../../lib/glass-capsule"
 import { t } from "../lib/i18n"
 
 export default function LockCard(onUnlock: () => void): Gtk.Widget {
@@ -117,8 +117,8 @@ export default function LockCard(onUnlock: () => void): Gtk.Widget {
   // is behind a lock surface, so we paint the blurred wallpaper ourselves.
   // Rim weights mirror what the CSS used to draw: --nidara-glass-border-sm on
   // the entry, the stronger --nidara-glass-border on the primary button.
-  col.append(withGlassBackdrop(passwordEntry, "subtle", true))
-  col.append(withGlassBackdrop(unlockBtn, "strong", true))
+  col.append(withGlassCapsule(passwordEntry, "subtle", true))
+  col.append(withGlassCapsule(unlockBtn, "strong", false))
   col.append(errorLabel)
 
   col.connect("map", () => {
