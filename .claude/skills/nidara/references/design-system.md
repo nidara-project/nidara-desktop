@@ -593,10 +593,20 @@ belongs to a small dedicated element next to the neutral text, or to a filled ba
 | Turn ended abnormally (`.agent-error-row`) | the 6px dot | `--nidara-text-dim` |
 | Battery critical | the battery glyph's fill | plain white `%` |
 | Recording active (island compact, CC badge) | the 8px dot | `--nidara-text` |
+| Caps Lock on (greeter) | the 6px dot | `--nidara-text` |
 
-Rejected three times now (battery `%` 2026-07-20, assistant errors 2026-07-21, the capture card's
-and detail page's clock 2026-08-02 — all three caught by the user's eye), which is why it is a rule
-and not a preference. Corollary already documented below: once a capsule fills with a semantic
+Rejected four times now (battery `%` 2026-07-20, assistant errors 2026-07-21, the capture card's
+and detail page's clock 2026-08-02, the greeter's caps warning 2026-08-09 — all four caught by the
+user's eye), which is why it is a rule and not a preference.
+
+🔑 **The fourth one adds a reason the first three did not have: on an arbitrary backdrop a
+mid-tone hue is WORSE than plain white, not merely louder.** The greeter's caps warning was
+`--nidara-warning` type sitting directly on the wallpaper, and on a light one it read worse
+than the neutral text beside it — a saturated mid-tone has nowhere to go when the background
+can be anything, which is exactly the argument that had already talked `.greeter-error` out of
+red on the same screen. Where the shell's version of this rule is about *taste* (red type on
+glass shouts), the greeter's is about *legibility*. Same conclusion, and on the surfaces that
+sit on the user's own photograph it is the stronger of the two arguments. Corollary already documented below: once a capsule fills with a semantic
 colour, do NOT tint the label on top of it as well.
 
 ### And the red BUDGET is smaller than that (2026-08-02, user call: "se tiende a abusar del rojo")

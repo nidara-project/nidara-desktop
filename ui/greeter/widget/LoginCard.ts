@@ -77,18 +77,27 @@ export default function LoginCard(): Gtk.Widget {
     visible: false,
     wrap: true,
     halign: Gtk.Align.CENTER,
-    margin_top: 6,
   })
+  const errorWrap = withGlassCapsule(errorLabel)
+  errorWrap.visible = false
+  errorWrap.halign = Gtk.Align.CENTER
+  errorWrap.margin_top = 6
 
   // Caps Lock warning — read from the seat keyboard device (updates live via
   // notify::caps-lock-state, no laggy key-event polling).
-  const capsLabel = new Gtk.Label({
-    label: t("capsLock"),
-    css_classes: ["greeter-caps"],
-    visible: false,
-    halign: Gtk.Align.CENTER,
-    margin_top: 6,
-  })
+  // Caps warning: a warning-coloured DOT plus neutral text — the colour lives in
+  // the mark, never in the copy (design-system.md). It used to be yellow type,
+  // which on a light wallpaper read worse than plain white.
+  const capsRow = new Gtk.Box({ spacing: 6, halign: Gtk.Align.CENTER, css_classes: ["greeter-caps"] })
+  capsRow.append(new Gtk.Box({ valign: Gtk.Align.CENTER, css_classes: ["greeter-caps-dot"] }))
+  const capsText = new Gtk.Label({ label: t("capsLock") })
+  capsRow.append(capsText)
+  // The capsule is what makes it legible on a light wallpaper; the wrapper is
+  // what gets shown and hidden, so hold on to it rather than to the row.
+  const capsLabel = withGlassCapsule(capsRow)
+  capsLabel.visible = false
+  capsLabel.halign = Gtk.Align.CENTER
+  capsLabel.margin_top = 6
   const keyboard = Gdk.Display.get_default()?.get_default_seat()?.get_keyboard() ?? null
   const syncCaps = () => { if (keyboard) capsLabel.visible = keyboard.get_caps_lock_state() }
   if (keyboard) keyboard.connect("notify::caps-lock-state", syncCaps)
@@ -106,7 +115,7 @@ export default function LoginCard(): Gtk.Widget {
 
   const showError = (msg: string) => {
     errorLabel.label = msg
-    errorLabel.visible = true
+    errorWrap.visible = true
     passwordEntry.add_css_class("greeter-shake")
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
       passwordEntry.remove_css_class("greeter-shake")
@@ -120,7 +129,7 @@ export default function LoginCard(): Gtk.Widget {
     avatar.setSource(u.avatarPath)
     usernameLabel.label = u.displayName
     passwordEntry.set_text("")
-    errorLabel.visible = false
+    errorWrap.visible = false
     passwordEntry.grab_focus()
   }
 
@@ -133,7 +142,7 @@ export default function LoginCard(): Gtk.Widget {
     if (!session) { showError(t("noSession")); return }
 
     setLoading(true)
-    errorLabel.visible = false
+    errorWrap.visible = false
 
     try {
       // greetdLogin (lib/greetd.ts) — NOT AstalGreet.login, which swallows
@@ -177,8 +186,11 @@ export default function LoginCard(): Gtk.Widget {
   col.append(withGlassCapsule(passwordEntry, "subtle", true))
   col.append(capsLabel)
   col.append(withGlassCapsule(loginBtn, "strong", false))
-  col.append(sessionDrp)
-  col.append(errorLabel)
+  // The session selector is a control, and every other control on these two
+  // screens sits on glass — including the locale bar's dropdowns, which are the
+  // same widget. Bare, it was unreadable on a light wallpaper.
+  col.append(withGlassCapsule(sessionDrp))
+  col.append(errorWrap)
 
   // Multi-user switcher — only when more than one human user exists. Selecting a
   // chip swaps the active login target (avatar, name, password). One must stay
@@ -231,7 +243,7 @@ export default function LoginCard(): Gtk.Widget {
 
   onLocaleChange(() => {
     passwordEntry.placeholder_text = t("password")
-    capsLabel.label = t("capsLock")
+    capsText.label = t("capsLock")
     if (!isAuthenticating) loginLabel.label = t("login")
   })
 

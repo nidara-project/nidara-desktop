@@ -155,10 +155,7 @@ window > contents {
 // were looking at.
 .greeter-date,
 .greeter-clock,
-.greeter-username,
-.greeter-caps,
-.greeter-error,
-dropdown.greeter-session-dropdown > button label {
+.greeter-username {
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.28), 0 0 14px rgba(0, 0, 0, 0.26);
 }
 
@@ -355,21 +352,51 @@ dropdown.greeter-session-dropdown > button label {
   &:checked .greeter-chip-avatar { border-color: var(--nidara-accent); }
 }
 
-// ── Error / Shake ────────────────────────────────────────────────────────────
-// Deliberately NOT --nidara-danger: this label sits directly on the user's
-// wallpaper (the card has no background), and a mid-red on a dark or reddish
-// image is the one colour that can vanish. The shake animation and the message
-// itself carry the error; the colour does not have to shout it.
-.greeter-error {
+// ── The two card messages ────────────────────────────────────────────────────
+// NEITHER RED NOR YELLOW (user, 2026-08-09), and it turns out the design system
+// already said so from the other side: semantic colour goes in a MARK or a
+// FILL, never in the copy. `.greeter-caps` was the one place in the project
+// still breaking that rule, and on a light wallpaper the yellow read WORSE than
+// plain white — a mid-tone hue on an unknown background is the one thing that
+// can vanish in both directions, which is exactly why `.greeter-error` had
+// already been talked out of red.
+//
+// So both messages are neutral text, and the signal moves twice:
+//   - caps lock gets a small warning-coloured DOT. It is a persistent state you
+//     need to notice while typing something you cannot see — the shell's
+//     "status mark" case, same shape as the recording dot.
+//   - a wrong password gets nothing extra: the shake and the sentence carry it,
+//     and a red mark on a transient message is exactly the red-budget creep the
+//     user has called out before.
+//
+// And both sit on a PAINTED CAPSULE, because that is what actually made them
+// legible. They live in the middle of the card, where the scrim is deliberately
+// at its weakest, and white text on a near-white wallpaper cannot be rescued by
+// a veil capped at 0.28 — rendered at 0.16 / 0.20 / 0.24 to be sure, the gain
+// was marginal and it cost wallpaper across the whole centre of the screen.
+// Everything else on this screen that has to be read sits on glass; these two
+// were the exception, not the rule.
+.greeter-error,
+.greeter-caps {
   color: var(--nidara-text);
   font-size: $fs-caption;
+  padding: 3px 12px;
+  min-height: 18px;
 }
 
 .greeter-caps {
-  color: var(--nidara-warning);
-  font-size: $fs-caption;
   font-weight: $fw-medium;
   letter-spacing: 0.2px;
+}
+
+// The mark. `min-*` rather than a size request: a CSS margin is drawn INSIDE the
+// allocation in GTK4, so a request plus a margin shrinks the widget instead of
+// offsetting it, and the dot paints as an oval (design-system.md).
+.greeter-caps-dot {
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: $nidara-radius-pill;
+  background: var(--nidara-warning);
 }
 
 @keyframes greeter-shake {

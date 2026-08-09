@@ -44,11 +44,16 @@ export default function LockCard(onUnlock: () => void): Gtk.Widget {
   const errorLabel = new Gtk.Label({
     label: "",
     css_classes: ["greeter-error"],
-    visible: false,
     wrap: true,
     halign: Gtk.Align.CENTER,
-    margin_top: 6,
   })
+  // On glass like the greeter's: it sits in the middle of the card, where the
+  // scrim is weakest, and neutral text on a light wallpaper needs a body behind
+  // it. The WRAPPER is what gets shown and hidden.
+  const errorWrap = withGlassCapsule(errorLabel)
+  errorWrap.visible = false
+  errorWrap.halign = Gtk.Align.CENTER
+  errorWrap.margin_top = 6
 
   // ── Auth logic ────────────────────────────────────────────────────────────
   const setLoading = (loading: boolean) => {
@@ -60,7 +65,7 @@ export default function LockCard(onUnlock: () => void): Gtk.Widget {
 
   const showError = (msg: string) => {
     errorLabel.label = msg
-    errorLabel.visible = true
+    errorWrap.visible = true
     passwordEntry.add_css_class("greeter-shake")
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
       passwordEntry.remove_css_class("greeter-shake")
@@ -74,7 +79,7 @@ export default function LockCard(onUnlock: () => void): Gtk.Widget {
     if (!password) { passwordEntry.grab_focus(); return }
 
     setLoading(true)
-    errorLabel.visible = false
+    errorWrap.visible = false
 
     const pam = new AstalAuth.Pam()
     pam.username = user.username
@@ -119,7 +124,7 @@ export default function LockCard(onUnlock: () => void): Gtk.Widget {
   // the entry, the stronger --nidara-glass-border on the primary button.
   col.append(withGlassCapsule(passwordEntry, "subtle", true))
   col.append(withGlassCapsule(unlockBtn, "strong", false))
-  col.append(errorLabel)
+  col.append(errorWrap)
 
   col.connect("map", () => {
     // Trigger the entrance fade on the next frame so the transition runs.

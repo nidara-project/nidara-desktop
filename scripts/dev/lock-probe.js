@@ -194,26 +194,34 @@ card.append(wrap(new Gtk.Button({
 // render them, because "does the card still hold together when the warning is
 // there" is a layout question nothing else answers.
 if (GLib.getenv("CAPS")) {
-    card.append(new Gtk.Label({
-        label: "Bloq Mayús está activado", css_classes: ["greeter-caps"],
-        halign: Gtk.Align.CENTER, margin_top: 6,
-    }))
+    // Dot + neutral text, on a capsule — as LoginCard builds it.
+    const capsRow = new Gtk.Box({ spacing: 6, halign: Gtk.Align.CENTER, css_classes: ["greeter-caps"] })
+    capsRow.append(new Gtk.Box({ valign: Gtk.Align.CENTER, css_classes: ["greeter-caps-dot"] }))
+    capsRow.append(new Gtk.Label({ label: "Bloq Mayús está activado" }))
+    const capsWrap = wrap(capsRow)
+    capsWrap.halign = Gtk.Align.CENTER
+    capsWrap.margin_top = 6
+    card.append(capsWrap)
 }
 if (SCOPE === "greeter") {
     // Session selector — a set-once control, kept visually subordinate to the
     // password field. Gtk.DropDown for real: it is the widget whose focus ring
     // and popover styling this sheet spends most of its lines on.
     const drop = Gtk.DropDown.new_from_strings(["Nidara", "Hyprland", "GNOME"])
-    drop.halign = Gtk.Align.CENTER
-    drop.margin_top = 14
     drop.add_css_class("greeter-session-dropdown")
-    card.append(drop)
+    const dropWrap = wrap(drop)
+    dropWrap.halign = Gtk.Align.CENTER
+    dropWrap.margin_top = 14
+    card.append(dropWrap)
 }
 if (GLib.getenv("ERROR")) {
-    card.append(new Gtk.Label({
+    const errWrap = wrap(new Gtk.Label({
         label: "Contraseña incorrecta", css_classes: ["greeter-error"],
-        wrap: true, halign: Gtk.Align.CENTER, margin_top: 6,
+        wrap: true, halign: Gtk.Align.CENTER,
     }))
+    errWrap.halign = Gtk.Align.CENTER
+    errWrap.margin_top = 6
+    card.append(errWrap)
 }
 if (SCOPE === "greeter") {
     // Multi-user switcher — only built when more than one human user exists, so
