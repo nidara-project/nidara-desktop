@@ -361,13 +361,15 @@ window > contents {
 // can vanish in both directions, which is exactly why `.greeter-error` had
 // already been talked out of red.
 //
-// So both messages are neutral text, and the signal moves twice:
-//   - caps lock gets a small warning-coloured DOT. It is a persistent state you
-//     need to notice while typing something you cannot see — the shell's
-//     "status mark" case, same shape as the recording dot.
-//   - a wrong password gets nothing extra: the shake and the sentence carry it,
-//     and a red mark on a transient message is exactly the red-budget creep the
-//     user has called out before.
+// So both messages are plain neutral text, and NOTHING replaces the colour.
+//
+// A warning-coloured dot was tried and removed the same day (user, 2026-08-09).
+// The shell does have that pattern — .island-rec-dot, .agent-tool-dot,
+// .agent-error-dot, .bar-cc-badge — but every one of those lives in the island
+// or the bar, where there is no room for a word and the mark SUBSTITUTES for the
+// text. Here the sentence already says it. A mark that repeats the copy next to
+// it is decoration, and the capsule these now sit on is what makes them
+// noticeable anyway.
 //
 // And both sit on a PAINTED CAPSULE, because that is what actually made them
 // legible. They live in the middle of the card, where the scrim is deliberately
@@ -387,16 +389,6 @@ window > contents {
 .greeter-caps {
   font-weight: $fw-medium;
   letter-spacing: 0.2px;
-}
-
-// The mark. `min-*` rather than a size request: a CSS margin is drawn INSIDE the
-// allocation in GTK4, so a request plus a margin shrinks the widget instead of
-// offsetting it, and the dot paints as an oval (design-system.md).
-.greeter-caps-dot {
-  min-width: 6px;
-  min-height: 6px;
-  border-radius: $nidara-radius-pill;
-  background: var(--nidara-warning);
 }
 
 @keyframes greeter-shake {

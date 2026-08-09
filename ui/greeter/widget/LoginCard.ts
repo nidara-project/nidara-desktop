@@ -85,16 +85,13 @@ export default function LoginCard(): Gtk.Widget {
 
   // Caps Lock warning — read from the seat keyboard device (updates live via
   // notify::caps-lock-state, no laggy key-event polling).
-  // Caps warning: a warning-coloured DOT plus neutral text — the colour lives in
-  // the mark, never in the copy (design-system.md). It used to be yellow type,
-  // which on a light wallpaper read worse than plain white.
-  const capsRow = new Gtk.Box({ spacing: 6, halign: Gtk.Align.CENTER, css_classes: ["greeter-caps"] })
-  capsRow.append(new Gtk.Box({ valign: Gtk.Align.CENTER, css_classes: ["greeter-caps-dot"] }))
-  const capsText = new Gtk.Label({ label: t("capsLock") })
-  capsRow.append(capsText)
-  // The capsule is what makes it legible on a light wallpaper; the wrapper is
-  // what gets shown and hidden, so hold on to it rather than to the row.
-  const capsLabel = withGlassCapsule(capsRow)
+  // Plain neutral text on a capsule. It used to be warning-yellow type, which on
+  // a light wallpaper read worse than plain white; nothing replaces the colour,
+  // because a mark that repeats the sentence beside it is decoration (see the
+  // stylesheet). The capsule is what makes it legible AND noticeable.
+  const capsText = new Gtk.Label({ label: t("capsLock"), css_classes: ["greeter-caps"] })
+  // The WRAPPER is what gets shown and hidden — hold on to it, not the label.
+  const capsLabel = withGlassCapsule(capsText)
   capsLabel.visible = false
   capsLabel.halign = Gtk.Align.CENTER
   capsLabel.margin_top = 6

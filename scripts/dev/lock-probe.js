@@ -194,11 +194,10 @@ card.append(wrap(new Gtk.Button({
 // render them, because "does the card still hold together when the warning is
 // there" is a layout question nothing else answers.
 if (GLib.getenv("CAPS")) {
-    // Dot + neutral text, on a capsule — as LoginCard builds it.
-    const capsRow = new Gtk.Box({ spacing: 6, halign: Gtk.Align.CENTER, css_classes: ["greeter-caps"] })
-    capsRow.append(new Gtk.Box({ valign: Gtk.Align.CENTER, css_classes: ["greeter-caps-dot"] }))
-    capsRow.append(new Gtk.Label({ label: "Bloq Mayús está activado" }))
-    const capsWrap = wrap(capsRow)
+    // Neutral text on a capsule — as LoginCard builds it.
+    const capsWrap = wrap(new Gtk.Label({
+        label: "Bloq Mayús está activado", css_classes: ["greeter-caps"],
+    }))
     capsWrap.halign = Gtk.Align.CENTER
     capsWrap.margin_top = 6
     card.append(capsWrap)

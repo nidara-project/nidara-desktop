@@ -593,13 +593,20 @@ belongs to a small dedicated element next to the neutral text, or to a filled ba
 | Turn ended abnormally (`.agent-error-row`) | the 6px dot | `--nidara-text-dim` |
 | Battery critical | the battery glyph's fill | plain white `%` |
 | Recording active (island compact, CC badge) | the 8px dot | `--nidara-text` |
-| Caps Lock on (greeter) | the 6px dot | `--nidara-text` |
 
 Rejected four times now (battery `%` 2026-07-20, assistant errors 2026-07-21, the capture card's
 and detail page's clock 2026-08-02, the greeter's caps warning 2026-08-09 — all four caught by the
 user's eye), which is why it is a rule and not a preference.
 
-🔑 **The fourth one adds a reason the first three did not have: on an arbitrary backdrop a
+⚠️ **"Not in the copy" does NOT mean "therefore a dot".** Every entry in that table is a
+surface with no room for a word — the island's compact capsule cannot say "recording", an
+assistant tool row has no space for a status label — so the mark **substitutes** for text. The
+greeter's caps warning is a whole sentence, and a dot beside it repeats what the sentence
+already says; that is decoration, not signal (user, 2026-08-09, after one shipped for an hour).
+**When the copy already carries the meaning, removing the colour is the entire change.** What
+makes the message noticeable there is the capsule it sits on, not a mark.
+
+🔑 **The fourth rejection adds a reason the first three did not have: on an arbitrary backdrop a
 mid-tone hue is WORSE than plain white, not merely louder.** The greeter's caps warning was
 `--nidara-warning` type sitting directly on the wallpaper, and on a light one it read worse
 than the neutral text beside it — a saturated mid-tone has nowhere to go when the background
