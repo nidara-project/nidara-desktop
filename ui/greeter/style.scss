@@ -273,14 +273,22 @@ window > contents {
   background: transparent;
   border: none;
   color: var(--nidara-text);
+  // 🔑 THE RADIUS HAS TO BE ON THE BASE RULE, not only on the states that paint
+  // something. The widget draws no box at rest — the capsule is painted behind
+  // it — so it is tempting to declare the radius only under :hover/:active,
+  // where a fill actually appears. But `outline` follows the widget's OWN
+  // border-radius, so a radius-less button gets a rounded-RECTANGLE focus ring
+  // around a pill (user-caught 2026-08-09, reproduced offscreen). The hover fill
+  // and the focus ring are two consumers of one number.
+  border-radius: $nidara-radius-pill;
   padding: 0 24px;
   font-weight: $fw-semibold;
   font-size: $fs-body;
   min-height: 40px;
   outline: none;
 
-  &:hover  { background: rgba(255, 255, 255, 0.10); border-radius: $nidara-radius-pill; }
-  &:active { background: rgba(255, 255, 255, 0.16); border-radius: $nidara-radius-pill; }
+  &:hover  { background: rgba(255, 255, 255, 0.10); }
+  &:active { background: rgba(255, 255, 255, 0.16); }
   &:focus,
   &:focus-within { @include nidara-focus-ring; }
   &:disabled { color: var(--nidara-text-dim); }
@@ -315,6 +323,12 @@ window > contents {
   border-radius: var(--nidara-radius-pill);
 
   &:hover { background: rgba(255, 255, 255, 0.08); }
+  // Without this the chip keeps GTK4's built-in focus ring, which is its own
+  // blue and ignores the user's accent — a second ring vocabulary on a screen
+  // that already has one. The `:checked` accent border below is SELECTION, a
+  // different state, and the ring's offset keeps the two readable together.
+  outline: none;
+  &:focus-visible { @include nidara-focus-ring; }
 
   // Both the Gtk.Picture (photo) and the Gtk.Image (glyph fallback) carry this
   // class — the chip draws its own selection ring instead of the glass border.
@@ -367,6 +381,13 @@ dropdown > button {
   background-image: none;
   min-height: 0;
   padding: 0;
+  // Same reason as .greeter-user-chip: otherwise GTK's own blue ring shows up.
+  // These read as ghost BUTTONS here, not as the bordered input the shell's
+  // dropdown trigger is, so they take the ring rather than an accent edge. The
+  // radius comes from the two variants below — both are pills — and it has to be
+  // there for the ring to follow the shape (see .greeter-login-btn).
+  outline: none;
+  &:focus-visible { @include nidara-focus-ring; }
 
   label { color: inherit; font-size: inherit; }
   // ⚠️ `margin-start` was declared on both of these and GTK4 CSS HAS NO SUCH

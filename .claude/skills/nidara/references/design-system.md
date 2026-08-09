@@ -469,6 +469,21 @@ inputs) shows keyboard focus as its 2px border going accent — no ring. A BUTTO
 (`nidara-focus-ring`, now in `ui/lib/styles/_tokens.scss` so all three bundles share it). One
 control must never show both.
 
+⚠️ **`outline` follows the widget's OWN `border-radius`, so declare the radius on the BASE
+rule — not only on the states that paint something.** A widget whose box is painted behind it
+(the greeter/lock capsules) draws nothing at rest, which makes it natural to put the radius
+under `:hover`/`:active` where a fill actually appears. Then the focus ring comes out a
+rounded RECTANGLE around a pill (user-caught 2026-08-09 on the unlock button, reproduced
+offscreen). **The hover fill and the focus ring are two consumers of one number.** When
+sweeping, the check is: every `@include nidara-focus-ring` consumer must have a
+`border-radius` outside its state blocks.
+
+⚠️ **A focusable control with NO focus rule does not get "no ring" — it gets GTK's own.**
+GTK4's built-in fallback CSS draws a blue `outline`, which ignores the user's accent entirely.
+That is why the greeter/lock sheet says `outline: none` on every control before declaring its
+own state, and why the user chip and the dropdown triggers were quietly showing a second ring
+vocabulary until 2026-08-09. Adding a control to these surfaces means adding both halves.
+
 The greeter and lockscreen broke this in both directions until 2026-08-09 and the symptom the
 user reported was neither rule: the focus just looked **dull**. The unlock button drew an
 accent border AND a halo (both affordances), and every ring on those two surfaces was
