@@ -97,7 +97,9 @@ question "do I know what I paint before I paint it?".
   open. `MorphRevealer` fires `onAllocated` from inside `size_allocate` just like `ScaleRevealer`,
   and `IslandWindow.mount` had wired it since the focus-grab migration, so a mode's rect lands on
   the frame that first paints it. Measured live: 1.3 % of its box at rest, 3.1 % with the Assistant
-  open, 31.7 % with the (full-width by design) overview — against 100 % before.
+  open, 31.7 % with the (full-width by design) overview — against 100 % before. In GPU points, with
+  `IslandWindow.ts` as the only variable: the Assistant open goes **5.9 → 1.1**, which is the
+  island-CLOSED floor (1.0) — opening it costs nothing measurable; the overview goes 4.3 → 1.8.
   🔑 **The morph itself needs no per-frame region**: `applyProgress` only touches opacity, never
   layout, so the allocation is final from the first pass — one stamp per open, one per close — and
   the travelling shape is `lerp(capsule, glass)`, both ends inside the rect already declared. The

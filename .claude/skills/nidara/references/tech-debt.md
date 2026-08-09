@@ -2439,8 +2439,26 @@ tightening that pad has to give the chips a rect first.
 Verified visually per mode on the real shell (overview / player / Assistant fully drawn, blur intact)
 and numerically at the risky edge: sampling a column down through the player panel's drop shadow,
 alpha reaches 0 at y≈236 against a region bottom of 278 — the 16px pad clears the shadow with room,
-so nothing is scissored mid-fade. ⚠️ Not re-measured in GPU points: as with the app grid, what is
-measured here is the BOX ratio and the saving is inferred from this section's cost model.
+so nothing is scissored mid-fade.
+
+**MEASURED in GPU points** with the harness above (damage 1600x700 at 480,200; empty workspace;
+`gpu_busy_percent` at 20 Hz × 20 s; shell restarted per arm; **the only variable is
+`IslandWindow.ts`**, so dock and bar declare in both arms; every arm held 144.0 fps):
+
+| | GPU |
+|---|---|
+| island CLOSED (the floor) | 1.0 % |
+| Assistant open, surface handed back (old) | 5.9 / 6.1 % |
+| Assistant open, rect declared (new) | **1.1 / 1.2 %** |
+| overview open, surface handed back (old) | 4.3 % |
+| overview open, rect declared (new) | **1.8 %** |
+
+🔑 **The Assistant lands on the CLOSED floor**: opening it no longer costs anything measurable, the
+same result the bar got for the CC. The overview keeps a real cost (1.8 vs 1.0) and that is correct
+rather than disappointing — its declared band genuinely overlaps the damage rect, and §46's cost
+model is the *intersection* of the damage with the region. ⚠️ Which is also the caveat on all six
+numbers: they are specific to where this harness puts its damage. A mode whose region does not
+overlap the damage reads as free; move the damage under it and it will not.
 
 #### Also dead: shaping the region to the squircle's curve
 
