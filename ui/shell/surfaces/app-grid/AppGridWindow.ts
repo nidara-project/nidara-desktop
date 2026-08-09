@@ -70,7 +70,16 @@ export function AppGridWindow(
     gdkmonitor: Gdk.Monitor,
     peers: () => (Gtk.Window | null)[],
 ): Gtk.Window {
-    const monGeo = gdkmonitor.get_geometry()
+    // Re-read on a scale/resolution change, NOT captured once. The surface itself
+    // follows the monitor for free (anchored on four edges), but these numbers CLAMP
+    // the blur rect, and a stale clamp is either a region past the buffer (harmless,
+    // intersected away) or one that cuts the panel (not). This used to be covered for
+    // free: the grid lived in the dock's window, and `app.ts` rebuilds THAT on
+    // `notify::geometry` for exactly this reason — a coupling the move quietly
+    // dropped. Refreshing beats rebuilding here: nothing else in this window caches
+    // geometry, and the panel's own width is clamped to 920–950px, i.e. constant for
+    // any monitor wider than ~1900.
+    let monGeo = gdkmonitor.get_geometry()
     const win = new Gtk.Window({
         name: NAMESPACE,
         application: app,
@@ -230,6 +239,14 @@ export function AppGridWindow(
     // key-dedupe above makes a stamp that changes nothing free. Same hook `Bar.tsx`
     // uses to follow the island capsule.
     panel.glassArea?.connect("resize", () => { if (status.app_grid_open) startStamping() })
+
+    // Same idea one level out: the monitor changed shape, so the clamp above is stale.
+    try {
+        gdkmonitor.connect("notify::geometry", () => {
+            monGeo = gdkmonitor.get_geometry()
+            if (status.app_grid_open) startStamping()
+        })
+    } catch (e) { console.error("[AppGridWindow] monitor geometry watch failed:", e) }
 
     // ── Modality ──────────────────────────────────────────────────────────────
     //

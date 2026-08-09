@@ -242,8 +242,24 @@ export default function AppGridPanel(
         orientation: Gtk.Orientation.VERTICAL,
         vexpand: false,
         hexpand: true,
+        // ⚠️ The panel's vertical budget lives HERE, on the container, not on
+        // whichever child happens to be showing. It used to live only on `scroll`,
+        // so hiding the scroller for the no-results state left nothing holding the
+        // height and the whole panel collapsed from ~738px to ~280px — a launcher
+        // that changes size while you type, and (because the input region is stamped
+        // from the panel's bounds) ~630px of dead screen that swallowed clicks
+        // instead of dismissing. Both were the same missing line.
+        //
+        // `height_request` can only RAISE a minimum, never cap, so this cannot fight
+        // the scroller's own request — the too-BIG direction is already capped there.
+        // Stating it on the container is what makes it survive a third state being
+        // added later without anyone remembering this.
+        height_request: scrollHeight,
     })
     gridArea.append(scrollOverlay)
+    // `noResults` already asks for `valign: CENTER` + `vexpand: true`; it just had no
+    // space to centre in. With the budget above it lands in the middle of the grid
+    // area instead of clinging to the top of a short panel.
     gridArea.append(noResults)
 
     const contentBox = new Gtk.Box({
