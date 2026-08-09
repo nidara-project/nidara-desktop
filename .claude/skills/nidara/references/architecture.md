@@ -76,13 +76,32 @@ owns three decisions:
   mode above is a missing piece of desktop, so a user who hits it needs a bootable shell before they
   can report anything, and `systemctl --user set-environment` is reachable from a TTY.
 
-**Every blurred layer declares a region today** — `DockAxis.ts` (both axes), `IslandWindow.ts` and
-`Bar.tsx` — and they split into **two rules**. The dock knows its silhouette *before* it paints, so
-it declares in every state, hidden included. The island and the bar cannot: their content arrives
-through a `MorphRevealer`/`ScaleRevealer`, and a widget just made visible has no allocation until the
-next layout pass — so they declare **only at rest** and hand the whole surface back the instant
-anything is revealed or still animating (`get_visible()` is not enough on the way out; `tickId` is
-what says "still moving"). 🔑 **Before wiring a region to the same call sites that stamp the input
+**Every blurred layer declares a region today** — `DockAxis.ts` (both axes), `IslandWindow.ts`,
+`Bar.tsx` and `AppGridWindow.ts` — and they split into **three rules**, one per shape of the
+question "do I know what I paint before I paint it?".
+
+- **The dock knows its silhouette before it paints**, so it declares in every state, hidden
+  included. Since 2026-08-09 that is literally every state: the two branches that used to hand the
+  whole surface back — an open app grid, and a yield — are gone, the first because the grid moved
+  out and the second because it was only ever justified by the grid.
+- **The island and the bar cannot**: their content arrives through a `MorphRevealer`/`ScaleRevealer`,
+  and a widget just made visible has no allocation until the next layout pass — so they declare
+  **only at rest** and hand the whole surface back the instant anything is revealed or still
+  animating (`get_visible()` is not enough on the way out; `tickId` is what says "still moving").
+- **The app grid is the third case: it declares only while OPEN, and does not exist otherwise.** It
+  has the same no-allocation-yet problem, but two properties the island lacks let it declare
+  anyway. Its revealer is `OVERLAY_POP` with `animateLayout: false`, so the allocation is the FINAL
+  one from the first laid-out frame and the 0.97→1.0 pop paints strictly inside it; and the panel is
+  centred at a fixed size, so the rect never slides. It therefore rides the frame clock only until
+  the first measurable stamp (`add_tick_callback`, `settled >= 2`, then removed) instead of
+  re-declaring per frame — a region that changes every frame can cost more than the box it saves.
+  Closed, it is UNMAPPED, and an unmapped surface has no blur pass at all.
+  ⚠️ Its two regions default in OPPOSITE directions while it cannot measure: **null (whole surface)
+  for blur**, because a wrong rect there ERASES the grid, and **empty for input**, because a wrong
+  rect there makes a monitor-sized surface eat every click on screen. Same principle both times —
+  fail towards invisible.
+
+🔑 **Before wiring a region to the same call sites that stamp the input
 region, re-read each one asking "can this arrive late?"** — a late input stamp costs a late click, a
 late visible stamp is a frame that is never drawn. That question is what found the notification
 banners' deliberately-deferred stamp in `NotificationPopups.tsx` (§46).
@@ -615,6 +634,32 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     Consequences you inherit when touching it (two input regions, keyboard-grab
     collision, CSS scoped to BOTH windows, layer-order re-assertion) are listed
     in `state-and-ipc.md` under "Overlay placement".
+  - `app-grid/AppGridWindow.ts` — the **third exception to commandment 5**
+    (2026-08-09), and the only one whose reason is a BILL rather than a visual
+    impossibility. Its own layer-shell window per monitor, namespace
+    `nidara-app-grid`, OVERLAY level, anchored on four edges with
+    `exclusive_zone = -1` (so the panel centres on the SCREEN, not on what is left
+    after the bar and dock reserve theirs) and `KeyboardMode.NONE` like everything
+    else — the compositor focus grab carries the keyboard.
+    **Why it moved.** The panel used to be a `Gtk.Overlay` child of the DOCK's
+    window. Hyprland charges layer blur by the surface's BOX, and the dock's
+    surface is the whole monitor while it only PAINTS a pill — which is the entire
+    reason it declares a region (§46). A guest that can paint anywhere made that
+    impossible: every open handed the full 2560×1440 box back, so the saving
+    evaporated exactly when the screen was busiest. Split apart, the dock keeps its
+    pill rect in **every** state and this surface declares the panel's
+    (**measured on the real shell: 1110×834 of 2560×1440**, ~25%).
+    **What was traded away, deliberately** (owner, 2026-08-09): opening the grid no
+    longer REVEALS the dock. That coupling was the whole justification for the
+    old placement (`tech-debt.md` §18). Two things soften it and both are
+    verified: the dock's windows go into this surface's focus grab as **peers**, so
+    its icons still launch with the grid open, and with auto-hide on, an edge hover
+    still slides it in **while the grid stays open**.
+    **What that unlocked**: with the dock coupling gone there was nothing keeping
+    the grid out of `Status.ts`, so it is now `status.app_grid_open` — a normal
+    mutually-exclusive overlay, and `dumpState` reads the property instead of
+    scanning windows for the dock's `isAppGridPanelOpen()`.
+    Its region rules are the third case in the visible-region section above.
   - `settings/` (+ `settings/pages/`, 18 pages), `about/`
   - `agent-pointer/` — the fake AI cursor that visualizes computer-use pointer
     actions (accent arrow + "AI" badge, Cairo-painted, click-through). A
@@ -787,7 +832,7 @@ These are GObject singletons. Widgets subscribe to them via `notify::prop`. **No
 | File | LOC | Role |
 |---|---|---|
 | `Status.ts` | 202 | Central GObject state machine for overlays. Mutually-exclusive setters (opening one closes the others). Props: `cc/nc/prism/system-menu/about/settings-open`, `island-mode` (Activity Island mode string, "" = collapsed; replaced `overview-open`), `recording`, `cc-edit-mode`, `bar-expanded-id`, `cc-detail-id`. Exports island mode ids (`ISLAND_OVERVIEW`, `ISLAND_PLAYER`, `ISLAND_BATTERY`). **See `state-and-ipc.md`.** |
-| `InputYield.ts` | ~125 | The shell **stepping out of the way** so computer-use can reach a real window. A grabbing surface CLAMPS pointer focus to itself, so from inside the Assistant island (always grabbing) clicks were swallowed and `focus_window` was a no-op. (Under the old layer-shell path the reason was different and stronger — `rawWindowFocus` refuses to move window focus at all while a surface is in `m_exclusiveLSes` — which is why this module survived the focus-grab migration rather than dying with it.) `begin()` makes every grabbing surface RELEASE its focus grab **and** stamp an empty input region, resolves only once the compositor has ANNOUNCED the release (`HyprlandState.afterGrabRelease`), `end()` restores. Driven by the HELPERS via the `yieldInput` IPC (so external MCP clients are covered too), re-entrant, with a 15 s watchdog so a helper that dies mid-action cannot leave the shell keyboard-less. Surfaces opt in with `registerHolder()` + a `notify::active` handler: Bar (Prism), IslandWindow, DockCore (app grid). **See `state-and-ipc.md`.** |
+| `InputYield.ts` | ~125 | The shell **stepping out of the way** so computer-use can reach a real window. A grabbing surface CLAMPS pointer focus to itself, so from inside the Assistant island (always grabbing) clicks were swallowed and `focus_window` was a no-op. (Under the old layer-shell path the reason was different and stronger — `rawWindowFocus` refuses to move window focus at all while a surface is in `m_exclusiveLSes` — which is why this module survived the focus-grab migration rather than dying with it.) `begin()` makes every grabbing surface RELEASE its focus grab **and** stamp an empty input region, resolves only once the compositor has ANNOUNCED the release (`HyprlandState.afterGrabRelease`), `end()` restores. Driven by the HELPERS via the `yieldInput` IPC (so external MCP clients are covered too), re-entrant, with a 15 s watchdog so a helper that dies mid-action cannot leave the shell keyboard-less. Surfaces opt in with `registerHolder()` + a `notify::active` handler: Bar (Prism), IslandWindow, AppGridWindow. (It was DockCore until 2026-08-09 — the grid was the only thing on the dock's window that ever grabbed, and it left with its own surface, so the dock now holds nothing and asks for nothing.) **See `state-and-ipc.md`.** |
 | `AppService.ts` | 685 | `.desktop` discovery, icon resolution + fallbacks, WM-class → Desktop-ID mapping. Backs Dock + AppGrid. **Launching: ALWAYS go through `getLaunchCommand(id)`** (wrapped in `uwsm app -- sh -c 'cd "$HOME" && exec <cmd>'`): it picks `flatpak run` for flatpak entries (gtk-launch's D-Bus activation dies silently for them when the session bus indexed its service dirs without the flatpak exports) and `gtk-launch` for everything else. Never parse `Exec=` by hand. Flatpak/Snap *discovery* requires `XDG_DATA_DIRS` set **before gjs starts** — done in `bin/nidara-ui`; GLib caches data dirs at first use, so patching the env in-process cannot fix it (verified 2026-06-12). **Icon LOOKUP is centralized here; app IDENTITY is the step surfaces keep skipping** (both bugs below found 2026-08-02, from one user report). `getIconName` answers "what art is this icon name", never "which app is this thing" — so a surface holding a foreign identity string must normalize it FIRST, and there are three entry points depending on what you hold: **`resolveWindowApp(class)`** for a Hyprland window, **`iconForAppName(name)`** for a human display name, **`isGenericIconName(n)`** to test whether a name you were handed is a placeholder rather than an answer. Skipping the step doesn't error — it renders the generic glyph, so the only symptom is two surfaces drawing the same thing differently. Concretely: the workspace overview fed `c.class` straight in, and since no theme has an icon called `io.Astal.ags`, **Settings drew the generic glyph in the overview and its registry icon in the dock** (the dock normalizes; the overview didn't). And the CC/Settings audio rows took AstalWp's `stream.icon` at face value — but that property is NEVER empty: a client declaring no `application.icon-name` gets `application-x-executable-symbolic`, a perfectly resolvable name for the generic glyph, so **GNOME Clocks played audio under a gear**. Same rows also had the app name wrong: on an AstalWp stream `name` is the STREAM ("Playback Stream") and `description` is the client ("Clocks"). The notification centre survives both only because it asks the registry FIRST (`getResolvedApp(desktop_entry || app_name)`) — its no-match fallback was hardened the same day. **The audit behind those fixes is done: every icon call site in the shell is listed by `grep -rn "getIconName(\|iconForAppName(\|resolveIconChain(\|resolveWindowApp("`, and all of them now normalize. `surfaces/bar/Schematic.tsx` was deleted in the same pass** — 195 dead lines nothing imported, superseded by `common/WorkspaceSchematic.ts`, still carrying both bugs plus `nd-icon` on app icons. Dead code that models the wrong pattern is worse than none; it is what a grep finds first. For ordered icon-name fallback chains use `resolveIconChain(names)` (theme-first: any name in the ACTIVE theme beats earlier names that only exist in deep fallbacks or shipped assets; absolute-path entries = final custom fallback) — plain `getIconName(array)` exhausts deep fallbacks per name. Icon resolution NEVER mixes themes: per-app override (`~/.local/share/icons/nidara/`) → active theme (+ its `Inherits`) → hicolor (the app's own installed icon) → pixmaps. An icon the active theme lacks is fixed via the Settings → Apps per-app override, never by borrowing from another installed theme. When nothing resolves, app surfaces (dock, app grid, Prism, overview) fall back to `application-x-executable` (the active theme's generic app icon) — never GTK's broken-image `image-missing`. **Per-app override GOTCHA:** overrides are stored under the basename key (`iconOverlayKey`, e.g. `/opt/foo/bar.png` → `bar`), and `AppData.icon` is **canonicalized to the resolved override PATH** once one exists — so callers usually hold a *path*, not a name. Any override lookup (`getIconOverridePath`/`removeIconOverride`) must normalize through `iconOverlayKey` (idempotent on keys), or Restore/badge/delete silently no-op on path-valued icons (bit App Icons for Antigravity, fixed 2026-07-04). After `set/removeIconOverride` (which call `reload()` **synchronously**) re-read fresh state via `getAppData(id)` — the caller's own `AppData` is a stale snapshot whose `.icon` may point at a just-deleted overlay file. |
 | `TrashService.ts` | ~125 | Watches the trash (gvfs `trash:///` + `trash::item-count`, aggregates all volumes; falls back to a FileMonitor on `~/.local/share/Trash/files`). Exposes `isEmpty`/`itemCount` + `subscribe`. Drives the dock trash icon (full ↔ empty, swapped in place by DockItem). |
 | `ThemeManager.ts` | 534 | GTK/icon/cursor theme, dark mode, CSS providers (main/font/tokens/tint), hot-reload of `style.css` in dev. Also pushes the accent into Hyprland's **groupbar** active-tab color (`syncHyprlandGroupAccent`, at boot + on accent change, via `hs.evalLua`) — the one place accent enters compositor chrome; the rest of the group styling is static in `hyprland.lua`'s `group` block (glass borders like windows). Gotcha: a groupbar **bakes its colors at group creation** — config changes only affect groups made afterwards. **Font gotcha:** the interface font is the one appearance prop NOT in `appearance.json` — it's delegated to the GNOME `font-name` gsetting (`syncFont`/`setFont`/`settings.ini` all read it). `applyAll` **seeds it to `Inter 11` on first boot**, but only when `get_user_value("font-name") === null` (factory default, not an explicit pick) — otherwise a fresh Arch + GTK ≥4.22 leaves it at `Adwaita Sans 11`. `monospace-font-name` is seeded the same way to `JetBrainsMono Nerd Font 11` (the schema default names Adwaita Mono, a font Nidara doesn't install; the JetBrains nerd font ships with every install). |

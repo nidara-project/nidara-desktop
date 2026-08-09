@@ -62,12 +62,6 @@ export interface RevealState {
     slideCurrent: number
     slideTarget: number
     fullscreenMode: boolean
-    appGridPanelOpen: boolean
-    // The grid's CLOSE is animated, so the flag above goes false a whole
-    // animation before the grid stops painting. The blur region must follow what
-    // is being DRAWN, not what is logically open — declaring the dock's small
-    // rect early scissors the tail of the close.
-    appGridPainting: boolean
     menuOpenCount: number
 }
 
@@ -117,9 +111,6 @@ export interface AxisAdapter {
     // main-axis pixel where a centered run of `extent` px begins (used for both
     // the static item layout origin and the reorder drag-lock origin)
     mainStart(extent: number): number
-
-    // appgrid background click: is the point inside the dock strip?
-    inDockStrip(x: number, y: number): boolean
 
     // settings changed: reset axis widget sizes/margins for the new constants
     onSettingsResize(): void
@@ -419,13 +410,13 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             const bodyKey = `${x},${y},${width},${height}`
 
             // Yielded for an agent action (core/InputYield): click-through, so a
-            // synthetic click reaches the app rather than the open app grid — which
-            // stamps the whole surface below. Its own key, so the restore recomputes
-            // a different one and re-applies instead of matching a stale cache.
-            // No blur rect: the grid may be the thing painting.
-            if (inputYield.active) { apply("yield", setRect(null)); return }
-            if (st.appGridPanelOpen) { apply("grid", () => surface.set_input_region(null)); return }
-            if (st.fullscreenMode && !st.appGridPanelOpen && !st.isRevealed) {
+            // synthetic click reaches the app rather than the dock. Its own key, so
+            // the restore recomputes a different one and re-applies instead of
+            // matching a stale cache. It KEEPS its blur rect: a yield changes who
+            // gets the clicks, not what is drawn, and the only thing that used to
+            // paint outside this rect — the app grid — has its own surface now.
+            if (inputYield.active) { apply("yield", setRect(null), body); return }
+            if (st.fullscreenMode && !st.isRevealed) {
                 apply(`fs:${bodyKey}`, setRect(null), body); return
             }
             if (dockSettings.autoHide && !st.isRevealed && st.slideTarget > 0
@@ -444,21 +435,15 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             }
             // A menu is open. It paints in its OWN surface (Gtk.Popover — see the note
             // on the padding), so the dock still shows nothing but the pill and there
-            // is nothing to give up. Distinct key from the grid's: sharing one would
-            // let a grid-open transition match the cached key and keep this rect,
-            // which would clip the grid.
+            // is nothing to give up. Its own key so that leaving the state recomputes
+            // a different one and re-applies, rather than matching a stale cache.
             if (st.menuOpenCount > 0) {
                 apply(`menu:${bodyKey}`, () => surface.set_input_region(null), body); return
             }
-            const painting = st.appGridPainting
-            apply(`body:${bodyKey}:${painting ? 1 : 0}`,
-                  setRect(body),
-                  painting ? null : body)
+            apply(`body:${bodyKey}`, setRect(body), body)
         },
 
         mainStart: (extent: number) => Math.max(0, (monMain - extent) / 2),
-        inDockStrip: (_x: number, y: number) => y >= WIN_H - reach(),
-
         onSettingsResize() {
             da.height_request = DOCK_CONSTANTS.PILL_HEIGHT
             shim.height_request = DOCK_CONSTANTS.PILL_HEIGHT
@@ -841,13 +826,13 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             const bodyKey = `${edgeX},${top},${width},${height}`
 
             // Yielded for an agent action (core/InputYield): click-through, so a
-            // synthetic click reaches the app rather than the open app grid — which
-            // stamps the whole surface below. Its own key, so the restore recomputes
-            // a different one and re-applies instead of matching a stale cache.
-            // No blur rect: the grid may be the thing painting.
-            if (inputYield.active) { apply("yield", setRect(null)); return }
-            if (st.appGridPanelOpen) { apply("grid", () => surface.set_input_region(null)); return }
-            if (st.fullscreenMode && !st.appGridPanelOpen && !st.isRevealed) {
+            // synthetic click reaches the app rather than the dock. Its own key, so
+            // the restore recomputes a different one and re-applies instead of
+            // matching a stale cache. It KEEPS its blur rect: a yield changes who
+            // gets the clicks, not what is drawn, and the only thing that used to
+            // paint outside this rect — the app grid — has its own surface now.
+            if (inputYield.active) { apply("yield", setRect(null), body); return }
+            if (st.fullscreenMode && !st.isRevealed) {
                 apply(`fs:${bodyKey}`, setRect(null), body); return
             }
             const slideOff = Math.round(st.slideCurrent)
@@ -868,25 +853,17 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             }
             // A menu is open. It paints in its OWN surface (Gtk.Popover — see the padding
             // note above), so the dock still shows nothing but the pill and there is
-            // nothing to give up. ⚠️ Distinct key from the grid's — both used to be
-            // `"null"`, and sharing one would let a grid-open transition match the cached
-            // key and keep this small rect, which WOULD clip the grid.
+            // nothing to give up. ⚠️ Its own key, not `"null"`: sharing one with another
+            // state would let the transition out of it match the cached key and keep
+            // this region, which is how a stale stamp survives a state change here.
             if (st.menuOpenCount > 0) {
                 apply(`menu:${bodyKey}`, () => surface.set_input_region(null), body); return
             }
-            const painting = st.appGridPainting
-            apply(`body:${bodyKey}:${painting ? 1 : 0}`,
-                  setRect(body),
-                  painting ? null : body)
+            apply(`body:${bodyKey}`, setRect(body), body)
         },
 
         mainStart: (extent: number) =>
             Math.max(0, Math.round(getGtkCenter(realizedMain) - extent / 2)),
-
-        inDockStrip: (x: number, _y: number) => {
-            const pillW = innerEdgeCross()
-            return position === 'left' ? x < pillW : x > WIN_W - pillW
-        },
 
         onSettingsResize() {
             if (position === 'left') shim.margin_start = dockSettings.screenGap

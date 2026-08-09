@@ -642,9 +642,17 @@ hl.window_rule({
 -- popups and this rule covered them. Moving it to its own surface moved them
 -- too, and the player panel's source menu came out unblurred (user-caught
 -- 2026-08-03). Any layer that can open a Gtk.Popover needs the flag.
+-- nidara-app-grid: the app grid got its OWN surface on 2026-08-09 (it used to be a
+-- child of the dock's window, which had to hand its whole blur region back for as
+-- long as the grid was up — see AppGridWindow.ts). It keeps the DOCK's 0.04 rather
+-- than the bar's 0.01 on purpose: 0.04 is what it has been blurred at all along,
+-- and the reason the dock is not at 0.01 is app ICONS haloing, which is most of
+-- what this surface paints. It opens context menus, hence blur_popups — the exact
+-- flag the island shipped without when IT moved out of the bar.
 hl.layer_rule({ match = { namespace = "nidara-bar" },      blur = true, blur_popups = true, ignore_alpha = 0.01  })
 hl.layer_rule({ match = { namespace = "nidara-island" },   blur = true, blur_popups = true, ignore_alpha = 0.01  })
 hl.layer_rule({ match = { namespace = "nidara-dock" },     blur = true, blur_popups = true, ignore_alpha = 0.04 })
+hl.layer_rule({ match = { namespace = "nidara-app-grid" }, blur = true, blur_popups = true, ignore_alpha = 0.04 })
 hl.layer_rule({ match = { namespace = "nidara-lock" },     blur = true, ignore_alpha = 0.3   })
 
 

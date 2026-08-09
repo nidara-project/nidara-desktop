@@ -3,8 +3,8 @@
  *
  * Holds all the dock logic that is identical between the horizontal (bottom) and
  * vertical (left/right) docks: pinned/running grouping, reorder & drag, the
- * spring animation tick, AppGrid panel, fullscreen handling, auto-hide, and the
- * wiring of Hyprland/AppService/Status. Everything axis-specific is delegated to
+ * spring animation tick, fullscreen handling, auto-hide, and the wiring of
+ * Hyprland/AppService/Status. Everything axis-specific is delegated to
  * an `AxisAdapter` (see DockAxis.ts). DockHorizontal/DockVertical are thin
  * wrappers that pass the matching adapter.
  */
@@ -24,14 +24,15 @@ import {
     menuState, onMenuCountChanged, dockSideState, onPinnedChanged,
 } from "./state"
 import status from "../../core/Status"
-import inputYield from "../../core/InputYield"
 import hs from "../../core/HyprlandState"
-import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
+// No focus grab here any more: the dock holds no modality at all. The app grid was
+// the only thing on this window that ever grabbed, and it has its own surface now
+// (surfaces/app-grid/AppGridWindow.ts) — which is also why core/InputYield no
+// longer has anything to ask of the dock.
 import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
 import shellActions from "../../core/ShellActions"
 import { iconAssetPath } from "../../core/Icons"
-import AppGridPanel from "../app-grid/AppGrid"
 import { safeDisconnect } from "../../core/signals"
 import type { AxisAdapter, RevealState } from "./DockAxis"
 
@@ -90,10 +91,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     let cursorInDock = false
     let lastMousePos = -1000
 
-    // Declared early so revealState() never hits a TDZ; assigned in their sections.
-    let appGridPanelOpen = false
-    // Stays true through the close animation — see RevealState.appGridPainting.
-    let appGridPainting = false
+    // Declared early so revealState() never hits a TDZ; assigned in its section.
     let fullscreenMode = false
 
     const unpinnedOpenOrder = new Map<string, number>()
@@ -217,8 +215,8 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     let layerShellReady = false
 
     const revealState = (): RevealState => ({
-        isRevealed, slideCurrent, slideTarget, fullscreenMode, appGridPanelOpen,
-        appGridPainting, menuOpenCount: menuState.openCount,
+        isRevealed, slideCurrent, slideTarget, fullscreenMode,
+        menuOpenCount: menuState.openCount,
     })
 
     const setRevealed = (reveal: boolean) => {
@@ -462,7 +460,6 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         }
     })
     motion.connect("motion", (_controller, x, y) => {
-        if (appGridPanelOpen) return
         if (fullscreenMode) return
         if (dockSettings.autoHide && !isRevealed && !isSettlingIn) {
             setRevealed(true)
@@ -490,7 +487,6 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
     motion.connect("leave", () => {
         cursorInDock = false
-        if (appGridPanelOpen) return
         if (dragBus.draggingId || isDndEnding) return
 
         clearLeaveTimeout()
@@ -498,19 +494,19 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         const hideDelay = dockSettings.autoHide ? Math.max(magnDelay, dockSettings.hideDelay) : magnDelay
         leaveTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, magnDelay, () => {
             leaveTimeout = null
-            if (isDndEnding || dragBus.draggingId || appGridPanelOpen) return GLib.SOURCE_REMOVE
+            if (isDndEnding || dragBus.draggingId) return GLib.SOURCE_REMOVE
             updateAllTargets(-1000)
             if (dockSettings.autoHide) {
                 if (hideDelay > magnDelay) {
                     leaveTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, hideDelay - magnDelay, () => {
                         leaveTimeout = null
-                        if (isDndEnding || dragBus.draggingId || menuState.openCount > 0 || appGridPanelOpen) return GLib.SOURCE_REMOVE
+                        if (isDndEnding || dragBus.draggingId || menuState.openCount > 0) return GLib.SOURCE_REMOVE
                         setRevealed(false)
                         axis.buildInputRegion(win, smoothedBarMain, revealState())
                         return GLib.SOURCE_REMOVE
                     })
                 } else {
-                    if (menuState.openCount === 0 && !appGridPanelOpen) {
+                    if (menuState.openCount === 0) {
                         setRevealed(false)
                         axis.buildInputRegion(win, smoothedBarMain, revealState())
                     }
@@ -1229,147 +1225,6 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         }
     }
 
-    // ── Embedded AppGrid panel ────────────────────────────────────────────────
-    // Our ownership token for the compositor focus grab that IS the grid's modality
-    // (`common/FocusGrab.ts`); 0 when we hold none, which is a broken grid rather
-    // than a slower one — there is no layer-shell fallback left. The grid was the
-    // LAST surface to migrate (it was held back by its context-menu popovers, which
-    // take the same single compositor grab slot) until FocusGrab learned to SUSPEND
-    // a lease for the life of a popup instead of treating the eviction as a
-    // dismissal.
-    let appGridGrabToken = 0
-
-    // Through HyprlandState, never `hs.focusWorkspace` directly — the switch has to
-    // happen with the grab already handed over, and `focusWorkspaceFromShell` owns
-    // that order. Nothing to lend: a focus grab never refused to move window focus,
-    // which is exactly why it replaced EXCLUSIVE here.
-    const appGrid = AppGridPanel(gdkmonitor, () => closeAppGridPanel(),
-        (id) => hs.focusWorkspaceFromShell(id))
-
-    // Step aside while an agent acts on another app (core/InputYield): the grab
-    // clamps pointer focus to this surface, so a synthetic click could not reach the
-    // app it was aimed at. Only the grid ever grabs on this window — the resting dock
-    // holds nothing — so this is a no-op otherwise.
-    inputYield.registerHolder(() => appGridPanelOpen)
-    inputYield.connect("notify::active", () => {
-        if (!layerShellReady || !appGridPanelOpen) return
-        if (inputYield.active) {
-            releaseFocusGrab(appGridGrabToken)
-            appGridGrabToken = 0
-        } else {
-            appGridGrabToken = acquireFocusGrab([win], onGridGrabCleared)
-        }
-        axis.buildInputRegion(win, smoothedBarMain, revealState())
-    })
-
-    appGrid.widget.visible = false
-    appGrid.widget.halign  = Gtk.Align.CENTER
-    appGrid.widget.valign  = Gtk.Align.CENTER
-    windowOverlay.add_overlay(appGrid.widget)
-
-    // The compositor took the grab away. A popup is NOT one of the causes that reach
-    // here — FocusGrab suspends the lease for those and hands it back when the popover
-    // closes — so what is left is an outside press or an eviction, and the grid's
-    // answer to both is the same as its catcher-era answer to a click outside: close.
-    const onGridGrabCleared = () => {
-        appGridGrabToken = 0
-        if (appGridPanelOpen) closeAppGridPanel()
-    }
-
-    const openAppGridPanel = () => {
-        if (appGridPanelOpen) return
-        clearLeaveTimeout()
-        appGridPanelOpen = true
-        win.set_focusable(true)
-        win.set_focus_visible(true)
-        if (layerShellReady) {
-            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
-            appGridGrabToken = acquireFocusGrab([win], onGridGrabCleared)
-            if (!appGridGrabToken)
-                console.error("[AppGrid] focus grab REFUSED — the grid has no modality: it cannot be typed into and nothing dismisses it.")
-        }
-        appGrid.setVisible(true)
-        appGrid.onShow()
-        // Send the icons back to rest: the panel opens with the cursor still over the
-        // launching icon (magnified), and motion is ignored while the panel is open, so
-        // they'd otherwise stay frozen mid-bulge. Same as launching any app.
-        updateAllTargets(-1000)
-        // Go through buildInputRegion (which stamps the whole surface while the
-        // panel is open) instead of calling set_input_region directly: the axis
-        // dedupes by a shape key, and a direct call leaves that key describing the
-        // RESTING region while the surface actually accepts input everywhere. The
-        // close path then recomputes the same resting key, matches the stale cache
-        // and skips the restore — leaving this 2560x1440 TOP surface swallowing
-        // every click on screen (only the island, on OVERLAY, still got them).
-        axis.buildInputRegion(win, smoothedBarMain, revealState())
-        if (!isRevealed) {
-            setRevealed(true)
-            runUnifiedTick(true)
-        }
-    }
-
-    const closeAppGridPanel = () => {
-        if (!appGridPanelOpen) return
-        appGridPanelOpen = false
-        // Set BEFORE the animation starts, cleared by its onDone: between those
-        // two points the grid is gone logically but still on screen.
-        appGridPainting = true
-        appGrid.setVisible(false, () => {
-            appGridPainting = false
-            axis.buildInputRegion(win, smoothedBarMain, revealState())
-        })
-        appGrid.setActive(false)
-        win.set_focus(null)
-        win.set_focusable(false)
-        win.set_focus_visible(false)
-        if (layerShellReady) {
-            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
-            releaseFocusGrab(appGridGrabToken)
-            appGridGrabToken = 0
-            // Nothing to restore on layer-shell: this surface's interactivity is set
-            // to NONE once at init and never moved off it (see the setup above for
-            // why NONE and not ON_DEMAND). Releasing the grab is the whole close.
-            axis.setExclusiveZone(win, (isRevealed && !dockSettings.autoHide) ? DOCK_CONSTANTS.EXCLUSIVE_ZONE : 0)
-            // No workspace to re-assert here any more: the strip switches with the
-            // grab already down (see `appGrid`'s constructor above), so this drop has
-            // nothing left to drag. Correcting it afterwards was what made the
-            // workspace animation set off and change its mind mid-flight.
-        }
-        if (fullscreenMode && !cursorInDock) {
-            setRevealed(false)
-        } else if (dockSettings.autoHide && !cursorInDock) {
-            setRevealed(false)
-        }
-        axis.buildInputRegion(win, smoothedBarMain, revealState())
-    }
-
-    ;(win as any).toggleAppGridPanel = () => {
-        if (appGridPanelOpen) closeAppGridPanel()
-        else openAppGridPanel()
-    }
-    // Read-only mirror of the panel state for dumpState (the app grid lives in the
-    // dock, not Status.ts, so this is how IPC observes whether it's open).
-    ;(win as any).isAppGridPanelOpen = () => appGridPanelOpen
-
-    const bgClickGesture = new Gtk.GestureClick()
-    bgClickGesture.set_propagation_phase(Gtk.PropagationPhase.BUBBLE)
-    bgClickGesture.connect("released", (_gesture: any, _n: number, x: number, y: number) => {
-        if (!appGridPanelOpen) return
-        const a = appGrid.widget.get_allocation()
-        const inSquircle  = x >= a.x && x <= a.x + a.width && y >= a.y && y <= a.y + a.height
-        const inDockStrip = axis.inDockStrip(x, y)
-        if (!inSquircle && !inDockStrip) closeAppGridPanel()
-    })
-    windowOverlay.add_controller(bgClickGesture)
-
-    const appGridKeyCtrl = new Gtk.EventControllerKey()
-    appGridKeyCtrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-    appGridKeyCtrl.connect("key-pressed", (_c: any, keyval: number) => {
-        if (!appGridPanelOpen) return false
-        return appGrid.handleKey(keyval)
-    })
-    win.add_controller(appGridKeyCtrl)
-
     // ── Fullscreen detection ──────────────────────────────────────────────────
     let trackedClient: any = null
     let trackedClientConn: number | null = null
@@ -1377,7 +1232,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     const setFullscreenMode = (active: boolean) => {
         if (fullscreenMode === active) return
         fullscreenMode = active
-        if (active && !appGridPanelOpen) {
+        if (active) {
             if (isRevealed) setRevealed(false)
             axis.buildInputRegion(win, smoothedBarMain, revealState())
         } else if (!active) {

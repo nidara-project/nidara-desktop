@@ -22,7 +22,7 @@
  *
  * Three env hooks make it an experiment rather than a dump:
  *   SCOPE=…       which shell WINDOW the specimen stands in: settings (default),
- *                 bar, island or dock. ⚠️ NOT cosmetic — our sheets are scoped per
+ *                 bar, island, dock or appgrid. ⚠️ NOT cosmetic — our sheets are scoped per
  *                 window (`#nidara-bar …`, `window.nidara-settings-window`), so a
  *                 specimen built in the wrong one matches NOTHING and every
  *                 measurement comes back as if the widget were unstyled. There is no
@@ -72,12 +72,14 @@ if (extraCss) { load(extraCss, Gtk.STYLE_PROVIDER_PRIORITY_USER + 40); print(`[a
 // ── the scope ────────────────────────────────────────────────────────────────
 // A shell window is identified BOTH ways in our sheets — by id (`#nidara-bar`) and
 // by class (`.nidara-bar-window`) — and the two names differ, so carry both. The
-// dock's window hosts the app grid too (there is no app-launcher window).
+// app grid got a window of its own on 2026-08-09; before that it was styled under
+// the dock's scope, so an app-grid specimen measured with SCOPE=dock is now wrong.
 const SCOPES = {
     settings: { name: "nidara-settings-window", cls: "nidara-settings-window" },
     bar:      { name: "nidara-bar",             cls: "nidara-bar-window" },
     island:   { name: "nidara-island",          cls: "nidara-island-window" },
     dock:     { name: "nidara-dock",            cls: "nidara-dock-window" },
+    appgrid:  { name: "nidara-app-grid",        cls: "nidara-app-grid-window" },
 }
 const scopeKey = GLib.getenv("SCOPE") || "settings"
 const scope = SCOPES[scopeKey]

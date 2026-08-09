@@ -1868,17 +1868,26 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
    |---|---|
    | Bar (+ CC, NC, Prism, system menu — commandment 5) | `#nidara-bar, .nidara-bar-window` |
    | Activity Island (+ workspace overview) | `#nidara-island, .nidara-island-window` |
-   | Dock (**+ the app grid** — it has no window of its own) | `#nidara-dock, .nidara-dock-window` |
+   | Dock | `#nidara-dock, .nidara-dock-window` |
+   | App grid | `#nidara-app-grid, .nidara-app-grid-window` |
    | Settings | `window.nidara-settings-window` |
 
    ⚠️ **A shared widget spans scopes and must list them all.** `common/WorkspaceSchematic.ts` renders
-   into the island (overview) *and* the dock (app grid strip), so `_workspace.scss` carries two
+   into the island (overview) *and* the app grid (workspace strip), so `_workspace.scss` carries two
    blocks. Put a `.wo-schematic-*` rule in the island-only block and it silently stops painting in
    the app grid — nothing errors, the strip just goes flat.
 
+   ⚠️ **A window's scope can MOVE, and nothing tells you.** The app grid's was `#nidara-dock` until
+   2026-08-09, because the panel lived inside the dock's window; giving it a surface of its own
+   (`AppGridWindow.ts`) changed the scope of `_app-grid.scss` **and** of `_workspace.scss`'s shared
+   block **and** of the app grid's entries in `_reset.scss`'s two neutralization lists. Miss any one
+   of the three and the rules stop matching in silence — no SCSS error, no GTK warning, just
+   unstyled widgets. When a surface changes windows, `grep` the OLD scope selector across
+   `styles/` before you call the move done.
+
    ⚠️ **Scoping changes what an unrooted widget resolves.** A probe that builds a widget outside a
    matching window gets NO styling and reads 0 for everything, with no error. That is why
-   `scripts/dev/gtk-probe.js` takes `SCOPE=settings|bar|island|dock` — measured proof it matters: the
+   `scripts/dev/gtk-probe.js` takes `SCOPE=settings|bar|island|dock|appgrid` — measured proof it matters: the
    same dropdown row is 29px in the Settings window (which re-anchors control text to the relative
    `$fse-*` ramp) and 28px in any other.
 

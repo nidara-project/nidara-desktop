@@ -59,6 +59,7 @@ import Dock from "./surfaces/dock/Dock"
 import { syncConstants } from "./surfaces/dock/DockPhysics"
 import { onDockSettingsChanged, dockSettings } from "./surfaces/dock/state"
 import Bar from "./surfaces/bar/Bar"
+import { AppGridWindow } from "./surfaces/app-grid/AppGridWindow"
 import AgentPointer, { isAgentPointerActive } from "./surfaces/agent-pointer/AgentPointer"
 import Settings from "./surfaces/settings/Settings"
 import Theme, { setPreferDark } from "./core/ThemeManager"
@@ -82,11 +83,6 @@ interface ShellWindow {
 // Entries may return a Promise (requestHandler already awaits it — agentPointer
 // resolves when the fake cursor lands; the GJS main loop stays free meanwhile).
 const ipc: Record<string, ((...args: string[]) => string | void | Promise<string | void>) | undefined> = {}
-
-// Whether the fullscreen app grid is open. Unlike the other overlays it lives
-// inside the dock window (not Status.ts), so dumpState reads its real state from
-// the dock via this accessor. Populated by main(); false until the dock exists.
-let isAppGridOpen: () => boolean = () => false
 
 // What the Activity Island COVERS on screen, monitor-relative — capsule plus the
 // revealed mode, or null when the island paints nothing. Also populated by main().
@@ -696,7 +692,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             controlCenter: status.cc_open,
             notificationCenter: status.nc_open,
             prism: status.prism_open,
-            appGrid: isAppGridOpen(),
+            appGrid: status.app_grid_open,
             systemMenu: status.system_menu_open,
             overview: status.island_mode === ISLAND_OVERVIEW,   // back-compat key
             island: status.island_mode,
@@ -817,11 +813,25 @@ app.start({
       try {
         const barWin = Bar(monitor)
         const dockWin = Dock(monitor)
+        // The app grid's own OVERLAY layer surface (see AppGridWindow.ts) — also
+        // created UNMAPPED, and for the same reason as the pointer: an unmapped
+        // surface has no blur pass, so a closed grid costs nothing at all. The dock
+        // goes in as a focus-grab peer, resolved LAZILY because a position or
+        // auto-hide change rebuilds that window (scheduleDockRebuild below) and a
+        // captured reference would point at a closed surface.
+        const gridWin = AppGridWindow(monitor, () => {
+          const peers: Gtk.Window[] = []
+          windows.forEach(w => {
+            if (w.name === "nidara-dock" && (w as any).gdkmonitor === monitor) peers.push(w as any)
+          })
+          return peers
+        })
         // Fake AI cursor (created UNMAPPED — zero cost until an action plays)
         const pointerWin = AgentPointer(monitor)
 
         windows.add(barWin);
         windows.add(dockWin);
+        windows.add(gridWin as any);
         windows.add(pointerWin as any);
         // The Activity Island's own OVERLAY layer surface (see IslandWindow.ts):
         // a sibling toplevel the bar creates, tracked here so teardown reaches it.
@@ -893,20 +903,10 @@ app.start({
     } catch (e) { console.error(`[UI] Error:`, e) }
 
     //  Toggles Logic
-    const toggleAppGrid = () => {
-      windows.forEach(w => {
-        if (w.name === "nidara-dock") try { (w as any).toggleAppGridPanel?.() } catch (e) { console.error(e) }
-      })
-    }
-    // Expose the app grid's real open-state to dumpState (it lives in the dock,
-    // not Status.ts). OR across docks = open on any monitor.
-    isAppGridOpen = () => {
-      let open = false
-      windows.forEach(w => {
-        if (w.name === "nidara-dock") try { if ((w as any).isAppGridPanelOpen?.()) open = true } catch (e) { console.error(e) }
-      })
-      return open
-    }
+    // Plain Status now, like every other overlay — the app grid stopped being a
+    // closure flag inside the dock window when it got a surface of its own
+    // (surfaces/app-grid/AppGridWindow.ts). dumpState reads the same property.
+    const toggleAppGrid = () => { status.app_grid_open = !status.app_grid_open }
     // Same idiom for the island's covered rect (see islandRect's declaration).
     islandRect = () => {
       let r: Rect | null = null

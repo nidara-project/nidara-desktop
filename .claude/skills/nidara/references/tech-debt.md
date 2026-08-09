@@ -500,20 +500,53 @@ Also deferred by product decision: **drag-reorder of bar widgets** (bar order is
 `notifyComputerAction` — an action path that bypasses `nidara-act/type/click` would stay "armed", not
 "active"; fine today (those are the only action tools), re-check if a new path is added.
 
-### 18. App grid lives in the dock BY DESIGN (Super-launch reveals the dock) — not a Status overlay
-The fullscreen app grid is implemented **inside the dock window** (`DockCore.tsx` — closure var
-`appGridPanelOpen`, exposed on the window as `toggleAppGridPanel` / `isAppGridPanelOpen`), **not**
-as a `Status.ts` overlay like CC/NC/Prism/Overview. This is **deliberate** (owner, 2026-06-20):
-launching the grid (Super) also **reveals the dock**, so the user can reach the dock when it's
-hidden (autohide) or out of the way (games / fullscreen). **Don't "fix" this by moving the app grid
-into Status** — you'd break the dock-reveal coupling.
-**Accepted consequence:** the app grid is **outside Status's mutual exclusion**, so it can be open
-at the same time as another overlay (verified live: app grid + Control Center both `true`). Left
-as-is by owner decision — low impact, and forcing exclusion would fight the dock coupling.
-**Observability fixed (2026-06-20):** `dumpState.overlays.appGrid` now reports its real state —
-`app.ts` reads it from the dock via the window's `isAppGridPanelOpen()` (through a module-level
-`isAppGridOpen` accessor populated in `main()`), instead of mirroring in Status. Agents can now see
-whether the launcher is open while the architectural special-case stays intact.
+### 18. ✅ CLOSED — the app grid left the dock's window, and the coupling that kept it there was TRADED, not lost (2026-08-09)
+
+**What this entry used to say, and it was right at the time:** the grid was implemented inside the
+dock window (`DockCore.tsx`, closure var `appGridPanelOpen`, exposed as `toggleAppGridPanel` /
+`isAppGridPanelOpen`) rather than as a `Status.ts` overlay, **deliberately** (owner, 2026-06-20),
+because launching it also **revealed the dock** — the way to reach the dock when auto-hide or a
+fullscreen window had put it away. It warned: don't "fix" this by moving it into Status.
+
+**It was not fixed; it was PRICED.** The owner asked for the move once the bill was named: Hyprland
+charges layer blur by the surface's BOX, so a guest that can paint anywhere forced the dock to hand
+back its whole monitor-sized region for as long as the grid was up (`DockAxis.ts` had a
+`st.appGridPanelOpen` branch in each axis that did exactly that, plus an `appGridPainting` flag so
+the close animation kept it). The §46 saving vanished at the busiest moment on screen. Told that
+the reveal was the price, the owner chose the region — **"prefiero optimizar antes que mantener
+eso"**.
+
+**What shipped.** `surfaces/app-grid/AppGridWindow.ts`: its own OVERLAY layer surface per monitor,
+namespace `nidara-app-grid`, UNMAPPED while closed. Measured on the real shell: it declares
+**1110×834 of 2560×1440** (~25%) while open, and the dock now declares its pill rect in **every**
+state — every `apply()` in both axes passes a blur rect, there is no branch left that clears it.
+
+**Three things the move made possible or necessary, none of them optional:**
+- **It IS a Status overlay now** (`status.app_grid_open`), because the dock coupling was the only
+  thing keeping it out. That closes this entry's own "accepted consequence": the grid could sit open
+  behind the Control Center, and now the exclusion is mutual both ways (verified live). `dumpState`
+  reads the property; the window-scanning `isAppGridOpen` accessor in `app.ts` is gone.
+- **The CSS scope moved with it** — `_app-grid.scss`, `_workspace.scss`'s shared block, and BOTH
+  neutralization lists in `_reset.scss`. See §56: this is also how that file's half of §56 closed.
+- **A Hyprland layer rule is not optional for a new namespace.** `nidara-app-grid` needs
+  `blur + blur_popups + ignore_alpha` or the panel renders as unblurred glass. It keeps the DOCK's
+  `0.04`, not the bar's `0.01`: 0.04 is what it has been blurred at all along, and the reason the
+  dock is not at 0.01 is app ICONS haloing, which is most of what this surface paints.
+
+🔑 **A coupling documented as "deliberate, don't fix" is a decision with a price nobody has quoted
+yet.** This entry told three agents not to touch it and none of them asked what it cost. The move
+took an afternoon once the question was "what does the reveal cost?" instead of "should the grid be
+in Status?".
+
+⚠️ **What was actually given up, so nobody re-adds it by accident:** Super no longer reveals the
+dock. Two things soften it and both are verified live — the dock's windows are **peers** in the
+grid's focus grab (its icons still launch with the grid open, and clicking one does not dismiss),
+and with auto-hide on, an edge hover still slides the dock in **while the grid stays open**.
+
+⚠️ **Multi-monitor is unchanged, which means still imperfect.** Each surface takes its own focus
+grab and there is one grab compositor-wide, so on two monitors the second open evicts the first and
+closes it. That was already true of the two docks, and it is true of the island today — see the
+`setModal` call in `Bar.tsx`. Not a regression; not fixed either.
 
 ### 19. Shipped default config was a personal snapshot — RESOLVED
 The seeded `defaults/*.json` were a dump of the maintainer's personal config, not curated
@@ -1901,6 +1934,22 @@ and **reverted the same day**. Read the "what was ruled out" part before proposi
 > surfaces are still monitor-sized — that is the whole point of the mechanism. Kept here as the
 > record of what was ruled out (dynamic sizing, splitting a surface, `xray`) and of the two rules
 > that govern a region.**
+>
+> **Addendum 2026-08-09 — the saving was CONDITIONAL and one of the conditions is now gone.** Those
+> four numbers were all measured AT REST. The moment something opened, the code handed the whole
+> surface back on purpose, so the win evaporated exactly when the screen was busiest. The worst
+> case was the DOCK, because its guest was the app grid: `st.appGridPanelOpen` in each axis cleared
+> the region outright, and `appGridPainting` held it cleared through the close animation. **§18
+> fixed that at the root** — the grid moved to its own surface (`AppGridWindow.ts`), so the dock now
+> declares its pill rect in every state (every `apply()` in both axes passes one; no branch clears
+> it), and the grid declares its own **1110×834 of 2560×1440** while open and is UNMAPPED when
+> closed. The equivalent condition on the BAR is still there and is the remaining work here:
+> `paintsBelowStrip()` clears its region for ANY open panel (CC, NC, Prism, system menu, popups)
+> rather than declaring `strip + the panel's rect`. ⚠️ The dock's numbers above are still valid —
+> they were at-rest measurements and the at-rest path did not change. **The 2026-08-09 change is
+> NOT re-measured in GPU points:** what was measured is the box (region ratio, read off the live
+> shell), and the saving is inferred from this entry's own cost model. If a number is needed, the
+> harness is the one described here — synthetic damage, 3 shuffled rounds.
 
 **The mechanism, because `ignore_alpha` makes it easy to guess wrong:** Hyprland charges layer blur
 by the surface's **BOX**, not by the pixels that end up visible. `ignore_alpha` decides what is SEEN
@@ -2212,8 +2261,11 @@ transfer, because there the padding was on the *wide* axis.
 ⚠️ **The key-collision trap from #90 was already present here, latent.** Two branches (`appGridPanelOpen`
 and `menuOpenCount > 0`) both keyed `"null"`. Harmless while the key only guarded `set_input_region`,
 a real bug the moment a blur rect rides the same cycle: the menu branch declares the body rect, so a
-menu→grid transition would have matched the cached key and **scissored the app grid away**. Keys are
-now `grid` / `menu:<body>`.
+menu→grid transition would have matched the cached key and **scissored the app grid away**. Keys were
+made `grid` / `menu:<body>`. ⚠️ **The `grid` branch is gone as of 2026-08-09** (§18 — the grid left
+the dock's window), so the collision cannot recur here; the LESSON still applies to every branch
+added to `buildInputRegion`, which is why `menu:<body>` keeps a distinct key with nothing to collide
+with today.
 
 Verified live with the dock moved to the left: rest (full column, glass intact), app grid open (draws
 complete over the dock), auto-hide on→off (returns clean). Setting restored to `bottom` afterwards.
@@ -2510,12 +2562,26 @@ in use, dimmed by `WP_SCRIM` and clipped to a proportional rounded rect. Mechani
   Cairo `draw_func`, not an animation.
 - Because it costs nothing *per surface*, it is deliberately **not opt-in** the way captures are.
 
-### 56. ⚠️ PARTLY DONE (2026-08-07) — unscoped partials; commandment 2 was never two-thirds kept
+### 56. ⚠️ PARTLY DONE (2026-08-07, advanced 2026-08-09) — unscoped partials; commandment 2 was never two-thirds kept
 
 **Done:** `_control-center` and `_prism` → the bar's window; `_settings` → its own; `_workspace` →
 **split across two** windows (see below). Plus three DEAD selectors deleted and the probe taught to
-pick a scope. **Left:** `_app-grid` (most of it) and the ~10 top-level rules that leak out of
-`_bar.scss` / `_dock.scss` — both need `#nidara-dock, .nidara-dock-window`.
+pick a scope. **`_app-grid` is done too, as of 2026-08-09** — but by a route this entry did not
+foresee: the grid got a WINDOW of its own (§18), so the file is scoped to `#nidara-app-grid,
+.nidara-app-grid-window`, not to `#nidara-dock` as planned here. `_workspace.scss`'s shared block
+and both `_reset.scss` lists moved with it. **Left:** the top-level rules leaking out of
+`_bar.scss` / `_dock.scss`.
+
+⚠️ **"~10 rules" was wrong — MEASURED 2026-08-09, it is ~37.** Counting top-level rules and
+discounting the universal `.nidara-*` components and the already-scoped `window#`/`#` blocks:
+`_bar.scss` has **34**, `_dock.scss` **3**. Budget accordingly; the estimate was made by eye.
+
+⚠️ **`_dock.scss`'s `&>box` is a strong candidate for a FOURTH dead selector** (noticed 2026-08-09,
+not verified). The dock window's direct child is a `Gtk.Overlay`, not the layout box, so
+`window.nidara-dock-window > box` should never match. The overlay itself is now a single-child
+wrapper with nothing overlaid on it (the app grid was its only overlay child) — so removing the
+wrapper is tempting, and would make this selector START matching, which is a silent behaviour
+change in the opposite direction. Verify with `gtk-probe` before touching either.
 
 **The original entry was wrong on three counts, and the corrections are the useful part:**
 
@@ -2546,17 +2612,22 @@ the 11 partials, the only names declared in more than one file (`.linked`, `.nid
 exist, so none had ever matched: `window#nidara-app-launcher` (`_app-grid`, plus two entries in
 `_reset`'s neutralization lists) and `window#nidara-dock-vertical` (`_dock`; both dock orientations
 are one window, `name: "nidara-dock"`). Also `.wo-schematic-win`, a rule for a class no widget
-carries. **The app grid has no window of its own** — its panel is a child of the DOCK's window — which
-is exactly why its scope is `#nidara-dock`.
+carries. **The app grid had no window of its own** — its panel was a child of the DOCK's window —
+which is why its scope was going to be `#nidara-dock`. ⚠️ **That stopped being true on 2026-08-09**
+(§18): the window exists now, `nidara-app-grid`, and `window#nidara-app-launcher` was never it. A
+dead selector deleted here and a live one that appeared later are the same lesson twice — **the
+window a partial belongs to is a fact about the TSX, and it can change under the sheet without a
+single error.**
 
 ⚠️ **`_workspace.scss` needs TWO scopes and that is load-bearing.** `common/WorkspaceSchematic.ts`
-renders into the island (overview) *and* the dock (app grid strip). A `.wo-schematic-*` rule left in
-the island-only block silently stops painting in the strip.
+renders into the island (overview) *and* the app grid (workspace strip). A `.wo-schematic-*` rule
+left in the island-only block silently stops painting in the strip. The second scope was
+`#nidara-dock` until 2026-08-09 and is `#nidara-app-grid` now — this warning caught its own rename.
 
 ⚠️ **What scoping silently changes, and the fix that shipped with it**: CSS resolved on an unrooted
 widget *because* these rules were global. Anything reading a styled value from a widget outside a
 matching window (`get_style_context().get_padding()` on a probe) now returns 0 — **no error**.
-`scripts/dev/gtk-probe.js` therefore takes `SCOPE=settings|bar|island|dock` and prints it.
+`scripts/dev/gtk-probe.js` therefore takes `SCOPE=settings|bar|island|dock|appgrid` and prints it.
 Measured proof the hook is not cosmetic: the same dropdown row is **29px** under `SCOPE=settings` and
 **28px** anywhere else, because Settings re-anchors control text to the relative `$fse-*` ramp.
 
