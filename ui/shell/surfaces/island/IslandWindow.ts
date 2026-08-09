@@ -150,6 +150,46 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     // down ITS grab.
     let grabToken = 0
 
+    // Root-relative bounds of something that is actually on screen, or null.
+    //
+    // compute_bounds against the root, NOT get_allocation(): the capsule is
+    // nested (root > row > centre box > capsule) and a child's allocation is
+    // relative to its parent, so an allocation would land the rect in the wrong
+    // place. Bounds are root-relative whatever the depth.
+    //
+    // The null is load-bearing for all three callers — it is how they tell
+    // "revealed, but not laid out yet" apart from "not there", and both regions
+    // below have to fall back to their safe state when they see it.
+    const boundsOf = (w: Gtk.Widget | null): { x: number, y: number, w: number, h: number } | null => {
+        if (!w?.get_visible() || !w.get_mapped()) return null
+        const [ok, b] = w.compute_bounds(root)
+        if (!ok || b.get_width() <= 1 || b.get_height() <= 1) return null
+        return { x: b.get_x(), y: b.get_y(), w: b.get_width(), h: b.get_height() }
+    }
+
+    /** Everything this surface is painting right now: the capsule (plus whichever
+     *  indicator chips are revealed) and any mode that is open OR still morphing.
+     *  `pending` is a live revealer we could not measure — it is the one state
+     *  where a region computed from these numbers would be a LIE. */
+    const paintedBounds = (): { rects: { x: number, y: number, w: number, h: number }[], pending: boolean } => {
+        const rects: { x: number, y: number, w: number, h: number }[] = []
+        let pending = false
+        for (const t of hitTargets()) {
+            const b = boundsOf(t)
+            if (b) rects.push(b)
+        }
+        for (const r of revealers) {
+            // `get_visible()` alone is not enough on the way out: a closing
+            // revealer is still visible until its final tick, and tickId is the
+            // only thing that says "still moving".
+            if (!r.get_visible() && r.tickId === null) continue
+            const b = boundsOf(r)
+            if (b) rects.push(b)
+            else pending = true
+        }
+        return { rects, pending }
+    }
+
     const updateInputRegion = () => {
         const surface = win.get_native()?.get_surface()
         if (!surface?.set_input_region) return
@@ -166,25 +206,16 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             win.queue_draw()
             return
         }
-        // compute_bounds against the root, NOT get_allocation(): the capsule is
-        // nested (root > row > centre box > capsule) and a child's allocation is
-        // relative to its parent, so an allocation would land the rect in the
-        // wrong place. Bounds are root-relative whatever the depth.
-        const add = (w: Gtk.Widget | null) => {
-            if (!w?.get_visible() || !w.get_mapped()) return
-            const [ok, b] = w.compute_bounds(root)
-            if (!ok || b.get_width() <= 1 || b.get_height() <= 1) return
-            // @ts-ignore  (same untyped Cairo.Region call as Bar.tsx)
-            region.unionRectangle({
-                x: Math.round(b.get_x()), y: Math.round(b.get_y()),
-                width: Math.round(b.get_width()), height: Math.round(b.get_height()),
-            })
-        }
         // The capsule must stay clickable at all times — it is a bar control that
         // happens to be painted here. Same for whichever indicator chips are
-        // currently revealed.
-        for (const t of hitTargets()) add(t)
-        for (const r of revealers) add(r)
+        // currently revealed, and for an open mode.
+        for (const b of paintedBounds().rects) {
+            // @ts-ignore  (same untyped Cairo.Region call as Bar.tsx)
+            region.unionRectangle({
+                x: Math.round(b.x), y: Math.round(b.y),
+                width: Math.round(b.w), height: Math.round(b.h),
+            })
+        }
         surface.set_input_region(region)
         updateVisibleRegion()
         win.queue_draw()   // input regions are double-buffered: apply on next commit
@@ -197,28 +228,42 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     // charges layer blur by the surface's BOX, so every repaint of every window
     // anywhere on screen pays for all of it.
     //
-    // 🔑 The rule is the opposite of the dock's, and the difference is the morph.
-    // The dock can declare its rect in every state because its silhouette is known
-    // before it paints. Here the expanded modes arrive through a MorphRevealer, and
-    // a widget that was just made visible has NO allocation until the next layout
-    // pass — so a region computed at open time would describe the capsule alone
-    // while the mode paints far outside it, and the mode would be SCISSORED AWAY
-    // for as long as it stayed open. (That one-frame `0,0 0x0` is documented in
-    // §46: it is normal GTK, it shows up in control builds too.)
+    // 🔑 An open mode is declared too, and the argument that makes it safe is the
+    // SAME one the bar's panels ended up using: `MorphRevealer.onAllocated` fires
+    // from inside `vfunc_size_allocate`, i.e. before the snapshot of the same
+    // frame, and `mount` wires it to `updateInputRegion` (which stamps this region
+    // too). So the rect that describes a mode lands in the very frame that first
+    // paints it — including every later relayout, which is what a growing Assistant
+    // conversation or a `margin_top` re-pin is. There is no window in which the
+    // region describes the capsule while the mode paints outside it.
     //
-    // So: declare ONLY while resting as the compact capsule, and hand the whole
-    // surface back the instant anything is revealed or still animating. The resting
-    // state is ~all of the time and is exactly the expensive one; a mode being open
-    // is transient, the user is looking at it, and it is the risky half. The
-    // ordering is safe because we send the clear BEFORE the frame that paints the
-    // opening mode commits — Wayland applies surface state on commit, in request
-    // order, on the same connection.
+    // The one frame that genuinely cannot be measured is the turn that REVEALS a
+    // mode: `set_visible(true)` runs before any layout pass, so the revealer has no
+    // allocation yet. That is the `pending` case, and its answer is the whole
+    // surface — the safe state — for exactly one frame, until the allocation that
+    // follows re-stamps a real rect.
+    //
+    // 🔑 And the morph does NOT need a region that changes per frame, which was the
+    // thing actually worth avoiding: a region re-declared every frame can cost more
+    // than the box it saves (`tech-debt.md` §46). The morph is
+    // snapshot-time only: `applyProgress` touches opacity and queues a draw, never a
+    // relayout, so the revealer's allocation is FINAL from its first layout pass and
+    // this rect is stamped ONCE per open and once per close. What travels is the
+    // painted shape, `R = lerp(capsule, glass)` — and both ends are inside this
+    // union: the capsule because it is a hit target, the glass because it is inside
+    // the revealer's own box (which is also why the shape's cairo node clips itself
+    // to that box + 8px). A lerp between two rects that share a top edge and a
+    // centre stays inside their bounding box, so every intermediate frame is
+    // covered by the rect we already declared.
     // The two paddings are wildly different on purpose, and the asymmetry is the
     // whole safety argument.
     //
     // VERTICAL is where the money is: this rect trades a 1440px-tall box for the
-    // bar row, and nothing else paints above or below it at rest (the chip badge
-    // overlaps its glyph, `--nidara-shadow-sm` spreads ≤3px). So keep it tight.
+    // bar row at rest — nothing else paints above or below it there (the chip badge
+    // overlaps its glyph, `--nidara-shadow-sm` spreads ≤3px) — and for the mode's
+    // own height while one is open, which is still a fraction of the monitor. So
+    // keep it tight; 16px covers the panel shadows too, the same pad the bar uses
+    // for the same family of glass panels.
     //
     // HORIZONTAL is where the MOTION is, and where a tight rect would be a bug
     // factory: the capsule is centred, so anything that changes its width slides
@@ -229,6 +274,14 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     // that IS NOT DRAWN for 400ms. A pad wider than any such shift (three chips
     // ≈ 150px) makes the whole class of late stamps a non-event, and it costs
     // very little: the cut that matters is the height.
+    //
+    // That same pad is what makes the chips safe across a morph, and it is worth
+    // saying out loud because the alternative reads as covered when it is not:
+    // `hitTargets()` DROPS the chips the moment they fade to nothing (opacity 0 at
+    // 35% of the morph, by design — see ActivityIsland), so a re-stamp that happens
+    // mid-morph measures a union without them, and on the way back OUT they ramp
+    // up again with no relayout to re-measure. They land inside the pad, not inside
+    // a rect anyone computed for them.
     const BLUR_PAD_X = 200
     const BLUR_PAD_Y = 16
     let lastBlurKey = ""
@@ -240,18 +293,17 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             lastBlurKey = key
             setVisibleRect(surface, rect)
         }
-        // `get_visible()` alone is not enough on the way out: a closing revealer is
-        // still visible until its final tick, and tickId is the only thing that
-        // says "still moving".
-        if (revealers.some(r => r.get_visible() || r.tickId !== null)) { set("open", null); return }
+        const { rects, pending } = paintedBounds()
+        // A mode was revealed this turn and has no allocation yet: anything we
+        // computed now would describe the capsule while the mode paints outside
+        // it, and outside the region means NOT DRAWN. Give the surface back for
+        // the one frame it takes `onAllocated` to hand us the real rect.
+        if (pending) { set("pending", null); return }
 
         let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
-        for (const w of hitTargets()) {
-            if (!w?.get_visible() || !w.get_mapped()) continue
-            const [ok, b] = w.compute_bounds(root)
-            if (!ok || b.get_width() <= 1 || b.get_height() <= 1) continue
-            x0 = Math.min(x0, b.get_x());                  y0 = Math.min(y0, b.get_y())
-            x1 = Math.max(x1, b.get_x() + b.get_width());  y1 = Math.max(y1, b.get_y() + b.get_height())
+        for (const b of rects) {
+            x0 = Math.min(x0, b.x);       y0 = Math.min(y0, b.y)
+            x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h)
         }
         // Nothing measurable (first frames, capsule hidden): the un-optimised
         // surface is always the safe answer.
@@ -266,7 +318,7 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         const width = Math.min(monGeo.width - x, Math.round(x1 - x0) + BLUR_PAD_X * 2)
         const height = Math.min(surfH - y, Math.round(y1 - y0) + BLUR_PAD_Y * 2)
         if (width <= 0 || height <= 0) { set("none", null); return }
-        set(`rest:${x},${y},${width},${height}`, { x, y, width, height })
+        set(`rect:${x},${y},${width},${height}`, { x, y, width, height })
     }
 
     // What the island actually COVERS, monitor-relative — capsule plus whichever
@@ -281,15 +333,10 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     // (exclusive_zone -1 above), so root-relative IS monitor-relative here.
     const occupiedRect = (): { x: number, y: number, w: number, h: number, monitor: string } | null => {
         let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
-        const add = (w: Gtk.Widget | null) => {
-            if (!w?.get_visible() || !w.get_mapped()) return
-            const [ok, b] = w.compute_bounds(root)
-            if (!ok || b.get_width() <= 1 || b.get_height() <= 1) return
-            x0 = Math.min(x0, b.get_x());              y0 = Math.min(y0, b.get_y())
-            x1 = Math.max(x1, b.get_x() + b.get_width()); y1 = Math.max(y1, b.get_y() + b.get_height())
+        for (const b of paintedBounds().rects) {
+            x0 = Math.min(x0, b.x);       y0 = Math.min(y0, b.y)
+            x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h)
         }
-        for (const t of hitTargets()) add(t)
-        for (const r of revealers) add(r)
         if (!isFinite(x0)) return null
         // The connector name (DP-1, …) so a consumer on a multi-monitor setup can
         // tell whether this rect is even on the output it is clicking — the numbers

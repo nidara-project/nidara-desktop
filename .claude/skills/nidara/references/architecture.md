@@ -91,10 +91,20 @@ question "do I know what I paint before I paint it?".
   included. Since 2026-08-09 that is literally every state: the two branches that used to hand the
   whole surface back — an open app grid, and a yield — are gone, the first because the grid moved
   out and the second because it was only ever justified by the grid.
-- **The island cannot**: its modes arrive through a `MorphRevealer`, which has no final allocation
-  until the morph lands — so it declares **only at rest** as the compact capsule and hands the whole
-  surface back the instant anything is revealed or still animating (`get_visible()` is not enough on
-  the way out; `tickId` is what says "still moving").
+- **The island declares `capsule + whatever mode is live`** (2026-08-10). It used to declare only at
+  rest — "its modes arrive through a `MorphRevealer`, which has no allocation until the morph lands"
+  — and that was true for exactly ONE frame, written as if it held for as long as a mode stayed
+  open. `MorphRevealer` fires `onAllocated` from inside `size_allocate` just like `ScaleRevealer`,
+  and `IslandWindow.mount` had wired it since the focus-grab migration, so a mode's rect lands on
+  the frame that first paints it. Measured live: 1.3 % of its box at rest, 3.1 % with the Assistant
+  open, 31.7 % with the (full-width by design) overview — against 100 % before.
+  🔑 **The morph itself needs no per-frame region**: `applyProgress` only touches opacity, never
+  layout, so the allocation is final from the first pass — one stamp per open, one per close — and
+  the travelling shape is `lerp(capsule, glass)`, both ends inside the rect already declared. The
+  only clear left is the frame in which a just-revealed mode has no allocation yet (`pending` →
+  whole surface). ⚠️ `get_visible()` is not enough on the way out; `tickId` is what says "still
+  moving". ⚠️ The indicator chips leave `hitTargets()` when they fade at 35 % of the morph, so they
+  live inside `BLUR_PAD_X = 200`, not inside a rect of their own — tighten that pad and they blink.
 - **The bar declares `strip + one rect per open panel`** (2026-08-09). It used to follow the
   island's rule, and that was the island's answer to a question the bar does not have: its five
   panels are `ScaleRevealer` + `OVERLAY_POP` with `animateLayout: false`, so — exactly like the app
@@ -112,8 +122,8 @@ question "do I know what I paint before I paint it?".
   box, everywhere else GTK's `overflow: HIDDEN` on the revealer clips for us before the compositor
   sees anything.
 - **The app grid is the third case: it declares only while OPEN, and does not exist otherwise.** It
-  has the same no-allocation-yet problem, but two properties the island lacks let it declare
-  anyway. Its revealer is `OVERLAY_POP` with `animateLayout: false`, so the allocation is the FINAL
+  has the same no-allocation-yet problem, and two properties that let it stop watching for the
+  answer. Its revealer is `OVERLAY_POP` with `animateLayout: false`, so the allocation is the FINAL
   one from the first laid-out frame and the 0.97→1.0 pop paints strictly inside it; and the panel is
   centred, so it does not slide sideways under a late stamp. It therefore rides the frame clock only
   until the first measurable stamp (`add_tick_callback`, `settled >= 2`, then removed) instead of
@@ -147,13 +157,17 @@ monotonically: a full-screen blurred layer is +5.9 pts, the same layer declaring
    surface has no blur pass at all — **zero beats small**, and no region can match that. This is the
    app grid, and it is why the grid's own answer is not "declare better" but "not be there".
 2. **Can it always answer "what am I painting" before it paints it?** Then full-screen is fine;
-   declare a region and move on. Dock, bar, app grid.
+   declare a region and move on. Dock, bar, app grid, island.
+   🔑 The answer is usually yes even when the surface animates, and the reason is `size_allocate`:
+   both revealers call `onAllocated` from inside it, so "I don't know yet" lasts the single frame
+   between revealing a widget and laying it out — not the lifetime of whatever is open. The island
+   spent four months in case 3 on the strength of that confusion, and the bar copied it there.
 3. **Can it NOT answer?** This is the only case where the surface's BOX is still the cost, because
    an unanswerable frame hands the whole box back. Then — and only then — ask whether a **fixed**
    smaller box is possible. ⚠️ **Fixed, never resizing**: §46 ruled out dynamic sizing, and the
    artefact tracked the RESIZE, so a box set once at map time and never changed does not hit it.
-   Nobody has tried that; it is the one unexplored option here. It would only pay for the island,
-   whose expanded modes are near-monitor anyway, which is why it stays unexplored.
+   Nobody has tried it, and since 2026-08-10 **no surface of ours is in this case** — so treat a
+   candidate landing here as a reason to re-check step 2 first.
 
 Two things the region does not buy, so do not plan around them:
 

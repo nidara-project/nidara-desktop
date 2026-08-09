@@ -1805,7 +1805,12 @@ Anything left lit next to the capsule reads straight through the open island** (
 moment the chips shipped, 2026-08-01). Whatever is faded this way must also drop out of
 `IslandWindow`'s input-region stamp, or it leaves an invisible dead patch: the compositor
 reads a press there as INSIDE the grab and neither dismisses nor passes it on — which is
-why `mount` takes a hitTargets GETTER.
+why `mount` takes a hitTargets GETTER. ⚠️ Since 2026-08-10 that same getter also feeds the
+BLUR region, and the two want opposite things: a chip must leave the input stamp the moment
+it is invisible, but on the way back OUT it ramps up again with no relayout to re-measure,
+so nothing re-declares a rect for it. It is drawn because it falls inside
+`IslandWindow`'s `BLUR_PAD_X = 200` (three chips ≈ 150px) — the pad is load-bearing, not
+slack.
 All bounds are
 `compute_bounds`-re-read every frame so bar relayouts can't leave a stale origin. Same `reveal(open, onDone?)` contract as
 `ScaleRevealer` (self-managed visibility, close-then-`onDone` for the input-region

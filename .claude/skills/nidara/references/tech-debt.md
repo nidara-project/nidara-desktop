@@ -2198,6 +2198,11 @@ compact capsule; hand the whole surface back the moment anything is revealed or 
 (`get_visible()` is not enough on the way out — a closing revealer is visible until its final tick,
 `tickId` is what says "still moving"). Resting is ~all of the time and is the expensive state anyway.
 
+⚠️ **SUPERSEDED 2026-08-10 — the rule in that last paragraph was wrong** (see the entry below). The
+missing allocation lasts ONE FRAME, not "as long as the mode stays open", and `MorphRevealer` has the
+same `onAllocated`-inside-`vfunc_size_allocate` guarantee the bar's panels rely on. The island now
+declares its open modes too; the numbers above (capsule at rest, −7.2 pts) still stand.
+
 🔑 **The two paddings are deliberately asymmetric (200 x / 16 y), and that asymmetry is what makes it
 safe.** The win is entirely in the HEIGHT — 1440 → 64. The horizontal is where the MOTION is: the
 capsule is centred, so anything changing its width slides it sideways, and one of those paths
@@ -2308,8 +2313,9 @@ per painting panel`**. Measured on the live shell with the CC open: `2560x64` + 
 **11.2 % of the box**, against 100 % before.
 
 🔑 **The bar was never in the island's situation — it is in the app grid's, and the difference is
-one option object.** The island genuinely cannot declare while open: its modes arrive through a
-`MorphRevealer`, which has no final allocation until the morph lands. Every panel here is a
+one option object.** The island was believed unable to declare while open, because its modes arrive
+through a `MorphRevealer` (wrong, and fixed the next day — see the 2026-08-10 entry; the belief is
+what mattered here, because it is what the bar copied). Every panel here is a
 `ScaleRevealer` with `OVERLAY_POP` and `animateLayout: false`, so the allocation is the FINAL one
 from the first laid-out frame and the 0.97→1.0 pop paints strictly inside it. Borrowing the island's
 rule wholesale was the actual mistake, and it cost the entire open-state saving for four months.
@@ -2385,6 +2391,56 @@ exactly this.
 ⚠️ **Trap 2: a stray damage client from an earlier launch doubles the load and says nothing.** Kill
 by pattern, not by pidfile. (And `pkill -f damage.js` from a shell whose own command line contains
 that string kills the shell instead — put the kill in a script file.)
+
+#### ✅ 2026-08-10: the ISLAND declares its OPEN MODES too — the rule above was wrong
+
+The 2026-08-04 entry says the island "genuinely cannot declare while open" because its modes arrive
+through a `MorphRevealer`. That was the same mistake the bar made, one layer further along: it is
+true while the morph has **no allocation yet**, which is one frame, and it was written as if it were
+true for **as long as the mode stays open**, which is a whole Assistant conversation.
+
+`MorphRevealer.onAllocated` fires from inside `vfunc_size_allocate` — the same property that made the
+bar's panels safe — and `IslandWindow.mount` had already wired it to `updateInputRegion` (for clicks)
+since the focus-grab migration. The blur region rides the same call, so a mode's rect lands on the
+frame that first paints it, and on every relayout after that (a growing conversation, a `margin_top`
+re-pin). Measured on the live shell, declared rect as a share of the 2560x1440 box:
+
+| island state | declared | % of its box |
+|---|---|---|
+| at rest (capsule) | 753x64 | 1.3 % |
+| Assistant | 792x145 | **3.1 %** |
+| battery | 753x159 | 3.3 % |
+| media player | 832x278 | 6.3 % |
+| workspace overview | 2560x457 | 31.7 % |
+
+All of them were **100 %** before. The overview is full-monitor-width by design, so its win is 3×;
+the Assistant — the mode that stays open for as long as a conversation lasts — is 32×.
+
+🔑 **The morph needs no per-frame region, and that was the thing actually worth avoiding.**
+`applyProgress` only sets opacity and queues a draw — never a relayout — so the revealer's allocation
+is FINAL from its first layout pass: **one stamp per open, one per close**, verified in the log (a
+`pending` immediately followed by one rect, then silence for the whole 300ms). And the travelling
+shape stays inside that one rect: it is `lerp(capsule, glass)`, the capsule is a hit target, the glass
+is inside the revealer's own box (the shape's cairo node clips itself to that box + 8px), and a lerp
+between two rects sharing a top edge and a centre never leaves their bounding box.
+
+⚠️ **The one frame that cannot be measured is the turn that REVEALS a mode** — `set_visible(true)`
+runs before any layout pass. That is the `pending` case and its answer is the whole surface, for the
+single frame until `onAllocated` re-stamps. Falling back to "I don't know" is the only correct answer
+there; a rect computed from a revealer with no allocation describes the capsule while the mode paints
+outside it, and outside the region is NOT DRAWN.
+
+⚠️ **The indicator chips are covered by the PAD, not by a rect anyone computed for them.**
+`hitTargets()` drops them the moment they fade to opacity 0 (35 % into the morph, by design), so any
+re-stamp taken mid-morph measures a union without them — and on the way back out they ramp up again
+with no relayout to trigger a re-measure. Three chips ≈ 150px against `BLUR_PAD_X = 200`. Anyone
+tightening that pad has to give the chips a rect first.
+
+Verified visually per mode on the real shell (overview / player / Assistant fully drawn, blur intact)
+and numerically at the risky edge: sampling a column down through the player panel's drop shadow,
+alpha reaches 0 at y≈236 against a region bottom of 278 — the 16px pad clears the shadow with room,
+so nothing is scissored mid-fade. ⚠️ Not re-measured in GPU points: as with the app grid, what is
+measured here is the BOX ratio and the saving is inferred from this section's cost model.
 
 #### Also dead: shaping the region to the squircle's curve
 
