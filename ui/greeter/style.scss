@@ -137,12 +137,28 @@ window > contents {
     rgba(0, 0, 0, 0.28) 100%);
 }
 
-// ── Date / Clock ────────────────────────────────────────────────────────────
-// The three bare-on-wallpaper labels share one shadow — see .greeter-scrim for
-// why it is capped at 0.28 and why it is not the whole fix.
+// ── Text with no glass behind it ─────────────────────────────────────────────
+// THE MEMBERSHIP RULE, not a list of favourites: everything on either screen
+// that sits DIRECTLY on the wallpaper goes here. Anything inside a painted
+// capsule (the password placeholder, the power and locale bars) must NOT — it
+// already has a body behind it, and a shadow there only muddies the glass.
+//
+// See .greeter-scrim for why this is capped at 0.28 and why the shadow is not
+// the whole fix.
+//
+// ⚠️ It shipped for three days as date/clock/username only, because those are
+// what the LOCKSCREEN has and that is the specimen the fix was rendered against.
+// The greeter has three more — the caps warning, the session selector and the
+// error line — and on a light wallpaper they were invisible (caught 2026-08-09
+// the first time the FULL greeter went through lock-probe.js). When a fix lands
+// on a shared stylesheet, render the surface with MORE widgets, not the one you
+// were looking at.
 .greeter-date,
 .greeter-clock,
-.greeter-username {
+.greeter-username,
+.greeter-caps,
+.greeter-error,
+dropdown.greeter-session-dropdown > button label {
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.28), 0 0 14px rgba(0, 0, 0, 0.26);
 }
 

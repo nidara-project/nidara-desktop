@@ -36,10 +36,14 @@
  *   BG=<colour|path>  backdrop standing in for the wallpaper: a CSS colour, or
  *                an image file. Legibility is a question about the WALLPAPER, so
  *                run it at least twice — a dark one and a light one.
- *   SCOPE=greeter|lock   which window classes the specimen carries. `lock` adds
- *                `nidara-lock-window`, which is where the "capsules are painted,
- *                not CSS-drawn" overrides live — so in that scope the capsules
- *                correctly render as nothing. Default `greeter`.
+ *   SCOPE=greeter|lock   WHICH SURFACE to build, not just which CSS classes.
+ *                `lock` is the smaller one (LockCard: avatar, name, password,
+ *                unlock, power bar) and is the only scope that sets a backdrop
+ *                on the painter. `greeter` adds everything LoginCard has on top
+ *                — caps warning, session dropdown, error line, the multi-user
+ *                switcher — plus the locale bar in the bottom-left corner, and
+ *                is the default. The two share one stylesheet, so a change made
+ *                for one has to be looked at in both.
  *   EXTRA_CSS=<path>  a second sheet loaded ABOVE the first — "what if we also
  *                said this?". How candidate treatments are compared without
  *                editing the real stylesheet for each one.
@@ -52,7 +56,12 @@
  *                (gjs cannot import TypeScript; the bundle is the whole reason
  *                for the indirection. `--external:'gi://*'` keeps the GI imports
  *                resolving at runtime.)
- *   W, H         surface size (default 1280x800).
+ *   W, H         surface size, used only when FULLSCREEN=0. Both real surfaces
+ *                cover the screen, so the probe fullscreens by default: on a
+ *                TILING compositor W/H are a request that gets ignored anyway,
+ *                and at the wrong height the card lands on top of the clock —
+ *                a layout verdict that is entirely the probe's fault. Set
+ *                FULLSCREEN=0 to inspect a component at an arbitrary size.
  *
  * ⚠️ TWO THINGS TO KNOW BEFORE READING A NUMBER OFF IT.
  *
@@ -62,11 +71,12 @@
  *    display". So in practice this runs on the LIVE session and flashes a real
  *    window for ~0.7s per render. That is the whole intrusion; nothing is
  *    locked, logged out or restarted.
- * 2. Consequently a TILING compositor sizes the window, and W/H are a request it
- *    ignores — a run can come back 626px wide instead of 1280. Every centred
- *    element then sits somewhere else. **Crop from the bounds this script
- *    prints, never from a remembered offset**, and float the window (Hyprland:
- *    `hyprctl dispatch togglefloating`) when the absolute layout matters.
+ * 2. Consequently a TILING compositor sizes the window, which is why the default
+ *    is fullscreen — the only reliable way to get the real aspect ratio, and the
+ *    honest one, since both surfaces really are fullscreen. It does mean the
+ *    flash covers the screen for that ~0.7s. With FULLSCREEN=0 the window is
+ *    whatever the layout gives it, so **crop from the bounds this script prints,
+ *    never from a remembered offset**.
  */
 import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
@@ -80,6 +90,8 @@ const REPO = GLib.getenv("NIDARA_REPO") || GLib.get_current_dir()
 const CSS = GLib.getenv("CSS") || `${REPO}/ui/greeter/style.css`
 const BG = GLib.getenv("BG") || "#1b2430"
 const SCOPE = GLib.getenv("SCOPE") || "greeter"
+// Shipped Lucide glyphs, resolved exactly as ui/lib/icons.ts does at runtime.
+const ICON_DIR = `${GLib.getenv("NIDARA_SHELL_ROOT") ?? "/usr/share/nidara/ui/shell"}/assets/icons/hicolor/scalable/actions`
 const W = parseInt(GLib.getenv("W") || "1280", 10)
 const H = parseInt(GLib.getenv("H") || "800", 10)
 
@@ -178,11 +190,52 @@ card.append(wrap(new Gtk.Button({
     label: "Desbloquear", css_classes: ["greeter-login-btn"],
     halign: Gtk.Align.CENTER, width_request: 280, margin_top: 8,
 }), "strong"))
+// The conditional lines, both hidden at rest in the real card. CAPS=1 / ERROR=1
+// render them, because "does the card still hold together when the warning is
+// there" is a layout question nothing else answers.
+if (GLib.getenv("CAPS")) {
+    card.append(new Gtk.Label({
+        label: "Bloq Mayús está activado", css_classes: ["greeter-caps"],
+        halign: Gtk.Align.CENTER, margin_top: 6,
+    }))
+}
+if (SCOPE === "greeter") {
+    // Session selector — a set-once control, kept visually subordinate to the
+    // password field. Gtk.DropDown for real: it is the widget whose focus ring
+    // and popover styling this sheet spends most of its lines on.
+    const drop = Gtk.DropDown.new_from_strings(["Nidara", "Hyprland", "GNOME"])
+    drop.halign = Gtk.Align.CENTER
+    drop.margin_top = 14
+    drop.add_css_class("greeter-session-dropdown")
+    card.append(drop)
+}
 if (GLib.getenv("ERROR")) {
     card.append(new Gtk.Label({
         label: "Contraseña incorrecta", css_classes: ["greeter-error"],
         wrap: true, halign: Gtk.Align.CENTER, margin_top: 6,
     }))
+}
+if (SCOPE === "greeter") {
+    // Multi-user switcher — only built when more than one human user exists, so
+    // most dev boxes never see it. USERS=<n> forces it.
+    const n = parseInt(GLib.getenv("USERS") || "0", 10)
+    if (n > 1) {
+        const switcher = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL, spacing: 10,
+            halign: Gtk.Align.CENTER, margin_top: 18,
+            css_classes: ["greeter-user-switcher"],
+        })
+        for (let i = 0; i < n; i++) {
+            const chipAvatar = new Gtk.Box({
+                width_request: 36, height_request: 36,
+                css_classes: ["greeter-chip-avatar", "greeter-avatar-fallback"],
+            })
+            switcher.append(new Gtk.ToggleButton({
+                child: chipAvatar, active: i === 0, css_classes: ["greeter-user-chip"],
+            }))
+        }
+        card.append(switcher)
+    }
 }
 
 // Power bar — PowerBar.ts. ICONS=1 loads the shipped Lucide glyphs the way
@@ -192,7 +245,6 @@ if (GLib.getenv("ERROR")) {
 // missing-glyph placeholder measures differently from the real thing, and the
 // type questions this probe exists for are about the labels.
 const POWER_ICONS = { Suspender: "moon", Reiniciar: "rotate-ccw", Apagar: "power" }
-const ICON_DIR = `${GLib.getenv("NIDARA_SHELL_ROOT") ?? "/usr/share/nidara/ui/shell"}/assets/icons/hicolor/scalable/actions`
 const powerBar = new Gtk.Box({
     spacing: 4, halign: Gtk.Align.CENTER, valign: Gtk.Align.END,
     css_classes: ["greeter-power-bar"], margin_bottom: 40,
@@ -212,6 +264,32 @@ for (const label of ["Suspender", "Reiniciar", "Apagar"]) {
     powerBar.append(new Gtk.Button({ css_classes: ["greeter-power-btn"], child: inner }))
 }
 
+// Locale bar — greeter only, bottom-left. Two dropdowns and a separator inside
+// a painted pill; it is the last thing on either screen that was CSS-drawn.
+const localeBar = (() => {
+    const row = new Gtk.Box({
+        orientation: Gtk.Orientation.HORIZONTAL, spacing: 8,
+        halign: Gtk.Align.START, valign: Gtk.Align.END,
+        margin_start: 40, margin_bottom: 40,
+        css_classes: ["locale-bar"],
+    })
+    const icon = new Gtk.Image({ pixel_size: 12, css_classes: ["locale-bar-icon"] })
+    const glyph = `${ICON_DIR}/keyboard.svg`
+    if (GLib.file_test(glyph, GLib.FileTest.EXISTS)) {
+        icon.gicon = Gio.FileIcon.new(Gio.File.new_for_path(glyph))
+        icon.add_css_class("nd-icon")
+    }
+    row.append(icon)
+    const kb = Gtk.DropDown.new_from_strings(["es", "us"])
+    kb.add_css_class("locale-bar-dropdown")
+    row.append(kb)
+    row.append(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["locale-bar-sep"] }))
+    const lang = Gtk.DropDown.new_from_strings(["Español", "English"])
+    lang.add_css_class("locale-bar-dropdown")
+    row.append(lang)
+    return row
+})()
+
 const overlay = new Gtk.Overlay()
 overlay.set_child(backdrop)
 // The wallpaper scrim, as both real surfaces build it — `can_target: false`
@@ -225,6 +303,7 @@ overlay.add_overlay(scrim)
 overlay.add_overlay(clockBox)
 overlay.add_overlay(card)
 overlay.add_overlay(wrap(powerBar))
+if (SCOPE === "greeter") overlay.add_overlay(wrap(localeBar))
 win.set_child(overlay)
 
 // ── reporting ────────────────────────────────────────────────────────────────
@@ -250,6 +329,7 @@ function savePng(widget, path) {
     print(`  → ${path} (${w}x${h})`)
 }
 
+if (GLib.getenv("FULLSCREEN") !== "0") win.fullscreen()
 win.present()
 const loop = GLib.MainLoop.new(null, false)
 
