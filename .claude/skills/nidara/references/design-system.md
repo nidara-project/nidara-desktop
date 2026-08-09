@@ -598,13 +598,33 @@ Rejected four times now (battery `%` 2026-07-20, assistant errors 2026-07-21, th
 and detail page's clock 2026-08-02, the greeter's caps warning 2026-08-09 — all four caught by the
 user's eye), which is why it is a rule and not a preference.
 
-⚠️ **"Not in the copy" does NOT mean "therefore a dot".** Every entry in that table is a
-surface with no room for a word — the island's compact capsule cannot say "recording", an
-assistant tool row has no space for a status label — so the mark **substitutes** for text. The
-greeter's caps warning is a whole sentence, and a dot beside it repeats what the sentence
-already says; that is decoration, not signal (user, 2026-08-09, after one shipped for an hour).
-**When the copy already carries the meaning, removing the colour is the entire change.** What
-makes the message noticeable there is the capsule it sits on, not a mark.
+⚠️ **"Not in the copy" does NOT mean "therefore a dot" — a mark has to EARN its place, and
+there are exactly two ways.** Settled with the user 2026-08-09, after a warning dot on the
+greeter's caps message shipped for an hour and was removed:
+
+1. **It SUBSTITUTES for text there is no room for.** `.island-rec-dot` and `.bar-cc-badge`:
+   a compact island capsule cannot say "recording", a bar icon button cannot say "the AI has
+   permissions". The dot is the only thing that fits, so it carries the whole message.
+2. **It DISCRIMINATES between items that otherwise look identical.** `.agent-tool-dot` /
+   `.agent-error-dot`: the assistant's transcript is a list of steps rendered the same way, and
+   the dot is what separates the ones that failed from the ones that worked. Remove it and you
+   cannot tell them apart at a glance. This is the case the "no room" reading misses — there IS
+   room next to a tool name; the dot is not there for space, it is there for contrast within a
+   set.
+
+**A single self-describing sentence is neither.** The greeter's caps warning says what it
+means, in words, and appears alone; a dot beside it repeats the sentence. That is decoration.
+**When the copy already carries the meaning, removing the colour is the entire change** — what
+makes the message noticeable is the capsule it sits on.
+
+The user's own framing, worth keeping because it is the test that scales: *"in the agent it
+makes sense because it marks errors and tells them apart from the correct steps. Here the text
+is enough."* Before adding a mark, name which of the two jobs it is doing. If the answer is
+"it makes it stand out", it is decoration.
+
+⏸️ **If that message ever does need something, the candidate is an ICON, not a dot** — an
+informational glyph, because the thing being communicated is a *kind* of state rather than a
+severity. Deferred by the user 2026-08-09: text alone for now.
 
 🔑 **The fourth rejection adds a reason the first three did not have: on an arbitrary backdrop a
 mid-tone hue is WORSE than plain white, not merely louder.** The greeter's caps warning was
