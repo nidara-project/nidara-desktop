@@ -1377,6 +1377,12 @@ Two reasons, and the second is the one that generalises:
   keyframe or a 15 fps Cairo redraw means re-blurring 2560×1440 forever, for a dot. This is the
   general rule from the glow work: **continuous animation costs ≈40 % GPU; momentary is fine,
   perpetual is not.**
+  🔑 **And it does not scale down with the effect.** A 1px rotating border gradient measured the
+  same as a 24px glow (2026-08-01), because what costs is the damage the animation causes every
+  tick, not the pixels it paints — a loop dirties the window whatever it draws, and re-compositing
+  means re-blurring the surfaces above it. So the question to ask about a new effect is
+  **"continuous or punctual?"**, never "is this one expensive?" — the second question has no
+  useful answer, and asking it is how a 1px detail gets waved through.
 The three marks are `.bar-cc-badge` (CC capsule, opacity 0.6 armed / 1.0 active — the STEP is what
 distinguishes them, no keyframe), `.island-rec-dot` (island compact + its indicator chip), and the
 screenrecord tile's steady `DANGER_HEX` fill. The one surviving `@keyframes rec-pulse` user is

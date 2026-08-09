@@ -1972,6 +1972,26 @@ of blurred layers covering it*, so with three full-screen layers **every repaint
 anywhere pays triple blur**. It is a tax on daily use (scroll, video, dragging), not on idle — a
 different axis from #18's idle work.
 
+**Where this section came from (2026-08-01), because the framing still does the work.** The first
+measurement was not "shrink a layer" but "turn each layer's blur OFF and see what comes back", via a
+temporary `layer_rule` override + `hyprctl reload` under continuous synthetic damage:
+
+| | GPU |
+|---|---|
+| all three layers blurred (what shipped) | 43.7 % |
+| island's blur off | 33.4 % |
+| + dock's off | 23.1 % |
+| + bar's off | 12.0 % |
+| `decoration:blur:enabled = false` | 8.6 % |
+
+🔑 **~10 points per full-screen blurred layer — and the ISLAND, which showed a ~300px capsule, cost
+exactly what the BAR cost.** That sentence is the whole reason this section exists: it separates
+what a surface *is* from what it *shows*, which is the distinction every fix since has been built on.
+⚠️ **The absolute numbers are that day's machine, not today's** — idle alone was 4-6 % before #18
+fixed it (it is 0.0-0.1 % now), and the modern harness reads +5.9 pts for a full-screen blurred
+layer. Quote the ratio, never the values. (This measurement was recovered 2026-08-10 from a branch
+that was never pushed; the rest of that day's findings had already landed through the AgentGlow work.)
+
 **Measured 2026-08-02**, synthetic damage 1600x700 at 144/s, 3 rounds shuffled, baseline stable to
 ±0.4 pts: a full-screen blurred layer costs **+5.9 pts** of GPU; the same layer shrunk to what it
 actually shows costs **+0.4**. Fixing the island A/B'd at **31.4% → 25.3% (−6.1 pts)** against the
