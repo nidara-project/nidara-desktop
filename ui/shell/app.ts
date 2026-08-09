@@ -815,12 +815,21 @@ app.start({
         const dockWin = Dock(monitor)
         // The app grid's own OVERLAY layer surface (see AppGridWindow.ts) — also
         // created UNMAPPED, and for the same reason as the pointer: an unmapped
-        // surface has no blur pass, so a closed grid costs nothing at all. The dock
-        // goes in as a focus-grab peer, resolved LAZILY because a position or
-        // auto-hide change rebuilds that window (scheduleDockRebuild below) and a
-        // captured reference would point at a closed surface.
+        // surface has no blur pass, so a closed grid costs nothing at all.
+        //
+        // Its focus-grab PEERS are this monitor's other shell chrome: the bar, the
+        // island and the dock. A grab clamps pointer focus to the surfaces in its
+        // whitelist, so anything left out stops receiving even MOTION — the bar's
+        // capsules went inert (no hover) with the grid open, user-caught 2026-08-09.
+        // The bar and the island already whitelist each other for exactly this; the
+        // grid is simply joining the same set. It is resolved LAZILY: the DOCK window
+        // is rebuilt on a position or auto-hide change (scheduleDockRebuild below), so
+        // a captured reference would point at a closed surface, and the island is
+        // reachable only once Bar() has finished building.
         const gridWin = AppGridWindow(monitor, () => {
-          const peers: Gtk.Window[] = []
+          const peers: Gtk.Window[] = [barWin as any]
+          const isl = (barWin as any).islandWindow
+          if (isl) peers.push(isl)
           windows.forEach(w => {
             if (w.name === "nidara-dock" && (w as any).gdkmonitor === monitor) peers.push(w as any)
           })

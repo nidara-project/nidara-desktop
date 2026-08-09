@@ -652,9 +652,18 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     **What was traded away, deliberately** (owner, 2026-08-09): opening the grid no
     longer REVEALS the dock. That coupling was the whole justification for the
     old placement (`tech-debt.md` §18). Two things soften it and both are
-    verified: the dock's windows go into this surface's focus grab as **peers**, so
-    its icons still launch with the grid open, and with auto-hide on, an edge hover
-    still slides it in **while the grid stays open**.
+    verified: this monitor's other shell chrome (**bar, island and dock**) goes into the
+    grid's focus grab as **peers**, so the dock's icons still launch with the grid
+    open, and with auto-hide on, an edge hover still slides it in **while the grid
+    stays open**.
+    ⚠️ **The peer list is not a nicety — a grab CLAMPS pointer focus, so a surface
+    left out of it stops receiving even MOTION.** Shipping with only the dock as a
+    peer left the bar's capsules inert: no hover, no click (user-caught 2026-08-09,
+    same day). The bar and the island already whitelist each other for exactly this;
+    the grid simply joins the set. Whitelisting the bar then obliges
+    `dismissOverlays()` to close the grid, because a peer is by definition a surface
+    the compositor will NOT dismiss on — otherwise the empty bar strip becomes the
+    one press on screen that does nothing.
     **What that unlocked**: with the dock coupling gone there was nothing keeping
     the grid out of `Status.ts`, so it is now `status.app_grid_open` — a normal
     mutually-exclusive overlay, and `dumpState` reads the property instead of

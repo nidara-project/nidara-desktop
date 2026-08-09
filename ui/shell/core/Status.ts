@@ -163,8 +163,15 @@ export class UIStatus extends GObject.Object {
         this.notify("island-mode")
     }
 
+    // "Is the user looking at something of ours right now." The app grid counts
+    // (added 2026-08-09 with the rest of its move into Status), and leaving it out
+    // was not cosmetic: it is the FIRST line of the bar's empty-strip dismissal
+    // handler, so the strip silently stopped dismissing the grid while it dismissed
+    // every other overlay from the same pixel. Its other caller is AgentService,
+    // which used it to avoid popping the island over something the user opened —
+    // and had been popping it over an open app grid all along.
     public get isAnyOverlayOpen(): boolean {
-        return this._cc_open || this._nc_open || this._prism_open || this._system_menu_open || this._island_mode !== "" || this._bar_expanded_id !== ""
+        return this._cc_open || this._nc_open || this._prism_open || this._app_grid_open || this._system_menu_open || this._island_mode !== "" || this._bar_expanded_id !== ""
     }
 
     public get about_open() { return this._about_open }

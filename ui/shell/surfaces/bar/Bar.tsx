@@ -166,6 +166,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     if (status.cc_edit_mode) return   // don't close CC while in edit mode
     status.cc_open = false; status.nc_open = false; status.prism_open = false; status.system_menu_open = false
     status.island_mode = ""; status.bar_expanded_id = ""
+    // The app grid too, and it is NOT decoration: this surface is a peer in the
+    // grid's focus grab (so its capsules stay hoverable while the grid is open), and
+    // a peer is precisely a surface the compositor will NOT dismiss on. Without this
+    // line the empty strip would be the one press on screen that does nothing.
+    status.app_grid_open = false
   }
   // An EMPTY stretch of the bar strip dismisses too, and only GTK can do it. The
   // compositor cannot: the strip belongs to the surface we whitelist, so a press

@@ -543,6 +543,19 @@ dock. Two things soften it and both are verified live — the dock's windows are
 grid's focus grab (its icons still launch with the grid open, and clicking one does not dismiss),
 and with auto-hide on, an edge hover still slides the dock in **while the grid stays open**.
 
+🔑 **Moving a surface into `Status` is THREE edits, not one, and the other two fail in silence**
+(both found the same day, one by the user and one by chasing it). A new overlay property needs:
+the setter + `EXCLUSIVE` map (obvious), **`isAnyOverlayOpen`** (it is the first line of the bar's
+empty-strip dismissal handler AND what stops `AgentService` popping the island over something the
+user opened — the grid was missing from both), and **`dismissOverlays()`** in `Bar.tsx` (only once
+the bar is a grab peer, but then mandatory). Symptom of the first miss: the empty bar strip
+dismissed every overlay except the new one, from the same pixel.
+
+⚠️ **A grab CLAMPS pointer focus, so the peer list decides who can be HOVERED, not just clicked.**
+The grid shipped with only the dock whitelisted and the bar's capsules went dead — user-caught
+within the hour. Peers are now bar + island + dock, the set the bar and island already granted each
+other.
+
 ⚠️ **Multi-monitor is unchanged, which means still imperfect.** Each surface takes its own focus
 grab and there is one grab compositor-wide, so on two monitors the second open evicts the first and
 closes it. That was already true of the two docks, and it is true of the island today — see the
