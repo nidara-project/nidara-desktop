@@ -2386,6 +2386,43 @@ exactly this.
 by pattern, not by pidfile. (And `pkill -f damage.js` from a shell whose own command line contains
 that string kills the shell instead — put the kill in a script file.)
 
+#### Also dead: shaping the region to the squircle's curve
+
+`wl_region` takes rectangles, but a region is a SET of them, so a curve IS expressible as a
+staircase — that is how pixman represents any shape. It is still not worth doing, twice over.
+
+**The area is noise.** What sits between the bounding rect and the squircle is `4r²(1−π/4)`: for the
+CC's 356x610 panel that is ~494 px² at `RADIUS.lg` (0.23 %) and ~879 px² at the island radius
+(0.40 %). The 16px safety pad we add ON PURPOSE is +14.7 % of the same panel — 35-65× more than the
+corners could ever return. And §46 measured that you pay for *the region expanded by the blur
+radius* anyway, so the kernel hands the corners straight back.
+
+**And it would cost.** Hyprland iterates the clip region's rects when drawing (`OpenGL.cpp`, the same
+behaviour that makes a declared region cheap), so a ~30-rect staircase per corner is ~120 extra
+iterations per panel per frame. Worse, the scissor is hard: a staircase off by 1px eats the squircle's
+antialiased Cairo edge — reintroducing a fixed artefact to optimise 0.3 %.
+
+🔑 **And it would not help an EFFECT either, which is the usual reason someone asks.** The shape of a
+compositor effect is driven by the surface's per-pixel ALPHA, not by the region — that is exactly
+what `ignore_alpha` does, which is why today's blur already follows the curve including its AA edge.
+The region decides what is COMPUTED, `ignore_alpha` decides what is SEEN. For refraction specifically
+a tight region is actively wrong: refraction displaces pixels from OUTSIDE the drawn shape inward, so
+it samples past the edge and a curve-hugging clip would cut the samples it needs — that direction
+needs MORE pad, not less.
+
+**Refraction itself is settled and CLOSED (2026-06-12) — do not re-explore it either.** True
+Liquid-Glass refraction needs the backdrop pixels, which by Wayland's design only the compositor has:
+there is no client-side path (GTK4 has no `backdrop-filter`, SVG filters cannot touch the backdrop,
+and `GskGLShader` is deprecated and non-functional on the current renderers). A Hyprland **plugin**
+could do it per drawn element, alpha-mask-driven exactly like blur — hyprglass's whole-window look
+was that plugin's limitation, not the mechanism's — but the plugin route was rejected before
+publication: the plugin API breaks every Hyprland release and a crash takes the whole session down.
+The `if hl.plugin.hyprglass ~= nil then … end` block in `hyprland.lua` is **inert by design**; it is
+not a missing install, and do not wire `hyprpm` into `install.sh` for it. The only sustainable route,
+if this is ever revisited, is proposing it upstream to Hyprland's blur engine the way `vibrancy` was.
+A client-side "fake lens rim" (a Cairo/CSS specular edge over the existing compositor blur) was
+offered and declined — the compositor blur is good enough.
+
 ---
 
 ## Meta: how to interpret "tech debt" here
