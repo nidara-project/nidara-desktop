@@ -211,7 +211,11 @@ the resolution changes, and the mismatch shows as tile colour at the corners.
 owned the per-window geometry, so thumbnails were an insertion, not a rewrite. Two rules that are
 easy to get wrong there:
 
-- **Capture on OPEN, never on a timer or on `changed`.** `sync()` runs on every HyprlandState
+- **Capture on OPEN, never on a timer or on `changed`.** MEASURED 2026-08-10 rather than assumed: an
+  open overview holding real thumbnails costs **0.0 %** on an idle desktop, the captures show up only
+  as +0.2-0.5 points in the 3 s opening transient, and with the screen being damaged real textures
+  and flat placeholders are indistinguishable (1.8 vs 1.9 % — blur is charged by area, not by what is
+  painted under it). Full table in `tech-debt.md` §46. `sync()` runs on every HyprlandState
   "changed" while the surface is open; a capture per event would turn a window drag into a render
   pass per window per motion event. `SchematicHandle.refresh()` marks stale, the overview calls it on
   `notify::island-mode`, and `sync()` consumes the flag once. Continuous refresh would also be the

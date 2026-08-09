@@ -2462,6 +2462,42 @@ model is the *intersection* of the damage with the region. ⚠️ Which is also 
 numbers: they are specific to where this harness puts its damage. A mode whose region does not
 overlap the damage reads as free; move the damage under it and it will not.
 
+#### ✅ 2026-08-10: the overview RE-MEASURED after #95 — real thumbnails cost nothing to hold
+
+The open item this section carried since #95 (real window captures in the Workspace Overview): the
+overview "now paints MUCH more", and its region lives on the island's surface, so its numbers were
+assumed stale. They were not. Same harness, plus a no-damage variant for the questions the harness
+cannot ask, with `NIDARA_WINDOW_CAPTURE=0` (placeholders) as the only variable:
+
+| | GPU |
+|---|---|
+| **with damage** — floor, nothing open | 1.0 / 1.1 % |
+| with damage — overview open, PLACEHOLDER thumbnails | 1.9 % |
+| with damage — overview open, REAL thumbnails | **1.8 %** |
+| **idle desktop** — nothing open | 0.1 % |
+| idle desktop — overview OPENING (3 s transient), placeholders | 2.0 % (max 26) |
+| idle desktop — overview OPENING (3 s transient), real | 2.2 / 2.4 / 2.5 % (max 29-35) |
+| idle desktop — overview HELD OPEN | **0.0 %** (3 rounds) |
+
+🔑 **Blur is charged by AREA, not by what is painted under it** — which is why real textures and flat
+placeholders measure the same (1.8 vs 1.9, and 0.0 vs 0.0 held open). The intuition that drove this
+item — "it paints much more, so it must cost more" — is the wrong model for a compositor effect, and
+it is the same confusion as expecting the region to shape the blur (see the squircle entry below).
+
+🔑 **An open overview on an idle desktop costs NOTHING continuously: 0.0 %.** Its ~0.8 points with
+damage are entirely the intersection of its declared band with someone else's damage — i.e. the
+overview is not a load, it is a surface that other people's repaints have to go through.
+
+The captures appear only in the OPENING transient, +0.2-0.5 points over 3 s against placeholders,
+inside the morph's own cost — which is `WindowCapture.ts`'s "one render pass, one-shot, never polls"
+claim measured rather than trusted. ⚠️ One round showed a 0.1 % / max 16 blip while held open; rounds
+2 and 3 read a flat 0.0 % / max 0, so it was a late-landing capture, not a load. A single round of a
+number this small says nothing.
+
+**Nothing to fix, and nothing left to tighten**: the overview's band is 2543 px of a 2560 px monitor
+because the panel genuinely is that wide. It stays the most expensive island mode, and it is the
+cheap kind of expensive — paid only while it is open, which is seconds.
+
 #### Also dead: shaping the region to the squircle's curve
 
 `wl_region` takes rectangles, but a region is a SET of them, so a curve IS expressible as a

@@ -20,6 +20,20 @@
 # Everything after the label is handed to `ags request` verbatim, so any IPC action
 # can be the scenario (`toggleCC`, `toggleAppGrid`, `setIsland overview`, …).
 #
+# TWO NUMBERS, because they answer different questions and a mean hides one of them:
+#   gpu=      the steady state — what holding this open costs
+#   opening=  the first TRANS seconds from the state change — the animation plus any
+#             one-shot work (window captures, first paint) it triggers
+#
+# And two MODES:
+#   DAMAGE=1 (default)  something else is repainting the screen. This is the §46
+#                       question: blur is charged as the intersection of that damage
+#                       with what each surface declares.
+#   DAMAGE=0            an idle desktop, nothing repainting. Answers "does this cost
+#                       anything BY ITSELF while open?" — a different question, and
+#                       the one that showed the overview's real thumbnails to be free
+#                       to hold (0.0 %) while its cost under damage is all region.
+#
 # HOW TO READ THE OUTPUT
 #  - Run the arms ALTERNATED (A,B,B,A), not A,A,B,B: the machine drifts.
 #  - 🔑 Check `fps=` on every arm. It must be the monitor's rate. An arm below it
@@ -58,7 +72,16 @@ SECS="${SECS:-20}"
 WS="${WS:-6}"          # a workspace with nothing on it: other clients are damage too
 SETTLE="${SETTLE:-9}"  # the shell needs its first layout passes before it is measurable
 
+DAMAGE="${DAMAGE:-1}"  # 0 = no damage client: "does this cost anything on an IDLE desktop?"
+TRANS="${TRANS:-3}"    # seconds sampled from the state change, reported separately
+
 damage_stop() { pkill -f 'blur-damage\.js'; sleep 0.5; }
+
+sample() {  # sample <seconds> — mean/min/max of GPU busy %, 20 Hz
+    { for _ in $(seq $(( $1 * 20 ))); do cat "$GPU_PATH"; sleep 0.05; done; } | awk '
+        { s+=$1; n++; if (min==""||$1<min) min=$1; if ($1>max) max=$1 }
+        END { printf "%.1f%% (min %d max %d, n=%d)", s/n, min, max, n }'
+}
 
 # Which paths a REF arm swapped, so --reset restores THOSE and nothing else. A blunt
 # `git checkout HEAD -- .` here would eat whatever else you had in flight.
@@ -105,19 +128,27 @@ sleep "$SETTLE"
 ags request focusWorkspace "$WS" >/dev/null
 
 damage_stop
-LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so setsid gjs -m "$REPO/scripts/dev/blur-damage.js" \
-    >"$LOG" 2>&1 </dev/null &
-sleep 3
+if [ "$DAMAGE" = 1 ]; then
+    LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so setsid gjs -m "$REPO/scripts/dev/blur-damage.js" \
+        >"$LOG" 2>&1 </dev/null &
+    sleep 3
+fi
 
-[ $# -gt 0 ] && ags request "$@" >/dev/null
+# The state change is applied in the background so the sampler can catch the
+# transient it causes — opening a surface costs its animation and any one-shot work
+# (window captures, first paint) that a steady-state mean averages into nothing.
+OPEN="n/a"
+if [ $# -gt 0 ]; then
+    ags request "$@" >/dev/null &
+    OPEN=$(sample "$TRANS")
+fi
 sleep 2
+GPU=$(sample "$SECS")
 
-GPU=$({ for _ in $(seq $(( SECS * 20 ))); do cat "$GPU_PATH"; sleep 0.05; done; } | awk '
-    { s+=$1; n++; if (min==""||$1<min) min=$1; if ($1>max) max=$1 }
-    END { printf "%.1f%% (min %d max %d, n=%d)", s/n, min, max, n }')
-FPS=$(grep -ao 'fps=[0-9.]*' "$LOG" | tail -3 | tr '\n' ' ')
+if [ "$DAMAGE" = 1 ]; then FPS=$(grep -ao 'fps=[0-9.]*' "$LOG" | tail -3 | tr '\n' ' ')
+else FPS="(no damage: idle-desktop arm)"; fi
 damage_stop
 
-printf '%-34s gpu=%s  %s\n' "$LABEL" "$GPU" "$FPS"
+printf '%-34s gpu=%s  opening=%s  %s\n' "$LABEL" "$GPU" "$OPEN" "$FPS"
 [ -n "${REF:-}" ] && echo "   ⚠️  working tree still holds $REF's $FILES — '$SELF --reset' when done"
 exit 0
