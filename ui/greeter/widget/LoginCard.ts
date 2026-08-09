@@ -1,4 +1,4 @@
-import { Gtk, Gdk } from "ags/gtk4"
+import { Gtk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import GLib from "gi://GLib"
 import { getSessions } from "../lib/sessions"
@@ -83,21 +83,14 @@ export default function LoginCard(): Gtk.Widget {
   errorWrap.halign = Gtk.Align.CENTER
   errorWrap.margin_top = 6
 
-  // Caps Lock warning — read from the seat keyboard device (updates live via
-  // notify::caps-lock-state, no laggy key-event polling).
-  // Plain neutral text on a capsule. It used to be warning-yellow type, which on
-  // a light wallpaper read worse than plain white; nothing replaces the colour,
-  // because a mark that repeats the sentence beside it is decoration (see the
-  // stylesheet). The capsule is what makes it legible AND noticeable.
-  const capsText = new Gtk.Label({ label: t("capsLock"), css_classes: ["greeter-caps"] })
-  // The WRAPPER is what gets shown and hidden — hold on to it, not the label.
-  const capsLabel = withGlassCapsule(capsText)
-  capsLabel.visible = false
-  capsLabel.halign = Gtk.Align.CENTER
-  capsLabel.margin_top = 6
-  const keyboard = Gdk.Display.get_default()?.get_default_seat()?.get_keyboard() ?? null
-  const syncCaps = () => { if (keyboard) capsLabel.visible = keyboard.get_caps_lock_state() }
-  if (keyboard) keyboard.connect("notify::caps-lock-state", syncCaps)
+  // NO caps-lock warning of our own, deliberately. `Gtk.PasswordEntry` already
+  // builds one — an `image.caps-lock-indicator` inside the field — so this card
+  // used to show TWO warnings for one state while the lockscreen, which never
+  // had ours, showed one. The field's is the one that survives: it is where the
+  // cursor is, it is what macOS and iOS do, and it makes the two screens
+  // identical for free. It is styled in ui/greeter/style.scss; there is no
+  // property to turn it off, so adding a second one is the only mistake
+  // available here.
 
   // ── Auth logic ────────────────────────────────────────────────────────────
   const setLoading = (loading: boolean) => {
@@ -181,7 +174,6 @@ export default function LoginCard(): Gtk.Widget {
   // followFocus only on the ENTRY: an input shows focus as its edge going
   // accent, a button shows a ring, and no control shows both.
   col.append(withGlassCapsule(passwordEntry, "subtle", true))
-  col.append(capsLabel)
   col.append(withGlassCapsule(loginBtn, "strong", false))
   // The session selector is a control, and every other control on these two
   // screens sits on glass — including the locale bar's dropdowns, which are the
@@ -240,7 +232,6 @@ export default function LoginCard(): Gtk.Widget {
 
   onLocaleChange(() => {
     passwordEntry.placeholder_text = t("password")
-    capsText.label = t("capsLock")
     if (!isAuthenticating) loginLabel.label = t("login")
   })
 

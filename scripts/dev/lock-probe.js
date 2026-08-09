@@ -190,18 +190,14 @@ card.append(wrap(new Gtk.Button({
     label: "Desbloquear", css_classes: ["greeter-login-btn"],
     halign: Gtk.Align.CENTER, width_request: 280, margin_top: 8,
 }), "strong"))
-// The conditional lines, both hidden at rest in the real card. CAPS=1 / ERROR=1
-// render them, because "does the card still hold together when the warning is
-// there" is a layout question nothing else answers.
-if (GLib.getenv("CAPS")) {
-    // Neutral text on a capsule — as LoginCard builds it.
-    const capsWrap = wrap(new Gtk.Label({
-        label: "Bloq Mayús está activado", css_classes: ["greeter-caps"],
-    }))
-    capsWrap.halign = Gtk.Align.CENTER
-    capsWrap.margin_top = 6
-    card.append(capsWrap)
-}
+// ERROR=1 renders the failure line, hidden at rest in the real card, because
+// "does the card still hold together when it is there" is a layout question
+// nothing else answers.
+//
+// CAPS=1 no longer builds a warning of our own — neither surface has one. It
+// force-shows `Gtk.PasswordEntry`'s `image.caps-lock-indicator`, which is the
+// only one left, because GTK drives that node from the REAL keyboard and a probe
+// should not need you to press Caps Lock to render a state.
 if (SCOPE === "greeter") {
     // Session selector — a set-once control, kept visually subordinate to the
     // password field. Gtk.DropDown for real: it is the widget whose focus ring
@@ -339,6 +335,24 @@ function savePng(widget, path) {
 if (GLib.getenv("FULLSCREEN") !== "0") win.fullscreen()
 win.present()
 const loop = GLib.MainLoop.new(null, false)
+
+// CAPS=1 — force GTK's own indicator on, in its own frame.
+//
+// Two constraints fix the timing, and both cost a run to find. It cannot be set
+// at construction: GTK re-syncs the node from the REAL keyboard when the entry
+// is mapped, undoing it. And it cannot be set immediately before the snapshot:
+// showing a child queues a resize, and the snapshot then comes back EMPTY —
+// `savePng` prints "nothing drawn" and every crop is missing. So it goes in a
+// timeout of its own, after the map and well before the render.
+if (GLib.getenv("CAPS")) GLib.timeout_add(GLib.PRIORITY_DEFAULT, 350, () => {
+    let c = entry.get_first_child()
+    while (c) {
+        if (c.get_css_classes().includes("caps-lock-indicator")) { c.set_visible(true); break }
+        c = c.get_next_sibling()
+    }
+    if (!c) print("  ! no caps-lock-indicator node found")
+    return GLib.SOURCE_REMOVE
+})
 
 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 700, () => {
     const dateL = clockBox.get_first_child()

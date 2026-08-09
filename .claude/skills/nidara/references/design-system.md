@@ -622,9 +622,29 @@ makes sense because it marks errors and tells them apart from the correct steps.
 is enough."* Before adding a mark, name which of the two jobs it is doing. If the answer is
 "it makes it stand out", it is decoration.
 
-⏸️ **If that message ever does need something, the candidate is an ICON, not a dot** — an
-informational glyph, because the thing being communicated is a *kind* of state rather than a
-severity. Deferred by the user 2026-08-09: text alone for now.
+✅ **And the sequel, same day: the icon already existed and the message was deleted.**
+`Gtk.PasswordEntry` builds its OWN caps-lock warning — an `image.caps-lock-indicator` inside
+the field, driven from the real keyboard, with no property to turn it off. So the greeter was
+showing TWO warnings for one state (that icon plus our text) while the lockscreen, which never
+had ours, showed one. Ours is gone; the field's is the only one on both screens, which is what
+macOS and iOS do and what the user had already reached for when they said "if anything, an
+icon". **Before adding an indicator to a composed GTK widget, check whether the widget already
+ships one.**
+
+🔑 **On a composed GTK widget, DUMP THE NODE TREE — do not assume the node.** Walking
+`entry.password` to confirm the indicator turned up a second, older mistake: the peek icon is
+an `image`, and this sheet had been styling `> button`, so that rule had never matched and the
+eye was inheriting the entry's full `--nidara-text`. It matters more than it sounds, because
+the fix above depends on a hierarchy — the caps indicator is a STATE and must sit above the eye,
+a passive affordance — and that hierarchy did not exist. (`entry.password` has exactly three
+children: `text` and two `image`s.) Same family as the `margin-start` that GTK4 does not have;
+both were invisible because CSS that matches nothing fails silently.
+
+⚠️ **Rendering a GTK-owned state needs its own frame.** `lock-probe.js`'s `CAPS=1` force-shows
+that indicator, and the timing has exactly one valid slot: not at construction (GTK re-syncs the
+node from the real keyboard when the entry is mapped) and not immediately before the snapshot
+(showing a child queues a resize, and the snapshot comes back EMPTY — "nothing drawn", every
+crop missing). It goes in a timeout of its own, after the map, well before the render.
 
 🔑 **The fourth rejection adds a reason the first three did not have: on an arbitrary backdrop a
 mid-tone hue is WORSE than plain white, not merely louder.** The greeter's caps warning was

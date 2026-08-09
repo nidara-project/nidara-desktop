@@ -258,14 +258,35 @@ window > contents {
 
   > text { color: var(--nidara-text); }
 
-  > button {
-    background: transparent;
-    border: none;
-    min-height: 0;
-    padding: 4px 8px;
+  // ⚠️ The peek icon is an `image`, NOT a `button`. This block selected
+  // `> button` until 2026-08-09 and had therefore never matched anything —
+  // verified by dumping the widget's CSS node tree, with and without text in the
+  // field: `entry.password` has exactly three children, `text` and two `image`s.
+  // Same class of dead rule as the `margin-start` on the dropdowns, and the same
+  // lesson: on a composed GTK widget, DUMP THE TREE instead of assuming the node.
+  //
+  // Fixed rather than deleted, unlike `margin-start`, because the intent here is
+  // load-bearing: the eye is a passive affordance and must sit BELOW the caps
+  // indicator that shares the field with it. Without this it inherited the
+  // entry's full `--nidara-text` and the two read as equals.
+  > image {
     color: var(--nidara-text-dim);
     &:hover { color: var(--nidara-text-secondary); }
   }
+
+  // Gtk.PasswordEntry builds its OWN caps-lock warning inside the field, and
+  // there is no property to turn it off — which is why neither surface adds one
+  // of its own (the greeter used to, and showed two warnings for one state).
+  // It is the only indicator now, so it is brighter than the peek button beside
+  // it: a STATE should not read as one more affordance. Full `--nidara-text`
+  // against the button's `-dim`.
+  //
+  // Left neutral rather than warning-tinted. By the mark rule this icon is a
+  // legitimate place for semantic colour — it SUBSTITUTES for text there is no
+  // room for, which is the first of the two jobs a mark can do — but yellow was
+  // just rejected on this screen and the difference is worth deciding on its own,
+  // not inheriting from here.
+  image.caps-lock-indicator { color: var(--nidara-text); }
 }
 
 // ── Login / Unlock button ───────────────────────────────────────────────────
@@ -378,17 +399,11 @@ window > contents {
 // was marginal and it cost wallpaper across the whole centre of the screen.
 // Everything else on this screen that has to be read sits on glass; these two
 // were the exception, not the rule.
-.greeter-error,
-.greeter-caps {
+.greeter-error {
   color: var(--nidara-text);
   font-size: $fs-caption;
   padding: 3px 12px;
   min-height: 18px;
-}
-
-.greeter-caps {
-  font-weight: $fw-medium;
-  letter-spacing: 0.2px;
 }
 
 @keyframes greeter-shake {

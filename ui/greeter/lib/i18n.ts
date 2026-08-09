@@ -1,7 +1,7 @@
 import GLib from "gi://GLib"
 import { refreshDateFormat } from "./dateNames"
 
-// Mini-catalog: 12 keys × 12 languages. Deliberately duplicated per bundle
+// Mini-catalog: 11 keys × 12 languages. Deliberately duplicated per bundle
 // (greeter and lockscreen each ship their own i18n.ts — see the skill's
 // tech-debt notes). Power/password terminology mirrors the shell catalogs
 // (bar.system-menu.*, settings.users.password) so the same word never renders
@@ -14,7 +14,6 @@ const strings = {
     wrongPassword: "Wrong password",
     noSession:     "No session available",
     loginError:    "Error signing in",
-    capsLock:      "Caps Lock is on",
     unlock:        "Unlock",
     unlocking:     "Verifying…",
     suspend:       "Sleep",
@@ -28,7 +27,6 @@ const strings = {
     wrongPassword: "Contraseña incorrecta",
     noSession:     "No hay sesión disponible",
     loginError:    "Error al iniciar sesión",
-    capsLock:      "Bloq Mayús activado",
     unlock:        "Desbloquear",
     unlocking:     "Verificando…",
     suspend:       "Suspender",
@@ -42,7 +40,6 @@ const strings = {
     wrongPassword: "Mot de passe incorrect",
     noSession:     "Aucune session disponible",
     loginError:    "Erreur de connexion",
-    capsLock:      "Verrouillage majuscule activé",
     unlock:        "Déverrouiller",
     unlocking:     "Vérification…",
     suspend:       "Veille",
@@ -56,7 +53,6 @@ const strings = {
     wrongPassword: "Falsches Passwort",
     noSession:     "Keine Sitzung verfügbar",
     loginError:    "Fehler bei der Anmeldung",
-    capsLock:      "Feststelltaste ist aktiviert",
     unlock:        "Entsperren",
     unlocking:     "Überprüfung…",
     suspend:       "Ruhezustand",
@@ -70,7 +66,6 @@ const strings = {
     wrongPassword: "Password errata",
     noSession:     "Nessuna sessione disponibile",
     loginError:    "Errore di accesso",
-    capsLock:      "Bloc Maiusc attivo",
     unlock:        "Sblocca",
     unlocking:     "Verifica…",
     suspend:       "Sospendi",
@@ -84,7 +79,6 @@ const strings = {
     wrongPassword: "Senha incorreta",
     noSession:     "Nenhuma sessão disponível",
     loginError:    "Erro ao entrar",
-    capsLock:      "Caps Lock ativado",
     unlock:        "Desbloquear",
     unlocking:     "Verificando…",
     suspend:       "Suspender",
@@ -98,7 +92,6 @@ const strings = {
     wrongPassword: "Palavra-passe incorreta",
     noSession:     "Nenhuma sessão disponível",
     loginError:    "Erro ao iniciar sessão",
-    capsLock:      "Caps Lock ativado",
     unlock:        "Desbloquear",
     unlocking:     "A verificar…",
     suspend:       "Suspender",
@@ -112,7 +105,6 @@ const strings = {
     wrongPassword: "Nieprawidłowe hasło",
     noSession:     "Brak dostępnej sesji",
     loginError:    "Błąd logowania",
-    capsLock:      "Caps Lock jest włączony",
     unlock:        "Odblokuj",
     unlocking:     "Weryfikacja…",
     suspend:       "Uśpij",
@@ -126,7 +118,6 @@ const strings = {
     wrongPassword: "Onjuist wachtwoord",
     noSession:     "Geen sessie beschikbaar",
     loginError:    "Fout bij inloggen",
-    capsLock:      "Caps Lock staat aan",
     unlock:        "Ontgrendelen",
     unlocking:     "Verifiëren…",
     suspend:       "Slaapstand",
@@ -140,7 +131,6 @@ const strings = {
     wrongPassword: "Неверный пароль",
     noSession:     "Нет доступных сеансов",
     loginError:    "Ошибка входа",
-    capsLock:      "Включён Caps Lock",
     unlock:        "Разблокировать",
     unlocking:     "Проверка…",
     suspend:       "Спящий режим",
@@ -154,7 +144,6 @@ const strings = {
     wrongPassword: "密码错误",
     noSession:     "没有可用的会话",
     loginError:    "登录出错",
-    capsLock:      "大写锁定已开启",
     unlock:        "解锁",
     unlocking:     "正在验证…",
     suspend:       "睡眠",
@@ -168,7 +157,6 @@ const strings = {
     wrongPassword: "パスワードが違います",
     noSession:     "利用可能なセッションがありません",
     loginError:    "ログインエラー",
-    capsLock:      "Caps Lock がオンになっています",
     unlock:        "ロック解除",
     unlocking:     "確認中…",
     suspend:       "スリープ",
