@@ -16,7 +16,15 @@ Setting any of these to `true` closes all the rest:
 - `system_menu_open`
 - `island_mode` (a STRING, not a bool — the Activity Island's open mode id, `""` = collapsed; modes today: `ISLAND_OVERVIEW` (`"overview"`) and `ISLAND_PLAYER` (`"player"`, the media panel). Replaced the old `overview_open` boolean when the overview became the island's first mode — see `surfaces/island/ActivityIsland.tsx`. Note `""` only means no mode is EXPANDED — the capsule's compact content mutates independently (dots ↔ media compact) and is not Status state.)
 
-The exclusion is implemented by the private `closeExclusive(keep, opts)` helper — each setter calls it on open; when adding a new exclusive overlay, add its `_field → notify-name` to the `EXCLUSIVE` map and call `closeExclusive` from the new setter (don't touch the other setters). Two string-valued members are special-cased: `island_mode` is cleared explicitly inside `closeExclusive` (it can't live in the boolean `EXCLUSIVE` map), and `bar_expanded_id` (the pill expansion capsule) is a **one-way member**: setting it non-empty closes the overlays, and the overlay setters clear it via `opts.barExpanded`. New island MODES are NOT new Status fields — they're new ids for `island_mode`, registered in `ActivityIsland` (mode ids are exported from `Status.ts` so core/IPC/surfaces share one vocabulary).
+The exclusion is implemented by the private `closeExclusive(keep, opts)` helper — each setter calls it on open.
+
+⚠️ **Adding a new exclusive overlay is THREE edits, and only the first one is obvious. The other two fail in SILENCE** (both shipped broken with the app grid's move, 2026-08-09 — `tech-debt.md` §18):
+
+1. The setter itself: add `_field → notify-name` to the `EXCLUSIVE` map and call `closeExclusive` from the new setter (don't touch the other setters).
+2. **`isAnyOverlayOpen`.** It is not the convenience getter it looks like: it is the FIRST line of the bar's empty-strip dismissal handler (`barStripClick` in `Bar.tsx`), so an overlay missing from it silently stops being dismissable from a pixel that dismisses every other one. It is also what stops `AgentService` popping the Assistant island over something the user opened.
+3. **`dismissOverlays()` in `Bar.tsx`** — required as soon as the new surface whitelists the BAR in its focus grab, because a grab peer is by definition a surface the compositor will not dismiss on. Skip it and the empty bar strip becomes the one press on screen that does nothing.
+
+None of the three produces an error, a warning or a failed build when missed. Two string-valued members are special-cased: `island_mode` is cleared explicitly inside `closeExclusive` (it can't live in the boolean `EXCLUSIVE` map), and `bar_expanded_id` (the pill expansion capsule) is a **one-way member**: setting it non-empty closes the overlays, and the overlay setters clear it via `opts.barExpanded`. New island MODES are NOT new Status fields — they're new ids for `island_mode`, registered in `ActivityIsland` (mode ids are exported from `Status.ts` so core/IPC/surfaces share one vocabulary).
 
 ### Other tracked props
 
@@ -29,7 +37,7 @@ The exclusion is implemented by the private `closeExclusive(keep, opts)` helper 
 
 ### Toggles
 
-`Status.ts` exposes typed togglers: `toggleCC`, `toggleNC`, `togglePrism`, `toggleSystemMenu`, `toggleIsland(id)` (+ `toggleOverview`, an alias for `toggleIsland(ISLAND_OVERVIEW)` — also still the IPC action name), `toggleAbout`. There's also a convenience getter `isAnyOverlayOpen`. `dumpState` reports both `overlays.island` (the mode string) and the legacy `overlays.overview` boolean (back-compat for agents).
+`Status.ts` exposes typed togglers: `toggleCC`, `toggleNC`, `togglePrism`, `toggleSystemMenu`, `toggleIsland(id)` (+ `toggleOverview`, an alias for `toggleIsland(ISLAND_OVERVIEW)` — also still the IPC action name), `toggleAbout`. There's also `isAnyOverlayOpen` — treat it as load-bearing, not convenient: see the three-edit warning above. `dumpState` reports both `overlays.island` (the mode string) and the legacy `overlays.overview` boolean (back-compat for agents).
 
 ### Example flow — opening the CC
 
@@ -1485,7 +1493,7 @@ It joined the state machine on the way out: `status.app_grid_open` is a normal m
 
 If you add another state change that both resizes an overlay and relies on per-widget region rects, follow the same recipe.
 
-**Keyboard focus for a keyboard-driven overlay → a FOCUS GRAB. Never `EXCLUSIVE`, never `ON_DEMAND`.** ⚠️ This section used to instruct the opposite; the layer-shell keyboard path was replaced wholesale by `hyprland-focus-grab-v1` (2026-08-06, `common/FocusGrab.ts`). **Every shell surface now rests AND opens in `KeyboardMode.NONE`** — bar, island, dock, agent-pointer — and takes the keyboard by acquiring a grab instead. Wiring an `EXCLUSIVE↔NONE` toggle into a new overlay does not merely duplicate a mechanism: `EXCLUSIVE` re-adds the surface to `m_exclusiveLSes`, and that list makes Hyprland **refuse to move window focus at all**, handing back the exact bug the migration removed (`tech-debt.md` §53).
+**Keyboard focus for a keyboard-driven overlay → a FOCUS GRAB. Never `EXCLUSIVE`, never `ON_DEMAND`.** ⚠️ This section used to instruct the opposite; the layer-shell keyboard path was replaced wholesale by `hyprland-focus-grab-v1` (2026-08-06, `common/FocusGrab.ts`). **Every shell surface now rests AND opens in `KeyboardMode.NONE`** — bar, island, dock, app grid, agent-pointer — and takes the keyboard by acquiring a grab instead. Wiring an `EXCLUSIVE↔NONE` toggle into a new overlay does not merely duplicate a mechanism: `EXCLUSIVE` re-adds the surface to `m_exclusiveLSes`, and that list makes Hyprland **refuse to move window focus at all**, handing back the exact bug the migration removed (`tech-debt.md` §53).
 
 So, for a new keyboard-driven overlay: leave `set_keyboard_mode` at `NONE` and call `acquireFocusGrab([win, …peers], onCleared)` when it opens, `releaseFocusGrab(token)` when it closes. The grab grants keyboard focus the instant it takes, which is what a text caret needs (a widget-side `entry.grab_focus()` alone is not enough — the toplevel must be compositor-active for the caret to render), and it brings outside-click dismissal with it. `Bar.tsx` does this in `syncKeyboardMode()` for everything it owns (`barModal()`), `IslandWindow` for every open island mode, `AppGridWindow` for the grid (it was `DockCore` until the grid got its own surface on 2026-08-09).
 
