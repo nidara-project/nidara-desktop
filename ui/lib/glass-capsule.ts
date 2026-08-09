@@ -233,7 +233,7 @@ function backdropTexture(widget: Gtk.Widget, w: number, h: number): Gdk.Texture 
 // Declaration merging: the ambient `ags/gtk4` typing exposes Gtk as `any` in
 // value position but as the real @girs namespace in type position, so tsc can't
 // see that this class extends Gtk.Widget (same trick as common/ScaleRevealer).
-export interface GlassCapsule extends Gtk.Widget {}
+export interface GlassCapsule extends Gtk.Box {}
 
 /**
  * Single-child container painting the glass capsule around its child: the rim as
@@ -243,8 +243,33 @@ export interface GlassCapsule extends Gtk.Widget {}
  * The backdrop is sampled in WINDOW coordinates, so what shows through is the
  * piece of wallpaper actually behind the capsule, registered with the sharp copy
  * around it rather than a floating crop.
+ *
+ * 🔑 IT EXTENDS Gtk.Box, AND THAT IS A LIFECYCLE DECISION, NOT A LAYOUT ONE.
+ * The first version extended `Gtk.Widget` and parented the child by hand
+ * (`child.set_parent(this)`), which in GTK4 obliges you to unparent it on
+ * disposal. Nothing did, so every capsule logged one line per surface teardown:
+ *
+ *     Gtk-WARNING: Finalizing NidaraGlassCapsule 0x…, but it still has
+ *     children left: - GtkPasswordEntry 0x…
+ *
+ * The documented answer is a `dispose` override, and it is genuinely unavailable
+ * here — measured 2026-08-09, not assumed: GJS refuses to run a JS vfunc during
+ * garbage collection and says so, `"Attempting to run a JS callback during
+ * garbage collection … The offending callback was dispose(), a vfunc … it has
+ * been blocked"`. A `destroyCapsule()` had been added as the manual escape hatch
+ * and never acquired a caller.
+ *
+ * So the fix is not to clean up better — it is to stop hand-parenting. A
+ * `Gtk.Box` owns its children's lifetime, which also deletes `vfunc_measure` and
+ * `vfunc_size_allocate`: a one-child box already measures and allocates to the
+ * child. `vfunc_snapshot` is untouched, so the painting is identical. Verified
+ * offscreen both ways — hand-parented, one warning per capsule; as a Box, none.
+ *
+ * ⚠️ The CSS node becomes `box`. Nothing in `ui/greeter/style.scss` selects a
+ * bare `box` (checked), but a rule added there later would now reach inside every
+ * capsule on both screens.
  */
-export class GlassCapsule extends Gtk.Widget {
+export class GlassCapsule extends Gtk.Box {
   static {
     GObject.registerClass({ GTypeName: "NidaraGlassCapsule" }, this)
   }
@@ -262,7 +287,9 @@ export class GlassCapsule extends Gtk.Widget {
     // following it there paints the whole bar accent — which reads as "the bar
     // is focused" when what is focused is one button inside it.
     this.followFocus = followFocus
-    child.set_parent(this)
+    // `append`, not `set_parent`: GTK owns the child from here on. `child` is
+    // kept as a field only so hasFocus() and the painter can reach it.
+    this.append(child)
 
     if (followFocus) child.connect("state-flags-changed", () => this.queue_draw())
   }
@@ -273,15 +300,6 @@ export class GlassCapsule extends Gtk.Widget {
     // lands on the inner `text` node, so the outer widget is never :focus.
     const flags = this.child.get_state_flags()
     return (flags & Gtk.StateFlags.FOCUS_WITHIN) !== 0 || (flags & Gtk.StateFlags.FOCUSED) !== 0
-  }
-
-  vfunc_measure(orientation: Gtk.Orientation, for_size: number): [number, number, number, number] {
-    const [min, nat] = this.child.measure(orientation, for_size)
-    return [min, nat, -1, -1]
-  }
-
-  vfunc_size_allocate(width: number, height: number, baseline: number) {
-    this.child.allocate(width, height, baseline, null)
   }
 
   vfunc_snapshot(snapshot: Gtk.Snapshot) {
@@ -349,12 +367,8 @@ export class GlassCapsule extends Gtk.Widget {
       }
     }
 
-    this.snapshot_child(this.child, snapshot)
-  }
-
-  // Not a vfunc_dispose override: GJS blocks JS vfuncs during disposal.
-  destroyCapsule() {
-    this.child?.unparent()
+    // The child, drawn by Gtk.Box on top of everything above.
+    super.vfunc_snapshot(snapshot)
   }
 }
 
