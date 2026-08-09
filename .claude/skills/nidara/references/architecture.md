@@ -135,10 +135,45 @@ question "do I know what I paint before I paint it?".
   rect there makes a monitor-sized surface eat every click on screen. Same principle both times —
   fail towards invisible.
 
+#### Deciding the shape of a FIFTH blurred surface
+
+Those four are what exists, not a menu. For a new one, **do not start from "should this layer be
+full-screen"** — once a surface declares a region that question stopped being about performance.
+§46 measured the cost as tracking the *intersection* of the damage with the declared region,
+monotonically: a full-screen blurred layer is +5.9 pts, the same layer declaring a 400x60 region is
+**+0.7**. The box became a layout decision. Ask these three, in order:
+
+1. **Can it be UNMAPPED most of the time?** Then give it its own surface and unmap it. An unmapped
+   surface has no blur pass at all — **zero beats small**, and no region can match that. This is the
+   app grid, and it is why the grid's own answer is not "declare better" but "not be there".
+2. **Can it always answer "what am I painting" before it paints it?** Then full-screen is fine;
+   declare a region and move on. Dock, bar, app grid.
+3. **Can it NOT answer?** This is the only case where the surface's BOX is still the cost, because
+   an unanswerable frame hands the whole box back. Then — and only then — ask whether a **fixed**
+   smaller box is possible. ⚠️ **Fixed, never resizing**: §46 ruled out dynamic sizing, and the
+   artefact tracked the RESIZE, so a box set once at map time and never changed does not hit it.
+   Nobody has tried that; it is the one unexplored option here. It would only pay for the island,
+   whose expanded modes are near-monitor anyway, which is why it stays unexplored.
+
+Two things the region does not buy, so do not plan around them:
+
+- **A floor of ~1 pt per mapped blurred layer**, however small the region — the blur samples past
+  its edge, so what you pay for is the region expanded by the radius. The lever there is the NUMBER
+  of mapped blurred layers, not their size. Five namespaces carry a `blur` rule today (bar, island,
+  dock, app grid, lock); at rest only three are mapped.
+- **Nothing, if the surface really does paint everything.** `nidara-lock` is full-screen and blurred
+  and should declare nothing at all. Declaring is for surfaces that paint far less than they occupy.
+
 🔑 **Before wiring a region to the same call sites that stamp the input
 region, re-read each one asking "can this arrive late?"** — a late input stamp costs a late click, a
 late visible stamp is a frame that is never drawn. That question is what found the notification
 banners' deliberately-deferred stamp in `NotificationPopups.tsx` (§46).
+
+🔑 **What the 2026-08-09 measurement settled beyond GPU points:** the bar is full-screen *only*
+because commandment 5 puts every overlay inside its window. Until the panels were declared, the
+honest reading was that the commandment carried a real GPU price every time anything opened. It does
+not any more — an open Control Center measures at the no-panel baseline. Weigh that before treating
+the coupling as debt.
 
 ### Window capture — real thumbnails, one render pass each
 
