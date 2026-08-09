@@ -2023,6 +2023,15 @@ The only change that removed it was removing the resize. **Root cause not establ
 somewhere in how the compositor presents a layer surface across a size change, and chasing it further
 needs Hyprland-side instrumentation, not shell-side.
 
+⚠️ **Correction 2026-08-09: this evidence is ISLAND-SPECIFIC, and the heading over-generalises.**
+Every ruled-out hypothesis above was measured on a surface that STAYS MAPPED and cycles its size
+96↔1440, and the artefact tracked the RESIZE. The app grid never resizes its surface — it maps at
+full size and unmaps (§18) — so "dynamic sizing is a dead end" does not automatically transfer to a
+map/unmap surface; nobody has tested that case. It is still not worth spending: with a region
+declared, the remaining headroom is the difference between this entry's own +0.4 (a layer showing
+only what it paints) and 0, i.e. the tail of the win, and only while the grid is open. **Do not cite
+this section as proof for a surface that does not resize.**
+
 **Separate bug found along the way (user-reported 2026-08-02) — FIXED the same day**, see
 `architecture.md`'s IslandWindow section and `HyprlandState.layerTop`. That first fix read the bar's
 position once per `configreloaded`, which fixed the island going DOWN and left it stuck there when
