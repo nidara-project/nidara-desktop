@@ -1956,13 +1956,14 @@ and **reverted the same day**. Read the "what was ruled out" part before proposi
 > fixed that at the root** — the grid moved to its own surface (`AppGridWindow.ts`), so the dock now
 > declares its pill rect in every state (every `apply()` in both axes passes one; no branch clears
 > it), and the grid declares its own **1110×834 of 2560×1440** while open and is UNMAPPED when
-> closed. The equivalent condition on the BAR is still there and is the remaining work here:
-> `paintsBelowStrip()` clears its region for ANY open panel (CC, NC, Prism, system menu, popups)
-> rather than declaring `strip + the panel's rect`. ⚠️ The dock's numbers above are still valid —
-> they were at-rest measurements and the at-rest path did not change. **The 2026-08-09 change is
-> NOT re-measured in GPU points:** what was measured is the box (region ratio, read off the live
-> shell), and the saving is inferred from this entry's own cost model. If a number is needed, the
-> harness is the one described here — synthetic damage, 3 shuffled rounds.
+> closed. **The equivalent condition on the BAR is gone too, same day** — `paintsBelowStrip()` used
+> to clear the region for ANY open panel (CC, NC, Prism, system menu, expansion capsule, banners),
+> i.e. for most of any interaction; it now declares `strip + one padded rect per open panel`. See
+> the section at the end of this entry. ⚠️ The dock's numbers above are still valid — they were
+> at-rest measurements and the at-rest path did not change. **Both 2026-08-09 changes are now
+> MEASURED** (same day, last section): with the CC open the bar costs **4.1 % → 0.65 %** GPU, i.e.
+> an open panel adds nothing over the no-panel baseline; with the app grid open, all four surfaces
+> declaring is **22.8 % → 2.0 %**. Read the two harness traps there before running it again.
 
 **The mechanism, because `ignore_alpha` makes it easy to guess wrong:** Hyprland charges layer blur
 by the surface's **BOX**, not by the pixels that end up visible. `ignore_alpha` decides what is SEEN
@@ -2229,6 +2230,8 @@ arrive through `ScaleRevealer`s and paint far outside the strip. So: declare `0,
 only while nothing else in the window paints, hand the whole surface back otherwise. Full monitor
 WIDTH on purpose: the surface is that wide anyway, and it buys immunity to every capsule that resizes
 itself (window title, clock, tray). The height is where the entire 1440 → 64 win lives.
+⚠️ **The second half of that rule was replaced on 2026-08-09** — the bar now declares the panels too;
+see the last section of this entry. The strip rect and the reason for its full width are unchanged.
 
 🔑 **The "can this stamp be late?" audit found exactly one offender, and it was written in the code
 as a deliberate choice.** `NotificationPopups.tsx` defers its stamp to an idle *on purpose*, so it
@@ -2294,6 +2297,94 @@ complete over the dock), auto-hide on→off (returns clean). Setting restored to
 
 **This closes §46's implementation.** All four blurred surfaces declare: horizontal dock −7.0,
 island −7.2, bar −6.9, vertical dock −7.9.
+
+#### ✅ 2026-08-09: the BAR declares its PANELS too — the last conditional saving
+
+The at-rest numbers above were never the whole story: `paintsBelowStrip()` handed the entire surface
+back for **any** open panel, and five of them live in this window (CC, NC, Prism, system menu, the
+expansion capsule) plus the notification banners. "Something is open" is most of any interaction, so
+the −6.9 evaporated exactly when the screen was busiest. It now declares **`strip + one padded rect
+per painting panel`**. Measured on the live shell with the CC open: `2560x64` + `388x642` =
+**11.2 % of the box**, against 100 % before.
+
+🔑 **The bar was never in the island's situation — it is in the app grid's, and the difference is
+one option object.** The island genuinely cannot declare while open: its modes arrive through a
+`MorphRevealer`, which has no final allocation until the morph lands. Every panel here is a
+`ScaleRevealer` with `OVERLAY_POP` and `animateLayout: false`, so the allocation is the FINAL one
+from the first laid-out frame and the 0.97→1.0 pop paints strictly inside it. Borrowing the island's
+rule wholesale was the actual mistake, and it cost the entire open-state saving for four months.
+
+🔑 **What makes it safe is `onAllocated`, and specifically WHERE it fires.** `ScaleRevealer` calls it
+from inside `vfunc_size_allocate`, i.e. before the snapshot of the same frame — so however stale the
+bounds were when the open path stamped, the panel's real rect lands on the very frame that first
+paints it. That retires the whole "can this stamp be late?" class for the panels without a tick
+callback, a timeout, or a settle count. ⚠️ Consequence: that hook is now **load-bearing for what is
+drawn**, not just for clicks, so it is wired by walking `masterOverlay` like the rect predicate
+itself. A hand-list that missed a panel added later used to cost a late click; it would now cost a
+panel that is not drawn.
+
+⚠️ **The banners are the one thing that still clears**, and only inside a known window: between
+`onContentAppeared` (synchronous, fires on append) and the deferred stamp that follows the grow-in,
+the box's bounds describe the PREVIOUS stack — a second banner declared off those bounds is a banner
+that is never drawn. A `popupsSettled` flag makes that window explicit instead of hoping. Their band
+is also the only one declared at **full monitor width**: swipe-to-dismiss flips the revealer to
+`overflow: VISIBLE` and flings the card clear off screen, and that is the one place GTK stops
+clipping for us.
+
+🔑 **The pad is 16, not the app grid's 48, and the reason is structural**: every panel here sits
+inside a revealer whose `overflow` is `HIDDEN`, so whatever it paints outside its allocation is
+already clipped by GTK before the compositor sees it. The squircle's soft edge lives INSIDE the rect
+(`GLASS_INSET`). The pad covers rounding, not an escaping shadow. When a surface's own widget tree
+already clips, the region does not have to guess at a margin — check that before padding.
+
+`common/VisibleRegion.ts` grew `setVisibleRects` for this (`setVisibleRect` is now the one-rect
+convenience). Multi-rect is free protocol-side — `wl_region_add` is additive and Hyprland iterates
+the clip region, not its bounding box — so the cost is the rects' own area, not their union's box.
+
+Verified live, one screenshot per state: rest, control centre, notification centre, Prism empty,
+Prism with results (the slide-down revealer that resizes per frame), the window menu (expansion
+capsule, left-anchored), the system menu, one banner, two stacked banners, and CC **edit mode** (the
+panel grows from 610 to ~900 px and the Done pill draws). All complete, none clipped.
+
+#### ✅ 2026-08-09, same day: MEASURED — and the harness has two traps of its own
+
+Damage layer 1600x700 at (480,200) — below the bar strip, above the dock's, clear of the CC's rect —
+on an **empty workspace**, `amdgpu` `gpu_busy_percent` sampled at 20 Hz for 20 s per arm, shell
+restarted in every arm. Baselines: idle **0.0 %**, damage running with nothing open **0.6 %**.
+
+**Scenario 1 — the control centre open, single variable = `Bar.tsx`** (the old file checked out from
+`main`, so dock and island declare in BOTH arms), 3 rounds shuffled:
+
+| CC open, damage at 144 fps | GPU |
+|---|---|
+| bar hands the whole surface back (old) | 4.0 / 4.2 / 4.0 % |
+| bar declares `strip + panel` (new) | **0.7 / 0.7 / 0.6 %** |
+
+**−3.4 points**, ranges nowhere near overlapping. 🔑 The number that matters is not the delta but the
+**0.6**: that is the no-panel baseline, so **an open control centre now adds nothing measurable to
+the blur bill**, where it used to add +3.4. The open state stopped being the expensive one.
+
+**Scenario 2 — the app grid open, every surface's region vs `NIDARA_VISIBLE_REGION=0`** (the
+all-or-nothing switch, so this bounds the whole §46 mechanism in the busiest state rather than
+isolating one surface), 2 rounds shuffled:
+
+| app grid open, damage at 144 fps | GPU |
+|---|---|
+| no surface declares | 22.8 / 22.8 % |
+| all four declare | **2.1 / 2.0 %** |
+
+**−20.7 points, −91 %.**
+
+⚠️ **Trap 1: a cairo `draw_func` is not a valid damage source.** Rasterising 1.1 MP on the CPU every
+frame throttled the client to 27–40 fps — and to a DIFFERENT rate per arm (31 vs 40), so the two arms
+were carrying different loads and the GPU comparison meant nothing. A single **GSK color node**
+(`vfunc_snapshot` + `append_color`) holds 144.0 fps in every arm. **Print the fps and refuse any arm
+that is not at the monitor's rate**; the first two rounds of this measurement were thrown away for
+exactly this.
+
+⚠️ **Trap 2: a stray damage client from an earlier launch doubles the load and says nothing.** Kill
+by pattern, not by pidfile. (And `pkill -f damage.js` from a shell whose own command line contains
+that string kills the shell instead — put the kill in a script file.)
 
 ---
 

@@ -75,19 +75,42 @@ owns three decisions:
 - `NIDARA_VISIBLE_REGION=0` disables the optimisation everywhere. Keep this working: the failure
   mode above is a missing piece of desktop, so a user who hits it needs a bootable shell before they
   can report anything, and `systemctl --user set-environment` is reachable from a TTY.
+- It speaks **many rects** (`setVisibleRects`; `setVisibleRect` is the one-rect convenience).
+  `wl_region_add` is additive and Hyprland iterates the clip region rather than its bounding box, so
+  N rects cost their own area, not their union's — which is what lets the bar declare "strip PLUS
+  the open panel" instead of giving the surface back. ⚠️ **`[]` and `null` both mean CLEAR, on
+  purpose, and that is NOT what the protocol says**: a genuinely empty `wl_region` is a surface that
+  draws nothing. Nobody wants that as the answer to "I could not measure anything", so the wrapper
+  will not produce it — say `null` to mean "I don't know" and get the whole surface.
 
 **Every blurred layer declares a region today** — `DockAxis.ts` (both axes), `IslandWindow.ts`,
-`Bar.tsx` and `AppGridWindow.ts` — and they split into **three rules**, one per shape of the
+`Bar.tsx` and `AppGridWindow.ts` — and they split into **four rules**, one per shape of the
 question "do I know what I paint before I paint it?".
 
 - **The dock knows its silhouette before it paints**, so it declares in every state, hidden
   included. Since 2026-08-09 that is literally every state: the two branches that used to hand the
   whole surface back — an open app grid, and a yield — are gone, the first because the grid moved
   out and the second because it was only ever justified by the grid.
-- **The island and the bar cannot**: their content arrives through a `MorphRevealer`/`ScaleRevealer`,
-  and a widget just made visible has no allocation until the next layout pass — so they declare
-  **only at rest** and hand the whole surface back the instant anything is revealed or still
-  animating (`get_visible()` is not enough on the way out; `tickId` is what says "still moving").
+- **The island cannot**: its modes arrive through a `MorphRevealer`, which has no final allocation
+  until the morph lands — so it declares **only at rest** as the compact capsule and hands the whole
+  surface back the instant anything is revealed or still animating (`get_visible()` is not enough on
+  the way out; `tickId` is what says "still moving").
+- **The bar declares `strip + one rect per open panel`** (2026-08-09). It used to follow the
+  island's rule, and that was the island's answer to a question the bar does not have: its five
+  panels are `ScaleRevealer` + `OVERLAY_POP` with `animateLayout: false`, so — exactly like the app
+  grid below — the allocation is FINAL from the first laid-out frame and the pop paints inside it.
+  🔑 **What makes per-panel rects safe is `onAllocated`**, which `ScaleRevealer` fires from inside
+  `size_allocate`, i.e. before the snapshot of the same frame: however stale the bounds were when
+  the open path stamped, the panel's real rect lands on the very frame that first paints it. That
+  hook is now wired by **walking `masterOverlay`**, like the rect predicate itself — a hand-list that
+  missed a panel added later used to cost a late click and would now cost a panel that is not drawn.
+  The one path that still hands the whole surface back is the notification banners, and only between
+  `onContentAppeared` (synchronous, on append) and the deferred stamp that follows their grow-in —
+  the window in which the box's bounds describe the *previous* stack. Their band is declared
+  **full monitor width** because a swipe-to-dismiss flips the revealer to `overflow: VISIBLE` and
+  flings the card clear off screen: it is the one thing in that window that paints outside its own
+  box, everywhere else GTK's `overflow: HIDDEN` on the revealer clips for us before the compositor
+  sees anything.
 - **The app grid is the third case: it declares only while OPEN, and does not exist otherwise.** It
   has the same no-allocation-yet problem, but two properties the island lacks let it declare
   anyway. Its revealer is `OVERLAY_POP` with `animateLayout: false`, so the allocation is the FINAL

@@ -5,7 +5,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
 import { MorphRevealer } from "../../common/MorphRevealer"
-import { setVisibleRect } from "../../common/VisibleRegion"
+import { setVisibleRects } from "../../common/VisibleRegion"
 import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
@@ -431,27 +431,70 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // repaint of every window on screen, all day, to show a 48px strip. The rect
   // it declares at rest is 2560x64 — 4% of its own box.
   //
-  // The rule is the island's, for the island's reason: declare ONLY while
-  // resting as the bare strip, and hand the whole surface back the instant
-  // anything else in this window paints. Content outside the region is NOT
-  // DRAWN (hard GL scissor), so the failure mode is a panel that never appears
-  // — every state that is not provably "just the strip" clears instead.
+  // It declares `strip + whatever else is painting`, one rect each. The first
+  // version handed the WHOLE SURFACE back for any open panel, which was the
+  // island's rule borrowed wholesale — and it meant the saving evaporated in
+  // exactly the states that cost the most: five panels live here (CC, NC, Prism,
+  // system menu, the expansion capsule) plus the banners, so "something is open"
+  // is most of any interaction. The island genuinely cannot do better (its modes
+  // arrive through a MorphRevealer, which has no final allocation until the
+  // morph lands); these panels are `ScaleRevealer` + OVERLAY_POP with
+  // `animateLayout: false`, so the allocation is the FINAL one from the first
+  // laid-out frame and the 0.97→1.0 pop paints INSIDE it.
   //
   // 🔑 The audit that mattered was not "what paints below the strip" but "can
   // the stamp arrive LATE". An input region that lags by a frame costs a late
-  // click; a visible region that lags by a frame is a frame NOT PAINTED. Every
-  // path that opens something here flips get_visible() synchronously
-  // (syncOverlays, popToggle, showExpansion). The one exception is the
+  // click; a visible region that lags by a frame is a frame NOT PAINTED. What
+  // makes per-panel rects safe is `onAllocated`, which fires from inside
+  // `size_allocate` — i.e. BEFORE the snapshot of the same frame — so a panel's
+  // rect is always stamped by the very frame that first paints it, however stale
+  // the bounds were when the open path stamped. The one exception is the
   // notification banners, whose stamp is deferred to an idle ON PURPOSE so it
   // reads a settled allocation — correct for input, fatal here. That path gets
-  // its own immediate hook (`onContentAppeared` below); the deferred one keeps
-  // owning the input region.
+  // its own immediate hook (`onContentAppeared` below) and is the only thing
+  // that still clears the region outright, for as long as the stack is unsettled.
+  //
+  // ⚠️ Anything unmeasurable clears (whole surface), never a small rect: content
+  // outside the region is NOT DRAWN (hard GL scissor), so the failure mode of
+  // guessing is a panel that never appears.
 
-  // Is anything in this window painting outside the bar strip right now? Walked
-  // off masterOverlay rather than hand-listed, so a panel mounted here later is
-  // covered by construction instead of by someone remembering. Two children
-  // are not panels:
-  //  · barBox — the strip itself, i.e. the thing the rect describes.
+  // How far a panel's glass can reach past its own allocation. Small on purpose
+  // and NOT the app grid's 48: every panel here is wrapped in a ScaleRevealer,
+  // which is `overflow: HIDDEN`, so whatever a panel paints outside its
+  // allocation is already clipped by GTK before the compositor sees it — the pad
+  // is for rounding and the squircle's soft edge (which lives INSIDE the rect,
+  // GLASS_INSET), not for a shadow that escapes. The banners are the one
+  // exception and are handled below.
+  const PANEL_PAD = 16
+  // Vertical is where the whole gain is (1440 → 64), so the pad only has to
+  // cover the capsules' soft Cairo edge and any rounding, not a guess-margin.
+  // Horizontally we keep the full monitor width: the bar spans it anyway, and
+  // paying for pixels that are already the surface's own width buys immunity to
+  // every capsule that changes size on its own (window title, clock, tray).
+  const BLUR_PAD_Y = 16
+
+  // The banner stack is settled (its box's allocation describes every banner in
+  // it). False between a banner being appended and the deferred stamp that
+  // follows its grow-in — the window in which the box's bounds are a lie.
+  let popupsSettled = true
+
+  type BlurRect = { x: number, y: number, width: number, height: number }
+  const clampRect = (x: number, y: number, w: number, h: number): BlurRect => {
+      const x0 = Math.max(0, Math.round(x)), y0 = Math.max(0, Math.round(y))
+      return {
+          x: x0, y: y0,
+          width: Math.min(Math.round(monGeo.width) - x0, Math.round(w)),
+          height: Math.min(Math.round(monGeo.height) - y0, Math.round(h)),
+      }
+  }
+
+  // Every rectangle this window paints right now, or `null` when something is
+  // painting that cannot be measured yet (→ the caller hands the surface back).
+  //
+  // Walked off masterOverlay rather than hand-listed, so a panel mounted here
+  // later is covered by construction instead of by someone remembering. Two
+  // children are not panels:
+  //  · barBox — the strip itself, i.e. the thing the first rect describes.
   //  · popups — a container, so it is `visible` whether or not it holds a
   //    banner. Its CHILDREN are the content, hence the emptiness test.
   // An open ISLAND mode does not count either, and no longer needs excluding by
@@ -459,33 +502,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // and this window still declares only the strip — and a long activity (media,
   // the assistant) is exactly when that saving matters.
   // Everything else answers with `tickId` as well as `get_visible()`: a panel
-  // closing is still visible until its final tick, and re-declaring the strip
-  // one tick early would scissor away the tail of its own close animation.
-  const paintsBelowStrip = () => {
-      for (let c = masterOverlay.get_first_child(); c; c = c.get_next_sibling()) {
-          if (c === barBox) continue
-          if (c === popups) { if (popups.get_first_child()) return true; continue }
-          if (c.get_visible() || ((c as any).tickId ?? null) !== null) return true
-      }
-      return false
-  }
-  // Vertical is where the whole gain is (1440 → 64), so the pad only has to
-  // cover the capsules' soft Cairo edge and any rounding, not a guess-margin.
-  // Horizontally we keep the full monitor width: the bar spans it anyway, and
-  // paying for pixels that are already the surface's own width buys immunity to
-  // every capsule that changes size on its own (window title, clock, tray).
-  const BLUR_PAD_Y = 16
-  let lastBlurKey = ""
-  const updateVisibleRegion = () => {
-      const surface = win.get_native()?.get_surface()
-      if (!surface) return
-      const set = (key: string, rect: { x: number, y: number, width: number, height: number } | null) => {
-          if (key === lastBlurKey) return
-          lastBlurKey = key
-          setVisibleRect(surface, rect)
-      }
-      if (paintsBelowStrip()) { set("open", null); return }
-
+  // closing is still visible until its final tick, and dropping its rect one
+  // tick early would scissor away the tail of its own close animation.
+  const paintedRects = (): BlurRect[] | null => {
       // The strip's own extent. Measured rather than hardcoded (the 8px top
       // margin is CSS, `.bar-centerbox`), but floored at PANEL_TOP so this is
       // valid BEFORE the first layout pass too — that is what lets the very
@@ -493,21 +512,81 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // PANEL_TOP is the right floor by construction: it is where every panel in
       // this window is positioned to start.
       let bottom = PANEL_TOP
-      const [ok, b] = barBox.compute_bounds(masterOverlay)
-      if (ok) bottom = Math.max(bottom, b.get_y() + b.get_height())
-      const height = Math.min(monGeo.height, Math.round(bottom) + BLUR_PAD_Y)
-      // Measured on the real shell (2560x1440@144, damage 1600x700 landing BELOW
-      // the strip, 3 shuffled rounds, dock and island both declaring in either
-      // branch): 19.3% → 12.4% GPU, i.e. −6.9 points for a 2560x64 rect. Same
-      // order as the dock (−7.0) and the island (−7.2) — the third and last of
-      // the monitor-sized layers.
-      set(`strip:${height}`, { x: 0, y: 0, width: Math.round(monGeo.width), height })
+      const [okBar, bar] = barBox.compute_bounds(masterOverlay)
+      if (okBar) bottom = Math.max(bottom, bar.get_y() + bar.get_height())
+      const rects: BlurRect[] = [
+          clampRect(0, 0, monGeo.width, Math.round(bottom) + BLUR_PAD_Y),
+      ]
+
+      for (let c = masterOverlay.get_first_child(); c; c = c.get_next_sibling()) {
+          if (c === barBox) continue
+          // A banner's swipe-to-dismiss is the ONE thing in this window that
+          // paints outside its own box on purpose: ScaleRevealer flips itself to
+          // `overflow: VISIBLE` while swiping and flings the card clear off
+          // screen, so GTK stops clipping for us exactly there. Full monitor
+          // width for the band retires that whole class of bug for a strip of
+          // pixels — the same trade the strip itself makes.
+          const fullWidth = c === popups
+          if (fullWidth) {
+              if (!popups.get_first_child()) continue
+              // Appended-but-not-grown-in: the box's bounds describe the previous
+              // stack, and a banner outside the region is a banner that is never
+              // drawn. Nothing to do but pay full price until it settles.
+              if (!popupsSettled) return null
+          } else if (!(c.get_visible() || ((c as any).tickId ?? null) !== null)) continue
+
+          const [ok, b] = c.compute_bounds(masterOverlay)
+          if (!ok) return null
+          let height = b.get_height()
+          // CC edit mode is the one open state whose allocation is known to lag
+          // (IslandGrid flips cc_edit_mode AFTER its rebuild — see the matching
+          // union in updateInputRegion). Growing is the harmless direction here,
+          // so take whichever is bigger rather than reasoning about which frame
+          // this is.
+          if (c === cc && status.cc_edit_mode && b.get_width() > 1) {
+              const [, natH] = cc.measure(Gtk.Orientation.VERTICAL, Math.round(b.get_width()))
+              height = Math.max(height, natH)
+          }
+          const r = fullWidth
+              ? clampRect(0, b.get_y() - PANEL_PAD, monGeo.width, height + PANEL_PAD * 2)
+              : clampRect(b.get_x() - PANEL_PAD, b.get_y() - PANEL_PAD,
+                          b.get_width() + PANEL_PAD * 2, height + PANEL_PAD * 2)
+          // Presented this frame, not laid out yet. Same answer as above.
+          if (r.width <= 1 || r.height <= 1) return null
+          rects.push(r)
+      }
+      return rects
+  }
+
+  let lastBlurKey = ""
+  const updateVisibleRegion = () => {
+      const surface = win.get_native()?.get_surface()
+      if (!surface) return
+      const rects = paintedRects()
+      // Dedupe by key so calling this more often than necessary is free — that is
+      // what lets every allocation of every panel re-stamp without a repaint per
+      // frame, which is the expensive failure mode this mechanism exists to avoid.
+      const key = rects ? rects.map(r => `${r.x},${r.y},${r.width},${r.height}`).join("|") : "none"
+      if (key === lastBlurKey) return
+      lastBlurKey = key
+      // At rest this is the single strip rect, measured on the real shell
+      // (2560x1440@144, damage 1600x700 landing BELOW the strip, 3 shuffled
+      // rounds, dock and island both declaring in either branch): 19.3% → 12.4%
+      // GPU, i.e. −6.9 points for a 2560x64 rect. Same order as the dock (−7.0)
+      // and the island (−7.2).
+      setVisibleRects(surface, rects)
+      // The shim only applies a region on a real wl_surface.commit. Every key
+      // change here rides a geometry change that repaints anyway; this just makes
+      // sure the frame is asked for.
+      win.queue_draw()
   }
 
   // Banners appear/vanish independently of the overlay open/close events that
   // drive updateInputRegion, so the popups widget calls back here whenever its
-  // stack settles (banner grown in, or dismissed) to re-stamp the region.
-  ;(popups as any).onStackChanged = updateInputRegion
+  // stack settles (banner grown in, or dismissed) to re-stamp the region. It is
+  // also what re-arms the blur region: settled means the box's bounds finally
+  // describe every banner in it.
+  ;(popups as any).onStackChanged = () => { popupsSettled = true; updateInputRegion() }
   // Every panel re-stamps from the layout pass that gave it an allocation. The
   // synchronous stamp in syncOverlays() cannot see a panel that was revealed in
   // the same turn — get_allocation() is a layout pass behind, and for a panel
@@ -517,14 +596,22 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // the whitelist, and the panel dismisses as you click into it. (Before the grab
   // the full-screen catcher rect covered the panel by accident, which is why this
   // never showed.)
-  for (const p of [cc, nc, prism, systemMenu, expansionCapsule])
-    p.onAllocated = updateInputRegion
+  //
+  // Walked off masterOverlay for the same reason paintedRects() is: this hook is
+  // now what keeps a panel's BLUR rect honest as well (it fires from inside
+  // size_allocate, so the rect lands on the frame that paints the new geometry),
+  // and a hand-list that misses a panel added later would not fail with a late
+  // click any more — it would fail with a panel that is not drawn. `popups` is
+  // excluded: it is a plain Gtk.Box with no such hook, and its stamps come from
+  // the two callbacks around this one.
+  for (let c = masterOverlay.get_first_child(); c; c = c.get_next_sibling())
+    if (c !== barBox && c !== popups) (c as any).onAllocated = updateInputRegion
   // …and the visible region can NOT wait for that idle: a banner is appended in
   // one turn and painted in the next frame, so a region still describing the bar
-  // strip would scissor it away entirely. This hook fires synchronously on
-  // append — it only ever CLEARS (the stack is non-empty by then), which is the
-  // safe direction, and the deferred stamp above still owns the input region.
-  ;(popups as any).onContentAppeared = updateVisibleRegion
+  // strip (or the previous, shorter stack) would scissor it away entirely. This
+  // hook fires synchronously on append — it only ever CLEARS, which is the safe
+  // direction, and the deferred stamp above still owns the input region.
+  ;(popups as any).onContentAppeared = () => { popupsSettled = false; updateVisibleRegion() }
 
   // Unified overlay pop (ScaleRevealer: subtle grow + fade, GTK-side). On close
   // the wrapper hides itself when the animation completes and THEN refreshes the
@@ -774,10 +861,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // frame so the panel is laid out, position it under the icon, THEN pop in —
       // the panel never appears at the wrong spot first (no reposition jump).
       expansionCapsule.set_visible(true)
-      // Hand the surface back NOW, not in the deferred stamp below: the panel is
-      // already visible (transparent, but laid out and painting), and the frame
-      // that fades it in would be scissored to the bar strip if the clear waited
-      // 16ms. Late is free for the input region, never for this one.
+      // Re-stamp NOW, not in the deferred stamp below: the panel is already
+      // visible (transparent, but laid out and painting), and a region still
+      // describing only the bar strip would scissor away the frame that fades it
+      // in. Late is free for the input region, never for this one. This stamp can
+      // only ever be the stale bounds of the PREVIOUS content or nothing at all
+      // (→ whole surface); the panel is at opacity 0 until `reveal` below, and
+      // both the append and `positionExpansion` re-stamp from `onAllocated`
+      // before anything of it is visible.
       updateVisibleRegion()
       GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
           positionExpansion(id)

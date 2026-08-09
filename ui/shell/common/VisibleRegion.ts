@@ -81,20 +81,36 @@ export function initVisibleRegion() { load() }
 
 load()
 
+export type VisibleRect = { x: number, y: number, width: number, height: number }
+
 /**
- * Declare the single rectangle this surface paints. Passing `null` clears the
- * declaration, which is also the safe state.
+ * Declare every rectangle this surface paints. Passing `null` — or nothing with
+ * area — clears the declaration, which is also the safe state.
+ *
+ * ⚠️ "Empty means clear" is deliberate and is NOT what the protocol says: a
+ * genuinely empty `wl_region` is a surface that draws NOTHING (Hyprland cancels
+ * the pass outright). Nobody wants that as the answer to "I could not measure
+ * anything", so the one thing this wrapper will never produce is the region that
+ * erases the caller. Say `null` to mean "I don't know" and get the whole surface.
+ *
+ * `wl_region_add` is additive and Hyprland iterates the clip region rather than
+ * its bounding box, so N rects cost their own area, not their union's box — which
+ * is what makes "the bar strip PLUS the open panel" worth declaring instead of
+ * giving the whole surface back (`references/tech-debt.md` §46).
  */
-export function setVisibleRect(
-    surface: Gdk.Surface | null,
-    rect: { x: number, y: number, width: number, height: number } | null,
-) {
+export function setVisibleRects(surface: Gdk.Surface | null, rects: VisibleRect[] | null) {
     if (!shim || !surface) return
-    if (!rect || rect.width <= 0 || rect.height <= 0) {
+    const solid = rects?.filter(r => r.width > 0 && r.height > 0) ?? []
+    if (solid.length === 0) {
         shim.visible_region_clear(surface)
         return
     }
     shim.visible_region_begin(surface)
-    shim.visible_region_add_rect(surface, rect.x, rect.y, rect.width, rect.height)
+    for (const r of solid) shim.visible_region_add_rect(surface, r.x, r.y, r.width, r.height)
     shim.visible_region_commit(surface)
+}
+
+/** Single-rect convenience over `setVisibleRects` — same contract. */
+export function setVisibleRect(surface: Gdk.Surface | null, rect: VisibleRect | null) {
+    setVisibleRects(surface, rect ? [rect] : null)
 }
