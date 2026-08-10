@@ -222,7 +222,12 @@ export default function LoginCard(): Gtk.Widget {
   }
 
   col.connect("map", () => {
-    syncCaps()
+    // ⚠️ `syncCaps()` was called here until 2026-08-10 and had not existed since
+    // #100 deleted the greeter's own caps-lock warning the day before. It was the
+    // FIRST statement of this handler, so every login threw `ReferenceError:
+    // syncCaps is not defined` and the two timeouts below never got scheduled:
+    // `.greeter-card` is `opacity: 0` until `-shown` arrives, so the login card
+    // never faded in and the password field never took focus.
     // Trigger the entrance fade on the next frame so the transition runs.
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
       col.add_css_class("greeter-card-shown")

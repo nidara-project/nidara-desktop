@@ -112,6 +112,42 @@ jobs:
         working-directory: ui/shell
         run: npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json
 
+      # ── greeter + lockscreen: NAMES ONLY, and that is a deliberate ceiling ──
+      # These two bundles cannot be fully typechecked yet. Their `gi.d.ts` declares
+      # `Gtk`/`Gdk` as VALUES (`export const Gtk: any`), so every `Gtk.Widget` used
+      # as a TYPE reports "Cannot find namespace" — ~40 errors that are all the
+      # shim's shape, not the code's. Giving them the real @girs is the proper fix
+      # and it is not free (the snapshot is built for the shell's GI set; these two
+      # also need AstalGreet and Gtk4LayerShell).
+      #
+      # So this gate filters to TS2304/TS2552 — "Cannot find name X" — which is
+      # exactly the class that has actually shipped a bug, and which the namespace
+      # noise was hiding. On 2026-08-10 `LoginCard.ts` still called `syncCaps()`,
+      # deleted by #100 the day before along with the caps-lock warning it belonged
+      # to. It was the FIRST statement of the card's `map` handler, so every login
+      # threw a ReferenceError and the two `timeout_add`s after it never ran: the
+      # card stayed at `opacity: 0` and the password field never took focus. It
+      # reached main because nothing typechecked this bundle and these surfaces have
+      # no dev mode — a fixed /usr/share path, so a repo build proves nothing.
+      #
+      # Both bundles are clean under this filter. Raise the ceiling by fixing the
+      # typings, not by loosening the grep.
+      - name: No undefined identifiers in greeter / lockscreen
+        run: |
+          fail=0
+          for b in greeter lockscreen; do
+            out=$(cd "ui/$b" && npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json 2>&1 \
+                  | grep -E 'TS2304|TS2552' || true)
+            if [ -n "$out" ]; then
+              echo "::error::ui/$b references names that do not exist:"
+              echo "$out"
+              fail=1
+            else
+              echo "ui/$b: no undefined identifiers"
+            fi
+          done
+          exit $fail
+
   smoke:
     name: Headless boot smoke
     runs-on: ubuntu-latest
