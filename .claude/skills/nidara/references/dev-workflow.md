@@ -237,7 +237,7 @@ this looks for at least one selector in the compiled sheet that is either unscop
 kit) or scoped to *that* window. No selector at all is fine — the widget is Cairo-painted or the
 class is a marker. Only selectors naming a **different** window is the bug.
 
-It found three on its first run (2026-08-10): the island's whole media panel (`.cc-media-*` was
+It found three on its first run (2026-08-10): the island's whole media panel (`.nidara-media-*` was
 inside `_control-center.scss`'s `#nidara-bar` block while `PlayerIsland` shows the same panel —
 broken since July), the "Default" audio badge and the slider readout (both scoped to the CC's
 detail page while Settings wore them too).

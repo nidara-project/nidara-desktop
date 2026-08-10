@@ -1208,7 +1208,7 @@ of this ladder.
 
 **Never `suggested-action` / `destructive-action` — and know WHY they seem to work.** Those are
 Adwaita classes, and the shell restyles them in exactly two class scopes: `.bar-expansion-panel`
-(`_bar.scss`) and `.cc-detail-panel` (`_control-center.scss`). Inside those two, an Adwaita class
+(`_bar.scss`) and `.nidara-detail-panel` (`_control-center.scss`). Inside those two, an Adwaita class
 looks native; **one pixel outside, it renders as raw GTK — Adwaita blue and Adwaita red, colours
 the user never picked.** That is not theoretical: it shipped twice on 2026-08-02, in the island's
 capture card (blue Stop) and in the CC status banner row (red revoke button), both caught on sight
@@ -1924,6 +1924,30 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
    in `_components.scss`, not in the sheet of whichever surface happens to host it today. That is why
    `.bar-popover-key/-val/-value/-icon-btn` all live there despite the `bar-` prefix in the name.
 
+   🔑 **A class prefix names its OWNER, not the window it happens to render in — and a prefix that
+   lies is a bug waiting to be written.** Settled 2026-08-10 by renaming the last three families that
+   claimed the Control Center owned them: `cc-atomic-*` → **`nidara-atomic-*`** (the vocabulary every
+   `widgets/` atomic wears — also worn by `AvatarCropper` and three Settings pages, another window
+   entirely), `cc-media-*` → **`nidara-media-*`** (`widgets/media.ts`'s one panel, shown by three
+   surfaces across two windows), and `cc-detail-panel`/`-section-label` → **`nidara-detail-*`** (worn
+   by `MenuRow` and four widgets). The `-atomic` SUFFIX went too where the `nidara-atomic-`/`-media-`
+   prefix already carried it (`cc-media-btn-atomic` → `nidara-media-btn`).
+
+   The `cc-*` names that SURVIVED are the test of the rule, not an exception to it: `cc-open`,
+   `cc-edit-mode`, `cc-edit-pill`, `cc-drag-source`, `cc-drop-ghost`, `cc-slot-placeholder`,
+   `cc-resize-btn`, `cc-context-menu`, `cc-island`, `cc-capsule-btn` and the `cc-status-*` family are
+   the Control Center's own chrome — its grid, its edit mode, its tiles. **Do not sweep a prefix
+   because it is a prefix**; sweep the names whose owner is somewhere else. (`cc-detail-id` is not a
+   class at all — it is a `Status.ts` `ParamSpec`. Leave it.)
+
+   ⚠️ **Renaming is NOT relocating, and the two must not ride together.** `nidara-media-*` still
+   lives in `_control-center.scss` under BOTH window scopes, deliberately: dropping it into
+   `_components.scss` would make it global and change which rules outrank it (see the media block's
+   own comment). A `nidara-*` class in a surface sheet is the one legitimate mismatch — the prefix
+   answers *who owns this*, the sheet answers *at what specificity*. Verify a rename with a compiled
+   diff: normalise the new names back to the old ones in `style.css` and it must come out **byte
+   identical**. Anything else is a behaviour change wearing a rename's clothes.
+
    ⚠️ **A shared widget spans scopes and must list them all.** `common/WorkspaceSchematic.ts` renders
    into the island (overview) *and* the app grid (workspace strip), so `_workspace.scss` carries two
    blocks. Put a `.wo-schematic-*` rule in the island-only block and it silently stops painting in
@@ -1932,11 +1956,11 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
    The one that actually shipped broken: `widgets/media.ts` builds ONE panel
    (`buildMediaDetailPanel`) and three surfaces show it — the bar pill expansion and the CC detail
    page, both inside the bar's window, **and the island's PLAYER mode** (`PlayerIsland.tsx`). Its
-   `.cc-media-*` rules were inside `_control-center.scss`'s `#nidara-bar` block, so from the day the
+   `.nidara-media-*` rules were inside `_control-center.scss`'s `#nidara-bar` block, so from the day the
    island got its own window (2026-07-26) the transport buttons and the source selector rendered with
    raw GTK defaults there. Nobody noticed until 2026-08-10. They now carry both scopes — and
    deliberately stay **window-scoped rather than global**, so that whatever outranks them in the bar
-   outranks them identically in the island; dropping to a bare `.cc-media-*` would have changed that
+   outranks them identically in the island; dropping to a bare `.nidara-media-*` would have changed that
    balance in one window only (`.cc-island button` and `.bar-center button` are both (1,1,1)).
 
    **The detector is committed: `scripts/dev/scope-audit.mjs`** (`node ../../scripts/dev/scope-audit.mjs`

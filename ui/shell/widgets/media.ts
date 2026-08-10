@@ -72,22 +72,22 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
     // Wrap to up to 2 lines (uses the width to the right of the artwork) and only
     // ellipsize if the title still overflows two lines.
     const titleLabel = new Gtk.Label({
-        label: t("cc.media.no-media"), css_classes: ["cc-media-title-atomic"],
+        label: t("cc.media.no-media"), css_classes: ["nidara-media-title"],
         halign: Gtk.Align.START, hexpand: true, xalign: 0,
         wrap: true, wrap_mode: Pango.WrapMode.WORD_CHAR, lines: 2, ellipsize: 3,
         max_width_chars: 30,
     })
     const artistLabel = new Gtk.Label({
-        label: "", css_classes: ["cc-media-artist-atomic"],
+        label: "", css_classes: ["nidara-media-artist"],
         halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 26,
     })
 
     const prevImg = new Gtk.Image({ gicon: Icons.skipBack,    pixel_size: 16, css_classes: ["nd-icon"] })
     const playImg = new Gtk.Image({ gicon: Icons.play,        pixel_size: 20, css_classes: ["nd-icon"] })
     const nextImg = new Gtk.Image({ gicon: Icons.skipForward, pixel_size: 16, css_classes: ["nd-icon"] })
-    const prev = new Gtk.Button({ child: prevImg, css_classes: ["cc-media-btn-atomic"], valign: Gtk.Align.CENTER })
-    const play = new Gtk.Button({ child: playImg, css_classes: ["cc-media-btn-atomic", "cc-media-play-btn"], valign: Gtk.Align.CENTER })
-    const next = new Gtk.Button({ child: nextImg, css_classes: ["cc-media-btn-atomic"], valign: Gtk.Align.CENTER })
+    const prev = new Gtk.Button({ child: prevImg, css_classes: ["nidara-media-btn"], valign: Gtk.Align.CENTER })
+    const play = new Gtk.Button({ child: playImg, css_classes: ["nidara-media-btn", "nidara-media-play-btn"], valign: Gtk.Align.CENTER })
+    const next = new Gtk.Button({ child: nextImg, css_classes: ["nidara-media-btn"], valign: Gtk.Align.CENTER })
     prev.set_size_request(32, 32); play.set_size_request(36, 36); next.set_size_request(32, 32)
 
     const ctrlBox = new Gtk.Box({ spacing: 12, halign: Gtk.Align.CENTER, hexpand: true })
@@ -106,7 +106,7 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
     const srcInner = new Gtk.Box({ spacing: 2 })
     srcInner.append(srcAppImg); srcInner.append(srcChevron)
     const sourceBtn = new Gtk.Button({
-        child: srcInner, css_classes: ["cc-media-btn-atomic"],
+        child: srcInner, css_classes: ["nidara-media-btn"],
         halign: Gtk.Align.END, valign: Gtk.Align.START, visible: false,
     })
     attachTooltip(sourceBtn, () => t("cc.media.source"))
@@ -201,8 +201,8 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
     topRow.append(textBox)
     topRow.append(sourceBtn)
 
-    const elapsedLabel = new Gtk.Label({ label: "0:00", css_classes: ["cc-media-time"], halign: Gtk.Align.START })
-    const totalLabel   = new Gtk.Label({ label: "--:--", css_classes: ["cc-media-time"], halign: Gtk.Align.END, hexpand: true })
+    const elapsedLabel = new Gtk.Label({ label: "0:00", css_classes: ["nidara-media-time"], halign: Gtk.Align.START })
+    const totalLabel   = new Gtk.Label({ label: "--:--", css_classes: ["nidara-media-time"], halign: Gtk.Align.END, hexpand: true })
     const timeRow = new Gtk.Box()
     timeRow.append(elapsedLabel); timeRow.append(totalLabel)
 

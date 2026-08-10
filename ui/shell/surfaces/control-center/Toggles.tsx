@@ -54,7 +54,7 @@ export function buildCapsuleInner(
     })
 
     const iconBox = new Gtk.Box({
-        css_classes: ["cc-atomic-icon-circle-bg"],
+        css_classes: ["nidara-atomic-icon-circle-bg"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         width_request: 48, height_request: 48,
     })
@@ -63,8 +63,8 @@ export function buildCapsuleInner(
     iconBox.append(icon)
 
     const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
-    const label = new Gtk.Label({ label: getTitle(), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 14 })
-    const subLabel = new Gtk.Label({ css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 14 })
+    const label = new Gtk.Label({ label: getTitle(), css_classes: ["nidara-atomic-label-bold"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 14 })
+    const subLabel = new Gtk.Label({ css_classes: ["nidara-atomic-label-dim"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 14 })
 
     // Stateful vs stateless tile. A widget with an on/off-style status (wifi,
     // bluetooth, focus…) shows a single-line title + its state subtitle. An action
@@ -181,11 +181,11 @@ export function buildRoundContent(
     subscribe?: SubscribeFn,
 ): Gtk.Widget {
     const syncClasses = () => {
-        btn.set_css_classes(getActive() ? ["cc-atomic-round-btn", "active"] : ["cc-atomic-round-btn"])
+        btn.set_css_classes(getActive() ? ["nidara-atomic-round-btn", "active"] : ["nidara-atomic-round-btn"])
         setIcon(icon, getIcon())
     }
     const btn = new Gtk.Button({
-        css_classes: getActive() ? ["cc-atomic-round-btn", "active"] : ["cc-atomic-round-btn"],
+        css_classes: getActive() ? ["nidara-atomic-round-btn", "active"] : ["nidara-atomic-round-btn"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         hexpand: true, vexpand: true,
         width_request: 48, height_request: 48,

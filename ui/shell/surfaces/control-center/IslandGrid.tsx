@@ -339,7 +339,7 @@ export default function IslandGrid() {
         // Content
         const panel = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
-            css_classes: ["cc-detail-panel"],
+            css_classes: ["nidara-detail-panel"],
             hexpand: true,
             // Same halo as every other list of rows on a radius-lg surface. This island is
             // a FIXED 356px wide, so the inset is paid out of the row: 340 → 328 usable.

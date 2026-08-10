@@ -83,13 +83,13 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
     // width_request pins the wrap width; height_request reserves the 2-line height
     // unconditionally, so the parent always allocates enough regardless of measurement.
     const title = new Gtk.Label({
-        label: t("cc.media.no-media"), css_classes: ["cc-media-title-atomic"],
+        label: t("cc.media.no-media"), css_classes: ["nidara-media-title"],
         halign: Gtk.Align.CENTER, justify: Gtk.Justification.CENTER,
         wrap: true, wrap_mode: Pango.WrapMode.WORD_CHAR, lines: 2, ellipsize: 3,
         width_request: 140, height_request: 36,
     })
     const artist = new Gtk.Label({
-        label: "", css_classes: ["cc-media-artist-atomic"],
+        label: "", css_classes: ["nidara-media-artist"],
         halign: Gtk.Align.CENTER, ellipsize: 3, max_width_chars: 20,
     })
 
@@ -100,9 +100,9 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
     const prevImg = new Gtk.Image({ gicon: Icons.skipBack,    pixel_size: 18 , css_classes: ["nd-icon"] })
     const playImg = new Gtk.Image({ gicon: Icons.play,        pixel_size: 18 , css_classes: ["nd-icon"] })
     const nextImg = new Gtk.Image({ gicon: Icons.skipForward, pixel_size: 18 , css_classes: ["nd-icon"] })
-    const prev = new Gtk.Button({ child: prevImg, css_classes: ["cc-media-btn-atomic"] })
-    const play = new Gtk.Button({ child: playImg, css_classes: ["cc-media-btn-atomic"] })
-    const next = new Gtk.Button({ child: nextImg, css_classes: ["cc-media-btn-atomic"] })
+    const prev = new Gtk.Button({ child: prevImg, css_classes: ["nidara-media-btn"] })
+    const play = new Gtk.Button({ child: playImg, css_classes: ["nidara-media-btn"] })
+    const next = new Gtk.Button({ child: nextImg, css_classes: ["nidara-media-btn"] })
     prev.set_size_request(24, 24); play.set_size_request(24, 24); next.set_size_request(24, 24)
     controls.append(prev); controls.append(play); controls.append(next)
 
@@ -174,13 +174,13 @@ function buildWideContent(state: MediaState): Gtk.Widget {
         }
     })
 
-    const title  = new Gtk.Label({ label: t("cc.media.no-media"), css_classes: ["cc-media-title-atomic"],  halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
-    const artist = new Gtk.Label({ label: "",         css_classes: ["cc-media-artist-atomic"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
+    const title  = new Gtk.Label({ label: t("cc.media.no-media"), css_classes: ["nidara-media-title"],  halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
+    const artist = new Gtk.Label({ label: "",         css_classes: ["nidara-media-artist"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
     const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
     textBox.append(title); textBox.append(artist)
 
     const widePlayImg = new Gtk.Image({ gicon: Icons.play, pixel_size: 18 , css_classes: ["nd-icon"] })
-    const play = new Gtk.Button({ child: widePlayImg, css_classes: ["cc-media-btn-atomic"], valign: Gtk.Align.CENTER })
+    const play = new Gtk.Button({ child: widePlayImg, css_classes: ["nidara-media-btn"], valign: Gtk.Align.CENTER })
     play.set_size_request(32, 32)
 
     const row = new Gtk.Box({

@@ -93,7 +93,7 @@ function buildVpnContent(onClose: () => void): Gtk.Widget {
                     // REVERSIBLE, so neutral — `danger` is for destructive only
                     // (design-system.md). Was Adwaita's suggested-/destructive-
                     // action, correct only by virtue of rendering inside
-                    // `.cc-detail-panel`, one of the two scopes that restyle them.
+                    // `.nidara-detail-panel`, one of the two scopes that restyle them.
                     const btn = NidaraButton({
                         valign: Gtk.Align.CENTER,
                         pill: true,

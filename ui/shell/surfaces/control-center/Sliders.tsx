@@ -18,7 +18,7 @@ function buildHorizontalSlider(
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.HORIZONTAL,
         spacing: 12,
-        css_classes: ["cc-atomic-slider-box-horizontal"],
+        css_classes: ["nidara-atomic-slider-box-horizontal"],
         halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER,
         hexpand: true, vexpand: false,
         margin_start: 4, margin_end: 4,
@@ -66,7 +66,7 @@ function buildVolumeIcon(speaker: any): Gtk.Widget {
     const getIcon = () => speaker ? AudioSvc.targetVolumeIcon(speaker) : Icons.volumeMuted
     const icon = new Gtk.Image({ gicon: getIcon(), pixel_size: 28, css_classes: ["nd-icon"] })
     const btn = new Gtk.Button({
-        css_classes: ["cc-atomic-round-btn"],
+        css_classes: ["nidara-atomic-round-btn"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         hexpand: true, vexpand: true,
         width_request: 48, height_request: 48,

@@ -166,7 +166,7 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     const header = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER, hexpand: true, height_request: 22 })
     // Title natural width capped a bit under the body's 30 (see the body note): the
     // controls now share this line, and the popup window sizes to natural width.
-    header.append(new Gtk.Label({ label: cleanSummary, css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, lines: 1, hexpand: true, max_width_chars: 24, xalign: 0 }))
+    header.append(new Gtk.Label({ label: cleanSummary, css_classes: ["nidara-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, lines: 1, hexpand: true, max_width_chars: 24, xalign: 0 }))
 
     let timeLabel: Gtk.Label | null = null
     if (!isPopup) {

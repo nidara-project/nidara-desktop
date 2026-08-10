@@ -68,7 +68,7 @@ function buildDeviceList(): { box: Gtk.ListBox; refresh: () => void } {
             // connect is the affirmative CTA (`primary`), disconnect is REVERSIBLE
             // and therefore neutral — `danger` is for destructive only. It used to
             // be Adwaita's suggested-/destructive-action, which looked native only
-            // because this list renders inside `.cc-detail-panel`, one of the two
+            // because this list renders inside `.nidara-detail-panel`, one of the two
             // scopes that restyle those classes; anywhere else it was raw GTK.
             const actionBtn = NidaraButton({
                 valign: Gtk.Align.CENTER,

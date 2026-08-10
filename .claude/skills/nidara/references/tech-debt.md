@@ -46,7 +46,7 @@ only live `is-*` toggle is `.is-active` in `StatusIndicators.tsx`). The other 24
 accounted-for traps: the 9 dynamic `.accent-*` swatches, `.nidara-btn--ghost` (variant `"ghost"` IS
 used, Audio.tsx), the 4 GTK-internal nodes (`combo`/`day-name`/`other-month`/`week-number`), the 4 kept aliases above, and 4
 tombstone *comments* the extractor matches inside `/* … */` (`bar-ws-dot`/`cc-resize-btn`/
-`cc-media-progress`/`settings-page-title` — the CSS is already gone, the comment documents why the
+`nidara-media-progress`/`settings-page-title` — the CSS is already gone, the comment documents why the
 live class is named differently). **Next-run trap:** the extractor matches `.name` inside comments, so
 a tombstone comment reads as an orphan — check whether the only hit is a comment before acting.
 
@@ -2846,6 +2846,21 @@ in use, dimmed by `WP_SCRIM` and clipped to a proportional rounded rect. Mechani
 
 ### 56. ✅ DONE (2026-08-07 → 2026-08-10) — unscoped partials; commandment 2 was never two-thirds kept
 
+✅ **Follow-up closed the same day: the misleading `cc-*` vocabulary is renamed.** Three families
+whose prefix claimed the Control Center owned them are now `nidara-atomic-*`, `nidara-media-*` and
+`nidara-detail-*` — the rule and the survivors are in `design-system.md` ("A class prefix names its
+OWNER"). It is worth knowing WHY this was debt and not tidying: the `cc-` prefix is what made
+`.cc-media-*` look at home inside `_control-center.scss`'s `#nidara-bar` block, which is the bug
+below that ran for months. **A name that misfiles a rule in a reader's head eventually misfiles it
+in the sheet.** Verified by a compiled diff (new names normalised back → `style.css` byte identical),
+`scope-audit` green on all six windows, and typecheck.
+
+▶️ **Still open from this line of work, both deliberately deferred** (they were split off so the
+rename stayed reviewable): `_dock.scss`'s `&>box` (see the sixth-dead-selector warning below —
+needs `gtk-probe` against a running shell), and the four kit classes with no consumer
+(`.nidara-tile`, `.nidara-switch`, `.nidara-input`, `.is-selected`) — a PRODUCT call about whether
+unused kit API stays available, **not** dead-CSS cleanup. See §1's "deliberately KEPT" list.
+
 **Closed 2026-08-10 with `_bar.scss` + `_dock.scss`, the last two.** Earlier stages:
 `_control-center` and `_prism` → the bar's window; `_settings` → its own; `_workspace` → **split
 across two** windows (see below); `_app-grid` on 2026-08-09, by a route this entry did not foresee —
@@ -2878,14 +2893,14 @@ every parent-referencing `&` inside changes meaning. Cheap detector: grep the co
 for `#nidara-` anywhere other than the start of a selector.
 
 🔑 **The reverse failure was live too, and older.** Scoping a sheet to a window it does not fully own
-is the same bug pointed the other way, and `_control-center.scss` had it since #97: `.cc-media-*`
+is the same bug pointed the other way, and `_control-center.scss` had it since #97: `.nidara-media-*`
 sat inside its `#nidara-bar` block, but `widgets/media.ts`'s `buildMediaDetailPanel` is shown by the
 bar pill expansion, the CC detail page **and the island's PLAYER mode** (`PlayerIsland.tsx:42`).
 From the day the island became its own window the transport buttons and the source selector rendered
 with raw GTK defaults, for months, silently (user-caught 2026-08-10). Fixed by giving the block both
 scopes — kept window-scoped rather than made global on purpose, so the specificity balance is the
 same in both windows (`.cc-island button` and `.bar-center button` are (1,1,1) and would beat a bare
-`.cc-media-*`). **Instrument, reusable:** for every class used by code that renders into a given
+`.nidara-media-*`). **Instrument, reusable:** for every class used by code that renders into a given
 window, check the compiled `style.css` for at least one selector that is unscoped or scoped to that
 window; classes with no CSS are Cairo-painted, classes whose only selectors name another window are
 the bug. Found it in one pass over 54 classes.
@@ -2933,7 +2948,7 @@ as it was for #97.
 
 **No live collision — verified rather than assumed.** Cross-referencing every class selector across
 the 11 partials, the only names declared in more than one file (`.linked`, `.nidara-row-title`,
-`.nidara-row-subtitle`) are all nested under a distinctive parent (`.cc-detail-panel`,
+`.nidara-row-subtitle`) are all nested under a distinctive parent (`.nidara-detail-panel`,
 `scrolledwindow.apps-list-scroll`). Nothing was overriding anything.
 
 🔑 **Three DEAD selectors fell out of mapping classes to windows** — each named a window that does not

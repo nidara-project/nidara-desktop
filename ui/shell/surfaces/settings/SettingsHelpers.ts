@@ -222,7 +222,7 @@ export const sliderRow = (
         onExtChange,
         debounce: 32,
         commitOnRelease,
-        cssClasses: ["cc-atomic-scale-native"],
+        cssClasses: ["nidara-atomic-scale-native"],
         width_request: 140,
     })
 

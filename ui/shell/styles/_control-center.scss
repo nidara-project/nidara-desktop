@@ -68,7 +68,7 @@
         button { @include nidara-reset; }
     }
 
-    .cc-atomic-slider-box-horizontal {
+    .nidara-atomic-slider-box-horizontal {
         background: transparent;
     }
 
@@ -87,14 +87,14 @@
         }
 
         /* 1x1 Round Toggles */
-        .cc-atomic-round-btn {
+        .nidara-atomic-round-btn {
             border-radius: var(--nidara-radius-pill);
             color: var(--nidara-text);
 
         }
 
         /* Icon-only toggle nested inside a split capsule (see buildSplitCapsuleContent):
-           the surrounding .cc-atomic-icon-circle-bg box still paints the resting badge;
+           the surrounding .nidara-atomic-icon-circle-bg box still paints the resting badge;
            this button only needs the round clip + hover/press feedback so the icon
            reads as its own tap target, distinct from the rest of the capsule (which
            opens the detail panel). Two classes outrank the `.cc-island button` reset
@@ -107,20 +107,20 @@
     }
 
     /* 48x48 Circular Badge inside capsules (no override needed, is a box not a button) */
-    .cc-atomic-icon-circle-bg {
+    .nidara-atomic-icon-circle-bg {
         background-color: var(--nidara-surface);
         border-radius: var(--nidara-radius-pill);
         color: var(--nidara-text);
     }
 
     /* --- Typographical Utilities for Toggles --- */
-    .cc-atomic-label-bold {
+    .nidara-atomic-label-bold {
         font-size: $fs-small;
         font-weight: $fw-bold;
         color: var(--nidara-text);
     }
 
-    .cc-atomic-label-dim {
+    .nidara-atomic-label-dim {
         font-size: $fs-caption;
         // Pin the weight: without it the label inherits its parent's, so capsules
         // wrapped in a cc-capsule-btn (bt, focus, dark_mode, night_light) rendered the
@@ -189,7 +189,7 @@
         }
     }
 
-    /* (.nidara-circle-btn, .slider-fill-value and .cc-atomic-scale-native moved to
+    /* (.nidara-circle-btn, .slider-fill-value and .nidara-atomic-scale-native moved to
        _components.scss on 2026-08-07 — they are rendered by SHARED components
        (common/IconButton.ts, common/Slider.ts) and by Settings pages, so scoping this
        file to the bar's window would have silently unstyled them there. A class used
@@ -439,7 +439,7 @@
         letter-spacing: 0.04em;
     }
 
-    .cc-detail-section-label {
+    .nidara-detail-section-label {
         font-size: $fs-caption;
         font-weight: $fw-bold;
         color: var(--nidara-text-dim);
@@ -449,7 +449,7 @@
     }
 
     /* --- CC Detail Panel — styles for content inside the squircle island --------- */
-    .cc-detail-panel {
+    .nidara-detail-panel {
 
         // Strip the boxed-card look: inside the detail panel a nidara-list sits flat
         // on the island, not as a frosted card.
@@ -600,27 +600,34 @@
 
    Kept at the same specificity as before (window-scoped, not global) on purpose:
    whatever wins against these rules in the bar must win identically in the
-   island, and dropping to a bare `.cc-media-*` would have changed that balance
-   in one window only. The `cc-` prefix is historical — it is the shell's whole
-   atomic-widget vocabulary, not a claim that the Control Center owns this.
+   island, and dropping to a bare `.nidara-media-*` would have changed that balance
+   in one window only.
+
+   ⚠️ A `nidara-*` name in a SURFACE sheet is deliberate here, and the only place
+   in the shell where the two do not coincide. `nidara-*` says who OWNS the class
+   (the kit — `widgets/media.ts` places this panel, no surface does); the sheet it
+   sits in is a separate question, settled by the specificity argument above. The
+   class was `cc-media-*` until 2026-08-10, which said the Control Center owned a
+   panel three surfaces wear — the exact misreading that let the island bug sit
+   for months.
    ========================================================================== */
 #nidara-bar,
 .nidara-bar-window,
 #nidara-island,
 .nidara-island-window {
-    .cc-media-title-atomic {
+    .nidara-media-title {
         font-size: $fs-small;
         font-weight: $fw-bold;
         color: var(--nidara-text);
     }
 
-    .cc-media-artist-atomic {
+    .nidara-media-artist {
         font-size: $fs-caption;
         font-weight: $fw-regular;
         color: var(--nidara-text-dim);
     }
 
-    .cc-media-btn-atomic {
+    .nidara-media-btn {
         color: var(--nidara-text);
         background: transparent;
         border: none;
@@ -632,19 +639,19 @@
         padding: 0;
     }
 
-    .cc-media-play-btn {
+    .nidara-media-play-btn {
         background-color: var(--nidara-accent);
         border-radius: var(--nidara-radius-pill);
         color: var(--nidara-accent-fg);
     }
 
-    .cc-media-time {
+    .nidara-media-time {
         font-size: $fs-caption;
         font-weight: $fw-medium;
         color: var(--nidara-text-dim);
         opacity: 0.7;
     }
 
-    // (Removed dead .cc-media-progress GTK-scale rules — the media progress bar is a
+    // (Removed dead .nidara-media-progress GTK-scale rules — the media progress bar is a
     // Cairo-drawn slider via makeHSlider, so these never applied.)
 }

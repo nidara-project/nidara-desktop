@@ -69,7 +69,7 @@ export default function RecordingIsland(): Gtk.Widget {
     clock.connect("unrealize", () => { safeDisconnect(status, sigId); stopTick() })
 
     // NidaraButton, not `suggested-action`: the Adwaita class is only restyled
-    // inside `.bar-expansion-panel` / `.cc-detail-panel`, and the island is
+    // inside `.bar-expansion-panel` / `.nidara-detail-panel`, and the island is
     // neither — it rendered as raw GTK blue, an accent the user never picked.
     // `button.nidara-btn` is unscoped, so it is the only button vocabulary that
     // looks right in EVERY window (nidara-kit/button.ts).

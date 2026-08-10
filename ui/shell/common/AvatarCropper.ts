@@ -87,7 +87,7 @@ export function showAvatarCropper(
         onChange: setZoom,
         onValueChanged: setZoom,
         debounce: 0,
-        cssClasses: ["cc-atomic-scale-native"],
+        cssClasses: ["nidara-atomic-scale-native"],
     })
     ;(zoomSlider as any).hexpand = true
 

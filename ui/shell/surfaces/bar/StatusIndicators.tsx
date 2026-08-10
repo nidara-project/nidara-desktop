@@ -127,7 +127,7 @@ function buildBannerRow(ind: BarIndicator, s: IndicatorState): Gtk.Widget {
     text.append(new Gtk.Label({ label: ind.detail(), halign: Gtk.Align.START, css_classes: ["nidara-row-subtitle"] }))
 
     // NidaraButton, `secondary` — NOT Adwaita's `destructive-action`, which is
-    // both off-system (raw GTK red: this row is outside the `.cc-detail-panel`
+    // both off-system (raw GTK red: this row is outside the `.nidara-detail-panel`
     // scope that restyles Adwaita button classes, so it rendered as pure Adwaita)
     // and wrong: revoking a permission is reversible, and the shell's own rule is
     // that danger means destructive. See nidara-kit/button.ts — page code never

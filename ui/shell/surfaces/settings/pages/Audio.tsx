@@ -78,7 +78,7 @@ function createDeviceRow(
     const scale = makeVolumeSlider(endpoint, {
         onValueChanged: (v) => { valLabel.label = `${Math.round(v)}%` },
         onExternal: () => { muteImg.gicon = AudioSvc.targetVolumeIcon(endpoint) },
-        cssClasses: ["cc-atomic-scale-native"],
+        cssClasses: ["nidara-atomic-scale-native"],
     })
 
     const sliderRow = new Gtk.Box({ spacing: 8 })
@@ -144,7 +144,7 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
     const scale = makeVolumeSlider(stream, {
         onValueChanged: (v) => { valLabel.label = `${Math.round(v)}%` },
         onExternal: () => { muteImg.gicon = AudioSvc.targetVolumeIcon(stream) },
-        cssClasses: ["cc-atomic-scale-native"],
+        cssClasses: ["nidara-atomic-scale-native"],
     })
 
     const sliderRow = new Gtk.Box({ spacing: 8 })

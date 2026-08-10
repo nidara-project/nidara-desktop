@@ -15,7 +15,7 @@
  * you get is "that thing looks like raw GTK now", months later, from a human.
  *
  * That is not hypothetical. The island's media panel rendered with GTK defaults
- * for months because `.cc-media-*` sat inside `_control-center.scss`'s
+ * for months because `.nidara-media-*` sat inside `_control-center.scss`'s
  * `#nidara-bar` block while `PlayerIsland` shows the very same panel. The same
  * sweep then found the "Default" badge and the slider readout, both scoped to
  * the CC's detail page while Settings wore them too.

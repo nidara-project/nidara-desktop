@@ -176,7 +176,7 @@ function buildCCDetail(_onClose: () => void): Gtk.Widget {
     }
 
     const sectionLabel = (text: string) => new Gtk.Label({
-        label: text, css_classes: ["cc-detail-section-label"],
+        label: text, css_classes: ["nidara-detail-section-label"],
         halign: Gtk.Align.START, margin_start: 12, margin_top: 4,
     })
 

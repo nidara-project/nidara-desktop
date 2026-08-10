@@ -143,7 +143,7 @@ export function createCCContextMenu(opts: CCContextMenuOpts = {}): CCContextMenu
                     checked: isCurrent,
                     sensitive: !isCurrent && fits,
                     trailing: !isCurrent && !fits
-                        ? new Gtk.Label({ label: t("cc.menu.size-full"), css_classes: ["cc-atomic-label-dim"], valign: Gtk.Align.CENTER })
+                        ? new Gtk.Label({ label: t("cc.menu.size-full"), css_classes: ["nidara-atomic-label-dim"], valign: Gtk.Align.CENTER })
                         : undefined,
                     onClick: () => { ccLayout.resize(id, size); close() },
                 }))

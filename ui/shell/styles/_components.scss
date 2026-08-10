@@ -428,7 +428,7 @@ button.nidara-seg-btn {
 // The number beside a slider ("72%", "4500K"). Nine consumers and not one of them
 // is only the Control Center: `control-center/Sliders.tsx`, the brightness /
 // night-light / volume widgets, and Settings → Audio / Appearance / the shared
-// `SettingsHelpers` row. Its rule was inside `#nidara-bar .cc-detail-panel`, so
+// `SettingsHelpers` row. Its rule was inside `#nidara-bar .nidara-detail-panel`, so
 // everywhere else — the whole Settings window included — the readout rendered at
 // default size and colour, with the digits free to jitter as they counted
 // (2026-08-10, same sweep that found the "Default" badge below).
@@ -442,7 +442,7 @@ button.nidara-seg-btn {
 // The accent pill marking the current default audio device. TWO surfaces build
 // it from the same two classes: the CC's audio detail page (`widgets/volume.ts`)
 // and Settings → Audio (`pages/Audio.tsx`). It lived inside
-// `#nidara-bar .cc-detail-panel` in _control-center.scss, so the Settings copy
+// `#nidara-bar .nidara-detail-panel` in _control-center.scss, so the Settings copy
 // rendered as plain text — the same defect as the media panel, one surface's
 // sheet owning a component two surfaces wear (2026-08-10).
 //
@@ -802,7 +802,7 @@ dropdown popover {
 
 // ── Icon-only action button ───────────────────────────────────────────────────
 // Compact, transparent, rounded — for mute/remove/add inline actions.
-// Originally scoped to .cc-detail-panel; promoted here so settings pages
+// Originally scoped to .nidara-detail-panel; promoted here so settings pages
 // get the same treatment without needing a parent class.
 button.settings-icon-btn {
     background: transparent;
@@ -861,7 +861,7 @@ button.settings-icon-btn {
 
 /* The native Gtk.Scale trough inside a CC atomic — and inside Settings, which
    reuses the same control (SettingsHelpers, Appearance, Audio) and AvatarCropper. */
-.cc-atomic-scale-native {
+.nidara-atomic-scale-native {
     background: transparent;
 }
 

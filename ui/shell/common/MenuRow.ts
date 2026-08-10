@@ -58,7 +58,7 @@ export function menuRow(opts: MenuRowOpts): Gtk.Button {
     // `-gtk-icon-filter: invert(1)`; see design-system.md). The one part of that
     // class that DID apply was the rest of it: `.accent-label` is the audio detail's
     // "Default" BADGE — pill background, radius and padding — so inside
-    // `.cc-detail-panel` every checked menu row drew an accent pill behind its tick,
+    // `.nidara-detail-panel` every checked menu row drew an accent pill behind its tick,
     // and nowhere else. User-caught in the CC's media source selector 2026-08-10,
     // against the island's copy of the same menu, which never matched that rule.
     const check = new Gtk.Image({
