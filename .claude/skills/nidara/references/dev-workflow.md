@@ -89,6 +89,28 @@ caught up to → guard WARN → source build). See tech-debt #21 and `packaging/
 
 User config always under `~/.config/nidara/`.
 
+### ⚠️ Anything the installer creates in the user's HOME must be chowned — ancestors included
+
+The installer runs under `sudo`, so every `mkdir -p` into `$REAL_HOME` creates the
+**missing parents as root**, and a root-owned dir in the user's home breaks whatever the
+user's own session writes there — silently, because the writers swallow the error.
+
+Both known cases are fixed and both live in **`bin/nidara-setup`**, side by side (one
+implementation, so the package hook and `nidara-update` repair it too, not just `install.sh`):
+
+- `~/.config` — root-owned meant no `gtk-{3,4}.0` (icon theme + dark never reached GTK apps),
+  no `dconf`, no `user-dirs.dirs` (clean-install bugs 1/2/4, VM 06-22).
+- `~/.cache` + `~/.cache/nidara` — created by the installer's package build cache
+  (`~/.cache/nidara/pkgbuild`, three `mkdir` sites in `install.sh`, all now via
+  `ensure_pkg_cache`). Root-owned meant Astal couldn't cache frequents (dock/app-grid
+  ordering never persisted), no album-art cache, and **`nidara-update` couldn't create its
+  work dir** — an mktemp inside `~/.cache/nidara` — so the update path was broken on a fresh
+  install (VM sweep 08-10).
+
+The failing condition is a **first** install on a machine where the dir doesn't exist yet,
+and once poisoned a rerun looks fine — so it only ever shows up on a virgin VM base. When
+adding an installer path that writes into the home, chown the dir **and its parents**.
+
 ### Asset resolution — `SHELL_ROOT`, never the config dir
 
 Code-shipped assets (icons in `assets/icons/`, `style.css`) resolve ONLY against
