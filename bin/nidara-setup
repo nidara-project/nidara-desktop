@@ -172,6 +172,23 @@ mkdir -p "$CONFIG_DIR"
 # VM 06-22. Own the parent too, not just our dir.
 chown "$REAL_USER" "${REAL_HOME}/.config" "$CONFIG_DIR"
 
+# ~/.cache has the SAME hazard, and it bit us the same way (VM sweep 08-10): the
+# installer's package build cache lives at ~/.cache/nidara/pkgbuild, and every
+# `mkdir -p` of it under sudo creates ~/.cache and ~/.cache/nidara as root when
+# they don't exist yet. Three things the user's own session writes there then
+# fail, and all three fail QUIETLY: Astal's frequents cache (`cannot cache
+# frequents: … Permission denied`, so dock/app-grid usage ordering never
+# persists), MediaService's album art (~/.cache/nidara/media-art), and
+# `nidara-update`, whose work dir is an mktemp INSIDE ~/.cache/nidara — the
+# update path itself broken on a fresh install.
+#
+# This runs on every install, package hook and update, so it also REPAIRS an
+# install already poisoned before this existed. Non-recursive on ~/.cache (other
+# apps' caches are none of our business, and the dir is what matters), recursive
+# on ~/.cache/nidara, which is ours whole.
+[ -d "${REAL_HOME}/.cache" ] && chown "$REAL_USER" "${REAL_HOME}/.cache"
+[ -d "${REAL_HOME}/.cache/nidara" ] && chown -R "$REAL_USER" "${REAL_HOME}/.cache/nidara"
+
 # Default JSON configs (never overwrite user's existing files).
 # Bar/CC widget placement + CC tile layout are NOT seeded here: they come from the
 # shell's code defaults (DEFAULT_PLACEMENT + CC_DEFAULT_ORDER in widgets/index.ts),

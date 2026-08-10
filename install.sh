@@ -80,6 +80,18 @@ run_user() {
     if [ "$(id -u)" -eq 0 ]; then sudo -u "$REAL_USER" -H "$@"; else "$@"; fi
 }
 
+# Create the build cache with the USER owning it — ANCESTORS INCLUDED. Under sudo
+# a bare `mkdir -p "$PKG_CACHE/…"` creates ~/.cache and ~/.cache/nidara as root
+# whenever they don't exist yet, and from then on everything the user's own
+# session writes there fails silently (Astal's frequents cache, the album-art
+# cache, and `nidara-update`'s work dir — the list and the repair for installs
+# already poisoned are in bin/nidara-setup, beside the same fix for ~/.config).
+ensure_pkg_cache() {
+    mkdir -p "$PKG_CACHE/src"
+    chown "$REAL_USER" "${REAL_HOME}/.cache" "${REAL_HOME}/.cache/nidara" 2>/dev/null || true
+    chown -R "$REAL_USER" "$PKG_CACHE" 2>/dev/null || true
+}
+
 # makepkg the PKGBUILD in dir $1, then hand the result to pacman. We --overwrite
 # because earlier Nidara releases `meson install`-ed these libs straight into
 # /usr as UNTRACKED files (invisible to `pacman -Qo`, unupgradable, unremovable —
@@ -87,8 +99,8 @@ run_user() {
 # transition gives those paths to pacman; from here they upgrade/remove cleanly.
 build_install_pkg() {
     local dir="$1"
-    mkdir -p "$PKG_CACHE/src"
-    chown -R "$REAL_USER" "$dir" "$PKG_CACHE/src" 2>/dev/null || true
+    ensure_pkg_cache
+    chown -R "$REAL_USER" "$dir" 2>/dev/null || true
     # -f rebuild, --nodeps (install order is managed below), --skipinteg (git sources)
     run_user bash -c "cd '$dir' && SRCDEST='$PKG_CACHE/src' makepkg -f --noconfirm --nodeps --skipinteg --noprogressbar"
     local pkgfile
@@ -112,6 +124,7 @@ build_local_nidara_pkg() {
         echo "  [WARN] packaging/nidara/PKGBUILD pkgver=$pkgver ≠ VERSION=$(cat "$REPO_DIR/VERSION") —"
         echo "         these are bumped together in release commits; packaging this tree as $pkgver."
     fi
+    ensure_pkg_cache
     rm -rf "$pdir"
     mkdir -p "$pdir"
     cp "$REPO_DIR/packaging/nidara/PKGBUILD" "$REPO_DIR/packaging/nidara/nidara.install" "$pdir/"
@@ -400,8 +413,7 @@ echo "  Skipped (pins unchanged)."
 elif [ "$DEPS_FROM_REPO" = "yes" ]; then
 echo "  Skipped (installed from nidara-repo)."
 else
-mkdir -p "$PKG_CACHE/src"
-chown -R "$REAL_USER" "$PKG_CACHE" 2>/dev/null || true
+ensure_pkg_cache
 
 # ── appmenu-glib-translator (build/runtime dep of libastal-tray) ──────────────
 # Build this FIRST: libastal-tray links it. Pinned by $APPMENU_REF.
