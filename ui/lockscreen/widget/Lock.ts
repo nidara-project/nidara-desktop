@@ -6,6 +6,29 @@ import PowerBar from "./PowerBar"
 import Clock from "./Clock"
 import { resolveWallpaper } from "../../lib/wallpaper"
 import { setCapsuleBackdrop } from "../../lib/glass-capsule"
+import { playExit } from "../../lib/entrance"
+
+// Every monitor's fadeable UI, so the exit covers all of them at once.
+const exitTargets: Gtk.Widget[] = []
+let unlocking = false
+
+/**
+ * Dissolve the lock UI, then unlock.
+ *
+ * ⚠️ This is a DELAY, not a transition, and that is not a compromise we chose: the
+ * moment `unlock()` is called the compositor takes the surface down and the session
+ * is there, so there is no window in which a cross-fade could happen. Every system
+ * with a pretty unlock IS the compositor. 150ms is priced to read as "password
+ * accepted" rather than as waiting.
+ *
+ * ⚠️ `playExit` guarantees the callback runs even if the frame clock stops. Losing
+ * it here would leave the user locked out of their own machine.
+ */
+function requestUnlock(onUnlock: () => void) {
+  if (unlocking) return
+  unlocking = true
+  playExit(exitTargets, onUnlock, 150)
+}
 
 function buildWindow(onUnlock: () => void): Gtk.ApplicationWindow {
   const win = new Gtk.ApplicationWindow({
@@ -36,7 +59,11 @@ function buildWindow(onUnlock: () => void): Gtk.ApplicationWindow {
   clockWidget.valign = Gtk.Align.START
   clockWidget.margin_top = 72
 
-  const lockCard = LockCard(onUnlock)
+  // The exit runs on EVERY monitor, not just the one that took the password, so
+  // the fade targets are collected module-wide (`exitTargets`) and `buildWindow`
+  // is called once per monitor. Without that, a two-screen setup would dissolve
+  // one and hard-cut the other.
+  const lockCard = LockCard(() => requestUnlock(onUnlock))
   lockCard.halign = Gtk.Align.CENTER
   lockCard.valign = Gtk.Align.CENTER
 
@@ -59,6 +86,12 @@ function buildWindow(onUnlock: () => void): Gtk.ApplicationWindow {
   overlay.add_overlay(clockWidget)
   overlay.add_overlay(lockCard)
   overlay.add_overlay(powerBar)
+
+  // The UI fades on unlock; the WALLPAPER and the scrim deliberately do not. The
+  // lockscreen paints the same image the desktop does (resolveWallpaper falls
+  // through to the global one), so holding it makes the final cut a change of
+  // what is ON the wallpaper rather than a change of everything.
+  exitTargets.push(clockWidget, lockCard, powerBar)
 
   win.set_child(overlay)
   return win

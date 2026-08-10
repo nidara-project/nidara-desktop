@@ -157,3 +157,60 @@ export function playEntrance(widget: Gtk.Widget, opts: EntranceOpts): void {
         })
     })
 }
+
+/**
+ * Fade a set of widgets out, then run `done` exactly once.
+ *
+ * ── WHY THE EXIT IS SHORT, AND WHY IT LEAVES THE WALLPAPER ALONE ────────────
+ * There is no moment in which a "real" unlock transition could be seen. The
+ * instant `Gtk4SessionLock.unlock()` is called the compositor tears our surface
+ * down and the session is simply there — so an exit animation is not a transition,
+ * it is a DELAY deliberately inserted before unlocking. macOS, iOS and GNOME all
+ * cross-fade lock→desktop because they ARE the compositor; under
+ * `ext-session-lock-v1` we are a client and only own the half that leaves.
+ *
+ * What makes the short version worth its latency is that the lockscreen paints the
+ * SAME wallpaper as the desktop (`resolveWallpaper` falls through to the global
+ * one unless a per-surface override is set). So the caller fades the UI — card,
+ * clock, power bar — and holds the wallpaper: the final cut is then between our
+ * wallpaper and the real desktop showing the same image, instead of between a full
+ * lock screen and a desktop. The bar, the dock and the user's windows still pop in;
+ * nothing we can do about that from here.
+ *
+ * 150ms is chosen to read as an acknowledgement that the password was accepted
+ * rather than as waiting. Alpha is linear, for the reason documented above.
+ *
+ * ⚠️ `done` MUST run even if the frame clock stops — it is what unlocks the
+ * session. A dropped callback here is a user locked out of their own machine, so
+ * the timeout is not a nicety, it is the contract. Same reason the entrance can
+ * never gate the card appearing.
+ */
+export function playExit(widgets: Gtk.Widget[], done: () => void, durationMs = 150): void {
+    let finished = false
+    const finish = () => {
+        if (finished) return
+        finished = true
+        for (const w of widgets) w.opacity = 0
+        done()
+    }
+
+    const driver = widgets[0]
+    if (!driver) { finish(); return }
+
+    const start = GLib.get_monotonic_time()
+    let tickId = 0
+    tickId = driver.add_tick_callback(() => {
+        if (finished) return GLib.SOURCE_REMOVE
+        const p = (GLib.get_monotonic_time() - start) / 1000 / durationMs
+        if (p >= 1) { finish(); return GLib.SOURCE_REMOVE }
+        for (const w of widgets) w.opacity = 1 - p
+        return GLib.SOURCE_CONTINUE
+    })
+
+    // The contract, not a fallback: unlock happens on time whatever the clock does.
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, durationMs + 250, () => {
+        if (!finished && tickId) driver.remove_tick_callback(tickId)
+        finish()
+        return GLib.SOURCE_REMOVE
+    })
+}

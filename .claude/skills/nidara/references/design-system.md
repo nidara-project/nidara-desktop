@@ -2217,11 +2217,34 @@ the centring halving, visible in one line.
 stylesheet.** They would fight the JS that owns both properties, and on the one surface that
 matters they never worked.
 
+### The exit is a DELAY, not a transition
+
+🔑 **There is no moment in which an unlock transition could be seen.** The instant
+`Gtk4SessionLock.unlock()` is called the compositor takes the surface down and the session is
+simply there. macOS, iOS and GNOME all cross-fade lock→desktop because they ARE the
+compositor; under `ext-session-lock-v1` we are a client and own only the half that leaves. So
+an exit animation is latency, deliberately spent, and it has to be priced as such.
+
+What makes 150ms worth it is a fact about the wallpaper: **the lockscreen paints the same
+image as the desktop** (`resolveWallpaper` falls through to the global one unless a per-surface
+override exists). So `playExit` fades the UI — card, hero, power bar — and HOLDS the wallpaper
+and the scrim. The final cut is then a change of what is *on* the wallpaper rather than a
+change of everything. The bar, the dock and the user's windows still pop in; that half is not
+ours.
+
+⚠️ **The exit covers EVERY monitor.** `buildWindow` runs once per monitor, so the fade targets
+are collected module-wide in `Lock.ts` (`exitTargets`) and one `requestUnlock` dissolves all of
+them. Per-window, a two-screen setup would dissolve the active monitor and hard-cut the other.
+
+⚠️ **`playExit`'s callback is a CONTRACT, not a nicety: it is what unlocks the session.** A
+dropped callback is a user locked out of their own machine, so a timeout fires it regardless of
+the frame clock. Verified by killing the tick callback in the bundle — unlock still runs
+exactly once, at the timeout instead of at 157ms.
+
 **Not done, deliberately:** a spring curve — Apple's real signature is spring physics rather
 than bezier, and `stepSpring` in `DockPhysics.ts` already exists and substeps correctly, so it
 would be its second consumer and the trigger to promote it to `ui/lib/`. Now that the
-animation is a tick loop, it is a drop-in swap for the easing function. And an EXIT animation
-on unlock: today the card vanishes when the bundle quits.
+animation is a tick loop, it is a drop-in swap for the easing function.
 
 ## Cairo vs CSS
 
