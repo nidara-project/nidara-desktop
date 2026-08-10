@@ -2113,3 +2113,59 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
 ## When you're tempted to invent a new pattern
 
 Before adding a new mixin, new token, or new class convention: check whether `_base.scss` already has it, and whether `@mixin glass` / `@mixin nidara-reset` cover the case. Migrating to existing mixins is a stated direction of the project (`@mixin glass` underuse is item #5 in the tech-debt list); adding a parallel pattern makes the future migration worse.
+
+## The login card: a message that cannot move it, and an entrance (2026-08-10)
+
+Two changes to `.greeter-card`, both on the shared sheet so the greeter and the lockscreen
+get them together.
+
+### The failure message no longer shifts the card
+
+The card is `valign: CENTER`, so anything that changes its height moves its whole contents.
+Showing "Wrong password" added 30px and lifted the avatar, the name, the field and the
+button by **15px each** — half of it, because centring splits growth in two. Failing a
+password moved the field you were about to retype in.
+
+🔑 **The fix is toggling `opacity`, not `visible`, and the reason is a GTK fact worth
+keeping: an EMPTY `Gtk.Label` still measures one line.** So the error capsule is 24px tall
+whether it holds a message or nothing, and leaving it ALLOCATED (opacity 0) reserves exactly
+the right space with no number involved. `visible = false` is what breaks it — a hidden
+widget gets no allocation at all.
+
+⚠️ **A `min-height: 30px` on the slot shipped in the first draft, looked like the mechanism,
+and was not.** It only made the slot 6px taller than the capsule inside it; the mutation test
+(set it to 0) changed nothing. Reserving by NUMBER would also have been the fragile version,
+because the right number is the user's UI font rather than a constant. It was removed.
+
+One line is the true worst case, measured rather than assumed: all 36 real messages
+(12 locales × `wrongPassword`/`noSession`/`loginError`) are 24px tall, none wraps, and the
+widest is 216px against the card's 280.
+
+**The cost, stated:** the strip is always reserved, so with no error on screen the card sits
+15px higher than it used to. Same 15px — paid once, statically, instead of on every failure.
+
+### The card rises as it fades in
+
+`margin-top: 40px → 0` alongside the opacity, over the existing 450ms.
+
+- **`margin-top`, never `transform: translateY`** — commandment 9. GTK honours a CSS
+  transform when painting and ignores it when hit-testing, and this card is nothing but
+  clickables. Margin is the sanctioned tool and is honest here: the card is the only thing on
+  screen, so the per-frame relayout costs nothing worth reclaiming with a snapshot-time
+  transform. (`ScaleRevealer` was considered and is the wrong tool — it scales, and it was
+  written for overlay *pop*.)
+- ⚠️ **The margin is NOT the travel.** Centring gives half of it back: measured 24px→13px,
+  40px→21px, 56px→29px. **40 is the knob.** 21px reads as a sheet arriving; 29 reads as the
+  card being dropped.
+- **The curve moved from `$ease` to `$ease-emphasized`,** the one judgement call. `$ease` is
+  symmetric — right for a state change that could go either way. A surface ARRIVING goes one
+  way and should land rather than glide to a stop, which is what `$ease-emphasized` is
+  documented for. It is also what makes 21px legible instead of drift.
+
+Still one-shot, per the cost rule: a CONTINUOUS animation costs ~40 % of a GPU, and under
+`ext-session-lock-v1` the compositor cannot help — everything is paid in our process.
+
+**Not done, and deliberately left as separate decisions:** a staggered entrance (per-child
+`transition-delay`, cheap), and an EXIT animation on unlock — today the card simply vanishes
+when the bundle quits, which would mean holding the surface for the duration before
+`app.quit()`. Both are in `tech-debt.md`'s lockscreen backlog.

@@ -414,14 +414,63 @@ window > contents {
 // ── Card entrance (fade-in on map) ───────────────────────────────────────────
 .greeter-card {
   opacity: 0;
+  // ── The card RISES as it fades in ─────────────────────────────────────────
+  // `margin-top`, NOT `transform: translateY`. Commandment 9 bans CSS transforms
+  // on clickables — GTK honours them when painting and ignores them when
+  // hit-testing, and this card is nothing but clickables. Margin is the sanctioned
+  // way, and it is honest here: the card is the only thing on screen, so the
+  // relayout it costs per frame buys nothing back for a snapshot-time transform.
+  //
+  // ⚠️ This number is NOT the travel. The card is `valign: CENTER`, so the margin
+  // also grows the box and the centring gives half of it back: measured
+  // 24px→13px, 40px→21px, 56px→29px of actual movement. **40 is the knob**; 21px
+  // is the "a sheet arrived" distance, and 29 already reads as the card being
+  // dropped rather than arriving.
+  margin-top: 40px;
   // 450ms is NOT on the $dur-* ladder and should not be snapped onto it: those
   // three (100/180/260) time a control's state change, and this is a full-screen
-  // surface arriving. The CURVE is the system's, which is the part that was
-  // freehand — plain `ease` is not $ease.
-  transition: opacity 450ms $ease;
+  // surface arriving.
+  //
+  // The curve moved from $ease to $ease-emphasized on 2026-08-10, and that is the
+  // one judgement call in this block. $ease is symmetric — it accelerates as much
+  // as it decelerates, which is right for a state change that could go either way.
+  // A surface ARRIVING only goes one way, and should land rather than glide to a
+  // stop; $ease-emphasized is the system's decelerate curve and is documented for
+  // exactly this ("popovers/sheets"). It is also what makes the rise legible: with
+  // a symmetric curve, 12px of travel over 450ms reads as drift.
+  transition: opacity 450ms $ease-emphasized, margin-top 450ms $ease-emphasized;
 }
 .greeter-card.greeter-card-shown {
   opacity: 1;
+  margin-top: 0;
+}
+
+// ── The failure message's reserved slot ──────────────────────────────────────
+// The height is RESERVED so the message cannot move the card. Before this,
+// showing it grew the card by 30px and — because the card is centred — lifted the
+// avatar, the name, the password field and the button by 15px each, which meant
+// failing a password moved the field you were about to retype in.
+//
+// 🔑 THE RESERVATION IS THE `opacity`, NOT A HEIGHT — and this block carried a
+// `min-height: 30px` for about ten minutes that looked like the mechanism and was
+// not. Measured: **an empty Gtk.Label still measures one line**, so the capsule is
+// 24px tall whether it holds "Wrong password" or nothing at all. Toggling
+// `opacity` keeps it ALLOCATED, and the slot's height therefore never changes.
+// (`visible = false` is what breaks this: a hidden widget gets no allocation.)
+//
+// The `min-height` was removed because it only made the slot 6px TALLER than the
+// capsule it holds — the no-shift property was already there without it, and the
+// mutation test proved it: setting it to 0 changed nothing. Reserving by number
+// would also have been the fragile version, since the right number is the user's
+// UI font, not a constant.
+//
+// One line really is the worst case: all 36 real messages (12 locales ×
+// wrongPassword/noSession/loginError) measure 24px, none wraps, and the widest is
+// 216px against the card's 280.
+.greeter-error-slot {
+  // Fading suits what this is now: a message that expires on its own should leave
+  // the way it came rather than blink out.
+  > * { transition: opacity $dur-slow $ease; }
 }
 
 // ── Multi-user switcher ──────────────────────────────────────────────────────
