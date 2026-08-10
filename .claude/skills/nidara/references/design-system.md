@@ -2226,8 +2226,14 @@ compositor; under `ext-session-lock-v1` we are a client and own only the half th
 an exit animation is latency, deliberately spent, and it has to be priced as such.
 
 What makes 150ms worth it is a fact about the wallpaper: **the lockscreen paints the same
-image as the desktop** (`resolveWallpaper` falls through to the global one unless a per-surface
-override exists). So `playExit` fades the UI — card, hero, power bar — and HOLDS the wallpaper
+image as the desktop.** Not "unless overridden" — `ui/lib/wallpaper.ts` RESERVES a `surfaces`
+block and `resolveWallpaper` reads it, but nothing writes one and Settings does not expose it,
+so as of 2026-08-10 the two are always identical. ⚠️ **Whoever implements per-surface
+wallpapers has to revisit this exit**: a different lock image makes the held wallpaper
+discontinuous with the desktop and the final cut becomes the thing the fade was bought to
+avoid. Do not add a check before it can happen — there is nothing to detect today.
+
+So `playExit` fades the UI — card, hero, power bar — and HOLDS the wallpaper
 and the scrim. The final cut is then a change of what is *on* the wallpaper rather than a
 change of everything. The bar, the dock and the user's windows still pop in; that half is not
 ours.

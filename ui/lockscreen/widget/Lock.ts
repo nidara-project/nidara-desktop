@@ -88,9 +88,11 @@ function buildWindow(onUnlock: () => void): Gtk.ApplicationWindow {
   overlay.add_overlay(powerBar)
 
   // The UI fades on unlock; the WALLPAPER and the scrim deliberately do not. The
-  // lockscreen paints the same image the desktop does (resolveWallpaper falls
-  // through to the global one), so holding it makes the final cut a change of
-  // what is ON the wallpaper rather than a change of everything.
+  // lockscreen paints the same image the desktop does — the `surfaces` override in
+  // wallpaper.ts is a reserved schema slot that nothing writes and Settings does
+  // not expose — so holding it makes the final cut a change of what is ON the
+  // wallpaper rather than a change of everything. See ui/lib/entrance.ts for what
+  // to revisit if per-surface wallpapers ever ship.
   exitTargets.push(clockWidget, lockCard, powerBar)
 
   win.set_child(overlay)

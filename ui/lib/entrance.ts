@@ -170,9 +170,19 @@ export function playEntrance(widget: Gtk.Widget, opts: EntranceOpts): void {
  * `ext-session-lock-v1` we are a client and only own the half that leaves.
  *
  * What makes the short version worth its latency is that the lockscreen paints the
- * SAME wallpaper as the desktop (`resolveWallpaper` falls through to the global
- * one unless a per-surface override is set). So the caller fades the UI — card,
- * clock, power bar — and holds the wallpaper: the final cut is then between our
+ * SAME wallpaper as the desktop. Not "unless overridden": `ui/lib/wallpaper.ts`
+ * RESERVES a `surfaces` block in its schema and `resolveWallpaper` reads it, but
+ * nothing writes one and Settings does not expose it, so as of 2026-08-10 the two
+ * images are always identical. That is the premise this exit is built on.
+ *
+ * ⚠️ WHOEVER IMPLEMENTS PER-SURFACE WALLPAPERS: re-check this. With a different
+ * lockscreen image the held wallpaper stops being continuous with the desktop and
+ * the final cut becomes the very thing the fade was bought to avoid — at which
+ * point either the fade should be skipped when the two differ, or the wallpaper
+ * should fade too. Do not add that check before it can happen; there is nothing to
+ * detect today.
+ *
+ * So the caller fades the UI — card, clock, power bar — and holds the wallpaper: the final cut is then between our
  * wallpaper and the real desktop showing the same image, instead of between a full
  * lock screen and a desktop. The bar, the dock and the user's windows still pop in;
  * nothing we can do about that from here.
