@@ -65,15 +65,27 @@ CrystalMenu/CrystalWindow are **Increments 2-3**."* Every sibling in that plan s
 `.nidara-sidebar` 1). Only the tile migration never happened.
 
 The reusable part was never the problem: the **mixin** `nidara-tile-states` is well adopted, by
-`.app-grid-button`, `.cc-split-icon-btn`, `.cc-detail-back-btn`, `.bar-popover-icon-btn` and
-`.nidara-tile` itself. What stalled is visible in those four — they take **different radii (`md` /
-`sm` / `xs`) and their own padding**, so absorbing them needs size variants, which is a design
-decision. Rows all share one geometry and sailed through; tiles do not and did not.
+`.app-grid-button`, `.cc-split-icon-btn`, `.cc-detail-back-btn` and `.bar-popover-icon-btn`. What
+stalled is visible in those four — they take **different radii (`md` / `sm` / `sm` / `xs`) and their
+own padding**, so absorbing them needs size variants, which is a design decision. Rows all share one
+geometry and sailed through; tiles do not and did not.
 
-▶️ **So the honest options are finish it or drop it, and "leave it sitting there" is the one that
-keeps lying** — the same pattern as the `cc-*` prefix in §56. Either give it `--sm`/`--xs` variants
-and migrate the four, or delete the class and record that the increment was abandoned on purpose.
-Owner's call; it is 4 lines of source either way, so this is about the kit's honesty, not bytes.
+✅ **DROPPED 2026-08-10 (owner's call).** The options were finish it or delete it — "leave it sitting
+there" was the only one that kept lying, same shape as the `cc-*` prefix in §56. The class is gone;
+the mixin stays. **Bring it back WITH variants if the migration is ever attempted, never bare.**
+
+🔑 **It was never used, not used-then-dropped, and the distinction took one command.** `git log -S`
+across the whole history — under both this name and the pre-rename `.crystal-tile`, since #22 hides
+the origin of every kit class — finds no commit that ever applied it from code. Its comment named
+"CC icon tiles" among the intended wearers, which is exactly why it read like CC chrome that had
+fallen out of use; the history says otherwise. **A class's comment describes the plan, the history
+describes what happened.**
+
+⚠️ Two traps met while establishing that, both of which nearly produced a wrong answer:
+`git log -S'.crystal-tile'` also matches `.crystal-tile-states`, so it appears to point at the mixin's
+commit — search the declaration (`'.crystal-tile {'`) when a name is a prefix of another. And `-S`
+over `ui/` hits the **committed generated `style.css`** as well as the source, so a "consumer" can be
+the compiled output of the very rule you are investigating.
 **Re-run 2026-06-23 (271 classes):** removed 2 newly-confirmed dead blocks —
 `.settings-icon-btn--danger` (`_components.scss`, a never-wired "danger tint" modifier; the base
 `.settings-icon-btn` is only ever added plain/`+flat`) and `.is-danger` (`_control-center.scss`, the
@@ -2893,9 +2905,10 @@ in the sheet.** Verified by a compiled diff (new names normalised back → `styl
 ✅ **And `_dock.scss`'s `&>box` closed the same day** — measured dead, deleted, and the note that
 warned about it corrected (see the sixth-dead-selector entry below; it was wrong).
 
-▶️ **One item still open from this line of work**: the four kit classes with no consumer
-(`.nidara-tile`, `.nidara-switch`, `.nidara-input`, `.is-selected`) — a PRODUCT call about whether
-unused kit API stays available, **not** dead-CSS cleanup. See §1's "deliberately KEPT" list.
+✅ **And the last item closed 2026-08-10 too**: the four kit classes with no consumer turned out to
+be TWO things, not one — three opt-in aliases whose element half is fully live (zero consumers is
+their expected state), and `.nidara-tile`, an unfinished increment, now deleted. **§1 is the entry;
+this line used to lump all four together and point at a list §1 no longer has.**
 
 **Closed 2026-08-10 with `_bar.scss` + `_dock.scss`, the last two.** Earlier stages:
 `_control-center` and `_prism` → the bar's window; `_settings` → its own; `_workspace` → **split

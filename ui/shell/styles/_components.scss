@@ -89,13 +89,20 @@ selection {
 .nidara-row--single { min-height: 48px; }
 .nidara-row--double { min-height: 72px; }
 
-/* Floating icon tile/button over a translucent panel (bar/dock/app-grid widgets,
-   CC icon tiles). Hover raises a glass capsule (mode-aware fill + inner edge). */
-.nidara-tile {
-    @include nidara-reset;
-    border-radius: $nidara-radius-md;
-    @include nidara-tile-states;
-}
+// (`.nidara-tile` deleted 2026-08-10. It was declared in `69cce101 refactor(ui):
+// universal CrystalRow/CrystalList` as a placeholder for that plan's Increments
+// 2-3 — its own message says so — and the tile migration never happened while
+// every sibling in the plan shipped. `git log -S` over the whole history, under
+// this name and the pre-rename `.crystal-tile`, finds NO commit that ever
+// applied it from code: it was never used, as opposed to used and then dropped.
+//
+// The reusable unit was always the `nidara-tile-states` MIXIN, which stays and
+// is adopted by `.app-grid-button`, `.cc-split-icon-btn`, `.cc-detail-back-btn`
+// and `.bar-popover-icon-btn`. What could not be shared is the packaging: those
+// four take radius `md` / `sm` / `sm` / `xs` and their own padding, so absorbing
+// them would need size variants. Rows universalised cleanly because they share
+// one geometry; tiles do not. Bring the class back WITH variants if that
+// migration is ever attempted — do not restore it bare.)
 
 /* Title + label typography for the list/row components. */
 .nidara-list-title {

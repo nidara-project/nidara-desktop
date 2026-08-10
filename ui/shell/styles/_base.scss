@@ -168,7 +168,8 @@ $fse-title-1:  2em;
 
 // ── Interaction states for ANY row / list-item / menu-item ─────────────────────
 // THE single source of truth for hover/pressed/selected. Powers the universal
-// `.nidara-row` component (and `.nidara-tile` shares the same model). Mode-aware:
+// `.nidara-row` component (`nidara-tile-states` below shares the model, for tiles
+// on translucent panels — see the note there on which to use). Mode-aware:
 // hover/pressed use `--nidara-surface-hover/-active` (rgba(fg,…)) so they lighten
 // in dark / darken in light — always toward the mode's contrast, visible on ANY
 // background (a fixed dark deepen overlay vanished on a translucent panel over a
