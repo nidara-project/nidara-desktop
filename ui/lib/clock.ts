@@ -73,8 +73,27 @@ export function NidaraClock(deps: ClockDeps): Gtk.Widget {
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 0,
+        // The hero block arrives WITH the card rather than being there before it —
+        // both screens are one composition, and animating the card over a clock
+        // that was already sitting there read as one element on a static backdrop.
+        // Same class pair and same transition as `.greeter-card`; the numbers
+        // differ because this block is `valign: START` and the card is CENTER, so
+        // centring gives the card half its margin back and this gets all of it.
+        css_classes: ["greeter-hero"],
     })
     box.append(dateLabel)
     box.append(timeLabel)
+
+    // ⚠️ The 16ms is not a flourish, it is the same requirement the card has: a
+    // class added in the same turn as the map has nothing to transition FROM, so
+    // the animation is skipped and the block simply appears. One frame later it
+    // animates. Both blocks do this on their own `map`, which is what keeps them
+    // in step without either knowing about the other.
+    box.connect("map", () => {
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
+            box.add_css_class("greeter-hero-shown")
+            return GLib.SOURCE_REMOVE
+        })
+    })
     return box
 }

@@ -445,6 +445,31 @@ window > contents {
   margin-top: 0;
 }
 
+// ── The hero block (date + clock) arrives WITH the card ──────────────────────
+// It used to be there from the first frame while the card faded in over it, which
+// read as one element animating on a static backdrop rather than a screen
+// arriving. Same curve and same duration as `.greeter-card` — the whole
+// composition is one movement, which is the reason this is not staggered:
+// staggering says "these are independent peers", and a login screen is one thing.
+//
+// ⚠️ The NUMBER differs from the card's on purpose, and it is not a tuning
+// preference. This block is `valign: START`, so it keeps all of its margin as
+// travel; the card is `valign: CENTER`, where centring hands half of it back. 21px
+// here and 40px there produce the SAME 21px of movement — measured, both.
+//
+// ⚠️ It is also ADDITIVE with the widget's own `margin_top = 72` (set in Lock.ts
+// and Greeter.ts, not here): GTK's widget margin and the CSS box margin are
+// separate and stack. So this animates 93px → 72px, not 21px → 0.
+.greeter-hero {
+  opacity: 0;
+  margin-top: 21px;
+  transition: opacity 450ms $ease-emphasized, margin-top 450ms $ease-emphasized;
+}
+.greeter-hero.greeter-hero-shown {
+  opacity: 1;
+  margin-top: 0;
+}
+
 // ── The failure message's reserved slot ──────────────────────────────────────
 // The height is RESERVED so the message cannot move the card. Before this,
 // showing it grew the card by 30px and — because the card is centred — lifted the

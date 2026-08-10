@@ -2162,10 +2162,43 @@ widest is 216px against the card's 280.
   way and should land rather than glide to a stop, which is what `$ease-emphasized` is
   documented for. It is also what makes 21px legible instead of drift.
 
+### The hero block arrives with it — and why nothing is staggered
+
+The date+clock block (`.greeter-hero`, built in `ui/lib/clock.ts`) was there from the first
+frame while the card faded in over it, which read as one element animating on a static
+backdrop rather than a screen arriving. It now carries the same curve and duration.
+
+🔑 **Not staggered, and that is a rule rather than a preference: staggering says "these are
+independent peers".** It is right for a list of rows arriving and wrong for the parts of one
+object — a login card that assembles itself out of avatar, name, field and button reads as
+machinery. The whole composition is ONE movement. (Apple's platforms stagger collections, not
+the components of a single control; that part is design reasoning and recollection, not
+something measurable from this repo — unlike every number above it.)
+
+⚠️ **The two blocks carry DIFFERENT numbers to produce the SAME movement.** `.greeter-hero` is
+`valign: START` and keeps all of its margin as travel; `.greeter-card` is `valign: CENTER`,
+where centring hands half of it back. 21px there and 40px here both measure ~21px of travel.
+
+⚠️ **CSS margin is ADDITIVE with the widget's own `margin_top`.** The clock is positioned with
+`clockWidget.margin_top = 72` in `Lock.ts`/`Greeter.ts`, so the rule animates 93px → 72px, not
+21px → 0. Verified, not assumed.
+
+Being "in phase" is guaranteed by construction rather than by timing: both rules compile to
+the identical `450ms cubic-bezier(0.2, 0, 0, 1)`, and each block adds its own class on its own
+`map` + 16ms, so neither needs to know about the other.
+
 Still one-shot, per the cost rule: a CONTINUOUS animation costs ~40 % of a GPU, and under
 `ext-session-lock-v1` the compositor cannot help — everything is paid in our process.
 
-**Not done, and deliberately left as separate decisions:** a staggered entrance (per-child
-`transition-delay`, cheap), and an EXIT animation on unlock — today the card simply vanishes
-when the bundle quits, which would mean holding the surface for the duration before
-`app.quit()`. Both are in `tech-debt.md`'s lockscreen backlog.
+⚠️ **DO NOT MEASURE THESE ANIMATIONS BY SAMPLING FRAMES.** A throwaway probe window only
+advances CSS transitions while the compositor grants it frames, and on a tiling WM it may not:
+a timed probe read **0px of travel and reported it as a pass**, twice, because the transition
+was frozen rather than finished. Measure the TWO STATES instead — add and remove the `-shown`
+class with `transition: none` layered on top, and diff the positions. Frame-independent, and
+it is what determines the travel anyway. See `feedback_prove_the_test_can_fail` in memory.
+
+**Not done, and deliberately left as separate decisions:** a spring curve (Apple's real
+signature is spring physics, not bezier; `stepSpring` in `DockPhysics.ts` already exists and
+substeps correctly, so this would be its second consumer and the trigger to promote it to
+`ui/lib/`), and an EXIT animation on unlock — today the card simply vanishes when the bundle
+quits, which would mean holding the surface for the duration before `app.quit()`.
