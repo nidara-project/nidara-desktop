@@ -256,6 +256,43 @@ matching only half of it: it anchored `.class` on a preceding space, so every el
 — `label.accent-label`, `button.nidara-btn`, `spinbutton.time-spin` — was invisible, and a class
 styled *only* that way read as "no CSS at all" and passed.
 
+### Proving a selector matches NOTHING (the sentinel probe — a technique, not a script)
+
+`scope-audit` answers "can this rule reach the window?"; `gtk-probe` answers "how big is this?".
+Neither answers *"is `window.nidara-dock-window > box` dead?"*, because that is a question about one
+bespoke widget tree. **Ask it instead of deriving it from the source:**
+
+1. Declare the selector with a **sentinel** no other rule uses — `padding: 37px` — at
+   `STYLE_PROVIDER_PRIORITY_APPLICATION`.
+2. Rebuild the exact nesting in question (read it out of the TSX; the dock is
+   `win.set_child(overlay)` → `overlay.set_child(layout)` → `layout.set_child(da)` +
+   `add_overlay(shim)`).
+3. `gtk4-broadwayd :5` + `GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 gjs -m probe.js`, wait one frame,
+   walk the tree and print every node whose `get_style_context().get_padding()` carries the sentinel.
+
+~50 lines, and deliberately **not** committed: the tree is different for every question, so a
+permanent tool would only ever be scaffolding. The 2026-08-10 run over `&>box` returned 0.
+
+🔑 **A zero proves nothing until a control has produced a one.** Always run a variant whose direct
+child really IS the node you are asking about — otherwise a typo'd selector, a provider that never
+loaded, or a probe that walks the wrong root all look exactly like "dead". Same lesson as verifying
+`scope-audit` against a reintroduced bug, one paragraph up.
+
+🔑 **Run the counterfactual too, and doubt the caution as hard as the claim.** The third variant here
+was "what if the redundant wrapper were removed?" — because the tech-debt note warned that would make
+the selector start matching. It also returned 0 (`layout` is an overlay as well), so the note had
+been guarding nothing. **A warning derived from a source read is a hypothesis with the same burden of
+proof as the thing it warns about.**
+
+⚠️ **A plain `Gtk.Window` is not a layer-shell surface.** Confirm the shape against the running shell
+before acting: `ags request queryUI <selector>` prints each node's `path` as GType ancestry
+(`"GtkWindow.fullscreen > GtkOverlay"`), which settles "what is the window's direct child?" directly.
+
+⚠️ **A widget-tree walk cannot see GTK-internal CSS nodes.** `decoration`, `slider`, `trough`,
+`contents` are nodes without widgets — neither this probe nor `queryUI` will ever report them, and
+their absence is not evidence they are dead. That is why `decoration` survived the deletion that
+removed `&>box` from the same rule.
+
 ### Measuring a control's real geometry with no screen (`scripts/dev/gtk-probe.js`)
 
 For any question of the form *"where does this inset actually come from?"* on a widget that

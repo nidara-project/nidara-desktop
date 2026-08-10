@@ -2855,9 +2855,10 @@ below that ran for months. **A name that misfiles a rule in a reader's head even
 in the sheet.** Verified by a compiled diff (new names normalised back → `style.css` byte identical),
 `scope-audit` green on all six windows, and typecheck.
 
-▶️ **Still open from this line of work, both deliberately deferred** (they were split off so the
-rename stayed reviewable): `_dock.scss`'s `&>box` (see the sixth-dead-selector warning below —
-needs `gtk-probe` against a running shell), and the four kit classes with no consumer
+✅ **And `_dock.scss`'s `&>box` closed the same day** — measured dead, deleted, and the note that
+warned about it corrected (see the sixth-dead-selector entry below; it was wrong).
+
+▶️ **One item still open from this line of work**: the four kit classes with no consumer
 (`.nidara-tile`, `.nidara-switch`, `.nidara-input`, `.is-selected`) — a PRODUCT call about whether
 unused kit API stays available, **not** dead-CSS cleanup. See §1's "deliberately KEPT" list.
 
@@ -2911,13 +2912,35 @@ the bug. Found it in one pass over 54 classes.
 `.about-*` came out into its own `_about.scss` scoped to `window#nidara-about, .about-floating-window`:
 it is a separate toplevel and was never part of the bar in anything but file position.
 
-⚠️ **`_dock.scss`'s `&>box` is a strong candidate for a SIXTH dead selector** (noticed 2026-08-09,
-still not verified — deliberately left alone by the 2026-08-10 pass). The dock window's direct child
-is a `Gtk.Overlay`, not the layout box, so `window.nidara-dock-window > box` should never match. The
-overlay itself is now a single-child wrapper with nothing overlaid on it (the app grid was its only
-overlay child) — so removing the wrapper is tempting, and would make this selector START matching,
-which is a silent behaviour change in the opposite direction. Verify with `gtk-probe` before touching
-either.
+✅ **`_dock.scss`'s `&>box` was the SIXTH dead selector — measured and deleted 2026-08-10.** The dock
+window's direct child is a `Gtk.Overlay` (`DockCore.tsx`: `win.set_child(windowOverlay)`), so
+`window.nidara-dock-window > box` never matched.
+
+🔑 **The warning this entry used to carry was WRONG, and the way it was wrong is the lesson.** It
+said the redundant `windowOverlay` was tempting to remove and that removing it would make the
+selector START matching — a silent behaviour change in the opposite direction. It would not:
+`layout` is a `Gtk.Overlay` too (`DockAxis.ts`, both axes), so the direct child stays an overlay
+either way, and that cleanup was safe the whole time. **The note was reasoned from one level of the
+tree and guarded nothing for a day.** A caution written from a source read is a hypothesis, and it
+gets the same burden of proof as the claim it cautions against.
+
+🛠️ **How to settle "does this selector match anything?" — ask it, don't derive it.** Declare the
+selector with a sentinel value nothing else uses (`padding: 37px`), rebuild the widget nesting on the
+broadway backend (`gtk4-broadwayd :5`, `GDK_BACKEND=broadway`), walk the tree and print which nodes
+came back with it. ~50 lines, no permanent script — the tree is bespoke per question, which is why
+this is a technique in `dev-workflow.md` rather than a committed tool like `scope-audit.mjs`.
+**Always run a control variant whose child really IS the node you are asking about**: 0 hits means
+nothing until something has produced 1. Result here — control 1, today's tree 0, wrapper-removed 0.
+
+⚠️ **A plain `Gtk.Window` probe does not stand in for a layer-shell surface**, so it was confirmed
+against the running shell: `ags request queryUI .cd-layout` → `path: "GtkWindow.fullscreen >
+GtkOverlay"`. `queryUI` reports ancestry for exactly this kind of question.
+
+⚠️ **Only half the rule was provable.** `decoration, &>box { … }` kept its `decoration` half:
+`decoration` is a GTK-internal **CSS node, not a widget**, so no widget-tree walk — probe or
+`queryUI` — can see it, and nothing here says whether it is live. Deleting what you measured and
+leaving what you did not is the honest split (same shape as `.bar-capsule`, where half a rule was
+dead and half was not).
 
 ⚠️ **Nothing mechanical proves a scoping pass correct.** Compiled class coverage comes out identical
 either way; a misfiled rule stays in the sheet and just stops matching. The 2026-08-10 pass diffed

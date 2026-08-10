@@ -7,8 +7,27 @@ window.nidara-dock-window,
     margin: 0;
     padding: 0;
 
-    decoration,
-    &>box {
+    // (`&>box` deleted 2026-08-10 — DEAD, the sixth. It expanded to both
+    // `window.nidara-dock-window > box` and `#nidara-dock > box`, and the dock
+    // window's direct child is a `Gtk.Overlay` — `DockCore.tsx` does
+    // `win.set_child(windowOverlay)` — so neither could ever match.
+    //
+    // MEASURED, not reasoned: declare the selector with a sentinel padding,
+    // rebuild the dock's exact nesting on the broadway backend, and read back
+    // which nodes got it. 0 here; 1 for a control tree whose child really is a
+    // box, which is what makes the 0 mean anything. Confirmed live too, since a
+    // plain `Gtk.Window` probe cannot stand in for a layer-shell surface:
+    // `ags request queryUI .cd-layout` → path `GtkWindow.fullscreen > GtkOverlay`.
+    //
+    // ⚠️ tech-debt used to warn that removing the redundant `windowOverlay`
+    // would make this selector START matching. That was WRONG: `layout` is a
+    // `Gtk.Overlay` as well (`DockAxis.ts`, both axes), so the direct child stays
+    // an overlay either way — the probe's third variant also returned 0. That
+    // cleanup was safe all along and the warning guarded nothing.
+    //
+    // `decoration` stays: a GTK-internal CSS node, not a widget, so no
+    // widget-tree walk can see it and nothing here proves it dead either way.
+    decoration {
         @include nidara-reset;
     }
 }
