@@ -1,12 +1,14 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
+import { NidaraClock, type RegionSettings } from "../../lib/clock"
+import { type DateFormat } from "../../lib/date-names"
 import { getPreferredUser } from "../lib/greeter-prefs"
-import { formatDatePart } from "../lib/dateNames"
 import { onLocaleChange } from "../lib/i18n"
 
-type DateFormat = "none" | "short" | "short-year" | "long" | "numeric" | "iso"
-
-function readRegionConfig(): { timeFormat: "24h" | "12h"; showSeconds: boolean; dateFormat: DateFormat } {
+// The greeter's half of the shared clock: WHERE to read region.json, which is a
+// privilege question this bundle is the only one that has. Everything the widget
+// does with the answer lives in ui/lib/clock.ts.
+function readRegionConfig(): RegionSettings {
   const fallback = { timeFormat: "24h" as const, showSeconds: false, dateFormat: "long" as DateFormat }
   // Try the last-logged-in user's home first (works if /home/<user> is not
   // 700), then the world-readable mirror RegionConfig writes to
@@ -31,54 +33,7 @@ function readRegionConfig(): { timeFormat: "24h" | "12h"; showSeconds: boolean; 
   return fallback
 }
 
-const region = readRegionConfig()
-const timeFmt = region.timeFormat === "12h"
-  ? (region.showSeconds ? "%I:%M:%S %p" : "%I:%M %p")
-  : (region.showSeconds ? "%H:%M:%S" : "%H:%M")
-
-function formatTime(): string {
-  return GLib.DateTime.new_now_local().format(timeFmt) ?? ""
-}
-
-function formatDate(): string {
-  return formatDatePart(region.dateFormat, GLib.DateTime.new_now_local())
-}
-
 // Returns date + time labels for embedding inside a card (no container box)
 export default function Clock(): Gtk.Widget {
-  const dateLabel = new Gtk.Label({
-    label: formatDate(),
-    css_classes: ["greeter-date"],
-    halign: Gtk.Align.CENTER,
-    xalign: 0.5,
-  })
-
-  const timeLabel = new Gtk.Label({
-    label: formatTime(),
-    css_classes: ["greeter-clock"],
-    halign: Gtk.Align.CENTER,
-    xalign: 0.5,
-  })
-
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
-    timeLabel.label = formatTime()
-    return GLib.SOURCE_CONTINUE
-  })
-
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 60000, () => {
-    dateLabel.label = formatDate()
-    return GLib.SOURCE_CONTINUE
-  })
-
-  // The language dropdown changes the process locale live (setLocale →
-  // applyProcessLocale) — repaint the date now, not on the next minute tick.
-  onLocaleChange(() => { dateLabel.label = formatDate() })
-
-  const box = new Gtk.Box({
-    orientation: Gtk.Orientation.VERTICAL,
-    spacing: 0,
-  })
-  box.append(dateLabel)
-  box.append(timeLabel)
-  return box
+  return NidaraClock({ readRegion: readRegionConfig, onLocaleChange })
 }

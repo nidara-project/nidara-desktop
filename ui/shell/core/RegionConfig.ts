@@ -2,7 +2,7 @@ import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import { readFile, writeFile } from "ags/file"
 import { execAsync } from "ags/process"
-import { formatDatePart } from "./i18n/dateNames"
+import { formatDatePart } from "../../lib/date-names"
 
 export type TimeFormat = "24h" | "12h"
 export type DateFormat = "none" | "short" | "short-year" | "long" | "numeric" | "iso"
@@ -183,7 +183,7 @@ class RegionConfigManager extends GObject.Object {
 
     /**
      * Returns a fully formatted clock string. The date portion (names + field
-     * order) follows the system regional format — LC_TIME via i18n/dateNames.ts,
+     * order) follows the system regional format — LC_TIME via ui/lib/date-names.ts,
      * like Gtk.Calendar — not the in-app UI language.
      */
     formatClock(dt?: GLib.DateTime): string {

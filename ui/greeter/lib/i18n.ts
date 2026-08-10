@@ -1,5 +1,5 @@
 import GLib from "gi://GLib"
-import { refreshDateFormat } from "./dateNames"
+import { refreshDateFormat } from "../../lib/date-names"
 
 // Mini-catalog: 11 keys × 12 languages. Deliberately duplicated per bundle
 // (greeter and lockscreen each ship their own i18n.ts — see the skill's
@@ -215,7 +215,7 @@ function detectLocale(): Locale {
 }
 
 // The glibc locale each UI language runs the greeter PROCESS under: LC_TIME
-// drives the clock's date names (dateNames.ts formats via %a/%A/%b/%B) and
+// drives the clock's date names (ui/lib/date-names.ts formats via %a/%A/%b/%B) and
 // the process locale is where Pango takes the text language it hands to
 // fontconfig, which picks the regional Han face for CJK (the 65-0 fontconfig
 // rules — see the skill's "Fonts & CJK variants"). Exactly the set

@@ -1,14 +1,17 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
-import { formatDatePart } from "../lib/dateNames"
+import { NidaraClock, type RegionSettings } from "../../lib/clock"
+import { type DateFormat } from "../../lib/date-names"
 
-type DateFormat = "none" | "short" | "short-year" | "long" | "numeric" | "iso"
-
-function readRegionConfig(): { timeFormat: "24h" | "12h"; showSeconds: boolean; dateFormat: DateFormat } {
+// The lockscreen's half of the shared clock: it runs AS the user, so its own
+// config dir is the answer — no mirror, no other user's home. The greeter's is
+// three lines longer for a reason that does not apply here (see ui/lib/clock.ts).
+function readRegionConfig(): RegionSettings {
+  const fallback = { timeFormat: "24h" as const, showSeconds: false, dateFormat: "long" as DateFormat }
   try {
     const path = `${GLib.get_user_config_dir()}/nidara/region.json`
     const [ok, data] = GLib.file_get_contents(path)
-    if (!ok) return { timeFormat: "24h", showSeconds: false, dateFormat: "long" }
+    if (!ok) return fallback
     const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))
     const fmt = (cfg.dateFormat as DateFormat) ?? "long"
     return {
@@ -17,54 +20,11 @@ function readRegionConfig(): { timeFormat: "24h" | "12h"; showSeconds: boolean; 
       dateFormat: fmt === "none" ? "long" : fmt,
     }
   } catch {
-    return { timeFormat: "24h", showSeconds: false, dateFormat: "long" }
+    return fallback
   }
-}
-
-const region = readRegionConfig()
-const timeFmt = region.timeFormat === "12h"
-  ? (region.showSeconds ? "%I:%M:%S %p" : "%I:%M %p")
-  : (region.showSeconds ? "%H:%M:%S" : "%H:%M")
-
-function formatTime(): string {
-  return GLib.DateTime.new_now_local().format(timeFmt) ?? ""
-}
-
-function formatDate(): string {
-  return formatDatePart(region.dateFormat, GLib.DateTime.new_now_local())
 }
 
 // Returns date + time labels for embedding inside a card (no container box)
 export default function Clock(): Gtk.Widget {
-  const dateLabel = new Gtk.Label({
-    label: formatDate(),
-    css_classes: ["greeter-date"],
-    halign: Gtk.Align.CENTER,
-    xalign: 0.5,
-  })
-
-  const timeLabel = new Gtk.Label({
-    label: formatTime(),
-    css_classes: ["greeter-clock"],
-    halign: Gtk.Align.CENTER,
-    xalign: 0.5,
-  })
-
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
-    timeLabel.label = formatTime()
-    return GLib.SOURCE_CONTINUE
-  })
-
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 60000, () => {
-    dateLabel.label = formatDate()
-    return GLib.SOURCE_CONTINUE
-  })
-
-  const box = new Gtk.Box({
-    orientation: Gtk.Orientation.VERTICAL,
-    spacing: 0,
-  })
-  box.append(dateLabel)
-  box.append(timeLabel)
-  return box
+  return NidaraClock({ readRegion: readRegionConfig })
 }

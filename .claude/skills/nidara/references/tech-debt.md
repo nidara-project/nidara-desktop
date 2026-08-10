@@ -3115,8 +3115,11 @@ the system it is supposed to belong to.**
 3. **`ui/greeter/style.css.map` is tracked while `style.css` is gitignored**
    (`.gitignore:110`), so every build dirties the tree with the `.map`. Cosmetic, but it makes a
    `git status` after a build look like it contains a change it does not.
-4. The greeter and lockscreen still **duplicate** `PowerBar.ts`, `Clock.ts` and their i18n
-   scaffolding; this pass added a fourth shared file (`icons.ts`) rather than merging them.
+4. ~~The greeter and lockscreen still **duplicate** `PowerBar.ts`, `Clock.ts` and their i18n
+   scaffolding~~ — **RESOLVED 2026-08-10** for the widgets: `ui/lib/power-bar.ts`,
+   `ui/lib/clock.ts` and `ui/lib/date-names.ts` (the last one had THREE copies — the shell's
+   too). The **i18n catalogs stay per bundle on purpose** and that is now load-bearing rather
+   than incidental; see §60.
 
 
 ### 59. NTK — the kit's stylesheet is out of the shell; the other bundles do not import it YET (2026-08-10)
@@ -3199,3 +3202,57 @@ already ships.
 
 ⚠️ The CSS node is now `box`. Nothing in `ui/greeter/style.scss` selects a bare `box` (checked),
 but a rule added there later would reach inside every capsule on both screens.
+
+
+### 60. Greeter ↔ lockscreen: the widgets are one copy now, and injection is the shape (2026-08-10)
+
+Step 2 of the NTK plan. `Clock.ts` and `PowerBar.ts` existed twice, and `dateNames.ts` **three
+times** — the shell's copy carried a header naming the other two. Now: `ui/lib/clock.ts`,
+`ui/lib/power-bar.ts`, `ui/lib/date-names.ts`. Net −71 lines, and three consumers for the date
+formatter.
+
+🔑 **THE DUPLICATION HAD ALREADY DRIFTED, which is the argument for doing the rest.** The
+lockscreen's `PowerBar` still carried a comment describing the buttons as "accent and opaque" —
+a design deleted in #99/#100 the day before, when accent went back to meaning state only. The
+CODE was fixed in both copies and the EXPLANATION in one. That is the cheap version of the
+failure; the expensive version is [the dropdown](design-system.md) — same disease, one
+generation of unfixed bugs deep.
+
+**The shape for anything promoted to `ui/lib/` that needs to speak: INJECT the bundle's i18n,
+never reach for it.** `t()` lives in each bundle's `lib/i18n.ts` and stays there — the catalogs
+are deliberately different sizes (greeter 12 keys, lockscreen 7) and read different config
+paths — so `NidaraPowerBar({ t, onLocaleChange? })` takes them as parameters. Two details worth
+copying:
+
+- **`onLocaleChange` is optional, and that optionality IS the whole divergence.** Every
+  difference between the two old copies came from one fact: the greeter can change language
+  while it is on screen (a dropdown calling `setlocale()` live) and the lockscreen cannot. Pass
+  the hook where it exists; omit it and the labels are simply built once.
+- **Name the keys, do not take `any`.** `PowerBarKey = "suspend" | "restart" | "shutdown"` is
+  what makes a future catalog missing one a break at the call site instead of three buttons
+  quietly labelled with their own key.
+- **`readRegion` is injected for a PRIVILEGE reason, not a preference.** The lockscreen runs as
+  the user and reads its own config dir; the greeter is a system user that owns no such file, so
+  it tries the last user's home and then the world-readable `/var/tmp/nidara` mirror.
+
+🔑 **How it was verified, because none of these surfaces has a dev loop.** Three separate
+answers for three shapes of risk, and the middle one is the reusable trick:
+
+1. `formatDatePart` is PURE → old and new bundled side by side and run over 5 dates × 7 formats
+   × **10 locales** (including the year-first CJK path and day-first vs month-first): **350/350
+   identical strings**.
+2. The widgets → built from the OLD bundle and the NEW one and their **CSS node trees dumped and
+   diffed** (`scripts/dev/` harness, kept out of the repo): identical, 3/3 nodes for the clock
+   and 14/14 for the power bar, same geometry, classes and strings. ⚠️ **Run the two sides in
+   SEPARATE PROCESSES**: each esbuild bundle embeds its own `glass-capsule.ts`, and GObject
+   refuses to register the type name `NidaraGlassCapsule` twice.
+3. The greeter's live re-string → `setLocale()` on the built widget, asserting all three labels
+   change. ⚠️ **The first two attempts at this test measured NOTHING** and both looked like a
+   pass/fail about the code: once because the process locale was already the target language, and
+   once because the widget bundle and the i18n bundle were two module instances, so `setLocale`
+   ran against a different copy of the state. **A shared-module test has to be ONE module
+   graph** — one esbuild entry re-exporting both.
+
+**Still duplicated on purpose (for now):** the CARD (`LoginCard.ts` / `LockCard.ts`). It is the
+next step and it is where the backlog's real defect lives — the failure message never expires,
+because nothing watches the keyboard on either surface.
