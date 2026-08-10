@@ -102,12 +102,42 @@ export function playEntrance(widget: Gtk.Widget, opts: EntranceOpts): void {
         widget.opacity = 0
         widget.margin_top = baseMargin + opts.rise
 
-        const start = GLib.get_monotonic_time()
+        // ⚠️ THE CLOCK STARTS AT THE FIRST FRAME, NOT AT `map`. Measured in a VM
+        // (2026-08-10, cold and warm alike): the lock's main loop can be busy for
+        // >300ms after `map`, and the first tick then arrives with the whole 450ms
+        // budget already spent — the animation "ran" in one frame, straight to the
+        // end state, exactly the snap this file exists to avoid. Wall time between
+        // `map` and the first frame is startup cost, not animation.
+        //
+        // The FROM state still goes in `map` (above): that precondition is what the
+        // CSS version could not satisfy, and it is untouched. Only the moment we
+        // start COUNTING moves. A slow start now delays the animation instead of
+        // eating it.
+        let start = 0
+        let watchdog = 0
+        const armWatchdog = (ms: number) => {
+            if (watchdog) GLib.source_remove(watchdog)
+            watchdog = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+                watchdog = 0
+                if (!done && tickId) widget.remove_tick_callback(tickId)
+                settle()
+                return GLib.SOURCE_REMOVE
+            })
+        }
+
         let tickId = 0
         tickId = widget.add_tick_callback(() => {
             if (done) return GLib.SOURCE_REMOVE
+            if (start === 0) {
+                // First frame: this is t=0. Re-arm the safety net from here too, or
+                // a late start would have it fire mid-animation and settle early.
+                start = GLib.get_monotonic_time()
+                armWatchdog(duration + 400)
+                return GLib.SOURCE_CONTINUE
+            }
             const elapsed = (GLib.get_monotonic_time() - start) / 1000
             if (elapsed >= duration) {
+                if (watchdog) { GLib.source_remove(watchdog); watchdog = 0 }
                 settle()
                 return GLib.SOURCE_REMOVE
             }
@@ -150,11 +180,10 @@ export function playEntrance(widget: Gtk.Widget, opts: EntranceOpts): void {
             }
         }
 
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, duration + 400, () => {
-            if (!done && tickId) widget.remove_tick_callback(tickId)
-            settle()
-            return GLib.SOURCE_REMOVE
-        })
+        // The safety net, and it is a contract, not a fallback: a frame clock that
+        // never ticks must still leave the card visible (it starts at opacity 0).
+        // Armed from `map` for the "no frames ever" case; the first tick re-arms it.
+        armWatchdog(duration + 400)
     })
 }
 

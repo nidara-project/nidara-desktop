@@ -2144,6 +2144,14 @@ widest is 216px against the card's 280.
 **The cost, stated:** the strip is always reserved, so with no error on screen the card sits
 15px higher than it used to. Same 15px — paid once, statically, instead of on every failure.
 
+**The slot sits directly under the primary button, and nothing goes between them.** The message
+is about the password, so it belongs under the field and button it refers to. The greeter's
+session selector and user switcher both go BELOW it (`card.append`); an earlier
+`insertBeforeError` put the selector in between and pushed the failure two rows down, reading
+as if it belonged to the selector. Reserving the slot is what keeps the layout still — WHERE it
+sits was always a free choice, and this is the lockscreen's order, which had it right by having
+nothing else to place.
+
 ### The card rises as it fades in — driven by the frame clock, NOT by CSS
 
 Both blocks fade in while rising ~21px over 450ms on `$ease-emphasized`. The animation lives
@@ -2197,6 +2205,20 @@ mutation, not by eye.
 frame clock that never ticks would mean an invisible login card. A timeout lands the end state
 regardless; only the movement is lost. Verified by killing the tick callback: the card still
 arrives.
+
+⚠️ **THE CLOCK STARTS AT THE FIRST FRAME, NOT AT `map`.** Same failure as the CSS version, one
+level down: in a VM the lock's main loop can be busy for >300ms after `map` (cold and warm
+alike), and a clock anchored there hands the first tick a budget that is already spent — so it
+settles immediately and the animation snaps, exactly what this file exists to prevent. Wall
+time between `map` and the first frame is startup cost, not animation. The FROM state still
+goes in `map` (that precondition is untouched); only the counting moves. The watchdog is armed
+from `map` for "no frames ever" and re-armed by the first tick, or a late start would have it
+fire mid-animation. Measured in the VM, before → after:
+
+```
+before:  93 93 93 93 → 72     (four samples of the FROM state, then the end)
+after:   93 … 73 72 72        (0 → 0.65 → 0.98 → 1.00 opacity)
+```
 
 `NIDARA_ENTRANCE_TRACE=1 nidara-lock` prints the interpolation — distinct positions mean it
 ran, one value repeated means it snapped. Keep it: this animation was diagnosed three times
@@ -3291,6 +3313,14 @@ widest is 216px against the card's 280.
 
 **The cost, stated:** the strip is always reserved, so with no error on screen the card sits
 15px higher than it used to. Same 15px — paid once, statically, instead of on every failure.
+
+**The slot sits directly under the primary button, and nothing goes between them.** The message
+is about the password, so it belongs under the field and button it refers to. The greeter's
+session selector and user switcher both go BELOW it (`card.append`); an earlier
+`insertBeforeError` put the selector in between and pushed the failure two rows down, reading
+as if it belonged to the selector. Reserving the slot is what keeps the layout still — WHERE it
+sits was always a free choice, and this is the lockscreen's order, which had it right by having
+nothing else to place.
 
 ### The card rises as it fades in
 

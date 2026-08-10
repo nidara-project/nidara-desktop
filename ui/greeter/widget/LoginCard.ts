@@ -52,7 +52,14 @@ export default function LoginCard(): Gtk.Widget {
   // The session selector is a control, and every other control on these two
   // screens sits on glass — including the locale bar's dropdowns, which are the
   // same widget. Bare, it was unreadable on a light wallpaper.
-  card.insertBeforeError(withGlassCapsule(sessionDrp))
+  //
+  // BELOW the error capsule, not above it: the message is about the password, so
+  // it belongs directly under the field and button it refers to — the way the
+  // lockscreen (which has no session selector) already reads. Slotting the
+  // selector in between pushed the failure two rows down, under a control it has
+  // nothing to do with. Reserving the slot is what keeps the layout still; WHERE
+  // it sits was always free.
+  card.append(withGlassCapsule(sessionDrp))
 
   // ── Auth logic ────────────────────────────────────────────────────────────
   const setLoading = (loading: boolean) => {

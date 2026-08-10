@@ -60,9 +60,12 @@ export interface AuthCard {
      * directly wipes the error message that was just shown.
      */
     resetPassword: () => void
-    /** Add a control between the primary button and the error capsule. */
-    insertBeforeError: (w: Gtk.Widget) => void
-    /** Add a control BELOW the error capsule (the greeter's user switcher). */
+    /**
+     * Add a control BELOW the error capsule — the greeter's session selector and
+     * user switcher. Nothing goes between the button and the message: the message
+     * is about the password, and a control in between reads as if it belonged to
+     * that control instead.
+     */
     append: (w: Gtk.Widget) => void
     /** Swap the displayed identity (the greeter's user switcher). */
     setUser: (u: AuthCardUser) => void
@@ -276,12 +279,9 @@ export function buildAuthCard(opts: AuthCardOpts): AuthCard {
         showError,
         clearError,
         resetPassword,
-        // Between the primary button and the error capsule: the greeter's session
-        // selector. The message stays below the controls so appearing never shoves
-        // them around.
-        insertBeforeError: (w: Gtk.Widget) => col.insert_child_after(w, primaryButton.get_parent()),
-        // Below the error capsule: the greeter's user switcher, which is the one
-        // thing that really does sit at the bottom of that card.
+        // Below the error capsule: the greeter's session selector and user
+        // switcher. The slot sits right under the button and the card's height
+        // never changes, so what appears below it stays put either way.
         append: (w: Gtk.Widget) => col.append(w),
         setUser: (u: AuthCardUser) => {
             avatar.setSource(u.avatarPath)
