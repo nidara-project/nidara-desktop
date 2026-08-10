@@ -68,6 +68,26 @@ export default function AppGridPanel(
     searchBox.append(new Gtk.Image({ gicon: Icons.search, pixel_size: 18, css_classes: ["app-grid-search-icon", "nd-icon"] }))
     searchBox.append(searchEntry)
 
+    // Typing reaches the grid's WINDOW-level key handler, not the entry — the focus
+    // grab routes it there so the same keystroke can drive grid navigation — so the
+    // characters are pushed into the BUFFER by hand (see handleKey). A buffer write
+    // does not move the caret: GtkEntryBuffer has no cursor, and `Gtk.Text` only
+    // advances its own position from its own editing path. The letters landed
+    // correctly and the caret sat at column 0 forever (user-caught 2026-08-10).
+    // Every buffer mutation goes through these two so it cannot be forgotten again;
+    // -1 is GtkEditable for "after the last character".
+    const searchInsert = (ch: string) => {
+        const buf = searchEntry.get_buffer()
+        buf.insert_text(buf.get_length(), ch, 1)
+        searchEntry.set_position(-1)
+    }
+    const searchBackspace = () => {
+        const buf = searchEntry.get_buffer()
+        const len = buf.get_length()
+        if (len > 0) buf.delete_text(len - 1, 1)
+        searchEntry.set_position(-1)
+    }
+
     const searchBoxClick = new Gtk.GestureClick()
     searchBoxClick.connect("pressed", () => {
         searchBox.add_css_class("search-active")
@@ -657,6 +677,7 @@ export default function AppGridPanel(
             wsNav = 0
             flowbox.unselect_all()
             searchEntry.get_buffer().set_text("", -1)
+            searchEntry.set_position(-1)   // same reason as searchInsert: the buffer has no caret
             filterApps()
             searchBox.remove_css_class("search-active")
             focusWsSlot(hs.focusedWorkspaceId || 1)
@@ -696,8 +717,7 @@ export default function AppGridPanel(
                 }
                 if (keyval >= Gdk.KEY_space && keyval <= Gdk.KEY_asciitilde) {
                     returnToSearch()
-                    const buf = searchEntry.get_buffer()
-                    buf.insert_text(buf.get_length(), String.fromCharCode(keyval), 1)
+                    searchInsert(String.fromCharCode(keyval))
                     return true
                 }
                 return false
@@ -733,15 +753,12 @@ export default function AppGridPanel(
             }
             if (keyval === Gdk.KEY_BackSpace) {
                 if (navIdx >= 0) returnToSearch()
-                const buf = searchEntry.get_buffer()
-                const len = buf.get_length()
-                if (len > 0) buf.delete_text(len - 1, 1)
+                searchBackspace()
                 return true
             }
             if (keyval >= Gdk.KEY_space && keyval <= Gdk.KEY_asciitilde) {
                 if (navIdx >= 0) returnToSearch()
-                const buf = searchEntry.get_buffer()
-                buf.insert_text(buf.get_length(), String.fromCharCode(keyval), 1)
+                searchInsert(String.fromCharCode(keyval))
                 return true
             }
             return false

@@ -165,6 +165,21 @@ magnifier glyph (off-brand, wrong on the opposite mode). Wire filtering off the 
 `changed`. The Settings sidebar search (`Settings.tsx`) is the reference; App Icons repeated the
 `SearchEntry` mistake and was corrected (2026-07-04).
 
+⚠️ **If a surface types INTO that `Gtk.Text` from its own key handler, move the caret yourself.** The
+app grid takes keys at the window level (the focus grab routes them there so the same keystroke can
+also drive grid navigation) and pushes characters into the **buffer**:
+`buf.insert_text(buf.get_length(), ch, 1)`. A `GtkEntryBuffer` has no cursor, and `Gtk.Text` only
+advances its position from its own editing path — so the letters land correctly and the caret sits at
+column 0 forever. Nothing warns. Follow every buffer mutation with `entry.set_position(-1)`
+(GtkEditable: "after the last character"), ideally by routing all of them through one helper, as
+`AppGrid.tsx`'s `searchInsert`/`searchBackspace` now do. Shipped broken; user-caught 2026-08-10.
+
+⚠️ **Do not tint the magnifier on focus.** It is an `nd-icon`, so `color` cannot reach it — the glyph
+is monochrome and driven by `-gtk-icon-filter: invert(1)`, a black/white toggle, not a recolor (see
+"Most icon glyphs cannot be CSS-recolored" below). The focus signal belongs on the BOX: border and
+fill. An accent rule on the app grid's search icon was written, was dead for other reasons, and was
+deleted rather than repaired once that was understood (2026-08-10).
+
 ## Ghost descenders on filter (PROVISIONAL fix — see tech-debt)
 
 **Symptom:** in App Icons (`pages/AppIcons.tsx`) — the only Settings list with a live **search that
@@ -1913,6 +1928,22 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
    into the island (overview) *and* the app grid (workspace strip), so `_workspace.scss` carries two
    blocks. Put a `.wo-schematic-*` rule in the island-only block and it silently stops painting in
    the app grid — nothing errors, the strip just goes flat.
+
+   The one that actually shipped broken: `widgets/media.ts` builds ONE panel
+   (`buildMediaDetailPanel`) and three surfaces show it — the bar pill expansion and the CC detail
+   page, both inside the bar's window, **and the island's PLAYER mode** (`PlayerIsland.tsx`). Its
+   `.cc-media-*` rules were inside `_control-center.scss`'s `#nidara-bar` block, so from the day the
+   island got its own window (2026-07-26) the transport buttons and the source selector rendered with
+   raw GTK defaults there. Nobody noticed until 2026-08-10. They now carry both scopes — and
+   deliberately stay **window-scoped rather than global**, so that whatever outranks them in the bar
+   outranks them identically in the island; dropping to a bare `.cc-media-*` would have changed that
+   balance in one window only (`.cc-island button` and `.bar-center button` are both (1,1,1)).
+
+   **The cheap detector, worth re-running whenever a surface moves windows:** collect every class
+   used by code that renders into that window, and for each one check the compiled `style.css` for at
+   least one selector that is either unscoped or scoped to that window. Classes with no CSS at all
+   are Cairo-painted and fine; classes whose only selectors name a *different* window are the bug.
+   That is a ~40-line script and it found the media panel in one pass.
 
    ⚠️ **A window's scope can MOVE, and nothing tells you.** The app grid's was `#nidara-dock` until
    2026-08-09, because the panel lived inside the dock's window; giving it a surface of its own

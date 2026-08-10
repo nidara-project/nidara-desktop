@@ -2877,6 +2877,19 @@ focus and nothing reported it. **Scoping a file is not a wrapper you can add wit
 every parent-referencing `&` inside changes meaning. Cheap detector: grep the compiled `style.css`
 for `#nidara-` anywhere other than the start of a selector.
 
+🔑 **The reverse failure was live too, and older.** Scoping a sheet to a window it does not fully own
+is the same bug pointed the other way, and `_control-center.scss` had it since #97: `.cc-media-*`
+sat inside its `#nidara-bar` block, but `widgets/media.ts`'s `buildMediaDetailPanel` is shown by the
+bar pill expansion, the CC detail page **and the island's PLAYER mode** (`PlayerIsland.tsx:42`).
+From the day the island became its own window the transport buttons and the source selector rendered
+with raw GTK defaults, for months, silently (user-caught 2026-08-10). Fixed by giving the block both
+scopes — kept window-scoped rather than made global on purpose, so the specificity balance is the
+same in both windows (`.cc-island button` and `.bar-center button` are (1,1,1) and would beat a bare
+`.cc-media-*`). **Instrument, reusable:** for every class used by code that renders into a given
+window, check the compiled `style.css` for at least one selector that is unscoped or scoped to that
+window; classes with no CSS are Cairo-painted, classes whose only selectors name another window are
+the bug. Found it in one pass over 54 classes.
+
 **Two relocations rather than scopes**, both because the class had no surface to belong to:
 `.nidara-confirm-*` (a `nidara-*` name = kit) and `.bar-popover-key/-val/-value/-icon-btn` (worn by
 `widgets/`, which the USER places — bar today, CC grid today, plugin-placed tomorrow) → `_components`.
