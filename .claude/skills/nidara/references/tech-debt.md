@@ -743,33 +743,33 @@ autostart, permissions…) and for an agent to write per-app overrides — add a
 name/path to `app.id` — meaningful for a general app list, and the icon internals don't belong
 there anymore now the page isn't icon-only. See memory `project_settings_apps_page`.
 
-### 29. Ghost descenders on list mutation — ROOT CAUSE FIXED 2026-08-11 (#123), one trigger left to confirm by eye
-**What it was:** on `invalidate_filter` (App Icons / Installed Apps, the Autostart app picker)
-and — the second trigger, user-confirmed 07-11 — on ROW REMOVAL from a plain `.nidara-list`
-(deleting entries in Settings → Apps → Autostart), GTK4 left the descender ink of `y/g/j/p`
-behind hidden rows and clipped it on visible ones. It was read as a GskGL damage bug, and every
-geometry-neutral attempt failed (`queue_draw` at any scope, swaps, rebuild-fresh-rows, opacity
-toggle; padding "fixed" it by cutting the tail off). The shipped workaround was
-`.apps-list .nidara-row-subtitle { line-height: 1.35 }` — scoped to one list, PROVISIONAL by
-its own comment, and never reaching the row-removal trigger at all.
+### 29. Ghost descenders on list mutation — ✅ RESOLVED at the root 2026-08-11 (#123 + #124)
+Kept because the WRONG diagnosis held for a month and is easy to arrive at again.
 
-**What it actually was:** the ink did not overflow because of a repaint bug. It overflowed
-because the LINE BOX was wrong — the font's ascent/descent were unrounded, so the box the
-toolkit reported did not contain the ink it drew, and anything that re-laid the list out
-repainted the box and left the rest. The same defect shaved the tops of flat glyphs everywhere
-else in the DE ("the T is cut but the G is not"). #123 fixes it at the source
-(`gtk-hint-font-metrics = true`, plus whole-pixel font sizes); #124 removes the local
-line-height, since growing one list's box was only ever dodging it.
+**Symptom:** on `invalidate_filter` (App Icons / Installed Apps, the Autostart app picker) and
+on ROW REMOVAL from a plain `.nidara-list` (deleting entries in Settings → Apps → Autostart),
+GTK4 left the descender ink of `y/g/j/p` behind hidden rows and clipped it on visible ones.
 
-⚠️ **Still to confirm with a human: the ROW-REMOVAL trigger** (delete an entry in Settings →
-Apps → Autostart). The filter trigger is verified — first subtitle row anchored via `queryUI`,
-cropped to its box plus 10px below, filter cycled to an empty result and cleared: 0 differing
-pixels, descenders whole. Row removal was not re-tested and follows from the same mechanism
-rather than from a measurement. **And the warning that made this item hard in the first place
-still stands: screenshot/agent verification is masked here** — hover row-state re-render and
-window resize both clear the ghost, so an interaction-driven check can report a pass it did not
-earn. If it reappears there, this item reopens with the line-height NOT as the answer: the
-answer would be whichever list still reports a box smaller than its ink.
+**What it was read as:** a GskGL damage/re-raster bug. Every geometry-neutral attempt failed —
+`queue_draw` at any scope, swaps, rebuild-fresh-rows, opacity toggle — and padding "fixed" it
+by cutting the tail off. The shipped workaround grew one list's line box
+(`.apps-list .nidara-row-subtitle { line-height: 1.35 }`), which is why it never reached the
+row-removal trigger at all.
+
+**What it was:** the LINE BOX was wrong. The font's ascent/descent were unrounded, so the box
+the toolkit reported did not contain the ink it drew; any re-layout repainted the box and left
+the rest on screen. The same defect shaved the tops of flat glyphs (T E F H I L) DE-wide —
+"the T is cut but the G is not" was the same bug wearing different clothes. Fixed in #123
+(`gtk-hint-font-metrics` + whole-pixel font sizes, see design-system.md); the line-height came
+out in #124. Both triggers verified after: the filter cycle by pixel diff, the row removal by
+the user on real hardware.
+
+🔑 **The transferable lesson:** when ink survives a repaint, suspect the BOX before the
+compositor. A widget whose reported geometry is smaller than what it draws produces damage
+that cannot cover its own output, and no amount of invalidation from our side fixes it.
+⚠️ And the trap that made this expensive: **hover re-render and window resize both clear the
+ghost**, so an interaction-driven check reports a pass it did not earn. Park the pointer, or
+have a human look.
 
 ### 30. Users page form dialogs are unstyled Gtk.Windows — need a nidara-kit form-dialog primitive (2026-07-10)
 Settings → Users has three dialogs with two different skins: Delete User goes through

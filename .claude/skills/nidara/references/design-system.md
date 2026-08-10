@@ -191,7 +191,7 @@ It was not. The line box itself was wrong — unrounded font metrics meant the b
 reported did not contain the ink it drew, so any re-layout repainted the box and left the rest
 on screen. The same defect shaved the tops of flat glyphs (T E F H I L) everywhere else. See
 "Text is only crisp when the line box lands on WHOLE PIXELS" above for the fix and the
-measurements; tech-debt §29 for what is still to confirm by eye.
+measurements; tech-debt §29 for why the wrong diagnosis held for a month.
 
 ## Radii — ONE ladder, in `ui/lib/tokens.ts` (audited 2026-08-03)
 
