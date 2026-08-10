@@ -3119,6 +3119,51 @@ the system it is supposed to belong to.**
    scaffolding; this pass added a fourth shared file (`icons.ts`) rather than merging them.
 
 
+### 59. NTK — the kit's stylesheet is out of the shell; the other bundles do not import it YET (2026-08-10)
+
+`ui/lib/nidara-kit/` has been importable from any bundle for a long time; its LOOK was not.
+Every rule for it lived in `ui/shell/styles/_components.scss`, which only the shell compiles —
+`.nidara-btn` appeared **16 times in the shell's compiled sheet and 0 times in the greeter's**,
+so a greeter that imported `NidaraButton` would have rendered it as raw GTK. The code was
+shared and the appearance was not.
+
+**Done:** the kit's half is now `ui/lib/styles/_components.scss`, with the mixins it needs in
+`ui/lib/styles/_mixins.scss` and the relative `$fse-*` ramp in `_tokens.scss`. `_base.scss`
+`@forward`s both, so `@use 'base' as *` is unchanged. The split rule and the bundle-import
+caveat are in `design-system.md` ("The kit's stylesheet").
+
+🔑 **The verification could NOT be "byte identical", and pretending otherwise would have hidden
+the risk.** Splitting one file in two necessarily reorders the output — 572 lines moved. What
+was proved instead is stronger for this shape of change, in two steps: (1) the compiled sheet
+holds **exactly the same 534 selector→body pairs**, none lost, none added; (2) of the 1892
+pairs whose relative order flipped, **zero** could apply to the same element at equal
+specificity with a shared property — so no cascade outcome can have changed. Keep that script
+shape for any future extraction; a rule-set diff alone would have missed a real reorder bug.
+
+**Left open, in the order the NTK plan wants them:**
+1. **The greeter's three raw `Gtk.DropDown` → `NidaraDropDown`.** This is what earns the kit
+   import, and it must bring the TOKEN CONTRACT with it (17 of the 23 `--nidara-*` properties
+   the kit reads are undefined there). ⚠️ Two of the three known selector collisions ARE the
+   dropdown, so this migration removes them rather than fighting them. ⚠️ greeter/lock have no
+   dev mode — fixed path to `/usr/share`, silent failure — so this one needs a VM pass.
+2. **Deduplicate greeter↔lock** (`Clock.ts`, `PowerBar.ts`, the card) — see §57.4 above.
+3. **`common/Slider.ts` → kit** (400 self-contained Cairo lines; already THE slider, there is no
+   `Gtk.Scale`). Highest leverage, lowest risk.
+4. **The composed rows** (`toggleRow` 29 uses, `dropdownRow` 20, `sliderRow` 32, `createRow` 91).
+   🔑 The blocker is ONE thing: they all end in `createRow`, which both BUILDS the row and
+   REGISTERS it in Settings' search index. Building has to be split from registering. That is
+   the real architecture piece, and it goes last on purpose.
+5. **`_alert.scss` stayed in the shell** even though `alert-dialog.ts` is in `ui/lib/` — it is a
+   window-SCOPED block (`window.nidara-alert-dialog`), a different animal from the kit's global
+   layer, and no other bundle shows a dialog yet. Revisit when one does.
+
+🔑 **The rule that governs all five: a component enters the kit when its SECOND real consumer
+appears, and it enters migrating in the SAME change.** Never declared ahead. The proof is
+inside one commit, `69cce101`: the half that promoted `createRow`/`listGroup` and migrated
+every call site at once has 23 consumers today; the half that declared `.nidara-tile` and
+deferred the migration to "increments 2-3" was never applied and was deleted in #111.
+
+
 ### 58. ✅ CLOSED — `GlassCapsule` stopped owning what it should never have owned (2026-08-09)
 
 `ui/lib/glass-capsule.ts` extended `Gtk.Widget` and parented its child by hand

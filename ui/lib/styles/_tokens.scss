@@ -37,6 +37,31 @@ $fs-title-3:  17px;  // card / dialog titles
 $fs-title-2:  22px;  // section headers
 $fs-title-1:  28px;  // large titles (rare in shell UI)
 
+// ── The RELATIVE ramp (em) — same ratios, anchored to the toolkit base font ──
+// Moved here from the shell's `_base.scss` on 2026-08-10, where it was labelled
+// "Settings-only". **That label was already false in two places**: the kit's own
+// row typography uses it (`.nidara-list-title`, `.nidara-row-title`,
+// `.nidara-row-subtitle`, `.nidara-list-footer`) and so does the alert dialog,
+// which is its own toplevel window. It could not stay behind when the kit's sheet
+// moved.
+//
+// 🔑 The anchor is NOT a Settings-local font-size — it is `gtk-font-name`
+// (ThemeManager), which is display-wide. That is why the alert dialog keeps
+// scaling correctly as a separate window, and why these are safe wherever the
+// content is BODY COPY that should follow the user's interface font.
+//
+// The rule that has not changed: SHELL CHROME uses the fixed `$fs-*` px ramp.
+// A bar or dock label that reflows with the font picker breaks the layout it
+// sits in; a row of text in a window is supposed to grow. Ratios vs a 14px base.
+$fse-mini:     0.79em;
+$fse-caption:  0.86em;
+$fse-small:    0.93em;
+$fse-body:     1em;
+$fse-subtitle: 1.07em;
+$fse-title-3:  1.21em;
+$fse-title-2:  1.57em;
+$fse-title-1:  2em;
+
 // ── The DISPLAY register — deliberately NOT a rung of the ramp above ─────────
 // One consumer in the whole DE: the hero clock of the lockscreen and the
 // greeter. It is not "the ramp continued"; it is a different register, the same

@@ -910,7 +910,24 @@ outside every system that ships a lock screen (macOS 1:4.8, iOS 1:4.4, Win11 1:3
 **`ui/lib/styles/_tokens.scss` is now the mode-independent half of the system**, `@use`d by
 both `ui/shell/styles/_base.scss` (which `@forward`s it, so every `@use 'base' as *` keeps
 seeing the same names) and `ui/greeter/style.scss`. It holds the type ramp, the weights, the
-line heights, the spacing scale, the motion curves and the radius ladder.
+line heights, the spacing scale, the motion curves and the radius ladder — and since
+2026-08-10 the relative **`$fse-*` em ramp** too.
+
+⚠️ **`$fse-*` was labelled "Settings-only" and that was already false in two places**: the
+kit's own row typography wears it (`.nidara-list-title`, `.nidara-row-title`,
+`.nidara-row-subtitle`, `.nidara-list-footer`) and so does the alert dialog, which is its own
+toplevel window. The anchor is not a Settings-local font-size — it is `gtk-font-name`
+(ThemeManager), which is display-wide, which is exactly why the dialog keeps scaling right as
+a separate window. The rule that has not changed: **shell CHROME uses the fixed `$fs-*` px
+ramp**, because a bar or dock label that reflows with the font picker breaks the layout it
+sits in. Body copy in a window is supposed to grow.
+
+**Its sibling `ui/lib/styles/_mixins.scss` (2026-08-10) holds the mixins the KIT needs** —
+`nidara-reset`, `glass`, `material-card`, `nidara-row-states`, `nidara-tile-states` — for the
+same reason and with the same `@forward` from `_base.scss`. `material-control`,
+`material-popover` and the `material($level)` vibrancy ladder deliberately stayed in the
+shell: they describe full-window layer-shell surfaces, which has no meaning in a login
+screen.
 
 Three rules for extending it:
 
@@ -1143,7 +1160,8 @@ scaling), expose an explicit teardown (`dismantle()`) and require callers to inv
 All action buttons go through **`NidaraButton`** (`ui/lib/nidara-kit/button.ts`) — never
 `new Gtk.Button({ css_classes: ["nidara-btn", …] })` by hand, and never per-surface classes
 (`settings-row-action` was a dead class that left its button rendering as raw Adwaita). CSS
-lives once in `_components.scss` under `button.nidara-btn`.
+lives once under `button.nidara-btn` — in **`ui/lib/styles/_components.scss`** since
+2026-08-10, because `NidaraButton` is built in `ui/lib/` (see "The kit's stylesheet" below).
 
 Variants carry **intent**, applied consistently across pages (Network/Bluetooth were unified
 to this in 2026-06):
@@ -1885,9 +1903,33 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
 6. **No `transform: scale` or `transform: translate` on interactive widgets.** GTK respects them but they break hit-testing. Use `margin`, scale inside Cairo, or — for transient show/hide animations — a snapshot-time transform that ends at identity (see `ScaleRevealer` above). *(CSS transforms currently clean: 0 occurrences. Don't reintroduce them.)*
 7. **All SURFACE CSS wrapped in its window's selector** — never global unscoped. The exception is
    deliberate and narrow: `_base.scss` (tokens on `*`, which must inherit into every window and
-   popover) and `_components.scss` (the shared widget kit — `entry`, `.nidara-*` — used by all of
-   them) are the design system's GLOBAL layer, plus `_reset.scss`'s neutralization and any
-   `@keyframes` (not scopable in CSS at all). Everything else names a window. Both spellings are in
+   popover) and the TWO `_components.scss` (the shared widget kit — `entry`, `.nidara-*` — used
+   by all of them) are the design system's GLOBAL layer, plus `_reset.scss`'s neutralization and
+   any `@keyframes` (not scopable in CSS at all).
+
+   📄 **"The kit's stylesheet" — `_components.scss` exists twice since 2026-08-10.**
+   `ui/lib/styles/_components.scss` is the kit's own, written so more than one bundle can
+   compile it; `ui/shell/styles/_components.scss` is the half that is still the shell's. **One
+   mechanical test decides which, not a judgement call: a rule goes to `ui/lib/` iff the widget
+   that wears it is built in `ui/lib/`.** Grep the class there and everyone gets the same
+   answer. So `.nidara-tooltip` and `.nidara-circle-btn` did NOT move (their `common/Tooltip.ts`
+   and `common/IconButton.ts` are the shell's) while the whole `Gtk.DropDown` block did
+   (`scrolled.ts` exports `NidaraDropDown`). **A `nidara-*` class still in the shell's sheet is
+   not a leftover to sweep** — same legitimate mismatch as `nidara-media-*`: the PREFIX says who
+   owns the class, the SHEET says which bundles compile it. Elsewhere in this document, a bare
+   `_components.scss` means whichever half holds the rule being discussed.
+
+   ⚠️ **The greeter and the lockscreen do NOT import the kit's sheet yet, deliberately.**
+   Nothing in them wears a kit class, and the file carries BARE-ELEMENT selectors (`entry`,
+   `selection`, `dropdown > button`, `dropdown popover`) that match without a class and collide
+   with what those two already declare — measured: the kit gives every `entry` a
+   `border-radius`, and the greeter's password field has its CSS box deliberately OFF (painted
+   by `glass-capsule.ts`), so its focus ring would go pill → rounded rectangle. There is also a
+   TOKEN CONTRACT: the kit's rules read 23 `--nidara-*` custom properties and the greeter
+   defines 6. An undefined custom property does not warn — the declaration is simply dropped —
+   so importing without satisfying it fails SILENTLY, on two surfaces with no dev mode. The
+   migration that brings a real consumer is what earns the import, and it carries the contract
+   with it. Everything else names a window. Both spellings are in
    use because both are set in TSX — id **and** class, and they differ:
 
    | Window | Scope selector |

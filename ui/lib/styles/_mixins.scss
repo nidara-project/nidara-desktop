@@ -1,0 +1,114 @@
+// =============================================================================
+// NIDARA DESIGN SYSTEM — the mixins the KIT needs, shared by all bundles
+// =============================================================================
+//
+// Same reason as `_tokens.scss`, one layer up: `_components.scss` here is
+// compiled by more than the shell, and it cannot reach into
+// `ui/shell/styles/_base.scss` for the mixins it uses. These five came out of
+// there; `_base.scss` `@forward`s them, so every `@use 'base' as *` in the shell
+// keeps seeing them under the same names and the compiled sheet is unchanged.
+//
+// ⚠️ Only what the KIT uses is here. `material-control`, `material-popover` and
+// the `material($level)` vibrancy ladder stayed in the shell on purpose: they
+// describe full-window layer-shell surfaces (how much wallpaper bleeds through a
+// bar or an overlay), which is a shell concern with no meaning in a login screen.
+//
+// ⚠️ Nothing here may emit CSS at import time — a mixin emits only where it is
+// included, which is what keeps this file free to be imported by three bundles.
+// Comments are `//` (silent), never `/* */` (sass copies those into the output).
+//
+// ⚠️ These mixins spend the custom properties listed in `_components.scss`'s
+// token contract (`--nidara-surface-hover`, `--nidara-border`,
+// `--nidara-state-selected`, `--nidara-edge`…). A bundle that includes them
+// without defining those gets declarations that are silently dropped.
+
+@use 'tokens' as *;
+
+// Wipes the GTK/Adwaita defaults that we fight everywhere.
+// Use inside any scoped selector before declaring custom appearance.
+@mixin nidara-reset {
+    background: none;
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    outline: none;
+}
+
+// CSS-side glass appearance (blur is compositor-side via Hyprland layerrule).
+// $level: surface | raised | floating
+@mixin glass($level: surface) {
+    @if $level == surface {
+        background-color: var(--nidara-surface);
+        border: 1px solid var(--nidara-border);
+        border-radius: var(--nidara-radius-md);
+    } @else if $level == raised {
+        background-color: var(--nidara-surface-raised);
+        border: 1px solid var(--nidara-border);
+        border-radius: var(--nidara-radius-md);
+        box-shadow: var(--nidara-shadow-md);
+    } @else if $level == floating {
+        background-color: var(--nidara-bg);
+        border: var(--nidara-edge);
+        border-radius: var(--nidara-radius-lg);
+        box-shadow: var(--nidara-shadow-lg);
+    }
+}
+
+// Settings groups, sidebar: border + subtle frost. One of the material mixins —
+// pick a material, never hand-write background/border. (Its siblings stayed in
+// the shell; see the note at the top.)
+@mixin material-card {
+    background-color: var(--nidara-surface-back);
+    border: 1px solid var(--nidara-border);
+    border-radius: $nidara-radius-md;
+}
+
+// ── Interaction states for ANY row / list-item / menu-item ─────────────────────
+// THE single source of truth for hover/pressed/selected. Powers the universal
+// `.nidara-row` component (`nidara-tile-states` below shares the model, for tiles
+// on translucent panels — see the note there on which to use). Mode-aware:
+// hover/pressed use `--nidara-surface-hover/-active` (rgba(fg,…)) so they lighten
+// in dark / darken in light — always toward the mode's contrast, visible on ANY
+// background (a fixed dark deepen overlay vanished on a translucent panel over a
+// dark wallpaper). Works with `:selected` (GTK) and `.is-selected` (our widgets).
+// Accent enters ONLY for persistent selection.
+//
+// 🔑 `.is-selected` having no consumer of its own is its EXPECTED state, not dead
+// weight: it is the opt-in half for widgets we paint ourselves, since GTK's
+// `:selected` only ever appears on `GtkListBox` rows (settled in #110).
+@mixin nidara-row-states {
+    transition: background-color 0.12s ease;
+    &:hover                 { background-color: var(--nidara-surface-hover); }
+    &:active                { background-color: var(--nidara-surface-active); }
+    &:selected, &.is-selected { background-color: var(--nidara-state-selected); }
+}
+
+// ── Interaction states for floating ICON TILES over the wallpaper ──────────────
+// Use on bar/dock/app-grid widgets and CC icon tiles — anything that sits on a
+// TRANSLUCENT panel showing the wallpaper through it. A dark deepen overlay
+// (nidara-row-states) is nearly invisible there when the wallpaper is dark and
+// opacity is maxed. Instead RAISE a glass capsule: a mode-aware frost fill
+// (`--nidara-surface-hover` = rgba(fg,…) → lightens in dark / darkens in light,
+// always toward the mode's contrast) + a 1px inner edge drawn with an inset
+// box-shadow (no geometry shift, no GtkGizmo break) so the tile reads on ANY
+// wallpaper. Reserve this for icon tiles; text rows on dense material use
+// nidara-row-states (deepen) so the text never washes out. Accent = selection.
+//
+// 🔑 The MIXIN is the reusable unit here, not a class. `.nidara-tile` was deleted
+// in #111 after never once being applied: its four would-be consumers
+// (`.app-grid-button`, `.cc-split-icon-btn`, `.cc-detail-back-btn`,
+// `.bar-popover-icon-btn`) take three different radii and their own padding, so
+// packaging them needs size variants. Rows universalised cleanly because they
+// share one geometry; tiles do not.
+@mixin nidara-tile-states {
+    &:hover {
+        background-color: var(--nidara-surface-hover);
+        box-shadow: inset 0 0 0 1px var(--nidara-border);
+    }
+    &:active {
+        background-color: var(--nidara-surface-active);
+        box-shadow: inset 0 0 0 1px var(--nidara-border);
+    }
+    &:selected, &.is-selected { background-color: var(--nidara-state-selected); }
+}

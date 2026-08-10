@@ -35,7 +35,8 @@ These are non-negotiable. Violating them produces bugs that are hard to debug be
 2. **Never write unscoped global CSS** — a surface's CSS goes inside its window's selector
    (`#nidara-bar, .nidara-bar-window` / `#nidara-island …` / `#nidara-dock …` /
    `window.nidara-settings-window`). The design system's global layer is the sole exception:
-   `_base.scss` tokens, `_components.scss`'s shared kit, `_reset.scss`, `@keyframes`. Scope table and
+   `_base.scss` tokens, the TWO `_components.scss` (`ui/lib/styles/` = the kit's, shared with the
+   other bundles; `ui/shell/styles/` = the shell's half), `_reset.scss`, `@keyframes`. Scope table and
    the two traps in `references/design-system.md`.
 3. **Kill zombies before debugging.** A stuck terminal or "styles won't refresh" almost always means a zombie GJS is still drawing the dead UI. Run `killall gjs` before changing code in a loop.
 4. **`core/` never touches the UI.** All visibility changes flow through `Status.ts`. Widgets never flip each other directly.

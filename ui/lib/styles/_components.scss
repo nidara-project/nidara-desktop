@@ -1,0 +1,581 @@
+// =============================================================================
+// NIDARA KIT — the components' own stylesheet, shared by all bundles
+// =============================================================================
+//
+// `ui/lib/nidara-kit/` has been importable from any bundle for a long time; its
+// LOOK was not. Every rule below lived in `ui/shell/styles/_components.scss`,
+// which only the shell compiles, so a greeter that imported `NidaraButton` would
+// have rendered it with GTK's defaults: `.nidara-btn` appeared 16 times in the
+// shell's compiled sheet and 0 times in the greeter's. The kit's code was shared
+// and its appearance was not — that is what this file fixes.
+//
+// ── WHAT BELONGS HERE ───────────────────────────────────────────────────────
+// One mechanical test, not a judgement call: **a rule moves here iff the widget
+// that wears it is built in `ui/lib/`.** Grep the class in `ui/lib/` and the
+// answer is the same for everyone. It is why `.nidara-tooltip` and
+// `.nidara-circle-btn` did NOT come along despite the `nidara-` prefix —
+// `common/Tooltip.ts` and `common/IconButton.ts` are the shell's — and why the
+// bare-element halves of `entry, .nidara-input` and the whole `Gtk.DropDown`
+// block did: `alert-dialog.ts` builds a `Gtk.Entry` and `scrolled.ts` exports
+// `NidaraDropDown`.
+//
+// A `nidara-*` class still sitting in the shell's sheet is not a mistake, it is
+// the same legitimate mismatch documented for `nidara-media-*`: the PREFIX says
+// who owns the class, the SHEET says which bundles compile it. They converge as
+// components move, not before.
+//
+// ── THIS IS THE GLOBAL LAYER, ON PURPOSE ────────────────────────────────────
+// Commandment 2 (all surface CSS scoped to its window) does not apply: the kit
+// is the design system's global layer, exactly like `_base` and `_reset`. A kit
+// component is worn by whatever window imports it, so scoping it to one would
+// be the bug rather than the fix.
+//
+// ⚠️ WHO IMPORTS IT TODAY: the shell, and only the shell. The greeter and the
+// lockscreen do NOT yet, deliberately — nothing in them wears a kit class, and
+// the rules below include BARE-ELEMENT selectors (`entry`, `selection`,
+// `dropdown > button`, `dropdown popover`) that match without a class and would
+// collide with the equivalents those two already declare. The concrete one
+// measured 2026-08-10: this file gives every `entry` a `border-radius`, and the
+// greeter's password field has its CSS box deliberately OFF (painted by
+// `glass-capsule.ts`), so its focus ring would go from pill to rounded
+// rectangle. Two of those three collisions are `Gtk.DropDown`, which is exactly
+// what the greeter's migration to `NidaraDropDown` replaces — so that migration
+// is what earns the import, and it brings the token contract below with it.
+//
+// ⚠️ THE TOKEN CONTRACT. These rules read 23 `--nidara-*` custom properties and
+// the greeter today defines 6 of them. The 17 missing are the surface ladder
+// (`--nidara-surface{,-back,-hover,-active,-raised,-strong}`), `--nidara-border`,
+// `--nidara-danger{,-rgb}`, `--nidara-accent-fg`, `--nidara-shadow-{sm,md}`,
+// `--nidara-thumb`, `--nidara-popover-{bg,border}`, plus `--nidara-state-selected`
+// and `--nidara-edge` which the mixins need. An undefined custom property does
+// not warn — the declaration is simply dropped — so importing this file without
+// satisfying the contract fails SILENTLY, on two surfaces that have no dev mode
+// (`greeter/lock` build against a fixed /usr/share path). Satisfy it first.
+
+@use 'tokens' as *;
+@use 'mixins' as *;
+
+/* --- Base text input -------------------------------------------------------
+   Every plain Gtk.Entry (and anything with .nidara-input) gets the nidara
+   look out of the box — no per-widget CSS, no GTK default-theme blue. This is
+   the single place text fields are themed. Custom inputs (the settings search
+   box, Prism) are Gtk.Text under their own class and override this. Accent
+   appears ONLY on focus + text selection, per the design system. */
+entry,
+.nidara-input {
+    background: var(--nidara-surface-back);
+    // 2px border kept at constant width (transparent at rest → accent on focus)
+    // with background-clip: padding-box so the visual thickness never changes the
+    // real geometry — no layout shift, and no thin 1px line that reads badly on the
+    // rounded corners / lighter backgrounds.
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: $nidara-radius-sm;
+    padding: 6px 10px;
+    min-height: 0;
+    color: var(--nidara-text);
+    caret-color: var(--nidara-accent);
+    box-shadow: none;
+    outline: none;
+    transition: border-color 0.15s ease;
+
+    &:focus, &:focus-within {
+        border-color: var(--nidara-accent);
+        box-shadow: none;
+        outline: none;
+    }
+    &:disabled { opacity: 0.5; }
+
+    > text {
+        background: transparent;
+        color: var(--nidara-text);
+        caret-color: var(--nidara-accent);
+    }
+}
+
+/* Selected text — accent tint everywhere (entries and labels alike). */
+selection {
+    background-color: rgba(var(--nidara-accent-rgb), 0.30);
+    color: var(--nidara-text);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   UNIVERSAL INTERACTIVE COMPONENTS
+   Reusable building blocks for ANY surface (settings, CC, bar, future windows).
+   Add these classes from TSX (or via the lib/nidara-kit factories) — never
+   reinvent a per-surface row/list/tile. Only geometry lives here; the interaction
+   model is the single source in _base.scss (nidara-row-states / -tile-states,
+   both mode-aware so the hover is visible on any wallpaper). See
+   feedback_universal_components in memory.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Clickable text row in a list/menu (settings rows, CC rows, menu items). */
+.nidara-row {
+    @include nidara-reset;
+    // `nidara-reset` clears background/border/shadow/outline but NOT padding, and
+    // Adwaita gives every `list > row` 2px of it. That 2px is invisible on its own
+    // and shifts the row's whole text column: measured 2026-08-03, a row title sat
+    // 18px inside a row whose content margin is 16, which is why the group header
+    // above the card could never be lined up with it by any round number.
+    padding: 0;
+    border-radius: $nidara-radius-sm;
+    margin: 1px 0;
+    @include nidara-row-states;
+}
+
+/* The kit row's DECLARED height — 48 one text line, 72 two. Applied by NidaraRow /
+   NidaraStackedRow only (see rowHeightClass in nidara-kit/row.ts for why it is NOT on
+   `.nidara-row` itself: dense bar/CC panel rows wear that class with their own tighter
+   padding). `min-height`, not a size request — the row's own 1px margin would eat it.
+   Both are floors: a wrapping subtitle or a preview row grows past them. */
+.nidara-row--single { min-height: 48px; }
+.nidara-row--double { min-height: 72px; }
+
+// (`.nidara-tile` deleted 2026-08-10. It was declared in `69cce101 refactor(ui):
+// universal CrystalRow/CrystalList` as a placeholder for that plan's Increments
+// 2-3 — its own message says so — and the tile migration never happened while
+// every sibling in the plan shipped. `git log -S` over the whole history, under
+// this name and the pre-rename `.crystal-tile`, finds NO commit that ever
+// applied it from code: it was never used, as opposed to used and then dropped.
+//
+// The reusable unit was always the `nidara-tile-states` MIXIN, which stays and
+// is adopted by `.app-grid-button`, `.cc-split-icon-btn`, `.cc-detail-back-btn`
+// and `.bar-popover-icon-btn`. What could not be shared is the packaging: those
+// four take radius `md` / `sm` / `sm` / `xs` and their own padding, so absorbing
+// them would need size variants. Rows universalised cleanly because they share
+// one geometry; tiles do not. Bring the class back WITH variants if that
+// migration is ever attempted — do not restore it bare.)
+
+/* Title + label typography for the list/row components. */
+.nidara-list-title {
+    font-size: $fse-caption;
+    font-weight: $fw-bold;
+    color: var(--nidara-text-dim);
+    letter-spacing: 0.08em;
+    margin-left: 4px;
+    // The ONLY gap between a section header and its card (NidaraList box is
+    // spacing:0). Deliberately tight so the header binds to the card below it;
+    // the larger group↔group gap is the page spacing (settings-page, 24px).
+    margin-bottom: 8px;
+}
+// Group footer: the scope a title can't carry (who a group applies to). Same left
+// edge as .nidara-list-title, mirroring its margin-bottom above the card so the
+// footer binds to the card it explains rather than to the next group's header.
+.nidara-list-footer {
+    font-size: $fse-caption;
+    color: var(--nidara-text-dim);
+    margin-left: 4px;
+    margin-top: 8px;
+}
+.nidara-row-title {
+    font-size: $fse-small;
+    font-weight: $fw-medium;
+    color: var(--nidara-text);
+}
+.nidara-row-subtitle {
+    font-size: $fse-small;
+    color: var(--nidara-text-dim);
+}
+
+/* Boxed list container — dense frosted card holding .nidara-row children. */
+.nidara-list {
+    @include material-card;
+    /* ⚠️ Load-bearing: a row sits 5px inside this card (1px border + this 3px + 1px row
+       margin), and radius-sm 10 is DERIVED from that inset against the card's radius-md
+       16. Change this 3 and `sm` has to be re-derived in ui/lib/tokens.ts. */
+    padding: 3px;
+    box-shadow: none;
+}
+
+/* Navigation sidebar list (icon+label rows, single-select → accent). */
+.nidara-sidebar {
+    background: transparent;
+    // The row-fill halo, same as every other list of rows (rowInsetFor in tokens.ts).
+    // It used to be 12 on the sides to hold the NidaraScrolled lane; the lane does not
+    // need that — what has to clear the lane is a row's trailing CONTROL, and these rows
+    // have none (icon + label, both leading). The pill floats over the fill's last pixels
+    // the way every overlay scrollbar does. `window.ts` still passes reserveLane: false,
+    // so the bar stays inside this box instead of widening the capsule.
+    padding: 6px;
+
+    > row {
+        @include nidara-reset;
+        border-radius: $nidara-radius-sm;
+        margin: 1px 0;
+        min-height: 36px;
+        @include nidara-row-states;
+
+        // The row content (icon+label) tints with the row state: dim at rest,
+        // full text colour on hover/selected.
+        &:hover, &:selected, &:active {
+            .nidara-sidebar-item { color: var(--nidara-text); }
+        }
+    }
+
+    // Thematic divider: a thin title-less line between groups.
+    // Override the row interaction model — it must be inert.
+    > row.sidebar-divider {
+        min-height: 0;
+        // Spans exactly the row width now that the list carries the 12px inset — a
+        // separator that stops short of the rows it separates reads as a third margin.
+        margin: $space-2 0;
+        padding: 0;
+        background: transparent;
+        box-shadow: none;
+        &:hover, &:selected, &:active { background: transparent; box-shadow: none; }
+
+        .sidebar-divider-line {
+            min-height: 1px;
+            background: var(--nidara-border);
+        }
+    }
+}
+
+/* Sidebar row content — a single CSS color drives both the label and the
+   symbolic icon tint (no hardcoded opacity on the icon widget). */
+.nidara-sidebar-item {
+    color: var(--nidara-text-dim);
+    transition: color 0.15s ease;
+}
+
+/* ── Window shell (NidaraWindow) ──────────────────────────────────────────────
+   Chrome for a settings-style window. The sidebar capsule / collapsed popover /
+   icon-btn live with the rest of the window CSS for now. */
+.nidara-window-glass {
+    @include glass(floating);
+}
+.nidara-window-header {
+    background: transparent;
+    border-bottom: 1px solid var(--nidara-border);
+    // padding-right 22 makes the headerEnd close button's gap to the window's
+    // right edge equal its gap to the top edge (24px measured, incl. glass
+    // chrome): the 22px circle ends up centred on the corner diagonal.
+    padding: 0 22px 8px 8px;
+    min-height: 50px;
+}
+.nidara-window-tools {
+    // Header start group: sidebar toggle + nav capsule + title/breadcrumb.
+    min-height: 50px;
+    padding: 0 6px;
+}
+// .nidara-window-sidebar-scroll has no rules on purpose: the sidebar is a
+// NidaraScrolled, whose bar lives on the wrapping overlay, so its gap to the search
+// slot is set on that overlay in window.ts — CSS here would move the view out from
+// under its own scroll lane.
+
+/* NidaraScrolled's bar (lib/nidara-kit/scrolled.ts). A single DrawingArea spanning
+   the full height: the whole lane is the hit area (constant width — that is the fix
+   for tech-debt #15, since GTK's slider grew toward whatever the pointer approached
+   and ate the ✕ next to it), and the thin pill is PAINTED inside it. It is painted
+   rather than laid out because a scroll position is not a layout property: moving a
+   box by margin made the drag lag behind the pointer and made the view re-allocate
+   on every step. `color` here is the pill's fill, read back in Cairo via
+   get_style_context().get_color() — nidara-kit is self-contained and cannot import
+   ThemeManager, so this is how it stays token-driven.
+   The lane WIDTH must never become state-dependent: growing on hover IS the bug. */
+.nidara-scroll-bar {
+    background: transparent;
+    color: var(--nidara-surface-raised);
+    transition: opacity 0.25s ease, color 0.15s ease;
+
+    &:hover,
+    &.dragging { color: var(--nidara-text-dim); }
+}
+
+// =============================================================================
+// NIDARA BUTTON SYSTEM
+// =============================================================================
+// Single source of truth for all NidaraButton variants.
+// Use the NidaraButton() function from nidara-kit — never Adwaita classes
+// (suggested-action, destructive-action, pill, flat) directly in page code.
+//
+// Variants (nidara-btn--<variant>):
+//   secondary  default  surface + border
+//   primary             accent fill
+//   danger              danger tint + danger text/border
+//   ghost               transparent, dim text
+//
+// Shape modifiers:
+//   nidara-btn--pill   fully rounded, slightly wider padding
+//   nidara-btn--icon   square-ish icon-only footprint
+//
+// Size axis (orthogonal to variant AND to the shape modifiers):
+//   (none)             default   ~32px tall, $fs-small
+//   nidara-btn--compact          ~24px tall, $fs-caption — one step down the ramp,
+//                                for dense rows where a default button would
+//                                out-weigh the row's own text.
+
+button.nidara-btn {
+    // Wipe Adwaita/GTK defaults completely
+    background-image: none;
+    box-shadow: none;
+    outline: none;
+
+    // Geometry
+    padding: 5px 14px;
+    // Shared content min-height so EVERY nidara-btn is the same height regardless of
+    // content — a labelled button (13px text, ~18px line) and an icon-only one (16px
+    // glyph) end up identical, so icon buttons (details/forget) don't render shorter
+    // than the Connect button next to them.
+    min-height: 20px;
+    border-radius: $nidara-radius-sm;
+    font-size: $fs-small;
+    font-weight: $fw-medium;
+    transition: background 0.15s ease;
+
+    // ── secondary (default) ───────────────────────────────────────────────────
+    background-color: var(--nidara-surface);
+    border: 1px solid var(--nidara-border);
+    color: var(--nidara-text);
+
+    &:hover   { background-color: var(--nidara-surface-hover);   background-image: none; box-shadow: none; }
+    &:active  { background-color: var(--nidara-surface-active); background-image: none; box-shadow: none; }
+    &:disabled { opacity: 0.45; }
+    &:focus-visible { @include nidara-focus-ring; }
+
+    // ── primary ───────────────────────────────────────────────────────────────
+    &.nidara-btn--primary {
+        background-color: var(--nidara-accent);
+        border-color: transparent;
+        color: var(--nidara-accent-fg);
+
+        &:hover  { background-color: color-mix(in srgb, var(--nidara-accent) 85%, white 15%); background-image: none; box-shadow: none; }
+        &:active { background-color: color-mix(in srgb, var(--nidara-accent) 70%, black 30%); background-image: none; }
+        &:focus-visible { outline-color: var(--nidara-accent); }
+    }
+
+    // ── danger ────────────────────────────────────────────────────────────────
+    &.nidara-btn--danger {
+        background-color: rgba(var(--nidara-danger-rgb), 0.10);
+        border-color:     rgba(var(--nidara-danger-rgb), 0.25);
+        color: var(--nidara-danger);
+
+        &:hover  { background-color: rgba(var(--nidara-danger-rgb), 0.20); background-image: none; box-shadow: none; }
+        &:active { background-color: rgba(var(--nidara-danger-rgb), 0.30); background-image: none; }
+        &:focus-visible { outline-color: var(--nidara-danger); }
+    }
+
+    // ── ghost ─────────────────────────────────────────────────────────────────
+    &.nidara-btn--ghost {
+        background-color: transparent;
+        border-color: transparent;
+        color: var(--nidara-text-dim);
+
+        &:hover  { background-color: var(--nidara-surface-hover); background-image: none; box-shadow: none; color: var(--nidara-text); }
+        &:active { background-color: var(--nidara-surface-active); background-image: none; }
+    }
+
+    // ── pill shape modifier ───────────────────────────────────────────────────
+    &.nidara-btn--pill {
+        border-radius: $nidara-radius-pill;
+        padding: 5px 18px;
+    }
+
+    // ── icon-only modifier ────────────────────────────────────────────────────
+    // Compact, uniform square-ish footprint so an icon button matches the height
+    // of a labelled one in a cluster (e.g. details/forget next to Connect).
+    // Defined after --pill so its tighter horizontal padding wins.
+    &.nidara-btn--icon {
+        padding: 5px 8px;
+        min-width: 0;
+    }
+
+    // ── compact size modifier ─────────────────────────────────────────────────
+    // One step down the ramp: caption text, tighter box (~24px tall vs ~32px).
+    // Declared LAST on purpose — it is a size, not a shape, so it must win the
+    // padding fight against --pill/--icon while leaving their border-radius and
+    // min-width alone. Keep it that way if you add modifiers below.
+    &.nidara-btn--compact {
+        font-size: $fs-caption;
+        min-height: 16px;
+        padding: 3px 10px;
+
+        &.nidara-btn--pill { padding: 3px 12px; }
+        &.nidara-btn--icon { padding: 3px 6px; }
+    }
+}
+
+// ── Gtk.DropDown ─────────────────────────────────────────────────────────────
+// GTK4 native dropdown — auto-positions above/below available space, and its popover
+// is a real Wayland surface, so the compositor's popup blur frosts it. The in-window
+// overlay list this replaced could do neither; it was deleted with its manager.
+
+// Trigger button
+// Trigger button styled like the base text input (.nidara-input): surface-back
+// fill + constant 2px border (transparent at rest → accent on focus, via
+// background-clip: padding-box so there's no jump).
+dropdown > button {
+    @include nidara-reset;
+    background: var(--nidara-surface-back);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: $nidara-radius-sm;
+    // Match the NidaraButton box height: a button is 5px padding + 1px border;
+    // this trigger carries a 2px border (input look), so 4px padding lands at the
+    // same outer height instead of reading 2px shorter and cramped. Horizontal
+    // 14px gives the same breathing room as a secondary button.
+    padding: 4px 14px;
+    // Same 20px content floor as button.nidara-btn, for the same reason: without it
+    // the box is whatever the text line happens to measure, and it came out 31px
+    // against the button's 32 — measured live, `queryUI dropdown` 2026-08-03. The
+    // padding above was already chosen to match the button; this is the other half.
+    min-height: 20px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+    // Same text as NidaraButton (size + weight). Set on the button — NOT the inner
+    // label — so the Settings-only `$fse-*` em re-anchor (in _settings.scss, which
+    // targets `dropdown > button`) is inherited by the label. A font-size on the
+    // label itself would out-specify that override and pin the text to fixed px.
+    font-size: $fs-small;
+    font-weight: $fw-medium;
+
+    // GTK4 CSS has no `spacing` property (that was GTK3-only).
+    // Add a left margin on the label so icon and label have a gap.
+    > box > label { margin-left: $space-2; }
+
+    label {
+        color: var(--nidara-text);
+    }
+    image {
+        color: var(--nidara-text-dim);
+    }
+
+    &:hover  { background-color: var(--nidara-surface-hover); background-image: none; box-shadow: none; }
+    &:active { background-color: var(--nidara-surface-active); background-image: none; }
+    // Accent only on KEYBOARD focus — :focus alone flashes the accent border on
+    // every mouse click and when the popover closes (focus returns to the button).
+    &:focus-visible { border-color: var(--nidara-accent); box-shadow: none; outline: none; }
+    &:disabled { opacity: 0.45; }
+}
+
+// Popover list (auto-flips above when near bottom of screen).
+// `dropdown popover` is REQUIRED: GTK4 puts the `.combo` class on the dropdown's
+// button but NOT on its popover, so `popover.combo` alone never matched it and the
+// list fell back to GTK4's opaque default popover. Match it structurally instead.
+popover.combo,
+dropdown popover {
+    @include nidara-reset;
+
+    // --nidara-popover-bg now shares the WINDOW tone (NidaraTheme: popoverBg=baseBg)
+    // and floors its alpha so compositor blur applies (popups_ignorealpha=0.30) — a
+    // frosted glass that follows the opacity slider down to that floor, instead of a
+    // lighter always-opaque block. (`dropdown popover` is REQUIRED: GTK4 puts `.combo`
+    // on the dropdown's button but NOT its popover, so popover.combo never matched.)
+    > contents {
+        background-color: var(--nidara-popover-bg, rgba(36, 36, 36, 0.85));
+        border: 1px solid var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
+        border-radius: $nidara-radius-md;
+        // ⚠️ margin 0 + no shadow, TOGETHER. GTK gives `popover > contents` a ~17px margin
+        // per side purely as room for its own drop shadow to render unclipped, and the
+        // popup SURFACE is sized to include it — measured live 2026-08-03 with `queryUI`:
+        // the list sat 41px inside the popover against the 7 this stylesheet accounts for,
+        // and the whole thing read as "this popover has more padding" through four rounds
+        // of chasing the wrong number. `.nidara-sidebar-popup` in _settings.scss hit this
+        // first and fixed it the same way; keep the two in step. The definition here is
+        // the compositor's blur plus the 1px border, not a drop shadow.
+        margin: 0;
+        box-shadow: none;
+        // NOTHING here. Padding on this box sits OUTSIDE the scroll: it pushes the viewport
+        // in, and the scroll bar rides the viewport's trailing edge, so the pill ended up
+        // 10px from the card wall (6 + EDGE_CLEAR) against 4 on every flush surface. The
+        // shell rule is that a viewport reaches its own visible inner edge.
+        // The whole inset lives on the LIST below, all four sides from ONE declaration.
+        // ⚠️ The "7px at the sides, 13 at the top" this file used to blame on splitting
+        // the inset was a stale-stylesheet reading: 13 = 1 border + 6 of card padding
+        // + 6 of list margin, i.e. BOTH declarations live at once, which is what a
+        // half-recompiled style.css had. Reproduced exactly offscreen
+        // (`scripts/dev/gtk-probe.js`, EXTRA_CSS='… > contents { padding: 6px 0 }'),
+        // and with this `0` the same probe reads 7 left and 7 top. Either declaration
+        // ALONE is symmetric; it is having both that is not.
+        padding: 0;
+        // overflow: hidden not supported in GTK4 CSS — clipping is handled by border-radius
+    }
+
+    > arrow {
+        background-color: var(--nidara-popover-bg, rgba(36, 36, 36, 0.85));
+        border-color: var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
+    }
+
+    scrolledwindow { @include nidara-reset; }
+    viewport       { @include nidara-reset; }
+
+    listview {
+        @include nidara-reset;
+        // The row-fill halo — SIDES ONLY, and that asymmetry is the point.
+        //
+        // Horizontally it is the usual two constraints in one number: (1) CONCENTRIC —
+        // a radius-md corner holding radius-sm rows wants 16 − 10 = 6 (`rowInsetFor` in
+        // tokens.ts); (2) ALIGNMENT AXIS — the list is the trigger OPENED, so an option
+        // sits on the same left edge as the value it replaces: 1 (border) + 6 + the row's
+        // 9 = the trigger's 16 (2px border + 14 padding).
+        //
+        // 🔑 Vertically there is NO inset, because on a natively-scrollable list a
+        // vertical inset is not air — it is VIEWPORT. `GtkListView` is a `GtkScrollable`,
+        // so the ScrolledWindow hands it the whole card and it scrolls inside its own
+        // allocation: 6px of margin (or of padding — measured, they behave identically)
+        // takes the page size from 400 to 388 and the content is then CUT 6px inside the
+        // card instead of at its edge. A dead band, and the user read it as the top and
+        // bottom being more separated than the sides — which is exactly what it is.
+        // Everywhere else in the shell a list's vertical padding scrolls away with the
+        // content, because those lists sit in a `GtkViewport`; this one cannot (see
+        // NidaraDropDown for why the viewport is not an option here), so it gives up the
+        // air rather than clip at an inset. Measured with `scripts/dev/gtk-probe.js`:
+        // page_size 400 of 400.
+        //
+        // ⚠️ `nidara-reset` clears background/border/shadow/outline — NOT margin, and not
+        // padding. GTK's own theme ships `dropdown popover listview { margin: 8px }`
+        // (verified in Default-dark.css, extracted from libgtk's gresource) — all four
+        // sides, dead band included — so this line is also what stops a stranger's number
+        // from deciding the axis.
+        margin: 0 6px;
+
+        // GTK's own item node carries NOTHING: no padding, no fill, no radius. The fill
+        // lives on `.nidara-dropdown-item`, a box `NidaraDropDown` hands the factory,
+        // which hexpands into it — the same shape as every other list in the shell.
+        // ⚠️ The reason first written here — that GTK's item box is inset inside the list
+        // by 6/24 and is always 30px narrower — does NOT reproduce. Offscreen, with GTK's
+        // factory AND with ours, the item is exactly the ListView's content rect
+        // (`FACTORY=gtk scripts/dev/gtk-probe.js`). What the swap does buy is real and
+        // measured: GTK's default factory puts a CHECKMARK in every item (18px icon +
+        // 4 spacing) and a fill of ours cannot sit on a node that also carries that.
+        > row {
+            @include nidara-reset;
+            padding: 0;
+            margin: 0;
+            min-height: 0;
+            color: var(--nidara-text);
+            font-size: $fs-small;
+        }
+
+        // The row we own. 9, not 10, on the horizontal: it is the second term of the
+        // alignment axis above (1 + 6 + 9 = the trigger's 16).
+        .nidara-dropdown-item {
+            border-radius: $nidara-radius-sm;
+            padding: 6px 9px;
+            @include nidara-row-states;
+        }
+
+        // GTK highlights the pointed item via :selected on ITS node (hover-select), and
+        // the trigger already shows the current value — so deepen it like a hover instead
+        // of drawing the accent (accent is for PERSISTENT selection).
+        > row:selected .nidara-dropdown-item,
+        > row:hover .nidara-dropdown-item {
+            background-color: var(--nidara-surface-hover);
+        }
+        > row:active .nidara-dropdown-item {
+            background-color: var(--nidara-surface-active);
+        }
+
+        // ONE focus ring, on the box we own. Tabbing through the list drew TWO concentric
+        // accent rings (user-caught 2026-08-03) — GTK's item node and the box inside it
+        // each took one, and the gap between them is a direct picture of the inset this
+        // whole hunt was about. `nidara-reset` above kills the outer one; this puts the
+        // survivor on the same rectangle as the hover fill, negative offset so it sits
+        // INSIDE the row instead of bleeding into its neighbour.
+        > row:focus-visible {
+            outline: none;
+            box-shadow: none;
+
+            .nidara-dropdown-item { @include nidara-focus-ring(-2px); }
+        }
+    }
+}

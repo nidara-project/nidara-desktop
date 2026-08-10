@@ -12,6 +12,12 @@
 // NidaraTheme.ts rewrites at runtime per mode, and the Settings-only em ramp.
 @forward '../../lib/styles/tokens';
 @use '../../lib/styles/tokens' as *;
+// The mixins the KIT needs moved out with its stylesheet (2026-08-10) — they are
+// compiled by more than the shell now. Forwarded so `@use 'base' as *` keeps
+// seeing `nidara-reset`, `glass`, `material-card`, `nidara-row-states` and
+// `nidara-tile-states` under the same names. What stayed below is shell-only.
+@forward '../../lib/styles/mixins';
+@use '../../lib/styles/mixins' as *;
 
 * {
     /* --- Brand Colors (Dynamic) --- */
@@ -97,62 +103,25 @@ $nidara-text-dim: var(--nidara-text-dim);
 /* ($nidara-radius-* and the whole $fs-/$fw-/$lh-/$space-/motion set are
    forwarded from ui/lib/styles/_tokens.scss — same names, same values.) */
 
-/* Settings-only RELATIVE ramp (em). Same ratios as $fs-* but anchored to
-   the toolkit base font, so the Settings font-SIZE picker scales the whole
-   Settings window uniformly. Use these in _settings.scss; the chrome uses the
-   fixed $fs-* px ramp (chrome must NOT reflow — fixed dimensions). Ratios vs 14px base. */
-$fse-mini:     0.79em;
-$fse-caption:  0.86em;
-$fse-small:    0.93em;
-$fse-body:     1em;
-$fse-subtitle: 1.07em;
-$fse-title-3:  1.21em;
-$fse-title-2:  1.57em;
-$fse-title-1:  2em;
+/* (The relative $fse-* em ramp moved to ui/lib/styles/_tokens.scss on
+   2026-08-10 — same names, same values, forwarded above. It was labelled
+   "Settings-only" and was not: the kit's row typography and the alert dialog
+   both use it, and the kit's sheet is compiled by more than the shell now.) */
 
 /* ==========================================================================
    MIXINS
    ========================================================================== */
 
-// Wipes the GTK/Adwaita defaults that we fight everywhere.
-// Use inside any scoped selector before declaring custom appearance.
-@mixin nidara-reset {
-    background: none;
-    background-color: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
-    outline: none;
-}
-
-// CSS-side glass appearance (blur is compositor-side via Hyprland layerrule).
-// $level: surface | raised | floating
-@mixin glass($level: surface) {
-    @if $level == surface {
-        background-color: var(--nidara-surface);
-        border: 1px solid var(--nidara-border);
-        border-radius: var(--nidara-radius-md);
-    } @else if $level == raised {
-        background-color: var(--nidara-surface-raised);
-        border: 1px solid var(--nidara-border);
-        border-radius: var(--nidara-radius-md);
-        box-shadow: var(--nidara-shadow-md);
-    } @else if $level == floating {
-        background-color: var(--nidara-bg);
-        border: var(--nidara-edge);
-        border-radius: var(--nidara-radius-lg);
-        box-shadow: var(--nidara-shadow-lg);
-    }
-}
+// ⚠️ `nidara-reset`, `glass`, `material-card`, `nidara-row-states` and
+// `nidara-tile-states` are NOT here anymore — they moved to
+// `ui/lib/styles/_mixins.scss` with the kit's stylesheet on 2026-08-10 and are
+// @forwarded at the top of this file, so `@use 'base' as *` still resolves them.
+// What is left below is shell-only: the vibrancy/material vocabulary of
+// full-window layer-shell surfaces, which has no meaning in a login screen.
 
 // ── Material mixins — the surface system (one per level; NO @if — a parametric
 //    @mixin material($level) silently mis-emitted branches here). Pick a material;
 //    never hand-write background/border. Glass = thin border + subtle frost. ──────
-@mixin material-card {            // settings groups, sidebar: border + subtle frost
-    background-color: var(--nidara-surface-back);
-    border: 1px solid var(--nidara-border);
-    border-radius: $nidara-radius-md;
-}
 @mixin material-control {         // inputs / dropdown triggers (accent on focus)
     background: var(--nidara-surface-back);
     background-clip: padding-box;
@@ -166,47 +135,6 @@ $fse-title-1:  2em;
     box-shadow: var(--nidara-shadow-popover);
 }
 
-// ── Interaction states for ANY row / list-item / menu-item ─────────────────────
-// THE single source of truth for hover/pressed/selected. Powers the universal
-// `.nidara-row` component (`nidara-tile-states` below shares the model, for tiles
-// on translucent panels — see the note there on which to use). Mode-aware:
-// hover/pressed use `--nidara-surface-hover/-active` (rgba(fg,…)) so they lighten
-// in dark / darken in light — always toward the mode's contrast, visible on ANY
-// background (a fixed dark deepen overlay vanished on a translucent panel over a
-// dark wallpaper). Works with `:selected` (GTK) and `.is-selected` (our widgets).
-// Accent enters ONLY for persistent selection.
-@mixin nidara-row-states {
-    transition: background-color 0.12s ease;
-    &:hover                 { background-color: var(--nidara-surface-hover); }
-    &:active                { background-color: var(--nidara-surface-active); }
-    &:selected, &.is-selected { background-color: var(--nidara-state-selected); }
-}
-
-// ── Interaction states for floating ICON TILES over the wallpaper ──────────────
-// Use on bar/dock/app-grid widgets and CC icon tiles — anything that sits on a
-// TRANSLUCENT panel showing the wallpaper through it. A dark deepen overlay
-// (nidara-row-states) is nearly invisible there when the wallpaper is dark and
-// opacity is maxed. Instead RAISE a glass capsule: a mode-aware frost fill
-// (`--nidara-surface-hover` = rgba(fg,…) → lightens in dark / darkens in light,
-// always toward the mode's contrast) + a 1px inner edge drawn with an inset
-// box-shadow (no geometry shift, no GtkGizmo break) so the tile reads on ANY
-// wallpaper. Reserve this for icon tiles; text rows on dense material use
-// nidara-row-states (deepen) so the text never washes out. Accent = selection.
-@mixin nidara-tile-states {
-    &:hover {
-        background-color: var(--nidara-surface-hover);
-        box-shadow: inset 0 0 0 1px var(--nidara-border);
-    }
-    &:active {
-        background-color: var(--nidara-surface-active);
-        box-shadow: inset 0 0 0 1px var(--nidara-border);
-    }
-    &:selected, &.is-selected { background-color: var(--nidara-state-selected); }
-}
-
-// Keyboard focus ring. Apply on :focus-visible (keyboard nav only,
-// not mouse click). Single source of truth — don't hand-roll outlines.
-// $offset: 2px outset (default) or negative for inset cases (rows inside lists).
 // Vibrancy ladder for full-window layer-shell surfaces (bar/dock/overlays).
 // The compositor blur does the heavy lifting; this only sets how much of the
 // wallpaper bleeds through. Rule: lower in z-stack → thicker; higher → thinner.
