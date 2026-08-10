@@ -2191,8 +2191,19 @@ regardless; only the movement is lost. Verified by killing the tick callback: th
 arrives.
 
 `NIDARA_ENTRANCE_TRACE=1 nidara-lock` prints the interpolation — distinct positions mean it
-ran, one value repeated means it snapped. Keep it: this animation has been diagnosed twice
-from the log alone.
+ran, one value repeated means it snapped. Keep it: this animation was diagnosed three times
+from the log alone, and it is what confirmed the fix on the real surface:
+
+```
++0ms    hero y=93.0 op=0.00 margin=93     card y=614.0 op=0.00 margin=40
++60ms   hero y=87.0 op=0.27               card y=608.0 op=0.27 margin=29
++150ms  hero y=78.0 op=0.73               card y=599.0 op=0.73 margin=11
++450ms  hero y=72.0 op=1.00               card y=594.0 op=1.00 margin=0
+```
+
+21px and 20px of travel, identical opacity at every sample — in lockstep on hardware, not
+just in the compiled sheet. The card's margin running 40→29→11→2→0 against 20px of movement is
+the centring halving, visible in one line.
 
 ⚠️ **DO NOT restore `opacity`/`transition` rules for `.greeter-card` or `.greeter-hero` in the
 stylesheet.** They would fight the JS that owns both properties, and on the one surface that
