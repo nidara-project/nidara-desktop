@@ -2192,13 +2192,30 @@ the identical `450ms cubic-bezier(0.2, 0, 0, 1)`, and each block reveals itself 
 not: 16ms is wall clock, and the two only coincide when the widget is already being drawn.
 
 On the LOCKSCREEN they are not the same thing, and the user reported it from a real lock as
-"no animation, or it arrives late, or there is none". The log gives the window: under
-`ext-session-lock-v1` the surface is presented at T, and the compositor acks the lock ~60ms
-later — measured, `[Lock] Window assigned` .138 → `Session locked successfully` .199. The 16ms
-timeout fired squarely inside that blind stretch, so the class landed before the `opacity: 0`
-state had ever reached a frame. `Gtk.Widget.add_tick_callback` is the honest version: it only
-runs when frames are actually being produced, and the class goes on the SECOND tick, so the
-FROM state has been painted once.
+"no animation, or it arrives late, or there is none".
+
+🔑 **MEASURED ON REAL HARDWARE, and this is the number to remember: under
+`ext-session-lock-v1` the surface gets NO FRAMES AT ALL for ~60ms after `map`.** One lock's
+log, end to end:
+
+```
+.622  [Lock] Window assigned to monitor      ← map fires here (t0)
+.682  [entrance] … via frame +61ms           ← the FIRST frame
+.685  [Lock] Session locked successfully     ← compositor ack, 3ms later
+```
+
+The frame clock starts essentially at the moment the compositor takes the surface. The old
+16ms timeout therefore fired at ~.638 — **44ms before any frame existed** — so the
+`opacity: 0` state was never painted and GTK had nothing to interpolate from.
+
+`Gtk.Widget.add_tick_callback` is the honest version: it only runs when frames are actually
+being produced, and the class goes on the SECOND tick, so the FROM state has been painted
+once. Both blocks fired in the SAME MILLISECOND on that lock, which is the "they arrive
+together" claim confirmed on hardware rather than in the compiled sheet.
+
+⚠️ **The general lesson beyond this file: on a session-lock surface, `map` is not "the screen
+is showing this".** Anything timed from `map` with a wall clock is racing a compositor
+handshake it cannot see.
 
 ⚠️ **With a FALLBACK, because the animation must never be a gate.** `.greeter-card` is
 `opacity: 0` until its class arrives, so a frame clock that never ticks would mean an
@@ -2207,7 +2224,8 @@ on anyway and only the animation is lost. Both paths are exercised and distingui
 log: `[entrance] greeter-card-shown via frame +18ms` versus `via fallback +500ms`.
 
 That log line is deliberate and should stay: these two surfaces cannot be watched while they
-run, so it is the only witness that says which path fired and when.
+run, so it is the only witness that says which path fired and when — and it is what turned a
+guess about the compositor into the 61ms above on the first try.
 
 Still one-shot, per the cost rule: a CONTINUOUS animation costs ~40 % of a GPU, and under
 `ext-session-lock-v1` the compositor cannot help — everything is paid in our process.
