@@ -40,7 +40,7 @@ function createDeviceRow(
     if (isDefault) {
         header.append(new Gtk.Label({
             label: t("settings.audio.default"),
-            css_classes: ["settings-row-status", "accent-label"],
+            css_classes: ["accent-label"],
             valign: Gtk.Align.CENTER,
         }))
     } else {

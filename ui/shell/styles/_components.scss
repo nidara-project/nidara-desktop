@@ -408,6 +408,22 @@ button.nidara-seg-btn {
     }
 }
 
+// ── Dim modifier ─────────────────────────────────────────────────────────────
+// Secondary text: a read-only value at the end of a row (`staticLabel` in
+// SettingsHelpers), the save-path in the screen-recorder's settings. It had NO
+// rule anywhere — the class named an intent nobody implemented, so those labels
+// rendered at full text colour, in both Settings and the CC (2026-08-10). A
+// modifier, deliberately unqualified by element and by window: it says one thing
+// and says it everywhere.
+//
+// It used to be paired with `.settings-row-status`, which carried no
+// declarations at all and has been dropped from its four call sites. A class
+// that promises styling and delivers none is how `.accent-label` ended up on
+// MenuRow's tick.
+.dimmed {
+    color: var(--nidara-text-dim);
+}
+
 // ── Slider readout ───────────────────────────────────────────────────────────
 // The number beside a slider ("72%", "4500K"). Nine consumers and not one of them
 // is only the Control Center: `control-center/Sliders.tsx`, the brightness /

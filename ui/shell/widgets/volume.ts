@@ -78,7 +78,7 @@ function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
     if (isDefault) {
         header.append(new Gtk.Label({
             label: t("settings.audio.default"),
-            css_classes: ["settings-row-status", "accent-label"], valign: Gtk.Align.CENTER,
+            css_classes: ["accent-label"], valign: Gtk.Align.CENTER,
         }))
     } else {
         const setBtn = NidaraButton({

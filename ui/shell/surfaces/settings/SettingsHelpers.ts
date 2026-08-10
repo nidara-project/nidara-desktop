@@ -393,7 +393,7 @@ export const imagePickerRow = (
 // ── Static Info Label ─────────────────────────────────────────────────────────
 export const staticLabel = (text: any) => new Gtk.Label({
     label: String(text ?? "---"),
-    css_classes: ["settings-row-status", "dimmed"],
+    css_classes: ["dimmed"],
     halign: Gtk.Align.END,
 })
 

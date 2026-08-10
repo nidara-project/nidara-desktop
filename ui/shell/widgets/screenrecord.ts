@@ -331,7 +331,7 @@ function saveDirRow(): Gtk.ListBoxRow {
 
     const pathLabel = new Gtk.Label({
         label: pretty(recordingConfig.saveDir),
-        css_classes: ["settings-row-status", "dimmed"],
+        css_classes: ["dimmed"],
         ellipsize: 3, max_width_chars: 28, valign: Gtk.Align.CENTER,
     })
     const chooseBtn = NidaraButton({
