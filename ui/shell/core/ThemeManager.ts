@@ -1,6 +1,7 @@
 import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
+import Pango from "gi://Pango"
 import { Gdk, Gtk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import { execAsync } from "ags/process"
@@ -136,9 +137,20 @@ class ThemeManager extends GObject.Object {
     private syncFont() {
         try {
             const fontName = this.interfaceSettings.get_string("font-name")
-            const [family] = fontName.match(/^(.*?) (\d+)$/)?.slice(1) || ["sans-serif"]
+            // ⚠️ PARSE WITH PANGO, NEVER A REGEX. `gtk-font-name` is a Pango font
+            // string, and only its simplest form is "Family <int>". A style word
+            // ("Inter Variable Medium 11"), a fractional size ("Inter 11.5") or a
+            // variation axis ("… @wght=500") are all legal — and the font button in
+            // Settings → Appearance emits exactly those. The old
+            // `/^(.*?) (\d+)$/` matched none of them and fell through to
+            // "sans-serif", so picking a font could SILENTLY drop the whole desktop
+            // onto fontconfig's default (measured 2026-08-11: a machine set to
+            // "Inter Variable Medium 11 @wght=500" had been rendering Noto Sans for
+            // months, and the only trace was this log line saying `sans-serif`).
+            // Nothing warned because falling back is what the code did on purpose.
+            const family = Pango.FontDescription.from_string(fontName).get_family() || "sans-serif"
             const fontCss = `* { font-family: "${family}", "Symbols Nerd Font", sans-serif; }`
-            
+
             this.ensureProvidersLinked()
             this.fontProvider.load_from_string(fontCss)
             console.log(`[ThemeManager] Font Sync: ${family}`)
