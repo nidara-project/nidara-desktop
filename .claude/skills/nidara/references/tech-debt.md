@@ -743,29 +743,33 @@ autostart, permissions…) and for an agent to write per-app overrides — add a
 name/path to `app.id` — meaningful for a general app list, and the icon internals don't belong
 there anymore now the page isn't icon-only. See memory `project_settings_apps_page`.
 
-### 29. Ghost descenders on list mutation — line-height workaround is PROVISIONAL and PARTIAL (2026-07-09, extended 07-11)
-NOT just filtering: the same descender ghosts appear when ROWS ARE REMOVED from a plain
-settings list — user-confirmed 07-11 deleting entries in Settings → Apps → Autostart, whose
-entries list is a regular `.nidara-list` where the `.apps-list`-scoped line-height fix does
-NOT apply. Treat this as one bug with two triggers (filter-hide and row-removal); the user
-wants a **robust, definitive fix for all list-mutation cases** eventually, instead of chasing
-it list by list — that likely means resolving the underlying GTK repaint bug (options (b)/(c)
-below) or applying the line-height metric globally after a visual pass (option (a)).
-App Icons / Installed Apps and the Autostart app picker (same `.apps-list` classes, same filter
-idiom) are the Settings lists that filter in place; on `invalidate_filter`
-GTK4 (4.22.4, default renderer, Wayland) leaves the descender ink of `y/g/j/p` behind hidden rows
-(ghost) and clips it on the visible ones — a GskGL damage/re-raster bug (hover row-state re-render
-and window resize both clear it; `queue_draw()` after `invalidate_filter()` does NOT).
-Current fix: `.apps-list .nidara-row-subtitle { line-height: 1.35 }` (grows the line box so the ink
-is inside it → drawn full AND repainted on filter). It **works but is provisional**: scoped to App
-Icons, so its subtitles are slightly looser than the shared `.nidara-row-subtitle` elsewhere — a
-design-system inconsistency the user flagged and chose to live with for now, to revisit. A proper
-fix is either (a) apply the metric globally (changes every list's density — needs a visual pass), or
-(b) a geometry-neutral fix of the actual GTK repaint (every attempt failed or clipped: queue_draw at
-any scope, swaps, rebuild-fresh-rows, opacity toggle, padding→clips; see design-system.md "Ghost
-descenders"), or (c) bisect `GSK_RENDERER` (cairo vs ngl/vulkan) and file upstream. **Also:
-screenshot/agent-driven verification is masked here** (interaction re-renders and hides it) — verify
-with a human. Same latent bug in `AppGrid.tsx`.
+### 29. Ghost descenders on list mutation — ROOT CAUSE FIXED 2026-08-11 (#123), one trigger left to confirm by eye
+**What it was:** on `invalidate_filter` (App Icons / Installed Apps, the Autostart app picker)
+and — the second trigger, user-confirmed 07-11 — on ROW REMOVAL from a plain `.nidara-list`
+(deleting entries in Settings → Apps → Autostart), GTK4 left the descender ink of `y/g/j/p`
+behind hidden rows and clipped it on visible ones. It was read as a GskGL damage bug, and every
+geometry-neutral attempt failed (`queue_draw` at any scope, swaps, rebuild-fresh-rows, opacity
+toggle; padding "fixed" it by cutting the tail off). The shipped workaround was
+`.apps-list .nidara-row-subtitle { line-height: 1.35 }` — scoped to one list, PROVISIONAL by
+its own comment, and never reaching the row-removal trigger at all.
+
+**What it actually was:** the ink did not overflow because of a repaint bug. It overflowed
+because the LINE BOX was wrong — the font's ascent/descent were unrounded, so the box the
+toolkit reported did not contain the ink it drew, and anything that re-laid the list out
+repainted the box and left the rest. The same defect shaved the tops of flat glyphs everywhere
+else in the DE ("the T is cut but the G is not"). #123 fixes it at the source
+(`gtk-hint-font-metrics = true`, plus whole-pixel font sizes); #124 removes the local
+line-height, since growing one list's box was only ever dodging it.
+
+⚠️ **Still to confirm with a human: the ROW-REMOVAL trigger** (delete an entry in Settings →
+Apps → Autostart). The filter trigger is verified — first subtitle row anchored via `queryUI`,
+cropped to its box plus 10px below, filter cycled to an empty result and cleared: 0 differing
+pixels, descenders whole. Row removal was not re-tested and follows from the same mechanism
+rather than from a measurement. **And the warning that made this item hard in the first place
+still stands: screenshot/agent verification is masked here** — hover row-state re-render and
+window resize both clear the ghost, so an interaction-driven check can report a pass it did not
+earn. If it reappears there, this item reopens with the line-height NOT as the answer: the
+answer would be whichever list still reports a box smaller than its ink.
 
 ### 30. Users page form dialogs are unstyled Gtk.Windows — need a nidara-kit form-dialog primitive (2026-07-10)
 Settings → Users has three dialogs with two different skins: Delete User goes through

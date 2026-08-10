@@ -180,43 +180,18 @@ is monochrome and driven by `-gtk-icon-filter: invert(1)`, a black/white toggle,
 fill. An accent rule on the app grid's search icon was written, was dead for other reasons, and was
 deleted rather than repaired once that was understood (2026-08-10).
 
-## Ghost descenders on filter (PROVISIONAL fix — see tech-debt)
+## Ghost descenders on filter — FIXED AT THE ROOT 2026-08-11, not by a line height
 
-**Symptom:** in App Icons (`pages/AppIcons.tsx`) — the only Settings list with a live **search that
-filters in place** (`set_filter_func` + `invalidate_filter`) — filtering leaves faint tails of
-`y/g/j/p` behind the hidden rows, AND clips the tails of the *visible* remaining rows. The user's
-tells: *"everything disappears except the tails"* and *"hovering a row fixes it."* The resting full
-list is fine; only the filter re-layout breaks. Other pages never filter, so they never show it — they
-are NOT broken, the bug just never triggers there (but they share the same label geometry).
+Historical, because the workaround is gone and the reasoning is worth keeping: list subtitles
+used to leave the tails of `y/g/j/p` behind on a filter re-layout, and the shipped fix grew the
+line box of one list (`.apps-list .nidara-row-subtitle { line-height: 1.35 }`) so the ink lived
+inside the label's text node. It read as a GskGL damage bug for a month.
 
-**Nature:** a GTK4/GskGL renderer bug — on a mapped ScrolledWindow's content re-layout it doesn't
-re-rasterise the descender **ink** that overflows Pango's logical line box. Hover (row state
-re-render) and window resize (full re-raster) both clear it — those are the "tells," not the cause.
-
-**⚠️ Verification is masked:** capturing a screenshot / driving the UI with synthetic clicks
-re-renders the surface and HIDES the artifact — every crop came out clean while the user still saw it.
-Do NOT trust `ags request screenshot` here; rely on the user's eyes.
-
-**Current fix (provisional):**
-```scss
-.apps-list .nidara-row-subtitle { line-height: 1.35; }   // grows the LINE BOX so the ink is inside it
-```
-`line-height` grows the label's own text line box so the descender ink is part of the label's text
-node → drawn in full (no clip/cut) AND inside the region GTK repaints on filter (no ghost). It is the
-*least-bad* working fix, but **provisional**: it's scoped to `.apps-list`, so App Icons' subtitles are
-slightly looser than the identical `.nidara-row-subtitle` on every other page — a design-system
-inconsistency. Making it global would touch every list's density to fix a one-page bug. Left scoped
-by user decision (2026-07-09), flagged to revisit.
-
-**Dead ends — all measured live against the user, do NOT repeat:**
-- `padding-bottom` on the subtitle: "fixes" the ghost only by **clipping the tail** (visibly cuts
-  y/g/j on the visible rows). Same clip seen from both sides.
-- `queue_draw()` at any scope incl. the toplevel root — stays diff-limited, no effect.
-- Swapping the ListBox child, rebuilding the whole ScrolledWindow, rebuilding fresh rows and swapping
-  — none held (the bug is below the widget layer).
-- `opacity` toggle to force an offscreen re-raster — a timing-based repaint hack, didn't hold.
-
-**Still exposed:** `surfaces/app-grid/AppGrid.tsx` filters its FlowBox in place — same latent bug.
+It was not. The line box itself was wrong — unrounded font metrics meant the box the toolkit
+reported did not contain the ink it drew, so any re-layout repainted the box and left the rest
+on screen. The same defect shaved the tops of flat glyphs (T E F H I L) everywhere else. See
+"Text is only crisp when the line box lands on WHOLE PIXELS" above for the fix and the
+measurements; tech-debt §29 for what is still to confirm by eye.
 
 ## Radii — ONE ladder, in `ui/lib/tokens.ts` (audited 2026-08-03)
 
