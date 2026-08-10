@@ -34,11 +34,46 @@ pre-commandment-5 separate overlay windows, the old sidebar variant, deleted Res
 and the pre-context-menu CC edit chrome. **False-positive traps for the next run:** classes
 built dynamically (`accent-${key}` in Appearance.tsx, `nidara-btn--${variant}` in
 nidara-kit/button.ts), GTK-internal node classes (`day-name`/`other-month`/`week-number` =
-Gtk.Calendar, `combo`), and live names that look stale (`notif-win`). Deliberately KEPT
-with zero direct consumers: the `entry, .nidara-input` / `switch, .nidara-switch` API
-aliases, `.nidara-tile` (canonical tile recipe, referenced by the
-`nidara-tile-states` docs), and `.is-selected` (paired with the live `:selected` GTK
-pseudo in `_base.scss` — an opt-in alias for our own widgets, same policy as the input/switch aliases).
+Gtk.Calendar, `combo`), and live names that look stale (`notif-win`).
+
+#### The four "kit classes with zero consumers" are TWO different things, not one bucket
+
+This list read as one open question for months — *"should these be deleted?"* — and that framing was
+the problem, not the classes. Settled 2026-08-10 by reading the history instead of the counts.
+**Nothing in the kit was declared upfront; every one of these came out of a real need.**
+
+**(a) Three are the OPT-IN HALF of a rule that is fully live**, and were never meant to have
+consumers. They are escape hatches shipped alongside an element rule that does the actual work:
+
+| Class | The live half | Reach |
+|---|---|---|
+| `.nidara-input` | `entry, .nidara-input { … }` | ~20 real `Gtk.Entry`/`PasswordEntry` (Settings Ai/Users/Region/Autostart/Network, the kit's `alert-dialog`, greeter + lock) |
+| `.nidara-switch` | `switch, .nidara-switch { … }` | 10+ real `Gtk.Switch` |
+| `.is-selected` | `&:selected, &.is-selected` inside `nidara-row-states` / `nidara-tile-states` | every include of those two mixins |
+
+The class exists to say *"this thing is not a `Gtk.Entry` but should look like one"*. Deleting it
+removes zero declarations from any existing widget — the body stays either way — and `.is-selected`
+is not even a standalone rule, it lives inside two mixins next to GTK's own `:selected` (which only
+appears on `GtkListBox` rows, so the alias is the only route for widgets we paint ourselves).
+**Zero consumers is the expected state for an alias. Stop re-triaging these.**
+
+**(b) `.nidara-tile` is the one genuine finding, and it is UNFINISHED, not unused.** It came from
+`69cce101 refactor(ui): universal CrystalRow/CrystalList`, whose own message says: *"Floating tiles
+already share one model (`crystal-tile-states`); a `.crystal-tile` class + CrystalSidebar/
+CrystalMenu/CrystalWindow are **Increments 2-3**."* Every sibling in that plan shipped and is used
+(`.nidara-row` 23 consumers, `.nidara-menu` 4, `.nidara-window-glass` 3, `.nidara-list` 4,
+`.nidara-sidebar` 1). Only the tile migration never happened.
+
+The reusable part was never the problem: the **mixin** `nidara-tile-states` is well adopted, by
+`.app-grid-button`, `.cc-split-icon-btn`, `.cc-detail-back-btn`, `.bar-popover-icon-btn` and
+`.nidara-tile` itself. What stalled is visible in those four — they take **different radii (`md` /
+`sm` / `xs`) and their own padding**, so absorbing them needs size variants, which is a design
+decision. Rows all share one geometry and sailed through; tiles do not and did not.
+
+▶️ **So the honest options are finish it or drop it, and "leave it sitting there" is the one that
+keeps lying** — the same pattern as the `cc-*` prefix in §56. Either give it `--sm`/`--xs` variants
+and migrate the four, or delete the class and record that the increment was abandoned on purpose.
+Owner's call; it is 4 lines of source either way, so this is about the kit's honesty, not bytes.
 **Re-run 2026-06-23 (271 classes):** removed 2 newly-confirmed dead blocks —
 `.settings-icon-btn--danger` (`_components.scss`, a never-wired "danger tint" modifier; the base
 `.settings-icon-btn` is only ever added plain/`+flat`) and `.is-danger` (`_control-center.scss`, the
