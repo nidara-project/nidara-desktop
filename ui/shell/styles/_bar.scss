@@ -2,27 +2,28 @@
 
 /* ==========================================================================
    NIDARA BAR - STITCH FIDELITY (Pills, Dots and Cairo Circles)
+   ==========================================================================
+
+   THIS FILE COVERS TWO WINDOWS, and which one a class lands in is NOT the
+   directory its TSX lives in. `Bar.tsx` builds the capsule row and hands it to
+   `islandWin.mount()` (Bar.tsx, "islandRow"), so widgets declared in
+   surfaces/bar/ are rendered inside `#nidara-island`; conversely everything
+   under surfaces/island/ paints there too. The scopes below follow the WINDOW,
+   which is the only thing CSS sees:
+
+     · shared      — the capsule row's geometry, built by the bar, mounted in both
+     · bar only    — left/right flanks, tray, CC badge, window menu, popovers
+     · island only — `.bar-center` (the capsule group), workspace dots, activities
+
+   A rule filed under the wrong one stays in the sheet, stops matching and
+   reports NOTHING. See design-system.md.
+
+   (`.bar-capsule` deleted 2026-08-10 — DEAD: the name survives only in a comment
+   at surfaces/bar/capsule.ts, no widget has ever carried the class. It was the
+   dead half of the focus-kill rule below.)
    ========================================================================== */
 
-/* --- Focus Kill --- */
-/* Focus reset for bar items only */
-.bar-capsule,
-.bar-tray-btn {
-    outline-width: 0;
-    outline-color: transparent;
-    box-shadow: none;
-}
-
-/* --- Distro icon: color follows theme via currentColor in the SVG --- */
-.bar-distro-icon {
-    color: var(--nidara-text);
-}
-
-/* --- Tray icons: symbolic names used explicitly in code; color applies for recoloring --- */
-.bar-tray-icon {
-    color: var(--nidara-text);
-}
-
+/* --- Window surfaces themselves --- */
 #nidara-bar,
 .nidara-bar-window,
 /* The Activity Island's own layer surface. Transparent via CSS, never
@@ -43,248 +44,314 @@ window#nidara-bar-zone {
     background: transparent;
 }
 
-/* --- Centerbox --- */
-.bar-centerbox {
-    background-color: transparent;
-    border: none;
-    margin-top: 8px;
-}
+/* ==========================================================================
+   SHARED — bar + island
+   The capsule row and the three flank groups. `.bar-left`/`.bar-right` only ever
+   exist in the bar and `.bar-center` only in the island, but they are ONE rule
+   because that is the point: `islandRow` reuses `.bar-centerbox` so the 8px top
+   margin and the 40px row height come from the same CSS the bar uses instead of
+   a constant duplicated across two windows (Bar.tsx says so at the mount site).
+   Splitting them would be the first step toward that duplication.
+   ========================================================================== */
+#nidara-bar,
+.nidara-bar-window,
+#nidara-island,
+.nidara-island-window {
 
-/* --- Left/Center/Right capsules --- */
-.bar-left,
-.bar-center,
-.bar-right {
-    @include nidara-reset;
-    padding: 0;
-    margin: 0;
+    /* --- Centerbox --- */
+    .bar-centerbox {
+        background-color: transparent;
+        border: none;
+        margin-top: 8px;
+    }
 
-    label,
-    image {
+    /* --- Left/Center/Right capsules --- */
+    .bar-left,
+    .bar-center,
+    .bar-right {
+        @include nidara-reset;
+        padding: 0;
+        margin: 0;
+
+        label,
+        image {
+            color: var(--nidara-text);
+        }
+    }
+
+    /* (.bar-left / .bar-right side margins are handled in TSX, not CSS.) */
+
+    /* --- Global Bar Button Reset --- */
+    .bar-left button,
+    .bar-center button,
+    .bar-right button,
+    .bar-tray-btn {
+        @include nidara-reset;
+        padding: 0;
+        margin: 0;
+        min-width: 0;
+        min-height: 0;
+    }
+
+    /* Ensure all symbolic icons in the bar use adaptive text color */
+    .bar-right image,
+    .bar-left image,
+    .bar-center image {
+        -gtk-icon-palette: success white, warning white, error white;
         color: var(--nidara-text);
     }
 }
 
-/* (.bar-left / .bar-right side margins are handled in TSX, not CSS.) */
+/* ==========================================================================
+   BAR ONLY
+   ========================================================================== */
+#nidara-bar,
+.nidara-bar-window {
 
-/* --- Global Bar Button Reset --- */
-.bar-left button,
-.bar-center button,
-.bar-right button,
-.bar-tray-btn {
-    @include nidara-reset;
-    padding: 0;
-    margin: 0;
-    min-width: 0;
-    min-height: 0;
+    /* --- Focus Kill --- */
+    /* Focus reset for bar items only */
+    .bar-tray-btn {
+        outline-width: 0;
+        outline-color: transparent;
+        box-shadow: none;
+    }
+
+    /* --- Distro icon: color follows theme via currentColor in the SVG --- */
+    .bar-distro-icon {
+        color: var(--nidara-text);
+    }
+
+    /* --- Tray icons: symbolic names used explicitly in code; color applies for recoloring --- */
+    .bar-tray-icon {
+        color: var(--nidara-text);
+    }
+
+    /* --- Resource ring icon (bar cpu-memory arcs) --- */
+    /* An atomic widget: it renders in the bar AND in the Control Center's grid,
+       which is the same window (the CC is a Gtk.Overlay child of the bar), so one
+       scope covers both. */
+    .resource-icon {
+        font-size: $fs-mini;
+        font-weight: $fw-bold;
+        color: var(--nidara-text);
+        margin-bottom: 0px;
+    }
+
+    /* Specific styling for the Control Center pill icon */
+    .bar-right image {
+        opacity: 1;
+        /* Full opacity for better contrast */
+    }
+
+    /* The system menu uses the universal .nidara-menu component (_components.scss).
+       Its inline confirm pair (.nidara-confirm-*) is universal too and lives there. */
+
+    // ── Status-indicator badge (recording, AI control, …) ─────────────────────
+    // A small dot inside the Control-Center capsule, right of its icon — the
+    // always-visible signal that the CC has something for you (detail/Stop live in
+    // the CC itself: the .cc-status-* banner, or the widget tile).
+    //   armed  — present but idle (AI granted, not acting): subtle.
+    //   active — happening now (recording / agent acting): full.
+    // NO animation in either state. A blink here re-blurs the whole 2560×1440 bar
+    // surface every frame for as long as the condition lasts (a capture is minutes,
+    // not a moment), and it read as an alarm; the opacity step already separates the
+    // two states. Keep it that way — see design-system.md on continuous animation.
+    .bar-cc-badge {
+        border-radius: var(--nidara-radius-pill);
+        background: var(--nidara-danger);
+        opacity: 0.6;
+
+        &.is-active { opacity: 1; }
+    }
+
+    .bar-overflow-label {
+        font-size: $fs-small;
+        font-weight: $fw-bold;
+        color: var(--nidara-text);
+        letter-spacing: 0.04em;
+    }
+
+    /* --- Window menu (AppTitle expansion) --- */
+    // Inline move-to-workspace strip: flat numbered buttons, current one accented
+    // and disabled. Rows/headers/separators come from the shared nidara-menu-*
+    // classes (MenuRow.ts) — only the strip needs its own style.
+    .window-menu-ws-btn {
+        @include nidara-reset;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        min-width: 28px;
+        min-height: 28px;
+        padding: 0;
+        border-radius: $nidara-radius-sm;
+        font-size: $fs-small;
+        font-weight: $fw-medium;
+        @include nidara-row-states;
+
+        &.current {
+            // Current workspace: a faint accent-tinted pill marks the state — the
+            // number stays theme-coloured (never accent on text). Button is disabled.
+            background: var(--nidara-accent-10);
+            color: var(--nidara-text);
+        }
+    }
+
+    /* --- Bar inline expansion panel --- */
+    .bar-expansion-panel {
+        /* Vertical gap set from TSX (PANEL_TOP) so it stays in sync with CC/NC. */
+
+        button.suggested-action {
+            @include nidara-reset;
+            background: var(--nidara-accent);
+            color: var(--nidara-accent-fg);
+            border-radius: $nidara-radius-sm;
+            padding: 6px 14px;
+            font-size: $fs-small;
+            font-weight: $fw-semibold;
+
+            &:hover  { background: rgba(var(--nidara-accent-rgb), 0.82); }
+            &:active { background: rgba(var(--nidara-accent-rgb), 0.65); }
+        }
+
+        button.destructive-action {
+            @include nidara-reset;
+            background: var(--nidara-danger);
+            color: var(--nidara-accent-fg);
+            border: none;
+            box-shadow: none;
+            border-radius: $nidara-radius-sm;
+            padding: 6px 14px;
+            font-size: $fs-small;
+            font-weight: $fw-semibold;
+
+            &:hover  { background: rgba(var(--nidara-danger-rgb), 0.82); }
+            &:active { background: rgba(var(--nidara-danger-rgb), 0.65); }
+        }
+
+        button.flat {
+            background: transparent;
+            background-image: none;
+            border: none;
+            box-shadow: none;
+            color: var(--nidara-text);
+            border-radius: $nidara-radius-sm;
+            padding: 6px 14px;
+            font-size: $fs-small;
+            font-weight: $fw-medium;
+
+            &:hover  { background: var(--nidara-accent-10); }
+            &:active { background: rgba(var(--nidara-accent-rgb), 0.18); }
+        }
+    }
+
+    // Clipboard history + bar overflow lists use the universal .nidara-menu-row.
+    // The atomic widgets' popover rows (.bar-popover-*) are in _components.scss:
+    // a widget is placed by the user, so it cannot belong to one surface's sheet.
 }
 
-.workspace-dot {
-    min-width: 6px;
-    min-height: 6px;
-    border-radius: 50%;
-    background-color: var(--nidara-surface-raised);
-    box-shadow: var(--nidara-shadow-sm);
-    transition: background-color 0.3s #{$ease}, box-shadow 0.3s #{$ease};
-    margin: 0;
-    padding: 0;
-}
+/* ==========================================================================
+   ISLAND ONLY
+   The workspace dots and the activity forms. `makeWorkspaceDot` is called from
+   ActivityIsland, IslandActivities and WorkspaceOverview — and the overview is
+   mounted INSIDE the island (ActivityIsland imports it), so all three land in
+   the same surface. The bar never draws a dot.
+   ========================================================================== */
+#nidara-island,
+.nidara-island-window {
 
-.workspace-dot.occupied {
-    background-color: var(--nidara-accent-60);
-}
+    .workspace-dot {
+        min-width: 6px;
+        min-height: 6px;
+        border-radius: 50%;
+        background-color: var(--nidara-surface-raised);
+        box-shadow: var(--nidara-shadow-sm);
+        transition: background-color 0.3s #{$ease}, box-shadow 0.3s #{$ease};
+        margin: 0;
+        padding: 0;
+    }
 
-.workspace-dot.active {
-    // A 6px-tall dot stretched to 18 wide: this is a STADIUM, not a corner radius.
-    // The old literal 4 was already past half the height and clamped to the same
-    // shape — it was never a rung of the ladder.
-    min-width: 18px;
-    border-radius: var(--nidara-radius-pill);
-    background-color: $nidara-accent;
-}
+    .workspace-dot.occupied {
+        background-color: var(--nidara-accent-60);
+    }
 
-.workspace-dot.empty {
-    background-color: var(--nidara-surface-hover);
-}
+    .workspace-dot.active {
+        // A 6px-tall dot stretched to 18 wide: this is a STADIUM, not a corner radius.
+        // The old literal 4 was already past half the height and clamped to the same
+        // shape — it was never a rung of the ladder.
+        min-width: 18px;
+        border-radius: var(--nidara-radius-pill);
+        background-color: $nidara-accent;
+    }
 
-/* --- Resource ring icon (bar cpu-memory arcs) --- */
-.resource-icon {
-    font-size: $fs-mini;
-    font-weight: $fw-bold;
-    color: var(--nidara-text);
-    margin-bottom: 0px;
-}
+    .workspace-dot.empty {
+        background-color: var(--nidara-surface-hover);
+    }
 
-/* Ensure all symbolic icons in the bar use adaptive text color */
-.bar-right image,
-.bar-left image,
-.bar-center image {
-    -gtk-icon-palette: success white, warning white, error white;
-    color: var(--nidara-text);
-}
+    // ── Activity Island: compact activity forms ───────────────────────────────
+    // The capsule's mutated content while an activity is live (media rides the
+    // player compact's own Cairo painters; these are the REC and battery forms).
+    // Steady, not pulsing — same reasoning as .bar-cc-badge, and the island is the
+    // worse offender (its own OVERLAY surface, blurred over the bar). What proves
+    // the capture is alive is the clock next to it, which is already ticking.
+    .island-rec-dot {
+        border-radius: var(--nidara-radius-pill);
+        background: var(--nidara-danger);
+    }
 
-/* Specific styling for the Control Center pill icon */
-.bar-right image {
-    opacity: 1;
-    /* Full opacity for better contrast */
-}
+    // The capture card's hero clock (RecordingIsland). Text colour, not danger —
+    // the red in that card is the 8px dot beside the title, which is the whole of
+    // the shell's red budget for a state that is merely happening.
+    .island-rec-clock {
+        font-size: $fs-title-1;
+        font-weight: $fw-semibold;
+        font-variant-numeric: tabular-nums;
+        color: var(--nidara-text);
+    }
 
-/* The system menu uses the universal .nidara-menu component (_components.scss). */
+    .island-rec-time {
+        font-size: $fs-small;
+        font-weight: $fw-semibold;
+        font-variant-numeric: tabular-nums;   // ticking digits must not jitter
+        color: var(--nidara-text);
+    }
 
-// ── Inline confirmation view ──────────────────────────────────────────────────
-// Confirm view buttons = nidara-menu-row (geometry + hover) + an emphasis tone.
-// UNIVERSAL (nidara-*), not the system menu's own: any flat list that needs a
-// destructive confirm swaps its row for a cancel/confirm pair in place rather than
-// opening a dialog — a modal over a popover dismisses the surface it is asking
-// about. Shared by the bar system menu (logout/restart/shutdown) and the clipboard
-// widget's "Clear history".
-.nidara-confirm-secondary {
-    background: var(--nidara-surface-back);
-    color: var(--nidara-text-dim);
-    font-size: $fs-caption;
-    &:hover { color: var(--nidara-text); }
-}
+    /* Indicator-chip badge: a turn that finished while the island could not show
+       it. Accent = an answer waiting (accent means "active/selected", and this is
+       the chip that has something for you); danger = the turn failed. No animation:
+       it sits in the bar for as long as it takes the user to look, and a pulsing
+       dot there costs the compositor a blur pass per frame, forever. */
+    .island-chip-badge {
+        border-radius: var(--nidara-radius-pill);
+        background: $nidara-accent;
+        /* Reads against the glyph it overlaps, whatever the wallpaper does. */
+        box-shadow: 0 0 0 1.5px var(--nidara-surface-raised);
+    }
 
-.nidara-confirm-primary {
-    background: var(--nidara-surface);
-    color: var(--nidara-text);
-    font-size: $fs-caption;
-    font-weight: $fw-semibold;
-}
+    .island-chip-badge.error {
+        background: var(--nidara-danger);
+    }
 
-/* ── About Window ──────────────────────────────────────────────────────────── */
+    .island-battery-pct {
+        font-size: $fs-small;
+        font-weight: $fw-bold;
+        font-variant-numeric: tabular-nums;
+        // White on purpose (user call 2026-07-20): the shell has NO red text —
+        // danger lives in fills/dots (the glyph's red sliver carries the alarm).
+        color: var(--nidara-text);
+    }
 
-// Window node transparent; the glass surface lives on its direct child
-// (.nidara-window-glass, same chrome as Settings). Do NOT re-add a `> *`
-// transparent reset here — it would override the glass background.
-.about-floating-window {
-    background: transparent;
-    background-color: transparent;
-}
+    // ── Activity Island: battery-critical expanded surface ────────────────────
+    .island-battery-title {
+        font-size: $fs-small;
+        font-weight: $fw-bold;
+        color: var(--nidara-text);
+    }
 
-.about-logo {
-    margin-bottom: 8px;
-    color: var(--nidara-text);   /* recolours the symbolic Nidara mark (dark/light) */
-    -gtk-icon-filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4));
-}
-
-.about-shell-name {
-    font-size: $fs-title-3;
-    font-weight: $fw-bold;
-    letter-spacing: 0.02em;
-}
-
-.about-os-name {
-    font-size: $fs-small;
-    font-weight: $fw-regular;
-    opacity: 0.7;
-}
-
-.about-spec-key {
-    font-size: $fs-caption;
-    font-weight: $fw-medium;
-    opacity: 0.55;
-    min-width: 80px;
-}
-
-.about-spec-val {
-    font-size: $fs-caption;
-    font-weight: $fw-regular;
-}
-
-.about-sep {
-    background: var(--nidara-surface);
-    min-height: 1px;
-}
-
-// ── Status-indicator badge (recording, AI control, …) ─────────────────────────
-// A small dot inside the Control-Center capsule, right of its icon — the
-// always-visible signal that the CC has something for you (detail/Stop live in
-// the CC itself: the .cc-status-* banner, or the widget tile).
-//   armed  — present but idle (AI granted, not acting): subtle.
-//   active — happening now (recording / agent acting): full.
-// NO animation in either state. A blink here re-blurs the whole 2560×1440 bar
-// surface every frame for as long as the condition lasts (a capture is minutes,
-// not a moment), and it read as an alarm; the opacity step already separates the
-// two states. Keep it that way — see design-system.md on continuous animation.
-.bar-cc-badge {
-    border-radius: var(--nidara-radius-pill);
-    background: var(--nidara-danger);
-    opacity: 0.6;
-
-    &.is-active { opacity: 1; }
-}
-
-.bar-overflow-label {
-    font-size: $fs-small;
-    font-weight: $fw-bold;
-    color: var(--nidara-text);
-    letter-spacing: 0.04em;
-}
-
-// ── Activity Island: compact activity forms ───────────────────────────────────
-// The capsule's mutated content while an activity is live (media rides the
-// player compact's own Cairo painters; these are the REC and battery forms).
-// Steady, not pulsing — same reasoning as .bar-cc-badge, and the island is the
-// worse offender (its own OVERLAY surface, blurred over the bar). What proves
-// the capture is alive is the clock next to it, which is already ticking.
-.island-rec-dot {
-    border-radius: var(--nidara-radius-pill);
-    background: var(--nidara-danger);
-}
-
-// The capture card's hero clock (RecordingIsland). Text colour, not danger —
-// the red in that card is the 8px dot beside the title, which is the whole of
-// the shell's red budget for a state that is merely happening.
-.island-rec-clock {
-    font-size: $fs-title-1;
-    font-weight: $fw-semibold;
-    font-variant-numeric: tabular-nums;
-    color: var(--nidara-text);
-}
-
-.island-rec-time {
-    font-size: $fs-small;
-    font-weight: $fw-semibold;
-    font-variant-numeric: tabular-nums;   // ticking digits must not jitter
-    color: var(--nidara-text);
-}
-
-/* Indicator-chip badge: a turn that finished while the island could not show
-   it. Accent = an answer waiting (accent means "active/selected", and this is
-   the chip that has something for you); danger = the turn failed. No animation:
-   it sits in the bar for as long as it takes the user to look, and a pulsing
-   dot there costs the compositor a blur pass per frame, forever. */
-.island-chip-badge {
-    border-radius: var(--nidara-radius-pill);
-    background: $nidara-accent;
-    /* Reads against the glyph it overlaps, whatever the wallpaper does. */
-    box-shadow: 0 0 0 1.5px var(--nidara-surface-raised);
-}
-
-.island-chip-badge.error {
-    background: var(--nidara-danger);
-}
-
-.island-battery-pct {
-    font-size: $fs-small;
-    font-weight: $fw-bold;
-    font-variant-numeric: tabular-nums;
-    // White on purpose (user call 2026-07-20): the shell has NO red text —
-    // danger lives in fills/dots (the glyph's red sliver carries the alarm).
-    color: var(--nidara-text);
-}
-
-// ── Activity Island: battery-critical expanded surface ────────────────────────
-.island-battery-title {
-    font-size: $fs-small;
-    font-weight: $fw-bold;
-    color: var(--nidara-text);
-}
-
-.island-battery-sub {
-    font-size: $fs-caption;
-    font-weight: $fw-regular;
-    color: var(--nidara-text-dim);
+    .island-battery-sub {
+        font-size: $fs-caption;
+        font-weight: $fw-regular;
+        color: var(--nidara-text-dim);
+    }
 }
 
 // ── Activity Island: the built-in Assistant ──────────────────────────────────
@@ -442,98 +509,4 @@ window#nidara-bar-zone {
         font-size: $fs-small;
         color: var(--nidara-text-dim);
     }
-}
-
-/* --- Window menu (AppTitle expansion) --- */
-// Inline move-to-workspace strip: flat numbered buttons, current one accented
-// and disabled. Rows/headers/separators come from the shared nidara-menu-*
-// classes (MenuRow.ts) — only the strip needs its own style.
-.window-menu-ws-btn {
-    @include nidara-reset;
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    min-width: 28px;
-    min-height: 28px;
-    padding: 0;
-    border-radius: $nidara-radius-sm;
-    font-size: $fs-small;
-    font-weight: $fw-medium;
-    @include nidara-row-states;
-
-    &.current {
-        // Current workspace: a faint accent-tinted pill marks the state — the
-        // number stays theme-coloured (never accent on text). Button is disabled.
-        background: var(--nidara-accent-10);
-        color: var(--nidara-text);
-    }
-}
-
-/* --- Bar inline expansion panel --- */
-.bar-expansion-panel {
-    /* Vertical gap set from TSX (PANEL_TOP) so it stays in sync with CC/NC. */
-
-    button.suggested-action {
-        @include nidara-reset;
-        background: var(--nidara-accent);
-        color: var(--nidara-accent-fg);
-        border-radius: $nidara-radius-sm;
-        padding: 6px 14px;
-        font-size: $fs-small;
-        font-weight: $fw-semibold;
-
-        &:hover  { background: rgba(var(--nidara-accent-rgb), 0.82); }
-        &:active { background: rgba(var(--nidara-accent-rgb), 0.65); }
-    }
-
-    button.destructive-action {
-        @include nidara-reset;
-        background: var(--nidara-danger);
-        color: var(--nidara-accent-fg);
-        border: none;
-        box-shadow: none;
-        border-radius: $nidara-radius-sm;
-        padding: 6px 14px;
-        font-size: $fs-small;
-        font-weight: $fw-semibold;
-
-        &:hover  { background: rgba(var(--nidara-danger-rgb), 0.82); }
-        &:active { background: rgba(var(--nidara-danger-rgb), 0.65); }
-    }
-
-    button.flat {
-        background: transparent;
-        background-image: none;
-        border: none;
-        box-shadow: none;
-        color: var(--nidara-text);
-        border-radius: $nidara-radius-sm;
-        padding: 6px 14px;
-        font-size: $fs-small;
-        font-weight: $fw-medium;
-
-        &:hover  { background: var(--nidara-accent-10); }
-        &:active { background: rgba(var(--nidara-accent-rgb), 0.18); }
-    }
-}
-
-// Clipboard history + bar overflow lists use the universal .nidara-menu-row.
-
-.bar-popover-value {
-    font-size: $fs-small;
-    font-weight: $fw-medium;
-    color: var(--nidara-text);
-    min-width: 40px;
-}
-
-.bar-popover-icon-btn {
-    background: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
-    padding: 4px;
-    border-radius: $nidara-radius-xs;
-    transition: background-color 0.15s ease, box-shadow 0.15s ease;
-
-    @include nidara-tile-states;
 }

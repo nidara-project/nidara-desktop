@@ -32,15 +32,25 @@ window.nidara-app-grid-window {
             border-color: rgba(var(--nidara-accent-rgb), 0.7);
             background: var(--nidara-surface);
         }
+
+        /* The icon's active tint is nested HERE, under the box, and not written as
+           `.app-grid-search-box:focus-within &` from inside `.app-grid-search-icon`.
+           That form was correct while the icon was a top-level rule (`&` was just
+           the class); once this file went inside the window scope (#102) `&` began
+           expanding to `#nidara-app-grid .app-grid-search-icon`, so the selector
+           compiled to `.app-grid-search-box:focus-within #nidara-app-grid
+           .app-grid-search-icon` — a window nested inside a search box, which can
+           never match. The icon simply stopped turning accent, with no error
+           anywhere. Parent-referencing `&` and a scope wrapper do not mix: when a
+           rule needs an ancestor's state, nest it under that ancestor. */
+        &:focus-within .app-grid-search-icon,
+        &.search-active .app-grid-search-icon {
+            color: var(--nidara-accent);
+        }
     }
 
     .app-grid-search-icon {
         color: var(--nidara-text-dim);
-
-        .app-grid-search-box:focus-within &,
-        .app-grid-search-box.search-active & {
-            color: var(--nidara-accent);
-        }
     }
 
     .app-grid-search-entry {

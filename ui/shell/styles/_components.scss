@@ -282,6 +282,29 @@ selection {
     min-height: 1px;
 }
 
+// ── Inline confirmation view ──────────────────────────────────────────────────
+// Confirm view buttons = nidara-menu-row (geometry + hover) + an emphasis tone.
+// UNIVERSAL (nidara-*), not the system menu's own: any flat list that needs a
+// destructive confirm swaps its row for a cancel/confirm pair in place rather than
+// opening a dialog — a modal over a popover dismisses the surface it is asking
+// about. Shared by the bar system menu (logout/restart/shutdown) and the clipboard
+// widget's "Clear history".
+// Lived in _bar.scss until 2026-08-10; a nidara-* class belongs to the kit, and
+// leaving it there is what made _bar.scss look like it had to stay unscoped.
+.nidara-confirm-secondary {
+    background: var(--nidara-surface-back);
+    color: var(--nidara-text-dim);
+    font-size: $fs-caption;
+    &:hover { color: var(--nidara-text); }
+}
+
+.nidara-confirm-primary {
+    background: var(--nidara-surface);
+    color: var(--nidara-text);
+    font-size: $fs-caption;
+    font-weight: $fw-semibold;
+}
+
 /* Glass menu popover — the Gtk.Popover surface that hosts a Cairo glass bubble
    (common/GlassBubble) + the .nidara-menu rows above. Shared by the dock context
    menu and the app-grid context menu so every glass menu speaks one language.
@@ -385,6 +408,14 @@ button.nidara-seg-btn {
     }
 }
 
+// ── Atomic-widget popover vocabulary ─────────────────────────────────────────
+// The key/value/readout row and its inline icon button, worn by the widgets in
+// widgets/ (wifi, ethernet, battery, night-light, focus, bluetooth, volume,
+// brightness). Global on purpose: a widget is placed by the USER — today the bar
+// and the Control Center grid, tomorrow wherever the plugin system lands one —
+// so its vocabulary cannot belong to a surface's sheet. `-value` and `-icon-btn`
+// joined their siblings here on 2026-08-10; they had been sitting unscoped in
+// _bar.scss, which is what made the family look like two different things.
 .bar-popover-key {
     font-size: $fs-small;
     color: var(--nidara-text-dim);
@@ -394,6 +425,25 @@ button.nidara-seg-btn {
     font-size: $fs-small;
     font-weight: $fw-medium;
     color: var(--nidara-text);
+}
+
+.bar-popover-value {
+    font-size: $fs-small;
+    font-weight: $fw-medium;
+    color: var(--nidara-text);
+    min-width: 40px;
+}
+
+.bar-popover-icon-btn {
+    background: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    padding: 4px;
+    border-radius: $nidara-radius-xs;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
+
+    @include nidara-tile-states;
 }
 
 // =============================================================================

@@ -2844,26 +2844,59 @@ in use, dimmed by `WP_SCRIM` and clipped to a proportional rounded rect. Mechani
   Cairo `draw_func`, not an animation.
 - Because it costs nothing *per surface*, it is deliberately **not opt-in** the way captures are.
 
-### 56. ⚠️ PARTLY DONE (2026-08-07, advanced 2026-08-09) — unscoped partials; commandment 2 was never two-thirds kept
+### 56. ✅ DONE (2026-08-07 → 2026-08-10) — unscoped partials; commandment 2 was never two-thirds kept
 
-**Done:** `_control-center` and `_prism` → the bar's window; `_settings` → its own; `_workspace` →
-**split across two** windows (see below). Plus three DEAD selectors deleted and the probe taught to
-pick a scope. **`_app-grid` is done too, as of 2026-08-09** — but by a route this entry did not
-foresee: the grid got a WINDOW of its own (§18), so the file is scoped to `#nidara-app-grid,
-.nidara-app-grid-window`, not to `#nidara-dock` as planned here. `_workspace.scss`'s shared block
-and both `_reset.scss` lists moved with it. **Left:** the top-level rules leaking out of
-`_bar.scss` / `_dock.scss`.
+**Closed 2026-08-10 with `_bar.scss` + `_dock.scss`, the last two.** Earlier stages:
+`_control-center` and `_prism` → the bar's window; `_settings` → its own; `_workspace` → **split
+across two** windows (see below); `_app-grid` on 2026-08-09, by a route this entry did not foresee —
+the grid got a WINDOW of its own (§18), so it is scoped to `#nidara-app-grid,
+.nidara-app-grid-window`, not to `#nidara-dock` as planned here.
 
-⚠️ **"~10 rules" was wrong — MEASURED 2026-08-09, it is ~37.** Counting top-level rules and
-discounting the universal `.nidara-*` components and the already-scoped `window#`/`#` blocks:
-`_bar.scss` has **34**, `_dock.scss` **3**. Budget accordingly; the estimate was made by eye.
+**"~10 rules" was wrong — measured 2026-08-09 at ~37** (`_bar.scss` 34, `_dock.scss` 3), and the
+count was the least interesting part. What the final pass actually found:
 
-⚠️ **`_dock.scss`'s `&>box` is a strong candidate for a FOURTH dead selector** (noticed 2026-08-09,
-not verified). The dock window's direct child is a `Gtk.Overlay`, not the layout box, so
-`window.nidara-dock-window > box` should never match. The overlay itself is now a single-child
-wrapper with nothing overlaid on it (the app grid was its only overlay child) — so removing the
-wrapper is tempting, and would make this selector START matching, which is a silent behaviour
-change in the opposite direction. Verify with `gtk-probe` before touching either.
+🔑 **The window a class lands in is not the folder its TSX lives in.** `Bar.tsx` builds the capsule
+row and hands it to `islandWin.mount()`, so `.bar-center` renders **only** in `#nidara-island`;
+`.bar-centerbox` is built twice and needs both scopes (deliberately — `islandRow` reuses the class
+so the 8px top margin and 40px row height come from one rule instead of a constant duplicated across
+two windows); `.workspace-dot` is island-only, since `makeWorkspaceDot` is called from the island and
+from the overview, which is mounted inside the island. Filing any of them under `#nidara-bar` on the
+strength of the filename would have unstyled the capsule and every workspace dot, silently. The
+method is grep the class → grep where its widget is `append`ed/`mount`ed.
+
+🔑 **Two more DEAD selectors, bringing the total to five**: `#the-dock-bar` (`_dock`; no widget in the
+shell carries that name) and `.bar-capsule` (`_bar`; survives only in a comment at
+`surfaces/bar/capsule.ts` — it was the dead half of the tray focus-kill rule).
+
+🔑 **A live bug fell out of the audit, in a file that was already "done".** `_app-grid.scss` had
+`.app-grid-search-box:focus-within &` written inside `.app-grid-search-icon`. Correct while that rule
+was top-level; after #102 wrapped the file in the window scope, `&` expanded to `#nidara-app-grid
+.app-grid-search-icon` and the rule compiled to `.app-grid-search-box:focus-within #nidara-app-grid
+.app-grid-search-icon` — a window nested inside a search box. The icon had stopped turning accent on
+focus and nothing reported it. **Scoping a file is not a wrapper you can add without reading it**:
+every parent-referencing `&` inside changes meaning. Cheap detector: grep the compiled `style.css`
+for `#nidara-` anywhere other than the start of a selector.
+
+**Two relocations rather than scopes**, both because the class had no surface to belong to:
+`.nidara-confirm-*` (a `nidara-*` name = kit) and `.bar-popover-key/-val/-value/-icon-btn` (worn by
+`widgets/`, which the USER places — bar today, CC grid today, plugin-placed tomorrow) → `_components`.
+`.about-*` came out into its own `_about.scss` scoped to `window#nidara-about, .about-floating-window`:
+it is a separate toplevel and was never part of the bar in anything but file position.
+
+⚠️ **`_dock.scss`'s `&>box` is a strong candidate for a SIXTH dead selector** (noticed 2026-08-09,
+still not verified — deliberately left alone by the 2026-08-10 pass). The dock window's direct child
+is a `Gtk.Overlay`, not the layout box, so `window.nidara-dock-window > box` should never match. The
+overlay itself is now a single-child wrapper with nothing overlaid on it (the app grid was its only
+overlay child) — so removing the wrapper is tempting, and would make this selector START matching,
+which is a silent behaviour change in the opposite direction. Verify with `gtk-probe` before touching
+either.
+
+⚠️ **Nothing mechanical proves a scoping pass correct.** Compiled class coverage comes out identical
+either way; a misfiled rule stays in the sheet and just stops matching. The 2026-08-10 pass diffed
+old vs new `style.css` selector-by-selector (every old selector must reappear with a scope prefix and
+the same body) — that catches deletions and typos, **not** a rule scoped to the wrong window. Only
+looking at the running shell does. Live human validation is part of "done" for this kind of change,
+as it was for #97.
 
 **The original entry was wrong on three counts, and the corrections are the useful part:**
 

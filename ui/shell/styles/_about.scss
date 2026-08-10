@@ -1,0 +1,58 @@
+@use 'base' as *;
+
+/* ==========================================================================
+   ABOUT WINDOW
+   ==========================================================================
+
+   Its own toplevel (`AboutWindow.tsx`: Gtk.Window, name "nidara-about", class
+   "about-floating-window"), create+destroy rather than hide — commandment 8.
+   These rules lived unscoped at the bottom of _bar.scss until 2026-08-10, which
+   read as "the About window is part of the bar". It never was: nothing here is
+   reachable from `#nidara-bar`, and scoping them there would have silently
+   unstyled the whole window.
+
+   The window node is transparent; the glass surface lives on its direct child
+   (.nidara-window-glass in _components.scss, same chrome as Settings). Do NOT
+   re-add a `> *` transparent reset here — it would override the glass
+   background.
+   ========================================================================== */
+window#nidara-about,
+.about-floating-window {
+    background: transparent;
+    background-color: transparent;
+
+    .about-logo {
+        margin-bottom: 8px;
+        color: var(--nidara-text);   /* recolours the symbolic Nidara mark (dark/light) */
+        -gtk-icon-filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4));
+    }
+
+    .about-shell-name {
+        font-size: $fs-title-3;
+        font-weight: $fw-bold;
+        letter-spacing: 0.02em;
+    }
+
+    .about-os-name {
+        font-size: $fs-small;
+        font-weight: $fw-regular;
+        opacity: 0.7;
+    }
+
+    .about-spec-key {
+        font-size: $fs-caption;
+        font-weight: $fw-medium;
+        opacity: 0.55;
+        min-width: 80px;
+    }
+
+    .about-spec-val {
+        font-size: $fs-caption;
+        font-weight: $fw-regular;
+    }
+
+    .about-sep {
+        background: var(--nidara-surface);
+        min-height: 1px;
+    }
+}

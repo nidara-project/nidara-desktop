@@ -13,82 +13,84 @@ window.nidara-dock-window,
     }
 }
 
-/* --- Islands Layout --- */
+/* --- Dock contents ---
+   Everything below is painted by surfaces/dock/ inside the dock's own window
+   (DockCore builds it once as `name: "nidara-dock"` for both orientations), so
+   it all lives under the dock scope — see design-system.md's scope table.
 
-#the-dock-bar {
-    padding: 0;
-    transform-origin: bottom;
-}
-
-.cd-item {
-    @include nidara-reset;
-    margin: 0;
-    padding: 0;
-    transform-origin: bottom;
-    transition: background-color 0.2s #{$ease-emphasized};
-    -gtk-icon-shadow: none;
-
-    &.cd-dragging {
-        opacity: 0.3;
-    }
-
-    &:hover {
+   (`#the-dock-bar` deleted 2026-08-10 — DEAD: no widget in the shell carries
+   that name. Fifth dead selector found by mapping declared classes back to the
+   files that render them; the other four are noted in _bar.scss and below.) */
+#nidara-dock,
+.nidara-dock-window {
+    .cd-item {
         @include nidara-reset;
+        margin: 0;
+        padding: 0;
+        transform-origin: bottom;
+        transition: background-color 0.2s #{$ease-emphasized};
+        -gtk-icon-shadow: none;
+
+        &.cd-dragging {
+            opacity: 0.3;
+        }
+
+        &:hover {
+            @include nidara-reset;
+            /* --- Hover Shadow Killer --- */
+            box-shadow: none;
+            -gtk-icon-shadow: none;
+        }
+
+        // Kill internal GTK nodes (ripples, highlights, etc.)
+        &>ripple,
+        &>highlight,
+        &>outline,
+        &>focus-ring,
+        &>decoration {
+            @include nidara-reset;
+            opacity: 0;
+        }
     }
 
-    // Kill internal GTK nodes (ripples, highlights, etc.)
-    &>ripple,
-    &>highlight,
-    &>outline,
-    &>focus-ring,
-    &>decoration {
-        @include nidara-reset;
-        opacity: 0;
+    .cd-revealer {
+        background-color: transparent;
+        padding: 0;
+        margin: 0;
+        transition: none;
+    }
+
+    .cd-icon-container {
+        margin: 0;
+        padding: 0;
+        background-color: transparent;
+        transition: none;
+    }
+
+    /* --- Separator - dark hairline --- */
+    .cd-separator {
+        min-width: 1px;
+        background-color: var(--nidara-text-disabled);
+        margin: 0;
+        box-shadow: none;
+        border-radius: 0px;
+    }
+
+    /* --- Launcher Icon Visibility ---
+       `cd-icon-box-<appId>` is stamped per item in DockItem.tsx; "launcher" is
+       the permanent first slot (DockCore's DOCK_PERMANENT_IDS). */
+    #cd-icon-box-launcher image {
+        color: var(--nidara-text);
+        // NO -gtk-icon-shadow here: the dock is a blurred layer with ignore_alpha 0.04
+        // (pinned just under dockOpacity's 0.05 floor so the 5%-frost capsule still
+        // blurs — see config/hypr/hyprland.lua:516). Hyprland blurs the wallpaper
+        // behind ANY shadow pixel above that threshold → a halo around the shadow. A
+        // shadow faint enough to stay under 0.04 everywhere is invisible anyway, so a
+        // real drop shadow and this blurred layer are mutually exclusive.
+        -gtk-icon-shadow: none;
     }
 }
 
-.cd-revealer {
-    background-color: transparent;
-    padding: 0;
-    margin: 0;
-    transition: none;
-}
-
-.cd-icon-container {
-    margin: 0;
-    padding: 0;
-    background-color: transparent;
-    transition: none;
-}
-
-/* --- Separator - dark hairline --- */
-#nidara-dock .cd-separator {
-    min-width: 1px;
-    background-color: var(--nidara-text-disabled);
-    margin: 0;
-    box-shadow: none;
-    border-radius: 0px;
-}
-
-/* --- Hover Shadow Killer --- */
-#nidara-dock .cd-item:hover {
-    box-shadow: none;
-    -gtk-icon-shadow: none;
-}
-
-
-
-/* --- Launcher Icon Visibility --- */
-#cd-icon-box-launcher image {
-    color: var(--nidara-text);
-    // NO -gtk-icon-shadow here: the dock is a blurred layer with ignore_alpha 0.04
-    // (pinned just under dockOpacity's 0.05 floor so the 5%-frost capsule still
-    // blurs — see config/hypr/hyprland.lua:516). Hyprland blurs the wallpaper
-    // behind ANY shadow pixel above that threshold → a halo around the shadow. A
-    // shadow faint enough to stay under 0.04 everywhere is invisible anyway, so a
-    // real drop shadow and this blurred layer are mutually exclusive.
-    -gtk-icon-shadow: none;
-}
 /* ── Vertical Dock ─────────────────────────────────────────────────────────
    (`window#nidara-dock-vertical` deleted 2026-08-07 — DEAD: both orientations
    are the same window, built once in DockCore with `name: "nidara-dock"`, so

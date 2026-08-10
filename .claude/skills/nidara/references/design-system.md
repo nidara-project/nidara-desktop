@@ -1882,6 +1882,32 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
    | Dock | `#nidara-dock, .nidara-dock-window` |
    | App grid | `#nidara-app-grid, .nidara-app-grid-window` |
    | Settings | `window.nidara-settings-window` |
+   | About | `window#nidara-about, .about-floating-window` |
+
+   ⚠️ **The window a class lands in is NOT the directory its TSX lives in.** `_bar.scss` was the last
+   unscoped surface sheet (closed 2026-08-10) and the mapping was not what the filenames said:
+   `Bar.tsx` builds the capsule row and hands it to `islandWin.mount()`, so `.bar-center` — declared
+   in `surfaces/bar/` — renders inside `#nidara-island` and nowhere else, while `.bar-centerbox` is
+   built twice and genuinely needs both scopes. `.workspace-dot` never appears in the bar at all
+   (`makeWorkspaceDot` is called only from the island and from the overview, which is mounted inside
+   the island). Scoping either one to `#nidara-bar` on the strength of its filename would have
+   silently unstyled the capsule and every workspace dot. **Follow the mount site, not the folder:**
+   grep the class, then grep where the widget holding it is `append`ed / `mount`ed.
+
+   ⚠️ **Parent-referencing `&` and a scope wrapper do not mix.** `.app-grid-search-box:focus-within &`
+   written inside `.app-grid-search-icon` was correct while that rule was top-level; once `#102`
+   wrapped the file in the window scope, `&` expanded to `#nidara-app-grid .app-grid-search-icon` and
+   the rule compiled to `.app-grid-search-box:focus-within #nidara-app-grid .app-grid-search-icon` — a
+   window nested inside a search box, unmatchable. The search icon stopped turning accent and nothing
+   reported it (found and fixed 2026-08-10). **When a rule needs an ancestor's state, nest it under
+   that ancestor** (`&:focus-within .app-grid-search-icon`), never reach back up with `&`. After
+   adding a scope wrapper, grep the compiled `style.css` for `#nidara-` appearing anywhere other than
+   the START of a selector — every hit is a rule that can never match.
+
+   ⚠️ **An atomic widget has no surface, so its CSS belongs to the kit.** Anything under `widgets/`
+   is placed by the USER (bar, CC grid, wherever the plugin system lands it next), so its classes go
+   in `_components.scss`, not in the sheet of whichever surface happens to host it today. That is why
+   `.bar-popover-key/-val/-value/-icon-btn` all live there despite the `bar-` prefix in the name.
 
    ⚠️ **A shared widget spans scopes and must list them all.** `common/WorkspaceSchematic.ts` renders
    into the island (overview) *and* the app grid (workspace strip), so `_workspace.scss` carries two
