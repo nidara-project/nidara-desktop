@@ -111,8 +111,22 @@ export function playEntrance(widget: Gtk.Widget, opts: EntranceOpts): void {
                 settle()
                 return GLib.SOURCE_REMOVE
             }
-            const p = easeEmphasized(elapsed / duration)
-            widget.opacity = p
+            const t = elapsed / duration
+            const p = easeEmphasized(t)
+            // 🔑 POSITION AND ALPHA DO NOT SHARE A CURVE, and reusing one was a real
+            // mistake here. `$ease-emphasized` is a strong decelerate: on the real
+            // lock it put the card at 0.73 opacity by 150ms and 0.95 by 300, so the
+            // fade was effectively over in the first sixth of the animation and the
+            // remaining 300ms crawled from 0.73 to 1 — a stretch the eye cannot
+            // resolve. The user's report was "I'm not sure the opacity changes at
+            // all"; measured against the pixels it changed exactly proportionally
+            // (alpha 0.060 / 0.161 / 0.222 for 0.27 / 0.73 / 1.00), so this was
+            // never a rendering bug, it was the ramp.
+            //
+            // Alpha is LINEAR. Motion decelerating while alpha ramps evenly is the
+            // usual split, and it is what makes the fade legible: at 150ms this is
+            // 0.33 instead of 0.73.
+            widget.opacity = t
             // Rounded: a fractional margin makes GTK re-round the whole layout every
             // frame, which shows up as the text jittering by a pixel as it travels.
             widget.margin_top = baseMargin + Math.round(opts.rise * (1 - p))

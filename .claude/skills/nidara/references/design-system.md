@@ -2175,6 +2175,14 @@ catch-up burst). **The frame clock is the one thing that surface does reliably p
 the animation now uses it directly and sets its own FROM state in `map`, before the first
 draw.
 
+🔑 **POSITION AND ALPHA DO NOT SHARE A CURVE.** They did at first, and the user's report was
+"I'm not sure the opacity changes at all". It did — measured straight off the pixels, mean
+alpha 0.060 / 0.161 / 0.222 for widget opacity 0.27 / 0.73 / 1.00, exactly proportional, so it
+was never a rendering question. The fault was the ramp: `$ease-emphasized` is a strong
+decelerate, so on the real lock the card hit 0.73 by 150ms and 0.95 by 300, and the last 300ms
+crawled across a difference the eye cannot resolve. **Motion decelerates; alpha is LINEAR.**
+The same trace now reads 0.13 / 0.33 / 0.65 / 1.00, which is a fade you can actually see.
+
 ⚠️ **Numbers, and they differ per block to produce the same movement.** `.greeter-hero` is
 `valign: START` and keeps all its rise (21); the card is `valign: CENTER`, where centring
 hands half back (40 → ~21px). Both measured.
