@@ -1,6 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { formatDatePart, type DateFormat } from "./date-names"
+import { revealOnFirstFrame } from "./first-frame"
 
 // The date + time block of the greeter and the lockscreen — the hero of both
 // screens. Returns the two labels in a column with no container chrome, for
@@ -84,16 +85,10 @@ export function NidaraClock(deps: ClockDeps): Gtk.Widget {
     box.append(dateLabel)
     box.append(timeLabel)
 
-    // ⚠️ The 16ms is not a flourish, it is the same requirement the card has: a
-    // class added in the same turn as the map has nothing to transition FROM, so
-    // the animation is skipped and the block simply appears. One frame later it
-    // animates. Both blocks do this on their own `map`, which is what keeps them
-    // in step without either knowing about the other.
-    box.connect("map", () => {
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
-            box.add_css_class("greeter-hero-shown")
-            return GLib.SOURCE_REMOVE
-        })
-    })
+    // Same requirement as the card, and the same primitive: the class must land
+    // AFTER the initial state has been painted or there is nothing to transition
+    // from. Both blocks do this on their own `map`, which is what keeps them in
+    // step without either knowing about the other.
+    box.connect("map", () => { revealOnFirstFrame(box, "greeter-hero-shown") })
     return box
 }

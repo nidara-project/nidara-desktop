@@ -2184,8 +2184,30 @@ where centring hands half of it back. 21px there and 40px here both measure ~21p
 21px → 0. Verified, not assumed.
 
 Being "in phase" is guaranteed by construction rather than by timing: both rules compile to
-the identical `450ms cubic-bezier(0.2, 0, 0, 1)`, and each block adds its own class on its own
-`map` + 16ms, so neither needs to know about the other.
+the identical `450ms cubic-bezier(0.2, 0, 0, 1)`, and each block reveals itself off its own
+`map`, so neither needs to know about the other.
+
+🔑 **REVEAL ON A FRAME, NEVER ON A TIMEOUT** (`ui/lib/first-frame.ts`). Both blocks used
+`GLib.timeout_add(…, 16, …)` under a comment claiming it fired "on the next frame". It does
+not: 16ms is wall clock, and the two only coincide when the widget is already being drawn.
+
+On the LOCKSCREEN they are not the same thing, and the user reported it from a real lock as
+"no animation, or it arrives late, or there is none". The log gives the window: under
+`ext-session-lock-v1` the surface is presented at T, and the compositor acks the lock ~60ms
+later — measured, `[Lock] Window assigned` .138 → `Session locked successfully` .199. The 16ms
+timeout fired squarely inside that blind stretch, so the class landed before the `opacity: 0`
+state had ever reached a frame. `Gtk.Widget.add_tick_callback` is the honest version: it only
+runs when frames are actually being produced, and the class goes on the SECOND tick, so the
+FROM state has been painted once.
+
+⚠️ **With a FALLBACK, because the animation must never be a gate.** `.greeter-card` is
+`opacity: 0` until its class arrives, so a frame clock that never ticks would mean an
+invisible login card — locked out by a flourish. If no frames come within 500ms the class goes
+on anyway and only the animation is lost. Both paths are exercised and distinguishable in the
+log: `[entrance] greeter-card-shown via frame +18ms` versus `via fallback +500ms`.
+
+That log line is deliberate and should stay: these two surfaces cannot be watched while they
+run, so it is the only witness that says which path fired and when.
 
 Still one-shot, per the cost rule: a CONTINUOUS animation costs ~40 % of a GPU, and under
 `ext-session-lock-v1` the compositor cannot help — everything is paid in our process.
