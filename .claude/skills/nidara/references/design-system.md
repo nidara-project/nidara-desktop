@@ -3420,3 +3420,31 @@ signature is spring physics, not bezier; `stepSpring` in `DockPhysics.ts` alread
 substeps correctly, so this would be its second consumer and the trigger to promote it to
 `ui/lib/`), and an EXIT animation on unlock — today the card simply vanishes when the bundle
 quits, which would mean holding the surface for the duration before `app.quit()`.
+
+### ⚠️ Text is only crisp when the line box lands on WHOLE PIXELS
+
+Two independent things have to hold, and both are set in `ThemeManager`. The symptom when
+either fails is not "blurry text" — it reads as **the tops of some letters being shaved**,
+which is why it went unfixed for so long: flat-topped glyphs (T E F H I L) put a full-width
+bar on their top row, so losing half its coverage is obvious, while round ones (G O C S) put
+three or four pixels up there and look fine. "In GTK the T is cut but the G isn't" is the
+signature of this bug, not of a clipping one.
+
+1. **`gtk-hint-font-metrics = true`** (`syncFontMetrics`) rounds the font's ascent/descent to
+   whole pixels, so the baseline lands ON a row. Measured with the same font at the same
+   14.667px: metrics OFF → ascent `14.208984375`, the T's crossbar smeared across two rows
+   (`#######+` over `+++##++.`); metrics ON → ascent `15.0`, one crisp row (`.########`).
+   GTK turns this off to serve fractional display scaling.
+2. **The size must be a whole number of pixels.** The font dialog returns POINTS, and at 96dpi
+   11pt is 14.667px — so the default `Inter 11` put the anchor on a fraction, and because the
+   `$fse-*` ramp is relative, every step inherited it (11.59 / 12.61 / 13.64 / 14.67 / 15.69).
+   The seeded default is now **`Inter 14px`** (absolute, dpi-independent, and the base the
+   ratios were designed against: 11.06 / 12.04 / 13.02 / 14 / 14.98), and `setFont` snaps any
+   pick to whole pixels on the way in.
+
+🔧 To check a suspicion, dump the pixels rather than squinting:
+`magick shot.png -crop WxH+X+Y +repage -colorspace Gray txt:-` and print `#`/`+`/`.` by
+threshold. A crisp horizontal stroke is ONE full-intensity row; a smeared one is two partial
+rows. That is also how the same investigation ruled out the font family, the VM, transparent
+backgrounds and `queue_draw`.
+

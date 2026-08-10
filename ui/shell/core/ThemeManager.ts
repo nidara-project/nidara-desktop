@@ -134,7 +134,35 @@ class ThemeManager extends GObject.Object {
         } catch (e) { console.error(`[ThemeManager] Failed to monitor ${stylePath}:`, e) }
     }
 
+    /**
+     * Round the font's ascent/descent to whole pixels, so a line box is an integer
+     * and the baseline lands ON a pixel row.
+     *
+     * 🔑 This is the mechanism behind years of "the tops of the letters look
+     * shaved". Measured with the SAME font at the SAME size (14.667px — what the
+     * 11pt default resolves to at 96dpi):
+     *
+     *   hint metrics OFF → ascent 14.208984375 → the T's crossbar smears across two
+     *                      rows (`#######+` over `+++##++.`)
+     *   hint metrics ON  → ascent 15.0        → one crisp row (`.########`)
+     *
+     * Flat-topped glyphs (T E F H I L) are where it shows, because their top row is
+     * a full-width bar and losing half its coverage is obvious. Round ones (G O C S)
+     * put three or four pixels up there and look fine — which is why it reads as
+     * "the T is cut but the G isn't" rather than as blurry text.
+     *
+     * GTK turns this off to serve fractional display scaling; we never asked for it
+     * either way and inherited whatever the default was.
+     */
+    private syncFontMetrics() {
+        try {
+            const s = Gtk.Settings.get_default()
+            if (s) s.gtk_hint_font_metrics = true
+        } catch (e) { }
+    }
+
     private syncFont() {
+        this.syncFontMetrics()
         try {
             const fontName = this.interfaceSettings.get_string("font-name")
             // ⚠️ PARSE WITH PANGO, NEVER A REGEX. `gtk-font-name` is a Pango font
@@ -339,7 +367,37 @@ class ThemeManager extends GObject.Object {
             `[Icon Theme]\nName=Default\nComment=Default Cursor Theme\nInherits=${cursor}\n`)
     }
 
+    /**
+     * Rewrite a font string so its size is a WHOLE NUMBER OF PIXELS.
+     *
+     * The font dialog hands back POINT sizes, and a point size is a lottery: at
+     * 96dpi 11pt is 14.667px and 10pt is 13.333px, while 10.5pt is exactly 14. A
+     * fractional pixels-per-em is the second half of the crisp-text story
+     * (`syncFontMetrics` is the first), and it also propagates: the `$fse-*` ramp is
+     * relative, so every step inherits the anchor's fraction. Pango's `<n>px` form
+     * is absolute, which additionally stops the same setting meaning two different
+     * sizes on two machines whose dpi differ.
+     *
+     * Snapped on the way IN — one door, the one every pick comes through — rather
+     * than rounded at each read.
+     */
+    private snapFontToWholePixels(fontName: string): string {
+        try {
+            const desc = Pango.FontDescription.from_string(fontName)
+            const dpi = (Gtk.Settings.get_default()?.gtk_xft_dpi ?? 96 * 1024) / 1024
+            const px = desc.get_size_is_absolute()
+                ? desc.get_size() / Pango.SCALE
+                : (desc.get_size() / Pango.SCALE) * dpi / 72
+            if (!(px > 0)) return fontName
+            desc.set_absolute_size(Math.round(px) * Pango.SCALE)
+            return desc.to_string()
+        } catch (e) {
+            return fontName
+        }
+    }
+
     async setFont(fontName: string) {
+        fontName = this.snapFontToWholePixels(fontName)
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "font-name", fontName])
         if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
         this.emit("changed")
@@ -554,7 +612,13 @@ class ThemeManager extends GObject.Object {
         // from an explicit choice), so a deliberate pick is never clobbered on later boots.
         // Runs before syncGtkTheme so the settings.ini it writes also gets Inter.
         if (this.interfaceSettings.get_user_value("font-name") === null)
-            this.interfaceSettings.set_string("font-name", "Inter 11")
+            // ⚠️ "14px", not "11". A point size resolves to a fractional pixel size
+            // at 96dpi (11pt = 14.667px) and the relative ramp hangs off this
+            // anchor, so every step inherited the fraction. 14px is also the base
+            // the $fse-* ratios were designed against: at 14 they land within
+            // 0.05px of whole pixels (11.06 / 12.04 / 13.02 / 14 / 14.98), where
+            // 14.667 gave 11.59 / 12.61 / 13.64 / 14.67 / 15.69.
+            this.interfaceSettings.set_string("font-name", "Inter 14px")
         // Same deal for the monospace font: the schema default ("Adwaita Mono 11")
         // names a font we don't even install, while ttf-jetbrains-mono-nerd ships
         // with every Nidara install. Seed it once; never clobber a user's pick.
