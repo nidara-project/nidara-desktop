@@ -53,9 +53,17 @@ export function menuRow(opts: MenuRowOpts): Gtk.Button {
             ? new Gtk.Label({ label: opts.label, halign: Gtk.Align.FILL, hexpand: true, xalign: 0, ellipsize: 3, max_width_chars: 1, css_classes: ["nidara-menu-label"] })
             : new Gtk.Label({ label: opts.label, halign: Gtk.Align.START, hexpand: true, css_classes: ["nidara-menu-label"] }))
     if (opts.trailing) inner.append(opts.trailing)
+    // `nd-icon` ONLY. It used to carry `accent-label` too, meaning to tint the tick
+    // accent — which a Gtk.Image never obeys (an nd-icon is monochrome, driven by
+    // `-gtk-icon-filter: invert(1)`; see design-system.md). The one part of that
+    // class that DID apply was the rest of it: `.accent-label` is the audio detail's
+    // "Default" BADGE — pill background, radius and padding — so inside
+    // `.cc-detail-panel` every checked menu row drew an accent pill behind its tick,
+    // and nowhere else. User-caught in the CC's media source selector 2026-08-10,
+    // against the island's copy of the same menu, which never matched that rule.
     const check = new Gtk.Image({
         gicon: Icons.check, pixel_size: 15,
-        css_classes: ["nd-icon", "accent-label"],
+        css_classes: ["nd-icon"],
         valign: Gtk.Align.CENTER,
         visible: !!opts.checked,
     })

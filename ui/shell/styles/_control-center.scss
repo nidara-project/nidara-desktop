@@ -573,8 +573,11 @@
             &:checked       { background: var(--nidara-accent); }
         }
 
-        // Default speaker badge
-        .accent-label {
+        // Default speaker badge. Qualified `label` on purpose: this is a TEXT badge
+        // (pill + padding), and an unqualified class let a Gtk.Image pick the whole
+        // treatment up — which is exactly what happened to MenuRow's tick until
+        // 2026-08-10. A badge that renders as a background belongs to labels.
+        label.accent-label {
             color: var(--nidara-text);
             background: rgba(var(--nidara-accent-rgb), 0.14);
             border-radius: $nidara-radius-pill;
