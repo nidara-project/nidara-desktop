@@ -411,64 +411,25 @@ window > contents {
   }
 }
 
-// ── Card entrance (fade-in on map) ───────────────────────────────────────────
-.greeter-card {
-  opacity: 0;
-  // ── The card RISES as it fades in ─────────────────────────────────────────
-  // `margin-top`, NOT `transform: translateY`. Commandment 9 bans CSS transforms
-  // on clickables — GTK honours them when painting and ignores them when
-  // hit-testing, and this card is nothing but clickables. Margin is the sanctioned
-  // way, and it is honest here: the card is the only thing on screen, so the
-  // relayout it costs per frame buys nothing back for a snapshot-time transform.
-  //
-  // ⚠️ This number is NOT the travel. The card is `valign: CENTER`, so the margin
-  // also grows the box and the centring gives half of it back: measured
-  // 24px→13px, 40px→21px, 56px→29px of actual movement. **40 is the knob**; 21px
-  // is the "a sheet arrived" distance, and 29 already reads as the card being
-  // dropped rather than arriving.
-  margin-top: 40px;
-  // 450ms is NOT on the $dur-* ladder and should not be snapped onto it: those
-  // three (100/180/260) time a control's state change, and this is a full-screen
-  // surface arriving.
-  //
-  // The curve moved from $ease to $ease-emphasized on 2026-08-10, and that is the
-  // one judgement call in this block. $ease is symmetric — it accelerates as much
-  // as it decelerates, which is right for a state change that could go either way.
-  // A surface ARRIVING only goes one way, and should land rather than glide to a
-  // stop; $ease-emphasized is the system's decelerate curve and is documented for
-  // exactly this ("popovers/sheets"). It is also what makes the rise legible: with
-  // a symmetric curve, 12px of travel over 450ms reads as drift.
-  transition: opacity 450ms $ease-emphasized, margin-top 450ms $ease-emphasized;
-}
-.greeter-card.greeter-card-shown {
-  opacity: 1;
-  margin-top: 0;
-}
-
-// ── The hero block (date + clock) arrives WITH the card ──────────────────────
-// It used to be there from the first frame while the card faded in over it, which
-// read as one element animating on a static backdrop rather than a screen
-// arriving. Same curve and same duration as `.greeter-card` — the whole
-// composition is one movement, which is the reason this is not staggered:
-// staggering says "these are independent peers", and a login screen is one thing.
+// ── Card + hero entrance ─────────────────────────────────────────────────────
+// NOT HERE ANY MORE, and that is the point. The entrance used to be
+// `.greeter-card { opacity: 0; margin-top: 40px; transition: … }` plus a
+// `-shown` class, and it worked in the greeter and in any ordinary window while
+// SNAPPING on the lockscreen — measured with frames flowing and the FROM state
+// laid out: the whole 21px in under 8ms, no interpolation at all.
 //
-// ⚠️ The NUMBER differs from the card's on purpose, and it is not a tuning
-// preference. This block is `valign: START`, so it keeps all of its margin as
-// travel; the card is `valign: CENTER`, where centring hands half of it back. 21px
-// here and 40px there produce the SAME 21px of movement — measured, both.
+// A CSS transition has a precondition that cannot be satisfied on a
+// session-lock surface: something painted to interpolate FROM. That surface gets
+// no frames for ~60ms after `map` and then delivers its first two ticks about 2ms
+// apart, so the initial state is laid out and never painted.
 //
-// ⚠️ It is also ADDITIVE with the widget's own `margin_top = 72` (set in Lock.ts
-// and Greeter.ts, not here): GTK's widget margin and the CSS box margin are
-// separate and stack. So this animates 93px → 72px, not 21px → 0.
-.greeter-hero {
-  opacity: 0;
-  margin-top: 21px;
-  transition: opacity 450ms $ease-emphasized, margin-top 450ms $ease-emphasized;
-}
-.greeter-hero.greeter-hero-shown {
-  opacity: 1;
-  margin-top: 0;
-}
+// So the animation is driven from the frame clock instead — `ui/lib/entrance.ts`,
+// which sets the initial state before the first map and owns the curve
+// ($ease-emphasized, solved). Both blocks travel ~21px over 450ms.
+//
+// ⚠️ Do not "restore" opacity/transition rules for `.greeter-card` or
+// `.greeter-hero` here. They would fight the JS that now owns both properties,
+// and on the one surface that matters they never worked.
 
 // ── The failure message's reserved slot ──────────────────────────────────────
 // The height is RESERVED so the message cannot move the card. Before this,

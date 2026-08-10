@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { formatDatePart, type DateFormat } from "./date-names"
-import { revealOnFirstFrame } from "./first-frame"
+import { playEntrance } from "./entrance"
 
 // The date + time block of the greeter and the lockscreen — the hero of both
 // screens. Returns the two labels in a column with no container chrome, for
@@ -85,10 +85,10 @@ export function NidaraClock(deps: ClockDeps): Gtk.Widget {
     box.append(dateLabel)
     box.append(timeLabel)
 
-    // Same requirement as the card, and the same primitive: the class must land
-    // AFTER the initial state has been painted or there is nothing to transition
-    // from. Both blocks do this on their own `map`, which is what keeps them in
-    // step without either knowing about the other.
-    box.connect("map", () => { revealOnFirstFrame(box, "greeter-hero-shown") })
+    // Same entrance as the card, same duration and curve, each on its own `map` —
+    // which is what keeps them in step without either knowing about the other. 21
+    // and not 40: this block is `valign: START`, so it keeps all of its margin as
+    // travel (and it is ADDITIVE with the `margin_top = 72` its host sets).
+    playEntrance(box, { rise: 21 })
     return box
 }

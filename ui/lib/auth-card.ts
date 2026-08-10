@@ -2,7 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { makeAvatar } from "./avatar"
 import { withGlassCapsule } from "./glass-capsule"
-import { revealOnFirstFrame } from "./first-frame"
+import { playEntrance } from "./entrance"
 
 // The identity-and-password column both login screens are built around: avatar,
 // name, password field, primary button, failure message. The greeter adds a
@@ -247,13 +247,13 @@ export function buildAuthCard(opts: AuthCardOpts): AuthCard {
     col.append(withGlassCapsule(primaryButton, "strong", false))
     col.append(errorSlot)
 
+    // Entrance: driven by the frame clock, not a CSS transition — see
+    // ui/lib/entrance.ts for the measurement that forced that. 40 rather than 21
+    // because this column is `valign: CENTER` and centring hands half the margin
+    // back; both blocks end up travelling the same ~21px.
+    playEntrance(col, { rise: 40 })
+
     col.connect("map", () => {
-        // Entrance: on the first real FRAME, not on a 16ms timeout. The timeout was
-        // a lie on the lockscreen — see ui/lib/first-frame.ts — where `map` runs
-        // before the compositor has acked the session lock, so the class landed
-        // before the opacity:0 state had ever been painted and the card just
-        // appeared.
-        revealOnFirstFrame(col, "greeter-card-shown")
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
             passwordEntry.grab_focus()
             return GLib.SOURCE_REMOVE
