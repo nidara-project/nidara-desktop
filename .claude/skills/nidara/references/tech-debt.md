@@ -1630,7 +1630,9 @@ These were paid down; the *rule* remains:
   7-line wrappers.
 - **Accent colors** live only in `ui/lib/accent.ts` — add/change them there.
 - **Greeter ↔ lockscreen ↔ shell** share `ui/lib/accent.ts` + `ui/lib/users.ts` + `ui/lib/wallpaper.ts`
-  + `ui/lib/avatar.ts`, and since 2026-08-09 (see #57) also **`ui/lib/styles/_tokens.scss`** (the
+  + `ui/lib/avatar.ts`, and since 2026-08-10 also **`ui/lib/styles/_components.scss`** — the kit's
+  own stylesheet, which the two login surfaces now `@use` (see "The greeter wears the kit" below)
+  — and since 2026-08-09 (see #57) **`ui/lib/styles/_tokens.scss`** (the
   design system's mode-independent half — type ramp, spacing, motion, radius ladder),
   **`ui/lib/tokens.ts`**'s `LOCK_GLASS` (the numeric half of the glass mirror the lockscreen's
   painter needs) and **`ui/lib/icons.ts`** (the shipped icon set, for the two bundles with no

@@ -24,6 +24,22 @@
 // nobody chose together). If a size here is not a `$fs-*`, it is a bug.
 @use '../lib/styles/tokens' as *;
 
+// ── The kit's stylesheet ────────────────────────────────────────────────────
+// `ui/lib/nidara-kit/` has been importable from here forever; its LOOK arrived
+// with this line (2026-08-10). What earns it is `NidaraDropDown`: the three
+// selectors on these two screens were raw `Gtk.DropDown`s carrying the whole
+// unfixed saga — GTK's checkmark eating 22px of every row, GTK's scroll bar
+// growing toward the pointer so a click near an option's trailing edge lands on
+// the bar (live here: the language list is 12 items, the only one that scrolls),
+// and a focus ring drawn twice.
+//
+// 🔑 SOURCE ORDER IS THE MECHANISM. Sass emits a module's CSS BEFORE the file
+// that loads it, so everything below out-ranks the kit at equal specificity.
+// That is deliberate and it is what makes the two bare-element collisions safe:
+// `dropdown > button` and `dropdown popover` exist in both sheets with the same
+// specificity, and these screens keep their own. See the dropdown section.
+@use '../lib/styles/components';
+
 // ── Palette ─────────────────────────────────────────────────────────────────
 // The one thing that is legitimately local. The shell rewrites its colour
 // tokens at runtime per light/dark mode (NidaraTheme.generateTokensCss); these
@@ -78,11 +94,58 @@
   --nidara-glass-border-sm:rgba(255, 255, 255, 0.14);
 
   --nidara-warning:        #f3ba4b;
-  --nidara-popup-bg:       rgba(14, 14, 22, 0.97);
 
   // (--nidara-glass-light and --nidara-danger were declared here with zero
   // consumers. The danger one could not have had any: see .greeter-error, which
-  // deliberately does NOT tint itself red.)
+  // deliberately does NOT tint itself red. --nidara-danger is back below, this
+  // time with one: the kit's alert dialog.)
+
+  // ── THE KIT'S TOKEN CONTRACT ──────────────────────────────────────────────
+  // The 16 custom properties `ui/lib/styles/_components.scss` reads and this
+  // sheet did not define. They are NOT optional decoration: an undefined custom
+  // property does not warn — GTK drops the whole declaration — so importing the
+  // kit without these fails SILENTLY, on the two surfaces that have no dev mode
+  // and build against a fixed /usr/share path. (The radius ladder the kit also
+  // reads is already satisfied, by `radius-vars` above.)
+  //
+  // Values are the shell's DARK set verbatim (_base.scss), for the reason
+  // already given for the text ramp: these screens are permanently dark glass,
+  // so the shell's dark tokens ARE their palette, and a near-miss copy is how
+  // this surface fell a generation behind the last time.
+  //
+  // 🔑 The list is what the kit ACTUALLY READS, measured against the compiled
+  // sheet — not what it might one day want. `--nidara-shadow-md` was in the
+  // first draft and came straight back out: the `glass()` mixin names it, but
+  // no kit rule calls that mixin, so nothing read it. Same discipline as the
+  // consumerless classes deleted in #109–#111. The check is two commands
+  // against style.css, so re-run them instead of guessing:
+  //   read  = grep -oE 'var\(--nidara-[a-z0-9-]+' style.css | sort -u
+  //   given = grep -oE '^ *--nidara-[a-z0-9-]+:'  style.css | sort -u
+  --nidara-surface-back:   rgba(255, 255, 255, 0.04);
+  --nidara-surface:        rgba(255, 255, 255, 0.08);
+  --nidara-surface-hover:  rgba(255, 255, 255, 0.12);
+  --nidara-surface-active: rgba(255, 255, 255, 0.16);
+  --nidara-surface-raised: rgba(255, 255, 255, 0.20);
+  --nidara-state-selected: rgba(0, 136, 255, 0.22);
+  --nidara-border:         rgba(127, 127, 127, 0.15);
+  --nidara-edge:           1px solid rgba(255, 255, 255, 0.14);
+  --nidara-accent-fg:      #ffffff;
+  --nidara-danger:         #ff3b30;
+  --nidara-danger-rgb:     255, 59, 48;
+  --nidara-shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.40), 0 2px 6px rgba(0, 0, 0, 0.24);
+  --nidara-bg:             rgba(30, 30, 30, 0.5);
+
+  // The two exceptions to "verbatim", and both are the same reason: the shell
+  // floors its popover alpha at 0.85 so Hyprland's popup blur has something to
+  // work with. These screens do NOT get that blur — the greeter runs its own
+  // compositor config (hyprland-greeter.lua) and the lockscreen's popups sit
+  // above the session lock — so an 85 %-opaque list would read as a grey haze
+  // over the wallpaper. `rgba(14, 14, 22, 0.97)` is this sheet's own value,
+  // chosen for exactly that; it was called `--nidara-popup-bg` until the kit
+  // arrived with the contract name for the same thing. Renamed, not duplicated:
+  // its only two consumers were the popover block the kit now owns.
+  --nidara-popover-bg:     rgba(14, 14, 22, 0.97);
+  --nidara-popover-border: rgba(255, 255, 255, 0.14);
 }
 
 // ── Shipped icons ───────────────────────────────────────────────────────────
@@ -256,7 +319,21 @@ window > contents {
   &:focus,
   &:focus-within { outline: none; }
 
-  > text { color: var(--nidara-text); }
+  // ⚠️ `caret-color` here is a GUARD, not decoration. The kit's sheet styles
+  // bare `entry` — including `entry > text { caret-color: var(--nidara-accent) }`
+  // — and it reaches the inner `text` node directly, so the `caret-color` this
+  // rule's PARENT sets is inherited and loses to it. Without this line the
+  // import silently turns the caret on both login screens accent-blue. Right in
+  // Settings (accent marks where your keystrokes go, on a card full of fields);
+  // wrong here, where accent is the login button's focus ring and this is the
+  // only field on screen.
+  //
+  // Everything else the kit's `entry` block declares lands harmlessly: this
+  // class out-ranks bare `entry` on background, border, padding and min-height,
+  // and the one property it does NOT declare — `border-radius` — falls on a box
+  // that is switched off. The focus ring is not a CSS outline here at all; it is
+  // the capsule's rim (`withGlassCapsule(passwordEntry, "subtle", true)`).
+  > text { color: var(--nidara-text); caret-color: var(--nidara-text); }
 
   // ⚠️ The peek icon is an `image`, NOT a `button`. This block selected
   // `> button` until 2026-08-09 and had therefore never matched anything —
@@ -417,13 +494,27 @@ window > contents {
 .greeter-shake { animation: greeter-shake 0.4s ease; }
 
 // ── Gtk.DropDown — session and keyboard layout selectors ─────────────────────
-// Base trigger: same ghost style for all dropdowns in the greeter.
-// GTK4 blank theme means zero defaults — define everything explicitly.
+// These are `NidaraDropDown`s now (LoginCard.ts, LocaleBar.ts), so their POPUP
+// is the kit's — that block used to live here and is gone; the kit owns it.
+//
+// What stays here is the TRIGGER, and it is a deliberate divergence, not a
+// leftover. The kit styles the trigger as an INPUT (surface-back fill, 2px
+// border, radius-sm, 4px/14px padding, 20px content floor) because in Settings
+// it sits on a card next to text fields. These three sit on painted glass over
+// the user's wallpaper, and two of them sit INSIDE a capsule beside an icon and
+// a separator, clamped to 18px so they end up exactly as tall as
+// .greeter-power-btn. Taking the kit's trigger would break that alignment
+// outright — this is geometry, not taste. So: ghost pill here, input on the
+// card, one popup shared.
+//
+// This block and the kit's `dropdown > button` have the SAME specificity; this
+// one wins purely because Sass emits the module first (see the @use at the top).
+// If that import ever moves below here, these screens silently become Settings.
+//
 // `dropdown > button` WITHOUT `.combo`: on current GTK4 the internal button
 // does NOT carry the .combo class, so every `button.combo` selector is dead
 // (verified empirically in the VM — the button rendered with Adwaita defaults,
-// visibly taller than its siblings). Same lesson as the popover below and as
-// the shell's _components.scss.
+// visibly taller than its siblings). Same lesson as the shell's _components.scss.
 dropdown > button {
   background: transparent;
   border: none;
@@ -443,10 +534,35 @@ dropdown > button {
   // ⚠️ `margin-start` was declared on both of these and GTK4 CSS HAS NO SUCH
   // PROPERTY — it logs "No property named margin-start" and does nothing. GTK4
   // dropped the logical margin longhands; the physical `margin-left` is what
-  // exists. Removed rather than translated: it never applied, so translating it
-  // would ADD a 4px gap that has never shipped, on a control the greeter's
-  // dropdowns share. If the gap is wanted, that is a deliberate change with a
-  // render behind it, not a silent side effect of clearing a warning.
+  // exists. Removed rather than translated (2026-08-09): it never applied, so
+  // translating it would ADD a 4px gap that has never shipped, on a control the
+  // greeter's dropdowns share. If the gap is wanted, that is a deliberate change
+  // with a render behind it, not a silent side effect of clearing a warning.
+  //
+  // 🔑 The next line is that same decision, defended. The kit ships
+  // `dropdown > button > box > label { margin-left: 8px }` — the gap is right
+  // THERE because a Settings trigger can carry an icon before its label — and
+  // nothing here out-ranked it, so importing the kit would have handed these
+  // three exactly the indent that was just refused: silently, and at 8px rather
+  // than 4. Zeroed on purpose, not left to luck. These triggers are label +
+  // arrow, never an icon, so the gap has nothing to separate.
+  > box > label { margin-left: 0; }
+  // 🔑 The second guard, and this one was NOT predicted — it was caught by
+  // rendering the whole surface before and after and diffing the pixels. The
+  // kit's trigger is `$fw-medium` (500) because in Settings it is a control on a
+  // card; these are dim, subordinate labels on glass, and the greeter's own
+  // variants below override the SIZE but never the WEIGHT, so 500 came through.
+  // It is not only a tone change: heavier glyphs are wider, so the language pill
+  // grew ~2px and pushed its own label and chevron sideways — an import silently
+  // moving a laid-out control.
+  //
+  // 🔑 And it was the ONLY thing the import moved. With this line the greeter
+  // renders 0 different pixels out of 3,686,400 against the sheet before it
+  // (scripts/dev/lock-probe.js, SCOPE=greeter, both sheets, `magick compare
+  // -metric AE`). That is the check to repeat for step 2 of the kit migration,
+  // and it is worth more than reading the cascade: the margin above was found by
+  // reading and this one was not.
+  font-weight: 400;
   image { color: inherit; -gtk-icon-size: 10px; }
   // GtkDropDown's chevron is an `arrow` node, not `image` — uncapped it renders
   // at 16px and makes the combo visibly taller than its sibling buttons.
@@ -478,48 +594,22 @@ dropdown.locale-bar-dropdown > button {
   &:active { background: rgba(255, 255, 255, 0.05); }
 }
 
-// Popover list — shared for both (auto-positions: above when near bottom).
-// `dropdown popover`, not `popover.combo`: GTK4 never puts .combo on the
-// popover (same finding as the shell's _components.scss).
-dropdown popover {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-
-  > contents {
-    background: var(--nidara-popup-bg);
-    border: 1px solid var(--nidara-glass-border-sm);
-    border-radius: var(--nidara-radius-sm);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.60);
-    padding: 4px;
-  }
-
-  > arrow {
-    background: var(--nidara-popup-bg);
-    border-color: var(--nidara-glass-border-sm);
-  }
-
-  scrolledwindow, viewport {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-  }
-
-  listview {
-    background: transparent;
-
-    > row {
-      border-radius: $nidara-radius-xs;
-      padding: 6px 12px;
-      min-height: 0;
-      color: var(--nidara-text-secondary);
-      font-size: $fs-small;
-
-      &:hover    { background: rgba(255, 255, 255, 0.08); color: var(--nidara-text); }
-      &:selected { background: var(--nidara-accent-15); color: var(--nidara-text); }
-    }
-  }
-}
+// Popover list — DELETED, and that deletion is the point of this change.
+//
+// A near-copy of the kit's block used to sit here, frozen at the generation
+// before PR #86 fixed it: the fill and the padding were on GTK's own `> row`,
+// which also carries GTK's CHECKMARK (18px icon + 4 spacing) — so every option
+// on the login screen was indented around a mark nobody chose, and no fill of
+// ours could ever own that node. `:selected` drew ACCENT, on a list where GTK
+// moves :selected with the POINTER (hover-select), so merely dragging through
+// the language list flashed the accent down twelve rows. GTK's scroll bar was
+// left in place, the one that grows toward the pointer so a click near an
+// option's trailing edge lands on the bar instead of the option — and the
+// language list is the only list on these two screens long enough to scroll.
+//
+// `NidaraDropDown` fixes all three at once, in `ui/lib/`, for every bundle. The
+// tone that WAS local survives as `--nidara-popover-bg` in the palette above.
+// Nothing replaces this block: deleting it is what lets the kit's win.
 
 // ── Locale bar ───────────────────────────────────────────────────────────────
 // Painted (see .greeter-power-bar). Same derivation for the inset: the painted

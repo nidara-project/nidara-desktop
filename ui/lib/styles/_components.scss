@@ -30,27 +30,39 @@
 // component is worn by whatever window imports it, so scoping it to one would
 // be the bug rather than the fix.
 //
-// ⚠️ WHO IMPORTS IT TODAY: the shell, and only the shell. The greeter and the
-// lockscreen do NOT yet, deliberately — nothing in them wears a kit class, and
-// the rules below include BARE-ELEMENT selectors (`entry`, `selection`,
-// `dropdown > button`, `dropdown popover`) that match without a class and would
-// collide with the equivalents those two already declare. The concrete one
-// measured 2026-08-10: this file gives every `entry` a `border-radius`, and the
-// greeter's password field has its CSS box deliberately OFF (painted by
-// `glass-capsule.ts`), so its focus ring would go from pill to rounded
-// rectangle. Two of those three collisions are `Gtk.DropDown`, which is exactly
-// what the greeter's migration to `NidaraDropDown` replaces — so that migration
-// is what earns the import, and it brings the token contract below with it.
+// ── WHO IMPORTS IT: ALL THREE BUNDLES (greeter + lock since 2026-08-10) ─────
+// `ui/greeter/style.scss` — the sheet the greeter AND the lockscreen compile —
+// `@use`s this file. What earned it was migrating those screens' three raw
+// `Gtk.DropDown`s to `NidaraDropDown`: that turned two of the three known
+// bare-element collisions (`dropdown > button`, `dropdown popover`) from a
+// problem into the payload. Read design-system.md "The greeter wears the kit"
+// before adding a fourth bundle or a bare-element rule here.
 //
-// ⚠️ THE TOKEN CONTRACT. These rules read 23 `--nidara-*` custom properties and
-// the greeter today defines 6 of them. The 17 missing are the surface ladder
-// (`--nidara-surface{,-back,-hover,-active,-raised,-strong}`), `--nidara-border`,
-// `--nidara-danger{,-rgb}`, `--nidara-accent-fg`, `--nidara-shadow-{sm,md}`,
-// `--nidara-thumb`, `--nidara-popover-{bg,border}`, plus `--nidara-state-selected`
-// and `--nidara-edge` which the mixins need. An undefined custom property does
-// not warn — the declaration is simply dropped — so importing this file without
-// satisfying the contract fails SILENTLY, on two surfaces that have no dev mode
-// (`greeter/lock` build against a fixed /usr/share path). Satisfy it first.
+// ⚠️ THREE THINGS THAT SHEET RELIES ON, so do not break them from this side:
+//
+// 1. SOURCE ORDER. Sass emits this module BEFORE the file that loads it, so a
+//    consumer's own rules out-rank these at equal specificity. That is the only
+//    thing keeping the login screens' ghost-pill triggers from becoming the
+//    input-styled trigger below. Nothing here may rely on being last.
+// 2. THE TOKEN CONTRACT. These rules read 22 `--nidara-*` custom properties. An
+//    undefined one does NOT warn — GTK drops the declaration — so a consumer
+//    that has not defined them fails SILENTLY, and the greeter/lock have no dev
+//    mode to notice in (fixed /usr/share path). **Adding a `var(--nidara-…)`
+//    here is a change to every consumer's palette block.** The greeter's list is
+//    verified by grepping the compiled sheet, not by hand; the two commands are
+//    in the comment above that block.
+// 3. THE BARE-ELEMENT RULES ARE THE SHARP EDGE. `entry`, `selection`,
+//    `dropdown > button`, `dropdown popover` match with no class at all. What
+//    they cost was measured on the greeter: two properties reached controls
+//    nobody intended — `> box > label { margin-left }` and `font-weight` on the
+//    trigger — and only the first was findable by reading the cascade. A new
+//    bare-element rule needs the pixel diff in design-system.md run against the
+//    login screens, not just a look at the shell.
+//    (The `entry` collision that was PREDICTED here did not happen: the greeter's
+//    password field has its CSS box off and shows focus as the capsule's painted
+//    rim, not an outline, so this file's `border-radius` lands on an invisible
+//    box. The real one was `entry > text { caret-color }`, which reaches the
+//    inner node directly and beats what the class above it inherits.)
 
 @use 'tokens' as *;
 @use 'mixins' as *;

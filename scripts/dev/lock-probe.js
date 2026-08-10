@@ -55,7 +55,13 @@
  *                    --format=esm --external:'gi://*' --outfile=/tmp/glass.js
  *                (gjs cannot import TypeScript; the bundle is the whole reason
  *                for the indirection. `--external:'gi://*'` keeps the GI imports
- *                resolving at runtime.)
+ *                resolving at runtime, and `--alias:ags/gtk4=…` resolves the one
+ *                import that is a runtime path rather than a package — see
+ *                scripts/dev/ags-gtk4-shim.js.)
+ *   KIT=<path>   a BUNDLED ui/lib/nidara-kit/scrolled.js, to build the three
+ *                selectors with the real `NidaraDropDown`. Without it they are
+ *                bare `Gtk.DropDown`s and the kit's construction-time work — the
+ *                list factory, `adoptGtkScrolled` — never runs. See below.
  *   W, H         surface size, used only when FULLSCREEN=0. Both real surfaces
  *                cover the screen, so the probe fullscreens by default: on a
  *                TILING compositor W/H are a request that gets ignored anyway,
@@ -130,6 +136,26 @@ if (PAINTER) {
     print(`[painter] ${PAINTER}${SCOPE === "lock" ? " (with backdrop)" : ""}`)
 }
 
+// KIT=<bundled ui/lib/nidara-kit/scrolled.js> — build the three selectors with the
+// REAL `NidaraDropDown` instead of a bare `Gtk.DropDown`. Added 2026-08-10 with
+// the greeter's adoption of the kit, and the gap it closes is worth stating: this
+// probe REBUILDS the widget tree, it does not import LoginCard, so a stylesheet
+// can be proven pixel-identical here while the code path that actually ships was
+// never once executed. `NidaraDropDown` swaps the list factory and re-parents
+// GTK's ScrolledWindow into an overlay (`adoptGtkScrolled`) — construction-time
+// work on a surface where a thrown error is a login screen that does not appear.
+// Same bundling indirection as PAINTER, same reason (gjs cannot import TS):
+//   npx --yes esbuild ui/lib/nidara-kit/scrolled.ts --bundle --format=esm \
+//     --external:'gi://*' --alias:ags/gtk4=./scripts/dev/ags-gtk4-shim.js \
+//     --outfile=/tmp/kit.js
+let makeDropDown = (strings) => Gtk.DropDown.new_from_strings(strings)
+const KIT = GLib.getenv("KIT")
+if (KIT) {
+    const kit = await import(`file://${KIT}`)
+    makeDropDown = (strings) => kit.NidaraDropDown({ model: Gtk.StringList.new(strings) })
+    print(`[kit] ${KIT} → NidaraDropDown`)
+}
+
 
 // ── the specimen: Lock.ts's buildWindow(), minus the parts that need a session ──
 const classes = SCOPE === "lock" ? ["greeter-window", "nidara-lock-window"] : ["greeter-window"]
@@ -202,7 +228,7 @@ if (SCOPE === "greeter") {
     // Session selector — a set-once control, kept visually subordinate to the
     // password field. Gtk.DropDown for real: it is the widget whose focus ring
     // and popover styling this sheet spends most of its lines on.
-    const drop = Gtk.DropDown.new_from_strings(["Nidara", "Hyprland", "GNOME"])
+    const drop = makeDropDown(["Nidara", "Hyprland", "GNOME"])
     drop.add_css_class("greeter-session-dropdown")
     const dropWrap = wrap(drop)
     dropWrap.halign = Gtk.Align.CENTER
@@ -283,11 +309,11 @@ const localeBar = (() => {
         icon.add_css_class("nd-icon")
     }
     row.append(icon)
-    const kb = Gtk.DropDown.new_from_strings(["es", "us"])
+    const kb = makeDropDown(["es", "us"])
     kb.add_css_class("locale-bar-dropdown")
     row.append(kb)
     row.append(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["locale-bar-sep"] }))
-    const lang = Gtk.DropDown.new_from_strings(["Español", "English"])
+    const lang = makeDropDown(["Español", "English"])
     lang.add_css_class("locale-bar-dropdown")
     row.append(lang)
     return row

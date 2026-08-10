@@ -7,6 +7,7 @@ import { greeterPrefs, savePrefs } from "../lib/greeter-prefs"
 import { makeAvatar } from "../../lib/avatar"
 import { greetdLogin, AuthError } from "../lib/greetd"
 import { withGlassCapsule } from "../../lib/glass-capsule"
+import { NidaraDropDown } from "../../lib/nidara-kit/scrolled"
 import { t, onLocaleChange } from "../lib/i18n"
 
 export default function LoginCard(): Gtk.Widget {
@@ -54,13 +55,16 @@ export default function LoginCard(): Gtk.Widget {
     child: loginInner,
   })
 
-  // Session selector — Gtk.DropDown auto-positions its popover (no off-screen bug)
+  // Session selector — `NidaraDropDown` (kit): the native widget, so the popover
+  // is still a real Wayland popup that auto-positions, but the list inside it is
+  // the shell's — see LocaleBar.ts and style.scss.
   const sessionNames = sessions.map(s => s.name)
   const sessionModel = new Gtk.StringList({ strings: sessionNames })
   // Compact centered pill (natural width) — a set-once control, kept visually
   // subordinate to the password field (decided 2026-07-02; prior art: GDM/SDDM
-  // hide it in a corner, others have none).
-  const sessionDrp = new Gtk.DropDown({
+  // hide it in a corner, others have none). That subordination is exactly why
+  // the trigger does NOT take the kit's input look, only its popup.
+  const sessionDrp = NidaraDropDown({
     model: sessionModel,
     halign: Gtk.Align.CENTER,
     margin_top: 14,

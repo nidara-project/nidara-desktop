@@ -54,6 +54,18 @@ jobs:
         working-directory: ui/shell
         run: npx --yes sass@1.97.3 --no-charset style.scss /tmp/style.css
 
+      # The greeter/lockscreen sheet (one file, both bundles) was compiled by
+      # nothing here until 2026-08-10, and it is the one that could least afford
+      # it: those two surfaces have NO dev mode — they load a fixed
+      # /usr/share path, so a break shows up only when someone boots a VM.
+      # It now `@use`s ui/lib/styles/, which the shell's compile above already
+      # gates for syntax, but not for what the GREETER needs from it (its own
+      # `radius-vars`, its own token contract). Cheap, and it closes the gap the
+      # kit import opened.
+      - name: Compile the greeter/lock SCSS (must succeed)
+        working-directory: ui/shell
+        run: npx --yes sass@1.97.3 --no-charset ../greeter/style.scss /tmp/greeter.css
+
   pkgbuild:
     name: PKGBUILD parses
     runs-on: ubuntu-latest

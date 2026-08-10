@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import { NidaraDropDown } from "../../lib/nidara-kit/scrolled"
 import { ndImageProps } from "../../lib/icons"
 import { withGlassCapsule } from "../../lib/glass-capsule"
 import { execAsync } from "ags/process"
@@ -56,13 +57,19 @@ const LANGUAGES: Language[] = [
 // ── Widget ────────────────────────────────────────────────────────────────────
 
 export default function LocaleBar(): Gtk.Widget {
-  // ── Keyboard layout selector — Gtk.DropDown (auto-positions, no off-screen bug)
+  // ── Keyboard layout selector ────────────────────────────────────────────────
+  // `NidaraDropDown`, not a raw `Gtk.DropDown`: still the native widget (its
+  // popover is a real Wayland popup, which an in-window list can never be), but
+  // with the kit's list factory and the kit's scroll bar inside it. The greeter
+  // ran the raw one until 2026-08-10 and therefore still had GTK's checkmark in
+  // every row and GTK's pointer-seeking scroll bar. Only the TRIGGER stays
+  // greeter-styled — `.locale-bar-dropdown`, see style.scss for why.
   const currentLayout = detectCurrentLayout()
   const kbIds    = KB_LAYOUTS.map(l => l.id)
   const kbLabels = KB_LAYOUTS.map(l => l.label)
 
   const kbModel = new Gtk.StringList({ strings: kbLabels })
-  const kbDrp = new Gtk.DropDown({
+  const kbDrp = NidaraDropDown({
     model: kbModel,
     valign: Gtk.Align.CENTER,
     css_classes: ["locale-bar-dropdown"],
@@ -80,13 +87,15 @@ export default function LocaleBar(): Gtk.Widget {
       .catch(e => console.warn("[LocaleBar] kb_layout change:", e))
   })
 
-  // ── Language selector — same DropDown pattern as the keyboard one (12
-  // languages don't scale as toggle buttons). Picking one re-strings the
+  // ── Language selector — same pattern as the keyboard one (12 languages don't
+  // scale as toggle buttons). This is the ONE list on either screen long enough
+  // to scroll, so it is the one that was actually losing clicks to GTK's
+  // proximity-grown scroll bar. Picking one re-strings the
   // GREETER only: the session's language still comes from /etc/locale.conf
   // (Settings → Language) — greetd starts the session with an empty env.
   const langIds   = LANGUAGES.map(l => l.id)
   const langModel = new Gtk.StringList({ strings: LANGUAGES.map(l => l.label) })
-  const langDrp = new Gtk.DropDown({
+  const langDrp = NidaraDropDown({
     model: langModel,
     valign: Gtk.Align.CENTER,
     css_classes: ["locale-bar-dropdown"],

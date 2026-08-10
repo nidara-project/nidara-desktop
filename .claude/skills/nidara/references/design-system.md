@@ -1038,6 +1038,72 @@ screen with no glass behind it. Read its header before trusting a number: it doe
 blur, the painted rim, or `:focus-visible`, and on a tiling compositor the window size is a
 request, so **crop from the bounds it prints, never from a remembered offset**.
 
+## The greeter wears the kit (2026-08-10)
+
+`ui/greeter/style.scss` — the sheet both login surfaces compile — now `@use`s
+**`ui/lib/styles/_components.scss`**, so the kit's look reaches the greeter and the
+lockscreen and not only the shell. The thing that earned it: the three selectors on those
+screens were raw `Gtk.DropDown`s and are now **`NidaraDropDown`**, so their popup is the
+shell's list rather than a frozen copy of the pre-#86 one (GTK's checkmark in every row,
+accent flashing down the list on hover-select because GTK moves `:selected` with the
+pointer, and GTK's proximity-grown scroll bar on the 12-item language list — the only list
+on either screen long enough to scroll).
+
+**Four things to know before adding the next bundle, or the next kit component:**
+
+- **Source order is the whole safety mechanism.** Sass emits a module's CSS *before* the
+  file that loads it, so everything in `style.scss` out-ranks the kit at equal specificity.
+  That is what makes the two bare-element collisions (`dropdown > button`, `dropdown
+  popover`) safe rather than a coin flip. **If that `@use` ever moves below the rules, the
+  login screens silently become Settings.**
+- **The trigger deliberately does NOT take the kit's look, and that is geometry, not taste.**
+  The kit styles a dropdown trigger as an *input* (surface-back fill, 2px border, radius-sm,
+  20px content floor) because in Settings it sits on a card beside text fields. Two of the
+  greeter's sit *inside* a painted capsule next to an icon and a separator, clamped to 18px
+  so they match `.greeter-power-btn` exactly. **The kit is not all-or-nothing: take the
+  popup, keep the trigger.**
+- **The token contract is the silent half.** The kit's rules read `--nidara-*` custom
+  properties; an undefined one does not warn, GTK drops the declaration. The greeter defined
+  6 of 22 and got the other 16 in the same change (the shell's dark set verbatim, except
+  `--nidara-popover-bg`, which stays this sheet's near-opaque value because these popups get
+  no compositor blur). **The list is what the sheet ACTUALLY READS, measured against the
+  compiled CSS — two greps, both written in the block's comment. `--nidara-shadow-md` was in
+  the first draft and came out: `glass()` names it, no kit rule calls `glass()`.**
+- 🔑 **Verify by rendering the surface and diffing PIXELS, not by reading the cascade.** Two
+  properties leaked through and only one was predictable. Reading found the kit's
+  `> box > label { margin-left: 8px }` — the exact gap the greeter had just refused as a
+  dead `margin-start`. Reading MISSED `font-weight: $fw-medium`, which the greeter's
+  per-variant rules override the size of but never the weight: heavier glyphs are wider, so
+  the language pill grew ~2px and shifted its own label and chevron. With both guarded, the
+  greeter and the lockscreen render **0 different pixels out of 3,686,400** against the
+  sheet before them. That is the acceptance test for every later step of this migration:
+
+```bash
+# closed surface — must be pixel-identical unless a change is intended.
+# KIT= is not optional here: lock-probe REBUILDS the tree, it does not import
+# LoginCard, so without it the kit's construction-time work (list factory,
+# adoptGtkScrolled) never runs and a sheet can pass while the shipping code path
+# was never executed. That hook was added for this change, for that reason.
+CSS=…/style.css PAINTER=/tmp/glass.js KIT=/tmp/kit.js SCOPE=greeter|lock \
+  BG='#1b2430' gjs -m scripts/dev/lock-probe.js /tmp/after
+magick compare -metric AE /tmp/before.png /tmp/after.png /dev/null
+
+# the popup, which no eye can hold open — must match the shell node for node
+CSS=ui/greeter/style.css SCOPE=greeter CLASS=greeter-session-dropdown ITEMS=12 \
+  gjs -m scripts/dev/gtk-probe.js /tmp/popup
+```
+
+`gtk-probe.js` gained `CSS=` and `CLASS=` and a `greeter` scope for exactly this — it already
+built this specimen for Settings, it just could not read another bundle's sheet. Both
+surfaces now measure identical to the shell: `contents` pad 0 / border 1, `listview`
+`margin: 0 6px`, `row` stripped to nothing, `.nidara-dropdown-item` pad 6/9, row origin 7 left
+/ 1 top. The one honest difference is row height, 28 here against 29 in Settings — Settings
+re-anchors to the `$fse-*` em ramp and the login screens stay on fixed px, which is the rule.
+
+⚠️ **The greeter/lock sheet was compiled by nothing in CI until this change**, on the two
+surfaces that can least afford it (no dev mode, fixed `/usr/share` path — a break shows up
+only when someone boots a VM). The `styles` job now compiles it too.
+
 ## Cairo vs CSS
 
 - **CSS** for anything with states (hover/active/focus/drag).

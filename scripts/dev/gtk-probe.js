@@ -21,8 +21,15 @@
  * measure pixel by pixel.
  *
  * Three env hooks make it an experiment rather than a dump:
- *   SCOPE=…       which shell WINDOW the specimen stands in: settings (default),
- *                 bar, island, dock or appgrid. ⚠️ NOT cosmetic — our sheets are scoped per
+ *   CSS=…         which compiled sheet to load as style.css (default the shell's).
+ *                 `CSS=ui/greeter/style.css SCOPE=greeter` measures the specimen as
+ *                 the LOGIN screens see it — the only way to look at their dropdown
+ *                 popup, since a popover needs a human to hold it open and neither
+ *                 surface can be reloaded.
+ *   CLASS=…       a css class for the trigger (`greeter-session-dropdown`,
+ *                 `locale-bar-dropdown`). Without it you measure the base rule only.
+ *   SCOPE=…       which WINDOW the specimen stands in: settings (default),
+ *                 bar, island, dock, appgrid or greeter. ⚠️ NOT cosmetic — our sheets are scoped per
  *                 window (`#nidara-bar …`, `window.nidara-settings-window`), so a
  *                 specimen built in the wrong one matches NOTHING and every
  *                 measurement comes back as if the widget were unstyled. There is no
@@ -51,7 +58,14 @@ import system from "system"
 
 const OUT = ARGV[0] || "/tmp/nidara-probe"
 const REPO = GLib.getenv("NIDARA_REPO") || GLib.get_current_dir()
-const STYLE = `${REPO}/ui/shell/style.css`
+// CSS=… points the probe at a DIFFERENT compiled sheet. Added 2026-08-10 with the
+// greeter's adoption of `NidaraDropDown`: that migration's whole payload is the
+// POPUP, which is the one thing neither eye nor `lock-probe.js` can look at (a
+// popover needs a human to hold it open, and the greeter cannot be reloaded at
+// all). The probe already built exactly this specimen — it was written for the
+// same control in Settings — so it only ever lacked the ability to read another
+// bundle's stylesheet.
+const STYLE = GLib.getenv("CSS") || `${REPO}/ui/shell/style.css`
 const ITEMS = parseInt(GLib.getenv("ITEMS") || "5", 10)
 
 Gtk.init()
@@ -80,6 +94,11 @@ const SCOPES = {
     island:   { name: "nidara-island",          cls: "nidara-island-window" },
     dock:     { name: "nidara-dock",            cls: "nidara-dock-window" },
     appgrid:  { name: "nidara-app-grid",        cls: "nidara-app-grid-window" },
+    // The greeter and the lockscreen, which share one sheet and one window
+    // identity pattern. Pair it with CSS=ui/greeter/style.css — the scope alone
+    // measures a specimen against the SHELL's rules, which is the exact trap the
+    // warning above describes, one bundle further out.
+    greeter:  { name: "nidara-greeter",         cls: "greeter-window" },
 }
 const scopeKey = GLib.getenv("SCOPE") || "settings"
 const scope = SCOPES[scopeKey]
@@ -98,7 +117,14 @@ win.set_child(page)
 
 const strings = []
 for (let i = 0; i < ITEMS; i++) strings.push(`Option ${i + 1}`)
+// CLASS=… puts a class on the trigger. The shell's dropdowns are bare, but the
+// greeter's are not — `.greeter-session-dropdown` and `.locale-bar-dropdown` are
+// the per-variant overrides that keep those triggers ghost pills instead of the
+// kit's input box, and a specimen without one measures a trigger that does not
+// exist on either screen.
 const drop = Gtk.DropDown.new_from_strings(strings)
+const cls = GLib.getenv("CLASS")
+if (cls) { drop.add_css_class(cls); print(`[class] dropdown.${cls}`) }
 const factory = new Gtk.SignalListItemFactory()
 factory.connect("setup", (_f, item) => {
     const label = new Gtk.Label({ xalign: 0, hexpand: true, halign: Gtk.Align.FILL })
