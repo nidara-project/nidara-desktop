@@ -220,6 +220,42 @@ When a reload seems to do nothing or styles refuse to refresh, the cause is almo
 2. `killall gjs` — then `Super+Shift+R` once it's gone.
 3. `tail -f "$XDG_RUNTIME_DIR/nidara-ui.log"` and re-trigger; look for stack traces.
 
+### Finding CSS that can never reach its widget (`scripts/dev/scope-audit.mjs`)
+
+```bash
+cd ui/shell && npm run build          # style.css must be current
+node ../../scripts/dev/scope-audit.mjs   # exit 1 if anything is unreachable
+```
+
+Every surface sheet is wrapped in its window's selector (commandment 2), which makes the scope a
+fact about the TSX — and the TSX moves. When a surface changes windows, the rules that used to
+reach it stay in the sheet, stop matching, and report **nothing**: no SCSS error, no GTK warning,
+no diff. The symptom arrives months later as "that thing looks like raw GTK now", from a human.
+
+For every class named in `css_classes:` / `add_css_class()` by code that renders into a window,
+this looks for at least one selector in the compiled sheet that is either unscoped (the global
+kit) or scoped to *that* window. No selector at all is fine — the widget is Cairo-painted or the
+class is a marker. Only selectors naming a **different** window is the bug.
+
+It found three on its first run (2026-08-10): the island's whole media panel (`.cc-media-*` was
+inside `_control-center.scss`'s `#nidara-bar` block while `PlayerIsland` shows the same panel —
+broken since July), the "Default" audio badge and the slider readout (both scoped to the CC's
+detail page while Settings wore them too).
+
+⚠️ **What it cannot tell you**: whether a *reachable* rule is the one you meant, or whether
+specificity lets something else win. It answers "can this rule ever apply here", nothing more. A
+clean run is not a substitute for looking at the running shell.
+
+⚠️ **Keep `WINDOWS` in step with the scope table** in `design-system.md` whenever a surface moves
+or is added — and note that its `dirs` follow the MOUNT SITE, not the folder name: `widgets/media.ts`
+is listed under the island because `PlayerIsland` mounts its panel there.
+
+⚠️ **Verify the tool against a known bug before trusting a green run.** Reintroducing one into
+`style.css` (which is generated, so it costs a rebuild to undo) is how the first version was caught
+matching only half of it: it anchored `.class` on a preceding space, so every element-qualified rule
+— `label.accent-label`, `button.nidara-btn`, `spinbutton.time-spin` — was invisible, and a class
+styled *only* that way read as "no CSS at all" and passed.
+
 ### Measuring a control's real geometry with no screen (`scripts/dev/gtk-probe.js`)
 
 For any question of the form *"where does this inset actually come from?"* on a widget that

@@ -408,6 +408,41 @@ button.nidara-seg-btn {
     }
 }
 
+// ── Slider readout ───────────────────────────────────────────────────────────
+// The number beside a slider ("72%", "4500K"). Nine consumers and not one of them
+// is only the Control Center: `control-center/Sliders.tsx`, the brightness /
+// night-light / volume widgets, and Settings → Audio / Appearance / the shared
+// `SettingsHelpers` row. Its rule was inside `#nidara-bar .cc-detail-panel`, so
+// everywhere else — the whole Settings window included — the readout rendered at
+// default size and colour, with the digits free to jitter as they counted
+// (2026-08-10, same sweep that found the "Default" badge below).
+.slider-value-label {
+    color: var(--nidara-text-dim);
+    font-size: $fs-small;
+    font-variant-numeric: tabular-nums;
+}
+
+// ── "Default" badge ──────────────────────────────────────────────────────────
+// The accent pill marking the current default audio device. TWO surfaces build
+// it from the same two classes: the CC's audio detail page (`widgets/volume.ts`)
+// and Settings → Audio (`pages/Audio.tsx`). It lived inside
+// `#nidara-bar .cc-detail-panel` in _control-center.scss, so the Settings copy
+// rendered as plain text — the same defect as the media panel, one surface's
+// sheet owning a component two surfaces wear (2026-08-10).
+//
+// Qualified `label` on purpose: this is a TEXT badge, and the unqualified class
+// is what let a Gtk.Image pick the whole pill up — MenuRow's tick wore
+// `accent-label` hoping to be tinted accent (impossible on an nd-icon) and got a
+// background instead. Keep the element qualifier.
+label.accent-label {
+    color: var(--nidara-text);
+    background: rgba(var(--nidara-accent-rgb), 0.14);
+    border-radius: $nidara-radius-pill;
+    padding: 2px 8px;
+    font-size: $fs-caption;
+    font-weight: $fw-semibold;
+}
+
 // ── Atomic-widget popover vocabulary ─────────────────────────────────────────
 // The key/value/readout row and its inline icon button, worn by the widgets in
 // widgets/ (wifi, ethernet, battery, night-light, focus, bluetooth, volume,

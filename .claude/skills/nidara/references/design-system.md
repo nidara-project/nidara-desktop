@@ -1939,11 +1939,13 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
    outranks them identically in the island; dropping to a bare `.cc-media-*` would have changed that
    balance in one window only (`.cc-island button` and `.bar-center button` are both (1,1,1)).
 
-   **The cheap detector, worth re-running whenever a surface moves windows:** collect every class
-   used by code that renders into that window, and for each one check the compiled `style.css` for at
-   least one selector that is either unscoped or scoped to that window. Classes with no CSS at all
-   are Cairo-painted and fine; classes whose only selectors name a *different* window are the bug.
-   That is a ~40-line script and it found the media panel in one pass.
+   **The detector is committed: `scripts/dev/scope-audit.mjs`** (`node ../../scripts/dev/scope-audit.mjs`
+   from `ui/shell`, after a build). It collects every class used by code that renders into each
+   window and checks the compiled `style.css` for at least one selector that is either unscoped or
+   scoped to that window. Classes with no CSS at all are Cairo-painted and fine; classes whose only
+   selectors name a *different* window are the bug. **Re-run it whenever a surface moves windows** —
+   it found the media panel, the "Default" badge and the slider readout in one pass. Details and its
+   limits in `dev-workflow.md`.
 
    ⚠️ **A window's scope can MOVE, and nothing tells you.** The app grid's was `#nidara-dock` until
    2026-08-09, because the panel lived inside the dock's window; giving it a surface of its own

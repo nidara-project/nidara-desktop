@@ -573,22 +573,13 @@
             &:checked       { background: var(--nidara-accent); }
         }
 
-        // Default speaker badge. Qualified `label` on purpose: this is a TEXT badge
-        // (pill + padding), and an unqualified class let a Gtk.Image pick the whole
-        // treatment up — which is exactly what happened to MenuRow's tick until
-        // 2026-08-10. A badge that renders as a background belongs to labels.
-        label.accent-label {
-            color: var(--nidara-text);
-            background: rgba(var(--nidara-accent-rgb), 0.14);
-            border-radius: $nidara-radius-pill;
-            padding: 2px 8px;
-            font-size: $fs-caption;
-            font-weight: $fw-semibold;
-        }
+        // (The "Default" speaker badge, label.accent-label, moved to _components.scss
+        //  2026-08-10 — the audio detail page and Settings → Audio both wear it.)
 
         .nidara-row-title    { font-size: $fs-small; color: var(--nidara-text); }
         .nidara-row-subtitle { font-size: $fs-small; color: var(--nidara-text-dim); }
-        .slider-value-label   { color: var(--nidara-text-dim); font-size: $fs-small; font-variant-numeric: tabular-nums; }
+        // (.slider-value-label moved to _components.scss 2026-08-10 — nine consumers
+        //  across the CC, the atomic widgets and three Settings pages.)
 
         separator { background: var(--nidara-border); margin: 4px 0; min-height: 1px; }
     }
