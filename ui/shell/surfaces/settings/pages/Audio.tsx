@@ -185,12 +185,23 @@ export default function AudioPage() {
     const micGroup     = listGroup(t("settings.audio.group.input"))
     const streamGroup  = listGroup(t("settings.audio.group.apps"))
 
-    const emptyStreams = new Gtk.Label({
-        label: t("settings.audio.no-apps"),
-        css_classes: ["nidara-row-subtitle"],
-        margin_top: 12, margin_bottom: 12, margin_start: 16,
-        halign: Gtk.Align.START,
-    })
+    // A group whose list is empty shows as a bare header over a 6px sliver of card
+    // — which is what a VM (no microphone, nothing playing) made obvious: two of
+    // the three sections were furniture with nothing in them. Each section is
+    // present exactly when it has something to say, and `banner` covers the case
+    // where none of them do. There is no "no apps playing" placeholder here on
+    // purpose: absence of a section IS the message, and the Control Center's
+    // volume popover is the surface where that string still earns its keep.
+    const applyVisibility = () => {
+        const speakers = AudioSvc.speakers(audio).length
+        const mics     = AudioSvc.microphones(audio).length
+        const streams  = AudioSvc.streams(audio).length
+
+        banner.visible = speakers === 0 && mics === 0
+        speakerGroup.box.visible = speakers > 0
+        micGroup.box.visible     = mics > 0
+        streamGroup.box.visible  = streams > 0
+    }
 
     // ── Devices ───────────────────────────────────────────────────────────────
     const refreshDevices = () => {
@@ -211,13 +222,7 @@ export default function AudioPage() {
             micGroup.listBox.append(createDeviceRow(ep, true, isDef, () => AudioSvc.setDefault(ep)))
         })
 
-        // No outputs and no inputs = no sound hardware → show the placeholder and
-        // hide the (empty) device/app groups, instead of three bare headers.
-        const hasHardware = AudioSvc.speakers(audio).length > 0 || AudioSvc.microphones(audio).length > 0
-        banner.visible = !hasHardware
-        speakerGroup.box.visible = hasHardware
-        micGroup.box.visible = hasHardware
-        streamGroup.box.visible = hasHardware
+        applyVisibility()
     }
 
     // ── Streams ───────────────────────────────────────────────────────────────
@@ -225,9 +230,8 @@ export default function AudioPage() {
         let c = streamGroup.listBox.get_first_child()
         while (c) { streamGroup.listBox.remove(c); c = streamGroup.listBox.get_first_child() }
 
-        const streams = AudioSvc.streams(audio)
-        emptyStreams.visible = streams.length === 0
-        streams.forEach(s => streamGroup.listBox.append(createStreamRow(s)))
+        AudioSvc.streams(audio).forEach(s => streamGroup.listBox.append(createStreamRow(s)))
+        applyVisibility()
     }
 
     // ── Signals ───────────────────────────────────────────────────────────────
@@ -242,7 +246,6 @@ export default function AudioPage() {
         return () => { disposeDevices(); disposeStreams() }
     })
 
-    streamGroup.listBox.append(emptyStreams)
     page.append(speakerGroup.box)
     page.append(micGroup.box)
     page.append(streamGroup.box)
