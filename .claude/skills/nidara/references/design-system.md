@@ -1898,6 +1898,7 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
    | App grid | `#nidara-app-grid, .nidara-app-grid-window` |
    | Settings | `window.nidara-settings-window` |
    | About | `window#nidara-about, .about-floating-window` |
+   | Alert dialog (`showNidaraAlert`) | `window.nidara-alert-dialog` |
 
    ⚠️ **The window a class lands in is NOT the directory its TSX lives in.** `_bar.scss` was the last
    unscoped surface sheet (closed 2026-08-10) and the mapping was not what the filenames said:
@@ -1918,6 +1919,22 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
    that ancestor** (`&:focus-within .app-grid-search-icon`), never reach back up with `&`. After
    adding a scope wrapper, grep the compiled `style.css` for `#nidara-` appearing anywhere other than
    the START of a selector — every hit is a rule that can never match.
+
+   ⚠️ **A transient is a SIBLING root, not a child — the caller's window is not the widget's
+   window.** `showNidaraAlert` builds `new Gtk.Window` and sets `transient_for`; a `Gtk.Window` is
+   always a `GtkRoot`, so nothing rooted at another window can ever reach it. Its rules sat at
+   column 0 in `_settings.scss` and worked from 2026-05-24; scoping that sheet (#97, 2026-08-07)
+   swept them inside, they compiled to `window.nidara-settings-window window.nidara-alert-dialog`
+   — a window inside a window — and the whole `.nidara-alert-*` family died. Bluetooth pairing, the
+   Display resolution confirm and Delete user rendered as raw GTK for three days: measured on the
+   real tree, the footer buttons came back `4 9` padding against their declared `14 16` (a 48px row
+   collapsed to ~28) and the heading at weight 400 instead of 600. Fixed 2026-08-10 by giving it
+   `_alert.scss` with its own root, exactly like `.about-*` got `_about.scss` in the same sweep.
+
+   🔑 **The trap was that it looked legitimate.** `.about-*` was in `_bar.scss` "only by position"
+   and read as obviously misfiled; the alert dialog is *called only from Settings*, so filing it
+   with Settings looked right. Ask which window the widget IS, never which window opens it.
+   `scope-audit.mjs`'s pass 2 now catches this shape without needing to know the window exists.
 
    ⚠️ **An atomic widget has no surface, so its CSS belongs to the kit.** Anything under `widgets/`
    is placed by the USER (bar, CC grid, wherever the plugin system lands it next), so its classes go

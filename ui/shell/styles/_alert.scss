@@ -1,0 +1,127 @@
+@use 'base' as *;
+
+// ── NidaraAlertDialog (ui/lib/nidara-kit/alert-dialog.ts) ────────────────────
+// Undecorated Gtk.Window, glass surface, fully rounded. Our replacement for
+// Adw.AlertDialog: Bluetooth pairing (PIN / passkey), the Display "keep this
+// resolution?" confirm, deleting a user.
+//
+// ⚠️ THIS IS ITS OWN TOPLEVEL WINDOW, and that is the whole reason this file
+// exists. `showNidaraAlert` builds a `new Gtk.Window` and only sets
+// `transient_for` — a transient is a SIBLING root, never a descendant, so no
+// selector rooted at another window can reach it.
+//
+// These rules lived at column 0 in `_settings.scss` from 2026-05-24 and worked.
+// Scoping that sheet (`fd66184e`, 2026-08-07, #97) swept them inside
+// `window.nidara-settings-window`, where they compiled to
+// `window.nidara-settings-window window.nidara-alert-dialog` — a window inside a
+// window — and the whole family stopped matching. Every dialog above rendered
+// with GTK defaults for three days. Proven with a 37px sentinel on the exact
+// tree the component builds: unscoped 37, scoped 0.
+//
+// It is the same accident as `.about-*`, which was in `_bar.scss` "only by
+// position" and got its own sheet in the same sweep. The difference is that this
+// one looked legitimate — Settings is the only caller today — and THAT is the
+// trap: the caller's window is not the widget's window.
+//
+// `scripts/dev/scope-audit.mjs` now carries a second pass that catches this
+// shape directly (a window scope root in non-initial position is impossible by
+// construction), because the first pass could not: it knows the six surfaces and
+// attributes every `nidara-kit` class to Settings, so it read the dead rule as
+// reachable and passed.
+window.nidara-alert-dialog {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+
+    > box {
+        @include glass(floating);
+        // overflow: hidden not supported in GTK4 CSS
+    }
+
+    // The $fse-* em ramp is deliberate and survives the move. It resolves
+    // against the interface font (`gtk-font-name`, ThemeManager), which is
+    // display-wide — not against anything the Settings window sets — so a dialog
+    // opened from anywhere scales with the user's font exactly as it did here.
+    // A dialog is body copy, not shell chrome: it is the one place outside
+    // Settings where scaling with the picker is the right behaviour rather than
+    // a layout hazard.
+    .nidara-alert-heading {
+        font-size: $fse-body;
+        font-weight: $fw-semibold;
+        color: var(--nidara-text);
+    }
+
+    .nidara-alert-body {
+        font-size: $fse-small;
+        color: var(--nidara-text-dim);
+        margin-bottom: 0;
+    }
+
+    // Single-line input (PIN / passkey prompts).
+    // ⚠️ Needs to keep out-specifying the global `entry, .nidara-input` rule in
+    // _components.scss (0,0,1) — which is what has actually been painting this
+    // field while the block was dead, so the entry is the one part of the dialog
+    // that did NOT look raw.
+    entry.nidara-alert-entry {
+        background: var(--nidara-surface-back);
+        border: 1px solid var(--nidara-border);
+        border-radius: $nidara-radius-pill;
+        padding: 6px 14px;
+        font-size: $fse-body;
+        color: var(--nidara-text);
+        caret-color: var(--nidara-text);
+        outline: none;
+        box-shadow: none;
+
+        &:focus, &:focus-within {
+            border-color: var(--nidara-surface-raised);
+            box-shadow: none;
+        }
+    }
+
+    .nidara-alert-sep {
+        background: var(--nidara-border);
+        min-height: 1px;
+        margin: 0;
+    }
+
+    .nidara-alert-buttons {
+        button.nidara-alert-btn {
+            @include nidara-reset;
+            // 14 is arithmetic toward a height, not a gap: 14 + 14 + the ~20px line box of
+            // $fse-small lands the dialog's footer buttons on the 48px row height. Snapping
+            // it to $space-4 would make them 52. Same reasoning as nidara-kit/row.ts.
+            padding: 14px $space-4;
+            font-size: $fse-small;
+            font-weight: $fw-medium;
+            color: var(--nidara-text);
+            border-radius: 0;
+            transition: background 0.15s ease;
+
+            // Round the bottom corners to match the dialog
+            &:first-child { border-bottom-left-radius: $nidara-radius-lg; }
+            &:last-child  { border-bottom-right-radius: $nidara-radius-lg; }
+
+            &:hover  { background: var(--nidara-surface-hover); }
+            &:active { background: var(--nidara-surface-active); }
+            &:focus-visible { @include nidara-focus-ring(-2px); }
+
+            &.nidara-alert-btn--destructive {
+                color: var(--nidara-danger);
+                &:hover { background: rgba(var(--nidara-danger-rgb), 0.1); }
+            }
+
+            &.nidara-alert-btn--suggested {
+                // Default action: marked by weight, not accent text (legibility).
+                color: var(--nidara-text);
+                font-weight: $fw-semibold;
+                &:hover { background: var(--nidara-accent-10); }
+            }
+        }
+
+        // Vertical divider between sibling buttons
+        button.nidara-alert-btn + button.nidara-alert-btn {
+            border-left: 1px solid var(--nidara-border);
+        }
+    }
+}

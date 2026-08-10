@@ -8,5 +8,7 @@
 @use 'styles/app-grid';
 @use 'styles/workspace';
 @use 'styles/settings';
+// Own toplevel window (a transient of Settings, not a child) — see _alert.scss.
+@use 'styles/alert';
 @use 'styles/prism';
 @use 'styles/agent-pointer';

@@ -242,13 +242,29 @@ inside `_control-center.scss`'s `#nidara-bar` block while `PlayerIsland` shows t
 broken since July), the "Default" audio badge and the slider readout (both scoped to the CC's
 detail page while Settings wore them too).
 
+**Pass 2 — a window inside a window (added 2026-08-10, needs no list).** Pass 1 is only as complete
+as its hand-kept `WINDOWS`, so it is blind to a window nobody told it about. The
+`NidaraAlertDialog` was exactly that: its own toplevel, whose rules #97 swept inside
+`window.nidara-settings-window`. Every class in it comes from `../lib/nidara-kit`, which pass 1
+attributes to **Settings** — so it found a Settings-scoped selector, called it reachable, and went
+green while the whole dialog rendered as raw GTK.
+
+Pass 2 asks a structural question instead: a window scope root (`window.…`, `window#…`, `#nidara-…`)
+in a **non-initial** position is impossible by construction, because a `Gtk.Window` is always a
+`GtkRoot` and a transient is a sibling root, never a descendant. Zero false positives across the
+sheet's 1259 selectors. ⚠️ Match `window` as a whole compound, never as a suffix — GTK4's node name
+for a `Gtk.ScrolledWindow` is `scrolledwindow`, and a substring test flags every
+`scrolledwindow.apps-list-scroll > viewport` in the sheet.
+
 ⚠️ **What it cannot tell you**: whether a *reachable* rule is the one you meant, or whether
 specificity lets something else win. It answers "can this rule ever apply here", nothing more. A
 clean run is not a substitute for looking at the running shell.
 
 ⚠️ **Keep `WINDOWS` in step with the scope table** in `design-system.md` whenever a surface moves
 or is added — and note that its `dirs` follow the MOUNT SITE, not the folder name: `widgets/media.ts`
-is listed under the island because `PlayerIsland` mounts its panel there.
+is listed under the island because `PlayerIsland` mounts its panel there. The mount site of a
+**transient** is its own root: don't add the alert dialog's classes to Settings just because
+Settings opens it.
 
 ⚠️ **Verify the tool against a known bug before trusting a green run.** Reintroducing one into
 `style.css` (which is generated, so it costs a rebuild to undo) is how the first version was caught
@@ -277,6 +293,15 @@ permanent tool would only ever be scaffolding. The 2026-08-10 run over `&>box` r
 child really IS the node you are asking about — otherwise a typo'd selector, a provider that never
 loaded, or a probe that walks the wrong root all look exactly like "dead". Same lesson as verifying
 `scope-audit` against a reintroduced bug, one paragraph up.
+
+🔑 **Once it is fixed, drop the sentinel and read the REAL sheet.** The sentinel proves reachability;
+it does not prove the dialog now wears its own stylesheet. Same ~50-line probe, but load
+`ui/shell/style.css` and print declared values (`get_padding`, `get_border`, the Pango weight)
+against what the SCSS says. Point it at a `git worktree add … origin/main` build via `SHEET=` and
+before/after come out of one instrument. The 2026-08-10 alert-dialog run read `4 9` padding and
+weight 400 before, `14 16` and 600 after — which also showed the entry had NOT been raw all along:
+it was wearing the global `entry` rule from `_components.scss` (2px border, `6 10`), the only part
+of the dialog with a global fallback to fall back to.
 
 🔑 **Run the counterfactual too, and doubt the caution as hard as the claim.** The third variant here
 was "what if the redundant wrapper were removed?" — because the tech-debt note warned that would make

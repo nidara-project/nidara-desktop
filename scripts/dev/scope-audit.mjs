@@ -38,6 +38,21 @@
  *
  * Keep WINDOWS in step with the scope table in the nidara skill
  * (references/design-system.md) whenever a surface moves or is added.
+ *
+ * ── PASS 2: a window inside a window ────────────────────────────────────────
+ * The pass above is only as complete as WINDOWS, and that list is hand-kept — so
+ * it is blind to a window it has never been told about. The NidaraAlertDialog is
+ * exactly that: its own toplevel Gtk.Window, whose rules got swept inside
+ * `window.nidara-settings-window` when that sheet was scoped (#97). Every class
+ * in it belongs to `../lib/nidara-kit`, which this file attributes to Settings,
+ * so pass 1 found a Settings-scoped selector, called it reachable, and went
+ * green while the whole dialog rendered as raw GTK.
+ *
+ * Pass 2 needs no list. A window scope root in a NON-INITIAL position is
+ * impossible by construction — a Gtk.Window is always a GtkRoot, and a transient
+ * is a sibling root, never a descendant — so any such selector is dead no matter
+ * which windows exist. It caught the dialog with zero false positives across the
+ * sheet's 1259 selectors.
  */
 
 import { readFileSync, readdirSync, existsSync } from "node:fs"
@@ -56,6 +71,10 @@ const ALL_SCOPES = [
     ".nidara-bar-window", ".nidara-island-window", ".nidara-dock-window",
     ".nidara-app-grid-window", ".nidara-settings-window",
     "window.nidara-settings-window", ".about-floating-window",
+    // ⚠️ A missing entry here does NOT fail — it reads as "unscoped", i.e.
+    // reachable from everywhere, which is the most permissive answer the tool
+    // can give. Adding a window means adding it in BOTH lists.
+    "window.nidara-alert-dialog",
 ]
 
 /* dirs = the code that renders INTO this window, which is not the same as the
@@ -89,12 +108,22 @@ const WINDOWS = [
     {
         name: "settings",
         dirs: ["surfaces/settings", "surfaces/settings/pages", "../lib/nidara-kit"],
+        // The kit's alert dialog is its OWN toplevel — Settings opens it, but a
+        // transient is a sibling root, so its classes are not Settings' to reach.
+        // Leaving it in was how the dead `window.nidara-settings-window
+        // window.nidara-alert-dialog` passed this audit for three days.
+        not: ["alert-dialog.ts"],
         own: ["window.nidara-settings-window", ".nidara-settings-window"],
     },
     {
         name: "about",
         dirs: ["surfaces/about"],
         own: ["window#nidara-about", ".about-floating-window"],
+    },
+    {
+        name: "alert",
+        files: ["../lib/nidara-kit/alert-dialog.ts"],
+        own: ["window.nidara-alert-dialog"],
     },
 ]
 
@@ -137,8 +166,9 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 
 let failures = 0
 for (const win of WINDOWS) {
-    const files = [...win.dirs.flatMap(sources), ...(win.files ?? []).map(f => join(SHELL, f))]
+    const files = [...(win.dirs ?? []).flatMap(sources), ...(win.files ?? []).map(f => join(SHELL, f))]
         .filter(existsSync)
+        .filter(f => !(win.not ?? []).includes(basename(f)))
     const used = classesIn(files)
     const bad = []
 
@@ -166,5 +196,25 @@ for (const win of WINDOWS) {
     }
     failures += bad.length
 }
+
+/* ── Pass 2 — a window scope root that is not at the start of its selector ────
+ * `window` must be matched as a whole compound, never as a suffix: GTK4's node
+ * name for a Gtk.ScrolledWindow is `scrolledwindow`, so a naive substring test
+ * flags every `scrolledwindow.apps-list-scroll > viewport` in the sheet. */
+const isWindowRoot = (c) => /^window(?=[.#:]|$)/.test(c) || /^#nidara-/.test(c)
+const nested = []
+for (const s of selectors) {
+    const compounds = s.split(/\s*[>+~]\s*|\s+/).filter(Boolean)
+    const at = compounds.findIndex((c, i) => i > 0 && isWindowRoot(c))
+    if (at > 0) nested.push([s, compounds[at]])
+}
+
+console.log(`${nested.length ? "FAIL" : "ok  "}  ${"nesting".padEnd(9)} ${String(selectors.length).padStart(3)} selectors` +
+            (nested.length ? `, ${nested.length} rooted at a window inside a window` : ""))
+for (const [sel, compound] of nested) {
+    console.log(`        ${sel}`)
+    console.log(`            unreachable : \`${compound}\` is a toplevel window, so it can never be a descendant`)
+}
+failures += nested.length
 
 process.exit(failures ? 1 : 0)

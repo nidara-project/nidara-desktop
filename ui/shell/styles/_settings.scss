@@ -487,92 +487,9 @@ window.nidara-settings-window {
         }
     }
 
-    // ── NidaraAlertDialog ────────────────────────────────────────────────────────
-    // Undecorated Gtk.Window, glass surface, fully rounded.
-    window.nidara-alert-dialog {
-        background: transparent;
-        border: none;
-        box-shadow: none;
-
-        > box {
-            @include glass(floating);
-            // overflow: hidden not supported in GTK4 CSS
-        }
-    }
-
-    .nidara-alert-heading {
-        font-size: $fse-body;
-        font-weight: $fw-semibold;
-        color: var(--nidara-text);
-    }
-
-    .nidara-alert-body {
-        font-size: $fse-small;
-        color: var(--nidara-text-dim);
-        margin-bottom: 0;
-    }
-
-    // Single-line input (PIN / passkey prompts)
-    entry.nidara-alert-entry {
-        background: var(--nidara-surface-back);
-        border: 1px solid var(--nidara-border);
-        border-radius: $nidara-radius-pill;
-        padding: 6px 14px;
-        font-size: $fse-body;
-        color: var(--nidara-text);
-        caret-color: var(--nidara-text);
-        outline: none;
-        box-shadow: none;
-
-        &:focus, &:focus-within {
-            border-color: var(--nidara-surface-raised);
-            box-shadow: none;
-        }
-    }
-
-    .nidara-alert-sep {
-        background: var(--nidara-border);
-        min-height: 1px;
-        margin: 0;
-    }
-
-    .nidara-alert-buttons {
-        button.nidara-alert-btn {
-            @include nidara-reset;
-            // 14 is arithmetic toward a height, not a gap: 14 + 14 + the ~20px line box of
-            // $fse-small lands the dialog's footer buttons on the 48px row height. Snapping
-            // it to $space-4 would make them 52. Same reasoning as nidara-kit/row.ts.
-            padding: 14px $space-4;
-            font-size: $fse-small;
-            font-weight: $fw-medium;
-            color: var(--nidara-text);
-            border-radius: 0;
-            transition: background 0.15s ease;
-
-            // Round the bottom corners to match the dialog
-            &:first-child { border-bottom-left-radius: $nidara-radius-lg; }
-            &:last-child  { border-bottom-right-radius: $nidara-radius-lg; }
-
-            &:hover  { background: var(--nidara-surface-hover); }
-            &:active { background: var(--nidara-surface-active); }
-            &:focus-visible { @include nidara-focus-ring(-2px); }
-
-            &.nidara-alert-btn--destructive {
-                color: var(--nidara-danger);
-                &:hover { background: rgba(var(--nidara-danger-rgb), 0.1); }
-            }
-
-            &.nidara-alert-btn--suggested {
-                // Default action: marked by weight, not accent text (legibility).
-                color: var(--nidara-text);
-                font-weight: $fw-semibold;
-                &:hover { background: var(--nidara-accent-10); }
-            }
-        }
-
-        // Vertical divider between sibling buttons
-        button.nidara-alert-btn + button.nidara-alert-btn {
-            border-left: 1px solid var(--nidara-border);
-        }
-    }
+    // (NidaraAlertDialog moved to _alert.scss on 2026-08-10. It is its own
+    // toplevel Gtk.Window — a transient, not a child — so nothing rooted at this
+    // window has ever been able to reach it. It sat here because Settings is the
+    // only caller, which is exactly the trap: the caller's window is not the
+    // widget's window. See the header of _alert.scss.)
 }

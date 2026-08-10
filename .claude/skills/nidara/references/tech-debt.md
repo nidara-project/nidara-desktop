@@ -2910,6 +2910,24 @@ be TWO things, not one — three opt-in aliases whose element half is fully live
 their expected state), and `.nidara-tile`, an unfinished increment, now deleted. **§1 is the entry;
 this line used to lump all four together and point at a list §1 no longer has.**
 
+⚠️ **The scoping work left a casualty of its own, found 2026-08-10: the kit's alert dialog.**
+`showNidaraAlert` builds its own toplevel `Gtk.Window` (transient, therefore a SIBLING root), and
+its rules sat at column 0 in `_settings.scss` from 2026-05-24. #97 wrapped that sheet and swept them
+inside, compiling `window.nidara-settings-window window.nidara-alert-dialog` — unmatchable — so
+Bluetooth pairing, the Display resolution confirm and Delete user rendered as raw GTK for three days
+(footer buttons `4 9` against their declared `14 16`, heading at weight 400 not 600; the entry alone
+looked passable because the global `entry` rule in `_components.scss` caught it). Now `_alert.scss`
+with its own root, the same shape `.about-*` got in the same sweep.
+
+🔑 **Both casualties of #97 are the same lesson from opposite sides: wrapping a file changes the
+meaning of what was inside it.** `_app-grid.scss` was an `&` that re-expanded; this was a second
+WINDOW that happened to be filed in the sheet. And this one hid better — `.about-*` was in
+`_bar.scss` "only by position", obviously misfiled, while the alert dialog is *called only from
+Settings*, so filing it there looked correct. **Ask which window a widget IS, never which window
+opens it.** `scope-audit.mjs` grew a pass 2 for the shape (a window scope root in non-initial
+position is impossible by construction) precisely because pass 1 could not see it: it attributes
+every `nidara-kit` class to Settings, so it read the dead rule as reachable and passed.
+
 **Closed 2026-08-10 with `_bar.scss` + `_dock.scss`, the last two.** Earlier stages:
 `_control-center` and `_prism` → the bar's window; `_settings` → its own; `_workspace` → **split
 across two** windows (see below); `_app-grid` on 2026-08-09, by a route this entry did not foresee —
