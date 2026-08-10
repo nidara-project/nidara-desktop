@@ -3255,6 +3255,54 @@ answers for three shapes of risk, and the middle one is the reusable trick:
    ran against a different copy of the state. **A shared-module test has to be ONE module
    graph** — one esbuild entry re-exporting both.
 
-**Still duplicated on purpose (for now):** the CARD (`LoginCard.ts` / `LockCard.ts`). It is the
-next step and it is where the backlog's real defect lives — the failure message never expires,
-because nothing watches the keyboard on either surface.
+**The CARD followed immediately** (`ui/lib/auth-card.ts`) — see §61, which also fixes the
+backlog defect that lived in both copies.
+
+
+### 61. The card is shared, and the failure message finally expires (2026-08-10)
+
+Step 2b of NTK, and the backlog's defect #1, in one change because they are the same
+change: `ui/lib/auth-card.ts` now builds the avatar / name / password field / primary
+button / failure message column for both login screens, and the feedback logic that
+lives there is what was broken in both copies.
+
+**The split is CHROME vs ATTEMPT, and it is where it is on purpose.** The greeter talks
+to greetd and starts a session; the lockscreen talks to PAM and lifts a session lock.
+Those are different protocols with different failure shapes, so the shared component owns
+the chrome and the feedback and hands back `onSubmit` / `setLoading` / `showError`. A
+parameter that switched between the two auth flows would be two functions in a trench
+coat.
+
+🔑 **The message never expired because nothing watched the keyboard.** No `changed`, no
+`notify::text`, on either surface — the only thing that ever hid "Wrong password" was
+starting another attempt, so you retyped with the screen still contradicting you. Now
+TYPING clears it (the one that matters; GNOME's lock screen does the same) and an 8s timer
+covers the other case, a failure left on a screen nobody is at.
+
+⚠️ **THE TRAP IN THAT FIX, which was written and only caught by testing it.**
+`notify::text` fires for PROGRAMMATIC writes too, and a failed attempt ends by emptying the
+field — so `showError(); passwordEntry.set_text("")` cleared the message about a
+millisecond after showing it, and the user got a flicker instead of a reason. The card owns
+that distinction now: **`card.resetPassword()`, never `passwordEntry.set_text("")`.** The
+guard lives in the component so no caller has to remember an ordering rule to keep its own
+error on screen. `showError` also cancels the previous timer, or a second failure inherits
+the first one's countdown.
+
+🔑 **Every assertion was proved able to FAIL, by mutation.** Removing the `resetPassword`
+guard breaks assertions 3 and 4; removing the timer breaks 5. That step is not ceremony —
+the FIRST attempt at the timer mutation was a no-op, because esbuild renames `GLib` to
+`GLib2` in the bundle and the `sed` never matched, so a green run "proved" a timer that was
+never exercised. Same failure mode as §60's locale test. **If a test has not been seen to
+fail, it has not been seen to work.**
+
+**Structural check:** both cards' node trees were dumped before and after. Two intentional
+differences, both benign and both verified rather than waved through:
+- the error LABEL lost a redundant `visible: false` (its WRAPPER is what governs, and the
+  lockscreen never had the extra);
+- the lockscreen's button gains GTK's `.text-button`, because the shared card passes a
+  `Gtk.Label` as `child` instead of setting `label:` — in the old code `css_classes:` in the
+  same constructor clobbered it. Nothing in `ui/greeter/style.scss` selects `.text-button`
+  (checked), and the button measures 280×40 either way.
+
+**Left for the VM**, along with everything else on these two surfaces: whether the timer
+and the shake read right at real size, and greetd/PAM actually driving the failure path.

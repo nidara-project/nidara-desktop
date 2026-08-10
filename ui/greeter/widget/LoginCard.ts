@@ -1,12 +1,12 @@
 import { Gtk } from "ags/gtk4"
 import app from "ags/gtk4/app"
-import GLib from "gi://GLib"
 import { getSessions } from "../lib/sessions"
 import { getUsers, type User } from "../../lib/users"
 import { greeterPrefs, savePrefs } from "../lib/greeter-prefs"
 import { makeAvatar } from "../../lib/avatar"
 import { greetdLogin, AuthError } from "../lib/greetd"
 import { withGlassCapsule } from "../../lib/glass-capsule"
+import { buildAuthCard } from "../../lib/auth-card"
 import { NidaraDropDown } from "../../lib/nidara-kit/scrolled"
 import { t, onLocaleChange } from "../lib/i18n"
 
@@ -22,44 +22,21 @@ export default function LoginCard(): Gtk.Widget {
   let sessionIdx = Math.max(0, sessions.findIndex(s => s.id === "nidara"))
   let isAuthenticating = false
 
-  const avatar = makeAvatar(80)
-  avatar.setSource(activeUser.avatarPath)
-
-  const usernameLabel = new Gtk.Label({
-    label: activeUser.displayName,
-    css_classes: ["greeter-username"],
-    halign: Gtk.Align.CENTER,
-    margin_top: 12,
-  })
-
-  const passwordEntry = new Gtk.PasswordEntry({
-    placeholder_text: t("password"),
-    show_peek_icon: true,
-    css_classes: ["greeter-password"],
-    halign: Gtk.Align.CENTER,
-    width_request: 280,
-    margin_top: 28,
-  })
-
-  // Login button — spinner + label so auth shows live progress, not just text.
-  const loginSpinner = new Gtk.Spinner({ visible: false })
-  const loginLabel = new Gtk.Label({ label: t("login") })
-  const loginInner = new Gtk.Box({ spacing: 8, halign: Gtk.Align.CENTER })
-  loginInner.append(loginSpinner)
-  loginInner.append(loginLabel)
-  const loginBtn = new Gtk.Button({
-    css_classes: ["greeter-login-btn"],
-    halign: Gtk.Align.CENTER,
-    width_request: 280,
-    margin_top: 10,
-    child: loginInner,
+  // Avatar, name, password field, primary button and the failure message are the
+  // lockscreen's too (ui/lib/auth-card.ts). What is greeter-only is below: the
+  // session selector, the multi-user switcher, and greetd.
+  const card = buildAuthCard({
+    user: activeUser,
+    t,
+    primary: { label: t("login"), spinner: true },
+    margins: { username: 12, entry: 28, button: 10 },
+    onSubmit: () => { void doLogin() },
   })
 
   // Session selector — `NidaraDropDown` (kit): the native widget, so the popover
   // is still a real Wayland popup that auto-positions, but the list inside it is
   // the shell's — see LocaleBar.ts and style.scss.
-  const sessionNames = sessions.map(s => s.name)
-  const sessionModel = new Gtk.StringList({ strings: sessionNames })
+  const sessionModel = new Gtk.StringList({ strings: sessions.map(s => s.name) })
   // Compact centered pill (natural width) — a set-once control, kept visually
   // subordinate to the password field (decided 2026-07-02; prior art: GDM/SDDM
   // hide it in a corner, others have none). That subordination is exactly why
@@ -71,72 +48,40 @@ export default function LoginCard(): Gtk.Widget {
     css_classes: ["greeter-session-dropdown"],
   })
   sessionDrp.selected = sessionIdx
-  sessionDrp.connect("notify::selected", () => {
-    sessionIdx = sessionDrp.selected
-  })
-
-  const errorLabel = new Gtk.Label({
-    label: "",
-    css_classes: ["greeter-error"],
-    visible: false,
-    wrap: true,
-    halign: Gtk.Align.CENTER,
-  })
-  const errorWrap = withGlassCapsule(errorLabel)
-  errorWrap.visible = false
-  errorWrap.halign = Gtk.Align.CENTER
-  errorWrap.margin_top = 6
-
-  // NO caps-lock warning of our own, deliberately. `Gtk.PasswordEntry` already
-  // builds one — an `image.caps-lock-indicator` inside the field — so this card
-  // used to show TWO warnings for one state while the lockscreen, which never
-  // had ours, showed one. The field's is the one that survives: it is where the
-  // cursor is, it is what macOS and iOS do, and it makes the two screens
-  // identical for free. It is styled in ui/greeter/style.scss; there is no
-  // property to turn it off, so adding a second one is the only mistake
-  // available here.
+  sessionDrp.connect("notify::selected", () => { sessionIdx = sessionDrp.selected })
+  // The session selector is a control, and every other control on these two
+  // screens sits on glass — including the locale bar's dropdowns, which are the
+  // same widget. Bare, it was unreadable on a light wallpaper.
+  card.insertBeforeError(withGlassCapsule(sessionDrp))
 
   // ── Auth logic ────────────────────────────────────────────────────────────
   const setLoading = (loading: boolean) => {
     isAuthenticating = loading
-    loginBtn.sensitive = !loading
-    passwordEntry.sensitive = !loading
+    card.setLoading(loading)
+    // The dropdown is the one control the shared card does not know about.
     sessionDrp.sensitive = !loading
-    loginLabel.label = loading ? t("authenticating") : t("login")
-    loginSpinner.visible = loading
-    if (loading) loginSpinner.start(); else loginSpinner.stop()
-  }
-
-  const showError = (msg: string) => {
-    errorLabel.label = msg
-    errorWrap.visible = true
-    passwordEntry.add_css_class("greeter-shake")
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
-      passwordEntry.remove_css_class("greeter-shake")
-      return GLib.SOURCE_REMOVE
-    })
+    card.setPrimaryLabel(loading ? t("authenticating") : t("login"))
   }
 
   const setActiveUser = (u: User) => {
     if (u === activeUser) return
     activeUser = u
-    avatar.setSource(u.avatarPath)
-    usernameLabel.label = u.displayName
-    passwordEntry.set_text("")
-    errorWrap.visible = false
-    passwordEntry.grab_focus()
+    card.setUser(u)
+    card.resetPassword()
+    card.clearError()
+    card.passwordEntry.grab_focus()
   }
 
   const doLogin = async () => {
     if (isAuthenticating) return
-    const password = passwordEntry.get_text()
-    if (!password) { passwordEntry.grab_focus(); return }
+    const password = card.passwordEntry.get_text()
+    if (!password) { card.passwordEntry.grab_focus(); return }
 
     const session = sessions[sessionIdx]
-    if (!session) { showError(t("noSession")); return }
+    if (!session) { card.showError(t("noSession")); return }
 
     setLoading(true)
-    errorWrap.visible = false
+    card.clearError()
 
     try {
       // greetdLogin (lib/greetd.ts) — NOT AstalGreet.login, which swallows
@@ -149,41 +94,19 @@ export default function LoginCard(): Gtk.Widget {
       const msg = String(e?.message ?? e)
       console.error("[Greeter] login error:", msg)
       const isAuth = e instanceof AuthError && e.isAuthFailure
-      showError(isAuth ? t("wrongPassword") : t("loginError"))
+      card.showError(isAuth ? t("wrongPassword") : t("loginError"))
       // Re-enable BEFORE grabbing focus: grab_focus() on a still-insensitive
       // entry silently fails ("GtkText did not receive a focus-out event"
       // warning) and left the field unfocused after every failed attempt —
       // the next keystrokes went nowhere until the user clicked the field.
       setLoading(false)
-      passwordEntry.set_text("")
-      passwordEntry.grab_focus()
+      // `resetPassword`, not `set_text("")`: the latter fires `notify::text`,
+      // which is what clears the message when you start typing — so it would
+      // erase the error we just showed (ui/lib/auth-card.ts).
+      card.resetPassword()
+      card.passwordEntry.grab_focus()
     }
   }
-
-  passwordEntry.connect("activate", doLogin)
-  loginBtn.connect("clicked", doLogin)
-
-  const col = new Gtk.Box({
-    orientation: Gtk.Orientation.VERTICAL,
-    halign: Gtk.Align.CENTER,
-    valign: Gtk.Align.CENTER,
-    css_classes: ["greeter-card"],
-  })
-
-  col.append(avatar.widget)
-  col.append(usernameLabel)
-  // Painted capsules, exactly as the lockscreen paints its own — see
-  // ui/lib/glass-capsule.ts. No backdrop source is set in this bundle, so the
-  // body is fill-only and the compositor supplies the blur behind it.
-  // followFocus only on the ENTRY: an input shows focus as its edge going
-  // accent, a button shows a ring, and no control shows both.
-  col.append(withGlassCapsule(passwordEntry, "subtle", true))
-  col.append(withGlassCapsule(loginBtn, "strong", false))
-  // The session selector is a control, and every other control on these two
-  // screens sits on glass — including the locale bar's dropdowns, which are the
-  // same widget. Bare, it was unreadable on a light wallpaper.
-  col.append(withGlassCapsule(sessionDrp))
-  col.append(errorWrap)
 
   // Multi-user switcher — only when more than one human user exists. Selecting a
   // chip swaps the active login target (avatar, name, password). One must stay
@@ -218,31 +141,13 @@ export default function LoginCard(): Gtk.Widget {
       chips.push(chip)
       switcher.append(chip)
     }
-    col.append(switcher)
+    card.append(switcher)
   }
 
-  col.connect("map", () => {
-    // ⚠️ `syncCaps()` was called here until 2026-08-10 and had not existed since
-    // #100 deleted the greeter's own caps-lock warning the day before. It was the
-    // FIRST statement of this handler, so every login threw `ReferenceError:
-    // syncCaps is not defined` and the two timeouts below never got scheduled:
-    // `.greeter-card` is `opacity: 0` until `-shown` arrives, so the login card
-    // never faded in and the password field never took focus.
-    // Trigger the entrance fade on the next frame so the transition runs.
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
-      col.add_css_class("greeter-card-shown")
-      return GLib.SOURCE_REMOVE
-    })
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
-      passwordEntry.grab_focus()
-      return GLib.SOURCE_REMOVE
-    })
-  })
-
   onLocaleChange(() => {
-    passwordEntry.placeholder_text = t("password")
-    if (!isAuthenticating) loginLabel.label = t("login")
+    card.passwordEntry.placeholder_text = t("password")
+    if (!isAuthenticating) card.setPrimaryLabel(t("login"))
   })
 
-  return col
+  return card.widget
 }
