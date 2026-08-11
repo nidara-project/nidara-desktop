@@ -5,7 +5,7 @@ import { listGroup, createRow, pageBox, type SettingsNav } from "../SettingsHelp
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import appService, { type AppData } from "../../../core/AppService"
-import { NidaraButton, NidaraScrolled, ROW_H_SINGLE } from "../../../../lib/nidara-kit"
+import { NidaraButton, NidaraScrolled, NidaraEmptyRow } from "../../../../lib/nidara-kit"
 import { attachTooltip } from "../../../common/Tooltip"
 import { makeIconImage } from "./AppIconImage"
 
@@ -379,14 +379,7 @@ export default function AutostartPage(nav: SettingsNav) {
         while (child) { listBox.remove(child); child = listBox.get_first_child() }
 
         if (entries.length === 0) {
-            const emptyRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row", ROW_H_SINGLE] })
-            emptyRow.set_child(new Gtk.Label({
-                label: t("settings.autostart.empty"),
-                css_classes: ["settings-placeholder"],
-                margin_top: 12,
-                margin_bottom: 12,
-            }))
-            listBox.append(emptyRow)
+            listBox.append(NidaraEmptyRow(t("settings.autostart.empty")))
         } else {
             entries.forEach((entry, idx) => listBox.append(buildEntryRow(entry, idx)))
         }

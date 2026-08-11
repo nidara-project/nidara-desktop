@@ -7,6 +7,7 @@ import Icons from "../../../core/Icons"
 import { t } from "../../../core/i18n"
 import Theme from "../../../core/ThemeManager"
 import { safeDisconnect } from "../../../core/signals"
+import { NidaraRow } from "../../../../lib/nidara-kit"
 
 // ── hypridle config ───────────────────────────────────────────────────────────
 // The symlink at ~/.config/hypr/hypridle.conf always resolves to the per-user
@@ -188,15 +189,16 @@ export default function PowerPage() {
     const checkIcons = new Map<string, Gtk.Widget>()
 
     profiles.forEach(p => {
-        const rowContent = new Gtk.Box({ spacing: 16, margin_start: 16, margin_end: 16, margin_top: 12, margin_bottom: 12 })
-        rowContent.append(new Gtk.Image({ gicon: p.icon, pixel_size: 20, css_classes: ["sidebar-icon", "nd-icon"] }))
-        rowContent.append(new Gtk.Label({ label: p.label, hexpand: true, halign: Gtk.Align.START, css_classes: ["nidara-row-title"] }))
         const checkIcon = buildSelectionCheck(16)
         checkIcon.visible = false
-        rowContent.append(checkIcon)
         checkIcons.set(p.id, checkIcon)
-        const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
-        row.set_child(rowContent); row.set_name(p.id)
+        // NidaraRow, not createRow: the search index is built when the page is
+        // constructed and these three are settings VALUES, not settings — indexing
+        // them would make "Balanced" a search hit that navigates to a page whose
+        // row it cannot select.
+        const row = NidaraRow(p.label, "", checkIcon, [], undefined,
+            new Gtk.Image({ gicon: p.icon, pixel_size: 20, css_classes: ["sidebar-icon", "nd-icon"] }))
+        row.set_name(p.id)
         profileGroup.listBox.append(row)
     })
 

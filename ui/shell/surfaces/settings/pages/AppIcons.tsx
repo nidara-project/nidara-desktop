@@ -1,5 +1,5 @@
 import { Gtk } from "ags/gtk4"
-import { NidaraScrolled } from "../../../../lib/nidara-kit"
+import { NidaraScrolled, NidaraRow } from "../../../../lib/nidara-kit"
 import appService, { type AppData } from "../../../core/AppService"
 import { pageBox, listGroup, imagePickerRow, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
@@ -55,28 +55,8 @@ function buildAppIconDetailPage(app: AppData, syncRow: () => void): Gtk.Widget {
 // ── App row ───────────────────────────────────────────────────────────────────
 
 function buildAppRow(app: AppData, nav: SettingsNav): Gtk.ListBoxRow {
-    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
-    const box = new Gtk.Box({
-        spacing: 16,
-        margin_start: 16,
-        margin_end: 12,
-        margin_top: 12,
-        margin_bottom: 12,
-    })
-
     const canonical = appService.getCanonicalIconName(app.icon ?? "")
     const rowIcon = makeIconImage(canonical, 32)
-
-    const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
-    textBox.append(new Gtk.Label({ label: app.name, halign: Gtk.Align.START, css_classes: ["nidara-row-title"] }))
-
-    const idLabel = new Gtk.Label({
-        label: app.id,
-        halign: Gtk.Align.START,
-        css_classes: ["nidara-row-subtitle"],
-        ellipsize: 3, // PANGO_ELLIPSIZE_END
-    })
-    textBox.append(idLabel)
 
     // Override badge
     const badge = new Gtk.Label({
@@ -112,11 +92,15 @@ function buildAppRow(app: AppData, nav: SettingsNav): Gtk.ListBoxRow {
         opacity: 0.4, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"],
     })
 
-    box.append(rowIcon)
-    box.append(textBox)
-    box.append(badge)
-    box.append(chevron)
-    row.set_child(box)
+    const trailing = new Gtk.Box({ spacing: 16, valign: Gtk.Align.CENTER })
+    trailing.append(badge)
+    trailing.append(chevron)
+
+    // NidaraRow, not createRow: this list is every installed app, rebuilt from the
+    // app service — the search index holds settings, not the machine's contents.
+    // The `.desktop` id rides as the subtitle, so it now wraps in the column instead
+    // of ellipsising at its own natural width.
+    const row = NidaraRow(app.name, app.id, trailing, [], undefined, rowIcon)
     row.set_cursor_from_name("pointer")
 
     const click = new Gtk.GestureClick()

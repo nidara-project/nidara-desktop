@@ -3374,11 +3374,9 @@ branch onto the merged font work.)
 **What is deliberately NOT done** — this was scoped as the geometry law plus the row contract,
 not the page-by-page pass:
 
-- **~20 rows are hand-rolled**, a bare `Gtk.ListBoxRow` wearing `.nidara-row` for the chrome
-  rather than built by `NidaraRow` (Settings → Audio's device and app rows, Users, the
-  search-results list in `Settings.tsx`). They do not get the title contract, and each one is a
-  place the row shape can drift again. Bringing them into the component is the obvious next step
-  and it is mechanical.
+- ~~**~20 rows are hand-rolled**, a bare `Gtk.ListBoxRow` wearing `.nidara-row` for the chrome
+  rather than built by `NidaraRow`.~~ ✅ DONE 2026-08-11 — see #65 for what the pass found and
+  which rows deliberately stayed hand-rolled.
 - **The page-by-page pass itself**: hierarchy, grouping, what belongs on which page. The
   instrument reports geometry, not editorial judgement — see #64.
 - **Fixed-width widgets inside pages** (Appearance/Gaming's 320 px preview, Network's 260 px
@@ -3398,3 +3396,60 @@ symptom: a human opening the window in one locale at one size cannot see it. The
 small — the sweep already walks all 18 pages and reads `bounds`; it needs a locale switch per
 run and a per-node overflow check (child wider than the box it sits in) instead of the current
 row-height count.
+
+### 65. ✅ CLOSED — the hand-rolled rows are the component now (2026-08-11)
+
+Twelve rows across Settings wore `.nidara-row` for the chrome while building their own box, so
+they got the LOOK of a row and none of its contract. They are `NidaraRow` / the new
+`NidaraEmptyRow` now. What the pass turned up, measured with `ags request queryUI .nidara-row`
+on the live session before the change:
+
+- **Settings → Sound: all six rows carried NO height class**, so their height was whatever
+  `12 + content + 12` summed to (92 px).
+- **Settings → Power: the three profile rows measured 44 px** — four pixels UNDER the 48 px
+  `--single` token — sitting in a page whose other rows measured 72. That is exactly the "lists
+  breathe differently from page to page" the height tokens were introduced to end, still present
+  in a shipped page a week after the tokens landed.
+- **Four titles had no `ellipsize`** (Apps → App icons' app name, Users' `displayName`, Power's
+  profile label, the search result's label). `displayName` is free text the user types into the
+  field one group above, so it is a row title with no upper bound at all.
+- **The search result's subtitle used `max_width_chars: 50`** — the same character stub that had
+  been removed from Sound three commits earlier for cutting strings the row had room for.
+- **Three subtitles sat at `halign: START`**, which allocates a wrapping label its NATURAL width
+  — the line-balancing heuristic that made descriptions break at 310–589 px at no consistent edge
+  (the measurement in `row.ts`).
+
+🔑 **And the find that was not a row at all: `.settings-placeholder` had been a dead class since
+March.** `0307adf2` (2026-03-25) renamed it to `.settings-page-subtitle` **in the stylesheet
+only**, leaving six TSX call sites asking for a class that no longer existed; the renamed rule was
+then deleted along with `pageHeader()`. So every page-level empty state — Bluetooth's no-adapter
+banner, Sound's no-hardware banner, Display's no-monitors, search's no-results — rendered as a
+plain default label at full body size and undimmed, beside empty-list rows built with
+`nidara-row-subtitle` that rendered small and dim. **Nothing errored and nothing logged: a CSS
+class GTK cannot resolve is a silent no-op**, which is why a rename that touches only the
+stylesheet is invisible until someone greps for the class. The rule is restored (scoped, in
+`_settings.scss`) and the row-level cases moved to `NidaraEmptyRow`.
+
+`NidaraEmptyRow(text)` is new in the kit. Five places built "this list is empty" by hand and had
+already drifted three ways: dimmed-and-indented (Network, Users) vs centered-and-full-size
+(Autostart, Bluetooth), with and without a height class. It is also **not selectable and not
+activatable** — every hand-rolled copy was a plain row and took the hover state, so a message
+claimed to be a control.
+
+**Deliberately still hand-rolled** — each is a different widget wearing row chrome, not a row:
+
+- `wallpaper-preview-row` (Appearance, Gaming) and the two `users-avatar-row`s: a `Gtk.Picture`
+  as the row's DIRECT child, because wrapping it in a box makes its height-for-width natural
+  explode (the reason is in Users.tsx and predates this pass).
+- `settings-adv-revealer-row` (Appearance): a `Gtk.Revealer` holding more rows.
+- Users' "Add user" row: a real `Gtk.Button` (`.settings-action-row`) filling a row, so the click
+  works regardless of the list's `SelectionMode`.
+- Autostart's custom-command row: an entry plus its Add button and **no title at all**. A row
+  with no title is not a `NidaraRow`; if this shape recurs, it wants its own kit primitive.
+- The dense bar/CC panel rows (`widgets/volume.ts`, `bluetooth.ts`, `vpn.ts`) — already documented
+  in `row.ts` as opting out with their own tighter 10/14 padding.
+
+⚠️ Rows built from live hardware or accounts use `NidaraRow` **directly, never `createRow`**:
+`createRow` also registers the row in the Settings SEARCH INDEX, and a headset, an installed app
+or a user account is not a setting. The index is built at page-construction time anyway, so a
+device row would enter it only sometimes.

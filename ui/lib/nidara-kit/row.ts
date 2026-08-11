@@ -114,6 +114,45 @@ function textColumn(label: string, subtitle: string, titleIcon?: Gtk.Widget): Gt
 }
 
 /**
+ * NidaraEmptyRow — the "there is nothing here" row inside a list card.
+ *
+ * A list that can be empty needs SOMETHING in its card, or the group reads as a
+ * bare header over a 6px sliver. Five places built that row by hand and they had
+ * already drifted three ways (measured 2026-08-11): Network and Users used a
+ * dimmed `nidara-row-subtitle` indented to the rows' own 16px text edge; Autostart
+ * and Bluetooth used a CENTERED `.settings-placeholder`, a class with no CSS rule
+ * anywhere in the repo since `0307adf2` renamed it in the stylesheet only — so
+ * those two rendered at full body size, undimmed; and Bluetooth's carried no
+ * height class at all, making it shorter than the device rows it replaces.
+ *
+ * The text is dimmed and sits at the same left edge as every real row's title, so
+ * an empty list looks like the list it replaces rather than like a banner. Page
+ * level "no hardware at all" messages are NOT this — they are `.settings-placeholder`
+ * outside the card (Settings → Sound's banner), which is a different statement.
+ *
+ * ⚠️ Not selectable and not activatable: it is a message, and a message that takes
+ * the row hover state claims to be a control. Every hand-rolled copy was a plain
+ * row and lit up under the pointer.
+ */
+export function NidaraEmptyRow(text: string): Gtk.ListBoxRow {
+    const label = new Gtk.Label({
+        label: text,
+        css_classes: ["nidara-row-subtitle"],
+        halign: Gtk.Align.START, xalign: 0,
+        wrap: true, wrap_mode: Pango.WrapMode.WORD_CHAR,
+        // The row's own content metrics, same as NidaraRow's outermost box, so the
+        // message lines up with the titles of the rows it stands in for.
+        margin_start: 16, margin_end: 16, margin_top: 12, margin_bottom: 12,
+    })
+    const row = new Gtk.ListBoxRow({
+        css_classes: ["nidara-row", ROW_H_SINGLE],
+        selectable: false, activatable: false,
+    })
+    row.set_child(label)
+    return row
+}
+
+/**
  * NidaraStackedRow — same row, control on its OWN LINE underneath, full width.
  *
  * Use when the control needs room to breathe: a text entry with buttons, a long

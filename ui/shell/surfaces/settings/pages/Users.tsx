@@ -3,7 +3,7 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
-import { showNidaraAlert, NidaraButton, ROW_H_SINGLE } from "../../../../lib/nidara-kit"
+import { showNidaraAlert, NidaraButton, NidaraRow, NidaraEmptyRow, ROW_H_SINGLE } from "../../../../lib/nidara-kit"
 import { getUsers, getCurrentUser, type User } from "../../../../lib/users"
 import { listGroup, createRow, createStackedRow, fieldWithActions, pageBox } from "../SettingsHelpers"
 import { showAvatarCropper } from "../../../common/AvatarCropper"
@@ -329,10 +329,6 @@ function buildUserRow(user: User, onRefresh: () => void): Gtk.ListBoxRow {
     if (user.avatarPath) { try { avatarImg.set_from_file(user.avatarPath) } catch { showGlyph() } }
     else showGlyph()
 
-    const nameBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
-    nameBox.append(new Gtk.Label({ label: user.displayName, css_classes: ["nidara-row-title"], halign: Gtk.Align.START }))
-    nameBox.append(new Gtk.Label({ label: user.username, css_classes: ["nidara-row-subtitle"], halign: Gtk.Align.START }))
-
     // Always-visible label for the switch — an unlabeled toggle in the row reads
     // as a mystery control (VM pass feedback). It also replaces the old "Admin"
     // badge, which duplicated what the switch position already says.
@@ -394,17 +390,19 @@ function buildUserRow(user: User, onRefresh: () => void): Gtk.ListBoxRow {
         })
     })
 
-    const inner = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16, margin_top: 12, margin_bottom: 12 })
-    inner.append(avatarImg)
-    inner.append(nameBox)
-    inner.append(adminLabel)
-    inner.append(adminToggle)
-    inner.append(pwBtn)
-    inner.append(deleteBtn)
+    // The trailing cluster keeps its own 12px spacing; only the row's outer metrics
+    // move into the component.
+    const trailing = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
+    trailing.append(adminLabel)
+    trailing.append(adminToggle)
+    trailing.append(pwBtn)
+    trailing.append(deleteBtn)
 
-    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
-    row.set_child(inner)
-    return row
+    // NidaraRow, not createRow: these are the machine's accounts, not settings.
+    // ⚠️ The title matters here more than anywhere else on this page — `displayName`
+    // is free text the user types into the field above, so it is the one row title in
+    // Settings with no upper bound at all. Hand-rolled it had no ellipsize.
+    return NidaraRow(user.displayName, user.username, trailing, [], undefined, avatarImg)
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -551,14 +549,7 @@ export default function UsersPage() {
 
         const others = getUsers().filter(u => u.username !== username)
         if (others.length === 0) {
-            const emptyRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row", ROW_H_SINGLE] })
-            emptyRow.set_child(new Gtk.Label({
-                label: t("settings.users.other.empty"),
-                css_classes: ["nidara-row-subtitle"],
-                margin_start: 16, margin_top: 12, margin_bottom: 12,
-                halign: Gtk.Align.START,
-            }))
-            otherList.append(emptyRow)
+            otherList.append(NidaraEmptyRow(t("settings.users.other.empty")))
         } else {
             others.forEach(u => otherList.append(buildUserRow(u, rebuildOtherUsers)))
         }

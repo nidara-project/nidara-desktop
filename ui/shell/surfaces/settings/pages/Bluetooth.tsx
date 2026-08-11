@@ -6,7 +6,7 @@ import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as BT from "../../../core/BluetoothService"
 import { safeDisconnect } from "../../../core/signals"
-import { NidaraButton, showNidaraAlert, type AlertHandle } from "../../../../lib/nidara-kit"
+import { NidaraButton, NidaraRow, NidaraEmptyRow, showNidaraAlert, type AlertHandle } from "../../../../lib/nidara-kit"
 import { attachTooltip } from "../../../common/Tooltip"
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -194,46 +194,18 @@ export default function BluetoothPage() {
         while (child) { listBox.remove(child); child = listBox.get_first_child() }
 
         if (devices.length === 0) {
-            const empty = new Gtk.Label({
-                label: t("settings.bluetooth.no-devices"),
-                css_classes: ["settings-placeholder"],
-                margin_top: 12,
-                margin_bottom: 12,
-            })
-            const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
-            row.set_child(empty)
-            listBox.append(row)
+            listBox.append(NidaraEmptyRow(t("settings.bluetooth.no-devices")))
             return
         }
 
         devices.forEach(dev => {
-            const nameLabel = new Gtk.Label({
-                label: BT.deviceName(dev),
-                css_classes: ["nidara-row-title"],
-                halign: Gtk.Align.START,
-                hexpand: true,
-                ellipsize: 3,
-            })
-            const addrLabel = new Gtk.Label({
-                label: dev.address,
-                css_classes: ["nidara-row-subtitle"],
-                halign: Gtk.Align.START,
-            })
-            const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
-            textBox.append(nameLabel)
-            textBox.append(addrLabel)
-
-            const rowBox = new Gtk.Box({
-                spacing: 12,
-                margin_start: 16,
-                margin_end: 16,
-                margin_top: 12,
-                margin_bottom: 12,
-            })
             const devImg = new Gtk.Image({ pixel_size: 20, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] })
             if (dev.icon) devImg.icon_name = dev.icon; else devImg.gicon = Icons.bluetooth
-            rowBox.append(devImg)
-            rowBox.append(textBox)
+
+            // The trailing cluster keeps its own 12px spacing — this migration moves
+            // the ROW's metrics into the component, it does not re-space each row's
+            // buttons.
+            const rowBox = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
 
             if (allowActions) {
                 // Forget — destructive → danger, matching Network's forget button.
@@ -283,9 +255,9 @@ export default function BluetoothPage() {
                 rowBox.append(pairBtn)
             }
 
-            const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
-            row.set_child(rowBox)
-            listBox.append(row)
+            // NidaraRow, not createRow: a paired headset is live hardware, not a
+            // setting, so it has no business in the search index.
+            listBox.append(NidaraRow(BT.deviceName(dev), dev.address, rowBox, [], undefined, devImg))
         })
     }
 

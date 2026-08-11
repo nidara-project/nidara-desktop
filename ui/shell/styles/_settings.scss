@@ -246,6 +246,24 @@ window.nidara-settings-window {
     // Page titles now live in the window header breadcrumb (Settings.tsx), so the
     // in-body .settings-page-title/-subtitle were removed along with pageHeader().
 
+    // Page-level "there is no hardware here at all" banner — Bluetooth (no adapter),
+    // Sound (no devices), Display (no monitors), search (no results). It stands
+    // OUTSIDE the list cards, which is what separates it from NidaraEmptyRow: that
+    // one says a list is empty, this one says the page has nothing to be about.
+    //
+    // ⚠️ This rule is a RESTORATION, not a new style. `.settings-placeholder` was
+    // styled until `0307adf2` (2026-03-25) renamed it to `.settings-page-subtitle`
+    // in the stylesheet ONLY, leaving every TSX call site asking for a class that
+    // no longer existed; the renamed rule was then deleted with pageHeader() (see
+    // the comment above). So from March to 2026-08-11 all six banners rendered as
+    // plain default labels — full body size, undimmed — while the empty-list rows
+    // built with `nidara-row-subtitle` beside them rendered small and dim. Nothing
+    // errored: a CSS class GTK cannot resolve is silently no-op.
+    .settings-placeholder {
+        font-size: $fse-subtitle;
+        color: var(--nidara-text-dim);
+    }
+
     // List card, group title and row label/subtitle are now the universal
     // .nidara-list / .nidara-list-title / .nidara-row-title / .nidara-row-subtitle
     // components in _components.scss (single source). Settings only keeps geometry

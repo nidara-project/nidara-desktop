@@ -5,7 +5,7 @@ import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as Net from "../../../core/NetworkService"
 import type { VpnProfile } from "../../../core/NetworkService"
-import { NidaraButton, ROW_H_SINGLE } from "../../../../lib/nidara-kit"
+import { NidaraButton, NidaraEmptyRow } from "../../../../lib/nidara-kit"
 import { attachTooltip } from "../../../common/Tooltip"
 import { safeDisconnect } from "../../../core/signals"
 
@@ -460,16 +460,7 @@ export default function NetworkPage(nav?: SettingsNav) {
             // The Scan button lives in this group's header, so the group must stay
             // visible whenever Wi-Fi is on — otherwise there's no way to scan for
             // the first network. Show an empty placeholder when nothing is found.
-            if (aps.length === 0) {
-                const emptyRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row", ROW_H_SINGLE] })
-                emptyRow.set_child(new Gtk.Label({
-                    label: t("settings.network.ap.empty"),
-                    css_classes: ["nidara-row-subtitle"],
-                    margin_top: 12, margin_bottom: 12, margin_start: 16,
-                    halign: Gtk.Align.START,
-                }))
-                apList.append(emptyRow)
-            }
+            if (aps.length === 0) apList.append(NidaraEmptyRow(t("settings.network.ap.empty")))
 
             apBox.visible = enabled
         }
@@ -503,22 +494,16 @@ export default function NetworkPage(nav?: SettingsNav) {
     // ── VPN ───────────────────────────────────────────────────────────────────
     const { box: vpnBox, listBox: vpnList } = listGroup(t("settings.network.group.vpn"))
 
-    const emptyVpn = new Gtk.Label({
-        label: t("settings.network.vpn.no-profiles"),
-        css_classes: ["nidara-row-subtitle"],
-        margin_top: 12, margin_bottom: 12, margin_start: 16,
-        halign: Gtk.Align.START,
-    })
-
     const refreshVpn = () => {
         let child = vpnList.get_first_child()
         while (child) { vpnList.remove(child); child = vpnList.get_first_child() }
 
         Net.listVpnProfiles().then(profiles => {
             if (profiles.length === 0) {
-                const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row", ROW_H_SINGLE] })
-                row.set_child(emptyVpn)
-                vpnList.append(row)
+                // Built fresh each time, not once and re-appended: the label above was a
+                // module-level widget re-parented into a new row on every refresh, which
+                // only worked because the old row was removed first.
+                vpnList.append(NidaraEmptyRow(t("settings.network.vpn.no-profiles")))
             } else {
                 profiles.forEach(p => vpnList.append(buildVpnRow(p, refreshVpn)))
             }

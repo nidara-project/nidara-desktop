@@ -4,8 +4,73 @@ import { listGroup, pageBox, bindWhileRealized } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as AudioSvc from "../../../core/AudioService"
-import { NidaraButton } from "../../../../lib/nidara-kit"
+import { NidaraButton, NidaraRow } from "../../../../lib/nidara-kit"
 import { makeVolumeSlider } from "../../../common/Slider"
+
+// ── Volume row (devices and per-app streams) ─────────────────────────────────
+
+/**
+ * The shape both audio lists share: leading icon, name, trailing controls, and the
+ * volume slider on the row's SECOND line — `NidaraRow`'s `footer` slot.
+ *
+ * Device rows and stream rows were separate hand-rolled builders that were
+ * identical from the mute button down: same slider, same value label, same two
+ * endpoint glyphs, same `notify::mute` wiring, same outer metrics. They differed
+ * in the leading icon and in whether a default-device control rides ahead of mute,
+ * which is now two arguments.
+ *
+ * ⚠️ The footer takes NO `margin_start`. NidaraRow leaves that to the caller because
+ * a secondary button (Settings → Widgets' "Configure") indents to line up with the
+ * title — but the slider is this row's PRIMARY control and spans the full content
+ * width, as it did hand-rolled.
+ */
+function createVolumeRow(
+    target: any,
+    title: string,
+    leadingIcon: Gtk.Widget,
+    /** Rides ahead of the mute button: the default-device badge or its button. */
+    defaultControl?: Gtk.Widget,
+): Gtk.ListBoxRow {
+    const muteImg = new Gtk.Image({
+        gicon: AudioSvc.targetVolumeIcon(target),
+        pixel_size: 18, css_classes: ["nd-icon"],
+    })
+    const muteBtn = new Gtk.Button({
+        child: muteImg, css_classes: ["settings-icon-btn"],
+        valign: Gtk.Align.CENTER,
+    })
+    muteBtn.connect("clicked", () => { AudioSvc.toggleMute(target) })
+    target.connect("notify::mute", () => {
+        muteImg.gicon = AudioSvc.targetVolumeIcon(target)
+    })
+
+    const trailing = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
+    if (defaultControl) trailing.append(defaultControl)
+    trailing.append(muteBtn)
+
+    const valLabel = new Gtk.Label({
+        label: `${Math.round(target.volume * 100)}%`,
+        css_classes: ["slider-value-label"],
+        width_chars: 5, xalign: 1.0,
+    })
+    const scale = makeVolumeSlider(target, {
+        onValueChanged: (v) => { valLabel.label = `${Math.round(v)}%` },
+        onExternal: () => { muteImg.gicon = AudioSvc.targetVolumeIcon(target) },
+        cssClasses: ["nidara-atomic-scale-native"],
+    })
+
+    const slider = new Gtk.Box({ spacing: 8 })
+    slider.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
+    slider.append(scale)
+    slider.append(new Gtk.Image({ gicon: Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
+    slider.append(valLabel)
+
+    // NidaraRow, not createRow: a sound card and a playing app are hardware state,
+    // not settings, so they stay out of the search index. The title's one-line
+    // ellipsis now comes from the component — this page is exactly where the
+    // three-line "Starship/Matisse HD Audio Controller Analog Stereo" was measured.
+    return NidaraRow(title, "", trailing, [], undefined, leadingIcon, slider)
+}
 
 // ── Device row (speakers / mics) ──────────────────────────────────────────────
 
@@ -15,39 +80,13 @@ function createDeviceRow(
     isDefault: boolean,
     onSetDefault: () => void,
 ): Gtk.ListBoxRow {
-    const box = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 12,
-        margin_start: 16, margin_end: 16,
-        margin_top: 12, margin_bottom: 12,
-    })
-
-    // ── Header ────────────────────────────────────────────────────────────────
-    const header = new Gtk.Box({ spacing: 12 })
-
-    header.append(new Gtk.Image({
-        gicon: isMic ? Icons.mic : Icons.speaker,
-        pixel_size: 18, css_classes: ["nd-icon"],
-    }))
-    header.append(new Gtk.Label({
-        label: endpoint.description || endpoint.name || t("settings.audio.device"),
-        halign: Gtk.Align.START, hexpand: true,
-        css_classes: ["nidara-row-title"],
-        // ellipsize with NO max_width_chars: the character cap was a stub from when
-        // the content pane could shrink, and it kept truncating names the row had
-        // room for — measured 2026-08-11, "Starship/Matisse HD Audio Controller
-        // Analog Stereo" was cut at 234px inside a 688px row. The pane is a constant
-        // now (WINDOW_LAYOUT), so the row's own width is the only bound needed.
-        ellipsize: 3,
-    }))
-
-    // Default badge / set-default button
+    let defaultControl: Gtk.Widget
     if (isDefault) {
-        header.append(new Gtk.Label({
+        defaultControl = new Gtk.Label({
             label: t("settings.audio.default"),
             css_classes: ["accent-label"],
             valign: Gtk.Align.CENTER,
-        }))
+        })
     } else {
         const setBtn = NidaraButton({
             label: t("settings.audio.btn.set-default"),
@@ -55,118 +94,31 @@ function createDeviceRow(
             valign: Gtk.Align.CENTER,
         })
         setBtn.connect("clicked", onSetDefault)
-        header.append(setBtn)
+        defaultControl = setBtn
     }
 
-    // Mute button
-    const muteImg = new Gtk.Image({
-        gicon: AudioSvc.targetVolumeIcon(endpoint),
-        pixel_size: 18, css_classes: ["nd-icon"],
-    })
-    const muteBtn = new Gtk.Button({
-        child: muteImg, css_classes: ["settings-icon-btn"],
-        valign: Gtk.Align.CENTER,
-    })
-    muteBtn.connect("clicked", () => { AudioSvc.toggleMute(endpoint) })
-    endpoint.connect("notify::mute", () => {
-        muteImg.gicon = AudioSvc.targetVolumeIcon(endpoint)
-    })
-    header.append(muteBtn)
-    box.append(header)
-
-    // ── Volume slider ─────────────────────────────────────────────────────────
-    const valLabel = new Gtk.Label({
-        label: `${Math.round(endpoint.volume * 100)}%`,
-        css_classes: ["slider-value-label"],
-        width_chars: 5, xalign: 1.0,
-    })
-    const scale = makeVolumeSlider(endpoint, {
-        onValueChanged: (v) => { valLabel.label = `${Math.round(v)}%` },
-        onExternal: () => { muteImg.gicon = AudioSvc.targetVolumeIcon(endpoint) },
-        cssClasses: ["nidara-atomic-scale-native"],
-    })
-
-    const sliderRow = new Gtk.Box({ spacing: 8 })
-    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
-    sliderRow.append(scale)
-    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
-    sliderRow.append(valLabel)
-    box.append(sliderRow)
-
-    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
-    row.set_child(box)
-    return row
+    return createVolumeRow(
+        endpoint,
+        endpoint.description || endpoint.name || t("settings.audio.device"),
+        new Gtk.Image({
+            gicon: isMic ? Icons.mic : Icons.speaker,
+            pixel_size: 18, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER,
+        }),
+        defaultControl,
+    )
 }
 
 // ── Stream row (per-app) ──────────────────────────────────────────────────────
 
 function createStreamRow(stream: any): Gtk.ListBoxRow {
-    const appName = stream.description || stream.name || "App"
-    const iconName = AudioSvc.streamIconName(stream)
-
-    // Same vertical layout as the device rows: header (icon + name + mute) on top,
-    // slider underneath.
-    const box = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 12,
-        margin_start: 16, margin_end: 16,
-        margin_top: 12, margin_bottom: 12,
-    })
-
-    // ── Header ────────────────────────────────────────────────────────────────
-    const header = new Gtk.Box({ spacing: 12 })
-    // Real app icon — NO nd-icon: that class recolours/inverts monochrome UI glyphs,
-    // which mangles a full-colour app icon. Sized to match the device leading icon.
-    header.append(new Gtk.Image({ icon_name: iconName, pixel_size: 24, valign: Gtk.Align.CENTER }))
-    header.append(new Gtk.Label({
-        label: appName,
-        halign: Gtk.Align.START, hexpand: true,
-        css_classes: ["nidara-row-title"],
-        // ellipsize with NO max_width_chars: the character cap was a stub from when
-        // the content pane could shrink, and it kept truncating names the row had
-        // room for — measured 2026-08-11, "Starship/Matisse HD Audio Controller
-        // Analog Stereo" was cut at 234px inside a 688px row. The pane is a constant
-        // now (WINDOW_LAYOUT), so the row's own width is the only bound needed.
-        ellipsize: 3,
-    }))
-
-    const muteImg = new Gtk.Image({
-        gicon: AudioSvc.targetVolumeIcon(stream),
-        pixel_size: 18, css_classes: ["nd-icon"],
-    })
-    const muteBtn = new Gtk.Button({
-        child: muteImg, css_classes: ["settings-icon-btn"],
-        valign: Gtk.Align.CENTER,
-    })
-    muteBtn.connect("clicked", () => { AudioSvc.toggleMute(stream) })
-    stream.connect("notify::mute", () => {
-        muteImg.gicon = AudioSvc.targetVolumeIcon(stream)
-    })
-    header.append(muteBtn)
-    box.append(header)
-
-    // ── Volume slider ─────────────────────────────────────────────────────────
-    const valLabel = new Gtk.Label({
-        label: `${Math.round(stream.volume * 100)}%`,
-        css_classes: ["slider-value-label"],
-        width_chars: 5, xalign: 1.0,
-    })
-    const scale = makeVolumeSlider(stream, {
-        onValueChanged: (v) => { valLabel.label = `${Math.round(v)}%` },
-        onExternal: () => { muteImg.gicon = AudioSvc.targetVolumeIcon(stream) },
-        cssClasses: ["nidara-atomic-scale-native"],
-    })
-
-    const sliderRow = new Gtk.Box({ spacing: 8 })
-    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
-    sliderRow.append(scale)
-    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
-    sliderRow.append(valLabel)
-    box.append(sliderRow)
-
-    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
-    row.set_child(box)
-    return row
+    return createVolumeRow(
+        stream,
+        stream.description || stream.name || "App",
+        // Real app icon — NO nd-icon: that class recolours/inverts monochrome UI
+        // glyphs, which mangles a full-colour app icon. Sized to match the device
+        // leading icon.
+        new Gtk.Image({ icon_name: AudioSvc.streamIconName(stream), pixel_size: 24, valign: Gtk.Align.CENTER }),
+    )
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────

@@ -2,8 +2,8 @@ import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import status from "../../core/Status"
 import {
-    NidaraClamp, NidaraScrolled, NidaraSidebar, NidaraWindow,
-    NIDARA_WINDOW_RADIUS as WINDOW_RADIUS, ROW_H_SINGLE, ROW_H_DOUBLE,
+    NidaraClamp, NidaraScrolled, NidaraSidebar, NidaraWindow, NidaraRow,
+    NIDARA_WINDOW_RADIUS as WINDOW_RADIUS,
 } from "../../../lib/nidara-kit"
 import { WINDOW_LAYOUT } from "../../../lib/tokens"
 
@@ -293,38 +293,23 @@ export default function Settings(monitor: Gdk.Monitor) {
 
         matches.forEach(item => {
             const cat = categories.find(c => c.id === item.pageId)
-            const row = new Gtk.Box({
-                spacing: 12,
-                margin_start: 16,
-                margin_end: 16,
-                margin_top: 12,
-                margin_bottom: 12,
-            })
 
-            row.append(new Gtk.Image({
-                gicon: cat?.icon ?? Icons.settings,
-                pixel_size: 18,
-                css_classes: ["search-result-page-icon", "nd-icon"],
-                opacity: 0.6,
-            }))
+            const trailing = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
+            trailing.append(new Gtk.Label({ label: item.pageLabel, css_classes: ["search-result-chip"] }))
+            trailing.append(new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 14, opacity: 0.4, css_classes: ["nd-icon"] }))
 
-            const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true })
-            text.append(new Gtk.Label({ label: item.label, css_classes: ["nidara-row-title"], halign: Gtk.Align.START }))
-            if (item.subtitle) {
-                text.append(new Gtk.Label({
-                    label: item.subtitle,
-                    css_classes: ["nidara-row-subtitle"],
-                    halign: Gtk.Align.START,
-                    ellipsize: 3,
-                    max_width_chars: 50,
+            // A result row shows a row that exists elsewhere, so it is built by the
+            // same component those rows are — including the subtitle's wrap. The
+            // hand-rolled copy ellipsised at `max_width_chars: 50`, the same character
+            // stub that was removed from Settings → Audio for cutting strings the row
+            // had room for: a description was clipped at 50 chars inside an 800px pane.
+            const lbr = NidaraRow(item.label, item.subtitle, trailing, ["search-result-row"], undefined,
+                new Gtk.Image({
+                    gicon: cat?.icon ?? Icons.settings,
+                    pixel_size: 18,
+                    css_classes: ["search-result-page-icon", "nd-icon"],
+                    opacity: 0.6,
                 }))
-            }
-            row.append(text)
-            row.append(new Gtk.Label({ label: item.pageLabel, css_classes: ["search-result-chip"] }))
-            row.append(new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 14, opacity: 0.4, css_classes: ["nd-icon"] }))
-
-            const lbr = new Gtk.ListBoxRow({ css_classes: ["nidara-row", item.subtitle ? ROW_H_DOUBLE : ROW_H_SINGLE, "search-result-row"] })
-            lbr.set_child(row)
             ;(lbr as any)._targetPageId = item.pageId
             searchResultsList.append(lbr)
         })

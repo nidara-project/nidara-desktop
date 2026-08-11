@@ -78,6 +78,17 @@ truncates strings the row had room for. Two of those stubs were left over from w
 shrink (Audio's device rows, cut at 234 px inside a 688 px row) and were removed with the pane's
 width becoming a constant. The row's own width is the only bound a title needs.
 
+⚠️ **A row that carries `.nidara-row` is not the same thing as a row built by `NidaraRow`**, and
+the class is what makes the difference invisible: it supplies the chrome (hover, radius, margin)
+while the height class, the title's ellipsis and the subtitle's fill live on the COMPONENT. Twelve
+Settings rows sat in that gap until 2026-08-11 — Sound's six had no declared height at all, and
+Power's three profile rows measured 44 px against a 48 px token in a page whose other rows were 72.
+If a list is empty, its row is **`NidaraEmptyRow(text)`** (dimmed, left-aligned to the same edge as
+a real title, and neither selectable nor activatable — a message that takes the hover state claims
+to be a control). A page-level "there is no hardware at all" statement is the different thing:
+`.settings-placeholder`, outside the card. See tech-debt #65 for both, and for why that class
+silently styled nothing for five months.
+
 ## The Settings window has ONE geometry law — `WINDOW_LAYOUT` in `ui/lib/tokens.ts`
 
 **The content pane is a CONSTANT 800 px.** Not a maximum, not a band: the same width on all 18
@@ -366,7 +377,7 @@ Swept 2026-08-03. Each step is +4, and horizontal is always +4 over vertical:
 | Surface | v / h | Who |
 |---|---|---|
 | **A list of rows on a shell surface** | **`rowInsetFor(R, n)`**, uniform, from the GLASS — radius **and exponent**. Every floating popup of the shell is a squircle at `lg`, so in practice they all land on **6** | bar expansion panels + clipboard, the **system menu**, the CC context menu, the **CC detail panel** (squircle `lg` → 6); the three `GlassBubble` menus (`lg` squircle body + arrow → 6); the Settings dropdown (circular `md` → 6, **sides only** — see below) |
-| **Window row** | **12 / 16** | `NidaraRow`, and hand-rolled rows inside Settings |
+| **Window row** | **12 / 16** | `NidaraRow` / `NidaraEmptyRow` — inside Settings that is now every row but the five documented opt-outs in tech-debt #65 |
 | **Island** | **16 / 20** | all five island modes |
 
 **That first row is not a tier — it is a formula, `rowInsetFor()` in `ui/lib/tokens.ts`.** A row's
