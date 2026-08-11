@@ -3410,6 +3410,27 @@ bar on their top row, so losing half its coverage is obvious, while round ones (
 three or four pixels up there and look fine. "In GTK the T is cut but the G isn't" is the
 signature of this bug, not of a clipping one.
 
+🔴 **BOTH points below are under revision as of 2026-08-11 — do not treat them as the cure.**
+Re-measured while the user was still reporting shaved tops in monospace at 15px, in isolated
+processes (one per configuration, setting flipped BEFORE any widget exists):
+
+- **A whole-pixel size does NOT put the baseline on the pixel grid.** JetBrainsMono: 13px →
+  baseline 13.260, 14px → 14.280, 15px → 15.300, 16px → 16.320. Inter: 14px → 13.563, 15px →
+  14.531. The baseline is `size × ascender/upem`, which is fractional for essentially every
+  size — so point 2's rounding buys dpi-independence and clean ramp arithmetic, **not**
+  crispness. That was a wrong inference, and it is why "make the number whole" kept moving the
+  symptom instead of removing it.
+- **Toggling `gtk-hint-font-metrics` changed none of those numbers** (identical tables ON and
+  OFF). That does not prove the lever is dead — from GJS the cairo font options are
+  unreachable (`cairo.FontOptions` has no foreign-type marshaller, so
+  `PangoCairo.context_get_font_options` throws), so the setting could not be confirmed to
+  arrive at all. It does mean point 1 is **unverified**, not established.
+- **The ink sits INSIDE the logical box** (mono 15px: ink.y 3.64, logical.y 0), so glyphs are
+  not painting outside their own layout. The remaining variable is where the widget PLACES
+  that layout: a fractional logical height (19.80px) centred in an integer allocation yields a
+  fractional y, hence a mid-row baseline — a placement problem, not a font-size one. That is
+  the direction to investigate, once, with a pixel dump of the real shell.
+
 1. **`gtk-hint-font-metrics = true`** (`syncFontMetrics`) rounds the font's ascent/descent to
    whole pixels, so the baseline lands ON a row. Measured with the same font at the same
    14.667px: metrics OFF → ascent `14.208984375`, the T's crossbar smeared across two rows
