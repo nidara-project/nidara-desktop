@@ -19,6 +19,11 @@
 #     fresh — regenerates it with scripts/gen-widget-index.mjs and fails if it
 #     differs. Pure node; also surfaces the codegen's own validation errors
 #     (stray non-widget file in widgets/, duplicate widget id).
+#   - skill-docs: the in-repo skill does not say the same thing twice. Pure node.
+#     `design-system.md` once held 1157 duplicated lines — half the file, twice —
+#     and edits then landed in DIFFERENT COPIES, so the reference contradicted
+#     itself for weeks. Nobody sees that by reading, because a long reference is
+#     read by search. Logic in scripts/ci/skill-docs-check.mjs.
 #   - smoke: the REAL thing — load the kernel's vkms (virtual KMS) on the
 #     runner, then in a privileged Arch container build the pinned Astal/AGS
 #     stack (proves install.sh's source builds still work), `ags bundle` the
@@ -219,6 +224,17 @@ jobs:
             echo "Fix: run 'node scripts/gen-widget-index.mjs' and commit the updated widgets.gen.ts alongside your widget change."
             exit 1
           fi
+
+  skill-docs:
+    name: Skill docs (no duplicated sections)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: No repeated headings in .claude/skills (must succeed)
+        run: node scripts/ci/skill-docs-check.mjs
 
   agent-loop:
     name: Assistant loop (nidara-agent)
