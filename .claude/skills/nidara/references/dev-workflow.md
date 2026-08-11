@@ -39,13 +39,33 @@ clients use `SigLevel = Required DatabaseOptional`, and `install.sh` imports + l
 public key bundled at `packaging/nidara-repo.gpg` — it also migrates unsigned-era installs
 away from `Optional TrustAll`, in an unconditional block that runs even when phase 1 is
 pin-skipped). The committed
-PKGBUILDs there are generated from `pins.env` by `scripts/gen-pkgbuilds.sh` and are lifted
-verbatim from `install.sh`'s §2/§4 generators. Since the packaging switch it also ships
+PKGBUILDs there are generated from `pins.env` by `scripts/gen-pkgbuilds.sh`; their
+`build()`/`package()` are lifted verbatim from `install.sh`'s §2/§4 generators, but their
+**`makedepends` deliberately are NOT** — see the box below. Since the packaging switch it also ships
 **`nidara` itself**: `build-repo.sh` builds it LAST (the dep loop just installed the whole
 stack into the build host) from the release tag pinned by `NIDARA_REF` in `pins.env`, using
 the PKGBUILD found INSIDE that tag's tarball (`packaging/nidara/`) — the recipe travels with
 the release, so it can never drift from the tree it packages, and a lockstep gate refuses to
 publish if tag / `VERSION` / `pkgver` disagree.
+
+**The build toolchain there is DERIVED from the makedepends (2026-08-12), so
+`packaging/nidara/PKGBUILD`'s `makedepends` is load-bearing.** `build-repo.sh` runs
+`makepkg --nodeps` on purpose — the chain `pacman -U`s each package into the build host, so
+makepkg must not resolve anything — which means *nothing* installs a package's build deps for
+it. That job used to belong to a hand-typed list in the workflow, and it drifted in silence:
+`hyprland-protocols` was declared correctly here and missing there, so v0.7.0 (the first
+release to generate Wayland protocol glue) died on
+`missing protocol: …/hyprland-focus-grab-v1.xml`. Now `nidara-repo/scripts/build-deps.sh`
+unions the `makedepends` of every PKGBUILD it builds — including this one, read out of the
+release tag — so **anything `build()` reaches for must be named in `makedepends` or it will
+not exist in the build container**. `install.sh`'s own generators keep a minimal list on
+purpose (§1's `pacman -S` ran first); the authoritative per-lib lists live in that repo's
+`gen-pkgbuilds.sh`, derived from each lib's `meson.build` at the pinned revision.
+
+**A clean-install VM does not cover this, by construction** — there the deps arrive with the
+rest of the system. The two test beds are complementary: the VM proves the installer on a
+virgin box, the build container proves the dependency chain. nidara-repo builds pull requests
+now (unsigned, no publish) precisely so that chain can be proven before it lands.
 
 **Status (validated E2E in a clean VM, 2026-06-21):** `install.sh` §1 registers `[nidara]`
 in `/etc/pacman.conf` (idempotent) and `pacman -S`'s the 18 packages **explicitly** —
