@@ -6,6 +6,7 @@ import { Gdk, Gtk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import { execAsync } from "ags/process"
 import { readFile, writeFile } from "ags/file"
+import { applyCrispFontRendering } from "../../lib/font-rendering"
 import {
     type NidaraThemeConfig,
     type AccentKey,
@@ -162,10 +163,9 @@ class ThemeManager extends GObject.Object {
      * either way and inherited whatever the default was.
      */
     private syncFontMetrics() {
-        try {
-            const s = Gtk.Settings.get_default()
-            if (s) s.gtk_hint_font_metrics = true
-        } catch (e) { }
+        // One lever, shared by all three bundles — see ui/lib/font-rendering.ts for
+        // why `gtk-hint-font-metrics` alone did nothing for months.
+        applyCrispFontRendering()
     }
 
     private syncFont() {
@@ -509,13 +509,26 @@ class ThemeManager extends GObject.Object {
         try { return this.interfaceSettings.get_double("text-scaling-factor") } catch (_) { return 1.0 }
     }
 
+    private _iniWriteTimer = 0
+
     async setTextScaling(factor: number) {
         const rounded = Math.round(factor * 100) / 100
-        await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "text-scaling-factor", String(rounded)])
+        // ⚠️ In-process `set_double`, NOT `execAsync(["gsettings", …])`. This runs on
+        // every step of a drag, and spawning a subprocess per step is what forced the
+        // slider to commit only on release — so the size jumped into place after the
+        // fact instead of following the thumb.
+        this.interfaceSettings.set_double("text-scaling-factor", rounded)
         // The gsetting alone moves nothing now that the fonts are absolute pixels —
         // resize them ourselves from the unscaled bases.
         this.syncFontsToScale()
-        if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
+        // settings.ini is for OTHER apps and costs two file writes, so coalesce it to
+        // the end of the drag rather than doing it 30 times a second.
+        if (this._iniWriteTimer) GLib.source_remove(this._iniWriteTimer)
+        this._iniWriteTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+            this._iniWriteTimer = 0
+            if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
+            return GLib.SOURCE_REMOVE
+        })
         this.emit("changed")
     }
 

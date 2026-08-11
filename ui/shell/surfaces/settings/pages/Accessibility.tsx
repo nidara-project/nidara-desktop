@@ -37,9 +37,11 @@ export default function AccessibilityPage() {
         (v) => Theme.setTextScaling(v),
         {
             decimals: 2,
-            // Rescaling reflows the whole UI; apply on release so the page doesn't
-            // jump line-by-line while dragging. Thumb + value track live.
-            commitOnRelease: true,
+            // Follows the thumb. It used to commit only on release, because each step
+            // spawned a `gsettings` subprocess — the reason was cost, not design, and
+            // the result was a slider whose effect you could not see while choosing it.
+            // setTextScaling now writes in-process and coalesces the settings.ini write.
+            commitOnRelease: false,
             endpoints: [
                 new Gtk.Label({ label: "A", css_classes: ["slider-text-endpoint", "is-sm"], valign: Gtk.Align.CENTER }),
                 new Gtk.Label({ label: "A", css_classes: ["slider-text-endpoint", "is-lg"], valign: Gtk.Align.CENTER }),

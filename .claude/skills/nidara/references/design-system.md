@@ -3410,26 +3410,45 @@ bar on their top row, so losing half its coverage is obvious, while round ones (
 three or four pixels up there and look fine. "In GTK the T is cut but the G isn't" is the
 signature of this bug, not of a clipping one.
 
-🔴 **BOTH points below are under revision as of 2026-08-11 — do not treat them as the cure.**
-Re-measured while the user was still reporting shaved tops in monospace at 15px, in isolated
-processes (one per configuration, setting flipped BEFORE any widget exists):
+🔑 **The cure is ONE global switch, and it is not a font size.** `ui/lib/font-rendering.ts` →
+`applyCrispFontRendering()`, called once per bundle before any window exists (shell via
+`ThemeManager.syncFontMetrics`, greeter and lockscreen in their `main()`). It sets
+**`gtk-font-rendering = MANUAL`** *and* `gtk-hint-font-metrics = true`.
 
-- **A whole-pixel size does NOT put the baseline on the pixel grid.** JetBrainsMono: 13px →
-  baseline 13.260, 14px → 14.280, 15px → 15.300, 16px → 16.320. Inter: 14px → 13.563, 15px →
-  14.531. The baseline is `size × ascender/upem`, which is fractional for essentially every
-  size — so point 2's rounding buys dpi-independence and clean ramp arithmetic, **not**
-  crispness. That was a wrong inference, and it is why "make the number whole" kept moving the
-  symptom instead of removing it.
-- **Toggling `gtk-hint-font-metrics` changed none of those numbers** (identical tables ON and
-  OFF). That does not prove the lever is dead — from GJS the cairo font options are
-  unreachable (`cairo.FontOptions` has no foreign-type marshaller, so
-  `PangoCairo.context_get_font_options` throws), so the setting could not be confirmed to
-  arrive at all. It does mean point 1 is **unverified**, not established.
-- **The ink sits INSIDE the logical box** (mono 15px: ink.y 3.64, logical.y 0), so glyphs are
-  not painting outside their own layout. The remaining variable is where the widget PLACES
-  that layout: a fractional logical height (19.80px) centred in an integer allocation yields a
-  fractional y, hence a mid-row baseline — a placement problem, not a font-size one. That is
-  the direction to investigate, once, with a pixel dump of the real shell.
+⚠️ **`gtk-hint-font-metrics` alone does nothing.** GTK 4.16 added `gtk-font-rendering`, whose
+default `AUTOMATIC` means "GTK decides" — and that includes ignoring the low-level font
+settings, the metric hint among them. Nidara set the hint from #123 onwards with **zero
+effect**; the fix only landed when the mode went to MANUAL (2026-08-11). Measured, one process
+per configuration, flag set before any widget exists:
+
+| `gtk-font-rendering` | `hint-font-metrics` | Inter 15px | JetBrainsMono 15px |
+|---|---|---|---|
+| AUTOMATIC (the default, what #123 shipped) | true | baseline 14.531 ✗ | 15.300 ✗ |
+| **MANUAL** | **true** | **15.000 ✓** | **16.000 ✓** |
+| MANUAL | false | 14.531 ✗ | 15.300 ✗ |
+
+The third row is the control: MANUAL is only the gate, the hint does the work. Logical heights
+go integral too (mono 15px: 19.80 → 21.00), which is why row geometry stops jittering.
+
+⚠️ **A whole-pixel font size was never the cure**, and believing it was cost three rounds of
+patches. The baseline is `size × ascender/upem`, fractional for essentially every size: a clean
+15px puts JetBrainsMono's baseline at 15.300, while the old 11pt/14.667px was actually CLOSER
+to the grid at 14.209 — exactly why the user reported monospace looking *worse* after the size
+was "fixed". The snap in `snapFontToWholePixels` still earns its place for dpi-independence and
+whole-pixel ramp arithmetic; it earns none for crispness.
+
+⚠️ MANUAL also hands `gtk-xft-antialias/hinting/hintstyle/rgba` back to fontconfig, so a machine
+configured for subpixel rendering now gets it instead of AUTOMATIC's grayscale. That is what
+the mode means, but it is a visible change.
+
+🔧 Two GJS limits found on the way, worth knowing before re-investigating: `cairo.FontOptions`
+has **no foreign-type marshaller** (`PangoCairo.context_get_font_options` throws, and it cannot
+be constructed), so font options can only be driven through GtkSettings; and flipping a font
+setting at runtime does not update an existing Pango context — a probe that toggles in-process
+prints two identical tables that look like a result. One process per configuration.
+
+The two points below are the mechanism, kept because the symptom description is the fastest way
+to recognise this bug. Point 1 is the real lever (gated by the mode above); point 2 is not.
 
 1. **`gtk-hint-font-metrics = true`** (`syncFontMetrics`) rounds the font's ascent/descent to
    whole pixels, so the baseline lands ON a row. Measured with the same font at the same

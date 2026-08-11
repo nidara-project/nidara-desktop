@@ -5,6 +5,7 @@ import Greeter from "./widget/Greeter"
 import { getPreferredUser } from "./lib/greeter-prefs"
 import { initProcessLocale } from "./lib/i18n"
 import { accentCssFor } from "../lib/accent"
+import { applyCrispFontRendering } from "../lib/font-rendering"
 
 // Use our blank theme instead of Adwaita.
 // With an empty gtk.css at /usr/share/themes/nidara/gtk-4.0/gtk.css,
@@ -52,6 +53,10 @@ app.start({
     // the clock's date names AND Pango's CJK face selection are right from
     // the first frame. See lib/i18n.ts initProcessLocale().
     initProcessLocale()
+
+    // Before any window exists: put glyph baselines on the pixel grid. The greeter
+    // has no ThemeManager, so without this it renders text the shell would not.
+    applyCrispFontRendering()
 
     const display = Gdk.Display.get_default()
     if (!display) { console.error("[Greeter] No display"); return }

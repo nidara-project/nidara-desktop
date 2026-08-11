@@ -6,6 +6,7 @@ import Gtk4SessionLock from "gi://Gtk4SessionLock"
 import { Lock, LockOverlay } from "./widget/Lock"
 import { accentCssFor, ACCENT_HEX, type AccentKey } from "../lib/accent"
 import { setAccentRim } from "../lib/glass-capsule"
+import { applyCrispFontRendering } from "../lib/font-rendering"
 
 // Use our blank theme instead of Adwaita.
 GLib.setenv("GTK_THEME", "nidara", true)
@@ -47,6 +48,10 @@ app.start({
   css: cssPath,
 
   main() {
+    // Before any window exists: put glyph baselines on the pixel grid. The lock
+    // screen has no ThemeManager, so without this it renders text the shell would not.
+    applyCrispFontRendering()
+
     const display = Gdk.Display.get_default()
     if (!display) { console.error("[Lock] No display"); return }
 
