@@ -79,12 +79,24 @@ export function NidaraSidebar(
         // around it is a FIXED column (`sidebarWidth`, 250px in Settings) whose scroll
         // view is `hscrollbar_policy: NEVER`. Without ellipsizing, the label's minimum
         // width IS its natural width, so a long string makes the capsule demand more
-        // than its column reserves and it overruns the content pane. Measured
-        // 2026-08-11: the label budget is 176px (250 − 8 capsule margin − 12 list
-        // padding − 24 row margins − 18 icon − 12 spacing) and the Russian
-        // "Специальные возможности" needs 204px AT THE DEFAULT SIZE — i.e. this was
-        // already broken in one shipped locale before any accessibility scaling, and
-        // English "Language & region" joined it at factor 1.39.
+        // than its column reserves and it overruns the content pane.
+        //
+        // The budget is **170px**, and it is smaller than it looks: 250 − 8 capsule
+        // margin − 2 capsule BORDER − 12 list padding − 4 Adwaita `list > row`
+        // padding − 24 row margins − 18 icon − 12 spacing. The last two of those cost
+        // 6px that an earlier version of this comment missed (it claimed 176) — the
+        // theme's stray 2px is the very padding `.nidara-row` exists to clear, and
+        // these rows are bare `Gtk.ListBoxRow`s that never opted out of it.
+        //
+        // Russian "Специальные возможности" needed 200px AT THE DEFAULT SIZE — broken
+        // in a shipped locale before any accessibility scaling — and is abbreviated in
+        // `ru.ts` for exactly that reason. Japanese goes at factor 1.25, English
+        // "Language & region" at 1.39.
+        //
+        // 🔑 None of those numbers is a note to trust: `scripts/dev/text-budget.js`
+        // measures all 12 locales against this budget on every CI run, and its
+        // `--verify` mode re-derives the budget from a live window, which is how the
+        // 6px error above was found.
         content.append(new Gtk.Label({
             label: item.label,
             css_classes: ["nidara-sidebar-label"],

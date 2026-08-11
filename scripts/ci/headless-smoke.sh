@@ -299,7 +299,23 @@ phase_run() {
         log "captured control-center.png"
     fi
 
-    # ── 6. JS errors are a hard failure (boot must be clean) ──────────────────
+    # ── 6. Do the shipped locales still FIT? ─────────────────────────────────
+    # scripts/dev/text-budget.js measures every sidebar string in all 12 locales
+    # against the column's real budget, with the shipped font pinned. It runs HERE
+    # rather than in its own job for one reason: it needs a GDK display and the
+    # `inter-font` package, and this is the only job that has both. It exits 2 (not
+    # 1) if the font is missing, so a container that stops shipping Inter reports
+    # that instead of silently measuring a substitute and passing.
+    if NIDARA_REPO=/repo gjs -m /repo/scripts/dev/text-budget.js >/tmp/smoke/text-budget.txt 2>&1; then
+        log "text budget OK — $(grep -c '^   scale' /tmp/smoke/text-budget.txt) scale rows checked"
+    else
+        rc=$?
+        log "FAIL: text budget (exit $rc)"
+        cat /tmp/smoke/text-budget.txt
+        exit 1
+    fi
+
+    # ── 7. JS errors are a hard failure (boot must be clean) ──────────────────
     if grep -nE "JS ERROR|Unhandled promise rejection" "$shell_log" > /tmp/smoke/js-errors.txt; then
         log "FAIL: JS errors during boot:"
         cat /tmp/smoke/js-errors.txt

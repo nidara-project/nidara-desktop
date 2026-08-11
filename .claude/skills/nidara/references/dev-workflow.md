@@ -318,6 +318,47 @@ syntax error, and the shape of that mistake is that it prints an error and keeps
 built on it reports differences that are really the window never having moved (that happened while
 writing this one — the first table it produced was noise).
 
+### Do the shipped locales still FIT? (`scripts/dev/text-budget.js`) — a CI GATE
+
+```bash
+gjs -m scripts/dev/text-budget.js                    # the gate, as CI runs it
+gjs -m scripts/dev/text-budget.js --scales 1.0,1.5   # narrow the sweep
+gjs -m scripts/dev/text-budget.js --verify           # cross-check the budget live
+gjs -m scripts/dev/text-budget.js --font "Noto Sans 11"
+```
+
+The companion to `settings-geometry.mjs` and the opposite kind of instrument: that one drives the
+live session and cannot run in CI; this one touches nothing, builds real GTK labels with the real
+compiled stylesheet, and measures every string of all **12 locales** at text scales 1.0→1.5. It is
+wired into the headless smoke job (the only one with a GDK display *and* `inter-font`).
+
+**Why offline rather than a sweep of the real window**: the locale comes from `$LANG` at shell
+startup (`core/i18n/detectLanguage`), so a live sweep of 12 locales means 12 shell restarts.
+
+**What a breach means.** The sidebar label ellipsises, so a breach is not a broken layout — it is a
+page name the user cannot read. That makes the rule a product rule: **at scale 1.0 nothing may be
+truncated (fails); above it, truncation is graceful degradation (reported)**. `--fail-at` moves the
+line. The degradation ladder is the useful half — it is how you see that Japanese goes at 1.25 and
+English itself at 1.39, i.e. that the column is tight for the job rather than one locale being long.
+
+Three traps, each of which produced a green run that measured nothing:
+
+- ⚠️ **A `Gtk.Settings` change needs the main context PUMPED.** Without it the sweep measures every
+  scale at 1.0 and passes — the first version printed four identical numbers for four scales.
+- ⚠️ **The font is PINNED to the shipped default** (read from the line in `core/ThemeManager.ts`
+  that seeds it), not taken from the machine — a budget is a property of the product. And the script
+  **refuses to run if that family is missing**, because fontconfig substitutes SILENTLY: an
+  unavailable font does not error, it just measures a different typeface.
+- ⚠️ **The locale files are parsed, not imported** (they are TypeScript, this is gjs). The parse is
+  asserted — a locale that yields under 50 keys aborts the run rather than passing vacuously.
+
+🔑 **`--verify` is what keeps the budget honest**, and it earned that on the day it was written:
+`sidebar.ts` documented the label budget as 176px and the real allocation measured **170px**. The
+comment had missed the capsule's 1px borders and Adwaita's `list > row { padding: 2px }` — the very
+padding `.nidara-row` exists to clear, which the sidebar's bare `Gtk.ListBoxRow`s never opted out
+of. Six pixels, in the one place already known to be a string over budget. Derive a budget, then
+make the machine check the derivation against a real window.
+
 ### Proving a selector matches NOTHING (the sentinel probe — a technique, not a script)
 
 `scope-audit` answers "can this rule reach the window?"; `gtk-probe` answers "how big is this?".

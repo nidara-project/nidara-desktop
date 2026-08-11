@@ -3383,7 +3383,7 @@ not the page-by-page pass:
   popover, the Users avatar) fit the 800 px pane comfortably and were left alone. They are the
   reason the OLD breakpoint differed per page, so they are worth remembering, not changing.
 
-### 64. Settings needs a LOCALE + text-scale sweep, and the instrument only does geometry (2026-08-11)
+### 64. ⬒ HALF DONE — the locale sweep exists and gates CI; the live half does not (2026-08-11)
 
 `scripts/dev/settings-geometry.mjs` asserts that every page renders the same pane width and that
 the window's floor holds. What it does not do is the part that keeps reopening this surface: run
@@ -3396,6 +3396,28 @@ symptom: a human opening the window in one locale at one size cannot see it. The
 small — the sweep already walks all 18 pages and reads `bounds`; it needs a locale switch per
 run and a per-node overflow check (child wider than the box it sits in) instead of the current
 row-height count.
+
+**✅ The deterministic half shipped 2026-08-11: `scripts/dev/text-budget.js`.** It measures every
+sidebar string in all 12 locales at scales 1.0→1.5 with real GTK labels, the real compiled sheet and
+the shipped font pinned, and runs inside the headless smoke job — so this is a **CI gate**, not a
+thing someone remembers. Full write-up in `dev-workflow.md`. What it caught on its first run:
+
+- **Russian shipped TRUNCATED.** "Специальные возможности" needed 200px of a 170px budget at the
+  DEFAULT text size — the escape this whole line of work started from, confirmed and now fixed
+  (abbreviated to "Спец. возможности" in `ru.ts`, 143px, keeping the term users know from
+  GNOME/Windows/Android rather than swapping in a shorter synonym).
+- **The documented budget was wrong by 6px** — 176 claimed, 170 real. See #66.
+- **The column is tight for accessibility scaling generally**: at 1.25 four locales truncate
+  (ja, ru, de, pl) and at 1.5 all twelve do, English included. That is #62's "text scales, boxes
+  do not" with a number on it, and it is reported rather than failed on purpose.
+
+**What is still missing — the LIVE half.** Row titles inside the 800px pane are not covered. They
+ellipsise rather than push, so they lose information silently instead of breaking the layout, and
+their budget is not a constant: it is the row's 688px content minus the leading icon minus the
+trailing control, and that control is often a button whose own label is localised, so the budget
+moves with the locale under test. Covering it honestly needs allocated widths harvested from a live
+session per locale — which, because the locale is read from `$LANG` at startup, means a shell
+restart per locale. That is the part worth designing before building.
 
 ### 65. ✅ CLOSED — the hand-rolled rows are the component now (2026-08-11)
 
@@ -3453,3 +3475,21 @@ claimed to be a control.
 `createRow` also registers the row in the Settings SEARCH INDEX, and a headset, an installed app
 or a user account is not a setting. The index is built at page-construction time anyway, so a
 device row would enter it only sometimes.
+
+### 66. The sidebar's rows never opted out of the theme's padding (2026-08-11)
+
+`.nidara-row` carries `padding: 0` for a documented reason: `nidara-reset` clears background, border,
+shadow and outline but NOT padding, and Adwaita gives every `list > row` 2px of it. The **sidebar's**
+rows are bare `Gtk.ListBoxRow`s (`ui/lib/nidara-kit/sidebar.ts`) with no such class, so they still
+pay it — 4px across, on the one column in the product that is a hard fixed width and already one
+string over budget.
+
+Measured with `--verify` (that is how it was found): capsule 240 → list 228 → item 200 → label 170,
+against a derivation that predicted 176. The other 2px of the gap is the capsule's `material-card`
+border, which is legitimate.
+
+Reclaiming the 4px is a one-line rule and would give every locale that much more headroom, but it
+was NOT bundled with the instrument that found it: it shifts the sidebar's layout, and the honest
+order is to land the measurement first and the change against it second. Whoever takes it should run
+`text-budget.js --verify` before and after — the budget is derived in that script and must move with
+the fix, or the gate starts checking a number that no longer exists.

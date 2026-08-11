@@ -94,7 +94,14 @@ export default {
     "settings.defaultapps.calendar.desc": "Открывает файлы календаря (.ics)",
 
     // Accessibility
-    "settings.accessibility.title": "Специальные возможности",
+    // Abbreviated on purpose, and the abbreviation is the whole point: the sidebar
+    // is a fixed 250px column with a 170px label budget, and the conventional full
+    // form "Специальные возможности" needs 200px — so it shipped TRUNCATED in this
+    // locale at the default text size. Kept as the term Russian users know from
+    // GNOME/Windows/Android rather than swapped for a shorter synonym; 143px, which
+    // leaves 27px of headroom. `scripts/dev/text-budget.js` is what found it and
+    // what keeps it honest.
+    "settings.accessibility.title": "Спец. возможности",
     "settings.accessibility.group.vision": "Зрение",
     "settings.accessibility.group.motion": "Движение",
     "settings.accessibility.text-scale": "Размер текста",
