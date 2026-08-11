@@ -5,6 +5,7 @@ import {
     NidaraClamp, NidaraScrolled, NidaraSidebar, NidaraWindow,
     NIDARA_WINDOW_RADIUS as WINDOW_RADIUS, ROW_H_SINGLE, ROW_H_DOUBLE,
 } from "../../../lib/nidara-kit"
+import { WINDOW_LAYOUT } from "../../../lib/tokens"
 
 // Page Imports
 import AppearancePage from "./pages/Appearance"
@@ -37,6 +38,11 @@ import { attachTooltip } from "../../common/Tooltip"
  */
 export default function Settings(monitor: Gdk.Monitor) {
     clearSearchIndex()
+
+    // The content pane's width — one number for all 18 pages, the search results
+    // included. It is the kit's, not Settings': the window derives its minimum size
+    // and the sidebar's breakpoint from the same value.
+    const PANE_W = WINDOW_LAYOUT.content
 
     // ── Navigation controls ───────────────────────────────────────────────────
     const backBtn = new Gtk.Button({
@@ -134,8 +140,15 @@ export default function Settings(monitor: Gdk.Monitor) {
         // whole DE. The clamp already centres the content inside a much wider
         // viewport, so there is nothing at the right edge to reserve a lane against.
         const { widget: scroll, scrolled } = NidaraScrolled({
-            child: NidaraClamp(widget, 800, true),   // NidaraClamp replaces Adw.Clamp
+            // min === max: the pane is a CONSTANT width on every page (WINDOW_LAYOUT).
+            child: NidaraClamp(widget, PANE_W, true, PANE_W),
             reserveLane: false,
+            // The window's own minimum keeps the pane whole, so this only matters when
+            // a compositor forces the window narrower anyway: then the page SCROLLS
+            // sideways instead of losing its right-hand controls to a clip. EXTERNAL,
+            // not AUTOMATIC — GTK's own horizontal scrollbar is exactly the widget the
+            // rest of the DE replaced.
+            hscrollPolicy: Gtk.PolicyType.EXTERNAL,
             // The page runs flush into the window's bottom-right corner, and the
             // window is glass(floating) = --nidara-radius-lg. At 24px that arc clips
             // ~11px of the pill; the 4px a card needs is not enough here.
@@ -254,10 +267,11 @@ export default function Settings(monitor: Gdk.Monitor) {
     searchResultsPage.append(searchResultsList)
     searchResultsPage.append(searchResultsEmpty)
 
-    const srClamp = NidaraClamp(searchResultsPage, 800, true)
+    const srClamp = NidaraClamp(searchResultsPage, PANE_W, true, PANE_W)
     const { widget: srScroll, scrolled: srScrolled } = NidaraScrolled({
         child: srClamp,
         reserveLane: false,
+        hscrollPolicy: Gtk.PolicyType.EXTERNAL,
         cornerRadius: WINDOW_RADIUS,
         cssClasses: ["settings-page-scroll"],
     })
@@ -446,9 +460,9 @@ export default function Settings(monitor: Gdk.Monitor) {
         headerTitle: breadcrumb,
         headerEnd: closeBtn,
         toolbarExtra: navCapsule,
-        sidebarWidth: 250,
-        defaultWidth: 1000,
-        defaultHeight: 700,
+        sidebarWidth: WINDOW_LAYOUT.sidebar,
+        contentWidth: PANE_W,
+        defaultHeight: 760,
     })
     const win = cw.window
     // Glass tooltip instead of the kit's native toggleTooltip (nidara-kit can't

@@ -294,6 +294,30 @@ matching only half of it: it anchored `.class` on a preceding space, so every el
 — `label.accent-label`, `button.nidara-btn`, `spinbutton.time-spin` — was invisible, and a class
 styled *only* that way read as "no CSS at all" and passed.
 
+### Checking the Settings window's geometry law (`scripts/dev/settings-geometry.mjs`)
+
+```bash
+node scripts/dev/settings-geometry.mjs                       # default width sweep
+node scripts/dev/settings-geometry.mjs --widths 1400,1050,802
+```
+
+Drives the LIVE session: for each window width it resizes the Settings window through Hyprland,
+walks all 18 pages via `ags request settingsPage`, and reads each page's real `bounds` out of
+`queryUI`. It asserts the three invariants of `WINDOW_LAYOUT` (design-system.md) — same pane width
+across pages, same pane width across window widths, and the window's floor holding — and exits 1
+on a violation.
+
+It exists because this failure is **invisible one page at a time**: the breakpoint used to be
+derived per page, so the sidebar docked on 16 pages and floated on 2 at the same window size, and
+the only way to see that is to sweep. It is also how the numbers in `WINDOW_LAYOUT` were measured.
+
+⚠️ Needs a graphical session (it is not a CI gate), and it resizes/floats the user's Settings
+window, restoring size and tiling state at the end. ⚠️ It resizes with `hl.dsp.window.resize` —
+under this repo's Lua config the classic `hyprctl dispatch resizewindowpixel …` string is a Lua
+syntax error, and the shape of that mistake is that it prints an error and keeps going, so a sweep
+built on it reports differences that are really the window never having moved (that happened while
+writing this one — the first table it produced was noise).
+
 ### Proving a selector matches NOTHING (the sentinel probe — a technique, not a script)
 
 `scope-audit` answers "can this rule reach the window?"; `gtk-probe` answers "how big is this?".

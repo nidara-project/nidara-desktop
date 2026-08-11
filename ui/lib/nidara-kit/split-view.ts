@@ -44,29 +44,37 @@ export interface NidaraSplitViewResult {
  *
  * ── Auto-collapse ─────────────────────────────────────────────────────────────
  *
- *   When collapseAt > 0 the split view self-manages collapse by polling
- *   root.get_width() every 200 ms while the widget is mapped. This covers both
- *   floating resize (where notify::width on the window is reliable) and Wayland
- *   compositor tiling (where the configure event bypasses GTK property
- *   notifications on internal widgets).
+ *   The breakpoint is a FIXED width (`collapseAt`), polled from root.get_width()
+ *   every 200 ms while mapped. The poll — rather than notify::width — covers both
+ *   floating resize (where the notification is reliable) and Wayland compositor
+ *   tiling (where the configure event bypasses GTK property notifications on
+ *   internal widgets).
+ *
+ *   ⚠️ It used to be DERIVED, every tick, from the content's current natural width
+ *   (`sidebarWidth + content.naturalWidth + margin`), which read as adaptive and was
+ *   in fact a different window on every page. Measured 2026-08-11 in Settings: at a
+ *   850px window 16 pages kept the sidebar docked while Appearance and Region — the
+ *   two carrying a 320px preview — collapsed it, so navigating between two pages
+ *   made the sidebar appear and disappear and resized the content under the pointer.
+ *   A breakpoint has to be a property of the WINDOW, not of what is currently
+ *   inside it. See WINDOW_LAYOUT in `lib/tokens.ts` for the law and the numbers.
  */
 export function NidaraSplitView(opts: {
     sidebar: Gtk.Widget
     content: Gtk.Widget
     sidebarWidth?: number
     /**
-     * px — explicit fixed breakpoint: sidebar collapses when widget width drops
-     * below this. When omitted (or 0), the breakpoint is CONTENT-DRIVEN: it is
-     * derived every poll from `sidebarWidth + content.naturalWidth + collapseMargin`,
-     * so the sidebar only collapses once there is no longer room for the sidebar
-     * AND the content at its natural (un-clipped) width. This adapts per page —
-     * narrow pages keep the sidebar docked at smaller widths than wide ones.
+     * px — the breakpoint: the sidebar floats below this width and docks at or
+     * above it. A CONSTANT, and deliberately not derived from the content (see the
+     * warning in the header comment). Callers should pass `sidebarWidth + the
+     * content pane's width`, which is what makes the transition seamless: at
+     * exactly that width both sides of the law give the same content width.
+     *
+     * 0 disables auto-collapse (manual `setCollapsed` only).
      */
     collapseAt?: number
     /** false disables auto-collapse entirely (manual setCollapsed only). Default true. */
     autoCollapse?: boolean
-    /** px added to the content-driven breakpoint (sidebar gap + breathing room). Default 24. */
-    collapseMargin?: number
     cssClasses?: string[]
     name?: string
     /**
@@ -93,7 +101,6 @@ export function NidaraSplitView(opts: {
         sidebarWidth   = 250,
         collapseAt     = 0,
         autoCollapse   = true,
-        collapseMargin = 24,
         cssClasses     = [],
         name,
         floatAnchor,
@@ -370,26 +377,17 @@ export function NidaraSplitView(opts: {
 
     // ── Auto-collapse: 200 ms poll while mapped ────────────────────────────────
     //
-    // Breakpoint is either the explicit `collapseAt` px, or — when that is 0 —
-    // content-driven: sidebarWidth + the content's current natural width +
-    // collapseMargin. The content natural is measured every tick so it adapts to
-    // the active page (Settings swaps pages), and the sidebar collapses exactly
-    // when the window can no longer fit the sidebar plus un-clipped content.
-    const collapseThreshold = (): number => {
-        if (collapseAt > 0) return collapseAt
-        // measure() → [minimum, natural, min_baseline, nat_baseline]
-        const contentNat = content.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
-        return sidebarWidth + contentNat + collapseMargin
-    }
-
-    if (autoCollapse) {
+    // The poll compares against a CONSTANT, so a tick costs one get_width() and no
+    // measurement of the content — the previous version re-measured the whole page
+    // tree five times a second for a number that was not supposed to move.
+    if (autoCollapse && collapseAt > 0) {
         let timerId: number | null = null
 
         const startPoll = () => {
             if (timerId !== null) return
             timerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 200, () => {
                 const w = root.get_width()
-                if (w > 0) doCollapse(w < collapseThreshold())
+                if (w > 0) doCollapse(w < collapseAt)
                 return GLib.SOURCE_CONTINUE
             })
         }

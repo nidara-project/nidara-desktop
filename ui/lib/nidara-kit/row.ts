@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import Pango from "gi://Pango"
 
 export interface NidaraRowResult {
     row: Gtk.ListBoxRow
@@ -56,7 +57,30 @@ function textColumn(label: string, subtitle: string, titleIcon?: Gtk.Widget): Gt
     })
     const titleLabel = new Gtk.Label({
         label, css_classes: ["nidara-row-title"],
-        halign: Gtk.Align.START, xalign: 0, wrap: true,
+        // ⚠️ ONE LINE, ellipsised — a title does not wrap. Two reasons, and neither
+        // is taste:
+        //
+        // 1. A wrapping label's MINIMUM width is its longest word, so a title made
+        //    the row squeezable down to that: with the pane free to shrink, the text
+        //    column collapsed and descriptions came out one word per line (measured
+        //    2026-08-11, a 47px subtitle column). The pane is a constant now, but a
+        //    row that can only be laid out one way cannot regress into that again.
+        // 2. `nidara-row--single/--double` DECLARE the row's height (48/72). A title
+        //    that can take two lines makes that declaration a lie for some rows and
+        //    not others — the exact "lists breathe differently from page to page"
+        //    the height tokens were introduced to end.
+        //
+        // Ellipsising is also simply the right answer for what actually overflows
+        // here: not setting names, which fit at 800px in every shipped locale, but
+        // hardware strings — Settings → Audio renders "Starship/Matisse HD Audio
+        // Controller Analog Stereo" as a device title, and it took three lines.
+        //
+        // No `wrap`, so the natural width is the full string: at halign START the
+        // label keeps that (an icon after it stays adjacent) and only gives way when
+        // the row cannot hold it. The subtitle below is the opposite case — prose,
+        // which does wrap — and it is FILL for the reason spelled out there.
+        halign: Gtk.Align.START, xalign: 0,
+        wrap: false, ellipsize: Pango.EllipsizeMode.END,
     })
     if (titleIcon) {
         const titleLine = new Gtk.Box({ spacing: 8, halign: Gtk.Align.START })
@@ -79,6 +103,11 @@ function textColumn(label: string, subtitle: string, titleIcon?: Gtk.Widget): Gt
             // break happens only where the card actually ends. `xalign: 0` keeps the
             // text left-aligned inside that full-width box.
             halign: Gtk.Align.FILL, hexpand: true, xalign: 0, wrap: true,
+            // WORD_CHAR, not WORD: a subtitle can carry a token with no break
+            // opportunity in it — a path, a URL, a German compound — and plain WORD
+            // lets that token overrun the column instead of breaking it. The column
+            // is the fixed side of this layout now; the text yields.
+            wrap_mode: Pango.WrapMode.WORD_CHAR,
         }))
     }
     return text

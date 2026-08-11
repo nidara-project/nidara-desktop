@@ -3326,9 +3326,9 @@ There, the text grows and the box does not:
   column. Its label overflowing that column was the sharpest failure and is fixed mechanically
   (`ellipsize: END`, see architecture.md — it was already overflowing in Russian at factor 1.0),
   but ellipsized nav text at a large scale is a workaround, not the design.
-- the auto-collapse breakpoint is derived from `sidebarWidth + content.naturalWidth +
-  collapseMargin`, and content natural width grows with the font — so a large scale collapses
-  the sidebar in a window that has plenty of room.
+- ~~the auto-collapse breakpoint is derived from the content's natural width, so a large scale
+  collapses the sidebar in a window that has plenty of room~~ — **settled by #63**: the
+  breakpoint is a constant, and the text scale cannot move it.
 - `_settings.scss` `min-width: 210px`, the 30×30 icon boxes, `min-height: 36/50px` in the kit:
   all px. Row min-heights are the benign case (a row grows past its minimum); a min-WIDTH is not.
 
@@ -3344,3 +3344,49 @@ squeezing its subtitle into four lines. So the cap is **`TEXT_SCALE_MAX = 1.5`**
 `core/ThemeManager.ts` (one constant, also used by `applyAll` to clamp a factor stored by the
 older build whose slider went to 2.0 — a value above the max is a state the UI cannot represent).
 Raise it when the geometry scales too, and look again before you do.
+
+### 63. Settings geometry: the law exists now; the pages have not been walked (2026-08-11)
+
+The window's geometry is a single rule — `WINDOW_LAYOUT` in `ui/lib/tokens.ts`, spelled out in
+design-system.md ("The Settings window has ONE geometry law"). The content pane is a constant
+800 px, the sidebar's breakpoint is `sidebar + content` instead of the active page's natural
+width, the window has a floor, and `NidaraRow`'s title is one ellipsised line. Verified with
+`scripts/dev/settings-geometry.mjs`: pane = 720 px (800 minus its padding) on all 18 pages at
+every window width tested, and the window refused to go below 802.
+
+⚠️ **This overlaps #62 and settles one of its bullets.** That entry lists "the auto-collapse
+breakpoint is derived from `sidebarWidth + content.naturalWidth + collapseMargin`, so a large
+text scale collapses the sidebar in a window that has plenty of room" as a symptom of Settings
+scaling text but not boxes. That mechanism is gone — the breakpoint is a constant now, so the
+text scale cannot move it. The REST of #62 stands untouched: the pane is 800 px whatever the
+text scale, so a large factor still means more text in the same box, and `TEXT_SCALE_MAX = 1.5`
+is still the honest limit. (That bullet is struck through in #62 above, done while rebasing this
+branch onto the merged font work.)
+
+**What is deliberately NOT done** — this was scoped as the geometry law plus the row contract,
+not the page-by-page pass:
+
+- **~20 rows are hand-rolled**, a bare `Gtk.ListBoxRow` wearing `.nidara-row` for the chrome
+  rather than built by `NidaraRow` (Settings → Audio's device and app rows, Users, the
+  search-results list in `Settings.tsx`). They do not get the title contract, and each one is a
+  place the row shape can drift again. Bringing them into the component is the obvious next step
+  and it is mechanical.
+- **The page-by-page pass itself**: hierarchy, grouping, what belongs on which page. The
+  instrument reports geometry, not editorial judgement — see #64.
+- **Fixed-width widgets inside pages** (Appearance/Gaming's 320 px preview, Network's 260 px
+  popover, the Users avatar) fit the 800 px pane comfortably and were left alone. They are the
+  reason the OLD breakpoint differed per page, so they are worth remembering, not changing.
+
+### 64. Settings needs a LOCALE + text-scale sweep, and the instrument only does geometry (2026-08-11)
+
+`scripts/dev/settings-geometry.mjs` asserts that every page renders the same pane width and that
+the window's floor holds. What it does not do is the part that keeps reopening this surface: run
+the same sweep across **locales** (`ru` was already overflowing the sidebar at factor 1.0 before
+the label ellipsised — see #62) and across **text scales**, and report what overflows or wraps
+past a sensible budget rather than what merely differs.
+
+That is the missing half of "discovering", and it is why Settings keeps coming back with a new
+symptom: a human opening the window in one locale at one size cannot see it. The extension is
+small — the sweep already walks all 18 pages and reads `bounds`; it needs a locale switch per
+run and a per-node overflow check (child wider than the box it sits in) instead of the current
+row-height count.

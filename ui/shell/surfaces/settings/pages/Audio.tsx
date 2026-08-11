@@ -33,7 +33,12 @@ function createDeviceRow(
         label: endpoint.description || endpoint.name || t("settings.audio.device"),
         halign: Gtk.Align.START, hexpand: true,
         css_classes: ["nidara-row-title"],
-        ellipsize: 3, max_width_chars: 26,
+        // ellipsize with NO max_width_chars: the character cap was a stub from when
+        // the content pane could shrink, and it kept truncating names the row had
+        // room for — measured 2026-08-11, "Starship/Matisse HD Audio Controller
+        // Analog Stereo" was cut at 234px inside a 688px row. The pane is a constant
+        // now (WINDOW_LAYOUT), so the row's own width is the only bound needed.
+        ellipsize: 3,
     }))
 
     // Default badge / set-default button
@@ -117,7 +122,12 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
         label: appName,
         halign: Gtk.Align.START, hexpand: true,
         css_classes: ["nidara-row-title"],
-        ellipsize: 3, max_width_chars: 26,
+        // ellipsize with NO max_width_chars: the character cap was a stub from when
+        // the content pane could shrink, and it kept truncating names the row had
+        // room for — measured 2026-08-11, "Starship/Matisse HD Audio Controller
+        // Analog Stereo" was cut at 234px inside a 688px row. The pane is a constant
+        // now (WINDOW_LAYOUT), so the row's own width is the only bound needed.
+        ellipsize: 3,
     }))
 
     const muteImg = new Gtk.Image({

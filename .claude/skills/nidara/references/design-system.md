@@ -57,6 +57,77 @@ outliers and leaves the heuristic in charge underneath — it looked identical o
 reports each node's real `bounds`, so "do these all break at the same column?" is a set of numbers
 rather than a judgement call.
 
+### A TITLE is the opposite case: one line, ellipsised (2026-08-11)
+
+`NidaraRow`'s title is **`wrap: false, ellipsize: END`**, and it is not the same decision as the
+subtitle above it — prose wraps, a label does not:
+
+- a wrapping label's **minimum** width is its longest word, so a wrapping title makes the whole row
+  squeezable down to that. That is how a settings page ends up "almost vertical": before the pane
+  had a floor, the text column reached **47 px** and descriptions came out one word per line.
+- `nidara-row--single/--double` **declare** the row's height (48/72). A title that may take two
+  lines makes that declaration true for some rows and false for others — precisely the "lists
+  breathe differently from page to page" the height tokens exist to end.
+
+What actually overflows there is not setting names (they fit at 800 px in every shipped locale)
+but hardware strings: Settings → Audio renders `Starship/Matisse HD Audio Controller Analog Stereo`
+as a title, and it took three lines. Ellipsis is the right answer to that, wrapping is not.
+
+⚠️ And do NOT reach for `max_width_chars` to tame one: it caps the label's natural width, so it
+truncates strings the row had room for. Two of those stubs were left over from when the pane could
+shrink (Audio's device rows, cut at 234 px inside a 688 px row) and were removed with the pane's
+width becoming a constant. The row's own width is the only bound a title needs.
+
+## The Settings window has ONE geometry law — `WINDOW_LAYOUT` in `ui/lib/tokens.ts`
+
+**The content pane is a CONSTANT 800 px.** Not a maximum, not a band: the same width on all 18
+pages, in every locale, at every text scale. Widening the window adds empty margin; narrowing it
+spends that margin, then makes the sidebar float, then hits the window's minimum. Written out,
+with S = sidebar (250), C = content (800), and W the width INSIDE the window's 1px glass rims
+(so a window is `W + 2` wide — the breakpoint is deliberately in rim-space, because at exactly
+`W = S + C` the docked pane must get exactly C):
+
+| available width W | sidebar | content |
+|---|---|---|
+| `W ≥ S + C` | docked | C, centred in W − S |
+| `C ≤ W < S+C` | floating (popover) | C, centred in W |
+| `W < C` | — | refused by `set_size_request`; a compositor that forces it anyway gets horizontal SCROLL, not a clip |
+
+It is continuous: at `W = S + C` both rows give the same content width, so the sidebar leaving does
+not resize the page under the pointer.
+
+**Three things enforce it, and all three have to stay in step** — `NidaraClamp(page, C, true, C)`
+(min === max), `NidaraSplitView({ collapseAt: S + C })`, and `win.set_size_request(C + rims, …)`
+in `NidaraWindow`. The window derives the last two from `contentWidth`, so a caller only states C.
+
+**What it replaced, and why none of it was noticeable one page at a time** (all measured live
+2026-08-11, `ags request queryUI` × 18 pages × window widths):
+
+- the collapse breakpoint was DERIVED from the active page's natural width, every 200 ms. At a
+  850 px window, 16 pages kept the sidebar docked and **Appearance and Region** — the two carrying
+  a 320 px preview — collapsed it. Navigating Display → Appearance made the sidebar vanish and the
+  page jump 518 → 720 px. A breakpoint is a property of the WINDOW, never of what is inside it.
+- content width was **not monotonic** in window width: 900 → 568, 800 → 468, 700 → **618**,
+  600 → 518. Narrowing the window made the page wider at the breakpoint, because collapsing hands
+  the sidebar's 250 px to the content.
+- the clamp had a ceiling and no floor, and `NidaraSplitView`'s ZeroMinOverlay deliberately severs
+  the content's minimum from the window — so nothing stopped a drag. The window went to **250 px**
+  with the page stuck at 403 and CLIPPED.
+
+**Why 800 is the number**: it is what the widest ROW needs. Across all 18 pages the widest trailing
+control is 388 px (Appearance → Accent color), then 324 (Region) and 315 (a slider row). At C = 800
+the page inside its `$space-10` padding is 720 and a row's content box 688, leaving the widest row
+~347 px of text column — about 40 characters. Below ~720 that budget starts breaking titles
+(Appearance at 518, most pages by 418). Which is also the argument against an elastic band: between
+640 and 800 there is nothing to gain and a text column to lose. A constant buys the row contract ONE
+width to be correct at, forever. (Prior art: macOS System Settings has a hard minimum window and
+never reflows its content pane.)
+
+**Check it with the instrument, not by opening the window**: `node scripts/dev/settings-geometry.mjs`
+sweeps every page at several window widths and asserts the three invariants (same pane width across
+pages, same pane width across window widths, floor holds). The failure mode here is invisible one
+page at a time — that is the whole reason it exists.
+
 ## Scrollable boxed list — card on the ScrolledWindow, not the list
 
 When a boxed list must scroll INSIDE a fixed card (App Icons' installed-apps list), the card

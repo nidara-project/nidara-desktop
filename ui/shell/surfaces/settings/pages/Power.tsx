@@ -276,13 +276,17 @@ export default function PowerPage() {
     const note = new Gtk.Label({
         label: t("settings.power.lock-note"),
         css_classes: ["nidara-row-subtitle"],
-        halign: Gtk.Align.START,
+        // FILL + hexpand + xalign, exactly like a row subtitle and for the same
+        // reason: a halign-START wrapping label is allocated its NATURAL width, and
+        // for a wrapping GtkLabel that is a line-balancing heuristic — so the
+        // footnote broke at its own column instead of the card's. `max_width_chars`
+        // was the stub that hid it (see NidaraRow's textColumn).
+        halign: Gtk.Align.FILL, hexpand: true, xalign: 0,
         margin_start: 20,
         // Footnote binds to the card ABOVE it (NidaraList box is now spacing:0);
         // 8px matches the title→card attachment gap. See design-system.md.
         margin_top: 8,
         wrap: true,
-        max_width_chars: 55,
     })
     idleGroup.box.append(note)
 
