@@ -34,9 +34,10 @@ export function NidaraFontButton(opts: NidaraFontButtonOpts): Gtk.Button {
         const family = desc.get_family() || "Sans"
         const size = desc.get_size() > 0 ? Math.round(desc.get_size() / Pango.SCALE) : 0
         // ⚠️ The unit is not decoration. A Pango size is points OR pixels depending
-        // on `size_is_absolute`, and Nidara stores the interface font in absolute
-        // pixels (ThemeManager.snapFontToWholePixels) — so a bare "15" next to a
-        // system that everywhere else talks points reads as 15pt and is 15px.
+        // on `size_is_absolute`, and both reach this button: Nidara stores points
+        // (ThemeManager.fontToPoints) but another tool — or a pre-migration install —
+        // can leave a `<n>px` font in gsettings, where a bare "15" would read as 15pt
+        // and be 15px. The suffix is how the difference is visible at all.
         const unit = desc.get_size_is_absolute() ? "px" : "pt"
         label.set_text(size ? `${family}  ${size}${unit}` : family)
         // Preview: render the label text in the selected font (like Gtk.FontButton).

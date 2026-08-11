@@ -38,6 +38,19 @@ export interface SliderOpts {
     max?: number
     value: number
     step?: number
+    /**
+     * Snap the thumb (and therefore the value and the label) to multiples of `step`
+     * instead of gliding freely — detents.
+     *
+     * Use it when the underlying thing is COARSER than the pixels the thumb can
+     * travel, so a free glide would offer precision the system cannot deliver and
+     * most positions would be indistinguishable from their neighbours. The
+     * accessibility text scale is the case that motivated it: font rendering hints
+     * glyph advances to whole pixels, so measured, only ~half of its 0.01 steps
+     * changed anything on screen while all of them moved the number. Snapping to
+     * 0.05 makes every position the user can stop at do something.
+     */
+    snapToStep?: boolean
     orientation?: SliderOrientation
     /** Draw the circular thumb (default true). false = bar/fill only. */
     thumb?: boolean
@@ -219,7 +232,13 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
     // Apply a fraction from interaction: redraw + label, and (unless release-commit)
     // push the debounced onChange.
     const applyFrac = (f: number) => {
-        const nf = Math.max(0, Math.min(1, f))
+        let nf = Math.max(0, Math.min(1, f))
+        if (opts.snapToStep) {
+            // Quantize the FRACTION, so thumb, label and committed value can never
+            // disagree — they are all derived from it.
+            const q = step / range
+            nf = Math.max(0, Math.min(1, Math.round(nf / q) * q))
+        }
         if (nf === frac) return
         frac = nf
         da.queue_draw()

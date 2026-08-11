@@ -3310,3 +3310,37 @@ differences, both benign and both verified rather than waved through:
 
 **Left for the VM**, along with everything else on these two surfaces: whether the timer
 and the shake read right at real size, and greetd/PAM actually driving the failure path.
+
+### 62. Settings scales its TEXT with the accessibility slider but not its BOXES (2026-08-11)
+
+The accessibility text scale is honest again — the fonts are stored in points, so GTK applies
+the factor through the dpi and the slider is continuous (design-system.md, "the font SIZE is not
+part of this"). What is NOT honest yet is the geometry it scales into. Chrome is safe by design
+(`_reset.scss` pins `font-size` on bar/dock/island/app-grid, and CC/NC/Prism inherit it from the
+bar's window), so this is about the surfaces that are SUPPOSED to reflow: **Settings, About and
+the alert dialog**, which take the `$fse-*` em ramp.
+
+There, the text grows and the box does not:
+
+- `NidaraSplitView`'s sidebar is `width_request: sidebarWidth` (250 in Settings) — a fixed
+  column. Its label overflowing that column was the sharpest failure and is fixed mechanically
+  (`ellipsize: END`, see architecture.md — it was already overflowing in Russian at factor 1.0),
+  but ellipsized nav text at a large scale is a workaround, not the design.
+- the auto-collapse breakpoint is derived from `sidebarWidth + content.naturalWidth +
+  collapseMargin`, and content natural width grows with the font — so a large scale collapses
+  the sidebar in a window that has plenty of room.
+- `_settings.scss` `min-width: 210px`, the 30×30 icon boxes, `min-height: 36/50px` in the kit:
+  all px. Row min-heights are the benign case (a row grows past its minimum); a min-WIDTH is not.
+
+**What this needs**, when it is picked up: the reflowing windows express their geometry in `em`
+(or a token derived from the interface font) rather than px, so the box scales with what it
+contains. That is the real fix and it belongs to the kit, not to Settings alone.
+
+**Until then the slider's range is the honest limit, and it was set from looking** (2026-08-11,
+live session, Accessibility / Appearance / Control center / Display / Top bar at factor 2.0):
+nothing overflows any more once the sidebar label ellipsizes — the two remaining symptoms are the
+nav truncating to `Notificatio…` and a row with TWO trailing controls (Top bar → Custom icon)
+squeezing its subtitle into four lines. So the cap is **`TEXT_SCALE_MAX = 1.5`** in
+`core/ThemeManager.ts` (one constant, also used by `applyAll` to clamp a factor stored by the
+older build whose slider went to 2.0 — a value above the max is a state the UI cannot represent).
+Raise it when the geometry scales too, and look again before you do.

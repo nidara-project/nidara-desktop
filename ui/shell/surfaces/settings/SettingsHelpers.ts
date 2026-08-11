@@ -184,9 +184,9 @@ export const sliderRow = (
     min: number,
     max: number,
     cb: (v: number) => void,
-    opts: { unit?: string; icons?: [Gio.FileIcon, Gio.FileIcon]; iconSizes?: [number, number]; endpoints?: [Gtk.Widget, Gtk.Widget]; pct?: boolean; decimals?: number; commitOnRelease?: boolean; onExtChange?: (cb: (v: number) => void) => (() => void) } = {},
+    opts: { unit?: string; icons?: [Gio.FileIcon, Gio.FileIcon]; iconSizes?: [number, number]; endpoints?: [Gtk.Widget, Gtk.Widget]; pct?: boolean; decimals?: number; commitOnRelease?: boolean; step?: number; onExtChange?: (cb: (v: number) => void) => (() => void) } = {},
 ) => {
-    const { unit = "", icons, iconSizes = [16, 16], endpoints, pct = false, decimals, commitOnRelease = false, onExtChange } = opts
+    const { unit = "", icons, iconSizes = [16, 16], endpoints, pct = false, decimals, commitOnRelease = false, step, onExtChange } = opts
 
     // Integer sliders (no `decimals`/`pct`) must STORE integers, not just display them:
     // the raw Gtk.Scale value is fractional, and a fractional setting (e.g. screenGap=8.19)
@@ -222,6 +222,11 @@ export const sliderRow = (
         onExtChange,
         debounce: 32,
         commitOnRelease,
+        // `step` opts the row into DETENTS (see SliderOpts.snapToStep): pass it when
+        // the setting is coarser than the thumb's travel, so no position of the thumb
+        // is indistinguishable from its neighbour. Without it the slider glides and
+        // scroll/keyboard fall back to range/20 as before.
+        ...(step !== undefined ? { step, snapToStep: true } : {}),
         cssClasses: ["nidara-atomic-scale-native"],
         width_request: 140,
     })

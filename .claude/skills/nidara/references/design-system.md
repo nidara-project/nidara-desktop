@@ -897,10 +897,11 @@ a separate window. The rule that has not changed: **shell CHROME uses the fixed 
 ramp**, because a bar or dock label that reflows with the font picker breaks the layout it
 sits in. Body copy in a window is supposed to grow.
 
-⚠️ **The `$fse-*` ratios are anchored to a 15px base since 2026-08-11** (they were 14px), so
-each rung lands on a whole pixel at the default font. Changing the default font size means
-re-deriving them — see "the tops of letters were being shaved" below for why the anchor wins
-that argument and the ratios move.
+⛔ **Do not retune the `$fse-*` ratios to land on whole pixels.** It was tried twice (#123, #124)
+and reverted both times: the anchor is `gtk-font-name`, deliberately a POINT size so the
+accessibility text scale can reach it through the dpi, and 11pt is 14.667px — no set of ratios
+lands a fractional anchor on integers. It buys nothing either; crispness comes from
+`gtk-hint-font-metrics`. Full story under "the tops of letters were being shaved" below.
 
 **Its sibling `ui/lib/styles/_mixins.scss` (2026-08-10) holds the mixins the KIT needs** —
 `nidara-reset`, `glass`, `material-card`, `nidara-row-states`, `nidara-tile-states` — for the
@@ -1616,6 +1617,16 @@ horizontal wrapper). There is **no native `Gtk.Scale`** and no `PillSlider` — 
 - **Wiring:** `onChange` (committed, optional `debounce` / `commitOnRelease`), `onValueChanged`
   (live, for the % label), `onExtChange(cb) → cleanup` for external value updates (ignored
   while the user drags).
+- **`snapToStep`** (with `step`) turns the glide into **detents** — the FRACTION is quantized, so
+  thumb, label and committed value are all derived from the same snapped number and cannot
+  disagree. 🔑 Reach for it when the underlying thing is coarser than the thumb's travel, because
+  a free glide then promises precision the screen cannot show and most positions are
+  indistinguishable from their neighbours. The case that added it (2026-08-11) is the
+  accessibility text scale: font rendering hints glyph advances to whole pixels, so measured, only
+  37 of 75 one-hundredth steps over 0.75–1.50 changed the rendered width of a label while all 75
+  moved the number — "the slider only changes in certain positions" was a true report about a real
+  mismatch, not a drawing bug. `sliderRow` exposes it as a plain `step` option (passing `step` opts
+  the row in; omitting it keeps the old free glide with `range/20` for scroll and arrow keys).
 - **`makeVerticalFillTile`'s bottom icon is sized/placed to match a 1×1 tile's icon exactly** —
   28px glyph, vertical centre `UNIT/2` (40px) above the TALL tile's true bottom edge, not an
   arbitrary smaller icon of its own. Derivation: `40 − 4 (BaseIsland's TALL padding,
@@ -2786,6 +2797,16 @@ horizontal wrapper). There is **no native `Gtk.Scale`** and no `PillSlider` — 
 - **Wiring:** `onChange` (committed, optional `debounce` / `commitOnRelease`), `onValueChanged`
   (live, for the % label), `onExtChange(cb) → cleanup` for external value updates (ignored
   while the user drags).
+- **`snapToStep`** (with `step`) turns the glide into **detents** — the FRACTION is quantized, so
+  thumb, label and committed value are all derived from the same snapped number and cannot
+  disagree. 🔑 Reach for it when the underlying thing is coarser than the thumb's travel, because
+  a free glide then promises precision the screen cannot show and most positions are
+  indistinguishable from their neighbours. The case that added it (2026-08-11) is the
+  accessibility text scale: font rendering hints glyph advances to whole pixels, so measured, only
+  37 of 75 one-hundredth steps over 0.75–1.50 changed the rendered width of a label while all 75
+  moved the number — "the slider only changes in certain positions" was a true report about a real
+  mismatch, not a drawing bug. `sliderRow` exposes it as a plain `step` option (passing `step` opts
+  the row in; omitting it keeps the old free glide with `range/20` for scroll and arrow keys).
 - **`makeVerticalFillTile`'s bottom icon is sized/placed to match a 1×1 tile's icon exactly** —
   28px glyph, vertical centre `UNIT/2` (40px) above the TALL tile's true bottom edge, not an
   arbitrary smaller icon of its own. Derivation: `40 − 4 (BaseIsland's TALL padding,
@@ -3434,8 +3455,8 @@ go integral too (mono 15px: 19.80 → 21.00), which is why row geometry stops ji
 patches. The baseline is `size × ascender/upem`, fractional for essentially every size: a clean
 15px puts JetBrainsMono's baseline at 15.300, while the old 11pt/14.667px was actually CLOSER
 to the grid at 14.209 — exactly why the user reported monospace looking *worse* after the size
-was "fixed". The snap in `snapFontToWholePixels` still earns its place for dpi-independence and
-whole-pixel ramp arithmetic; it earns none for crispness.
+was "fixed". The whole-pixel snap has since been **removed** (it also broke the accessibility
+text scale); see "the font SIZE is not part of this" below.
 
 ⚠️ MANUAL also hands `gtk-xft-antialias/hinting/hintstyle/rgba` back to fontconfig, so a machine
 configured for subpixel rendering now gets it instead of AUTOMATIC's grayscale. That is what
@@ -3447,40 +3468,58 @@ be constructed), so font options can only be driven through GtkSettings; and fli
 setting at runtime does not update an existing Pango context — a probe that toggles in-process
 prints two identical tables that look like a result. One process per configuration.
 
-The two points below are the mechanism, kept because the symptom description is the fastest way
-to recognise this bug. Point 1 is the real lever (gated by the mode above); point 2 is not.
+**`gtk-hint-font-metrics = true`** (`syncFontMetrics`, gated by the MANUAL mode above) rounds the
+font's ascent/descent to whole pixels, so the baseline lands ON a row. Measured with the same
+font at the same 14.667px: metrics OFF → ascent `14.208984375`, the T's crossbar smeared across
+two rows (`#######+` over `+++##++.`); metrics ON → ascent `15.0`, one crisp row (`.########`).
+GTK turns this off by default to serve fractional display scaling.
 
-1. **`gtk-hint-font-metrics = true`** (`syncFontMetrics`) rounds the font's ascent/descent to
-   whole pixels, so the baseline lands ON a row. Measured with the same font at the same
-   14.667px: metrics OFF → ascent `14.208984375`, the T's crossbar smeared across two rows
-   (`#######+` over `+++##++.`); metrics ON → ascent `15.0`, one crisp row (`.########`).
-   GTK turns this off to serve fractional display scaling.
-2. **The size must be a whole number of pixels.** The font dialog returns POINTS, and at 96dpi
-   11pt is 14.667px — so the default `Inter 11` put the anchor on a fraction, and because the
-   `$fse-*` ramp is relative, every step inherited it (11.59 / 12.61 / 13.64 / 14.67 / 15.69).
-   The seeded default is **`Inter 15px`** — absolute and dpi-independent — and `setFont` /
-   `setMonoFont` snap any pick to whole pixels on the way in, with `applyAll` snapping once at
-   boot to catch fonts set before the snap existed or by another tool (nwg-look, Tweaks).
+### ⛔ The font SIZE is not part of this, and the DE stores POINTS
 
-   ⚠️ **15, not 14.** #123 first seeded `14px` because the then-current `$fse-*` ratios landed
-   on whole pixels there — but every install since PR #6 had shipped `Inter 11` = 14.667px, so
-   that quietly made the default **4.5% smaller than it had ever been** (caught by the user,
-   2026-08-11: "if 15px equals 11pt and 11pt was the default, then 14px is a reduction"). The
-   ramp was retuned to land on whole pixels at a 15px anchor (0.8 / 0.867 / 0.933 / 1 / 1.067 /
-   1.2 / 1.533 / 2 → 12 / 13 / 14 / 15 / 16 / 18 / 23 / 30) instead. 🔑 **The anchor is a
-   product decision and the ratios are arithmetic — bend the arithmetic, not the anchor.**
+This is the trap that ate #123, #124 and most of a third branch, so it is written as a rule:
+**never reach for the font size to fix rendering, and never store an absolute pixel size.**
 
-3. **Absolute pixels are immune to dpi, and `text-scaling-factor` works BY dpi.** So the moment
-   the font became `Inter 14px`, the Accessibility text-size slider stopped moving anything at
-   all — measured: at factor 1.5, `Inter 11` resolves to 22px while `Inter 14px` stays 14px.
-   `ThemeManager` now applies the factor itself: `state.fontBase` (in `appearance.json`) holds
-   the size AS PICKED — that is what the font button shows and edits, like GNOME's — and
-   gsettings holds base × factor. ⚠️ Two traps: the base is what keeps it idempotent (scaling
-   the live gsettings value compounds on every drag), and the "adopt an external edit" branch
-   must run **only at boot** — `setFont` and `setTextScaling` push a change out while gsettings
-   still holds the old value, which is indistinguishable from someone else having edited it.
-   The chrome's fixed `$fs-*` px ramp does NOT follow the factor and never has (decided
-   2026-08-11: macOS behaviour — window content scales, the bar and dock do not).
+The reasoning that looked right: the font dialog returns POINTS, at 96dpi `Inter 11` is 14.667px,
+the `$fse-*` ramp is relative so every rung inherits that fraction — therefore snap the anchor to
+a whole pixel (`Inter 14px`, then `Inter 15px`) and the ramp lands on the grid. Two things were
+wrong with it.
+
+1. **It does nothing for crispness.** The hint rounds the ASCENT, and it does that just as well
+   at a fractional size. Measured 2026-08-11, one process per configuration, ascent from a
+   realized widget's own Pango context:
+
+   | config | Inter 11pt (14.667px) | Inter 15px | Mono 11pt | Mono 15px |
+   |---|---|---|---|---|
+   | AUTOMATIC + hint | 14.209 ✗ | 14.531 ✗ | 14.960 ✗ | 15.300 ✗ |
+   | **MANUAL + hint** | **15.000 ✓** | **15.000 ✓** | **15.000 ✓** | **16.000 ✓** |
+   | MANUAL, no hint | 14.209 ✗ | 14.531 ✗ | 14.960 ✗ | 15.300 ✗ |
+
+   The fractional point size is on the grid exactly as much as the whole-pixel one. (Row 3 is the
+   control that makes row 2 mean something — see `feedback_prove_the_test_can_fail`.)
+
+2. **An absolute pixel size breaks accessibility, and no workaround makes it whole.** GTK applies
+   `text-scaling-factor` by multiplying `gtk-xft-dpi` (measured: factor 1.0 → dpi 96, 1.25 → 120,
+   1.5 → 144), and a pixel size is immune to dpi by definition. So `Inter 14px` killed the
+   Accessibility text slider outright. Rescaling the fonts ourselves from an unscaled base —
+   which is what the branch did next — was worse than dead: the effective size was
+   `round(basePx × factor)`, so the whole 0.75–2.0 range held **20 distinct sizes and ~5 of every
+   6 thumb positions changed nothing**, and a mono base of a different size stepped at different
+   positions than the UI. A pixel is the coarsest possible step for a continuous control.
+
+So: **`gtk-font-name` holds a POINT size** (seeded `Inter 11` / `JetBrainsMono Nerd Font 11`, the
+same 11 every install has shipped since PR #6), `ThemeManager.fontToPoints` converts any pick —
+and any px font left by a previous version or by nwg-look/Tweaks — to whole points on the way in,
+and `migrateFontsToPoints` runs it once at boot so an upgraded install is repaired. Nothing in
+`ThemeManager` touches the size when the text scale moves: GTK does it, through the dpi,
+continuously (measured: 1.10 → 16.13px, 1.13 → 16.57px, 1.17 → 17.16px).
+
+🔑 **The lesson worth more than the fix**: the anchor is a product decision, the ramp is
+arithmetic, and *the rendering is a toolkit switch*. Three rounds of patches moved the first two
+looking for a result that only ever came from the third. See `feedback_mechanical_over_logic`.
+
+The chrome's fixed `$fs-*` px ramp does NOT follow the factor and never has (macOS behaviour —
+window content scales, the bar and dock do not); `_reset.scss` pins `font-size` on the bar, dock,
+island and app-grid windows, and CC/NC/Prism inherit it by living inside the bar's window.
 
 🔧 To check a suspicion, dump the pixels rather than squinting:
 `magick shot.png -crop WxH+X+Y +repage -colorspace Gray txt:-` and print `#`/`+`/`.` by

@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
+import Pango from "gi://Pango"
 
 export interface NidaraSidebarItem {
     id: string
@@ -73,7 +74,24 @@ export function NidaraSidebar(
             icon.gicon = item.icon
             content.append(icon)
         }
-        content.append(new Gtk.Label({ label: item.label, css_classes: ["nidara-sidebar-label"] }))
+        // ⚠️ ELLIPSIZE, and it is structural rather than cosmetic. This label carries
+        // no font-size rule, so it grows with the interface font — and the capsule
+        // around it is a FIXED column (`sidebarWidth`, 250px in Settings) whose scroll
+        // view is `hscrollbar_policy: NEVER`. Without ellipsizing, the label's minimum
+        // width IS its natural width, so a long string makes the capsule demand more
+        // than its column reserves and it overruns the content pane. Measured
+        // 2026-08-11: the label budget is 176px (250 − 8 capsule margin − 12 list
+        // padding − 24 row margins − 18 icon − 12 spacing) and the Russian
+        // "Специальные возможности" needs 204px AT THE DEFAULT SIZE — i.e. this was
+        // already broken in one shipped locale before any accessibility scaling, and
+        // English "Language & region" joined it at factor 1.39.
+        content.append(new Gtk.Label({
+            label: item.label,
+            css_classes: ["nidara-sidebar-label"],
+            ellipsize: Pango.EllipsizeMode.END,
+            xalign: 0,
+            hexpand: true,
+        }))
 
         const row = new Gtk.ListBoxRow()
         row.set_child(content)
