@@ -154,14 +154,32 @@ export default function Settings(monitor: Gdk.Monitor) {
         while (c) { breadcrumb.remove(c); c = breadcrumb.get_first_child() }
         const meta = pageTitles.get(pageId)
         if (!meta) return   // e.g. the search-results page — no title
-        if (meta.parentId) {
-            const parent = pageTitles.get(meta.parentId)
+
+        // Walk the WHOLE chain of ancestors, not just one. Apps → Installed apps →
+        // <app> is three levels deep, and rendering a single parent dropped the root:
+        // the header read "Installed apps › Firefox", which names the page you came
+        // from but not where you are. A trail is only a trail if it reaches the start.
+        //
+        // `seen` is a cycle guard, not defensiveness for its own sake: page ids and
+        // their parents are registered by whoever calls `pushSubpage`, so a page that
+        // names itself (or a pair that name each other) is a plausible typo, and the
+        // symptom would be the Settings window hanging on navigation.
+        const chain: { id: string; title: string }[] = []
+        const seen = new Set<string>([pageId])
+        for (let id = meta.parentId; id && !seen.has(id); id = pageTitles.get(id)?.parentId) {
+            seen.add(id)
+            const m = pageTitles.get(id)
+            if (!m) break
+            chain.unshift({ id, title: m.title })
+        }
+
+        for (const crumb of chain) {
             const link = new Gtk.Button({
-                label: parent?.title ?? "",
+                label: crumb.title,
                 css_classes: ["nidara-breadcrumb-link"],
                 valign: Gtk.Align.CENTER,
             })
-            link.connect("clicked", () => navigateTo(meta.parentId!))
+            link.connect("clicked", () => navigateTo(crumb.id))
             breadcrumb.append(link)
             breadcrumb.append(new Gtk.Label({ label: "›", css_classes: ["nidara-breadcrumb-sep"] }))
         }
