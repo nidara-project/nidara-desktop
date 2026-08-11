@@ -91,10 +91,24 @@ with S = sidebar (250), C = content (800), and W the width INSIDE the window's 1
 |---|---|---|
 | `W ≥ S + C` | docked | C, centred in W − S |
 | `C ≤ W < S+C` | floating (popover) | C, centred in W |
-| `W < C` | — | refused by `set_size_request`; a compositor that forces it anyway gets horizontal SCROLL, not a clip |
+| `F ≤ W < C` | floating | W — the pane YIELDS (see the floor below) |
+| `W < F` | — | refused by `set_size_request`; a compositor that forces it anyway gets horizontal SCROLL, not a clip |
 
 It is continuous: at `W = S + C` both rows give the same content width, so the sidebar leaving does
 not resize the page under the pointer.
+
+⚠️ **The floor is the DISTRESS width `F` (560), not the pane** — and that is a compositor fact, not
+a preference. `set_size_request` reaches Hyprland as `xdg_toplevel.set_min_size` and **Hyprland
+tiles at whatever the layout says anyway**: with the floor at the pane's 802 and Settings in a
+673px tile, GTK laid the window out at 802, the compositor cut the last 129px, and a row's trailing
+button went with it. Unreachable controls are worse than tight text. ⚠️ Nor can the floor be made
+conditional on being tiled — **Hyprland never clears the `tiled` toplevel state**: measured on a
+window it had just floated and resized to 600×800, GTK still carried `tiled-top`, `tiled-left`,
+`tiled-right`, `tiled-bottom` and `maximized`. A floor that reads that state never comes back.
+
+None of which is the elastic band: `C` is the width pages are DESIGNED at — the size the window
+opens at, and every width where the sidebar docks — and `F` is only what happens in a window too
+small for the design, where the question is merely which way to fail.
 
 **Three things enforce it, and all three have to stay in step** — `NidaraClamp(page, C, true, C)`
 (min === max), `NidaraSplitView({ collapseAt: S + C })`, and `win.set_size_request(C + rims, …)`

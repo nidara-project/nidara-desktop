@@ -132,8 +132,11 @@ export const rowInsetFor = (surfaceRadius: number, n: number = 3.2, rowRadius: n
  *
  *     W ≥ S + C   →  sidebar DOCKED,   content C, centred in W − S
  *     C ≤ W < S+C →  sidebar FLOATING, content C, centred in W
- *     W < C       →  refused (`set_size_request`); if a compositor forces it
- *                    anyway, the page SCROLLS horizontally instead of clipping
+ *     F ≤ W < C   →  sidebar FLOATING, content W — the pane YIELDS rather than
+ *                    let the window's edge cut a row's trailing control off
+ *                    (`contentFloor`, below)
+ *     W < F       →  refused (`set_size_request`); a compositor that forces it
+ *                    anyway gets horizontal SCROLL, not a clip
  *
  * It is continuous: at W = S + C both branches give the same content width, so
  * the sidebar leaving does not resize the page under the pointer. That exactness
@@ -173,12 +176,39 @@ export const rowInsetFor = (surfaceRadius: number, n: number = 3.2, rowRadius: n
  * at, forever, instead of a range where "correct" has to hold at every point.
  * (Prior art for the shape: macOS System Settings has a hard minimum window and
  * never reflows its content pane.)
+ *
+ * ## `contentFloor` — the distress width, and why the law needs a second number
+ *
+ * The first version of this made `content` the window's minimum too, so the pane
+ * could never be squeezed at all. On a TILING compositor that is not a promise
+ * anyone keeps: `set_size_request` reaches Hyprland as `xdg_toplevel.set_min_size`
+ * and Hyprland tiles at whatever the layout says regardless. Measured 2026-08-11
+ * with Settings in a 673px tile and the floor at 802: GTK laid the window out at
+ * its own 802px minimum, the compositor cut the last 129px off, and a row's
+ * trailing button went with it. Unreachable controls are worse than tight text.
+ *
+ * ⚠️ And it cannot be made conditional on being tiled — that was the second try.
+ * **Hyprland never clears the `tiled` toplevel state**: measured on a window it had
+ * just floated and resized, GTK still carried `tiled-top/left/right/bottom` AND
+ * `maximized`. As a signal for "someone else is sizing me" it is stuck on.
+ *
+ * So the floor is uniform and it is `contentFloor`: the pane is `content` in every
+ * window with room for it — which is every ordinary one, including the size it
+ * opens at and every width where the sidebar docks — and yields below that.
+ *
+ * This is NOT the elastic band that was rejected. That question was which width
+ * pages are DESIGNED at, and the answer is one constant. This is what happens in a
+ * window too small for the design, where the only choice is which way to fail. 560
+ * covers the tiles that actually happen (four columns on a 2560 screen is 640,
+ * three is 853); under it the page scrolls horizontally instead.
  */
 export const WINDOW_LAYOUT = {
     /** Docked sidebar column, including its 8px capsule margin. */
     sidebar: 250,
     /** The content pane. A CONSTANT — see above. */
     content: 800,
+    /** The distress width — only a compositor can push the pane here. */
+    contentFloor: 560,
     /**
      * The 1px glass rim on each side of the window (`.nidara-window-glass`), which
      * the minimum size has to include or the pane loses 2px at the floor.

@@ -8,13 +8,14 @@
  *
  * ── What law ─────────────────────────────────────────────────────────────────
  *
- * `WINDOW_LAYOUT` in `ui/lib/tokens.ts`: the content pane is a CONSTANT width on
- * every page, the sidebar docks at exactly `sidebar + content`, and the window
- * refuses to go below the pane. Written out, the three invariants this asserts:
+ * `WINDOW_LAYOUT` in `ui/lib/tokens.ts` — read from that file at run time, so this
+ * script cannot drift from the law it checks. Three invariants:
  *
  *   1. At any window width, all pages render the pane at the SAME width.
- *   2. That width is the same at every window width (the pane never reflows).
- *   3. The window cannot be resized below its floor.
+ *   2. That width is EXACTLY what the law predicts: `content` in any window with
+ *      room for it, the window's own width once it is smaller (the distress
+ *      yield), never wider than the window (which would mean a clip).
+ *   3. The window cannot be resized below `contentFloor`.
  *
  * ── Why a script and not an eyeball ──────────────────────────────────────────
  *
@@ -34,6 +35,35 @@
  */
 
 import { execFileSync } from "node:child_process"
+import { readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
+import { dirname, join } from "node:path"
+
+// ── The law, read from its single source ─────────────────────────────────────
+// Parsed rather than duplicated: a checker carrying its own copy of the numbers
+// passes happily after someone changes them.
+const TOKENS = join(dirname(fileURLToPath(import.meta.url)), "../../ui/lib/tokens.ts")
+const tokensSrc = readFileSync(TOKENS, "utf8")
+const token = (name) => {
+    const m = tokensSrc.match(new RegExp(`\\n\\s*${name}:\\s*(\\d+)`))
+    if (!m) { console.error(`could not read WINDOW_LAYOUT.${name} from ${TOKENS}`); process.exit(2) }
+    return Number(m[1])
+}
+const SIDEBAR = token("sidebar")
+const CONTENT = token("content")
+const FLOOR = token("contentFloor")
+const RIM = token("glassRim")
+
+// `.settings-page` padding: `$space-8 $space-10 $space-10` → 40px each side. The
+// pane a page reports through queryUI is the padded box, so the clamp's width is
+// this much wider.
+const PAGE_PAD = 80
+
+/** The pane width the law predicts for a window `winW` px wide. */
+const expectedPane = (winW) => {
+    const avail = winW - RIM * 2
+    return Math.min(CONTENT, Math.max(FLOOR, avail)) - PAGE_PAD
+}
 
 const PAGES = [
     "network", "bluetooth", "appearance", "display", "audio", "bar", "dock",
@@ -116,24 +146,27 @@ for (const W of WIDTHS) {
     }
 
     const widths = [...new Set(perPage.values())]
-    const ok = widths.length === 1
-    if (!ok) {
+    if (widths.length !== 1) {
         const byWidth = {}
         for (const [p, w] of perPage) (byWidth[w] ||= []).push(p)
         findings.push(`window ${realW}: pane width differs per page — ${JSON.stringify(byWidth)}`)
     }
-    // A window WIDER than asked means the compositor was refused: the floor doing
-    // its job, not a failure. Report it so a sweep below the floor reads correctly.
-    if (realW > W) console.log(`  (floor held: asked ${W}, window stayed ${realW})`)
+    const want = expectedPane(realW)
+    if (widths.length === 1 && widths[0] !== want)
+        findings.push(`window ${realW}: pane is ${widths[0]}, the law says ${want}`)
+    // A pane wider than the window it sits in is the clip that started all this.
+    if (widths.some(w => w + PAGE_PAD > realW))
+        findings.push(`window ${realW}: pane ${widths} + padding exceeds the window — content is being CUT`)
+    // A window meaningfully WIDER than asked means the compositor was refused: the
+    // floor doing its job, not a failure. Report it so a sweep below the floor reads
+    // correctly. The slack is because Hyprland's resize dispatcher lands ±1px.
+    if (realW > W + 4) console.log(`  (floor held: asked ${W}, window stayed ${realW})`)
     console.log(
         `window ${String(realW).padStart(5)}  pane ${widths.join("/")}  ` +
         `sidebar ${[...dockedStates].map(d => d ? "docked" : "floating").join("+")}  ` +
         `rows over declared height: ${tallRows.length}`,
     )
 }
-
-if (paneWidths.size > 1)
-    findings.push(`pane REFLOWED across window widths: ${[...paneWidths].sort((a, b) => a - b).join(", ")}`)
 
 // ── Restore ──────────────────────────────────────────────────────────────────
 resize(original[0], original[1])
@@ -142,7 +175,10 @@ if (!wasFloating) dispatch(`hl.dsp.window.float({ action = 'unset', window = 'ad
 
 console.log()
 if (findings.length === 0) {
-    console.log(`PASS — pane is ${[...paneWidths][0]}px on all ${PAGES.length} pages at every width tested.`)
+    console.log(
+        `PASS — every one of the ${PAGES.length} pages rendered the pane at exactly the width the law ` +
+        `predicts (${CONTENT}px content, ${FLOOR}px floor), and nothing was cut.`,
+    )
     process.exit(0)
 }
 for (const f of findings) console.error(`FAIL — ${f}`)

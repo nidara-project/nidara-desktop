@@ -140,8 +140,10 @@ export default function Settings(monitor: Gdk.Monitor) {
         // whole DE. The clamp already centres the content inside a much wider
         // viewport, so there is nothing at the right edge to reserve a lane against.
         const { widget: scroll, scrolled } = NidaraScrolled({
-            // min === max: the pane is a CONSTANT width on every page (WINDOW_LAYOUT).
-            child: NidaraClamp(widget, PANE_W, true, PANE_W),
+            // The pane is a CONSTANT width on every page (WINDOW_LAYOUT); the floor
+            // is the distress width a tiling compositor can force us to, where
+            // yielding beats hiding a row's trailing control off the window's edge.
+            child: NidaraClamp(widget, PANE_W, true, WINDOW_LAYOUT.contentFloor),
             reserveLane: false,
             // The window's own minimum keeps the pane whole, so this only matters when
             // a compositor forces the window narrower anyway: then the page SCROLLS
@@ -267,7 +269,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     searchResultsPage.append(searchResultsList)
     searchResultsPage.append(searchResultsEmpty)
 
-    const srClamp = NidaraClamp(searchResultsPage, PANE_W, true, PANE_W)
+    const srClamp = NidaraClamp(searchResultsPage, PANE_W, true, WINDOW_LAYOUT.contentFloor)
     const { widget: srScroll, scrolled: srScrolled } = NidaraScrolled({
         child: srClamp,
         reserveLane: false,

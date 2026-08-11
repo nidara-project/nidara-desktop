@@ -38,11 +38,12 @@ export interface NidaraWindowOpts {
     sidebarWidth?: number
     /**
      * The content pane's CONSTANT width (see WINDOW_LAYOUT). It is not a hint: it
-     * sets the window's minimum width and the sidebar's breakpoint, and the caller
-     * is expected to clamp its pages to the same number.
+     * sets the sidebar's breakpoint and the width the window opens at, and the
+     * caller is expected to clamp its pages to the same number.
      */
     contentWidth?: number
-    /** Ignored below `contentWidth + rims` — the window states that as its floor. */
+    /** Only a floor for the OPENING size — see `openWidth`. The window's minimum is
+     *  the distress width, not this. */
     defaultWidth?: number
     defaultHeight?: number
     /** Extra css classes on the Gtk.Window. */
@@ -85,7 +86,7 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     // The window opens WIDE ENOUGH TO BE ITSELF: sidebar docked and the pane at its
     // full width. A default below the breakpoint would greet every user with the
     // narrow (floating-sidebar) layout, which is the fallback, not the design.
-    const minWidth = minWindowWidthFor(contentWidth)
+    const minFloorWidth = minWindowWidthFor(WINDOW_LAYOUT.contentFloor)
     const openWidth = Math.max(defaultWidth ?? 0, collapseAtFor(sidebarWidth, contentWidth) + 48)
 
     // decorated:false + Gtk.WindowHandle on the header = custom CSD, no Adwaita.
@@ -99,12 +100,28 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         visible: false,
     })
     if (name) win.set_name(name)
-    // The FLOOR, and the only place it is stated. NidaraSplitView's ZeroMinOverlay
-    // deliberately severs the content's minimum from the window (so the pane's width
-    // can never dictate how a compositor tiles), which also means nothing else would
-    // ever stop a drag: before this the window went down to 250px with the page
-    // clipped at 403 (measured). GTK forwards it as xdg_toplevel.set_min_size.
-    win.set_size_request(minWidth, WINDOW_LAYOUT.minHeight)
+    // ── The floor is the DISTRESS width, not the pane ─────────────────────────
+    //
+    // NidaraSplitView's ZeroMinOverlay deliberately severs the content's minimum
+    // from the window (so the pane's width can never dictate how a compositor
+    // tiles), which also means nothing else would ever stop a resize: before this
+    // the window went to 250px with the page clipped at 403 (measured 2026-08-11).
+    // GTK forwards a size request as xdg_toplevel.set_min_size.
+    //
+    // ⚠️ It is a REQUEST, and a tiling compositor is not asking. Hyprland tiles at
+    // whatever the layout says; GTK then lays the window out at its own minimum
+    // anyway and the compositor CUTS the difference — measured in a 673px tile with
+    // the floor at the pane's 802: 129px gone off the right, taking a row's trailing
+    // button with it. Hiding a control is worse than tightening text, so the floor
+    // is the distress width and the pane yields into a window too small for it.
+    //
+    // ⚠️ And the floor CANNOT be conditional on being tiled, which was the first fix
+    // here: Hyprland never clears the `tiled` toplevel state. Measured on a window it
+    // had just floated and resized to 600×800, GTK still carried `tiled-top`,
+    // `tiled-left`, `tiled-right`, `tiled-bottom` AND `maximized`. As a signal for
+    // "someone else decides how wide I am" it is stuck on, so a floor that reads it
+    // is a floor that never comes back.
+    win.set_size_request(minFloorWidth, WINDOW_LAYOUT.minHeight)
 
     // ── Sidebar capsule (toolbar on top, scrolling list below) ────────────────
     // NidaraScrolled, like every other scroll view in the DE — a window's sidebar is

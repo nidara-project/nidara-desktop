@@ -3351,8 +3351,16 @@ The window's geometry is a single rule — `WINDOW_LAYOUT` in `ui/lib/tokens.ts`
 design-system.md ("The Settings window has ONE geometry law"). The content pane is a constant
 800 px, the sidebar's breakpoint is `sidebar + content` instead of the active page's natural
 width, the window has a floor, and `NidaraRow`'s title is one ellipsised line. Verified with
-`scripts/dev/settings-geometry.mjs`: pane = 720 px (800 minus its padding) on all 18 pages at
-every window width tested, and the window refused to go below 802.
+`scripts/dev/settings-geometry.mjs`: every page rendered the pane at exactly the width the law
+predicts, at every window width tested, with nothing cut.
+
+⚠️ The floor is the DISTRESS width (560), not the pane, and that cost two tries — both worth
+knowing before touching it again. `set_size_request` reaches Hyprland as
+`xdg_toplevel.set_min_size` and **Hyprland tiles at the layout's size regardless**: with the floor
+at the pane's 802 and Settings in a 673px tile, GTK laid out at 802 and the compositor cut the last
+129px, taking a row's trailing button. And the floor cannot be made conditional on being tiled —
+**Hyprland never clears the `tiled` toplevel state**, so a window it had just floated and resized to
+600×800 still carried `tiled-top/left/right/bottom` and `maximized`.
 
 ⚠️ **This overlaps #62 and settles one of its bullets.** That entry lists "the auto-collapse
 breakpoint is derived from `sidebarWidth + content.naturalWidth + collapseMargin`, so a large
