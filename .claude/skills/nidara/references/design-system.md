@@ -897,6 +897,11 @@ a separate window. The rule that has not changed: **shell CHROME uses the fixed 
 ramp**, because a bar or dock label that reflows with the font picker breaks the layout it
 sits in. Body copy in a window is supposed to grow.
 
+⚠️ **The `$fse-*` ratios are anchored to a 15px base since 2026-08-11** (they were 14px), so
+each rung lands on a whole pixel at the default font. Changing the default font size means
+re-deriving them — see "the tops of letters were being shaved" below for why the anchor wins
+that argument and the ratios move.
+
 **Its sibling `ui/lib/styles/_mixins.scss` (2026-08-10) holds the mixins the KIT needs** —
 `nidara-reset`, `glass`, `material-card`, `nidara-row-states`, `nidara-tile-states` — for the
 same reason and with the same `@forward` from `_base.scss`. `material-control`,
@@ -3413,9 +3418,29 @@ signature of this bug, not of a clipping one.
 2. **The size must be a whole number of pixels.** The font dialog returns POINTS, and at 96dpi
    11pt is 14.667px — so the default `Inter 11` put the anchor on a fraction, and because the
    `$fse-*` ramp is relative, every step inherited it (11.59 / 12.61 / 13.64 / 14.67 / 15.69).
-   The seeded default is now **`Inter 14px`** (absolute, dpi-independent, and the base the
-   ratios were designed against: 11.06 / 12.04 / 13.02 / 14 / 14.98), and `setFont` snaps any
-   pick to whole pixels on the way in.
+   The seeded default is **`Inter 15px`** — absolute and dpi-independent — and `setFont` /
+   `setMonoFont` snap any pick to whole pixels on the way in, with `applyAll` snapping once at
+   boot to catch fonts set before the snap existed or by another tool (nwg-look, Tweaks).
+
+   ⚠️ **15, not 14.** #123 first seeded `14px` because the then-current `$fse-*` ratios landed
+   on whole pixels there — but every install since PR #6 had shipped `Inter 11` = 14.667px, so
+   that quietly made the default **4.5% smaller than it had ever been** (caught by the user,
+   2026-08-11: "if 15px equals 11pt and 11pt was the default, then 14px is a reduction"). The
+   ramp was retuned to land on whole pixels at a 15px anchor (0.8 / 0.867 / 0.933 / 1 / 1.067 /
+   1.2 / 1.533 / 2 → 12 / 13 / 14 / 15 / 16 / 18 / 23 / 30) instead. 🔑 **The anchor is a
+   product decision and the ratios are arithmetic — bend the arithmetic, not the anchor.**
+
+3. **Absolute pixels are immune to dpi, and `text-scaling-factor` works BY dpi.** So the moment
+   the font became `Inter 14px`, the Accessibility text-size slider stopped moving anything at
+   all — measured: at factor 1.5, `Inter 11` resolves to 22px while `Inter 14px` stays 14px.
+   `ThemeManager` now applies the factor itself: `state.fontBase` (in `appearance.json`) holds
+   the size AS PICKED — that is what the font button shows and edits, like GNOME's — and
+   gsettings holds base × factor. ⚠️ Two traps: the base is what keeps it idempotent (scaling
+   the live gsettings value compounds on every drag), and the "adopt an external edit" branch
+   must run **only at boot** — `setFont` and `setTextScaling` push a change out while gsettings
+   still holds the old value, which is indistinguishable from someone else having edited it.
+   The chrome's fixed `$fs-*` px ramp does NOT follow the factor and never has (decided
+   2026-08-11: macOS behaviour — window content scales, the bar and dock do not).
 
 🔧 To check a suspicion, dump the pixels rather than squinting:
 `magick shot.png -crop WxH+X+Y +repage -colorspace Gray txt:-` and print `#`/`+`/`.` by

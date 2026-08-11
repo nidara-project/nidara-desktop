@@ -52,15 +52,23 @@ $fs-title-1:  28px;  // large titles (rare in shell UI)
 //
 // The rule that has not changed: SHELL CHROME uses the fixed `$fs-*` px ramp.
 // A bar or dock label that reflows with the font picker breaks the layout it
-// sits in; a row of text in a window is supposed to grow. Ratios vs a 14px base.
-$fse-mini:     0.79em;
-$fse-caption:  0.86em;
-$fse-small:    0.93em;
-$fse-body:     1em;
-$fse-subtitle: 1.07em;
-$fse-title-3:  1.21em;
-$fse-title-2:  1.57em;
-$fse-title-1:  2em;
+// sits in; a row of text in a window is supposed to grow.
+//
+// ⚠️ Ratios vs a **15px** base — retuned 2026-08-11 when the default font moved
+// back to 15px (see ThemeManager.applyAll: 14px had silently shrunk the default
+// below the 11pt every install had shipped with since PR #6). They are chosen so
+// each rung lands on a WHOLE pixel at the default anchor: at 15 the old 14-based
+// ratios drifted up to 0.45px off (title-2 → 23.55px), which is the same
+// half-pixel baseline the crisp-text work went to remove. The proportions are
+// unchanged to within 2.4%; only the arithmetic moved.
+$fse-mini:     0.8em;    // 12px at the 15px anchor
+$fse-caption:  0.867em;  // 13px
+$fse-small:    0.933em;  // 14px
+$fse-body:     1em;      // 15px
+$fse-subtitle: 1.067em;  // 16px
+$fse-title-3:  1.2em;    // 18px
+$fse-title-2:  1.533em;  // 23px
+$fse-title-1:  2em;      // 30px
 
 // ── The DISPLAY register — deliberately NOT a rung of the ramp above ─────────
 // One consumer in the whole DE: the hero clock of the lockscreen and the
