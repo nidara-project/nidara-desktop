@@ -404,6 +404,11 @@ class ThemeManager extends GObject.Object {
     }
 
     async setMonoFont(fontName: string) {
+        // Same door as setFont: a point size here is the same fractional-pixel
+        // lottery it is for the interface font, and monospace is where a half-pixel
+        // baseline shows WORST — a column of identical glyph boxes makes the
+        // uneven rows obvious in a way proportional text hides.
+        fontName = this.snapFontToWholePixels(fontName)
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "monospace-font-name", fontName])
         this.emit("changed")
     }
@@ -623,7 +628,22 @@ class ThemeManager extends GObject.Object {
         // names a font we don't even install, while ttf-jetbrains-mono-nerd ships
         // with every Nidara install. Seed it once; never clobber a user's pick.
         if (this.interfaceSettings.get_user_value("monospace-font-name") === null)
-            this.interfaceSettings.set_string("monospace-font-name", "JetBrainsMono Nerd Font 11")
+            this.interfaceSettings.set_string("monospace-font-name", "JetBrainsMono Nerd Font 14px")
+
+        // Migrate a font picked BEFORE the pixel snap existed (or by another tool —
+        // nwg-look, GNOME Tweaks, a dotfile) onto whole pixels. The snap lives on
+        // the way in through setFont/setMonoFont, but that door only catches fonts
+        // chosen in Nidara's own picker; without this, an upgrading user keeps the
+        // fractional baseline that made text look shaved and never learns why.
+        // Idempotent: an already-absolute size snaps to itself and writes nothing.
+        for (const key of ["font-name", "monospace-font-name"]) {
+            const cur = this.interfaceSettings.get_string(key)
+            const snapped = this.snapFontToWholePixels(cur)
+            if (snapped !== cur) {
+                console.log(`[ThemeManager] Snapping ${key} to whole pixels: "${cur}" → "${snapped}"`)
+                this.interfaceSettings.set_string(key, snapped)
+            }
+        }
 
         await this.syncGtkTheme()
         const settings = this.interfaceSettings
