@@ -456,6 +456,12 @@ build_install_pkg "$appmenu_dir"
 # depends=() is intentional: every runtime dep is already pulled in by step 1's
 # `pacman -S`, and empty deps keep this first packaging pass from failing on
 # transient resolution. (nidara-repo can tighten these later — see packaging/README.)
+# makedepends is minimal for the same reason and is minimal ONLY HERE: nidara-repo
+# builds these same packages with nothing pre-installed and derives its whole CI
+# toolchain from the makedepends its PKGBUILDs declare, so the real per-lib lists
+# live in that repo's scripts/gen-pkgbuilds.sh. Adding a build dep here means
+# adding it there too — here it changes nothing, there it is the difference
+# between a package building and a release dying halfway through.
 echo "  Packaging Astal components (in dependency order)..."
 astal_pkgs=(
     "lib/astal/io|libastal-io"

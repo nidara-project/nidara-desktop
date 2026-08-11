@@ -73,6 +73,15 @@ and removal is clean.
 - `depends=()` is intentional for now: every runtime dep is already pulled in by
   `install.sh` §1's `pacman -S`, and empty deps keep this first packaging pass from
   failing on transient resolution.
+- ⚠️ The `makedepends` in the generators below are the **minimum for this path only**,
+  where §1 has already installed everything. `nidara-repo` has no such step and derives
+  its whole CI toolchain from the `makedepends` its committed PKGBUILDs declare, so the
+  authoritative per-package lists live in that repo's `scripts/gen-pkgbuilds.sh` — if you
+  add a build dep here, add it there too, or CI builds without it and fails.
+- The same applies to **`nidara/PKGBUILD` in this directory**, which nidara-repo reads
+  straight out of the release tag: anything its `build()` reaches for must be named in
+  `makedepends` or it will not exist in the build container. That is how v0.7.0 died on
+  a missing `hyprland-focus-grab-v1.xml`.
 
 ## Where this is heading (nidara-repo)
 

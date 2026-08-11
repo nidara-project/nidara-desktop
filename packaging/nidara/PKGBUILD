@@ -67,8 +67,18 @@ depends=(
 # wayland-protocols + hyprland-protocols supply the XML that wayland-scanner turns
 # into libnidara-wl's glue; gobject-introspection supplies g-ir-scanner, without
 # which the shell's `gi://NidaraWl` import has nothing to resolve.
+#
+# This list is LOAD-BEARING, not documentation: nidara-repo's CI derives its whole
+# build toolchain from the makedepends of the PKGBUILDs it builds — this one
+# included, read straight out of the release tag — and installs nothing else
+# (build-repo.sh runs makepkg --nodeps by design). Anything build() reaches for
+# and this array does not name is absent in that container, which is how v0.7.0
+# died on a missing hyprland-focus-grab-v1.xml. `wayland` (wayland-scanner +
+# wayland-client) and `gtk4` (lib/nidara-wl/build.sh compiles and g-ir-scans
+# against it) were in exactly that position: never declared, present only because
+# the astal packages built before nidara happened to pull them in.
 makedepends=(nodejs npm wlr-protocols wayland-protocols hyprland-protocols
-             gobject-introspection pkgconf)
+             wayland gtk4 gobject-introspection pkgconf)
 backup=(etc/xdg-desktop-portal/hyprland-portals.conf)
 options=(!debug)
 

@@ -661,7 +661,20 @@ fallback (and the update pin-skip
 record), `install.sh` keeps its own `*_REF` pins → **pins still live in two places** (`install.sh`
 `*_REF` + `nidara-repo/pins.env`) and must be bumped **in lockstep**. This is now *permanent*, not
 transitional — the earlier "Phase 3 collapses to one SoT" plan does **not** apply (the fallback needs
-the refs). **Still deferred at the repo:** tightening `depends=()` + `provides`/`conflicts` (a
+the refs). **Build toolchain: DERIVED, not retyped (2026-08-12).** The workflow used to carry a hand-written
+union of the PKGBUILDs' `makedepends`, which drifted silently because `build-repo.sh` runs
+`makepkg --nodeps` on purpose — a declared makedepend missing from the workflow is simply absent,
+with no warning (it killed v0.7.0 on `missing protocol: …/hyprland-focus-grab-v1.xml`).
+Deriving it required first making the PKGBUILDs honest: the 16 `libastal-*` declared only
+`meson ninja vala gobject-introspection git glib2-devel`, harmless on a user's machine (install.sh's
+`PACMAN_DEPS` ran first) and fatal in CI. Now `gen-pkgbuilds.sh` declares real per-package
+`makedepends` (each one read out of that lib's `meson.build` at the pinned rev) and
+`scripts/build-deps.sh` prints the union incl. the `NIDARA_REF` tag's own PKGBUILD. **Consequence
+for this repo:** `packaging/nidara/PKGBUILD`'s `makedepends` is load-bearing — whatever `build()`
+reaches for must be named there or it will not exist in the build container (`wayland` and `gtk4`
+were added for exactly that reason). nidara-repo also builds PRs now (unsigned, no publish), so a
+change to the chain is provable before merging. **Still deferred at the repo:** tightening
+`depends=()` + `provides`/`conflicts` (a
 `nidara-keyring` package could later replace the bundled-key import, but the current
 `pacman-key --add` path works and ships). **Since the packaging switch (2026-07) the repo also
 ships `nidara` itself**: built LAST by `build-repo.sh` from the `NIDARA_REF` tag in `pins.env`,
