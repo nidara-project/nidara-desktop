@@ -221,6 +221,74 @@ auto-merge — every PR is human-reviewed.
 
 ---
 
+## Step 4 — When MORE THAN ONE PR is open (the ordering rules)
+
+One PR at a time needs no rules. Two do, and the failure is not conflicts in the ordinary sense
+— it is that **`main` moves and every open branch silently goes stale**. All of the below is
+from a single afternoon (2026-08-11) in which three PRs — fonts, Settings geometry, and a skill
+dedupe — spent longer being untangled than being written.
+
+### The two facts that cause everything else
+
+1. **This repo SQUASH-merges.** A merged PR reaches `main` as ONE new commit with a new hash.
+   Your branch's original commits, whatever they said, no longer exist there.
+2. **`main` requires branches to be UP TO DATE** (branch protection,
+   `required_status_checks.strict = true`). So every merge marks every other open PR `BEHIND`,
+   and GitHub refuses to merge it until you rebase — even when nothing conflicts.
+
+Together: *the merge of PR A invalidates PR B mechanically, regardless of content.* That is not
+GitHub misbehaving and it is not something to fix by clicking harder.
+
+### The rules
+
+- **Branch from FRESH `origin/main`, every time.**
+  `git fetch origin && git switch -c <name> origin/main`. Branching off the branch you were
+  just on drags its commits into the new PR — and after the first one squash-merges, they
+  become unmergeable duplicates of work that is already in `main`.
+- **Prefer to finish one before opening the next** when they touch the same files. Two PRs
+  appending to `tech-debt.md` WILL conflict at the tail; that is a property of the file, not
+  bad luck.
+- **Stacking is allowed, but declare it.** Set the PR's base to the parent BRANCH (not `main`)
+  and say so in the first line of the body, with the reason. A stacked PR based on `main`
+  instead would delete or duplicate work that has not merged yet.
+- ⚠️ **After the parent merges, do NOT fix a stacked branch by resolving conflicts.** The
+  conflicts are its own commits meeting their squashed copy, and resolving them by hand
+  re-applies work that is already in. Replay only your own commit:
+
+  ```bash
+  git fetch origin
+  git rebase --onto origin/main <the-parent-branch-tip-you-branched-from> <your-branch>
+  gh pr edit <n> --base main       # GitHub retargets stacked PRs, but check
+  git push --force-with-lease
+  ```
+
+- **Immediately before merging any PR:** `git fetch origin && git rebase origin/main &&
+  git push --force-with-lease`, then let CI finish. Skipping this is what `BEHIND` means.
+- **Merge order:** anything another PR is stacked on goes first. Among independent PRs, merge
+  the one touching the SHARED documents (`tech-debt.md`, the skill references) LAST — it is the
+  one guaranteed to need a rebase, so make it rebase once instead of making everything else
+  rebase around it.
+- **When two PRs both edit a shared doc, the one merging SECOND owns the reconciliation.** Keep
+  both entries. If your change makes a claim in the other's entry false, strike it through with
+  a pointer to what settled it — never delete it silently, or the record loses why it changed.
+  (Deuda #62's collapse-breakpoint bullet was retired exactly this way by #63.)
+
+### Reading CI: trust the RUN, not the check list
+
+GitHub sometimes leaves a job's record `in_progress` inside a run that has already finished.
+Seen twice in one afternoon, on different jobs each time, with the PR page showing a pending
+check and the merge button blocked. The run is the truth:
+
+```bash
+gh pr view <n> --json statusCheckRollup --jq '.statusCheckRollup[0].detailsUrl'   # → runs/<id>
+gh api repos/<owner>/<repo>/actions/runs/<id> --jq '"\(.status)/\(.conclusion)"'
+```
+
+`completed/success` means green, whatever the checks list says. Do not re-push an empty commit
+to "re-trigger" — that runs the whole suite again to learn what you already know.
+
+---
+
 ## Carrying a GLOBAL fix locally (not contributed — yet)
 
 Sometimes a GLOBAL-bucket change stays on this machine: the user declines the PR, it's
