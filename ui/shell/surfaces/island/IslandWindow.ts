@@ -177,14 +177,35 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
      *  empty list (the capsule is always in it), so live-but-none-measurable can
      *  only mean "not laid out yet", never "nothing to click". */
     const paintedBounds = (): { rects: { x: number, y: number, w: number, h: number }[], pending: boolean,
-                                targetsLive: number, targetsMeasured: number } => {
+                                targetsLive: number, targetsMeasured: number, missing: string[], byId: Record<string, string>, trace: string } => {
         const rects: { x: number, y: number, w: number, h: number }[] = []
         let pending = false
         const targets = hitTargets()
         let targetsMeasured = 0
+        // A target the island MEANT to show and could not measure. This is the
+        // distinction the counts cannot make (see the chips' `islandRevealed` tag):
+        // a collapsed chip measuring null is the healthy resting state, while a
+        // REVEALED one measuring null is a control that is about to be dropped from
+        // the region and take no input until something unrelated re-stamps.
+        const missing: string[] = []
+        const trace: string[] = []
+        // id → the rect this pass would stamp for it, "NULL" when unmeasurable. Keyed
+        // so the MOVED check can compare a target against ITSELF across two samples
+        // instead of comparing whole trace strings, which differ whenever the target
+        // SET changes for perfectly good reasons. Built ONLY under the trap: this
+        // runs once per target per stamp and stamps run per FRAME of every island
+        // animation, so the formatting stays behind the flag with the trace itself.
+        const byId: Record<string, string> = {}
         for (const t of targets) {
             const b = boundsOf(t)
+            const id = (t as any).islandTargetId ?? "?"
+            const revealed = (t as any).islandRevealed?.() !== false
             if (b) { rects.push(b); targetsMeasured++ }
+            else if (revealed) missing.push(id)
+            if (TRACE) {
+                byId[id] = b ? `${Math.round(b.x)},${Math.round(b.y)} ${Math.round(b.w)}x${Math.round(b.h)}` : "NULL"
+                trace.push(`${id}${revealed ? "" : "-"}=${byId[id]}`)
+            }
         }
         for (const r of revealers) {
             // `get_visible()` alone is not enough on the way out: a closing
@@ -195,7 +216,7 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             if (b) rects.push(b)
             else pending = true
         }
-        return { rects, pending, targetsLive: targets.length, targetsMeasured }
+        return { rects, pending, targetsLive: targets.length, targetsMeasured, missing, byId, trace: trace.join(" ") }
     }
 
     // ── Never blank our own input region ────────────────────────────────────────
@@ -229,8 +250,7 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     // Climbs so a genuinely stuck surface is not polled at 50ms forever; resets on
     // the first stamp that measures, so the common case is one quick retry.
     const RESTAMP_DELAYS = [50, 100, 250, 500, 1000]
-    const holdRegion = (live: number) => {
-        if (TRACE) console.log(`[island-region] HELD: ${live} live target(s), none measurable — region kept, re-stamp queued`)
+    const queueRestamp = () => {
         if (restampSource) return
         const delay = RESTAMP_DELAYS[Math.min(restampStep++, RESTAMP_DELAYS.length - 1)]
         restampSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
@@ -241,6 +261,10 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             if (win.get_visible()) updateInputRegion()
             return GLib.SOURCE_REMOVE
         })
+    }
+    const holdRegion = (live: number) => {
+        if (TRACE) console.log(`[island-region] HELD: ${live} live target(s), none measurable — region kept, re-stamp queued`)
+        queueRestamp()
     }
 
     const updateInputRegion = () => {
@@ -281,9 +305,29 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         }
         surface.set_input_region(region)
         if (painted.targetsMeasured > 0) { everStamped = true; restampStep = 0 }
+        // ── The PARTIAL case, which the guard above cannot see ──────────────────
+        //
+        // `holdRegion` only engages when NOTHING measured. That was the shape of the
+        // resume-from-suspend bug (#136), but it is the rarer half: measured folds
+        // the moment ONE target survives, and the region then goes out missing the
+        // others with no retry and no trigger that would ever re-cut it. Measured on
+        // this session, 2026-08-13: 116 stamps in ten minutes dropped a chip the
+        // island was showing, two of them dropping the CAPSULE, every one with
+        // `measured > 0` so the `=== 0` guard stayed quiet.
+        //
+        // A dropped target is a control the user can see and cannot click, and
+        // nothing re-stamps on its own. So keep the stamp (it is the best region we
+        // can describe this instant — never worse than not stamping) and climb the
+        // same ladder until the missing ones measure. `missing` counts only targets
+        // the island MEANT to show: a collapsed chip measuring null is the resting
+        // state of three of the five, and retrying for those would poll forever.
+        if (painted.missing.length > 0) {
+            if (TRACE) console.log(`[island-region] PARTIAL: ${painted.missing.join(",")} revealed but unmeasurable — stamped without them, re-stamp queued`)
+            queueRestamp()
+        }
         updateVisibleRegion()
         win.queue_draw()   // input regions are double-buffered: apply on next commit
-        if (TRACE) traceStamp(painted.rects.length, painted.targetsLive)
+        if (TRACE) traceStamp(painted)
     }
 
     // ── Region trap: `NIDARA_ISLAND_REGION_TRACE=1` ─────────────────────────────
@@ -322,14 +366,32 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     // legitimately correct it, not during.
     const TRACE = GLib.getenv("NIDARA_ISLAND_REGION_TRACE") === "1"
     let stampSeq = 0
-    const traceStamp = (rectCount: number, targetCount: number) => {
+    const traceStamp = (painted: ReturnType<typeof paintedBounds>) => {
         const seq = ++stampSeq
-        console.log(`[island-region] stamp #${seq} rects=${rectCount} hitTargets=${targetCount}`)
+        console.log(`[island-region] stamp #${seq} rects=${painted.rects.length} hitTargets=${painted.targetsLive}`
+            + ` measured=${painted.targetsMeasured}${painted.missing.length ? ` MISSING=${painted.missing.join(",")}` : ""} | ${painted.trace}`)
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
             if (stampSeq !== seq) return GLib.SOURCE_REMOVE   // superseded: not our verdict to give
             const live = hitTargets().length
-            if (live > targetCount)
-                console.error(`[island-region] STALE after #${seq}: stamped ${targetCount} target(s), ${live} are live now and nothing re-stamped — those chips are taking no input`)
+            if (live > painted.targetsLive)
+                console.error(`[island-region] STALE after #${seq}: stamped ${painted.targetsLive} target(s), ${live} are live now and nothing re-stamped — those chips are taking no input`)
+            // The check the count-based one above cannot make: compare what this
+            // stamp actually PUT IN THE REGION against where the same targets are
+            // now. A chip that moved (the group re-centres whenever the capsule
+            // changes width) or that was dropped for being unmeasurable is taking
+            // no input at its painted position, and nothing re-stamps on its own.
+            //
+            // ⚠️ Compare only the targets in BOTH samples, by id. Comparing the whole
+            // trace string cried wolf 17 times out of 17 on its first evening: opening
+            // a mode fades `indicatorRow` to nothing and `hitTargets()` then correctly
+            // returns the capsule ALONE, so the two strings differ for a reason that
+            // is not a stale region at all. A target that left the set is not a target
+            // that moved.
+            const now = paintedBounds()
+            const moved = Object.entries(painted.byId).filter(([id, was]) =>
+                was !== "NULL" && now.byId[id] !== undefined && now.byId[id] !== "NULL" && now.byId[id] !== was)
+            if (moved.length > 0 && stampSeq === seq)
+                console.error(`[island-region] MOVED after #${seq}: ${moved.map(([id, was]) => `${id} stamped at ${was} but is at ${now.byId[id]}`).join("; ")} — no stamp in between, so the region is at the old coordinates and those controls take no input`)
             return GLib.SOURCE_REMOVE
         })
     }

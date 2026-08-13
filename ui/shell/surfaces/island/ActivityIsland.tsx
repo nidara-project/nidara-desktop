@@ -184,6 +184,10 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         else front?.onExpand?.()
     }
     const capsule = SquircleContainer({ child: compactStack, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => openFront() })
+    // See the chips' equivalent below — the capsule is permanent furniture, so it
+    // is always "revealed" and its rect is the one that has never gone missing.
+    ;(capsule as any).islandTargetId = "capsule"
+    ;(capsule as any).islandRevealed = () => true
     // Live dot refs for the morph: ghosts lerp FROM these bounds. (While the
     // compact shows another activity the dots are unmapped and MorphRevealer
     // lets the overview's landing dots ride the content fade instead.)
@@ -315,6 +319,9 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     // collapses to nothing with it.
     const indicatorRow = new Gtk.Box({ halign: Gtk.Align.CENTER })
     const chips = new Map<string, { revealer: Gtk.Revealer, hit: Gtk.Widget }>()
+    // Fires when a chip's slide ENDS, which is the frame its final rect exists —
+    // see onChipsSettled below for why the chips needed a trigger of their own.
+    const chipSettledSubs: (() => void)[] = []
     for (const a of [...activities].sort((x, y) => y.priority - x.priority)) {
         const glyph = a.indicator()
         glyph.halign = Gtk.Align.CENTER
@@ -326,6 +333,15 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         const chip = SquircleContainer({ child: glyph, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => promote(a) })
         chip.width_request = CHIP_W
         chip.margin_start = CHIP_GAP
+        // For the input-region trap only (IslandWindow's traceStamp): which chip
+        // this is, and whether it is MEANT to be on screen. The stamp's target
+        // COUNT cannot answer the second question — `hitTargets()` always returns
+        // all five chips and three of them are legitimately collapsed, so "live
+        // but unmeasurable" and "deliberately absent" look identical in the
+        // numbers. That conflation is why the count-based checks kept reading
+        // healthy while these chips took no input.
+        ;(chip as any).islandTargetId = a.id
+        ;(chip as any).islandRevealed = () => revealer.reveal_child
         // Gtk.Revealer, not ScaleRevealer: this is a HORIZONTAL appearance and
         // ScaleRevealer animates the measured HEIGHT only (it passes width
         // straight through), so a chip would pop to full width and shove the
@@ -340,6 +356,11 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
             reveal_child: false,
         })
         revealer.set_child(chip)
+        // `child-revealed` flips when the slide FINISHES, in both directions — the
+        // one moment the row's final geometry exists. Everything before it is a
+        // frame of an animation whose rects are already out of date by the time
+        // they are stamped.
+        revealer.connect("notify::child-revealed", () => { for (const cb of chipSettledSubs) cb() })
         indicatorRow.append(revealer)
         chips.set(a.id, { revealer, hit: chip })
     }
@@ -492,6 +513,16 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         background: () => background,
         /** Fire when that list changes (membership or order). */
         onBackgroundChanged: (cb: () => void) => { backgroundSubs.push(cb) },
+        /** Fire when a chip has FINISHED sliding in or out. The chips are hit
+         *  targets on a surface whose input region is stamped from measurement,
+         *  and until now they were the only ones with no trigger of their own:
+         *  the capsule re-stamps from its glass `resize`, a mode from its
+         *  revealer's `onAllocated`, and the chips from a fixed 400ms guess in
+         *  Bar.tsx — which fires while the slide is still moving whenever the
+         *  transition and that timer disagree, stamping rects the row has already
+         *  left behind. A chip whose rect is stale is a control that is painted
+         *  where the compositor sends nothing. */
+        onChipsSettled: (cb: () => void) => { chipSettledSubs.push(cb) },
         /** All mode revealers — the bar mounts each on its master overlay and
          *  includes them in its input-region pass (visibility-gated there). */
         revealers: [...modes.values()].map(rt => rt.revealer),

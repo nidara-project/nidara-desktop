@@ -1022,6 +1022,28 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       islandWin.updateInputRegion(); return GLib.SOURCE_REMOVE
     })
   })
+  // …and again when the slide actually ENDS, which is the frame the row's final
+  // rects exist. The 400ms above is a guess at that moment and it only has to be
+  // wrong once: nothing else re-cuts the region for a chip, so a stamp taken while
+  // the row was still moving leaves that chip painted where the compositor sends
+  // nothing, for as long as the layout holds. Both are kept — the timer covers a
+  // reveal that never animates, this covers one that outlasts it.
+  island.onChipsSettled(() => islandWin.updateInputRegion())
+  // …and the moment the chips re-ENTER the hit set at all. `hitTargets()` returns
+  // the capsule alone while the row is faded to nothing, so every stamp taken with
+  // a mode open drops the chips' rects deliberately — and that becomes the reported
+  // symptom the instant nothing re-stamps once they ramp back. The re-stamp is
+  // supposed to come from `MorphRevealer.reveal`'s `onDone`, which does not run if
+  // the morph is interrupted (a mode switched mid-close). The trap caught exactly
+  // that once, 2026-08-13 04:38: *"stamped 1 target(s), 6 are live now and nothing
+  // re-stamped"*. Opacity does not affect `compute_bounds`, so the crossing back off
+  // zero is already a measurable layout — one stamp, at the only moment that matters.
+  let chipsWereHidden = island.indicatorRow.opacity === 0
+  island.indicatorRow.connect("notify::opacity", () => {
+    const hidden = island.indicatorRow.opacity === 0
+    if (chipsWereHidden && !hidden) islandWin.updateInputRegion()
+    chipsWereHidden = hidden
+  })
   const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 8 })
   // Absorbs SizeGroup slack so actual capsules stay pinned to the right edge.
   // When left > right (long window title), SizeGroup widens the right allocation;
