@@ -3647,10 +3647,47 @@ measurable layout, and it costs one stamp per morph. Note this path is invisible
 — the chips are not `missing`, they are legitimately *excluded*, so neither the retry ladder nor
 `onChipsSettled` would ever have covered it.
 
-⚠️ **NOT proven: that any of these removes the death the user hit.** It could not be reproduced on
-demand — **31 trustworthy cycles of open/close across all modes, 0 deaths**. Both fixes are justified
-by what the log shows happening regardless (dropped controls, no trigger), not by a reproduction. The
-trap below is now sharp enough to name the mechanism at the next natural occurrence.
+⚠️ **None of the three was the cause**, and the trap said so within minutes of them landing — worth
+keeping as the record of what "the fix is in, the bug is not fixed" looks like when the instrument is
+good enough to tell you.
+
+✅ **THE CAUSE: the stamp reads a TORN layout, and measuring more carefully cannot help.** Caught
+2026-08-13 16:55, minutes after the triggers above were merged:
+
+```
+#61  capsule=1091 297x32   agent=1396  dots=1436     healthy
+#62  capsule=1174 132x32   agent=1479  dots=1519     impossible
+     MOVED, 600 ms later:  agent is at 1314, dots at 1354
+#63  7.6 SECONDS later, still wrong          #64  correct again
+```
+
+🔑 **#62 is geometrically impossible and that is the whole proof.** A 132-wide capsule at 1174 IS a
+212-wide group centred on 1280, so the chips belonged at 1314/1354 — the stamp recorded 1479/1519, a
+**173 px gap** between the capsule and a chip the layout puts **8 px** apart. One pass of
+`paintedBounds` read the capsule with its NEW allocation and the chips with their OLD one, because the
+`glassArea "resize"` hook fires from **inside `size-allocate`**, before the row's siblings have been
+re-allocated. Then nothing re-stamped for 7.6 s, and for 7.6 s the chips took no input.
+
+None of the three triggers can see this: nothing is `missing` (everything measured), `child-revealed`
+does not fire (the chips are not revealing, they MOVED), and the opacity crossing already happened.
+**The measurement was wrong, not incomplete** — which is why every guard aimed at absence missed it.
+
+**Fix**: after every stamp, re-measure once the tree is still and re-stamp if the geometry moved
+(`scheduleVerify` in `IslandWindow.ts`). **DEBOUNCED, not merely coalesced**: during an animation
+stamps arrive every ~7 ms, and verifying per stamp would double the work on a path the blur region
+also pays for. Pushing the timer forward on each stamp buys **one** extra measurement per animation
+instead of ~20, taken where it matters — after the last frame, on the state that will persist. The
+yield path records an empty `stampedRects` and cancels the pending verify, so a yielded (deliberately
+click-through) surface is never read as torn and stamped back over the agent's own clicks.
+
+**Verified**: `TORN` fires (13 times over 32 cycles, i.e. the condition is real and frequent), and
+after it **0 `MOVED` and 0 `STALE` survive** where `MOVED` had been reporting the stale region before.
+32 cycles, 0 deaths, against a pre-fix reproduction that hit within 2 cycles. Cost measured in stamps
+per cycle: overview ~13 before and after, agent ~93–106 before and after.
+
+⚠️ 32 clean cycles is evidence, not proof — the pre-fix rate varied between 1-in-2 and 1-in-25. If it
+returns, the trap now has a fourth column to check (`TORN` firing but the geometry still wrong would
+mean the verify's own 50 ms window is too short).
 
 🔑 **The mechanism it would have to be.** `ActivityIsland.hitTargets()` returns the capsule ALONE
 while `indicatorRow.opacity === 0` — deliberately: leaving faded chips' rects stamped puts an

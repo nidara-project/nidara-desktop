@@ -267,6 +267,56 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         queueRestamp()
     }
 
+    // ── Verify once the layout has stopped moving ───────────────────────────────
+    //
+    // 🔑 A stamp can be internally IMPOSSIBLE, and measuring more carefully cannot
+    // help, because the tree is mid-flight while we read it. Caught 2026-08-13
+    // 16:55, minutes after the three trigger fixes landed:
+    //
+    //   #61  capsule=1091 297x32   agent=1396  dots=1436     healthy
+    //   #62  capsule=1174 132x32   agent=1479  dots=1519     impossible
+    //        MOVED, 600 ms later:  agent is at 1314, dots at 1354
+    //   #63  7.6 SECONDS later, still wrong        #64  correct again
+    //
+    // #62's capsule is 132 wide at 1174 — which is exactly a 212-wide group centred
+    // on 1280, so the chips belonged at 1314/1354. It stamped 1479/1519: a 173px
+    // gap between the capsule and a chip that the layout puts 8px apart. ONE pass of
+    // `paintedBounds` read the capsule with its NEW allocation and the chips with
+    // their OLD one, because the `glassArea "resize"` hook fires from INSIDE
+    // size-allocate, before the row's siblings have been re-allocated. Then nothing
+    // re-stamped for 7.6 s, and for those 7.6 s the chips took no input.
+    //
+    // The three triggers cannot see this: nothing is `missing` (everything measured),
+    // `child-revealed` does not fire (the chips are not revealing, they MOVED), and
+    // the opacity crossing already happened. The measurement was wrong, not missing.
+    //
+    // So: after every stamp, re-measure once the tree is still and re-stamp if the
+    // geometry moved. DEBOUNCED, not merely coalesced — during an animation stamps
+    // arrive every ~7ms, and verifying per stamp would double the work on a path the
+    // blur region also pays for. Pushing the timer forward on each stamp means one
+    // extra measurement per animation instead of ~20, taken where it matters: after
+    // the last frame, on the state that is going to persist.
+    const VERIFY_MS = 50
+    let verifySource = 0
+    let stampedRects: { x: number, y: number, w: number, h: number }[] = []
+    const sameRects = (a: typeof stampedRects, b: typeof stampedRects) =>
+        a.length === b.length && a.every((r, i) => r.x === b[i].x && r.y === b[i].y && r.w === b[i].w && r.h === b[i].h)
+    const scheduleVerify = () => {
+        if (verifySource) GLib.source_remove(verifySource)
+        verifySource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, VERIFY_MS, () => {
+            verifySource = 0
+            if (!win.get_visible()) return GLib.SOURCE_REMOVE
+            const now = paintedBounds().rects.map(r => ({
+                x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h),
+            }))
+            if (!sameRects(now, stampedRects)) {
+                if (TRACE) console.error(`[island-region] TORN: the region was stamped for a layout that no longer exists — re-stamping (had ${stampedRects.length} rect(s), measured ${now.length} now)`)
+                updateInputRegion()   // re-stamps and re-arms this check, which then agrees and stops
+            }
+            return GLib.SOURCE_REMOVE
+        })
+    }
+
     const updateInputRegion = () => {
         const surface = win.get_native()?.get_surface()
         if (!surface?.set_input_region) return
@@ -277,6 +327,11 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         // behind the Assistant — the exact clicks the yield exists to let through.
         if (inputYield.active) {
             surface.set_input_region(region)
+            // Deliberately empty, so record it as such: the verify below must not
+            // read a yielded surface as a torn one and stamp the island back over
+            // the clicks the yield exists to let through. Ending the yield stamps.
+            stampedRects = []
+            if (verifySource) { GLib.source_remove(verifySource); verifySource = 0 }
             // A yield changes who gets the CLICKS, not what is painted — the island
             // is still on screen, so its blur region is computed the same way.
             updateVisibleRegion()
@@ -296,14 +351,19 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             updateVisibleRegion()
             return
         }
-        for (const b of painted.rects) {
+        const rounded = painted.rects.map(b => ({
+            x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h),
+        }))
+        for (const b of rounded) {
             // @ts-ignore  (same untyped Cairo.Region call as Bar.tsx)
-            region.unionRectangle({
-                x: Math.round(b.x), y: Math.round(b.y),
-                width: Math.round(b.w), height: Math.round(b.h),
-            })
+            region.unionRectangle({ x: b.x, y: b.y, width: b.w, height: b.h })
         }
         surface.set_input_region(region)
+        // What is ON the surface right now, in the same rounded numbers the verify
+        // will compare against — so a re-measure that agrees costs one comparison
+        // and no Wayland call.
+        stampedRects = rounded
+        scheduleVerify()
         if (painted.targetsMeasured > 0) { everStamped = true; restampStep = 0 }
         // ── The PARTIAL case, which the guard above cannot see ──────────────────
         //
