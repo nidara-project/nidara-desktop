@@ -170,13 +170,21 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     /** Everything this surface is painting right now: the capsule (plus whichever
      *  indicator chips are revealed) and any mode that is open OR still morphing.
      *  `pending` is a live revealer we could not measure — it is the one state
-     *  where a region computed from these numbers would be a LIE. */
-    const paintedBounds = (): { rects: { x: number, y: number, w: number, h: number }[], pending: boolean } => {
+     *  where a region computed from these numbers would be a LIE.
+     *
+     *  `targetsLive`/`targetsMeasured` are the SAME distinction for the hit
+     *  targets, and the input region leans on it: `hitTargets()` never returns an
+     *  empty list (the capsule is always in it), so live-but-none-measurable can
+     *  only mean "not laid out yet", never "nothing to click". */
+    const paintedBounds = (): { rects: { x: number, y: number, w: number, h: number }[], pending: boolean,
+                                targetsLive: number, targetsMeasured: number } => {
         const rects: { x: number, y: number, w: number, h: number }[] = []
         let pending = false
-        for (const t of hitTargets()) {
+        const targets = hitTargets()
+        let targetsMeasured = 0
+        for (const t of targets) {
             const b = boundsOf(t)
-            if (b) rects.push(b)
+            if (b) { rects.push(b); targetsMeasured++ }
         }
         for (const r of revealers) {
             // `get_visible()` alone is not enough on the way out: a closing
@@ -187,7 +195,52 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             if (b) rects.push(b)
             else pending = true
         }
-        return { rects, pending }
+        return { rects, pending, targetsLive: targets.length, targetsMeasured }
+    }
+
+    // ── Never blank our own input region ────────────────────────────────────────
+    //
+    // 🔑 The failure this exists for (user-caught 2026-08-13, resume from suspend):
+    // ONE stamp landed with `rects=0 hitTargets=6` and the island took no pointer
+    // input at all until the UI was reloaded, 33 minutes later.
+    //
+    // An empty region is the LEAST safe state for input, and it is terminal. The
+    // capsule is permanent furniture with no re-stamp trigger of its own: the only
+    // hooks that exist are the revealers' `onAllocated` (no mode was open) and the
+    // morph's `onDone` (no morph ran). Nothing was ever going to correct it.
+    //
+    // ⚠️ Note where the BAR is different, because it is why only this surface can
+    // die this way: `Bar.tsx` unions an unconditional `{0,0,width,BAR_H}` strip, a
+    // constant that cannot fail to measure. The capsule is CENTRED and changes
+    // width, so it has no such constant — it is measured, and measurement has an
+    // unmeasurable state (widgets between an unmap and their first layout pass:
+    // `present()` stamping in its own turn, a surface re-configured after a
+    // suspend/lock). `boundsOf` returns null for every target and the union is
+    // empty, which is indistinguishable from "click-through" once stamped.
+    //
+    // So: hold the region already on the surface and climb back to a real stamp.
+    // Holding is only correct because we HAVE one — before the first successful
+    // stamp there is no region to keep, and a Wayland surface with none takes
+    // input across its whole buffer, i.e. this monitor-sized surface would swallow
+    // every click on screen. That is the one case where stamping empty is right.
+    let everStamped = false
+    let restampSource = 0
+    let restampStep = 0
+    // Climbs so a genuinely stuck surface is not polled at 50ms forever; resets on
+    // the first stamp that measures, so the common case is one quick retry.
+    const RESTAMP_DELAYS = [50, 100, 250, 500, 1000]
+    const holdRegion = (live: number) => {
+        if (TRACE) console.log(`[island-region] HELD: ${live} live target(s), none measurable — region kept, re-stamp queued`)
+        if (restampSource) return
+        const delay = RESTAMP_DELAYS[Math.min(restampStep++, RESTAMP_DELAYS.length - 1)]
+        restampSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
+            restampSource = 0
+            // Hidden for fullscreen: nothing is on screen to be clicked and
+            // `setShown(true)` stamps on the way back, so let the chain die rather
+            // than poll for the whole fullscreen session.
+            if (win.get_visible()) updateInputRegion()
+            return GLib.SOURCE_REMOVE
+        })
     }
 
     const updateInputRegion = () => {
@@ -210,6 +263,15 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         // happens to be painted here. Same for whichever indicator chips are
         // currently revealed, and for an open mode.
         const painted = paintedBounds()
+        // Live targets, not one of them measurable — see `holdRegion` above. The
+        // blur region is still recomputed: it has its own safe state for exactly
+        // this ("nothing measurable" hands the whole surface back), and it is the
+        // opposite of the input region's, so it must not be skipped along with it.
+        if (painted.targetsLive > 0 && painted.targetsMeasured === 0 && everStamped) {
+            holdRegion(painted.targetsLive)
+            updateVisibleRegion()
+            return
+        }
         for (const b of painted.rects) {
             // @ts-ignore  (same untyped Cairo.Region call as Bar.tsx)
             region.unionRectangle({
@@ -218,9 +280,10 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             })
         }
         surface.set_input_region(region)
+        if (painted.targetsMeasured > 0) { everStamped = true; restampStep = 0 }
         updateVisibleRegion()
         win.queue_draw()   // input regions are double-buffered: apply on next commit
-        if (TRACE) traceStamp(painted.rects.length, hitTargets().length)
+        if (TRACE) traceStamp(painted.rects.length, painted.targetsLive)
     }
 
     // ── Region trap: `NIDARA_ISLAND_REGION_TRACE=1` ─────────────────────────────
@@ -230,6 +293,16 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     // provoke it (see `tech-debt.md` #68 for the paths that were ruled out), so this
     // arms a trap in the user's own session instead: the next occurrence lands in the
     // log with the stamp sequence that produced it.
+    //
+    // ✅ IT PAID OFF, and not the way it was aimed (2026-08-13). The occurrence it
+    // caught was `stamp #422 rects=0 hitTargets=6` on resume from suspend — a stamp
+    // that captured EVERY target's absence, not a subset. The STALE check below
+    // never fired for it: it compares `hitTargets()` counts, and that number was 6
+    // on both sides. The bug was in the other column. What the trap actually
+    // delivered was the LINE — one stamp, right after the resume, then nothing for
+    // 33 minutes until the reload — which is what identified the mechanism now
+    // guarded by `holdRegion`. Keep it armed: the chip-level stale below is still
+    // unproven, and this same log is how it would be caught.
     //
     // 🔑 What it watches, and why that is the whole bug in one number. `hitTargets()`
     // returns the capsule ALONE while the indicator row is faded to nothing, so a
@@ -411,6 +484,16 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             // dismisses. That is the "island doesn't take mouse input when it
             // opens" symptom, and it lasted the whole 300ms morph.
             for (const r of mounted) r.onAllocated = updateInputRegion
+            // The capsule row is the only thing on this surface that is ALWAYS
+            // painted, and until now it was the only one with no re-stamp trigger
+            // — the revealers get `onAllocated` above, the morph gets `onDone`,
+            // and the permanent furniture got nothing. So a region stamped while
+            // the row was unmapped stayed wrong for as long as the session lasted
+            // (see `holdRegion`). `map` is the exact moment the widgets we measure
+            // come back: after a `setShown(true)`/`present()`, or a surface the
+            // compositor re-configured coming out of suspend. If the allocation is
+            // not final yet the stamp holds and the retry ladder finishes the job.
+            row.connect("map", () => updateInputRegion())
             root.add_overlay(row)
             for (const r of mounted) root.add_overlay(r)
             // Present once, and stay mapped: the capsule is permanent furniture

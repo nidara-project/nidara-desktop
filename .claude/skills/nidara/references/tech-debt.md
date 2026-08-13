@@ -3552,11 +3552,54 @@ stop taking pointer input while only the closed active island responds. `updateI
 region left stamped after a yield is the standing suspicion — unverified, and it needs a repro before
 any code. Related: #40, #38.
 
-### 68. The island's chips losing pointer input — a TRAP is armed; the sweep ruled out the easy half (2026-08-13)
+### 68. The island losing pointer input — the WHOLE-region half is FIXED; the chip-level half is still open (2026-08-13)
 
-Reported by the owner 2026-08-12: *"sometimes the inactive island's icons stop taking mouse input,
-only the closed active island responds"*. Intermittent, so the entry that matters is what has been
-**ruled out**, and by what.
+Two failures wearing one symptom. The trap armed for the second one caught the FIRST.
+
+#### ✅ Fixed: the island goes fully dead on resume from suspend
+
+Reported by the owner 2026-08-13: *"coming back from sleep the activity island was left with no input
+until I reloaded the UI"*. The trap had it on the first occurrence:
+
+```
+05:16:56  stamp #421 rects=3 hitTargets=6      ← last before suspend (05:33)
+09:20:15  stamp #422 rects=0 hitTargets=6      ← 8s after resume: an EMPTY region
+[09:53:24] nidara-ui: DEV mode                  ← the owner's reload, 33 minutes later
+```
+
+🔑 **Six live targets, zero measurable, and an empty region stamped over a good one.** `boundsOf`
+returns null for a widget that is not mapped or has no allocation, so the union came out empty and
+`set_input_region` was handed nothing — which is not "click-through pending a correction", it is the
+terminal state. **The capsule is permanent furniture that had no re-stamp trigger of its own:** the
+revealers have `onAllocated`, the morph has `onDone`, and neither runs when no mode is open. Nothing
+was ever going to correct it.
+
+⚠️ **Why only this surface can die this way.** `Bar.tsx` unions an unconditional
+`{0,0,monGeo.width,BAR_H}` strip — a constant that cannot fail to measure, so the bar always stamps
+*something*. The island's capsule is CENTRED and changes width, so it has no such constant; it is
+measured, and measurement has an unmeasurable state. Same file, same job, opposite failure mode.
+
+**The numbers that sized the fix** (2435 stamps of the owner's log): only 7 stamps ever had
+`rects=0`, and **6 of them are `stamp #1`** — the first of a session, before any layout, each
+corrected milliseconds later. The 7th is #422. So the condition is real but never benign
+mid-session, which is exactly what `everStamped` keys on.
+
+**The fix** (`IslandWindow.ts`): `paintedBounds` now reports `targetsLive`/`targetsMeasured`, and
+`updateInputRegion` **holds the region already on the surface** instead of blanking it when targets
+are live but none measurable — plus a backing-off re-stamp ladder (`holdRegion`) and a
+`row.connect("map")` hook, the trigger the permanent furniture never had.
+
+🔑 **Holding is only correct because there is something to hold.** Before the first successful stamp
+there is no region, and a Wayland surface with none takes input across its whole buffer — this one is
+monitor-sized, so it would swallow every click on screen. That is why `everStamped` gates the guard
+and why those six `stamp #1`s must keep stamping empty.
+
+#### 🔴 Still open: the chips alone losing input
+
+The original 2026-08-12 report — *"sometimes the inactive island's icons stop taking mouse input, only
+the closed active island responds"* — describes the chips going dead while the capsule still works.
+The resume bug kills the capsule too, so it is **not** established that they are the same thing. What
+was ruled out below still stands, and the trap stays armed.
 
 🔑 **The mechanism it would have to be.** `ActivityIsland.hitTargets()` returns the capsule ALONE
 while `indicatorRow.opacity === 0` — deliberately: leaving faded chips' rects stamped puts an
@@ -3578,13 +3621,18 @@ computer-use yield with a mode open AND with the island closed; a chip changing 
 `onDone` re-stamp arrives. So the failure is not in the deterministic paths, which is consistent with
 "sometimes" and is why guessing at code next would be wrong.
 
-▶️ **What is armed instead:** `NIDARA_ISLAND_REGION_TRACE=1` (`IslandWindow.traceStamp`) logs every
-stamp and fires a CRITICAL when a stamp's target count is later exceeded with no stamp in between —
-i.e. exactly "those chips are taking no input". Off by default, no cost when off (the trace call is
-guarded, not just the body). **Proven to fire** by disabling the `onDone` re-stamp for one run; a
-silent trap nobody has seen trip proves nothing. Arm it with
+▶️ **What is armed:** `NIDARA_ISLAND_REGION_TRACE=1` (`IslandWindow.traceStamp`) logs every stamp,
+fires a CRITICAL when a stamp's target count is later exceeded with no stamp in between, and now logs
+a `HELD` line whenever the guard above declines to blank the region. Off by default, no cost when off
+(the trace call is guarded, not just the body). **Proven to fire** by disabling the `onDone` re-stamp
+for one run; a silent trap nobody has seen trip proves nothing. Arm it with
 `systemctl --user set-environment NIDARA_ISLAND_REGION_TRACE=1 && systemctl --user restart nidara.service`.
 
-⛔ **Do not "fix" this on the strength of the reasoning above.** The next step is the log line, not a
-patch: the mechanism explains the symptom but so did the `syncIslandGrab` CRITICAL, which turned out
-to be a false alarm (#67).
+🔑 **The lesson from how it paid off: it was aimed at the wrong column.** The STALE check compares
+`hitTargets()` counts, and on #422 that number was 6 on both sides — the trap never fired. What
+caught the bug was the raw `rects=` it happened to log next to it. A detector narrowed to the
+mechanism you suspect will miss the one you don't; log the neighbouring quantity too.
+
+⛔ **Do not "fix" the chip-level half on the strength of the reasoning above.** The next step is a log
+line, not a patch: the mechanism explains the symptom but so did the `syncIslandGrab` CRITICAL, which
+turned out to be a false alarm (#67).
