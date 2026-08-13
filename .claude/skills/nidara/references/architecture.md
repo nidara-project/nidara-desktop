@@ -442,6 +442,29 @@ as you click into it. Both revealers therefore expose **`onAllocated`**, fired f
 `vfunc_size_allocate`, and the bar's panels + the island's modes re-stamp from it. Mechanical, not a
 deferred timeout hoping layout happened.
 
+⚠️ **Never stamp an EMPTY region over a good one — the same hazard with nothing coming to fix it.**
+The paragraph above is about one widget being unmeasurable for one frame, with `onAllocated` already
+on its way. The sibling failure is EVERY target unmeasurable at once (widgets between an unmap and
+their first layout pass: `present()` stamping in its own turn, a surface the compositor re-configured
+after a suspend or a lock). The union comes out empty, and an empty region is not "click-through
+until something corrects it" — it is the terminal state, because the thing that would correct it is
+the very layout pass that has not happened. That is how the island came back from suspend taking no
+input at all until the UI was reloaded (`tech-debt.md` #68, stamp #422).
+
+🔑 **The asymmetry to carry: the two regions have OPPOSITE safe states.** For the VISIBLE (blur)
+region, unmeasurable → hand the whole surface back; a region that is too big only costs performance.
+For the INPUT region the same answer would swallow every click on screen, and the empty one takes
+them all away — so its safe state is neither, it is **the region already on the surface**. Hold it and
+re-stamp (`IslandWindow.holdRegion`). The one moment holding is wrong is before the first successful
+stamp, when there is nothing to hold: a Wayland surface with no region takes input across its whole
+buffer, so a monitor-sized surface must stamp empty until it has measured something once.
+
+🔑 **A surface whose region is measured needs a re-stamp trigger for its PERMANENT furniture, not
+just its transient parts.** The island's revealers had `onAllocated` and its morph had `onDone`; the
+always-present capsule had nothing, which is exactly why its failure lasted the whole session. Note
+the bar does not have this problem for a structural reason worth copying where you can: it unions an
+unconditional `{0,0,monGeo.width,BAR_H}` strip, a constant that cannot fail to measure.
+
 What a grab replaces, all three verified in Hyprland 0.56's source:
 
 - **Keyboard without `EXCLUSIVE`.** `CFocusGrab` drives `CFocusState::rawSurfaceFocus` directly and
