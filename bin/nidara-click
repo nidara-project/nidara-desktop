@@ -411,10 +411,10 @@ function act(mode, app, spec, islandBounds) {
             // would press the button and have nowhere legitimate to release it.
             const toName = (ARGV[3] ?? "").trim()
             if (!toName) { emit({ error: "drag-app needs <from-node> <to-node>" }); return }
-            const from = resolveNode(a, app, "from", nodeName,
+            const from = resolveNode(app.toLowerCase(), app, "from", nodeName,
                 (ARGV[4] ?? "").trim() || null, (ARGV[5] ?? "").trim())
             if (!from) return
-            const to = resolveNode(a, app, "to", toName,
+            const to = resolveNode(app.toLowerCase(), app, "to", toName,
                 (ARGV[6] ?? "").trim() || null, (ARGV[7] ?? "").trim())
             if (!to) return
             relX = from.x; relY = from.y
@@ -431,7 +431,10 @@ function act(mode, app, spec, islandBounds) {
                 role = (ARGV[3] ?? "").trim() || null
                 occRaw = (ARGV[4] ?? "").trim()
             }
-            const t = resolveNode(a, app, "", nodeName, role, occRaw)
+            // `app.toLowerCase()` is the app FILTER (findNodeCentres compares it
+            // against already-lowercased AT-SPI application names), `app` is the
+            // original for error messages — same split as nidara-act's findMatches.
+            const t = resolveNode(app.toLowerCase(), app, "", nodeName, role, occRaw)
             if (!t) return
             relX = t.x; relY = t.y
         }
