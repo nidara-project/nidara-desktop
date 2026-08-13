@@ -1054,6 +1054,33 @@ config is Lua here, so the dispatch is parsed as Lua and errors with `')' expect
 use `ags request closeWindow` (or `hl.dsp.*` form), and never discard the output of a dispatch you
 depend on, or you will read the unchanged state as the app "ignoring" you.
 
+⚠️ **The same Lua trap invalidated a whole A/B on 2026-08-13**, so it is worth stating as a rule
+rather than an anecdote: `hyprctl dispatch movecursor 469 756` errors with `')' expected near '469'`,
+prints it, and continues. The pointer never moved, the precondition of the experiment ("the cursor is
+over the OTHER window") never held, and **both the broken and the fixed build passed**. The form is
+`hyprctl dispatch "hl.dsp.cursor.move({ x = 469, y = 756 })"` (verified in
+`LuaBindingsDispatchers.cpp` for the exact tag). **When a test depends on a dispatch, assert the
+EFFECT and abort when it is missing** — `hyprctl cursorpos` here — instead of assuming the setup
+took. See `tech-debt.md` #67.
+
+### Arming the island's region trap (intermittent dead chips)
+
+For "the island's icons sometimes stop taking mouse input". It cannot be reproduced on demand (see
+`tech-debt.md` #68 for the paths already ruled out), so the tool is a trap left in the running
+session rather than a sweep:
+
+```bash
+systemctl --user set-environment NIDARA_ISLAND_REGION_TRACE=1
+systemctl --user restart nidara.service
+grep -n "island-region" "$XDG_RUNTIME_DIR/nidara-ui.log"     # every stamp; STALE = the bug, caught
+```
+
+Each stamp logs `rects=` (rectangles actually unioned) and `hitTargets=` (clickable targets the
+stamp could see). A CRITICAL `STALE after #N` means a stamp captured fewer targets than are live
+600 ms later with no stamp in between — the dead-chip state, with the sequence that produced it
+sitting directly above it in the log. Off by default and free when off. Disarm with
+`systemctl --user unset-environment NIDARA_ISLAND_REGION_TRACE` + a restart.
+
 ## Persistence
 
 All persistent state lives in `~/.config/nidara/`:

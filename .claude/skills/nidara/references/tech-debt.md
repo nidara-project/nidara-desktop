@@ -3551,3 +3551,40 @@ stop taking pointer input while only the closed active island responds. `updateI
 `islandWin.updateInputRegion` hang off the same `notify::active` handler this entry is about, so a
 region left stamped after a yield is the standing suspicion — unverified, and it needs a repro before
 any code. Related: #40, #38.
+
+### 68. The island's chips losing pointer input — a TRAP is armed; the sweep ruled out the easy half (2026-08-13)
+
+Reported by the owner 2026-08-12: *"sometimes the inactive island's icons stop taking mouse input,
+only the closed active island responds"*. Intermittent, so the entry that matters is what has been
+**ruled out**, and by what.
+
+🔑 **The mechanism it would have to be.** `ActivityIsland.hitTargets()` returns the capsule ALONE
+while `indicatorRow.opacity === 0` — deliberately: leaving faded chips' rects stamped puts an
+invisible dead patch in the bar, which under a grab is read as a press INSIDE and neither dismisses
+nor passes through. So any stamp taken while a mode is open drops the chips, correctly, and becomes
+the reported symptom **only if nothing re-stamps once they ramp back**. And nothing has to: the morph
+ramps opacity in `applyProgress` without a relayout, so `onAllocated` never fires on the way out. The
+one thing that re-stamps is `MorphRevealer.reveal`'s `onDone` (wired in `syncIslandModes`).
+
+⚠️ **The blur region survives this same premise only because of `BLUR_PAD_X = 200`.** Its own comment
+says so — *"a re-stamp mid-morph measures a union without them, and on the way back OUT they ramp up
+again with no relayout to re-measure. They land inside the pad"*. **The input region has no pad.**
+Same premise, no net. If this turns out to be the bug, that asymmetry is where to look first.
+
+**Ruled out by measurement (2026-08-13), ~460 stamps, 99 of them capsule-only:** clean open/close of
+all four modes; mode switches at 100 ms (mid-morph); close-then-reopen inside the closing morph;
+computer-use yield with a mode open AND with the island closed; a chip changing while a mode is open
+(the `onBackgroundChanged` 400 ms deferred stamp). **0 stale regions.** In every one of those the
+`onDone` re-stamp arrives. So the failure is not in the deterministic paths, which is consistent with
+"sometimes" and is why guessing at code next would be wrong.
+
+▶️ **What is armed instead:** `NIDARA_ISLAND_REGION_TRACE=1` (`IslandWindow.traceStamp`) logs every
+stamp and fires a CRITICAL when a stamp's target count is later exceeded with no stamp in between —
+i.e. exactly "those chips are taking no input". Off by default, no cost when off (the trace call is
+guarded, not just the body). **Proven to fire** by disabling the `onDone` re-stamp for one run; a
+silent trap nobody has seen trip proves nothing. Arm it with
+`systemctl --user set-environment NIDARA_ISLAND_REGION_TRACE=1 && systemctl --user restart nidara.service`.
+
+⛔ **Do not "fix" this on the strength of the reasoning above.** The next step is the log line, not a
+patch: the mechanism explains the symptom but so did the `syncIslandGrab` CRITICAL, which turned out
+to be a false alarm (#67).

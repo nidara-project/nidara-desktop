@@ -209,7 +209,8 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         // The capsule must stay clickable at all times — it is a bar control that
         // happens to be painted here. Same for whichever indicator chips are
         // currently revealed, and for an open mode.
-        for (const b of paintedBounds().rects) {
+        const painted = paintedBounds()
+        for (const b of painted.rects) {
             // @ts-ignore  (same untyped Cairo.Region call as Bar.tsx)
             region.unionRectangle({
                 x: Math.round(b.x), y: Math.round(b.y),
@@ -219,6 +220,45 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         surface.set_input_region(region)
         updateVisibleRegion()
         win.queue_draw()   // input regions are double-buffered: apply on next commit
+        if (TRACE) traceStamp(painted.rects.length, hitTargets().length)
+    }
+
+    // ── Region trap: `NIDARA_ISLAND_REGION_TRACE=1` ─────────────────────────────
+    //
+    // For the intermittent "the island's chips stop taking mouse input and only the
+    // closed capsule responds". It cannot be caught by looking, and a sweep cannot
+    // provoke it (see `tech-debt.md` #68 for the paths that were ruled out), so this
+    // arms a trap in the user's own session instead: the next occurrence lands in the
+    // log with the stamp sequence that produced it.
+    //
+    // 🔑 What it watches, and why that is the whole bug in one number. `hitTargets()`
+    // returns the capsule ALONE while the indicator row is faded to nothing, so a
+    // stamp taken in that window legitimately drops the chips' rects — and becomes a
+    // dead patch in the bar if nothing re-stamps once they ramp back. The morph
+    // ramps opacity WITHOUT a relayout, so `onAllocated` does not fire on the way
+    // out; the re-stamp comes from `MorphRevealer.reveal`'s `onDone` and from nowhere
+    // else. Hence: how many targets a stamp captured, against how many are live a
+    // moment later with no stamp in between.
+    //
+    // ⚠️ Verified to FIRE by disabling that `onDone` re-stamp in `syncIslandModes`
+    // for one run (*"stamped 1 target(s), 6 are live now"*). A silent trap that has
+    // never been shown to trip is not evidence of anything.
+    //
+    // The 600 ms is not tuning: it only has to outlast the longest morph (300 ms in,
+    // 220 ms out) so a stamp mid-flight is judged after the animation that would
+    // legitimately correct it, not during.
+    const TRACE = GLib.getenv("NIDARA_ISLAND_REGION_TRACE") === "1"
+    let stampSeq = 0
+    const traceStamp = (rectCount: number, targetCount: number) => {
+        const seq = ++stampSeq
+        console.log(`[island-region] stamp #${seq} rects=${rectCount} hitTargets=${targetCount}`)
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
+            if (stampSeq !== seq) return GLib.SOURCE_REMOVE   // superseded: not our verdict to give
+            const live = hitTargets().length
+            if (live > targetCount)
+                console.error(`[island-region] STALE after #${seq}: stamped ${targetCount} target(s), ${live} are live now and nothing re-stamped — those chips are taking no input`)
+            return GLib.SOURCE_REMOVE
+        })
     }
 
     // ── Blur cost: what this surface actually PAINTS ────────────────────────────
