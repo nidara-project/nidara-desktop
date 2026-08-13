@@ -3594,12 +3594,63 @@ there is no region, and a Wayland surface with none takes input across its whole
 monitor-sized, so it would swallow every click on screen. That is why `everStamped` gates the guard
 and why those six `stamp #1`s must keep stamping empty.
 
-#### 🔴 Still open: the chips alone losing input
+#### 🟡 The chips alone losing input — REPRODUCED AND MEASURED on a live session (2026-08-13), one cause fixed, root cause not yet proven
 
 The original 2026-08-12 report — *"sometimes the inactive island's icons stop taking mouse input, only
 the closed active island responds"* — describes the chips going dead while the capsule still works.
-The resume bug kills the capsule too, so it is **not** established that they are the same thing. What
-was ruled out below still stands, and the trap stays armed.
+The resume bug kills the capsule too, so it is **not** established that they are the same thing.
+
+🔑 **It was finally caught IN THE ACT** (user reported it live, 2026-08-13 15:24). What made that
+possible was measuring the SYMPTOM instead of the suspected mechanism — see the probe below. On the
+user's dead island:
+
+- both chips: **0 pixels changed** on hover, at every pointer position — no input at all;
+- the capsule: **19 pixels changed** on hover, and its response spanned exactly `[1091, 1385]`, i.e.
+  **its stamped rect matched its painted rect perfectly** while the chips beside it were unreachable;
+- the island had been at rest for ~3 minutes with **no stamp** since `#355 rects=3 hitTargets=6`;
+- forcing a re-stamp revived them (**30.7 px** response) — which also proved the probe can fire, so
+  the zeros before it were real and not a dead detector.
+
+▶️ **The probe (reusable, and the thing to reach for next time).** Hover a chip with the RAW injector
+and diff its pixels: `nidara-input move <x> <y> 2560 1440`, screenshot, `magick compare -metric AE`
+on a crop of that chip. Alive = the chip repaints its hover border; dead = pixel-identical.
+⚠️ **`nidara-click` cannot be used for this**: it yields the island's input region click-through
+before acting, so it would test nothing. ⚠️ **And gate the probe on a SETTLED island**:
+`islandBounds` unions the REVEALER rects, so a closing panel still reads as "the island" — a 474px
+player panel sailed through a `<600` gate and got hovered at its edge, producing two false DEADs
+before the gate was tightened to "geometry unchanged across 0.7 s AND no stamp in flight".
+
+✅ **Fixed: the PARTIAL-measurement hole** (`IslandWindow.updateInputRegion`). `holdRegion` from the
+whole-region half only engages when NOTHING measures — `targetsMeasured === 0`. The moment ONE target
+survives, the region goes out **missing the others, with no retry and no trigger that would ever
+re-cut it**. That is not theoretical: instrumented on this session, **116 stamps in ten minutes went
+out dropping a chip the island was showing, two of them dropping the CAPSULE itself**, every one with
+`measured > 0` so the guard stayed quiet. Now a stamp with any `missing` target keeps its stamp (the
+best region describable that instant) and climbs the same retry ladder.
+
+✅ **Fixed: the chips had no re-stamp trigger of their own.** The capsule re-stamps from its glass
+`resize`, a mode from its revealer's `onAllocated` — the chips had only a fixed **400 ms** guess
+(`Bar.tsx` → `onBackgroundChanged`), which has to be wrong only once, since nothing else re-cuts the
+region for them. `ActivityIsland.onChipsSettled` now fires on each chip revealer's
+`notify::child-revealed` — the frame the slide actually ends and the row's final rects exist. Both are
+kept: the timer covers a reveal that never animates, the signal one that outlasts it.
+
+✅ **Fixed: the row re-entering the hit set had no trigger either.** The `STALE` check fired
+**organically for the first time** at 2026-08-13 04:38 — *"stamped 1 target(s), 6 are live now and
+nothing re-stamped"* — which is a DIFFERENT path from the one above: `hitTargets()` returns the
+capsule alone while the row is faded out, so every stamp taken with a mode open drops the chips' rects
+**deliberately**, and the symptom appears the moment nothing re-stamps once they ramp back. That
+re-stamp comes from `MorphRevealer.reveal`'s `onDone`, which does not run when the morph is
+INTERRUPTED (a mode switched mid-close). `Bar.tsx` now also re-stamps when `indicatorRow.opacity`
+crosses back off zero: opacity does not affect `compute_bounds`, so that crossing is already a
+measurable layout, and it costs one stamp per morph. Note this path is invisible to both guards above
+— the chips are not `missing`, they are legitimately *excluded*, so neither the retry ladder nor
+`onChipsSettled` would ever have covered it.
+
+⚠️ **NOT proven: that any of these removes the death the user hit.** It could not be reproduced on
+demand — **31 trustworthy cycles of open/close across all modes, 0 deaths**. Both fixes are justified
+by what the log shows happening regardless (dropped controls, no trigger), not by a reproduction. The
+trap below is now sharp enough to name the mechanism at the next natural occurrence.
 
 🔑 **The mechanism it would have to be.** `ActivityIsland.hitTargets()` returns the capsule ALONE
 while `indicatorRow.opacity === 0` — deliberately: leaving faded chips' rects stamped puts an
@@ -3621,9 +3672,22 @@ computer-use yield with a mode open AND with the island closed; a chip changing 
 `onDone` re-stamp arrives. So the failure is not in the deterministic paths, which is consistent with
 "sometimes" and is why guessing at code next would be wrong.
 
-▶️ **What is armed:** `NIDARA_ISLAND_REGION_TRACE=1` (`IslandWindow.traceStamp`) logs every stamp,
-fires a CRITICAL when a stamp's target count is later exceeded with no stamp in between, and now logs
-a `HELD` line whenever the guard above declines to blank the region. Off by default, no cost when off
+▶️ **What is armed:** `NIDARA_ISLAND_REGION_TRACE=1` (`IslandWindow.traceStamp`) logs every stamp
+**with the actual rect it put in the region, per named target** (`capsule=1091,8 297x32 agent=1396,8
+32x32 …`; a trailing `-` on the name means the chip is deliberately collapsed, so its `NULL` is the
+healthy resting state), plus `measured=` and `MISSING=`. It fires a CRITICAL on `STALE` (target count
+later exceeded), on **`MOVED`** (the targets are at different coordinates 600 ms later with no stamp
+in between — the region is at the old numbers), and logs `HELD` / **`PARTIAL`** whenever the guards
+above decline to blank or complete the region.
+
+🔑 **Why the counts alone could never have caught this, and the shape of the mistake.**
+`hitTargets()` returns all five chips always, and three of them are legitimately collapsed at any
+moment — so `hitTargets=6 measured=3` is BOTH the healthy resting state and the broken one. "Live but
+unmeasurable" and "deliberately absent" are the same number. That is why every count-based check read
+healthy while the chips took no input, and it is why the chips now carry `islandTargetId` /
+`islandRevealed` tags: the trap needs the island's INTENT for each target, which no count can supply.
+This is the third time in this bug that the detector was watching the wrong column (see the lesson
+below, and the STALE check that missed #422). Off by default, no cost when off
 (the trace call is guarded, not just the body). **Proven to fire** by disabling the `onDone` re-stamp
 for one run; a silent trap nobody has seen trip proves nothing. Arm it with
 `systemctl --user set-environment NIDARA_ISLAND_REGION_TRACE=1 && systemctl --user restart nidara.service`.
@@ -3633,6 +3697,44 @@ for one run; a silent trap nobody has seen trip proves nothing. Arm it with
 caught the bug was the raw `rects=` it happened to log next to it. A detector narrowed to the
 mechanism you suspect will miss the one you don't; log the neighbouring quantity too.
 
+⚠️ **And the mirror lesson, from MOVED's first evening: 17 alarms, 17 of them false.** Its first
+version compared the whole trace STRING across 600 ms. Opening a mode fades `indicatorRow` to nothing
+and `hitTargets()` then correctly returns the capsule ALONE — so the strings differ for a reason that
+is not a stale region at all. It now compares each target against ITSELF by id (`byId`), over the
+targets present in both samples: **a target that left the set is not a target that moved.** A trap
+that cries wolf is worse than no trap, because the real line arrives in a column of noise nobody
+reads any more.
+
+⚠️ **Reading the HELD/FORCE volume in this log correctly.** 661 `HELD` lines look alarming and are
+not organic: they are all inside 10:07–10:16 on 2026-08-13, the window where a throwaway `FORCE`
+harness (since removed — do not look for it in the source) deliberately held the island unmeasurable
+for 120 s / 180 s to prove the #136 guard fires. Sessions since: **0**. Check the timestamps before
+treating a count in this log as a rate.
+
 ⛔ **Do not "fix" the chip-level half on the strength of the reasoning above.** The next step is a log
 line, not a patch: the mechanism explains the symptom but so did the `syncIslandGrab` CRITICAL, which
 turned out to be a false alarm (#67).
+
+### 69. ✅ FIXED — every `*-app` verb of `nidara-click` was dead on arrival (2026-08-13)
+
+`nidara-click`'s node-targeting modes passed an **undefined variable** as the app filter —
+`resolveNode(a, app, …)` at three call sites — so `app` / `rclick-app` / `hover-app` /
+`scroll-app` / `drag-app` all threw `ReferenceError: a is not defined` before touching AT-SPI.
+That is the whole pointer half of computer-use aimed BY NAME: MCP's `click_app`, `hover_app`,
+`scroll_app`, `drag_app`, and the same tools inside the Assistant. Fixed to
+`app.toLowerCase()` (the filter `findNodeCentres` expects — it compares against
+already-lowercased AT-SPI application names; `app` stays as the original for error messages,
+the same split `nidara-act`'s `findMatches` uses).
+
+⚠️ **How it stayed hidden, and the debt that remains.** The `*-at` (coordinate) half shares the
+whole pipeline — yield, focus check, injector, cursor choreography, JSON envelope — and works
+perfectly, so every smoke of "does nidara-click work" passed. **Nothing exercises the `*-app`
+half**: the CI smoke boots the shell and drives IPC, and these CLIs are not in it. Three
+failures sat in the user's log for weeks as
+`[nidara-agent] tool click_app … → FAIL nidara-click produced no output`, i.e. the agent
+reported the failure faithfully and nobody read the log.
+
+▶️ The cheap coverage that would have caught it: run each verb once against a node name that
+does NOT exist and assert the output is the structured `no showing node named …` envelope
+rather than empty output. It needs no real click, no focused app for the resolve step, and it
+fails loudly on any ReferenceError — the entire class of "this code path was never executed".
