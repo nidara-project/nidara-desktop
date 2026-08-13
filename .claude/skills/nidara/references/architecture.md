@@ -422,6 +422,12 @@ guards that are the whole design: only when the compositor was left with **nothi
 over the top of a window the user just clicked), and only on the workspace the user is **looking at**
 (focusing elsewhere drags the workspace along, so an empty workspace is allowed to stay empty). Timed
 off the compositor's own announcement via `afterGrabRelease`, not a delay.
+🔑 **The SAME sentence broke computer-use, and it took until 2026-08-12 to connect them.** The
+guards above make a dismissal leave the pointer's choice alone — correct there, fatal for the input
+yield, whose caller has *already* chosen the window. `core/InputYield.begin()` therefore restores
+focus with the opposite policy; the reading of `setGrab(nullptr)` that settles which branch
+`follow_mouse = 1` takes is in `state-and-ipc.md`. Two callers of one mechanism, deliberately
+different policies — do not "unify" them.
 
 ⚠️ **Scope each `cleared` handler to what its own surface owns.** The bar closes only its overlays,
 the island only `island_mode`; a handler reaching further would shut whatever the other surface just
@@ -450,8 +456,10 @@ What a grab replaces, all three verified in Hyprland 0.56's source:
   nothing dismisses.
 - **Release is not double-buffered.** Layer-shell interactivity applies on the surface's next commit
   (the ~12 ms race `HyprlandState.afterGrabRelease` exists for). Destroying a grab takes effect when
-  the compositor reads the request. On release the compositor also refocuses the window the user came
-  from, honouring `input:follow_mouse` — we no longer do that by hand.
+  the compositor reads the request. On release the compositor also refocuses by itself, honouring
+  `input:follow_mouse` — we no longer do that by hand. ⚠️ Read that as "by POINTER", not "the window
+  the user came from": with the `follow_mouse = 1` this repo ships, `setGrab(nullptr)` takes the
+  `refocus()` branch, and `refocusLastWindow` is what the OTHER values get.
 
 ⚠️ **There is exactly ONE grab slot compositor-wide** (`CSeatManager::m_seatGrab`) **and xdg-shell
 popups use the same one.** A `Gtk.Popover` with `autohide` opening anywhere evicts the grab. So

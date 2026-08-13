@@ -752,7 +752,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // is a broken desktop and says so rather than degrading in silence.
   const syncIslandGrab = () => {
     const open = !!status.island_mode
-    if (!islandWin.setModal(open, [win]) && open)
+    // The `!inputYield.active` term is the same one syncKeyboardMode carries, and it
+    // is here for the same reason — `setModal` applies it internally, so without it
+    // this call reads a DELIBERATE release as a broken desktop. It fired on every
+    // computer-use action taken from the Assistant (which is an open island by
+    // definition): five CRITICALs in one 2026-08-12 log, under two shell PIDs,
+    // describing a grab nobody had asked for. An alarm that cries during the one
+    // situation it cannot distinguish is worse than no alarm — it was sitting next to
+    // a real bug (the yield eating the caller's focus, see core/InputYield) and made
+    // it look like the same thing.
+    if (!islandWin.setModal(open, [win]) && open && !inputYield.active)
       console.error("[Bar] island modality: NO compositor focus grab — nothing will dismiss it")
   }
 

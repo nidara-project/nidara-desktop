@@ -96,9 +96,46 @@ class InputYieldClass extends GObject.Object {
         }
         if (!held) return Promise.resolve()
 
+        // Read BEFORE the notify: this is the last moment the answer is still the
+        // caller's. See `_restoreFocus` for what happens to it a few milliseconds later.
+        const keep = (hyprlandState.focusedClient as any)?.address ?? ""
+
         this._active = true
         this.notify("active")   // surfaces release their grab + stamp an empty region here
-        return new Promise<void>(resolve => hyprlandState.afterGrabRelease(() => resolve()))
+        return new Promise<void>(resolve => hyprlandState.afterGrabRelease(() =>
+            this._restoreFocus(keep).then(() => resolve())))
+    }
+
+    /**
+     * Hand the keyboard back to whoever had it before we stepped aside.
+     *
+     * 🔑 THE YIELD ITSELF TAKES THE FOCUS AWAY. Dropping a focus grab makes Hyprland
+     * refocus BY POINTER (`input:follow_mouse = 1`, which this repo ships in
+     * `config/hypr/hyprland.lua` — so it is every install, not a local setting), and
+     * the pointer is wherever the user last left it. Measured 2026-08-12: the model
+     * called `focusWindow org.gnome.TextEditor`, the compositor confirmed it by title,
+     * and 3.2 s later the click was refused because the active window was the terminal
+     * the cursor happened to sit over. The desktop had undone the caller's own
+     * precondition, and then blamed the caller for it.
+     *
+     * The `activewindow` event `afterGrabRelease` waits for IS that wrong focus
+     * arriving, so this runs at exactly the right instant — no delay to tune.
+     *
+     * ⚠️ NOT the same policy as `restoreFocusAfterGrab`, which returns early when
+     * "the compositor found someone". That is right for a dismissal: whatever the
+     * pointer is over is a fine answer when the user just clicked something away.
+     * It is wrong here, because a computer-use caller has ALREADY chosen the window
+     * and the helpers verify focus before they inject.
+     *
+     * Dispatched unconditionally rather than only when the focus moved: re-focusing
+     * the window that is already focused is a compositor no-op, whereas deciding
+     * would mean reading `focused_client` in the middle of the event that changes it.
+     * We wait for `hyprctl` to EXIT, not merely to be spawned — the helper's own
+     * `hyprctl activewindow` is a separate process and must not race ours.
+     */
+    private _restoreFocus(keep: string): Promise<unknown> {
+        if (!keep) return Promise.resolve()   // nothing was focused; nothing to give back
+        return Promise.resolve(hyprlandState.focusWindow(keep))
     }
 
     /** Take the keyboard back. Safe to call when not yielded (a helper that refused

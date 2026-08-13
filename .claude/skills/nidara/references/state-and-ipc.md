@@ -414,10 +414,48 @@ Things to keep if you touch it:
   `EXCLUSIVE` broke the menu); now `acquireFocusGrab` is the only thing to redo, and FocusGrab owns
   the popup case by suspending the lease.
 
+- **`begin()` GIVES THE FOCUS BACK that the release takes away** (`_restoreFocus`, 2026-08-13). It
+  reads `focusedClient` *before* the notify and re-focuses that address once the release has landed.
+  Not defensive coding — without it computer-use is structurally broken on this desktop; the
+  mechanism is spelled out below.
+
+⚠️ **The release refocuses BY POINTER, and that is a property of this repo's own config.**
+`CSeatManager::setGrab(nullptr)` (Hyprland 0.56.1, `src/managers/SeatManager.cpp`) branches on
+`input:follow_mouse`: `0 || 2 || 3` → `refocusLastWindow(monitor-under-cursor)`, **anything else —
+i.e. 1 — → `g_pInputManager->refocus()`**, which focuses whatever the cursor is over.
+`config/hypr/hyprland.lua` ships `follow_mouse = 1`, so every install takes the pointer branch.
+
+That is why the sequence documented here until 2026-08-12 ("the release refocuses the last window,
+which is the target") was only ever true for the configs Nidara does not ship. What actually
+happened, measured in a live Assistant run: `focusWindow org.gnome.TextEditor` succeeded and the
+compositor confirmed it by title; 3.2 s later the click was refused because the pointer had been
+resting over a terminal the whole time, and the yield's own release had handed it the focus. The
+caller was then told to focus the window it had already focused.
+
+🔑 **The repair is timed by the same event the yield already waits for.** The `activewindow` that
+`afterGrabRelease` listens for IS the wrong focus arriving (the refocus happens inside
+`setGrab(nullptr)`, before the event), so restoring in that callback needs no delay and no polling.
+And it is a ONE-SHOT: `follow_mouse` re-evaluates on pointer motion, so nothing undoes the restore
+while the pointer stays still. The dispatch is awaited to completion — `hyprctl` exiting means the
+compositor applied it — before `begin()` resolves, so the helper's own `hyprctl activewindow` (a
+separate process, spawned only after the IPC reply) cannot race it.
+
+⛔ **Do not "fix" this in the helpers instead** by moving the pointer to the target before the focus
+check. It looks equivalent and is not: it changes what the user sees (the pointer choreography in
+`surfaces/agent-pointer/` owns that), it does nothing for `nidara-type`, which never moves the
+pointer, and it treats a defect of ours as an ordering detail of theirs.
+
+⚠️ **This is NOT the policy of `restoreFocusAfterGrab`**, which returns early when the compositor
+found *someone*. That is right for a dismissal — whatever the pointer is over is a fine answer when
+the user just clicked a panel away — and wrong here, because the caller has already chosen the
+window and the helpers verify focus before they inject. Two callers, two policies, one mechanism;
+they share `afterGrabRelease` and nothing else.
+
 Sequence that works, and why (verified against `rawSurfaceFocus`, which touches only
 `m_focusSurface` — a layer-shell grab never clears `m_focusWindow`): `focusWindow` yields → focus
 moves → grab comes back (window focus untouched) → the helper yields again → the release refocuses
-the last window, which is the target → `hyprctl activewindow` names it → the focus check passes.
+by pointer → **`begin()` puts it back before it answers** → `hyprctl activewindow` names the target
+→ the focus check passes.
 
 #### The same refusal has a THIRD victim: a window that MAPS while a surface grabs (2026-07-31)
 

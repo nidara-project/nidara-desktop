@@ -2735,7 +2735,7 @@ async function runTurn(userText) {
             if (r.stopReason === "tool_use" && r.toolUses.length) {
                 emit({ t: "state", s: "acting" })
                 const results = []
-                let stuckOn = null
+                let stuckOn = null, stuckWhy = ""
                 for (const tu of r.toolUses) {
                     if (cancelled) return
                     emit({ t: "tool", name: tu.name, summary: summarizeTool(tu) })
@@ -2751,7 +2751,7 @@ async function runTurn(userText) {
                     // know it isn't converging — and the user pays per attempt.
                     const sig = `${tu.name}:${tu.rawArgs || ""}`
                     if (!res.ok) {
-                        if (sig === lastFailure) stuckOn = summarizeTool(tu)
+                        if (sig === lastFailure) { stuckOn = summarizeTool(tu); stuckWhy = res.content }
                         lastFailure = sig
                     } else if (sig === lastFailure) {
                         lastFailure = null
@@ -2762,7 +2762,14 @@ async function runTurn(userText) {
                 history.push({ role: "tool", results })
                 if (stuckOn) {
                     log(`aborting turn: identical failing tool call repeated (${stuckOn})`)
-                    emitError("The assistant kept repeating the same failing action, so I stopped it before it ran up the bill. Try rewording what you asked for.")
+                    // SAY WHAT REFUSED, and do not prescribe a remedy we cannot know
+                    // is one. The old text ended with "try rewording what you asked
+                    // for", which on 2026-08-12 sent the user to fix their sentence
+                    // while the actual failure was ours: the desktop had dropped the
+                    // window focus the model had correctly established (see
+                    // core/InputYield). A loop guard is well placed to report the
+                    // reason it saw twice and badly placed to guess whose fault it is.
+                    emitError(`I stopped the assistant: ${stuckOn} kept failing, and repeating it would just run up the bill.${stuckWhy ? ` The desktop said: ${truncate(stuckWhy.trim(), 180)}` : ""}`)
                     return
                 }
                 emit({ t: "state", s: "thinking" })

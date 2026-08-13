@@ -3506,3 +3506,48 @@ was NOT bundled with the instrument that found it: it shifts the sidebar's layou
 order is to land the measurement first and the change against it second. Whoever takes it should run
 `text-budget.js --verify` before and after — the budget is derived in that script and must move with
 the fix, or the gate starts checking a number that no longer exists.
+
+### 67. ✅ FIXED — the input yield was eating the focus its own caller had just set (2026-08-13)
+
+Computer-use refused legitimate clicks from inside the Assistant. The model did everything right —
+`focusWindow org.gnome.TextEditor`, confirmed by the compositor, by title — and 3.2 s later
+`click_app` came back *"refused: … is not the focused window (active: kitty)"*. The terminal had
+never been touched: the **pointer** was resting over it.
+
+🔑 **We took the focus away ourselves, in `yieldInput begin`.** Hyprland 0.56.1
+`CSeatManager::setGrab(nullptr)` branches on `input:follow_mouse` — `0 || 2 || 3` →
+`refocusLastWindow`, **else (1) → `refocus()`**, i.e. the window under the cursor. `hyprland.lua`
+ships `follow_mouse = 1`, so this is every install, not a local setting. Fixed in
+`core/InputYield._restoreFocus`: read `focusedClient` before the notify, re-focus it in the
+`afterGrabRelease` callback (the `activewindow` event it waits for IS the wrong focus arriving), and
+await the dispatch before answering so the helper's own `hyprctl` cannot race it. Full write-up in
+`state-and-ipc.md`.
+
+⚠️ **The knowledge was already in this repo and stayed unconnected for a week.** `architecture.md`
+has described "dropping a grab refocuses by POINTER" since 2026-08-05, and
+`HyprlandState.restoreFocusAfterGrab` was written for the null-focus half of the very same sentence.
+What was missing was noticing that the dismissal's policy ("the compositor found someone — leave it")
+is exactly wrong for a caller that had already chosen the window. Cheap to have seen; nobody looked,
+because the symptom was in a helper and the cause was in a compositor call two modules away.
+
+Two things went with it:
+
+- **A CRITICAL that could only fire when nothing was wrong.** `syncIslandGrab` in `Bar.tsx` logged
+  *"island modality: NO compositor focus grab"* whenever `setModal` returned false with a mode open —
+  but `setModal` itself applies `!inputYield.active`, so during the truce a DELIBERATE release read as
+  a broken desktop. Five CRITICALs in one log, under two PIDs, next to a real bug they made look like
+  one symptom. `syncKeyboardMode` had carried the yield term all along; the island's check had not.
+- **The loop guard in `bin/nidara-agent` blamed the user** — *"try rewording what you asked for"* —
+  for a desktop refusal. It now names the failing call and quotes what refused it, and prescribes
+  nothing. A guard is well placed to report the reason it saw twice and badly placed to guess whose
+  fault it is.
+
+⛔ **Rejected: moving the pointer to the target before the focus check** (the obvious helper-side
+fix). It does nothing for `nidara-type`, which never moves the pointer; it makes the agent-pointer
+choreography's job visible in the wrong order; and it treats our defect as their ordering problem.
+
+**Still open, and possibly next door:** the intermittent report that the island's inactive-mode icons
+stop taking pointer input while only the closed active island responds. `updateInputRegion` +
+`islandWin.updateInputRegion` hang off the same `notify::active` handler this entry is about, so a
+region left stamped after a yield is the standing suspicion — unverified, and it needs a repro before
+any code. Related: #40, #38.
