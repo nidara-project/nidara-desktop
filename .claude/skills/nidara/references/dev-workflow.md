@@ -190,7 +190,13 @@ sudo cp ui/lockscreen/build/nidara-lock /usr/share/nidara/ui/lockscreen/build/
 ```
 
 Then: **the lockscreen** is seen by locking the session (`loginctl lock-session`) — cheap and
-reversible with your password. **The greeter** is not: seeing it means logging out or
+reversible with your password. ⚠️ **And only with your password — killing the lock client is not
+a way out.** `ext-session-lock` is designed so a client that dies without unlocking leaves the session
+locked — that is the security property, not a crash — so `pkill nidara-lock` gets you a locked
+screen with nothing drawing on it. In a VM where nobody knows the password (or after a
+`faillock`), the only exit is restarting greetd from another TTY or over SSH; and if that greetd
+already consumed its `initial_session`, `sudo rm -f /run/greetd.run` first or you land on the
+greeter instead of the session. **The greeter** is not cheap either: seeing it means logging out or
 restarting `greetd`, which kills the session you are working in. Don't restart greetd to
 check a style change; look at it on the next login, in the VM, or offscreen with
 `scripts/dev/lock-probe.js` (which needs neither an install nor a session — it reads
