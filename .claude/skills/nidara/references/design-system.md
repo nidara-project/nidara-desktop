@@ -793,7 +793,11 @@ How the flip works:
   - **Shared Cairo widget drawn into BOTH** (the slider, in CC/system-menu AND Settings) can't
     pick a global flag — it calls **`Theme.surfaceIsDark(widget)`**, which resolves by the
     widget's ROOT window name (`nidara-bar`/`nidara-dock` → `chromeIsDark`, else → `isDark`).
-    `common/Slider.ts` uses it for the neutral track colour. Use this for any future shared painter.
+    The slider uses it for the neutral track colour. Use this for any future shared painter.
+    ⚠️ Since the slider moved to the kit (2026-08-15) it reaches that method through
+    **`kitAppearance().surfaceIsDark(widget)`**, not by importing `Theme` — a kit component may
+    not import from `ui/shell/`. Same method, injected. A shared painter that stays in
+    `ui/shell/common/` still calls `Theme.surfaceIsDark` directly.
 - **Light-mode text ramp is nudged up:** `--nidara-text-secondary`/`-dim` are `rgba(fg, 0.85/0.72)`
   in light vs `0.8/0.6` in dark (`nidaraVars`). Black ink over translucent light glass (on an
   arbitrary wallpaper) reads washed-out at the dark-mode alphas; white-on-dark needs less ink.
@@ -1245,10 +1249,12 @@ only when someone boots a VM). The `styles` job now compiles it too.
   the other axis): a bounding box gives a 2560×100 panorama a 2px-tall thumb, and a synchronous
   decode of twenty screenshots visibly stalls the panel as it opens.
 - **Any Cairo draw call that needs a colour defined as a hex string elsewhere goes through
-  `hexToFloatRgb(hex)`** (`common/DrawingUtils.ts`) — `"#rrggbb"` → `{r,g,b}` as 0..1 floats,
+  `hexToFloatRgb(hex)`** — since 2026-08-15 it is defined in **`lib/accent.ts`**, beside the
+  palette it parses, so the kit's slider can reach it; `common/DrawingUtils.ts` re-exports it and
+  the shell's painters keep their import path. `"#rrggbb"` → `{r,g,b}` as 0..1 floats,
   never a hand-rolled `parseInt(hex.slice(...), 16) / 255` triplet. Before this existed, that
   three-liner was independently copy-pasted into `SquircleContainer` (×2), the CC drag ghost,
-  and — worse — `common/Slider.ts` and `widgets/battery.ts` had drifted into hardcoding their
+  and — worse — `nidara-kit/slider.ts` and `widgets/battery.ts` had drifted into hardcoding their
   OWN *pre-computed float copies* of a color instead of parsing the real hex live. Found because
   the slider's fill and battery's low/charging colors turned out to be silently duplicating (and
   in battery's case, duplicating the WRONG source — see below), not just visually similar by
@@ -1275,7 +1281,7 @@ This is the table that decides almost every "which widget should I use?" questio
 | Dock, Bar, workspace dots, resource circles, schematic | **Pure GTK4 + Cairo** (`Gtk.DrawingArea` / `Gtk.Snapshot`) | Adwaita adds nothing here; painting direct = zero defensive CSS. |
 | Floating overlays (CC, NotifCenter, Prism (search), SystemMenu, Overview) | **`Gtk.Box` + gtk4-layer-shell + custom CSS** | Adwaita would only add chrome you'd have to undo. |
 | Toggles / switches / buttons inside overlays | **`Gtk.Switch`, `Gtk.Button`** (NOT `Adw.*Row`) | Base widgets style cleanly; `Adw.*Row` brings padding/focus-ring/separators that have to be killed one by one. |
-| Sliders (any) | **`makeSlider`** from `common/Slider.ts` (NOT `Gtk.Scale`) | See "Sliders" below — one Cairo component for the whole shell. |
+| Sliders (any) | **`makeSlider`** from `nidara-kit/slider.ts` (NOT `Gtk.Scale`) | See "Sliders" below — one Cairo component for the whole shell. |
 | Settings window | **`ui/lib/nidara-kit`** (`NidaraSplitView`, `NidaraClamp`, `NidaraButton`, `NidaraDropDown`) | Custom split view. **Do NOT use `Adw.OverlaySplitView`** — it breaks capsule margins. |
 | Modal dialogs | **`showNidaraAlert`** from `nidara-kit` | Clean, themeable. |
 
@@ -1687,11 +1693,18 @@ point `launcherIcon` at any file).
 
 ## Sliders — one component
 
-All sliders are **`makeSlider`** (Cairo) in `common/Slider.ts` (`makeHSlider` is just a
+All sliders are **`makeSlider`** (Cairo) in `nidara-kit/slider.ts` (`makeHSlider` is just a
 horizontal wrapper). There is **no native `Gtk.Scale`** and no `PillSlider` — don't add them.
 
+⚠️ **It lives in the KIT, not in the shell** (moved 2026-08-15, NTK step 3). That is what forced
+the kit's **appearance seam**: the accent and the surface's mode now arrive from
+`kitAppearance()`, which each BUNDLE registers once in its `app.ts` — see
+`nidara-kit/appearance.ts` and architecture.md. A bundle that builds a slider without registering
+gets blue-on-light and one warning in the log; it does not crash.
+
 - **Cairo-drawn**: fill + thumb are painted together so they never visually separate (the
-  native `scale` highlight/slider misalignment bug). Accent comes from `PALETTE[Theme.accentColor]`.
+  native `scale` highlight/slider misalignment bug). Accent comes from `kitAppearance().accent()`
+  (the shell wires that to `PALETTE[Theme.accentColor]`).
 - **Custom input** (a `GestureDrag` + scroll + arrow keys, *not* a `Gtk.Scale`): clicking the
   track jumps to that position; grabbing the thumb never warps it; `drag-begin` claims the
   sequence so a slider inside a clickable tile (e.g. a CC widget) doesn't trigger the tile.
@@ -1731,7 +1744,7 @@ horizontal wrapper). There is **no native `Gtk.Scale`** and no `PillSlider` — 
   centre of its 80×80 cell regardless of padding magnitude, so `UNIT/2` from either edge is the
   correct target for both. If `UNIT`/`islandPadding`/the glyph size ever change, recompute this
   margin too — it's a hand-derived constant (matching the existing `trackH: 72` comment right
-  above it in `common/Slider.ts`), not something that re-derives itself.
+  above it in `nidara-kit/slider.ts`), not something that re-derives itself.
 - **`makeVerticalFillTile`'s `icon` param accepts a getter** (`Gio.FileIcon | (() =>
   Gio.FileIcon)`) plus an optional `iconSubscribe?: (sync) => cleanup`, so a level-dependent icon
   (volume's mute/low/medium/high ladder, via `AudioSvc.targetVolumeIcon`/`watchVolume`) stays
@@ -2072,17 +2085,21 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
    owns the class, the SHEET says which bundles compile it. Elsewhere in this document, a bare
    `_components.scss` means whichever half holds the rule being discussed.
 
-   ⚠️ **The greeter and the lockscreen do NOT import the kit's sheet yet, deliberately.**
-   Nothing in them wears a kit class, and the file carries BARE-ELEMENT selectors (`entry`,
-   `selection`, `dropdown > button`, `dropdown popover`) that match without a class and collide
-   with what those two already declare — measured: the kit gives every `entry` a
-   `border-radius`, and the greeter's password field has its CSS box deliberately OFF (painted
-   by `glass-capsule.ts`), so its focus ring would go pill → rounded rectangle. There is also a
-   TOKEN CONTRACT: the kit's rules read 23 `--nidara-*` custom properties and the greeter
-   defines 6. An undefined custom property does not warn — the declaration is simply dropped —
-   so importing without satisfying it fails SILENTLY, on two surfaces with no dev mode. The
-   migration that brings a real consumer is what earns the import, and it carries the contract
-   with it. Everything else names a window. Both spellings are in
+   ⚠️ **The greeter and the lockscreen DO import it, since 2026-08-10** — what earned the
+   import was migrating their three raw `Gtk.DropDown`s to `NidaraDropDown` (PR #114, see "The
+   greeter wears the kit" above). Two things stay sharp on that side. The file carries
+   BARE-ELEMENT selectors (`entry`, `selection`, `dropdown > button`, `dropdown popover`) that
+   match without a class and collide with what those two already declare; source order saves
+   them (Sass emits a module BEFORE the file that `@use`s it, so the login sheet out-ranks the
+   kit at equal specificity) and nothing here may rely on being last. And there is a TOKEN
+   CONTRACT: the kit's rules read 22 `--nidara-*` custom properties (15 in the sheet itself,
+   the rest via `_mixins.scss`; re-measure with a grep over BOTH, that is where the number comes
+   from), an undefined one does not
+   warn — the declaration is simply dropped — so **adding a `var(--nidara-…)` to the kit's sheet
+   is a change to every consumer's palette block**, verified by grepping the compiled sheet, on
+   two surfaces with no dev mode. (The slider's move on 2026-08-15 brought exactly one rule,
+   `.slider-fill-value`, and deliberately added no token: it reads `--nidara-text`, already in
+   the contract.) Everything else names a window. Both spellings are in
    use because both are set in TSX — id **and** class, and they differ:
 
    | Window | Scope selector |

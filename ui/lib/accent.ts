@@ -42,6 +42,20 @@ export function hexToRgb(hex: string): string {
   return `${r}, ${g}, ${b}`
 }
 
+/** "#rrggbb" → { r, g, b } as 0..1 floats, what Cairo's setSourceRGBA wants. The
+ *  single conversion point for any Cairo draw call that needs a color defined as a
+ *  hex string elsewhere (the live accent, a semantic status color). It sits here
+ *  rather than in the shell's `common/DrawingUtils.ts` — which re-exports it — so
+ *  `nidara-kit/slider.ts` can fill its track with the accent without reaching into
+ *  `ui/shell/`. */
+export function hexToFloatRgb(hex: string): { r: number, g: number, b: number } {
+  return {
+    r: parseInt(hex.slice(1, 3), 16) / 255,
+    g: parseInt(hex.slice(3, 5), 16) / 255,
+    b: parseInt(hex.slice(5, 7), 16) / 255,
+  }
+}
+
 /**
  * CSS block defining the --nidara-accent* custom properties for a given accent
  * key. Used by the greeter and lockscreen (which read the accent from

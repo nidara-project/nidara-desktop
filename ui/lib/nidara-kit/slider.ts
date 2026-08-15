@@ -3,10 +3,12 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import Cairo from "gi://cairo"
 
-// Palette tokens are CSS variables; for Cairo we read the accent from ThemeManager
-import Theme from "../core/ThemeManager"
-import { safeDisconnect } from "../core/signals"
-import { hexToFloatRgb } from "./DrawingUtils"
+// Palette tokens are CSS variables and Cairo cannot read them, so the accent and
+// the surface's mode arrive through the kit's appearance seam — the bundle registers
+// its own source (the shell registers ThemeManager). See ./appearance.ts.
+import { kitAppearance } from "./appearance"
+import { safeDisconnect } from "../signals"
+import { hexToFloatRgb } from "../accent"
 
 const TRACK_H  = 6   // px — track thickness
 const THUMB_R  = 9   // px — thumb radius (visual)
@@ -77,7 +79,7 @@ export interface SliderOpts {
 }
 
 /**
- * makeSlider — the ONE slider for the whole shell (Cairo-drawn, horizontal or
+ * makeSlider — the ONE slider, for any Nidara window (Cairo-drawn, horizontal or
  * vertical). Input is a custom GestureDrag + scroll (NOT a Gtk.Scale), so:
  *   • clicking the track jumps to that position,
  *   • grabbing the thumb never warps it (the old Gtk.Scale bug),
@@ -142,7 +144,7 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
         if (drawTrack) {
             // Follow the surface skin, not the global mode: a slider in a light-pinned
             // CC/system-menu over a dark system needs a dark track, not a white one.
-            const dark = Theme.surfaceIsDark(da)
+            const dark = kitAppearance().surfaceIsDark(da)
             const base = dark ? 1 : 0
             cr.setSourceRGBA(base, base, base, dark ? 0.18 : 0.14)
             capsuleMain(cr, pad, L - pad, cc, trackH, horiz); cr.fill()
@@ -151,7 +153,7 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
         // Fill (accent) — skipped when a host paints it instead (paintFill:false;
         // see makeVerticalFillTile, whose gauge fill now lives in BaseIsland).
         if (paintFill) {
-            const { r: ar, g: ag, b: ab } = hexToFloatRgb(Theme.accentPalette[Theme.accentColor].color)
+            const { r: ar, g: ag, b: ab } = hexToFloatRgb(kitAppearance().accent())
             cr.setSourceRGBA(ar, ag, ab, 0.9)
             if (thumb) {
                 // Capsule whose rounded end meets the thumb.
@@ -297,9 +299,9 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
     })
     da.add_controller(keys)
 
-    // Theme accent change → redraw.
-    const themeSignalId = Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
-    da.connect("unrealize", () => safeDisconnect(Theme, themeSignalId))
+    // Accent / mode change → redraw.
+    const unsubscribeAppearance = kitAppearance().onChange(() => { if (da.get_mapped()) da.queue_draw() })
+    da.connect("unrealize", unsubscribeAppearance)
 
     // External value updates (ignored while the user is dragging).
     if (onExtChange) {

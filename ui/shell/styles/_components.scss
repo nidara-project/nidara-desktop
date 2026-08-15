@@ -371,16 +371,10 @@ button.settings-icon-btn {
     background: transparent;
 }
 
-/* 1×2 capsule slider (volume/brightness): % overlaid on top, icon at the bottom.
-   Both sit over the track/fill, so a soft shadow keeps them legible either way.
-   Painted by the one slider component, common/Slider.ts — every window. */
-.slider-fill-value {
-    font-size: $fs-small;
-    font-weight: $fw-bold;
-    font-variant-numeric: tabular-nums;
-    color: var(--nidara-text);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
-}
+/* (.slider-fill-value moved to ui/lib/styles/_components.scss 2026-08-15, with the
+   slider itself: makeVerticalFillTile builds that label, and the label's sheet goes
+   where its builder goes. .slider-value-label and .slider-text-endpoint stayed here
+   — the shell's own call sites build those, not the component.) */
 
 /* Shared round glass icon button (see common/IconButton.ts). Single source of
    truth for close/remove/collapse controls. Size is set inline per use; shape/icon/hover

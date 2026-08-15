@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import AstalWp from "gi://AstalWp"
-import { makeHSlider, makeVerticalFillTile } from "../../common/Slider"
+import { makeHSlider, makeVerticalFillTile } from "../../../lib/nidara-kit"
 import { CCWidgetSpec, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"

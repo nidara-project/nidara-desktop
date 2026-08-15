@@ -1,8 +1,7 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import GdkPixbuf from "gi://GdkPixbuf"
 import Cairo from "gi://cairo"
-import { NidaraButton } from "../../lib/nidara-kit"
-import { makeHSlider } from "./Slider"
+import { NidaraButton, makeHSlider } from "../../lib/nidara-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 

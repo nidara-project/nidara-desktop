@@ -1,7 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
-import { makeHSlider } from "../../common/Slider"
-import { NidaraRow, NidaraStackedRow, NidaraList, NidaraButton, NidaraDropDown } from "../../../lib/nidara-kit"
+import { NidaraRow, NidaraStackedRow, NidaraList, NidaraButton, NidaraDropDown, makeHSlider } from "../../../lib/nidara-kit"
 import { attachTooltip } from "../../common/Tooltip"
 import { t } from "../../core/i18n"
 

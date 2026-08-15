@@ -109,7 +109,7 @@ see `references/dev-workflow.md`.
 - The state model is **one central GObject (`Status.ts`)** with mutually-exclusive overlay setters. Subscribe via `notify::prop`. See `references/state-and-ipc.md`.
 - The dock H/V split is **already deduplicated**: `DockHorizontal.tsx` and `DockVertical.tsx` are 7-line wrappers; shared logic lives in `DockCore.tsx` with axis differences isolated in `DockAxis.ts`. Edit those, not the wrappers — see `references/tech-debt.md`.
 - Dock springs integrate via `stepSpring` in `DockPhysics.ts`, which **substeps internally (≤1/60 s per substep)**. Never integrate a spring with a raw frame `dt`: semi-implicit Euler diverges when `damping·dt > 2`, and the frame clock can stall/fall back to ~60 Hz (e.g. a fullscreen window occludes the dock) pushing `dt` to the `MAX_DT` clamp — that exact combination exploded the auto-hide slide to 1e+68 px (2026-07-18). Stability comes from the substep, not from `MAX_DT`.
-- Sliders are **one component**: `makeSlider` (Cairo) in `common/Slider.ts` — horizontal or vertical, optional thumb, custom non-warp input. There is no native `Gtk.Scale`. See `references/design-system.md`.
+- Sliders are **one component**: `makeSlider` (Cairo) in `ui/lib/nidara-kit/slider.ts` — horizontal or vertical, optional thumb, custom non-warp input. There is no native `Gtk.Scale`. It lives in the KIT, so it gets its accent and its surface mode from the **appearance seam** (`nidara-kit/appearance.ts`) that each bundle registers once in `app.ts` — never by importing `ThemeManager`. See `references/design-system.md`.
 
 ## Keep this skill current (part of "done", not a follow-up)
 

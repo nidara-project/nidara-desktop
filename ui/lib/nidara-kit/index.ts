@@ -53,6 +53,18 @@ export type { NidaraSidebarItem, NidaraSidebarResult } from "./sidebar"
 export { NidaraWindow, NIDARA_WINDOW_RADIUS, NIDARA_CARD_RADIUS } from "./window"
 export type { NidaraWindowOpts, NidaraWindowResult } from "./window"
 
+// makeSlider — the ONE slider (Cairo, horizontal/vertical; there is no Gtk.Scale
+// anywhere in Nidara). makeHSlider is the horizontal wrapper, makeVolumeSlider binds
+// one to an AstalWp endpoint, makeVerticalFillTile is the 1×2 CC gauge tile.
+export type { SliderOpts, SliderOrientation } from "./slider"
+export { makeSlider, makeHSlider, makeVerticalFillTile, makeVolumeSlider } from "./slider"
+
+// The appearance seam the slider paints through — every BUNDLE registers its own
+// source once, in app.ts. Cairo cannot read CSS tokens, so the accent and the
+// surface's mode have to be handed to the kit. See appearance.ts.
+export type { KitAppearance } from "./appearance"
+export { setKitAppearance, kitAppearance } from "./appearance"
+
 // showNidaraAlert — modal confirmation dialog (replaces Adw.AlertDialog)
 export type { AlertResponse, AlertHandle } from "./alert-dialog"
 export { showNidaraAlert } from "./alert-dialog"

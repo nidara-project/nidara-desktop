@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import { PANEL_W } from "../common/widget-kit"
 import AstalWp from "gi://AstalWp"
-import { makeVolumeSlider } from "../common/Slider"
+import { makeVolumeSlider } from "../../lib/nidara-kit"
 import { VolumeWidget } from "../surfaces/control-center/Sliders"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { t } from "../core/i18n"

@@ -65,6 +65,25 @@ import Settings from "./surfaces/settings/Settings"
 import Theme, { setPreferDark } from "./core/ThemeManager"
 import AboutWindow from "./surfaces/about/AboutWindow"
 import notifConfig from "./core/NotifConfig"
+import { setKitAppearance } from "../lib/nidara-kit"
+import { safeDisconnect } from "./core/signals"
+
+// ── The kit's appearance seam ────────────────────────────────────────────────
+// `nidara-kit/slider.ts` paints in Cairo, and Cairo cannot read a CSS token: it
+// needs the accent as a real hex string and it needs to know whether the surface
+// under it is dark. Only the bundle knows that, and the kit may not import from
+// `ui/shell/`, so the shell hands ThemeManager over here — at module scope, which
+// runs before main() builds the first widget. A bundle that forgets this gets a
+// blue slider on a light track and one warning in the log. See
+// `ui/lib/nidara-kit/appearance.ts`.
+setKitAppearance({
+  accent:        () => Theme.accentPalette[Theme.accentColor].color,
+  surfaceIsDark: (widget) => Theme.surfaceIsDark(widget),
+  onChange:      (cb) => {
+    const id = Theme.connect("changed", cb)
+    return () => safeDisconnect(Theme, id)
+  },
+})
 
 // Minimal interface for windows managed by the shell
 interface ShellWindow {

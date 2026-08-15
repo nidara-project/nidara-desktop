@@ -1,6 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import nightLight from "../core/NightLightManager"
-import { makeHSlider } from "../common/Slider"
+import { makeHSlider } from "../../lib/nidara-kit"
 import { buildRoundContent, buildSplitCapsuleContent } from "../surfaces/control-center/Toggles"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { makeIconAction } from "./bar-helpers"

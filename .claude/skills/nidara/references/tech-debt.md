@@ -388,7 +388,7 @@ second run disconnects an already-stale id. Fix = `core/signals.ts` → `safeDis
 which guards with `GObject.signal_handler_is_connected` (idempotent). Migrated the reproducing
 cluster — the CC/overlay/Settings widgets that recycle: `Sliders.tsx`, `MediaIsland.tsx`,
 `widgets/{volume,battery,media,screenrecord,ethernet,night-light,dark-mode}.ts`, plus
-`common/Slider.ts` and once-guarded the `onExt` cleanup in `SettingsHelpers.ts` toggleRow/dropdownRow.
+`nidara-kit/slider.ts` and once-guarded the `onExt` cleanup in `SettingsHelpers.ts` toggleRow/dropdownRow.
 **Full sweep done 2026-06-23.** Every remaining disconnect-in-cleanup site now goes through
 `safeDisconnect` — both the useless `try{disconnect}catch{}` guards AND the bare unguarded
 `obj.disconnect(id)` calls on `unrealize`/`destroy` (which were the actual repro pattern: `unrealize`
@@ -723,7 +723,7 @@ The coherence redesign landed and was verified live. **Done:**
   skin automatically because `generateChromeTokenScope` reuses `nidaraVars(chromeIsDark)`.
 - **Slider track now follows the surface skin — FIXED.** New `Theme.surfaceIsDark(widget)` (ThemeManager)
   resolves dark/light by the widget's root window name (`nidara-bar`/`nidara-dock` → `chromeIsDark`, else
-  `isDark`); `common/Slider.ts` track uses it. Redraws on `Theme "changed"` (slider already subscribes).
+  `isDark`); `nidara-kit/slider.ts` track uses it. Redraws on `Theme "changed"` (slider already subscribes).
 
 **Residual (NOT Phase 3 — product decision / cosmetic, left as-is):**
 - **Tray icon coherence (partly unsolvable).** Symbolic tray icons follow the theme/pin; pixmap-only ones
@@ -1747,7 +1747,7 @@ These were paid down; the *rule* remains:
 - **Repo weight** — history was rewritten (.git 342→95 MiB); old clones must re-clone. Don't
   commit binaries: the app bundles (`ui/*/build/*`) and every `style.css` are gitignored too —
   `install.sh` rebuilds them from source on the target. Verify pngs / build artifacts stay git-ignored.
-- **Sliders** — one Cairo `makeSlider` (`common/Slider.ts`); no native `Gtk.Scale`,
+- **Sliders** — one Cairo `makeSlider` (`nidara-kit/slider.ts`); no native `Gtk.Scale`,
   no `PillSlider`. See `design-system.md`.
 - **Monitor config** — applies via `hyprctl eval "hl.monitor({...})"`, NOT `hyprctl keyword`
   (rejected by the Lua parser). See `architecture.md`.
@@ -3169,8 +3169,15 @@ shape for any future extraction; a rule-set diff alone would have missed a real 
    dropdown, so this migration removes them rather than fighting them. ⚠️ greeter/lock have no
    dev mode — fixed path to `/usr/share`, silent failure — so this one needs a VM pass.
 2. **Deduplicate greeter↔lock** (`Clock.ts`, `PowerBar.ts`, the card) — see §57.4 above.
-3. **`common/Slider.ts` → kit** (400 self-contained Cairo lines; already THE slider, there is no
-   `Gtk.Scale`). Highest leverage, lowest risk.
+3. ✅ **DONE — `common/Slider.ts` → `nidara-kit/slider.ts` (2026-08-15).** 419 Cairo lines, and
+   the first kit component that needed something only the BUNDLE knows. Three dependencies had
+   to be resolved rather than carried: `safeDisconnect` and `hexToFloatRgb` were pure and simply
+   moved down to `ui/lib/` (both re-exported from their old shell paths, so 46 import sites did
+   not churn) — but `ThemeManager` could not move and could not be imported, which is what
+   produced the **appearance seam** (`nidara-kit/appearance.ts`, see architecture.md). CSS: the
+   mechanical test moved exactly ONE rule, `.slider-fill-value`, because `makeVerticalFillTile`
+   builds that label; `.slider-value-label` and `.slider-text-endpoint` stayed in the shell's
+   sheet because the shell's call sites build those. No new token entered the kit's contract.
 4. **The composed rows** (`toggleRow` 29 uses, `dropdownRow` 20, `sliderRow` 32, `createRow` 91).
    🔑 The blocker is ONE thing: they all end in `createRow`, which both BUILDS the row and
    REGISTERS it in Settings' search index. Building has to be split from registering. That is
@@ -3184,6 +3191,24 @@ appears, and it enters migrating in the SAME change.** Never declared ahead. The
 inside one commit, `69cce101`: the half that promoted `createRow`/`listGroup` and migrated
 every call site at once has 23 consumers today; the half that declared `.nidara-tile` and
 deferred the migration to "increments 2-3" was never applied and was deleted in #111.
+
+**Amended 2026-08-15 — a second, equally valid trigger, stated out loud rather than smuggled
+in as an exception.** The slider had ten import sites and **all ten were inside `ui/shell/`**;
+greeter and lockscreen had none, so by the letter of the rule it could not move, and it moved
+anyway. The reason it is not a violation: what the rule protects against is designing an API
+for consumers you are IMAGINING — and an API that ten real call sites have been exercising for
+months is the opposite of imagined. So the trigger is either of:
+
+- a **second consumer in another bundle**, migrated in the same change (the dropdown, the card);
+  or
+- **many real consumers in one bundle plus an API nothing is asking to change** — proven, not
+  predicted.
+
+What does NOT count, under either reading, is "we will need this later". `.crystal-tile` is
+still the counter-example, and the ⚠️ that came with this amendment is that the second trigger
+gives no free evidence about OTHER bundles: nothing in the ten shell call sites would have
+revealed that the greeter cannot supply an accent. The seam exists because the move was done,
+not because the consumers predicted it.
 
 
 ### 58. ✅ CLOSED — `GlassCapsule` stopped owning what it should never have owned (2026-08-09)

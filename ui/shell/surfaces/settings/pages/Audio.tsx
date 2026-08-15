@@ -4,8 +4,7 @@ import { listGroup, pageBox, bindWhileRealized } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as AudioSvc from "../../../core/AudioService"
-import { NidaraButton, NidaraRow } from "../../../../lib/nidara-kit"
-import { makeVolumeSlider } from "../../../common/Slider"
+import { NidaraButton, NidaraRow, makeVolumeSlider } from "../../../../lib/nidara-kit"
 
 // ── Volume row (devices and per-app streams) ─────────────────────────────────
 

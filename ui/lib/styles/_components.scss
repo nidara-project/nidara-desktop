@@ -591,3 +591,23 @@ dropdown popover {
         }
     }
 }
+
+/* --- Slider ----------------------------------------------------------------
+   `nidara-kit/slider.ts` is Cairo end to end — track, fill and thumb are drawn,
+   not styled — so the ONE rule it brings here is for the only real GTK widget it
+   builds: the percentage label that `makeVerticalFillTile` overlays on the 1×2
+   volume/brightness gauge. It sits ON the fill, which is accent under it and glass
+   above it, so the shadow is what keeps it legible either way.
+
+   The kit's other slider classes deliberately did NOT come along: `.slider-value-label`
+   (the "72%" beside a horizontal slider) and `.slider-text-endpoint` (the small/large
+   "A"s on the text-size slider) are built by the SHELL'S call sites, so they stay in
+   the shell's sheet. Same mechanical test as everything above — grep the class in
+   `ui/lib/` and the answer is the same for everyone. */
+.slider-fill-value {
+    font-size: $fs-small;
+    font-weight: $fw-bold;
+    font-variant-numeric: tabular-nums;
+    color: var(--nidara-text);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
