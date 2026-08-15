@@ -65,6 +65,19 @@ export { makeSlider, makeHSlider, makeVerticalFillTile, makeVolumeSlider } from 
 export type { KitAppearance } from "./appearance"
 export { setKitAppearance, kitAppearance } from "./appearance"
 
+// The COMPOSED rows — "label + subtitle + the control that edits it", which is what a
+// preferences pane is made of. They take the row BUILDER as a parameter (`mkRow`,
+// default `plainRow`) so that composing a row and registering it somewhere are two
+// different jobs: Settings passes its own `createRow`, everyone else does not. See
+// rows.ts for why that is a parameter and not a module-level seam.
+export type { NidaraRowBuilder, NidaraSliderRowOpts } from "./rows"
+export { NidaraToggleRow, NidaraDropDownRow, NidaraSliderRow, plainRow } from "./rows"
+
+// bindWhileRealized — bind a subscription to a widget's REALIZED lifetime, not to a
+// one-shot unrealize. Required by anything that caches widgets instead of rebuilding
+// them; the composed rows re-arm their external sync through it.
+export { bindWhileRealized } from "./lifetime"
+
 // showNidaraAlert — modal confirmation dialog (replaces Adw.AlertDialog)
 export type { AlertResponse, AlertHandle } from "./alert-dialog"
 export { showNidaraAlert } from "./alert-dialog"

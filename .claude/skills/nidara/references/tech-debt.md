@@ -428,7 +428,8 @@ What it actually cost, before the fix (all confirmed by reading the disposal pat
   after one visit, and each later departure logged `GLib-CRITICAL … Source ID N was not found`
   (**always the same N** — the tell that a stale id is being re-removed rather than a new one leaking).
 
-**Fix:** `bindWhileRealized(widget, subscribe)` in `SettingsHelpers.ts` — subscribes on every
+**Fix:** `bindWhileRealized(widget, subscribe)` (`nidara-kit/lifetime.ts` since 2026-08-16;
+`SettingsHelpers.ts` re-exports it) — subscribes on every
 `realize`, disposes on every `unrealize`, idempotent both ways. Put the initial refresh INSIDE
 `subscribe`: a page you return to must re-read the world, not replay the state it had when the
 window opened. All 8 sites migrated (Region, Audio, Bluetooth, Display, Appearance ×2, Dock, Power,
@@ -3176,12 +3177,48 @@ shape for any future extraction; a rule-set diff alone would have missed a real 
    not churn) — but `ThemeManager` could not move and could not be imported, which is what
    produced the **appearance seam** (`nidara-kit/appearance.ts`, see architecture.md). CSS: the
    mechanical test moved exactly ONE rule, `.slider-fill-value`, because `makeVerticalFillTile`
-   builds that label; `.slider-value-label` and `.slider-text-endpoint` stayed in the shell's
-   sheet because the shell's call sites build those. No new token entered the kit's contract.
-4. **The composed rows** (`toggleRow` 29 uses, `dropdownRow` 20, `sliderRow` 32, `createRow` 91).
-   🔑 The blocker is ONE thing: they all end in `createRow`, which both BUILDS the row and
-   REGISTERS it in Settings' search index. Building has to be split from registering. That is
-   the real architecture piece, and it goes last on purpose.
+   builds that label; `.slider-text-endpoint` stayed in the shell's sheet because Settings'
+   Accessibility page builds those. (`.slider-value-label` stayed too — until step 4 moved the
+   slider ROW a day later and took it along.) No new token entered the kit's contract.
+4. ✅ **DONE — the composed rows (2026-08-16).** `toggleRow` / `dropdownRow` / `sliderRow` are
+   now `NidaraToggleRow` / `NidaraDropDownRow` / `NidaraSliderRow` in `nidara-kit/rows.ts`.
+   (The counts written here — 29/20/32/91 — had drifted; measured on the day, they were
+   21/17/14/81. Re-measure before quoting a number from this file.)
+
+   🔑 **The blocker was real but smaller than it read.** `createRow` did not build anything —
+   `NidaraRow` has been in the kit for a long time. What `createRow` added was three lines:
+   pushing the row's label into Settings' **search index**, via an ambient page context that
+   `Settings.tsx` opens and closes around each page's (synchronous, eager) construction. Every
+   composed row ended there, so all of them were welded to a side effect only Settings wants.
+
+   🔑 **The split is a PARAMETER, not another seam: `mkRow`.** A composed row now builds its
+   control and hands it to whatever row builder it was given (default `plainRow`). Settings
+   passes its own `createRow`, which registers then delegates — so all ~130 call sites are
+   untouched and the search index behaves exactly as before (verified in the live session: a
+   `toggleRow` label typed into Settings' search still resolves to its page).
+
+   ⚠️ **Why a parameter and not a module-level seam like `appearance.ts`.** Appearance is
+   per-BUNDLE — one accent per process. Registration is per-CALLER: the same shell has Settings
+   rows that must be indexed and `widgets/screenrecord.ts` rows that must not. A global would
+   have to be pushed and popped around every build, which is the ambient context being escaped.
+
+   `bindWhileRealized` went to `nidara-kit/lifetime.ts` with them (the rows re-arm their
+   external sync through it); `SettingsHelpers` re-exports it. What stayed in Settings:
+   `createRow`/`createStackedRow` (they ARE the registration), `listGroup`, `pageBox`,
+   `presetRow` (one consumer, and its `settings-*` classes are Settings') and `imagePickerRow`.
+
+   🔑 **The proof that the move was real: `widgets/screenrecord.ts` stopped importing from
+   `surfaces/settings/`.** A Control Center widget had been reaching into another surface for
+   `pageBox`/`listGroup`/`createRow`/`toggleRow`/`dropdownRow`; it now calls the kit. Its
+   `pageBox` was decoration in the CC anyway — `.settings-page` is scoped inside
+   `window.nidara-settings-window`, so the class it added styled nothing there.
+
+   CSS: `.slider-value-label` followed to the kit's sheet — `NidaraSliderRow` builds one, so a
+   non-shell window would otherwise get an unstyled readout. It is now worn on BOTH sides, and
+   that is fine: the shell compiles both sheets, a lone bundle does not. And
+   `.nidara-atomic-scale-native` was DELETED rather than promoted: it suppressed the background
+   of "the native Gtk.Scale trough", and there has been no `Gtk.Scale` since `d9dca37f` — the
+   class rode along in `cssClasses` and spent months being applied to a `Gtk.DrawingArea`.
 5. **`_alert.scss` stayed in the shell** even though `alert-dialog.ts` is in `ui/lib/` — it is a
    window-SCOPED block (`window.nidara-alert-dialog`), a different animal from the kit's global
    layer, and no other bundle shows a dialog yet. Revisit when one does.

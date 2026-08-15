@@ -3,11 +3,11 @@ import Gio from "gi://Gio"
 import { PANEL_W } from "../common/widget-kit"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 import { NidaraDropDown } from "../../lib/nidara-kit/scrolled"
+import { NidaraList, NidaraRow, NidaraToggleRow, NidaraDropDownRow } from "../../lib/nidara-kit"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
-import { pageBox, listGroup, createRow, toggleRow, dropdownRow } from "../surfaces/settings/SettingsHelpers"
 
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -317,7 +317,7 @@ function audioSourceRow(): Gtk.ListBoxRow {
         selectStored()
     }).catch(() => {})
 
-    return createRow(
+    return NidaraRow(
         t("widget.screenrecord.settings.source"),
         t("widget.screenrecord.settings.source.desc"),
         drp,
@@ -354,14 +354,19 @@ function saveDirRow(): Gtk.ListBoxRow {
     const trailing = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
     trailing.append(pathLabel)
     trailing.append(chooseBtn)
-    return createRow(t("widget.screenrecord.settings.save-to"), "", trailing)
+    return NidaraRow(t("widget.screenrecord.settings.save-to"), "", trailing)
 }
 
 function buildSettings(): Gtk.Widget {
-    const page = pageBox("screenrecord-settings-page")
+    // A plain vertical box, not Settings' `pageBox`. This widget used to import that
+    // helper (and createRow/toggleRow/dropdownRow) from `surfaces/settings/` — a CC
+    // widget reaching into another surface for a row. The rows are the kit's now, and
+    // the box was never more than this here: `.settings-page` is scoped inside
+    // `window.nidara-settings-window`, so the class it added styled nothing in the CC.
+    const page = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 24 })
 
     // ── Audio ─────────────────────────────────────────────────────────────
-    const audio = listGroup(t("widget.screenrecord.settings.audio-group"))
+    const audio = NidaraList(t("widget.screenrecord.settings.audio-group"))
     audio.listBox.append(audioSourceRow())
     page.append(audio.box)
 
@@ -373,8 +378,8 @@ function buildSettings(): Gtk.Widget {
     }
     const fpsLabel = (n: number) => n === 0 ? t("widget.screenrecord.settings.framerate.auto") : `${n} fps`
 
-    const video = listGroup(t("widget.screenrecord.settings.video-group"))
-    video.listBox.append(dropdownRow(
+    const video = NidaraList(t("widget.screenrecord.settings.video-group"))
+    video.listBox.append(NidaraDropDownRow(
         t("widget.screenrecord.settings.quality"),
         t("widget.screenrecord.settings.quality.desc"),
         qualityLabels[recordingConfig.quality],
@@ -384,7 +389,7 @@ function buildSettings(): Gtk.Widget {
             if (q) recordingConfig.setQuality(q)
         },
     ))
-    video.listBox.append(dropdownRow(
+    video.listBox.append(NidaraDropDownRow(
         t("widget.screenrecord.settings.framerate"),
         t("widget.screenrecord.settings.framerate.desc"),
         fpsLabel(recordingConfig.framerate),
@@ -397,7 +402,7 @@ function buildSettings(): Gtk.Widget {
     // No render node, no row: a toggle that cannot change anything is worse than
     // an absent one. The stored value still exists and comes back with the GPU.
     if (hardwareAvailable()) {
-        video.listBox.append(toggleRow(
+        video.listBox.append(NidaraToggleRow(
             t("widget.screenrecord.settings.hardware"),
             t("widget.screenrecord.settings.hardware.desc"),
             recordingConfig.hardware,
@@ -408,8 +413,8 @@ function buildSettings(): Gtk.Widget {
 
     // ── File ──────────────────────────────────────────────────────────────
     const formatLabels: Record<RecordFormat, string> = { mp4: "MP4", mkv: "MKV", webm: "WebM" }
-    const file = listGroup(t("widget.screenrecord.settings.file-group"))
-    file.listBox.append(dropdownRow(
+    const file = NidaraList(t("widget.screenrecord.settings.file-group"))
+    file.listBox.append(NidaraDropDownRow(
         t("widget.screenrecord.settings.format"),
         t("widget.screenrecord.settings.format.desc"),
         formatLabels[recordingConfig.format],

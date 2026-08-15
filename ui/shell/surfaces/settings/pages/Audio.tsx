@@ -55,7 +55,6 @@ function createVolumeRow(
     const scale = makeVolumeSlider(target, {
         onValueChanged: (v) => { valLabel.label = `${Math.round(v)}%` },
         onExternal: () => { muteImg.gicon = AudioSvc.targetVolumeIcon(target) },
-        cssClasses: ["nidara-atomic-scale-native"],
     })
 
     const slider = new Gtk.Box({ spacing: 8 })

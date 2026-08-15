@@ -1002,12 +1002,18 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     choice: what you decide **at the moment of acting** stays in the capture
     panel (screen-or-region, audio-on-or-off), what is a **preference** goes in
     the subpage and is persisted by a `core/` config module (screenrecord →
-    `core/RecordingConfig.ts`). The page is built with the ordinary
-    `SettingsHelpers` vocabulary (`pageBox`/`listGroup`/`createRow`/
-    `dropdownRow`/`toggleRow`), so a widget page is indistinguishable from a
-    first-class Settings page — and importing those helpers from `widgets/` is
-    fine (widget → surfaces is the normal direction; only `core/` is forbidden
-    from reaching up).
+    `core/RecordingConfig.ts`). The page is built with the ordinary row
+    vocabulary, so a widget page is indistinguishable from a first-class Settings
+    page — but since 2026-08-16 that vocabulary comes from **`ui/lib/nidara-kit`**
+    (`NidaraList`/`NidaraRow`/`NidaraDropDownRow`/`NidaraToggleRow`), not from
+    `surfaces/settings/SettingsHelpers`. ⚠️ This paragraph used to say the reverse
+    — that importing the Settings helpers from `widgets/` was fine because
+    widget → surfaces is the normal direction. The direction was never the
+    problem; the coupling was. Those helpers carry Settings' search-index
+    registration, which a CC widget neither wants nor should depend on being
+    inert, and `pageBox`'s `.settings-page` is scoped inside
+    `window.nidara-settings-window`, so it styled nothing out here anyway. A
+    widget that wants a preferences page takes the kit's rows.
     **Hardware gate**: a widget tied to hardware declares `isAvailable()` (+
     optional `watchAvailable(cb)` for hotplug) — when false it's hidden from
     bar + CC (filtered in `Bar.rebuildBarWidgets` and `IslandGrid.syncCCLayout`,
@@ -1155,6 +1161,7 @@ calls outside HyprlandState.
 Pure-GTK4 primitives + Nidara tokens, **no Adwaita, no resets**. Mostly consumed by the shell's Settings pages, plus what the greeter/lockscreen adopted (the dropdown, the login card, the clock):
 
 - `makeSlider` (`slider.ts`) — the ONE slider, Cairo end to end; `makeHSlider` is the horizontal wrapper, `makeVolumeSlider` binds one to an AstalWp endpoint, `makeVerticalFillTile` is the 1×2 CC gauge. Details in design-system.md, "Sliders — one component". It moved here from `ui/shell/common/` on 2026-08-15 (NTK step 3) and it is the first kit component that needed something the bundle owns → the seam below.
+- **The composed rows** (`rows.ts`): `NidaraToggleRow`, `NidaraDropDownRow`, `NidaraSliderRow` — "label + subtitle + the control that edits it", which is most of what a preferences pane is. They take the row BUILDER as a parameter (`mkRow`, default `plainRow`), which is how **building a row and registering it are two different jobs** (NTK step 4, 2026-08-16). Settings hands in its own `createRow`, which pushes the label into the search index and then delegates; nobody else does, and nobody else has to know the index exists. ⚠️ **Contrast with the appearance seam below: that one is a module-level global because it is per-BUNDLE; this one is a parameter because it is per-CALLER.** The same shell has Settings rows that must be indexed and `widgets/screenrecord.ts` rows that must not — a global would have to be pushed and popped around every build. `lifetime.ts`'s `bindWhileRealized` came along with them (the rows re-arm their external sync through it).
 - **`appearance.ts` — the kit's appearance seam. Read this before adding any Cairo-painted kit component.** Everything else in the kit needs nothing but GTK from its host. A Cairo painter does: Cairo cannot read a CSS token, so the accent must arrive as a real `#rrggbb` and "is the surface under me dark?" must be answered by whoever knows what that surface is (in the shell, `core/ThemeManager` — which the kit may not import, or it stops being usable from the greeter). So the BUNDLE injects it: `setKitAppearance({ accent, surfaceIsDark, onChange })`, once, at module scope in its `app.ts`, before `main()` builds anything. Same shape as injecting the greeter's `t()` into the shared login card. ⚠️ **An unregistered bundle does not fail — it renders the fallback (blue, light surface).** That is the silent-default trap the token contract warns about, so the fallback logs a warning on first use; the greeter/lock have no dev mode to notice it in otherwise. Only the shell registers today, because only the shell has sliders. Measured A/B on 2026-08-15, same widget: registered → fill `#D45A94` (pink accent) and no warning; unregistered → `#017BE9` and the warning.
 
 - `NidaraSplitView` — replaces `Adw.OverlaySplitView` + `Breakpoint`. Its `collapseAt` is a **fixed px breakpoint**, never derived from the content: a breakpoint computed from the active page's natural width is a different window on every page (2026-08-11 — see design-system.md, "The Settings window has ONE geometry law").
@@ -1173,7 +1180,8 @@ The Settings sidebar (`Settings.tsx` `categories[]`) is **ordered into 3 unlabel
 `remove()` + `append()`, so navigating away **unrealizes a page without destroying it** and coming
 back re-realizes the same widget. `unrealize` here means *"taken out for a moment"*, not *"being
 destroyed"*: anything the page needs in order to stay CURRENT — service watches, signal handlers,
-GLib timers — must go through **`bindWhileRealized(widget, subscribe)`** (`SettingsHelpers.ts`),
+GLib timers — must go through **`bindWhileRealized(widget, subscribe)`** (`nidara-kit/lifetime.ts`,
+re-exported by `SettingsHelpers.ts`),
 which re-subscribes on every realize and disposes on every unrealize. Do the initial refresh inside
 `subscribe` too, so a page you return to re-reads the world. A bare `connect("unrealize", dispose)`
 silently freezes the page after the user's first departure (that was tech-debt #12b: frozen device

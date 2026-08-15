@@ -1,6 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
-import { NidaraRow, NidaraStackedRow, NidaraList, NidaraButton, NidaraDropDown, makeHSlider } from "../../../lib/nidara-kit"
+import { NidaraRow, NidaraStackedRow, NidaraList, NidaraButton,
+         NidaraToggleRow, NidaraDropDownRow, NidaraSliderRow, type NidaraSliderRowOpts } from "../../../lib/nidara-kit"
 import { attachTooltip } from "../../common/Tooltip"
 import { t } from "../../core/i18n"
 
@@ -31,39 +32,12 @@ export interface SettingsNav {
 
 // ── Page lifetime ─────────────────────────────────────────────────────────────
 /**
- * Bind a live subscription to a widget's REALIZED lifetime.
- *
- * Use this instead of `widget.connect("unrealize", dispose)` for anything a page
- * needs in order to stay CURRENT: service watches, signal handlers, GLib timers.
- *
- * Why it must exist: category pages are built once and cached (`pageCache` in
- * Settings.tsx), and navigating away only `remove()`s the page from the content
- * area. That unrealizes it WITHOUT destroying it, and coming back re-realizes the
- * very same widget. A plain unrealize-cleanup therefore fires the first time the
- * user leaves and is never undone — the page returns looking alive but frozen: a
- * device list that no longer notices a headset, a clock preview stuck at the
- * minute you left. `safeDisconnect` and once-guards (tech-debt #12) only made
- * that silent; they never re-armed anything.
- *
- * `subscribe` runs on every realize and its returned disposer on every unrealize,
- * so put the initial refresh inside it too: a page you come back to should show
- * the world as it is now, not as it was when the window opened.
+ * `bindWhileRealized` moved to `nidara-kit/lifetime.ts` (2026-08-16) because the
+ * kit's composed rows re-arm their external-sync through it. Re-exported here so
+ * Settings pages keep their import path; the explanation — why a cached page needs
+ * re-subscription rather than a one-shot cleanup — went with the implementation.
  */
-export function bindWhileRealized(
-    widget: Gtk.Widget,
-    subscribe: () => (() => void) | void,
-): void {
-    let dispose: (() => void) | null = null
-    const start = () => {
-        if (dispose) return
-        const d = subscribe()
-        dispose = typeof d === "function" ? d : () => {}
-    }
-    const stop = () => { if (dispose) { dispose(); dispose = null } }
-    widget.connect("realize", start)
-    widget.connect("unrealize", stop)
-    if (widget.get_realized()) start()
-}
+export { bindWhileRealized } from "../../../lib/nidara-kit"
 
 // ── Search index ──────────────────────────────────────────────────────────────
 export interface SearchItem {
@@ -91,6 +65,13 @@ export const listGroup = (title: string, footer: string = "") => NidaraList(titl
 
 // ── Generic Row ───────────────────────────────────────────────────────────────
 // Universal NidaraRow + the settings-only side effect (search-index registration).
+//
+// 🔑 This is the whole of what Settings adds to a row, and since 2026-08-16 it is
+// the ONLY thing it adds: the composed rows below build their control in the kit
+// and take this function as their `mkRow`. Registering is Settings'; building is
+// the kit's. Anything that builds rows OUTSIDE Settings (widgets/screenrecord.ts)
+// calls the kit directly and is simply never indexed — before, it went through
+// here and relied on `_pageCtx` happening to be empty.
 export const createRow = (label: string, subtitle: string, widget: Gtk.Widget, titleIcon?: Gtk.Widget, leadingIcon?: Gtk.Widget, footer?: Gtk.Widget) => {
     if (_pageCtx.id) {
         _searchIndex.push({ pageId: _pageCtx.id, pageLabel: _pageCtx.label, label, subtitle })
@@ -107,75 +88,28 @@ export const createStackedRow = (label: string, subtitle: string, widget: Gtk.Wi
     return NidaraStackedRow(label, subtitle, widget)
 }
 
-// ── Toggle Row ────────────────────────────────────────────────────────────────
+// ── Composed rows: the kit builds, Settings registers ────────────────────────
+// Each of these is the kit's composed row with `createRow` handed in as its row
+// builder. The control, its callback wiring and the guarded external-sync all live
+// in `nidara-kit/rows.ts`; what stays here is the one thing the kit must not know
+// about, the search index. Call-site signatures are unchanged.
 export const toggleRow = (
     label: string,
     subtitle: string,
     init: boolean,
     cb: (v: boolean) => void,
-    // Optional live external-sync: register a callback that the page invokes when the
-    // underlying value changes outside the UI (e.g. an external `hyprctl reload`). It
-    // applies the new state WITHOUT firing `cb` (guarded), so there's no feedback loop.
-    // Returns a disconnect, wired to the switch's unrealize.
     onExt?: (apply: (v: boolean) => void) => (() => void),
-) => {
-    const sw = new Gtk.Switch({ active: init, valign: Gtk.Align.CENTER })
-    let syncing = false
-    sw.connect("state-set", (_: any, state: boolean) => {
-        if (!syncing) cb(state)
-        return false
-    })
-    if (onExt) {
-        // Re-subscribed on every realize: the switch is recycled with its cached page,
-        // so a once-only cleanup would leave it deaf to external changes forever after
-        // the first time the user navigates away. See bindWhileRealized.
-        bindWhileRealized(sw, () => onExt((v: boolean) => {
-            if (sw.active === v) return
-            syncing = true; sw.active = v; syncing = false
-        }))
-    }
-    return createRow(label, subtitle, sw)
-}
+) => NidaraToggleRow(label, subtitle, init, cb, onExt, createRow)
 
-// ── Dropdown Row ──────────────────────────────────────────────────────────────
 export const dropdownRow = (
     label: string,
     subtitle: string,
     init: string,
     opts: string[],
     cb: (v: string) => void,
-    // See toggleRow's `onExt` — same live external-sync contract (guarded, no loop).
     onExt?: (apply: (v: string) => void) => (() => void),
-) => {
-    // NidaraDropDown = the native Gtk.DropDown (its popover is a separate Wayland
-    // surface, so Hyprland's popup blur frosts it — a window-overlay list would only
-    // show the content behind it, no compositor blur) with our scroll bar swapped into
-    // its popup list. Styled via `dropdown popover` in _components.scss.
-    const model = new Gtk.StringList({ strings: opts })
-    const drp = NidaraDropDown({ model, valign: Gtk.Align.CENTER })
-    const initIdx = opts.indexOf(init)
-    drp.selected = initIdx >= 0 ? initIdx : 0
-    let syncing = false
-    drp.connect("notify::selected", () => {
-        if (syncing) return
-        const idx = drp.selected
-        if (idx < opts.length) cb(opts[idx])
-    })
-    if (onExt) {
-        // See toggleRow — re-subscribed on every realize, not cleaned up once.
-        bindWhileRealized(drp, () => onExt((v: string) => {
-            const idx = opts.indexOf(v)
-            if (idx < 0 || idx === drp.selected) return
-            syncing = true; drp.selected = idx; syncing = false
-        }))
-    }
-    return createRow(label, subtitle, drp)
-}
+) => NidaraDropDownRow(label, subtitle, init, opts, cb, onExt, createRow)
 
-// ── Slider Row ────────────────────────────────────────────────────────────────
-// opts.icons: [lowIconName, highIconName] — omit for no icons
-// opts.unit:  suffix for the value label (e.g. "px", "%") — default ""
-// opts.pct:   if true, value is treated as 0-1 float and displayed as percentage
 export const sliderRow = (
     label: string,
     subtitle: string,
@@ -183,67 +117,8 @@ export const sliderRow = (
     min: number,
     max: number,
     cb: (v: number) => void,
-    opts: { unit?: string; icons?: [Gio.FileIcon, Gio.FileIcon]; iconSizes?: [number, number]; endpoints?: [Gtk.Widget, Gtk.Widget]; pct?: boolean; decimals?: number; commitOnRelease?: boolean; step?: number; onExtChange?: (cb: (v: number) => void) => (() => void) } = {},
-) => {
-    const { unit = "", icons, iconSizes = [16, 16], endpoints, pct = false, decimals, commitOnRelease = false, step, onExtChange } = opts
-
-    // Integer sliders (no `decimals`/`pct`) must STORE integers, not just display them:
-    // the raw Gtk.Scale value is fractional, and a fractional setting (e.g. screenGap=8.19)
-    // propagates into geometry (EXCLUSIVE_ZONE) and gets truncated downstream — that lost
-    // the dock's last interactive pixel column at the screen wall. Round at the source.
-    const quantize = (decimals === undefined && !pct) ? (v: number) => Math.round(v) : (v: number) => v
-    const onCommit = (v: number) => cb(quantize(v))
-
-    const formatVal = (v: number) => {
-        if (pct) return `${Math.round(v * 100)}%`
-        if (decimals !== undefined) return `${v.toFixed(decimals)}${unit}`
-        return `${Math.round(v)}${unit}`
-    }
-
-    // hexpand:false is REQUIRED: makeHSlider's overlay sets hexpand:true, which
-    // otherwise propagates up to this container, making createRow treat it as an
-    // expanding widget that shares row space with the text — so the slider's width
-    // and position drift with the subtitle length. Pin it to shrink-wrap (the slider
-    // keeps its fixed width_request) so every slider row aligns.
-    const container = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, hexpand: false })
-
-    const valueLabel = new Gtk.Label({
-        label: formatVal(init),
-        css_classes: ["slider-value-label"],
-        width_chars: 5,
-        xalign: 1.0,
-    })
-
-    const sliderWidget = makeHSlider({
-        min, max, value: init,
-        onChange: onCommit,
-        onValueChanged: (v) => { valueLabel.label = formatVal(v) },
-        onExtChange,
-        debounce: 32,
-        commitOnRelease,
-        // `step` opts the row into DETENTS (see SliderOpts.snapToStep): pass it when
-        // the setting is coarser than the thumb's travel, so no position of the thumb
-        // is indistinguishable from its neighbour. Without it the slider glides and
-        // scroll/keyboard fall back to range/20 as before.
-        ...(step !== undefined ? { step, snapToStep: true } : {}),
-        cssClasses: ["nidara-atomic-scale-native"],
-        width_request: 140,
-    })
-
-    // Endpoints flanking the slider: arbitrary widgets via `endpoints` (e.g. small/
-    // large "A" labels, which stay crisp where a tiny SVG icon would not), else a
-    // pair of nd-icon images via `icons`.
-    const mkIcon = (i: number) =>
-        new Gtk.Image({ gicon: icons![i], pixel_size: iconSizes[i], opacity: 0.5, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER })
-    const leftEnd  = endpoints?.[0] ?? (icons ? mkIcon(0) : null)
-    const rightEnd = endpoints?.[1] ?? (icons ? mkIcon(1) : null)
-
-    if (leftEnd)  container.append(leftEnd)
-    container.append(sliderWidget)
-    if (rightEnd) container.append(rightEnd)
-    container.append(valueLabel)
-    return createRow(label, subtitle, container)
-}
+    opts: NidaraSliderRowOpts = {},
+) => NidaraSliderRow(label, subtitle, init, min, max, cb, opts, createRow)
 
 // ── Preset Button Row ─────────────────────────────────────────────────────────
 export const presetRow = (

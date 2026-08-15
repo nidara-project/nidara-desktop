@@ -225,19 +225,10 @@ button.nidara-seg-btn {
     color: var(--nidara-text-dim);
 }
 
-// ── Slider readout ───────────────────────────────────────────────────────────
-// The number beside a slider ("72%", "4500K"). Nine consumers and not one of them
-// is only the Control Center: `control-center/Sliders.tsx`, the brightness /
-// night-light / volume widgets, and Settings → Audio / Appearance / the shared
-// `SettingsHelpers` row. Its rule was inside `#nidara-bar .nidara-detail-panel`, so
-// everywhere else — the whole Settings window included — the readout rendered at
-// default size and colour, with the digits free to jitter as they counted
-// (2026-08-10, same sweep that found the "Default" badge below).
-.slider-value-label {
-    color: var(--nidara-text-dim);
-    font-size: $fs-small;
-    font-variant-numeric: tabular-nums;
-}
+// (.slider-value-label moved to ui/lib/styles/_components.scss 2026-08-16: the kit's
+// NidaraSliderRow now builds one, so the rule has to be in the sheet the kit ships or
+// a non-shell window gets an unstyled readout. The shell's own six call sites keep it
+// — the shell compiles both sheets.)
 
 // ── "Default" badge ──────────────────────────────────────────────────────────
 // The accent pill marking the current default audio device. TWO surfaces build
@@ -365,16 +356,18 @@ button.settings-icon-btn {
    would have silently unstyled them outside it. The kit is where a class used by
    more than one window belongs. */
 
-/* The native Gtk.Scale trough inside a CC atomic — and inside Settings, which
-   reuses the same control (SettingsHelpers, Appearance, Audio) and AvatarCropper. */
-.nidara-atomic-scale-native {
-    background: transparent;
-}
+/* (.nidara-atomic-scale-native DELETED 2026-08-16. It turned `background: transparent`
+   off on "the native Gtk.Scale trough", and there has been no Gtk.Scale since the
+   unified Cairo slider landed (d9dca37f) — the class rode along in `cssClasses` and
+   spent the time being applied to a Gtk.DrawingArea, which has no background to
+   suppress. Removed rather than promoted into the kit's sheet along with the slider
+   row that carried it.) */
 
 /* (.slider-fill-value moved to ui/lib/styles/_components.scss 2026-08-15, with the
    slider itself: makeVerticalFillTile builds that label, and the label's sheet goes
-   where its builder goes. .slider-value-label and .slider-text-endpoint stayed here
-   — the shell's own call sites build those, not the component.) */
+   where its builder goes. .slider-text-endpoint stays here — Settings' Accessibility
+   page builds those two "A"s, not the component. .slider-value-label followed the
+   slider ROW to the kit on 2026-08-16.) */
 
 /* Shared round glass icon button (see common/IconButton.ts). Single source of
    truth for close/remove/collapse controls. Size is set inline per use; shape/icon/hover

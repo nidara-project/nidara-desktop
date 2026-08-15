@@ -1282,6 +1282,7 @@ This is the table that decides almost every "which widget should I use?" questio
 | Floating overlays (CC, NotifCenter, Prism (search), SystemMenu, Overview) | **`Gtk.Box` + gtk4-layer-shell + custom CSS** | Adwaita would only add chrome you'd have to undo. |
 | Toggles / switches / buttons inside overlays | **`Gtk.Switch`, `Gtk.Button`** (NOT `Adw.*Row`) | Base widgets style cleanly; `Adw.*Row` brings padding/focus-ring/separators that have to be killed one by one. |
 | Sliders (any) | **`makeSlider`** from `nidara-kit/slider.ts` (NOT `Gtk.Scale`) | See "Sliders" below — one Cairo component for the whole shell. |
+| A preference row (label + subtitle + its control) | **`NidaraToggleRow` / `NidaraDropDownRow` / `NidaraSliderRow`** from `nidara-kit/rows.ts` | Inside Settings, reach them through `SettingsHelpers`' `toggleRow`/`dropdownRow`/`sliderRow`, which hand in `createRow` so the row also lands in the search index. Anywhere else, call the kit directly. |
 | Settings window | **`ui/lib/nidara-kit`** (`NidaraSplitView`, `NidaraClamp`, `NidaraButton`, `NidaraDropDown`) | Custom split view. **Do NOT use `Adw.OverlaySplitView`** — it breaks capsule margins. |
 | Modal dialogs | **`showNidaraAlert`** from `nidara-kit` | Clean, themeable. |
 
@@ -2098,8 +2099,12 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
    warn — the declaration is simply dropped — so **adding a `var(--nidara-…)` to the kit's sheet
    is a change to every consumer's palette block**, verified by grepping the compiled sheet, on
    two surfaces with no dev mode. (The slider's move on 2026-08-15 brought exactly one rule,
-   `.slider-fill-value`, and deliberately added no token: it reads `--nidara-text`, already in
-   the contract.) Everything else names a window. Both spellings are in
+   `.slider-fill-value`, and the slider ROW's move on 2026-08-16 brought one more,
+   `.slider-value-label`; neither added a token — they read `--nidara-text` and
+   `--nidara-text-dim`, both already in the contract. ⚠️ `.slider-value-label` is now worn on
+   BOTH sides, since the shell still builds six readouts by hand. That is not a mistake to
+   sweep: when a class ends up built in `ui/lib/` AND in the shell, the kit's sheet is where it
+   must live, because the shell compiles both and a lone bundle does not.) Everything else names a window. Both spellings are in
    use because both are set in TSX — id **and** class, and they differ:
 
    | Window | Scope selector |

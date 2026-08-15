@@ -592,6 +592,26 @@ dropdown popover {
     }
 }
 
+/* --- Slider readout --------------------------------------------------------
+   The number beside a horizontal slider ("72%", "4500K"), built by the kit's
+   `NidaraSliderRow` — which is why it is here since 2026-08-16 and not in the
+   shell's sheet, where it started. It has consumers on BOTH sides now (the shell
+   builds six of these by hand: `control-center/Sliders.tsx`, the brightness /
+   night-light / volume widgets, Settings → Audio / Appearance) and that is fine:
+   the shell compiles this sheet too. What would NOT be fine is the reverse — a
+   greeter that used the kit's slider row and got a default-sized readout with the
+   digits jittering as they count, which is exactly the shape of the bug this rule
+   was written to fix in the first place (2026-08-10, when it was scoped inside
+   `#nidara-bar .nidara-detail-panel` and unstyled everywhere else).
+
+   `tabular-nums` is the load-bearing property, not the colour: without it the
+   glyph advances change as the value counts and the row's right edge shivers. */
+.slider-value-label {
+    color: var(--nidara-text-dim);
+    font-size: $fs-small;
+    font-variant-numeric: tabular-nums;
+}
+
 /* --- Slider ----------------------------------------------------------------
    `nidara-kit/slider.ts` is Cairo end to end — track, fill and thumb are drawn,
    not styled — so the ONE rule it brings here is for the only real GTK widget it
@@ -599,11 +619,12 @@ dropdown popover {
    volume/brightness gauge. It sits ON the fill, which is accent under it and glass
    above it, so the shadow is what keeps it legible either way.
 
-   The kit's other slider classes deliberately did NOT come along: `.slider-value-label`
-   (the "72%" beside a horizontal slider) and `.slider-text-endpoint` (the small/large
-   "A"s on the text-size slider) are built by the SHELL'S call sites, so they stay in
-   the shell's sheet. Same mechanical test as everything above — grep the class in
-   `ui/lib/` and the answer is the same for everyone. */
+   `.slider-text-endpoint` (the small/large "A"s on the text-size slider) did NOT come
+   along: Settings' Accessibility page builds those, not the component. `.slider-value-label`
+   did not either, until the slider ROW followed on 2026-08-16 and brought it (see above).
+   Same mechanical test throughout — grep the class in `ui/lib/` and the answer is the
+   same for everyone; when a class ends up built on BOTH sides, the kit's sheet is where
+   it has to live, because the shell compiles both and a lone bundle does not. */
 .slider-fill-value {
     font-size: $fs-small;
     font-weight: $fw-bold;

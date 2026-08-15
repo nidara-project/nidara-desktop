@@ -186,7 +186,6 @@ export default function AppearancePage() {
         onValueChanged: (v) => { masterValue.label = `${Math.round(v * 100)}%` }, // drag unifies → show %
         onExtChange: extOpacity(glassRepr),
         debounce: 32,
-        cssClasses: ["nidara-atomic-scale-native"],
         width_request: 140,
     })
     // Runs AFTER makeSlider's own %-label sync (connected earlier, during construction),

@@ -189,11 +189,14 @@
         }
     }
 
-    /* (.nidara-circle-btn, .slider-fill-value and .nidara-atomic-scale-native moved to
-       _components.scss on 2026-08-07 — they are rendered by SHARED components
-       (common/IconButton.ts, common/Slider.ts) and by Settings pages, so scoping this
-       file to the bar's window would have silently unstyled them there. A class used
-       outside one window belongs in the global kit, not in a surface sheet.) */
+    /* (.nidara-circle-btn, .slider-fill-value and .nidara-atomic-scale-native left this
+       file on 2026-08-07 — they are rendered by SHARED components (common/IconButton.ts,
+       the slider) and by Settings pages, so scoping this file to the bar's window would
+       have silently unstyled them there. A class used outside one window belongs in the
+       global layer, not in a surface sheet. Where they ended up has moved on since:
+       .slider-fill-value went to the KIT's sheet with the slider (2026-08-15), and
+       .nidara-atomic-scale-native was deleted (2026-08-16) — it suppressed a Gtk.Scale
+       background and there has been no Gtk.Scale for months.) */
 
     .cc-slot-placeholder {
         background: var(--nidara-surface-strong);
