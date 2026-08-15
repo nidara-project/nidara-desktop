@@ -1081,6 +1081,32 @@ stamp could see). A CRITICAL `STALE after #N` means a stamp captured fewer targe
 sitting directly above it in the log. Off by default and free when off. Disarm with
 `systemctl --user unset-environment NIDARA_ISLAND_REGION_TRACE` + a restart.
 
+### Testing a live resolution / scale change
+
+The bed for anything that derives a number from the monitor (regions, layout budgets, the overview's
+card width). **CI cannot do it** — the smoke boots at one resolution and never changes it — and you
+do not do it on your own session either, so it is a VM with a `virtio-gpu-gl` output.
+
+```bash
+# NOT `hyprctl keyword monitor …` — "can't work with non-legacy parsers. Use eval."
+hyprctl eval "hl.monitor({ output = 'Virtual-1', mode = '1280x720@60', position = 'auto', scale = 1 })"
+```
+
+- **Go BOTH ways.** Small → large is the more dangerous direction: a stale *small* clamp cuts a
+  large surface, while a stale large one is intersected away harmlessly.
+- **Read numbers, not only pixels.** `ags request dumpState` → `overlays.islandBounds` prices the
+  overview against the screen (8px `WO_EDGE_MARGIN` each side: 1903 on 1920, 1263 on 1280), and the
+  region trap above prints the stamped rect per target, which is the only way to see the INPUT
+  region — a screenshot cannot show you where clicks land.
+- **Expect one `TORN` per change, and read it as healthy.** The geometry notification arrives before
+  GTK has re-allocated, so the immediate stamp is stale by construction and #138's 50 ms verify is
+  what corrects it (`capsule=899` → `TORN` → `capsule=579`).
+- ⚠️ **`install.sh --update-apply` on a VM that has no `.git` installs the PREBUILT release** and
+  your branch never runs (`tech-debt` and the VM harness README both say it; it is still the easiest
+  way to waste an hour). `git init` in the served tree first, then confirm the bundle really moved:
+  the shell binary is base64 inside a shell wrapper, so `sed -n 5p <bundle> | base64 -d | grep -c …`,
+  never a plain `grep` on the file.
+
 ## Persistence
 
 All persistent state lives in `~/.config/nidara/`:

@@ -3777,3 +3777,34 @@ reported the failure faithfully and nobody read the log.
 does NOT exist and assert the output is the structured `no showing node named …` envelope
 rather than empty output. It needs no real click, no focused app for the resolve step, and it
 fails loudly on any ReferenceError — the entire class of "this code path was never executed".
+
+### 70. ✅ FIXED — the bar and the island never heard the monitor change shape (2026-08-15)
+
+Switching to 1080p live cut the Activity Island off, cut the bar's capsules, and opened the
+AppTitle panel somewhere else (user-caught 2026-08-10). A clean 2×2, not a hypothesis: the dock
+rebuilds on `notify::geometry` and the app grid refreshed on it — those two were fine; the bar and
+the island each captured `const monGeo = gdkmonitor.get_geometry()` at build time and subscribed to
+nothing. The surfaces resize for free (four anchors); what went stale are the numbers they cut with.
+
+🔑 **The interesting part is WHY two of four forgot: subscribing was optional.** `get_geometry()` is
+available to anyone holding the monitor, so caching it is the path of least resistance and nothing
+ever says otherwise — the warning was even written out twice already (`app.ts:892` for the dock,
+`AppGridWindow.ts:73` for the grid) and generalised neither time. Fixed with `createRegionStamper`
+in `common/VisibleRegion.ts`: the stamper owns the geometry and CALLS the surface's producer with
+the box to fit its rects in, so a surface that cannot reach the geometry cannot cache it. Full
+contract in `architecture.md` → "Who owns the monitor's geometry".
+
+⚠️ **Three numbers were not covered by a live `geo()`** and each needed its own answer — the bar's
+solved-then-stored budgets (notification height, icon overflow count, app-title char cap), the
+overview's card width baked into every card, and the island's INPUT region (the capsule is CENTRED,
+so a width change MOVES it without resizing it — the one case its `resize` hook cannot see).
+
+▶️ **What is left, deliberately.** `AppGrid.tsx:234` still solves its panel width from the monitor
+at build time (`max(920, min(w*0.50, 950))`). It is a no-op for any monitor wider than ~1840 (both
+ends clamp to 950), so it only misses on a change that crosses that line — e.g. 2560 → 1366, where
+the panel stays 30px wider than intended and still fits. Fixing it means the same `onMonitorResized`
+treatment; it was left out to keep this change to the surfaces that actually broke.
+
+⚠️ **CI cannot catch this class at all.** The headless smoke boots at one resolution and never
+changes it, exactly like the wallpaper-restore path. The bed is a VM (or a live mode switch), and
+the A/B is worth re-running whenever a surface starts deriving a new number from the monitor.

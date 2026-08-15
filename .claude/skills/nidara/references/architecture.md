@@ -147,6 +147,65 @@ question "do I know what I paint before I paint it?".
   rect there makes a monitor-sized surface eat every click on screen. Same principle both times —
   fail towards invisible.
 
+#### Who owns the monitor's geometry: `createRegionStamper` (2026-08-15)
+
+**A surface must never hold a `Gdk.Rectangle` it got from `get_geometry()`.** Switching to 1080p
+live cut the Activity Island off the screen entirely, cut the bar's capsules, and opened the
+AppTitle panel somewhere else; a UI reload fixed all three, because a fresh build reads fresh
+geometry. It was a clean 2×2 — the dock (rebuilds on `notify::geometry`) and the app grid
+(refreshed on it) were fine; the bar and the island each captured `const monGeo` at build time and
+subscribed to nothing. The surfaces themselves resize for free (anchored on four edges); what goes
+stale are the NUMBERS they cut with.
+
+🔑 **Two of four forgot BECAUSE subscribing was optional.** So the fix is not two more handlers:
+`common/VisibleRegion.ts` grew a stamper that OWNS the geometry, and the surface hands over a
+producer that returns rectangles and is CALLED with the box to fit them in. A surface that cannot
+reach the geometry cannot cache it. (Prior art: GNOME Shell's `LayoutManager` — what is central is
+not where the number lives, it is *who does the arithmetic*.)
+
+```ts
+const visibleRegion = createRegionStamper({
+    monitor: gdkmonitor,
+    tag: "bar",
+    surface: () => win.get_native()?.get_surface() ?? null,   // resolved per stamp, never captured
+    rects: (box) => paintedRects(box),                        // UNCLIPPED; null = "I don't know"
+    box: (geo) => …,          // only the island: its surface is the monitor MINUS its top offset
+    onStamped: () => win.queue_draw(),                        // fires only when the stamp CHANGED
+})
+visibleRegion.geometry()        // live, read per use
+visibleRegion.onGeometryChanged(cb)   // for what you SOLVED from those numbers, not the rects
+```
+
+It owns the geometry, the clip (an **intersection**, so a rect starting left of the box loses the
+overhang rather than sliding right by it), the dedupe and the Wayland call. It deliberately does
+NOT own the CONTENT of the rects — there is no duplication there (the island has `pending`, the
+dock answers `null` with its menu open, the app grid unmaps, the bar seals several) — nor the
+**input region**, which is the same numbers through a different call with the opposite safe state.
+
+- ⚠️ **The dock stays on the raw `setVisibleRect`, on purpose.** Its blur rect is fused into the
+  same key/apply cycle as its input region so the two cannot drift, it speaks buffer coordinates,
+  and `app.ts` already rebuilds the whole window on `notify::geometry`.
+- 🔑 **The dedupe is keyed on the SURFACE, not just the rects.** A window that is unmapped and
+  presented again is realized onto a new `Gdk.Surface` with no region at all, and a key carried
+  over from the old one would suppress the stamp that gives it back. The app grid was clearing its
+  key by hand for this; the island and the bar were not.
+- ⚠️ **A live `geo()` does not fix a number you SOLVED and then stored in a widget.** Three needed
+  their own answer: the bar's notification-height budget / icon-overflow count / app-title char cap
+  (re-derived on `onGeometryChanged`, debounced 100 ms to match the dock rebuild's own debounce —
+  the overflow count is the "capsules cut off" half, a bar still fitting 2560px of icons into
+  1920); the workspace overview's card width (`previewWidthFor` bakes its answer into every card —
+  stale, that is a panel *wider than the screen* it is centred on, 1903px on a 1280 display), fixed
+  with `SchematicHandle.setWidth` + an `onMonitorResized` duck-typed hook routed **through
+  `ActivityIsland`**, because a mode subscribing to the monitor itself is the optional subscription
+  all over again; and the island's INPUT region, since the capsule is CENTRED and a new width MOVES
+  it without resizing it — the one case its `glassArea "resize"` trigger cannot see.
+- **Verified in the VM, both directions** (2026-08-15, 1920↔1280 live): before, the island capsule
+  simply vanished; after, the trace shows the immediate stamp landing stale (`capsule=899`), #138's
+  `TORN` verify firing 50 ms later, and the re-stamp landing on `capsule=579` = the new centre. The
+  overview's `islandBounds` track the monitor both ways (1903 on 1920, 1263 on 1280, i.e. the 8px
+  `WO_EDGE_MARGIN` each side). ⚠️ **CI cannot see any of this** — the smoke boots at one resolution
+  and never changes it.
+
 #### Deciding the shape of a FIFTH blurred surface
 
 Those four are what exists, not a menu. For a new one, **do not start from "should this layer be
@@ -275,6 +334,11 @@ deliberately *not* a full-bleed Mission Control mode (user, 2026-08-04).
   `WorkspaceOverview(gdkmonitor)` — because the bar and its island are already built **once per
   monitor** (`createUI` in `app.ts`). Use `Gdk.Monitor.get_geometry()`: logical px, the same space
   the panel is laid out in.
+  ⚠️ **And SOLVE IT AGAIN when the monitor changes shape** (2026-08-15). The answer is baked into
+  every card (`createSchematicMap(i, previewWidth)` + `width_request`), so a build-time solve leaves
+  a panel *wider than the screen* it is centred on — 1903px of cards on a 1280 display. Hence
+  `onMonitorResized` on the returned widget, called by the bar **through `ActivityIsland`**; a mode
+  must not watch the monitor itself (see "Who owns the monitor's geometry").
 - 🔑 **The spacing it solves with is NOT declared in CSS — that is the point, do not "restore" it.**
   `.workspace-overview` and `.wo-item` carry no padding; `WO_PANEL_PAD` / `WO_CARD_PAD` are applied
   as GTK margins from `WorkspaceOverview.tsx`, which is also the file doing the arithmetic. A margin
