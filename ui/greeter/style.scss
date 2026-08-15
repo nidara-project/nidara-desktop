@@ -655,8 +655,40 @@ dropdown.locale-bar-dropdown > button {
   padding: 4px;
 }
 
+// The keyboard glyph is the only thing in this capsule that is BARE INK — every
+// other child is a dropdown that paints its own hover pill. That distinction is
+// what the left margin is for, and it is the same rule the power bar below spells
+// out from the other side.
+//
+// `.locale-bar`'s uniform `padding: 4px` is the CONCENTRIC inset: outer pill
+// radius (32/2 = 16) minus the dropdown button's own clamped pill (24/2 = 12), so
+// a hover fill sits evenly inside the cap. Correct — for a fill. Ink has nothing
+// between itself and the curve, and the dropdown's own `padding: 3px 8px` means
+// its glyphs sit 4 + 8 = 12px in from the capsule's edge. Measured on
+// `scripts/dev/lock-probe.js` (2026-08-16): the icon's ink was at 4px and the
+// language dropdown's arrow at 12px — three times the clearance on the right,
+// which is exactly what the user saw as "the icon is stuck to the left".
+//
+// So the icon carries the difference itself, 8px, landing its ink 12px in. It goes
+// on the ICON and not on the container's padding-left on purpose: the correction
+// belongs to the thing that is bare ink, so reordering this row cannot leave it
+// behind.
+//
+// ⚠️ 12px is NOT "symmetry with the right end", and the difference is worth
+// knowing before anyone tunes it again. Photometry on the rendered capsule (same
+// probe, `-locale.png` crop) says the visible ink clears the RIGHT cap by 17px,
+// not 12: the ▾ glyph does not fill the 8px padding it sits in. That 17 is an
+// accident of GTK's arrow, not a chosen number, and chasing it would push a dense
+// 12px square glyph out to where a light triangle happens to land.
+//
+// The number that IS derived: the icon's ink must clear the cap by about what it
+// clears the straight edges by. The glyph is 12px tall in a 32px capsule, so its
+// vertical clearance is (32 − 12) / 2 = 10px. 12 horizontal against 10 vertical —
+// marginally more at the curve, which is what a cap wants, since the arc falls
+// away above and below the ink's own height.
 .locale-bar-icon {
   color: var(--nidara-text-dim);
+  margin-left: 8px;
   margin-right: 2px;
 }
 

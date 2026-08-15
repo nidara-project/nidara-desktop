@@ -332,7 +332,11 @@ overlay.add_overlay(scrim)
 overlay.add_overlay(clockBox)
 overlay.add_overlay(card)
 overlay.add_overlay(wrap(powerBar))
-if (SCOPE === "greeter") overlay.add_overlay(wrap(localeBar))
+// Kept in a variable, not inlined into add_overlay: the LOCALE BAR block below
+// measures the CAPSULE, and the capsule is what `wrap` returns — the row inside
+// it knows nothing about where its own edges ended up.
+const localeCapsule = SCOPE === "greeter" ? wrap(localeBar) : null
+if (localeCapsule) overlay.add_overlay(localeCapsule)
 win.set_child(overlay)
 
 // ── reporting ────────────────────────────────────────────────────────────────
@@ -398,6 +402,44 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, 700, () => {
     print(`card      ${fmt(boundsIn(card, win))}`)
     print(`entry     ${fmt(boundsIn(entry, win))}`)
     print(`powerbar  ${fmt(boundsIn(powerBar, win))}`)
+
+    if (localeCapsule) {
+        // ── LOCALE BAR ───────────────────────────────────────────────────────
+        // The question this answers is INK-TO-EDGE, not box-to-edge. A capsule's
+        // padding is the right inset for a child that paints its own fill (the
+        // dropdown's hover pill, which must sit concentrically inside the outer
+        // pill) and the WRONG one for bare ink, which has nothing between itself
+        // and the cap's curve. So print both: each child's box, and then where
+        // the visible ink actually starts and ends.
+        print("\n═══ LOCALE BAR ═══")
+        const cap = boundsIn(localeCapsule, win)
+        print(`capsule       ${fmt(cap)}`)
+        const names = ["kb icon", "kb dropdown", "separator", "language"]
+        const kids = []
+        for (let c = localeBar.get_first_child(); c; c = c.get_next_sibling()) kids.push(c)
+        kids.forEach((k, n) => print(`  ${(names[n] ?? `child ${n}`).padEnd(12)} ${fmt(boundsIn(k, win))}`))
+
+        // Drill to the first LABEL inside a dropdown — that is its real ink.
+        const labelIn = (w) => {
+            if (w instanceof Gtk.Label) return w
+            for (let c = w.get_first_child(); c; c = c.get_next_sibling()) {
+                const found = labelIn(c)
+                if (found) return found
+            }
+            return null
+        }
+        const icon = kids[0], lang = kids[3], kb = kids[1]
+        const ib = boundsIn(icon, win), lb = boundsIn(lang, win)
+        const kbLabel = kb ? labelIn(kb) : null
+        const klb = kbLabel ? boundsIn(kbLabel, win) : null
+        if (cap && ib && lb) {
+            print(`\nink insets — LEFT ${Math.round(ib.x - cap.x)}px (icon)`
+                + `   RIGHT ${Math.round((cap.x + cap.w) - (lb.x + lb.w))}px (dropdown box)`)
+            if (klb) print(`dropdown's own ink starts ${Math.round(klb.x - boundsIn(kb, win).x)}px inside its box`
+                         + ` → ${Math.round(klb.x - cap.x)}px from the capsule edge`)
+        }
+        savePng(localeCapsule, `${OUT}-locale.png`)
+    }
 
     savePng(overlay, `${OUT}.png`)
     savePng(card, `${OUT}-card.png`)

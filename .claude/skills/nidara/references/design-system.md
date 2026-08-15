@@ -424,6 +424,27 @@ caught the halo being twice as wide at the sides as at the ends. No menu system 
 highlight is ~5/4pt, Windows 11 flyouts 4/4). The text's own breathing room lives on the row —
 `.nidara-menu-row` is `7px 12px`.
 
+**⚠️ The formula covers children that paint a FILL. Bare ink is not covered, and it looks wrong
+at the same number.** `rowInsetFor` derives from concentricity — outer radius minus the child's
+own radius — which presumes the child HAS a radius, i.e. a hover pill or a background of its own.
+A child that paints none has nothing between its glyph and the cap's curve, so the identical inset
+reads as "stuck to the edge". The greeter's locale-bar capsule is the case that made it explicit
+(2026-08-16, user-caught): `padding: 4px` is exactly right for the two dropdowns inside it (32/2
+outer − 24/2 clamped inner = 4) and left the bare keyboard glyph's ink 4px from the cap, while the
+dropdowns' own `padding: 3px 8px` put THEIR glyphs at 12. Three times the clearance on one end.
+
+The correction goes **on the ink**, not on the container's padding — the container's number is
+derived and correct, and putting the difference on the bare child means reordering the row cannot
+lose it. The number to aim at is **the clearance the ink already has from the straight edges**: a
+12px glyph in a 32px capsule sits 10px off the top and bottom, so 12px from the cap is right —
+marginally more at the curve, which is what a cap wants.
+
+🔑 **What NOT to aim at is the opposite end's measured clearance.** Photometry said the ▾ on the
+right cleared its cap by 17px, not 12, because GTK's arrow glyph does not fill the padding it
+sits in. That 17 is an accident of a glyph, not a chosen number; matching it would have pushed a
+dense square icon out to where a light triangle happens to land. Measure both, then align to the
+DERIVED number and record why the other one was ignored.
+
 Prism is the check that the formula is honest: its panel is `xl` 32 but `n: 4.5`, and the formula
 gives **5.6** — which is why its long-standing 8 never looked wrong, while the 22 a circular 32
 would have demanded would have been absurd. This is `cornerClearFor`'s lesson one level up: the
@@ -1111,7 +1132,11 @@ editing from. That is why they drifted, and why a 2026-08-09 session ended with 
 acting as the render loop and finding four defects by eye.
 
 `lock-probe.js` builds the real widget tree with the real stylesheet and writes a PNG, plus
-the bounds of the hero block and the measured date:clock ratio. Point `CSS=` at two builds
+the bounds of the hero block, the measured date:clock ratio and — since 2026-08-16 — a
+**LOCALE BAR** block: the capsule and each child's box, plus where the ink actually starts and
+ends. It also crops the capsule to `<out>-locale.png`, which is what makes photometry on it
+honest: measuring the locale bar out of the full-surface PNG has the SCRIM's gradient underneath
+and every luminance threshold lies. Crop the widget, then measure. Point `CSS=` at two builds
 for a before/after pair, and run it at least twice with different `BG=` — **legibility here
 is a question about the WALLPAPER**, and that is exactly what it caught: on a light backdrop
 the date, the clock and the username all wash out, because they are the only text on the
