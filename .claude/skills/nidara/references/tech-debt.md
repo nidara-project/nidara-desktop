@@ -3517,7 +3517,9 @@ never been touched: the **pointer** was resting over it.
 🔑 **We took the focus away ourselves, in `yieldInput begin`.** Hyprland 0.56.1
 `CSeatManager::setGrab(nullptr)` branches on `input:follow_mouse` — `0 || 2 || 3` →
 `refocusLastWindow`, **else (1) → `refocus()`**, i.e. the window under the cursor. `hyprland.lua`
-ships `follow_mouse = 1`, so this is every install, not a local setting. Fixed in
+shipped `follow_mouse = 1` at the time, so this was every install, not a local setting. (It ships
+**`2`** since 2026-08-15 → the `refocusLastWindow` branch, which happens to hand the focus back on its
+own; the fix below stays regardless, because a user override puts `1` back in one line.) Fixed in
 `core/InputYield._restoreFocus`: read `focusedClient` before the notify, re-focus it in the
 `afterGrabRelease` callback (the `activewindow` event it waits for IS the wrong focus arriving), and
 await the dispatch before answering so the helper's own `hyprctl` cannot race it. Full write-up in

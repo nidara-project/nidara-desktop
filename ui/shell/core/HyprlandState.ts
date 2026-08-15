@@ -524,10 +524,13 @@ class HyprlandStateClass extends GObject.Object {
     /** Hand the keyboard back to the window the user was working in, after one of our
      *  surfaces let go of a compositor focus grab.
      *
-     *  WHY IT IS NEEDED. Dropping the grab makes Hyprland refocus by POINTER
-     *  (`CSeatManager::setGrab(nullptr)` → `input:follow_mouse` = 1 → `refocus()`), so
-     *  where the mouse happens to rest decides who gets the keyboard. Measured
-     *  2026-08-05: dismiss a panel onto a window and that window is focused; dismiss it
+     *  WHY IT IS NEEDED. Dropping the grab makes Hyprland refocus by itself, and
+     *  `CSeatManager::setGrab(nullptr)` branches on `input:follow_mouse`: `1` →
+     *  `refocus()`, so where the mouse happens to rest decides who gets the keyboard;
+     *  `0 || 2 || 3` → `refocusLastWindow` on the monitor under the cursor. The repo
+     *  ships `2` since 2026-08-15 (the branch that usually answers correctly), but the
+     *  value is a user override away and this stays for it. Measured
+     *  2026-08-05 (under `1`): dismiss a panel onto a window and that window is focused; dismiss it
      *  with the pointer over the wallpaper — by clicking there OR by pressing Esc while
      *  the pointer merely sits there — and the session is left with NO active window at
      *  all. A plain desktop click with nothing open does not do that, so it is specific

@@ -419,11 +419,19 @@ Things to keep if you touch it:
   Not defensive coding — without it computer-use is structurally broken on this desktop; the
   mechanism is spelled out below.
 
-⚠️ **The release refocuses BY POINTER, and that is a property of this repo's own config.**
+⚠️ **What the release refocuses TO is a property of this repo's own config, not of the grab.**
 `CSeatManager::setGrab(nullptr)` (Hyprland 0.56.1, `src/managers/SeatManager.cpp`) branches on
 `input:follow_mouse`: `0 || 2 || 3` → `refocusLastWindow(monitor-under-cursor)`, **anything else —
 i.e. 1 — → `g_pInputManager->refocus()`**, which focuses whatever the cursor is over.
-`config/hypr/hyprland.lua` ships `follow_mouse = 1`, so every install takes the pointer branch.
+
+`config/hypr/hyprland.lua` shipped `follow_mouse = 1` until **2026-08-15 and now ships `2`** (pointer
+focus detached from keyboard focus — see the window-menu entry in `architecture.md` for why), which
+moves the default install onto the `refocusLastWindow` branch: the release now hands the keyboard to
+the last window the monitor had, which after a `focusWindow` IS the target. ⚠️ That does NOT retire
+`_restoreFocus` or `restoreFocusAfterGrab` — `follow_mouse` is one `hyprland-user.lua` line from being
+1 again, and neither repair costs anything when the compositor already answered correctly. Read the
+value, never assume it. Everything below is the measurement under `1`, kept because it is the only
+written record of the pointer branch (and because it is what a user who overrides will hit).
 
 That is why the sequence documented here until 2026-08-12 ("the release refocuses the last window,
 which is the target") was only ever true for the configs Nidara does not ship. What actually

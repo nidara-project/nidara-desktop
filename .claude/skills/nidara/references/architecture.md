@@ -410,9 +410,12 @@ by GEOMETRY as well as by widget identity: "the press hit no control of ours" is
 outside click. Getting this wrong makes us dismiss the panel ourselves, which looks correct and is
 not: it takes the dismissal away from the compositor, and with it the refocus.
 
-🔑 **Dropping a grab refocuses by POINTER, so give the keyboard back explicitly.**
-`CSeatManager::setGrab(nullptr)` honours `input:follow_mouse` (1 → `refocus()`), which means the
-window that gets the keyboard is whatever the mouse rests on. Measured 2026-08-05: dismiss onto a
+🔑 **Dropping a grab refocuses by itself, so give the keyboard back explicitly.**
+`CSeatManager::setGrab(nullptr)` honours `input:follow_mouse` (1 → `refocus()`, i.e. the window under
+the cursor; `0 || 2 || 3` → `refocusLastWindow` on the monitor under the cursor). ⚠️ **The repo ships
+`2` since 2026-08-15**, so the pointer branch below is no longer the default install — but it is one
+`hyprland-user.lua` line away, both repairs stay, and the paragraph is kept because it is the only
+written record of what the pointer branch does. Measured 2026-08-05 (under `1`): dismiss onto a
 window and that window is focused; dismiss with the pointer over the wallpaper — by clicking there OR
 by pressing Esc while it merely sits there — and the session is left with NO active window. A plain
 desktop click with nothing open does not do that, so it is specific to dropping a grab, and working
@@ -425,8 +428,8 @@ off the compositor's own announcement via `afterGrabRelease`, not a delay.
 🔑 **The SAME sentence broke computer-use, and it took until 2026-08-12 to connect them.** The
 guards above make a dismissal leave the pointer's choice alone — correct there, fatal for the input
 yield, whose caller has *already* chosen the window. `core/InputYield.begin()` therefore restores
-focus with the opposite policy; the reading of `setGrab(nullptr)` that settles which branch
-`follow_mouse = 1` takes is in `state-and-ipc.md`. Two callers of one mechanism, deliberately
+focus with the opposite policy; the reading of `setGrab(nullptr)` that settles which branch each
+`follow_mouse` value takes is in `state-and-ipc.md`. Two callers of one mechanism, deliberately
 different policies — do not "unify" them.
 
 ⚠️ **Scope each `cleared` handler to what its own surface owns.** The bar closes only its overlays,
@@ -480,9 +483,10 @@ What a grab replaces, all three verified in Hyprland 0.56's source:
 - **Release is not double-buffered.** Layer-shell interactivity applies on the surface's next commit
   (the ~12 ms race `HyprlandState.afterGrabRelease` exists for). Destroying a grab takes effect when
   the compositor reads the request. On release the compositor also refocuses by itself, honouring
-  `input:follow_mouse` — we no longer do that by hand. ⚠️ Read that as "by POINTER", not "the window
-  the user came from": with the `follow_mouse = 1` this repo ships, `setGrab(nullptr)` takes the
-  `refocus()` branch, and `refocusLastWindow` is what the OTHER values get.
+  `input:follow_mouse` — we no longer do that by hand. ⚠️ Read that as "the compositor's choice", not
+  "the window the user came from": `setGrab(nullptr)` takes `refocus()` (the window under the cursor)
+  on `1`, and `refocusLastWindow` (monitor under the cursor) on `0 || 2 || 3`. The repo ships **`2`**
+  since 2026-08-15, so it is the second branch — but never assume the value, a user override flips it.
 
 ⚠️ **There is exactly ONE grab slot compositor-wide** (`CSeatManager::m_seatGrab`) **and xdg-shell
 popups use the same one.** A `Gtk.Popover` with `autohide` opening anywhere evicts the grab. So

@@ -109,10 +109,14 @@ class InputYieldClass extends GObject.Object {
     /**
      * Hand the keyboard back to whoever had it before we stepped aside.
      *
-     * 🔑 THE YIELD ITSELF TAKES THE FOCUS AWAY. Dropping a focus grab makes Hyprland
-     * refocus BY POINTER (`input:follow_mouse = 1`, which this repo ships in
-     * `config/hypr/hyprland.lua` — so it is every install, not a local setting), and
-     * the pointer is wherever the user last left it. Measured 2026-08-12: the model
+     * 🔑 THE YIELD ITSELF CAN TAKE THE FOCUS AWAY. Dropping a focus grab makes Hyprland
+     * refocus on its own, and `input:follow_mouse` picks how: `1` → BY POINTER, wherever
+     * the user last left it; `0 || 2 || 3` → the monitor's last window, which after a
+     * `focusWindow` is the target we want. `config/hypr/hyprland.lua` shipped `1` when
+     * this was written and ships `2` since 2026-08-15 — so the default install is now
+     * the harmless branch, and this stays because a user override is one
+     * `hyprland-user.lua` line and re-focusing the right window costs nothing when the
+     * compositor already chose it. Measured 2026-08-12 (under `1`): the model
      * called `focusWindow org.gnome.TextEditor`, the compositor confirmed it by title,
      * and 3.2 s later the click was refused because the active window was the terminal
      * the cursor happened to sit over. The desktop had undone the caller's own
