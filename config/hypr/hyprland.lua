@@ -183,7 +183,17 @@ hl.config({
 
     input = {
         kb_layout               = "us",
-        follow_mouse            = 1,
+        -- 2 = pointer focus is DETACHED from keyboard focus: hovering still sends the
+        -- window its motion/hover states, but only a CLICK moves the keyboard focus.
+        -- Not a taste setting — it is what makes the bar's chrome reachable in a tiled
+        -- session. Under `1`, travelling to the AppTitle capsule (or the dock, or the
+        -- tray) crosses whatever windows lie on the way and re-focuses each of them, so
+        -- the capsule renames itself mid-journey and you open the window menu for a
+        -- window you never meant to act on. `0` would fix that too but also kills hover
+        -- feedback inside apps. The window menu additionally CLOSES itself if focus
+        -- moves while it is open (surfaces/bar/WindowMenu.ts) — that covers the paths a
+        -- pointer setting cannot, like Alt+Tab.
+        follow_mouse            = 2,
         float_switch_override_focus = 0,
         touchpad = {
             natural_scroll = false,

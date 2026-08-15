@@ -1,7 +1,9 @@
 import { Gtk } from "ags/gtk4"
-import hs from "../../core/HyprlandState"
+import GLib from "gi://GLib"
+import hs, { bareAddr } from "../../core/HyprlandState"
 import { t } from "../../core/i18n"
 import { getWordmark } from "../../utils"
+import { safeDisconnect } from "../../core/signals"
 import { menuRow, menuHeader, menuSeparator } from "../../common/MenuRow"
 
 // Window-options menu for the AppTitle capsule — the visual gateway to Hyprland's
@@ -21,6 +23,47 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
     // Capture at open time — the menu acts on the window it was opened for.
     const client = hs.focusedClient
     const wsId = hs.focusedWorkspaceId
+
+    // ── Stale-focus guard ──────────────────────────────────────────────────────
+    // Every row below closes over the address captured above: this menu acts on ONE
+    // window and cannot re-target itself mid-flight. If focus moves while it is up
+    // (Alt+Tab is the everyday case — the compositor moves focus with no click at
+    // all, so the bar's focus grab is never cleared and nothing dismisses us), the
+    // AppTitle capsule renames itself to the NEW window while the menu keeps acting
+    // on the old one: one label naming two different windows, and rows whose checks
+    // describe neither. Rebuilding in place is not the answer — the panel would
+    // mutate under a pointer already travelling toward a row. So: close.
+    //
+    // Read the RECONCILED focus (`hs.focusedClient`), never `hl.focused_client` —
+    // acquiring the grab can make the compositor announce "no active window", and
+    // the raw answer would read that silence as a focus change and close us at open.
+    // For the same reason this hangs off `changed`, which only fires when the
+    // structural signature (focus included) actually moved.
+    //
+    // Lifetime is the widget's: the expansion rebuilds its content on every open, so
+    // map→unmap brackets exactly one showing of this menu, and a bar that hides
+    // (fullscreen chrome-hiding) re-checks on the way back rather than acting on a
+    // change it slept through.
+    const openedFor = bareAddr((client as any)?.address)
+    let focusWatch = 0
+    const focusMoved = () => bareAddr((hs.focusedClient as any)?.address) !== openedFor
+    root.connect("map", () => {
+        // Deferred: on the FIRST map we are inside showExpansion's own set_visible,
+        // and closing from there would re-enter it (hide racing the reveal it is
+        // still about to schedule). Idle also costs nothing — a focus change cannot
+        // land between building this menu and mapping it (same call stack), so the
+        // catch-up only ever fires on a RE-map, after the bar came back.
+        if (focusMoved()) {
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { onClose(); return GLib.SOURCE_REMOVE })
+            return
+        }
+        if (focusWatch) return
+        focusWatch = hs.connect("changed", () => { if (focusMoved()) onClose() })
+    })
+    root.connect("unmap", () => {
+        safeDisconnect(hs, focusWatch)
+        focusWatch = 0
+    })
 
     if (client) {
         const addr = client.address
