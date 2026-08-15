@@ -18,14 +18,27 @@ type OpenMenu = (anchor: Gtk.Widget, build: (onClose: () => void) => Gtk.Widget,
 // Bar-left capsule showing the focused window's app name (wordmark), kept in
 // sync with Hyprland's focused client and its title changes. Clicking it (any
 // button) opens the window-options menu (WindowMenu.ts).
-export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): Gtk.Widget {
+/** The capsule, plus the one number it derives from the monitor. */
+export interface AppTitleHandle {
+  widget: Gtk.Widget
+  /** Re-derive the label's cap after a resolution change. The width arrives as a
+   *  CONSTRUCTION argument, which made this the one flavour of the stale-geometry
+   *  bug a live `monGeo` does not fix on its own (user-caught 2026-08-10: the
+   *  panel opened in the wrong place after switching to 1080p). The chain is
+   *  monitor width → max label chars → the capsule's measured width → where the
+   *  bar centres the expansion panel under it, so a stale cap moves a panel that
+   *  never reads the monitor at all. */
+  setMonitorWidth: (px: number) => void
+}
+
+export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHandle {
   // Max label width = half monitor - center capsule est. (100px) - icon capsule + gap overhead (~100px)
-  const labelMaxChars = Math.max(15, Math.floor((monitorWidth / 2 - 200) / 8))
+  const maxCharsFor = (w: number) => Math.max(15, Math.floor((w / 2 - 200) / 8))
   const appName = new Gtk.Label({
     label: "—",
     css_classes: ["bar-app-name"],
     ellipsize: Pango.EllipsizeMode.END,
-    max_width_chars: labelMaxChars,
+    max_width_chars: maxCharsFor(monitorWidth),
     margin_start: 16,
     margin_end: 16,
   })
@@ -89,7 +102,10 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): Gtk.Widget 
     shellActions.openWindowMenu = openWindowMenu
   }
 
-  return capsule
+  return {
+    widget: capsule,
+    setMonitorWidth: (px) => { appName.max_width_chars = maxCharsFor(px) },
+  }
 }
 
 export default AppTitle

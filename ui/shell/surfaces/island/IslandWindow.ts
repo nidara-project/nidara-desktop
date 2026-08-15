@@ -4,7 +4,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import GLib from "gi://GLib"
 import { MorphRevealer } from "../../common/MorphRevealer"
-import { setVisibleRect } from "../../common/VisibleRegion"
+import { createRegionStamper, type VisibleRect } from "../../common/VisibleRegion"
 import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import status from "../../core/Status"
 import inputYield from "../../core/InputYield"
@@ -97,13 +97,33 @@ export interface IslandWindowHandle {
 }
 
 export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
-    const monGeo = gdkmonitor.get_geometry()
+    // How far the whole surface is pushed down to stay level with the bar — see
+    // setTopOffset. Normally 0; everything below that converts between
+    // root-relative and monitor-relative coordinates has to add it. Declared up
+    // here because the region stamper's clip box is measured against it.
+    let topOffset = 0
+
+    // The monitor's geometry is NOT captured — it is the stamper's, re-read on
+    // `notify::geometry`. This surface was one of the two that cached it and got
+    // cut off on a live resolution change (see common/VisibleRegion.ts).
+    const visibleRegion = createRegionStamper({
+        monitor: gdkmonitor,
+        tag: "island",
+        surface: () => win.get_native()?.get_surface() ?? null,
+        // The surface is the monitor rect MINUS the top offset: a rect past the
+        // buffer is intersected away, and an empty intersection cancels the
+        // element — i.e. the island disappears.
+        box: (geo) => ({ x: 0, y: 0, width: geo.width, height: geo.height - topOffset }),
+        rects: () => paintedRegion(),
+        onStamped: () => win.queue_draw(),
+    })
+
     const win = new Gtk.Window({
         name: NAMESPACE,
         application: app,
         css_classes: ["nidara-island-window"],
-        default_width: monGeo.width,
-        default_height: monGeo.height,
+        default_width: visibleRegion.geometry().width,
+        default_height: visibleRegion.geometry().height,
         visible: false,
     })
 
@@ -138,10 +158,6 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
 
     let hitTargets: () => Gtk.Widget[] = () => []
     let revealers: MorphRevealer[] = []
-    // How far the whole surface is pushed down to stay level with the bar — see
-    // setTopOffset. Normally 0; everything below that converts between
-    // root-relative and monitor-relative coordinates has to add it.
-    let topOffset = 0
 
     // Our ownership token for the compositor focus grab that IS this surface's
     // modality, 0 when we hold none — see setModal and common/FocusGrab.ts. A token rather
@@ -390,6 +406,16 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         if (TRACE) traceStamp(painted)
     }
 
+    // The monitor changed shape. The blur region is the stamper's own business
+    // (it re-stamps right after this), but the INPUT region is stamped here and
+    // has to be re-cut too: the capsule is CENTRED, so a new width moves it, and a
+    // region left at the old centre is a control painted where the compositor
+    // sends nothing — the same failure as a torn stamp, from a different cause.
+    // Measuring now reads the layout GTK has not redone yet, which is exactly what
+    // `scheduleVerify` is for: it re-measures 50 ms later and re-stamps if the
+    // geometry moved.
+    visibleRegion.onGeometryChanged(() => { if (win.get_visible()) updateInputRegion() })
+
     // ── Region trap: `NIDARA_ISLAND_REGION_TRACE=1` ─────────────────────────────
     //
     // For the intermittent "the island's chips stop taking mouse input and only the
@@ -519,21 +545,16 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     // a rect anyone computed for them.
     const BLUR_PAD_X = 200
     const BLUR_PAD_Y = 16
-    let lastBlurKey = ""
-    const updateVisibleRegion = () => {
-        const surface = win.get_native()?.get_surface()
-        if (!surface) return
-        const set = (key: string, rect: { x: number, y: number, width: number, height: number } | null) => {
-            if (key === lastBlurKey) return
-            lastBlurKey = key
-            setVisibleRect(surface, rect)
-        }
+    // The producer the stamper calls: what this surface paints, padded, in
+    // surface coordinates. Clipping to the surface box and deduping belong to the
+    // stamper — this only has to answer honestly, `null` included.
+    const paintedRegion = (): VisibleRect[] | null => {
         const { rects, pending } = paintedBounds()
         // A mode was revealed this turn and has no allocation yet: anything we
         // computed now would describe the capsule while the mode paints outside
         // it, and outside the region means NOT DRAWN. Give the surface back for
         // the one frame it takes `onAllocated` to hand us the real rect.
-        if (pending) { set("pending", null); return }
+        if (pending) return null
 
         let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
         for (const b of rects) {
@@ -542,19 +563,16 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         }
         // Nothing measurable (first frames, capsule hidden): the un-optimised
         // surface is always the safe answer.
-        if (!isFinite(x0)) { set("none", null); return }
+        if (!isFinite(x0)) return null
 
-        // Clamp to the surface, which is the monitor rect MINUS any top offset —
-        // a rect past the buffer is intersected away, and an empty intersection
-        // cancels the element, i.e. the island disappears.
-        const surfH = Math.round(monGeo.height - topOffset)
-        const x = Math.max(0, Math.round(x0) - BLUR_PAD_X)
-        const y = Math.max(0, Math.round(y0) - BLUR_PAD_Y)
-        const width = Math.min(monGeo.width - x, Math.round(x1 - x0) + BLUR_PAD_X * 2)
-        const height = Math.min(surfH - y, Math.round(y1 - y0) + BLUR_PAD_Y * 2)
-        if (width <= 0 || height <= 0) { set("none", null); return }
-        set(`rect:${x},${y},${width},${height}`, { x, y, width, height })
+        return [{
+            x: Math.round(x0) - BLUR_PAD_X,
+            y: Math.round(y0) - BLUR_PAD_Y,
+            width: Math.round(x1 - x0) + BLUR_PAD_X * 2,
+            height: Math.round(y1 - y0) + BLUR_PAD_Y * 2,
+        }]
     }
+    const updateVisibleRegion = () => visibleRegion.stamp()
 
     // What the island actually COVERS, monitor-relative — capsule plus whichever
     // mode is revealed, which is exactly what `updateInputRegion` stamps.

@@ -80,7 +80,7 @@ function previewWidthFor(gdkmonitor: Gdk.Monitor): number {
 export const WO_GLASS = { radius: RADIUS.xl, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
 
 export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
-    const previewWidth = previewWidthFor(gdkmonitor)
+    let previewWidth = previewWidthFor(gdkmonitor)
 
     // The panel's inset is a MARGIN here, not a padding in `_workspace.scss`, so
     // `previewWidthFor` and the layout are reading the same number rather than two
@@ -126,7 +126,7 @@ export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
         valign: Gtk.Align.CENTER
     })
 
-    const slots = new Map<number, { itemBox: Gtk.Box, label: Gtk.Label, count: Gtk.Label, schematic: (geom?: ClientGeometry) => void, refreshThumbs: () => void }>()
+    const slots = new Map<number, { itemBox: Gtk.Box, label: Gtk.Label, count: Gtk.Label, schematic: (geom?: ClientGeometry) => void, refreshThumbs: () => void, setWidth: (px: number) => void }>()
 
     // Keyboard-focused slot (1..WS_COUNT), -1 = keyboard nav idle. Set on open to
     // the active workspace; moved by ←/→; committed by Enter. Purely a visual
@@ -196,7 +196,7 @@ export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
         btn.set_focus_on_click(false)
         btn.connect("clicked", () => switchToWorkspace(i))
 
-        slots.set(i, { itemBox, label, count, schematic: schematic.sync, refreshThumbs: schematic.refresh })
+        slots.set(i, { itemBox, label, count, schematic: schematic.sync, refreshThumbs: schematic.refresh, setWidth: schematic.setWidth })
         const col = (i - 1) % WS_COUNT
         const row = Math.floor((i - 1) / WS_COUNT)
         list.attach(btn, col, row, 1, 1)
@@ -281,6 +281,21 @@ export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
     ;(windowContent as any).onOpen = () => {
         navIdx = hs.focusedWorkspace?.id || 1
         refreshKbFocus()
+    }
+    // The monitor changed shape, so the equation `previewWidthFor` solved has a
+    // different answer — and this panel is sized to land 8px from each screen
+    // edge, so a stale card width is a panel WIDER THAN THE SCREEN it is centred
+    // on (2560's 449px cards make a 2543px panel; on a 1920 display that is
+    // 600px of overflow). Called by the bar through ActivityIsland.onMonitorResized;
+    // this widget deliberately does not watch the monitor itself.
+    ;(windowContent as any).onMonitorResized = () => {
+        const w = previewWidthFor(gdkmonitor)
+        if (w === previewWidth) return
+        previewWidth = w
+        slots.forEach(ctx => {
+            ctx.itemBox.width_request = previewWidth + WO_CARD_CHROME
+            ctx.setWidth(previewWidth)
+        })
     }
     ;(windowContent as any).handleKey = (keyval: number): boolean => {
         if (keyval === Gdk.KEY_Escape) { status.island_mode = ""; return true }

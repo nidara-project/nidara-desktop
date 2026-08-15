@@ -114,3 +114,156 @@ export function setVisibleRects(surface: Gdk.Surface | null, rects: VisibleRect[
 export function setVisibleRect(surface: Gdk.Surface | null, rect: VisibleRect | null) {
     setVisibleRects(surface, rect ? [rect] : null)
 }
+
+// ── The stamper: one owner for the monitor's geometry ────────────────────────
+//
+// 🔑 THE BUG THIS EXISTS FOR (user-caught 2026-08-10, switching to 1080p live):
+// the Activity Island was cut off, the bar's capsules were cut off, and the
+// AppTitle panel opened somewhere else. Reloading the UI fixed all three — a
+// fresh build reads fresh geometry. The dock and the app grid were FINE.
+//
+// It was a clean 2x2, not a hypothesis. `Gdk.Monitor` emits `notify::geometry`
+// on any mode/scale change; the dock rebuilt on it and the app grid refreshed on
+// it — and those are exactly the two that survived. The bar and the island each
+// captured `const monGeo = gdkmonitor.get_geometry()` at build time and never
+// subscribed. The surfaces themselves resize for free (anchored on four edges);
+// what goes stale are the NUMBERS they cut with — the blur region, the input
+// region, and every layout budget solved from the monitor's width.
+//
+// 🔑 WHY A COMPONENT AND NOT TWO MORE HANDLERS. Two of four forgot BECAUSE
+// subscribing was optional: `get_geometry()` is available to anyone who imports
+// the monitor, so caching it is the path of least resistance and nothing ever
+// says otherwise. The fix that holds is one where the surface never sees the
+// monitor at all — it hands over a function that returns rectangles and is
+// CALLED with the box to fit them in. If it cannot reach the geometry, it cannot
+// cache it. (Prior art: GNOME Shell's LayoutManager, where chrome registers and
+// the manager owns the computation, recomputing on `monitors-changed`. What is
+// central is not where the number is stored — it is who does the arithmetic.)
+//
+// ⛔ What this deliberately does NOT own: the CONTENT of the rectangles. There is
+// no duplication there to remove — the island has a `pending` state, the dock
+// answers `null` while its menu is open, the app grid unmaps, the bar seals
+// several rects. Each surface keeps its own producer; the stamper owns the
+// geometry, the clip, the dedupe and the Wayland call.
+//
+// ⛔ And NOT the input region, which is a different call with the opposite safe
+// state (empty = click-through, where an empty VISIBLE region would be a surface
+// that draws nothing). Surfaces stamp that themselves; what they take from here
+// is `geometry()`, so the numbers they cut it with are live too.
+//
+// ⚠️ The DOCK stays on the raw `setVisibleRect` on purpose. Its blur rect is
+// fused into the same key/apply cycle as its input region (`DockAxis.ts` —
+// deliberately, so the two cannot drift), it speaks buffer coordinates derived
+// from `WIN_W`/`WIN_H`/`monMain` captured at build time, and `app.ts` REBUILDS
+// the whole dock window on `notify::geometry` for exactly that reason. Splitting
+// its two regions apart to route one of them through here would trade a real
+// coupling for a cosmetic one.
+
+export type RegionBox = { x: number, y: number, width: number, height: number }
+
+export interface RegionStamper {
+    /** The monitor's logical geometry RIGHT NOW. Read it per use; storing it is
+     *  the bug this component exists to make impossible. */
+    geometry(): RegionBox
+    /** The surface's own box in SURFACE coordinates — the monitor's, unless the
+     *  caller declared an offset (see `box` in the options). */
+    box(): RegionBox
+    /** Recompute and stamp. Deduped, so calling it more often than necessary is
+     *  free: a stamp that changes nothing makes no Wayland call and fires no
+     *  `onStamped`. That is what lets every allocation of every panel re-stamp
+     *  without repainting the surface per frame. */
+    stamp(): void
+    /** Run `cb` after the monitor's geometry changed and before the re-stamp —
+     *  for everything else the surface solved from those numbers (panel height
+     *  budgets, an overflow count, a label's max width). */
+    onGeometryChanged(cb: (geo: RegionBox) => void): void
+}
+
+export function createRegionStamper(opts: {
+    monitor: Gdk.Monitor
+    /** Resolved per stamp, never captured: a window that is hidden and presented
+     *  again comes back with a DIFFERENT `Gdk.Surface`. */
+    surface: () => Gdk.Surface | null
+    /** Every rectangle the surface paints right now, in surface coordinates and
+     *  UNCLIPPED — the stamper cuts them to `box`. `null` means "I cannot
+     *  describe this", whose answer is the whole surface: content outside the
+     *  region is NOT DRAWN, so guessing shows up as a missing panel. */
+    rects: (box: RegionBox) => VisibleRect[] | null
+    /** The surface's box when it is not the monitor's. The island is the only
+     *  caller: it slides down by a top margin when something reserves space
+     *  above the bar, and a rect clipped to the full monitor height would then
+     *  hang off the bottom of its own buffer. */
+    box?: (geo: RegionBox) => RegionBox
+    /** Called only when a stamp CHANGED the declaration. The shim applies a
+     *  region on the next real `wl_surface.commit`, so this is where a
+     *  `queue_draw()` goes. */
+    onStamped?: () => void
+    /** Prefix for this stamper's log lines, e.g. "bar". */
+    tag?: string
+}): RegionStamper {
+    const read = (): RegionBox => {
+        const g = opts.monitor.get_geometry()
+        return { x: g.x, y: g.y, width: g.width, height: g.height }
+    }
+    let geo = read()
+    const subs: ((geo: RegionBox) => void)[] = []
+    const boxOf = (): RegionBox =>
+        opts.box ? opts.box(geo) : { x: 0, y: 0, width: geo.width, height: geo.height }
+
+    let lastKey = ""
+    // Identity, not equality: the dedupe key is only meaningful for the surface it
+    // was stamped on. A window that is unmapped (fullscreen hide, a closed grid)
+    // and presented again is realized onto a NEW surface with no region at all, and
+    // a key carried over from the old one would suppress the stamp that gives it
+    // back — a monitor-sized layer with no declaration, which is precisely the cost
+    // this whole mechanism exists to avoid.
+    let lastSurface: Gdk.Surface | null = null
+
+    const stamp = () => {
+        const surface = opts.surface()
+        if (!surface) return
+        if (surface !== lastSurface) { lastSurface = surface; lastKey = "" }
+        const box = boxOf()
+        const produced = opts.rects(box)
+        // Intersect rather than clamp: a rect that starts left of the box has to
+        // LOSE that overhang, not slide right by it. Anything that survives with
+        // area is real; if nothing does, the honest answer is the whole surface —
+        // an empty region means "this surface draws nothing" to the compositor.
+        const solid: VisibleRect[] = []
+        for (const r of produced ?? []) {
+            const x0 = Math.max(box.x, Math.round(r.x))
+            const y0 = Math.max(box.y, Math.round(r.y))
+            const x1 = Math.min(box.x + box.width, Math.round(r.x + r.width))
+            const y1 = Math.min(box.y + box.height, Math.round(r.y + r.height))
+            if (x1 > x0 && y1 > y0) solid.push({ x: x0, y: y0, width: x1 - x0, height: y1 - y0 })
+        }
+        const key = produced === null || solid.length === 0
+            ? "none"
+            : solid.map(r => `${r.x},${r.y},${r.width},${r.height}`).join("|")
+        if (key === lastKey) return
+        lastKey = key
+        setVisibleRects(surface, solid.length ? solid : null)
+        opts.onStamped?.()
+    }
+
+    try {
+        opts.monitor.connect("notify::geometry", () => {
+            geo = read()
+            // Subscribers FIRST: they re-derive the layout numbers, and the stamp
+            // that follows should describe the surface as it will be, not as it was.
+            for (const cb of subs) {
+                try { cb(geo) } catch (e) { console.error(`[RegionStamper:${opts.tag ?? "?"}] geometry subscriber failed:`, e) }
+            }
+            stamp()
+        })
+    } catch (e) {
+        console.error(`[RegionStamper:${opts.tag ?? "?"}] monitor geometry watch failed:`, e)
+    }
+
+    return {
+        geometry: () => geo,
+        box: boxOf,
+        stamp,
+        onGeometryChanged: (cb) => { subs.push(cb) },
+    }
+}

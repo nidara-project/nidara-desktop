@@ -4,7 +4,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import GLib from "gi://GLib"
 import AppGridPanel from "./AppGrid"
-import { setVisibleRect } from "../../common/VisibleRegion"
+import { createRegionStamper, type VisibleRect } from "../../common/VisibleRegion"
 import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import status from "../../core/Status"
 import inputYield from "../../core/InputYield"
@@ -70,22 +70,26 @@ export function AppGridWindow(
     gdkmonitor: Gdk.Monitor,
     peers: () => (Gtk.Window | null)[],
 ): Gtk.Window {
-    // Re-read on a scale/resolution change, NOT captured once. The surface itself
-    // follows the monitor for free (anchored on four edges), but these numbers CLAMP
-    // the blur rect, and a stale clamp is either a region past the buffer (harmless,
-    // intersected away) or one that cuts the panel (not). This used to be covered for
-    // free: the grid lived in the dock's window, and `app.ts` rebuilds THAT on
-    // `notify::geometry` for exactly this reason — a coupling the move quietly
-    // dropped. Refreshing beats rebuilding here: nothing else in this window caches
-    // geometry, and the panel's own width is clamped to 920–950px, i.e. constant for
-    // any monitor wider than ~1900.
-    let monGeo = gdkmonitor.get_geometry()
+    // The monitor's geometry belongs to the stamper, which re-reads it on a
+    // scale/resolution change. This surface was already correct before the stamper
+    // existed (it refreshed by hand) and is converted anyway: the two surfaces that
+    // got this wrong got it wrong because subscribing was OPTIONAL, so leaving a
+    // hand-rolled copy here would keep the option open. It used to be covered for
+    // free in a third way — the grid lived in the dock's window, and `app.ts`
+    // rebuilds THAT on `notify::geometry` — a coupling the move to its own surface
+    // quietly dropped.
+    const visibleRegion = createRegionStamper({
+        monitor: gdkmonitor,
+        tag: "app-grid",
+        surface: () => win.get_native()?.get_surface() ?? null,
+        rects: () => paintedRegion(),
+    })
     const win = new Gtk.Window({
         name: NAMESPACE,
         application: app,
         css_classes: ["nidara-app-grid-window"],
-        default_width: monGeo.width,
-        default_height: monGeo.height,
+        default_width: visibleRegion.geometry().width,
+        default_height: visibleRegion.geometry().height,
         visible: false,
     })
 
@@ -142,18 +146,21 @@ export function AppGridWindow(
     // lets them drift. They are not the same rectangle — the blur rect is padded,
     // the input rect is not, because padding what you can CLICK would put a 48px
     // dead ring around the panel that swallows the outside press that dismisses it.
-    let lastBlurKey = ""
+    //
+    // The blur rect goes out through the stamper, but it is still measured HERE,
+    // in the same pass as the input rect — the producer below just hands over what
+    // this one found. Re-measuring inside the producer would be the drift this
+    // section exists to prevent, and the island proved it is not theoretical: one
+    // pass reading two widgets at different moments of a size-allocate stamped a
+    // geometrically impossible region (see IslandWindow's `scheduleVerify`).
+    let painted: VisibleRect | null = null
+    const paintedRegion = () => painted ? [painted] : null
     let lastInputKey = ""
     const stampRegions = (): boolean => {
         const surface = win.get_native()?.get_surface()
         if (!surface?.set_input_region) return false
 
         const region = new Cairo.Region()
-        const setBlur = (key: string, rect: { x: number, y: number, width: number, height: number } | null) => {
-            if (key === lastBlurKey) return
-            lastBlurKey = key
-            setVisibleRect(surface, rect)
-        }
 
         // Yielded for an agent action (core/InputYield): fully click-through, so a
         // synthetic click reaches the app it was aimed at rather than this surface.
@@ -171,7 +178,8 @@ export function AppGridWindow(
             // wrong rect there makes a monitor-sized surface eat every click on
             // screen). Opposite defaults, same principle: fail towards invisible.
             if (lastInputKey !== "empty") { lastInputKey = "empty"; surface.set_input_region(region) }
-            setBlur("none", null)
+            painted = null
+            visibleRegion.stamp()
             win.queue_draw()
             return false
         }
@@ -191,12 +199,9 @@ export function AppGridWindow(
         const unchanged = inputKey === lastInputKey
         if (!unchanged) { lastInputKey = inputKey; surface.set_input_region(region) }
 
-        const x = Math.max(0, bx - BLUR_PAD)
-        const y = Math.max(0, by - BLUR_PAD)
-        const width = Math.min(monGeo.width - x, bw + BLUR_PAD * 2)
-        const height = Math.min(monGeo.height - y, bh + BLUR_PAD * 2)
-        if (width <= 0 || height <= 0) setBlur("none", null)
-        else setBlur(`panel:${x},${y},${width},${height}:${yielded ? 1 : 0}`, { x, y, width, height })
+        // Padded, unclipped: the stamper cuts it to the monitor and dedupes it.
+        painted = { x: bx - BLUR_PAD, y: by - BLUR_PAD, width: bw + BLUR_PAD * 2, height: bh + BLUR_PAD * 2 }
+        visibleRegion.stamp()
         // Input regions are double-buffered — they apply on the surface's next
         // commit — so a stamp that changed something has to ride a repaint.
         if (!unchanged) win.queue_draw()
@@ -240,13 +245,12 @@ export function AppGridWindow(
     // uses to follow the island capsule.
     panel.glassArea?.connect("resize", () => { if (status.app_grid_open) startStamping() })
 
-    // Same idea one level out: the monitor changed shape, so the clamp above is stale.
-    try {
-        gdkmonitor.connect("notify::geometry", () => {
-            monGeo = gdkmonitor.get_geometry()
-            if (status.app_grid_open) startStamping()
-        })
-    } catch (e) { console.error("[AppGridWindow] monitor geometry watch failed:", e) }
+    // Same idea one level out: the monitor changed shape, so the panel is centred
+    // somewhere else. The stamper has already re-cut the blur rect against the new
+    // box by the time this runs; re-opening the stamping window is for the INPUT
+    // rect, which is measured here and would otherwise keep swallowing clicks over
+    // the panel's old position.
+    visibleRegion.onGeometryChanged(() => { if (status.app_grid_open) startStamping() })
 
     // ── Modality ──────────────────────────────────────────────────────────────
     //
@@ -314,10 +318,11 @@ export function AppGridWindow(
             // Unmapping is what makes the closed grid free: Hyprland runs no blur
             // pass for a surface that is not there. Guarded because a re-open inside
             // the 150ms would otherwise be hidden by its own predecessor's callback.
-            if (!status.app_grid_open) {
-                win.set_visible(false)
-                lastBlurKey = ""
-            }
+            // Nothing to reset afterwards: the re-open realizes a NEW Gdk.Surface and
+            // the stamper keys its dedupe on the surface it stamped (this used to be
+            // a hand-cleared `lastBlurKey`, and it was the only surface that
+            // remembered to do it).
+            if (!status.app_grid_open) win.set_visible(false)
         })
     }
 

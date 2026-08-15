@@ -537,6 +537,20 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         onOpened: () => { (active()?.mode.widget as any)?.onOpen?.() },
         /** Route a key to the open mode. */
         handleKey: (keyval: number): boolean => ((active()?.mode.widget as any)?.handleKey?.(keyval)) ?? false,
+        /** The monitor changed shape: any mode that SOLVED a size from it has to
+         *  solve again. Duck-typed like `onOpen`/`handleKey` above, so a mode
+         *  that derives nothing from the monitor implements nothing — today only
+         *  the overview does (its card width comes from the monitor's width, and
+         *  a stale one is a panel wider than the screen it is centred on). The
+         *  bar calls this; a mode must not subscribe to the monitor itself, or we
+         *  are back to the optional subscription that caused the bug
+         *  (common/VisibleRegion.ts). */
+        onMonitorResized: () => {
+            for (const rt of modes.values()) {
+                try { (rt.mode.widget as any)?.onMonitorResized?.() }
+                catch (e) { console.error(`[ActivityIsland] ${rt.mode.id} failed to re-solve its geometry:`, e) }
+            }
+        },
         /** Pin every revealer's top edge to the capsule's top (both wear their
          *  glass with the same 2px Cairo inset, so aligning the BOXES aligns
          *  the drawn edges). Falls back to the panel gap when the capsule is

@@ -29,6 +29,13 @@ export interface SchematicHandle {
      *  surface sits open — and nothing captures at all until a surface says it is
      *  about to be looked at. */
     refresh: () => void
+    /** Re-solve at a different card width. The map is a scale model of the
+     *  monitor, so its width is not a style — it is the denominator of every tile
+     *  coordinate, and the caller derives it from the monitor (see
+     *  `previewWidthFor` in WorkspaceOverview). A live resolution change makes
+     *  that number wrong for as long as the widget lives, which is why this is a
+     *  setter and not a construction argument. No-op when the width is unchanged. */
+    setWidth: (px: number) => void
 }
 
 /**
@@ -77,8 +84,12 @@ export interface SchematicOptions {
     thumbnails?: boolean
 }
 
-export function createSchematicMap(wsId: number, width: number, options: SchematicOptions = {}): SchematicHandle {
+export function createSchematicMap(wsId: number, initialWidth: number, options: SchematicOptions = {}): SchematicHandle {
     const wantThumbnails = options.thumbnails ?? false
+    // Not a constant: the caller solves it from the monitor and re-solves it when
+    // the monitor changes shape (see `setWidth`). Every tile coordinate below is
+    // scaled by it, so the whole map is only as fresh as this number.
+    let width = initialWidth
     const initialHeight = Math.round(width * (9 / 16))
 
     // Cairo canvas draws background + tile rectangles at exact pixel coords.
@@ -390,6 +401,18 @@ export function createSchematicMap(wsId: number, width: number, options: Schemat
     return {
         wrapper: overlay,
         sync,
+        setWidth: (px: number) => {
+            const w = Math.max(1, Math.round(px))
+            if (w === width) return
+            width = w
+            // `sync` re-derives the height from the monitor's aspect and applies
+            // both size requests, so it is the whole of the resize — but it
+            // returns early when it cannot find the workspace's monitor, and then
+            // the requests would still describe the old width. Set them here too.
+            overlay.set_size_request(width, Math.round(width * (9 / 16)))
+            canvas.set_size_request(width, Math.round(width * (9 / 16)))
+            sync()
+        },
         // The wallpaper is re-checked here too, not only on "changed": gaming
         // hero-art swaps it through hyprland.lua, behind WallpaperManager's back.
         refresh: () => { armed = true; staleAll = true; Wallpaper.warmPreview() },

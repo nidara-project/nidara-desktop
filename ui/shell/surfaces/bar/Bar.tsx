@@ -5,7 +5,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
 import { MorphRevealer } from "../../common/MorphRevealer"
-import { setVisibleRects } from "../../common/VisibleRegion"
+import { createRegionStamper } from "../../common/VisibleRegion"
 import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
@@ -74,13 +74,27 @@ function SystemMenuIcon(): Gtk.Widget {
 }
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
-  const monGeo = gdkmonitor.get_geometry()
+  // The monitor's geometry is NOT captured here — it belongs to the stamper,
+  // which re-reads it on `notify::geometry`. This surface was one of the two that
+  // cached it and came out cut off on a live resolution change; the header of
+  // common/VisibleRegion.ts has the 2x2 that proved it. `geo()` is live at every
+  // use below, and this file must never hold on to the object it returns.
+  const visibleRegion = createRegionStamper({
+    monitor: gdkmonitor,
+    tag: "bar",
+    surface: () => win.get_native()?.get_surface() ?? null,
+    rects: (box) => paintedRects(box),
+    // The shim only applies a region on a real commit; every key change here
+    // rides a geometry change that repaints anyway, so this just asks for the frame.
+    onStamped: () => win.queue_draw(),
+  })
+  const geo = () => visibleRegion.geometry()
   const win = new Gtk.Window({
     name: "nidara-bar",
     application: app,
     css_classes: ["nidara-bar-window"],
-    default_width: monGeo.width,
-    default_height: monGeo.height, // Stay full height for CC/NC
+    default_width: geo().width,
+    default_height: geo().height, // Stay full height for CC/NC
     visible: false
   })
   win.set_opacity(0)
@@ -318,7 +332,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // until the list overflows, then it scrolls); CC needs no cap — its content
   // maxes out at the fixed 8-row board. Reactive to dock size.
   const applyPanelHeights = () => {
-    const maxH = monGeo.height - BAR_H - dockBottomFootprint() - SAFETY
+    const maxH = geo().height - BAR_H - dockBottomFootprint() - SAFETY
     ;(ncWidget as any).setMaxHeight?.(maxH)
   }
   applyPanelHeights()
@@ -354,7 +368,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
       // Bar strip (40px)
       // @ts-ignore
-      region.unionRectangle({ x: 0, y: 0, width: Math.round(monGeo.width), height: BAR_H })
+      region.unionRectangle({ x: 0, y: 0, width: Math.round(geo().width), height: BAR_H })
 
       const isAnyOpen = status.isAnyOverlayOpen
       if (false) {
@@ -365,7 +379,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           // the outside press land on our own surface — which the grab accepts, so
           // nothing would dismiss at all.
           // @ts-ignore
-          region.unionRectangle({ x: 0, y: BAR_H, width: Math.round(monGeo.width), height: Math.round(monGeo.height - BAR_H) })
+          region.unionRectangle({ x: 0, y: BAR_H, width: Math.round(geo().width), height: Math.round(geo().height - BAR_H) })
       }
 
       const addWidgetToRegion = (widget: Gtk.Widget) => {
@@ -479,17 +493,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   let popupsSettled = true
 
   type BlurRect = { x: number, y: number, width: number, height: number }
-  const clampRect = (x: number, y: number, w: number, h: number): BlurRect => {
-      const x0 = Math.max(0, Math.round(x)), y0 = Math.max(0, Math.round(y))
-      return {
-          x: x0, y: y0,
-          width: Math.min(Math.round(monGeo.width) - x0, Math.round(w)),
-          height: Math.min(Math.round(monGeo.height) - y0, Math.round(h)),
-      }
-  }
 
   // Every rectangle this window paints right now, or `null` when something is
   // painting that cannot be measured yet (→ the caller hands the surface back).
+  //
+  // `box` is the surface's own extent, handed in by the stamper — which is also
+  // the only way this function can know the monitor's width, and deliberately so:
+  // the numbers used to come from a `monGeo` captured at build time, and a bar
+  // that kept declaring 2560 on a 1920 screen was half of the live-resolution bug
+  // (common/VisibleRegion.ts). Rects go out UNCLIPPED; the stamper intersects.
   //
   // Walked off masterOverlay rather than hand-listed, so a panel mounted here
   // later is covered by construction instead of by someone remembering. Two
@@ -504,7 +516,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Everything else answers with `tickId` as well as `get_visible()`: a panel
   // closing is still visible until its final tick, and dropping its rect one
   // tick early would scissor away the tail of its own close animation.
-  const paintedRects = (): BlurRect[] | null => {
+  const paintedRects = (box: BlurRect): BlurRect[] | null => {
       // The strip's own extent. Measured rather than hardcoded (the 8px top
       // margin is CSS, `.bar-centerbox`), but floored at PANEL_TOP so this is
       // valid BEFORE the first layout pass too — that is what lets the very
@@ -515,7 +527,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       const [okBar, bar] = barBox.compute_bounds(masterOverlay)
       if (okBar) bottom = Math.max(bottom, bar.get_y() + bar.get_height())
       const rects: BlurRect[] = [
-          clampRect(0, 0, monGeo.width, Math.round(bottom) + BLUR_PAD_Y),
+          { x: 0, y: 0, width: box.width, height: Math.round(bottom) + BLUR_PAD_Y },
       ]
 
       for (let c = masterOverlay.get_first_child(); c; c = c.get_next_sibling()) {
@@ -537,6 +549,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
           const [ok, b] = c.compute_bounds(masterOverlay)
           if (!ok) return null
+          // Presented this frame, not laid out yet — the same "unmeasurable"
+          // state `boundsOf` guards on the island, and the same answer: hand the
+          // whole surface back rather than describe a panel that has no size.
+          if (b.get_width() <= 1 || b.get_height() <= 1) return null
           let height = b.get_height()
           // CC edit mode is the one open state whose allocation is known to lag
           // (IslandGrid flips cc_edit_mode AFTER its rebuild — see the matching
@@ -547,39 +563,20 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               const [, natH] = cc.measure(Gtk.Orientation.VERTICAL, Math.round(b.get_width()))
               height = Math.max(height, natH)
           }
-          const r = fullWidth
-              ? clampRect(0, b.get_y() - PANEL_PAD, monGeo.width, height + PANEL_PAD * 2)
-              : clampRect(b.get_x() - PANEL_PAD, b.get_y() - PANEL_PAD,
-                          b.get_width() + PANEL_PAD * 2, height + PANEL_PAD * 2)
-          // Presented this frame, not laid out yet. Same answer as above.
-          if (r.width <= 1 || r.height <= 1) return null
-          rects.push(r)
+          rects.push(fullWidth
+              ? { x: 0, y: Math.round(b.get_y()) - PANEL_PAD, width: box.width, height: Math.round(height) + PANEL_PAD * 2 }
+              : { x: Math.round(b.get_x()) - PANEL_PAD, y: Math.round(b.get_y()) - PANEL_PAD,
+                  width: Math.round(b.get_width()) + PANEL_PAD * 2, height: Math.round(height) + PANEL_PAD * 2 })
       }
       return rects
   }
 
-  let lastBlurKey = ""
-  const updateVisibleRegion = () => {
-      const surface = win.get_native()?.get_surface()
-      if (!surface) return
-      const rects = paintedRects()
-      // Dedupe by key so calling this more often than necessary is free — that is
-      // what lets every allocation of every panel re-stamp without a repaint per
-      // frame, which is the expensive failure mode this mechanism exists to avoid.
-      const key = rects ? rects.map(r => `${r.x},${r.y},${r.width},${r.height}`).join("|") : "none"
-      if (key === lastBlurKey) return
-      lastBlurKey = key
-      // At rest this is the single strip rect, measured on the real shell
-      // (2560x1440@144, damage 1600x700 landing BELOW the strip, 3 shuffled
-      // rounds, dock and island both declaring in either branch): 19.3% → 12.4%
-      // GPU, i.e. −6.9 points for a 2560x64 rect. Same order as the dock (−7.0)
-      // and the island (−7.2).
-      setVisibleRects(surface, rects)
-      // The shim only applies a region on a real wl_surface.commit. Every key
-      // change here rides a geometry change that repaints anyway; this just makes
-      // sure the frame is asked for.
-      win.queue_draw()
-  }
+  // At rest this is the single strip rect, measured on the real shell
+  // (2560x1440@144, damage 1600x700 landing BELOW the strip, 3 shuffled rounds,
+  // dock and island both declaring in either branch): 19.3% → 12.4% GPU, i.e.
+  // −6.9 points for a 2560x64 rect. Same order as the dock (−7.0) and the
+  // island (−7.2). Dedupe, clip and the Wayland call live in the stamper.
+  const updateVisibleRegion = () => visibleRegion.stamp()
 
   // Banners appear/vanish independently of the overlay open/close events that
   // drive updateInputRegion, so the popups widget calls back here whenever its
@@ -831,7 +828,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // Left edge of the panel: flush with the anchor (start-align) or centered
       // under it. halign is END, so margin_end pins the panel's RIGHT edge.
       const panelLeft = (id === CUSTOM_ID && customAlign === "start") ? tx : iconCenterX - panelW / 2
-      expansionCapsule.margin_end = Math.max(8, Math.round(monGeo.width - panelLeft - panelW))
+      expansionCapsule.margin_end = Math.max(8, Math.round(geo().width - panelLeft - panelW))
   }
 
   const showExpansion = (id: string) => {
@@ -922,7 +919,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: 8 })
   const sysMenuWidget = SystemMenuIcon()
-  const appTitleWidget = AppTitle(monGeo.width, openCustomExpansion)
+  const appTitle = AppTitle(geo().width, openCustomExpansion)
+  const appTitleWidget = appTitle.widget
   // The system-menu capsule has no visibility setting on purpose: it owns the
   // only GUI path to log out / restart / shut down (SystemMenu.tsx), and the
   // exit-session keybind was deliberately not shipped, so hiding it leaves no
@@ -978,13 +976,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // on the event, and then keep watching ONLY while displaced. A healthy session
   // polls zero times; a broken-config session — already degraded, and being fixed
   // right now — pays one `hyprctl layers` every 400 ms until the bar comes home.
-  const monY = monGeo.y   // layerTop is global; the island's margin is monitor-local
   const monName = gdkmonitor.get_connector() ?? undefined
   let islandWatch = 0
   const syncIslandToBar = () =>
     hs.layerTop("nidara-bar", monName).then(y => {
       if (y === null) return
-      const offset = Math.max(0, y - monY)
+      // layerTop is global; the island's margin is monitor-local
+      const offset = Math.max(0, y - geo().y)
       islandWin.setTopOffset(offset)
       if (offset > 0 && !islandWatch) {
         islandWatch = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
@@ -1317,10 +1315,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       const fixedW = fixedCapsules.reduce((s, w) => s + (w.get_visible() ? natW(w) + spacing : 0), 0)
       // Budget = space available to optWidgets before the right side would overlap the
       // workspace capsule. The workspace is centered, so each side gets at most:
-      //   (monGeo.width - 16(bar margins) - workspace_nat) / 2
+      //   (geo().width - 16(bar margins) - workspace_nat) / 2
       // minus fixedW, minus the barBox margin_end (8px).
       const workspaceNat = natW(center)
-      const budget = (monGeo.width - 16 - workspaceNat) / 2 - fixedW
+      const budget = (geo().width - 16 - workspaceNat) / 2 - fixedW
 
       let total = 0
       let fitsCount = 0
@@ -1338,6 +1336,50 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
   // Measure after first layout pass (bar realized but still invisible)
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 220, () => { measureOverflow(); return GLib.SOURCE_REMOVE })
+
+  // ── The monitor changed shape ──────────────────────────────────────────────
+  //
+  // The regions follow the geometry on their own now (the stamper re-stamps this
+  // surface, and the island's re-stamps its own). What does NOT is everything
+  // this file SOLVED from the monitor's width or height and then stored in a
+  // widget: the notification budget, how many bar icons fit, the app-title cap.
+  // Those are the "capsules cut off" half of the bug — a bar still fitting 2560px
+  // worth of icons into 1920.
+  //
+  // Debounced like the dock's rebuild, and for the same reason: a mode change can
+  // land as more than one `notify::geometry`, and `measureOverflow` rebuilds the
+  // widget row. 100 ms is that rebuild's own debounce (`scheduleDockRebuild` in
+  // app.ts), kept identical so the two do not disagree about how settled a
+  // resolution change is.
+  let geometrySync = 0
+  visibleRegion.onGeometryChanged(() => {
+    if (geometrySync) GLib.source_remove(geometrySync)
+    geometrySync = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+      geometrySync = 0
+      applyPanelHeights()
+      appTitle.setMonitorWidth(geo().width)
+      measureOverflow()
+      // The island's own numbers: its top margin is measured against the
+      // monitor's Y (which moves when outputs are re-arranged), and its overview
+      // solves the card size from the monitor's width.
+      syncIslandToBar()
+      island.onMonitorResized()
+      // measureOverflow may have rebuilt the row and appTitle may have changed
+      // width, so the strip's capsules are in new places. Both regions again.
+      updateInputRegion()
+      // And the island's, from HERE rather than only from its own geometry
+      // handler. That one fires the instant the monitor changes, which is before
+      // GTK has re-allocated anything: its 50 ms verify would then compare a stale
+      // measurement against a stale stamp, agree, and stop. This one runs after
+      // the debounce and after the row rebuild above, i.e. on the layout that is
+      // going to persist — and the capsule is CENTRED, so it moves on a width
+      // change without ever resizing, which is exactly the case its own
+      // `glassArea "resize"` trigger cannot see.
+      islandWin.updateInputRegion()
+      return GLib.SOURCE_REMOVE
+    })
+  })
+
   let barFullscreenMode = false
   let barOverlayActive = false
 
