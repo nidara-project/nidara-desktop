@@ -1372,6 +1372,17 @@ all three cases side by side and is the reference for the split:
 | Change timezone | `timedatectl set-timezone` → `org.freedesktop.timedate1.set-timezone` | admin password | entry + **Apply** |
 | Language (LANG) | `pkexec localectl set-locale` → `/etc/locale.conf` | admin password | dropdown + **Apply** |
 
+⚠️ **"System-wide" does not mean "the login screen too."** The greeter has its own
+language picker (`ui/greeter/widget/LocaleBar.ts`, persisted to `greeter-prefs.json` in
+the greeter user's config dir), and `detectLocale()` in `ui/greeter/lib/i18n.ts` reads
+that **first** — `$LANG` next (usually absent: greetd starts the greeter with an empty
+env) and `/etc/locale.conf` only as the **fallback**. So Settings → Language governs the
+greeter on a machine nobody has picked on, and stops governing it the moment someone
+uses that picker. The reverse holds too, by design: the greeter's pick re-strings the
+greeter only and never touches the session. A subtitle claiming "login screen included"
+shipped in the first draft of this work and was wrong for every machine whose greeter
+had been used once — user-caught the same day.
+
 Both system actions are `auth_admin_keep` on **all three** polkit levels (`allow_any`,
 `allow_inactive`, `allow_active` — checked in `/usr/share/polkit-1/actions/`), so every
 change raises a real password dialog. The rule: **root → Apply; our own user config →

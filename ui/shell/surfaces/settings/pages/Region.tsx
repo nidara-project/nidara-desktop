@@ -221,10 +221,18 @@ export default function RegionPage() {
     //
     // ⚠️ This group holds TWO DIFFERENT SCOPES, which is why its title is neutral
     // ("Language & formats") and each row states its own reach in the subtitle:
-    // Language writes /etc/locale.conf (system-wide — greeter, TTY, every user),
-    // Regional format writes ~/.config/environment.d/nidara-locale.conf (THIS user
-    // only, re-read by the systemd user manager at each login). A group title that
-    // named either scope would be a lie about the other row.
+    // Language writes /etc/locale.conf (system-wide), Regional format writes
+    // ~/.config/environment.d/nidara-locale.conf (THIS user only, re-read by the
+    // systemd user manager at each login). A group title that named either scope
+    // would be a lie about the other row.
+    //
+    // 🔑 "System-wide" deliberately does NOT promise the login screen. The greeter
+    // has its OWN language picker (`ui/greeter/widget/LocaleBar.ts` → `greeter-prefs
+    // .json`), and `detectLocale()` in `ui/greeter/lib/i18n.ts` reads that FIRST —
+    // /etc/locale.conf is only its fallback, for a machine nobody has picked on yet.
+    // So this row governs the greeter until someone touches that picker, and never
+    // again after. The first draft of this subtitle said "login screen included"
+    // and was wrong for every machine whose greeter had been used once.
     const regionalValues: string[] = [""]
     const regionalModel = new Gtk.StringList({ strings: [t("settings.region.locale.regional.same")] })
     const regionalDrp = NidaraDropDown({ model: regionalModel, valign: Gtk.Align.CENTER })
