@@ -97,8 +97,8 @@ export default {
     "settings.accessibility.text-scale.desc": "Skalierungsfaktor für den gesamten Text",
     "settings.accessibility.cursor-size": "Cursorgröße",
     "settings.accessibility.cursor-size.desc": "Größe des Mauszeigers",
-    "settings.accessibility.animations": "Animationen aktivieren",
-    "settings.accessibility.animations.desc": "Übergangseffekte der Oberfläche",
+    "settings.accessibility.reduce-motion": "Bewegung reduzieren",
+    "settings.accessibility.reduce-motion.desc": "Overlays erscheinen ohne Effekt, und Fenster- und Arbeitsflächenanimationen werden abgeschaltet.",
 
     // Users
     "settings.users.title": "Benutzer",

@@ -97,8 +97,8 @@ export default {
     "settings.accessibility.text-scale.desc": "すべてのテキストの拡大率",
     "settings.accessibility.cursor-size": "カーソルサイズ",
     "settings.accessibility.cursor-size.desc": "マウスポインターのサイズ",
-    "settings.accessibility.animations": "アニメーションを有効化",
-    "settings.accessibility.animations.desc": "インターフェースの切り替え効果",
+    "settings.accessibility.reduce-motion": "視差効果を減らす",
+    "settings.accessibility.reduce-motion.desc": "パネルは効果なしで表示され、ウィンドウとワークスペースのアニメーションが無効になります。",
 
     // Users
     "settings.users.title": "ユーザー",

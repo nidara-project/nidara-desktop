@@ -104,8 +104,8 @@ export default {
     "settings.accessibility.text-scale.desc": "Коэффициент масштабирования всего текста",
     "settings.accessibility.cursor-size": "Размер курсора",
     "settings.accessibility.cursor-size.desc": "Размер указателя мыши",
-    "settings.accessibility.animations": "Включить анимацию",
-    "settings.accessibility.animations.desc": "Эффекты переходов интерфейса",
+    "settings.accessibility.reduce-motion": "Уменьшить движение",
+    "settings.accessibility.reduce-motion.desc": "Панели появляются без эффекта, а анимации окон и рабочих столов отключаются.",
 
     // Users
     "settings.users.title": "Пользователи",

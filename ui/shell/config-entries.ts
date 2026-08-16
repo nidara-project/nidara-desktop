@@ -15,6 +15,7 @@ import { ACCENT_PALETTE, type AccentKey, type ShellAppearance } from "./core/Nid
 import NightLight from "./core/NightLightManager"
 import notifConfig from "./core/NotifConfig"
 import AstalNotifd from "gi://AstalNotifd"
+import { reduceMotion, setReduceMotion } from "./core/ReduceMotion"
 import recordingConfig, {
     FORMATS, QUALITIES, type RecordFormat, type RecordQuality,
 } from "./core/RecordingConfig"
@@ -117,6 +118,17 @@ export function registerConfigEntries() {
         type: "boolean",
         get: () => AstalNotifd.get_default()?.dont_disturb ?? false,
         set: v => { const nd = AstalNotifd.get_default(); if (nd) nd.dont_disturb = v as boolean },
+    })
+
+    // ── Accessibility ─────────────────────────────────────────────────────
+    // Backed by the GNOME gsetting `enable-animations` (inverted), NOT by a
+    // nidara-*.json — see core/ReduceMotion.ts for why a shadow copy would be
+    // wrong. Writing it here reaches the shell's own motion AND Hyprland's.
+    registerConfig("accessibility.reduceMotion", {
+        desc: "Reduce motion: overlays appear without their pop, dock icons snap instead of springing, and Hyprland's window/workspace animations are switched off. Movement that follows the pointer (swipes, sliders) and the Assistant's pointer animation are deliberately unaffected.",
+        type: "boolean",
+        get: () => reduceMotion(),
+        set: v => setReduceMotion(v as boolean),
     })
 
     // ── Screen recording ──────────────────────────────────────────────────

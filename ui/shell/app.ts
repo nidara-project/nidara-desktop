@@ -19,6 +19,7 @@ import { initAgentGlow } from "./core/AgentGlow"
 import appService, { type AppData } from "./core/AppService"
 import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue } from "./core/ConfigRegistry"
 import { registerConfigEntries } from "./config-entries"
+import { initReduceMotion } from "./core/ReduceMotion"
 import hyprlandState from "./core/HyprlandState"
 import queryUI from "./core/UITree"
 
@@ -799,6 +800,11 @@ app.start({
     // (No DnD seeding here. AstalNotifd's `dont_disturb` is GSettings-backed and
     // persists on its own; the block that used to force it true at every main()
     // — which is every UI RELOAD, not just login — was removed 2026-08-16.)
+
+    // Reduce motion: apply the current value to Hyprland (a separate process that
+    // knows nothing about dconf) and keep watching. The shell-side readers are
+    // pull-based (ScaleRevealer, DockPhysics) and need no init.
+    initReduceMotion()
 
     // Agent-facing config surface (describeConfig/getConfig/setConfig)
     registerConfigEntries()

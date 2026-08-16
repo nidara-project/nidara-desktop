@@ -97,8 +97,8 @@ export default {
     "settings.accessibility.text-scale.desc":   "Factor de escala para todo el texto",
     "settings.accessibility.cursor-size":       "Tamaño del cursor",
     "settings.accessibility.cursor-size.desc":  "Tamaño del puntero del ratón",
-    "settings.accessibility.animations":        "Activar animaciones",
-    "settings.accessibility.animations.desc":   "Efectos de transición en la interfaz",
+    "settings.accessibility.reduce-motion":        "Reducir el movimiento",
+    "settings.accessibility.reduce-motion.desc":        "Los paneles aparecen sin su rebote y se desactivan las animaciones de ventanas y escritorios.",
 
     // Users
     "settings.users.title": "Usuarios",

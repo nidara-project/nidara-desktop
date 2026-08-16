@@ -2043,6 +2043,16 @@ borders) stays perceptible — that tail is what made the old CSS fade look "non
   (top-anchored, own tick so reveal/swipe don't cancel it) — the NC uses it when a rebuilt
   row (item chevron toggle) or the group header ⇄ stacked-capsule swap replaces its old
   widget, so the column glides instead of snapping by the height difference.
+- **Reduce motion lands in `reveal()` and nowhere else** (2026-08-16). Every overlay that
+  pops — CC, NC, Prism, system menu, overview, app grid, bar expansion, notification
+  banners — goes through that one call, so the accessibility accommodation is a single
+  branch instead of a flag threaded through eight surfaces. It jumps to the end state the
+  animation would have reached, **in the same order**: on close the widget is hidden before
+  `onDone`, because callers use `onDone` to refresh the compositor input region and it must
+  see the panel already gone. `morphFromHeight` short-circuits the same way (`morphFrom =
+  null` IS the rest state). The switch is `core/ReduceMotion.ts` — read it before adding a
+  new animation anywhere; if your motion is system-initiated it belongs behind that call,
+  and if it follows the pointer it deliberately does not.
 - **Typing gotcha:** the class merges `export interface ScaleRevealer extends Gtk.Widget`
   because the ambient `ags/gtk4` typing exposes `Gtk` as `any` in value position — without
   the merge, tsc can't see the inheritance. Don't add TS `private` members or members whose

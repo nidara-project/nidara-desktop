@@ -97,8 +97,8 @@ export default {
     "settings.accessibility.text-scale.desc": "Fattore di scala per tutto il testo",
     "settings.accessibility.cursor-size": "Dimensione cursore",
     "settings.accessibility.cursor-size.desc": "Dimensione del puntatore del mouse",
-    "settings.accessibility.animations": "Attiva le animazioni",
-    "settings.accessibility.animations.desc": "Effetti di transizione dell'interfaccia",
+    "settings.accessibility.reduce-motion": "Riduci il movimento",
+    "settings.accessibility.reduce-motion.desc": "I pannelli compaiono senza effetto e le animazioni di finestre e spazi di lavoro vengono disattivate.",
 
     // Users
     "settings.users.title": "Utenti",

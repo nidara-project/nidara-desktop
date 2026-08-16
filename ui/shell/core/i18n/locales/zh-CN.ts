@@ -97,8 +97,8 @@ export default {
     "settings.accessibility.text-scale.desc": "所有文字的缩放比例",
     "settings.accessibility.cursor-size": "光标大小",
     "settings.accessibility.cursor-size.desc": "鼠标指针的大小",
-    "settings.accessibility.animations": "启用动画",
-    "settings.accessibility.animations.desc": "界面过渡效果",
+    "settings.accessibility.reduce-motion": "减弱动态效果",
+    "settings.accessibility.reduce-motion.desc": "面板直接显示，窗口与工作区动画关闭。",
 
     // Users
     "settings.users.title": "用户",

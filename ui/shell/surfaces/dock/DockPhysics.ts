@@ -4,6 +4,26 @@
  */
 
 import { dockSettings } from "./state"
+import { reduceMotion } from "../../core/ReduceMotion"
+
+/**
+ * Reduce motion, for a spring: land on the target this frame and report "done".
+ *
+ * 🔑 This removes the TRAVEL, not the feature. Magnification still magnifies and
+ * auto-hide still hides — the icon is simply already at its new size, and the dock
+ * is simply already out. That is the right reading of the accommodation: hover
+ * magnification is a pointer-driven response (it tracks where you are, and stops
+ * when you stop), so removing it entirely would take away a feature rather than
+ * quiet the motion. What goes is the overshoot and the settle.
+ *
+ * Returning `false` is what stops the caller's frame tick, so a reduced dock also
+ * costs nothing per frame instead of ticking to a target it already reached.
+ */
+function snapToTarget(ch: SpringChannel): boolean {
+    ch.current = ch.target
+    ch.velocity = 0
+    return false
+}
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 // Values derived from dockSettings. Call syncConstants() before dock recreation.
@@ -185,6 +205,7 @@ export function stepSpring(ch: SpringChannel, dt: number, stiffness: number, dam
 }
 
 export function springStep(ch: SpringChannel, dt: number): boolean {
+    if (reduceMotion()) return snapToTarget(ch)
     const delta = ch.target - ch.current;
     const absDelta = Math.abs(delta);
     const absVel = Math.abs(ch.velocity);
@@ -205,6 +226,7 @@ export function springStep(ch: SpringChannel, dt: number): boolean {
  * quickly (~250 ms) without overshoot.
  */
 export function slideSpringStep(ch: SpringChannel, dt: number): boolean {
+    if (reduceMotion()) return snapToTarget(ch)
     const STIFFNESS = 700
     const DAMPING   = 53   // ≈ 2√700 → critically damped
 

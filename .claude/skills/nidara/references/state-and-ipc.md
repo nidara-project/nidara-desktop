@@ -630,6 +630,28 @@ Rules:
   state like GNOME does. **The check is one command:** `gsettings list-recursively io.astal.<lib>`,
   or read the `.vala` property — if the getter hits `settings.get_*`, it persists. A shadow copy
   can only ever disagree with the real one.
+- **Reading an effective Hyprland option: `getOptionInt` is INT-TYPED ONLY.** A bool
+  option's `hyprctl getoption -j` carries no `int` field at all —
+  `animations:enabled` answers `{"option":…,"bool":false,"set":true}` — so
+  `getOptionInt` returns 0 for every boolean whatever its value, silently.
+  `HyprlandState.getOptionBool(name, fallback)` is the one for those, and it takes a
+  fallback so a failed read is not mistaken for `false`. (Found 2026-08-16: the
+  reduce-motion baseline read `true` as 0 and pinned Hyprland's animations off — the
+  bug survived a clean typecheck and a clean build, and only the live A/B caught it.)
+- **Changing a Hyprland option live is `hs.evalLua`, and the shape comes from the SHIPPED
+  STUB.** `/usr/share/hypr/stubs/hl.meta.lua` declares the whole Lua config surface
+  (`HL.ConfigOpt.Animations.enabled`, etc.) — read it rather than guessing a
+  translation of the `hyprland.conf` key. `hyprctl keyword` is not an option: the Lua
+  parser answers "Use eval.", which costs nothing and changes nothing, so a `keyword`
+  call looks like it worked.
+- **A setting that overrides the user's Hyprland config must capture a BASELINE.** Reduce
+  motion pushes `animations.enabled = false`, and turning it back off restores what
+  `getOptionBool` reported before the shell ever pushed — not a hardcoded `true`, which
+  would overrule a `hyprland-user.lua` that disabled animations on purpose. Two traps
+  came with it: the baseline must NOT be read from the live option while the override is
+  already active (a shell reload would capture our own value as the user's), and a
+  `hyprctl reload` discards the eval, so re-assert on `config-reloaded` — which is also
+  the moment the live value is trustworthy as the baseline again.
 - **A `desc` should not restate the DEFAULT.** `value` sits in the same JSON object, so a
   default is a second answer to the question the reader came with. (It was first suspected of
   causing a misread of `ai.allowFileWrite`; removing it did not fix that — the cause was the

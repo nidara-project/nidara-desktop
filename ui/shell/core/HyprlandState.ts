@@ -208,7 +208,13 @@ class HyprlandStateClass extends GObject.Object {
 
     /** Read an effective Hyprland option's int value via `hyprctl getoption` (works
      *  with the Lua parser, unlike `keyword`). On-demand read — the first of the
-     *  "effective config in HyprlandState" idea (gaps etc. could follow the same way). */
+     *  "effective config in HyprlandState" idea (gaps etc. could follow the same way).
+     *
+     *  ⚠️ INT-TYPED OPTIONS ONLY. A bool option's `getoption -j` carries no `int`
+     *  field at all — `animations:enabled` answers `{"option":…,"bool":false,"set":true}`
+     *  — so this returns 0 for every boolean, whatever its value, and says nothing
+     *  about it. Use `getOptionBool` for those. (Found 2026-08-16, by a reduce-motion
+     *  restore that read `true` as 0 and pinned Hyprland's animations off.) */
     getOptionInt(name: string): number {
         try {
             const opt = JSON.parse(exec(["hyprctl", "getoption", name, "-j"]))
@@ -219,6 +225,18 @@ class HyprlandStateClass extends GObject.Object {
             return 0
         }
         catch (e) { console.error("[HyprlandState] getOptionInt", name, e); return 0 }
+    }
+
+    /** Read an effective BOOL option (`hyprctl getoption -j` reports those under
+     *  `bool`, with no `int` alongside — see the warning on getOptionInt).
+     *  `fallback` is returned when the read fails or the option is not a bool, so a
+     *  caller never mistakes "could not tell" for `false`. */
+    getOptionBool(name: string, fallback = false): boolean {
+        try {
+            const opt = JSON.parse(exec(["hyprctl", "getoption", name, "-j"]))
+            return typeof opt.bool === "boolean" ? opt.bool : fallback
+        }
+        catch (e) { console.error("[HyprlandState] getOptionBool", name, e); return fallback }
     }
 
     /** Async read of an effective option: resolves the parsed `getoption -j` JSON

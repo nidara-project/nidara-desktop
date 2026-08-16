@@ -1,21 +1,10 @@
 import { Gtk } from "ags/gtk4"
-import Gio from "gi://Gio"
 import Theme, { TEXT_SCALE_MIN, TEXT_SCALE_MAX } from "../../../core/ThemeManager"
 import { listGroup, createRow, toggleRow, sliderRow, pageBox } from "../SettingsHelpers"
 import Icons from "../../../core/Icons"
 import { safeDisconnect } from "../../../core/signals"
+import { reduceMotion, setReduceMotion, onReduceMotionChange } from "../../../core/ReduceMotion"
 import { t } from "../../../core/i18n"
-
-const iface = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
-
-function getAnimations(): boolean {
-    try { return iface.get_boolean("enable-animations") } catch { return true }
-}
-function setAnimations(v: boolean) {
-    try { iface.set_boolean("enable-animations", v) } catch (e) {
-        console.error("[Accessibility] enable-animations:", e)
-    }
-}
 
 export default function AccessibilityPage() {
     const page = pageBox("accessibility-page")
@@ -68,7 +57,8 @@ export default function AccessibilityPage() {
         },
     ))
 
-    // ⚠️ `Theme.setCursorSize`, never `iface.set_int("cursor-size")` directly. The
+    // ⚠️ `Theme.setCursorSize`, never a bare `set_int("cursor-size")` on the
+    // gsetting. The
     // gsetting is only ONE of three consumers — Hyprland's live compositor cursor
     // takes `hyprctl setcursor` and XWayland apps read gtk `settings.ini`, neither
     // of which watches dconf. This row wrote the gsetting alone until 2026-08-16,
@@ -105,13 +95,29 @@ export default function AccessibilityPage() {
     page.append(visionGroup.box)
 
     // ── Motion ────────────────────────────────────────────────────────────────
+    // Phrased as the ACCOMMODATION ("Reduce motion", on = less movement), like
+    // GNOME, macOS and `prefers-reduced-motion`, not as the mechanism it flips.
+    // The underlying gsetting is still `enable-animations` and still the inverse;
+    // `core/ReduceMotion.ts` owns that inversion and is the only place it happens.
+    //
+    // Until 2026-08-16 this row wrote that gsetting and NOTHING in the shell read
+    // it, so the switch reached the animations inside applications and left the
+    // desktop's own — every overlay, the dock springs, the island morph, all of
+    // Hyprland's window and workspace motion — running. On an accessibility page
+    // that reads as a promise about the desktop.
     const motionGroup = listGroup(t("settings.accessibility.group.motion"))
 
     motionGroup.listBox.append(toggleRow(
-        t("settings.accessibility.animations"),
-        t("settings.accessibility.animations.desc"),
-        getAnimations(),
-        (v) => setAnimations(v),
+        t("settings.accessibility.reduce-motion"),
+        t("settings.accessibility.reduce-motion.desc"),
+        reduceMotion(),
+        (v) => setReduceMotion(v),
+        // Also reachable from `setConfig accessibility.reduceMotion` and from
+        // `gsettings` directly, and the page is cached — re-read on realize.
+        (apply) => {
+            apply(reduceMotion())
+            return onReduceMotionChange(apply)
+        },
     ))
 
     page.append(motionGroup.box)

@@ -97,8 +97,8 @@ export default {
     "settings.accessibility.text-scale.desc": "Schaalfactor voor alle tekst",
     "settings.accessibility.cursor-size": "Cursorgrootte",
     "settings.accessibility.cursor-size.desc": "Grootte van de muisaanwijzer",
-    "settings.accessibility.animations": "Animaties inschakelen",
-    "settings.accessibility.animations.desc": "Overgangseffecten van de interface",
+    "settings.accessibility.reduce-motion": "Beweging beperken",
+    "settings.accessibility.reduce-motion.desc": "Panelen verschijnen zonder effect en venster- en werkbladanimaties worden uitgeschakeld.",
 
     // Users
     "settings.users.title": "Gebruikers",

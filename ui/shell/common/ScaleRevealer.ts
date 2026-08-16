@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import Graphene from "gi://Graphene"
+import { reduceMotion } from "../core/ReduceMotion"
 
 // ScaleRevealer: shows/hides its child with a grow/shrink + fade animation.
 // Two modes, one engine:
@@ -110,6 +111,11 @@ export class ScaleRevealer extends Gtk.Widget {
     morphFromHeight(h0: number, duration = 250) {
         if (this.morphTickId !== null) { this.remove_tick_callback(this.morphTickId); this.morphTickId = null }
         if (h0 <= 0) return
+        // Under reduce motion the height simply IS the new one — `morphFrom = null`
+        // is the rest state the tick would have arrived at, so leaving it unset is
+        // the whole no-op. (The height still changes; only the easing between the
+        // two heights goes away.)
+        if (reduceMotion()) { this.morphFrom = null; this.queue_resize(); return }
         this.morphFrom = h0
         this.morphEased = 0
         let startUs: number | null = null
@@ -249,6 +255,26 @@ export class ScaleRevealer extends Gtk.Widget {
         const from = this.progress
         const target = open ? 1 : 0
         if (from === target) {
+            if (!open) this.set_visible(false)
+            onDone?.()
+            return
+        }
+        // 🔑 Reduce motion lands HERE and nowhere else for the whole shell. Every
+        // overlay that pops — Control Center, notification centre, Prism, system
+        // menu, overview, app grid, the bar expansion, notification banners — does
+        // it through this one call, so the accommodation is one branch rather than
+        // a flag threaded through eight surfaces.
+        //
+        // Jump to the same end state the animation would have reached, in the same
+        // ORDER: on close the widget is hidden before `onDone`, because callers use
+        // `onDone` to refresh the compositor input region and it must see the panel
+        // already gone. `onDone` fires synchronously, which is what a zero-duration
+        // animation means — a caller that needed a frame in between would have been
+        // relying on the delay, and none does.
+        if (reduceMotion()) {
+            this.progress = target
+            this.opacity = target
+            if (this.animateLayout) this.queue_resize(); else this.queue_draw()
             if (!open) this.set_visible(false)
             onDone?.()
             return

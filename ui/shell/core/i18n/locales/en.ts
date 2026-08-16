@@ -97,8 +97,8 @@ export default {
     "settings.accessibility.text-scale.desc":   "Scale factor for all text",
     "settings.accessibility.cursor-size":       "Cursor size",
     "settings.accessibility.cursor-size.desc":  "Size of the mouse pointer",
-    "settings.accessibility.animations":        "Enable animations",
-    "settings.accessibility.animations.desc":   "Interface transition effects",
+    "settings.accessibility.reduce-motion":        "Reduce motion",
+    "settings.accessibility.reduce-motion.desc":        "Overlays appear without their pop, and window and workspace animations are switched off.",
 
     // Users
     "settings.users.title": "Users",
