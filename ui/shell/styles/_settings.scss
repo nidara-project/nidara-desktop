@@ -36,12 +36,6 @@ window.nidara-settings-window {
         @include nidara-reset;
     }
 
-    // Transparent backdrop in collapsed mode — catches click-outside to close sidebar.
-    // Must have a background (even transparent) so GTK4 picks up pointer events.
-    .nidara-split-backdrop {
-        background: transparent;
-    }
-
     // ── Sidebar panel ─────────────────────────────────────────────────────────────
     // Rounded rectangle card floating in the left column — NOT a pill.
     // margin: top right bottom left — 8px all except right (content starts there).
@@ -53,16 +47,7 @@ window.nidara-settings-window {
         viewport, list { @include nidara-reset; }
     }
 
-    // When the sidebar is collapsed and floating over content (overlay fallback —
-    // used when no floatAnchor is provided), use a near-opaque background so
-    // content text doesn't bleed through.
-    .sidebar-floating .nidara-sidebar-capsule {
-        background: var(--nidara-popover-bg, rgba(36, 36, 36, 0.94));
-        border-color: var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
-        box-shadow: var(--nidara-shadow-lg);
-    }
-
-    // ── Sidebar Popover (collapsed + floatAnchor mode) ────────────────────────────
+    // ── Sidebar Popover (collapsed mode) ──────────────────────────────────────────
     // Hyprland's blur:popups = true applies kawase blur to the settings content
     // visible through the semi-transparent panel background — giving real frosted-
     // glass rather than a flat opaque overlay. No extra layerrule needed.

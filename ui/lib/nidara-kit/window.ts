@@ -209,7 +209,6 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         collapseAt: collapseAtFor(sidebarWidth, contentWidth),
         cssClasses: ["nidara-split-view"],
         name: "nidara-window-splitview",
-        floatAnchor: sidebarToggle,
     })
 
     sidebarToggle.connect("clicked", () => {

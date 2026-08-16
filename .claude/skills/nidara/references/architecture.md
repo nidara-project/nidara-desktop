@@ -574,6 +574,24 @@ no pointer-only mode. Any surface that adopts it starts taking keyboard focus fr
 which is fine for Prism and a real behaviour change for a panel like the CC. It is also **not
 enforced during DnD** (`!dndActive()`), which matters for the dock's drag.
 
+🔑 **There is no catcher left anywhere, including the ones that had stopped running.** Two remnants
+outlived the 2026-08-05 deletion by hiding as unreachable code, and were removed 2026-08-16:
+`Bar.tsx`'s catcher REGION sat behind an `if (false)` (a later PR then updated the geometry inside a
+block that could not execute — the residue was actively misleading maintenance), and the kit's
+`NidaraSplitView` kept a transparent full-area `backdrop` + `GestureClick` for the collapsed sidebar,
+selected only when no `floatAnchor` was passed, which no caller has done since the popover mode
+landed. Its `floatAnchor` parameter went with it: the popover parents to the split view's own root
+`Gtk.Overlay` (window-space `pointing_to`), so the anchor was never the popup's parent — it was a
+mode flag that read like a position. **A catcher and a grab must never both be live**: the catcher
+sits above the thing you clicked and eats the very press the grab is waiting to be given.
+
+**The Settings window is not part of any of this, and never was.** It is an xdg TOPLEVEL, so the
+compositor owns its focus by construction — there is nothing outside it to catch. Everything popup-
+shaped inside it is a real xdg_popup with `autohide` (`NidaraDropDown`/`Gtk.DropDown`, Network's
+password `Gtk.Popover`, the collapsed sidebar) and therefore takes the same single seat grab through
+GTK, and `showNidaraAlert` is a real `modal: true` + `transient_for` toplevel. If you are auditing
+"does surface X still fake its modality", toplevels are not candidates: only layer surfaces are.
+
 ⚠️ **Our objects live on a private `wl_event_queue`, so nothing dispatches `cleared` for us.** The
 shim pumps `wl_display_dispatch_queue_pending` on a 50 ms timer **while a grab is held** — it never
 reads the fd (GDK owns it, and `wl_display_read_events` already distributes to every queue). The
@@ -1201,7 +1219,7 @@ Pure-GTK4 primitives + Nidara tokens, **no Adwaita, no resets**. Mostly consumed
 - **The composed rows** (`rows.ts`): `NidaraToggleRow`, `NidaraDropDownRow`, `NidaraSliderRow` — "label + subtitle + the control that edits it", which is most of what a preferences pane is. They take the row BUILDER as a parameter (`mkRow`, default `plainRow`), which is how **building a row and registering it are two different jobs** (NTK step 4, 2026-08-16). Settings hands in its own `createRow`, which pushes the label into the search index and then delegates; nobody else does, and nobody else has to know the index exists. ⚠️ **Contrast with the appearance seam below: that one is a module-level global because it is per-BUNDLE; this one is a parameter because it is per-CALLER.** The same shell has Settings rows that must be indexed and `widgets/screenrecord.ts` rows that must not — a global would have to be pushed and popped around every build. `lifetime.ts`'s `bindWhileRealized` came along with them (the rows re-arm their external sync through it).
 - **`appearance.ts` — the kit's appearance seam. Read this before adding any Cairo-painted kit component.** Everything else in the kit needs nothing but GTK from its host. A Cairo painter does: Cairo cannot read a CSS token, so the accent must arrive as a real `#rrggbb` and "is the surface under me dark?" must be answered by whoever knows what that surface is (in the shell, `core/ThemeManager` — which the kit may not import, or it stops being usable from the greeter). So the BUNDLE injects it: `setKitAppearance({ accent, surfaceIsDark, onChange })`, once, at module scope in its `app.ts`, before `main()` builds anything. Same shape as injecting the greeter's `t()` into the shared login card. ⚠️ **An unregistered bundle does not fail — it renders the fallback (blue, light surface).** That is the silent-default trap the token contract warns about, so the fallback logs a warning on first use; the greeter/lock have no dev mode to notice it in otherwise. Only the shell registers today, because only the shell has sliders. Measured A/B on 2026-08-15, same widget: registered → fill `#D45A94` (pink accent) and no warning; unregistered → `#017BE9` and the warning.
 
-- `NidaraSplitView` — replaces `Adw.OverlaySplitView` + `Breakpoint`. Its `collapseAt` is a **fixed px breakpoint**, never derived from the content: a breakpoint computed from the active page's natural width is a different window on every page (2026-08-11 — see design-system.md, "The Settings window has ONE geometry law").
+- `NidaraSplitView` — replaces `Adw.OverlaySplitView` + `Breakpoint`. Its `collapseAt` is a **fixed px breakpoint**, never derived from the content: a breakpoint computed from the active page's natural width is a different window on every page (2026-08-11 — see design-system.md, "The Settings window has ONE geometry law"). Collapsed, the sidebar is REPARENTED into a `Gtk.Popover` (xdg_popup → compositor blur behind it, and `autohide` does the dismissing). There is exactly ONE collapsed mode since 2026-08-16: the Overlay + click-catching `backdrop` alternative, and the `floatAnchor` parameter that selected between them, are gone — see the focus-grab section for why a catcher must not coexist with a grab.
 - `NidaraClamp` — replaces `Adw.Clamp`. Takes a `minWidth` as well as a max; passing the same value for both is how a pane gets a CONSTANT width (what Settings does).
 - `NidaraWindow` — the glass window shell. It owns the geometry law: from one `contentWidth` it derives the split view's breakpoint (`sidebar + content`), the window's minimum size and the width it opens at (always wide enough to show the sidebar docked).
 - `NidaraButton` — suggested/destructive/pill variants

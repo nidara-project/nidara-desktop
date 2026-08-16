@@ -19,16 +19,22 @@ export interface NidaraSplitViewResult {
  *     [spacer sidebarWidth px | contentZeroMin hexpand]
  *     sidebar overlay anchored START fills the spacer area visually.
  *
- *   Collapsed (no floatAnchor):
- *     [contentZeroMin takes full width]
- *     sidebar overlay floats on top when showSidebar = true.
- *     Transparent backdrop beneath catches click-outside → closes sidebar.
- *
- *   Collapsed (with floatAnchor):
+ *   Collapsed:
  *     sidebar is reparented into a Gtk.Popover (xdg_popup) attached to
  *     floatAnchor. Hyprland's blur:popups = true applies compositor blur
  *     to the settings content visible behind the semi-transparent panel.
- *     Popover autohide handles click-outside; no separate backdrop needed.
+ *     Popover autohide handles click-outside.
+ *
+ *   ⚠️ There used to be a second collapsed mode — sidebar as an Overlay child over
+ *   a transparent full-area backdrop whose GestureClick closed it — taken when no
+ *   `floatAnchor` was passed. `floatAnchor` is REQUIRED now, and the backdrop is
+ *   gone (2026-08-16). It was the last click-catcher left in the codebase, kept as
+ *   a "fallback" that no caller could reach: the only call site (`nidara-kit/
+ *   window.ts`) has passed an anchor since the popover mode landed. Dismissal here
+ *   is the compositor's, exactly as it is for the layer surfaces since the catchers
+ *   died (`shell/common/FocusGrab.ts`) — an autohide popover takes the same single
+ *   seat grab. A catcher and a grab must never both be live: the catcher sits above
+ *   the thing you clicked and eats the press the grab wanted to deliver.
  *
  * ── Zero-minimum content wrapper ─────────────────────────────────────────────
  *
@@ -78,13 +84,6 @@ export function NidaraSplitView(opts: {
     cssClasses?: string[]
     name?: string
     /**
-     * When provided, the floating sidebar opens as a Gtk.Popover attached to
-     * this widget instead of an Overlay child. The Popover creates an xdg_popup
-     * surface, enabling Hyprland's blur:popups to blur the content behind it.
-     * If omitted, the original Overlay + backdrop approach is used.
-     */
-    floatAnchor?: Gtk.Widget
-    /**
      * Called whenever the sidebar's "presentation" changes: `true` when the
      * sidebar widget is on screen (docked, or shown in the collapsed popover),
      * `false` when it is hidden (collapsed with the popover closed, or manually
@@ -103,7 +102,6 @@ export function NidaraSplitView(opts: {
         autoCollapse   = true,
         cssClasses     = [],
         name,
-        floatAnchor,
         onSidebarPresented,
     } = opts
 
@@ -128,25 +126,6 @@ export function NidaraSplitView(opts: {
         width_request: sidebarWidth,
         hexpand: false,
     })
-
-    // ── Backdrop: catches click-outside in collapsed overlay mode ─────────────
-    // Only used when floatAnchor is NOT provided (Popover handles its own autohide).
-    const backdrop = new Gtk.Box({
-        hexpand: true,
-        vexpand: true,
-        halign: Gtk.Align.FILL,
-        valign: Gtk.Align.FILL,
-        css_classes: ["nidara-split-backdrop"],
-    })
-    backdrop.visible = false
-    const bdClick = new Gtk.GestureClick()
-    bdClick.connect("pressed", () => {
-        if (_collapsed && _showSidebar && !floatAnchor) {
-            _showSidebar = false
-            applyLayout()
-        }
-    })
-    backdrop.add_controller(bdClick)
 
     // ── Zero-minimum content wrapper ──────────────────────────────────────────
     const contentZeroMin = new Gtk.Overlay({
@@ -177,10 +156,9 @@ export function NidaraSplitView(opts: {
     })
     if (name) root.set_name(name)
     root.set_child(contentBase)
-    root.add_overlay(backdrop)     // z: below sidebar
-    root.add_overlay(sidebarWrap)  // z: above backdrop
+    root.add_overlay(sidebarWrap)
 
-    // ── Popover mode (floatAnchor) ─────────────────────────────────────────────
+    // ── Collapsed mode: the sidebar lives in a popover ────────────────────────
     // Sidebar is reparented into an xdg_popup (Gtk.Popover) so Hyprland's
     // blur:popups applies compositor blur to the content visible behind it.
     // The Popover is created lazily on first use and reused thereafter.
@@ -196,10 +174,10 @@ export function NidaraSplitView(opts: {
     // in/out of that Box via append/unparent — bypassing the Popover's
     // single-child caching entirely.
     //
-    // IMPORTANT — why set_parent(root) instead of set_parent(floatAnchor)?
+    // IMPORTANT — why set_parent(root) instead of set_parent(the toggle button)?
     // pointing_to coordinates are always in the parent widget's coordinate space.
-    // Parenting to floatAnchor (a button deep inside the header) would require
-    // translate_coordinates(root → floatAnchor) to convert the target window-space
+    // Parenting to the toggle (a button deep inside the header) would require
+    // translate_coordinates(root → toggle) to convert the target window-space
     // rect — this translation is fragile and produces a non-zero x offset that
     // makes the popup appear shifted (visually "wider" than the docked sidebar).
     // Parenting to `root` (the Gtk.Overlay that fills the window from 0,0) means
@@ -239,9 +217,10 @@ export function NidaraSplitView(opts: {
         })
         pop.set_child(sidebarSlot)  // called once, never again
         // Parent to root (the full-window Overlay at 0,0) so pointing_to
-        // coordinates are in window-space — no translate_coordinates needed.
-        // floatAnchor is still used as the truthy flag in applyLayout but is
-        // NOT the Popover parent.
+        // coordinates are in window-space — no translate_coordinates needed. The
+        // sidebar TOGGLE is not this popup's parent and never was, which is why
+        // the caller no longer hands one over (it used to arrive as `floatAnchor`,
+        // read as a mode flag and nothing else — see the header).
         pop.set_parent(root)
         pop.connect("closed", () => {
             // Restore sidebar to sidebarWrap when popover closes (any reason)
@@ -321,30 +300,16 @@ export function NidaraSplitView(opts: {
             spacer.width_request = _showSidebar ? sidebarWidth : 0
             spacer.visible       = _showSidebar
             sidebarWrap.visible  = _showSidebar
-            backdrop.visible     = false
-            sidebarWrap.remove_css_class("sidebar-floating")
-            if (floatAnchor) closeSidebarPopover()
-        } else if (floatAnchor) {
-            // ── Collapsed + Popover mode ──────────────────────────────────────
+            closeSidebarPopover()
+        } else {
+            // ── Collapsed: the sidebar lives in the popover ───────────────────
             spacer.width_request = 0
             spacer.visible       = false
             sidebarWrap.visible  = false
-            backdrop.visible     = false
             if (_showSidebar) {
                 openSidebarInPopover()
             } else {
                 closeSidebarPopover()
-            }
-        } else {
-            // ── Collapsed + Overlay fallback ──────────────────────────────────
-            spacer.width_request = 0
-            spacer.visible       = false
-            sidebarWrap.visible  = _showSidebar
-            backdrop.visible     = _showSidebar
-            if (_showSidebar) {
-                sidebarWrap.add_css_class("sidebar-floating")
-            } else {
-                sidebarWrap.remove_css_class("sidebar-floating")
             }
         }
     }

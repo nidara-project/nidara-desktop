@@ -370,18 +370,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // @ts-ignore
       region.unionRectangle({ x: 0, y: 0, width: Math.round(geo().width), height: BAR_H })
 
-      const isAnyOpen = status.isAnyOverlayOpen
-      if (false) {
-          // Catcher region — covers everything below bar to intercept outside-click dismissal
-          // In edit mode we skip this so other windows remain interactive.
-          // Skipped under a compositor focus grab too, for the opposite reason: the
-          // dismissal happens ABOVE us, and a region covering the desktop would make
-          // the outside press land on our own surface — which the grab accepts, so
-          // nothing would dismiss at all.
-          // @ts-ignore
-          region.unionRectangle({ x: 0, y: BAR_H, width: Math.round(geo().width), height: Math.round(geo().height - BAR_H) })
-      }
-
+      // ⚠️ NOTHING below the bar strip goes into this region, and that is the
+      // dismissal mechanism working, not a gap in it. While an overlay was open
+      // this used to union the whole monitor below BAR_H — the catcher region,
+      // there to be clicked so we could notice the press. Under the compositor
+      // grab it would do the exact opposite of its old job: the press that
+      // dismisses has to land OUTSIDE our surface, and a region covering the
+      // desktop makes it land on us, where the grab accepts it and nothing
+      // dismisses at all. Deleted 2026-08-16; it had been sitting behind an
+      // `if (false)` since the grab landed (#94), long enough for a later change
+      // to update the geometry inside a block that could not run (#140).
       const addWidgetToRegion = (widget: Gtk.Widget) => {
           if (!widget.get_visible()) return
           const alloc = widget.get_allocation()
