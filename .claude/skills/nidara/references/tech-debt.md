@@ -3941,3 +3941,12 @@ returns, so it applies the change by itself and makes a broken fix look like a w
 restarting the shell destroys the Settings window, leaving the pointer over the wallpaper with no
 shell surface to act on. The only instruments that told the truth were a person looking at the screen
 and `WAYLAND_DEBUG=1`.
+
+⚠️ **It used to work.** The user remembers the theme applying instantly, which makes this a
+REGRESSION and is where a future attempt should start — not in the code above. Two unverified
+suspects, both cheap to check: the Hyprland upgrade (0.56.2 is from 2026-08-05), and **GTK4 moving to
+`cursor-shape-v1`** (4.16+). The second is the more interesting one: before it, a GTK client uploaded
+its own cursor BUFFER, and a client that re-reads `gtk-cursor-theme-name` re-uploads by itself — so
+the theme would have refreshed with no compositor involvement and no `enter`. If that is it, the
+behaviour did not break so much as move house, and the client-side lane above was the right idea a
+version too late. Bisecting one of the two is the whole investigation.
