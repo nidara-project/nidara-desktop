@@ -1,4 +1,6 @@
 import { Gdk, Gtk } from "ags/gtk4"
+import GLib from "gi://GLib"
+import hs from "../core/HyprlandState"
 import { safeDisconnect } from "../core/signals"
 
 /**
@@ -28,10 +30,7 @@ import { safeDisconnect } from "../core/signals"
  * ⚠️ **Scope.** Only the client holding pointer focus may name a shape
  * (`InputManager.cpp:68-72`), so this reaches Nidara's surfaces, not third-party apps.
  * The case where nobody holds it — right after a dropdown's popover closes — is handled
- * by `armOnNextEnter`; read it, it is the subtlest part of this file. ⛔ Do NOT try to
- * cover it with a settling timer: measured on the wire across three selections with no
- * human input, no `enter` arrives at all while the mouse is still, so there is nothing
- * for a later attempt to find.
+ * by `refreshAfterRefocus`; read it, it is the subtlest part of this file.
  *
  * ⚠️ **Never verify this with a screenshot.** See the cursor section of
  * `references/dev-workflow.md`: `grim -c` only refreshes its copy on the pointer-focus
@@ -45,7 +44,7 @@ function bump(w: Gtk.Widget) {
 }
 
 /** Re-issue the cursor on whichever of our surfaces the pointer is in.
- *  Returns false when there was nothing to re-issue it on — see `armOnNextEnter`. */
+ *  Returns false when there was nothing to re-issue it on — see `refreshAfterRefocus`. */
 export function refreshShellCursor(): boolean {
     try {
         const pointer = Gdk.Display.get_default()?.get_default_seat()?.get_pointer()
@@ -79,59 +78,42 @@ export function refreshShellCursor(): boolean {
 }
 
 /**
- * Wait for the pointer to come back, then re-issue.
+ * Close the one state nothing else can: nobody holds pointer focus.
  *
- * 🔑 **Neither half works alone, and that is the whole story of this file.** Pick a
- * cursor theme from a `Gtk.DropDown` and the popover is destroyed under a motionless
- * pointer: nobody holds pointer focus (the parent got `leave` when the popover opened,
- * and no `enter` follows — verified on the wire across three selections with no human
- * input), so there is no surface to name a shape on. Moving the mouse restores focus,
- * but GTK then names `default` — the name Hyprland already has, and its dedupe throws
- * a repeat away. So the pointer coming back does not repaint, and our rename cannot
- * happen until it does.
+ * Picking the cursor THEME goes through a `Gtk.DropDown`, and choosing an item
+ * destroys its popover — the surface the pointer was in. Hyprland does not hand the
+ * focus to the window underneath, because it only re-runs that pass on pointer motion
+ * and the pointer has not moved. Two facts then hold at once, and neither is fixable
+ * alone:
  *
- * Hence: when the refresh finds nothing to bump, arm the windows and do it on the very
- * next pointer event. That is the moment both conditions hold at once — the pointer is
- * back, and we are the one naming the shape. One shot, removed as soon as it fires: no
- * polling, no timers, no second mechanism. It is the same bump, waiting for the only
- * event that makes it possible.
+ *   - Nobody holds pointer focus, so there is no surface on which to name a shape.
+ *     Verified on the wire across three selections with no human input: no `enter`
+ *     ever arrives while the mouse is still. ⛔ A settling timer finds nothing however
+ *     long it waits — that was tried and measured.
+ *   - When the pointer does come back, GTK names `default`, which is the name Hyprland
+ *     already has, and its dedupe throws a repeat away. So the focus returning does not
+ *     repaint either.
  *
- * 🔑 **It has to be `motion`, not `enter`.** A `Gtk.Popover` hangs off its parent's
- * widget tree, so the pointer never LEFT the window and no `enter` is ever delivered to
- * it — armed on `enter`, this silently never fires. Verified on the wire: with `enter`
- * the one-pixel move produced only GTK's own `set_shape(1)`; with `motion` it produced
- * `set_shape(8)` then `set_shape(1)`, the rename that repaints. `enter` is kept as well
- * for the case where the pointer arrives from outside the window entirely.
+ * So ask the compositor to re-decide what is under the pointer (`reevaluatePointerFocus`
+ * — a warp to where the pointer already is; it does not move and no input is
+ * synthesised), and re-issue once it has. Measured end to end: `leave(dead popover)` →
+ * `enter(parent window)` → our `set_shape(crosshair)` → `set_shape(default)`.
  *
- * ⚠️ Pointer focus cannot be requested. There is no Wayland protocol for a client to
- * take it — the compositor assigns it by pointer position alone. `common/FocusGrab.ts`
- * grabs the KEYBOARD, which is a different seat capability and no help here.
+ * ⚠️ Pointer focus cannot be requested by a client. There is no Wayland protocol for
+ * it — the compositor assigns it by pointer position alone, which is why this has to
+ * go through the compositor at all. `common/FocusGrab.ts` grabs the KEYBOARD, a
+ * different seat capability, and is no help here.
  */
-const armedWindows = new WeakSet<Gtk.Window>()
-let pending = false
+const SETTLE_MS = 120
 
-function armOnNextEnter(windows: Gtk.Window[]) {
-    pending = true
-    for (const w of windows) {
-        if (!w.get_mapped() || armedWindows.has(w)) continue
-        armedWindows.add(w)
-
-        // ⚠️ The controller is created ONCE per window and NEVER removed. Removing it
-        // from inside its own handler — the obvious way to make this one-shot — frees
-        // the controller while GTK is still emitting on it, and the shell dies with a
-        // segfault the first time a cursor setting is changed from a dropdown. The
-        // one-shot lives in `pending` instead, which costs nothing: with nothing
-        // pending the handler is a boolean test.
-        const ctl = new Gtk.EventControllerMotion()
-        const fire = () => {
-            if (!pending) return
-            pending = false
-            refreshShellCursor()
-        }
-        ctl.connect("motion", fire)
-        ctl.connect("enter", fire)
-        w.add_controller(ctl)
-    }
+async function refreshAfterRefocus() {
+    await hs.reevaluatePointerFocus()
+    // The `enter` is on the wire by now; give the main loop one turn to read it before
+    // asking GDK where the pointer is.
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, SETTLE_MS, () => {
+        refreshShellCursor()
+        return GLib.SOURCE_REMOVE
+    })
 }
 
 /**
@@ -141,11 +123,8 @@ function armOnNextEnter(windows: Gtk.Window[]) {
  * before that faithfully re-issues the OLD picture. `Gtk.Settings` is bound too, for a
  * `gsettings set` from a terminal that ThemeManager never sees.
  */
-export function bindCursorThemeRefresh(theme: any, getWindows: () => Gtk.Window[]): () => void {
-    const refresh = () => {
-        if (refreshShellCursor()) pending = false
-        else armOnNextEnter(getWindows())
-    }
+export function bindCursorThemeRefresh(theme: any): () => void {
+    const refresh = () => { if (!refreshShellCursor()) void refreshAfterRefocus() }
     const id = theme.connect("cursor-applied", refresh)
 
     const settings = Gtk.Settings.get_default()

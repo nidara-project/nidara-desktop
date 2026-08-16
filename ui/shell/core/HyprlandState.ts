@@ -298,6 +298,38 @@ class HyprlandStateClass extends GObject.Object {
             .catch(e => console.error("[HyprlandState] evalLua:", luaCall, e))
     }
 
+    /**
+     * Ask the compositor to re-decide which surface the pointer is over, WITHOUT
+     * moving it: a warp to the position it is already at.
+     *
+     * 🔑 There is a state Wayland cannot get itself out of. Destroy the surface that
+     * holds pointer focus — which is exactly what closing a `Gtk.DropDown`'s popover
+     * does — and Hyprland does not hand the focus to whatever is underneath: it only
+     * re-runs that pass on pointer motion, and the pointer has not moved. So NOBODY
+     * holds pointer focus, and since only the client that holds it may name a cursor
+     * shape, nothing on the desktop can repaint the pointer until the user moves the
+     * mouse. That is the compositor's bug; this is the one lever it leaves us.
+     *
+     * `Actions::moveCursor` (`src/config/shared/actions/ConfigActions.cpp:1181`) is
+     * `warpTo(pos, true)` followed by `simulateMouseMovement()`, so warping to the
+     * CURRENT position is a pure focus re-evaluation. Measured on the wire: the
+     * pointer stays at the same coordinates and the client receives
+     * `wl_pointer.leave(dead popover)` → `wl_pointer.enter(parent window)`.
+     *
+     * ⚠️ This is NOT synthetic input. No libinput event is generated, so
+     * focus-follows-mouse does not fire and the keyboard focus is untouched.
+     */
+    async reevaluatePointerFocus() {
+        try {
+            const out = await execAsync(["hyprctl", "cursorpos"])
+            const [x, y] = out.split(",").map((v) => parseInt(v.trim(), 10))
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return
+            await this._dispatch(`hl.dsp.cursor.move({ x = ${x}, y = ${y} })`)
+        } catch (e) {
+            console.error("[HyprlandState] reevaluatePointerFocus:", e)
+        }
+    }
+
     /** Set the compositor cursor theme + size (`hyprctl setcursor`). */
     setCursor(theme: string, size: number) {
         return execAsync(["hyprctl", "setcursor", theme, String(size)]).catch(() => {})
