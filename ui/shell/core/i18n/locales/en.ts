@@ -54,17 +54,13 @@ export default {
     "settings.region.tz.apply": "Apply",
     "settings.region.tz.placeholder": "Ex: Europe/London",
 
-    "settings.region.locale.group": "System language & keyboard",
+    "settings.region.locale.group": "Language & formats",
     "settings.region.locale.lang": "Language (locale)",
-    "settings.region.locale.lang.desc": "Requires a session restart",
-    "settings.region.locale.lang.placeholder": "Ex: en_US.UTF-8",
+    "settings.region.locale.lang.desc": "Whole system, login screen included. Takes effect on the next login.",
     "settings.region.locale.regional": "Regional format",
-    "settings.region.locale.regional.desc": "Locale used for dates, numbers, currency and units. Takes effect on next login.",
+    "settings.region.locale.regional.desc": "Dates, numbers, currency and units. Your account only, from the next login.",
     "settings.region.locale.regional.same": "Same as language",
 
-    "settings.region.locale.kb": "Keyboard layout",
-    "settings.region.locale.kb.desc": "Applies instantly",
-    "settings.region.locale.kb.placeholder": "Ex: us",
 
     // Default Apps
     "settings.defaultapps.title": "Default apps",

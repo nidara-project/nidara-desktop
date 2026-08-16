@@ -54,17 +54,13 @@ export default {
     "settings.region.tz.apply": "Toepassen",
     "settings.region.tz.placeholder": "Bijv. Europe/Amsterdam",
 
-    "settings.region.locale.group": "Systeemtaal en toetsenbord",
+    "settings.region.locale.group": "Taal en notaties",
     "settings.region.locale.lang": "Taal (locale)",
     "settings.region.locale.lang.desc": "Vereist een herstart van de sessie",
-    "settings.region.locale.lang.placeholder": "Bijv. nl_NL.UTF-8",
     "settings.region.locale.regional": "Regionale notatie",
     "settings.region.locale.regional.desc": "Locale gebruikt voor datums, getallen, valuta en eenheden. Wordt van kracht bij de volgende aanmelding.",
     "settings.region.locale.regional.same": "Hetzelfde als taal",
 
-    "settings.region.locale.kb": "Toetsenbordindeling",
-    "settings.region.locale.kb.desc": "Wordt direct toegepast",
-    "settings.region.locale.kb.placeholder": "Bijv. us",
 
     // Default Apps
     "settings.defaultapps.title": "Standaardapps",

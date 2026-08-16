@@ -54,17 +54,13 @@ export default {
     "settings.region.tz.apply": "Применить",
     "settings.region.tz.placeholder": "Напр.: Europe/Moscow",
 
-    "settings.region.locale.group": "Язык системы и клавиатура",
+    "settings.region.locale.group": "Язык и форматы",
     "settings.region.locale.lang": "Язык (локаль)",
     "settings.region.locale.lang.desc": "Требуется перезапуск сеанса",
-    "settings.region.locale.lang.placeholder": "Напр.: ru_RU.UTF-8",
     "settings.region.locale.regional": "Региональный формат",
     "settings.region.locale.regional.desc": "Локаль, используемая для дат, чисел, валюты и единиц измерения. Вступит в силу при следующем входе в систему.",
     "settings.region.locale.regional.same": "Как язык интерфейса",
 
-    "settings.region.locale.kb": "Раскладка клавиатуры",
-    "settings.region.locale.kb.desc": "Применяется мгновенно",
-    "settings.region.locale.kb.placeholder": "Напр.: us",
 
     // Default Apps
     "settings.defaultapps.title": "Приложения по умолчанию",

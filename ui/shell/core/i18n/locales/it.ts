@@ -54,17 +54,13 @@ export default {
     "settings.region.tz.apply": "Applica",
     "settings.region.tz.placeholder": "Es: Europe/Rome",
 
-    "settings.region.locale.group": "Lingua di sistema e tastiera",
+    "settings.region.locale.group": "Lingua e formati",
     "settings.region.locale.lang": "Lingua (locale)",
     "settings.region.locale.lang.desc": "Richiede il riavvio della sessione",
-    "settings.region.locale.lang.placeholder": "Es: it_IT.UTF-8",
     "settings.region.locale.regional": "Formato regionale",
     "settings.region.locale.regional.desc": "Locale usato per date, numeri, valuta e unità di misura. Ha effetto al prossimo accesso.",
     "settings.region.locale.regional.same": "Come la lingua",
 
-    "settings.region.locale.kb": "Layout tastiera",
-    "settings.region.locale.kb.desc": "Si applica immediatamente",
-    "settings.region.locale.kb.placeholder": "Es: it",
 
     // Default Apps
     "settings.defaultapps.title": "App predefinite",

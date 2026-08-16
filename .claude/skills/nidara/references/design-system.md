@@ -1330,6 +1330,65 @@ releases its children in C, which is GC-safe. `NidaraClamp` (`nidara-kit/clamp.t
 exactly this. When subclassing is unavoidable (`ScaleRevealer` needs snapshot-time
 scaling), expose an explicit teardown (`dismantle()`) and require callers to invoke it.
 
+## Entry vs dropdown in Settings — the CLOSED SET decides, not the list's length
+
+A `Gtk.Entry` in Settings is a claim that the valid values are open-ended. Where they are
+not, the entry is just a dropdown that can be typed wrong — `Gtk.EntryCompletion` does not
+fix that, because completion is a suggestion and the widget still commits whatever is in
+the buffer. Audit of every writable field (2026-08-16), with the option counts **measured
+on a stock install** rather than guessed from the catalogue:
+
+| Field | Closed set? | Options | Verdict |
+|---|---|---|---|
+| Language & region → Language (LANG) | `localectl list-locales` | **13** — the GENERATED locales, not glibc's ~800 | → `NidaraDropDown` |
+| Language & region → Timezone | `timedatectl list-timezones` | **598** | entry stays (see below) |
+| Users → full name / username | no | — | entry |
+| Autostart → command | no | — | entry |
+| AI → model / endpoint | no (BYOK, arbitrary) | — | entry |
+
+🔑 **Measure the set on the machine before choosing.** `localectl list-locales` returns only
+what `locale.gen` generated — 13 rows, a trivially browsable dropdown. Sized from the glibc
+catalogue instead, the same field looks like an 800-row list that "obviously" needs a search
+box. The count that decides the control is the runtime one.
+
+**Timezone stays an entry for now** because 598 rows need `Gtk.DropDown`'s `enable_search`,
+and that is not a free flag: it requires `expression` (a `Gtk.PropertyExpression` on
+`GtkStringObject:string`), its `search_match_mode` defaults to **`PREFIX`** — so "Madrid"
+would not find "Europe/Madrid" and the whole feature reads as broken — and, crucially,
+`NidaraDropDownRow` (`nidara-kit/rows.ts`) reads and writes the selection **by index**,
+which stops meaning a stable thing the moment a search filter is active. Converting it means
+moving that row to `selected_item` first. `search_match_mode` is GTK 4.12+; the repo targets
+4.22, so availability is not the blocker.
+
+### A row that costs ROOT keeps its Apply button — even as a dropdown
+
+Asked and settled 2026-08-16 ("¿el Apply de Language no sobra, si Regional format no lo
+lleva?"). It does not, and the reason is not cosmetic. Settings → Language & region holds
+all three cases side by side and is the reference for the split:
+
+| Row | What it actually writes | Cost | Control |
+|---|---|---|---|
+| Regional format | `~/.config/environment.d/nidara-locale.conf` — 7 `LC_*` vars, as the user | none | dropdown, **instant** |
+| Change timezone | `timedatectl set-timezone` → `org.freedesktop.timedate1.set-timezone` | admin password | entry + **Apply** |
+| Language (LANG) | `pkexec localectl set-locale` → `/etc/locale.conf` | admin password | dropdown + **Apply** |
+
+Both system actions are `auth_admin_keep` on **all three** polkit levels (`allow_any`,
+`allow_inactive`, `allow_active` — checked in `/usr/share/polkit-1/actions/`), so every
+change raises a real password dialog. The rule: **root → Apply; our own user config →
+instant.** A dropdown that raises a polkit prompt on `notify::selected` is a trap, not a
+convenience — merely browsing the options starts asking for the root password.
+
+⚠️ And it is not a one-line removal even if you wanted it: the page sets `langDrp.selected`
+inside an `idle_add` once the model has loaded, so an instant-apply handler would fire
+`pkexec` **on page open**. Any move to instant-apply must guard the sync exactly the way
+`NidaraDropDownRow` does.
+
+🔑 The tempting counter-argument — "Regional format proves we can do it per-user, so put
+`LANG` in `environment.d` too and drop the button" — is a **product** change, not a cleanup:
+it demotes the row from the SYSTEM language (greeter, TTY, other users) to this session's
+language, and the group is titled "System language" for that reason. Considered and
+declined; reopen it as a product decision, not as a refactor.
+
 ## Buttons — one component + a variant convention
 
 All action buttons go through **`NidaraButton`** (`ui/lib/nidara-kit/button.ts`) — never

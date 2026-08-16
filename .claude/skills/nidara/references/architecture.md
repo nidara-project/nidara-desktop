@@ -1117,6 +1117,14 @@ stop-unit + pkill + wait-until-dead + uwsm relaunch. A full audit (2026-06-08)
 migrated every remaining `keyword` caller — they were all silently broken on the Lua parser:
 - `InputConfig` live-apply → `hl.config({ input = { … } })` (incl. nested `touchpad`, and
   `kb_layout`/`kb_variant`). The whole Input page was a no-op live until this.
+  **One setting, one owner: the keyboard layout belongs to Settings → Devices** (`Input.tsx`),
+  and nothing else may write it. Language & region carried a second control for it until
+  2026-08-16 — a text entry whose Apply called `inputConfig.setKbLayout(kb)` with ONE
+  argument, so `variant` fell back to its `= ""` default and silently wiped a
+  Dvorak/Colemak choice made in Devices. A defaulted trailing parameter is exactly how a
+  duplicate control goes wrong quietly: the call typechecks, applies, and destroys half
+  the state. macOS and GNOME both put the layout under Keyboard/Devices, not under
+  Language; keep it there.
 - `AboutWindow` float/center → a static `hl.window_rule` in `hyprland.lua` (matched by the
   "About Nidara" title; the `windowrulev2` keyword calls were removed).
 - greeter `LocaleBar` kb_layout → eval (the greeter runs its OWN Lua config,

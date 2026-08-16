@@ -4,7 +4,6 @@ import GObject from "gi://GObject"
 import { execAsync } from "ags/process"
 import { listGroup, createRow, toggleRow, pageBox, staticLabel, bindWhileRealized } from "../SettingsHelpers"
 import regionConfig, { TimeFormat, DateFormat } from "../../../core/RegionConfig"
-import inputConfig from "../../../core/InputConfig"
 import { t } from "../../../core/i18n"
 import { safeDisconnect } from "../../../core/signals"
 import { NidaraButton, NidaraDropDown } from "../../../../lib/nidara-kit"
@@ -185,50 +184,47 @@ export default function RegionPage() {
 
     page.append(tzBox)
 
-    // ── Idioma del sistema y Teclado ──────────────────────────────────────────
+    // ── Idioma y formatos ─────────────────────────────────────────────────────
     const { box: localeBox, listBox: localeList } = listGroup(t("settings.region.locale.group"))
 
     // --- 1. Locale (LANG) ---
-    const langEntry = new Gtk.Entry({ placeholder_text: t("settings.region.locale.lang.placeholder"), width_chars: 20, valign: Gtk.Align.CENTER })
-    const langCompletion = new Gtk.EntryCompletion()
-    const langModel = new Gtk.ListStore()
-    // @ts-ignore
-    langModel.set_column_types([GObject.TYPE_STRING])
-    langCompletion.set_model(langModel)
-    langCompletion.set_text_column(0)
-    langCompletion.set_inline_completion(true)
-    langCompletion.set_minimum_key_length(1)
-    langEntry.set_completion(langCompletion)
+    // A dropdown, not a text entry: `localectl list-locales` is the closed set of
+    // locales this system can actually switch to (the GENERATED ones — 13 on a stock
+    // install, not the ~800 of the full glibc catalogue), so there is nothing to type
+    // that the list cannot offer. `langValues` shadows the model because the model is
+    // the only thing the widget knows and we need the string back on selection.
+    //
+    // The Apply button stays — unlike the regional-format dropdown below (our own JSON
+    // config, instant), this one shells out to `pkexec localectl`, and a control that
+    // raises a polkit password prompt the moment the selection moves is a trap. Same
+    // rule as the timezone row above: root gets an Apply, our own config does not.
+    const langValues: string[] = []
+    const langModel = new Gtk.StringList({ strings: [] })
+    const langDrp = NidaraDropDown({ model: langModel, valign: Gtk.Align.CENTER })
 
     const applyLangBtn = NidaraButton({ label: t("settings.region.tz.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })
-    const langEntryRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
-    langEntryRow.append(langEntry)
-    langEntryRow.append(applyLangBtn)
-    
-    localeList.append(createRow(t("settings.region.locale.lang"), t("settings.region.locale.lang.desc"), langEntryRow))
+    const langRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+    langRow.append(langDrp)
+    langRow.append(applyLangBtn)
 
-    // --- 2. Keyboard Layout ---
-    const kbEntry = new Gtk.Entry({ placeholder_text: t("settings.region.locale.kb.placeholder"), width_chars: 20, valign: Gtk.Align.CENTER })
-    const kbCompletion = new Gtk.EntryCompletion()
-    const kbModel = new Gtk.ListStore()
-    // @ts-ignore
-    kbModel.set_column_types([GObject.TYPE_STRING])
-    kbCompletion.set_model(kbModel)
-    kbCompletion.set_text_column(0)
-    kbCompletion.set_inline_completion(true)
-    kbCompletion.set_minimum_key_length(1)
-    kbEntry.set_completion(kbCompletion)
+    localeList.append(createRow(t("settings.region.locale.lang"), t("settings.region.locale.lang.desc"), langRow))
 
-    const applyKbBtn = NidaraButton({ label: t("settings.region.tz.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })
-    const kbEntryRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
-    kbEntryRow.append(kbEntry)
-    kbEntryRow.append(applyKbBtn)
-    
-    localeList.append(createRow(t("settings.region.locale.kb"), t("settings.region.locale.kb.desc"), kbEntryRow))
+    // The keyboard layout used to have a second control right here — an entry whose
+    // Apply called `inputConfig.setKbLayout(kb)` with ONE argument, so `variant`
+    // defaulted back to "" and silently dropped a Dvorak/Colemak choice made in
+    // Devices. Settings → Devices is the single owner now (its dropdown carries the
+    // variant), which is also where macOS and GNOME put it.
 
     // --- 2. Regional Format (LC_TIME, LC_NUMERIC, etc.) ---
     // A single locale choice that sets all "format" LC_* variables at once.
     // Populated from `locale -a`; "" means "same as LANG".
+    //
+    // ⚠️ This group holds TWO DIFFERENT SCOPES, which is why its title is neutral
+    // ("Language & formats") and each row states its own reach in the subtitle:
+    // Language writes /etc/locale.conf (system-wide — greeter, TTY, every user),
+    // Regional format writes ~/.config/environment.d/nidara-locale.conf (THIS user
+    // only, re-read by the systemd user manager at each login). A group title that
+    // named either scope would be a lie about the other row.
     const regionalValues: string[] = [""]
     const regionalModel = new Gtk.StringList({ strings: [t("settings.region.locale.regional.same")] })
     const regionalDrp = NidaraDropDown({ model: regionalModel, valign: Gtk.Align.CENTER })
@@ -263,51 +259,43 @@ export default function RegionPage() {
         regionalDrp,
     ))
 
-    // Initialization: parse current values and populate lists
-    execAsync(["localectl", "status"]).then(out => {
-        const langMatch = out.match(/System Locale:\s*LANG=(\S+)/)
-        if (langMatch) langEntry.text = langMatch[1]
+    // Initialization: fill the locale list, THEN select the live LANG in it.
+    // Nested on purpose — the selection is only meaningful once the model has rows,
+    // and `localectl status` is what knows which row is the current one.
+    execAsync(["localectl", "list-locales"]).then(list => {
+        list.trim().split("\n").forEach(l => {
+            const v = l.trim()
+            if (!v) return
+            langValues.push(v)
+            langModel.append(v)
+        })
 
-        execAsync(["localectl", "list-locales"]).then(list => {
-            list.trim().split("\n").forEach(l => {
-                if (!l) return
-                const iter = langModel.append()
-                // @ts-ignore
-                langModel.set(iter, [0], [l])
+        return execAsync(["localectl", "status"]).then(out => {
+            const current = out.match(/System Locale:\s*LANG=(\S+)/)?.[1]
+            if (!current) return
+            // A LANG that is set but not generated (someone edited /etc/locale.conf by
+            // hand) is not in list-locales. Show the truth rather than a neighbouring
+            // row that would silently become the value on the next Apply.
+            let idx = langValues.indexOf(current)
+            if (idx < 0) { langValues.push(current); langModel.append(current); idx = langValues.length - 1 }
+            // idle_add for the same reason as the regional dropdown below: setting
+            // `selected` in the same tick the model grew does not stick.
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                langDrp.selected = idx
+                return GLib.SOURCE_REMOVE
             })
-        }).catch(console.error)
-
-        kbEntry.text = inputConfig.kbLayout || out.match(/X11 Layout:\s*(\S+)/)?.[1] || "us"
-
-        execAsync(["localectl", "list-x11-keymap-layouts"]).then(list => {
-            list.trim().split("\n").forEach(k => {
-                if (!k) return
-                const iter = kbModel.append()
-                // @ts-ignore
-                kbModel.set(iter, [0], [k])
-            })
-        }).catch(console.error)
+        })
     }).catch(console.error)
 
     const applyLang = () => {
-        const lang = langEntry.text.trim()
+        const lang = langValues[langDrp.selected]
         if (!lang) return
         applyLangBtn.sensitive = false
         execAsync(["pkexec", "localectl", "set-locale", `LANG=${lang}`])
             .finally(() => applyLangBtn.sensitive = true)
     }
 
-    const applyKb = () => {
-        const kb = kbEntry.text.trim()
-        if (!kb) return
-        inputConfig.setKbLayout(kb)
-    }
-
     applyLangBtn.connect("clicked", applyLang)
-    langEntry.connect("activate", applyLang)
-    
-    applyKbBtn.connect("clicked", applyKb)
-    kbEntry.connect("activate", applyKb)
 
     page.append(localeBox)
 

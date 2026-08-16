@@ -54,17 +54,13 @@ export default {
     "settings.region.tz.apply": "应用",
     "settings.region.tz.placeholder": "例如:Asia/Shanghai",
 
-    "settings.region.locale.group": "系统语言与键盘",
+    "settings.region.locale.group": "语言与格式",
     "settings.region.locale.lang": "语言(区域设置)",
     "settings.region.locale.lang.desc": "需要重启会话",
-    "settings.region.locale.lang.placeholder": "例如:zh_CN.UTF-8",
     "settings.region.locale.regional": "区域格式",
     "settings.region.locale.regional.desc": "用于日期、数字、货币和单位的区域设置,将在下次登录时生效。",
     "settings.region.locale.regional.same": "与界面语言相同",
 
-    "settings.region.locale.kb": "键盘布局",
-    "settings.region.locale.kb.desc": "立即生效",
-    "settings.region.locale.kb.placeholder": "例如:us",
 
     // Default Apps
     "settings.defaultapps.title": "默认应用",

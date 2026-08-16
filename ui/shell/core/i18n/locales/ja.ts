@@ -54,17 +54,13 @@ export default {
     "settings.region.tz.apply": "適用",
     "settings.region.tz.placeholder": "例:Asia/Tokyo",
 
-    "settings.region.locale.group": "システム言語とキーボード",
+    "settings.region.locale.group": "言語と形式",
     "settings.region.locale.lang": "言語(ロケール)",
     "settings.region.locale.lang.desc": "セッションの再起動が必要です",
-    "settings.region.locale.lang.placeholder": "例:ja_JP.UTF-8",
     "settings.region.locale.regional": "地域設定の形式",
     "settings.region.locale.regional.desc": "日付、数値、通貨、単位に使用するロケールです。次回ログイン時に反映されます。",
     "settings.region.locale.regional.same": "言語と同じ",
 
-    "settings.region.locale.kb": "キーボードレイアウト",
-    "settings.region.locale.kb.desc": "即座に適用されます",
-    "settings.region.locale.kb.placeholder": "例:us",
 
     // Default Apps
     "settings.defaultapps.title": "既定のアプリ",

@@ -54,17 +54,13 @@ export default {
     "settings.region.tz.apply": "Appliquer",
     "settings.region.tz.placeholder": "Ex : Europe/Paris",
 
-    "settings.region.locale.group": "Langue du système et clavier",
+    "settings.region.locale.group": "Langue et formats",
     "settings.region.locale.lang": "Langue (locale)",
     "settings.region.locale.lang.desc": "Nécessite un redémarrage de session",
-    "settings.region.locale.lang.placeholder": "Ex : fr_FR.UTF-8",
     "settings.region.locale.regional": "Format régional",
     "settings.region.locale.regional.desc": "Locale utilisée pour les dates, nombres, devises et unités. Prend effet à la prochaine connexion.",
     "settings.region.locale.regional.same": "Comme la langue",
 
-    "settings.region.locale.kb": "Disposition du clavier",
-    "settings.region.locale.kb.desc": "S'applique immédiatement",
-    "settings.region.locale.kb.placeholder": "Ex : fr",
 
     // Default Apps
     "settings.defaultapps.title": "Applications par défaut",
