@@ -26,7 +26,7 @@ import AccessibilityPage from "./pages/Accessibility"
 import UsersPage from "./pages/Users"
 import GamingPage from "./pages/Gaming"
 import AiPage from "./pages/Ai"
-import { beginPage, endPage, clearSearchIndex, getSearchIndex, type SettingsNav } from "./SettingsHelpers"
+import { beginPage, endPage, clearSearchIndex, getSearchIndex, runPageRefreshers, type SettingsNav } from "./SettingsHelpers"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import IconButton from "../../common/IconButton"
@@ -132,6 +132,9 @@ export default function Settings(monitor: Gdk.Monitor) {
         if (current) contentArea.remove(current)
         contentArea.append(next)
         activePageId = id
+        // Cached page, so its body does not run again: re-ask whatever it had to
+        // GO AND ASK for. See `onPageShown` in SettingsHelpers.
+        runPageRefreshers(id)
     }
 
     // Every page (and dynamically-pushed subpage) is a clamped, scrollable box.
@@ -463,7 +466,13 @@ export default function Settings(monitor: Gdk.Monitor) {
     // practice; on a multi-monitor multi-window setup the last event wins, which is
     // moot until that design is revisited — see tech-debt #16.)
     status.settings_open = win.get_visible()
-    win.connect("notify::visible", () => { status.settings_open = win.get_visible() })
+    win.connect("notify::visible", () => {
+        status.settings_open = win.get_visible()
+        // Reopening on the page you left does not go through showPage, and hiding
+        // the window does not unrealize the page either — so without this, the one
+        // page a user returns to most often is the one that never refreshes.
+        if (win.get_visible() && activePageId) runPageRefreshers(activePageId)
+    })
 
     cw.splitView.connectCollapsedChanged(() => {
         if (!sidebar.getSelectedId() && activePageId)

@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
-import { listGroup, createRow, pageBox, staticLabel } from "../SettingsHelpers"
+import { listGroup, createRow, pageBox, staticLabel, onPageShown } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import { readShellVersion } from "../../../core/Paths"
 import hs from "../../../core/HyprlandState"
@@ -78,20 +78,32 @@ export default function AboutPage() {
     // Update check — installed version vs the latest GitHub release. The row is
     // appended only when the check resolves: on network failure or while no
     // releases exist (pre-publication, private repo) About just stays quiet.
-    execAsync(["curl", "-fsS", "--max-time", "5",
-        "https://api.github.com/repos/nidara-project/nidara-desktop/releases/latest",
-    ]).then(out => {
-        const tag = String(JSON.parse(out)?.tag_name ?? "")
-        const latest = tag.replace(/^v/, "")
-        if (!latest) return
-        if (isNewerVersion(latest, readShellVersion())) {
-            shellList.append(createRow(t("settings.about.update"),
-                t("settings.about.update.available.desc"), staticLabel(tag)))
-        } else {
-            shellList.append(createRow(t("settings.about.update"),
-                t("settings.about.update.up-to-date"), staticLabel("")))
-        }
-    }).catch(() => {})
+    //
+    // Retried on every visit UNTIL it answers, then never again. Staying quiet was
+    // the right call for one attempt and the wrong one for a session: Settings is
+    // often opened right after login, the curl loses to a network that isn't up
+    // yet, and this page — built once, cached for the life of the shell — would
+    // have kept silent about an available update for the rest of the day. The
+    // one-shot flag is what keeps a re-run from stacking a second row.
+    let answered = false
+    onPageShown(() => {
+        if (answered) return
+        execAsync(["curl", "-fsS", "--max-time", "5",
+            "https://api.github.com/repos/nidara-project/nidara-desktop/releases/latest",
+        ]).then(out => {
+            const tag = String(JSON.parse(out)?.tag_name ?? "")
+            const latest = tag.replace(/^v/, "")
+            if (!latest || answered) return
+            answered = true
+            if (isNewerVersion(latest, readShellVersion())) {
+                shellList.append(createRow(t("settings.about.update"),
+                    t("settings.about.update.available.desc"), staticLabel(tag)))
+            } else {
+                shellList.append(createRow(t("settings.about.update"),
+                    t("settings.about.update.up-to-date"), staticLabel("")))
+            }
+        }).catch(() => {})
+    })
 
     page.append(shellBox)
 
@@ -110,10 +122,14 @@ export default function AboutPage() {
     sysList.append(createRow(t("settings.about.kernel"), t("settings.about.kernel.desc"), kernelLabel))
     execAsync(["uname", "-r"]).then(v => { kernelLabel.label = v.trim() }).catch(() => {})
 
-    // Uptime — async
+    // Uptime — async, and the one value on this page that is wrong the moment
+    // after it is read. Everything else here is fixed for the session (kernel, CPU,
+    // RAM, OS); this one is a clock, so it gets re-read whenever the page is shown.
     const uptimeLabel = staticLabel("…")
     sysList.append(createRow(t("settings.about.uptime"), t("settings.about.uptime.desc"), uptimeLabel))
-    execAsync(["uptime", "-p"]).then(v => { uptimeLabel.label = v.trim().replace(/^up /, "") }).catch(() => {})
+    onPageShown(() => {
+        execAsync(["uptime", "-p"]).then(v => { uptimeLabel.label = v.trim().replace(/^up /, "") }).catch(() => {})
+    })
 
     page.append(sysBox)
 

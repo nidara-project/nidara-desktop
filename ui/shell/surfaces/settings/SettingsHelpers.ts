@@ -49,11 +49,54 @@ export interface SearchItem {
 
 let _searchIndex: SearchItem[] = []
 let _pageCtx = { id: "", label: "" }
+/** pageId → live re-reads; see `onPageShown` below. */
+const _refreshers = new Map<string, Array<() => void>>()
 
 export const beginPage = (id: string, label: string) => { _pageCtx = { id, label } }
 export const endPage = () => { _pageCtx = { id: "", label: "" } }
-export const clearSearchIndex = () => { _searchIndex = []; _pageCtx = { id: "", label: "" } }
+export const clearSearchIndex = () => {
+    _searchIndex = []
+    _pageCtx = { id: "", label: "" }
+    _refreshers.clear()
+}
 export const getSearchIndex = (): SearchItem[] => [..._searchIndex]
+
+// ── Live re-reads ─────────────────────────────────────────────────────────────
+// Top-level pages are built ONCE (Settings.tsx caches them) and the window HIDES
+// on close, so a page body runs exactly one time per shell lifetime. Anything the
+// page SUBSCRIBED to keeps working; anything it merely ASKED — an `execAsync`, a
+// file read, a one-shot `powerprofilesctl get` — was answered once and then went
+// stale in silence, because a frozen value looks exactly like a correct one.
+//
+// This registers such a read against the page being built (the same `_pageCtx`
+// seam `createRow` indexes through), runs it immediately, and re-runs it whenever
+// the page becomes visible. Subpages need none of it: they are rebuilt on every
+// push, so `_pageCtx` being empty is the correct no-op.
+//
+// ⚠️ NOT the same job as `bindWhileRealized`, and it is not covered by it. That
+// one re-arms on REALIZE, which fires when you navigate between pages — but
+// hiding the Settings window does NOT unrealize its pages (measured 2026-08-16:
+// close the window on Power, change the profile from a terminal, reopen → a
+// realize-bound read does not run and the page still shows the old profile).
+// Closing and reopening is the most common way a user returns to a page, so a
+// re-read hung off realize misses precisely the case it exists for. Use
+// `bindWhileRealized` for a SUBSCRIPTION whose lifetime must match the widget's
+// (it has something to dispose); use this for a QUESTION that has to be re-asked
+// (it has nothing to dispose).
+export const onPageShown = (read: () => void) => {
+    if (_pageCtx.id) {
+        const list = _refreshers.get(_pageCtx.id) ?? []
+        list.push(read)
+        _refreshers.set(_pageCtx.id, list)
+    }
+    read()
+}
+
+export const runPageRefreshers = (pageId: string) => {
+    for (const read of _refreshers.get(pageId) ?? []) {
+        try { read() } catch (e) { console.error(`[Settings] refresh failed on ${pageId}:`, e) }
+    }
+}
 
 // ── Boxed List Group ──────────────────────────────────────────────────────────
 // Thin wrapper over the universal NidaraList component. Settings-specific code

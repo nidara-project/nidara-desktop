@@ -1196,6 +1196,34 @@ silently freezes the page after the user's first departure (that was tech-debt #
 lists, a dead pairing agent, a stopped clock preview). Subpages are exempt — `pushSubpage` rebuilds
 them on every push.
 
+⚠️ **`bindWhileRealized` is only half the answer, and the half it misses is the common one.** Realize
+tracks NAVIGATION between pages; it does **not** track the window's own show/hide. Hiding the Settings
+window leaves its pages REALIZED (measured 2026-08-16: close the window on Power, change the profile
+from a terminal, reopen → a realize-bound read does not run and the page still shows the old profile).
+Since Settings *hides* on close, closing and reopening is how a user returns to a page most of the
+time, so a re-read hung off realize misses precisely the case it exists for. The complement is
+**`onPageShown(read)`** (`SettingsHelpers.ts`): it registers the read against the page being built —
+the same `_pageCtx` seam `createRow` indexes through — runs it once immediately, and `Settings.tsx`
+re-runs it from BOTH triggers, `showPage` (navigation) and the window's `notify::visible` (reopen).
+The split between the two is what each one owns, not when it fires: **`bindWhileRealized` for a
+subscription whose lifetime must match the widget's — it has something to dispose; `onPageShown` for
+a question that has to be re-asked — it has nothing to dispose.**
+
+This distinction is the whole of a bug family found by the 2026-08-16 sweep, and the question that
+finds it is *what did this page have to GO AND ASK for?* An `execAsync`, a file read, a one-shot
+`powerprofilesctl get`: answered once, then frozen for the life of the shell, and a frozen value looks
+exactly like a correct one. Three were live — Power's profile selection (which game mode swaps behind
+its back), About's uptime (a clock, wrong within the minute), and About's update check (lost to a
+network that wasn't up yet at login, then silent about an available update all day). Note the update
+check's shape: a re-read that APPENDS must be idempotent, so it retries only until it answers.
+
+Verifying one of these needs no screenshot, but it does need the state to be READABLE: Power's
+selection checkmark is a bare `Gtk.DrawingArea`, and `queryUI` drops nodes with no id, class or text
+(`UITree`'s `interesting`) and only walks MAPPED ones. Giving it the class `power-profile-check` — not
+for styling, Cairo paints it — makes the single mapped node the machine-readable answer to "which
+profile does the page believe is active". That is the general move when a custom-painted state needs
+proving: name it so the instrument can see it.
+
 Naming note (2026-07): the page with id `widgets` (`pages/Widgets.tsx`) is titled **"Control
 Center"** in the UI and its copy says "controls", since it manages bar + CC
 placement in a single Settings page. `AtomicWidget`, the `widgets/` dir

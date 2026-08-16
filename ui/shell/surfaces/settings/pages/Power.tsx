@@ -2,7 +2,7 @@ import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-import { listGroup, pageBox, dropdownRow, createRow, bindWhileRealized } from "../SettingsHelpers"
+import { listGroup, pageBox, dropdownRow, createRow, bindWhileRealized, onPageShown } from "../SettingsHelpers"
 import Icons from "../../../core/Icons"
 import { t } from "../../../core/i18n"
 import Theme from "../../../core/ThemeManager"
@@ -152,7 +152,15 @@ const closestLabel = (opts: { label: string; s: number }[], seconds: number) => 
 // which accent is picked. Path matches Lucide's "check" (`M20 6 9 17l-5-5` in a 24×24
 // viewBox), scaled to the widget's own size.
 function buildSelectionCheck(size = 16): Gtk.Widget {
-    const da = new Gtk.DrawingArea({ width_request: size, height_request: size, valign: Gtk.Align.CENTER })
+    // The class is not styling — Cairo paints this. It is what makes the selection
+    // READABLE to `queryUI`, which drops nodes with no id, class or text (UITree's
+    // `interesting`) and only walks MAPPED ones. With it, the one mapped
+    // `.power-profile-check` IS the answer to "which profile does the page think
+    // is active", so the re-read below can be verified without a screenshot.
+    const da = new Gtk.DrawingArea({
+        width_request: size, height_request: size, valign: Gtk.Align.CENTER,
+        css_classes: ["power-profile-check"],
+    })
     da.set_can_target(false)
     da.set_draw_func((_w: Gtk.DrawingArea, cr: any, w: number, h: number) => {
         const v = Theme.isDark ? 1 : 0
@@ -202,30 +210,39 @@ export default function PowerPage() {
         profileGroup.listBox.append(row)
     })
 
+    // Set while we are SHOWING what the daemon already says, so the selection we
+    // make programmatically doesn't come back around as a write. Without it,
+    // merely opening this page issued `powerprofilesctl set` — harmless while the
+    // sync ran once, a write on every visit now that it re-runs.
+    let syncing = false
+
     profileGroup.listBox.connect("row-selected", (_: any, row: any) => {
         checkIcons.forEach(i => { i.visible = false })
         if (row) {
             const id = row.get_name()
             if (id) {
                 checkIcons.get(id)!.visible = true
-                execAsync(["powerprofilesctl", "set", id]).catch(console.error)
+                if (!syncing) execAsync(["powerprofilesctl", "set", id]).catch(console.error)
             }
         }
     })
 
     page.append(profileGroup.box)
 
-    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+    // The profile is not ours alone: game mode swaps it on the way in and out
+    // (hyprland.lua), and `powerprofilesctl` is a command anyone can run. Ask
+    // again every time the page is looked at rather than trusting the first answer.
+    onPageShown(() => {
         execAsync(["powerprofilesctl", "get"]).then((cur: string) => {
             const id = cur.trim()
-            profiles.forEach((p, i) => {
-                if (p.id === id) {
-                    const row = profileGroup.listBox.get_row_at_index(i)
-                    if (row) profileGroup.listBox.select_row(row)
-                }
-            })
+            const idx = profiles.findIndex(p => p.id === id)
+            if (idx < 0) return
+            const row = profileGroup.listBox.get_row_at_index(idx)
+            if (!row) return
+            syncing = true
+            profileGroup.listBox.select_row(row)
+            syncing = false
         }).catch(console.error)
-        return GLib.SOURCE_REMOVE
     })
 
     // ── Idle / lock ───────────────────────────────────────────────────────────
