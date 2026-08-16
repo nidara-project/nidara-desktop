@@ -317,6 +317,7 @@ export default {
     // Display
     "settings.display.error.no-monitors": "No monitors detected.",
     "settings.display.title": "Display",
+    "settings.display.group.all": "All displays",
     "settings.display.scale.desc": "Display scale factor",
     "settings.display.model.desc": "Monitor identifier",
     "settings.display.resolution.desc": "Resolution and refresh rate",

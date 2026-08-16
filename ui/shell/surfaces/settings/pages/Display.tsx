@@ -1,5 +1,5 @@
 import { Gtk } from "ags/gtk4"
-import { listGroup, createRow, pageBox, staticLabel, bindWhileRealized } from "../SettingsHelpers"
+import { listGroup, createRow, pageBox, staticLabel, bindWhileRealized, onPageShown } from "../SettingsHelpers"
 import { showNidaraAlert, NidaraDropDown } from "../../../../lib/nidara-kit"
 import hs from "../../../core/HyprlandState"
 import { t } from "../../../core/i18n"
@@ -246,26 +246,60 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
         rotDrp
     ))
 
-    // VRR — order matches Hyprland's misc:vrr int: 0=off, 1=always, 2=fullscreen-only,
-    // so the dropdown index equals the value applied (they were swapped before).
+    return box
+}
+
+// ── Settings that are NOT per monitor ─────────────────────────────────────────
+/**
+ * VRR is `misc:vrr` — a single GLOBAL Hyprland int (0=off, 1=always,
+ * 2=fullscreen-only), which `MonitorConfig` says out loud and writes as one
+ * `hl.config({ misc = { vrr = N } })` line.
+ *
+ * It used to be built inside `buildMonitorSection`, i.e. once per monitor. On a
+ * two-monitor desk that put the SAME setting under two different monitor headings
+ * — each promising a scope it doesn't have — with no sync between them, so
+ * changing one left the other showing the old value while both wrote the same key.
+ * Same family as the keyboard layout living in two pages (see
+ * `references/design-system.md`); here the group title carries the honest scope.
+ */
+function buildGlobalSection(): Gtk.Widget {
+    const { box, listBox } = listGroup(t("settings.display.group.all"))
+
+    // Index == value applied: 0=off, 1=always, 2=fullscreen-only.
     const VRR_OPTS = [
         t("settings.display.vrr.off"),
         t("settings.display.vrr.always"),
         t("settings.display.vrr.fullscreen"),
     ]
-    const vrrModel = new Gtk.StringList({ strings: VRR_OPTS })
-    const vrrDrp = NidaraDropDown({ model: vrrModel, valign: Gtk.Align.CENTER })
-    const currentVrr = monitorConfig.vrr
-    vrrDrp.selected = currentVrr < VRR_OPTS.length ? currentVrr : 0
+    const vrrDrp = NidaraDropDown({
+        model: new Gtk.StringList({ strings: VRR_OPTS }), valign: Gtk.Align.CENTER,
+    })
 
+    // ⚠️ Assigning `selected` emits notify::selected, so a re-read that merely SHOWS
+    // the current value would also WRITE it (eval + a rewrite of nidara-monitor.lua)
+    // on every visit. Guarded, and skipped when nothing moved.
+    let syncing = false
+    const syncFromConfig = () => {
+        const cur = monitorConfig.vrr < VRR_OPTS.length ? monitorConfig.vrr : 0
+        if (vrrDrp.selected === cur) return
+        syncing = true
+        vrrDrp.selected = cur
+        syncing = false
+    }
     vrrDrp.connect("notify::selected", () => {
+        if (syncing) return
         monitorConfig.setVrr(vrrDrp.selected)
     })
+    // The page is cached and the window hides rather than closes, so this is a
+    // question to re-ask on every visit: MonitorConfig re-reads the effective
+    // `misc:vrr` whenever Hyprland reloads its config (a hand-edited
+    // hyprland-user.lua), and the dropdown has to follow it.
+    onPageShown(syncFromConfig)
 
     listBox.append(createRow(
         t("settings.display.vrr"),
         t("settings.display.vrr.desc"),
-        vrrDrp
+        vrrDrp,
     ))
 
     return box
@@ -286,6 +320,12 @@ export default function DisplayPage() {
         }
     }
 
+    // Built ONCE and re-appended by every render: the per-monitor sections are
+    // rebuilt from scratch on a topology change, but this one is not per monitor
+    // and its `onPageShown` re-read must be registered exactly once (a later
+    // render runs outside the page's build context, where registering is a no-op).
+    const globalBox = buildGlobalSection()
+
     const render = () => {
         clearPage()
         // Monitors come from HyprlandState's cache (the facade), not a direct
@@ -299,6 +339,7 @@ export default function DisplayPage() {
         monitors.forEach(mon => {
             page.append(buildMonitorSection(mon, hs.getAvailableModes(mon.name)))
         })
+        page.append(globalBox)
     }
 
     // The Settings page is built once and cached for the window's lifetime (it hides,

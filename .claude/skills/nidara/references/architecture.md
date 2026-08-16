@@ -1182,6 +1182,19 @@ Only `dispatch`/`getoption`/`monitors`/`eval` callers remain (all valid). Also: 
 monitor scale must divide the native resolution into whole logical pixels or Hyprland snaps
 it — the Display page filters scale presets to exact-valid per monitor.
 
+**The same rule from the other side: a GLOBAL option must not be rendered per monitor.**
+VRR is `misc:vrr`, one global int (`MonitorConfig` says so and writes one
+`hl.config({ misc = { vrr = N } })` line), but its dropdown was built inside
+`buildMonitorSection` — i.e. once per monitor. One monitor hid it completely; two put the
+same setting under two monitor headings, each implying a scope it does not have, with no
+sync between them, so changing one left the other reading the old value. Fixed 2026-08-16
+by a page-level "All displays" group (`buildGlobalSection`), built ONCE outside `render()`
+and re-appended by it — the per-monitor sections are rebuilt on a topology change, and a
+re-read registered from inside a later `render()` would land outside the page's build
+context where `onPageShown` is a no-op. 🔑 The test that catches this class: for each
+control, ask what the KEY it writes is scoped to, then check the widget is built exactly
+that many times.
+
 The same sweep applies to **dispatch strings**: classic dispatcher syntax is forbidden
 everywhere, `hl.dsp.*` Lua only. Four HyprlandState methods (`sendToWorkspace`,
 `floatWindow`, `toggleGroup`, `sendToSpecial`) shipped with classic strings and were

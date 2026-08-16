@@ -302,6 +302,7 @@ export default {
     "settings.widgets.tooltip.no-space": "Sin espacio suficiente — quita un control primero",
     "settings.display.error.no-monitors": "No se detectaron monitores.",
     "settings.display.title": "Pantalla",
+    "settings.display.group.all": "Todas las pantallas",
     "settings.display.scale.desc": "Factor de escala de la pantalla",
     "settings.display.model.desc": "Identificador del monitor",
     "settings.display.resolution.desc": "Resolución y frecuencia de actualización",
