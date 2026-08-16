@@ -3916,31 +3916,39 @@ pointer parked inside a shell window and untouched:
 - **Theme: broken, and out of our reach.** Pick a cursor theme and the picture does not change until
   the pointer leaves the surface and comes back.
 
-▶️ **Do not try to fix the theme half from the shell — it has been tried and measured.** A client
-CAN re-issue its cursor (GTK4 ≥ 4.16 drives it through `wp_cursor_shape_device_v1.set_shape`, and a
-bump through a different shape and straight back does put both requests on the wire — GDK compares
-cursors by equality, so a fresh `Gdk.Cursor` with the same NAME emits nothing). It changes nothing.
-Timestamps from the shell, on a theme picked in the Settings dropdown by hand:
+▶️ **Corrected 2026-08-16, later the same day, and the earlier conclusion here was WRONG.** It said
+the theme half was out of the shell's reach because a client re-issuing its cursor changed nothing.
+That measurement was contaminated: every "it works when I do it by hand" run had the pointer over the
+TERMINAL the commands were being typed into, and a terminal re-declares its cursor every time it
+prints a line. The refresh being observed was the terminal's own, echoing each command. Uncontaminated
+test, pointer parked over the Settings window: `hyprctl setcursor <theme>` alone never repaints.
 
-```
-20:30:03.898  hyprctl setcursor DONE Adwaita          ← the compositor already holds the new theme
-20:30:03.921  emit cursor-applied
-20:30:03.922  BUMPED [nidara-settings-window, dock, island, bar]
-```
+What is actually true:
 
-Correct order, the right surface under the pointer, no visible change. Re-issuing the shape does not
-make Hyprland rebuild the cursor from the new theme; only a pointer `enter` does. The fix belongs in
-`changeTheme()`, which reloads the theme and never re-applies the shape in force — the compositor is
-the only party that knows every pointer, so it is also the only one that can fix it for third-party
-apps, which have exactly the same symptom.
+- The compositor HAS the new theme immediately. The picture does not change because nobody asks for
+  it again: **a client holds the cursor it declared**, and only re-declares on `wl_pointer.enter` —
+  which is why leaving the window and coming back applies it, and why a terminal printing output
+  refreshes it for free.
+- **A forced re-apply from the compositor side WORKS**, and was confirmed by eye with the pointer over
+  a GTK window: hide and show the real cursor (`cursor:invisible` true → false), which ends in
+  `setCursorFromName(name, force = true)`. ⚠️ It must be **two separate `hyprctl eval` calls** — one
+  eval applies its config once, at the end, so both statements in a single call collapse to the final
+  value and nothing toggles. That difference is what made a working idea ship inert.
+- The user's objection to that lane is not that it fails but that it is a hack with a visible blink
+  (~150 ms of hidden cursor was the value confirmed working; whether one frame is enough is untested).
 
-⚠️ **Three ways this investigation produced false results**, all worth knowing before re-opening it:
-`grim -c` reports a STALE cursor and will "prove" any such fix dead (see the cursor section in
-`dev-workflow.md`); `nidara-click`'s pointer choreography lands its `enter` seconds after the command
-returns, so it applies the change by itself and makes a broken fix look like a working one; and
-restarting the shell destroys the Settings window, leaving the pointer over the wallpaper with no
-shell surface to act on. The only instruments that told the truth were a person looking at the screen
-and `WAYLAND_DEBUG=1`.
+▶️ **Two lanes for whoever picks this up**, in the order worth trying:
+1. **Client-side, separated in TIME.** The bump in the closed PR #166 set a different shape and put
+   the original back in the SAME main-loop iteration — the exact shape of the single-eval mistake
+   above. Try declaring another cursor, waiting ~100 ms, then restoring. If a terminal refreshes it by
+   accident, a GTK client should be able to on purpose, and this lane has no blink.
+2. **Compositor-side hide/show**, already proven, with the blink shrunk as far as it still works.
+
+📌 Also learned, and worth knowing before touching `hyprctl setcursor`: the wiki says it accepts
+**hyprcursor themes only** since 0.37.0, and every theme on a normal Arch install is XCursor.
+Converting one with `hyprcursor-util` (a HARD dependency of hyprland, always present) takes ~1 s and
+shrinks it (Adwaita 16 MB → 2.3 MB). Doing so makes the call legitimate — but it does **not** fix the
+repaint, which is why it is a note and not a fix.
 
 ⚠️ **It used to work.** The user remembers the theme applying instantly, which makes this a
 REGRESSION and is where a future attempt should start — not in the code above. Two unverified

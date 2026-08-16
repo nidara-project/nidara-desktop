@@ -516,6 +516,12 @@ full session on 2026-08-16 (see tech-debt #72 for what was actually being chased
 - **Restarting the shell destroys the Settings window** (created lazily, hides on close), so a test
   that restarts and then changes a setting leaves the pointer over the wallpaper, with no shell
   surface under it at all. `ags request listWindows` + `hyprctl cursorpos` answers that in one line.
+- **The TERMINAL refreshes the cursor for free, and it will fake every result you like.** A terminal
+  re-declares its cursor whenever it prints, so any cursor experiment run with the pointer sitting
+  over the terminal you are typing in measures the echo of your own commands. This produced an entire
+  session's worth of "works by hand, not from the code" — the same command, one contaminated by where
+  the pointer happened to be. **Before believing any cursor result, print `hyprctl cursorpos` and the
+  window under it**, and park the pointer somewhere that is not a terminal.
 
 What does work: **a person looking at the screen**, and the wire (`WAYLAND_DEBUG=1 gjs -m probe.js
 2> log`, with a small GTK4 window as the client — GTK4 ≥ 4.16 drives the cursor through
