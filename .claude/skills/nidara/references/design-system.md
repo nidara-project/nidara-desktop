@@ -1462,6 +1462,22 @@ it demotes the row from the SYSTEM language (greeter, TTY, other users) to this 
 language, and the group is titled "System language" for that reason. Considered and
 declined; reopen it as a product decision, not as a refactor.
 
+### A value that is the CONTEXT for other rows must re-derive the GROUP, not just itself
+
+Some controls do not hold a value so much as decide what the rows around them mean. Settings →
+AI's **provider** is the case: the model, whether the endpoint row exists at all, whether the key
+row exists, and every placeholder in it are derived from it. In-page that was handled (its callback
+calls `refreshSensitivity`), but its **external-sync hook moved the dropdown and nothing else** —
+so with one Settings window per monitor, switching provider on one screen left the other showing
+the previous provider's model and a key field still describing it, while "Save key" reads the LIVE
+provider and would have filed the secret under the new one.
+
+🔑 The mechanical question is *what else on this page is derived from this value?* If the answer is
+"other rows", the hook must call the same re-derivation the local callback does — track the value
+the widgets were last built around (`shownProvider`) so a change can be recognised as a change of
+CONTEXT rather than of value. ⚠️ And when it is not the context that moved, a sync must not steal
+text someone is typing: reconcile a free-text entry only while it does not have focus.
+
 ## Buttons — one component + a variant convention
 
 All action buttons go through **`NidaraButton`** (`ui/lib/nidara-kit/button.ts`) — never

@@ -389,6 +389,7 @@ export default {
     "settings.ai.exposed-settings.desc": "Settings agents can discover and change — run `ags request describeConfig` to list them",
     "settings.ai.state-read": "State & diagnostics",
     "settings.ai.state-read.desc": "`dumpState` and nidara-doctor stay available regardless of the toggles above",
+    "settings.ai.state-read.value": "Always available",
     "settings.ai.connect-agent": "Connect your agent",
     "settings.ai.connect-agent.desc": "Tell your AI agent to register the MCP server described in this file — it works from any MCP client",
 

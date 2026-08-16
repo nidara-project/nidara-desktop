@@ -1,6 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import Secret from "gi://Secret"
-import { listGroup, pageBox, toggleRow, createRow, createStackedRow, dropdownRow, staticLabel, actionRow, fieldWithActions } from "../SettingsHelpers"
+import { listGroup, pageBox, toggleRow, createRow, createStackedRow, dropdownRow, staticLabel, actionRow, fieldWithActions, bindWhileRealized, onPageShown } from "../SettingsHelpers"
 import { NidaraButton, NidaraDropDown } from "../../../../lib/nidara-kit"
 import agentConfig from "../../../core/AgentConfig"
 import { AGENT_PROVIDERS, providerById } from "../../../core/AgentProviders"
@@ -345,7 +345,15 @@ export default function AiPage() {
     // Row visibility per provider: the model is always editable (a stale default
     // must be a retype, never a dead end); the endpoint only for Custom (named
     // providers pin their own URL); the key for everything except local runtimes.
+    //
+    // 🔑 The provider is this group's CONTEXT, not one of its values: the model, the
+    // endpoint row's visibility, the key row's visibility and every one of its
+    // placeholders are derived from it. `shownProvider` is the one the widgets were
+    // last built around, so a change made anywhere else can be recognised as a change
+    // of context rather than of value.
+    let shownProvider = agentConfig.brainProvider
     function refreshSensitivity() {
+        shownProvider = agentConfig.brainProvider
         const p = providerById(agentConfig.brainProvider)
         model.row.sensitive = !!p
         endpoint.row.visible = !!p?.editableEndpoint
@@ -378,6 +386,35 @@ export default function AiPage() {
     brainGroup.listBox.append(endpoint.row)
     brainGroup.listBox.append(keyRow)
     refreshSensitivity()
+
+    // ⚠️ The provider dropdown's own `onExt` above moves the DROPDOWN and nothing else,
+    // and everything else in this group belongs to the provider. There is one Settings
+    // window per monitor, so switching provider on one screen used to leave the other
+    // showing the previous provider's model, its endpoint row, and a key field that
+    // still described it — while "Save key" (which reads the LIVE provider) would have
+    // filed the secret under the new one. Re-derive the whole context when the provider
+    // moves; when it hasn't, keep the two free-text fields honest without stealing what
+    // someone is in the middle of typing.
+    bindWhileRealized(page, () => {
+        const sync = () => {
+            if (agentConfig.brainProvider !== shownProvider) { refreshSensitivity(); return }
+            if (!modelEntry.has_focus && modelEntry.get_text() !== agentConfig.brainModel)
+                modelEntry.set_text(agentConfig.brainModel)
+            if (!endpointEntry.has_focus && endpointEntry.get_text() !== agentConfig.brainEndpoint)
+                endpointEntry.set_text(agentConfig.brainEndpoint)
+        }
+        sync()
+        return agentConfig.onChange(sync)
+    })
+
+    // What the keyring holds is not a value this page owns — it is a QUESTION, and one
+    // whose answer moves without any signal to hear: another Settings window, a
+    // `secret-tool` from a terminal, or the Secret Service simply not being up yet when
+    // the window was built (this page is built ONCE per window, so "Key storage
+    // unavailable" would then stand for the rest of the session). Re-ask it whenever the
+    // page is shown; `bindWhileRealized` would not, because hiding Settings leaves its
+    // pages realized and reopening is how you come back to one.
+    onPageShown(refreshKeyUI)
 
     page.append(brainGroup.box)
 
@@ -503,10 +540,14 @@ export default function AiPage() {
         staticLabel(String(configKeys().length)),
     ))
 
+    // The value is "always", and it has to be SAID. This row's group answers questions
+    // about the surface with a fact in the trailing slot (the row above it prints a
+    // count); this one printed an empty label, so the one row on the page whose whole
+    // point is that no toggle can take it away was the row that answered nothing.
     surfaceGroup.listBox.append(createRow(
         t("settings.ai.state-read"),
         t("settings.ai.state-read.desc"),
-        staticLabel(""),
+        staticLabel(t("settings.ai.state-read.value")),
     ))
 
     page.append(surfaceGroup.box)
