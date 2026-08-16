@@ -5,7 +5,7 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
 import { showNidaraAlert, NidaraButton, NidaraRow, NidaraEmptyRow, ROW_H_SINGLE } from "../../../../lib/nidara-kit"
 import { getUsers, getCurrentUser, type User } from "../../../../lib/users"
-import { listGroup, createRow, createStackedRow, fieldWithActions, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, createStackedRow, fieldWithActions, pageBox, onPageShown } from "../SettingsHelpers"
 import { showAvatarCropper } from "../../../common/AvatarCropper"
 import { attachTooltip } from "../../../common/Tooltip"
 import { t } from "../../../core/i18n"
@@ -531,6 +531,25 @@ export default function UsersPage() {
         nameApplyBtn.sensitive = true
     }
     nameApplyBtn.connect("clicked", applyName); nameEntry.connect("activate", applyName)
+
+    // Everything on this page is READ from /etc/passwd, /etc/group and ~/.face —
+    // no signals, no service. The page is cached and the window hides rather than
+    // closes, so all of it was answered once per shell lifetime: your own photo and
+    // full name, and (below) the whole other-users list with each account's admin
+    // flag. `getUsers()` re-reads the file on every call, so a visit is the right
+    // moment to ask again.
+    let shownName = displayName
+    onPageShown(() => {
+        const now = getCurrentUser()
+        setAvatar(now.avatarPath)
+        // ⚠️ The entry is only re-synced while it still holds what WE put there. A
+        // half-typed name the user has not applied yet is theirs, and a re-read
+        // that clobbers it would lose work just for closing the window.
+        if (nameEntry.text === shownName && now.displayName !== shownName) {
+            nameEntry.text = now.displayName
+        }
+        shownName = now.displayName
+    })
     // Stacked, not trailing: an entry plus its Apply button is two controls, and the
     // trailing slot holds one. Squeezed in there the entry had to be pinned to a
     // fixed `width_chars` and the pair still read as a clump against the right edge.
@@ -580,7 +599,12 @@ export default function UsersPage() {
         addRow.set_child(addBtn)
         otherList.append(addRow)
     }
-    rebuildOtherUsers()
+    // Same reason as the profile above: an account created or deleted anywhere else
+    // — `useradd` in a terminal, another admin's session, `nidara-setup --user` on a
+    // fresh login — and every row's admin switch (which reads /etc/group at row
+    // build) was frozen at whatever the world looked like the first time this page
+    // was opened. Synchronous, so unlike the VPN list it needs no overlap guard.
+    onPageShown(rebuildOtherUsers)
     page.append(otherGroup.box)
 
     return page
