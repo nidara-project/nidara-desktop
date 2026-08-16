@@ -889,6 +889,21 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     protocol — see `state-and-ipc.md`); no ShellActions entry (no widget consumes it).
 - **`common/`** — shared UI pieces used across surfaces and widgets
   (`Slider`, `SquircleContainer`, `ScaleRevealer`, `MenuRow`, `widget-kit`, `DrawingUtils`…).
+  - `CursorRefresh.ts` — **a new cursor theme or size never reaches the cursor already
+    on screen.** `hyprctl setcursor` → `changeTheme()` reloads the theme and schedules
+    frames but never re-issues the shape, so those frames repaint the OLD picture. 🔑 The
+    law that governs everything here: **Hyprland redraws the pointer only when it sees a
+    different shape NAME** (`IHyprRenderer::setCursorFromName` opens with
+    `if (name == m_lastCursorData.name && !force) return;`). A name is what
+    `wp_cursor_shape_v1` carries, so the fix is the protocol's own vocabulary: name a
+    different shape and name the old one straight back, in one main-loop iteration —
+    the compositor applies both in one pass, nothing is composited in between, and
+    nothing flickers. Only the client holding pointer focus may name a shape, so this
+    covers Nidara's surfaces; the case where NOBODY holds it (right after a
+    `Gtk.DropDown`'s popover is destroyed under a motionless pointer) goes through
+    `HyprlandState.reevaluatePointerFocus()`. Before touching any of it, read the cursor
+    section of `dev-workflow.md` — five separate instruments lie about this, all in the
+    direction of "your change did nothing".
 - **`widgets/`** — atomic CC/bar widgets, **auto-registered**: one file that
     default-exports a `const w: AtomicWidget = {...}` is ALL it takes —
     `scripts/gen-widget-index.mjs` scans the dir and regenerates the committed

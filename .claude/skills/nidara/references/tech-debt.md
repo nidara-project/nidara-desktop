@@ -3903,61 +3903,55 @@ watch `client`'s `device-added`/`device-removed` and re-resolve `wifi`/`wired`. 
 page carries a comment at the `if (network.wired)` site so nobody "fixes" it by copying Audio.
 The workaround for a user is a shell reload (`Super+Shift+R`).
 
-### 72. Cursor SIZE re-renders live, cursor THEME does not — and a client cannot fix it (2026-08-16)
+### 72. ✅ FIXED — a cursor theme/size never reached the cursor already on screen (2026-08-17)
 
-Reported by the user as one bug ("cursor style and size only change when I leave the window") and it
-is two, with opposite answers. Both halves were confirmed **by eye**, on this machine, with the
-pointer parked inside a shell window and untouched:
+Reported as *"cursor style and size only change when I leave the window"*. One bug, not two — the
+earlier write-up here split it into size (working) and theme (out of reach) and **both halves were
+wrong**, each from a contaminated instrument. Fixed in `ui/shell/common/CursorRefresh.ts` (67 lines
+of code across four files).
 
-- **Size: DISPUTED, and probably not the exception it looks like.** It was written up as "not
-  broken" on one confirmation with the pointer over the Settings window; the user reported afterwards
-  that the size, too, only lands when the pointer leaves the window. The mechanism that made the
-  exception plausible is real (`changeTheme()` → `updateTheme()` recomputes `m_currentStyleInfo.size`
-  and schedules `AQ_SCHEDULE_CURSOR_SHAPE`), which is exactly why it was believed too easily. **Treat
-  both halves as the same bug until someone re-tests the size with the pointer parked on a non-
-  terminal window**, and do not build on the asymmetry.
-- **Theme: broken, and out of our reach.** Pick a cursor theme and the picture does not change until
-  the pointer leaves the surface and comes back.
+🔑 **The law, which is the only thing worth remembering.** Hyprland redraws the pointer **only when
+it sees a different shape NAME**: `IHyprRenderer::setCursorFromName` opens with
+`if (name == m_lastCursorData.name && !force) return;`, and `changeTheme()` reloads the theme and
+schedules frames without ever re-issuing the shape. Read in 0.56.2 and byte-identical on `main`, so
+no version bump fixes it. Measured, pointer parked and never moved:
 
-▶️ **Corrected 2026-08-16, later the same day, and the earlier conclusion here was WRONG.** It said
-the theme half was out of the shell's reach because a client re-issuing its cursor changed nothing.
-That measurement was contaminated: every "it works when I do it by hand" run had the pointer over the
-TERMINAL the commands were being typed into, and a terminal re-declares its cursor every time it
-prints a line. The refresh being observed was the terminal's own, echoing each command. Uncontaminated
-test, pointer parked over the Settings window: `hyprctl setcursor <theme>` alone never repaints.
+| action | cursor px on screen |
+|---|---|
+| Adwaita on screen | 112 |
+| `hyprctl setcursor Qogir-Dark` | 112 ← the bug |
+| toggle `cursor:invisible` off and on | 112 ← does **not** repaint |
+| a crossing that changes the NAME | 147 ← the only thing that does |
 
-What is actually true:
+**The fix**: name a different shape and name the old one straight back, in one main-loop iteration —
+the compositor applies both in one pass, nothing is composited between them, no flicker. A name is
+exactly what `wp_cursor_shape_v1` carries, so this is the protocol's own vocabulary, not a trick.
 
-- The compositor HAS the new theme immediately. The picture does not change because nobody asks for
-  it again: **a client holds the cursor it declared**, and only re-declares on `wl_pointer.enter` —
-  which is why leaving the window and coming back applies it, and why a terminal printing output
-  refreshes it for free.
-- **A forced re-apply from the compositor side WORKS**, and was confirmed by eye with the pointer over
-  a GTK window: hide and show the real cursor (`cursor:invisible` true → false), which ends in
-  `setCursorFromName(name, force = true)`. ⚠️ It must be **two separate `hyprctl eval` calls** — one
-  eval applies its config once, at the end, so both statements in a single call collapse to the final
-  value and nothing toggles. That difference is what made a working idea ship inert.
-- The user's objection to that lane is not that it fails but that it is a hack with a visible blink
-  (~150 ms of hidden cursor was the value confirmed working; whether one frame is enough is untested).
+**The hard half.** Only the client holding pointer focus may name a shape
+(`InputManager.cpp:68-72`), and the cursor THEME is only reachable through a `Gtk.DropDown` — whose
+popover is a real Wayland surface that is DESTROYED when you pick an item. Hyprland then hands focus
+to nobody (it re-runs that pass on pointer motion only, and the pointer has not moved), so for a
+while **no client on the desktop can repaint the pointer**. Verified on the wire across three
+scripted selections: no `enter` ever arrives while the mouse is still. Closed by
+`HyprlandState.reevaluatePointerFocus()` — `hl.dsp.cursor.move` to the position the pointer is
+already at, which is `warpTo(pos, true)` + `simulateMouseMovement()` and therefore a pure focus
+re-evaluation: the pointer does not move, no libinput event is generated, keyboard focus is untouched.
 
-▶️ **Two lanes for whoever picks this up**, in the order worth trying:
-1. **Client-side, separated in TIME.** The bump in the closed PR #166 set a different shape and put
-   the original back in the SAME main-loop iteration — the exact shape of the single-eval mistake
-   above. Try declaring another cursor, waiting ~100 ms, then restoring. If a terminal refreshes it by
-   accident, a GTK client should be able to on purpose, and this lane has no blink.
-2. **Compositor-side hide/show**, already proven, with the blink shrunk as far as it still works.
+⛔ **Do not re-propose these**, all closed by measurement, not by taste:
+- **`cursor:invisible` hide/show.** Hides fine, but restores the OLD picture — it does not repaint.
+- **Settling timers** after the popover closes. There is no `enter` to wait for.
+- **Waiting for the user to move the mouse.** Works, but one pixel is not enough on its own (GTK
+  re-names `default`, which the dedupe drops), and the `Gtk.EventControllerMotion` used to make it
+  one-shot had to be removed from inside its own handler — which **segfaulted the shell**.
+- **Dropping the native dropdown for an in-window list.** `NidaraSelect` was deleted 2026-08-03
+  (61c3e75c) precisely because a real popover gets compositor blur. That trade is what creates the
+  focus gap; the user re-affirmed the blur is worth keeping.
+- **Patching Hyprland.** It is genuinely the compositor's bug (a surface holding pointer focus is
+  destroyed and focus is not reassigned), but out of scope for this project.
 
-📌 Also learned, and worth knowing before touching `hyprctl setcursor`: the wiki says it accepts
-**hyprcursor themes only** since 0.37.0, and every theme on a normal Arch install is XCursor.
-Converting one with `hyprcursor-util` (a HARD dependency of hyprland, always present) takes ~1 s and
-shrinks it (Adwaita 16 MB → 2.3 MB). Doing so makes the call legitimate — but it does **not** fix the
-repaint, which is why it is a note and not a fix.
+📌 `hyprctl setcursor` is documented as hyprcursor-only since 0.37.0 and every theme on a normal Arch
+install is XCursor — it falls back and works, and converting with `hyprcursor-util` does **not** fix
+the repaint. A note, not a fix.
 
-⚠️ **It used to work.** The user remembers the theme applying instantly, which makes this a
-REGRESSION and is where a future attempt should start — not in the code above. Two unverified
-suspects, both cheap to check: the Hyprland upgrade (0.56.2 is from 2026-08-05), and **GTK4 moving to
-`cursor-shape-v1`** (4.16+). The second is the more interesting one: before it, a GTK client uploaded
-its own cursor BUFFER, and a client that re-reads `gtk-cursor-theme-name` re-uploads by itself — so
-the theme would have refreshed with no compositor involvement and no `enter`. If that is it, the
-behaviour did not break so much as move house, and the client-side lane above was the right idea a
-version too late. Bisecting one of the two is the whole investigation.
+⚠️ Before any further work here, read the cursor section of `dev-workflow.md`. **Five** separate
+instruments lie about this and all of them lie in the direction of "your change did nothing".

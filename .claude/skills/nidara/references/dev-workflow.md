@@ -497,43 +497,65 @@ focused state is a live check.
 enough that a single number fits two readings; compare DELTAS between nodes measured in the
 same run — that rule is why the probe prints the pairs itself.
 
-### Verifying the CURSOR — three instruments lie, and they lie in your favour
+### Verifying the CURSOR — five instruments lie, and they lie in your favour
 
-Nothing about the pointer's own picture can be verified with a screenshot, and the traps below cost a
-full session on 2026-08-16 (see tech-debt #72 for what was actually being chased).
+Two sessions (2026-08-16/17) went almost entirely into instruments rather than the fix. Read this
+before running a single cursor experiment.
 
-- **`grim -c` reports a STALE cursor.** Screencopy-with-cursor refreshes its copy on the pointer-focus
-  path, so it shows the cursor as of the last `wl_pointer.enter` — precisely the event any "does it
-  update without moving the mouse?" question is about. Measured: with the size set to 96 and the
-  pointer verifiably still for a minute, the capture reported the 24-px box while the user looking at
-  that same screen saw a cursor four times bigger. Three capture-based A/Bs "proved" a change dead
-  before a person looked.
-- **`nidara-click` applies the change by itself.** Its AI-cursor choreography lands the real pointer
-  motion SECONDS after the command returns, so the `enter` it produces is what refreshes the cursor.
-  Driving a dropdown with it makes a completely inert patch look like it works. In a
-  `WAYLAND_DEBUG=1` log, a `set_shape` sitting right after a `wl_pointer.enter` line is that enter,
-  not your change — check the order, always.
-- **Restarting the shell destroys the Settings window** (created lazily, hides on close), so a test
-  that restarts and then changes a setting leaves the pointer over the wallpaper, with no shell
-  surface under it at all. `ags request listWindows` + `hyprctl cursorpos` answers that in one line.
-- **The TERMINAL refreshes the cursor for free, and it will fake every result you like.** A terminal
-  re-declares its cursor whenever it prints, so any cursor experiment run with the pointer sitting
-  over the terminal you are typing in measures the echo of your own commands. This produced an entire
-  session's worth of "works by hand, not from the code" — the same command, one contaminated by where
-  the pointer happened to be. **Before believing any cursor result, print `hyprctl cursorpos` and the
-  window under it**, and park the pointer somewhere that is not a terminal.
+**🔑 The law first, because most "it does not work" readings are really this.** Hyprland redraws the
+pointer **only when it sees a different shape NAME** — `IHyprRenderer::setCursorFromName` opens with
+`if (name == m_lastCursorData.name && !force) return;`. So a crossing between two surfaces that both
+say `default` repaints NOTHING, and neither does re-sending the same shape. Leaving a window "works"
+only because something on the way out changes the name (a resize border → `left_side`, bare desktop →
+`left_ptr`, a text field → `text`). Design every A/B around that, or the control arm will be as dead
+as the test arm — which is how a perfectly good calibration was thrown away here.
 
-What does work: **a person looking at the screen**, and the wire (`WAYLAND_DEBUG=1 gjs -m probe.js
-2> log`, with a small GTK4 window as the client — GTK4 ≥ 4.16 drives the cursor through
-`wp_cursor_shape_device_v1.set_shape`, so the picture is the COMPOSITOR's, not a buffer the client
-uploads).
+The five liars:
 
-⚠️ Two more facts from the same session, both of which broke a reasonable-looking assumption:
-**the visible cursor and the setting can disagree indefinitely** (after a theme change with no enter,
-`gsettings get cursor-theme` reports the new one while the screen shows the old), and **portal
-latency measured in a COLD process is not the latency in a warm one** — `notify::gtk-cursor-theme-*`
-took ~1.5 s in a freshly spawned probe and 30 ms in the running shell, which inverted an ordering the
-whole design had been built on.
+- **`grim -c` cannot see the cursor's theme or size**, and it fails in the direction that reads as
+  "your change did nothing". It refreshes its copy on the pointer-focus path only. Calibrated three
+  ways: with the pointer moved but the NAME unchanged it reported an identical 157 px / ink 0.078 for
+  a black theme and a white one; only after a name-changing crossing did it discriminate (Adwaita
+  112 px vs Qogir-Dark 147 px). A capture also once reported a 24-px box while a person looking at
+  that screen saw a cursor four times bigger. **Never conclude from a screenshot.**
+- **The TERMINAL refreshes the cursor for free.** It re-declares its cursor whenever it prints, so any
+  experiment with the pointer over the terminal you are typing in measures the echo of your own
+  commands. An entire session of "works by hand, not from the code" was this.
+- **kitty HIDES its cursor when the pointer is still**, and un-hiding re-declares it. A theme change
+  tested over kitty therefore "works" no matter what your patch does.
+- **`hyprctl dispatch movecursor 469 756` moves nothing** on this Lua config (`')' expected`), and
+  worse: even in the correct form (`hyprctl dispatch "hl.dsp.cursor.move({ x = …, y = … })"`) a warp
+  produces **no crossing event**, and GTK only pushes a cursor for a device it has a recorded pointer
+  focus for. So the standard way to park the pointer **silently disables the mechanism under test**.
+  Park it with real motion — `nidara-input move X Y 2560 1440` — and assert `hyprctl cursorpos`.
+- **Hyprland's own log stops being written**, three times in one session. `debug:disable_logs` is only
+  re-read on `config.reloaded`, and `hyprctl eval` does NOT emit that event — so trying to turn logs
+  on by eval leaves them OFF with no way back. Put `hl.config({ debug = { disable_logs = false } })`
+  in `hyprland-user.lua` and `hyprctl reload`. Then **bracket every run with a canary** (any `hyprctl`
+  call logs `Hyprctl: new connection from pid N`): if your pid is missing at the end, the log died
+  mid-run and every count in it is void. A whole "the bug is reproduced!" reading came from a log that
+  had frozen seven minutes earlier.
+
+Also true, and each broke a reasonable-looking assumption: **the visible cursor and the setting
+disagree indefinitely** (`gsettings get cursor-theme` reports the new one while the screen shows the
+old); **portal latency measured in a COLD process is not the warm one** (~1.5 s spawning a probe,
+20 ms in the running shell, which inverted an ordering the design rested on); **`nidara-click` applies
+the change by itself** (its choreography lands real pointer motion seconds after the command returns,
+and it toggles `cursor:invisible`); and **restarting the shell destroys the Settings window**, leaving
+the pointer over the wallpaper with no surface of ours beneath it.
+
+**What actually works: the WIRE.** `WAYLAND_DEBUG=1 gjs -m probe.js 2> log`, with a minimal GTK4
+window that reproduces the case — for the dropdown bug that meant a window containing one
+`Gtk.DropDown`. It shows `wp_cursor_shape_device_v1.set_shape`, `wl_pointer.enter/leave` and
+`xdg_popup.destroy` with timestamps, which is the whole causal chain. Building it FIRST would have
+saved both sessions. ⚠️ Grep it with `#`, not `@` — `WAYLAND_DEBUG` writes `wl_pointer#31.enter`, and
+a pattern with `@` matches nothing and reads as "no events". ⚠️ And assert the ORDER: a `set_shape`
+sitting right after a `wl_pointer.enter` is that enter, not your change.
+
+⚠️ **Control your own variables.** One run here showed pointer focus returning "spontaneously" 800 ms
+after a popover closed, which reversed a conclusion — it was the user's hand on the mouse. Three
+scripted selections with no human input showed it never returns. If a human is at the machine, the
+mouse is an uncontrolled variable.
 
 ### Measuring what a layer's blur costs (`scripts/dev/blur-arm.sh`)
 
