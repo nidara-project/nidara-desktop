@@ -497,6 +497,38 @@ focused state is a live check.
 enough that a single number fits two readings; compare DELTAS between nodes measured in the
 same run — that rule is why the probe prints the pairs itself.
 
+### Verifying the CURSOR — three instruments lie, and they lie in your favour
+
+Nothing about the pointer's own picture can be verified with a screenshot, and the traps below cost a
+full session on 2026-08-16 (see tech-debt #72 for what was actually being chased).
+
+- **`grim -c` reports a STALE cursor.** Screencopy-with-cursor refreshes its copy on the pointer-focus
+  path, so it shows the cursor as of the last `wl_pointer.enter` — precisely the event any "does it
+  update without moving the mouse?" question is about. Measured: with the size set to 96 and the
+  pointer verifiably still for a minute, the capture reported the 24-px box while the user looking at
+  that same screen saw a cursor four times bigger. Three capture-based A/Bs "proved" a change dead
+  before a person looked.
+- **`nidara-click` applies the change by itself.** Its AI-cursor choreography lands the real pointer
+  motion SECONDS after the command returns, so the `enter` it produces is what refreshes the cursor.
+  Driving a dropdown with it makes a completely inert patch look like it works. In a
+  `WAYLAND_DEBUG=1` log, a `set_shape` sitting right after a `wl_pointer.enter` line is that enter,
+  not your change — check the order, always.
+- **Restarting the shell destroys the Settings window** (created lazily, hides on close), so a test
+  that restarts and then changes a setting leaves the pointer over the wallpaper, with no shell
+  surface under it at all. `ags request listWindows` + `hyprctl cursorpos` answers that in one line.
+
+What does work: **a person looking at the screen**, and the wire (`WAYLAND_DEBUG=1 gjs -m probe.js
+2> log`, with a small GTK4 window as the client — GTK4 ≥ 4.16 drives the cursor through
+`wp_cursor_shape_device_v1.set_shape`, so the picture is the COMPOSITOR's, not a buffer the client
+uploads).
+
+⚠️ Two more facts from the same session, both of which broke a reasonable-looking assumption:
+**the visible cursor and the setting can disagree indefinitely** (after a theme change with no enter,
+`gsettings get cursor-theme` reports the new one while the screen shows the old), and **portal
+latency measured in a COLD process is not the latency in a warm one** — `notify::gtk-cursor-theme-*`
+took ~1.5 s in a freshly spawned probe and 30 ms in the running shell, which inverted an ordering the
+whole design had been built on.
+
 ### Measuring what a layer's blur costs (`scripts/dev/blur-arm.sh`)
 
 The harness behind `references/tech-debt.md` §46. Use it for any claim of the form "this surface's
