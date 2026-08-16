@@ -94,7 +94,14 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
         const [ih, im] = initial.split(":").map(Number)
         const hSpin = makeSpin(0, 23, isNaN(ih) ? 20 : ih)
         const mSpin = makeSpin(0, 59, isNaN(im) ? 0 : im)
-        const emit = () => onChange(`${String(Math.round(hSpin.value)).padStart(2, "0")}:${String(Math.round(mSpin.value)).padStart(2, "0")}`)
+        // Guarded: writing a spin to DISPLAY the schedule fires `value-changed`, which
+        // would commit it straight back — a save on every external change. Same reason
+        // the Settings twin guards its own (see pages/Appearance.tsx).
+        let syncing = false
+        const emit = () => {
+            if (syncing) return
+            onChange(`${String(Math.round(hSpin.value)).padStart(2, "0")}:${String(Math.round(mSpin.value)).padStart(2, "0")}`)
+        }
         hSpin.connect("value-changed", emit)
         mSpin.connect("value-changed", emit)
 
@@ -105,7 +112,14 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
         row.append(new Gtk.Label({ label: ":", css_classes: ["nidara-row-subtitle"] }))
         row.append(mSpin)
         col.append(row)
-        return { col, sync: (v: string) => { const [h, m] = v.split(":").map(Number); hSpin.value = h; mSpin.value = m } }
+        return { col, sync: (v: string) => {
+            const [h, m] = v.split(":").map(Number)
+            if (isNaN(h) || isNaN(m)) return
+            syncing = true
+            hSpin.value = h
+            mSpin.value = m
+            syncing = false
+        } }
     }
 
     const from = timePicker(t("settings.appearance.night-light-from"), nightLight.scheduleFrom, (v) => nightLight.setScheduleFrom(v))

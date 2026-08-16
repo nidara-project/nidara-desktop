@@ -16,10 +16,33 @@ import { safeDisconnect } from "../../../core/signals"
 export default function AppearancePage() {
     const page = pageBox("appearance-page")
 
+    // Live external-sync for everything on this page that ThemeManager owns.
+    //
+    // 🔑 It PRIMES — `apply(read())` before connecting — and that is the whole point,
+    // not a nicety. Every consumer arms it through `bindWhileRealized`, which re-runs
+    // on each realize; a hook that only subscribes comes back listening but still
+    // showing what it was built with, and this page is built ONCE per Settings window.
+    // Measured 2026-08-16 on the version this replaces: `setConfig
+    // appearance.shellAppearance dark` moved the bar and the dock while the dropdown
+    // two inches away still read "Follow system", for the rest of the session.
+    //
+    // The writers are real and none of them are this page: `setConfig` (appearance.*
+    // is agent-writable), the Control Center's dark-mode widget, and the OTHER
+    // Settings window — there is one per monitor, all editing the same ThemeManager.
+    const onTheme = <T,>(read: () => T) => (apply: (v: T) => void) => {
+        apply(read())
+        const id = Theme.connect("changed", () => apply(read()))
+        return () => safeDisconnect(Theme, id)
+    }
+
     // 1. General style
     const styleGroup = listGroup(t("settings.appearance.group.base-style"))
     const darkSwitch = new Gtk.Switch({ active: Theme.isDark, valign: Gtk.Align.CENTER })
-    darkSwitch.connect("state-set", (_: any, state: boolean) => { Theme.setDarkMode(state); return false })
+    let syncingDark = false
+    darkSwitch.connect("state-set", (_: any, state: boolean) => {
+        if (!syncingDark) Theme.setDarkMode(state)
+        return false
+    })
     styleGroup.listBox.append(createRow(
         t("settings.appearance.dark-mode"),
         t("settings.appearance.dark-mode.desc"),
@@ -40,6 +63,7 @@ export default function AppearancePage() {
             const key = SHELL_APPEARANCES.find(k => apprLabel(k) === label)
             if (key) Theme.setShellAppearance(key)
         },
+        onTheme(() => apprLabel(Theme.shellAppearance)),
     ))
     page.append(styleGroup.box)
 
@@ -165,10 +189,13 @@ export default function AppearancePage() {
     // Live external-sync so the master and the advanced sliders stay consistent when
     // either changes the underlying value (guarded against the cb→set→changed→cb loop
     // by makeSlider, which ignores onExtChange while dragging). safeDisconnect: see #12.
-    const extOpacity = (read: () => number) => (cb: (v: number) => void) => {
-        const id = Theme.connect("changed", () => cb(read()))
-        return () => safeDisconnect(Theme, id)
-    }
+    //
+    // ⚠️ The four advanced sliders live inside a Revealer that starts CLOSED, so they
+    // are unmapped — and therefore unrealized — until it is opened. Their subscription
+    // is armed on realize, i.e. on the way in: with a hook that did not prime, dragging
+    // the master while "Advanced" was collapsed and then opening it showed four sliders
+    // still at the value they were built with, contradicting the master right above
+    // them. `onTheme` primes, so opening the disclosure re-reads.
     // The master governs the SAME four surfaces it writes (setGlassOpacity), so it must
     // read all four — proxying one axis let *only* the overlay slider move it, and a mean
     // is a number nobody set that also implies the surfaces are uniform when they aren't.
@@ -184,7 +211,7 @@ export default function AppearancePage() {
         min: 0.05, max: 0.80, value: glassRepr(),
         onChange: (v) => Theme.setGlassOpacity(v),
         onValueChanged: (v) => { masterValue.label = `${Math.round(v * 100)}%` }, // drag unifies → show %
-        onExtChange: extOpacity(glassRepr),
+        onExtChange: onTheme(glassRepr),
         debounce: 32,
         width_request: 140,
     })
@@ -222,22 +249,22 @@ export default function AppearancePage() {
     advInner.append(sliderRow(
         t("settings.appearance.bar-opacity"), t("settings.appearance.bar-opacity.desc"),
         Theme.barOpacity, 0.05, 0.80, (v) => Theme.setBarOpacity(v),
-        { ...OPACITY_OPTS, onExtChange: extOpacity(() => Theme.barOpacity) },
+        { ...OPACITY_OPTS, onExtChange: onTheme(() => Theme.barOpacity) },
     ))
     advInner.append(sliderRow(
         t("settings.appearance.overlay-opacity"), t("settings.appearance.overlay-opacity.desc"),
         Theme.overlayOpacity, 0.05, 0.80, (v) => Theme.setOverlayOpacity(v),
-        { ...OPACITY_OPTS, onExtChange: extOpacity(() => Theme.overlayOpacity) },
+        { ...OPACITY_OPTS, onExtChange: onTheme(() => Theme.overlayOpacity) },
     ))
     advInner.append(sliderRow(
         t("settings.appearance.dock-opacity"), t("settings.appearance.dock-opacity.desc"),
         Theme.dockOpacity, 0.05, 0.80, (v) => Theme.setDockOpacity(v),
-        { ...OPACITY_OPTS, onExtChange: extOpacity(() => Theme.dockOpacity) },
+        { ...OPACITY_OPTS, onExtChange: onTheme(() => Theme.dockOpacity) },
     ))
     advInner.append(sliderRow(
         t("settings.appearance.window-glass"), t("settings.appearance.window-glass.desc"),
         Theme.windowOpacity, 0.05, 0.80, (v) => Theme.setWindowOpacity(v),
-        { ...OPACITY_OPTS, onExtChange: extOpacity(() => Theme.windowOpacity) },
+        { ...OPACITY_OPTS, onExtChange: onTheme(() => Theme.windowOpacity) },
     ))
     const advRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN, reveal_child: false })
     advRevealer.set_child(advInner)
@@ -254,7 +281,21 @@ export default function AppearancePage() {
     page.append(fcGroup.box)
 
     // 4. Night Light
+    //
+    // ⚠️ Every control here has a TWIN in the Control Center: the night-light widget's
+    // detail panel (`widgets/night-light.ts`) is the same switch, the same temperature
+    // slider and the same schedule over the same NightLightManager. The twin re-read
+    // and this page did not — measured 2026-08-16: with Settings open on this page,
+    // `setConfig nightlight.temperature 3200` left the slider reading 4910 K, while the
+    // switch one row above followed `nightlight.enabled` in the same tick. Whoever
+    // touched the slider next would then have written the stale number back.
     const nlGroup = listGroup(t("settings.appearance.group.night-light"))
+
+    const onNightLight = <T,>(read: () => T) => (apply: (v: T) => void) => {
+        apply(read())
+        const id = NightLight.connect("changed", () => apply(read()))
+        return () => safeDisconnect(NightLight, id)
+    }
 
     // Manual toggle — insensitive when schedule controls it
     const nlSwitch = new Gtk.Switch({ active: NightLight.enabled, valign: Gtk.Align.CENTER, sensitive: !NightLight.scheduleEnabled })
@@ -270,7 +311,7 @@ export default function AppearancePage() {
         t("settings.appearance.night-light-temp.desc"),
         NightLight.temperature, 2700, 6500,
         (v) => NightLight.setTemperature(v),
-        { unit: "K", icons: [Icons.minus, Icons.plus] },
+        { unit: "K", icons: [Icons.minus, Icons.plus], onExtChange: onNightLight(() => NightLight.temperature) },
     ))
 
     // Schedule toggle
@@ -310,7 +351,14 @@ export default function AppearancePage() {
         const hSpin = makeSpin(0, 23, safeH)
         const mSpin = makeSpin(0, 59, safeM)
 
+        // `syncing` is not belt-and-braces: writing a spin to DISPLAY a value fires
+        // `value-changed`, which would commit it straight back — the same "showing a
+        // value is the same thing as setting it" that had opening Settings rewrite the
+        // file the login reads (#154). Here it would re-save the schedule on every
+        // refresh of a page that refreshes itself.
+        let syncing = false
         const emit = () => {
+            if (syncing) return
             const h = String(Math.round(hSpin.value)).padStart(2, "0")
             const m = String(Math.round(mSpin.value)).padStart(2, "0")
             onChange(`${h}:${m}`)
@@ -322,18 +370,29 @@ export default function AppearancePage() {
         box.append(hSpin)
         box.append(new Gtk.Label({ label: ":", css_classes: ["nidara-row-subtitle"] }))
         box.append(mSpin)
-        return box
+        const sync = (time: string) => {
+            const [h, m] = time.split(":").map(Number)
+            if (isNaN(h) || isNaN(m)) return
+            syncing = true
+            hSpin.value = h
+            mSpin.value = m
+            syncing = false
+        }
+        return { box, sync }
     }
 
     const schedTimeBox = new Gtk.Box({ spacing: 24, valign: Gtk.Align.CENTER })
 
+    const from = timePicker(NightLight.scheduleFrom, (v) => NightLight.setScheduleFrom(v))
+    const to   = timePicker(NightLight.scheduleTo,   (v) => NightLight.setScheduleTo(v))
+
     const fromBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
     fromBox.append(new Gtk.Label({ label: t("settings.appearance.night-light-from"), halign: Gtk.Align.START, css_classes: ["nidara-row-subtitle"] }))
-    fromBox.append(timePicker(NightLight.scheduleFrom, (v) => NightLight.setScheduleFrom(v)))
+    fromBox.append(from.box)
 
     const toBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
     toBox.append(new Gtk.Label({ label: t("settings.appearance.night-light-to"), halign: Gtk.Align.START, css_classes: ["nidara-row-subtitle"] }))
-    toBox.append(timePicker(NightLight.scheduleTo, (v) => NightLight.setScheduleTo(v)))
+    toBox.append(to.box)
 
     schedTimeBox.append(fromBox)
     schedTimeBox.append(toBox)
@@ -349,6 +408,8 @@ export default function AppearancePage() {
         nlSwitch.sensitive = !NightLight.scheduleEnabled
         schedSwitch.active = NightLight.scheduleEnabled
         schedTimeRow.visible = NightLight.scheduleEnabled
+        from.sync(NightLight.scheduleFrom)
+        to.sync(NightLight.scheduleTo)
     }
     bindWhileRealized(page, () => {
         syncNightLight()
@@ -363,10 +424,12 @@ export default function AppearancePage() {
     assetsGroup.listBox.append(dropdownRow(
         t("settings.appearance.gtk-theme"), t("settings.appearance.gtk-theme.desc"),
         Theme.themeFamily, Theme.getAvailableGtkThemes(), (v) => Theme.setGtkTheme(v),
+        onTheme(() => Theme.themeFamily),
     ))
     assetsGroup.listBox.append(dropdownRow(
         t("settings.appearance.icons"), t("settings.appearance.icons.desc"),
         Theme.iconTheme, Theme.getAvailableIconThemes(), (v) => Theme.setIconTheme(v),
+        onTheme(() => Theme.iconTheme),
     ))
     // Cursor THEME only. Its SIZE used to sit right here as a second dropdown and
     // moved to Accessibility on 2026-08-16 — one setting, one control, and pointer
@@ -375,6 +438,7 @@ export default function AppearancePage() {
     assetsGroup.listBox.append(dropdownRow(
         t("settings.appearance.cursor"), t("settings.appearance.cursor.desc"),
         Theme.cursorTheme, Theme.getAvailableCursorThemes(), (v) => Theme.setCursorTheme(v),
+        onTheme(() => Theme.cursorTheme),
     ))
     page.append(assetsGroup.box)
 
@@ -385,6 +449,7 @@ export default function AppearancePage() {
         font: Theme.interfaceFont,
         title: t("settings.appearance.interface-font"),
         onFontSet: (f) => Theme.setFont(f),
+        onExtChange: onTheme(() => Theme.interfaceFont),
     })
     fontsGroup.listBox.append(createRow(
         t("settings.appearance.interface-font"),
@@ -396,6 +461,7 @@ export default function AppearancePage() {
         font: Theme.monoFont,
         title: t("settings.appearance.mono-font"),
         onFontSet: (f) => Theme.setMonoFont(f),
+        onExtChange: onTheme(() => Theme.monoFont),
     })
     fontsGroup.listBox.append(createRow(
         t("settings.appearance.mono-font"),
@@ -406,17 +472,25 @@ export default function AppearancePage() {
 
     page.append(fontsGroup.box)
 
-    // State sync
+    // State sync for the two controls that are not rows with their own hook: the
+    // dark-mode switch and the accent swatches. Through `bindWhileRealized` like
+    // everything else on the page, so it re-reads on the way back in rather than
+    // relying on having been listening at the moment something changed.
     const updateThemeState = () => {
+        syncingDark = true
         darkSwitch.active = Theme.isDark
+        syncingDark = false
         const currentAccent = Theme.accentColor
         Object.keys(accentButtons).forEach(key => {
             accentButtons[key].remove_css_class("selected")
             if (key === currentAccent) accentButtons[key].add_css_class("selected")
         })
     }
-    updateThemeState()
-    Theme.connect("changed", updateThemeState)
+    bindWhileRealized(page, () => {
+        updateThemeState()
+        const id = Theme.connect("changed", updateThemeState)
+        return () => safeDisconnect(Theme, id)
+    })
 
     return page
 }

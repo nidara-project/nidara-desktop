@@ -1275,6 +1275,18 @@ silently freezes the page after the user's first departure (that was tech-debt #
 lists, a dead pairing agent, a stopped clock preview). Subpages are exempt — `pushSubpage` rebuilds
 them on every push.
 
+⚠️ **A hook that only SUBSCRIBES is the same bug wearing the fix's clothes.** The composed rows and
+`makeHSlider` arm their `onExt`/`onExtChange` through `bindWhileRealized`, so the caller's hook is what
+decides whether coming back re-reads: one that connects and returns a disposer is armed and blind — it
+learns nothing that happened while the widget was away, which is exactly the interval it exists to
+cover. **Prime it: `apply(read())` BEFORE connecting.** Settings → Appearance had five controls on this
+shape (measured 2026-08-16: `setConfig appearance.shellAppearance dark` moved the bar and the dock
+while the dropdown two inches away still read "Follow system", for the rest of the session; the four
+advanced glass sliders live in a Revealer that starts closed, so they are unrealized until it opens and
+came back showing the value they were BUILT with, contradicting the master right above them). The
+question that finds it is not *does this control have an external-sync hook?* but *does that hook
+answer the question, or only promise to?*
+
 ⚠️ **`bindWhileRealized` is only half the answer, and the half it misses is the common one.** Realize
 tracks NAVIGATION between pages; it does **not** track the window's own show/hide. Hiding the Settings
 window leaves its pages REALIZED (measured 2026-08-16: close the window on Power, change the profile

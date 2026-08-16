@@ -1,6 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Pango from "gi://Pango"
 import { NidaraButton } from "./button"
+import { bindWhileRealized } from "./lifetime"
 
 export interface NidaraFontButtonOpts {
     /** Current font as a GTK font-name string, e.g. "Inter Variable 14". */
@@ -9,6 +10,17 @@ export interface NidaraFontButtonOpts {
     onFontSet: (font: string) => void
     /** Dialog title. */
     title?: string
+    /**
+     * Live external-sync, the same guarded contract the composed rows use: register
+     * a callback invoked when the font changes OUTSIDE this button (another Settings
+     * window — there is one per monitor — or anything else that writes the setting).
+     * It repaints the label WITHOUT firing `onFontSet`, and returns a disposer.
+     *
+     * Prime it (call `apply` once before subscribing): it is armed through
+     * `bindWhileRealized`, so a primed hook is what makes the button re-read every
+     * time its page comes back rather than keep the string it was built with.
+     */
+    onExtChange?: (apply: (font: string) => void) => (() => void)
 }
 
 /**
@@ -46,6 +58,14 @@ export function NidaraFontButton(opts: NidaraFontButtonOpts): Gtk.Button {
         label.set_attributes(attrs)
     }
     refresh()
+
+    if (opts.onExtChange) {
+        bindWhileRealized(btn, () => opts.onExtChange!((font: string) => {
+            if (font === current) return
+            current = font
+            refresh()
+        }))
+    }
 
     btn.connect("clicked", () => {
         const fd = new Gtk.FontDialog({ title: opts.title ?? "Choose a font" })

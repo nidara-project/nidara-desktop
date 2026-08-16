@@ -1883,7 +1883,11 @@ gets blue-on-light and one warning in the log; it does not crash.
   in `BaseIsland`, not here. Every other caller leaves `paintFill` alone and is unaffected.
 - **Wiring:** `onChange` (committed, optional `debounce` / `commitOnRelease`), `onValueChanged`
   (live, for the % label), `onExtChange(cb) → cleanup` for external value updates (ignored
-  while the user drags).
+  while the user drags). ⚠️ `onExtChange` is armed through `bindWhileRealized`, so **prime it**
+  (`cb(read())` before connecting) or the slider comes back from a hidden page still on the value
+  it was built with — see the external-sync note in `architecture.md`. `NidaraFontButton` takes the
+  same optional `onExtChange` (2026-08-16) for the same reason: it is a button whose LABEL is the
+  value, and nothing outside it could refresh that label before.
 - **`snapToStep`** (with `step`) turns the glide into **detents** — the FRACTION is quantized, so
   thumb, label and committed value are all derived from the same snapped number and cannot
   disagree. 🔑 Reach for it when the underlying thing is coarser than the thumb's travel, because
