@@ -85,7 +85,10 @@ class ThemeManager extends GObject.Object {
             GTypeName: "ThemeManager",
             Signals: { 
                 "changed": {},
-                "ready": {}
+                "ready": {},
+                // Emitted once `hyprctl setcursor` has RESOLVED — `changed` fires with
+                // that write still in flight. Consumed by common/CursorRefresh.ts.
+                "cursor-applied": {}
             }
         }, this)
     }
@@ -354,7 +357,7 @@ class ThemeManager extends GObject.Object {
         //  - hyprctl        → Hyprland's live compositor cursor
         //  - Xcursor default → XWayland/X apps (Steam, etc.), which ignore the other two
         this.writeXcursorDefault(cursor)
-        hs.setCursor(cursor, size)
+        hs.setCursor(cursor, size).then(() => this.emit("cursor-applied"))
         if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
         this.saveSettings()
         this.emit("changed")
@@ -363,7 +366,7 @@ class ThemeManager extends GObject.Object {
     async setCursorSize(size: number) {
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-size", String(size)])
         // Same three consumers as the theme — push the size everywhere it's read.
-        if (this.state.cursorTheme) hs.setCursor(this.state.cursorTheme, size)
+        if (this.state.cursorTheme) hs.setCursor(this.state.cursorTheme, size).then(() => this.emit("cursor-applied"))
         if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
         this.emit("changed")
     }

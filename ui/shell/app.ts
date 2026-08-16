@@ -20,6 +20,7 @@ import appService, { type AppData } from "./core/AppService"
 import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue } from "./core/ConfigRegistry"
 import { registerConfigEntries } from "./config-entries"
 import { initReduceMotion } from "./core/ReduceMotion"
+import { bindCursorThemeRefresh } from "./common/CursorRefresh"
 import hyprlandState from "./core/HyprlandState"
 import queryUI from "./core/UITree"
 
@@ -812,6 +813,10 @@ app.start({
     // "The Assistant is working in this window" — the inner glow follows
     // agentService.busy. Also clears a glow left on by a shell that died mid-turn.
     initAgentGlow()
+
+    // A new cursor theme/size never reaches the cursor already on screen — Hyprland
+    // reloads the theme but never re-issues the shape. See common/CursorRefresh.ts.
+    bindCursorThemeRefresh(Theme)
 
     // Note: the nidara-bar/dock blur layer rules live in hyprland.lua
     // (hl.layer_rule). They used to be re-applied here via `hyprctl keyword`,
