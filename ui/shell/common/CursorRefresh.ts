@@ -107,18 +107,30 @@ export function refreshShellCursor(): boolean {
  * take it — the compositor assigns it by pointer position alone. `common/FocusGrab.ts`
  * grabs the KEYBOARD, which is a different seat capability and no help here.
  */
-function armOnNextEnter(windows: Gtk.Window[]) {
-    const armed: Array<[Gtk.Window, Gtk.EventControllerMotion]> = []
-    const disarm = () => armed.forEach(([w, c]) => w.remove_controller(c))
+const armedWindows = new WeakSet<Gtk.Window>()
+let pending = false
 
+function armOnNextEnter(windows: Gtk.Window[]) {
+    pending = true
     for (const w of windows) {
-        if (!w.get_mapped()) continue
+        if (!w.get_mapped() || armedWindows.has(w)) continue
+        armedWindows.add(w)
+
+        // ⚠️ The controller is created ONCE per window and NEVER removed. Removing it
+        // from inside its own handler — the obvious way to make this one-shot — frees
+        // the controller while GTK is still emitting on it, and the shell dies with a
+        // segfault the first time a cursor setting is changed from a dropdown. The
+        // one-shot lives in `pending` instead, which costs nothing: with nothing
+        // pending the handler is a boolean test.
         const ctl = new Gtk.EventControllerMotion()
-        const fire = () => { disarm(); refreshShellCursor() }
+        const fire = () => {
+            if (!pending) return
+            pending = false
+            refreshShellCursor()
+        }
         ctl.connect("motion", fire)
         ctl.connect("enter", fire)
         w.add_controller(ctl)
-        armed.push([w, ctl])
     }
 }
 
@@ -130,7 +142,10 @@ function armOnNextEnter(windows: Gtk.Window[]) {
  * `gsettings set` from a terminal that ThemeManager never sees.
  */
 export function bindCursorThemeRefresh(theme: any, getWindows: () => Gtk.Window[]): () => void {
-    const refresh = () => { if (!refreshShellCursor()) armOnNextEnter(getWindows()) }
+    const refresh = () => {
+        if (refreshShellCursor()) pending = false
+        else armOnNextEnter(getWindows())
+    }
     const id = theme.connect("cursor-applied", refresh)
 
     const settings = Gtk.Settings.get_default()
