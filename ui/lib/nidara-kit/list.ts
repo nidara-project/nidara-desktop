@@ -5,6 +5,10 @@ export interface NidaraListResult {
     box: Gtk.Box
     /** The Gtk.ListBox card. Append NidaraRow children here. */
     listBox: Gtk.ListBox
+    /** The footer label, when a `footer` was given. Exposed so a caller can show or
+     *  hide prose that only applies to some states — Settings → Dock's side-position
+     *  note. Callers that always show their footer never touch it. */
+    footerLabel?: Gtk.Label
 }
 
 /**
@@ -54,11 +58,12 @@ export function NidaraList(
 
     box.append(listBox)
 
+    let footerLabel: Gtk.Label | undefined
     if (footer) {
         // Mirrors the title's indent (widget margin + the class's own margin-left)
         // so header, card and footer share one left edge. Wraps: this is prose, and
         // Settings is resizable.
-        box.append(new Gtk.Label({
+        footerLabel = new Gtk.Label({
             label: footer,
             css_classes: ["nidara-list-footer"],
             // Fills its column for the same reason a row subtitle does — see the note
@@ -66,8 +71,9 @@ export function NidaraList(
             // prose sitting inches apart; they must break at the same edge.
             halign: Gtk.Align.FILL, hexpand: true, xalign: 0, margin_start: 16,
             margin_end: 16, wrap: true,
-        }))
+        })
+        box.append(footerLabel)
     }
 
-    return { box, listBox }
+    return { box, listBox, footerLabel }
 }

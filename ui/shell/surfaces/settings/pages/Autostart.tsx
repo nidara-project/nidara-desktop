@@ -286,7 +286,7 @@ function buildAppPickerPage(onPick: (cmd: string) => void, existingCommands: str
 export default function AutostartPage(nav: SettingsNav) {
     const page = pageBox("autostart-page")
 
-    const { box, listBox } = listGroup(t("settings.autostart.group.entries"))
+    const { box, listBox } = listGroup(t("settings.autostart.group.entries"), t("settings.autostart.apply-note"))
     page.append(box)
 
     let entries: AutostartEntry[] = parseEntries(readConf())
@@ -388,19 +388,5 @@ export default function AutostartPage(nav: SettingsNav) {
     }
 
     refresh()
-
-    // Info note
-    const note = new Gtk.Label({
-        label: t("settings.autostart.apply-note"),
-        css_classes: ["nidara-row-subtitle"],
-        halign: Gtk.Align.START,
-        margin_start: 20,
-        // Footnote binds to the card above (NidaraList box is spacing:0); 8px = the
-        // title→card attachment gap. See design-system.md.
-        margin_top: 8,
-        wrap: true,
-    })
-    box.append(note)
-
     return page
 }

@@ -36,10 +36,29 @@ Settings → AI states WHICH agents each permission group governs there, because
 agent and some only to the built-in Assistant. Per-row explanation still belongs in the row's own
 subtitle.
 
-## Wrapping prose FILLS its column — never `halign: START`
+`NidaraList` also **returns** that label as `footerLabel`, for prose that is true of only some
+states — Settings → Dock's side-position note is shown and hidden through it. That was the one
+reason a page had to hand-roll a footnote; there is none now, and the last four hand-rolled ones
+(Power, Dock, Widgets, Autostart) are gone. ⚠️ They had drifted three ways in the meantime, the same
+way the five hand-rolled empty rows had (`NidaraEmptyRow` in `row.ts`): different classes, different
+margins, and two of them `halign: START`. Note the size change that came with using the real thing —
+a group footer is `$fse-caption` (0.86em), not the `$fse-small` a row subtitle uses. **A footnote
+under a card is a group footer, so it is caption-sized.** A page-level note with no card to bind to
+is a different statement (`.settings-placeholder`, outside the card); Widgets' reorder note was the
+former dressed as the latter, and now rides the last rendered category group.
+
+## Wrapping prose FILLS its column — never `halign: START` (a CI GATE)
 
 Any label that can wrap (row subtitles, list footers) must be built
 **`halign: FILL, hexpand: true, xalign: 0, wrap: true`**. It is not a style preference:
+
+`scripts/ci/wrapping-prose-check.mjs` holds this down, because writing it down did not: the rule was
+already here and six labels violated it anyway. That is not carelessness — the failure is INVISIBLE
+until a string is long enough to wrap, which depends on the locale and the text-size setting, so on
+your machine in English at 1.0 every one of them looked fine. Measured offscreen at the card's real
+width (712px): the same note comes out 472px wide under `halign: START` and 692px under FILL — same
+line count for today's strings, a visibly narrower column for any string that does wrap. Escape hatch
+is `// wrapping-prose-ok:` plus a reason; nothing uses it yet.
 
 A `halign: START` label is allocated its NATURAL width, and a wrapping `GtkLabel`'s natural width
 is **GTK's own line-balancing heuristic**, not the space available. So every description picks its

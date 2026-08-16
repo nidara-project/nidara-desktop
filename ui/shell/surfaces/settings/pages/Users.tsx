@@ -148,7 +148,13 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
     const adminSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER })
     adminRow.append(adminSwitch)
 
-    const statusLabel = new Gtk.Label({ label: "", css_classes: ["nidara-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
+    const statusLabel = new Gtk.Label({
+        label: "", css_classes: ["nidara-row-subtitle"], visible: false,
+        // Wrapping prose FILLS its column (design-system.md): a halign START label is
+        // allocated its NATURAL width, which for a wrapping GtkLabel is a line-balancing
+        // heuristic — so a two-line error broke at its own column, not the form's.
+        halign: Gtk.Align.FILL, hexpand: true, xalign: 0, wrap: true,
+    })
 
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
     const cancelBtn = NidaraButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
@@ -269,7 +275,13 @@ function showChangePasswordDialog(user: User, parentWin: Gtk.Window | null) {
     const pwEntry  = new Gtk.PasswordEntry({ show_peek_icon: true, hexpand: true })
     const pw2Entry = new Gtk.PasswordEntry({ show_peek_icon: true, hexpand: true })
 
-    const statusLabel = new Gtk.Label({ label: "", css_classes: ["nidara-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
+    const statusLabel = new Gtk.Label({
+        label: "", css_classes: ["nidara-row-subtitle"], visible: false,
+        // Wrapping prose FILLS its column (design-system.md): a halign START label is
+        // allocated its NATURAL width, which for a wrapping GtkLabel is a line-balancing
+        // heuristic — so a two-line error broke at its own column, not the form's.
+        halign: Gtk.Align.FILL, hexpand: true, xalign: 0, wrap: true,
+    })
 
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
     const cancelBtn = NidaraButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })

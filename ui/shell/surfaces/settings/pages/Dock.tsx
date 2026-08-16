@@ -7,7 +7,7 @@ export default function DockPage() {
     const page = pageBox("dock-page")
 
     // 0. Position
-    const posGroup = listGroup(t("settings.dock.group.position"))
+    const posGroup = listGroup(t("settings.dock.group.position"), t("settings.dock.side-autohide-note"))
     const posOptions: { label: string; value: DockPosition }[] = [
         { label: t("settings.dock.opt.bottom"),  value: 'bottom' },
         { label: t("settings.dock.opt.left"), value: 'left'   },
@@ -24,19 +24,9 @@ export default function DockPage() {
         },
     ))
 
-    const verticalNote = new Gtk.Label({
-        label: t("settings.dock.side-autohide-note"),
-        css_classes: ["nidara-row-subtitle"],
-        halign: Gtk.Align.START,
-        margin_start: 20,
-        // Footnote binds to the card above (NidaraList box is spacing:0); 8px = the
-        // title→card attachment gap. See design-system.md.
-        margin_top: 8,
-        margin_bottom: 8,
-        wrap: true,
-        visible: dockSettings.position === 'left' || dockSettings.position === 'right',
-    })
-    posGroup.box.append(verticalNote)
+    // The kit's group footer, not a hand-rolled label — it only has to be TOLD
+    // when to show, because this note is true of the side positions only.
+    const verticalNote = posGroup.footerLabel!
     page.append(posGroup.box)
 
     // 1. Geometry

@@ -19,11 +19,16 @@
 #     fresh — regenerates it with scripts/gen-widget-index.mjs and fails if it
 #     differs. Pure node; also surfaces the codegen's own validation errors
 #     (stray non-widget file in widgets/, duplicate widget id).
-#   - skill-docs: the in-repo skill does not say the same thing twice. Pure node.
-#     `design-system.md` once held 1157 duplicated lines — half the file, twice —
-#     and edits then landed in DIFFERENT COPIES, so the reference contradicted
-#     itself for weeks. Nobody sees that by reading, because a long reference is
-#     read by search. Logic in scripts/ci/skill-docs-check.mjs.
+#   - skill-docs: two pure-node checks on things a reader cannot hold in their head.
+#     (1) The in-repo skill does not say the same thing twice: `design-system.md`
+#     once held 1157 duplicated lines — half the file, twice — and edits then landed
+#     in DIFFERENT COPIES, so the reference contradicted itself for weeks. Nobody
+#     sees that by reading, because a long reference is read by search. Logic in
+#     scripts/ci/skill-docs-check.mjs. (2) Every wrapping GtkLabel fills its column
+#     rather than picking its own break point — a rule design-system.md already
+#     stated and six labels violated anyway, because it only shows once a string is
+#     long enough to wrap, i.e. in a locale or text size that is not yours. Logic in
+#     scripts/ci/wrapping-prose-check.mjs.
 #   - smoke: the REAL thing — load the kernel's vkms (virtual KMS) on the
 #     runner, then in a privileged Arch container build the pinned Astal/AGS
 #     stack (proves install.sh's source builds still work), `ags bundle` the
@@ -237,7 +242,7 @@ jobs:
           fi
 
   skill-docs:
-    name: Skill docs (no duplicated sections)
+    name: Docs + prose shape
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -246,6 +251,12 @@ jobs:
           node-version: lts/*
       - name: No repeated headings in .claude/skills (must succeed)
         run: node scripts/ci/skill-docs-check.mjs
+      # A wrapping GtkLabel must FILL its column. The rule was written in
+      # design-system.md and violated six times anyway, because the failure only
+      # shows once a string is long enough to wrap — which depends on the locale and
+      # the text-size setting, i.e. on someone else's machine.
+      - name: Wrapping prose fills its column (must succeed)
+        run: node scripts/ci/wrapping-prose-check.mjs
 
   agent-loop:
     name: Assistant loop (nidara-agent)

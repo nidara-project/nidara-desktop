@@ -123,22 +123,28 @@ export default function WidgetsPage(nav: SettingsNav): Gtk.Widget {
         media: t("settings.widgets.category.media"),
     }
 
-    for (const cat of CATEGORY_ORDER) {
-        const widgets = registry.all()
-            .filter(w => w.category === cat)
-            .sort((a, b) => (a.barOrder ?? 0) - (b.barOrder ?? 0))
-        if (widgets.length === 0) continue
-        const { box, listBox } = listGroup(catLabel[cat])
+    // Which categories actually render depends on what the machine has, so the
+    // groups are resolved before the loop — the reorder note rides as the LAST
+    // one's footer.
+    const groups = CATEGORY_ORDER
+        .map(cat => ({
+            cat,
+            widgets: registry.all()
+                .filter(w => w.category === cat)
+                .sort((a, b) => (a.barOrder ?? 0) - (b.barOrder ?? 0)),
+        }))
+        .filter(g => g.widgets.length > 0)
+
+    groups.forEach(({ cat, widgets }, i) => {
+        // Reordering lives in the CC's own Edit mode, not here. It is the kit's
+        // group footer rather than a page-level label — same place on screen, but
+        // the kit owns the prose's shape, and a footnote that binds to a card is
+        // exactly what the group-footer idiom is for.
+        const isLast = i === groups.length - 1
+        const { box, listBox } = listGroup(catLabel[cat], isLast ? t("settings.widgets.reorder-note") : "")
         for (const w of widgets) listBox.append(buildWidgetRow(nav, w))
         page.append(box)
-    }
-
-    // Reordering lives in the CC's own Edit mode, not here.
-    page.append(new Gtk.Label({
-        label: t("settings.widgets.reorder-note"),
-        css_classes: ["nidara-row-subtitle"],
-        wrap: true, halign: Gtk.Align.START, margin_start: 20,
-    }))
+    })
 
     return page
 }
