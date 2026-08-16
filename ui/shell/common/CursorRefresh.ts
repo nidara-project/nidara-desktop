@@ -27,14 +27,11 @@ import { safeDisconnect } from "../core/signals"
  *
  * ⚠️ **Scope.** Only the client holding pointer focus may name a shape
  * (`InputManager.cpp:68-72`), so this reaches Nidara's surfaces, not third-party apps.
- * And it cannot help the one case where NOBODY holds pointer focus: right after a
- * `Gtk.DropDown`'s popover closes with the mouse held still, the popover is unmapped,
- * the compositor sends no `enter` to the parent, and GDK keeps reporting the dead
- * popover indefinitely. Verified on the wire: three bumps at +0/+250/+800 ms, all onto
- * `Gtk_Popover mapped=false`, **zero** `set_shape` sent. The cursor THEME is only
- * reachable through a dropdown, so it still waits for the next mouse movement — one
- * pixel is enough, where before it needed leaving the window. Do not add settling
- * timers for this; they were tried and measured useless.
+ * The case where nobody holds it — right after a dropdown's popover closes — is handled
+ * by `armOnNextEnter`; read it, it is the subtlest part of this file. ⛔ Do NOT try to
+ * cover it with a settling timer: measured on the wire across three selections with no
+ * human input, no `enter` arrives at all while the mouse is still, so there is nothing
+ * for a later attempt to find.
  *
  * ⚠️ **Never verify this with a screenshot.** See the cursor section of
  * `references/dev-workflow.md`: `grim -c` only refreshes its copy on the pointer-focus
@@ -47,15 +44,19 @@ function bump(w: Gtk.Widget) {
     w.set_cursor(had)
 }
 
-/** Re-issue the cursor on whichever of our surfaces the pointer is in. */
-export function refreshShellCursor() {
+/** Re-issue the cursor on whichever of our surfaces the pointer is in.
+ *  Returns false when there was nothing to re-issue it on — see `armOnNextEnter`. */
+export function refreshShellCursor(): boolean {
     try {
         const pointer = Gdk.Display.get_default()?.get_default_seat()?.get_pointer()
         const [surface, sx, sy] = pointer?.get_surface_at_position() ?? []
-        if (!surface) return
+        if (!surface) return false
 
         const native = Gtk.Native.get_for_surface(surface)
-        if (!native) return
+        if (!native) return false
+        // A dead popover: GDK keeps naming it long after the popup is destroyed, and
+        // setting a cursor on an unmapped widget puts nothing on the wire.
+        if (!(native as unknown as Gtk.Widget).get_mapped()) return false
 
         // Surface coordinates are not widget coordinates — a native's widget origin is
         // inset by its shadow, and `pick` wants the latter.
@@ -67,8 +68,57 @@ export function refreshShellCursor() {
         let owner: Gtk.Widget | null = root.pick(sx - tx, sy - ty, Gtk.PickFlags.DEFAULT)
         while (owner && !owner.get_cursor()) owner = owner.get_parent()
         bump(owner ?? root)
+        // One line per cursor setting change. Worth it: this mechanism is invisible by
+        // construction — when it does not run there is simply nothing to see.
+        console.log(`[CursorRefresh] re-issued on ${root.name || root.constructor?.name}`)
+        return true
     } catch (e) {
         console.error("[CursorRefresh]", e)
+        return false
+    }
+}
+
+/**
+ * Wait for the pointer to come back, then re-issue.
+ *
+ * 🔑 **Neither half works alone, and that is the whole story of this file.** Pick a
+ * cursor theme from a `Gtk.DropDown` and the popover is destroyed under a motionless
+ * pointer: nobody holds pointer focus (the parent got `leave` when the popover opened,
+ * and no `enter` follows — verified on the wire across three selections with no human
+ * input), so there is no surface to name a shape on. Moving the mouse restores focus,
+ * but GTK then names `default` — the name Hyprland already has, and its dedupe throws
+ * a repeat away. So the pointer coming back does not repaint, and our rename cannot
+ * happen until it does.
+ *
+ * Hence: when the refresh finds nothing to bump, arm the windows and do it on the very
+ * next pointer event. That is the moment both conditions hold at once — the pointer is
+ * back, and we are the one naming the shape. One shot, removed as soon as it fires: no
+ * polling, no timers, no second mechanism. It is the same bump, waiting for the only
+ * event that makes it possible.
+ *
+ * 🔑 **It has to be `motion`, not `enter`.** A `Gtk.Popover` hangs off its parent's
+ * widget tree, so the pointer never LEFT the window and no `enter` is ever delivered to
+ * it — armed on `enter`, this silently never fires. Verified on the wire: with `enter`
+ * the one-pixel move produced only GTK's own `set_shape(1)`; with `motion` it produced
+ * `set_shape(8)` then `set_shape(1)`, the rename that repaints. `enter` is kept as well
+ * for the case where the pointer arrives from outside the window entirely.
+ *
+ * ⚠️ Pointer focus cannot be requested. There is no Wayland protocol for a client to
+ * take it — the compositor assigns it by pointer position alone. `common/FocusGrab.ts`
+ * grabs the KEYBOARD, which is a different seat capability and no help here.
+ */
+function armOnNextEnter(windows: Gtk.Window[]) {
+    const armed: Array<[Gtk.Window, Gtk.EventControllerMotion]> = []
+    const disarm = () => armed.forEach(([w, c]) => w.remove_controller(c))
+
+    for (const w of windows) {
+        if (!w.get_mapped()) continue
+        const ctl = new Gtk.EventControllerMotion()
+        const fire = () => { disarm(); refreshShellCursor() }
+        ctl.connect("motion", fire)
+        ctl.connect("enter", fire)
+        w.add_controller(ctl)
+        armed.push([w, ctl])
     }
 }
 
@@ -79,13 +129,14 @@ export function refreshShellCursor() {
  * before that faithfully re-issues the OLD picture. `Gtk.Settings` is bound too, for a
  * `gsettings set` from a terminal that ThemeManager never sees.
  */
-export function bindCursorThemeRefresh(theme: any): () => void {
-    const id = theme.connect("cursor-applied", refreshShellCursor)
+export function bindCursorThemeRefresh(theme: any, getWindows: () => Gtk.Window[]): () => void {
+    const refresh = () => { if (!refreshShellCursor()) armOnNextEnter(getWindows()) }
+    const id = theme.connect("cursor-applied", refresh)
 
     const settings = Gtk.Settings.get_default()
     const ids = settings
         ? ["notify::gtk-cursor-theme-size", "notify::gtk-cursor-theme-name"]
-              .map((sig) => settings.connect(sig, refreshShellCursor))
+              .map((sig) => settings.connect(sig, refresh))
         : []
 
     return () => {

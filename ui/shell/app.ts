@@ -816,7 +816,7 @@ app.start({
 
     // A new cursor theme/size never reaches the cursor already on screen — Hyprland
     // reloads the theme but never re-issues the shape. See common/CursorRefresh.ts.
-    bindCursorThemeRefresh(Theme)
+    bindCursorThemeRefresh(Theme, () => (app.get_windows() ?? []) as Gtk.Window[])
 
     // Note: the nidara-bar/dock blur layer rules live in hyprland.lua
     // (hl.layer_rule). They used to be re-applied here via `hyprctl keyword`,
