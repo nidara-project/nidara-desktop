@@ -3870,3 +3870,35 @@ treatment; it was left out to keep this change to the surfaces that actually bro
 ⚠️ **CI cannot catch this class at all.** The headless smoke boots at one resolution and never
 changes it, exactly like the wallpaper-restore path. The bed is a VM (or a live mode switch), and
 the A/B is worth re-running whenever a surface starts deriving a new number from the monitor.
+
+### 71. AstalNetwork picks its devices ONCE, so a hot-plugged adapter is invisible everywhere (2026-08-16)
+
+Found while auditing Settings → Network (`onPageShown` sweep). The page decides Ethernet and
+Wi-Fi **presence at build time** (`if (network.wired)` / `if (network.wifi && network.wifi.device)`)
+and the page is cached, so a USB Wi-Fi dongle or USB-Ethernet adapter plugged in later leaves
+"No wireless adapter" on screen for the rest of the session.
+
+Audio and Bluetooth both hit this exact class earlier and fixed it — each carries a comment saying
+hardware presence cannot be a build-time check, and switches a live placeholder. **Network cannot
+copy them, and that is the finding**: the freeze is upstream, not in the page.
+
+`AstalNetwork.Network` (`lib/network/src/network.vala`) resolves its `Wifi`/`Wired` wrappers in
+`construct` — one `client.get_devices()` scan — and then never re-scans. It connects to
+`primary-connection`, `activating-connection`, `state` and `connectivity`; **not** to NM's
+`device-added` / `device-removed`. So:
+
+- `notify::wifi` and `notify::wired` exist in the API (they are `public … { get; private set; }`)
+  and **cannot fire** — nothing ever assigns them after construction;
+- a consumer cannot repair it from outside either: both constructors are `internal Wifi(NM.DeviceWifi)`
+  / `internal Wired(NM.DeviceEthernet)`, so GJS cannot build the missing wrapper;
+- `Network.client` (the `NM.Client`) IS public, so a consumer can *detect* the new device — it just
+  has nothing to drive the UI with.
+
+⚠️ **This is not a Settings bug, and the blast radius is bigger than Settings**: the bar's network
+indicator and the Control Center tile read the same frozen singleton. A Settings-only workaround
+would be a lie with better manners.
+
+▶️ The real fix is upstream, and this repo has landed one there before (Aylur/astal#451, the tray):
+watch `client`'s `device-added`/`device-removed` and re-resolve `wifi`/`wired`. Until then the
+page carries a comment at the `if (network.wired)` site so nobody "fixes" it by copying Audio.
+The workaround for a user is a shell reload (`Super+Shift+R`).

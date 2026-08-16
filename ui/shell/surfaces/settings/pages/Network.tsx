@@ -1,6 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import AstalNetwork from "gi://AstalNetwork"
-import { listGroup, createRow, staticLabel, pageBox, type SettingsNav } from "../SettingsHelpers"
+import { listGroup, createRow, staticLabel, pageBox, onPageShown, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as Net from "../../../core/NetworkService"
@@ -323,6 +323,15 @@ export default function NetworkPage(nav?: SettingsNav) {
 
     const page = pageBox("network-page")
 
+    // ⚠️ Hardware presence IS a build-time check here, unlike Audio and Bluetooth
+    // (which both switch a placeholder live and say so in their own comments).
+    // That is not an oversight to "fix" by copying them: AstalNetwork's singleton
+    // picks its Wifi/Wired wrappers in `construct` and never re-scans — it does not
+    // watch NM's device-added/device-removed, and both wrappers have an `internal`
+    // constructor, so no consumer can build the missing one. `notify::wired` /
+    // `notify::wifi` exist in the API but cannot fire. A USB adapter plugged in
+    // after the shell started is invisible to the bar and Control Center too; the
+    // fix belongs upstream. See `references/tech-debt.md`.
     // ── Ethernet ──────────────────────────────────────────────────────────────
     if (network.wired) {
         const { box, listBox } = listGroup(t("settings.network.group.ethernet"))
@@ -494,11 +503,20 @@ export default function NetworkPage(nav?: SettingsNav) {
     // ── VPN ───────────────────────────────────────────────────────────────────
     const { box: vpnBox, listBox: vpnList } = listGroup(t("settings.network.group.vpn"))
 
+    // Bumped on every refresh. `listVpnProfiles` is an async nmcli call and this
+    // list is now re-read on every visit, so two refreshes can overlap: without a
+    // generation guard the second one clears the list, both promises resolve, and
+    // every profile appears twice. Same shape as the AP list's `refreshGen` above.
+    let vpnGen = 0
     const refreshVpn = () => {
-        let child = vpnList.get_first_child()
-        while (child) { vpnList.remove(child); child = vpnList.get_first_child() }
+        const gen = ++vpnGen
 
         Net.listVpnProfiles().then(profiles => {
+            if (gen !== vpnGen) return   // a newer refresh already ran
+
+            let child = vpnList.get_first_child()
+            while (child) { vpnList.remove(child); child = vpnList.get_first_child() }
+
             if (profiles.length === 0) {
                 // Built fresh each time, not once and re-appended: the label above was a
                 // module-level widget re-parented into a new row on every refresh, which
@@ -509,7 +527,14 @@ export default function NetworkPage(nav?: SettingsNav) {
             }
         })
     }
-    refreshVpn()
+    // Wi-Fi, Ethernet and the AP list are SUBSCRIBED (NM signals), so they keep
+    // themselves current. The VPN list is not: it is an `nmcli connection show`
+    // that was asked exactly once, at build. Since the page is cached and the
+    // window hides rather than closes, a profile added with `nmcli`, imported from
+    // a .ovpn, or brought up outside Nidara stayed invisible — and a profile's
+    // Connect/Disconnect state was frozen at whatever it was the first time this
+    // page was opened. It is a question, so it is re-asked on every visit.
+    onPageShown(refreshVpn)
     page.append(vpnBox)
 
     return page
