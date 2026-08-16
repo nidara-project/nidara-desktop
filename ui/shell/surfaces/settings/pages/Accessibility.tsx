@@ -3,18 +3,11 @@ import Gio from "gi://Gio"
 import Theme, { TEXT_SCALE_MIN, TEXT_SCALE_MAX } from "../../../core/ThemeManager"
 import { listGroup, createRow, toggleRow, sliderRow, pageBox } from "../SettingsHelpers"
 import Icons from "../../../core/Icons"
+import { safeDisconnect } from "../../../core/signals"
 import { t } from "../../../core/i18n"
 
 const iface = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
 
-function getCursorSize(): number {
-    try { return iface.get_int("cursor-size") } catch { return 24 }
-}
-function setCursorSize(size: number) {
-    try { iface.set_int("cursor-size", Math.round(size)) } catch (e) {
-        console.error("[Accessibility] cursor-size:", e)
-    }
-}
 function getAnimations(): boolean {
     try { return iface.get_boolean("enable-animations") } catch { return true }
 }
@@ -75,12 +68,38 @@ export default function AccessibilityPage() {
         },
     ))
 
+    // ⚠️ `Theme.setCursorSize`, never `iface.set_int("cursor-size")` directly. The
+    // gsetting is only ONE of three consumers — Hyprland's live compositor cursor
+    // takes `hyprctl setcursor` and XWayland apps read gtk `settings.ini`, neither
+    // of which watches dconf. This row wrote the gsetting alone until 2026-08-16,
+    // so the slider moved the pointer inside GTK apps and left the actual desktop
+    // cursor untouched. ThemeManager is the one place that knows all three.
+    //
+    // This is also the ONLY cursor-size control now. Appearance had a second one (a
+    // 16/24/32/48/64 dropdown) which was correctly wired but in the wrong room:
+    // GNOME and macOS both file pointer size under accessibility, and two controls
+    // over one setting is how the keyboard-layout variant got wiped in #145.
     visionGroup.listBox.append(sliderRow(
         t("settings.accessibility.cursor-size"),
         t("settings.accessibility.cursor-size.desc"),
-        getCursorSize(), 16, 96,
-        (v) => setCursorSize(v),
-        { unit: "px", icons: [Icons.mousePointer, Icons.mousePointer] },
+        Theme.cursorSize, 16, 96,
+        (v) => void Theme.setCursorSize(v),
+        {
+            unit: "px",
+            icons: [Icons.mousePointer, Icons.mousePointer],
+            // Applying costs two subprocesses (`gsettings set`, `hyprctl setcursor`)
+            // plus a settings.ini rewrite, so this one commits on RELEASE — unlike
+            // the text-scale slider above, whose apply is in-process and therefore
+            // affordable per step. The value label still follows the thumb.
+            commitOnRelease: true,
+            // The page is cached; the cursor size can move underneath it (the About
+            // page's reset, an agent, `gsettings` from a terminal). Re-read on realize.
+            onExtChange: (cb) => {
+                const id = Theme.connect("changed", () => cb(Theme.cursorSize))
+                cb(Theme.cursorSize)
+                return () => safeDisconnect(Theme, id)
+            },
+        },
     ))
 
     page.append(visionGroup.box)

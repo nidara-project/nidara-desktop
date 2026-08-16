@@ -368,13 +368,13 @@ export default function AppearancePage() {
         t("settings.appearance.icons"), t("settings.appearance.icons.desc"),
         Theme.iconTheme, Theme.getAvailableIconThemes(), (v) => Theme.setIconTheme(v),
     ))
+    // Cursor THEME only. Its SIZE used to sit right here as a second dropdown and
+    // moved to Accessibility on 2026-08-16 — one setting, one control, and pointer
+    // size is an accessibility affordance in GNOME and macOS alike. What a cursor
+    // looks like is appearance; how big it needs to be to be findable is not.
     assetsGroup.listBox.append(dropdownRow(
         t("settings.appearance.cursor"), t("settings.appearance.cursor.desc"),
         Theme.cursorTheme, Theme.getAvailableCursorThemes(), (v) => Theme.setCursorTheme(v),
-    ))
-    assetsGroup.listBox.append(dropdownRow(
-        t("settings.appearance.cursor-size"), t("settings.appearance.cursor-size.desc"),
-        String(Theme.cursorSize), Theme.getAvailableCursorSizes(), (v) => Theme.setCursorSize(Number(v)),
     ))
     page.append(assetsGroup.box)
 

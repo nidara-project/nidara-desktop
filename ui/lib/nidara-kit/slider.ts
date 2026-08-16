@@ -7,6 +7,7 @@ import Cairo from "gi://cairo"
 // the surface's mode arrive through the kit's appearance seam — the bundle registers
 // its own source (the shell registers ThemeManager). See ./appearance.ts.
 import { kitAppearance } from "./appearance"
+import { bindWhileRealized } from "./lifetime"
 import { safeDisconnect } from "../signals"
 import { hexToFloatRgb } from "../accent"
 
@@ -304,13 +305,21 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
     da.connect("unrealize", unsubscribeAppearance)
 
     // External value updates (ignored while the user is dragging).
+    //
+    // 🔑 `bindWhileRealized`, not a one-shot subscribe + cleanup on "unrealize".
+    // Cleaning up without re-subscribing is a subscription that survives exactly one
+    // hide: a cached Settings page unrealizes when you navigate away, the cleanup
+    // runs, and every later visit shows a slider that no longer tracks anything.
+    // The composed toggle and dropdown rows were moved onto this helper on
+    // 2026-08-16 (`nidara-kit/rows.ts`); the slider was left behind and is caught up
+    // here. Callers whose `onExtChange` also PRIMES the value (calling `cb` once
+    // before connecting) therefore re-read on every realize, which is the point.
     if (onExtChange) {
-        const cleanup = onExtChange((v: number) => {
+        bindWhileRealized(da, () => onExtChange((v: number) => {
             if (pressed) return
             const f = Math.max(0, Math.min(1, (v - min) / range))
             if (Math.abs(f - frac) > 0.001) { frac = f; da.queue_draw(); opts.onValueChanged?.(valueOf()) }
-        })
-        da.connect("unrealize", cleanup)
+        }))
     }
 
     // Prime the label.

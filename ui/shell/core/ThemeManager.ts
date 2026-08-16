@@ -254,12 +254,12 @@ class ThemeManager extends GObject.Object {
         })
     }
 
-    getAvailableCursorSizes(): string[] {
-        const sizes = ["16", "24", "32", "48", "64"]
-        const current = String(this.cursorSize)
-        if (!sizes.includes(current)) sizes.push(current)
-        return sizes.sort((a, b) => Number(a) - Number(b))
-    }
+    // `getAvailableCursorSizes()` lived here and is gone (2026-08-16). It fed the
+    // Appearance dropdown a fixed 16/24/32/48/64 and then had to append whatever
+    // value it actually found, because the OTHER control over the same setting —
+    // Accessibility's 16–96 slider — could land on 37. A list that has to be
+    // patched with the live value is a control admitting it is not the only one.
+    // The slider is now the single owner, and a continuous range needs no list.
 
     private listDirs(paths: string[]): string[] {
         const sets = new Set<string>()
