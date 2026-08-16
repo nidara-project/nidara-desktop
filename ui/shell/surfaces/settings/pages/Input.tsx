@@ -13,7 +13,16 @@ export default function InputPage() {
     // `config-reloaded` (an external `hyprctl reload` / a hyprland-user.lua edit). The
     // control applies the value through its own guarded setter (no `setX`, no loop) and
     // disconnects on unrealize. Closes the old no-op "changed" stub.
+    //
+    // 🔑 It PRIMES — `apply(read())` before connecting — and that is the half that was
+    // missing. These hooks are armed through `bindWhileRealized`, which re-runs on each
+    // realize, i.e. every time you navigate back to this page; without the priming read
+    // the controls came back LISTENING but not looking, so a reload that happened while
+    // the page was away (the normal case — nobody sits on Devices to run `hyprctl
+    // reload`) never reached them and this page, built once per Settings window, showed
+    // the old numbers for the rest of the session.
     const onCfg = <T,>(read: () => T) => (apply: (v: T) => void) => {
+        apply(read())
         const id = inputConfig.connect("changed", () => apply(read()))
         return () => safeDisconnect(inputConfig, id)
     }
@@ -108,9 +117,20 @@ export default function InputPage() {
     ]
     const layoutLabels = layouts.map(([label]) => label)
 
+    // ⚠️ The 28 above are the layouts we can NAME, not the layouts Hyprland accepts.
+    // `kb_layout` takes a comma-separated SET ("es,us" — the standard way to have two
+    // layouts and a switch key) and `kb_variant` takes any XKB variant, so an ordinary
+    // hyprland-user.lua produces a pair that is not on the list. When that happens the
+    // effective value is shown as itself rather than silently rounded to the first
+    // entry: the dropdown adds it (see NidaraDropDownRow) and the row reports what you
+    // actually have. Picking it back is a no-op — `layouts.find` misses, so nothing is
+    // written — which is the point: this entry exists to be READ, not to be applied.
+    const rawLayoutLabel = (layout: string, variant: string) =>
+        variant ? `${layout} (${variant})` : layout
+
     const currentLayoutLabel = (): string => {
         const cur = layouts.find(([, l, v]) => l === inputConfig.kbLayout && v === inputConfig.kbVariant)
-        return cur?.[0] ?? inputConfig.kbLayout
+        return cur?.[0] ?? rawLayoutLabel(inputConfig.kbLayout, inputConfig.kbVariant)
     }
 
     kbList.append(dropdownRow(

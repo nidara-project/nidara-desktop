@@ -100,17 +100,36 @@ export function NidaraDropDownRow(
 ): Gtk.ListBoxRow {
     const model = new Gtk.StringList({ strings: opts })
     const drp = NidaraDropDown({ model, valign: Gtk.Align.CENTER })
-    const initIdx = opts.indexOf(init)
+
+    // 🔑 **A value that is not in the list is ADDED to it, never rounded down to
+    // item 0.** The list says what you may PICK; the selection says what you HAVE,
+    // and the second is not a subset of the first. A `GtkSingleSelection` refuses to
+    // hold "nothing selected", so an unknown value used to land on index 0 — the
+    // dropdown then displayed, with full confidence, a value nobody had chosen and
+    // that was not in force. Settings → Devices is where this drew blood: its
+    // keyboard row lists 28 layouts, and Hyprland's `kb_layout` accepts a
+    // comma-separated set ("es,us") and any XKB variant, so a perfectly ordinary
+    // config read back as "English (US)" — with the row's own callback one click away
+    // from making that lie true.
+    const known = [...opts]
+    const indexFor = (v: string) => {
+        if (!v) return -1
+        let i = known.indexOf(v)
+        if (i < 0) { known.push(v); model.append(v); i = known.length - 1 }
+        return i
+    }
+
+    const initIdx = indexFor(init)
     drp.selected = initIdx >= 0 ? initIdx : 0
     let syncing = false
     drp.connect("notify::selected", () => {
         if (syncing) return
         const idx = drp.selected
-        if (idx < opts.length) cb(opts[idx])
+        if (idx < known.length) cb(known[idx])
     })
     if (onExt) {
         bindWhileRealized(drp, () => onExt((v: string) => {
-            const idx = opts.indexOf(v)
+            const idx = indexFor(v)
             if (idx < 0 || idx === drp.selected) return
             syncing = true; drp.selected = idx; syncing = false
         }))
