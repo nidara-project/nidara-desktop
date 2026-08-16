@@ -50,6 +50,19 @@ export default function AccessibilityPage() {
             // 1.13 → 16.57px, 1.17 → 17.16px — continuous, where the pixel-based
             // rewrite it replaced gave 17px for all three).
             commitOnRelease: false,
+            // Same live re-read as the cursor slider below, and for the same reason:
+            // a factor set in the OTHER Settings window (there is one per monitor, on
+            // one ThemeManager) or by `gsettings` from a terminal has to reach this
+            // one, and a page built once per window has no other way to hear it. The
+            // hook PRIMES — `cb(read())` before connecting — because it is armed
+            // through `bindWhileRealized`, so navigating back re-reads instead of
+            // merely re-listening. This slider was the odd one out on a page whose
+            // other two controls both had it.
+            onExtChange: (cb) => {
+                cb(Theme.textScaling)
+                const id = Theme.connect("changed", () => cb(Theme.textScaling))
+                return () => safeDisconnect(Theme, id)
+            },
             endpoints: [
                 new Gtk.Label({ label: "A", css_classes: ["slider-text-endpoint", "is-sm"], valign: Gtk.Align.CENTER }),
                 new Gtk.Label({ label: "A", css_classes: ["slider-text-endpoint", "is-lg"], valign: Gtk.Align.CENTER }),
@@ -82,11 +95,12 @@ export default function AccessibilityPage() {
             // the text-scale slider above, whose apply is in-process and therefore
             // affordable per step. The value label still follows the thumb.
             commitOnRelease: true,
-            // The page is cached; the cursor size can move underneath it (the About
-            // page's reset, an agent, `gsettings` from a terminal). Re-read on realize.
+            // The page is cached; the cursor size can move underneath it (the other
+            // Settings window, an agent, `gsettings` from a terminal). Primed, so
+            // coming back to the page re-reads.
             onExtChange: (cb) => {
-                const id = Theme.connect("changed", () => cb(Theme.cursorSize))
                 cb(Theme.cursorSize)
+                const id = Theme.connect("changed", () => cb(Theme.cursorSize))
                 return () => safeDisconnect(Theme, id)
             },
         },
