@@ -3909,10 +3909,13 @@ Reported by the user as one bug ("cursor style and size only change when I leave
 is two, with opposite answers. Both halves were confirmed **by eye**, on this machine, with the
 pointer parked inside a shell window and untouched:
 
-- **Size: not broken.** Change it and the cursor resizes immediately, with no shell involvement at
-  all — verified with the shell running plain `main`. Hyprland's `changeTheme()` → `updateTheme()`
-  recomputes `m_currentStyleInfo.size` and schedules `AQ_SCHEDULE_CURSOR_SHAPE` on every monitor, and
-  that redraw picks the new size up on its own.
+- **Size: DISPUTED, and probably not the exception it looks like.** It was written up as "not
+  broken" on one confirmation with the pointer over the Settings window; the user reported afterwards
+  that the size, too, only lands when the pointer leaves the window. The mechanism that made the
+  exception plausible is real (`changeTheme()` → `updateTheme()` recomputes `m_currentStyleInfo.size`
+  and schedules `AQ_SCHEDULE_CURSOR_SHAPE`), which is exactly why it was believed too easily. **Treat
+  both halves as the same bug until someone re-tests the size with the pointer parked on a non-
+  terminal window**, and do not build on the asymmetry.
 - **Theme: broken, and out of our reach.** Pick a cursor theme and the picture does not change until
   the pointer leaves the surface and comes back.
 
