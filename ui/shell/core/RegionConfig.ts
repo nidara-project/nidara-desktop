@@ -129,6 +129,11 @@ class RegionConfigManager extends GObject.Object {
      * Takes effect on next login (systemd/PAM reads environment.d).
      */
     setRegionalLocale(locale: string) {
+        // The unchanged-guard every sibling setter here has, and the only one that
+        // was missing it — which mattered more here than anywhere else, because
+        // this setter does not just save: it rewrites (or DELETES) a file the
+        // systemd user manager reads at login.
+        if ((this._settings.regionalLocale ?? "") === locale) return
         this._settings.regionalLocale = locale
         this.save()
         try {

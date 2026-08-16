@@ -237,6 +237,14 @@ export default function RegionPage() {
     const regionalModel = new Gtk.StringList({ strings: [t("settings.region.locale.regional.same")] })
     const regionalDrp = NidaraDropDown({ model: regionalModel, valign: Gtk.Align.CENTER })
 
+    // Set while the dropdown is being told what the config ALREADY says. Without
+    // it, showing the current value writes it: `selected = idx` emits
+    // `notify::selected`, the handler calls setRegionalLocale, and that rewrites
+    // ~/.config/environment.d/nidara-locale.conf. Settings builds all 21 top-level
+    // pages eagerly, so this ran on every OPEN of the window, whatever page the
+    // user actually wanted. (Same shape as the profile sync in Power.tsx.)
+    let syncingRegional = false
+
     execAsync(["locale", "-a"]).then(output => {
         const locales = output.trim().split("\n")
             .map(l => l.trim())
@@ -247,15 +255,31 @@ export default function RegionPage() {
             regionalValues.push(l)
             regionalModel.append(l)
         })
+        // A saved locale the system no longer lists is SHOWN, not silently dropped.
+        // `indexOf` returns -1 for it and the fallback was index 0 — "same as LANG"
+        // — so the row REPORTED a setting the config did not hold, for a locale that
+        // `locale -a` merely stopped listing (dropped from locale.gen, or spelled
+        // differently before the .utf8 → .UTF-8 normalisation above). Measured: the
+        // file is not rewritten in that state, because index 0 is where the dropdown
+        // already was and GObject emits no notify for an unchanged property — so it
+        // is a display lie rather than data loss. Which is only luck: the same
+        // fallback with any other saved value writes.
         const current = regionConfig.regionalLocale
+        if (current && !regionalValues.includes(current)) {
+            regionalValues.push(current)
+            regionalModel.append(current)
+        }
         const idx = current ? regionalValues.indexOf(current) : 0
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            syncingRegional = true
             regionalDrp.selected = idx >= 0 ? idx : 0
+            syncingRegional = false
             return GLib.SOURCE_REMOVE
         })
     }).catch(console.error)
 
     regionalDrp.connect("notify::selected", () => {
+        if (syncingRegional) return
         const idx = regionalDrp.selected
         if (idx < regionalValues.length)
             regionConfig.setRegionalLocale(regionalValues[idx])

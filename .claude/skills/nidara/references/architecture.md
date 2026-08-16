@@ -1184,6 +1184,25 @@ Pure-GTK4 primitives + Nidara tokens, **no Adwaita, no resets**. Mostly consumed
 
 The Settings sidebar (`Settings.tsx` `categories[]`) is **ordered into 3 unlabelled clusters** via `NidaraSidebar`'s `groupStart` dividers; the array order *is* the IA, so reorder there. The window opens on **Appearance** by default (not the first item). The **AI page** (`pages/Ai.tsx`, third cluster) governs the agent surface — its rule: every row must gate or report something REAL (no placeholder toggles); it grows with the AI-native roadmap (assistant model picker…). Its IA (2026-07) is four groups, one concept each: **Desktop Access** (shell-scoped capabilities, default on) · **Other Apps** (computer-use perception/control, escalating, default off) · **MCP Server** (the CHANNEL: enable toggle + `.mcp.json` connect row — a transport, not a permission; capability toggles gate `ags request` and MCP alike) · **Agent Interface** (read-only facts). Don't fold the MCP toggle back among the capability toggles. Pages that contain sub-screens use the **parent-page + `pushSubpage` pattern**: e.g. **Apps** is a landing (`pages/Apps.tsx`) with three navigable rows that push **Default Apps** (`pages/DefaultApps.tsx`), **App Icons** (`pages/AppIcons.tsx`) and **Autostart** (`pages/Autostart.tsx` — moved off the sidebar 2026-07; Windows Apps→Startup prior art). Subpages can nest: Autostart pushes its own installed-apps picker (`apps/autostart/add`), like App Icons' per-app detail (`apps/icons/{id}`). Caveat: subpage rows aren't in the search index, so a parent's landing rows should carry searchable labels. ⚠️ **And "not yet" is the wrong reading** — visiting a subpage does not index it either. `pushSubpage` (`Settings.tsx`) calls its `build()` outside the `beginPage`/`endPage` pair that wraps the top-level `categories.forEach`, so `createRow`'s `_pageCtx.id` is empty for the whole subtree and the rows are dropped no matter which row builder made them. Measured 2026-08-16 in a live session (open the subpage, then search a label only it has → *No results*). The corollary is worth knowing before reaching for the search box as evidence: a row built outside Settings is unindexed for the SAME reason as a subpage row, so **the search index cannot tell the `mkRow` seam apart** — the proof that a widget's rows left `surfaces/settings/` is its import graph, not the searcher.
 
+**Every page's body runs when the WINDOW opens, not when the page is visited.** `categories.forEach`
+builds all 21 top-level pages eagerly into `pageCache`, so whatever a page does while constructing —
+spawn a process, read a file, apply a value — happens on every open of Settings, on behalf of a user
+who asked for some other page. Two consequences:
+
+- **Showing a value must never write it.** A dropdown told what the config already says emits
+  `notify::selected`, its handler calls the setter, and the setter persists. Settings → Region did
+  exactly that: opening the window on *any* page rewrote `region.json` **and
+  `~/.config/environment.d/nidara-locale.conf`**, a file the systemd user manager reads at login
+  (measured 2026-08-16 by mtime, both files, every open). Guard the programmatic assignment with a
+  `syncing` flag — Power's profile selection does the same for `powerprofilesctl set` — and give the
+  setter the unchanged-guard its siblings have. Note what hid it: the write was *idempotent*, so
+  nothing ever looked wrong.
+- **Falling back to index 0 is a claim, not a default.** `indexOf(saved)` returning −1 and selecting
+  0 makes the row report a setting the config does not hold. Show the saved value instead — append it
+  to the model if the system stopped listing it. ⚠️ That case happens to write nothing, but only
+  because index 0 is where the dropdown already sat and GObject emits no notify for an unchanged
+  property; the same fallback with any other value writes.
+
 **Page lifetime — the trap.** Category pages are built ONCE into `pageCache` and swapped by
 `remove()` + `append()`, so navigating away **unrealizes a page without destroying it** and coming
 back re-realizes the same widget. `unrealize` here means *"taken out for a moment"*, not *"being
