@@ -4,6 +4,7 @@ import { listGroup, pageBox, bindWhileRealized } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as AudioSvc from "../../../core/AudioService"
+import { safeDisconnect } from "../../../core/signals"
 import { NidaraButton, NidaraRow, makeVolumeSlider } from "../../../../lib/nidara-kit"
 
 // ── Volume row (devices and per-app streams) ─────────────────────────────────
@@ -39,9 +40,6 @@ function createVolumeRow(
         valign: Gtk.Align.CENTER,
     })
     muteBtn.connect("clicked", () => { AudioSvc.toggleMute(target) })
-    target.connect("notify::mute", () => {
-        muteImg.gicon = AudioSvc.targetVolumeIcon(target)
-    })
 
     const trailing = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
     if (defaultControl) trailing.append(defaultControl)
@@ -67,7 +65,25 @@ function createVolumeRow(
     // not settings, so they stay out of the search index. The title's one-line
     // ellipsis now comes from the component — this page is exactly where the
     // three-line "Starship/Matisse HD Audio Controller Analog Stereo" was measured.
-    return NidaraRow(title, "", trailing, [], undefined, leadingIcon, slider)
+    const row = NidaraRow(title, "", trailing, [], undefined, leadingIcon, slider)
+
+    // ⚠️ The mute icon's subscription must die with the ROW, because the target does
+    // not: an AstalWp endpoint outlives every row ever built for it. This was a bare
+    // `target.connect("notify::mute", …)` — and the rows are rebuilt on every device
+    // change AND on every realize of the page, so each visit hung another permanent
+    // handler on the same endpoint, each holding a discarded widget alive. The
+    // slider one line below never had the bug: it takes its external sync through
+    // the kit, which hands back a disposer. This is the same contract, by hand.
+    bindWhileRealized(row, () => {
+        const id = target.connect("notify::mute", () => {
+            muteImg.gicon = AudioSvc.targetVolumeIcon(target)
+        })
+        // Re-realizing after a spell away: the icon may be stale by now.
+        muteImg.gicon = AudioSvc.targetVolumeIcon(target)
+        return () => safeDisconnect(target, id)
+    })
+
+    return row
 }
 
 // ── Device row (speakers / mics) ──────────────────────────────────────────────
