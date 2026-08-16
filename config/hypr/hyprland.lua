@@ -467,10 +467,21 @@ hl.window_rule({
 
 -- ── Game mode — workspace, window rules & auto-return ────────────────────────
 local lastNonGameWs    = nil
+local inGameSession    = false
 local prevWallpaper    = nil
 local prevTransition   = "fade"
+local prevProfile      = nil
 local gameMonitor      = ""
 local activeGames      = {}   -- address → appid; tracks all Steam-launched game windows
+
+-- Reads the active power profile. Empty string when power-profiles-daemon is not
+-- installed, which is the same as "nothing to put back".
+local function currentProfile()
+    local p = io.popen("powerprofilesctl get 2>/dev/null")
+    if not p then return "" end
+    local out = p:read("*l"); p:close()
+    return out and out:match("^%s*(.-)%s*$") or ""
+end
 
 local function getSteamAppId(pid)
     local p = tonumber(pid)
@@ -534,14 +545,27 @@ hl.on("window.open", function(w)
     hl.dispatch(hl.dsp.focus({ workspace = "name:gamespace" }))
     hl.exec_cmd("hyprctl setprop address:" .. w.address .. " immediate 1 lock:0")
 
-    if prevWallpaper then return end
+    -- "Already in a game session" — one flag, not `prevWallpaper`. That variable is
+    -- only set when a wallpaper was actually swapped, so with mode = none (or
+    -- artwork with no hero art found) a second game window re-ran this whole block.
+    -- Harmless while the only thing it repeated was setting the profile to
+    -- performance; not harmless now that entering CAPTURES the profile to put back,
+    -- since the second pass would capture "performance" and restore that on exit.
+    if inGameSession then return end
+    inGameSession = true
 
     local ws = hl.get_active_workspace()
     local mon = ws and ws.monitor
     gameMonitor = (type(mon) == "string" and mon ~= "") and mon or ""
 
     local mode, custom, transition, perfOn = readGamingCfg()
-    if perfOn then hl.exec_cmd("powerprofilesctl set performance") end
+    if perfOn then
+        -- Remember what to go back to, exactly like the wallpaper below. Exit used
+        -- to hard-code `balanced`, so a session started from Power saver ended in
+        -- Balanced and the Settings choice was simply gone, silently.
+        prevProfile = currentProfile()
+        hl.exec_cmd("powerprofilesctl set performance")
+    end
 
     local wallpaperPath = nil
     if mode == "artwork" then
@@ -566,17 +590,32 @@ hl.on("window.destroy", function(w)
     hl.timer(function()
         local hasMore = false
         for _ in pairs(activeGames) do hasMore = true; break end
+        if hasMore then return end
+
+        -- UNDOING THE SESSION and PUTTING THE USER BACK are two different jobs, and
+        -- they used to share one condition. Everything below hung off "the user is
+        -- standing on gamespace right now" — so quitting a game after wandering to
+        -- another workspace left the game wallpaper up and the machine on
+        -- performance, with the session flags still set, so the NEXT game got no
+        -- entry either. Undoing is unconditional; only the focus return depends on
+        -- where the user happens to be.
+        inGameSession = false
+        -- Put back what we found, not a guess. Only when the profile is STILL the
+        -- one we set: if the user picked something else while the game ran, that is
+        -- a newer decision than ours and restoring would undo it.
+        if prevProfile and prevProfile ~= "" and currentProfile() == "performance" then
+            hl.exec_cmd("powerprofilesctl set " .. prevProfile)
+        end
+        prevProfile = nil
+        if prevWallpaper then
+            local outputFlag = (gameMonitor ~= "") and (" --outputs " .. gameMonitor) or ""
+            os.execute("awww img " .. prevWallpaper .. " --transition-type " .. prevTransition .. outputFlag)
+            prevWallpaper = nil
+        end
 
         local activeWs = hl.get_active_workspace()
-        if not hasMore and lastNonGameWs ~= nil and activeWs and activeWs.name == "gamespace" then
+        if lastNonGameWs ~= nil and activeWs and activeWs.name == "gamespace" then
             hl.dispatch(hl.dsp.focus({ workspace = lastNonGameWs }))
-            local _, _, _, perfOn = readGamingCfg()
-            if perfOn then hl.exec_cmd("powerprofilesctl set balanced") end
-            if prevWallpaper then
-                local outputFlag = (gameMonitor ~= "") and (" --outputs " .. gameMonitor) or ""
-                os.execute("awww img " .. prevWallpaper .. " --transition-type " .. prevTransition .. outputFlag)
-                prevWallpaper = nil
-            end
         end
     end, { timeout = 3000, type = "oneshot" })
 end)

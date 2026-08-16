@@ -236,6 +236,25 @@ jobs:
             exit 1
           fi
 
+  hypr-config:
+    name: Hyprland config (parses + game mode)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install lua
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.4
+      # The session's whole config is one Lua chunk: a syntax error anywhere in it
+      # means Hyprland starts with NO Nidara config at all — no keybinds, no rules,
+      # no game mode. `luac -p` needs none of the `hl` API to catch that.
+      - name: luac -p config/hypr/hyprland.lua (must parse)
+        run: luac5.4 -p config/hypr/hyprland.lua
+      # Beyond parsing, the game-mode handlers are the one part of this file with
+      # state that outlives a single event (what the profile and wallpaper were
+      # before the game). The harness stubs `hl` and drives the handlers directly,
+      # so it needs neither Hyprland nor Steam.
+      - name: Game-mode session handlers (must succeed)
+        run: lua5.4 scripts/dev/hypr-game-mode-test.lua
+
   skill-docs:
     name: Skill docs (no duplicated sections)
     runs-on: ubuntu-latest

@@ -344,6 +344,36 @@ syntax error, and the shape of that mistake is that it prints an error and keeps
 built on it reports differences that are really the window never having moved (that happened while
 writing this one — the first table it produced was noise).
 
+### Driving `hyprland.lua`'s game mode without Hyprland (`scripts/dev/hypr-game-mode-test.lua`) — a CI GATE
+
+```bash
+lua scripts/dev/hypr-game-mode-test.lua        # exits 1 on failure
+# run it against another copy of the config — e.g. to confirm it can still fail:
+git show main:config/hypr/hyprland.lua > /tmp/old.lua
+NIDARA_HYPR_CONFIG=/tmp/old.lua lua scripts/dev/hypr-game-mode-test.lua
+```
+
+The game-mode handlers only run when **Steam** opens a window, which is not something a test can
+arrange — so it fakes **Hyprland** instead of faking a game: a stub `hl` table records what the
+config asks the compositor to do, the real `config/hypr/hyprland.lua` is loaded against it, and the
+registered `window.open` / `window.destroy` callbacks are invoked directly with a game-shaped
+payload. `powerprofilesctl` is intercepted in both directions (`hl.exec_cmd` when the config sets a
+profile, `io.popen` when it reads one) and `HOME` points at a fixture holding `gaming.json`, so the
+test states its own preconditions and never touches the live session.
+
+What it asserts is that a game session is **undone**: the power profile after it is the one from
+before it, across all three profiles, across two windows for one game, when the user changes the
+profile mid-game, when they quit from another workspace, and — with the toggle off — that
+`powerprofilesctl` is never run at all. That last one is checked by counting commands rather than by
+reading the final value; a value can be right for the wrong reason.
+
+It is a CI gate alongside `luac -p` on the same file, and the parse check is the more important
+half: the session's whole config is one Lua chunk, so a syntax error anywhere in it means Hyprland
+starts with **no Nidara config at all** — no keybinds, no rules, no game mode.
+
+⚠️ The pattern generalises to anything else in `hyprland.lua` that keeps state across events. What
+made game mode worth covering is that it has some: what the wallpaper and the profile *were*.
+
 ### Do the shipped locales still FIT? (`scripts/dev/text-budget.js`) — a CI GATE
 
 ```bash
