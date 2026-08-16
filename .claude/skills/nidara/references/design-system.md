@@ -1390,6 +1390,38 @@ which stops meaning a stable thing the moment a search filter is active. Convert
 moving that row to `selected_item` first. `search_match_mode` is GTK 4.12+; the repo targets
 4.22, so availability is not the blocker.
 
+### A row that names a CATEGORY must enumerate AND write the whole category
+
+Settings → Apps → Default apps, fixed 2026-08-16. Every row there is a category — the
+labels say "Image viewer", "Web browser", and the subtitles promise "Opens photos and
+images", "Opens links and web pages" — but each was built from **one** content type, which
+broke it at both ends at once:
+
+- **What it wrote.** "Image viewer" wrote only `image/jpeg`, so a PNG still opened in the
+  previous app. The browser row was worse than partial: it wrote `text/html`, while
+  `xdg-settings get default-web-browser` and every app that opens a link read
+  `x-scheme-handler/http` — the choice never left the page.
+- **What it offered.** The same single type enumerated the dropdown, and a text editor
+  legitimately registers for `text/html`: on a stock Arch install the "Web browser" list
+  offered **micro, nvim and GNOME Text Editor** (measured, not guessed).
+
+The shape that holds: a row carries a LIST of types whose **first element defines the
+category** — it is what the app list and the current default are read from — and picking an
+app writes every type in the list **that the app is already registered for**. That support
+filter is not optional: `set_as_default_for_type` will happily make an app the default for
+a type it cannot open (it just appends an association), so writing the list blind trades a
+partial setting for a broken one.
+
+⚠️ **The types left OUT are a decision too, and belong in a comment.** `image/svg+xml` is
+not in the image list because "view" and "edit" genuinely diverge there; source-code types
+are not in the text-editor list because an editor claiming `text/x-csrc` is not a reason to
+take that association from an IDE the user chose deliberately.
+
+🔑 **The A/B that proves it** (and proves it could fail): run the write against a throwaway
+`XDG_CONFIG_HOME` — GIO writes `mimeapps.list` there — picking an app that is *not* already
+the default, then read `Gio.AppInfo.get_default_for_type("x-scheme-handler/http")` back. The
+pre-fix path prints `DID NOT REACH`. No display and no risk to the real config needed.
+
 ### A row that costs ROOT keeps its Apply button — even as a dropdown
 
 Asked and settled 2026-08-16 ("¿el Apply de Language no sobra, si Regional format no lo
