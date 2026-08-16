@@ -1340,11 +1340,22 @@ on a stock install** rather than guessed from the catalogue:
 
 | Field | Closed set? | Options | Verdict |
 |---|---|---|---|
-| Language & region → Language (LANG) | `localectl list-locales` | **13** — the GENERATED locales, not glibc's ~800 | → `NidaraDropDown` |
+| Language & region → Language (LANG) | `localectl list-locales` | **13** — the GENERATED locales, not glibc's ~800; **12 offerable**, see below | → `NidaraDropDown` |
 | Language & region → Timezone | `timedatectl list-timezones` | **598** | entry stays (see below) |
 | Users → full name / username | no | — | entry |
 | Autostart → command | no | — | entry |
 | AI → model / endpoint | no (BYOK, arbitrary) | — | entry |
+
+⚠️ **`C.UTF-8` is not a language, and `localectl list-locales` lists it FIRST.** It is the
+POSIX "no localization" locale — untranslated messages (which read as English because the
+msgids are), byte-order collation, C date format, no currency — and `detectLanguage()`
+(`core/i18n/index.ts`) matches no prefix for it and falls through to `en`, so Nidara's own
+UI looks fine while everything else in the session goes unlocalized. Left unfiltered it was
+the top entry of a control labelled "Language". Regional format had always filtered the
+C/POSIX family out of `locale -a`; the Language list shipped without that filter for one
+commit. Both filter it now. Filtering the list is **not** the same as hiding an active
+value: a LANG absent from the list is appended to the model, so a machine really running
+`C.UTF-8` still shows the truth rather than snapping to a neighbouring row.
 
 🔑 **Measure the set on the machine before choosing.** `localectl list-locales` returns only
 what `locale.gen` generated — 13 rows, a trivially browsable dropdown. Sized from the glibc

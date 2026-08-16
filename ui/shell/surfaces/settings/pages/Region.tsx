@@ -274,6 +274,16 @@ export default function RegionPage() {
         list.trim().split("\n").forEach(l => {
             const v = l.trim()
             if (!v) return
+            // Drop the C/POSIX family. `localectl list-locales` lists C.UTF-8 FIRST,
+            // so without this it is the top entry of a control labelled "Language" —
+            // and it is not a language: it is the POSIX "no localization" locale
+            // (untranslated messages, byte-order collation, C date format, no
+            // currency). Regional format below has always filtered it; this list
+            // did not, which is the inconsistency this filter closes.
+            // Not the same as hiding it if it is already ACTIVE — a LANG the list
+            // does not contain gets appended below, so a machine really running
+            // C.UTF-8 still shows the truth instead of a neighbouring row.
+            if (/^(C|POSIX)(\.|$)/.test(v)) return
             langValues.push(v)
             langModel.append(v)
         })
