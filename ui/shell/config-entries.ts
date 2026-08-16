@@ -14,6 +14,7 @@ import Theme from "./core/ThemeManager"
 import { ACCENT_PALETTE, type AccentKey, type ShellAppearance } from "./core/NidaraTheme"
 import NightLight from "./core/NightLightManager"
 import notifConfig from "./core/NotifConfig"
+import AstalNotifd from "gi://AstalNotifd"
 import recordingConfig, {
     FORMATS, QUALITIES, type RecordFormat, type RecordQuality,
 } from "./core/RecordingConfig"
@@ -106,11 +107,16 @@ export function registerConfigEntries() {
         get: () => notifConfig.popupTimeout,
         set: v => notifConfig.setPopupTimeout(v as number),
     })
-    registerConfig("notifications.dndDefault", {
-        desc: "Start each session with Do Not Disturb active.",
+    // The LIVE flag, not a preference about it: this is the same bit the Control
+    // Center's focus tile and Settings → Notifications flip, and AstalNotifd keeps
+    // it in GSettings, so setting it here persists across sessions with no help
+    // from us. It replaced `notifications.dndDefault` (2026-08-16), which only
+    // seeded the flag TRUE at startup and could never clear it.
+    registerConfig("notifications.doNotDisturb", {
+        desc: "Do Not Disturb: suppress notification popups (critical ones still show). Persists across sessions until turned off.",
         type: "boolean",
-        get: () => notifConfig.dndDefault,
-        set: v => notifConfig.setDndDefault(v as boolean),
+        get: () => AstalNotifd.get_default()?.dont_disturb ?? false,
+        set: v => { const nd = AstalNotifd.get_default(); if (nd) nd.dont_disturb = v as boolean },
     })
 
     // ── Screen recording ──────────────────────────────────────────────────

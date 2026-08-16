@@ -354,9 +354,8 @@ export default {
     "settings.notif.group.popups": "ポップアップ",
     "settings.notif.timeout": "自動的に消えるまでの時間",
     "settings.notif.timeout.desc": "ポップアップが非表示になるまで画面に表示され続ける時間",
-    "settings.notif.group.dnd": "サイレント",
-    "settings.notif.dnd-default": "ログイン時に有効化",
-    "settings.notif.dnd-default.desc": "毎回のセッションを「サイレント」を有効にした状態で開始します",
+    "settings.notif.dnd": "サイレント",
+    "settings.notif.dnd.desc": "通知のポップアップを表示しません。重要な通知は表示されます。",
 
     "settings.ai.title": "AI",
     "settings.ai.group.access": "デスクトップへのアクセス",

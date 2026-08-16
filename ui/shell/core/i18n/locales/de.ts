@@ -354,9 +354,8 @@ export default {
     "settings.notif.group.popups": "Popups",
     "settings.notif.timeout": "Automatisch ausblenden nach",
     "settings.notif.timeout.desc": "Wie lange ein Popup angezeigt wird, bevor es ausgeblendet wird",
-    "settings.notif.group.dnd": "Nicht stören",
-    "settings.notif.dnd-default": "Bei Anmeldung aktivieren",
-    "settings.notif.dnd-default.desc": "Jede Sitzung mit aktiviertem „Nicht stören“ beginnen",
+    "settings.notif.dnd": "Nicht stören",
+    "settings.notif.dnd.desc": "Blendet Benachrichtigungs-Popups aus. Kritische Meldungen kommen weiterhin durch.",
 
     "settings.ai.title": "KI",
     "settings.ai.group.access": "Desktop-Zugriff",

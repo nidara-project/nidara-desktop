@@ -354,9 +354,8 @@ export default {
     "settings.notif.group.popups": "Popups",
     "settings.notif.timeout": "Ocultar automaticamente após",
     "settings.notif.timeout.desc": "Por quanto tempo um popup permanece na tela antes de ocultar",
-    "settings.notif.group.dnd": "Não perturbe",
-    "settings.notif.dnd-default": "Ativar ao entrar",
-    "settings.notif.dnd-default.desc": "Iniciar cada sessão com o Não perturbe ativado",
+    "settings.notif.dnd": "Não perturbe",
+    "settings.notif.dnd.desc": "Oculta os popups de notificação. Alertas críticos continuam aparecendo.",
 
     "settings.ai.title": "IA",
     "settings.ai.group.access": "Acesso à área de trabalho",

@@ -64,7 +64,6 @@ import AgentPointer, { isAgentPointerActive } from "./surfaces/agent-pointer/Age
 import Settings from "./surfaces/settings/Settings"
 import Theme, { setPreferDark } from "./core/ThemeManager"
 import AboutWindow from "./surfaces/about/AboutWindow"
-import notifConfig from "./core/NotifConfig"
 import { setKitAppearance } from "../lib/nidara-kit"
 import { safeDisconnect } from "./core/signals"
 
@@ -797,13 +796,9 @@ for (const [name, { aliases }] of Object.entries(IPC_COMMANDS))
 app.start({
   applicationId: "org.nidara.desktop",
     main() {
-    // Apply notification DND default
-    if (notifConfig.dndDefault) {
-        import("gi://AstalNotifd").then(({ default: AstalNotifd }) => {
-            const notifd = AstalNotifd.get_default()
-            if (notifd) notifd.dont_disturb = true
-        }).catch(() => {})
-    }
+    // (No DnD seeding here. AstalNotifd's `dont_disturb` is GSettings-backed and
+    // persists on its own; the block that used to force it true at every main()
+    // — which is every UI RELOAD, not just login — was removed 2026-08-16.)
 
     // Agent-facing config surface (describeConfig/getConfig/setConfig)
     registerConfigEntries()

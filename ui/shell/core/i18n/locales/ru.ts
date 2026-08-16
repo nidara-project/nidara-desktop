@@ -361,9 +361,8 @@ export default {
     "settings.notif.group.popups": "Всплывающие уведомления",
     "settings.notif.timeout": "Автоскрытие через",
     "settings.notif.timeout.desc": "Как долго уведомление остаётся на экране перед скрытием",
-    "settings.notif.group.dnd": "Не беспокоить",
-    "settings.notif.dnd-default": "Включать при входе",
-    "settings.notif.dnd-default.desc": "Начинать каждый сеанс с включённым режимом «Не беспокоить»",
+    "settings.notif.dnd": "Не беспокоить",
+    "settings.notif.dnd.desc": "Скрывает всплывающие уведомления. Критические оповещения по-прежнему показываются.",
 
     "settings.ai.title": "ИИ",
     "settings.ai.group.access": "Доступ к рабочему столу",

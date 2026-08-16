@@ -354,9 +354,8 @@ export default {
     "settings.notif.group.popups": "Pop-ups",
     "settings.notif.timeout": "Automatisch sluiten na",
     "settings.notif.timeout.desc": "Hoe lang een pop-up op het scherm blijft voordat deze verdwijnt",
-    "settings.notif.group.dnd": "Niet storen",
-    "settings.notif.dnd-default": "Inschakelen bij aanmelden",
-    "settings.notif.dnd-default.desc": "Start elke sessie met Niet storen actief",
+    "settings.notif.dnd": "Niet storen",
+    "settings.notif.dnd.desc": "Verbergt meldingspop-ups. Kritieke meldingen komen wel door.",
 
     "settings.ai.title": "AI",
     "settings.ai.group.access": "Bureaubladtoegang",

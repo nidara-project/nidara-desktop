@@ -354,9 +354,8 @@ export default {
     "settings.notif.group.popups": "Popups",
     "settings.notif.timeout": "Auto-dismiss after",
     "settings.notif.timeout.desc": "How long a popup stays on screen before hiding",
-    "settings.notif.group.dnd": "Do not disturb",
-    "settings.notif.dnd-default": "Enable on login",
-    "settings.notif.dnd-default.desc": "Start each session with Do Not Disturb active",
+    "settings.notif.dnd": "Do not disturb",
+    "settings.notif.dnd.desc": "Silence notification popups. Critical alerts still come through.",
 
     "settings.ai.title": "AI",
     // Group footers answer the question the titles cannot: WHO does this govern?

@@ -337,9 +337,8 @@ export default {
     "settings.notif.group.popups": "Popups",
     "settings.notif.timeout": "Auto-ocultar después de",
     "settings.notif.timeout.desc": "Tiempo que un popup permanece en pantalla antes de ocultarse",
-    "settings.notif.group.dnd": "No molestar",
-    "settings.notif.dnd-default": "Activar al iniciar sesión",
-    "settings.notif.dnd-default.desc": "Iniciar cada sesión con No Molestar activado",
+    "settings.notif.dnd": "No molestar",
+    "settings.notif.dnd.desc": "Silencia los popups de notificación. Las alertas críticas siguen llegando.",
 
     "settings.bar.title": "Barra superior",
     "settings.bar.group.layout": "Disposición",

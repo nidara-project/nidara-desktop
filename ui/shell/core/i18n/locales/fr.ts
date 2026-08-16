@@ -354,9 +354,8 @@ export default {
     "settings.notif.group.popups": "Popups",
     "settings.notif.timeout": "Masquer après",
     "settings.notif.timeout.desc": "Durée d'affichage d'un popup avant qu'il disparaisse",
-    "settings.notif.group.dnd": "Ne pas déranger",
-    "settings.notif.dnd-default": "Activer à la connexion",
-    "settings.notif.dnd-default.desc": "Démarrer chaque session avec « Ne pas déranger » activé",
+    "settings.notif.dnd": "Ne pas déranger",
+    "settings.notif.dnd.desc": "Masque les popups de notification. Les alertes critiques passent toujours.",
 
     "settings.ai.title": "IA",
     "settings.ai.group.access": "Accès au bureau",

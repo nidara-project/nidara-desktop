@@ -354,9 +354,8 @@ export default {
     "settings.notif.group.popups": "Popup",
     "settings.notif.timeout": "Chiudi automaticamente dopo",
     "settings.notif.timeout.desc": "Per quanto tempo un popup resta visibile prima di scomparire",
-    "settings.notif.group.dnd": "Non disturbare",
-    "settings.notif.dnd-default": "Attiva all'accesso",
-    "settings.notif.dnd-default.desc": "Avvia ogni sessione con Non disturbare attivo",
+    "settings.notif.dnd": "Non disturbare",
+    "settings.notif.dnd.desc": "Nasconde i popup delle notifiche. Gli avvisi critici arrivano comunque.",
 
     "settings.ai.title": "IA",
     "settings.ai.group.access": "Accesso al desktop",

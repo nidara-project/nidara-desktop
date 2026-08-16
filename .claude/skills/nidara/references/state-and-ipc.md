@@ -617,6 +617,19 @@ Rules:
   import widget state) with a real `desc` (that string is the agent-facing documentation)
   and delegate `set` to the owning service's setter. That's ALL it takes to appear in
   `describeConfig`.
+- **Before adding a persisted setting, check whether the Astal library ALREADY persists it.**
+  Astal properties are not all in-memory: `AstalNotifd.dont_disturb` is a straight accessor over
+  GSettings (`io.astal.notifd dont-disturb`, schema in `/usr/share/glib-2.0/schemas/`), so it
+  survives logout and reboot in dconf with no help from us. Nidara had shadowed it anyway with a
+  `notifications.dndDefault` boolean in `notif-config.json` plus a "Enable on login" toggle in
+  Settings → Notifications, and a seeding block in `app.ts` `main()`. Two settings, one bit — and
+  the copy could only ever *set* it, never clear it, so its OFF position promised sessions would
+  start undisturbed while the persisted flag quietly kept DnD on. (Worse, `main()` runs on every
+  UI reload, not just at login.) All three were removed 2026-08-16; the registry key is now
+  `notifications.doNotDisturb`, reading and writing the live flag, and Settings shows the live
+  state like GNOME does. **The check is one command:** `gsettings list-recursively io.astal.<lib>`,
+  or read the `.vala` property — if the getter hits `settings.get_*`, it persists. A shadow copy
+  can only ever disagree with the real one.
 - **A `desc` should not restate the DEFAULT.** `value` sits in the same JSON object, so a
   default is a second answer to the question the reader came with. (It was first suspected of
   causing a misread of `ai.allowFileWrite`; removing it did not fix that — the cause was the

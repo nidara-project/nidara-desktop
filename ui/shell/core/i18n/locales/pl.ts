@@ -354,9 +354,8 @@ export default {
     "settings.notif.group.popups": "Popupy",
     "settings.notif.timeout": "Automatycznie ukryj po",
     "settings.notif.timeout.desc": "Jak długo powiadomienie pozostaje na ekranie przed ukryciem",
-    "settings.notif.group.dnd": "Nie przeszkadzać",
-    "settings.notif.dnd-default": "Włącz przy logowaniu",
-    "settings.notif.dnd-default.desc": "Rozpoczynaj każdą sesję z włączoną funkcją Nie przeszkadzać",
+    "settings.notif.dnd": "Nie przeszkadzać",
+    "settings.notif.dnd.desc": "Ukrywa popupy powiadomień. Krytyczne alerty nadal się pojawiają.",
 
     "settings.ai.title": "AI",
     "settings.ai.group.access": "Dostęp do pulpitu",

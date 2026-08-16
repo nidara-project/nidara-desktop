@@ -354,9 +354,8 @@ export default {
     "settings.notif.group.popups": "弹出通知",
     "settings.notif.timeout": "自动消失时间",
     "settings.notif.timeout.desc": "弹出通知在隐藏前停留的时间",
-    "settings.notif.group.dnd": "请勿打扰",
-    "settings.notif.dnd-default": "登录时启用",
-    "settings.notif.dnd-default.desc": "每次登录时自动启用「请勿打扰」",
+    "settings.notif.dnd": "请勿打扰",
+    "settings.notif.dnd.desc": "隐藏弹出通知。重要通知仍会显示。",
 
     "settings.ai.title": "AI",
     "settings.ai.group.access": "桌面访问",
