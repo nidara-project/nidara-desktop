@@ -1,6 +1,7 @@
 import GLib from "gi://GLib"
 import { readFile, writeFile } from "ags/file"
 import { providerById } from "./AgentProviders"
+import { loadKnown } from "./configFile"
 
 // Governance for the agent-facing surface (Settings → AI). This gates the
 // OFFICIAL door (`ags request setConfig`, future MCP server) — it is a consent
@@ -101,8 +102,7 @@ const DEFAULTS: AgentSettings = {
 let _settings: AgentSettings = { ...DEFAULTS }
 try {
     if (GLib.file_test(CONFIG_PATH, GLib.FileTest.EXISTS)) {
-        const data = JSON.parse(readFile(CONFIG_PATH)) as Partial<AgentSettings>
-        _settings = { ...DEFAULTS, ...data }
+        _settings = loadKnown(DEFAULTS, JSON.parse(readFile(CONFIG_PATH)))
         // RE-DERIVE the wire protocol from the provider table on every load.
         // brainBackend/brainEndpoint are documented as derived from brainProvider,
         // but they are also persisted — and only recomputed inside

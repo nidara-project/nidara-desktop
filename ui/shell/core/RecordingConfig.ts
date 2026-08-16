@@ -25,6 +25,7 @@
 import GLib from "gi://GLib"
 import { readFile, writeFile } from "ags/file"
 import { execAsync } from "ags/process"
+import { loadKnown } from "./configFile"
 
 export type RecordQuality = "low" | "balanced" | "high"
 export type RecordFormat = "mp4" | "mkv" | "webm"
@@ -75,8 +76,7 @@ const DEFAULTS = (): RecordingSettings => ({
 let _settings: RecordingSettings = DEFAULTS()
 try {
     if (GLib.file_test(CONFIG_PATH, GLib.FileTest.EXISTS)) {
-        const data = JSON.parse(readFile(CONFIG_PATH)) as Partial<RecordingSettings>
-        _settings = { ...DEFAULTS(), ...data }
+        _settings = loadKnown(DEFAULTS(), JSON.parse(readFile(CONFIG_PATH)))
     }
 } catch {}
 

@@ -1,5 +1,6 @@
 import GLib from "gi://GLib"
 import { readFile, writeFile } from "ags/file"
+import { loadKnown } from "./configFile"
 
 const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/notif-config.json`
 
@@ -18,11 +19,10 @@ const DEFAULTS: NotifSettings = {
 let _settings: NotifSettings = { ...DEFAULTS }
 try {
     if (GLib.file_test(CONFIG_PATH, GLib.FileTest.EXISTS)) {
-        const data = JSON.parse(readFile(CONFIG_PATH)) as Partial<NotifSettings>
-        // Key-by-key, not a spread of `data`: an existing install's file still has
-        // the retired `dndDefault`, and a spread would carry it into `_settings`
-        // and write it back out on every save, forever.
-        if (typeof data.popupTimeout === "number") _settings.popupTimeout = data.popupTimeout
+        // `loadKnown`, not a spread: an existing install's file still has the
+        // retired `dndDefault`, and a spread would carry it into `_settings` and
+        // write it back out on every save, forever. See core/configFile.ts.
+        _settings = loadKnown(DEFAULTS, JSON.parse(readFile(CONFIG_PATH)))
     }
 } catch {}
 

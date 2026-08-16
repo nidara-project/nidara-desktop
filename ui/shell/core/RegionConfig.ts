@@ -3,6 +3,7 @@ import GObject from "gi://GObject"
 import { readFile, writeFile } from "ags/file"
 import { execAsync } from "ags/process"
 import { formatDatePart } from "../../lib/date-names"
+import { loadKnown } from "./configFile"
 
 export type TimeFormat = "24h" | "12h"
 export type DateFormat = "none" | "short" | "short-year" | "long" | "numeric" | "iso"
@@ -60,8 +61,7 @@ class RegionConfigManager extends GObject.Object {
     private load(): RegionSettings {
         try {
             if (GLib.file_test(CONFIG_PATH, GLib.FileTest.EXISTS)) {
-                const data = JSON.parse(readFile(CONFIG_PATH)) as Partial<RegionSettings>
-                return { ...DEFAULTS, ...data }
+                return loadKnown(DEFAULTS, JSON.parse(readFile(CONFIG_PATH)))
             }
         } catch {}
         return { ...DEFAULTS }

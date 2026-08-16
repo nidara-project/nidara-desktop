@@ -31,6 +31,11 @@ class WidgetConfigManager extends GObject.Object {
         try {
             if (GLib.file_test(this.configPath, GLib.FileTest.EXISTS)) {
                 const data = JSON.parse(readFile(this.configPath)) as Record<string, WidgetPlacement>
+                // A spread is CORRECT here and must stay — unlike the other config
+                // files, this one's keys ARE the data (widget ids), so `DEFAULTS`
+                // seeds them rather than enumerating the valid ones. Don't reach for
+                // `core/configFile.ts`'s `loadKnown`: it would drop every widget the
+                // shipped defaults don't happen to name, third-party ones included.
                 return { ...DEFAULTS, ...data }
             }
         } catch {}
