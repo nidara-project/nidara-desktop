@@ -45,6 +45,17 @@ on:
   push:
     branches: [main]
   pull_request:
+  # ⚠️ REQUIRED BY THE MERGE QUEUE, and the way it fails is a stall, not an error.
+  # A queued PR waits for the four required checks (styles / typecheck / smoke /
+  # widgets-gen) to report against the QUEUE's temporary merge_group ref. Without
+  # this trigger those checks simply never start there, so the entry sits in the
+  # queue until it times out and gets kicked — with the PR itself still showing
+  # eight green checks from its `pull_request` run. Nothing anywhere says "you
+  # forgot a trigger".
+  #
+  # This is also why the trigger has to be on main BEFORE the queue is turned on:
+  # the queue runs the workflow as it exists on the base branch.
+  merge_group:
 
 jobs:
   styles:

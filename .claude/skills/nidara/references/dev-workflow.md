@@ -566,6 +566,29 @@ Gotchas that cost real debugging time:
 CI gates **SCSS compile + typecheck + widgets-gen freshness + headless boot smoke + Assistant
 loop** (`agent-loop`, see below).
 
+⚠️ **`ci.yml` triggers on `pull_request` AND `merge_group`, and dropping the second one breaks
+merges silently.** `main` uses a merge queue: the queue builds a temporary `merge_group` ref
+(the PR merged onto the current `main`) and waits for the four REQUIRED checks — styles,
+typecheck, smoke, widgets-gen — to report against it. Without the `merge_group:` trigger those
+checks never start there, so the queue entry waits until it times out and is kicked, while the
+PR still shows a full set of green checks from its own `pull_request` run. Nothing reports an
+error; a merge just never happens. The workflow the queue runs is the one on the BASE branch, so
+this trigger has to be on `main` before any of it works. Adding a new required check means adding
+it to the queue's list too, or the same stall returns.
+
+Note that `pull_request` already checks out `refs/pull/N/merge` — the merge RESULT, not the
+branch — so a green PR check has always been a statement about the merge, not just the diff.
+What the queue adds is that the statement is re-made against the `main` that is actually current
+at merge time.
+
+**What `main` actually gates, so a contributor's agent does not assume otherwise** (2026-08-16):
+the four checks above, plus linear history, no force pushes, no deletions. It does **not**
+require an approving review — that requirement existed until today and was unsatisfiable (one
+collaborator, and GitHub does not let anyone approve their own PR), so it produced a bypass on
+every merge instead of a review. **CI is the automated gate; the human gate is the maintainer
+reading the PR**, and nothing in this repository enforces the second one. Write access is what
+keeps `main` safe from outside: opening a PR is open to anyone, merging one is not.
+
 The **smoke job** (`scripts/ci/headless-smoke.sh`, `smoke` in ci.yml) is the only gate that
 actually RUNS the shell: the runner loads the kernel's **vkms** module (virtual KMS — needed
 because Hyprland cannot boot with zero DRM devices: aquamarine's GBM allocator wants a node,
