@@ -423,10 +423,12 @@ window.nidara-settings-window {
     }
 
     // ── Preset / segmented control buttons ───────────────────────────────────────
-    // Used in linked groups: Dock size presets, Gaming mode selector, etc.
-    // Selected state is indicated by:
-    //   - .nidara-btn--primary class  → Gtk.Button (added/removed dynamically)
-    //   - :checked pseudo-class        → Gtk.ToggleButton (managed by GTK)
+    // Used in linked groups: Dock size presets, Gaming mode selector.
+    // A segment is a Gtk.Button and its selected state is the .nidara-btn--primary
+    // class, added/removed by `segmentedGroup` (SettingsHelpers). The `:checked`
+    // branch that used to live here was for the Gaming page's own ToggleButton
+    // group — the one whose active segment could be clicked OFF, leaving the
+    // control empty. There are no ToggleButtons in a segmented group any more.
     button.settings-preset-btn {
         background-image: none;
         box-shadow: none;
@@ -445,8 +447,7 @@ window.nidara-settings-window {
         &:disabled { opacity: 0.45; }
 
         // ── Active / selected state ───────────────────────────────────────────────
-        &.nidara-btn--primary,
-        &:checked {
+        &.nidara-btn--primary {
             background-color: var(--nidara-accent);
             border-color: transparent;
             color: var(--nidara-accent-fg);

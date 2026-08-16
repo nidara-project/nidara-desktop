@@ -5,7 +5,7 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import Gaming, { type WallpaperMode } from "../../../core/GamingManager"
 import { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
 import { t } from "../../../core/i18n"
-import { listGroup, createRow, toggleRow, dropdownRow, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, toggleRow, dropdownRow, pageBox, segmentedGroup } from "../SettingsHelpers"
 import { NidaraButton } from "../../../../lib/nidara-kit"
 
 export default function GamingPage() {
@@ -14,36 +14,23 @@ export default function GamingPage() {
     // ── Wallpaper ─────────────────────────────────────────────────────────────
     const wallGroup = listGroup(t("settings.gaming.group.wallpaper"))
 
-    // Mode selector — three linked toggle buttons
-    const modes: { key: WallpaperMode; label: string }[] = [
-        { key: "artwork", label: t("settings.gaming.mode.artwork") },
-        { key: "custom",  label: t("settings.gaming.mode.custom")  },
-        { key: "none",    label: t("settings.gaming.mode.none")    },
-    ]
-
-    const modeBox = new Gtk.Box({
-        spacing: 0,
-        homogeneous: true,
-        css_classes: ["settings-preset-group", "linked"],
-        valign: Gtk.Align.CENTER,
-    })
-
-    const modeButtons: Record<WallpaperMode, Gtk.ToggleButton> = {} as any
-    modes.forEach(({ key, label }) => {
-        const btn = new Gtk.ToggleButton({
-            label,
-            active: Gaming.wallpaperMode === key,
-            css_classes: ["settings-preset-btn"],
-        })
-        btn.connect("toggled", () => {
-            if (!btn.active) return
-            modes.forEach(m => { if (m.key !== key) modeButtons[m.key].active = false })
-            Gaming.setWallpaperMode(key)
+    // Mode selector — the shared segmented control. It used to be a hand-rolled
+    // group of Gtk.ToggleButtons, and a ToggleButton that is already active turns
+    // OFF when clicked: the handler bailed on `!btn.active`, so clicking the
+    // selected mode left the control showing NOTHING selected while that mode was
+    // still in force. `segmentedGroup` has no empty state to fall into.
+    const modeBox = segmentedGroup<WallpaperMode>(
+        [
+            { value: "artwork", label: t("settings.gaming.mode.artwork") },
+            { value: "custom",  label: t("settings.gaming.mode.custom")  },
+            { value: "none",    label: t("settings.gaming.mode.none")    },
+        ],
+        Gaming.wallpaperMode,
+        (mode) => {
+            Gaming.setWallpaperMode(mode)
             updateCustomVisible()
-        })
-        modeButtons[key] = btn
-        modeBox.append(btn)
-    })
+        },
+    )
 
     wallGroup.listBox.append(createRow(
         t("settings.gaming.wallpaper-mode"),

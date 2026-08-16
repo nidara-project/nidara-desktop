@@ -163,7 +163,59 @@ export const sliderRow = (
     opts: NidaraSliderRowOpts = {},
 ) => NidaraSliderRow(label, subtitle, init, min, max, cb, opts, createRow)
 
+// ── Segmented control ─────────────────────────────────────────────────────────
+/**
+ * The linked row of buttons where exactly ONE is selected — Dock size presets,
+ * the Gaming wallpaper mode. One implementation, because there were two and only
+ * one of them was right.
+ *
+ * ⚠️ **A segment is a `Gtk.Button`, never a `Gtk.ToggleButton`.** The Gaming page
+ * built its own group out of ToggleButtons, and a ToggleButton that is already
+ * active turns OFF when clicked: the handler (`if (!btn.active) return`) then bailed
+ * out, leaving the group showing NO selection while a mode was still in force. A
+ * segmented control does not have an empty state — plain buttons plus the
+ * `.nidara-btn--primary` class cannot express one.
+ *
+ * Re-clicking the current segment is a no-op rather than a second `cb`: picking
+ * what is already picked should not re-apply a wallpaper.
+ */
+export const segmentedGroup = <T,>(
+    options: Array<{ label: string; value: T }>,
+    init: T,
+    cb: (v: T) => void,
+): Gtk.Box => {
+    const box = new Gtk.Box({
+        spacing: 0,
+        homogeneous: true,
+        css_classes: ["settings-preset-group", "linked"],
+        valign: Gtk.Align.CENTER,
+    })
+
+    const segments: Array<{ btn: Gtk.Button; value: T }> = []
+    let current = init
+    const paint = () => segments.forEach(({ btn, value }) => {
+        if (value === current) btn.add_css_class("nidara-btn--primary")
+        else btn.remove_css_class("nidara-btn--primary")
+    })
+
+    options.forEach(({ label, value }) => {
+        const btn = new Gtk.Button({ label, css_classes: ["settings-preset-btn"] })
+        btn.connect("clicked", () => {
+            if (value === current) return
+            current = value
+            paint()
+            cb(value)
+        })
+        segments.push({ btn, value })
+        box.append(btn)
+    })
+    paint()
+
+    return box
+}
+
 // ── Preset Button Row ─────────────────────────────────────────────────────────
+/** Numeric presets ("48px", "64px"…) as a segmented row. */
 export const presetRow = (
     label: string,
     subtitle: string,
@@ -171,33 +223,10 @@ export const presetRow = (
     init: number,
     unit: string,
     cb: (v: number) => void,
-) => {
-    const btnBox = new Gtk.Box({
-        spacing: 0,
-        homogeneous: true,
-        css_classes: ["settings-preset-group", "linked"],
-        valign: Gtk.Align.CENTER,
-    })
-
-    const buttons: Gtk.Button[] = []
-    presets.forEach(val => {
-        const btn = new Gtk.Button({
-            label: `${val}${unit}`,
-            css_classes: val === init
-                ? ["settings-preset-btn", "nidara-btn--primary"]
-                : ["settings-preset-btn"],
-        })
-        btn.connect("clicked", () => {
-            buttons.forEach(b => b.remove_css_class("nidara-btn--primary"))
-            btn.add_css_class("nidara-btn--primary")
-            cb(val)
-        })
-        buttons.push(btn)
-        btnBox.append(btn)
-    })
-
-    return createRow(label, subtitle, btnBox)
-}
+) => createRow(
+    label, subtitle,
+    segmentedGroup(presets.map(v => ({ label: `${v}${unit}`, value: v })), init, cb),
+)
 
 // ── Stacked-row field layout ──────────────────────────────────────────────────
 /**
