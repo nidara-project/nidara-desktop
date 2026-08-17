@@ -376,7 +376,7 @@ if sudo pacman -S --needed --noconfirm \
     libastal-io astal-quarrel libastal-gtk4 libastal-apps \
     libastal-hyprland libastal-mpris libastal-battery \
     libastal-notifd libastal-bluetooth libastal-tray libastal-wireplumber \
-    libastal-greet libastal-auth; then
+    libastal-auth; then
     # Lockstep guard: `pacman -S` can "succeed" with STALE versions when nidara-repo
     # hasn't been rebuilt for a pin bump yet (its packages still predate the new
     # *_REF). That would silently install outdated deps AND let §6 record the new
@@ -471,6 +471,10 @@ echo "  Packaging Astal components (in dependency order)..."
 #     meson guard needs `astal-3.0` OR `astal-4-4.0` and libastal-gtk4 satisfies
 #     it; its src/gtk3 JS folder installs unconditionally, so dropping the lib
 #     does not change what astal-gjs ships — only the Astal-3.0 typelib goes.
+#   - lib/greet: the greeter speaks greetd's socket itself since 2026-08-17
+#     (ui/greeter/lib/greetd.ts). Note lib/auth STAYS: AstalAuth is C against
+#     PAM and ships its own PAM config, so the lockscreen cannot absorb it the
+#     way the greeter absorbed this one.
 astal_pkgs=(
     "lib/astal/io|libastal-io"
     "lib/quarrel|astal-quarrel"
@@ -483,7 +487,6 @@ astal_pkgs=(
     "lib/bluetooth|libastal-bluetooth"
     "lib/tray|libastal-tray"
     "lib/wireplumber|libastal-wireplumber"
-    "lib/greet|libastal-greet"
     "lib/auth|libastal-auth"
     "lang/gjs|astal-gjs"
 )
