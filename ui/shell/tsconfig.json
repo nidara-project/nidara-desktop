@@ -4,8 +4,6 @@
     "baseUrl": ".",
     "checkJs": false,
     "jsx": "react",
-    "jsxFactory": "astal.jsx",
-    "jsxFragmentFactory": "astal.Fragment",
     "module": "ES2022",
     "moduleResolution": "node",
     "noEmit": true,
@@ -16,23 +14,11 @@
       "ags/*": [
         "./node_modules/ags/*"
       ],
-      "ags/gtk4/jsx-runtime": [
-        "./node_modules/ags/gtk4/jsx-runtime"
-      ],
       "ags/time": [
         "./node_modules/ags/time"
       ],
       "ags/process": [
         "./node_modules/ags/process"
-      ],
-      "astal": [
-        "./vendor/astal_source/lang/gjs/src"
-      ],
-      "astal/*": [
-        "./vendor/astal_source/lang/gjs/src/*"
-      ],
-      "astal/jsx-runtime": [
-        "./vendor/astal_source/lang/gjs/src/gtk4/jsx-runtime"
       ],
       "astal-girs": [
         "./@girs/index.d.ts"

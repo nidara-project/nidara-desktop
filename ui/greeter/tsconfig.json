@@ -4,8 +4,6 @@
     "baseUrl": ".",
     "checkJs": false,
     "jsx": "react",
-    "jsxFactory": "astal.jsx",
-    "jsxFragmentFactory": "astal.Fragment",
     "module": "ES2022",
     "moduleResolution": "node",
     "noEmit": true,

@@ -6,8 +6,8 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
 
 | Layer | Tech |
 |---|---|
-| Language | TypeScript / TSX → compiled to GJS |
-| UI framework | AGS v3 (Astal + Gnim JSX) |
+| Language | TypeScript (files carry a `.tsx` extension; see the JSX note below) → compiled to GJS |
+| UI framework | AGS v3 — used as a **runtime**, not as a component model (JSX and Gnim's reactivity are unused; see below) |
 | Toolkit | GTK4 (pure — libadwaita fully removed) |
 | Wayland surfaces | gtk4-layer-shell (layer-shell protocol), `Gtk4SessionLock` (ext-session-lock-v1) |
 | Raw Wayland from GJS | **`lib/nidara-wl/`** — the project's own C+GIR shim (see below) |
@@ -22,6 +22,25 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
 | Qt look | Kvantum + qt5ct/qt6ct (synced from the theme engine) |
 
 `@girs/` (≈58 MB of auto-generated GI typings) is **git-ignored**; it only powers local typecheck and editor IntelliSense.
+
+### ⚠️ There is no JSX in this repo, and the `.tsx` extension is a fossil
+
+Measured 2026-08-17 across all three bundles: **zero JSX elements**. Every widget is built
+imperatively (`new Gtk.Box({…})`, `.append()`, `set_child()`), and Gnim's reactivity
+(`createState`/`Accessor`/`createBinding`) appears **only** in the `.d.ts` shims — no runtime use.
+State is ours (`core/Status.ts` + the `core/` facades). The 53 `.tsx` files are `.tsx` by
+extension only; renaming them was judged churn, so the extension stays and this note explains it.
+
+What that means when you write code here: **do not introduce JSX** (nothing wires a pragma any
+more — `jsxFactory` pointed at an `astal` import that was itself dead and was removed), and do not
+reach for AGS's widget helpers or reactive primitives — match the imperative code around you.
+
+It also means AGS is a thinner dependency than it looks. What the shell actually consumes is
+~810 lines: `app.start()` (GApplication single-instance + the socket `ags request` talks to +
+`apply_css`), `ags/process`, `ags/file` — plus `ags/gtk4`, which is a **4-line file** re-exporting
+`Gtk`/`Gdk`/`Astal` and accounts for 125 of the imports. The real AGS value is the *tooling*
+(`ags bundle`, `ags types`, `ags request`), not the framework. Relevant when weighing a migration:
+there is no component-model lock-in to unwind.
 
 ## `lib/nidara-wl/` — the Wayland shim (the project's only native library)
 

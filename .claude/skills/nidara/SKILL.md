@@ -9,7 +9,11 @@ description: "Authoritative reference for working on the Nidara desktop environm
 
 ## What this project is
 
-Nidara is a **full Wayland desktop environment** for Arch Linux — not a theme, not a set of scripts. It registers as a proper Wayland session (like GNOME/KDE) and is launched by the display manager. The compositor is **Hyprland**; the UI is **AGS v3 (Aylur's GTK Shell)** written in **TypeScript/TSX → GJS**, on **GTK4 + gtk4-layer-shell** (libadwaita fully removed), styled with **SCSS** and painted with **Cairo** where shapes get custom (dock squircles, workspace dots, resource rings, schematic).
+Nidara is a **full Wayland desktop environment** for Arch Linux — not a theme, not a set of scripts. It registers as a proper Wayland session (like GNOME/KDE) and is launched by the display manager. The compositor is **Hyprland**; the UI is **TypeScript → GJS** on **GTK4 + gtk4-layer-shell** (libadwaita fully removed), bundled and hosted by **AGS v3 (Aylur's GTK Shell)**, styled with **SCSS** and painted with **Cairo** where shapes get custom (dock squircles, workspace dots, resource rings, schematic).
+
+⚠️ **Widgets are built imperatively — there is no JSX in this repo** and none of Gnim's reactive
+primitives are used, despite the `.tsx` extensions. Read `references/architecture.md` ("There is no
+JSX in this repo") before writing a widget; a JSX-shaped contribution will not match anything here.
 
 The aesthetic is "Nidara literal": heavy-blur glass capsules with a 1px inner white edge, soft outer shadow, top sheen; the accent color is used **only for active/selected state**.
 

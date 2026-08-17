@@ -27,7 +27,7 @@ so every clone is ready to be worked on by an agent out of the box.
 ## Features
 
 - **Compositor**: Hyprland (Wayland) — smooth animations, tiling + floating window management.
-- **Shell**: AGS v3 (TypeScript/TSX) — reactive, modular UI.
+- **Shell**: TypeScript on GTK4, bundled with AGS v3 — modular UI, custom-painted with Cairo.
 - **Bar**: Live clock, workspaces, system tray, resource indicators, system menu with inline power actions.
 - **Activity Island**: A capsule at the center of the bar that morphs into whatever is happening — workspace dots at rest, then media playback, screen recording, a low-battery warning, or the built-in Assistant — and expands into a panel for it.
 - **Assistant**: A built-in AI assistant that lives in the Activity Island (`Super + A`). Bring your own key — Anthropic, OpenAI, Google or SpaceXAI — or run it fully local against Ollama or any OpenAI-compatible endpoint, no key needed. It can read and change Nidara's own settings for you; everything it is allowed to touch is a switch in **Settings → AI**.
