@@ -26,20 +26,18 @@
 // reserved for selection). Chrome color follows the shell appearance pin.
 
 import { Gtk } from "ags/gtk4"
-import AstalBattery from "gi://AstalBattery"
 import Theme from "../core/ThemeManager"
+import * as Battery from "../core/BatteryService"
 import { hexToFloatRgb } from "./DrawingUtils"
 import { DANGER_HEX, SUCCESS_HEX } from "../../lib/status-colors"
 
-const bat = AstalBattery.get_default()
-
 /** A real battery device is present (false on desktops, where the display
  *  device exists but reports is_present = false). */
-export const batteryPresent = () => !!bat && bat.is_present
+export const batteryPresent = Battery.present
 
-/** Charge as a fraction 0..1 (AstalBattery.percentage is a fraction per the
- *  GI docs, NOT 0..100). */
-export const batteryFrac = () => (batteryPresent() ? Math.max(0, Math.min(1, bat!.percentage)) : 0)
+/** Charge as a fraction 0..1. UPower reports 0..100; the conversion lives in
+ *  core/BatteryService.ts, which is the shell's only door to UPower. */
+export const batteryFrac = Battery.fraction
 
 const RED   = hexToFloatRgb(DANGER_HEX)
 const GREEN = hexToFloatRgb(SUCCESS_HEX)
@@ -70,7 +68,11 @@ export function makeBatteryGlyph(box: number, fill = false): Gtk.DrawingArea {
     da.set_draw_func((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
         const f = batteryFrac()
-        const charging = batteryPresent() && bat!.charging
+        // The bolt means "on AC", not "still filling" — so FULLY_CHARGED keeps it.
+        // That is what AstalBattery's `charging` did (it was true at both states),
+        // and the glyph is the one place that conflation was the RIGHT reading, so
+        // it is spelled out here instead of inherited.
+        const charging = batteryPresent() && (Battery.charging() || Battery.charged())
         const c = Theme.chromeIsDark ? 1 : 0   // shell skin (bar + CC) — follows appearance pin
 
         // SVG units → px. The 24-unit box is centred in the allocation; every

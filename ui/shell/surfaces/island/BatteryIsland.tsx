@@ -4,8 +4,7 @@ import { RADIUS } from "../../../lib/tokens"
 import { PANEL_W } from "../../common/widget-kit"
 import { makeBatteryGlyph, batteryFrac } from "../../common/BatteryGlyph"
 import { t } from "../../core/i18n"
-import { safeDisconnect } from "../../core/signals"
-import AstalBattery from "gi://AstalBattery"
+import * as Battery from "../../core/BatteryService"
 
 // The battery-critical expanded surface — the island's auto-expand prototype
 // (opened by the battery activity taking the compact's front, see
@@ -18,7 +17,6 @@ import AstalBattery from "gi://AstalBattery"
 export const BATTERY_GLASS = { radius: RADIUS.xl, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
 
 export default function BatteryIsland(): Gtk.Widget {
-    const bat = AstalBattery.get_default()
 
     const glyph = makeBatteryGlyph(44)   // icon box; the compact's flyer ghost is built at this size too
     const title = new Gtk.Label({
@@ -35,10 +33,8 @@ export default function BatteryIsland(): Gtk.Widget {
         glyph.queue_draw()
     }
     sync()
-    if (bat) {
-        const id = bat.connect("notify", sync)
-        glyph.connect("unrealize", () => safeDisconnect(bat, id))
-    }
+    const dispose = Battery.watch(sync)
+    glyph.connect("unrealize", dispose)
 
     const inner = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL, spacing: 8,

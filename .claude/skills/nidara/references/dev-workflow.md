@@ -993,7 +993,8 @@ AstalMpris itself (`~/.cache/astal/mpris/`); the shell's curl fallback
 
 ### Testing the battery widget on a desktop (no battery)
 
-`AstalBattery` reads UPower's composite **DisplayDevice over the system D-Bus**, so on a
+`core/BatteryService.ts` reads UPower's composite **DisplayDevice** (through
+`UPowerGlib`, direct — AstalBattery was dropped 2026-08-17), so on a
 desktop (`is_present = false`) the battery tiles only render a dim fallback icon and the
 Cairo glyph can't be seen. Fake it with python-dbusmock's `upower` template via
 `scripts/dev/fake-battery.sh` (run as root — it stops `upower.service` and owns
@@ -1018,10 +1019,25 @@ updates without a reload — `Set` emits `PropertiesChanged`). Only the **first*
 `is_present` false→true, which `buildContent` reads at build time — so reload once
 (Super+Shift+R) after the first start, then change values freely.
 
-**Range gotcha:** UPower's `Percentage` is **0–100**, but `AstalBattery.percentage` divides
-it to a **0–1 fraction** (per the GI docs). The widget uses `bat.percentage` (0–1) directly
-for the Cairo fill and `× 100` for the label — an earlier `Math.round(bat.percentage)` in
-the detail panel was a latent "0%/1%" bug, hidden only because desktops never showed it.
+**Range gotcha:** UPower's `Percentage` is **0–100**, and every consumer here is written
+against a **0–1 fraction** — `Battery.fraction()` does that division (AstalBattery used to,
+which is why the convention exists). Reading `device.percentage` straight renders a 47%
+battery as a full one; an earlier `Math.round(bat.percentage)` in the detail panel was a
+latent "0%/1%" bug of the same family, hidden only because desktops never showed it.
+
+⚠️ **Prove the notify path, not just the numbers.** A service that reads its device once
+looks perfect in a screenshot and is frozen from boot (tech-debt #71). `gjs
+scripts/dev/battery-probe.js [seconds]` prints the DisplayDevice and then logs every
+`notify::` it receives; re-seed the mock while it watches and expect
+`PROBE-RESULT LIVE — n notify tick(s)`. With no mock and no battery it correctly reports
+`NO TICKS` — nothing is changing — so run it against the mock or the result means nothing.
+
+🔑 **AstalBattery had no `charged` property**, only `charging`, which was true at
+FULLY_CHARGED *as well as* CHARGING. `widgets/battery.ts` read `bat.charged` anyway, so the
+"Charged" branch was dead and a laptop at 100% on AC read "Charging" forever.
+`BatteryService` keeps `charging()` and `charged()` strictly apart; callers that meant "not
+draining" (the critical-battery activity, and the glyph's bolt, which means *on AC*) ask for
+both explicitly.
 
 ### Testing the built-in Assistant (`nidara-agent`) without a key or network
 

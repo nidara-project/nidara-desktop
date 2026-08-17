@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import AstalMpris from "gi://AstalMpris"
-import AstalBattery from "gi://AstalBattery"
+import * as Battery from "../../core/BatteryService"
 import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT, ISLAND_RECORDING, recordingElapsed } from "../../core/Status"
 import * as media from "../../core/MediaService"
 import { safeDisconnect } from "../../core/signals"
@@ -209,12 +209,14 @@ function recActivity(): IslandActivity {
 // coarse — a 5%→6% wobble must not flap the island): clears on charging or
 // above 7%. Desktops (no real battery) can never go live.
 function batteryActivity(): IslandActivity {
-    const bat = AstalBattery.get_default()
     const CRITICAL_AT = 0.05
     const CLEARS_ABOVE = 0.07
     let critical = false
     const evalCritical = () => {
-        if (!batteryPresent() || bat!.charging) { critical = false; return }
+        // charging OR charged, not just charging: AstalBattery conflated the two
+        // and this check relied on that conflation, so a battery sitting at
+        // FULLY_CHARGED must still count as "not draining".
+        if (!batteryPresent() || Battery.charging() || Battery.charged()) { critical = false; return }
         const f = batteryFrac()
         if (f <= CRITICAL_AT) critical = true
         else if (f > CLEARS_ABOVE) critical = false
@@ -270,7 +272,7 @@ function batteryActivity(): IslandActivity {
         // actually shows — it exists so that stops being true silently.
         indicator: () => { const g = makeBatteryGlyph(16); glyphs.push(g); return g },
         watch: (changed) => {
-            bat?.connect("notify", () => { evalCritical(); syncForms(); changed() })
+            Battery.watch(() => { evalCritical(); syncForms(); changed() })
             evalCritical(); syncForms()
         },
         isLive: () => critical,

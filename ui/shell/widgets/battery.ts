@@ -1,14 +1,11 @@
 import { Gtk } from "ags/gtk4"
 import { PANEL_W } from "../common/widget-kit"
-import AstalBattery from "gi://AstalBattery"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { wrapCapsuleTile } from "../surfaces/control-center/Toggles"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
-import { safeDisconnect } from "../core/signals"
+import * as Battery from "../core/BatteryService"
 import { makeBatteryGlyph, batteryPresent, batteryFrac } from "../common/BatteryGlyph"
-
-const bat = AstalBattery.get_default()
 
 // Glyph + presence/charge readers live in common/BatteryGlyph.ts (shared with
 // the island's battery-critical activity). Semantic fill colors (danger/success,
@@ -26,14 +23,18 @@ function formatTime(seconds: number): string {
     return `${m}m`
 }
 
+// ⚠️ This branch used to be dead. It read `bat.charged` off AstalBattery, which
+// has no such property — so it was always undefined, and since Astal's
+// `charging` was ALSO true at FULLY_CHARGED, a laptop at 100% on AC read
+// "Charging" forever. core/BatteryService keeps the two states apart.
 function getStateText(): string {
     if (!present()) return "—"
-    if (bat!.charged) return t("widget.battery.state.charged")
-    if (bat!.charging) {
-        const ts = formatTime(bat!.time_to_full)
+    if (Battery.charged()) return t("widget.battery.state.charged")
+    if (Battery.charging()) {
+        const ts = formatTime(Battery.timeToFull())
         return ts ? `${t("widget.battery.state.charging")} · ${ts}` : t("widget.battery.state.charging")
     }
-    const ts = formatTime(bat!.time_to_empty)
+    const ts = formatTime(Battery.timeToEmpty())
     return ts ? `${t("widget.battery.state.discharging")} · ${ts}` : t("widget.battery.state.discharging")
 }
 
@@ -44,9 +45,8 @@ const makeGlyph = makeBatteryGlyph
 // Connect a sync callback to the battery's notify signal with auto-cleanup.
 function bindSync(root: Gtk.Widget, sync: () => void) {
     sync()
-    if (!bat) return
-    const id = bat.connect("notify", sync)
-    root.connect("unrealize", () => safeDisconnect(bat, id))
+    const dispose = Battery.watch(sync)
+    root.connect("unrealize", dispose)
 }
 
 // Desktops / no battery: a plain dim icon, same footprint as any other tile.
@@ -206,7 +206,7 @@ const batteryWidget: AtomicWidget = {
     defaultInBar: true,   // laptops only — hardware gate (isAvailable: present) hides it on desktops
     defaultInCc: false,   // situational — lives in the bar by default, available to add to the CC
     isAvailable: present,
-    watchAvailable: (cb) => { bat?.connect("notify::is-present", cb) },
+    watchAvailable: (cb) => { Battery.watchPresence(cb) },
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,
