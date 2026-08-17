@@ -41,11 +41,14 @@ depends=(
   gjs gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 wayland
   # pinned Astal/AGS stack (served by the [nidara] repo)
   aylurs-gtk-shell astal-gjs appmenu-glib-translator
-  libastal-io astal-quarrel libastal-gtk3 libastal-gtk4 libastal-apps
-  libastal-hyprland libastal-mpris libastal-network libastal-battery
+  # (no libastal-network / libastal-gtk3 — see install.sh's astal_pkgs for why)
+  libastal-io astal-quarrel libastal-gtk4 libastal-apps
+  libastal-hyprland libastal-mpris libastal-battery
   libastal-notifd libastal-bluetooth libastal-tray libastal-wireplumber
   libastal-greet libastal-auth
-  # services the shell talks to
+  # services the shell talks to. networkmanager is load-bearing TWICE over: the
+  # daemon, and `libnm` (its dep) for the NM-1.0 typelib core/NetworkService.ts
+  # imports — that typelib used to arrive via libastal-network.
   networkmanager bluez bluez-libs bluez-utils upower accountsservice
   pipewire pipewire-audio pipewire-alsa pipewire-pulse wireplumber libpulse
   xdg-desktop-portal-gtk xdg-desktop-portal-hyprland

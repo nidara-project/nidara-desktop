@@ -100,9 +100,13 @@ phase_deps() {
     # Astal libs, dependency order (io first) — mirrors install.sh's astal_pkgs.
     git clone https://github.com/Aylur/astal.git /opt/src/astal
     git -C /opt/src/astal checkout --quiet "$ASTAL_REF"
+    # Same set install.sh's astal_pkgs builds, and for the same reasons — the two
+    # lists must move together (the cache key hashes BOTH files so a drift can't
+    # be masked by a stale tarball). lib/network and lib/astal/gtk3 are absent on
+    # purpose; booting the shell here is what proves they are not needed.
     local astal_subdirs=(
-        lib/astal/io lib/quarrel lib/astal/gtk3 lib/astal/gtk4
-        lib/apps lib/hyprland lib/mpris lib/network lib/battery
+        lib/astal/io lib/quarrel lib/astal/gtk4
+        lib/apps lib/hyprland lib/mpris lib/battery
         lib/notifd lib/bluetooth lib/tray lib/wireplumber lang/gjs
     )
     local sub

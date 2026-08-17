@@ -373,8 +373,8 @@ sudo pacman -Syu --needed --noconfirm $PACMAN_DEPS
 echo "  Installing the Astal/AGS stack from nidara-repo (prebuilt)..."
 if sudo pacman -S --needed --noconfirm \
     aylurs-gtk-shell appmenu-glib-translator \
-    libastal-io astal-quarrel libastal-gtk3 libastal-gtk4 libastal-apps \
-    libastal-hyprland libastal-mpris libastal-network libastal-battery \
+    libastal-io astal-quarrel libastal-gtk4 libastal-apps \
+    libastal-hyprland libastal-mpris libastal-battery \
     libastal-notifd libastal-bluetooth libastal-tray libastal-wireplumber \
     libastal-greet libastal-auth; then
     # Lockstep guard: `pacman -S` can "succeed" with STALE versions when nidara-repo
@@ -463,15 +463,21 @@ build_install_pkg "$appmenu_dir"
 # adding it there too — here it changes nothing, there it is the difference
 # between a package building and a release dying halfway through.
 echo "  Packaging Astal components (in dependency order)..."
+# What is NOT in this list, and why (a lib absent here is a decision, not an
+# oversight — re-adding one is a change of mind about who owns that domain):
+#   - lib/network: the shell reads NetworkManager through libnm directly since
+#     2026-08-17 (tech-debt #71), so nothing loads AstalNetwork any more.
+#   - lib/astal/gtk3: nothing in the three bundles imports gtk3. astal-gjs's
+#     meson guard needs `astal-3.0` OR `astal-4-4.0` and libastal-gtk4 satisfies
+#     it; its src/gtk3 JS folder installs unconditionally, so dropping the lib
+#     does not change what astal-gjs ships — only the Astal-3.0 typelib goes.
 astal_pkgs=(
     "lib/astal/io|libastal-io"
     "lib/quarrel|astal-quarrel"
-    "lib/astal/gtk3|libastal-gtk3"
     "lib/astal/gtk4|libastal-gtk4"
     "lib/apps|libastal-apps"
     "lib/hyprland|libastal-hyprland"
     "lib/mpris|libastal-mpris"
-    "lib/network|libastal-network"
     "lib/battery|libastal-battery"
     "lib/notifd|libastal-notifd"
     "lib/bluetooth|libastal-bluetooth"

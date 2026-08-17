@@ -187,6 +187,10 @@ jobs:
           ls -l /dev/dri
       # The built Astal/AGS/appmenu stack is cached as a tarball. Key parts:
       #   - install.sh hash → covers the pinned refs (they live there)
+      #   - headless-smoke.sh hash → covers WHICH libs get built. Keying on
+      #     install.sh alone was a trap: the subdir list lives in the smoke
+      #     script, so dropping a lib there would have restored a tarball that
+      #     still contained it and "proved" a removal that never happened.
       #   - month stamp → archlinux:latest moves; a monthly rebuild bounds the
       #     window for soname drift between cached binaries and fresh pacman libs
       - name: Compute cache month stamp
@@ -201,7 +205,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: deps-cache/nidara-deps.tar.zst
-          key: smoke-deps-v2-${{ steps.stamp.outputs.month }}-${{ hashFiles('install.sh') }}
+          key: smoke-deps-v2-${{ steps.stamp.outputs.month }}-${{ hashFiles('install.sh', 'scripts/ci/headless-smoke.sh') }}
       - name: Build deps + bundle + headless boot (Arch container on vkms)
         run: |
           mkdir -p deps-cache
@@ -214,7 +218,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: deps-cache/nidara-deps.tar.zst
-          key: smoke-deps-v2-${{ steps.stamp.outputs.month }}-${{ hashFiles('install.sh') }}
+          key: smoke-deps-v2-${{ steps.stamp.outputs.month }}-${{ hashFiles('install.sh', 'scripts/ci/headless-smoke.sh') }}
       - name: Upload screenshots + logs
         if: always()
         uses: actions/upload-artifact@v4

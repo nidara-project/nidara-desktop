@@ -692,11 +692,27 @@ enumeration; rendering is kms_swrast/llvmpipe), runs the bundle exactly as produ
 listActions`/`dumpState` don't answer with valid JSON, or the boot log contains `JS ERROR`.
 It then grims a desktop + Control Center screenshot into the `smoke-artifacts` artifact for
 HUMAN review — deliberately not a pixel diff (rejected as fragile). The built dependency
-stack is cached as a tarball keyed on `install.sh`'s hash + a month stamp (bounds soname
-drift against the moving `archlinux:latest`); Hyprland refuses root, so the boot phase
+stack is cached as a tarball keyed on `install.sh`'s hash **+ `headless-smoke.sh`'s** + a month
+stamp (bounds soname drift against the moving `archlinux:latest`); Hyprland refuses root, so the boot phase
 re-runs the script as an unprivileged `ci` user (`run` subcommand). Note the smoke job
 builds the COMMITTED tree (it does not re-run the widget codegen — staleness is the
 `widgets-gen` job's gate).
+
+⚠️ **The list of Astal libs to build lives in TWO files** — `install.sh`'s `astal_pkgs` and the
+smoke's `astal_subdirs` — and they must move together. Until 2026-08-17 the cache key hashed
+only `install.sh`, which made "we no longer need lib X" **unfalsifiable in CI**: drop X from the
+smoke list alone and the restored tarball still contains it, so the shell boots and the removal
+looks proven. The key now hashes both files. When you drop a lib, the smoke building the stack
+WITHOUT it and still booting is the proof — check the run actually rebuilt (cache miss), or it
+proved nothing.
+
+🔑 **A missing Astal lib does not necessarily break the shell, and that cuts both ways.**
+astal-gjs's `overrides.ts` imports ~10 `gi://Astal*` modules through a `suppress()` wrapper that
+swallows the failure, so an absent lib silently skips its array-getter patches instead of
+throwing. Live proof that this path is real, not theoretical: **`AstalPowerProfiles` is in that
+list and has never been installed on any Nidara machine** — it is not in `install.sh`'s package
+set at all — and the shell has always booted. So (a) removing a lib we do not import is safe by
+construction, and (b) you cannot conclude "the lib is needed" from the shell merely *starting*.
 
 The SCSS job is pure JS. The typecheck job can't run
 `ags types` (no ags binary / Astal libs on a runner), so it downloads a ~4 MB compressed
