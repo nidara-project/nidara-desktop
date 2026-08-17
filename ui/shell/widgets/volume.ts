@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import { PANEL_W } from "../common/widget-kit"
 import AstalWp from "gi://AstalWp"
-import { makeVolumeSlider } from "../../lib/nidara-kit"
+import { makeVolumeSlider, bindWhileRealized } from "../../lib/nidara-kit"
 import { VolumeWidget } from "../surfaces/control-center/Sliders"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { t } from "../core/i18n"
@@ -13,15 +13,24 @@ import { NidaraButton } from "../../lib/nidara-kit/button"
 // ── Bar icon (dynamic, reflects mute/volume level) ────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    const speaker = AstalWp.get_default()?.audio?.default_speaker
-    const getIcon = () => speaker ? AudioSvc.targetVolumeIcon(speaker) : Icons.volumeMuted
+    // Resolved on every use, never captured: this runs at shell start, where the
+    // default endpoint may not exist yet — captured, that null is permanent and the
+    // bar icon is stuck on "muted" for the session. Same reason as the CC tile
+    // (surfaces/control-center/Sliders.tsx).
+    const speaker = () => AudioSvc.defaultSpeaker()
+    const getIcon = () => { const s = speaker(); return s ? AudioSvc.targetVolumeIcon(s) : Icons.volumeMuted }
 
     const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
 
-    if (speaker) {
-        const dispose = AudioSvc.watchVolume(speaker, () => { image.gicon = getIcon() })
-        image.connect("unrealize", dispose)
-    }
+    // Re-read AND re-subscribed on every realize, and re-targeted when the default
+    // endpoint changes: a bare unrealize-cleanup is a subscription that survives
+    // exactly one hide.
+    bindWhileRealized(image, () => {
+        image.gicon = getIcon()
+        const stopDevices = AudioSvc.watchDevices(() => { image.gicon = getIcon() })
+        const stopVolume = AudioSvc.watchVolume(speaker(), () => { image.gicon = getIcon() })
+        return () => { stopVolume(); stopDevices() }
+    })
 
     return image
 }

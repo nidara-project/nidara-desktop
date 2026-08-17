@@ -2,7 +2,22 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # nidara-after-sleep — hypridle after_sleep_cmd
 # Installed to /usr/bin/nidara-after-sleep
-# Re-enables the displays after wake (DPMS) and restores the saved volume.
+# Re-enables the displays after wake (DPMS).
+#
+# It used to also restore the volume saved by nidara-before-sleep into
+# /tmp/.nidara-vol. That was added 2026-05-09 ("waits for WP stabilisation →
+# restores vol") and the stack it worked around has moved on: measured
+# 2026-08-17 on pipewire 1.6.8 / wireplumber 0.5.15, the volume survives both a
+# suspend/resume with the restore disabled AND a full power cycle (where the
+# /tmp file does not even exist), because WirePlumber persists it in
+# ~/.local/state/wireplumber/.
+#
+# What the pair still did was WRITE the user's volume from a file, which made it
+# the only thing on the system that could change the volume behind their back:
+# any wake where the save half did not refresh the file re-applied a stale value.
+# A restore is only safe while it is also necessary; this one had stopped being
+# necessary and kept the risk. Do not reintroduce it without re-measuring the
+# two experiments above.
 # ─────────────────────────────────────────────────────────────────────────────
 
 sleep 0.5
@@ -10,9 +25,4 @@ sleep 0.5
 # Nidara's Hyprland. If this line breaks, the screen stays black after every
 # wake with no recovery path beyond a blind TTY login — treat it as critical.
 hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })'
-
-# Restore volume once PipeWire is back up
-sleep 1.5
-v=$(cat /tmp/.nidara-vol 2>/dev/null)
-[ -n "$v" ] && wpctl set-volume @DEFAULT_SINK@ "$v" 2>/dev/null
 exit 0

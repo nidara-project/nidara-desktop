@@ -420,7 +420,17 @@ export function makeVolumeSlider(target: any, opts: {
         onValueChanged: (v) => opts.onValueChanged?.(v),
         onExtChange: (cb) => {
             if (!target?.connect) return () => {}
-            const id = target.connect("notify::volume", () => { cb((target.volume ?? 0) * 100); opts.onExternal?.() })
+            // PRIMES before connecting. `value` above is read once, when the widget is
+            // built, and this hook runs again on every realize (bindWhileRealized), so
+            // reading here is what makes a re-opened panel show the CURRENT volume
+            // rather than the one it was built with — and what covers an endpoint whose
+            // properties AstalWp had not populated yet at build time. Without it the
+            // widget only ever learns about volume changes that happen while it is on
+            // screen; the Control Center's own tile shipped that way in 0.7.1 and read
+            // 0% from login (see surfaces/control-center/Sliders.tsx).
+            const sync = () => { cb((target.volume ?? 0) * 100); opts.onExternal?.() }
+            sync()
+            const id = target.connect("notify::volume", sync)
             return () => safeDisconnect(target, id)
         },
         debounce: 24,
