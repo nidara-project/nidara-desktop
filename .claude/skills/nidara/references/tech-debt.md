@@ -458,10 +458,33 @@ by accident — brightness `pollWhileMapped`s every 2 s, so it re-reads whether 
 it. Fixed by resolving the endpoint through a getter (never captured), priming inside `onExtChange`,
 and re-targeting on `notify::default-speaker` via `AudioSvc.watchDevices`.
 🔑 **The rule for CC widgets specifically: a spec is built ONCE, at shell start, so nothing in it may
-capture a service endpoint or a value read from one.** The kit's slider already states the contract
-(`nidara-kit/slider.ts`: callers whose `onExtChange` primes re-read on every realize) — the volume
-tile simply did not hold it. **The rest of the CC has not been swept for this**, and neither has any
-other surface built at start-up; that sweep is open work.
+capture a service endpoint or a value read from one.** More precisely, `buildContent` re-runs on a CC
+layout/size rebuild and NOT on open (the note in `MediaIsland.tsx` is the authority), so for a user
+who never rearranges tiles, "once at shell start" is the whole session. The kit's slider already
+states the contract (`nidara-kit/slider.ts`: callers whose `onExtChange` primes re-read on every
+realize) — the volume tile simply did not hold it.
+
+**✅ The rest of the CC WAS swept, 2026-08-17 (all 16 widgets + the CC surfaces), and there is no
+second instance.** Recording the result so it is not re-run blindly:
+
+- **Nothing else freezes a VALUE.** The volume tile was alone in reading into a `const` and handing
+  the builder a closure over the number. Every other tile passes live getters —
+  focus/bluetooth/night-light/dark-mode/vpn/screenrecord read through a function on each call, media
+  keeps one shared subscribed state, and brightness `pollWhileMapped`s.
+- **Captures that remain, and why each is not this bug:** `buildCCDetail`/`buildBarExpanded`
+  (volume.ts) resolve when the panel is opened, by which time the endpoint exists;
+  `NotificationPopups` captures AstalNotifd, which cannot be absent because the shell IS that daemon;
+  `battery.ts`/`common/BatteryGlyph.ts` capture the UPower client at module import, but read
+  `is_present`/`percentage` live through it, so only a null client at import would bite.
+- ⚠️ **Wi-Fi and Ethernet look exactly like the family and must NOT be "fixed" the same way.**
+  `Toggles.tsx` captures `AstalNetwork.get_default()?.wifi` / `?.wired` at spec build, and
+  `widgets/wifi.ts` + `widgets/ethernet.ts` do the same — but re-resolving through a getter would
+  change nothing, because the limitation is one layer DOWN: the service itself binds its device at
+  init and never learns about one added later (**#22**, where the fix is written: watch NM's device
+  list reactively in `core/NetworkService`, not at construction). A getter in the widget would be
+  fix-shaped and inert — the tile would keep asking an object that never gains the device. The tell
+  that these two are a different bug: the volume endpoint DID exist and populate later and the widget
+  was the thing holding it wrong; here the widget is right and its source is empty.
 
 ### 13. Lockscreen GTK4 segfault when a wl_output vanishes — upstream, mitigated by watchdog
 On wake-from-suspend the DP link re-trains and the wl_output disappears for ~1 s; GTK
