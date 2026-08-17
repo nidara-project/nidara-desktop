@@ -5,6 +5,97 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] — 2026-08-17
+
+A settings release. Every one of Settings' 21 pages was read line by line against
+what it actually reads and writes, and most of what follows is what that found:
+controls that showed a value from when the window opened, controls that wrote a
+key nothing reads, and two controls fighting over one setting.
+
+### Fixed
+
+- **The pointer kept the old cursor until you left the window.** Changing the
+  cursor theme or size did nothing you could see until you moved the pointer out
+  of whatever window you changed it from. Two separate faults: the accessibility
+  page and the appearance page each had a cursor-size control and only one of them
+  reached the compositor, and Hyprland only repaints the pointer when it is told a
+  *different* shape name — so the shell now names another shape and names the
+  original straight back, in one pass, with nothing composited in between.
+
+- **Settings pages showed you the state of the world when the window opened.**
+  Nearly every page asked the system once, at build time, and a frozen value looks
+  exactly like a correct one. The pages that show a value read it again when you
+  come back to them now — text size, the AI provider's fields, appearance, the
+  users list, the VPN list, and the rest.
+
+- **Choosing a default web browser never took effect.** The row wrote `text/html`,
+  while everything that opens a link reads `x-scheme-handler/http`. The other rows
+  were partial in the same way: "Image viewer" set only `image/jpeg`, so a PNG kept
+  opening in the old app. Each row now writes its whole category — and offers only
+  applications that actually handle it, instead of listing a text editor as a
+  candidate web browser.
+
+- **Do Not Disturb could only be switched on.** The bar toggle set the flag and
+  had no path back to off.
+
+- **Two keyboard controls wrote one setting, and the one that lost reset your
+  variant.** Related: a layout the dropdown does not know about — `es,us`, or any
+  XKB variant — was displayed as "English (US)", one click away from making that
+  display true and wiping your second layout. A value the list does not contain is
+  now shown as itself rather than rounded down to the first entry.
+
+- **"Enable animations" quieted your applications and left the desktop moving.**
+  It wrote a GNOME key that GTK reads and Nidara never did, so overlays kept
+  popping, the dock kept springing and Hyprland kept animating every window and
+  workspace. It is now "Reduce motion", and it is the real thing.
+
+- **Opening Settings rewrote a file your login reads.** All 21 pages are built when
+  the window opens, so Region's locale dropdown ran every time and wrote
+  `region.json` and `~/.config/environment.d/nidara-locale.conf` no matter which
+  page you actually wanted. The writes were byte-identical, which is why nothing
+  ever looked wrong.
+
+- **Leaving a game put your power profile on Balanced.** Game mode captured
+  nothing on the way in and set a constant on the way out, so a session started
+  from Power saver ended somewhere else with nothing said.
+
+- **A second monitor showed two controls for one setting.** Options that are global
+  were drawn once per screen, so changing one left the other showing the old value.
+
+- **Settings could take on a key but never drop one**, so a retired setting
+  outlived the code that gave it meaning.
+
+- **The Gaming page's wallpaper selector could end up showing nothing selected**
+  while a mode was still in force — clicking the already-selected segment turned it
+  off. Settings had two segmented controls with the same look and different
+  mechanics; there is one now.
+
+- **The window menu acted on a window the bar had already stopped naming**, and the
+  Activity Island could paint chips in places clicks never reached.
+
+- **Two of the four shell surfaces never noticed the monitor changing shape**, so a
+  resolution or scale change left them measuring against the old geometry.
+
+- **The Assistant's pointer work took away the focus it had just set**, which broke
+  the step right after it.
+
+- **Ten languages carried two Settings descriptions that no longer matched.** The
+  English had been rewritten to say a change is system-wide rather than account-only;
+  the translations still said "requires a session restart". A missing translation
+  falls back to English and looks untranslated — one that has gone stale reads
+  perfectly and is wrong, so CI now tracks both.
+
+### Changed
+
+- **The nidara package declares the build dependencies it actually uses.** Two of
+  them existed in the release build container only because another package happened
+  to pull them in first. That is the exact shape of the fault that killed the v0.7.0
+  release halfway through.
+
+- **Sliders, settings rows and group footers moved into the shared kit**, so they
+  pick up the accent and the light/dark surface the same way everywhere instead of
+  four pages each building their own.
+
 ## [0.7.0] — 2026-08-11
 
 ### Fixed
