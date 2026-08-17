@@ -56,9 +56,9 @@ export default {
 
     "settings.region.locale.group": "言語と形式",
     "settings.region.locale.lang": "言語(ロケール)",
-    "settings.region.locale.lang.desc": "セッションの再起動が必要です",
+    "settings.region.locale.lang.desc": "アカウントだけでなくシステム全体に適用されます。次回ログイン時に反映されます。",
     "settings.region.locale.regional": "地域設定の形式",
-    "settings.region.locale.regional.desc": "日付、数値、通貨、単位に使用するロケールです。次回ログイン時に反映されます。",
+    "settings.region.locale.regional.desc": "日付、数値、通貨、単位。自分のアカウントのみ、次回ログインから反映されます。",
     "settings.region.locale.regional.same": "言語と同じ",
 
 

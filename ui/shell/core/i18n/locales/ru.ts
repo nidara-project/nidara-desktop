@@ -56,9 +56,9 @@ export default {
 
     "settings.region.locale.group": "Язык и форматы",
     "settings.region.locale.lang": "Язык (локаль)",
-    "settings.region.locale.lang.desc": "Требуется перезапуск сеанса",
+    "settings.region.locale.lang.desc": "Для всей системы, а не только для вашей учётной записи. Вступит в силу при следующем входе.",
     "settings.region.locale.regional": "Региональный формат",
-    "settings.region.locale.regional.desc": "Локаль, используемая для дат, чисел, валюты и единиц измерения. Вступит в силу при следующем входе в систему.",
+    "settings.region.locale.regional.desc": "Даты, числа, валюта и единицы измерения. Только ваша учётная запись, со следующего входа.",
     "settings.region.locale.regional.same": "Как язык интерфейса",
 
 

@@ -56,9 +56,9 @@ export default {
 
     "settings.region.locale.group": "Taal en notaties",
     "settings.region.locale.lang": "Taal (locale)",
-    "settings.region.locale.lang.desc": "Vereist een herstart van de sessie",
+    "settings.region.locale.lang.desc": "Systeembreed, niet alleen je account. Wordt van kracht bij de volgende aanmelding.",
     "settings.region.locale.regional": "Regionale notatie",
-    "settings.region.locale.regional.desc": "Locale gebruikt voor datums, getallen, valuta en eenheden. Wordt van kracht bij de volgende aanmelding.",
+    "settings.region.locale.regional.desc": "Datums, getallen, valuta en eenheden. Alleen je account, vanaf de volgende aanmelding.",
     "settings.region.locale.regional.same": "Hetzelfde als taal",
 
 

@@ -777,6 +777,42 @@ Type-wise, `t()` is typed `key: keyof typeof en` (`en` is the canonical key sour
 licence to skip es. (It used to derive from `es`, which broke the typecheck on every new key —
 fixed in `core/i18n/index.ts`.)
 
+#### The translation ledger (`scripts/ci/i18n-check.mjs`) — a CI GATE
+
+```bash
+node scripts/ci/i18n-check.mjs                     # report: per locale, untranslated + stale
+node scripts/ci/i18n-check.mjs --check             # the gate, as CI runs it
+node scripts/ci/i18n-check.mjs --sync              # after adding/rewriting ENGLISH strings
+node scripts/ci/i18n-check.mjs --translated de,fr  # after actually TRANSLATING those locales
+```
+
+Deferring ten locales to a bulk pass is the policy; having no record of what that pass owes was
+the bug. v0.6.0 and v0.7.0 both shipped 82 keys short in those ten, and the number reached 84
+with nothing anywhere noting it had moved. `ui/shell/core/i18n/translation-state.json` is the
+record — committed, machine-managed — and the gate fails when it no longer matches the catalogs,
+so **a PR that adds an untranslated string carries the new count in its own diff**.
+
+It tracks the invisible failure too. A key can be present *and* wrong: translated once, then the
+English rewritten underneath it. That renders a confident sentence that no longer matches the
+product, which is worse than the English fallback a missing key gives you — and nothing could
+detect it, because nothing recorded which English a translation was made from. The ledger stores
+a hash of every English string as of the last reconciliation; when one changes, every locale still
+holding the old wording is listed as `stale`.
+
+⚠️ **`--sync` and `--translated` are not interchangeable.** `--sync` is bookkeeping and never
+claims a translation is current; `--translated <locale>` is the only thing that clears a locale's
+stale list, and it is a statement of fact about work you actually did. Equally, never "start
+clean" by deleting the ledger and re-syncing — with no prior basis, every translation is declared
+current and all outstanding drift disappears silently. It was seeded (2026-08-17) by walking each
+locale's git history for the English in effect the last time each key's translated value changed;
+rebuild it that way or not at all.
+
+Hard failures, independent of the ledger, because these must always be zero: a catalog that does
+not parse or yields < 50 keys, a duplicate key inside a catalog (the later one silently wins), an
+orphan key left behind by a retired English one, an `en` key missing from `es`, and a
+greeter/lockscreen mini-catalog missing a language or a key (those two are duplicated per bundle
+by hand, so their parity is checked rather than assumed).
+
 ### Fonts & CJK variants
 
 The UI font is **Inter** (ThemeManager seeds `Inter 11` into the `font-name` gsetting on first

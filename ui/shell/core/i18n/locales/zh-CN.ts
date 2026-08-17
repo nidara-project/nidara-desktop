@@ -56,9 +56,9 @@ export default {
 
     "settings.region.locale.group": "语言与格式",
     "settings.region.locale.lang": "语言(区域设置)",
-    "settings.region.locale.lang.desc": "需要重启会话",
+    "settings.region.locale.lang.desc": "适用于整个系统，而不仅是当前账户。下次登录时生效。",
     "settings.region.locale.regional": "区域格式",
-    "settings.region.locale.regional.desc": "用于日期、数字、货币和单位的区域设置,将在下次登录时生效。",
+    "settings.region.locale.regional.desc": "日期、数字、货币和单位。仅适用于当前账户，从下次登录开始生效。",
     "settings.region.locale.regional.same": "与界面语言相同",
 
 

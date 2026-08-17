@@ -95,7 +95,10 @@ nidara-agent                      # the built-in Assistant's BRAIN: a BYOK LLM t
 nidara-mcp                        # all of the above as MCP tools over stdio (incl. list_windows/list_workspaces (reads), focus_window (ungated WM op), query_app → nidara-a11y, do_app_action → nidara-act, type_text/press_key → nidara-type, click_app/click_at (left + button:"right") / hover_app/hover_at / scroll_app/scroll_at / drag_app/drag_at → nidara-click; WM action verbs via run_action; .mcp.json: repo root for dev; installer-managed copy in ~/.config/nidara/ for users)
 ```
 
-CI gates SCSS compile, typecheck, widget-registry freshness **and a headless boot smoke**:
+CI gates SCSS compile, typecheck, widget-registry freshness, **translation parity + the
+translation ledger** (`scripts/ci/i18n-check.mjs` — the bulk-translated locales are allowed to owe
+keys, but the debt can't move without the number moving in the PR's diff; see `dev-workflow.md`)
+**and a headless boot smoke**:
 the smoke job builds the pinned Astal/AGS stack in an Arch container, bundles the shell,
 boots it on a real Hyprland over a virtual display (kernel vkms + llvmpipe) and fails on death, silent IPC,
 or JS errors; screenshots are uploaded as artifacts for human review. The typecheck job

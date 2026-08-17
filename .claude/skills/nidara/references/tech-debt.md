@@ -1685,6 +1685,24 @@ These were paid down; the *rule* remains:
   README counter 11 → 12. Not yet native-reviewed (same gate as the other 11
   languages — see the translation-wave native-review follow-up). Same shape of
   future candidate: zh-TW (today `zh_TW` → zh-CN).
+- **The bulk-translated locales owe 84 keys each, and that number is now WRITTEN DOWN**
+  (2026-08-17). `en`/`es` carry 698 keys; the other ten carry 614. The gap is mostly the
+  Assistant surface (`settings.ai.*`, `island.agent.*`, 57 keys) and it is not new — v0.6.0
+  and v0.7.0 both shipped it. What was wrong is that it moved from 82 to 84 across those two
+  releases with nothing recording it, because the workflow's "defer the other ten to a bulk
+  pass" had no artifact and therefore no floor. `ui/shell/core/i18n/translation-state.json`
+  is that artifact and `scripts/ci/i18n-check.mjs --check` is the CI gate; the debt is
+  allowed, but it cannot move without the number moving in the PR's own diff.
+  **The gate also catches the failure mode nothing could see before**: a key whose English
+  was rewritten AFTER it was translated. That one is worse than a missing key, because a
+  missing key falls back to English and looks obviously untranslated, while a stale one
+  renders a fluent sentence that is no longer true. Seeding the ledger from git history
+  found two live cases — `settings.region.locale.lang.desc` / `.regional.desc`, rewritten
+  on 08-16 to draw the system-wide-vs-account distinction while all ten locales still said
+  "requires a session restart". Fixed in the same change. Workflow: `--sync` after touching
+  English (bookkeeping, never claims a translation is current), `--translated <locale>`
+  after actually translating one. Do NOT rebuild the ledger by deleting it and re-syncing —
+  with no prior basis every translation is declared current and outstanding drift vanishes.
 - **Clock day/month names come from LC_TIME via GLib `%a/%A/%b/%B`** — every installed
   locale is localized for free (the clock follows the "Regional Format" setting, like
   Gtk.Calendar and macOS/GNOME). `formatDatePart()` derives the date order from the

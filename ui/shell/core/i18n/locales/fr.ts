@@ -56,9 +56,9 @@ export default {
 
     "settings.region.locale.group": "Langue et formats",
     "settings.region.locale.lang": "Langue (locale)",
-    "settings.region.locale.lang.desc": "Nécessite un redémarrage de session",
+    "settings.region.locale.lang.desc": "Pour tout le système, pas seulement votre compte. Prend effet à la prochaine connexion.",
     "settings.region.locale.regional": "Format régional",
-    "settings.region.locale.regional.desc": "Locale utilisée pour les dates, nombres, devises et unités. Prend effet à la prochaine connexion.",
+    "settings.region.locale.regional.desc": "Dates, nombres, devises et unités. Votre compte uniquement, dès la prochaine connexion.",
     "settings.region.locale.regional.same": "Comme la langue",
 
 

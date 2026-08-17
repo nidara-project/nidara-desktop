@@ -277,6 +277,22 @@ jobs:
       - name: Wrapping prose fills its column (must succeed)
         run: node scripts/ci/wrapping-prose-check.mjs
 
+  i18n:
+    name: Translations (parity + ledger)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      # Two releases shipped with 82 keys missing from ten locales and nobody noticed
+      # the number move to 84, because no artifact recorded it. This fails when the
+      # committed ledger no longer matches the catalogs — so untranslated and stale
+      # keys land in the PR's own diff — and on the parity rules that must always be
+      # zero (es out of sync with en, orphan keys, greeter/lock mini-catalogs).
+      - name: Translation ledger is fresh + parity holds (must succeed)
+        run: node scripts/ci/i18n-check.mjs --check
+
   agent-loop:
     name: Assistant loop (nidara-agent)
     runs-on: ubuntu-latest
