@@ -415,6 +415,34 @@ than parsing an address by hand.
 ⚠️ **Never send a diagnosable failure to `console.debug` in GJS** — it is suppressed unless
 `G_MESSAGES_DEBUG` is set, which turns a broken feature into a silent one. `console.warn`.
 
+### The app grid has no focused search box — and its Enter has a HINT, not a cursor
+
+Worth reading before touching `surfaces/app-grid/AppGrid.tsx`'s keyboard, because the obvious
+mental model is wrong. The grid holds a focus grab, so **every key arrives at one window-level
+`handleKey`**; the search box never receives a keystroke. Characters are pushed into its buffer by
+hand (`searchInsert`/`searchBackspace`, and they must also `set_position(-1)` — a GtkEntryBuffer
+has no caret, so writes to it leave the cursor at column 0 forever). There is therefore **no focus
+to move between the search box and the grid**: what decides where a key goes is the plain variable
+`navIdx` (-1 = nobody is arrowing) plus `wsNav` for the workspace strip.
+
+That is why "Enter opens the top result" (2026-08-18) is not a focus change. `filterApps` ends by
+ringing the first result with `flowbox.select_child` — and **deliberately leaves `navIdx` at -1**,
+because it is a hint, not a cursor: were it a cursor, the very next character typed would hit
+`handleKey`'s `if (navIdx >= 0) returnToSearch()` branch (which exists to leave the grid when you
+start typing again) and every keystroke would tear down the highlight it had just placed. Arrow
+keys set `navIdx` through `focusAt` and take over from there, which is why `highlightTopResult`
+bails while somebody is navigating. The two states are visually distinct and were verified on
+screen: `:selected` paints the plate's accent ring (the hint), `:focus` adds the button fill on top
+(you are standing here) — see `_app-grid.scss`.
+
+Two edges that only exist because of the hint, and both are handled: the ring is dropped when the
+workspace strip takes the cursor (`focusWsSlot`), since Enter there switches workspace and a ringed
+app would be advertising the wrong key; and it is restored by `returnToSearch`, whose ws-strip
+Backspace caller never touches the buffer and so would otherwise strand a query with no hit marked.
+The Enter fallback is gated on a non-empty query: with the grid unfiltered "the first one" is
+whatever sorts first alphabetically, and a stray Enter opening Add/Remove Software is worse than an
+Enter that does nothing.
+
 ### Focus grab — modality that the compositor enforces
 
 `focus_grab_*()` speaks `hyprland-focus-grab-v1`. From the shell go through

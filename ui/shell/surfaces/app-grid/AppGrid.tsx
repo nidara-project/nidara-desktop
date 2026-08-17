@@ -136,6 +136,9 @@ export default function AppGridPanel(
         wsNav = Math.max(1, Math.min(wsId, 5))
         syncWsStrip()
         searchBox.remove_css_class("search-active")
+        // Drop the top-result ring: while the strip holds the cursor, Enter
+        // switches workspace, so a ringed app would be advertising the wrong key.
+        flowbox.unselect_all()
     }
 
     const clearWsNav = () => {
@@ -576,10 +579,50 @@ export default function AppGridPanel(
     }
 
     // ── Filter + sort ──────────────────────────────────────────────────────
+    // `navIdx` and `getVisibleChildren` are declared HERE, above their users in
+    // both this section and the keyboard section, because `filterApps` reads them
+    // on every keystroke. They used to live with the arrow keys; leaving them
+    // there works only as long as nothing calls `filterApps` before that line
+    // runs, which is a temporal-dead-zone crash waiting for a reorder.
+
+    /** -1 = nobody is arrowing. Only `focusAt`/`returnToSearch` move it. */
+    let navIdx = -1
+
+    const getVisibleChildren = (): Gtk.FlowBoxChild[] => {
+        const result: Gtk.FlowBoxChild[] = []
+        let c = flowbox.get_first_child()
+        while (c) {
+            if (c.visible) result.push(c as Gtk.FlowBoxChild)
+            c = c.get_next_sibling()
+        }
+        return result
+    }
+
     const updateNoResults = () => {
         const empty = !!currentMatchIds && currentMatchIds.size === 0
         noResults.set_visible(empty)
         scrollOverlay.set_visible(!empty)
+    }
+
+    /**
+     * With a query typed, ring the top result so it is VISIBLE which app Enter
+     * will open. `:selected` in `_app-grid.scss` paints the plate's accent ring;
+     * the button FILL that also marks arrow navigation comes from `:focus`, which
+     * this deliberately does not take — the ring alone reads as "this is the hit",
+     * the ring plus fill as "you are standing here".
+     *
+     * **`navIdx` stays at -1 on purpose.** It is a hint, not a cursor. Were it a
+     * cursor, the next character typed would hit `handleKey`'s
+     * `if (navIdx >= 0) returnToSearch()` branch, which exists to leave the grid
+     * when you start typing again — so every keystroke would fight the highlight
+     * it had just placed. Arrow keys set `navIdx` and take over from there, which
+     * is why this bails out while somebody is navigating.
+     */
+    const highlightTopResult = () => {
+        if (navIdx >= 0) return
+        const first = currentQuery ? getVisibleChildren()[0] : null
+        if (first) flowbox.select_child(first)
+        else flowbox.unselect_all()
     }
 
     const filterApps = (query = "") => {
@@ -608,29 +651,26 @@ export default function AppGridPanel(
         flowbox.invalidate_sort()
         updateNoResults()
         if (currentQuery) clearWsNav()
+        // Both invalidations apply synchronously, so the top result is already in
+        // place by here — that is also why `focusAt(0)` works on the keystroke
+        // right after typing.
+        highlightTopResult()
     }
 
     searchEntry.connect("changed", () => filterApps(searchEntry.text))
 
     // ── Keyboard navigation ────────────────────────────────────────────────
-    let navIdx = -1
-
-    const getVisibleChildren = (): Gtk.FlowBoxChild[] => {
-        const result: Gtk.FlowBoxChild[] = []
-        let c = flowbox.get_first_child()
-        while (c) {
-            if (c.visible) result.push(c as Gtk.FlowBoxChild)
-            c = c.get_next_sibling()
-        }
-        return result
-    }
-
     const returnToSearch = () => {
         navIdx = -1
         clearWsNav()
         flowbox.unselect_all()
         searchBox.add_css_class("search-active")
         searchEntry.grab_focus()
+        // Leaving the grid is not leaving the QUERY: put the top-result ring back
+        // (a no-op when the search box is empty). Callers that go on to edit the
+        // buffer re-run this through `filterApps`; the ws-strip Backspace path
+        // does not, and without this it would strand a query with no hit marked.
+        highlightTopResult()
     }
 
     const focusAt = (idx: number) => {
@@ -747,6 +787,18 @@ export default function AppGridPanel(
                     const children = getVisibleChildren()
                     ;(children[navIdx]?.get_child() as Gtk.Button)?.emit("clicked")
                     return true
+                }
+                // No cursor, but a query: open the top hit — the one wearing the
+                // ring `highlightTopResult` put there. Gated on `currentQuery`
+                // because with the grid UNFILTERED "the first one" is whatever
+                // sorts first alphabetically, and a stray Enter opening Add/Remove
+                // Software is worse than an Enter that does nothing.
+                if (currentQuery) {
+                    const first = getVisibleChildren()[0]
+                    if (first) {
+                        ;(first.get_child() as Gtk.Button)?.emit("clicked")
+                        return true
+                    }
                 }
             }
             if (keyval === Gdk.KEY_BackSpace) {
