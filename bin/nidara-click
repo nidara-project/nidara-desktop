@@ -56,7 +56,7 @@ function emit(obj) { print(JSON.stringify(obj, null, 2)) }
 // contract on stdout (spawn_command_line_async can't redirect; Gio can).
 function pingShell() {
     try {
-        Gio.Subprocess.new(["ags", "request", "notifyComputerAction"],
+        Gio.Subprocess.new(["nidara-ipc", "notifyComputerAction"],
             Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE)
     } catch {}
 }
@@ -92,7 +92,7 @@ function cursorPos() {
     } catch { return null }
 }
 
-// Drive the shell's fake AI cursor (`ags request agentPointer …`). PURELY
+// Drive the shell's fake AI cursor (`nidara-ipc agentPointer …`). PURELY
 // VISUAL — an enhancement, never a gate: any failure (shell down, old shell
 // without the command) is a silent no-op and the injection proceeds. `wait`
 // blocks until the fake cursor LANDS (the request resolves on landing);
@@ -113,9 +113,9 @@ function cursorPos() {
 function visual(cmd, wait = true) {
     try {
         if (wait) {
-            GLib.spawn_command_line_sync(`timeout 2 ags request -- agentPointer ${cmd}`)
+            GLib.spawn_command_line_sync(`timeout 2 nidara-ipc agentPointer ${cmd}`)
         } else {
-            Gio.Subprocess.new(["ags", "request", "--", "agentPointer", ...cmd.split(" ")],
+            Gio.Subprocess.new(["nidara-ipc", "agentPointer", ...cmd.split(" ")],
                 Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE)
         }
     } catch {}
@@ -142,7 +142,7 @@ function visual(cmd, wait = true) {
 // that needs saying.
 function yieldInput(verb) {
     try {
-        const [ok, out] = GLib.spawn_command_line_sync(`timeout 3 ags request -- yieldInput ${verb}`)
+        const [ok, out] = GLib.spawn_command_line_sync(`timeout 3 nidara-ipc yieldInput ${verb}`)
         if (!ok || !out) return null
         return JSON.parse(new TextDecoder().decode(out).trim())
     } catch { return null }

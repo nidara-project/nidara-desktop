@@ -164,7 +164,7 @@ killall gjs                              # nuke stale GJS holding the old UI
 cd ui/shell && ags types -d .           # (re)generate @girs/ typings — see below
 cd ui/shell && npm run typecheck        # needs @girs/
 cd ui/shell && npm run build            # SCSS + ags bundle
-ags request toggleAppGrid                # send an IPC command
+nidara-ipc toggleAppGrid                # send an IPC command
 ```
 
 ### ⚠️ The greeter and the lockscreen have NO dev mode — building them changes nothing
@@ -354,7 +354,7 @@ node scripts/dev/settings-geometry.mjs --widths 1400,1050,802
 ```
 
 Drives the LIVE session: for each window width it resizes the Settings window through Hyprland,
-walks all 18 pages via `ags request settingsPage`, and reads each page's real `bounds` out of
+walks all 18 pages via `nidara-ipc settingsPage`, and reads each page's real `bounds` out of
 `queryUI`. It asserts the three invariants of `WINDOW_LAYOUT` (design-system.md) — same pane width
 across pages, same pane width across window widths, and the window's floor holding — and exits 1
 on a violation.
@@ -479,7 +479,7 @@ been guarding nothing. **A warning derived from a source read is a hypothesis wi
 proof as the thing it warns about.**
 
 ⚠️ **A plain `Gtk.Window` is not a layer-shell surface.** Confirm the shape against the running shell
-before acting: `ags request queryUI <selector>` prints each node's `path` as GType ancestry
+before acting: `nidara-ipc queryUI <selector>` prints each node's `path` as GType ancestry
 (`"GtkWindow.fullscreen > GtkOverlay"`), which settles "what is the window's direct child?" directly.
 
 ⚠️ **A widget-tree walk cannot see GTK-internal CSS nodes.** `decoration`, `slider`, `trough`,
@@ -591,7 +591,7 @@ a GPU number and should never be quoted as one.
 
 One arm = one line. It restarts the shell, parks it on an empty workspace, starts a rectangle that
 damages the screen at the monitor's refresh rate (`blur-damage.js`, a BOTTOM layer painting a GSK
-color node), puts the shell in the state you name via `ags request`, samples `gpu_busy_percent` at
+color node), puts the shell in the state you name via `nidara-ipc`, samples `gpu_busy_percent` at
 20 Hz for 20 s, and prints mean/min/max plus the damage client's fps.
 
 ```bash
@@ -605,7 +605,7 @@ scripts/dev/blur-arm.sh "floor"
 scripts/dev/blur-arm.sh --reset          # put back whatever a REF arm swapped in
 ```
 
-Anything after the label goes to `ags request` verbatim, so any IPC action can be the scenario
+Anything after the label goes to `nidara-ipc` verbatim, so any IPC action can be the scenario
 (`toggleCC`, `toggleAppGrid`, `setIsland overview`…). Knobs: `SECS`, `WS`, `SETTLE`, `DX/DY/DW/DH`.
 
 **Reading it:**
@@ -714,7 +714,7 @@ Astal/AGS/appmenu stack straight from `install.sh`'s refs (so a broken source bu
 CI, not a user's clean install), `ags bundle`s the shell, boots Hyprland with the SHIPPED
 `config/hypr/hyprland.lua` on the vkms display (seatd session + systemd-udevd for device
 enumeration; rendering is kms_swrast/llvmpipe), runs the bundle exactly as production does
-(`NIDARA_SHELL_ROOT` + cwd = shell root), and FAILS if the process dies, `ags request
+(`NIDARA_SHELL_ROOT` + cwd = shell root), and FAILS if the process dies, `nidara-ipc
 listActions`/`dumpState` don't answer with valid JSON, or the boot log contains `JS ERROR`.
 It then grims a desktop + Control Center screenshot into the `smoke-artifacts` artifact for
 HUMAN review — deliberately not a pixel diff (rejected as fragile). The built dependency
@@ -782,7 +782,7 @@ Testing gotcha: `XDG_DESKTOP_PORTAL_DIR` redirects BOTH `.portal` discovery AND
 `invocation.return_value` pattern (auto-marshalling hangs the reply).
 
 **`nidara-doctor`** (installed to `/usr/bin`) prints a Markdown diagnostic report:
-versions, hardware, `hyprctl monitors`, systemd unit state, `ags request dumpState`, recent
+versions, hardware, `hyprctl monitors`, systemd unit state, `nidara-ipc dumpState`, recent
 log errors. Run it FIRST when debugging a user's install, and attach its output as evidence
 on bug reports and hardware/compat PRs.
 
@@ -790,7 +790,7 @@ on bug reports and hardware/compat PRs.
 serves the agent surface — IPC actions, config, state, screenshots (inline images), doctor —
 plus the **computer-use** tools (`query_app`, `do_app_action`, `type_text`, `press_key`,
 `focus_window`) as MCP tools over stdio. Plain GJS, no Node/npm at runtime; mostly a thin adapter
-over `ags request` (so it needs no changes when IPC commands are added) — the exceptions are the
+over `nidara-ipc` (so it needs no changes when IPC commands are added) — the exceptions are the
 perception/action/keyboard tools, which run the standalone `nidara-a11y`/`nidara-act`/`nidara-type`
 helpers directly because reaching into a foreign app is not shell-self-control (`focus_window` is
 the exception-to-the-exception: it delegates back to the shell's `focusWindow`, which owns the
@@ -1126,7 +1126,7 @@ tool-use round-trip:
 
 ```bash
 # 1) point an ISOLATED config at the mock (don't touch the real ai.json — the daemon
-#    reads $XDG_CONFIG_HOME/nidara/ai.json, but `ags request` still hits the live shell):
+#    reads $XDG_CONFIG_HOME/nidara/ai.json, but `nidara-ipc` still hits the live shell):
 mkdir -p /tmp/tc/nidara
 printf '{"brainBackend":"openai","brainModel":"mock","brainEndpoint":"http://localhost:11435/v1"}' \
   > /tmp/tc/nidara/ai.json
@@ -1144,7 +1144,7 @@ Env on the mock scripts the tool call: `FAKE_BRAIN_TOOL` / `FAKE_BRAIN_ARGS` (JS
 - **The write gate is enforced by the SHELL, not the daemon.** The shell checks its OWN
   `allowConfigWrite` (from the REAL `ai.json`), so a test config with `allowConfigWrite:false` does
   NOT stop a `set_config` — the daemon's tool hits the live shell and really writes (a `set_config`
-  mock DID toggle night light for real; revert with `ags request setConfig … false`). To prove the
+  mock DID toggle night light for real; revert with `nidara-ipc setConfig … false`). To prove the
   daemon **surfaces a rejection** without mutating anything, script an **invalid value** (e.g.
   `nightlight.enabled=banana`): the shell's validator refuses, the daemon relays the error string,
   the model reports it, nothing changes.
@@ -1278,7 +1278,7 @@ scrolled past the cap. The prompt box is the only region that is both visible an
 # 1) the token is where the agent will look — through the SAME path it uses
 nidara-a11y org.gnome.Terminal | jq -r '.nodes[]|select(.role=="terminal").text' | grep -q "$TOKEN"
 # 2) the question actually landed in the island (see below) — BEFORE pressing Return
-ags request queryUI .agent-entry     # its `text` must be your question
+nidara-ipc queryUI .agent-entry     # its `text` must be your question
 ```
 
 **Driving the island needs `wtype` directly.** No keyboard verb points at it: `nidara-type` demands an
@@ -1307,11 +1307,11 @@ was closed), which leaves the dead copy as the only possible origin of the old a
 proves nothing. One verb, no shell restart:
 
 ```bash
-ags request agentNewConversation      # "conversation ended — N turns dropped"
+nidara-ipc agentNewConversation      # "conversation ended — N turns dropped"
 ```
 
 It refuses while a turn is in flight (`a turn is in flight — nothing was discarded`); poll
-`ags request dumpState` → `ai.assistant.busy` and retry. **Deliberately unreachable from the
+`nidara-ipc dumpState` → `ai.assistant.busy` and retry. **Deliberately unreachable from the
 Assistant itself** (`HIDDEN_ACTIONS` in the daemon) — see `state-and-ipc.md`; you drive it, it
 cannot drive itself.
 
@@ -1352,7 +1352,7 @@ of the repo's real files, which a computer-use agent could then type into — di
 match twice, which reads exactly like a resolver bug. Count the windows before believing an
 "ambiguous" result. `hyprctl dispatch closewindow address:0x…` **fails on this config** — Hyprland's
 config is Lua here, so the dispatch is parsed as Lua and errors with `')' expected near 'address'`;
-use `ags request closeWindow` (or `hl.dsp.*` form), and never discard the output of a dispatch you
+use `nidara-ipc closeWindow` (or `hl.dsp.*` form), and never discard the output of a dispatch you
 depend on, or you will read the unchanged state as the app "ignoring" you.
 
 ⚠️ **The same Lua trap invalidated a whole A/B on 2026-08-13**, so it is worth stating as a rule
@@ -1395,7 +1395,7 @@ hyprctl eval "hl.monitor({ output = 'Virtual-1', mode = '1280x720@60', position 
 
 - **Go BOTH ways.** Small → large is the more dangerous direction: a stale *small* clamp cuts a
   large surface, while a stale large one is intersected away harmlessly.
-- **Read numbers, not only pixels.** `ags request dumpState` → `overlays.islandBounds` prices the
+- **Read numbers, not only pixels.** `nidara-ipc dumpState` → `overlays.islandBounds` prices the
   overview against the screen (8px `WO_EDGE_MARGIN` each side: 1903 on 1920, 1263 on 1280), and the
   region trap above prints the stamped rect per target, which is the only way to see the INPUT
   region — a screenshot cannot show you where clicks land.
@@ -1653,6 +1653,6 @@ PAM can, so restarting the daemon by hand never fixes either.
 
 ### Adding a new keybind that triggers UI
 
-The pattern is: keybind in `hyprland.lua` → `ags request <cmd>` → `requestHandler` in `app.ts` → `ShellActions.<action>()` → `Status.<setter>()`.
+The pattern is: keybind in `hyprland.lua` → `nidara-ipc <cmd>` → `requestHandler` in `app.ts` → `ShellActions.<action>()` → `Status.<setter>()`.
 
 Don't shortcut this. Every step is there for a reason (Hyprland reload-safety, IPC visibility from CLI, typed registry, central state).

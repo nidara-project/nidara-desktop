@@ -17,7 +17,7 @@
 #   # put the tree back when you are done
 #   scripts/dev/blur-arm.sh --reset
 #
-# Everything after the label is handed to `ags request` verbatim, so any IPC action
+# Everything after the label is handed to `nidara-ipc` verbatim, so any IPC action
 # can be the scenario (`toggleCC`, `toggleAppGrid`, `setIsland overview`, …).
 #
 # TWO NUMBERS, because they answer different questions and a mean hides one of them:
@@ -102,7 +102,7 @@ if [ "${1:-}" = "--reset" ]; then
     exit 0
 fi
 
-LABEL="${1:?usage: blur-arm.sh <label> [ags request args…]   (or --reset)}"
+LABEL="${1:?usage: blur-arm.sh <label> [nidara-ipc args…]   (or --reset)}"
 shift
 
 cd "$REPO"
@@ -125,7 +125,7 @@ fi
 
 systemctl --user restart nidara.service
 sleep "$SETTLE"
-ags request focusWorkspace "$WS" >/dev/null
+nidara-ipc focusWorkspace "$WS" >/dev/null
 
 damage_stop
 if [ "$DAMAGE" = 1 ]; then
@@ -139,7 +139,7 @@ fi
 # (window captures, first paint) that a steady-state mean averages into nothing.
 OPEN="n/a"
 if [ $# -gt 0 ]; then
-    ags request "$@" >/dev/null &
+    nidara-ipc "$@" >/dev/null &
     OPEN=$(sample "$TRANS")
 fi
 sleep 2

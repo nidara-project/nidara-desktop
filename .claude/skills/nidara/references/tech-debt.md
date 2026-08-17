@@ -1012,7 +1012,7 @@ source code settled it in one grep.
 **(f) ~~A successful action reported FAILURE — `pingShell` polluted stdout.~~
 FIXED 2026-07-28, found in the first live run after (e).** `nidara-type` and
 `nidara-act` pinged the AI-control indicator with
-`GLib.spawn_command_line_async("ags request notifyComputerAction")`, which **cannot
+`GLib.spawn_command_line_async("nidara-ipc notifyComputerAction")`, which **cannot
 redirect stdio**, so the child inherited ours and the `ags` CLI's reply (`ok`)
 landed on the helper's stdout right after its JSON. The daemon parses exactly one
 JSON per helper, so it failed → the tool came back `ok:false`. **Deterministic, not
@@ -1598,13 +1598,13 @@ paths resolving through `MorphRevealer.top > … > GtkBox.agent-panel`. A snapsh
 still mapped at rest, so `core/UITree.ts` descends it fine. Do NOT "fix" the walk.
 
 **What actually happened, and it is a trap worth keeping:** an outside click dismisses the island —
-and typing `ags request queryUI` in a terminal requires clicking that terminal. (At the time this was
+and typing `nidara-ipc queryUI` in a terminal requires clicking that terminal. (At the time this was
 the `overlay-catcher`; since 2026-08-05 it is the compositor's focus grab. Same trap.) The island was closing *before* the query ran, so `queryUI` correctly
 reported `count: 0` for a surface that was no longer on screen. This is exactly the confusion the
 original entry warned about one line later, and it caught its own author twice more on 2026-07-25.
 
 **Method rule for introspecting any dismiss-on-click-outside surface:** open it and query it **in the
-same shell invocation** (`ags request toggleAgent; ags request queryUI …`), and read `dumpState`'s
+same shell invocation** (`nidara-ipc toggleAgent; nidara-ipc queryUI …`), and read `dumpState`'s
 `overlays.island` **in that same pass** — otherwise you cannot tell "not on screen" from "traversal
 broken". Both return `count: 0`. Sanity-check the walk itself against a class that is always live
 (`.bar-centerbox`).
@@ -2813,7 +2813,7 @@ never in this guard (§18).
 It became a user-visible bug the moment an overlay could stay open for minutes. `island_mode` counts
 as an overlay, and the Assistant holds it for a whole conversation, so **every app the agent launched
 got no dock icon until the user closed the island** (user-reported). Measured before the fix: open
-the CC → `ags request launchApp org.gnome.Calculator` → window on screen, no dock icon; close the CC
+the CC → `nidara-ipc launchApp org.gnome.Calculator` → window on screen, no dock icon; close the CC
 → icon appears. There was also a hidden 100ms retry loop for the whole time an overlay was open
 (`update()`'s `finally` re-arms whenever `needsUpdate` is set, and the re-run hit the same guard).
 
@@ -3108,7 +3108,7 @@ this is a technique in `dev-workflow.md` rather than a committed tool like `scop
 nothing until something has produced 1. Result here — control 1, today's tree 0, wrapper-removed 0.
 
 ⚠️ **A plain `Gtk.Window` probe does not stand in for a layer-shell surface**, so it was confirmed
-against the running shell: `ags request queryUI .cd-layout` → `path: "GtkWindow.fullscreen >
+against the running shell: `nidara-ipc queryUI .cd-layout` → `path: "GtkWindow.fullscreen >
 GtkOverlay"`. `queryUI` reports ancestry for exactly this kind of question.
 
 ⚠️ **Only half the rule was provable.** `decoration, &>box { … }` kept its `decoration` half:
@@ -3587,7 +3587,7 @@ restart per locale. That is the part worth designing before building.
 
 Twelve rows across Settings wore `.nidara-row` for the chrome while building their own box, so
 they got the LOOK of a row and none of its contract. They are `NidaraRow` / the new
-`NidaraEmptyRow` now. What the pass turned up, measured with `ags request queryUI .nidara-row`
+`NidaraEmptyRow` now. What the pass turned up, measured with `nidara-ipc queryUI .nidara-row`
 on the live session before the change:
 
 - **Settings → Sound: all six rows carried NO height class**, so their height was whatever

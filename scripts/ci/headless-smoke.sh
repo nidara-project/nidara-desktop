@@ -8,7 +8,7 @@
 #   2. `ags bundle` still produces a shell bundle (CI's other jobs don't bundle).
 #   3. The shipped config/hypr/hyprland.lua still parses and boots Hyprland.
 #   4. The shell bundle BOOTS on that Hyprland and stays alive.
-#   5. BOTH IPC doors respond and agree (`ags request` and `org.nidara.Shell`).
+#   5. BOTH IPC doors respond and agree (`nidara-ipc` and the deprecated `ags request`).
 #   6. Screenshots (grim) are captured for HUMAN review — deliberately NOT a
 #      pixel diff (fragile, rejected); a person glances at the artifact.
 #
@@ -279,40 +279,44 @@ phase_run() {
     shell_pid=$!
 
     # ── 4. Gate: stays alive + IPC answers ────────────────────────────────────
+    # Compiled from THIS tree rather than assumed on PATH: the smoke builds from
+    # source, and a binary an earlier install left on the box would let a broken
+    # client pass.
+    cc -O2 "$REPO/bin/nidara-ipc.c" $(pkg-config --cflags --libs gio-2.0) -o /tmp/smoke/nidara-ipc \
+        || { log "FAIL: nidara-ipc.c does not compile"; exit 1; }
+
     local ok=""
     for i in $(seq 1 40); do
         kill -0 "$shell_pid" 2>/dev/null || { log "FAIL: shell process died"; exit 1; }
-        if ags request listActions >/tmp/smoke/listActions.json 2>/dev/null; then ok=1; break; fi
+        if /tmp/smoke/nidara-ipc listActions >/tmp/smoke/listActions.json 2>/dev/null; then ok=1; break; fi
         sleep 1
     done
-    [ -n "$ok" ] || { log "FAIL: shell never answered 'ags request listActions'"; exit 1; }
+    [ -n "$ok" ] || { log "FAIL: shell never answered 'nidara-ipc listActions'"; exit 1; }
     jq -e . /tmp/smoke/listActions.json >/dev/null || { log "FAIL: listActions is not valid JSON"; exit 1; }
 
-    ags request dumpState >/tmp/smoke/dumpState.json
+    /tmp/smoke/nidara-ipc dumpState >/tmp/smoke/dumpState.json
     jq -e '.shell.version' /tmp/smoke/dumpState.json >/dev/null || { log "FAIL: dumpState has no .shell.version"; exit 1; }
     log "IPC OK — shell version $(jq -r '.shell.version' /tmp/smoke/dumpState.json)"
 
-    # The shell's OWN door, which is the one that outlives AGS. Both are asserted
-    # on purpose while both exist: `nidara-ipc` falls back to AGS's name, so a
-    # shell that FAILED to publish org.nidara.Shell would still answer here and
-    # the check would pass for the wrong reason. Pin the bus name first, then the
-    # reply — and require the two doors to agree byte for byte, since they are
-    # supposed to be the same dispatcher.
-    # gdbus, not busctl: glib2 is already a hard dependency here, systemd's CLI
-    # is not guaranteed in a minimal container. It also names the destination
-    # explicitly, so there is no fallback that could make this pass by accident.
+    # `nidara-ipc` falls back to AGS's name, so everything above would also pass on
+    # a shell that never published its own. Pin the name itself, with gdbus naming
+    # the destination so no fallback can rescue it. (gdbus, not busctl: glib2 is
+    # already a hard dependency here, systemd's CLI is not guaranteed in a minimal
+    # container.)
     gdbus call --session --dest org.nidara.Shell --object-path /org/nidara/Shell \
         --method org.nidara.Shell.Request '["listActions"]' >/dev/null 2>&1 \
         || { log "FAIL: shell never published org.nidara.Shell"; exit 1; }
-    # Compiled here rather than assumed on PATH: the smoke builds from source and
-    # must exercise THIS tree's client, not one an earlier install left behind.
-    cc -O2 "$REPO/bin/nidara-ipc.c" $(pkg-config --cflags --libs gio-2.0) -o /tmp/smoke/nidara-ipc \
-        || { log "FAIL: nidara-ipc.c does not compile"; exit 1; }
-    /tmp/smoke/nidara-ipc dumpState >/tmp/smoke/dumpState-ipc.json \
-        || { log "FAIL: nidara-ipc got no reply"; exit 1; }
-    cmp -s /tmp/smoke/dumpState.json /tmp/smoke/dumpState-ipc.json \
+
+    # THE ONE `ags request` LEFT IN THE REPO, and it is deliberate. Every caller
+    # moved to nidara-ipc, but AGS's door must keep working for at least a release:
+    # the keybinds in a user's own ~/.config/nidara/hyprland-user.lua still say
+    # `ags request`, and nothing else would notice if it broke. Delete this check
+    # on the day AGS's host goes, not before.
+    ags request dumpState >/tmp/smoke/dumpState-ags.json \
+        || { log "FAIL: the deprecated ags request door stopped answering"; exit 1; }
+    cmp -s /tmp/smoke/dumpState.json /tmp/smoke/dumpState-ags.json \
         || { log "FAIL: the two IPC doors disagree"; exit 1; }
-    log "IPC OK — org.nidara.Shell answers, and matches ags request"
+    log "IPC OK — org.nidara.Shell answers, and ags request still matches it"
 
     # ── 5. Screenshots for human review (NOT a gate beyond grim succeeding) ───
     sleep 4                                   # let the first frames render
@@ -320,7 +324,7 @@ phase_run() {
     log "captured desktop.png"
     # Control Center open — best-effort: a CC regression shouldn't mask the
     # boot gate, but the picture is valuable to reviewers.
-    if ags request toggleControlCenter >/dev/null 2>&1; then
+    if /tmp/smoke/nidara-ipc toggleControlCenter >/dev/null 2>&1; then
         sleep 2
         grim /tmp/smoke/control-center.png || true
         log "captured control-center.png"

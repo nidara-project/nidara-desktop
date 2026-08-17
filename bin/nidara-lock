@@ -30,7 +30,7 @@ fi
 
 # Hide bar and dock, disable all keybinds
 # (workspace switch not needed — ext-session-lock-v1 covers all monitors at compositor level)
-ags request hideForLock >> "$LOG" 2>&1 || true
+nidara-ipc hideForLock >> "$LOG" 2>&1 || true
 hyprctl dispatch 'hl.dsp.submap("lock")' >> "$LOG" 2>&1 || true
 
 # Run lockscreen — blocks until app.quit() on successful auth.
@@ -55,4 +55,4 @@ done
 
 # Restore everything after unlock
 hyprctl dispatch 'hl.dsp.submap("reset")' >> "$LOG" 2>&1 || true
-ags request showAfterLock >> "$LOG" 2>&1 || true
+nidara-ipc showAfterLock >> "$LOG" 2>&1 || true

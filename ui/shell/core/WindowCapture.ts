@@ -89,7 +89,7 @@ function load(): Promise<void> {
  * Hyprland window addresses are hex, and the shim takes a guint64.
  *
  * 🔑 THE TWO SOURCES DISAGREE ON THE PREFIX. `hyprctl clients` and the shell's own
- * `ags request listWindows` report "0x555b0a0cad80"; the AstalHyprland client
+ * `nidara-ipc listWindows` report "0x555b0a0cad80"; the AstalHyprland client
  * objects behind `hs.clients` report the SAME address as bare "555b0a0cad80".
  * `BigInt()` accepts the first and throws `SyntaxError` on the second — so reading
  * the address from the wrong source silently captured nothing at all. Normalise

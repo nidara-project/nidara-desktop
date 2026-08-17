@@ -17,7 +17,7 @@ window.nidara-dock-window,
     // which nodes got it. 0 here; 1 for a control tree whose child really is a
     // box, which is what makes the 0 mean anything. Confirmed live too, since a
     // plain `Gtk.Window` probe cannot stand in for a layer-shell surface:
-    // `ags request queryUI .cd-layout` → path `GtkWindow.fullscreen > GtkOverlay`.
+    // `nidara-ipc queryUI .cd-layout` → path `GtkWindow.fullscreen > GtkOverlay`.
     //
     // ⚠️ tech-debt used to warn that removing the redundant `windowOverlay`
     // would make this selector START matching. That was WRONG: `layout` is a

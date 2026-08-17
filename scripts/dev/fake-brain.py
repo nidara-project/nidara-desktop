@@ -11,7 +11,7 @@
 #   "brainEndpoint": "http://localhost:11435/v1",
 #   "brainModel": "mock"
 # then feed the daemon a user message on stdin and watch it call the tool via
-# `ags request` and answer.
+# `nidara-ipc` and answer.
 #
 # Configure the scripted tool via env (defaults = a harmless read):
 #   FAKE_BRAIN_TOOL   tool name to call          (default: get_config)

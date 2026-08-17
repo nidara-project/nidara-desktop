@@ -368,7 +368,7 @@ with the code on purpose — see [Contributing](#contributing).
 - **Type-check:** `cd ui/shell && npm run typecheck` (catches type errors before they reach the running shell)
 
 Optionally, you can drive the running shell from the CLI to test a specific surface — e.g.
-`ags request toggleAppGrid` (the full command list lives in the `requestHandler` in `ui/shell/app.ts`).
+`nidara-ipc toggleAppGrid` (the full command list lives in the `requestHandler` in `ui/shell/app.ts`).
 
 Before opening a PR, make sure the SCSS build passes (`cd ui/shell && npm run build`) and, if you
 have the git-ignored `@girs/` typings, the typecheck too. See [Contributing](#contributing) for the

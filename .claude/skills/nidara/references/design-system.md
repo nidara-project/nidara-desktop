@@ -64,7 +64,7 @@ A `halign: START` label is allocated its NATURAL width, and a wrapping `GtkLabel
 is **GTK's own line-balancing heuristic**, not the space available. So every description picks its
 own break column and the page reads as random — one row on a single line, the next broken at some
 other width, for no reason a user can see. Measured live on Settings → AI (2026-07-27, via
-`ags request queryUI .nidara-row-subtitle`): fourteen subtitles in one page came out **310, 332,
+`nidara-ipc queryUI .nidara-row-subtitle`): fourteen subtitles in one page came out **310, 332,
 369, 372, 442, 456, 480, 486, 493, 501, 540, 556, 567 and 589 px** wide. With FILL they are 610 px
 across every toggle row, and the only remaining variation is the rows whose trailing control is
 wider (a dropdown, a path label) — which is structural and reads as such.
@@ -72,7 +72,7 @@ wider (a dropdown, a path label) — which is structural and reads as such.
 `max_width_chars` does NOT fix this. It only caps the natural width, so it removes the widest
 outliers and leaves the heuristic in charge underneath — it looked identical on screen.
 
-**Verify wrapping with `ags request queryUI <selector>`, not with your eyes on a screenshot**: it
+**Verify wrapping with `nidara-ipc queryUI <selector>`, not with your eyes on a screenshot**: it
 reports each node's real `bounds`, so "do these all break at the same column?" is a set of numbers
 rather than a judgement call.
 
@@ -145,7 +145,7 @@ small for the design, where the question is merely which way to fail.
 in `NidaraWindow`. The window derives the last two from `contentWidth`, so a caller only states C.
 
 **What it replaced, and why none of it was noticeable one page at a time** (all measured live
-2026-08-11, `ags request queryUI` × 18 pages × window widths):
+2026-08-11, `nidara-ipc queryUI` × 18 pages × window widths):
 
 - the collapse breakpoint was DERIVED from the active page's natural width, every 200 ms. At a
   850 px window, 16 pages kept the sidebar docked and **Appearance and Region** — the two carrying

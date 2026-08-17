@@ -7,7 +7,7 @@
 //   { "mcpServers": { "nidara": { "command": "nidara-mcp" } } }
 //
 // WHY THIS EXISTS: the shell already exposes a complete agent surface over
-// `ags request` (listActions/dumpState/describeConfig/setConfig/screenshot)
+// `nidara-ipc` (listActions/dumpState/describeConfig/setConfig/screenshot)
 // plus `nidara-doctor`. This server is a thin adapter that turns that
 // surface into typed MCP tools so any MCP client gets it for free — no shell
 // parsing, and screenshots come back as inline images the client can see.
@@ -111,10 +111,10 @@ function run(argv) {
 }
 
 function agsRequest(args) {
-    const r = run(["ags", "request", ...args])
+    const r = run(["nidara-ipc", ...args])
     if (!r.ok && !r.out)
         throw new Error(
-            `ags request failed (is the shell running?): ${r.err || "no output"}`,
+            `nidara-ipc failed (is the shell running?): ${r.err || "no output"}`,
         )
     return r.out
 }
@@ -151,7 +151,7 @@ const TOOLS = [
     {
         name: "run_action",
         description:
-            "Run a Nidara IPC action by name (e.g. toggleCC, settingsPage bluetooth). Discover names with list_actions. Equivalent to `ags request <name> [args…]`.",
+            "Run a Nidara IPC action by name (e.g. toggleCC, settingsPage bluetooth). Discover names with list_actions. Equivalent to `nidara-ipc <name> [args…]`.",
         inputSchema: {
             type: "object",
             properties: {

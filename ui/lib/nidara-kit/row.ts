@@ -28,7 +28,7 @@ export interface NidaraRowResult {
  * The height is a token; the 14px vertical margin below is the leftover breathing
  * room, not the thing that defines the box. Before this the height was whatever
  * `14 + text + 14` happened to sum to, so the SAME one-line row measured **43px on
- * Settings → Network and 47px on Appearance** (`ags request queryUI .nidara-row`,
+ * Settings → Network and 47px on Appearance** (`nidara-ipc queryUI .nidara-row`,
  * 2026-08-03) — not a bug anyone could point at, just lists that breathe differently
  * from page to page, which is what the user reported.
  *
@@ -96,7 +96,7 @@ function textColumn(label: string, subtitle: string, titleIcon?: Gtk.Widget): Gt
             // FILL + hexpand, NOT halign START. A halign-START label is allocated its
             // NATURAL width, and a wrapping GtkLabel's natural width is a line-balancing
             // heuristic — so every description picked its own break column and the page
-            // read as random: measured live 2026-07-27 with `ags request queryUI`, these
+            // read as random: measured live 2026-07-27 with `nidara-ipc queryUI`, these
             // same subtitles came out 310, 332, 369, 372, 442, 456, 480, 486, 493, 501,
             // 540, 556, 567 and 589 px wide, one line here, two there, at no consistent
             // edge. Filling the column makes the width identical for every row, so a

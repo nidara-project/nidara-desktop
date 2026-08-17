@@ -481,7 +481,7 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     ;(win as any).toggle = cw.toggle
 
-    // Drive navigation from outside (`ags request settingsPage <id>`) — lets
+    // Drive navigation from outside (`nidara-ipc settingsPage <id>`) — lets
     // scripts and agents open a specific page without synthesizing clicks.
     // Case-insensitive because the ids are lowercase while the NAMES are not: an
     // agent asked for the AI page and sent `AI`, which cost it a step for nothing

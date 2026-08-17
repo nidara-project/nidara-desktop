@@ -53,7 +53,7 @@ user clicks bar pill
 
 This is the canonical pattern: **events go up through actions, state changes propagate down through `notify::` signals.**
 
-## IPC contract: `nidara-ipc` (and `ags request`, for now)
+## IPC contract: `nidara-ipc` (and `ags request`, deprecated)
 
 **There are two doors and ONE dispatcher.** `dispatchRequest(argv, res)` in `app.ts` is the
 function; `app.start({ requestHandler })` hands AGS's door to it, and `exportShellBusName()`
@@ -74,6 +74,13 @@ busctl --user call io.Astal.ags /io/Astal/Application \
 install.sh §6 and the PKGBUILD (same idiom as `bin/nidara-input.c`), which tries `org.nidara.Shell`
 and **falls back to `io.Astal.ags`**, so it works against a shell from before this change and after
 it.
+
+**The migration is DONE (2026-08-18):** every caller in this repo says `nidara-ipc` — the seven
+keybinds in `hyprland.lua`, all the `bin/nidara-*` helpers, the dev scripts, and the two
+user-facing strings in all twelve locales. Exactly **one** `ags request` survives, an assertion in
+the CI smoke, and it is deliberate: users' own `hyprland-user.lua` keybinds still call that door,
+and without a test nothing would notice the day it broke. Delete that assertion and the client's
+fallback together, when AGS's host goes — not before.
 
 ⚠️ **C on purpose, and this is the one thing not to "clean up" into GJS.** Every other
 `nidara-*` helper is GJS; this one is on a KEYBIND — `hyprland.lua` binds Super+Space, Super+A and
@@ -110,7 +117,8 @@ settled. And `Gio.DBusError` DOES work with `instanceof` in GJS (the opposite wa
 wrong); what actually bites is the error NAME — with `NO_AUTO_START` the bus answers a missing
 name with `NameHasNoOwner`, never `ServiceUnknown`.
 
-Hyprland keybinds still call `hl.dsp.exec_cmd("ags request <cmd>")` until that migration lands.
+Hyprland keybinds call `hl.dsp.exec_cmd("nidara-ipc <cmd>")` since 2026-08-18. A user's OWN
+`hyprland-user.lua` may still say `ags request`, which is exactly why AGS's door stays open.
 
 ### The IPC surface is self-describing
 
@@ -119,8 +127,8 @@ optional aliases, handler. `requestHandler` is a thin lookup over it; there is n
 Two built-in commands make the surface introspectable, so scripts and agents never need to
 read source to discover it:
 
-- `ags request listActions` → JSON describing every command (name, desc, aliases).
-- `ags request dumpState` → JSON snapshot of live shell state: version, locale, dark mode,
+- `nidara-ipc listActions` → JSON describing every command (name, desc, aliases).
+- `nidara-ipc dumpState` → JSON snapshot of live shell state: version, locale, dark mode,
   monitor count, which overlays are open, edit/recording flags. Read state → act → re-read
   to verify: that's the intended agent loop. (`nidara-doctor` embeds this output in
   its diagnostic report.)
@@ -171,13 +179,13 @@ GType), `Type` (substring, case-insensitive), optionally scoped `selector@window
 Two gotchas learned building it: (1) **overlays live under the `nidara-bar` window**
 (commandment 5), so scope the CC/NC/menus with `@bar`, *not* `@control`; (2) `pageBox(id)`
 sets the id as a **CSS class**, so a Settings page is `.display-page`, not `#display-page`.
-Examples: `ags request queryUI .bar-app-name` (assert the focused-app wordmark text),
+Examples: `nidara-ipc queryUI .bar-app-name` (assert the focused-app wordmark text),
 `queryUI .nidara-list-title@settings` (assert a Display monitor section rendered),
 `queryUI .nidara-menu-row` (a flat menu's rows). It pairs with the deterministic show
 actions (`settingsPage X`, `toggleCC`) — open, then `queryUI` to assert — and avoids
 synthesizing clicks. Some surfaces only open on a click, so they get a **deterministic
 interaction hook**: an IPC action that invokes the *same handler* the click would, no
-synthetic input. The first is `openWindowMenu` (the AppTitle capsule menu — `ags request
+synthetic input. The first is `openWindowMenu` (the AppTitle capsule menu — `nidara-ipc
 openWindowMenu`, then `queryUI .nidara-menu-label` for its rows). The pattern: the
 widget that owns the menu registers a `shellActions.openWindowMenu`-style fn (it needs the
 widget's local anchor/builder/state), and a thin IPC command calls it — see `ShellActions.ts`
@@ -215,7 +223,7 @@ first `.`/`[`/`(` — so keep those characters out of it), and `query_app`'s say
 only" plus where the inside door is, in the daemon and the MCP server both.
 
 Commands receive arguments: `requestHandler` passes `argv.slice(1)` to the handler
-(`run(args)`). `ags request settingsPage bluetooth` opens the Settings window directly on
+(`run(args)`). `nidara-ipc settingsPage bluetooth` opens the Settings window directly on
 that page (sidebar category ids) — the agent-friendly way to reach a Settings page without
 synthesizing clicks. **A rejection lists the valid ids** (`unknown page: AI — valid: network,
 bluetooth, appearance, …`, from `pageIds` published by the window) and lookup is
@@ -231,7 +239,7 @@ are a **first-class shell capability, not computer-use**. They are deterministic
 the compositor by window address, no synthetic input, no focus race) and **ungated**, the same
 reasoning as `launchApp`: a WM op reaches into no third-party app's internals (the `allowComputerControl`
 gate stays on the things that DO — synthetic keyboard/pointer and AT-SPI actions). The MCP path
-still has its global `allowMcp` floor; local `ags request` is always available.
+still has its global `allowMcp` floor; local `nidara-ipc` is always available.
 
 - **Reads** (ungated, like `dumpState`): `listWindows` (authoritative, async — reads `hyprctl
   clients -j` via `HyprlandState.getClientsJson`; carries `floating`/`fullscreen`/`pinned`/`grouped`,
@@ -573,7 +581,7 @@ Our side does know, because GDK marks a toplevel active when the compositor send
 `wl_keyboard.enter`. `dumpState.keyboardFocus` reports that per shell window:
 
 ```bash
-ags request dumpState | jq -c '.keyboardFocus'
+nidara-ipc dumpState | jq -c '.keyboardFocus'
 ```
 
 ```
@@ -641,10 +649,10 @@ through the function that owns the key.
 Settings are exposed to agents through a typed registry (`core/ConfigRegistry.ts`; entries
 registered in `config-entries.ts`):
 
-- `ags request describeConfig` → JSON schema of every exposed setting: description, type,
+- `nidara-ipc describeConfig` → JSON schema of every exposed setting: description, type,
   enum values / min/max, writability, current value. **Read this first** — never guess keys.
-- `ags request getConfig dock.iconSize` (one key) / `ags request getConfig` (all values).
-- `ags request setConfig appearance.accent blue` → validates against the declared
+- `nidara-ipc getConfig dock.iconSize` (one key) / `nidara-ipc getConfig` (all values).
+- `nidara-ipc setConfig appearance.accent blue` → validates against the declared
   type/constraints, applies through the owning service (persists + notifies the UI exactly
   like Settings would), and echoes `{key, value}` back. Invalid input returns a
   self-explanatory error, not a crash.
@@ -728,7 +736,7 @@ MCP over stdio. Two discovery paths, dev and user:
   page shows this path to the user ("Connect Your Agent" row).
 
 It is a **thin adapter with mostly no logic of its own**: every shell-self-control tool shells
-out to `ags request` (or `nidara-doctor`), so the `IPC_COMMANDS` table stays the single
+out to `nidara-ipc` (or `nidara-doctor`), so the `IPC_COMMANDS` table stays the single
 source of truth — a new IPC command is reachable through the `run_action` tool with zero MCP
 changes. Tools: `list_actions`, `run_action(name, args)`, `list_apps`, `launch_app(id)`,
 `dump_state`, `query_ui(selector)`, `list_windows`, `list_workspaces`,
@@ -752,7 +760,7 @@ click; bounded to the installed set) — opening a window is low-risk, unlike dr
 `query_app`, `do_app_action`, `type_text` and `press_key` are the exceptions to "delegates to the
 shell": they are the **computer-use** layer's perception, AT-SPI-action and synthetic-keyboard
 legs, and they run `nidara-a11y` / `nidara-act` / `nidara-type` directly (like `doctor` runs
-the doctor), **not** `ags request` — because reaching into a *third-party* app is not
+the doctor), **not** `nidara-ipc` — because reaching into a *third-party* app is not
 shell-self-control and must not live in the shell process. See "The computer-use layer" below.
 
 Governance: `ai.json.allowMcp` (Settings → AI → "Enable MCP Server") is re-read on **every**
@@ -767,7 +775,7 @@ is visible via `describeConfig` but not writable via `setConfig`.
 
 The MCP server exposes the surface to EXTERNAL agents. `bin/nidara-agent` is Nidara's
 OWN conversational assistant — and for everything it does TO THE DESKTOP it is deliberately
-**just another client of the same gated surface**: those tools ARE `ags request` calls, so
+**just another client of the same gated surface**: those tools ARE `nidara-ipc` calls, so
 Settings → AI gates (`allowConfigWrite` …) and the kill switch apply for free, and a new IPC
 action is usable with zero changes here (`run_action` is a passthrough — 100% coverage,
 exactly like MCP). The **file layer below is the one documented exception** to that rule.
@@ -880,11 +888,11 @@ exactly like MCP). The **file layer below is the one documented exception** to t
   model. Resolution order: explicit `index` → call `id` → continue the slot being filled (a pure
   continuation chunk carries neither). Keep the slots insertion-ordered so multiple calls execute in
   the order asked for.
-- **Tools offered to the model.** The `ags request` five — `run_action(action, args?)` for every
+- **Tools offered to the model.** The `nidara-ipc` five — `run_action(action, args?)` for every
   desktop action, plus the settings/state cluster `set_config(key, value)`, `get_config(key?)`,
   `dump_state()`, `describe_settings()` — with gates enforced by the SHELL (a refusal comes back as
   the tool-result STRING; the daemon never re-checks those). Two groups do not go through
-  `ags request` and enforce their own gates in the daemon: the **file layer** and the
+  `nidara-ipc` and enforce their own gates in the daemon: the **file layer** and the
   **computer-use tools** (both below).
 - **Every desktop action goes through ONE `run_action` tool whose DESCRIPTION carries a name index**
   — `snake_name — first clause of the action's description`, one per line — instead of one first-class
@@ -917,7 +925,7 @@ exactly like MCP). The **file layer below is the one documented exception** to t
   invent one, never look actions up"), the `run_action` description repeats "this list is the
   COMPLETE set", and its rejection hands back the exact name it sent. If a model is seen guessing,
   strengthen those before reverting to fatter tool schemas. Side benefit: `buildSystemPrompt()` never
-  calls `ags request`, so the daemon doesn't depend on the shell being up at spawn.
+  calls `nidara-ipc`, so the daemon doesn't depend on the shell being up at spawn.
 - **Two lossless squeezes stay** (both still in `buildToolset`/`execTool`): **`compactJson()`** strips
   the pretty-printing the shell emits for humans (tool results ride in `history` and are re-sent every
   later step, so this matters more there than in the prompt), and **`HIDDEN_ACTIONS`** is a denylist
@@ -938,7 +946,7 @@ exactly like MCP). The **file layer below is the one documented exception** to t
 - **`agentNewConversation` — the one verb deliberately out of the Assistant's reach.** It ends the
   conversation and starts an empty one, dropping BOTH halves (`transcript.json` and the daemon's
   `session.json`, in memory and on disk) via `AgentService.reset()`. Reachable from a terminal
-  (`ags request`) and from MCP, whose `run_action` is an unfiltered passthrough by design — its
+  (`nidara-ipc`) and from MCP, whose `run_action` is an unfiltered passthrough by design — its
   client is a person's agent, not this daemon. NOT reachable from the built-in Assistant: a reset
   mid-turn would strand the `tool_call` whose `tool_result` the next request has to carry, and
   "start over" belongs to the user or to whoever drives an eval, never to a move inside a turn.
@@ -1061,7 +1069,7 @@ Three details that are load-bearing:
 A turn **in flight** is still lost — see `tech-debt.md` #37(g); fixing that means making the daemon a
 systemd sibling rather than a child, and is deferred until tier 2 needs it.
 
-#### The file layer ("tier 1") — the ONE thing that is not `ags request`
+#### The file layer ("tier 1") — the ONE thing that is not `nidara-ipc`
 
 Added 2026-07-27. Six tools implemented **inside the daemon** with GLib/Gio rather than as IPC
 actions: `read_file` · `list_dir` · `search_files` · `edit_file` · `write_file` · `load_skill`.
@@ -1372,11 +1380,11 @@ Phase 2a — **action, deterministic only (built)**:
   `.cc-island button { @include nidara-reset }`, which matches `button.nidara-btn` at EQUAL
   specificity and, `_control-center` being imported after `_components`, would strip the Stop
   button's background and border. The action tools (`nidara-act`/`nidara-type`/`nidara-click`)
-  ping `ags request notifyComputerAction` on success → `AgentConfig.pulseComputerAction()` flips the
+  ping `nidara-ipc notifyComputerAction` on success → `AgentConfig.pulseComputerAction()` flips the
   transient `computerActing` flag (auto-decays). Opening the CC shows a **status banner above the
   widgets** (`ControlCenter.tsx`) with a row per active indicator + a **Stop** button — **that is the
   kill switch**. Mouse-revoke is **2 clicks** (open CC → Stop) by design; the one-key kill switch is
-  `Super+Shift+Esc` (`config/hypr/hyprland.lua` → `ags request disableComputerControl`). The badge
+  `Super+Shift+Esc` (`config/hypr/hyprland.lua` → `nidara-ipc disableComputerControl`). The badge
   staying visible while armed means the user is never unaware the agent may act.
 Phase 2b-i — **synthetic keyboard (built)**, for controls AT-SPI can't reach (Qt text fields;
 Qt buttons that only expose `SetFocus` → focus then press Enter/Space):
@@ -1544,7 +1552,7 @@ fades early — the user always wins, also during the linger. Visible over fulls
 properties:
 
 - **Land→confirm protocol — the visual never lies**: `nidara-click` reads `hyprctl cursorpos`
-  (baseline), then blocks on `ags request agentPointer <kind> <gx> <gy> [gx2 gy2] [from bx by]`
+  (baseline), then blocks on `nidara-ipc agentPointer <kind> <gx> <gy> [gx2 gy2] [from bx by]`
   — the request resolves when the fake cursor **lands** (~0.45-1.2 s incl. pop-in; inside the
   helper's `timeout 2` bound). It then **re-checks the
   gate** (the kill switch can fire mid-animation and now stops the injection inside that window)
@@ -1574,7 +1582,7 @@ properties:
 3. Add an entry to the `IPC_COMMANDS` table in `app.ts` — **with a real description**; that
    string is the command's documentation (it's what `listActions` serves). Never grow a
    parallel switch or a second command list elsewhere.
-4. Use it from `hyprland.lua` as `hl.dsp.exec_cmd("ags request <yourCmd>")`.
+4. Use it from `hyprland.lua` as `hl.dsp.exec_cmd("nidara-ipc <yourCmd>")`.
 
 ## `ShellActions` replaces `globalThis`
 

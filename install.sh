@@ -62,7 +62,7 @@ done
 # ── Pinned upstream versions ──────────────────────────────────────────────────
 # The Astal/AGS/appmenu libraries are built from source. Building against an
 # upstream's moving HEAD has bitten us before (e.g. the GJS 1.88 break of
-# `ags request`), so each source build is pinned to a known-good revision.
+# `nidara-ipc`), so each source build is pinned to a known-good revision.
 #
 # MAINTAINERS: bump these and re-test a clean install before tagging a release.
 # Astal has no git tags, so it is pinned by commit SHA.

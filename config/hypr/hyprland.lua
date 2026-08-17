@@ -344,17 +344,17 @@ hl.bind(mainMod .. " + SHIFT + R", hl.dsp.exec_cmd("systemctl --user restart nid
 hl.bind(mainMod .. " + L",         hl.dsp.exec_cmd("nidara-lock"))
 
 -- ── Keybinds — App launchers ─────────────────────────────────────────────────
-hl.bind(mainMod .. " + S",   hl.dsp.exec_cmd("ags request openSettings"))
-hl.bind("SUPER + SUPER_L",   hl.dsp.exec_cmd("ags request toggleAppGrid"), { release = true })
-hl.bind(mainMod .. " + A",   hl.dsp.exec_cmd("ags request toggleAgent"))
-hl.bind(mainMod .. " + B",          hl.dsp.exec_cmd("ags request toggleBarOverlay"))
+hl.bind(mainMod .. " + S",   hl.dsp.exec_cmd("nidara-ipc openSettings"))
+hl.bind("SUPER + SUPER_L",   hl.dsp.exec_cmd("nidara-ipc toggleAppGrid"), { release = true })
+hl.bind(mainMod .. " + A",   hl.dsp.exec_cmd("nidara-ipc toggleAgent"))
+hl.bind(mainMod .. " + B",          hl.dsp.exec_cmd("nidara-ipc toggleBarOverlay"))
 hl.bind(mainMod .. " + SHIFT + G", hl.dsp.exec_cmd("nidara-game-mode toggle"))
-hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd("ags request disableComputerControl")) -- kill switch: revoke AI computer-control instantly
+hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd("nidara-ipc disableComputerControl")) -- kill switch: revoke AI computer-control instantly
 hl.bind(mainMod .. " + E",   hl.dsp.exec_cmd("uwsm app -- " .. fileManager))
 hl.bind(mainMod .. " + T",   hl.dsp.exec_cmd("uwsm app -- " .. terminal))
 hl.bind(mainMod .. " + Q",   hl.dsp.window.close())
-hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("ags request togglePrism"))
-hl.bind(mainMod .. " + W",     hl.dsp.exec_cmd("ags request toggleOverview")) -- Workspace Overview (keyboard-navigable: ←/→ move, Enter switch, Esc close)
+hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("nidara-ipc togglePrism"))
+hl.bind(mainMod .. " + W",     hl.dsp.exec_cmd("nidara-ipc toggleOverview")) -- Workspace Overview (keyboard-navigable: ←/→ move, Enter switch, Esc close)
 -- No exit-session bind on purpose (upstream ships SUPER+M = exit): one accidental
 -- chord must never kill the whole session. Log out via the System Menu instead.
 -- Our SUPER+M is maximize (Window modes below) — never rebind it to exit.

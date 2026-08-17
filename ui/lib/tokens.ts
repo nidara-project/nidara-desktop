@@ -148,7 +148,7 @@ export const rowInsetFor = (surfaceRadius: number, n: number = 3.2, rowRadius: n
  *
  * The predecessor had a maximum (800) and no minimum, and derived the collapse
  * breakpoint from the ACTIVE PAGE's natural width — recomputed every 200 ms. Both
- * halves of that were wrong, measured live 2026-08-11 (`ags request queryUI`,
+ * halves of that were wrong, measured live 2026-08-11 (`nidara-ipc queryUI`,
  * 18 pages × window widths):
  *
  *   - The breakpoint differed PER PAGE. At a 850px window, 16 pages kept the

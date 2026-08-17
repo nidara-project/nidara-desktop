@@ -4,7 +4,7 @@ import { providerById } from "./AgentProviders"
 import { loadKnown } from "./configFile"
 
 // Governance for the agent-facing surface (Settings → AI). This gates the
-// OFFICIAL door (`ags request setConfig`, future MCP server) — it is a consent
+// OFFICIAL door (`nidara-ipc setConfig`, future MCP server) — it is a consent
 // layer, not a security boundary: any local process can still edit config
 // files directly, same as the user. Reading state (dumpState/getConfig) is
 // always allowed; it powers nidara-doctor and diagnostics.
@@ -135,7 +135,7 @@ const _listeners = new Set<() => void>()
 
 // Transient computer-use ACTIVITY — distinct from allowComputerControl (the
 // persistent PERMISSION). Lit by pulseComputerAction() when a real action lands
-// (the standalone tools ping `ags request notifyComputerAction`), then decays.
+// (the standalone tools ping `nidara-ipc notifyComputerAction`), then decays.
 // The bar indicator reads both: "armed" = permitted-but-idle, "active" = acting.
 let _acting = false
 let _actingTimer = 0

@@ -55,7 +55,7 @@ function emit(obj) { print(JSON.stringify(obj, null, 2)) }
 // while the focus gate refused every call from the Assistant before reaching here.
 function pingShell() {
     try {
-        Gio.Subprocess.new(["ags", "request", "notifyComputerAction"],
+        Gio.Subprocess.new(["nidara-ipc", "notifyComputerAction"],
             Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE)
     } catch {}
 }
@@ -93,7 +93,7 @@ function run(argv) {
 // old to know the command, is a silent no-op; if we die before `end`, the shell
 // restores itself.
 function yieldInput(verb) {
-    try { GLib.spawn_command_line_sync(`timeout 3 ags request -- yieldInput ${verb}`) } catch {}
+    try { GLib.spawn_command_line_sync(`timeout 3 nidara-ipc yieldInput ${verb}`) } catch {}
 }
 
 // Hyprland's focused window class (lowercased), e.g. "telegramdesktop".

@@ -104,8 +104,8 @@ costs nothing; a noisy or taste-specific PR costs the maintainer review time and
 
 ## Step 2 — Route it
 
-- **PERSONAL** → **first try `ags request setConfig <key> <value>`** (discover keys with
-  `ags request describeConfig`; if your client has the `nidara` MCP server
+- **PERSONAL** → **first try `nidara-ipc setConfig <key> <value>`** (discover keys with
+  `nidara-ipc describeConfig`; if your client has the `nidara` MCP server
   registered, the same doors are the `describe_config`/`set_config`/`screenshot` tools) —
   it validates, persists and live-applies through the owning service, no reload needed. If the setting isn't exposed there yet, write to the
   config layer (`~/.config/nidara/`, `hyprland-user.lua`, Settings UI) — and

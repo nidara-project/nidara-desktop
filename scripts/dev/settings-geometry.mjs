@@ -25,7 +25,7 @@
  * by opening Settings and looking at it, but a sweep prints it in one line. The
  * same sweep is how the numbers in `WINDOW_LAYOUT` were measured (2026-08-11).
  *
- * It drives the real session over IPC (`ags request queryUI` / `settingsPage`) and
+ * It drives the real session over IPC (`nidara-ipc queryUI` / `settingsPage`) and
  * resizes through Hyprland, so it needs a graphical Nidara session — it is a dev
  * instrument, not a CI gate. ⚠️ `hyprctl dispatch` under this repo's LUA config
  * only accepts Lua expressions (`hl.dsp.*`); the classic string form is a syntax
@@ -99,7 +99,7 @@ sleep(1500)
 
 let win = settingsWindow()
 if (!win) {
-    console.error("Settings window not found — is the shell running? (ags request openSettings)")
+    console.error("Settings window not found — is the shell running? (nidara-ipc openSettings)")
     process.exit(2)
 }
 const addr = win.address

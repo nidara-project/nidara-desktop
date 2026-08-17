@@ -5,7 +5,7 @@
 #
 # One command that gathers everything needed to diagnose a problem or to attach
 # as evidence to a bug report / PR: versions, hardware, compositor state, the
-# shell's own live state (via `ags request dumpState`), and recent log errors.
+# shell's own live state (via `nidara-ipc dumpState`), and recent log errors.
 # Output is Markdown — paste it directly into a GitHub issue or PR body.
 #
 # This is also the agent entry point: an AI agent helping a user should run
@@ -64,8 +64,8 @@ codeblock sh -c "hyprctl monitors -j 2>/dev/null | head -100"
 section "Shell service (systemd --user)"
 codeblock systemctl --user --no-pager status nidara
 
-section "Shell live state (ags request dumpState)"
-codeblock ags request dumpState
+section "Shell live state (nidara-ipc dumpState)"
+codeblock nidara-ipc dumpState
 
 section "Idle wakeups (main thread, 4 s sample — healthy ≈ 0/s when idle)"
 {

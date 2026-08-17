@@ -116,7 +116,7 @@ const ipc: Record<string, ((...args: string[]) => string | void | Promise<string
 type Rect = { x: number, y: number, w: number, h: number }
 let islandRect: () => Rect | null = () => null
 
-// Declarative IPC surface — the single source of truth for `ags request`.
+// Declarative IPC surface — the single source of truth for `nidara-ipc`.
 // `listActions` introspects this table, so adding a command here is ALL it takes
 // for scripts and agents to discover it; never grow a parallel switch elsewhere.
 // Commands that need main()-time closures (windows, monitors) go through `ipc`.
@@ -263,7 +263,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     // resolve it. The Assistant must not be able to discard its own context — a
     // reset mid-turn would break the tool_call/tool_result pairing it is standing
     // on, and "start over" is the user's call, not a move in a turn. Every other
-    // caller keeps it: a terminal (`ags request`) and an MCP client, which is the
+    // caller keeps it: a terminal (`nidara-ipc`) and an MCP client, which is the
     // point — an eval harness driving the bench is exactly who needs it.
     desc: "End the Assistant's conversation and begin an empty one — drops BOTH halves (the transcript the user reads and the model's history), in memory and on disk. The programmatic twin of the island's \"New conversation\" button, and the only way to reach a fresh conversation without restarting the shell: deleting the state files under a live shell does nothing, because the shell holds the conversation in memory and rewrites them at the next turn end. Refuses while a turn is in flight — read `dumpState` `ai.assistant` and retry once `busy` is false.",
     // No alias on purpose: a second name would look covered by the daemon's
@@ -797,7 +797,7 @@ for (const [name, { aliases }] of Object.entries(IPC_COMMANDS))
 
 // ─── The one dispatcher, and the two doors into it ──────────────────────────
 //
-// `ags request <cmd>` is not a protocol of AGS's own invention: it is a D-Bus
+// `nidara-ipc <cmd>` is not a protocol of AGS's own invention: it is a D-Bus
 // method call, `Request(as) → s` on `io.Astal.ags` at `/io/Astal/Application`.
 // You can make the exact same call with no AGS in sight:
 //
@@ -807,7 +807,7 @@ for (const [name, { aliases }] of Object.entries(IPC_COMMANDS))
 // So the shell now ALSO answers on a name of its own, `org.nidara.Shell`, and
 // both doors run this same function. Nothing is removed: the two names coexist
 // deliberately, because the callers we do not control — a user's own
-// `~/.config/nidara/hyprland-user.lua` keybinds — say `ags request` today and
+// `~/.config/nidara/hyprland-user.lua` keybinds — say `nidara-ipc` today and
 // have to keep working for at least a release after the new name ships.
 //
 // The name matters beyond the CLI. `AstalIO.Daemon` OVERWRITES the

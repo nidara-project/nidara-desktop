@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Nidara Settings
 Comment=Configure your Nidara environment
-# Note: ags request IPC is broken in GJS >= 1.88.
+# Note: nidara-ipc IPC is broken in GJS >= 1.88.
 # Settings is opened via the dock (DockItem bypasses Exec and calls toggleSettings directly).
 # This entry exists so AppService.ts can detect it as a known app.
 Exec=bash -c 'notify-send "Nidara" "Open Settings from the dock or taskbar."'

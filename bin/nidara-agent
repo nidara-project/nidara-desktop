@@ -9,7 +9,7 @@
 // WHAT IT DOES: turns natural language into desktop actions. Each user turn runs
 // a streaming tool-use loop against a BYOK LLM (Anthropic Messages API, or any
 // OpenAI-compatible endpoint incl. a local Ollama) and executes the model's tool
-// calls by shelling out to `ags request` — the SAME official door the CLI and
+// calls by shelling out to `nidara-ipc` — the SAME official door the CLI and
 // nidara-mcp use. So the assistant is just another client of the gated surface:
 // Settings → AI gates (allowConfigWrite …) and the kill switch apply for free,
 // and a new IPC action becomes usable with zero changes here (run_action is a
@@ -212,7 +212,7 @@ function fileGate(mode) {
 }
 
 // ── Computer-use frontier (third-party apps) ─────────────────────────────────
-// Perceiving and driving OTHER applications does not go through `ags request`
+// Perceiving and driving OTHER applications does not go through `nidara-ipc`
 // either — it goes through the four standalone helpers the MCP server already
 // uses (nidara-a11y / nidara-act / nidara-type / nidara-click). Same reasoning as
 // the file layer, plus one that is specific to these: AT-SPI calls are synchronous
@@ -280,7 +280,7 @@ function findTool(name) {
 }
 
 // Run a command synchronously, capturing stdout+stderr. Used for the fast
-// `ags request` calls (system-prompt build + tool execution); the slow leg (the
+// `nidara-ipc` calls (system-prompt build + tool execution); the slow leg (the
 // LLM stream) is async curl so cancel still works mid-turn.
 function run(argv) {
     const proc = Gio.Subprocess.new(
@@ -295,9 +295,9 @@ function run(argv) {
 // gate refusal (e.g. allowConfigWrite off) is a self-explanatory MESSAGE, not a
 // crash — we hand it straight to the model as the tool result.
 function agsRequest(args) {
-    const r = run(["ags", "request", ...args])
+    const r = run(["nidara-ipc", ...args])
     if (!r.ok && !r.out)
-        throw new Error(`ags request failed (is the shell running?): ${r.err || "no output"}`)
+        throw new Error(`nidara-ipc failed (is the shell running?): ${r.err || "no output"}`)
     return r.out
 }
 
@@ -417,7 +417,7 @@ function loadSkillTool(name) {
 // ── Tools offered to the model ───────────────────────────────────────────────
 // ONE passthrough tool (run_action) whose DESCRIPTION carries an index of every
 // desktop action — name + one-clause summary — instead of 32 first-class tool
-// schemas. Generated from `ags request listActions`, so a new action still appears
+// schemas. Generated from `nidara-ipc listActions`, so a new action still appears
 // for free (the self-maintaining property), and it weighs ~450 tokens where the 32
 // JSON schemas weighed ~2000 — a block that is re-sent on EVERY step of EVERY turn,
 // so every byte is paid per request (measured 2026-07-23).
@@ -1605,7 +1605,7 @@ function execTool(tu) {
 
 // ── System prompt (built once per session; reset() clears it) ────────────────
 let systemCache = null
-// The shell pretty-prints its JSON for humans reading `ags request` in a
+// The shell pretty-prints its JSON for humans reading `nidara-ipc` in a
 // terminal. The model does not need the indentation, and it is ~13% of the
 // system prompt (measured 2026-07-21: 12.5 KB → 10.8 KB across the three dumps).
 // Lossless, so there is no reason not to. Falls back to the original string if
@@ -1630,7 +1630,7 @@ function compactJson(s) {
 // This list is not merely advisory, which is what makes (3) sound: `run_action`
 // resolves ONLY through `actionMap`, built with the same filter below, so a hidden
 // name is UNREACHABLE and not just unadvertised. External callers keep it — a
-// terminal via `ags request`, and MCP, whose run_action is an unfiltered
+// terminal via `nidara-ipc`, and MCP, whose run_action is an unfiltered
 // passthrough by design (its client is a person's agent, not this daemon).
 // A DENYLIST on purpose: `run_action` stays a passthrough and a newly added
 // action still shows up for free, which is the property that keeps this whole

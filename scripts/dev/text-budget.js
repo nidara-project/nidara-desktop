@@ -326,13 +326,13 @@ setScale(1.0)
 if (VERIFY) {
     let out = ""
     try {
-        const [ok, stdout] = GLib.spawn_command_line_sync("ags request queryUI .nidara-sidebar-label")
+        const [ok, stdout] = GLib.spawn_command_line_sync("nidara-ipc queryUI .nidara-sidebar-label")
         if (ok && stdout) out = new TextDecoder().decode(stdout)
     } catch (e) { out = "" }
     const nodes = (() => { try { return JSON.parse(out).nodes || [] } catch { return [] } })()
     const live = nodes.filter(n => n.window === "nidara-settings-window" && n.mapped && n.bounds?.w > 0)
     if (live.length === 0) {
-        print("--verify: no live Settings window (open it with `ags request openSettings`) — budget NOT cross-checked")
+        print("--verify: no live Settings window (open it with `nidara-ipc openSettings`) — budget NOT cross-checked")
     } else {
         const allocated = Math.max(...live.map(n => n.bounds.w))
         const delta = allocated - BUDGET

@@ -90,6 +90,18 @@ int main(int argc, char **argv)
     if (argc < 2) { usage(stderr); return 2; }
     if (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")) { usage(stdout); return 0; }
 
+    /* `ags request -- <cmd>` was a real idiom in our own call sites (yieldInput,
+     * agentPointer): AGS's CLI needed the separator so it would not eat an
+     * argument beginning with a dash. This client passes everything after argv[0]
+     * through verbatim, so a copied `--` would arrive as the COMMAND NAME and the
+     * shell would answer "unknown command". Skip one leading separator rather than
+     * fail — someone migrating their own hyprland-user.lua will paste it. */
+    int first = 1;
+    if (!strcmp(argv[1], "--")) {
+        if (argc < 3) { usage(stderr); return 2; }
+        first = 2;
+    }
+
     GError *err = NULL;
     GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, &err);
     if (!bus) {
@@ -101,7 +113,7 @@ int main(int argc, char **argv)
     /* The command and its arguments, exactly as typed, as a D-Bus string array. */
     GVariantBuilder b;
     g_variant_builder_init(&b, G_VARIANT_TYPE("as"));
-    for (int i = 1; i < argc; i++) g_variant_builder_add(&b, "s", argv[i]);
+    for (int i = first; i < argc; i++) g_variant_builder_add(&b, "s", argv[i]);
     GVariant *args = g_variant_new("(as)", &b);
     /* One floating reference, consumed by the first call_sync. Held across the
      * loop with a ref of our own so the second door can reuse it. */
