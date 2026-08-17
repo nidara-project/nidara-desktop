@@ -1,5 +1,4 @@
 import { Gtk, Gdk } from "ags/gtk4"
-import AstalMpris from "gi://AstalMpris"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import Pango from "gi://Pango"
@@ -249,9 +248,10 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
         totalLabel.label = len > 0 ? fmt(len) : "--:--"
     }
 
-    // Decode + redraw only when the art PATH changes — player "notify" fires at
-    // 1 Hz while playing (position poll), so an unguarded decode here re-read the
-    // PNG every second for the whole session (tech-debt #11C).
+    // Decode + redraw only when the art PATH changes — "notify" fires for every
+    // property the player touches, and an unguarded decode here used to re-read
+    // the PNG every second for the whole session, back when AstalMpris polled
+    // position at 1 Hz (tech-debt #11C; core/mpris.ts no longer polls).
     let loadedArt: string | null = null
     const loadArt = () => {
         const path = media.resolveCoverArt(player)
@@ -272,7 +272,7 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
         titleLabel.label  = p?.title  || t("cc.media.no-media")
         artistLabel.label = p?.artist || ""
         // gicon assignment is NOT equality-guarded by GTK — same-icon reassign forces a redraw
-        const wantPlay = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING ? Icons.pause : Icons.play
+        const wantPlay = p?.playback_status === media.PlaybackStatus.PLAYING ? Icons.pause : Icons.play
         if (playImg.gicon !== wantPlay) playImg.gicon = wantPlay
         prev.sensitive = p?.can_go_previous !== false
         next.sensitive = p?.can_go_next    !== false

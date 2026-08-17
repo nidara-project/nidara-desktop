@@ -1,18 +1,22 @@
 #!/usr/bin/env gjs
 // fake-mpris.js — minimal MPRIS player for testing the shell's media widget
-// (source selection heuristic, pin menu, cover-art resolution) without playing
-// a sound. Registers org.mpris.MediaPlayer2.<name> on the session bus; drive it
-// with playerctl (`playerctl -p <name> pause/play`); Ctrl-C (or Quit) to stop.
+// (source selection heuristic, pin menu, cover-art resolution, seeking) without
+// playing a sound. Registers org.mpris.MediaPlayer2.<name> on the session bus;
+// drive it with playerctl (`playerctl -p <name> pause/play/position 30`);
+// Ctrl-C (or Quit) to stop. It is also what `mpris-probe.ts` drives.
 //
 //   gjs scripts/dev/fake-mpris.js <name> <identity> <title> <artist> <artUrl> [Playing|Paused] [desktopEntry]
 //
+// Position advances with the clock while Playing, Seek/SetPosition move it and
+// emit Seeked. FAKE_MPRIS_NO_TRACKID=1 removes mpris:trackid, which is the case
+// where SetPosition is a no-op and a client must fall back to a relative Seek.
+//
 // Examples:
-//   # data: cover art (the mpv-mpris case AstalMpris can NEVER cache — GIO
-//   # doesn't support data: URIs; the shell's own decode fallback must render it):
+//   # data: cover art (the mpv-mpris case — the shell decodes it into
+//   # ~/.cache/nidara/media-art itself; GIO cannot open a data: URI at all):
 //   gjs scripts/dev/fake-mpris.js fakeA "Aurora" "Red track" "Artist A" \
 //       "data:image/jpeg;base64,$(ffmpeg -loglevel error -f lavfi -i color=c=crimson:s=120x120 -frames:v 1 -f image2pipe -c:v mjpeg - | base64 -w0)" Playing kitty
-//   # https cover art (cached by AstalMpris where GVfs is present, else by the
-//   # shell's curl fallback):
+//   # https cover art (curl'd into the same cache, asynchronously):
 //   gjs scripts/dev/fake-mpris.js fakeB "Boreal" "Blue track" "Artist B" \
 //       "https://github.com/nidara-project.png" Playing
 
@@ -61,13 +65,34 @@ const playerXml = `<node>
   <property name="CanControl" type="b" access="read"/>
  </interface></node>`
 
-const metadata = () => new GLib.Variant("a{sv}", {
-    "mpris:trackid": GLib.Variant.new_string("/org/mpris/track/1"),
-    "mpris:length": GLib.Variant.new_int64(180 * 1000000),
-    "mpris:artUrl": GLib.Variant.new_string(artUrl || ""),
-    "xesam:title": GLib.Variant.new_string(title || "Test track"),
-    "xesam:artist": new GLib.Variant("as", [artist || "Test artist"]),
-})
+// mpris:trackid is what lets a client use SetPosition; FAKE_MPRIS_NO_TRACKID=1
+// drops it, which is the (common) case a client has to cover with a relative
+// Seek instead.
+const noTrackId = GLib.getenv("FAKE_MPRIS_NO_TRACKID") === "1"
+
+const metadata = () => {
+    const m = {
+        "mpris:length": GLib.Variant.new_int64(180 * 1000000),
+        "mpris:artUrl": GLib.Variant.new_string(artUrl || ""),
+        "xesam:title": GLib.Variant.new_string(title || "Test track"),
+        "xesam:artist": new GLib.Variant("as", [artist || "Test artist"]),
+    }
+    if (!noTrackId) m["mpris:trackid"] = new GLib.Variant("o", "/org/mpris/track/1")
+    return new GLib.Variant("a{sv}", m)
+}
+
+// Position: the spec forbids announcing it through PropertiesChanged, so a real
+// player just lets it run and answers when asked. Same here — it advances with
+// the monotonic clock while Playing and freezes when it is not.
+let posUs = 0
+let posAt = GLib.get_monotonic_time()
+const curPos = () => (playback === "Playing" ? posUs + (GLib.get_monotonic_time() - posAt) : posUs)
+const setPos = (us) => {
+    posUs = Math.max(0, Math.round(us))
+    posAt = GLib.get_monotonic_time()
+    print(`[${name}] Position -> ${(posUs / 1e6).toFixed(2)}s`)
+    if (playerExport) playerExport.emit_signal("Seeked", new GLib.Variant("(x)", [posUs]))
+}
 
 const root = {
     Raise() {}, Quit() { loop.quit() },
@@ -79,6 +104,8 @@ const root = {
 
 let playerExport = null
 function setStatus(s) {
+    posUs = curPos() // freeze the clock at the value it had under the old status
+    posAt = GLib.get_monotonic_time()
     playback = s
     print(`[${name}] PlaybackStatus -> ${s}`)
     if (playerExport) {
@@ -92,13 +119,17 @@ const player = {
     Pause() { setStatus("Paused") },
     Play() { setStatus("Playing") },
     PlayPause() { setStatus(playback === "Playing" ? "Paused" : "Playing") },
-    Seek(_o) {}, SetPosition(_t, _p) {}, OpenUri(_u) {},
+    Seek(offset) { setPos(curPos() + Number(offset)) },
+    SetPosition(_trackId, p) { setPos(Number(p)) },
+    OpenUri(_u) {},
     get PlaybackStatus() { return playback },
     LoopStatus: "None", Rate: 1.0, Shuffle: false,
     get Metadata() { return metadata() },
-    Volume: 1.0, Position: 0, MinimumRate: 1.0, MaximumRate: 1.0,
+    Volume: 1.0,
+    get Position() { return curPos() },
+    MinimumRate: 1.0, MaximumRate: 1.0,
     CanGoNext: true, CanGoPrevious: true, CanPlay: true, CanPause: true,
-    CanSeek: false, CanControl: true,
+    CanSeek: true, CanControl: true,
 }
 
 Gio.bus_own_name(

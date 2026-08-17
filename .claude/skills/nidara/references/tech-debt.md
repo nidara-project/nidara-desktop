@@ -342,19 +342,23 @@ handler re-assigns a `Gtk.Image.gicon` unconditionally → `gtk_image_clear` →
 full bar re-blur for an icon that never visually changed. **Fixed:** the always-visible bar
 widgets — `widgets/wifi.ts` (narrowed to `notify::enabled`/`notify::ssid`, AstalNetwork.Wifi
 churns `strength`/`scanning` on NM scans, commit dc42f44) and the bar **media** widget
-(`widgets/media.ts buildBarContent`, guarded the play/pause `gicon` — AstalMpris polls position
+(`widgets/media.ts buildBarContent`, guarded the play/pause `gicon` — AstalMpris polled position
 every 1 s while PLAYING via `player.vala init_position_poll` → `notify::position`, so it re-blurred
-at **1 Hz** while music played, commit d1803e2). **Rule:** guarding the `gicon` assignment
+at **1 Hz** while music played, commit d1803e2). **The media half of this lost its source on
+2026-08-17**: `core/mpris.ts` extrapolates position instead of polling it, so a playing player
+emits nothing at all (`scripts/dev/mpris-probe.ts` asserts 0 notifies in 3 s). The guards stay —
+they are the right shape for a generic `notify`, which still fires for real metadata changes. **Rule:** guarding the `gicon` assignment
 (`if (img.gicon !== want) img.gicon = want`; `Icons.*` are module-load cached refs so `===` holds)
 is enough and is *safer* than narrowing — the generic `notify` stays robust to all metadata
 changes, and with the only redraw-triggering setter guarded the 1 Hz wakeup queues no draw
 (repaints are the cost, not wakeups — same principle as (A)). `label`/`sensitive`/`visible` are
 already GTK equality-guarded. **Deferred items CLOSED in the 2026-07-02 optimization pass:**
 - **Cover-art decode churn fixed** (`media.ts` rich panel + `MediaIsland.tsx`): `loadArt` now
-  guards on the `cover_art` PATH (decode only when it changes), `MediaState` carries an
+  guards on the art PATH (decode only when it changes), `MediaState` carries an
   `artVersion` and every tile's `update()` gates `queue_draw` on it, and the play/pause `gicon`
   reassigns are identity-guarded. Before: 1 decode + full redraw per second while music played
-  (AstalMpris position poll), even with nothing visible — the media tile ships in the CC default.
+  (AstalMpris position poll — gone since 2026-08-17), even with nothing visible: the media tile
+  ships in the CC default.
 - **CC toggle icons guarded at the funnel**: all Toggles.tsx icon writes go through `setIcon`,
   which now identity-guards (`if (img.gicon !== icon)`) — covers wifi/every capsule sync. If a
   `getIcon()` returns fresh instances the guard just falls through to assignment (no regression).
@@ -1633,12 +1637,13 @@ These were paid down; the *rule* remains:
   shows: auto heuristic (a PLAYING player beats paused ones; ties go to the most recent
   playback-status change) plus a manual pin (source-selector glass menu in the media detail
   panel, `pinPlayer(busName|null)`; session-scoped, auto-resumes when the pinned player leaves
-  the bus). Cover art goes through `resolveCoverArt` — chain: `cover_art` (AstalMpris's cache)
-  → `file://` → `data:` (decoded once into `~/.cache/nidara/media-art/`) → `http(s)` (async
-  curl into the same cache, negative-cached on failure so a dead URL isn't retried at the 1 Hz
-  position poll). Known upstream noise: AstalMpris logs 2× `player.vala … Failed to cache
-  cover art … not supported` per `data:` track before our fallback renders it (GIO has no
-  `data:` support) — harmless, don't chase. `MediaIslandContent` shares ONE `MediaState`
+  the bus). Cover art goes through `resolveCoverArt` — chain: `file://` → a bare path →
+  `data:` (decoded once into `~/.cache/nidara/media-art/`) → `http(s)` (async curl into the
+  same cache, negative-cached on failure so a dead URL isn't retried). The chain used to start
+  at AstalMpris's own `cover_art` cache; that step went with the lib on 2026-08-17 and nothing
+  was lost, because the two kinds it did NOT cover (`data:`, and `https:` without GVfs) are the
+  common ones — it only ever logged 2× `player.vala … Failed to cache cover art` per track for
+  them. `MediaIslandContent` shares ONE `MediaState`
   singleton across tile rebuilds (a per-build state leaked its player subscription). Test with
   `scripts/dev/fake-mpris.js` (see `dev-workflow.md`) — heuristic + both art paths were
   verified live with it (2026-07-05).

@@ -1,6 +1,5 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
-import AstalMpris from "gi://AstalMpris"
 import GdkPixbuf from "gi://GdkPixbuf"
 import SquircleContainer from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/tokens"
@@ -201,7 +200,7 @@ export function PlayerCompact(opts: {
 
     const update = () => {
         const wasPlaying = playing
-        playing = player?.playback_status === AstalMpris.PlaybackStatus.PLAYING
+        playing = player?.playback_status === media.PlaybackStatus.PLAYING
         title.label = player?.title || media.playerLabel(player)
         loadArt()
         if (playing !== wasPlaying) {

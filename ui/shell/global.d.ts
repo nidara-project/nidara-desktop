@@ -11,14 +11,6 @@ namespace AstalApps {
 namespace AstalNotifd {
     export type Notification = any;
 }
-namespace AstalMpris {
-    export type Player = any;
-    export enum PlaybackStatus {
-        PLAYING,
-        PAUSED,
-        STOPPED
-    }
-}
 namespace AstalBluetooth {
     export type Bluetooth = any;
     export type Device = any;

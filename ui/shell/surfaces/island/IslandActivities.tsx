@@ -1,6 +1,5 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
-import AstalMpris from "gi://AstalMpris"
 import * as Battery from "../../core/BatteryService"
 import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT, ISLAND_RECORDING, recordingElapsed } from "../../core/Status"
 import * as media from "../../core/MediaService"
@@ -84,7 +83,7 @@ function mediaActivity(): IslandActivity {
         if (grace !== null) { GLib.source_remove(grace); grace = null }
     }
     const onStatus = () => {
-        const playing = curPlayer?.playback_status === AstalMpris.PlaybackStatus.PLAYING
+        const playing = curPlayer?.playback_status === media.PlaybackStatus.PLAYING
         if (playing) cancelGrace()
         else if (wasPlaying && curPlayer && grace === null) {
             grace = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, PAUSE_GRACE_S, () => {
@@ -132,7 +131,7 @@ function mediaActivity(): IslandActivity {
         // expiring under the open panel must not yank the compact); closing
         // the panel re-arbitrates (the engine listens on island-mode).
         isLive: () =>
-            curPlayer?.playback_status === AstalMpris.PlaybackStatus.PLAYING ||
+            curPlayer?.playback_status === media.PlaybackStatus.PLAYING ||
             grace !== null ||
             (!!curPlayer && status.island_mode === ISLAND_PLAYER),
     }

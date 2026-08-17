@@ -374,7 +374,6 @@ echo "  Installing the Astal/AGS stack from nidara-repo (prebuilt)..."
 if sudo pacman -S --needed --noconfirm \
     aylurs-gtk-shell appmenu-glib-translator \
     libastal-io astal-quarrel libastal-gtk4 libastal-apps \
-    libastal-mpris \
     libastal-notifd libastal-bluetooth libastal-tray libastal-wireplumber \
     libastal-auth; then
     # Lockstep guard: `pacman -S` can "succeed" with STALE versions when nidara-repo
@@ -475,6 +474,9 @@ echo "  Packaging Astal components (in dependency order)..."
 #     meson guard needs `astal-3.0` OR `astal-4-4.0` and libastal-gtk4 satisfies
 #     it; its src/gtk3 JS folder installs unconditionally, so dropping the lib
 #     does not change what astal-gjs ships — only the Astal-3.0 typelib goes.
+#   - lib/mpris: MPRIS is a D-Bus spec with no library under it, so AstalMpris
+#     was a Gio.DBusProxy wrapper; core/mpris.ts is that proxy, and it stopped
+#     polling Position (2026-08-17).
 #   - lib/greet: the greeter speaks greetd's socket itself since 2026-08-17
 #     (ui/greeter/lib/greetd.ts). Note lib/auth STAYS: AstalAuth is C against
 #     PAM and ships its own PAM config, so the lockscreen cannot absorb it the
@@ -484,7 +486,6 @@ astal_pkgs=(
     "lib/quarrel|astal-quarrel"
     "lib/astal/gtk4|libastal-gtk4"
     "lib/apps|libastal-apps"
-    "lib/mpris|libastal-mpris"
     "lib/notifd|libastal-notifd"
     "lib/bluetooth|libastal-bluetooth"
     "lib/tray|libastal-tray"

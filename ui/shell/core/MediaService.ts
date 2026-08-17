@@ -1,7 +1,7 @@
 // MediaService — the single source of truth for WHICH MPRIS player the shell shows.
 //
-// AstalMpris exposes every player on the bus; the media surfaces used to hardcode
-// get_players()[0] (= whichever app registered on D-Bus first), so a Spotify
+// `core/mpris.ts` exposes every player on the bus; the media surfaces used to
+// hardcode players()[0] (= whichever app registered on D-Bus first), so a Spotify
 // paused since the morning kept the tile while a YouTube video was audibly
 // playing. Same facade pattern as AudioService/NetworkService. This one owns:
 //
@@ -12,24 +12,31 @@
 //     (by bus name). The pin holds until that player leaves the bus, then auto
 //     selection resumes. Session-scoped on purpose — players don't survive a
 //     reboot, so persisting the pin would only pin a ghost.
-//   - COVER-ART resolution beyond AstalMpris's cache: `cover_art` only covers
-//     art the lib could cache locally. Browsers hand us file:// (works), but
-//     Spotify-class players publish https:// and mpv-mpris publishes data: —
-//     both rendered as an empty square before this. Resolution chain:
-//     cover_art path → file:// → data: (decoded once into our cache) →
-//     http(s) (curl'd async into ~/.cache/nidara/media-art, listeners
-//     re-notified when the file lands).
+//   - COVER-ART resolution, the whole of it. `mpris:artUrl` is whatever the app
+//     felt like publishing: browsers hand us file:// (works), Spotify-class
+//     players publish https:// and mpv-mpris publishes data: — both rendered as
+//     an empty square before this existed. Resolution chain: file:// → data:
+//     (decoded once into our cache) → http(s) (curl'd async into
+//     ~/.cache/nidara/media-art, listeners re-notified when the file lands).
+//     AstalMpris used to pre-cache the first two kinds into a `cover_art` path;
+//     that step is gone with it, and nothing was lost — the chain below already
+//     had to cover every case, because the two it did NOT cover are the common
+//     ones.
 //
 // Never imports Gtk (core→core only). Consumers subscribe() and re-read
 // selectedPlayer()/players(); the widget keeps its own per-player "notify"
 // wiring exactly as before.
 
-import AstalMpris from "gi://AstalMpris"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import GioUnix from "gi://GioUnix"
 import { execAsync } from "ags/process"
 import { safeDisconnect } from "./signals"
+import { PlaybackStatus, players as mprisPlayers, subscribePlayers } from "./mpris"
+
+/** Re-exported so surfaces never import `core/mpris` directly — the facade is
+ *  the only door to the media layer, same rule as HyprlandState/NetworkService. */
+export { PlaybackStatus } from "./mpris"
 
 // ── Selection state ──────────────────────────────────────────────────────────
 
@@ -45,7 +52,7 @@ function notifyListeners() {
 }
 
 function computeSelected(): any {
-    const list = AstalMpris.get_default()?.get_players() ?? []
+    const list = mprisPlayers()
     if (list.length === 0) return null
     if (pinnedBusName) {
         const pinned = list.find((p: any) => p.bus_name === pinnedBusName)
@@ -53,7 +60,7 @@ function computeSelected(): any {
         pinnedBusName = null // pinned player left the bus → resume auto
     }
     const rank = (p: any) => ({
-        playing: p.playback_status === AstalMpris.PlaybackStatus.PLAYING ? 1 : 0,
+        playing: p.playback_status === PlaybackStatus.PLAYING ? 1 : 0,
         ts: lastActive.get(p.bus_name) ?? 0,
     })
     return [...list].sort((a, b) => {
@@ -71,8 +78,7 @@ function reevaluate() {
 }
 
 function syncPlayerSubscriptions() {
-    const mpris = AstalMpris.get_default()
-    const list: any[] = mpris?.get_players() ?? []
+    const list: any[] = mprisPlayers()
     const live = new Set(list)
     for (const [p, id] of statusSigs) {
         if (!live.has(p)) { safeDisconnect(p, id); statusSigs.delete(p) }
@@ -90,9 +96,8 @@ function syncPlayerSubscriptions() {
 function init() {
     if (initialized) return
     initialized = true
-    const mpris = AstalMpris.get_default()
-    // Singleton lives for the whole shell process — no disconnect path needed.
-    mpris?.connect("notify::players", () => { syncPlayerSubscriptions(); reevaluate() })
+    // Module-level roster, alive for the whole shell process — no unsubscribe.
+    subscribePlayers(() => { syncPlayerSubscriptions(); reevaluate() })
     syncPlayerSubscriptions()
     selected = computeSelected()
     pruneArtCache()
@@ -102,7 +107,7 @@ function init() {
 
 export function players(): any[] {
     init()
-    return AstalMpris.get_default()?.get_players() ?? []
+    return mprisPlayers()
 }
 
 export function selectedPlayer(): any {
@@ -188,10 +193,6 @@ function artPath(url: string): string {
  */
 export function resolveCoverArt(p: any): string | null {
     if (!p) return null
-    // 1) AstalMpris already cached it (or the player handed us a local path)
-    const cached = p.cover_art
-    if (cached && GLib.file_test(cached, GLib.FileTest.EXISTS)) return cached
-
     const url: string = p.art_url || ""
     if (!url) return null
     if (artByUrl.has(url)) return artByUrl.get(url) ?? null
@@ -203,6 +204,14 @@ export function resolveCoverArt(p: any): string | null {
             artByUrl.set(url, ok ? path : null)
             return ok ? path! : null
         } catch { artByUrl.set(url, null); return null }
+    }
+
+    if (url.startsWith("/")) {
+        // Not a URI at all. The spec says artUrl is one, but players that cache
+        // their own art sometimes publish the bare path.
+        const ok = GLib.file_test(url, GLib.FileTest.EXISTS)
+        artByUrl.set(url, ok ? url : null)
+        return ok ? url : null
     }
 
     if (url.startsWith("data:")) {

@@ -984,12 +984,28 @@ gjs scripts/dev/fake-mpris.js fakeB "Boreal" "Blue track" "Artist B" "https://gi
 playerctl -p fakeB pause      # drive status flips (Playing beats Paused in the heuristic)
 ```
 
-Recipes for generating the `data:` art URI are in the script header. Expected noise: each
-`data:` track logs 2× `player.vala … Failed to cache cover art … not supported` from
-AstalMpris (GIO can't open `data:` URIs) before the shell's own decode fallback renders it —
-upstream, harmless, don't chase. On GVfs-equipped systems the `https` art is cached by
-AstalMpris itself (`~/.cache/astal/mpris/`); the shell's curl fallback
-(`~/.cache/nidara/media-art/`) covers GVfs-less installs.
+Recipes for generating the `data:` art URI are in the script header. Its `Position` advances
+with the clock while Playing, `Seek`/`SetPosition` move it and emit `Seeked`, and
+`FAKE_MPRIS_NO_TRACKID=1` drops `mpris:trackid` — the case where `SetPosition` is a documented
+no-op and a client has to fall back to a relative `Seek`. All art now resolves through
+`core/MediaService`'s own chain into `~/.cache/nidara/media-art/`; the `player.vala … Failed to
+cache cover art` CRITICALs that used to accompany every `data:`/`https:` track were AstalMpris
+and are gone with it (2026-08-17).
+
+**The layer underneath has its own probe.** `core/mpris.ts` talks to the session bus, so it can
+be exercised without the shell:
+
+```bash
+ags bundle --gtk 4 scripts/dev/mpris-probe.ts /tmp/mpris-probe
+/tmp/mpris-probe            # from the repo root; spawns its own fakes → PROBE-RESULT ALL PASS
+```
+
+It asserts the roster (appear/leave + the listener MediaService subscribes with), the metadata
+and root-interface reads, both seek paths, and — the one that is a measurement rather than a
+check — that **3 s of playback emit zero `notify`**. Position is extrapolated from an anchor
+instead of polled, so a playing player is silent; if that check ever counts signals again,
+something started polling. ⚠️ `DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent /tmp/mpris-probe`
+is the negative control — it must report FAIL.
 
 ### Exercising the compositor state layer WITHOUT restarting the shell
 

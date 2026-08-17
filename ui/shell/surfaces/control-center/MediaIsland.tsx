@@ -1,5 +1,4 @@
 import { Gtk, Gdk } from "ags/gtk4"
-import AstalMpris from "gi://AstalMpris"
 import GdkPixbuf from "gi://GdkPixbuf"
 import Pango from "gi://Pango"
 import { createSquirclePath } from "../../common/DrawingUtils"
@@ -11,8 +10,11 @@ import * as media from "../../core/MediaService"
 
 interface MediaState {
     artPixbuf: any
-    // Bumped only when the artwork actually changes — tiles compare it to skip
-    // queue_draw on the 1 Hz notify::position churn AstalMpris emits while playing.
+    // Bumped only when the artwork actually changes — tiles compare it to skip a
+    // queue_draw for a "notify" that was about something else (a title, a
+    // can-go-next). Until 2026-08-17 that meant the 1 Hz notify::position poll
+    // AstalMpris emitted while playing; core/mpris.ts extrapolates position
+    // instead of polling it, so that particular flood is gone at the source.
     artVersion: number
     currentPlayer: any
     listeners: Array<() => void>
@@ -46,8 +48,8 @@ function makeMediaState(): MediaState {
         state.notify()
     }
 
-    // Decode only when the art PATH changes — player "notify" fires at 1 Hz while
-    // playing (position poll), and re-decoding the PNG every second is pure churn.
+    // Decode only when the art PATH changes — "notify" fires for every property
+    // the player touches, and re-decoding the PNG for a title change is churn.
     let loadedArt: string | null = null
     const loadArt = () => {
         const path = media.resolveCoverArt(state.currentPlayer)
@@ -136,7 +138,7 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
         const p = state.currentPlayer
         title.label  = p?.title || t("cc.media.no-media")
         artist.label = p?.artist || ""
-        const wantPlay = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING ? Icons.pause : Icons.play
+        const wantPlay = p?.playback_status === media.PlaybackStatus.PLAYING ? Icons.pause : Icons.play
         if (playImg.gicon !== wantPlay) playImg.gicon = wantPlay
         prev.sensitive = p?.can_go_previous !== false
         next.sensitive = p?.can_go_next !== false
@@ -196,7 +198,7 @@ function buildWideContent(state: MediaState): Gtk.Widget {
         const p = state.currentPlayer
         title.label  = p?.title || t("cc.media.no-media")
         artist.label = p?.artist || ""
-        const wantPlay = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING ? Icons.pause : Icons.play
+        const wantPlay = p?.playback_status === media.PlaybackStatus.PLAYING ? Icons.pause : Icons.play
         if (widePlayImg.gicon !== wantPlay) widePlayImg.gicon = wantPlay
         if (drawnArt !== state.artVersion) { drawnArt = state.artVersion; artDa.queue_draw() }
     }
