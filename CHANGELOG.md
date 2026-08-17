@@ -5,6 +5,29 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] — 2026-08-17
+
+Two volume fixes, both found by running the released build rather than reading it.
+
+### Fixed
+
+- **The Control Center read 0% volume from every login.** The slider was built
+  before the audio endpoint had reported anything and then never asked again, so
+  it showed 0% with the sound at whatever you had left it, and only corrected
+  itself once something changed the volume from outside the shell. Dragging it
+  always worked — it was the number and the fill that lied. The same missing read
+  affected the volume panel in the top bar, Settings → Sound and the Control
+  Center's volume detail; and if audio arrives after the shell does, those
+  controls now come to life instead of staying dead for the session.
+
+- **Waking from suspend could set your volume to something you never chose.** A
+  pair of hooks saved the volume before sleep and re-applied it on wake — a
+  workaround from May for a WirePlumber that no longer needs one. On the current
+  stack the volume survives both a suspend and a full power cycle by itself, so
+  the pair did nothing in the ordinary case and re-applied a stale value in any
+  case where the saving half had not refreshed its file. Both halves are gone;
+  waking still re-enables the displays.
+
 ## [0.7.1] — 2026-08-17
 
 A settings release. Every one of Settings' 21 pages was read line by line against
