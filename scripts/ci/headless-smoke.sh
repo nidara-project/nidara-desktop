@@ -8,7 +8,7 @@
 #   2. `ags bundle` still produces a shell bundle (CI's other jobs don't bundle).
 #   3. The shipped config/hypr/hyprland.lua still parses and boots Hyprland.
 #   4. The shell bundle BOOTS on that Hyprland and stays alive.
-#   5. The IPC surface responds (`ags request listActions` / `dumpState`).
+#   5. BOTH IPC doors respond and agree (`ags request` and `org.nidara.Shell`).
 #   6. Screenshots (grim) are captured for HUMAN review — deliberately NOT a
 #      pixel diff (fragile, rejected); a person glances at the artifact.
 #
@@ -291,6 +291,24 @@ phase_run() {
     ags request dumpState >/tmp/smoke/dumpState.json
     jq -e '.shell.version' /tmp/smoke/dumpState.json >/dev/null || { log "FAIL: dumpState has no .shell.version"; exit 1; }
     log "IPC OK — shell version $(jq -r '.shell.version' /tmp/smoke/dumpState.json)"
+
+    # The shell's OWN door, which is the one that outlives AGS. Both are asserted
+    # on purpose while both exist: `nidara-ipc` falls back to AGS's name, so a
+    # shell that FAILED to publish org.nidara.Shell would still answer here and
+    # the check would pass for the wrong reason. Pin the bus name first, then the
+    # reply — and require the two doors to agree byte for byte, since they are
+    # supposed to be the same dispatcher.
+    # gdbus, not busctl: glib2 is already a hard dependency here, systemd's CLI
+    # is not guaranteed in a minimal container. It also names the destination
+    # explicitly, so there is no fallback that could make this pass by accident.
+    gdbus call --session --dest org.nidara.Shell --object-path /org/nidara/Shell \
+        --method org.nidara.Shell.Request '["listActions"]' >/dev/null 2>&1 \
+        || { log "FAIL: shell never published org.nidara.Shell"; exit 1; }
+    gjs -m "$REPO/bin/nidara-ipc" dumpState >/tmp/smoke/dumpState-ipc.json \
+        || { log "FAIL: nidara-ipc got no reply"; exit 1; }
+    cmp -s /tmp/smoke/dumpState.json /tmp/smoke/dumpState-ipc.json \
+        || { log "FAIL: the two IPC doors disagree"; exit 1; }
+    log "IPC OK — org.nidara.Shell answers, and matches ags request"
 
     # ── 5. Screenshots for human review (NOT a gate beyond grim succeeding) ───
     sleep 4                                   # let the first frames render

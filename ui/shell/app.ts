@@ -795,6 +795,107 @@ const IPC_ALIASES: Record<string, string> = {}
 for (const [name, { aliases }] of Object.entries(IPC_COMMANDS))
   for (const alias of aliases ?? []) IPC_ALIASES[alias] = name
 
+// ─── The one dispatcher, and the two doors into it ──────────────────────────
+//
+// `ags request <cmd>` is not a protocol of AGS's own invention: it is a D-Bus
+// method call, `Request(as) → s` on `io.Astal.ags` at `/io/Astal/Application`.
+// You can make the exact same call with no AGS in sight:
+//
+//   busctl --user call io.Astal.ags /io/Astal/Application \
+//          io.Astal.Application Request as 1 dumpState
+//
+// So the shell now ALSO answers on a name of its own, `org.nidara.Shell`, and
+// both doors run this same function. Nothing is removed: the two names coexist
+// deliberately, because the callers we do not control — a user's own
+// `~/.config/nidara/hyprland-user.lua` keybinds — say `ags request` today and
+// have to keep working for at least a release after the new name ships.
+//
+// The name matters beyond the CLI. `AstalIO.Daemon` OVERWRITES the
+// `applicationId` we pass to `app.start()` with `io.Astal.<instance>`, and GTK
+// derives the Wayland app-id from the GApplication id — which is the whole
+// reason Hyprland sees the Settings window as `io.Astal.ags` and the dock has to
+// remap it (the skill's commandment 7). Owning our own bus name is the first
+// step of owning that identity; the app-id itself only comes back when the host
+// goes (see references/architecture.md).
+
+/** Runs one IPC command and hands the response to `res`. May answer async. */
+function dispatchRequest(argv: string[], res: (out: string) => void): void {
+  if (!argv || argv.length === 0) return res("ok")
+  const cmd = argv[0].replace("()", "")
+  const entry = IPC_COMMANDS[cmd] ?? IPC_COMMANDS[IPC_ALIASES[cmd]]
+  if (!entry) {
+    console.warn(`[Handler] Unknown command: ${cmd}`)
+    return res("unknown command — try `nidara-ipc listActions`")
+  }
+  const out = entry.run(argv.slice(1))
+  // A command may legitimately return nothing (it acted, there is no payload);
+  // the wire always carries a string, so normalise rather than widen `res`.
+  const text = (v: unknown): string => (typeof v === "string" ? v : "ok")
+  // Async commands (listWindows reads `hyprctl clients -j`) respond once the
+  // Promise settles; sync commands respond immediately.
+  if (out instanceof Promise) {
+    out.then(v => res(text(v))).catch(e => res(`error: ${e}`))
+    return
+  }
+  res(text(out))
+}
+
+const NIDARA_BUS_NAME = "org.nidara.Shell"
+const NIDARA_BUS_PATH = "/org/nidara/Shell"
+const NIDARA_BUS_IFACE = `
+<node>
+  <interface name="org.nidara.Shell">
+    <method name="Request">
+      <arg type="as" name="argv" direction="in"/>
+      <arg type="s" name="response" direction="out"/>
+    </method>
+  </interface>
+</node>`
+
+/**
+ * Publish `org.nidara.Shell`. Fail-soft on purpose: a shell that cannot take the
+ * name must still boot and still answer on AGS's, because until the migration is
+ * finished that older name is the one the user's keybinds are calling.
+ */
+function exportShellBusName(): void {
+  // GJS dispatches `<Method>Async(params, invocation)` as an async method and
+  // waits for us to answer the invocation ourselves — which is what lets
+  // `listWindows` finish its subprocess before the caller is told anything.
+  const impl = {
+    RequestAsync([argv]: [string[]], invocation: any) {
+      try {
+        dispatchRequest(argv ?? [], out =>
+          invocation.return_value(new GLib.Variant("(s)", [out ?? "ok"])))
+      } catch (e) {
+        // A throwing command must not leave the caller blocked until its D-Bus
+        // timeout. Answered as a STRING, same shape as the async catch above, so
+        // both doors fail identically.
+        invocation.return_value(new GLib.Variant("(s)", [`error: ${e}`]))
+      }
+    },
+  }
+
+  try {
+    const exported = Gio.DBusExportedObject.wrapJSObject(NIDARA_BUS_IFACE, impl)
+    Gio.bus_own_name(
+      Gio.BusType.SESSION,
+      NIDARA_BUS_NAME,
+      Gio.BusNameOwnerFlags.NONE,
+      (conn: Gio.DBusConnection) => {
+        try {
+          exported.export(conn, NIDARA_BUS_PATH)
+        } catch (e) {
+          console.error(`[IPC] could not export ${NIDARA_BUS_PATH}:`, e)
+        }
+      },
+      () => console.log(`[IPC] serving ${NIDARA_BUS_NAME} (and AGS's io.Astal.ags)`),
+      () => console.warn(`[IPC] lost ${NIDARA_BUS_NAME} — another shell owns it?`),
+    )
+  } catch (e) {
+    console.error("[IPC] could not claim the bus name:", e)
+  }
+}
+
 app.start({
   applicationId: "org.nidara.desktop",
     main() {
@@ -809,6 +910,10 @@ app.start({
 
     // Agent-facing config surface (describeConfig/getConfig/setConfig)
     registerConfigEntries()
+
+    // The shell's OWN IPC door, beside the one AGS gives us. Registered here
+    // rather than at module scope so the commands it dispatches are wired first.
+    exportShellBusName()
 
     // "The Assistant is working in this window" — the inner glow follows
     // agentService.busy. Also clears a glow left on by a shell that died mid-turn.
@@ -1114,21 +1219,5 @@ app.start({
     shellActions.unlockScreen = unlockScreen
 
   },
-  requestHandler(argv, res) {
-    if (!argv || argv.length === 0) return res("ok")
-    const cmd = argv[0].replace("()", "")
-    const entry = IPC_COMMANDS[cmd] ?? IPC_COMMANDS[IPC_ALIASES[cmd]]
-    if (!entry) {
-      console.warn(`[Handler] Unknown command: ${cmd}`)
-      return res("unknown command — try `ags request listActions`")
-    }
-    const out = entry.run(argv.slice(1))
-    // Async commands (listWindows reads `hyprctl clients -j`) respond once the
-    // Promise settles; sync commands respond immediately.
-    if (out instanceof Promise) {
-      out.then(v => res(v ?? "ok")).catch(e => res(`error: ${e}`))
-      return
-    }
-    res(out ?? "ok")
-  }
+  requestHandler: dispatchRequest,
 })

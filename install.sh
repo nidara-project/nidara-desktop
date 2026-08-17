@@ -781,6 +781,7 @@ sudo cp "$REPO_DIR/bin/nidara-before-sleep" /usr/bin/nidara-before-sleep
 sudo cp "$REPO_DIR/bin/nidara-after-sleep"  /usr/bin/nidara-after-sleep
 sudo cp "$REPO_DIR/bin/nidara-game-mode" /usr/bin/nidara-game-mode
 sudo cp "$REPO_DIR/bin/nidara-doctor" /usr/bin/nidara-doctor
+sudo cp "$REPO_DIR/bin/nidara-ipc" /usr/bin/nidara-ipc
 sudo cp "$REPO_DIR/bin/nidara-portal"    /usr/bin/nidara-portal
 sudo cp "$REPO_DIR/bin/nidara-mcp" /usr/bin/nidara-mcp
 sudo cp "$REPO_DIR/bin/nidara-agent" /usr/bin/nidara-agent
@@ -790,7 +791,7 @@ sudo cp "$REPO_DIR/bin/nidara-type"      /usr/bin/nidara-type
 sudo cp "$REPO_DIR/bin/nidara-click"     /usr/bin/nidara-click
 sudo cp "$REPO_DIR/bin/nidara-update" /usr/bin/nidara-update
 sudo cp "$REPO_DIR/bin/nidara-setup" /usr/bin/nidara-setup
-sudo chmod +x /usr/bin/nidara /usr/bin/nidara-ui /usr/bin/nidara-greeter /usr/bin/nidara-lock /usr/bin/nidara-before-sleep /usr/bin/nidara-after-sleep /usr/bin/nidara-game-mode /usr/bin/nidara-doctor /usr/bin/nidara-portal /usr/bin/nidara-mcp /usr/bin/nidara-agent /usr/bin/nidara-a11y /usr/bin/nidara-act /usr/bin/nidara-type /usr/bin/nidara-click /usr/bin/nidara-update /usr/bin/nidara-setup
+sudo chmod +x /usr/bin/nidara /usr/bin/nidara-ui /usr/bin/nidara-greeter /usr/bin/nidara-lock /usr/bin/nidara-before-sleep /usr/bin/nidara-after-sleep /usr/bin/nidara-game-mode /usr/bin/nidara-doctor /usr/bin/nidara-ipc /usr/bin/nidara-portal /usr/bin/nidara-mcp /usr/bin/nidara-agent /usr/bin/nidara-a11y /usr/bin/nidara-act /usr/bin/nidara-type /usr/bin/nidara-click /usr/bin/nidara-update /usr/bin/nidara-setup
 
 # Compile the synthetic-pointer backend (nidara-input): a tiny zwlr_virtual_pointer_v1
 # Wayland client. wayland-scanner generates the protocol glue from wlr-protocols, then cc

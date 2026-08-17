@@ -53,9 +53,49 @@ user clicks bar pill
 
 This is the canonical pattern: **events go up through actions, state changes propagate down through `notify::` signals.**
 
-## IPC contract: `ags request`
+## IPC contract: `nidara-ipc` (and `ags request`, for now)
 
-`ags request '<cmd>'` works out of the box because `app.ts` implements `requestHandler(argv, res)`. Hyprland keybinds call `hl.dsp.exec_cmd("ags request <cmd>")`.
+**There are two doors and ONE dispatcher.** `dispatchRequest(argv, res)` in `app.ts` is the
+function; `app.start({ requestHandler })` hands AGS's door to it, and `exportShellBusName()`
+publishes a second one of our own. Adding a command reaches both automatically — never wire a
+command to one door only.
+
+`ags request <cmd>` was never a protocol of AGS's invention. It is a D-Bus method call, and you
+can make it with no AGS in sight — which is how this was verified rather than assumed:
+
+```bash
+busctl --user call org.nidara.Shell /org/nidara/Shell \
+       org.nidara.Shell Request as 1 dumpState      # ours
+busctl --user call io.Astal.ags /io/Astal/Application \
+       io.Astal.Application Request as 1 dumpState  # AGS's, byte-identical
+```
+
+**Use `nidara-ipc <cmd>` in new code.** It is a ~90-line GJS client (`bin/nidara-ipc`) that tries
+`org.nidara.Shell` and **falls back to `io.Astal.ags`**, so it works against a shell from before
+this change and after it. That fallback is load-bearing, not politeness: it is what lets the ~35
+consumers migrate one at a time instead of in a flag day, and it must not be dropped until AGS's
+host is gone. The fallback fires only on `NameHasNoOwner`/`ServiceUnknown` — any other failure came
+from a shell that DID answer, and retrying the other door would run the command twice.
+
+⚠️ **`ags request` cannot simply be renamed away.** Two of its callers are outside our control:
+a user's own `~/.config/nidara/hyprland-user.lua` keybinds, and the string appears in **user-facing
+translated text in 12 locales**. Both need a release-long deprecation window; that is why the new
+name shipped first and the migration follows.
+
+Why a bus name of our own, beyond the CLI: `AstalIO.Daemon` **overwrites** the `applicationId`
+passed to `app.start()` with `io.Astal.<instance>`, and GTK derives the Wayland app-id from the
+GApplication id — which is the entire reason Hyprland sees the Settings window as `io.Astal.ags`
+and the dock has to remap it (commandment 7). Owning the name is step one; the app-id itself only
+comes back when the host does.
+
+**GJS gotcha, measured 2026-08-18:** the exported method is named `RequestAsync(params, invocation)`
+because that naming is how GJS knows to let us answer the invocation ourselves — without it, an
+async command (`listWindows`, which shells out to `hyprctl`) would reply before its Promise
+settled. And `Gio.DBusError` DOES work with `instanceof` in GJS (the opposite was assumed and was
+wrong); what actually bites is the error NAME — with `NO_AUTO_START` the bus answers a missing
+name with `NameHasNoOwner`, never `ServiceUnknown`.
+
+Hyprland keybinds still call `hl.dsp.exec_cmd("ags request <cmd>")` until that migration lands.
 
 ### The IPC surface is self-describing
 

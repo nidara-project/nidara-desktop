@@ -29,6 +29,7 @@ declare global {
     export type Menu = GioMod.Gio.Menu;
     export type ListStore = GioMod.Gio.ListStore;
     export type ThemedIcon = GioMod.Gio.ThemedIcon;
+    export type DBusConnection = GioMod.Gio.DBusConnection;
   }
 
   namespace GLib {

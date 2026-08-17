@@ -1,0 +1,105 @@
+#!/usr/bin/env -S gjs -m
+// ─────────────────────────────────────────────────────────────────────────────
+// nidara-ipc — the shell's command surface, spoken directly.
+// Installed to /usr/bin/nidara-ipc.
+//
+//   nidara-ipc listActions              # discover every command
+//   nidara-ipc dumpState                # live shell state as JSON
+//   nidara-ipc setConfig dock.autoHide true
+//   nidara-ipc toggleAppGrid
+//
+// This replaces `ags request <cmd>`, which was never a protocol of AGS's own:
+// it is a D-Bus method call, `Request(as) → s`. The same call by hand, with no
+// AGS anywhere:
+//
+//   busctl --user call org.nidara.Shell /org/nidara/Shell \
+//          org.nidara.Shell Request as 1 dumpState
+//
+// ── Why this exists as its own binary ───────────────────────────────────────
+//
+// NOT a verb on `nidara`: that one is the Wayland session entry point, the thing
+// the display manager executes to start the desktop. Teaching it to also answer
+// questions about a running shell invites the accident where a typo boots a
+// second session. `nidara-ipc` joins the family that is already here —
+// nidara-a11y, nidara-act, nidara-click, nidara-type, nidara-agent, nidara-mcp —
+// all plain GJS, no Node.
+//
+// ── The fallback is load-bearing, not politeness ────────────────────────────
+//
+// It tries `org.nidara.Shell` and falls back to AGS's `io.Astal.ags`. Both are
+// live right now: the shell publishes its own name AND keeps AGS's. That is what
+// makes the migration incremental — this client works against a shell from
+// before the change and after it, so consumers (hyprland.lua keybinds, the
+// agent, the MCP server, CI) can move over one at a time instead of in a flag
+// day. Drop the fallback only once AGS's host is gone for good.
+//
+// Exit codes: 0 on a reply, 1 when no shell answered, 2 on bad usage. The reply
+// is printed verbatim on stdout — the shell already returns JSON where it means
+// JSON, so this must not reformat or the callers parsing it break.
+import Gio from "gi://Gio"
+import GLib from "gi://GLib"
+
+/** Doors in preference order. The second one goes when AGS's host does. */
+const DOORS = [
+    { name: "org.nidara.Shell", path: "/org/nidara/Shell", iface: "org.nidara.Shell" },
+    { name: "io.Astal.ags", path: "/io/Astal/Application", iface: "io.Astal.Application" },
+]
+
+// Long enough for the slowest command (listWindows shells out to hyprctl,
+// screenshot writes a PNG) and short enough that a wedged shell does not hang a
+// keybind forever.
+const TIMEOUT_MS = 15000
+
+const argv = ARGV
+if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
+    print("usage: nidara-ipc <command> [args...]")
+    print("       nidara-ipc listActions     # every command, with its arguments")
+    imports.system.exit(argv.length === 0 ? 2 : 0)
+}
+
+let bus
+try {
+    bus = Gio.bus_get_sync(Gio.BusType.SESSION, null)
+} catch (e) {
+    printerr(`nidara-ipc: no session bus: ${e}`)
+    imports.system.exit(1)
+}
+
+let lastError = "no shell is running"
+for (const door of DOORS) {
+    try {
+        const reply = bus.call_sync(
+            door.name, door.path, door.iface, "Request",
+            new GLib.Variant("(as)", [argv]),
+            new GLib.VariantType("(s)"),
+            Gio.DBusCallFlags.NO_AUTO_START, TIMEOUT_MS, null,
+        )
+        // Printed as-is: callers parse this (nidara-mcp, nidara-agent, the CI
+        // smoke), and a trailing newline from print() is what `$(…)` strips.
+        print(reply.deepUnpack()[0])
+        imports.system.exit(0)
+    } catch (e) {
+        // Only a MISSING name is worth trying the next door for. Any other
+        // failure came from a shell that DID answer, and retrying elsewhere
+        // would run the command twice.
+        //
+        // BOTH names, and the first one is the one that actually fires here
+        // (measured, 2026-08-18): with NO_AUTO_START the bus reports
+        // `NameHasNoOwner` because it never tries activation. `ServiceUnknown`
+        // is what an activatable name gives, so it is kept for the day this
+        // shell ships a D-Bus service file.
+        const UNOWNED = [
+            "org.freedesktop.DBus.Error.NameHasNoOwner",
+            "org.freedesktop.DBus.Error.ServiceUnknown",
+        ]
+        const unowned = Gio.DBusError.is_remote_error(e)
+            && UNOWNED.includes(Gio.DBusError.get_remote_error(e))
+        // "Nobody owns that name" is the ordinary shape of "the shell is not
+        // running" and the raw GDBus text says that badly. Anything else is a
+        // real fault and must be reported verbatim, however ugly.
+        if (!unowned) { lastError = `${e}`; break }
+    }
+}
+
+printerr(`nidara-ipc: ${lastError}`)
+imports.system.exit(1)
