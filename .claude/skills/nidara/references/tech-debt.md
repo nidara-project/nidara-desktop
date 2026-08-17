@@ -446,6 +446,23 @@ id is being removed again; a leak shows different ids.** And `G_DEBUG=fatal-crit
 needed here — the user naming the exact navigation (Language → Appearance) beat three rounds of
 static analysis, two of which pointed at the wrong file.
 
+⚠️ **This family is NOT confined to Settings, and the audit that found it did not look elsewhere**
+(2026-08-17, found by the VM sweep of the released 0.7.1). The **Control Center's volume tile** had
+it in its purest form: `Sliders.tsx` captured `default_speaker` when the widget SPEC was built — once,
+at shell start — read `speaker.volume` into a `const` and handed the slider `() => current * 100`. A
+CC widget spec is built at shell start, and at that moment AstalWp has not populated the endpoint's
+properties, so that read was **0**: the slider showed 0% from login with the sink at 40% and
+unmuted, and only corrected when something changed the volume from OUTSIDE. Four opens did not fix
+it; a shell restart with the sink settled for minutes reproduced it exactly. Its neighbour survived
+by accident — brightness `pollWhileMapped`s every 2 s, so it re-reads whether or not anyone primed
+it. Fixed by resolving the endpoint through a getter (never captured), priming inside `onExtChange`,
+and re-targeting on `notify::default-speaker` via `AudioSvc.watchDevices`.
+🔑 **The rule for CC widgets specifically: a spec is built ONCE, at shell start, so nothing in it may
+capture a service endpoint or a value read from one.** The kit's slider already states the contract
+(`nidara-kit/slider.ts`: callers whose `onExtChange` primes re-read on every realize) — the volume
+tile simply did not hold it. **The rest of the CC has not been swept for this**, and neither has any
+other surface built at start-up; that sweep is open work.
+
 ### 13. Lockscreen GTK4 segfault when a wl_output vanishes — upstream, mitigated by watchdog
 On wake-from-suspend the DP link re-trains and the wl_output disappears for ~1 s; GTK
 destroys the session-lock window bound to that output and segfaults inside

@@ -1,12 +1,10 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
-import AstalWp from "gi://AstalWp"
-import { makeHSlider, makeVerticalFillTile } from "../../../lib/nidara-kit"
+import { makeHSlider, makeVerticalFillTile, bindWhileRealized } from "../../../lib/nidara-kit"
 import { CCWidgetSpec, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import * as AudioSvc from "../../core/AudioService"
-import { safeDisconnect } from "../../core/signals"
 
 function buildHorizontalSlider(
     iconNameLow: Gio.FileIcon,
@@ -62,8 +60,10 @@ function buildVerticalSlider(
 }
 
 // Small (1×1) variant: round mute-toggle icon, mirroring the bar icon.
-function buildVolumeIcon(speaker: any): Gtk.Widget {
-    const getIcon = () => speaker ? AudioSvc.targetVolumeIcon(speaker) : Icons.volumeMuted
+// Takes a GETTER, not the endpoint: see the note on VolumeWidget for why nothing
+// here may capture the default speaker.
+function buildVolumeIcon(speaker: () => any): Gtk.Widget {
+    const getIcon = () => { const s = speaker(); return s ? AudioSvc.targetVolumeIcon(s) : Icons.volumeMuted }
     const icon = new Gtk.Image({ gicon: getIcon(), pixel_size: 28, css_classes: ["nd-icon"] })
     const btn = new Gtk.Button({
         css_classes: ["nidara-atomic-round-btn"],
@@ -72,41 +72,64 @@ function buildVolumeIcon(speaker: any): Gtk.Widget {
         width_request: 48, height_request: 48,
         child: icon,
     })
-    btn.connect("clicked", () => { AudioSvc.toggleMute(speaker); icon.gicon = getIcon() })
-    if (speaker) {
-        const ids = [
-            speaker.connect("notify::volume", () => { icon.gicon = getIcon() }),
-            speaker.connect?.("notify::mute", () => { icon.gicon = getIcon() }) ?? 0,
-        ]
-        btn.connect("unrealize", () => ids.forEach((id: number) => safeDisconnect(speaker, id)))
-    }
+    btn.connect("clicked", () => { AudioSvc.toggleMute(speaker()); icon.gicon = getIcon() })
+    // Re-subscribed AND re-read on every realize: subscribing once and disconnecting
+    // on "unrealize" is a subscription that survives exactly one hide (same trap the
+    // kit's slider documents), and it also has to re-target when the default endpoint
+    // changes.
+    bindWhileRealized(btn, () => {
+        icon.gicon = getIcon()
+        const stopDevices = AudioSvc.watchDevices(() => { icon.gicon = getIcon() })
+        const stopVolume = AudioSvc.watchVolume(speaker(), () => { icon.gicon = getIcon() })
+        return () => { stopVolume(); stopDevices() }
+    })
     return btn
 }
 
 export function VolumeWidget(): CCWidgetSpec {
-    const speaker = AstalWp.get_default()?.audio?.default_speaker
+    // 🔑 Resolved on every use, NEVER captured. This spec is built once, at shell
+    // start, and two things are false at that moment: AstalWp has not populated the
+    // endpoint's properties yet (`volume` reads 0 even when the sink is at 40%), and
+    // on a machine where pipewire settles after the shell there may be no default
+    // speaker at all — captured, that null is permanent and the tile is dead for the
+    // session. It also changes when the user switches output.
+    const speaker = () => AudioSvc.defaultSpeaker()
 
-    const getValue = () => speaker ? Math.round(speaker.volume * 100) / 100 : 0.5
-    const onChange = (v: number) => { if (speaker) speaker.volume = v }
+    const getValue = () => { const s = speaker(); return s ? Math.round(s.volume * 100) / 100 : 0.5 }
+    const onChange = (v: number) => { const s = speaker(); if (s) s.volume = v }
+
+    // PRIMES before connecting, then re-targets when the default endpoint changes.
+    // The kit's slider re-subscribes on every realize (`bindWhileRealized`), so a hook
+    // that only pushes FUTURE changes leaves the slider showing whatever it was built
+    // with — which is how the Control Center displayed 0% from login until something
+    // changed the volume from outside (found on the 0.7.1 VM sweep, with the sink at
+    // 40% and unmuted). Same defect the accessibility text slider had in #165: the
+    // hook was armed and nobody read on the way in.
     const onExtChange = (cb: (v: number) => void): (() => void) => {
-        if (!speaker) return () => {}
-        const id = speaker.connect("notify::volume", () => cb(speaker.volume))
-        return () => safeDisconnect(speaker, id)
+        let stopVolume: (() => void) | null = null
+        const sync = () => { const s = speaker(); if (s) cb(s.volume) }
+        const rewire = () => {
+            stopVolume?.()
+            stopVolume = AudioSvc.watchVolume(speaker(), sync)
+            sync()
+        }
+        rewire()
+        const stopDevices = AudioSvc.watchDevices(rewire)
+        return () => { stopVolume?.(); stopDevices() }
     }
 
     const buildContent = (size: WidgetSize): Gtk.Widget => {
-        const current = getValue()
         if (size === WidgetSize.SINGLE) {
             return buildVolumeIcon(speaker)
         }
         if (size === WidgetSize.TALL) {
             return buildVerticalSlider(
-                () => speaker ? AudioSvc.targetVolumeIcon(speaker) : Icons.volumeMuted,
-                () => current * 100, onChange, onExtChange,
-                (sync) => speaker ? AudioSvc.watchVolume(speaker, sync) : () => {},
+                () => { const s = speaker(); return s ? AudioSvc.targetVolumeIcon(s) : Icons.volumeMuted },
+                () => getValue() * 100, onChange, onExtChange,
+                (sync) => AudioSvc.watchVolume(speaker(), sync),
             )
         }
-        return buildHorizontalSlider(Icons.volumeLow, Icons.volumeHigh, () => current * 100, onChange, onExtChange)
+        return buildHorizontalSlider(Icons.volumeLow, Icons.volumeHigh, () => getValue() * 100, onChange, onExtChange)
     }
 
     return {
