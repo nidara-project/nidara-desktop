@@ -70,9 +70,24 @@ busctl --user call io.Astal.ags /io/Astal/Application \
        io.Astal.Application Request as 1 dumpState  # AGS's, byte-identical
 ```
 
-**Use `nidara-ipc <cmd>` in new code.** It is a ~90-line GJS client (`bin/nidara-ipc`) that tries
-`org.nidara.Shell` and **falls back to `io.Astal.ags`**, so it works against a shell from before
-this change and after it. That fallback is load-bearing, not politeness: it is what lets the ~35
+**Use `nidara-ipc <cmd>` in new code.** It is `bin/nidara-ipc.c`, a ~145-line C client compiled by
+install.sh §6 and the PKGBUILD (same idiom as `bin/nidara-input.c`), which tries `org.nidara.Shell`
+and **falls back to `io.Astal.ags`**, so it works against a shell from before this change and after
+it.
+
+⚠️ **C on purpose, and this is the one thing not to "clean up" into GJS.** Every other
+`nidara-*` helper is GJS; this one is on a KEYBIND — `hyprland.lua` binds Super+Space, Super+A and
+five more to it, so it runs on every press. Measured 2026-08-18, cheapest possible request, per
+invocation:
+
+| `ags request` | `gdbus` (C) | a GJS client |
+|---|---|---|
+| 2.9 ms | 3.1 ms | **30 ms** |
+
+The first version of this file WAS GJS and was rewritten the moment that number appeared: shipping
+it would have made every keybind ten times slower than the `ags request` it replaces. The other
+helpers stay GJS because an agent step already costs hundreds of milliseconds, so 27 ms is noise
+there and decisive here. That fallback is load-bearing, not politeness: it is what lets the ~35
 consumers migrate one at a time instead of in a flag day, and it must not be dropped until AGS's
 host is gone. The fallback fires only on `NameHasNoOwner`/`ServiceUnknown` — any other failure came
 from a shell that DID answer, and retrying the other door would run the command twice.

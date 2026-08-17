@@ -131,6 +131,10 @@ build() {
   cc -O2 bin/nidara-input.c build/wlr-virtual-pointer-unstable-v1-protocol.c \
      -Ibuild $(pkg-config --cflags --libs wayland-client) -o build/nidara-input
 
+  # nidara-ipc: the D-Bus client every hyprland.lua keybind runs (mirrors
+  # install.sh §6). C, not GJS — see the file's header for the 30 ms vs 2.9 ms.
+  cc -O2 bin/nidara-ipc.c $(pkg-config --cflags --libs gio-2.0) -o build/nidara-ipc
+
   # libnidara-wl: window capture + hyprland-surface visible region, reachable
   # from GJS via introspection (mirrors install.sh §6)
   lib/nidara-wl/build.sh "$srcdir/nidara-desktop-$pkgver/build/nidara-wl"
@@ -142,12 +146,13 @@ package() {
   # /usr/bin — session launchers, helpers, agent toolkit (install.sh §6 list)
   local b
   for b in nidara nidara-ui nidara-greeter nidara-lock nidara-before-sleep \
-           nidara-after-sleep nidara-game-mode nidara-doctor nidara-ipc nidara-portal \
+           nidara-after-sleep nidara-game-mode nidara-doctor nidara-portal \
            nidara-mcp nidara-agent nidara-a11y nidara-act nidara-type nidara-click \
            nidara-update nidara-setup; do
     install -Dm755 "bin/$b" "$pkgdir/usr/bin/$b"
   done
   install -Dm755 build/nidara-input "$pkgdir/usr/bin/nidara-input"
+  install -Dm755 build/nidara-ipc "$pkgdir/usr/bin/nidara-ipc"
 
   # libnidara-wl + its typelib. The typelib MUST land on the default
   # girepository path: the three bundles import gi://NidaraWl with no

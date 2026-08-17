@@ -304,7 +304,11 @@ phase_run() {
     gdbus call --session --dest org.nidara.Shell --object-path /org/nidara/Shell \
         --method org.nidara.Shell.Request '["listActions"]' >/dev/null 2>&1 \
         || { log "FAIL: shell never published org.nidara.Shell"; exit 1; }
-    gjs -m "$REPO/bin/nidara-ipc" dumpState >/tmp/smoke/dumpState-ipc.json \
+    # Compiled here rather than assumed on PATH: the smoke builds from source and
+    # must exercise THIS tree's client, not one an earlier install left behind.
+    cc -O2 "$REPO/bin/nidara-ipc.c" $(pkg-config --cflags --libs gio-2.0) -o /tmp/smoke/nidara-ipc \
+        || { log "FAIL: nidara-ipc.c does not compile"; exit 1; }
+    /tmp/smoke/nidara-ipc dumpState >/tmp/smoke/dumpState-ipc.json \
         || { log "FAIL: nidara-ipc got no reply"; exit 1; }
     cmp -s /tmp/smoke/dumpState.json /tmp/smoke/dumpState-ipc.json \
         || { log "FAIL: the two IPC doors disagree"; exit 1; }
