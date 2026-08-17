@@ -41,10 +41,10 @@ depends=(
   gjs gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 wayland
   # pinned Astal/AGS stack (served by the [nidara] repo)
   aylurs-gtk-shell astal-gjs appmenu-glib-translator
-  # (no libastal-network / libastal-gtk3 / libastal-greet / libastal-battery —
-  # see install.sh's astal_pkgs for why each one went)
+  # (no libastal-network / libastal-gtk3 / libastal-greet / libastal-battery /
+  # libastal-hyprland — see install.sh's astal_pkgs for why each one went)
   libastal-io astal-quarrel libastal-gtk4 libastal-apps
-  libastal-hyprland libastal-mpris
+  libastal-mpris
   libastal-notifd libastal-bluetooth libastal-tray libastal-wireplumber
   libastal-auth
   # services the shell talks to. networkmanager is load-bearing TWICE over: the

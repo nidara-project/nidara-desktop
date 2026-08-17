@@ -374,7 +374,7 @@ echo "  Installing the Astal/AGS stack from nidara-repo (prebuilt)..."
 if sudo pacman -S --needed --noconfirm \
     aylurs-gtk-shell appmenu-glib-translator \
     libastal-io astal-quarrel libastal-gtk4 libastal-apps \
-    libastal-hyprland libastal-mpris \
+    libastal-mpris \
     libastal-notifd libastal-bluetooth libastal-tray libastal-wireplumber \
     libastal-auth; then
     # Lockstep guard: `pacman -S` can "succeed" with STALE versions when nidara-repo
@@ -467,6 +467,8 @@ echo "  Packaging Astal components (in dependency order)..."
 # oversight — re-adding one is a change of mind about who owns that domain):
 #   - lib/network: the shell reads NetworkManager through libnm directly since
 #     2026-08-17 (tech-debt #71), so nothing loads AstalNetwork any more.
+#   - lib/hyprland: core/hypr-ipc.ts speaks the compositor's two sockets since
+#     2026-08-17, which is all AstalHyprland ever did (tech-debt #11's residual).
 #   - lib/battery: core/BatteryService.ts reads UPower through UPowerGlib
 #     (shipped by `upower`, already a dependency) since 2026-08-17.
 #   - lib/astal/gtk3: nothing in the three bundles imports gtk3. astal-gjs's
@@ -482,7 +484,6 @@ astal_pkgs=(
     "lib/quarrel|astal-quarrel"
     "lib/astal/gtk4|libastal-gtk4"
     "lib/apps|libastal-apps"
-    "lib/hyprland|libastal-hyprland"
     "lib/mpris|libastal-mpris"
     "lib/notifd|libastal-notifd"
     "lib/bluetooth|libastal-bluetooth"

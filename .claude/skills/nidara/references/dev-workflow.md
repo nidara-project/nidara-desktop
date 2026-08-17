@@ -991,6 +991,39 @@ upstream, harmless, don't chase. On GVfs-equipped systems the `https` art is cac
 AstalMpris itself (`~/.cache/astal/mpris/`); the shell's curl fallback
 (`~/.cache/nidara/media-art/`) covers GVfs-less installs.
 
+### Exercising the compositor state layer WITHOUT restarting the shell
+
+`core/HyprlandState.ts` is the shell's model of Hyprland, and reloading the shell to test it
+means blinking the user's desktop. `scripts/dev/hypr-state-probe.ts` runs the same module in a
+process of its own:
+
+```bash
+ags bundle --gtk 4 scripts/dev/hypr-state-probe.ts /tmp/hypr-probe
+/tmp/hypr-probe 15      # then drive Hyprland from another terminal
+```
+
+⚠️ **Drive it with `hyprctl dispatch "<lua>"`, not `hyprctl dispatch workspace 2`.** With the
+Lua config the classic syntax dies as `')' expected near '2'` — and the other near-miss is
+silent: `hyprctl eval "hl.dsp.focus({ workspace = 2 })"` prints **ok and does nothing**, because
+`hl.dsp.*` BUILDS a dispatch descriptor and `eval` throws it away. `hyprctl dispatch` wraps the
+argument in `hl.dispatch(…)`, which is what actually performs it — the same call `_dispatch`
+makes. Both wrong forms were mistaken for a broken state layer for a while.
+
+What the probe is for is telling the two signals apart:
+
+- `"changed"` = structural (focus, workspace, open/close, geometry, **FSMODE**),
+- `"title-changed"` = a window renamed itself and nothing else.
+
+Measured live 2026-08-17: a terminal running a spinner produced **14 `title-changed` and 0
+`changed`** in 14 s — a rename must never repaint the bar and dock. And driving
+maximized → fullscreen → none → maximized produced a `changed` for every FSMODE transition,
+including the one where the window already filled the monitor and **did not move a pixel**.
+That case is why `fullscreen` is in the state signature.
+
+🔑 **The negative control is `HYPRLAND_INSTANCE_SIGNATURE=nope`**: the IPC layer must report
+`[HyprIPC] event socket connect failed` rather than quietly showing an empty desktop. Silence
+there is the tech-debt #71 failure mode wearing compositor clothes.
+
 ### Testing the battery widget on a desktop (no battery)
 
 `core/BatteryService.ts` reads UPower's composite **DisplayDevice** (through

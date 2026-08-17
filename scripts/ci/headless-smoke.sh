@@ -102,12 +102,13 @@ phase_deps() {
     git -C /opt/src/astal checkout --quiet "$ASTAL_REF"
     # Same set install.sh's astal_pkgs builds, and for the same reasons — the two
     # lists must move together (the cache key hashes BOTH files so a drift can't
-    # be masked by a stale tarball). lib/network, lib/astal/gtk3 and lib/battery
-    # are absent on purpose; booting the shell here is what proves they are not
-    # needed.
+    # be masked by a stale tarball). lib/network, lib/astal/gtk3, lib/battery and
+    # lib/hyprland are absent on purpose; booting the shell here is what proves they
+    # are not needed — and for hyprland that is a real test, since the smoke boots a
+    # compositor and the shell has to model it.
     local astal_subdirs=(
         lib/astal/io lib/quarrel lib/astal/gtk4
-        lib/apps lib/hyprland lib/mpris
+        lib/apps lib/mpris
         lib/notifd lib/bluetooth lib/tray lib/wireplumber lang/gjs
     )
     local sub

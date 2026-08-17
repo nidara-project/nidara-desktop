@@ -1,5 +1,5 @@
-import AstalHyprland from "gi://AstalHyprland"
 import GLib from "gi://GLib"
+import type { HyprClient, HyprWorkspace } from "./core/hypr-ipc"
 
 /**
  * Robust Service Fetcher with Exponential Backoff 🛡️
@@ -53,7 +53,7 @@ export function calculateIconSize(
  * Wordmark Engine 🍎
  * Pretty names and sanitization for a premium look.
  */
-export function getWordmark(client: AstalHyprland.Client | null, focusedWorkspace: AstalHyprland.Workspace | null): string {
+export function getWordmark(client: HyprClient | null, focusedWorkspace: HyprWorkspace | null): string {
     if (!client) {
         const ws = focusedWorkspace
         if (!ws) return "Workspace"

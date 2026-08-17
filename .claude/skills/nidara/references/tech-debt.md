@@ -226,21 +226,30 @@ generic `notify`, cursor); blur is the cost multiplier (inherent).
 **(A) `HyprlandState "changed"` storm — FIXED 2026-06-14 (commit 6fcde4c).** On a live *armed* instance
 (~125/s main-thread wakeups) `gsk_renderer_render` now fires **~2/s** (was ~120/s) — a 98% cut
 in repaints, verified by gdb. The user-visible symptom (elevated GPU / continuous compositing)
-is resolved. **Residual (separate, low-priority):** ~40–60% of fresh instances still wake the
-main thread ~120/s from an **AstalHyprland busy IO-watch on socket2** (it re-emits `"event"`
-spuriously even though Hyprland sends ~4 real events/s). That's now HARMLESS — the fix makes
-those events produce no `"changed"`/repaint — costing only ~0.2% CPU and **zero GPU**. A real
-cure needs fixing/replacing AstalHyprland (already the #1 facade-replacement candidate, see
-[[project_astal_dependency]]); not worth it for 0.2% CPU.
+is resolved.
+
+✅ **The residual is gone too (2026-08-17).** It was an **AstalHyprland busy IO-watch on
+socket2**: ~40–60% of fresh instances woke the main thread ~120/s because the lib re-emitted
+`"event"` spuriously even though Hyprland sends ~4 real events/s, and reading its getters
+during `_refresh` could feed that back into itself. AstalHyprland was replaced by
+`core/hypr-ipc.ts` — the same two sockets, read directly — so there is no re-emitter left and
+the loop cannot form. The dirty-check and the throttle below both STAY, for a different and
+still-valid reason: **Hyprland itself bursts** (dragging a window across a workspace boundary
+emits movewindow + activewindow + workspace within one frame), and several tracked events
+describe the same settled state.
 
 **The fix (3 parts, all in `core/HyprlandState.ts` + `surfaces/overview/WorkspaceOverview.tsx`):**
 - **Dirty-check** (the load-bearing one): `_refresh()` computes a structural `_stateSignature()`
-  (focus + per-client addr/class/geometry/workspace + workspace list; **excludes titles** —
-  AppTitle tracks those via its own `notify::title`) and only `emit("changed")` when it differs.
-  Spurious re-emits see identical state → no `"changed"` → no repaint.
+  (focus + per-client addr/class/geometry/**fullscreen**/workspace + workspace list; **excludes
+  titles**) and only `emit("changed")` when it differs. Redundant events see identical state →
+  no `"changed"` → no repaint. Titles arrive on the narrow `"title-changed"` signal instead, which
+  only AppTitle listens to — measured live 2026-08-17: a terminal spinner produced **14
+  `title-changed` and 0 `changed`** in 14 s. `fullscreen` joined the signature when
+  AstalHyprland went: a maximized window toggling FSMODE does not have to move a pixel, and the
+  bar and dock used to catch that with per-client `notify::fullscreen` handlers.
 - **Throttle**: `_scheduleRefresh()` floors the interval between refreshes at
-  `REFRESH_MIN_INTERVAL_MS = 60` (real events are sparse, so imperceptible; caps the loop if it
-  ever self-feeds via the getters).
+  `REFRESH_MIN_INTERVAL_MS = 60` — one refresh per burst (real events are sparse, so the floor is
+  imperceptible).
 - **Visibility gate**: `WorkspaceOverview` only runs `syncAll` (icon churn + schematic
   `queue_draw`) while `status.overview_open` — not on every `"changed"` while closed.
 

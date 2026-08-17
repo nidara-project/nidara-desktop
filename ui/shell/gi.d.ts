@@ -1,7 +1,6 @@
 // NIDARA UI - gi module declarations
 // These satisfy imports like "gi://..."
 
-declare module "gi://AstalHyprland" { const v: any; export default v; }
 declare module "gi://AstalApps" { const v: any; export default v; }
 declare module "gi://AstalNotifd" { const v: any; export default v; }
 declare module "gi://AstalMpris" { const v: any; export default v; }

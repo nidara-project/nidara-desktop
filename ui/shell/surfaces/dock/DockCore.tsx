@@ -1226,8 +1226,6 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     }
 
     // ── Fullscreen detection ──────────────────────────────────────────────────
-    let trackedClient: any = null
-    let trackedClientConn: number | null = null
 
     const setFullscreenMode = (active: boolean) => {
         if (fullscreenMode === active) return
@@ -1244,20 +1242,10 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         }
     }
 
+    // No per-client signal to rewire — see the same note in Bar.tsx: `fullscreen`
+    // is part of HyprlandState's structural signature now.
     const checkFullscreen = () => {
-        const client = hs.focusedClient ?? null
-        if (client !== trackedClient) {
-            if (trackedClient && trackedClientConn !== null) {
-                safeDisconnect(trackedClient, trackedClientConn)
-                trackedClientConn = null
-            }
-            trackedClient = client
-            if (client) {
-                trackedClientConn = client.connect("notify::fullscreen", () =>
-                    setFullscreenMode(hs.isRealFullscreen(client)))
-            }
-        }
-        setFullscreenMode(hs.isRealFullscreen(client))
+        setFullscreenMode(hs.isRealFullscreen(hs.focusedClient ?? null))
     }
 
     const fsConn = hs.connect("changed", checkFullscreen)
@@ -1265,14 +1253,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     // rebuilt in-process on position/autoHide/geometry changes, and this handler
     // used to leak — every rebuild left a live "changed" subscription driving
     // fullscreen state into a destroyed window.
-    win.connect("destroy", () => {
-        safeDisconnect(hs, fsConn)
-        if (trackedClient && trackedClientConn !== null) {
-            safeDisconnect(trackedClient, trackedClientConn)
-            trackedClient = null
-            trackedClientConn = null
-        }
-    })
+    win.connect("destroy", () => { safeDisconnect(hs, fsConn) })
     checkFullscreen()
 
     update()

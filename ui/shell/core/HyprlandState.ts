@@ -1,8 +1,13 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
-import AstalHyprland from "gi://AstalHyprland"
 import { execAsync, exec } from "ags/process"
 import { safeDisconnect } from "./signals"
+import * as Hypr from "./hypr-ipc"
+import type { HyprClient, HyprWorkspace, HyprMonitor } from "./hypr-ipc"
+
+// Re-exported so consumers annotate against the shell's own vocabulary rather
+// than reaching into the IPC module (same rule as every other core/ facade).
+export type { HyprClient, HyprWorkspace, HyprMonitor } from "./hypr-ipc"
 
 // Tracked IPC event names that require a full state refresh
 const TRACKED_EVENTS = [
@@ -11,14 +16,19 @@ const TRACKED_EVENTS = [
     "openwindow", "closewindow",
     "focusedmon", "fullscreen",
     "changefloatingmode",
-    "monitor-added", "monitor-removed",
+    // Hyprland's own names. "monitor-added"/"monitor-removed" used to sit here and
+    // matched NOTHING: those were AstalHyprland's GObject signal names, and monitor
+    // changes actually arrived through a separate `hl.connect("monitor-added")`.
+    // On the wire they are one word.
+    "monitoradded", "monitorremoved", "monitoraddedv2",
 ]
 
 // Minimum ms between refreshes — see _scheduleRefresh (caps the tech-debt #11 storm).
 const REFRESH_MIN_INTERVAL_MS = 60
 
-// AstalHyprland reports window addresses with and without the "0x" prefix depending
-// on where they came from — always compare bare (same convention as resolveWindow).
+// Window addresses reach us both with and without the "0x" prefix depending on
+// where they came from (the IPC layer strips it, Hyprland's own event data and
+// `hyprctl -j` do not) — always compare bare, same convention as resolveWindow.
 export const bareAddr = (s?: string) => (s ?? "").toLowerCase().replace(/^0x/, "")
 
 /** One window's live rect, in Hyprland (logical, monitor-absolute) coordinates. */
@@ -35,11 +45,17 @@ class HyprlandStateClass extends GObject.Object {
             //   hyprland-user.lua edit). Effective-config consumers (InputConfig,
             //   MonitorConfig) listen to THIS, not "changed", to re-sync from the live
             //   config so they don't clobber external edits on their next write.
-            Signals: { "changed": {}, "config-reloaded": {} },
+            // "title-changed" = the focused window RENAMED itself and nothing else.
+            //   Deliberately separate from "changed", which repaints bar + dock: a
+            //   terminal spinner or a YouTube tab renames itself constantly.
+            Signals: {
+                "changed": {},
+                "config-reloaded": {},
+                "title-changed": { param_types: [GObject.TYPE_STRING] },
+            },
         }, this)
     }
 
-    private readonly hl: AstalHyprland.Hyprland
     private _refreshPending = false
     private _lastRefreshUs = 0
     private _lastSig = ""
@@ -92,40 +108,60 @@ class HyprlandStateClass extends GObject.Object {
     //    workspace DRAGS THAT WORKSPACE over the user. `restoreFocusAfterGrab` relies
     //    on this accessor never handing it one (see its own ⚠️).
     private _lastFocusedAddr = ""
-    private _focusFallback: AstalHyprland.Client | null = null
+    private _focusFallback: HyprClient | null = null
 
     // Cached raw arrays — one refresh per signal batch, shared by all consumers
-    clients:    AstalHyprland.Client[]    = []
-    workspaces: AstalHyprland.Workspace[] = []
-    monitors:   AstalHyprland.Monitor[]   = []
+    clients:    HyprClient[]    = []
+    workspaces: HyprWorkspace[] = []
+    monitors:   HyprMonitor[]   = []
 
-    // AstalHyprland.Monitor.available_modes is always null, so the mode list is read
-    // from `hyprctl monitors -j` and cached here (refreshed only on monitor add/remove,
-    // not on every event). Consumers (Display settings) read it instead of re-shelling.
-    availableModesByName = new Map<string, string[]>()
+    // Mode lists come with `monitors` now and need no cache of their own — the
+    // map and its `hyprctl monitors -j` refresh existed only because
+    // AstalHyprland.Monitor.available_modes was always null. Kept as a method
+    // (getAvailableModes) so Display settings did not have to change.
 
     // Pre-computed derived state — rebuilt on every refresh
-    clientsByWorkspace = new Map<number, AstalHyprland.Client[]>()
+    clientsByWorkspace = new Map<number, HyprClient[]>()
     occupiedWorkspaces = new Set<number>()
-    specialWorkspaces:  AstalHyprland.Workspace[] = []
+    specialWorkspaces:  HyprWorkspace[] = []
     submap = ""
 
     // Synced synchronously from the IPC event data so it's always up-to-date
-    // even before AstalHyprland has settled its own property updates.
+    // even before the refresh that event triggers has run.
     focusedWorkspaceId = 0
 
-    // Direct proxies — no caching needed, these are lightweight GObject accessors
-    get focusedWorkspace() { return this.hl.focused_workspace }
-    get focusedMonitor()   { return this.hl.focused_monitor }
+    // The compositor's raw answer to "who is focused", refreshed with the rest of
+    // the state. `focusedClient` reconciles it; nothing else should read it.
+    private _activeAddr: string | null = null
+
+    // One socket, many listeners. AstalHyprland let callers connect their own
+    // handler to its "event" signal; a raw socket has one reader, so the reader
+    // fans out to these instead. Used by one-shot waiters (afterGrabRelease).
+    private _eventHooks = new Set<(name: string, data: string) => void>()
+
+    /** Derived from the cached arrays — Hyprland marks the focused monitor itself,
+     *  and the focused workspace is the one `focusedWorkspaceId` names. */
+    get focusedWorkspace(): HyprWorkspace | null {
+        return this.workspaces.find(w => w.id === this.focusedWorkspaceId) ?? null
+    }
+    get focusedMonitor(): HyprMonitor | null {
+        return this.monitors.find(m => m.focused) ?? null
+    }
 
     /** The focused window — held steady across Hyprland's spurious "no active
      *  window", and never a window from the workspace you just left. Falls back to
      *  `_focusFallback` (see it) whenever the compositor's own answer fails the
      *  invariant, so consumers only ever see null when there is genuinely nothing
      *  focused on the focused workspace. */
-    get focusedClient(): AstalHyprland.Client | null {
-        const raw = this.hl.focused_client as AstalHyprland.Client | null
+    get focusedClient(): HyprClient | null {
+        const raw = this._activeClient()
         return this._focusIsHere(raw) ? raw : this._focusFallback
+    }
+
+    /** The cached client the compositor says is active, or null. */
+    private _activeClient(): HyprClient | null {
+        if (!this._activeAddr) return null
+        return this.clients.find(c => bareAddr(c.address) === this._activeAddr) ?? null
     }
 
     /** Is the compositor's answer about the workspace the user is looking AT?
@@ -133,45 +169,59 @@ class HyprlandStateClass extends GObject.Object {
      *  `activespecial`, never on `workspace`, so `focusedWorkspaceId` keeps naming
      *  the normal workspace underneath — a window on a special one (negative id)
      *  therefore counts as here, or focusing the scratchpad would blank the title. */
-    private _focusIsHere(c: AstalHyprland.Client | null): boolean {
+    private _focusIsHere(c: HyprClient | null): boolean {
         const id = (c as any)?.workspace?.id
         return typeof id === "number" && (id === this.focusedWorkspaceId || id < 0)
     }
 
     /** True ONLY for real fullscreen (Hyprland FSMODE 2), not "maximized" (FSMODE 1)
-     *  or none. AstalHyprland exposes Client.fullscreen as the Fullscreen ENUM, not a
-     *  boolean — a plain `!!client.fullscreen` is truthy for MAXIMIZED too, which is
-     *  why maximize used to hide the bar/dock. Chrome-hiding (bar opacity, dock
-     *  auto-hide) keys off THIS; maximize deliberately keeps all chrome visible and
-     *  clickable (fill-the-workspace, like the Windows/GNOME maximize convention). */
-    isRealFullscreen(client: AstalHyprland.Client | null | undefined): boolean {
-        return !!client && client.fullscreen === AstalHyprland.Fullscreen.FULLSCREEN
+     *  or none. `fullscreen` is Hyprland's FSMODE INT, not a boolean — a plain
+     *  `!!client.fullscreen` is truthy for MAXIMIZED too, which is why maximize used
+     *  to hide the bar/dock. Chrome-hiding (bar opacity, dock auto-hide) keys off
+     *  THIS; maximize deliberately keeps all chrome visible and clickable
+     *  (fill-the-workspace, like the Windows/GNOME maximize convention). */
+    isRealFullscreen(client: HyprClient | null | undefined): boolean {
+        return !!client && client.fullscreen === Hypr.FSMODE_FULLSCREEN
     }
 
     constructor() {
         super()
-        this.hl = AstalHyprland.get_default()
 
         const refresh = () => this._scheduleRefresh()
-        const onMonitors = () => { this._refreshModes(); refresh() }
-        // Avoid notify::clients and notify::focused-* — AstalHyprland re-emits them
-        // whenever it rebuilds its internal state (e.g. on windowtitle events from Chrome/
-        // YouTube), even when the logical state hasn't changed. TRACKED_EVENTS IPC signals
-        // cover all structural changes: focus (activewindow), workspace (workspace),
-        // open/close (openwindow/closewindow), move (movewindow), monitor (focusedmon).
-        this.hl.connect("monitor-added",   onMonitors)
-        this.hl.connect("monitor-removed", onMonitors)
-        this.hl.connect("event", (_h: any, name: string, data: string) => {
+        // Only TRACKED_EVENTS trigger a refresh. Hyprland is chatty — `windowtitle`
+        // fires per keystroke in a terminal and per frame on a YouTube tab — and a
+        // refresh means "changed", i.e. a bar + dock repaint (tech-debt #11).
+        // Everything structural is covered: focus (activewindow), workspace
+        // (workspace), open/close (openwindow/closewindow), move (movewindow),
+        // monitor (focusedmon, monitoradded/removed).
+        Hypr.subscribeEvents((name: string, data: string) => {
+            // Hooks first and unconditionally: a waiter is listening for an event
+            // that may not be in TRACKED_EVENTS, and must not depend on the
+            // refresh path deciding the event is interesting.
+            for (const hook of [...this._eventHooks]) {
+                try { hook(name, data) } catch (e) { console.error("[HyprlandState] hook threw:", e) }
+            }
+            if (name === "monitoradded" || name === "monitorremoved" || name === "monitoraddedv2") {
+                refresh()   // re-reads monitors, and the mode lists come with them
+                return
+            }
+            // A title change is NOT structural — the signature ignores titles on
+            // purpose — but the bar's title capsule still has to follow it. Patch
+            // the cached client and emit the narrow signal instead of refreshing.
+            if (name === "windowtitle" || name === "windowtitlev2") {
+                this._onWindowTitle(name, data)
+                return
+            }
             if (name === "submap") {
                 this.submap = data || ""
                 this._scheduleRefresh()
                 return
             }
             // Hyprland re-read its config (`hyprctl reload`, or a hyprland-user.lua
-            // edit). Refresh the modes cache (a monitor's modes can change) and let
+            // edit). Re-read state (a monitor's modes can change with it) and let
             // effective-config consumers re-sync via "config-reloaded".
             if (name === "configreloaded") {
-                this._refreshModes()
+                refresh()
                 this.emit("config-reloaded")
                 return
             }
@@ -189,21 +239,48 @@ class HyprlandStateClass extends GObject.Object {
         })
 
         this._refresh()
-        this._refreshModes()
     }
 
-    // Cache available modes per monitor from hyprctl (one sync read; modes only
-    // change when a monitor is added/removed). Returns [] if unknown.
-    private _refreshModes() {
-        try {
-            const arr = JSON.parse(exec(["hyprctl", "monitors", "-j"]))
-            this.availableModesByName.clear()
-            for (const m of arr) this.availableModesByName.set(m.name, m.availableModes ?? [])
-        } catch (e) { console.error("[HyprlandState] modes refresh failed:", e) }
+    /** Subscribe to raw compositor events; returns an unsubscribe. Prefer the
+     *  "changed" signal — this exists for waiting on ONE announcement. */
+    onEvent(cb: (name: string, data: string) => void): () => void {
+        this._eventHooks.add(cb)
+        return () => this._eventHooks.delete(cb)
     }
 
+    /** `windowtitle` carries just an address, `windowtitlev2` "ADDRESS,TITLE".
+     *  Patch the cached client so `focusedClient.title` is current, then emit
+     *  "title-changed" — deliberately NOT "changed": a spinner in a terminal
+     *  would otherwise repaint the whole bar and dock several times a second. */
+    private _onWindowTitle(name: string, data: string) {
+        let addr = "", title: string | null = null
+        if (name === "windowtitlev2") {
+            const comma = data.indexOf(",")
+            if (comma < 0) return
+            addr = bareAddr(data.slice(0, comma))
+            title = data.slice(comma + 1)
+        } else {
+            addr = bareAddr(data)
+        }
+        if (!addr) return
+        const c = this.clients.find(x => bareAddr(x.address) === addr)
+        if (!c) return
+        // v1 gives no title, so ask the compositor for the one window that changed.
+        if (title === null) {
+            const fresh = Hypr.getClients().find(x => bareAddr(x.address) === addr)
+            title = fresh?.title ?? c.title
+        }
+        if (title === c.title) return
+        c.title = title
+        this.emit("title-changed", addr)
+    }
+
+    /** Mode list for a monitor, straight off the cached `monitors` array —
+     *  `j/monitors` carries `availableModes` (42 entries for this box's DP-1), which
+     *  is why the separate hyprctl read and its cache map could go. Returns [] if
+     *  the monitor is unknown. */
     getAvailableModes(name: string): string[] {
-        return this.availableModesByName.get(name) ?? []
+        return this.monitors.find(m => m.name === name)?.availableModes ?? []
     }
 
     /** Read an effective Hyprland option's int value via `hyprctl getoption` (works
@@ -373,14 +450,17 @@ class HyprlandStateClass extends GObject.Object {
         } catch { return "" }
     }
 
-    // Coalesces multiple signals that fire in the same GLib iteration into one
-    // refresh, AND throttles to a minimum interval. AstalHyprland re-emits "event"
-    // spuriously while _refresh reads get_clients()/get_monitors(), which on some
-    // instances forms a SELF-SUSTAINING storm: event → refresh → _refresh → (re-emit)
-    // → event → … driving _refresh (and thus "changed" → bar+dock repaint) at
-    // monitor-refresh rate (tech-debt #11). Real Hyprland events are sparse, so a
-    // small floor is imperceptible but caps that loop. Throttling _refresh throttles
-    // the whole loop (the re-emit only fires when _refresh runs).
+    // Coalesces multiple events that fire in the same GLib iteration into one
+    // refresh, AND throttles to a minimum interval.
+    //
+    // The SELF-SUSTAINING storm this was written for is gone with AstalHyprland
+    // (tech-debt #11): reading its getters made it re-emit "event", so
+    // event → refresh → read → re-emit → event → … ran _refresh, and therefore the
+    // bar + dock repaint, at monitor-refresh rate. Reading a socket provokes
+    // nothing, so that loop cannot form any more. The throttle stays because
+    // Hyprland itself bursts — dragging a window across a workspace boundary emits
+    // movewindow + activewindow + workspace within a frame — and one refresh for
+    // the burst is what we want. It is a floor, not a workaround.
     private _scheduleRefresh() {
         if (this._refreshPending) return
         this._refreshPending = true
@@ -398,13 +478,15 @@ class HyprlandStateClass extends GObject.Object {
 
     private _refresh() {
         try {
-            this.clients    = this.hl.get_clients()    || []
-            this.workspaces = this.hl.get_workspaces() || []
-            this.monitors   = this.hl.get_monitors()   || []
+            this.clients    = Hypr.getClients()
+            this.workspaces = Hypr.getWorkspaces()
+            this.monitors   = Hypr.getMonitors()
+            this._activeAddr = Hypr.getActiveClientAddress()
 
-            // Keep focusedWorkspaceId in sync with AstalHyprland's view
+            // Keep focusedWorkspaceId in sync with the compositor's own view
             // (handles named workspaces and the initial state before any IPC fires).
-            const fwId = this.hl.focused_workspace?.id
+            // The focused MONITOR names it — a workspace is active per monitor.
+            const fwId = this.monitors.find(m => m.focused)?.activeWorkspace?.id
             if (fwId != null) this.focusedWorkspaceId = fwId
 
             this.clientsByWorkspace.clear()
@@ -432,7 +514,7 @@ class HyprlandStateClass extends GObject.Object {
             // Reconcile focus BEFORE the signature: a grab release that only silenced
             // the compositor must not read as a structural change, or every consumer
             // repaints to say the same thing.
-            const raw = this.hl.focused_client as AstalHyprland.Client | null
+            const raw = this._activeClient()
             // Trust the compositor's answer only while it is ON the focused workspace:
             // under an EXCLUSIVE grab it keeps naming the window you left behind.
             const live = this._focusIsHere(raw) ? raw : null
@@ -455,10 +537,10 @@ class HyprlandStateClass extends GObject.Object {
                 this._focusFallback = remembered ?? this._workspaceLastClient()
             }
 
-            // Only notify when the STRUCTURAL state actually changed. AstalHyprland
-            // re-emits "event" spuriously (and a focused window's title can churn fast,
-            // e.g. a terminal spinner) — without this guard every such no-op refresh
-            // would emit "changed" → repaint the bar + dock (tech-debt #11).
+            // Only notify when the STRUCTURAL state actually changed: several tracked
+            // events describe the same settled state (movewindow then activewindow),
+            // and without this guard each no-op refresh would emit "changed" →
+            // repaint the bar + dock (tech-debt #11).
             const sig = this._stateSignature()
             if (sig !== this._lastSig) {
                 this._lastSig = sig
@@ -473,11 +555,11 @@ class HyprlandStateClass extends GObject.Object {
      *  `lastwindow`, re-validated against the live client list (it can name a window
      *  that has since closed, and it is stale by definition on a workspace that has
      *  never been visited). Empty workspace → null, which is what makes the bar fall
-     *  back to the workspace name. No hyprctl: `Workspace.last_client` is already in
-     *  the cached array, so this stays inside the "_refresh never shells out" rule. */
-    private _workspaceLastClient(): AstalHyprland.Client | null {
-        const ws = this.workspaces.find(w => (w as any)?.id === this.focusedWorkspaceId)
-        const addr = bareAddr(((ws as any)?.last_client as any)?.address)
+     *  back to the workspace name. No extra IPC: `lastwindow` came with the
+     *  workspace list, so this stays inside the "_refresh reads once" rule. */
+    private _workspaceLastClient(): HyprClient | null {
+        const ws = this.workspaces.find(w => w?.id === this.focusedWorkspaceId)
+        const addr = bareAddr(ws?.lastwindow)
         if (!addr) return null
         return this.clients.find(c =>
             bareAddr((c as any).address) === addr
@@ -486,14 +568,20 @@ class HyprlandStateClass extends GObject.Object {
 
     // Cheap structural fingerprint of the state "changed" consumers react to (window
     // geometry/class/workspace + focus + the workspace list). DELIBERATELY excludes
-    // window titles — AppTitle tracks those via its own notify::title — so a
+    // window titles — AppTitle follows those via the narrow "title-changed" — so a
     // fast-updating title doesn't churn "changed".
     private _stateSignature(): string {
         // The RECONCILED focus, not hl.focused_client: a spurious null is not a change.
         let s = `${this.focusedWorkspaceId}|${(this.focusedClient as any)?.address ?? ""}`
         for (const c of this.clients as any[]) {
             if (!c) continue
-            s += `;${c.address},${c.class},${c.x},${c.y},${c.width},${c.height},${c.workspace?.id ?? ""}`
+            // `fullscreen` is in here because it is structural and NOT always visible
+            // in the geometry: a window already filling its monitor (maximized, or
+            // tiled alone) toggles FSMODE without moving a pixel, and the bar and dock
+            // both hide their chrome on that. They used to catch it with a per-client
+            // notify::fullscreen handler that had to be rewired on every focus change
+            // and leaked on dock rebuilds; one more int in the fingerprint replaces both.
+            s += `;${c.address},${c.class},${c.x},${c.y},${c.width},${c.height},${c.fullscreen},${c.workspace?.id ?? ""}`
         }
         s += "#"
         for (const ws of this.workspaces as any[]) {
@@ -600,7 +688,10 @@ class HyprlandStateClass extends GObject.Object {
      *  for the release is not performing it — see `afterGrabRelease`. */
     restoreFocusAfterGrab() {
         this.afterGrabRelease(() => {
-            if (this.hl.focused_client) return   // the compositor found someone: leave it
+            // A LIVE read, not `focusedClient`: that one is reconciled and answers
+            // with the remembered window precisely when the compositor has gone
+            // quiet — which is the case we are here to fix.
+            if (Hypr.getActiveClientAddress()) return   // the compositor found someone: leave it
             const addr = (this.focusedClient as any)?.address
             if (addr) this.focusWindow(addr)
         })
@@ -626,18 +717,16 @@ class HyprlandStateClass extends GObject.Object {
      *  is 12-15 ms, this is 5× that, and firing early is merely the old behaviour. */
     afterGrabRelease(cb: () => void) {
         let done = false
-        let handler = 0
+        let unhook: (() => void) | null = null
         let timer = 0
         const go = () => {
             if (done) return
             done = true
-            safeDisconnect(this.hl, handler)
+            unhook?.()
             if (timer) { GLib.source_remove(timer); timer = 0 }
             cb()
         }
-        handler = this.hl.connect("event", (_h: any, name: string) => {
-            if (name === "activewindow") go()
-        })
+        unhook = this.onEvent((name: string) => { if (name === "activewindow") go() })
         timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => { timer = 0; go(); return GLib.SOURCE_REMOVE })
     }
 
@@ -692,9 +781,11 @@ class HyprlandStateClass extends GObject.Object {
     }
 
     async floatAllInWorkspace(wsId: number) {
-        // Window state comes from hyprctl, NOT AstalHyprland.Client.floating —
-        // that prop goes stale (a tiled window can read floating=true), which
-        // made this skip windows and the menu draw wrong checks (2026-06-11).
+        // A FRESH read, not the cached `clients` array — see getClientsJson.
+        // Under AstalHyprland this was mandatory (its Client.floating went stale
+        // and a tiled window could read floating=true, so this skipped windows and
+        // the menu drew wrong checks, 2026-06-11); it stays because the cache is a
+        // snapshot taken at the last event and a bulk op must not act on one.
         const arr = await this.getClientsJson()
         for (const c of arr) {
             if (c.workspace?.id === wsId && !c.floating) await this.floatWindow(c.address)
@@ -724,11 +815,13 @@ class HyprlandStateClass extends GObject.Object {
         return this._dispatch(`hl.dsp.window.move({ workspace = 'special:${name}'${sel} })`)
     }
 
-    /** One-shot raw read of ALL clients from hyprctl. This is the authoritative
-     *  window state: AstalHyprland.Client props (floating, fullscreen) go stale,
-     *  and pinned/grouped aren't exposed at all. Called on demand (menu open,
-     *  bulk ops) — deliberately NOT part of _refresh, which runs on every IPC
-     *  event. Returns [] on failure. */
+    /** One-shot raw read of ALL clients from hyprctl, RIGHT NOW. Still the
+     *  authoritative window state even though `clients` is now built from the same
+     *  JSON: that array is a snapshot from the last event, and it is mapped down to
+     *  the fields the UI draws (no `grouped`, `tags`, `swallowing`, `fullscreenClient`).
+     *  The window menu must always read its checkmarks from HERE. Called on demand
+     *  (menu open, bulk ops) — deliberately NOT part of _refresh, which runs on
+     *  every IPC event. Returns [] on failure. */
     async getClientsJson(): Promise<any[]> {
         try { return JSON.parse(await execAsync(["hyprctl", "clients", "-j"])) }
         catch (e) { console.error("[HyprlandState] getClientsJson:", e); return [] }

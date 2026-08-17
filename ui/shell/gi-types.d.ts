@@ -1,5 +1,8 @@
-// Bridge GI namespaces used as TYPE annotations (e.g. `Gio.File`, `GLib.DateTime`,
-// `AstalHyprland.Workspace`) into the global scope with their REAL @girs types.
+// Bridge GI namespaces used as TYPE annotations (e.g. `Gio.File`, `GLib.DateTime`)
+// into the global scope with their REAL @girs types.
+//
+// Hyprland is NOT here any more: windows/workspaces/monitors are the shell's own
+// plain types now (`core/hypr-ipc.ts`), imported normally.
 //
 // Why this is needed: the GI default imports (`import Gio from "gi://Gio"`) provide
 // the namespace as a VALUE under this @girs setup, but TypeScript doesn't treat that
@@ -12,7 +15,6 @@
 import type * as GioMod from "gi://Gio?version=2.0";
 import type * as GLibMod from "gi://GLib?version=2.0";
 import type * as GdkPixbufMod from "gi://GdkPixbuf?version=2.0";
-import type * as HyprMod from "gi://AstalHyprland?version=0.1";
 
 declare global {
   namespace Gio {
@@ -38,12 +40,5 @@ declare global {
   namespace GdkPixbuf {
     export type Pixbuf = GdkPixbufMod.GdkPixbuf.Pixbuf;
     export type InterpType = GdkPixbufMod.GdkPixbuf.InterpType;
-  }
-
-  namespace AstalHyprland {
-    export type Workspace = HyprMod.AstalHyprland.Workspace;
-    export type Monitor = HyprMod.AstalHyprland.Monitor;
-    export type Client = HyprMod.AstalHyprland.Client;
-    export type Hyprland = HyprMod.AstalHyprland.Hyprland;
   }
 }

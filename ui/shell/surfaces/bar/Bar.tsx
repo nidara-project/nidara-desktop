@@ -1395,8 +1395,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   })
 
   // Fullscreen detection — hide bar automatically, restore when fullscreen exits
-  let trackedBarClient: any = null
-  let trackedBarClientConn: number | null = null
 
   const setBarFullscreenMode = (active: boolean) => {
       if (barFullscreenMode === active) return
@@ -1428,21 +1426,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       } catch (e) {}
   }
 
+  // No per-client signal to rewire: `fullscreen` is part of HyprlandState's
+  // structural signature, so "changed" fires for a window that toggles FSMODE
+  // without moving (maximized → fullscreen keeps the same rect).
   const checkBarFullscreen = () => {
-      const client = hs.focusedClient ?? null
-      // Skip rewire if focused client object hasn't changed
-      if (client !== trackedBarClient) {
-          if (trackedBarClient && trackedBarClientConn !== null) {
-              safeDisconnect(trackedBarClient, trackedBarClientConn)
-              trackedBarClientConn = null
-          }
-          trackedBarClient = client
-          if (client) {
-              trackedBarClientConn = client.connect("notify::fullscreen", () =>
-                  setBarFullscreenMode(hs.isRealFullscreen(client)))
-          }
-      }
-      setBarFullscreenMode(hs.isRealFullscreen(client))
+      setBarFullscreenMode(hs.isRealFullscreen(hs.focusedClient ?? null))
   }
 
   hs.connect("changed", checkBarFullscreen)

@@ -1,13 +1,11 @@
 import { Gtk } from "ags/gtk4"
 import Pango from "gi://Pango"
-import AstalHyprland from "gi://AstalHyprland"
 import GLib from "gi://GLib"
 import { getWordmark } from "../../utils"
 import SquircleContainer from "../../common/SquircleContainer"
 import { CAPSULE_BORDER } from "./capsule"
 import hs from "../../core/HyprlandState"
 import status from "../../core/Status"
-import { safeDisconnect } from "../../core/signals"
 import shellActions from "../../core/ShellActions"
 import buildWindowMenu from "./WindowMenu"
 
@@ -44,27 +42,21 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
   })
 
   GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-    let trackedClient: AstalHyprland.Client | null = null
-    let titleHandlerId = 0
-
     const sync = () => {
-      const client = hs.focusedClient
-      const label = getWordmark(client, hs.focusedWorkspace)
+      const label = getWordmark(hs.focusedClient, hs.focusedWorkspace)
       if (label && label !== appName.label) appName.label = label
-
-      // Only rewire notify::title when the focused client actually changed
-      if (client === trackedClient) return
-      if (trackedClient && titleHandlerId) {
-        safeDisconnect(trackedClient, titleHandlerId)
-        titleHandlerId = 0
-      }
-      trackedClient = client
-      if (client) {
-        titleHandlerId = client.connect("notify::title", sync)
-      }
     }
 
+    // TWO signals, because a rename is not a structural change. "changed" fires
+    // when the focused window/workspace actually changes; HyprlandState's
+    // signature deliberately ignores titles, so a window that merely renames
+    // itself — a terminal running a command, a YouTube tab — arrives on
+    // "title-changed" instead. That used to be a per-client `notify::title`
+    // handler on the AstalHyprland GObject, rewired on every focus change; the
+    // compositor announces it as `windowtitlev2` and HyprlandState forwards it,
+    // so there is nothing to rewire and nothing to disconnect.
     hs.connect("changed", sync)
+    hs.connect("title-changed", sync)
     sync()
     return GLib.SOURCE_REMOVE
   })
