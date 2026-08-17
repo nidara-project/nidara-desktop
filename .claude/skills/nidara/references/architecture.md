@@ -14,7 +14,7 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
 | Compositor | Hyprland ≥ 0.55 (config in **Lua**) |
 | Session manager | **uwsm** (manages the session as systemd units/scopes) |
 | Display manager | greetd (default; only installed if no other DM is enabled) |
-| Astal system services | AstalHyprland, AstalWp, AstalMpris, AstalNotifd, AstalBluetooth, AstalTray, AstalBattery, AstalApps, AstalGreet, AstalAuth (**not** AstalNetwork — dropped 2026-08-17, `core/NetworkService.ts` sits on `libnm` directly; tech-debt #71) |
+| Astal system services | AstalHyprland, AstalWp, AstalMpris, AstalNotifd, AstalBluetooth, AstalTray, AstalBattery, AstalApps, AstalAuth. **Dropped, do not reintroduce:** AstalNetwork (2026-08-17 — `core/NetworkService.ts` sits on `libnm` directly; tech-debt #71) and AstalGreet (2026-08-17 — `ui/greeter/lib/greetd.ts` speaks greetd's socket itself; it already owned the logic and was renting only the wire format) |
 | Styling | SCSS → `style.css` |
 | Build | `ags bundle` → standalone binary |
 | Wallpaper | `awww` (swww fork) |

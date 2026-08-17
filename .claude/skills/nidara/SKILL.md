@@ -26,7 +26,7 @@ This is the single most important fact to internalize before touching anything:
 | Bundle | Source | Output binary | Role |
 |---|---|---|---|
 | **Shell** | `ui/shell/` | `build/nidara` | Desktop: bar, dock, overlays, settings |
-| **Greeter** | `ui/greeter/` | `build/nidara-greeter` | Login (greetd + AstalGreet) |
+| **Greeter** | `ui/greeter/` | `build/nidara-greeter` | Login (greetd, spoken directly — no AstalGreet) |
 | **Lockscreen** | `ui/lockscreen/` | `build/nidara-lock` | Lock via `Gtk4SessionLock` (OVERLAY-layer fallback) |
 
 Each has its own `app.ts`, its own `package.json`, its own `ags bundle` invocation. Code shared between the greeter and the lockscreen is currently duplicated (see `references/tech-debt.md`).

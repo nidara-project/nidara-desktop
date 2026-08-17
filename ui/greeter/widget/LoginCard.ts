@@ -91,9 +91,9 @@ export default function LoginCard(): Gtk.Widget {
     card.clearError()
 
     try {
-      // greetdLogin (lib/greetd.ts) — NOT AstalGreet.login, which swallows
-      // auth errors and made a wrong password quit the greeter (TTY flash,
-      // no feedback). Only reaches quit() on a real session start.
+      // greetdLogin (lib/greetd.ts) speaks greetd directly — the AstalGreet call it
+      // replaced swallowed auth errors and made a wrong password quit the greeter
+      // (TTY flash, no feedback). Only reaches quit() on a real session start.
       await greetdLogin(activeUser.username, password, session.exec)
       savePrefs({ lastUser: activeUser.username })
       app.quit()

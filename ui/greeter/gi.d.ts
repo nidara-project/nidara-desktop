@@ -1,4 +1,3 @@
-declare module "gi://AstalGreet" { const v: any; export default v; }
 declare module "gi://GLib"        { const v: any; export default v; }
 declare module "gi://GObject"     { const v: any; export default v; }
 declare module "gi://Gio"         { const v: any; export default v; }

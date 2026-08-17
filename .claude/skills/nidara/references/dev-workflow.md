@@ -205,6 +205,32 @@ check a style change; look at it on the next login, in the VM, or offscreen with
 Note the asymmetry this creates in a review: the greeter and the lockscreen **share one
 stylesheet**, so every greeter-visible change ships whether or not anyone looked at it.
 
+### Testing the LOGIN itself, without a VM and without logging out
+
+`lock-probe.js` covers how the greeter looks. For what it *does* — the greetd conversation in
+`ui/greeter/lib/greetd.ts`, which the greeter speaks directly (no AstalGreet since 2026-08-17) —
+there is a fake daemon:
+
+```bash
+python3 scripts/dev/fake-greetd.py /tmp/greetd.sock /tmp/req.jsonl &   # add --big-endian for the control
+ags bundle --gtk 4 scripts/dev/greetd-probe.ts /tmp/greetd-probe
+GREETD_SOCK=/tmp/greetd.sock /tmp/greetd-probe                        # expect: PROBE-RESULT ALL PASS
+```
+
+The probe covers wrong password → `AuthError{isAuthFailure:true}`, right password → resolves, and
+no `GREETD_SOCK` → an error the card must NOT show as "wrong password".
+
+🔑 **Read `/tmp/req.jsonl`, not just the PASS lines.** It records the conversation the daemon saw,
+and that is the only place some of the contract is visible — a failed attempt must be followed by
+`cancel_session`, because greetd refuses the next `create_session` while a failed one is still
+under configuration. A client that skipped it would still print PASS.
+
+⚠️ **`--big-endian` exists so you can watch the probe FAIL before believing a green run** (it
+byte-swaps the reply's length prefix; a correct client reports a framing mismatch). Worth using:
+the bug it models is a real one — AstalGreet writes that prefix native-endian and reads it back
+big-endian, and it never surfaced upstream because `read_bytes_async` returns whatever is
+available instead of filling the count, so the nonsense length was harmless.
+
 ### Rebuilding the Wayland shim (`lib/nidara-wl/`)
 
 TSX changes reload with `Super+Shift+R`; the C shim does not. After editing `nidara-wl.c/.h` the
