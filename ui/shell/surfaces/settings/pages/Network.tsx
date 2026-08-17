@@ -1,6 +1,5 @@
 import { Gtk } from "ags/gtk4"
-import AstalNetwork from "gi://AstalNetwork"
-import { listGroup, createRow, staticLabel, pageBox, onPageShown, type SettingsNav } from "../SettingsHelpers"
+import { listGroup, createRow, staticLabel, pageBox, onPageShown, bindWhileRealized, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as Net from "../../../core/NetworkService"
@@ -64,10 +63,12 @@ const ipOf = (service: any) => Net.getIp(service, t("settings.network.label.none
 // ── AP row ────────────────────────────────────────────────────────────────────
 
 function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean, onRefresh: () => void, onDetails?: () => void): Gtk.ListBoxRow {
-    const ssid    = ap.ssid as string
+    // An SSID is arbitrary bytes on the wire, so NM hands it over as GLib.Bytes —
+    // Net.apSsid is the decoder. Everything else on an AP is read straight off it.
+    const ssid    = Net.apSsid(ap)
     const secured = Net.isSecured(ap)
-    // AstalNetwork.AccessPoint has no `active` property — the active AP is derived
-    // by the caller from network.wifi.active_access_point.bssid.
+    // NM.AccessPoint has no `active` property — the active AP is derived by the
+    // caller from the device's active_access_point.bssid.
     let active    = isActive
 
     // Right-side widget: optional info + (forget) + action button. (The lock for a
@@ -240,7 +241,7 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
 
 // ── AP detail subpage ───────────────────────────────────────────────────────────
 
-function buildApDetailPage(ap: any, network: any): Gtk.Widget {
+function buildApDetailPage(ap: any): Gtk.Widget {
     // Title (the SSID) rides in the window-header breadcrumb — see the pushSubpage
     // call in refreshAps — so the page body starts straight at the info group.
     const page = pageBox("network-ap-detail-page")
@@ -275,7 +276,7 @@ function buildApDetailPage(ap: any, network: any): Gtk.Widget {
     page.append(connBox)
 
     const isActive = () => {
-        const b = network.wifi?.active_access_point?.bssid
+        const b = Net.wifi()?.active_access_point?.bssid
         return !!b && b === ap.bssid
     }
 
@@ -285,7 +286,7 @@ function buildApDetailPage(ap: any, network: any): Gtk.Widget {
         connBox.visible = active
         if (!active) return
 
-        const dev = network.wifi?.device as any
+        const dev = Net.wifi()?.device as any
         let ip = "---", gw = "---", dns = "---", mac = "---", speed = "---"
         try {
             const cfg   = dev?.get_ip4_config?.()
@@ -295,7 +296,7 @@ function buildApDetailPage(ap: any, network: any): Gtk.Widget {
             const ns = cfg?.get_nameservers?.()
             if (ns?.length > 0) dns = ns.join(", ")
         } catch {}
-        try { mac = dev?.hw_address || dev?.get_hw_address?.() || "---" } catch {}
+        try { mac = dev?.get_hw_address?.() || "---" } catch {}
         try { const kbps = dev?.bitrate || 0; if (kbps > 0) speed = `${Math.round(kbps / 1000)} Mbps` } catch {}
 
         ipLabel.label = ip; gwLabel.label = gw; dnsLabel.label = dns
@@ -318,187 +319,221 @@ function buildApDetailPage(ap: any, network: any): Gtk.Widget {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function NetworkPage(nav?: SettingsNav) {
-    const network = AstalNetwork.get_default()
-    if (!network) return new Gtk.Label({ label: t("settings.network.error.no-service") })
+    // No NetworkManager at all is a different answer from "no adapter": there is
+    // nothing to watch, so the page says so once instead of switching placeholders.
+    if (!Net.available()) return new Gtk.Label({ label: t("settings.network.error.no-service") })
 
     const page = pageBox("network-page")
 
-    // ⚠️ Hardware presence IS a build-time check here, unlike Audio and Bluetooth
-    // (which both switch a placeholder live and say so in their own comments).
-    // That is not an oversight to "fix" by copying them: AstalNetwork's singleton
-    // picks its Wifi/Wired wrappers in `construct` and never re-scans — it does not
-    // watch NM's device-added/device-removed, and both wrappers have an `internal`
-    // constructor, so no consumer can build the missing one. `notify::wired` /
-    // `notify::wifi` exist in the API but cannot fire. A USB adapter plugged in
-    // after the shell started is invisible to the bar and Control Center too; the
-    // fix belongs upstream. See `references/tech-debt.md`.
-    // ── Ethernet ──────────────────────────────────────────────────────────────
-    if (network.wired) {
-        const { box, listBox } = listGroup(t("settings.network.group.ethernet"))
+    // Settings builds every page once and caches it for the window's lifetime, so
+    // hardware presence cannot be a build-time check — and it WAS one here until
+    // NetworkService stopped going through AstalNetwork (tech-debt #22/#71): the
+    // old singleton resolved its Wi-Fi/Ethernet wrappers in `construct` and never
+    // re-scanned, so the question was unanswerable a second time. It reads
+    // NetworkManager directly now, and `watchDevices` fires when an adapter
+    // appears or disappears. Every section below is therefore BUILT ALWAYS and
+    // switched live at the bottom of this function, the same shape Bluetooth uses
+    // for its no-adapter banner. Do not put a device behind an `if` here again.
 
-        const wiredStatusText = () => Net.wiredConnected(network.wired)
+    // ── Ethernet ──────────────────────────────────────────────────────────────
+    const { box: ethBox, listBox: ethList } = listGroup(t("settings.network.group.ethernet"))
+
+    const wiredStatus = staticLabel("---")
+    const wiredIface  = staticLabel("---")
+    const wiredIp     = staticLabel("---")
+
+    const updateWired = () => {
+        const w = Net.wired()
+        wiredStatus.label = Net.wiredConnected(w)
             ? t("settings.network.status.connected")
             : t("settings.network.status.disconnected")
-        const wiredStatus    = staticLabel(wiredStatusText())
-        const interfaceLabel = staticLabel(network.wired.device?.interface || "---")
-        const ipLabel        = staticLabel(ipOf(network.wired))
-
-        const updateWired = () => {
-            wiredStatus.label    = wiredStatusText()
-            interfaceLabel.label = String(network.wired.device?.interface || "---")
-            ipLabel.label        = ipOf(network.wired)
-        }
-        Net.watchWired(updateWired)
-
-        listBox.append(createRow(t("settings.network.ethernet"),  t("settings.network.hw-status.desc"),    wiredStatus))
-        listBox.append(createRow(t("settings.network.interface"),           t("settings.network.kernel-device.desc"),     interfaceLabel))
-        listBox.append(createRow(t("settings.network.ipv4"),     t("settings.network.ip.desc"),     ipLabel))
-        page.append(box)
+        wiredIface.label = w?.device.get_iface() || "---"
+        wiredIp.label    = ipOf(w)
     }
+
+    ethList.append(createRow(t("settings.network.ethernet"),  t("settings.network.hw-status.desc"),         wiredStatus))
+    ethList.append(createRow(t("settings.network.interface"), t("settings.network.kernel-device.desc"),     wiredIface))
+    ethList.append(createRow(t("settings.network.ipv4"),      t("settings.network.ip.desc"),                wiredIp))
+    page.append(ethBox)
 
     // ── Wi-Fi ─────────────────────────────────────────────────────────────────
-    if (network.wifi && network.wifi.device) {
-        const { box: wifiBox, listBox: wifiList } = listGroup(t("settings.network.group.wi-fi"))
+    const { box: wifiBox, listBox: wifiList } = listGroup(t("settings.network.group.wi-fi"))
 
-        const wifiSwitch = new Gtk.Switch({ active: Net.wifiEnabled(network.wifi), valign: Gtk.Align.CENTER })
-        // state-set issues the radio command; the switch's visible state is driven
-        // back from notify::enabled so it stays truthful if the radio is toggled
-        // elsewhere (CC tile, nmcli) and doesn't fight the command.
-        wifiSwitch.connect("state-set", (_sw, state) => { Net.setWifiEnabled(state); return false })
-        network.wifi.connect("notify::enabled", () => { wifiSwitch.active = Net.wifiEnabled(network.wifi) })
-        wifiList.append(createRow(t("settings.network.enable-wifi"), t("settings.network.enable-wifi.desc"), wifiSwitch))
+    const wifiSwitch = new Gtk.Switch({ active: Net.wifiEnabled(), valign: Gtk.Align.CENTER })
+    // state-set issues the radio command; the switch's visible state is driven
+    // back from the radio flag so it stays truthful if the radio is toggled
+    // elsewhere (CC tile, nmcli) and doesn't fight the command. `syncing` marks
+    // the write-back, because GtkSwitch emits state-set for a programmatic
+    // `active` too — without it, an external toggle would spawn an nmcli that
+    // re-commands the state we are merely reflecting.
+    let syncing = false
+    wifiSwitch.connect("state-set", (_sw, state) => { if (!syncing) Net.setWifiEnabled(state); return false })
 
-        const ssidLabel      = staticLabel("---")
-        const ipLabel        = staticLabel("---")
-        const speedLabel     = staticLabel("---")
-        const ifaceLabel     = staticLabel(String(network.wifi.device?.interface || "---"))
+    wifiList.append(createRow(t("settings.network.enable-wifi"), t("settings.network.enable-wifi.desc"), wifiSwitch))
 
-        const updateWifi = () => {
-            if (!network.wifi) return
-            ssidLabel.label  = String(network.wifi.ssid || t("settings.network.status.disconnected-hw"))
-            ipLabel.label    = ipOf(network.wifi)
-            // Link speed: AstalNetwork exposes none — read the NM device's bitrate (kb/s).
-            const kbps       = (network.wifi.device as any)?.bitrate || 0
-            speedLabel.label = kbps > 0 ? `${Math.round(kbps / 1000)} Mbps` : "---"
-        }
-        // watchWifi also wires the NM device's ip4-config / bitrate / state — WiFi
-        // has no `ip4-address` property and notify::ssid fires before DHCP assigns
-        // an address, so the device signals are what actually carry IP/speed.
-        Net.watchWifi(updateWifi)
-        updateWifi()
+    const ssidLabel  = staticLabel("---")
+    const wifiIpLabel = staticLabel("---")
+    const speedLabel = staticLabel("---")
+    const ifaceLabel = staticLabel("---")
 
-        wifiList.append(createRow(t("settings.network.interface"),      t("settings.network.wireless-interface.desc"),          ifaceLabel))
-        wifiList.append(createRow(t("settings.network.access-point"), t("settings.network.connected-network.desc"),              ssidLabel))
-        wifiList.append(createRow(t("settings.network.ip"),  t("settings.network.access-point.desc"),   ipLabel))
-        wifiList.append(createRow(t("settings.network.speed"),     t("settings.network.speed.desc"),                speedLabel))
-        page.append(wifiBox)
+    const updateWifi = () => {
+        const w = Net.wifi()
 
-        // ── AP list ───────────────────────────────────────────────────────────
-        const iface = String(network.wifi.device?.interface || "")
-        const { box: apBox, listBox: apList } = listGroup(t("settings.network.group.access-points"))
+        const enabled = Net.wifiEnabled(w)
+        if (wifiSwitch.active !== enabled) { syncing = true; wifiSwitch.active = enabled; syncing = false }
 
-        const scanBtn = NidaraButton({
-            label: t("settings.network.ap.scan"),
-            variant: "secondary",
-            pill: true,
-            valign: Gtk.Align.CENTER,
-            halign: Gtk.Align.END,
-        })
-
-        const headerBox = new Gtk.Box({ spacing: 0, hexpand: true })
-        const groupTitleLabel = new Gtk.Label({
-            label: t("settings.network.group.access-points").toUpperCase(),
-            css_classes: ["nidara-list-title"],
-            halign: Gtk.Align.START,
-            hexpand: true,
-            margin_start: 20,
-        })
-        headerBox.append(groupTitleLabel)
-        headerBox.append(scanBtn)
-
-        // Replace the plain title in apBox with the header+scan button row
-        const firstChild = apBox.get_first_child()
-        if (firstChild) apBox.remove(firstChild)
-        apBox.prepend(headerBox)
-
-        // Bumped on every refresh; the async saved-profiles fetch below bails if a
-        // newer refresh superseded it, so overlapping scan bursts can't duplicate rows.
-        let refreshGen = 0
-        async function refreshAps() {
-            if (!network.wifi) return
-            const gen = ++refreshGen
-
-            const enabled    = network.wifi.enabled
-            const activeAp   = network.wifi.active_access_point
-            const activeBssid = activeAp?.bssid
-
-            const aps: any[] = (network.wifi.get_access_points() || [])
-                .filter((ap: any) => !!ap.ssid)
-                .sort((a: any, b: any) => b.strength - a.strength)
-                .slice(0, 12)
-
-            // The connected AP must always be shown, even if it fell outside top-12.
-            if (activeAp && activeBssid && !aps.some((ap: any) => ap.bssid === activeBssid)) {
-                aps.unshift(activeAp)
-            }
-
-            const savedSsids = await Net.listSavedWifiSsids()
-            if (gen !== refreshGen) return   // a newer refresh already ran
-
-            let child = apList.get_first_child()
-            while (child) { apList.remove(child); child = apList.get_first_child() }
-
-            for (const ap of aps) {
-                const onDetails = nav
-                    ? () => nav.pushSubpage({
-                        id: `network/ap/${ap.bssid}`,
-                        title: ap.ssid,
-                        parentId: "network",
-                        build: () => buildApDetailPage(ap, network),
-                    })
-                    : undefined
-                apList.append(buildApRow(
-                    ap, iface,
-                    !!activeBssid && ap.bssid === activeBssid,
-                    savedSsids.has(ap.ssid),
-                    refreshAps,
-                    onDetails,
-                ))
-            }
-
-            // The Scan button lives in this group's header, so the group must stay
-            // visible whenever Wi-Fi is on — otherwise there's no way to scan for
-            // the first network. Show an empty placeholder when nothing is found.
-            if (aps.length === 0) apList.append(NidaraEmptyRow(t("settings.network.ap.empty")))
-
-            apBox.visible = enabled
-        }
-
-        scanBtn.connect("clicked", () => {
-            scanBtn.sensitive = false
-            Net.rescan().then(() => {
-                setTimeout(() => {
-                    refreshAps()
-                    scanBtn.sensitive = true
-                }, 2000)
-            })
-        })
-
-        network.wifi.connect("notify::access-points", refreshAps)
-        network.wifi.connect("notify::enabled", refreshAps)
-        network.wifi.connect("notify::active-access-point", refreshAps)
-        refreshAps()
-        page.append(apBox)
-
-    } else {
-        const { box, listBox } = listGroup(t("settings.network.group.wireless"))
-        listBox.append(createRow(
-            t("settings.network.hw-status"),
-            t("settings.network.no-adapter.desc"),
-            staticLabel(t("settings.network.error.no-wifi-hw"))
-        ))
-        page.append(box)
+        ifaceLabel.label  = w?.device.get_iface() || "---"
+        ssidLabel.label   = w?.ssid || t("settings.network.status.disconnected-hw")
+        wifiIpLabel.label = ipOf(w)
+        // Link speed is the NM device's bitrate (kb/s); nothing higher up carries it.
+        const kbps        = w?.device.bitrate ?? 0
+        speedLabel.label  = kbps > 0 ? `${Math.round(kbps / 1000)} Mbps` : "---"
     }
+
+    wifiList.append(createRow(t("settings.network.interface"),    t("settings.network.wireless-interface.desc"), ifaceLabel))
+    wifiList.append(createRow(t("settings.network.access-point"), t("settings.network.connected-network.desc"),  ssidLabel))
+    wifiList.append(createRow(t("settings.network.ip"),           t("settings.network.access-point.desc"),       wifiIpLabel))
+    wifiList.append(createRow(t("settings.network.speed"),        t("settings.network.speed.desc"),              speedLabel))
+    page.append(wifiBox)
+
+    // ── AP list ───────────────────────────────────────────────────────────────
+    const { box: apBox, listBox: apList } = listGroup(t("settings.network.group.access-points"))
+
+    const scanBtn = NidaraButton({
+        label: t("settings.network.ap.scan"),
+        variant: "secondary",
+        pill: true,
+        valign: Gtk.Align.CENTER,
+        halign: Gtk.Align.END,
+    })
+
+    const headerBox = new Gtk.Box({ spacing: 0, hexpand: true })
+    const groupTitleLabel = new Gtk.Label({
+        label: t("settings.network.group.access-points").toUpperCase(),
+        css_classes: ["nidara-list-title"],
+        halign: Gtk.Align.START,
+        hexpand: true,
+        margin_start: 20,
+    })
+    headerBox.append(groupTitleLabel)
+    headerBox.append(scanBtn)
+
+    // Replace the plain title in apBox with the header+scan button row
+    const firstChild = apBox.get_first_child()
+    if (firstChild) apBox.remove(firstChild)
+    apBox.prepend(headerBox)
+
+    // Bumped on every refresh; the async saved-profiles fetch below bails if a
+    // newer refresh superseded it, so overlapping scan bursts can't duplicate rows.
+    let refreshGen = 0
+    async function refreshAps() {
+        const wifi = Net.wifi()
+        if (!wifi) { apBox.visible = false; return }
+        const gen = ++refreshGen
+
+        // Read live: the interface name belongs to whichever adapter is present
+        // NOW, and `disconnect` is issued against it by name.
+        const iface = wifi.device.get_iface() || ""
+
+        const enabled     = wifi.enabled
+        const activeAp    = wifi.active_access_point
+        const activeBssid = activeAp?.bssid
+
+        const aps: any[] = (wifi.get_access_points() || [])
+            .filter((ap: any) => !!Net.apSsid(ap))
+            .sort((a: any, b: any) => b.strength - a.strength)
+            .slice(0, 12)
+
+        // The connected AP must always be shown, even if it fell outside top-12.
+        if (activeAp && activeBssid && !aps.some((ap: any) => ap.bssid === activeBssid)) {
+            aps.unshift(activeAp)
+        }
+
+        const savedSsids = await Net.listSavedWifiSsids()
+        if (gen !== refreshGen) return   // a newer refresh already ran
+
+        let child = apList.get_first_child()
+        while (child) { apList.remove(child); child = apList.get_first_child() }
+
+        for (const ap of aps) {
+            const ssid = Net.apSsid(ap)
+            const onDetails = nav
+                ? () => nav.pushSubpage({
+                    id: `network/ap/${ap.bssid}`,
+                    title: ssid,
+                    parentId: "network",
+                    build: () => buildApDetailPage(ap),
+                })
+                : undefined
+            apList.append(buildApRow(
+                ap, iface,
+                !!activeBssid && ap.bssid === activeBssid,
+                savedSsids.has(ssid),
+                refreshAps,
+                onDetails,
+            ))
+        }
+
+        // The Scan button lives in this group's header, so the group must stay
+        // visible whenever Wi-Fi is on — otherwise there's no way to scan for
+        // the first network. Show an empty placeholder when nothing is found.
+        if (aps.length === 0) apList.append(NidaraEmptyRow(t("settings.network.ap.empty")))
+
+        apBox.visible = enabled
+    }
+
+    scanBtn.connect("clicked", () => {
+        scanBtn.sensitive = false
+        Net.rescan().then(() => {
+            setTimeout(() => {
+                refreshAps()
+                scanBtn.sensitive = true
+            }, 2000)
+        })
+    })
+    page.append(apBox)
+
+    // ── No wireless adapter ───────────────────────────────────────────────────
+    const { box: noWifiBox, listBox: noWifiList } = listGroup(t("settings.network.group.wireless"))
+    noWifiList.append(createRow(
+        t("settings.network.hw-status"),
+        t("settings.network.no-adapter.desc"),
+        staticLabel(t("settings.network.error.no-wifi-hw"))
+    ))
+    page.append(noWifiBox)
+
+    // ── Adapter presence ──────────────────────────────────────────────────────
+    // The banner ↔ content switch. Called on every realize and on every
+    // device-added/device-removed, so plugging a USB dongle in with this page
+    // open swaps the "no adapter" group for the live one without a shell reload.
+    const applyDevices = () => {
+        const hasWired = !!Net.wired()
+        const hasWifi  = !!Net.wifi()
+
+        ethBox.visible    = hasWired
+        wifiBox.visible   = hasWifi
+        noWifiBox.visible = !hasWifi
+
+        if (hasWired) updateWired()
+        if (hasWifi) { updateWifi(); refreshAps() }
+        else apBox.visible = false
+    }
+
+    // Armed per VISIT, not per window: Settings only `remove()`s a page when you
+    // navigate away, which unrealizes it without destroying it. Subscribing at
+    // build time meant these were torn down the first time the user left and
+    // never re-armed — the page came back looking alive but frozen. It also
+    // leaked: none of the old handlers were ever disconnected.
+    bindWhileRealized(page, () => {
+        const disposers = [
+            Net.watchDevices(applyDevices),
+            Net.watchWired(updateWired),
+            Net.watchWifi(updateWifi),
+            Net.watchAccessPoints(refreshAps),
+        ]
+        applyDevices()
+        return () => disposers.forEach(d => d())
+    })
 
     // ── VPN ───────────────────────────────────────────────────────────────────
     const { box: vpnBox, listBox: vpnList } = listGroup(t("settings.network.group.vpn"))

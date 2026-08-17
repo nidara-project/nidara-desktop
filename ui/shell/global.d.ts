@@ -19,9 +19,6 @@ namespace AstalMpris {
         STOPPED
     }
 }
-namespace AstalNetwork {
-    export type Network = any;
-}
 namespace AstalBluetooth {
     export type Bluetooth = any;
     export type Device = any;

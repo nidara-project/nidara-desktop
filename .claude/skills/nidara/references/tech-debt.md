@@ -404,6 +404,27 @@ left tree-wide, the only `.disconnect(` call is inside `safeDisconnect` itself; 
 `try{disconnect}catch{}` (it doesn't catch the C-level critical) and never a bare `obj.disconnect(id)`
 in an `unrealize`/`destroy` handler.
 
+#### 12c. …and `obj.disconnect(id)` was itself unsafe, because `disconnect` can be SHADOWED (2026-08-17)
+`safeDisconnect` internally called `obj.disconnect(id)`. That is fine right up until the object owns a
+method of its own by that name — `disconnect` is an ordinary identifier, not a reserved GObject slot.
+**`NM.Device` owns one**: `nm_device_disconnect(device, cancellable)` **deactivates the interface**.
+So on an NM device the cleanup call resolved to libnm's method with the handler id handed over as the
+`GCancellable`. Found the moment `core/NetworkService.ts` started holding NM devices (#71): GJS
+rejected it on type — `Expected an object of type GCancellable for argument 'cancellable' but got type
+number` — surfacing as a failed cleanup instead of as a dropped network connection, which is a
+coin-flip we should not have been taking. Fix (one line, `ui/lib/signals.ts`):
+`GObject.signal_handler_disconnect(obj, id)`, which is unambiguous and cannot be shadowed. Benefits
+all 40 call sites. **When reaching for a GObject method that a GI class might also define
+(`disconnect`, `connect`, `emit`, `run`, `close`), prefer the `GObject.*` free function.** Checked at
+the time: `connect`/`emit` are NOT shadowed on the NM classes we touch, only `disconnect` on
+`NM.Device`.
+⚠️ This also corrects the 06-23 claim above that "the only `.disconnect(` call is inside
+`safeDisconnect` itself": three bare ones survived that sweep and still exist — `common/Tooltip.ts`
+(×2: a layer surface and `Theme`) and `common/FocusGrab.ts` (a popup). None is an NM object so none is
+shadowed, and each is guarded by its own null check rather than by `signal_handler_is_connected`. Left
+alone on 2026-08-17 rather than widening an unrelated change, but they are the remaining EXCEPTIONS to
+the rule, not evidence that the rule moved.
+
 #### 12b. …but that sweep silenced the criticals without fixing the LIFECYCLE — RESOLVED 2026-08-02
 The 06-23 sweep made double-cleanup *harmless*. It never made anything re-subscribe. Nothing above
 is wrong; it was half the bug, and the silent half is the one users feel.
@@ -725,16 +746,12 @@ with the PKGBUILD found INSIDE the tag (`packaging/nidara/`); `install.sh --syst
 `packaging/README.md` and `references/dev-workflow.md`. Next link of the distribution track:
 `nidara-repo → archiso → Calamares` ([[project_installer]]).
 
-### 22. Settings → Network doesn't hot-detect a Wi-Fi adapter added after boot (low impact)
-Found in the clean-VM nivel-3 sweep (2026-06-22, fake-wifi.sh with `mac80211_hwsim`): if the shell
-starts with **no** Wi-Fi device and one appears later, the Network page stays on the "No compatible
-adapter found / Wi-Fi hardware not detected" empty state until the shell is reloaded — then it binds
-correctly (detect → scan → connect, and the detail row updates reactively on connect, all verified).
-Cause is almost certainly init-time device binding in `libastal-network`/`core/NetworkService` rather
-than a `device-added` subscription. **Not a first-boot bug**: real Wi-Fi adapters exist at boot, so the
-common case works; the only gap is a **USB Wi-Fi dongle hot-plugged after login** (reload the shell to
-pick it up). Low priority; if fixed, watch NM's device list reactively in NetworkService, not just at
-construction. Same shape would apply to Bluetooth controllers hot-added after boot.
+### 22. ✅ CLOSED — duplicate of #71 (2026-06-22 → 2026-08-17)
+
+Found in the clean-VM nivel-3 sweep with `fake-wifi.sh`: a shell that started with no Wi-Fi device
+never noticed one appearing later. Correctly guessed at the time ("init-time device binding in
+`libastal-network` rather than a `device-added` subscription") and then re-found from the other end
+in **#71**, which carries the diagnosis, the fix and the verification. Read that one.
 
 ### 23. `appearance.shellAppearance` covers the WHOLE shell skin — RESOLVED (2026-06-23)
 The pin now applies to **bar + dock + every overlay** (CC/NC/Prism/system menu/overview/app grid), not just
@@ -3929,37 +3946,68 @@ treatment; it was left out to keep this change to the surfaces that actually bro
 changes it, exactly like the wallpaper-restore path. The bed is a VM (or a live mode switch), and
 the A/B is worth re-running whenever a surface starts deriving a new number from the monitor.
 
-### 71. AstalNetwork picks its devices ONCE, so a hot-plugged adapter is invisible everywhere (2026-08-16)
+### 71. ✅ CLOSED — AstalNetwork picked its devices ONCE, so the shell dropped it (2026-08-16 → 2026-08-17)
 
-Found while auditing Settings → Network (`onPageShown` sweep). The page decides Ethernet and
-Wi-Fi **presence at build time** (`if (network.wired)` / `if (network.wifi && network.wifi.device)`)
-and the page is cached, so a USB Wi-Fi dongle or USB-Ethernet adapter plugged in later leaves
-"No wireless adapter" on screen for the rest of the session.
+Found while auditing Settings → Network. `AstalNetwork.Network` resolved its `Wifi`/`Wired` wrappers
+in `construct` — one `client.get_devices()` scan — and never re-scanned: it connected to
+`primary-connection`, `activating-connection`, `state` and `connectivity`, but **not** to NM's
+`device-added` / `device-removed`. So a USB dongle plugged in after login stayed invisible for the
+rest of the session, in Settings AND in the bar AND in the Control Center, and no consumer could
+repair it from outside (`internal Wifi(NM.DeviceWifi)` — GJS cannot build the missing wrapper;
+`notify::wifi` / `notify::wired` exist in the API but nothing ever assigns them, so they cannot fire).
+This closes **#22** as well — same bug, found twice.
 
-Audio and Bluetooth both hit this exact class earlier and fixed it — each carries a comment saying
-hardware presence cannot be a build-time check, and switches a live placeholder. **Network cannot
-copy them, and that is the finding**: the freeze is upstream, not in the page.
+**The fix was to stop wrapping the wrapper.** `core/NetworkService.ts` reads `libnm` (`gi://NM`)
+directly now — the same C library Astal's Vala was wrapping, already installed as its own transitive
+dependency, and already typed (`@girs/nm-1.0.d.ts`, present in the CI snapshot too). What made that
+cheap rather than a rewrite:
 
-`AstalNetwork.Network` (`lib/network/src/network.vala`) resolves its `Wifi`/`Wired` wrappers in
-`construct` — one `client.get_devices()` scan — and then never re-scans. It connects to
-`primary-connection`, `activating-connection`, `state` and `connectivity`; **not** to NM's
-`device-added` / `device-removed`. So:
+- the **write half was never Astal's**: `connectAp`/`rescan`/`setWifiEnabled`/`forgetProfile`/VPN were
+  always `nmcli`, so only the READ half moved;
+- of the read half we used maybe a third — grep found **zero** uses of Astal's `is_hotspot`,
+  `scanning`, `scan()`, `state_changed`, `primary`, `connectivity` or `icon_name` (icons are ours);
+- `AstalNetwork.AccessPoint` was **pure pass-through** (`get { return ap.X; }`), so `bssid`,
+  `strength`, `frequency`, `max_bitrate`, `flags`, `wpa_flags`, `rsn_flags` are read straight off
+  `NM.AccessPoint` and the call sites did not change. The ONE thing NM gives rawer is `ssid`, which is
+  `GLib.Bytes` (an SSID is arbitrary bytes) → `Net.apSsid()`.
 
-- `notify::wifi` and `notify::wired` exist in the API (they are `public … { get; private set; }`)
-  and **cannot fire** — nothing ever assigns them after construction;
-- a consumer cannot repair it from outside either: both constructors are `internal Wifi(NM.DeviceWifi)`
-  / `internal Wired(NM.DeviceEthernet)`, so GJS cannot build the missing wrapper;
-- `Network.client` (the `NM.Client`) IS public, so a consumer can *detect* the new device — it just
-  has nothing to drive the UI with.
+⚠️ **Two things about the new module that are not obvious.**
 
-⚠️ **This is not a Settings bug, and the blast radius is bigger than Settings**: the bar's network
-indicator and the Control Center tile read the same frozen singleton. A Settings-only workaround
-would be a lie with better manners.
+1. **Presence is a subscription, not a fact.** `watchDevices()` re-resolves on every NM
+   device-added/device-removed and notifies **only when the SELECTION changed**. That guard is
+   correctness, not optimisation: NM emits device-added for every tun/bridge/veth, so a VPN going up
+   or Docker starting would otherwise re-arm every network subscription in the shell. Every other
+   watcher (`watchWifi`, `watchWifiEnabled`, `watchWifiNetwork`, `watchAccessPoints`, `watchWired`)
+   is built on `rebindable()`, so it tears down and re-arms itself across a hot-plug — a caller
+   subscribes once and stays correct.
+2. **The watchers are deliberately granular**, which the old blunt `notify` could not be. The bar
+   icon takes `watchWifiEnabled` (radio flag only — a wider one re-blurred the whole bar every frame
+   during a scan), a CC capsule takes `watchWifiNetwork` (flag + SSID, no bitrate churn), an info
+   panel showing an IP takes the full `watchWifi`.
 
-▶️ The real fix is upstream, and this repo has landed one there before (Aylur/astal#451, the tray):
-watch `client`'s `device-added`/`device-removed` and re-resolve `wifi`/`wired`. Until then the
-page carries a comment at the `if (network.wired)` site so nobody "fixes" it by copying Audio.
-The workaround for a user is a shell reload (`Super+Shift+R`).
+Settings → Network is now built WHOLE with its sections switched live (the Bluetooth banner shape),
+armed through `bindWhileRealized` — which also fixed a leak and a freeze the old page had: its
+handlers were connected at build and never disconnected, so after the user left the page once it
+never re-armed. **Do not put a device behind an `if` in that page again.**
+
+Verified on a host with no wireless hardware at all, `mac80211_hwsim` as the dongle (2026-08-17):
+A→B→A with the window open and no shell reload — placeholder → live Wi-Fi group on `wlan0` →
+placeholder back; then `fake-wifi.sh` for a real WPA2 AP → the AP row rendered with its lock, `100%
+• 2437 MHz`, and a real connect filled SSID / IP `10.42.0.19` / `54 Mbps` in place and flipped the row
+to Disconnect. Log clean throughout. The bar icon tracked every step, which was the point: this was
+never a Settings bug.
+
+Left deliberately: `isAvailable` / `watchAvailable` on `AtomicWidget` are declared in
+`surfaces/control-center/Types.ts` and **consumed by nothing** — the wifi/ethernet widgets have always
+declared them (against `notify::wifi`, a signal that could not fire). They now point at
+`Net.watchDevices`, so wiring the registry to them would work; that is a separate change.
+
+Upstream note: **Aylur/astal#449** ("fix(network): network device hot-plugging", ScarsTRF, opened
+2026-06-03) fixes the same bug in Vala and has sat without a human review since. It is a thorough
+patch — it also adds the `disconnect_signals()` the wrappers never had — but it flips `wifi`/`wired`
+from nullable to permanent wrappers plus an `is_active`, i.e. an API break we would have had to
+absorb at the same five call sites. We did not need it in the end; if it lands, nothing here depends
+on it.
 
 ### 72. ✅ FIXED — a cursor theme/size never reached the cursor already on screen (2026-08-17)
 

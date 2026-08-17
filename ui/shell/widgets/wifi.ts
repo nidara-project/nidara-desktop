@@ -1,11 +1,9 @@
 import { Gtk } from "ags/gtk4"
-import AstalNetwork from "gi://AstalNetwork"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as Net from "../core/NetworkService"
-import { safeDisconnect } from "../core/signals"
 
 function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; update: () => void } {
     const key = new Gtk.Label({ label, css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true })
@@ -16,29 +14,28 @@ function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; upda
     return { row, update: () => { val.label = getValue() } }
 }
 
+// The adapter is read through Net.wifi() on every call rather than captured, so a
+// dongle plugged in mid-session reaches these; the watchers re-arm themselves on
+// that hot-plug (see NetworkService.watchDevices — tech-debt #22/#71).
+const getIcon = () => Net.wifiEnabled() ? Icons.wifi : Icons.wifiOff
+
 function buildBarContent(): Gtk.Widget {
-    const wifi = AstalNetwork.get_default()?.wifi
-    const getIcon = () => (wifi as any)?.enabled === false ? Icons.wifiOff : Icons.wifi
     const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
-    if (wifi) {
-        // notify::enabled ONLY — the icon depends solely on `enabled`. The generic
-        // "notify" fires on every property churn (strength/scanning) and re-set the
-        // gicon each time → gtk_image_clear → queue_draw → a full bar re-blur every
-        // frame for an icon that never visually changes. Guard the assignment too.
-        const sigId = (wifi as any).connect("notify::enabled", () => { const ic = getIcon(); if (image.gicon !== ic) image.gicon = ic })
-        image.connect("unrealize", () => safeDisconnect(wifi, sigId))
-    }
+    // The radio flag ONLY — the icon depends solely on `enabled`. A wider
+    // subscription re-set the gicon on every strength/scan churn →
+    // gtk_image_clear → queue_draw → a full bar re-blur every frame for an icon
+    // that never visually changed. Guard the assignment too.
+    const dispose = Net.watchWifiEnabled(() => { const ic = getIcon(); if (image.gicon !== ic) image.gicon = ic })
+    image.connect("unrealize", dispose)
     return image
 }
 
 function buildContent(size: WidgetSize): Gtk.Widget {
-    const wifi = AstalNetwork.get_default()?.wifi
-    const getIcon = () => (wifi as any)?.enabled === false ? Icons.wifiOff : Icons.wifi
     const getSub = () => {
-        if (!wifi) return t("cc.wifi.sub.off")
-        const ssid = (wifi as any)?.ssid
-        if (ssid) return ssid
-        return (wifi as any)?.enabled === false ? t("cc.wifi.sub.off") : t("cc.wifi.sub.disconnected")
+        const w = Net.wifi()
+        if (!w) return t("cc.wifi.sub.off")
+        if (!w.enabled) return t("cc.wifi.sub.off")
+        return w.ssid || t("cc.wifi.sub.disconnected")
     }
 
     if (size === WidgetSize.SINGLE) {
@@ -49,35 +46,31 @@ function buildContent(size: WidgetSize): Gtk.Widget {
             hexpand: true, vexpand: true,
             css_classes: ["nd-icon"],
         })
-        if (wifi) {
-            const sigId = (wifi as any).connect("notify::enabled", () => { const ic = getIcon(); if (icon.gicon !== ic) icon.gicon = ic })
-            box.connect("unrealize", () => safeDisconnect(wifi, sigId))
-        }
+        const dispose = Net.watchWifiEnabled(() => { const ic = getIcon(); if (icon.gicon !== ic) icon.gicon = ic })
+        box.connect("unrealize", dispose)
         box.append(icon)
         return box
     }
 
     const inner = buildCapsuleInner(getIcon, () => t("cc.wifi.name"), getSub)
 
-    if (wifi) {
-        // Specific signals only — inner.update reads enabled (icon) + ssid (subtitle);
-        // the generic "notify" stormed a full re-blur on every strength/scan churn.
-        const sigIdE = (wifi as any).connect("notify::enabled", inner.update)
-        const sigIdS = (wifi as any).connect("notify::ssid", inner.update)
-        inner.box.connect("unrealize", () => { safeDisconnect(wifi, sigIdE); safeDisconnect(wifi, sigIdS) })
-    }
+    // Radio flag + which network we are on: exactly what the icon and the subtitle
+    // read. watchWifi would add bitrate/ip4-config churn this tile never shows.
+    const dispose = Net.watchWifiNetwork(inner.update)
+    inner.box.connect("unrealize", dispose)
     return wrapCapsuleTile(inner.box)
 }
 
 function buildInfoPanel(): Gtk.Widget {
-    const wifi = AstalNetwork.get_default()?.wifi
-
-    const ssid  = infoRow(t("widget.wifi.row.network"), () => (wifi as any)?.ssid || "—")
+    const ssid  = infoRow(t("widget.wifi.row.network"), () => Net.wifi()?.ssid || "—")
     const state = infoRow(t("widget.wifi.row.status"), () => {
-        if ((wifi as any)?.enabled === false) return t("widget.wifi.row.disabled")
-        return (wifi as any)?.ssid ? t("cc.wifi.sub.connected") : t("cc.wifi.sub.disconnected")
+        // "Disabled" means the radio is OFF, which is only sayable when there IS a
+        // radio — with no adapter this stays "Disconnected", as it always did.
+        const w = Net.wifi()
+        if (w && !w.enabled) return t("widget.wifi.row.disabled")
+        return w?.ssid ? t("cc.wifi.sub.connected") : t("cc.wifi.sub.disconnected")
     })
-    const ip = infoRow("IP", () => Net.getIp(wifi))
+    const ip = infoRow("IP", () => Net.getIp(Net.wifi()))
 
     const updateAll = () => { ssid.update(); state.update(); ip.update() }
     updateAll()
@@ -87,26 +80,22 @@ function buildInfoPanel(): Gtk.Widget {
     box.append(state.row)
     box.append(ip.row)
 
-    if (wifi) {
-        const sigId = (wifi as any).connect("notify", updateAll)
-        box.connect("unrealize", () => safeDisconnect(wifi, sigId))
-    }
+    // This one DOES show the IP, so it takes the wider watch (ip4-config lands
+    // after DHCP, well after the SSID is known).
+    const dispose = Net.watchWifi(updateAll)
+    box.connect("unrealize", dispose)
 
     return box
 }
 
 function buildDetailPanel(_onClose: () => void): Gtk.Widget {
-    const wifi = AstalNetwork.get_default()?.wifi
-
-    const sw = new Gtk.Switch({ active: (wifi as any)?.enabled !== false, valign: Gtk.Align.CENTER })
+    const sw = new Gtk.Switch({ active: Net.wifiEnabled(), valign: Gtk.Align.CENTER })
     sw.connect("state-set", (_sw: Gtk.Switch, state: boolean) => {
         Net.setWifiEnabled(state)
         return false
     })
-    if (wifi) {
-        const sigId = (wifi as any).connect("notify::enabled", () => { sw.active = (wifi as any)?.enabled !== false })
-        sw.connect("unrealize", () => safeDisconnect(wifi, sigId))
-    }
+    const dispose = Net.watchWifiEnabled(() => { sw.active = Net.wifiEnabled() })
+    sw.connect("unrealize", dispose)
 
     const switchLabel = new Gtk.Label({ label: t("cc.wifi.name"), css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true })
     const switchRow = new Gtk.Box({ spacing: 8, margin_bottom: 4 })
@@ -134,8 +123,8 @@ const wifiWidget: AtomicWidget = {
     icon: Icons.wifi,
     locations: ["bar", "cc"],
     defaultInBar: true,
-    isAvailable: () => !!AstalNetwork.get_default()?.wifi,
-    watchAvailable: (cb) => { AstalNetwork.get_default()?.connect("notify::wifi", cb) },
+    isAvailable: () => !!Net.wifi(),
+    watchAvailable: (cb) => { Net.watchDevices(cb) },
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,

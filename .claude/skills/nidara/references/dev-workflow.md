@@ -846,10 +846,10 @@ returning null and everything stays as before.
 
 ### Testing Wi-Fi without a Wi-Fi adapter
 
-The Network settings page is driven by `AstalNetwork`, so most of it only exercises
-when a Wi-Fi device exists. On a wired-only box, simulate one with the kernel's
-`mac80211_hwsim` (virtual 802.11 radios that NetworkManager treats as real). A dev
-helper lives at `scripts/dev/fake-wifi.sh` (start/stop a WPA2 AP). The recipe:
+The Network settings page only exercises when a Wi-Fi device exists. On a wired-only box,
+simulate one with the kernel's `mac80211_hwsim` (virtual 802.11 radios that NetworkManager
+treats as real). A dev helper lives at `scripts/dev/fake-wifi.sh` (start/stop a WPA2 AP).
+The recipe:
 
 ```bash
 sudo modprobe mac80211_hwsim radios=2     # → wlan0 + wlan1; not persistent across reboot
@@ -858,21 +858,31 @@ nmcli radio wifi on                       # radios boot "unavailable" until wifi
 sudo scripts/dev/fake-wifi.sh start       # AP "NidaraTest" / pass nidara123
 # Settings → Network → Scan → connect
 sudo scripts/dev/fake-wifi.sh stop
+sudo modprobe -r mac80211_hwsim           # and delete the NidaraTest profile you just saved
 ```
 
-Three non-obvious traps this setup exposes, all of which bit real code:
+**A wired-only box is not a worse rig for this, it is the BEST one** — `modprobe` /
+`modprobe -r` on a machine with no real wireless is a hot-plug you can do twice a minute,
+which is how tech-debt #22/#71 was finally closed (A→B→A with Settings open and no shell
+reload). Watch the bar icon too, not just the page: network presence reaches three surfaces.
 
-- **`AstalNetwork` watches exactly ONE Wi-Fi device.** `network.vala`'s `get_device()`
-  prefers a device with an active connection, else returns the **first** wifi device
-  (`wlan0`). So the *fake AP must run on `wlan1`* and `wlan0` stays the managed client —
-  otherwise the page watches the broadcaster and sees an empty AP list while `nmcli`
-  on the other interface sees everything.
+Non-obvious traps this setup exposes, all of which bit real code:
+
+- **The shell watches exactly ONE Wi-Fi device.** `NetworkService.pickDevice()` prefers a
+  device with an active connection, else returns the **first** of that type (`wlan0`) — the
+  rule inherited from AstalNetwork's `get_device()` and kept on purpose. So the *fake AP must
+  run on `wlan1`* and `wlan0` stays the managed client — otherwise the page watches the
+  broadcaster and sees an empty AP list while `nmcli` on the other interface sees everything.
 - **The world regulatory domain `00` sets `NO-IR` on 2.4 GHz**, which silently stops
   hostapd from ever beaconing — the interface stays `type managed` instead of `type AP`.
   Pin a real country first (`iw reg set ES`, also `country_code=` in the hostapd conf).
-- **`AstalNetwork.Wifi` is a single object, not a collection.** There is no
-  `get_devices()` and no `access-points-changed` signal — use the `device` property and
-  `notify::access-points`. These were latent bugs that never ran on wired-only hardware.
+- **The radio flag lives on the CLIENT, not on the device**: `enabled` is
+  `NM.Client.wireless_enabled`. With no wireless hardware at all NM reports it **false**,
+  which is why `Net.wifiEnabled()` answers `true` when there is no adapter — absent is not
+  off, and the bar must not paint a "radio off" icon on a machine that never had a radio.
+- **DHCP lands after the SSID.** `notify::active-access-point` fires well before an address
+  exists, so anything showing an IP must also watch the device's `ip4-config` (that is the
+  difference between `watchWifiNetwork` and the wider `watchWifi`).
 
 ### Testing Bluetooth without a Bluetooth adapter
 

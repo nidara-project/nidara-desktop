@@ -1,11 +1,9 @@
 import { Gtk } from "ags/gtk4"
-import AstalNetwork from "gi://AstalNetwork"
 import { CCWidgetSpec, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
 import Gio from "gi://Gio"
 import Icons from "../../core/Icons"
 import * as Net from "../../core/NetworkService"
-import { safeDisconnect } from "../../core/signals"
 
 function setIcon(img: Gtk.Image, icon: Gio.FileIcon) {
     // gicon assignment is NOT equality-guarded by GTK: reassigning the same icon
@@ -202,24 +200,18 @@ export function buildRoundContent(
 }
 
 export function EthernetWidget(): CCWidgetSpec {
-    const network = AstalNetwork.get_default()
-    const wired   = network?.wired
-
+    // The adapter is read on every call, never captured at build time — a
+    // USB-Ethernet dongle plugged in mid-session has to reach this tile, and
+    // `watchWired` re-arms itself on that hot-plug (tech-debt #22/#71).
     const getIcon   = () => Icons.ethernet
-    const getActive = () => Net.wiredConnected(wired)
+    const getActive = () => Net.wiredConnected()
     const getSub = () => {
-        if (!wired) return t("cc.ethernet.sub.no-cable")
-        if (!Net.wiredConnected(wired)) return t("cc.ethernet.sub.disconnected")
-        return (wired as any).device?.interface || t("cc.ethernet.sub.connected")
+        const w = Net.wired()
+        if (!w) return t("cc.ethernet.sub.no-cable")
+        if (!Net.wiredConnected(w)) return t("cc.ethernet.sub.disconnected")
+        return w.device.get_iface() || t("cc.ethernet.sub.connected")
     }
-    const subscribe: SubscribeFn = (sync) => {
-        if (!wired) return () => {}
-        const ids = [
-            (wired as any).connect("notify::internet",    sync),
-            (wired as any).connect("notify::ip4-address", sync),
-        ]
-        return () => ids.forEach(id => safeDisconnect(wired, id))
-    }
+    const subscribe: SubscribeFn = (sync) => Net.watchWired(sync)
 
     const buildContent = (size: WidgetSize): Gtk.Widget => {
         if (size === WidgetSize.SINGLE)
@@ -231,20 +223,19 @@ export function EthernetWidget(): CCWidgetSpec {
 }
 
 export function WifiWidget(): CCWidgetSpec {
-    const wifi   = AstalNetwork.get_default()?.wifi
     const toggle = () => Net.toggleWifi()
 
-    const getIcon   = () => Net.wifiEnabled(wifi) ? Icons.wifi : Icons.wifiOff
-    const getActive = () => !!(Net.wifiEnabled(wifi) && (wifi as any)?.ssid)
+    const getIcon   = () => Net.wifiEnabled() ? Icons.wifi : Icons.wifiOff
+    const getActive = () => !!(Net.wifiEnabled() && Net.wifi()?.ssid)
     const getSub    = () => {
-        if (!wifi) return t("cc.wifi.sub.off")
-        return (wifi as any).ssid || (Net.wifiEnabled(wifi) ? t("cc.wifi.sub.connected") : t("cc.wifi.sub.off"))
+        const w = Net.wifi()
+        if (!w) return t("cc.wifi.sub.off")
+        return w.ssid || (w.enabled ? t("cc.wifi.sub.connected") : t("cc.wifi.sub.off"))
     }
-    const subscribe: SubscribeFn = (sync) => {
-        if (!wifi) return () => {}
-        const id = (wifi as any).connect("notify", sync)
-        return () => safeDisconnect(wifi, id)
-    }
+    // Was a blanket `notify` on the Astal wrapper, which fired on every strength
+    // and scan tick. The tile reads the radio flag and the SSID; that is all it
+    // subscribes to now.
+    const subscribe: SubscribeFn = (sync) => Net.watchWifiNetwork(sync)
 
     const buildContent = (size: WidgetSize): Gtk.Widget => {
         if (size === WidgetSize.SINGLE)
