@@ -42,9 +42,9 @@ depends=(
   # pinned Astal/AGS stack (served by the [nidara] repo)
   aylurs-gtk-shell astal-gjs appmenu-glib-translator
   # (no libastal-network / libastal-gtk3 / libastal-greet / libastal-battery /
-  # libastal-hyprland / libastal-mpris — see install.sh's astal_pkgs for why each
-  # one went)
-  libastal-io astal-quarrel libastal-gtk4 libastal-apps
+  # libastal-hyprland / libastal-mpris / libastal-apps — see install.sh's
+  # astal_pkgs for why each one went)
+  libastal-io astal-quarrel libastal-gtk4
   libastal-notifd libastal-bluetooth libastal-tray libastal-wireplumber
   libastal-auth
   # services the shell talks to. networkmanager is load-bearing TWICE over: the

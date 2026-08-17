@@ -4,10 +4,9 @@ import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
 // @ts-ignore
 import Pango from "gi://Pango"
-import AstalApps from "gi://AstalApps"
 import Gio from "gi://Gio"
 import hs from "../../core/HyprlandState"
-import appService from "../../core/AppService"
+import appService, { type AppData } from "../../core/AppService"
 import { pinnedState, savePinned } from "../dock/state"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -28,8 +27,6 @@ const normId = (s: string) => {
     const base = (s || "").split("/").pop() || s || ""
     return base.toLowerCase().replace(/\.desktop$/, "")
 }
-
-const appsService = new AstalApps.Apps()
 
 export interface AppGridPanelHandle {
     widget: Gtk.Widget
@@ -340,10 +337,13 @@ export default function AppGridPanel(
     })
 
     // ── App widget factory ─────────────────────────────────────────────────
-    const createAppWidget = (app: any): Gtk.Button => {
-        const id = normId(app.entry || "")
-        const name = app.get_name ? app.get_name() : (app as any).name || ""
-        const iconName = app.icon_name || "application-x-executable"
+    const createAppWidget = (app: AppData): Gtk.Button => {
+        const id = normId(app.id)
+        const name = app.name
+        // The `Icon=` field verbatim, NOT app.icon (already canonicalized): this is
+        // the key an icon override is filed under, and refreshIcons re-resolves from
+        // it on every theme change.
+        const iconName = app.rawIcon || "application-x-executable"
 
         const icon = new Gtk.Image({
             pixel_size: 72,
@@ -517,16 +517,21 @@ export default function AppGridPanel(
                 shellActions.openSettings?.()
                 return
             }
-            try {
-                // Origin-aware command (gtk-launch / flatpak run) — see AppService.
-                // getLaunchCommand. cd $HOME so the app doesn't inherit the shell
-                // process's CWD (ui/shell).
-                const cmd = appService.getLaunchCommand(id || (app as any).entry || app.executable)
-                execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`])
-                    .catch(() => app.launch())
-            } catch (e) {
-                app.launch()
-            }
+            // Origin-aware command (gtk-launch / flatpak run) — see AppService.
+            // getLaunchCommand. cd $HOME so the app doesn't inherit the shell
+            // process's CWD (ui/shell).
+            const cmd = appService.getLaunchCommand(id || app.exec)
+            execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`])
+                // gtk-launch fails when the desktop id isn't in the XDG index, and
+                // it does happen (this machine's ~/.cache/astal/apps-frequents.json
+                // had counted 7 fallbacks for one editor). Falling back to the Exec
+                // line still goes through `uwsm app`, so the app keeps its systemd
+                // slice — the AstalApps fallback this replaces did NOT: AppInfo.launch
+                // spawns as a child of the shell.
+                .catch(() => {
+                    console.warn(`[AppGrid] ${cmd} failed for ${id}; launching Exec= directly`)
+                    appService.getResolvedApp(id)?.launch()
+                })
         })
 
         return button
@@ -554,15 +559,13 @@ export default function AppGridPanel(
     }
 
     appService.connect(refreshIcons)
-    appService.connectStructural(() => { appsService.reload(); resetCache(); initCache() })
+    // AppService already reloaded its registry before firing this — no second scan.
+    appService.connectStructural(() => { resetCache(); initCache() })
 
     const initCache = () => {
         if (cacheInitialized) return
-        const apps = appsService.get_list().sort((a, b) =>
-            (a.name || "").localeCompare(b.name || "")
-        )
-        apps.forEach(app => {
-            const id = normId(app.entry || "")
+        appService.listApps().forEach(app => {
+            const id = normId(app.id)
             if (id && !widgetCache.has(id)) {
                 const widget = createAppWidget(app)
                 widgetCache.set(id, widget)
@@ -587,20 +590,15 @@ export default function AppGridPanel(
             currentMatchIds = null
             sortOrder.clear()
         } else {
-            const matches = appsService.fuzzy_query(query)
+            // The ranking is entirely AppService's (core/app-search): already
+            // best-first and already total, so the grid just numbers it. The
+            // name-prefix re-scoring that used to live here existed to repair
+            // AstalApps' order — Prism ranks with the same function now, so the
+            // two surfaces answer the same query the same way.
             currentMatchIds = new Set<string>()
             sortOrder.clear()
-            const q = currentQuery
-            const scored = (matches as any[]).map((a, fuzzyRank: number) => {
-                const name = (a.name || "").toLowerCase()
-                let score = 2
-                if (name.startsWith(q)) score = 0
-                else if (name.split(/\s+/).some((w: string) => w.startsWith(q))) score = 1
-                return { a, fuzzyRank, score }
-            })
-            scored.sort((x, y) => x.score !== y.score ? x.score - y.score : x.fuzzyRank - y.fuzzyRank)
-            scored.forEach(({ a }, i) => {
-                const id = normId(a.entry || "")
+            appService.queryApps(currentQuery).forEach((app, i) => {
+                const id = normId(app.id)
                 currentMatchIds!.add(id)
                 sortOrder.set(id, i)
             })

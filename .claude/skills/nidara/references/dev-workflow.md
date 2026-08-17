@@ -1007,6 +1007,35 @@ instead of polled, so a playing player is silent; if that check ever counts sign
 something started polling. ⚠️ `DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent /tmp/mpris-probe`
 is the negative control — it must report FAIL.
 
+### Checking app search without opening the launcher
+
+`core/app-search.ts` decides what the app grid and Prism show for a query, and eyeballing a
+launcher proves nothing about the 55 apps that did NOT come back.
+
+```bash
+ags bundle --gtk 4 scripts/dev/apps-probe.ts /tmp/apps-probe
+/tmp/apps-probe             # from the repo root → PROBE-RESULT ALL PASS
+```
+
+Two halves. The **fixture** half states the ranking rules against a hand-written catalogue, so no
+installed app can quietly satisfy them. The **live** half runs the same questions over this
+machine's real `.desktop` files, including a sweep asserting that every installed app's own name
+ranks it first, and the check the whole replacement is about: **no result may be justified only by
+its `Exec=` ARGUMENTS**.
+
+⚠️ Two negative controls, and this probe is worth nothing without them:
+
+- `/tmp/apps-probe --astal` answers the live half with `gi://AstalApps`, the library we removed.
+  It must FAIL the one-character checks (it returns 56 of 56) and the `Exec=` checks. Keep the
+  mode as long as the lib is still installed anywhere — it is the evidence, not just a control.
+- `XDG_DATA_HOME=/nonexistent XDG_DATA_DIRS=/nonexistent /tmp/apps-probe` takes the desktop
+  files away: the live half must go red while the fixture half stays green. If both stay green,
+  the live half is reading nothing.
+
+Note `scripts/dev/gtk-init.ts`: a probe that imports `core/AppService` needs a GTK display open
+BEFORE the import runs (the service builds an icon theme in its constructor), and `Gtk.init()`
+written inline is too late — ES import declarations all execute first. Import that module first.
+
 ### Exercising the compositor state layer WITHOUT restarting the shell
 
 `core/HyprlandState.ts` is the shell's model of Hyprland, and reloading the shell to test it

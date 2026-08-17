@@ -4075,3 +4075,25 @@ the repaint. A note, not a fix.
 
 ⚠️ Before any further work here, read the cursor section of `dev-workflow.md`. **Five** separate
 instruments lie about this and all of them lie in the direction of "your change did nothing".
+
+### 73. App search dropped "most used first", and putting it back means counting our OWN launches (2026-08-17)
+AstalApps broke ties by **launch frequency**, cached in `~/.cache/astal/apps-frequents.json` and
+incremented inside `Application.launch()`. Nidara never launches that way — every surface goes
+through `AppService.getLaunchCommand()` under `uwsm app` — so the counter only advanced on the
+rare FALLBACK path. After months of daily use, this machine's cache held **two** entries out of 80
+apps (`antigravity-ide: 7`, `nvtop: 1`), which is not a frequency ranking, it is a log of when
+`gtk-launch` failed. `core/app-search.ts` therefore breaks ties on the app NAME, which is at least
+total and repeatable (a GTK sort function is keyed on it).
+
+Carrying it over properly is a real, wanted feature and it is **not** a port: the counter has to
+live where the launches actually happen (`getLaunchCommand`, or the dock/grid/Prism call sites),
+persist under `~/.config/nidara/`, and decay — a launcher that ranks by all-time count freezes
+whatever you used most in your first week. Until then, do NOT reintroduce a frequency term by
+reading Astal's file: it is stale, it belongs to a removed dependency, and it counts the wrong
+event. Note the empty-query order is unaffected either way — the app grid sorts A→Z by design.
+
+Second, smaller thing found in the same pass and left alone: `gtk-launch` genuinely fails for some
+entries (that is what those 7 fallbacks were). The grid now logs a warning and falls back to
+spawning `Exec=` under `uwsm app` — still inside the systemd slice, unlike the `AppInfo.launch()`
+fallback it replaced, which spawned the app as a child of the shell. **Nobody has diagnosed WHY
+gtk-launch fails for those entries**; the warning is there so the next person has a thread to pull.

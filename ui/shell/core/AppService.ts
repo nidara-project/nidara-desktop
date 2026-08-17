@@ -3,6 +3,7 @@ import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import { Gtk, Gdk } from "ags/gtk4"
 import { readFile } from "ags/file"
+import { rankApps } from "./app-search"
 
 export interface AppData {
     id: string
@@ -10,25 +11,23 @@ export interface AppData {
     exec: string
     icon: string | null
     wmClass: string | null
+    /**
+     * The `Icon=` field verbatim — a themed name or an absolute path, NOT resolved.
+     * `icon` above is the canonicalized result and is what you draw; this is the key
+     * an icon OVERRIDE is filed under (`setIconOverride`), so a surface that offers
+     * "change this app's icon" has to carry it around unmodified.
+     */
+    rawIcon: string
+    /** `Keywords=`, for search only. */
+    keywords: string[]
+    /**
+     * `g_app_info_should_show()`: false for NoDisplay/Hidden entries and for anything
+     * this desktop isn't in `OnlyShowIn`. The registry keeps them — a hidden entry is
+     * still the thing that names a window and owns its icon — but a launcher must not
+     * LIST them. Filter through `listApps()`/`queryApps()` rather than `getAllApps()`.
+     */
+    visible: boolean
 }
-
-/**
- * Split an app name or id into comparable word tokens: separators, camelCase and
- * letter/digit seams all count as breaks, and the reverse-DNS prefix is dropped.
- * "org.gtk.WidgetFactory4" and "gtk4-widget-factory" both become
- * [gtk, widget, factory, 4], which substring matching can never reconcile.
- * Deliberately the same rule as `sameApp` in bin/nidara-{a11y,act,click,type} —
- * the whole point is that every surface an agent touches agrees on what an app
- * is called. Keep them in step.
- */
-const NAME_NOISE = new Set(["org", "com", "io", "net", "app", "desktop"])
-const nameTokens = (s: string): string[] => (s || "")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/([a-zA-Z])(\d)/g, "$1 $2")
-    .replace(/(\d)([a-zA-Z])/g, "$1 $2")
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(t => t && !NAME_NOISE.has(t))
 
 // Icons that are file-type placeholders or symbolic UI icons — not real app icons.
 // Avoid using these as app icons; try to find a better themed alternative first.
@@ -63,7 +62,7 @@ class AppService {
     constructor() {
         // Patch XDG_DATA_DIRS before any Gio.AppInfo call so Flatpak/Snap apps are
         // visible even when the compositor starts without sourcing /etc/profile.d/.
-        // This also benefits AstalApps instances created later in state.ts / AppGrid.
+        // This also benefits the children we launch (see patchXdgDataDirs).
         this.patchXdgDataDirs()
 
         // Global Theme Discovery
@@ -382,6 +381,10 @@ class AppService {
 
             const icon = app.get_icon()
             let canonical: string | null = null
+            // The `Icon=` field as written. get_string() is a GDesktopAppInfo method:
+            // everything Gio.AppInfo.get_all() returns is one, but a defensive `?.`
+            // keeps a non-desktop entry from taking the whole registry down with it.
+            let rawIcon: string = (app as any).get_string?.("Icon") || ""
 
             if (icon instanceof Gio.ThemedIcon) {
                 // Bypass nameMap (mid-build during reload) — resolve directly from GTK theme.
@@ -394,6 +397,12 @@ class AppService {
                 }
             } else if (icon instanceof Gio.FileIcon) {
                 canonical = icon.get_file().get_path()
+            }
+            if (!rawIcon) {
+                // No keyfile to read it from: fall back to whatever the GIcon carries.
+                rawIcon = icon instanceof Gio.ThemedIcon ? (icon.get_names()[0] || "")
+                    : icon instanceof Gio.FileIcon ? (icon.get_file().get_path() || "")
+                    : ""
             }
 
             let wmClass: string | null = null
@@ -412,7 +421,10 @@ class AppService {
                 // Extract the binary name from the executable string
                 exec: app.get_executable()?.split(" ")[0].split("/").pop()?.replace(/["']/g, "").toLowerCase() || "",
                 icon: canonical,
-                wmClass: wmClass
+                wmClass: wmClass,
+                rawIcon,
+                keywords: (app as any).get_keywords?.() || [],
+                visible: app.should_show(),
             }
 
             this.cache.set(id.toLowerCase(), data)
@@ -701,8 +713,30 @@ class AppService {
         }
     }
 
+    /**
+     * The WHOLE registry, hidden entries included. This is the identity catalogue —
+     * use it to answer "what app is this window", not "what can I launch".
+     */
     getAllApps(): AppData[] {
         return Array.from(this.cache.values()).sort((a, b) => a.name.localeCompare(b.name))
+    }
+
+    /**
+     * What a launcher shows: `should_show()` entries only, sorted by name.
+     * The app grid's whole unfiltered list.
+     */
+    listApps(): AppData[] {
+        return Array.from(this.cache.values())
+            .filter(a => a.visible)
+            .sort((a, b) => a.name.localeCompare(b.name))
+    }
+
+    /**
+     * Launchable apps matching `query`, best first, uncapped. See `core/app-search`
+     * for the ranking — and for what AstalApps' `fuzzy_query` was doing instead.
+     */
+    queryApps(query: string): AppData[] {
+        return rankApps(query, this.listApps())
     }
 
     // ── Icon Overlay (per-app overrides) ──────────────────────────────────────
@@ -790,47 +824,30 @@ class AppService {
     }
 
     /**
-     * Searches apps by name or ID. Used by the search overlay (Prism).
+     * Top matches for a query. Used by the search overlay (Prism) and by the
+     * agent's `launch_app`.
+     *
+     * Same ranking as the app grid (`core/app-search`), so the two surfaces can
+     * never disagree about what "files" means, and the rescue tier `launch_app`
+     * depends on — a query with a word too many — comes with it.
+     *
+     * Ranks the WHOLE registry, hidden entries included, which is the one place
+     * this deliberately differs from `queryApps`. A launcher grid must not put 24
+     * of this machine's 80 entries on screen (portals, URL handlers, pinentry),
+     * but a name someone TYPED is evidence they want that specific thing, and the
+     * agent run that motivated the rescue tier on 2026-08-01 was asking for GTK
+     * Widget Factory — a `NoDisplay=true` entry. Filtering here would have made
+     * the rescue unreachable for the case it was written for.
      */
     search(query: string): AppData[] {
-        if (!query) return []
-        const q = query.toLowerCase()
-        const results: AppData[] = []
-
-        for (const app of this.cache.values()) {
-            if (app.name.toLowerCase().includes(q) || (app.id && app.id.toLowerCase().includes(q))) {
-                results.push(app)
-            }
-        }
-
-        // Rescue pass for a query with a word TOO MANY. Substring matching only
-        // survives a query that is a piece of the name; the names people and
-        // window titles actually use are the other way round — "GTK Widget
-        // Factory" for a .desktop called "Widget Factory", "Firefox browser",
-        // "GIMP image editor". On 2026-08-01 that cost a live agent run two steps
-        // and a 7 KB dump of all 80 apps, because launch_app answers a miss with
-        // the whole catalogue. Rescue ONLY when the primary pass came back empty,
-        // so Prism's ranking is untouched wherever it already had hits.
-        if (!results.length) {
-            const wanted = new Set(nameTokens(q))
-            const coveredBy = (s: string) => {
-                const t = nameTokens(s)
-                return t.length > 0 && t.every(tok => wanted.has(tok))
-            }
-            if (wanted.size) {
-                for (const app of this.cache.values()) {
-                    if (coveredBy(app.name) || (app.id && coveredBy(app.id))) results.push(app)
-                }
-            }
-        }
-
-        return results.sort((a, b) => {
-            const aName = a.name.toLowerCase()
-            const bName = b.name.toLowerCase()
-            if (aName.startsWith(q) && !bName.startsWith(q)) return -1
-            if (!aName.startsWith(q) && bName.startsWith(q)) return 1
-            return aName.localeCompare(bName)
-        }).slice(0, 8)
+        const ranked = rankApps(query, this.cache.values())
+        // A hidden entry that shares its display name with a visible one is a
+        // duplicate, not a second app — `com.google.Chrome.desktop` sits next to
+        // `google-chrome.desktop` on this machine, and "chrom" listed "Google
+        // Chrome" twice, back to back. The visible one is the app; drop the twin.
+        // Only exact-name twins, so a hidden app with a name of its own survives.
+        const visibleNames = new Set(ranked.filter(a => a.visible).map(a => a.name))
+        return ranked.filter(a => a.visible || !visibleNames.has(a.name)).slice(0, 8)
     }
 }
 

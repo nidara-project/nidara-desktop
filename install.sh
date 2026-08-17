@@ -373,7 +373,7 @@ sudo pacman -Syu --needed --noconfirm $PACMAN_DEPS
 echo "  Installing the Astal/AGS stack from nidara-repo (prebuilt)..."
 if sudo pacman -S --needed --noconfirm \
     aylurs-gtk-shell appmenu-glib-translator \
-    libastal-io astal-quarrel libastal-gtk4 libastal-apps \
+    libastal-io astal-quarrel libastal-gtk4 \
     libastal-notifd libastal-bluetooth libastal-tray libastal-wireplumber \
     libastal-auth; then
     # Lockstep guard: `pacman -S` can "succeed" with STALE versions when nidara-repo
@@ -481,11 +481,13 @@ echo "  Packaging Astal components (in dependency order)..."
 #     (ui/greeter/lib/greetd.ts). Note lib/auth STAYS: AstalAuth is C against
 #     PAM and ships its own PAM config, so the lockscreen cannot absorb it the
 #     way the greeter absorbed this one.
+#   - lib/apps: it was Gio.AppInfo plus a search, and core/AppService was already
+#     the Gio.AppInfo half. core/app-search.ts is the search, and it stopped
+#     scoring apps against their Exec= arguments (2026-08-17).
 astal_pkgs=(
     "lib/astal/io|libastal-io"
     "lib/quarrel|astal-quarrel"
     "lib/astal/gtk4|libastal-gtk4"
-    "lib/apps|libastal-apps"
     "lib/notifd|libastal-notifd"
     "lib/bluetooth|libastal-bluetooth"
     "lib/tray|libastal-tray"
