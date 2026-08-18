@@ -2,7 +2,6 @@
 // These satisfy imports like "gi://..."
 
 declare module "gi://AstalNotifd" { const v: any; export default v; }
-declare module "gi://AstalBluetooth" { const v: any; export default v; }
 declare module "gi://AstalTray" { const v: any; export default v; }
 declare module "gi://AstalWp" { const v: any; export default v; }
 declare module "gi://AstalBattery" { const v: any; export default v; }

@@ -1007,6 +1007,46 @@ instead of polled, so a playing player is silent; if that check ever counts sign
 something started polling. ⚠️ `DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent /tmp/mpris-probe`
 is the negative control — it must report FAIL.
 
+### Exercising BlueZ without a Bluetooth adapter
+
+`core/bluez.ts` talks to `org.bluez` on the SYSTEM bus, so it can be driven without
+the shell — and without hardware:
+
+```bash
+ags bundle --gtk 4 scripts/dev/bluez-probe.ts /tmp/bluez-probe
+/tmp/bluez-probe                                  # roster half only
+sudo scripts/dev/fake-bluetooth.sh start          # python-dbusmock bluez5
+/tmp/bluez-probe                                  # -> PROBE-RESULT ALL PASS (19)
+sudo scripts/dev/fake-bluetooth.sh stop
+```
+
+Two halves. The **roster** half runs anywhere and asserts the contract that holds
+with nothing plugged in: empty lists, false `is_powered`, a null adapter, and
+subscribe/dispose that does not throw. The **device** half needs the fake and
+asserts the paired/nearby split, a per-device `notify` firing exactly once, and
+the power round-trip through `adapter.powered`.
+
+WARNING: the negative control is `DBUS_SYSTEM_BUS_ADDRESS=unix:path=/nonexistent
+/tmp/bluez-probe`, and the FIRST version of this probe did not survive it: "no
+adapter" and "no system bus" both produce an empty roster, so all nine roster
+checks passed identically either way. Reaching the bus is now a PRECONDITION that
+fails hard and stops the run. If you add a check here, ask which of those two
+worlds it can tell apart.
+
+**The strongest test is not in the probe.** With the fake up and the shell
+running, flip a property from outside and watch the UI move:
+
+```bash
+python3 -c "import dbus; dbus.SystemBus().get_object('org.bluez',
+  '/org/bluez/hci0/dev_AA_BB_CC_00_00_03').UpdateProperties('org.bluez.Device1',
+  {'Paired': dbus.Boolean(True)}, dbus_interface='org.freedesktop.DBus.Mock')"
+```
+
+Settings -> Bluetooth must move that device from "Detected" to "Paired" on its own.
+That is the exact case `watchDevices` exists for — `notify::devices` covers only
+add/remove, so an in-place pairing change would otherwise leave the device in the
+wrong list until a full rebuild.
+
 ### Checking app search without opening the launcher
 
 `core/app-search.ts` decides what the app grid and Prism show for a query, and eyeballing a

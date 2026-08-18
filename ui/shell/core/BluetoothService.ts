@@ -1,20 +1,23 @@
 // BluetoothService — the single source of Bluetooth domain logic.
 //
 // Like NetworkService, this is a *stateless facade* over the already-reactive
-// AstalBluetooth GObject singleton (not its own GObject). It owns the power
+// singleton in `core/bluez.ts` (not its own GObject) — which since 2026-08-18 is
+// OURS: AstalBluetooth was 681 lines of Vala over an ObjectManager on org.bluez,
+// with no library beneath it, and the write half (the pairing agent below) was
+// already raw D-Bus here. It owns the power
 // toggle, device categorisation, the connect/pair/remove/discovery vocabulary,
 // and notify-subscription helpers. The Settings → Bluetooth page and the bar/CC
 // bt tile consume these instead of poking `bt.is_powered` two different ways or
 // re-deriving the paired/nearby split. Never imports Gtk; UI stays in the widgets.
 
-import AstalBluetooth from "gi://AstalBluetooth"
+import bluez, { type Device } from "./bluez"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { safeDisconnect } from "./signals"
 
-/** The AstalBluetooth singleton, or null if unavailable. */
-export function bt(): AstalBluetooth.Bluetooth | null {
-    return AstalBluetooth.get_default()
+/** The BlueZ roster singleton (`core/bluez.ts`), or null if unavailable. */
+export function bt(): any | null {
+    return bluez.get_default()
 }
 
 /** True when an adapter is present (the page shows a no-adapter banner otherwise). */
@@ -28,10 +31,11 @@ export function isPowered(b: any = bt()): boolean {
     return b?.is_powered ?? false
 }
 
-// IMPORTANT: AstalBluetooth.Bluetooth.is_powered is READ-ONLY (it reflects the
-// adapter). Writing it throws "not writable" — the toggle then flips visually but
-// the radio never actually powers off. Drive the adapter's `powered` instead;
-// `is_powered` re-derives from it and still emits notify::is-powered.
+// IMPORTANT: `is_powered` is DERIVED (it reflects the adapter), so writing it
+// would flip the toggle visually while the radio stayed on — which is exactly
+// what AstalBluetooth did, where the property was read-only and the write threw
+// "not writable". Drive the adapter's `powered` instead; `is_powered` re-derives
+// from it and still emits notify::is-powered. core/bluez.ts keeps that shape.
 export function setPowered(on: boolean): void {
     const a = bt()?.adapter
     if (a) a.powered = on
@@ -43,17 +47,17 @@ export function togglePower(): void {
 
 // ── Devices ──────────────────────────────────────────────────────────────────
 
-export function devices(b: any = bt()): AstalBluetooth.Device[] {
+export function devices(b: any = bt()): Device[] {
     return b?.devices ?? []
 }
 
 /** Devices with a saved pairing — the "My devices" list (connect/disconnect/forget). */
-export function pairedDevices(b: any = bt()): AstalBluetooth.Device[] {
+export function pairedDevices(b: any = bt()): Device[] {
     return devices(b).filter(d => d.paired)
 }
 
 /** Discovered-but-unpaired devices — the "Nearby" list (pair). */
-export function nearbyDevices(b: any = bt()): AstalBluetooth.Device[] {
+export function nearbyDevices(b: any = bt()): Device[] {
     return devices(b).filter(d => !d.paired)
 }
 
@@ -62,8 +66,10 @@ export function deviceName(dev: any): string {
 }
 
 // ── Device / adapter commands ────────────────────────────────────────────────
-// Thin guarded wrappers over the AstalBluetooth methods so callers don't repeat
-// the try/catch and the connect_device(null) cancellable boilerplate.
+// Thin guarded wrappers over core/bluez.ts so callers don't repeat the try/catch.
+// `connect_device`/`disconnect_device` are NOT called `connect`/`disconnect`
+// because those are GObject's own signal methods and every consumer uses
+// `dev.connect("notify::paired", …)` — AstalBluetooth named them the same way.
 
 export function connectDevice(dev: any): void {
     try { dev.connect_device(null) } catch (e) { console.error("[BT] connect:", e) }
@@ -109,6 +115,9 @@ export function stopDiscovery(): void {
 // Return a disposer; callers wire it to a widget's `unrealize`.
 
 type Dispose = () => void
+
+/** Re-exported so surfaces annotate against the facade, never the layer below. */
+export type { Device }
 
 export function watchPower(cb: () => void): Dispose {
     const b = bt() as any
@@ -159,7 +168,7 @@ export function watchDevices(cb: () => void): Dispose {
 }
 
 // ── Pairing agent (org.bluez.Agent1) ─────────────────────────────────────────
-// AstalBluetooth has no agent support, so without one BlueZ can only complete
+// No Bluetooth library offers agent support, so without one BlueZ can only complete
 // "just works" pairing: devices that need a passkey confirmation, a PIN, or
 // keyboard passkey entry pair blind or fail (tech-debt #13). We export a
 // KeyboardDisplay agent on the SYSTEM bus (where BlueZ lives) and forward each

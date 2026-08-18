@@ -374,7 +374,7 @@ echo "  Installing the Astal/AGS stack from nidara-repo (prebuilt)..."
 if sudo pacman -S --needed --noconfirm \
     aylurs-gtk-shell appmenu-glib-translator \
     libastal-io astal-quarrel libastal-gtk4 \
-    libastal-notifd libastal-bluetooth libastal-tray libastal-wireplumber \
+    libastal-notifd libastal-tray libastal-wireplumber \
     libastal-auth; then
     # Lockstep guard: `pacman -S` can "succeed" with STALE versions when nidara-repo
     # hasn't been rebuilt for a pin bump yet (its packages still predate the new
@@ -484,12 +484,15 @@ echo "  Packaging Astal components (in dependency order)..."
 #   - lib/apps: it was Gio.AppInfo plus a search, and core/AppService was already
 #     the Gio.AppInfo half. core/app-search.ts is the search, and it stopped
 #     scoring apps against their Exec= arguments (2026-08-17).
+#   - lib/bluetooth: 681 lines of Vala over a Gio ObjectManager on org.bluez, with
+#     no library beneath it — and the WRITE half (the org.bluez.Agent1 pairing
+#     agent) was already raw D-Bus in core/BluetoothService.ts. core/bluez.ts is
+#     the read half (2026-08-18).
 astal_pkgs=(
     "lib/astal/io|libastal-io"
     "lib/quarrel|astal-quarrel"
     "lib/astal/gtk4|libastal-gtk4"
     "lib/notifd|libastal-notifd"
-    "lib/bluetooth|libastal-bluetooth"
     "lib/tray|libastal-tray"
     "lib/wireplumber|libastal-wireplumber"
     "lib/auth|libastal-auth"

@@ -103,12 +103,13 @@ phase_deps() {
     # Same set install.sh's astal_pkgs builds, and for the same reasons — the two
     # lists must move together (the cache key hashes BOTH files so a drift can't
     # be masked by a stale tarball). lib/network, lib/astal/gtk3, lib/battery,
-    # lib/hyprland, lib/mpris and lib/apps are absent on purpose; booting the shell
-    # here is what proves they are not needed — and for hyprland that is a real
-    # test, since the smoke boots a compositor and the shell has to model it.
+    # lib/hyprland, lib/mpris, lib/apps and lib/bluetooth are absent on purpose;
+    # booting the shell here is what proves they are not needed — and for hyprland
+    # that is a real test, since the smoke boots a compositor and the shell has to
+    # model it.
     local astal_subdirs=(
         lib/astal/io lib/quarrel lib/astal/gtk4
-        lib/notifd lib/bluetooth lib/tray lib/wireplumber lang/gjs
+        lib/notifd lib/tray lib/wireplumber lang/gjs
     )
     local sub
     for sub in "${astal_subdirs[@]}"; do

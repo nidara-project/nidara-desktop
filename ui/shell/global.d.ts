@@ -8,10 +8,6 @@ namespace AstalHyprland {
 namespace AstalNotifd {
     export type Notification = any;
 }
-namespace AstalBluetooth {
-    export type Bluetooth = any;
-    export type Device = any;
-}
 namespace AstalTray {
     export type Item = any;
 }

@@ -1,5 +1,5 @@
 import { Gtk } from "ags/gtk4"
-import AstalBluetooth from "gi://AstalBluetooth"
+import { type Device } from "../../../core/BluetoothService"
 import GLib from "gi://GLib"
 import { listGroup, createRow, pageBox, bindWhileRealized } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
@@ -187,7 +187,7 @@ export default function BluetoothPage() {
     // ── Device list builder ───────────────────────────────────────────────────
     const rebuildList = (
         listBox: Gtk.ListBox,
-        devices: AstalBluetooth.Device[],
+        devices: Device[],
         allowActions: boolean,
     ) => {
         let child = listBox.get_first_child()
