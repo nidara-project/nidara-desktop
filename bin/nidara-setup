@@ -641,6 +641,36 @@ echo "  Enabling bluetooth..."
 sudo systemctl enable --now bluetooth.service 2>/dev/null || true
 fi  # USER_ONLY
 
+if [ -z "$USER_ONLY" ]; then
+# ── Retired dependencies (system — skipped by --user) ─────────────────────────
+# Nidara used to be built on AGS + the Astal libraries; both left in August 2026
+# (the shell hosts and bundles itself, and every service is ours now). `install.sh`
+# simply stopped installing them, which leaves an UPDATED machine carrying the
+# whole stack forever: pacman recorded them as explicitly installed, so
+# `pacman -Qdt` does not list them and nothing else will ever mention them again.
+# ~15 MiB, most of it the `ags` binary — small, but it is dead code with a
+# `/usr/bin` entry, and the user is the only one who can decide to remove it.
+# Say so, list exactly what is there, and let them run it. Never remove packages
+# on someone's behalf. (`libastal-auth` is deliberately NOT here: the lockscreen
+# and greeter still authenticate through it.)
+_retired=""
+for p in aylurs-gtk-shell astal-gjs astal-quarrel appmenu-glib-translator \
+         libastal-io libastal-gtk3 libastal-gtk4 libastal-apps libastal-battery \
+         libastal-bluetooth libastal-greet libastal-hyprland libastal-mpris \
+         libastal-network libastal-notifd libastal-tray libastal-wireplumber; do
+    pacman -Qq "$p" >/dev/null 2>&1 && _retired="$_retired $p"
+done
+if [ -n "$_retired" ]; then
+    echo ""
+    echo "  Note: Nidara no longer uses AGS or the Astal libraries, but this machine"
+    echo "  still has them from an earlier install. Nothing depends on them now; to"
+    echo "  reclaim the space (and drop /usr/bin/ags), you can remove them with:"
+    echo ""
+    echo "      sudo pacman -Rns$_retired"
+    echo ""
+fi
+fi  # USER_ONLY
+
 echo ""
 echo "  ✓ Nidara setup complete."
 echo "    Select 'Nidara' at the login screen."
