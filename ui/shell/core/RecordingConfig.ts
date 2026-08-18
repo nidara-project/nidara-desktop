@@ -23,8 +23,8 @@
 //     containers only (see CODECS), never for WebM.
 
 import GLib from "gi://GLib"
-import { readFile, writeFile } from "ags/file"
-import { execAsync } from "ags/process"
+import { readFile, writeFile } from "../../lib/file"
+import { execAsync } from "../../lib/process"
 import { loadKnown } from "./configFile"
 
 export type RecordQuality = "low" | "balanced" | "high"

@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import Cairo from "gi://cairo"

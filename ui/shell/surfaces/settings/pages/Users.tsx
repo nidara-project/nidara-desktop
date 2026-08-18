@@ -1,8 +1,10 @@
-import { Gdk, Gtk } from "ags/gtk4"
+import Gdk from "gi://Gdk?version=4.0"
+import { setWindowAppId } from "../../../../lib/app-id"
+import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import GdkPixbuf from "gi://GdkPixbuf"
-import { execAsync } from "ags/process"
+import { execAsync } from "../../../../lib/process"
 import { showNidaraAlert, NidaraButton, NidaraRow, NidaraEmptyRow, ROW_H_SINGLE } from "../../../../lib/nidara-kit"
 import { getUsers, getCurrentUser, type User } from "../../../../lib/users"
 import { listGroup, createRow, createStackedRow, fieldWithActions, pageBox, onPageShown } from "../SettingsHelpers"
@@ -114,12 +116,16 @@ function spawnTerminalWithCommand(cmd: string) {
 // ── "Add user" dialog ─────────────────────────────────────────────────────────
 
 function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) {
+    // Modal children of the Settings window, and Hyprland files them as clients of
+    // their own — so they declare Settings' app-id too, exactly as they resolved
+    // to it under the old remap. See ui/lib/app-id.ts.
     const dialog = new Gtk.Window({
         title: t("settings.users.other.add"),
         modal: true,
         resizable: false,
         default_width: 380,
     })
+    setWindowAppId(dialog, "nidara-settings")
     if (parentWin) dialog.set_transient_for(parentWin)
 
     const box = new Gtk.Box({
@@ -250,12 +256,16 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
 // ── "Change password" dialog ──────────────────────────────────────────────────
 
 function showChangePasswordDialog(user: User, parentWin: Gtk.Window | null) {
+    // Modal children of the Settings window, and Hyprland files them as clients of
+    // their own — so they declare Settings' app-id too, exactly as they resolved
+    // to it under the old remap. See ui/lib/app-id.ts.
     const dialog = new Gtk.Window({
         title: `${t("settings.users.other.pw.change")} — ${user.displayName}`,
         modal: true,
         resizable: false,
         default_width: 360,
     })
+    setWindowAppId(dialog, "nidara-settings")
     if (parentWin) dialog.set_transient_for(parentWin)
 
     const box = new Gtk.Box({

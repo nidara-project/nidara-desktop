@@ -1,6 +1,6 @@
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
-import { readFile, writeFile } from "ags/file"
+import { readFile, writeFile } from "../../../lib/file"
 import { WidgetSize, UNIT, GAP } from "./Types"
 import { WIDGET_META, CC_DEFAULT_ORDER } from "../../widgets/index"
 

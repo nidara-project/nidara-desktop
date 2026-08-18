@@ -20,7 +20,7 @@
 // Opacity, never scale: CSS transforms break GTK hit-testing (commandment 3),
 // and alpha is what makes this read as breathing anyway.
 
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Theme from "../core/ThemeManager"
 

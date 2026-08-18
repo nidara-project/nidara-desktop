@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import { listGroup, createRow, pageBox, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"

@@ -24,7 +24,7 @@
 // Everything below is READ-ONLY against NM except the nmcli commands. Widgets
 // must not import `gi://NM` — they ask this module, like they already did.
 
-import { execAsync } from "ags/process"
+import { execAsync } from "../../lib/process"
 import NM from "gi://NM?version=1.0"
 import { t } from "./i18n"
 import { safeDisconnect } from "./signals"

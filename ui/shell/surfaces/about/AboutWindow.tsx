@@ -1,8 +1,10 @@
-import app from "ags/gtk4/app"
-import { Gtk } from "ags/gtk4"
+import app from "../../../lib/host"
+import System from "system"
+import { setWindowAppId } from "../../../lib/app-id"
+import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-import { execAsync } from "ags/process"
+import { execAsync } from "../../../lib/process"
 import IconButton from "../../common/IconButton"
 import status from "../../core/Status"
 import hs from "../../core/HyprlandState"
@@ -118,7 +120,14 @@ export default function AboutWindow(): Gtk.Window | null {
     // ── Versions ──────────────────────────────────────────────────────────────
     const verBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_top: 8, margin_bottom: 8, margin_start: 16, margin_end: 16 })
     verBox.append(asyncSpecRow(t("settings.about.hyprland"), hs.version()))
-    verBox.append(specRow("AGS", "v3 (GJS + GTK4)"))
+    // Was a hardcoded `specRow("AGS", "v3 (GJS + GTK4)")`. It stopped being true
+    // the day the shell got its own application host — AGS is now a build-time
+    // tool at most — and a hardcoded string cannot go stale loudly. These two read
+    // the actual runtime. Both labels are proper nouns, so neither needs a
+    // translation key.
+    verBox.append(specRow("GTK", `${Gtk.get_major_version()}.${Gtk.get_minor_version()}.${Gtk.get_micro_version()}`))
+    // GJS packs its version as major*10000 + minor*100 + micro (18801 = 1.88.1).
+    verBox.append(specRow("GJS", `${Math.floor(System.version / 10000)}.${Math.floor(System.version / 100) % 100}.${System.version % 100}`))
 
     // ── Close button ──────────────────────────────────────────────────────────
     // Same kit IconButton as the Settings header close. margin_top 12 + the
@@ -163,6 +172,11 @@ export default function AboutWindow(): Gtk.Window | null {
         resizable: false,
     })
     win.set_child(glass)
+    // Deliberately the SAME app-id as the Settings window: About is opened from
+    // Settings, has no desktop entry of its own, and under AGS both windows
+    // already resolved to `nidara-settings` through AppService's remap. Giving it
+    // a name of its own here would only cost it its icon everywhere.
+    setWindowAppId(win, "nidara-settings")
     _instance = win
 
     // Float + center come from a static window rule in hyprland.lua (matched by the

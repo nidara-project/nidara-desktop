@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import Graphene from "gi://Graphene"
@@ -449,7 +449,11 @@ export class MorphRevealer extends Gtk.Widget {
     dismantle() {
         if (this.tickId !== null) { this.remove_tick_callback(this.tickId); this.tickId = null }
         for (const p of this.pairs) p.ghost.unparent()
-        this.sourceGhost?.unparent()
+        // `sourceGhosts`, plural — this read `this.sourceGhost?.unparent()` until
+        // 2026-08-18, a property that has never existed. The optional chain made it
+        // a silent no-op, so every source ghost stayed parented to a dismantled
+        // widget. Caught by the typecheck only once the AGS type shim was gone.
+        for (const g of this.sourceGhosts) g.unparent()
         this.child?.unparent()
     }
 }

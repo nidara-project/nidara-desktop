@@ -1,4 +1,6 @@
-import { Gtk, Gdk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
+import { setWindowAppId } from "../../lib/app-id"
+import Gdk from "gi://Gdk?version=4.0"
 import GdkPixbuf from "gi://GdkPixbuf"
 import Cairo from "gi://cairo"
 import { NidaraButton, makeHSlider } from "../../lib/nidara-kit"
@@ -90,12 +92,16 @@ export function showAvatarCropper(
     ;(zoomSlider as any).hexpand = true
 
     // ── Dialog ────────────────────────────────────────────────────────────────────
+    // Modal children of the Settings window, and Hyprland files them as clients of
+    // their own — so they declare Settings' app-id too, exactly as they resolved
+    // to it under the old remap. See ui/lib/app-id.ts.
     const dialog = new Gtk.Window({
         title: t("settings.users.avatar.crop.title"),
         modal: true,
         transient_for: parentWin ?? undefined,
         resizable: false,
     })
+    setWindowAppId(dialog, "nidara-settings")
 
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,

@@ -1,6 +1,6 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
-import { execAsync } from "ags/process"
+import { execAsync } from "../../../../lib/process"
 import { listGroup, createRow, pageBox, staticLabel, onPageShown } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import { readShellVersion } from "../../../core/Paths"

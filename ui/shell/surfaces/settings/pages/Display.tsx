@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import { listGroup, createRow, pageBox, staticLabel, bindWhileRealized, onPageShown } from "../SettingsHelpers"
 import { showNidaraAlert, NidaraDropDown } from "../../../../lib/nidara-kit"
 import hs from "../../../core/HyprlandState"

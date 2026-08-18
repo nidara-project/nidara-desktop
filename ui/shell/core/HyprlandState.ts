@@ -1,6 +1,6 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
-import { execAsync, exec } from "ags/process"
+import { execAsync, exec } from "../../lib/process"
 import { safeDisconnect } from "./signals"
 import * as Hypr from "./hypr-ipc"
 import type { HyprClient, HyprWorkspace, HyprMonitor } from "./hypr-ipc"

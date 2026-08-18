@@ -3,8 +3,8 @@
  * V106: Extracted for modular architecture
  */
 
-import { Gtk } from "ags/gtk4"
-import { writeFile, readFile } from "ags/file"
+import Gtk from "gi://Gtk?version=4.0"
+import { writeFile, readFile } from "../../../lib/file"
 import GLib from "gi://GLib"
 // --- PERSISTENCE ---
 // All Nidara config lives under ~/.config/nidara/ (matches ThemeManager,

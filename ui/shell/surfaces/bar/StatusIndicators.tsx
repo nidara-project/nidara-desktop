@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import agentConfig from "../../core/AgentConfig"
 import { GRID_WIDTH } from "../control-center/CCLayoutManager"
 import SquircleContainer, { Shape } from "../../common/SquircleContainer"

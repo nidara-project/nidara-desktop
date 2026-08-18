@@ -1,5 +1,5 @@
-import { Gtk, Gdk } from "ags/gtk4"
-import app from "ags/gtk4/app"
+import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import status from "../../core/Status"
 import IslandGrid from "./IslandGrid"

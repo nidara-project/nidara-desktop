@@ -11,7 +11,7 @@
  * the adapter through this interface.
  */
 
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"

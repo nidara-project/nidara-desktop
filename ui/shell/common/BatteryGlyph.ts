@@ -25,7 +25,7 @@
 // threshold (semantic status colors, NOT the theme accent — accent is
 // reserved for selection). Chrome color follows the shell appearance pin.
 
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import Theme from "../core/ThemeManager"
 import * as Battery from "../core/BatteryService"
 import { hexToFloatRgb } from "./DrawingUtils"

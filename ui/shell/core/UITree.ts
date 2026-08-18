@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 
 // queryUI — a read-only snapshot of what the shell's widgets are actually
 // rendering, for agent/script verification. Same category as dumpState (a

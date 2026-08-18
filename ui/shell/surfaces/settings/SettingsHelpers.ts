@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import { NidaraRow, NidaraStackedRow, NidaraList, NidaraButton,
          NidaraToggleRow, NidaraDropDownRow, NidaraSliderRow, type NidaraSliderRowOpts } from "../../../lib/nidara-kit"

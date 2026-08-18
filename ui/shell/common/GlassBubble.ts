@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import Theme from "../core/ThemeManager"
 
 // The Nidara glass bubble: a rounded body with a pointer spliced into one side,

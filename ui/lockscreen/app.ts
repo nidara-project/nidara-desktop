@@ -1,5 +1,5 @@
-import app from "ags/gtk4/app"
-import { Gdk } from "ags/gtk4"
+import app from "../lib/host"
+import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 // @ts-ignore
 import Gtk4SessionLock from "gi://Gtk4SessionLock"
@@ -44,7 +44,9 @@ function startFallback(display: Gdk.Display) {
 }
 
 app.start({
-  instanceName: "nidara-lock",
+  applicationId: "org.nidara.lock",
+  applicationName: "Nidara Lock Screen",
+  logDomain: "nidara-lock",
   css: cssPath,
 
   main() {

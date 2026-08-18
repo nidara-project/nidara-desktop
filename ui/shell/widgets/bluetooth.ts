@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 import { buildRoundContent, buildSplitCapsuleContent } from "../surfaces/control-center/Toggles"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"

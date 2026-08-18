@@ -30,7 +30,7 @@
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import GioUnix from "gi://GioUnix"
-import { execAsync } from "ags/process"
+import { execAsync } from "../../lib/process"
 import { safeDisconnect } from "./signals"
 import { PlaybackStatus, players as mprisPlayers, subscribePlayers } from "./mpris"
 

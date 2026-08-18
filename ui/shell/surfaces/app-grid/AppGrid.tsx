@@ -1,6 +1,7 @@
-import { Gtk, Gdk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
 import { NidaraScrolled } from "../../../lib/nidara-kit"
-import { execAsync } from "ags/process"
+import { execAsync } from "../../../lib/process"
 import GLib from "gi://GLib"
 // @ts-ignore
 import Pango from "gi://Pango"

@@ -1,5 +1,5 @@
 import GLib from "gi://GLib"
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import { RADIUS } from "../tokens"
 
 /**

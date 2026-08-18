@@ -1,4 +1,5 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
+import { setWindowAppId } from "../app-id"
 import Gio from "gi://Gio"
 import { NidaraScrolled } from "./scrolled"
 import { NidaraSplitView, type NidaraSplitViewResult } from "./split-view"
@@ -50,6 +51,12 @@ export interface NidaraWindowOpts {
     cssClasses?: string[]
     /** Gtk.Window name (for #id CSS / Hyprland matching). */
     name?: string
+    /**
+     * The Wayland app-id this window declares for ITSELF, instead of inheriting
+     * the process-wide one. A settings-style window is a real application window
+     * and the compositor should file it as one — see `ui/lib/app-id.ts`.
+     */
+    appId?: string
     // No tooltip opt for the toggle ON PURPOSE — native GTK tooltips are
     // unthemeable. Attach the glass tooltip to the returned `sidebarToggle`.
 }
@@ -80,7 +87,7 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         sidebarWidth = WINDOW_LAYOUT.sidebar,
         contentWidth = WINDOW_LAYOUT.content,
         defaultWidth, defaultHeight = 760,
-        cssClasses = [], name,
+        cssClasses = [], name, appId,
     } = opts
 
     // The window opens WIDE ENOUGH TO BE ITSELF: sidebar docked and the pane at its
@@ -100,6 +107,7 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         visible: false,
     })
     if (name) win.set_name(name)
+    if (appId) setWindowAppId(win, appId)
     // ── The floor is the DISTRESS width, not the pane ─────────────────────────
     //
     // NidaraSplitView's ZeroMinOverlay deliberately severs the content's minimum

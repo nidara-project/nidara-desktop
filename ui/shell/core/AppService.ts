@@ -1,8 +1,9 @@
 import Gio from "gi://Gio"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
-import { Gtk, Gdk } from "ags/gtk4"
-import { readFile } from "ags/file"
+import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
+import { readFile } from "../../lib/file"
 import { rankApps } from "./app-search"
 
 export interface AppData {
@@ -455,27 +456,33 @@ class AppService {
 
     /**
      * WHICH APP a Hyprland window belongs to — identity, nothing else.
-     * Returns null for windows that should be ignored (the shell's own surfaces).
      *
      * **Every surface that shows something per-window must normalize through this
-     * before asking for an icon, a name, or anything else.** The raw class is not
-     * the app: Settings is a real app window that Hyprland reports as
-     * `io.Astal.ags` (see commandment 7), and the icon theme has no entry under
-     * that name — the desktop registry knows it as `nidara-settings`. A surface
-     * that skips this step silently renders the generic app glyph and disagrees
-     * with the dock about what the same window is; that is exactly what the
-     * workspace overview did until 2026-08-02.
+     * before asking for an icon, a name, or anything else.** A surface that skips
+     * the step silently renders the generic app glyph and disagrees with the dock
+     * about what the same window is; that is exactly what the workspace overview
+     * did until 2026-08-02.
+     *
+     * It used to carry a remap, and that remap is GONE rather than renamed. The
+     * shell's own regular windows arrived as `io.Astal.ags` — AGS's application
+     * id, which no icon theme has art for — so this function translated it to
+     * `nidara-settings` and every caller that forgot to ask paid for it. Since
+     * the AGS host went, those windows declare `nidara-settings` themselves
+     * (`ui/lib/app-id.ts`), which is a real entry in the desktop registry, so
+     * there is nothing left to special-case. Keep going through this function
+     * anyway: the case folding is still load-bearing, and the day some other
+     * window needs translating this is where it goes.
+     *
+     * The remap took a latent bug with it. Its guard read
+     * `if (key.includes("ags") && rawClass !== "io.Astal.ags") return null` — a
+     * SUBSTRING test meant to hide our own surfaces (which are layer-shell and
+     * never appear in `hyprctl clients` anyway), so any third-party window whose
+     * class happened to contain those three letters was dropped from the dock and
+     * the overview entirely.
      */
     resolveWindowApp(rawClass: string): string | null {
         if (!rawClass) return null
-        const key = rawClass.toLowerCase()
-
-        // "io.Astal.ags" is our shell's only regular window (the Settings window).
-        // Layer shell windows never appear in hypr.clients, but just in case:
-        if (key.includes("ags") && rawClass !== "io.Astal.ags") return null
-
-        if (key === "org.nidara.desktop" || key === "gjs" || key === "io.astal.ags") return "nidara-settings"
-        return key
+        return rawClass.toLowerCase()
     }
 
     /**

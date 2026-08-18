@@ -1,4 +1,5 @@
-import { Gtk, Gdk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
 import { NidaraScrolled } from "../../../lib/nidara-kit"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"

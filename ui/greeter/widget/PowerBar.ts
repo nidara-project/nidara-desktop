@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import { NidaraPowerBar } from "../../lib/power-bar"
 import { t, onLocaleChange } from "../lib/i18n"
 

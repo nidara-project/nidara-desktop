@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import ccLayout, { GRID_WIDTH, SIZE_TIER, SizeTier } from "./CCLayoutManager"
 import { WidgetSize } from "./Types"
 import widgetConfig from "../../core/WidgetConfig"

@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 
 /**
  * Put text on the pixel grid. Call once per bundle, before any window is built.

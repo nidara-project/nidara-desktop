@@ -2125,8 +2125,9 @@ borders) stays perceptible — that tail is what made the old CSS fade look "non
   new animation anywhere; if your motion is system-initiated it belongs behind that call,
   and if it follows the pointer it deliberately does not.
 - **Typing gotcha:** the class merges `export interface ScaleRevealer extends Gtk.Widget`
-  because the ambient `ags/gtk4` typing exposes `Gtk` as `any` in value position — without
-  the merge, tsc can't see the inheritance. Don't add TS `private` members or members whose
+  because `Gtk` is `any` in value position for tsc — without the merge, it can't see the
+  inheritance. (That used to be blamed on the ambient `ags/gtk4` shim, which is gone; the merge
+  is still there and still needed, so the shim was not the cause.) Don't add TS `private` members or members whose
   name collides with a `Gtk.Widget` property (e.g. `scaleFactor`) — both break the merge.
 - **Banner sizing:** the popup column uses `GRID_WIDTH` (356px, from `CCLayoutManager`) so
   banners match the NC cards exactly — one `NotificationCapsule`, one size. Wrapping labels

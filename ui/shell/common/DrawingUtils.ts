@@ -1,6 +1,7 @@
 import Cairo from "gi://cairo"
 import GdkPixbuf from "gi://GdkPixbuf"
-import { Gtk, Gdk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
 
 /** The single hex → Cairo-float conversion point. It now lives beside the accent
  *  palette in `ui/lib/accent.ts`, because the kit's slider paints the accent and a

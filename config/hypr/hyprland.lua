@@ -456,7 +456,11 @@ hl.window_rule({
 })
 
 -- The Nidara "About" window (a small fixed-size GTK toplevel) floats and
--- centers. Matched by title since AGS windows share the io.Astal.ags class.
+-- centers. Matched by TITLE, and it has to stay that way: About deliberately
+-- shares the Settings window's class (`nidara-settings`, which both windows
+-- declare for themselves — see ui/lib/app-id.ts) so that both carry Settings'
+-- registry icon in the dock and the overview. Matching on class here would float
+-- and centre the Settings window too.
 hl.window_rule({
     name   = "float-about",
     match  = { title = "^About Nidara$" },

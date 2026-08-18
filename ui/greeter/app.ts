@@ -1,5 +1,5 @@
-import app from "ags/gtk4/app"
-import { Gdk } from "ags/gtk4"
+import app from "../lib/host"
+import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 import Greeter from "./widget/Greeter"
 import { getPreferredUser } from "./lib/greeter-prefs"
@@ -44,7 +44,9 @@ function loadAccentCss(): string {
 }
 
 app.start({
-  instanceName: "nidara-greeter",
+  applicationId: "org.nidara.greeter",
+  applicationName: "Nidara Greeter",
+  logDomain: "nidara-greeter",
   css: cssPath,
 
   main() {

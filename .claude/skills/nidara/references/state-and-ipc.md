@@ -67,8 +67,14 @@ can make it with no AGS in sight — which is how this was verified rather than 
 busctl --user call org.nidara.Shell /org/nidara/Shell \
        org.nidara.Shell Request as 1 dumpState      # ours
 busctl --user call io.Astal.ags /io/Astal/Application \
-       io.Astal.Application Request as 1 dumpState  # AGS's, byte-identical
+       io.Astal.Application Request as 1 dumpState  # the deprecated one, byte-identical
 ```
+
+⚠️ Since the AGS host went (2026-08-18) that second name is **served by us**, from
+`exportLegacyAgsBusName()` in `ui/shell/app.ts`, right beside `exportShellBusName()`. It used to
+come free with AGS's runtime. It carries `Request` and `Quit` only — AGS also offered
+`ToggleWindow` and `Inspector`, and neither has ever had a Nidara caller. Delete it, and the
+fallback in `bin/nidara-ipc.c`, together: the smoke test asserts both doors answer identically.
 
 **Use `nidara-ipc <cmd>` in new code.** It is `bin/nidara-ipc.c`, a ~145-line C client compiled by
 install.sh §6 and the PKGBUILD (same idiom as `bin/nidara-input.c`), which tries `org.nidara.Shell`
@@ -104,11 +110,12 @@ a user's own `~/.config/nidara/hyprland-user.lua` keybinds, and the string appea
 translated text in 12 locales**. Both need a release-long deprecation window; that is why the new
 name shipped first and the migration follows.
 
-Why a bus name of our own, beyond the CLI: `AstalIO.Daemon` **overwrites** the `applicationId`
-passed to `app.start()` with `io.Astal.<instance>`, and GTK derives the Wayland app-id from the
-GApplication id — which is the entire reason Hyprland sees the Settings window as `io.Astal.ags`
-and the dock has to remap it (commandment 7). Owning the name is step one; the app-id itself only
-comes back when the host does.
+Why a bus name of our own, beyond the CLI — and this half is now **finished**: `AstalIO.Daemon`
+used to **overwrite** the `applicationId` passed to `app.start()` with `io.Astal.<instance>`, and
+GTK hands the GApplication id to the compositor as the Wayland app-id, which is the entire reason
+Hyprland filed the Settings window as `io.Astal.ags` and the dock had to remap it. Owning the bus
+name was step one; the host went next, so the id is ours (`org.nidara.desktop`) and application
+windows name themselves on top of it. See `architecture.md` → "Identity: one window, one app-id".
 
 **GJS gotcha, measured 2026-08-18:** the exported method is named `RequestAsync(params, invocation)`
 because that naming is how GJS knows to let us answer the invocation ourselves — without it, an
@@ -212,10 +219,13 @@ the same node model the AT-SPI2 backend now fills for third-party apps (see "com
 below — `queryUI` is the shell's own toplevels; `query_app` is the same shape via AT-SPI).
 
 **That split is invisible from the outside, so both tools have to state it** (done 2026-07-30
-after measuring the cost). Nidara's windows are not reachable through AT-SPI under any name an
-agent would try — it registers on the bus as `gjs` with unnamed frames (see `tech-debt.md`) —
-so `query_app io.Astal.ags` and `query_app "Nidara Settings"` both return zero **with the
-window open in front of it**, which reads as "nothing there" rather than "wrong door". A model
+after measuring the cost). Until 2026-08-18 Nidara's windows were not reachable through AT-SPI
+under any name an agent would try — the process registered as `gjs` with unnamed frames — so
+`query_app io.Astal.ags` and `query_app "Nidara Settings"` both returned zero **with the
+window open in front of it**, which reads as "nothing there" rather than "wrong door". The host
+now sets `prgname`/application name, so `nidara-a11y org.nidara.desktop` answers (measured: 143
+nodes); the tools still state the split, because *which* door to use is the part a model gets
+wrong. A model
 asked to read its own Settings window spent three steps and ~15k tokens finding that out, then
 answered from `describe_settings` instead. `queryUI`'s `desc` now opens by naming whose windows
 it reads (that first clause is the entire line the daemon's action index carries, cut at the

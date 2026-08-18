@@ -59,7 +59,9 @@ if [ -f "$DEV_FILE" ]; then
             node "$SOURCE_DIR/scripts/gen-widget-index.mjs" >> "$LOG" 2>&1 \
                 || echo "[$(date '+%H:%M:%S')] nidara-ui: WARN — widget codegen failed, running with committed widgets.gen.ts" | tee -a "$LOG"
         fi
-        exec ags run app.ts >> "$LOG" 2>&1
+        # --gtk 4 is REQUIRED, not decoration: the bundler used to infer the
+        # toolkit from an `ags/gtk4` import, and nothing imports that any more.
+        exec ags run --gtk 4 app.ts >> "$LOG" 2>&1
     else
         echo "[$(date '+%H:%M:%S')] nidara-ui: WARNING — .dev points to '$SOURCE_DIR' but app.ts not found" | tee -a "$LOG"
     fi

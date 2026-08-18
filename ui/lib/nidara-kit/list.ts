@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 
 export interface NidaraListResult {
     /** Outer column: optional title + the list card. Append this to the page. */

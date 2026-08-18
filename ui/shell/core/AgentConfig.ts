@@ -1,5 +1,5 @@
 import GLib from "gi://GLib"
-import { readFile, writeFile } from "ags/file"
+import { readFile, writeFile } from "../../lib/file"
 import { providerById } from "./AgentProviders"
 import { loadKnown } from "./configFile"
 

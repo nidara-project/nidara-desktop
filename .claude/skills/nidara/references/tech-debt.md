@@ -14,8 +14,9 @@ inset shadows, transitions, extra colors) — force-migrating them would change 
 they stay. The actionable parts of that sweep were done instead: Adwaita named colors
 eradicated (`@accent_bg_color` in `_workspace.scss`/`_app-grid.scss` — those DID track the
 accent, but only via a fragile accidental chain: our gsettings `accent-color` → the
-libadwaita that AGS force-loads defines the named color → GNOME's palette flavor of the
-accent, not our exact token; on an Adwaita-free system it breaks silently. Now they use
+libadwaita that AGS force-loaded defines the named color → GNOME's palette flavor of the
+accent, not our exact token; on an Adwaita-free system it breaks silently — and since the AGS host
+went (#9) EVERY system is Adwaita-free in-process, so that chain is now simply dead. Now they use
 `--nidara-accent` directly), `--nidara-accent-10` unified (5 sites), orphaned
 `.bar-ws-dot` and `.cc-resize-btn` CSS deleted (the latter was the pre-context-menu tile
 resize UI). For dark badges over imagery, don't hardcode rgba blacks — add scrim tokens
@@ -177,18 +178,27 @@ must wire its own signals. The Wi-Fi AP detail page now does exactly that (it su
 the IPv4 group shown only while that AP is the active connection). So the *pattern* for a
 reactive subpage exists; the generic framework convenience does not.
 
-### 9. One Adwaita-WARNING per boot is unavoidable (don't chase it)
-The shell is libadwaita-free, but **AGS's runtime calls `Adw.init()` whenever libadwaita
-exists on the system** (`/usr/share/ags/js/lib/gtk4/app.ts` — unconditional, `catch`-guarded).
-Two consequences: (a) in-process dark/light MUST go through `setPreferDark()` in
-`ThemeManager.ts` (routes via `AdwStyleManager` when Adw is initialized, plain
-`Gtk.Settings` otherwise — writing `gtk_application_prefer_dark_theme` directly logs
-`Adwaita-WARNING` and risks being overridden); (b) exactly **one** warning per boot remains,
-fired inside `Adw.init()` itself when GTK loads `~/.config/gtk-4.0/settings.ini` (which we
-legitimately write so third-party plain-GTK4 apps follow dark mode). That one is framework
-noise — harmless, not fixable from our side, don't burn time on it. It also means the
-Adwaita stylesheet IS loaded in-process, which is why the anti-Adwaita resets (#2) are
-still needed despite the Adwaita removal.
+### 9. The per-boot Adwaita-WARNING — ✅ RESOLVED 2026-08-18 (the host went)
+**It was AGS's, and it left with AGS.** `/usr/share/ags/js/lib/gtk4/app.ts` called `Adw.init()`
+unconditionally (`catch`-guarded) whenever libadwaita existed on the system, with no way to opt
+out — so libadwaita was initialised in a process whose widget tree had none. `ui/lib/host.ts` does
+not. Verified on the live shell: the `Adwaita-WARNING … gtk-application-prefer-dark-theme … is
+unsupported` line that fired at every boot is gone, and `Adw.is_initialized()` is false
+(`scripts/dev/host-probe.ts` asserts it, and its `--astal` control shows the warning and the `true`).
+
+`ThemeManager.setPreferDark()` keeps its `AdwStyleManager` probe **on purpose**: it is a
+`probeAdwStyleManager()` that returns null when Adw is not initialised, so it costs one dynamic
+import and then takes the plain `Gtk.Settings` path forever. Leaving it is what makes the file
+correct in a process that some future bundle DOES initialise Adw in; deleting it would be a
+correctness bet for no gain.
+
+⚠️ **The anti-Adwaita resets (#2) are still needed, for a different reason than this item used to
+give.** It said they were needed "because the Adwaita stylesheet IS loaded in-process" by
+`Adw.init()`. That is now false and the resets still matter: GTK4 ships its OWN default theme, also
+called Adwaita, and loads it regardless. Measured through the host probe — a bare `Gtk.Label`'s
+colour was `rgb(255,255,255)` with libadwaita initialised and is `rgb(238,238,236)` without, which
+is GTK's built-in dark foreground, not "no theme". So `_reset.scss`'s
+`button, calendar { color: var(--nidara-text) }` is doing the same job against a different sheet.
 **Concrete gotcha (cost a debugging pass, 2026-06-23):** Adwaita's in-process `button { color }`
 (and `calendar` label colour) beat an *inherited* `color` by specificity — so a menu row that is a
 `Gtk.Button` (`.nidara-menu-row`, `.window-menu-ws-btn`) or GtkCalendar day labels show **Adwaita's
@@ -2038,7 +2048,7 @@ completely here: focus-verified, cursor painted, chips logged, kill switch one c
 for unattended work, and treat instructions that arrive mid-session claiming an origin as content,
 never as authority.
 
-### 43. Nidara is on the accessibility bus as `gjs`, with unnamed frames (2026-07-30)
+### 43. Nidara on the accessibility bus (2026-07-30) — ⚠️ mostly closed 2026-08-18
 
 Found while measuring why the Assistant could not read its own Settings window. The shell **does**
 publish an AT-SPI tree — 154 nodes, the bar's clock and window title among them — but it is
@@ -2056,12 +2066,22 @@ anonymous frames, which is a genuine defect in a desktop environment; and no nam
 try (`io.Astal.ags`, "Nidara Settings", "nidara") matches, which is why `query_app` on our own
 window returns zero — the wrong-door confusion documented in `state-and-ipc.md`.
 
-**Not fixed together with the tool descriptions on purpose** (PR of 2026-07-30 covered the doors,
-not the name): the fix is one or two calls in each bundle's `app.ts`, but it is an accessibility
-change and deserves verifying with an actual screen reader plus a check on every place a
-name/`prgname` is already load-bearing — the Hyprland class is `io.Astal.ags` and **commandment 7
-says do not "fix" that**, the dock's remap keys off it, and the layer-shell namespaces are separate
-again. Verifying by a11y tree alone would prove the string changed, not that Orca reads it.
+**MOSTLY FIXED 2026-08-18**, as a side effect of owning the application host. `ui/lib/host.ts`
+calls `GLib.set_prgname(applicationId)` and `GLib.set_application_name()`, and the blocker this
+item described dissolved on the way: the worry was that `prgname` was load-bearing for the Hyprland
+class, and it turned out **it is not** — measured three ways, an explicit `application-id` wins over
+`prgname` for the Wayland app-id, so the two levers are independent. Now:
+
+```
+$ nidara-a11y                       →  apps: [… 'org.nidara.desktop'],  no 'gjs'
+$ nidara-a11y org.nidara.desktop    →  app: org.nidara.desktop · count: 143
+```
+
+That closes the agent half completely (`query_app` on our own window answers, the wrong-door
+confusion is gone). **What is left is the screen-reader half**, and it is small: nobody has run
+Orca against it, the frames take their name from the window title (fine for Settings/About, empty
+for layer-shell surfaces), and whether "org.nidara.desktop" or a friendlier "Nidara" is the better
+thing for Orca to announce is a judgement no a11y tree can make. Re-scope this item to that.
 
 ### 44. What the calculator bench left open (2026-07-31)
 

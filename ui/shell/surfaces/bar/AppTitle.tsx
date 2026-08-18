@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import Pango from "gi://Pango"
 import GLib from "gi://GLib"
 import { getWordmark } from "../../utils"

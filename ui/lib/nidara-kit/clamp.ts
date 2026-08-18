@@ -1,5 +1,6 @@
 import GObject from "gi://GObject"
-import { Gdk, Gtk } from "ags/gtk4"
+import Gdk from "gi://Gdk?version=4.0"
+import Gtk from "gi://Gtk?version=4.0"
 
 /**
  * NidaraClamp — width-band content container with centering (pure GTK4)

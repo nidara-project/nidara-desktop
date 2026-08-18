@@ -9,9 +9,9 @@
  * wrappers that pass the matching adapter.
  */
 
-import app from "ags/gtk4/app"
-import { Gtk } from "ags/gtk4"
-import { execAsync } from "ags/process"
+import app from "../../../lib/host"
+import Gtk from "gi://Gtk?version=4.0"
+import { execAsync } from "../../../lib/process"
 import GLib from "gi://GLib"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import { DOCK_CONSTANTS, syncConstants, springStep, slideSpringStep, stepSpring } from "./DockPhysics"

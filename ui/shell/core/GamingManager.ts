@@ -1,6 +1,6 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
-import { readFile, writeFile } from "ags/file"
+import { readFile, writeFile } from "../../lib/file"
 import { TransitionType } from "./WallpaperManager"
 
 export type WallpaperMode = "artwork" | "custom" | "none"

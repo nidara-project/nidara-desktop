@@ -7,7 +7,7 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
 | Layer | Tech |
 |---|---|
 | Language | TypeScript (files carry a `.tsx` extension; see the JSX note below) → compiled to GJS |
-| UI framework | AGS v3 — used as a **runtime**, not as a component model (JSX and Gnim's reactivity are unused; see below) |
+| UI framework | none — GTK4 directly. The application host is `ui/lib/host.ts`; AGS survives as build tooling only (see below) |
 | Toolkit | GTK4 (pure — libadwaita fully removed) |
 | Wayland surfaces | gtk4-layer-shell (layer-shell protocol), `Gtk4SessionLock` (ext-session-lock-v1) |
 | Raw Wayland from GJS | **`lib/nidara-wl/`** — the project's own C+GIR shim (see below) |
@@ -35,12 +35,73 @@ What that means when you write code here: **do not introduce JSX** (nothing wire
 more — `jsxFactory` pointed at an `astal` import that was itself dead and was removed), and do not
 reach for AGS's widget helpers or reactive primitives — match the imperative code around you.
 
-It also means AGS is a thinner dependency than it looks. What the shell actually consumes is
-~810 lines: `app.start()` (GApplication single-instance + the socket `nidara-ipc` talks to +
-`apply_css`), `ags/process`, `ags/file` — plus `ags/gtk4`, which is a **4-line file** re-exporting
-`Gtk`/`Gdk`/`Astal` and accounts for 125 of the imports. The real AGS value is the *tooling*
-(`ags bundle`, `ags types`, the `ags request` CLI), not the framework. Relevant when weighing a migration:
-there is no component-model lock-in to unwind.
+### The application host is OURS (2026-08-18)
+
+AGS was a thinner dependency than it looked, and at runtime it is now gone. What the shell used to
+consume was ~810 lines across four imports, and all four have in-repo replacements:
+
+| was | is | size |
+|---|---|---|
+| `ags/gtk4` (125 imports) | `gi://Gtk?version=4.0` / `gi://Gdk?version=4.0`, directly | — |
+| `ags/gtk4/app` | **`ui/lib/host.ts`** — a `Gtk.Application` subclass with `start`/`apply_css`/`reset_css`/`quit` | ~170 |
+| `ags/process` | `ui/lib/process.ts` — `exec` + `execAsync`, the only two ever imported | ~65 |
+| `ags/file` | `ui/lib/file.ts` — `readFile` + `writeFile`, likewise | ~50 |
+
+`Astal` was imported in four files and **used in none**; those imports went with the barrel.
+
+**Read `ui/lib/host.ts`'s header before changing anything about startup.** Three things it does are
+load-bearing and each fails silently if lost: `Gtk.init()` at MODULE scope (import declarations run
+before any statement, so a widget built during another module's import needs GTK up already);
+`GLib.unsetenv("LD_PRELOAD")` (the bundle's launcher sets `libgtk4-layer-shell.so`, and without this
+every app the dock launches inherits it); and `hold()` (the app grid and the agent pointer are never
+mapped, so window count is not a liveness signal).
+
+Two things came back with it:
+
+- **`Adw.init()` is gone.** AGS called it whenever libadwaita existed on the system, with no opt-out
+  — which is why `core/ThemeManager` routed dark/light through `AdwStyleManager`. Verified on the
+  live shell: the `Adwaita-WARNING … gtk-application-prefer-dark-theme … is unsupported` line that
+  appeared at every boot no longer does.
+- **The app-id is ours**, and with it the seventh commandment (see below).
+
+What is still AGS is the *tooling* only: `ags bundle`, `ags types`, and the deprecated `ags request`
+CLI. ⚠️ `ags bundle`/`ags run` need **`--gtk 4`** now — the version used to be inferred from an
+`ags/gtk4` import and nothing imports that any more. It is passed in all three `package.json`s,
+`bin/nidara-ui` and `scripts/ci/headless-smoke.sh`.
+
+⚠️ And the piece that will bite whoever replaces the bundler: **`ags bundle` emits a shell wrapper
+that sets `LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so`** around the base64'd JS. That is where the
+preload comes from — not `bin/nidara-ui`. A replacement bundler that only emits JS produces a shell
+with no bar and no dock.
+
+### Identity: one window, one app-id (the seventh commandment, retired)
+
+`AstalIO.Daemon` used to OVERWRITE the `applicationId` passed to `app.start()` with
+`io.Astal.<instance>`, and GTK4 hands the GApplication id to the compositor as the Wayland app-id.
+That is the whole reason Hyprland filed the Settings window as `io.Astal.ags`, no icon theme had art
+for that name, and `AppService.resolveWindowApp` carried a remap every surface had to remember.
+
+Measured 2026-08-18, three ways, because the answer decides the design: with an `application-id` set,
+GTK hands the compositor **exactly that** and IGNORES `prgname`; with no id it falls back to
+`prgname` (which GJS leaves as `"gjs"`). And a **per-toplevel override wins over both**.
+
+So: the process is `org.nidara.desktop`, and the shell's own regular windows — Settings, About and
+Settings' three modal dialogs — declare **`nidara-settings`** for themselves via
+`setWindowAppId()` in **`ui/lib/app-id.ts`** (`NidaraWindow` takes an `appId` option). That name is a
+real entry in the desktop registry (`config/applications/nidara-settings.desktop`), so identity
+resolution is a plain lookup and **the remap is deleted, not renamed**. About shares the class on
+purpose: it has no desktop entry, and under the old remap it already resolved to Settings' icon.
+
+⚠️ Two traps in `app-id.ts`, both silent, both measured:
+1. **The `gi://GdkWayland?version=4.0` import is load-bearing.** Without the typelib loaded GJS sees
+   the surface as `unknown_GdkWaylandToplevel` with **no methods**, so a `typeof` guard turns the
+   whole feature into a no-op that logs nothing.
+2. **Apply it at `map`, not `realize`.** GTK creates the `xdg_toplevel` — and stamps the process-wide
+   id on it — inside the first `present()`, which happens at map; an override set at realize is
+   undone a moment later.
+
+Also gone with the remap: its guard was `key.includes("ags") && rawClass !== "io.Astal.ags"`, a
+SUBSTRING test that silently dropped any third-party window whose class contained those letters.
 
 ## `lib/nidara-wl/` — the Wayland shim (the project's only native library)
 
@@ -655,7 +716,7 @@ interval is how long a dismissal can lag; it is not a polling loop for state.
    **twice** — once `--type text`, once `--type image` (see the clipboard widget notes below;
    one untyped watcher silently never captures an image).
 4. **`nidara-ui`** (UI launcher in `/usr/bin/`): kills stale `gjs`, then —
-   - **Dev mode:** if `~/.config/nidara/.dev` exists, `cd` to its path and `ags run app.ts`.
+   - **Dev mode:** if `~/.config/nidara/.dev` exists, `cd` to its path and `ags run --gtk 4 app.ts`.
    - **Prod mode:** exec the bundle at `/usr/share/nidara/ui/shell/build/nidara`.
    - Log: `${XDG_RUNTIME_DIR:-/tmp}/nidara-ui.log` (per-user — see tech-debt "Resolved" rule on log paths).
 5. **`app.ts`** (`ui/shell/app.ts`): sets dark/light via `Gtk.Settings.gtk_application_prefer_dark_theme` (pure GTK4 — no `Adw.init()`); registers the `nd-*-symbolic` icon search path; `app.start({ applicationId: "org.nidara.desktop", main, requestHandler })`. In `main()`: iterates monitors → `createUI(monitor)` (Bar + Dock per monitor), wires the dock-rebuild debounce, and populates `core/ShellActions` + the IPC registry (the bar/dock blur layer rules live in `hyprland.lua` as `hl.layer_rule` — the old `hyprctl keyword layerrule` calls were dead under the Lua parser and were removed).

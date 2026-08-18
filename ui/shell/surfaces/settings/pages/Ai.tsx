@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import Secret from "gi://Secret"
 import { listGroup, pageBox, toggleRow, createRow, createStackedRow, dropdownRow, staticLabel, actionRow, fieldWithActions, bindWhileRealized, onPageShown } from "../SettingsHelpers"
 import { NidaraButton, NidaraDropDown } from "../../../../lib/nidara-kit"

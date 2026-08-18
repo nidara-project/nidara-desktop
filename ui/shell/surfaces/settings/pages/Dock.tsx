@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import { dockSettings, updateDockSettings, onDockSettingsChanged, type DockPosition } from "../../dock/state"
 import { listGroup, createRow, toggleRow, sliderRow, presetRow, dropdownRow, pageBox, bindWhileRealized } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"

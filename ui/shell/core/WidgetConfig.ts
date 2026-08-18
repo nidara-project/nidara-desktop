@@ -1,6 +1,6 @@
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
-import { readFile, writeFile } from "ags/file"
+import { readFile, writeFile } from "../../lib/file"
 import { DEFAULT_PLACEMENT as DEFAULTS, BAR_ORDER } from "../widgets/index"
 
 export interface WidgetPlacement {

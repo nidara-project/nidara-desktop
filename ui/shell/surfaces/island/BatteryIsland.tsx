@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import SquircleContainer from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/tokens"
 import { PANEL_W } from "../../common/widget-kit"

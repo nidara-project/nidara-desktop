@@ -34,8 +34,9 @@
  * fades the cursor out anyway.
  */
 
-import app from "ags/gtk4/app"
-import { Gtk, Gdk } from "ags/gtk4"
+import app from "../../../lib/host"
+import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"

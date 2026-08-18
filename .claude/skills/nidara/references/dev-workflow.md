@@ -7,7 +7,7 @@ Read this when running the installer, debugging a reload that won't take, lookin
 Arch-only provisioning. Three modes:
 
 - **`--system` (default):** installs Nidara **as a pacman package** (§6): it tries the prebuilt `nidara` package from the `[nidara]` repo — only when the tree IS the release it was built from (clean checkout of the `v$VERSION` tag, or a git-less release tarball) and with a version==VERSION lockstep guard — and on ANY miss (repo down, repo lagging the release, non-release tree) it builds the **same** `packaging/nidara/PKGBUILD` locally: the working tree is packed as the tarball makepkg expects (uncommitted changes included — the escape hatch installs what's here) and `pacman -U`'d. Either way **every installed file is pacman-owned** (upgradeable, removable, `pacman -Qo`-visible); `--overwrite '*'` hands over files that script-era installs wrote untracked into /usr, and known orphans (ags-v3 tree, crystal-shell theme, wallpaper.png, misplaced portal .conf) are cleaned explicitly. First-time setup then runs via `nidara-setup` (below). It keeps **no** persistent source copy and **migrates away** any legacy `~/.local/share/nidara/src` + `.source` from the old per-user model; the user's original download is disposable. **Release channel:** on a clean `main` checkout with `v*` tags available, it jumps to the newest tag and re-execs itself from there, so fresh installs get the latest release (never an unlabelled main snapshot that the first update would silently downgrade). Dirty trees, other branches/commits, and `--dev` are deliberate opt-outs; before the first release exists it's a no-op.
-- **`--dev`:** installs system binaries **and** writes `~/.config/nidara/.dev` pointing at the source tree. The UI launcher will then `ags run app.ts` from source instead of running the bundle. Registers the developer's own clone in `.source` (no managed copy). Dev installs keep the **direct-copy** flow (§5 build + §6 copies into /usr) — and **remove the `nidara` package first if present**, so a later `pacman -Syu` can't clobber the dev copies (this also makes the dev↔system toggle safe: going back to system reinstalls the package fresh). **Honours the pin-skip too:** re-running `./install.sh --dev` skips the pacman + Astal/AGS/appmenu rebuild when `/usr/share/nidara/pins` already match this script's pins (only a *positive* match skips — a missing pins file means a fresh machine, so it still builds). So iterating on the shell doesn't recompile Astal. Note you usually don't need to re-run it at all for UI changes — the shell runs from source, so Super+Shift+R reload suffices; re-run only when you touch system files (`bin/`, `config/`, portals, `.desktop`) or the install flow.
+- **`--dev`:** installs system binaries **and** writes `~/.config/nidara/.dev` pointing at the source tree. The UI launcher will then `ags run --gtk 4 app.ts` from source instead of running the bundle. Registers the developer's own clone in `.source` (no managed copy). Dev installs keep the **direct-copy** flow (§5 build + §6 copies into /usr) — and **remove the `nidara` package first if present**, so a later `pacman -Syu` can't clobber the dev copies (this also makes the dev↔system toggle safe: going back to system reinstalls the package fresh). **Honours the pin-skip too:** re-running `./install.sh --dev` skips the pacman + Astal/AGS/appmenu rebuild when `/usr/share/nidara/pins` already match this script's pins (only a *positive* match skips — a missing pins file means a fresh machine, so it still builds). So iterating on the shell doesn't recompile Astal. Note you usually don't need to re-run it at all for UI changes — the shell runs from source, so Super+Shift+R reload suffices; re-run only when you touch system files (`bin/`, `config/`, portals, `.desktop`) or the install flow.
 - **`nidara-setup`** (`/usr/bin/nidara-setup`): the idempotent first-time/system setup that *packaging can't do* — GI env in `/etc/environment`, per-user config seeding under `~/.config/nidara` plus a default `~/.config/kitty/` (never overwrites), uwsm env files + NVIDIA autodetect, greetd/DM setup (only when recognizably ours or no DM at all), service enablement (pipewire/wireplumber user units, power-profiles-daemon, bluetooth). System-environment detection (keyboard layout / timezone / locale) lives here too, next to its consumers. Reads payloads from `/usr/share/nidara/{defaults,config}` — shipped identically by the nidara package and by install.sh §6, so it behaves the same after `pacman -S nidara` and after a script install. Called by install.sh §7 and by `nidara-update`'s package path; a pacman-only user runs it once by hand: `sudo pacman -S nidara && nidara-setup`. (The old `--dev-repo` flag is gone — it symlinked hypridle.conf into the dev repo, but Settings → Power writes that file now, so UI changes were dirtying the repo working tree; it's seeded as a per-user copy like everything else, with a migration that preserves the old link's content. Idle-suspend default: the hypridle.conf seed gets a 30-min suspend listener appended ONLY when a battery is present — desktops default to never; Settings → Power overrides either way.) **`--user` mode = the first-login bootstrap** (issue #23): runs ONLY the per-user steps (config seeding incl. `.mcp.json`, uwsm env + NVIDIA autodetect, user services) and never touches sudo. `bin/nidara` (the session entry) invokes it at session start whenever `~/.config/nidara` is missing — so a user created AFTER install time (Settings → Users, `useradd`, archinstall, Calamares) gets seeded on first login, before Hyprland loads its config, and a deleted config dir self-heals. Fail-soft by design (`|| true`, log at `${XDG_RUNTIME_DIR:-/tmp}/nidara-first-login.log`): a seeding hiccup must never block the session. GTK/dconf theming for that new user then converges at shell boot (ThemeManager reconciles appearance.json → settings.ini + gsettings).
 - **`nidara-update`** (`/usr/bin/nidara-update`): three paths, tried in order.
   **Dev** — a dev install updates from its own registered clone (`.dev`/`.source`): `nidara-update` hands over to `install.sh --update`, which refuses on a dirty tree, fetches, fast-forwards the dev branch, then re-execs `--update-apply`.
@@ -87,7 +87,7 @@ caught up to → guard WARN → source build). See tech-debt #21 and `packaging/
 1. `pacman` deps (also registers `[nidara]` in `pacman.conf`).
 2. Install the Astal stack from `nidara-repo` (prebuilt). **Fallback** (repo down/incomplete) builds from source: `io`, `quarrel`, `gtk4`, `auth`, `lang/gjs`. Everything else has been absorbed into `core/` — see the Astal row in `architecture.md`; `appmenu-glib-translator` left with `libastal-tray` on 2026-08-18.
 3. The `ags` CLI (`aylurs-gtk-shell`) — same: from `nidara-repo`, else source.
-4. Build — **dev-like installs only**: `npm install` + SCSS compile + `ags bundle` × 3 (shell, greeter, lockscreen). System installs skip this: the build happens inside makepkg (or comes prebuilt).
+4. Build — **dev-like installs only**: `npm install` + SCSS compile + `ags bundle --gtk 4` × 3 (shell, greeter, lockscreen). System installs skip this: the build happens inside makepkg (or comes prebuilt).
 5. Install system files — **system**: the nidara *package* (prebuilt from nidara-repo, else local makepkg — see `--system` above). **Dev**: direct copies of binaries/configs/session entry/portals into /usr (package removed first). Pins recorded either way (untracked installer bookkeeping).
 6. First-time setup via **`nidara-setup`** (see above): seeds `~/.config/nidara/` (**never overwrites existing user config**), uwsm env + NVIDIA, greetd (**only if recognizably ours or no other DM is enabled**), enables pipewire/wireplumber (user), power-profiles-daemon + bluetooth (system). install.sh itself only writes the install-mode markers (`.dev`/`.source`).
 
@@ -163,7 +163,7 @@ tail -f "$XDG_RUNTIME_DIR/nidara-ui.log"  # logs (per-user; falls back to /tmp)
 killall gjs                              # nuke stale GJS holding the old UI
 cd ui/shell && ags types -d .           # (re)generate @girs/ typings — see below
 cd ui/shell && npm run typecheck        # needs @girs/
-cd ui/shell && npm run build            # SCSS + ags bundle
+cd ui/shell && npm run build            # SCSS + ags bundle (--gtk 4 — see below)
 nidara-ipc toggleAppGrid                # send an IPC command
 ```
 
@@ -756,7 +756,7 @@ the trace:
 ```bash
 systemctl --user stop nidara
 NIDARA_SHELL_ROOT="$PWD/ui/shell" G_DEBUG=fatal-criticals timeout 20 \
-  bash -c 'cd ui/shell && ags run app.ts' > /tmp/fatal-crit.log 2>&1
+  bash -c 'cd ui/shell && ags run --gtk 4 app.ts' > /tmp/fatal-crit.log 2>&1
 systemctl --user start nidara      # restore the session UI immediately
 coredumpctl gdb -1 --debugger-arguments="-batch -ex 'bt 30'"
 ```
@@ -803,7 +803,7 @@ Hyprland binding). Details and governance (`ai.json.allowMcp` / `allowComputerUs
 environment has none. Regenerate with `cd ui/shell && ags types -d .` (offline — reads the system
 `.gir` files; ~208 `.d.ts`; do **not** pass `-u`, which would rewrite the committed `tsconfig`).
 **The trap:** without `@girs/`, `npm run typecheck` doesn't fail loudly — it floods you with ~57
-*false* `Namespace '"ags/gtk4".Gtk' has no exported member 'Box'`-style errors. Real errors hide in
+*false* `Namespace 'Gtk' has no exported member 'Box'`-style errors. Real errors hide in
 that noise, so a regression can sit unnoticed (it did: typecheck silently went 0→32 between work
 sessions). **If you see "has no exported member" on GI types, you're missing `@girs/` — regenerate
 before trusting any typecheck result.**
@@ -1146,6 +1146,58 @@ notify-send "Hero" "" --hint=string:image-path:/path/to.png
 python3 -c '...'   # image-data: raw pixels, decoded to ~/.cache/nidara/notifd/images/
 cat ~/.cache/nidara/notifd/state.json | python3 -m json.tool
 ```
+
+### Exercising the application host (`ui/lib/host.ts` + `ui/lib/app-id.ts`)
+
+The host is the last piece of AGS that was not scaffolding, and nearly everything
+it does is invisible when it stops happening: an app-id nobody reads back, an
+environment variable that only hurts CHILD processes, a `hold()` whose absence
+looks like a clean exit. `scripts/dev/host-probe.ts` states each of those out loud.
+It needs a **live graphical Hyprland session** — it opens real windows and asks the
+compositor what class it filed them under.
+
+```bash
+ags bundle --gtk 4 --alias "@host=./ui/lib/host" \
+    scripts/dev/host-probe.ts /tmp/host-probe
+LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so /tmp/host-probe     # → 14 checks
+```
+
+The `--alias` is the whole trick: the probe imports `@host`, so the SAME source can
+be pointed at either host.
+
+```bash
+ags bundle --gtk 4 --alias "@host=/usr/share/ags/js/lib/gtk4/app.ts" \
+    scripts/dev/host-probe.ts /tmp/host-probe-astal
+LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so /tmp/host-probe-astal   # → 6 RED
+
+env -u LD_PRELOAD gjs -m "$XDG_RUNTIME_DIR"/<hash>-ags.js         # → 13 pass, 2 SKIPPED
+```
+
+🔑 **The `--astal` run is the evidence, not just a control**, and WHICH side each
+check falls on is the point. It goes red on exactly six: the `application-id` we
+asked for (AGS overwrites it with `io.Astal.<instance>`), the Hyprland class that
+follows from it, the per-window override's "process id untouched" companion,
+`prgname`, the application name, and `Adw.is_initialized()`. It
+stays GREEN on `LD_PRELOAD`, `hold()`, CSS apply/reset and GTK-initialised-at-import
+— those are behaviours the replacement had to KEEP, and a red there means something
+was lost. (Run it and the `Adwaita-WARNING` prints in the control's output too.)
+
+⚠️ The LD_PRELOAD check **arms itself**: the probe reads its own
+`/proc/self/environ` — the exec-time environment, which `unsetenv` cannot change —
+so "it was set when we started and is not set now" is a real before/after. Started
+without it, the check is SKIPPED with a message rather than scored green, because
+"gone now" proves nothing if nobody ever set it. **And dropping the `LD_PRELOAD=`
+prefix does not disarm it**: `ags bundle` emits a shell wrapper that sets the
+variable itself, so the honest control runs the decoded JS the wrapper leaves in
+`$XDG_RUNTIME_DIR`. That was written as a working control and was not one until it
+was actually run.
+
+⚠️ Two silent traps it exists to catch, both found by running it:
+`gi://GdkWayland?version=4.0` must be imported or GJS sees the surface as
+`unknown_GdkWaylandToplevel` **with no methods** (a `typeof` guard then makes the
+whole per-window app-id a no-op that logs nothing); and the override must be
+applied at `map`, not `realize`, because GTK stamps the process-wide id on the
+`xdg_toplevel` it creates during the first `present()`.
 
 ### Exercising the system tray (`core/tray.ts` + `core/dbusmenu.ts`)
 

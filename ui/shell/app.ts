@@ -1,8 +1,9 @@
 // MUST be first: captures the asset root and moves the process CWD to $HOME
 // before anything else can spawn a child or read the CWD.
 import { SHELL_ROOT, readShellVersion } from "./core/Paths"
-import app from "ags/gtk4/app"
-import { Gdk, Gtk } from "ags/gtk4"
+import app from "../lib/host"
+import Gdk from "gi://Gdk?version=4.0"
+import Gtk from "gi://Gtk?version=4.0"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
@@ -12,8 +13,8 @@ import { selectedPlayer } from "./core/MediaService"
 import shellActions from "./core/ShellActions"
 import { startNotifServer } from "./core/notifd"
 import { currentLocale } from "./core/i18n"
-import { readFile } from "ags/file"
-import { exec, execAsync } from "ags/process"
+import { readFile } from "../lib/file"
+import { exec, execAsync } from "../lib/process"
 import agentConfig from "./core/AgentConfig"
 import agentService from "./core/AgentService"
 import { initAgentGlow } from "./core/AgentGlow"
@@ -811,13 +812,17 @@ for (const [name, { aliases }] of Object.entries(IPC_COMMANDS))
 // `~/.config/nidara/hyprland-user.lua` keybinds — say `nidara-ipc` today and
 // have to keep working for at least a release after the new name ships.
 //
-// The name matters beyond the CLI. `AstalIO.Daemon` OVERWRITES the
-// `applicationId` we pass to `app.start()` with `io.Astal.<instance>`, and GTK
-// derives the Wayland app-id from the GApplication id — which is the whole
-// reason Hyprland sees the Settings window as `io.Astal.ags` and the dock has to
-// remap it (the skill's commandment 7). Owning our own bus name is the first
-// step of owning that identity; the app-id itself only comes back when the host
-// goes (see references/architecture.md).
+// The name mattered beyond the CLI, and that half is now DONE. `AstalIO.Daemon`
+// used to OVERWRITE the `applicationId` we pass to `app.start()` with
+// `io.Astal.<instance>`, and GTK hands the GApplication id to the compositor —
+// which is the whole reason Hyprland saw the Settings window as `io.Astal.ags`
+// and the dock had to remap it (the skill's seventh commandment). With the host
+// ours, the id is ours, and Settings names itself `nidara-settings` on top of
+// that (ui/lib/app-id.ts). Nothing remaps anything any more.
+//
+// What survives is the DOOR, below: `io.Astal.ags` as a bus name we serve
+// ourselves. It is not identity, it is compatibility — a `hyprland-user.lua`
+// written against 0.7.2 can still say `ags request …` for one release.
 
 /** Runs one IPC command and hands the response to `res`. May answer async. */
 function dispatchRequest(argv: string[], res: (out: string) => void): void {
@@ -855,8 +860,9 @@ const NIDARA_BUS_IFACE = `
 
 /**
  * Publish `org.nidara.Shell`. Fail-soft on purpose: a shell that cannot take the
- * name must still boot and still answer on AGS's, because until the migration is
- * finished that older name is the one the user's keybinds are calling.
+ * name must still boot and still answer on the deprecated one below, because
+ * until the migration is finished that older name is the one a user's own
+ * keybind file may still be calling.
  */
 function exportShellBusName(): void {
   // GJS dispatches `<Method>Async(params, invocation)` as an async method and
@@ -889,7 +895,7 @@ function exportShellBusName(): void {
           console.error(`[IPC] could not export ${NIDARA_BUS_PATH}:`, e)
         }
       },
-      () => console.log(`[IPC] serving ${NIDARA_BUS_NAME} (and AGS's io.Astal.ags)`),
+      () => console.log(`[IPC] serving ${NIDARA_BUS_NAME}`),
       () => console.warn(`[IPC] lost ${NIDARA_BUS_NAME} — another shell owns it?`),
     )
   } catch (e) {
@@ -897,9 +903,79 @@ function exportShellBusName(): void {
   }
 }
 
+// ─── The deprecated door, served by us now ──────────────────────────────────
+//
+// Until the host went, this name came free: AGS owned `io.Astal.<instance>` and
+// exported `io.Astal.Application` on it. Users' own keybind files still call
+// `ags request <cmd>`, which is a method call on exactly that name — so dropping
+// it would break a config we do not control, silently, at the next update.
+//
+// Only `Request` and `Quit` are here. AGS also offered `ToggleWindow` and
+// `Inspector`; neither has ever had a Nidara caller (our windows are toggled
+// through `nidara-ipc` actions, and the GTK inspector is a dev-time env var), so
+// re-implementing them would be inventing compatibility with nothing.
+//
+// EXPIRY: remove this together with the fallback in `bin/nidara-ipc.c` one
+// release after the rename shipped. The smoke test asserts both doors answer
+// identically, so deleting one without the other turns CI red.
+const LEGACY_BUS_NAME = "io.Astal.ags"
+const LEGACY_BUS_PATH = "/io/Astal/Application"
+const LEGACY_BUS_IFACE = `
+<node>
+  <interface name="io.Astal.Application">
+    <method name="Request">
+      <arg type="as" name="argv" direction="in"/>
+      <arg type="s" name="response" direction="out"/>
+    </method>
+    <method name="Quit"/>
+  </interface>
+</node>`
+
+function exportLegacyAgsBusName(): void {
+  const impl = {
+    // Same `<Method>Async(params, invocation)` shape as the new door — that
+    // suffix is how GJS knows we answer the invocation ourselves rather than
+    // having it answered for us the moment we return.
+    RequestAsync([argv]: [string[]], invocation: any) {
+      try {
+        dispatchRequest(argv ?? [], out =>
+          invocation.return_value(new GLib.Variant("(s)", [out ?? "ok"])))
+      } catch (e) {
+        invocation.return_value(new GLib.Variant("(s)", [`error: ${e}`]))
+      }
+    },
+    Quit() { app.quit() },
+  }
+
+  try {
+    const exported = Gio.DBusExportedObject.wrapJSObject(LEGACY_BUS_IFACE, impl)
+    Gio.bus_own_name(
+      Gio.BusType.SESSION,
+      LEGACY_BUS_NAME,
+      Gio.BusNameOwnerFlags.NONE,
+      (conn: Gio.DBusConnection) => {
+        try {
+          exported.export(conn, LEGACY_BUS_PATH)
+        } catch (e) {
+          console.error(`[IPC] could not export ${LEGACY_BUS_PATH}:`, e)
+        }
+      },
+      () => console.log(`[IPC] also serving the deprecated ${LEGACY_BUS_NAME}`),
+      () => console.warn(`[IPC] lost ${LEGACY_BUS_NAME} — is an AGS instance running?`),
+    )
+  } catch (e) {
+    console.error("[IPC] could not claim the deprecated bus name:", e)
+  }
+}
+
 app.start({
+  // The Wayland app-id of every regular window this process opens — except the
+  // ones that name themselves (Settings, About). Under AGS this line was
+  // overwritten with `io.Astal.ags`; see ui/lib/host.ts.
   applicationId: "org.nidara.desktop",
-    main() {
+  applicationName: "Nidara",
+  logDomain: "nidara",
+  main() {
     // The shell IS this desktop's notification server: `core/notifd.ts` owns
     // `org.freedesktop.Notifications`. Started HERE, explicitly, and not left to
     // whichever widget happens to ask first — the bar's bell was that widget, so
@@ -919,9 +995,10 @@ app.start({
     // Agent-facing config surface (describeConfig/getConfig/setConfig)
     registerConfigEntries()
 
-    // The shell's OWN IPC door, beside the one AGS gives us. Registered here
-    // rather than at module scope so the commands it dispatches are wired first.
+    // Both IPC doors. Registered here rather than at module scope so the
+    // commands they dispatch are wired first.
     exportShellBusName()
+    exportLegacyAgsBusName()
 
     // "The Assistant is working in this window" — the inner glow follows
     // agentService.busy. Also clears a glow left on by a shell that died mid-turn.
@@ -1067,12 +1144,14 @@ app.start({
     // when the window sits on another workspace (misc:focus_on_activate=false), so
     // after presenting we dispatch an explicit focus to the window — that switches
     // to its workspace, exactly like clicking any running app in the dock. The
-    // window is a normal Hyprland client (class io.Astal.ags, title set by
-    // NidaraWindow); match both to disambiguate from the About window.
+    // window is a normal Hyprland client (class `nidara-settings`, which it
+    // declares for itself — see ui/lib/app-id.ts — and a title set by
+    // NidaraWindow); match both to disambiguate from the About window, which
+    // deliberately shares the class so both carry Settings' registry icon.
     const raiseSettings = () => {
       settingsWindows.forEach(s => { try { s.present() } catch (e) { console.error(e) } })
       const c = hyprlandState.clients.find(
-        (c: any) => c.class === "io.Astal.ags" && c.title === "Nidara Settings")
+        (c: any) => c.class === "nidara-settings" && c.title === "Nidara Settings")
       if (c?.address) hyprlandState.focusWindow(c.address)
     }
     // Open/raise Settings — a normal window (NOT a toggle: re-invoking just
@@ -1227,5 +1306,4 @@ app.start({
     shellActions.unlockScreen = unlockScreen
 
   },
-  requestHandler: dispatchRequest,
 })

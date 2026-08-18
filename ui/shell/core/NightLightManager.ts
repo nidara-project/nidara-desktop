@@ -1,7 +1,7 @@
 import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import { readFile, writeFile } from "ags/file"
+import { readFile, writeFile } from "../../lib/file"
 
 const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/night-light.json`
 const DEFAULT_TEMP = 4000

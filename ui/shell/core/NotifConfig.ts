@@ -1,5 +1,5 @@
 import GLib from "gi://GLib"
-import { readFile, writeFile } from "ags/file"
+import { readFile, writeFile } from "../../lib/file"
 import { loadKnown } from "./configFile"
 
 const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/notif-config.json`

@@ -1,5 +1,5 @@
-import { Gtk } from "ags/gtk4"
-import { execAsync } from "ags/process"
+import Gtk from "gi://Gtk?version=4.0"
+import { execAsync } from "../../../../lib/process"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import { listGroup, pageBox, dropdownRow, createRow, bindWhileRealized, onPageShown } from "../SettingsHelpers"

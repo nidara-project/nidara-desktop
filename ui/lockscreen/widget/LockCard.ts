@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 // @ts-ignore
 import AstalAuth from "gi://AstalAuth"
 import { getCurrentUser } from "../../lib/users"

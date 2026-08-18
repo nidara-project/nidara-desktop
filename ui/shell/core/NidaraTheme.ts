@@ -6,7 +6,7 @@
 
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import { readFile, writeFile } from "ags/file"
+import { readFile, writeFile } from "../../lib/file"
 import { ACCENT_HEX, ACCENT_NAMES, hexToRgb, type AccentKey } from "../../lib/accent"
 import { DANGER_HEX, SUCCESS_HEX } from "../../lib/status-colors"
 

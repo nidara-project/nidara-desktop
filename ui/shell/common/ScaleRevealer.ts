@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import Graphene from "gi://Graphene"
@@ -38,10 +38,11 @@ export const OVERLAY_POP = {
     scaleFrom: 0.97, durationIn: 220, durationOut: 150, animateLayout: false,
 } as const
 
-// Declaration merging: the ambient `ags/gtk4` typing exposes Gtk as `any` in
-// value position (gi.d.ts) but as the real @girs namespace in type position
-// (types.d.ts), so tsc can't see that this class extends Gtk.Widget. Merging
-// the interface gives instances the full Widget surface for type-checking.
+// Declaration merging: `gi.d.ts` declares `gi://Gtk` as `any` in value position
+// while @girs supplies the real namespace in type position, so tsc cannot see
+// that this class extends Gtk.Widget. Merging the interface gives instances the
+// full Widget surface for type-checking. (The blame used to be pinned on the
+// `ags/gtk4` shim; that shim is gone and this is still needed.)
 export interface ScaleRevealer extends Gtk.Widget {}
 export class ScaleRevealer extends Gtk.Widget {
     static {

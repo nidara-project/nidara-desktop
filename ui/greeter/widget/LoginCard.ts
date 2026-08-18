@@ -1,5 +1,5 @@
-import { Gtk } from "ags/gtk4"
-import app from "ags/gtk4/app"
+import Gtk from "gi://Gtk?version=4.0"
+import app from "../../lib/host"
 import { getSessions } from "../lib/sessions"
 import { getUsers, type User } from "../../lib/users"
 import { greeterPrefs, savePrefs } from "../lib/greeter-prefs"

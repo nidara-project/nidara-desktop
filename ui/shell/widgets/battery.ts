@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import { PANEL_W } from "../common/widget-kit"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { wrapCapsuleTile } from "../surfaces/control-center/Toggles"

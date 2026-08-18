@@ -1,4 +1,5 @@
-import { Gdk, Gtk } from "ags/gtk4"
+import Gdk from "gi://Gdk?version=4.0"
+import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import hs from "../core/HyprlandState"
 import { safeDisconnect } from "../core/signals"

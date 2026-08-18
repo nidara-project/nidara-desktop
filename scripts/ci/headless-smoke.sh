@@ -151,7 +151,7 @@ phase_bundle() {
     npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
     log "ags bundle…"
     mkdir -p build
-    ags bundle app.ts build/nidara
+    ags bundle --gtk 4 app.ts build/nidara
     log "bundle OK: $(du -h build/nidara | cut -f1)"
 }
 

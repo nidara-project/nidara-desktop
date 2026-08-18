@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import hs from "../core/HyprlandState"
 
 // Canonical workspace count (bar capsule dots, overview cards, morph ghosts).

@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import hs, { bareAddr } from "../../core/HyprlandState"
 import { t } from "../../core/i18n"

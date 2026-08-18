@@ -12,7 +12,7 @@
 // Returns Gio icons via core/Icons (core→core, fine). Never imports Gtk — the
 // slider *widget* helper lives in common/Slider.ts (makeVolumeSlider).
 
-import { execAsync } from "ags/process"
+import { execAsync } from "../../lib/process"
 import { getDefault, AudioNode } from "./wireplumber"
 import Icons from "./Icons"
 import { safeDisconnect } from "./signals"

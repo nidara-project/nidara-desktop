@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import Pango from "gi://Pango"
 import { NidaraButton } from "./button"
 import { bindWhileRealized } from "./lifetime"

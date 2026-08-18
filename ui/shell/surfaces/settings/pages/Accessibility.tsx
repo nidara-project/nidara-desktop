@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import Theme, { TEXT_SCALE_MIN, TEXT_SCALE_MAX } from "../../../core/ThemeManager"
 import { listGroup, createRow, toggleRow, sliderRow, pageBox } from "../SettingsHelpers"
 import Icons from "../../../core/Icons"

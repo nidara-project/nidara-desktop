@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import widgetConfig from "../../../core/WidgetConfig"
 import ccLayout from "../../control-center/CCLayoutManager"
 import registry, { widgetAvailable, CATEGORY_ORDER } from "../../../widgets/index"

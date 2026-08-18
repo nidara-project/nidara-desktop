@@ -1,4 +1,5 @@
-import { Gtk, Gdk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
 import Gio from "gi://Gio"
 import appService from "../core/AppService"
 import hs, { bareAddr, type ClientGeometry } from "../core/HyprlandState"
@@ -370,9 +371,11 @@ export function createSchematicMap(wsId: number, initialWidth: number, options: 
 
             // Identity FIRST, icon second. Feeding `c.class` straight to the icon
             // theme makes this surface disagree with the dock about the same
-            // window: Settings is `io.Astal.ags`, a name no theme has, so it fell
-            // all the way through to the generic glyph while the dock — which does
-            // normalize — drew the registry's icon. Not the dock's slot mapping
+            // window: Settings used to be `io.Astal.ags`, a name no theme had, so
+            // it fell all the way through to the generic glyph while the dock —
+            // which does normalize — drew the registry's icon. That particular
+            // class is gone (the window names itself now), but the RULE is not:
+            // identity is resolved, never assumed from a raw class. Not the dock's slot mapping
             // (resolveHyprlandClass), which would draw Nautilus as the Home icon.
             const iconId = appService.resolveWindowApp(c.class || "") || c.class || "application-x-executable"
             const instance = (c as any).initialClass || (c as any).instance || ""

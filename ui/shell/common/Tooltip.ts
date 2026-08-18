@@ -1,4 +1,5 @@
-import { Gtk, Gdk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 import Theme from "../core/ThemeManager"
 import { ARROW_H, BUF, sideFor, paintGlassBubble, type ArrowSide } from "./GlassBubble"

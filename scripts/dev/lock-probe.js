@@ -55,9 +55,11 @@
  *                    --format=esm --external:'gi://*' --outfile=/tmp/glass.js
  *                (gjs cannot import TypeScript; the bundle is the whole reason
  *                for the indirection. `--external:'gi://*'` keeps the GI imports
- *                resolving at runtime, and `--alias:ags/gtk4=…` resolves the one
- *                import that is a runtime path rather than a package — see
- *                scripts/dev/ags-gtk4-shim.js.)
+ *                resolving at runtime.) It used to also need
+ *                `--alias:ags/gtk4=…` pointing at a shim, because that import
+ *                was a path only the AGS runtime could resolve; ui/lib imports
+ *                `gi://Gtk?version=4.0` directly now, so the alias and the shim
+ *                are both gone.
  *   KIT=<path>   a BUNDLED ui/lib/nidara-kit/scrolled.js, to build the three
  *                selectors with the real `NidaraDropDown`. Without it they are
  *                bare `Gtk.DropDown`s and the kit's construction-time work — the
@@ -146,8 +148,7 @@ if (PAINTER) {
 // work on a surface where a thrown error is a login screen that does not appear.
 // Same bundling indirection as PAINTER, same reason (gjs cannot import TS):
 //   npx --yes esbuild ui/lib/nidara-kit/scrolled.ts --bundle --format=esm \
-//     --external:'gi://*' --alias:ags/gtk4=./scripts/dev/ags-gtk4-shim.js \
-//     --outfile=/tmp/kit.js
+//     --external:'gi://*' --outfile=/tmp/kit.js
 let makeDropDown = (strings) => Gtk.DropDown.new_from_strings(strings)
 const KIT = GLib.getenv("KIT")
 if (KIT) {

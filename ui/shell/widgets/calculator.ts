@@ -1,4 +1,4 @@
-import { execAsync } from "ags/process"
+import { execAsync } from "../../lib/process"
 import { RoundToggle } from "../surfaces/control-center/Toggles"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { makeIconAction } from "./bar-helpers"

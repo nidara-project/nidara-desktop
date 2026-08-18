@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import { type Device } from "../../../core/BluetoothService"
 import GLib from "gi://GLib"
 import { listGroup, createRow, pageBox, bindWhileRealized } from "../SettingsHelpers"

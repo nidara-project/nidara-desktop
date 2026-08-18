@@ -1,5 +1,5 @@
 import GLib from "gi://GLib"
-import { readFile, writeFile } from "ags/file"
+import { readFile, writeFile } from "../../../lib/file"
 
 const SETTINGS_FILE = `${GLib.get_home_dir()}/.config/nidara/bar-settings.json`
 

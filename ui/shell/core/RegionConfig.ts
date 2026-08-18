@@ -1,7 +1,7 @@
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
-import { readFile, writeFile } from "ags/file"
-import { execAsync } from "ags/process"
+import { readFile, writeFile } from "../../lib/file"
+import { execAsync } from "../../lib/process"
 import { formatDatePart } from "../../lib/date-names"
 import { loadKnown } from "./configFile"
 

@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 
 export type NidaraButtonVariant = "primary" | "danger" | "secondary" | "ghost"
 export type NidaraButtonSize = "default" | "compact"

@@ -1,8 +1,8 @@
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 import { NidaraDropDown } from "../../lib/nidara-kit/scrolled"
 import { ndImageProps } from "../../lib/icons"
 import { withGlassCapsule } from "../../lib/glass-capsule"
-import { execAsync } from "ags/process"
+import { execAsync } from "../../lib/process"
 import { getLocale, setLocale, type Locale } from "../lib/i18n"
 import { greeterPrefs, savePrefs } from "../lib/greeter-prefs"
 
