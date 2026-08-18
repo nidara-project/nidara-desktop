@@ -312,9 +312,17 @@ phase_run() {
     # the keybinds in a user's own ~/.config/nidara/hyprland-user.lua still say
     # `ags request`, and nothing else would notice if it broke. Delete this check
     # on the day AGS's host goes, not before.
-    ags request dumpState >/tmp/smoke/dumpState-ags.json \
+    #
+    # Compared on listActions, NOT dumpState. dumpState is a live snapshot and two
+    # calls a second apart legitimately differ while the shell is still settling:
+    # the first version of this check compared dumpState, passed twice locally and
+    # in CI, and then failed on a run where `islandBounds` was null in one and a
+    # real rect in the other — the Activity Island had simply not laid out yet.
+    # listActions is a pure function of the build, so a difference there means what
+    # this check is actually for: the two doors are not the same dispatcher.
+    ags request listActions >/tmp/smoke/listActions-ags.json \
         || { log "FAIL: the deprecated ags request door stopped answering"; exit 1; }
-    cmp -s /tmp/smoke/dumpState.json /tmp/smoke/dumpState-ags.json \
+    cmp -s /tmp/smoke/listActions.json /tmp/smoke/listActions-ags.json \
         || { log "FAIL: the two IPC doors disagree"; exit 1; }
     log "IPC OK — org.nidara.Shell answers, and ags request still matches it"
 

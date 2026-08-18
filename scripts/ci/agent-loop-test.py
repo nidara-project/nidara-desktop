@@ -12,7 +12,7 @@
 #   - a 4xx (client error) MUST NOT be retried — it surfaces immediately.
 #
 # HERMETIC: no network, no API key, no real provider, no running shell. A tiny
-# OpenAI-compatible mock stands in for the LLM; a stub `ags` on PATH stands in for
+# OpenAI-compatible mock stands in for the LLM; a stub `nidara-ipc` on PATH stands in for
 # the shell so tool execution returns a value instead of failing. The daemon runs
 # exactly as installed (gjs), reading a throwaway ai.json under a temp
 # XDG_CONFIG_HOME and persisting its session under a temp XDG_STATE_HOME — both
@@ -187,12 +187,17 @@ class Mock(BaseHTTPRequestHandler):
 
 
 # ── Driving the real daemon over stdio ───────────────────────────────────────
-def make_stub_ags(bind: Path):
-    """A stub `ags` so a tool call returns a value (there is no shell in CI)."""
-    (bind / "ags").write_text(
+def make_stub_ipc(bind: Path):
+    """A stub `nidara-ipc` so a tool call returns a value (there is no shell in CI).
+
+    Renamed from the `ags` stub on 2026-08-18 with the daemon itself: nidara-agent
+    spawns `nidara-ipc <cmd>` now, one argument shallower than `ags request <cmd>`.
+    Miss that and every tool call fails with "No such file or directory" while the
+    daemon reports it as a tolerated warning — which is exactly how this was found.
+    """
+    (bind / "nidara-ipc").write_text(
         "#!/bin/sh\n"
-        '[ "$1" = request ] || exit 0\n'
-        "case \"$2\" in\n"
+        "case \"$1\" in\n"
         # agentNewConversation is served here on purpose: the shell really does
         # publish it, and the daemon's job is to drop it. A stub that omitted it
         # would make the denylist assertion pass without the denylist.
@@ -208,7 +213,7 @@ def make_stub_ags(bind: Path):
         "  *) printf '%s' '{}' ;;\n"
         "esac\n"
     )
-    (bind / "ags").chmod(0o755)
+    (bind / "nidara-ipc").chmod(0o755)
 
 
 # ── The Anthropic lane: a stub `curl` instead of a mock server ────────────────
@@ -409,7 +414,7 @@ def drive_daemon(port: int, anthropic_rec: Path | None = None,
         }))
         bind = tmp / "bin"
         bind.mkdir()
-        make_stub_ags(bind)
+        make_stub_ipc(bind)
         if argv_rec:
             make_stub_helpers(bind)
         if anthropic_rec:
