@@ -4,7 +4,7 @@
 # attempt (same spirit as the other scripts/dev/fake-* helpers).
 #
 #   python3 scripts/dev/fake-greetd.py /tmp/greetd.sock /tmp/req.jsonl &
-#   ags bundle --gtk 4 scripts/dev/greetd-probe.ts /tmp/greetd-probe
+#   scripts/bundle.sh scripts/dev/greetd-probe.ts /tmp/greetd-probe
 #   GREETD_SOCK=/tmp/greetd.sock /tmp/greetd-probe
 #
 # The password it accepts is GOOD_PASSWORD below; anything else answers with

@@ -7,7 +7,7 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
 | Layer | Tech |
 |---|---|
 | Language | TypeScript (files carry a `.tsx` extension; see the JSX note below) → compiled to GJS |
-| UI framework | none — GTK4 directly. The application host is `ui/lib/host.ts`; AGS survives as build tooling only (see below) |
+| UI framework | none — GTK4 directly. The application host is `ui/lib/host.ts` and the bundler is `scripts/bundle.sh`; **nothing of AGS is left** (see below) |
 | Toolkit | GTK4 (pure — libadwaita fully removed) |
 | Wayland surfaces | gtk4-layer-shell (layer-shell protocol), `Gtk4SessionLock` (ext-session-lock-v1) |
 | Raw Wayland from GJS | **`lib/nidara-wl/`** — the project's own C+GIR shim (see below) |
@@ -16,7 +16,7 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
 | Display manager | greetd (default; only installed if no other DM is enabled) |
 | Astal system services | AstalAuth (C against PAM, ships its own PAM config — not absorbable). **Dropped, do not reintroduce** (six on 2026-08-17, four on 2026-08-18): AstalNetwork — `core/NetworkService.ts` sits on `libnm` directly, tech-debt #71; AstalGreet — `ui/greeter/lib/greetd.ts` speaks greetd's socket itself, it already owned the logic and was renting only the wire format; AstalBattery — `core/BatteryService.ts` sits on `UPowerGlib`, and the move found a dead `charged` branch; AstalHyprland — `core/hypr-ipc.ts` speaks the compositor's two sockets, which is all the lib ever did; AstalMpris — `core/mpris.ts` IS the `Gio.DBusProxy` the lib wrapped (MPRIS is a D-Bus spec with no library under it), and it extrapolates Position instead of polling it; AstalApps — it was `Gio.AppInfo` plus a search, and `core/AppService.ts` was already the `Gio.AppInfo` half, so only the search had to be written (`core/app-search.ts`); AstalBluetooth — 681 lines of Vala over a Gio ObjectManager on `org.bluez` with **no library beneath it**, and the write half (the pairing agent) was already raw D-Bus here, so `core/bluez.ts` is just the read half; AstalWp — the FIRST of these with a real library beneath it, `libwireplumber`, which ships its own `Wp-0.5` typelib, so `core/wireplumber.ts` is `mixer-api` + `default-nodes-api` + one `WpObjectManager` and the other ~4.4k lines of AstalWp (devices, routes, profiles, video, recorders) had no consumer here; AstalNotifd — `org.freedesktop.Notifications` is a freedesktop SPEC with no library beneath it and the shell is the SERVER, the same shape as MPRIS and BlueZ, so `core/notifd.ts` IS the `Gio.DBusExportedObject` the Vala wrapped; AstalTray — **the last service**, and the one whose reputation was worst: StatusNotifierItem is another D-Bus spec with no library beneath it (`core/tray.ts` is the watcher AND the host), and the dbusmenu half that everyone dreads shrank from ~2100 lines of C to ~200 (`core/dbusmenu.ts`) because Nidara's ONE menu consumer flattens the model on every render, so none of the translator's incremental machinery was ever used. It took `appmenu-glib-translator` out of the dependency list with it |
 | Styling | SCSS → `style.css` |
-| Build | `ags bundle` → standalone binary |
+| Build | `scripts/bundle.sh` (esbuild) → standalone binary |
 | Wallpaper | `awww` (swww fork) |
 | Idle / night light | hypridle, hyprsunset |
 | Qt look | Kvantum + qt5ct/qt6ct (synced from the theme engine) |
@@ -64,15 +64,36 @@ Two things came back with it:
   appeared at every boot no longer does.
 - **The app-id is ours**, and with it the seventh commandment (see below).
 
-What is still AGS is the *tooling* only: `ags bundle`, `ags types`, and the deprecated `ags request`
-CLI. ⚠️ `ags bundle`/`ags run` need **`--gtk 4`** now — the version used to be inferred from an
-`ags/gtk4` import and nothing imports that any more. It is passed in all three `package.json`s,
-`bin/nidara-ui` and `scripts/ci/headless-smoke.sh`.
+### The toolchain is ours too (2026-08-18, same day)
 
-⚠️ And the piece that will bite whoever replaces the bundler: **`ags bundle` emits a shell wrapper
-that sets `LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so`** around the base64'd JS. That is where the
-preload comes from — not `bin/nidara-ui`. A replacement bundler that only emits JS produces a shell
-with no bar and no dock.
+Nothing of AGS is installed any more. What the CLI actually was, and what replaced it:
+
+| was | is | notes |
+|---|---|---|
+| `ags bundle app.ts out` | `scripts/bundle.sh app.ts out` | esbuild + a bash wrapper carrying the JS |
+| `ags run app.ts` | `scripts/run.sh app.ts` | bundles to `$XDG_RUNTIME_DIR`, execs `gjs` |
+| `ags types -d .` | `scripts/gen-types.sh` | `npx @ts-for-gir/cli generate '*'` — literally what it wrapped |
+| `ags request <cmd>` | `nidara-ipc <cmd>` | gone since #185; the bus name lives on as a compat door |
+
+`bundle.sh` does not *approximate* `ags bundle` — it transcribes its options out of AGS v3.1.2
+(`cli/lib/esbuild.go`, `cli/cmd/bundle.go`) and the transcription was checked the only way that
+means anything: **all three bundles come out byte-identical to AGS's output.** Two flags are
+load-bearing in a way that would not be obvious from reading them:
+
+- **`--tsconfig=…`** — through `target: ES2020` it sets `useDefineForClassFields: false`, so a class
+  field lowers to a constructor ASSIGNMENT. With define-semantics (the modern default) a class field
+  on a GObject subclass would shadow the GObject property accessor — silently, at runtime.
+- **`--target=es2022,firefox115`** — GJS is SpiderMonkey. This is why private fields and static
+  blocks survive untouched while `\p{…}` regexes get rewritten.
+
+⚠️ And the piece that bites hardest: **the wrapper sets
+`LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so`** around the base64'd JS (`scripts/run.sh` sets it for
+the dev loop). That is where the preload comes from — not `bin/nidara-ui`. A bundler that only emits
+JS produces a shell with no bar and no dock, and nothing in the log about why.
+
+The system `esbuild` package (Arch `extra`) is now a build dependency: `PACMAN_DEPS` in
+`install.sh`, `makedepends` in `packaging/nidara/PKGBUILD`, and the smoke's pacman list. `go` left
+`PACMAN_DEPS` at the same time — building AGS's Go CLI was the only thing that needed it.
 
 ### Identity: one window, one app-id (the seventh commandment, retired)
 
@@ -716,7 +737,7 @@ interval is how long a dismissal can lag; it is not a polling loop for state.
    **twice** — once `--type text`, once `--type image` (see the clipboard widget notes below;
    one untyped watcher silently never captures an image).
 4. **`nidara-ui`** (UI launcher in `/usr/bin/`): kills stale `gjs`, then —
-   - **Dev mode:** if `~/.config/nidara/.dev` exists, `cd` to its path and `ags run --gtk 4 app.ts`.
+   - **Dev mode:** if `~/.config/nidara/.dev` exists, `cd` to its path and run `scripts/run.sh app.ts`.
    - **Prod mode:** exec the bundle at `/usr/share/nidara/ui/shell/build/nidara`.
    - Log: `${XDG_RUNTIME_DIR:-/tmp}/nidara-ui.log` (per-user — see tech-debt "Resolved" rule on log paths).
 5. **`app.ts`** (`ui/shell/app.ts`): sets dark/light via `Gtk.Settings.gtk_application_prefer_dark_theme` (pure GTK4 — no `Adw.init()`); registers the `nd-*-symbolic` icon search path; `app.start({ applicationId: "org.nidara.desktop", main, requestHandler })`. In `main()`: iterates monitors → `createUI(monitor)` (Bar + Dock per monitor), wires the dock-rebuild debounce, and populates `core/ShellActions` + the IPC registry (the bar/dock blur layer rules live in `hyprland.lua` as `hl.layer_rule` — the old `hyprctl keyword layerrule` calls were dead under the Lua parser and were removed).
@@ -1016,7 +1037,7 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     default-exports a `const w: AtomicWidget = {...}` is ALL it takes —
     `scripts/gen-widget-index.mjs` scans the dir and regenerates the committed
     `widgets.gen.ts` (imports + `ALL_WIDGETS`; runs on npm build/dev hooks, on
-    the dev launcher before `ags run`, and CI job `widgets-gen` fails if stale).
+    the dev launcher before `scripts/run.sh`, and CI job `widgets-gen` fails if stale).
     Rules: widgets-only directory (anything else is a codegen hard-error; new
     helpers go in `common/` — `bar-helpers.ts` is grandfathered in EXCLUDE);
     unique `id`; no module-scope dependency on another widget (import order is

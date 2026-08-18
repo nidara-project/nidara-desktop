@@ -47,8 +47,8 @@ section "Versions"
     echo '```'
     echo "nidara: $ver"
     echo "hyprland:      $(hyprctl version 2>/dev/null | head -1 || echo n/a)"
-    echo "ags:           $(ags --version 2>/dev/null || echo n/a)"
     echo "gjs:           $(gjs --version 2>/dev/null || echo n/a)"
+    echo "esbuild:       $(esbuild --version 2>/dev/null || echo n/a)"
     echo "gtk4:          $(pacman -Q gtk4 2>/dev/null || echo n/a)"
     echo "kernel:        $(uname -r)"
     echo "os:            $(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || echo n/a)"
@@ -69,7 +69,11 @@ codeblock nidara-ipc dumpState
 
 section "Idle wakeups (main thread, 4 s sample — healthy ≈ 0/s when idle)"
 {
-    SHELL_PID=$(pgrep -f "gjs -m .*/ags.js" | head -1)
+    # Match the shell's DECODED bundle, whatever named it: scripts/bundle.sh writes
+    # $XDG_RUNTIME_DIR/nidara-<hash>.js and scripts/run.sh nidara-run-app.js. (It was
+    # `…/ags.js` until 2026-08-18 — a pattern that silently matched nothing after the
+    # bundler changed, and this section would just print "shell process not found".)
+    SHELL_PID=$(pgrep -f "gjs -m .*/nidara.*\.js" | head -1)
     if [ -n "${SHELL_PID:-}" ]; then
         TS="/proc/$SHELL_PID/task/$SHELL_PID/status"
         W1=$(awk '/voluntary/{s+=$2} END{print s}' "$TS" 2>/dev/null)

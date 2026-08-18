@@ -1,7 +1,7 @@
 // mpris-probe.ts — exercises core/mpris.ts (the AstalMpris replacement) against
 // real MPRIS players on the real session bus, in a process of its own.
 //
-//   ags bundle --gtk 4 scripts/dev/mpris-probe.ts /tmp/mpris-probe
+//   scripts/bundle.sh scripts/dev/mpris-probe.ts /tmp/mpris-probe
 //   /tmp/mpris-probe                       # from the repo root
 //   /tmp/mpris-probe /path/to/fake-mpris.js
 //

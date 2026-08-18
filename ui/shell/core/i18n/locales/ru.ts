@@ -156,7 +156,7 @@ export default {
     "settings.about.group.environment": "Окружение",
     "settings.about.group.system": "Система",
     "settings.about.title": "Сведения",
-    "settings.about.shell.desc": "AGS v3 / GJS + GTK4",
+    "settings.about.shell.desc": "TypeScript → GJS / GTK4",
     "settings.about.uptime.desc": "С последней загрузки",
     "settings.about.desktop.desc": "Оконный менеджер",
     "settings.about.cpu.desc": "Процессор",

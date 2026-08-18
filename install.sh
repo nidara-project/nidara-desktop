@@ -10,8 +10,9 @@
 # the newest release tag from the remote into a throwaway temp dir, builds/installs
 # from there, and discards it. No per-user source copy: the source of truth is the
 # git remote + what's installed in /usr/share. (The runtime is system-wide, so a
-# per-user clone made no sense and diverged between users.) The pinned Astal/AGS/
-# Astal/AGS stack is still rebuilt ONLY when the pins changed (/usr/share/nidara/pins).
+# per-user clone made no sense and diverged between users.) The one pinned
+# dependency left (libastal-auth) is rebuilt ONLY when its pin changed
+# (/usr/share/nidara/pins).
 # A --dev install registers the developer's own clone (~/.config/nidara/.dev +
 # .source) and updates from there, following its branch (same pin-skip). A plain
 # `./install.sh` (system) always rebuilds the whole stack — the escape hatch — and
@@ -60,18 +61,20 @@ for arg in "$@"; do
 done
 
 # ── Pinned upstream versions ──────────────────────────────────────────────────
-# The Astal/AGS libraries are built from source. Building against an
-# upstream's moving HEAD has bitten us before (e.g. the GJS 1.88 break of
-# `nidara-ipc`), so each source build is pinned to a known-good revision.
+# libastal-auth is built from source. Building against an upstream's moving HEAD
+# has bitten us before (e.g. the GJS 1.88 break of `nidara-ipc`), so the source
+# build is pinned to a known-good revision.
 #
-# MAINTAINERS: bump these and re-test a clean install before tagging a release.
+# MAINTAINERS: bump this and re-test a clean install before tagging a release.
 # Astal has no git tags, so it is pinned by commit SHA.
 ASTAL_REF="948805f6e8cf7f8c08eba06ab1db1eef0e75e3a0"   # github.com/aylur/astal @ main
-AGS_REF="v3.1.2"                                        # github.com/aylur/ags release tag
-# (APPMENU_REF is gone: vala-panel-appmenu was here ONLY as libastal-tray's
-#  dbusmenu→GMenuModel translator, and both left with core/tray.ts on 2026-08-18.)
+# (AGS_REF is gone: `ags bundle`/`ags run`/`ags types` were the last of AGS left,
+#  and scripts/{bundle,run,gen-types}.sh replaced them on 2026-08-18 — esbuild +
+#  gjs + ts-for-gir, which is all the CLI ever was. `go` left PACMAN_DEPS with
+#  it: building that CLI was the only thing this desktop needed a Go toolchain
+#  for. APPMENU_REF went earlier, with libastal-tray.)
 
-# Build dir for the source-built dependency packages (Astal libs, AGS).
+# Build dir for the source-built dependency package (libastal-auth).
 PKG_CACHE="${REAL_HOME}/.cache/nidara/pkgbuild"
 
 # Run a command as the unprivileged user. makepkg refuses to run as root, so when
@@ -231,24 +234,24 @@ if [ "$MODE" = "system" ] && [ -d "$REPO_DIR/.git" ] \
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Decide whether the pinned dependency stack (Astal libs + AGS) must be
-# rebuilt. It's expensive to build from source, so it's skipped when the pins
-# recorded at the last install ($PINS_FILE) already match this script's pins —
-# then phases 1, 2 and 4 are skipped and only Nidara's own artifacts are rebuilt.
+# Decide whether the pinned dependency (libastal-auth) must be rebuilt. It's
+# expensive to build from source, so it's skipped when the pin recorded at the
+# last install ($PINS_FILE) already matches this script's — then phases 1 and 2
+# are skipped and only Nidara's own artifacts are rebuilt.
 #
 # Which modes consult the pins:
 #   update-apply : skip on a pin match; ALSO skip when no pins are recorded yet
 #                  (pre-pin-era install whose stack is assumed current).
 #   dev          : skip ONLY on a positive pin match. A missing pins file means
-#                  the stack was never built on this machine, so it must build —
-#                  this is what makes re-running `./install.sh --dev` while
-#                  iterating on the shell cheap (no Astal recompile).
+#                  it was never built on this machine, so it must build — this is
+#                  what makes re-running `./install.sh --dev` while iterating on
+#                  the shell cheap (no Astal recompile).
 #   system       : never skipped. Plain `./install.sh` is the documented
 #                  "rebuild everything from scratch" escape hatch.
 # ─────────────────────────────────────────────────────────────────────────────
 REBUILD_DEPS="yes"
 # Phase 1 (pacman) has its own fingerprint, separate from the source-build pins:
-# a pin match skips the expensive Astal/AGS rebuild, but a CHANGED package list
+# a pin match skips the expensive Astal rebuild, but a CHANGED package list
 # (e.g. a new runtime tool like playerctl) must still sync packages — otherwise
 # updated installs silently miss dependencies that fresh installs get.
 PACMAN_SHA_FILE="/usr/share/nidara/pins-pacman"
@@ -259,7 +262,7 @@ PACMAN_DEPS="base-devel glib2-devel cmake meson ninja gobject-introspection vala
     intltool scdoc brightnessctl pamixer playerctl
     jq curl slurp grim wf-recorder wl-clipboard cliphist mesa pam
     pipewire pipewire-audio pipewire-alsa pipewire-pulse wireplumber libwireplumber
-    git nodejs npm gjs go
+    git nodejs npm gjs esbuild
     at-spi2-core wtype wlr-protocols wayland wayland-protocols hyprland-protocols
     accountsservice greetd pavucontrol rust cargo
     hyprland hypridle hyprsunset uwsm power-profiles-daemon python-gobject
@@ -270,10 +273,10 @@ PACMAN_DEPS="base-devel glib2-devel cmake meson ninja gobject-introspection vala
     papirus-icon-theme adwaita-icon-theme adwaita-cursors xdg-utils gsettings-desktop-schemas
     awww lz4"
 DEPS_LIST_SHA="$(printf '%s' "$PACMAN_DEPS" | sha256sum | awk '{print $1}')"
-# Set to "yes" once the Astal/AGS stack is installed as prebuilt packages
-# from nidara-repo (the binary pacman repo). When yes, the from-source build steps
-# (§2, §4) are skipped — they remain only as the fallback when the repo is
-# unreachable or incomplete.
+# Set to "yes" once libastal-auth is installed as a prebuilt package from
+# nidara-repo (the binary pacman repo). When yes, the from-source build in §2 is
+# skipped — it remains only as the fallback when the repo is unreachable or
+# incomplete.
 DEPS_FROM_REPO="no"
 OLD_VERSION="$(cat /usr/share/nidara/VERSION 2>/dev/null || echo "?")"
 # An update of a dev-mode install must keep dev semantics (config symlinks into
@@ -282,10 +285,10 @@ DEV_LIKE="no"
 [ "$MODE" = "dev" ] && DEV_LIKE="yes"
 [ "$MODE" = "update-apply" ] && [ -f "$CONFIG_DIR/.dev" ] && DEV_LIKE="yes"
 if [ "$MODE" = "update-apply" ] || [ "$MODE" = "dev" ]; then
-    new_pins="$(printf 'ASTAL_REF=%s\nAGS_REF=%s\n' "$ASTAL_REF" "$AGS_REF")"
+    new_pins="$(printf 'ASTAL_REF=%s\n' "$ASTAL_REF")"
     if [ -f "$PINS_FILE" ] && [ "$new_pins" = "$(cat "$PINS_FILE")" ]; then
         REBUILD_DEPS="no"
-        echo "  Dependency pins unchanged — skipping the Astal/AGS rebuild."
+        echo "  Dependency pin unchanged — skipping the libastal-auth rebuild."
     elif [ ! -f "$PINS_FILE" ] && [ "$MODE" = "update-apply" ]; then
         # Installs that predate pin recording: assume the stack matches current
         # pins (it was built from this same repo recently). Recorded from now on;
@@ -295,9 +298,9 @@ if [ "$MODE" = "update-apply" ] || [ "$MODE" = "dev" ]; then
         echo "         dependency stack is current; it will be recorded this time."
     elif [ ! -f "$PINS_FILE" ]; then
         # Fresh dev install: the stack was never built here, so build it.
-        echo "  No pin record found — building the Astal/AGS stack."
+        echo "  No pin record found — building libastal-auth."
     else
-        echo "  Dependency pins changed — full stack rebuild required."
+        echo "  Dependency pin changed — rebuild required."
     fi
     # Even on a pin match, run phase 1 if the pacman list changed since the
     # last install. A missing record = pre-fingerprint install → sync once
@@ -317,8 +320,8 @@ fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # nidara-repo trust & registration
-# The binary pacman repo (GitHub Pages) ships the Astal/AGS stack
-# prebuilt. Its CI GPG-signs every package and the repo db (since 2026-07-05);
+# The binary pacman repo (GitHub Pages) ships libastal-auth (and the `nidara`
+# package itself) prebuilt. Its CI GPG-signs every package and the repo db (since 2026-07-05);
 # the public key travels with this repo (packaging/nidara-repo.gpg) so a fresh
 # install needs no extra network fetch to establish trust.
 #
@@ -351,9 +354,9 @@ fi
 # 1. System dependencies
 # ─────────────────────────────────────────────────────────────────────────────
 if [ "$REBUILD_DEPS" = "no" ] && [ "$SYNC_PACMAN" = "no" ]; then
-echo "[1/7] System dependencies — skipped (pins and package list unchanged)."
+echo "[1/6] System dependencies — skipped (pins and package list unchanged)."
 else
-echo "[1/7] Installing system dependencies..."
+echo "[1/6] Installing system dependencies..."
 # nidara-repo registration + signing key live in the unconditional block above
 # (they must also run when this phase is pin-skipped, to migrate old installs).
 # -Syu, never bare -Sy: syncing the DBs without a full upgrade leaves a partial-upgrade
@@ -363,49 +366,46 @@ echo "[1/7] Installing system dependencies..."
 # can be compared on updates. Unquoted on purpose: word-splitting wanted.
 sudo pacman -Syu --needed --noconfirm $PACMAN_DEPS
 
-# Install the Astal/AGS stack from nidara-repo (prebuilt binaries) instead
-# of compiling it. aylurs-gtk-shell only depends on astal-gjs + gjs, and every
-# libastal-* package declares depends=() (its real runtime deps came from the
-# pacman -S above), so the whole stack must be listed explicitly — dep resolution
-# alone would not pull the libastal-* libs. On ANY failure (repo down, package
+# Install what is LEFT of the Astal stack from nidara-repo (prebuilt binaries)
+# instead of compiling it: one package, libastal-auth — the C PAM wrapper the
+# lockscreen authenticates through, and the last piece of Astal in the project
+# (see the skill's tech-debt: it is vendored, not absorbed, and it goes with the
+# PAM work). libastal-* packages declare depends=() (their real runtime deps came
+# from the pacman -S above), so it must be listed explicitly — dep resolution
+# alone would not pull it. On ANY failure (repo down, package
 # missing, version skew) we leave DEPS_FROM_REPO=no and fall through to the
-# from-source build in §2/§4 — the installer still succeeds, just slower.
-# NOTE (lockstep): this package list mirrors nidara-repo (built from its pins.env);
-# keep it in sync with §2's astal_pkgs + §4's ags.
-echo "  Installing the Astal/AGS stack from nidara-repo (prebuilt)..."
-if sudo pacman -S --needed --noconfirm \
-    aylurs-gtk-shell \
-    libastal-io astal-quarrel libastal-gtk4 \
-    libastal-auth; then
-    # Lockstep guard: `pacman -S` can "succeed" with STALE versions when nidara-repo
-    # hasn't been rebuilt for a pin bump yet (its packages still predate the new
-    # *_REF). That would silently install outdated deps AND let §6 record the new
-    # pins as if they matched — a mismatch the source fallback would never catch on
-    # its own. The package versions encode the pins (Astal = r<sha7>, ags =
-    # the tag), so verify the installed versions match THIS script's pins; if any
-    # don't, treat it as a repo miss and fall through to the from-source build below
-    # (which always builds the exact pinned revision).
-    _astal_v="$(pacman -Q libastal-io 2>/dev/null | awk '{print $2}')"
-    _ags_v="$(pacman -Q aylurs-gtk-shell 2>/dev/null | awk '{print $2}')"
-    if [[ "$_astal_v" == *"r${ASTAL_REF:0:7}"* ]] \
-    && [[ "$_ags_v" == "${AGS_REF#v}-"* ]]; then
+# from-source build in §2 — the installer still succeeds, just slower.
+# NOTE (lockstep): this mirrors nidara-repo (built from its pins.env); keep it in
+# sync with §2's astal_pkgs.
+echo "  Installing libastal-auth from nidara-repo (prebuilt)..."
+if sudo pacman -S --needed --noconfirm libastal-auth; then
+    # Lockstep guard: `pacman -S` can "succeed" with a STALE version when
+    # nidara-repo hasn't been rebuilt for a pin bump yet (its package still
+    # predates the new ASTAL_REF). That would silently install an outdated dep AND
+    # let §5 record the new pin as if it matched — a mismatch the source fallback
+    # would never catch on its own. The package version encodes the pin
+    # (r<sha7>), so verify it matches THIS script's pin; if it doesn't, treat it
+    # as a repo miss and fall through to the from-source build below (which
+    # always builds the exact pinned revision).
+    _astal_v="$(pacman -Q libastal-auth 2>/dev/null | awk '{print $2}')"
+    if [[ "$_astal_v" == *"r${ASTAL_REF:0:7}"* ]]; then
         DEPS_FROM_REPO="yes"
-        echo "  [OK] Astal/AGS stack installed from nidara-repo (pins verified) — skipping source builds."
+        echo "  [OK] libastal-auth installed from nidara-repo (pin verified) — skipping the source build."
     else
-        echo "  [WARN] nidara-repo versions don't match the current pins — the repo was"
-        echo "         likely not rebuilt for this bump yet (astal=$_astal_v ags=$_ags_v)."
-        echo "         Falling back to building the Astal/AGS stack from source."
+        echo "  [WARN] nidara-repo's libastal-auth doesn't match the current pin — the repo"
+        echo "         was likely not rebuilt for this bump yet (astal=$_astal_v)."
+        echo "         Falling back to building it from source."
     fi
 else
     echo "  [WARN] nidara-repo unavailable or incomplete — falling back to building"
-    echo "         the Astal/AGS stack from source (this is slower)."
+    echo "         libastal-auth from source (this is slower)."
 fi
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. Build & install Astal dependencies
 # ─────────────────────────────────────────────────────────────────────────────
-echo "[2/7] Building & packaging Astal service libraries..."
+echo "[2/6] Building & packaging libastal-auth..."
 if [ "$REBUILD_DEPS" = "no" ]; then
 echo "  Skipped (pins unchanged)."
 elif [ "$DEPS_FROM_REPO" = "yes" ]; then
@@ -427,7 +427,7 @@ ensure_pkg_cache
 # live in that repo's scripts/gen-pkgbuilds.sh. Adding a build dep here means
 # adding it there too — here it changes nothing, there it is the difference
 # between a package building and a release dying halfway through.
-echo "  Packaging Astal components (in dependency order)..."
+echo "  Packaging the last Astal component (libastal-auth)..."
 # What is NOT in this list, and why (a lib absent here is a decision, not an
 # oversight — re-adding one is a change of mind about who owns that domain):
 #   - lib/network: the shell reads NetworkManager through libnm directly since
@@ -464,12 +464,18 @@ echo "  Packaging Astal components (in dependency order)..."
 #     bluetooth. core/notifd.ts is that server, and it also stopped answering
 #     GetCapabilities with three capabilities Nidara does not honour (2026-08-18).
 #     Note this is the only package that shipped a GSettings schema.
+#   - lib/astal/io, lib/quarrel, lib/astal/gtk4, lang/gjs: these were never
+#     services — they were the RUNTIME AND TOOLCHAIN under `ags`. The shell has
+#     hosted itself since 2026-08-18 (ui/lib/host.ts), and the bundler went the
+#     same day: scripts/bundle.sh is esbuild with `ags bundle`'s exact flags
+#     (verified byte-identical output), scripts/run.sh is `ags run`, and
+#     scripts/gen-types.sh is the ts-for-gir call `ags types` wrapped.
+#
+# ONE package is left in this list, and it is the only Astal left anywhere:
+# lib/auth. It is C against PAM and ships its own /etc/pam.d file, so it cannot
+# be absorbed the way the rest were — it gets VENDORED when the PAM work lands.
 astal_pkgs=(
-    "lib/astal/io|libastal-io"
-    "lib/quarrel|astal-quarrel"
-    "lib/astal/gtk4|libastal-gtk4"
     "lib/auth|libastal-auth"
-    "lang/gjs|astal-gjs"
 )
 for entry in "${astal_pkgs[@]}"; do
     subdir="${entry%%|*}"
@@ -511,55 +517,14 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. Configure GObject Introspection
 # ─────────────────────────────────────────────────────────────────────────────
-echo "[3/7] Configuring GObject Introspection..."
+echo "[3/6] Configuring GObject Introspection..."
 sudo ldconfig
 # (GI_TYPELIB_PATH in /etc/environment is applied by nidara-setup, called in §7.)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. Build & install AGS CLI
+# 4. Build the Nidara UI bundle
 # ─────────────────────────────────────────────────────────────────────────────
-echo "[4/7] Building & packaging AGS CLI..."
-if [ "$REBUILD_DEPS" = "no" ]; then
-echo "  Skipped (pins unchanged)."
-elif [ "$DEPS_FROM_REPO" = "yes" ]; then
-echo "  Skipped (installed from nidara-repo)."
-else
-ags_dir="$PKG_CACHE/aylurs-gtk-shell"
-mkdir -p "$ags_dir"
-cat > "$ags_dir/PKGBUILD" <<PKGB
-pkgname=aylurs-gtk-shell
-pkgver=${AGS_REF#v}
-_ref=$AGS_REF
-PKGB
-cat >> "$ags_dir/PKGBUILD" <<'PKGB'
-pkgrel=1
-pkgdesc="Aylur's GTK Shell (ags) CLI, pinned for Nidara"
-arch=(x86_64)
-url="https://github.com/Aylur/ags"
-license=(GPL3)
-depends=(astal-gjs gjs)
-makedepends=(meson ninja vala gobject-introspection git nodejs npm go glib2-devel)
-options=(!debug)
-source=("ags::git+https://github.com/Aylur/ags.git#tag=$_ref")
-sha256sums=('SKIP')
-build() {
-  cd "$srcdir/ags"
-  npm install
-  meson setup build --prefix=/usr --buildtype=release
-  meson compile -C build
-}
-package() {
-  cd "$srcdir/ags"
-  DESTDIR="$pkgdir" meson install -C build
-}
-PKGB
-build_install_pkg "$ags_dir"
-fi
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 5. Build the Nidara UI bundle
-# ─────────────────────────────────────────────────────────────────────────────
-echo "[5/7] Building Nidara UI..."
+echo "[4/6] Building Nidara UI..."
 if [ "$DEV_LIKE" = "no" ]; then
 echo "  Skipped — system installs get Nidara as a pacman package (prebuilt from"
 echo "  nidara-repo, or built from this tree by makepkg in step 6)."
@@ -569,17 +534,17 @@ npm install
 npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
 
 # Dev mode: generate the git-ignored @girs/ GI typings so typecheck + editor
-# IntelliSense work straight after a clone — no manual `ags types` step. Only if
-# missing (regenerable, ~58MB); system mode doesn't typecheck so it's skipped.
+# IntelliSense work straight after a clone — no manual step. Only if missing
+# (regenerable, ~58MB); system mode doesn't typecheck so it's skipped.
 if [ "$MODE" = "dev" ]; then
     echo "  Generating @girs/ TypeScript typings..."
-    [ -d @girs ] || ags types -d .
+    [ -d @girs ] || "$REPO_DIR/scripts/gen-types.sh" .
 fi
 
 if [ "$MODE" != "dev" ]; then
     echo "  Bundling shell UI..."
     mkdir -p build
-    ags bundle app.ts build/nidara
+    "$REPO_DIR/scripts/bundle.sh" app.ts build/nidara
     echo "  [OK] Bundle: $REPO_DIR/ui/shell/build/nidara"
 fi
 
@@ -590,7 +555,7 @@ npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@ch
 cd "$REPO_DIR/ui/greeter"
 if [ "$MODE" != "dev" ]; then
     mkdir -p build
-    ags bundle app.ts build/nidara-greeter
+    "$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-greeter
     echo "  [OK] Greeter bundle: $REPO_DIR/ui/greeter/build/nidara-greeter"
 fi
 
@@ -598,15 +563,15 @@ echo "  Building lockscreen..."
 cd "$REPO_DIR/ui/lockscreen"
 if [ "$MODE" != "dev" ]; then
     mkdir -p build
-    ags bundle app.ts build/nidara-lock
+    "$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-lock
     echo "  [OK] Lockscreen bundle: $REPO_DIR/ui/lockscreen/build/nidara-lock"
 fi
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. Install system files
+# 5. Install system files
 # ─────────────────────────────────────────────────────────────────────────────
-echo "[6/7] Installing system files..."
+echo "[5/6] Installing system files..."
 
 if [ "$DEV_LIKE" = "no" ]; then
 # ── System installs consume the nidara PACKAGE ───────────────────────────────
@@ -867,11 +832,13 @@ sudo cp "$REPO_DIR/config/fontconfig/65-0-nidara-noto-cjk.conf" /usr/share/fontc
 sudo ln -sf /usr/share/fontconfig/conf.avail/65-0-nidara-noto-cjk.conf /etc/fonts/conf.d/65-0-nidara-noto-cjk.conf
 fi
 
-# Record the dependency pins this install was built against — --update compares
-# them to decide whether the Astal/AGS stack needs rebuilding. Both install
-# paths: these live UNTRACKED next to the package's files in /usr/share/nidara
-# (installer bookkeeping, deliberately not owned by the package).
-printf 'ASTAL_REF=%s\nAGS_REF=%s\n' "$ASTAL_REF" "$AGS_REF" \
+# Record the dependency pin this install was built against — --update compares it
+# to decide whether libastal-auth needs rebuilding. Both install paths: this lives
+# UNTRACKED next to the package's files in /usr/share/nidara (installer
+# bookkeeping, deliberately not owned by the package). The format changed on
+# 2026-08-18 (AGS_REF dropped), which makes every existing install look
+# pin-CHANGED exactly once — one extra rebuild of a single small C library.
+printf 'ASTAL_REF=%s\n' "$ASTAL_REF" \
     | sudo tee "$PINS_FILE" > /dev/null
 # And the pacman list fingerprint — --update compares it to decide whether
 # phase 1 (package sync) can be skipped.
@@ -881,7 +848,7 @@ printf '%s\n' "$DEPS_LIST_SHA" | sudo tee "$PACMAN_SHA_FILE" > /dev/null
 # 7. First-time setup — install-mode markers here; everything else is delegated
 #    to nidara-setup (ONE implementation, shared with the pacman-package path).
 # ─────────────────────────────────────────────────────────────────────────────
-echo "[7/7] Initializing user configuration..."
+echo "[6/6] Initializing user configuration..."
 mkdir -p "$CONFIG_DIR"
 # Own the parent too: under sudo, `mkdir -p` can create ~/.config itself as
 # root, which silently breaks the whole session (rationale in bin/nidara-setup).

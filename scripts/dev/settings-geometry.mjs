@@ -79,22 +79,24 @@ const WIDTHS = argWidths > -1
 const sh = (cmd, args) => {
     try { return execFileSync(cmd, args, { encoding: "utf8" }) } catch { return "" }
 }
-const ags = (...args) => sh("ags", ["request", ...args])
+const ipc = (...args) => sh("nidara-ipc", args)
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 
 const settingsWindow = () => {
-    const wins = JSON.parse(ags("listWindows") || "[]")
-    return wins.find(w => w.class === "io.Astal.ags" && w.title === "Nidara Settings")
+    const wins = JSON.parse(ipc("listWindows") || "[]")
+    // The class is `nidara-settings` since 2026-08-18: the window declares its own
+    // app-id (ui/lib/app-id.ts). It used to be AGS's `io.Astal.ags`.
+    return wins.find(w => w.class === "nidara-settings" && w.title === "Nidara Settings")
 }
 
 const nodes = () =>
-    (JSON.parse(ags("queryUI") || '{"nodes":[]}').nodes || [])
+    (JSON.parse(ipc("queryUI") || '{"nodes":[]}').nodes || [])
         .filter(n => n.window === "nidara-settings-window")
 
 const has = (n, cls) => (n.cssClasses || []).includes(cls)
 
 // ── Drive the window ─────────────────────────────────────────────────────────
-ags("openSettings")
+ipc("openSettings")
 sleep(1500)
 
 let win = settingsWindow()
@@ -127,7 +129,7 @@ for (const W of WIDTHS) {
     let tallRows = []
 
     for (const page of PAGES) {
-        ags("settingsPage", page)
+        ipc("settingsPage", page)
         sleep(400)
         const ns = nodes()
         const pane = ns.find(n => has(n, "settings-page"))

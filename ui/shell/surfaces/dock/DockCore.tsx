@@ -53,7 +53,14 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         const groupedClients: { [key: string]: any } = {}
         hs.clients.forEach(c => {
             if (!c.class) return
-            if (c.class.toLowerCase().includes("ags")) return
+            // (No "hide our own windows" filter here. There used to be
+            // `if (class.includes("ags")) return`, the twin of the one AppService
+            // dropped in #194: a SUBSTRING test aimed at AGS's `io.Astal.ags`,
+            // which also hid any third-party class containing those three letters.
+            // Our surfaces are layer-shell and never appear in `hyprctl clients`;
+            // Settings arrives as `nidara-settings` and is filtered below by the
+            // pinned list, exactly like every other app — which is also what the
+            // dock's real item list does, so the two now agree.)
             let key = c.class.toLowerCase()
             if (["org.gnome.nautilus", "nautilus", "thunar", "dolphin", "pcmanfm", "nemo", "nemo-desktop"].includes(key)) {
                 key = "home-shortcut"

@@ -4,7 +4,7 @@
 // path on the dev box; it is the login path, so "it compiles" is not enough.
 //
 //   python3 scripts/dev/fake-greetd.py /tmp/greetd.sock /tmp/req.jsonl &
-//   ags bundle --gtk 4 scripts/dev/greetd-probe.ts /tmp/greetd-probe
+//   scripts/bundle.sh scripts/dev/greetd-probe.ts /tmp/greetd-probe
 //   GREETD_SOCK=/tmp/greetd.sock /tmp/greetd-probe
 //
 // Expect `PROBE-RESULT ALL PASS`, and read /tmp/req.jsonl: it records the

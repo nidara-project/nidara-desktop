@@ -7,11 +7,11 @@ Read this when running the installer, debugging a reload that won't take, lookin
 Arch-only provisioning. Three modes:
 
 - **`--system` (default):** installs Nidara **as a pacman package** (§6): it tries the prebuilt `nidara` package from the `[nidara]` repo — only when the tree IS the release it was built from (clean checkout of the `v$VERSION` tag, or a git-less release tarball) and with a version==VERSION lockstep guard — and on ANY miss (repo down, repo lagging the release, non-release tree) it builds the **same** `packaging/nidara/PKGBUILD` locally: the working tree is packed as the tarball makepkg expects (uncommitted changes included — the escape hatch installs what's here) and `pacman -U`'d. Either way **every installed file is pacman-owned** (upgradeable, removable, `pacman -Qo`-visible); `--overwrite '*'` hands over files that script-era installs wrote untracked into /usr, and known orphans (ags-v3 tree, crystal-shell theme, wallpaper.png, misplaced portal .conf) are cleaned explicitly. First-time setup then runs via `nidara-setup` (below). It keeps **no** persistent source copy and **migrates away** any legacy `~/.local/share/nidara/src` + `.source` from the old per-user model; the user's original download is disposable. **Release channel:** on a clean `main` checkout with `v*` tags available, it jumps to the newest tag and re-execs itself from there, so fresh installs get the latest release (never an unlabelled main snapshot that the first update would silently downgrade). Dirty trees, other branches/commits, and `--dev` are deliberate opt-outs; before the first release exists it's a no-op.
-- **`--dev`:** installs system binaries **and** writes `~/.config/nidara/.dev` pointing at the source tree. The UI launcher will then `ags run --gtk 4 app.ts` from source instead of running the bundle. Registers the developer's own clone in `.source` (no managed copy). Dev installs keep the **direct-copy** flow (§5 build + §6 copies into /usr) — and **remove the `nidara` package first if present**, so a later `pacman -Syu` can't clobber the dev copies (this also makes the dev↔system toggle safe: going back to system reinstalls the package fresh). **Honours the pin-skip too:** re-running `./install.sh --dev` skips the pacman + Astal/AGS/appmenu rebuild when `/usr/share/nidara/pins` already match this script's pins (only a *positive* match skips — a missing pins file means a fresh machine, so it still builds). So iterating on the shell doesn't recompile Astal. Note you usually don't need to re-run it at all for UI changes — the shell runs from source, so Super+Shift+R reload suffices; re-run only when you touch system files (`bin/`, `config/`, portals, `.desktop`) or the install flow.
-- **`nidara-setup`** (`/usr/bin/nidara-setup`): the idempotent first-time/system setup that *packaging can't do* — GI env in `/etc/environment`, per-user config seeding under `~/.config/nidara` plus a default `~/.config/kitty/` (never overwrites), uwsm env files + NVIDIA autodetect, greetd/DM setup (only when recognizably ours or no DM at all), service enablement (pipewire/wireplumber user units, power-profiles-daemon, bluetooth). System-environment detection (keyboard layout / timezone / locale) lives here too, next to its consumers. Reads payloads from `/usr/share/nidara/{defaults,config}` — shipped identically by the nidara package and by install.sh §6, so it behaves the same after `pacman -S nidara` and after a script install. Called by install.sh §7 and by `nidara-update`'s package path; a pacman-only user runs it once by hand: `sudo pacman -S nidara && nidara-setup`. (The old `--dev-repo` flag is gone — it symlinked hypridle.conf into the dev repo, but Settings → Power writes that file now, so UI changes were dirtying the repo working tree; it's seeded as a per-user copy like everything else, with a migration that preserves the old link's content. Idle-suspend default: the hypridle.conf seed gets a 30-min suspend listener appended ONLY when a battery is present — desktops default to never; Settings → Power overrides either way.) **`--user` mode = the first-login bootstrap** (issue #23): runs ONLY the per-user steps (config seeding incl. `.mcp.json`, uwsm env + NVIDIA autodetect, user services) and never touches sudo. `bin/nidara` (the session entry) invokes it at session start whenever `~/.config/nidara` is missing — so a user created AFTER install time (Settings → Users, `useradd`, archinstall, Calamares) gets seeded on first login, before Hyprland loads its config, and a deleted config dir self-heals. Fail-soft by design (`|| true`, log at `${XDG_RUNTIME_DIR:-/tmp}/nidara-first-login.log`): a seeding hiccup must never block the session. GTK/dconf theming for that new user then converges at shell boot (ThemeManager reconciles appearance.json → settings.ini + gsettings).
+- **`--dev`:** installs system binaries **and** writes `~/.config/nidara/.dev` pointing at the source tree. The UI launcher will then run `scripts/run.sh app.ts` from source instead of running the bundle. Registers the developer's own clone in `.source` (no managed copy). Dev installs keep the **direct-copy** flow (§4 build + §5 copies into /usr) — and **remove the `nidara` package first if present**, so a later `pacman -Syu` can't clobber the dev copies (this also makes the dev↔system toggle safe: going back to system reinstalls the package fresh). **Honours the pin-skip too:** re-running `./install.sh --dev` skips the pacman + libastal-auth rebuild when `/usr/share/nidara/pins` already match this script's pins (only a *positive* match skips — a missing pins file means a fresh machine, so it still builds). So iterating on the shell doesn't recompile Astal. Note you usually don't need to re-run it at all for UI changes — the shell runs from source, so Super+Shift+R reload suffices; re-run only when you touch system files (`bin/`, `config/`, portals, `.desktop`) or the install flow.
+- **`nidara-setup`** (`/usr/bin/nidara-setup`): the idempotent first-time/system setup that *packaging can't do* — GI env in `/etc/environment`, per-user config seeding under `~/.config/nidara` plus a default `~/.config/kitty/` (never overwrites), uwsm env files + NVIDIA autodetect, greetd/DM setup (only when recognizably ours or no DM at all), service enablement (pipewire/wireplumber user units, power-profiles-daemon, bluetooth). System-environment detection (keyboard layout / timezone / locale) lives here too, next to its consumers. Reads payloads from `/usr/share/nidara/{defaults,config}` — shipped identically by the nidara package and by install.sh §5, so it behaves the same after `pacman -S nidara` and after a script install. Called by install.sh §5 and by `nidara-update`'s package path; a pacman-only user runs it once by hand: `sudo pacman -S nidara && nidara-setup`. (The old `--dev-repo` flag is gone — it symlinked hypridle.conf into the dev repo, but Settings → Power writes that file now, so UI changes were dirtying the repo working tree; it's seeded as a per-user copy like everything else, with a migration that preserves the old link's content. Idle-suspend default: the hypridle.conf seed gets a 30-min suspend listener appended ONLY when a battery is present — desktops default to never; Settings → Power overrides either way.) **`--user` mode = the first-login bootstrap** (issue #23): runs ONLY the per-user steps (config seeding incl. `.mcp.json`, uwsm env + NVIDIA autodetect, user services) and never touches sudo. `bin/nidara` (the session entry) invokes it at session start whenever `~/.config/nidara` is missing — so a user created AFTER install time (Settings → Users, `useradd`, archinstall, Calamares) gets seeded on first login, before Hyprland loads its config, and a deleted config dir self-heals. Fail-soft by design (`|| true`, log at `${XDG_RUNTIME_DIR:-/tmp}/nidara-first-login.log`): a seeding hiccup must never block the session. GTK/dconf theming for that new user then converges at shell boot (ThemeManager reconciles appearance.json → settings.ini + gsettings).
 - **`nidara-update`** (`/usr/bin/nidara-update`): three paths, tried in order.
   **Dev** — a dev install updates from its own registered clone (`.dev`/`.source`): `nidara-update` hands over to `install.sh --update`, which refuses on a dirty tree, fetches, fast-forwards the dev branch, then re-execs `--update-apply`.
-  **Package** (system installs since the packaging switch) — when `pacman -Qq nidara` says the package is installed, the update is just `sudo pacman -Syu` (interactive on purpose: it's a full system upgrade) — the `[nidara]` repo serves new releases — followed by `nidara-setup` (re-applies the idempotent setup: new config seeds, greetd refresh, new services) and, only if the package version actually changed, a `nidara.service` restart plus one `hyprctl reload` — the package replace of `/usr/share/nidara/config/hypr/hyprland.lua` kills Hyprland's inode-based config watch mid-extract and leaves a stuck "cannot open … hyprland.lua" banner otherwise (install.sh §6 does the same reload after its package install, covering the handoff/rerun cases; both gated on `HYPRLAND_INSTANCE_SIGNATURE`). **No git anywhere.** This path deliberately sits AFTER the `.patches` guard: a patched install is a locally built package, and a blind `-Syu` would silently replace it with pure upstream.
+  **Package** (system installs since the packaging switch) — when `pacman -Qq nidara` says the package is installed, the update is just `sudo pacman -Syu` (interactive on purpose: it's a full system upgrade) — the `[nidara]` repo serves new releases — followed by `nidara-setup` (re-applies the idempotent setup: new config seeds, greetd refresh, new services) and, only if the package version actually changed, a `nidara.service` restart plus one `hyprctl reload` — the package replace of `/usr/share/nidara/config/hypr/hyprland.lua` kills Hyprland's inode-based config watch mid-extract and leaves a stuck "cannot open … hyprland.lua" banner otherwise (install.sh §5 does the same reload after its package install, covering the handoff/rerun cases; both gated on `HYPRLAND_INSTANCE_SIGNATURE`). **No git anywhere.** This path deliberately sits AFTER the `.patches` guard: a patched install is a locally built package, and a blind `-Syu` would silently replace it with pure upstream.
   **Stateless (script-era installs)** — resolves the newest `v*` release tag on the remote with `git ls-remote`, shallow-clones just that tag (`--depth 1`) into a throwaway temp dir under `~/.cache/nidara/`, runs that clone's `install.sh --update-apply`, deletes the temp. Running this once on a pre-package install **migrates it to the package** (the clone's §6 installs nidara as a package, `--overwrite` takes over the untracked files), so every later update takes the package path.
   The apply pass behaves like `--system` but (a) writes **no** source marker, and (b) skips pacman + the Astal/AGS/appmenu rebuild when the pins (`/usr/share/nidara/pins`) match. It restarts `nidara.service` at the end. Settings → About checks the latest GitHub release and shows an update row (silent if the API is unreachable). **Carried local patches:** if `~/.config/nidara/.patches` exists (an agent keeps not-contributed repo fixes for this user — clone path inside; see `agent-contribution.md`, "Carrying a GLOBAL fix locally"), `nidara-update` refuses both blind paths and defers to the agent's flow (rebase `local/patches` onto the new tag → `install.sh --update-apply`, which builds a local package from the patched tree); `install.sh --update` likewise refuses to `checkout` a release over local-only commits instead of silently dropping them.
 
@@ -19,12 +19,13 @@ Arch-only provisioning. Three modes:
 
 These are bumped + clean-install-tested before tagging:
 
-- `ASTAL_REF` — commit SHA, no tags
-- `AGS_REF` — tag (e.g. `v3.1.2`)
-- `APPMENU_REF` — commit
+- `ASTAL_REF` — commit SHA, no tags. **The only one left**: it now pins `libastal-auth` alone.
+  (`AGS_REF` went with the toolchain on 2026-08-18, `APPMENU_REF` with the tray on the same day.)
 
-**Pins live in TWO places (permanent lockstep):** the same three refs also live in
-`nidara-project/nidara-repo`'s `pins.env`. Bump **both** together. This does **not** go away
+**Pins live in TWO places (permanent lockstep):** the ref also lives in
+`nidara-project/nidara-repo`'s `pins.env`. Bump **both** together — and note nidara-repo still
+builds packages this project no longer installs (the AGS/Astal-runtime five); pruning them there
+is a follow-up in that repo. This does **not** go away
 now that install.sh consumes the repo (below): install.sh keeps its `*_REF` for the
 from-source fallback and the update pin-skip record, so the two must stay in sync.
 
@@ -67,15 +68,15 @@ rest of the system. The two test beds are complementary: the VM proves the insta
 virgin box, the build container proves the dependency chain. nidara-repo builds pull requests
 now (unsigned, no publish) precisely so that chain can be proven before it lands.
 
-**Status (validated E2E in a clean VM, 2026-06-21):** `install.sh` §1 registers `[nidara]`
-in `/etc/pacman.conf` (idempotent) and `pacman -S`'s the 18 packages **explicitly** —
-`aylurs-gtk-shell` only depends on `astal-gjs`+`gjs` and every `libastal-*` declares
-`depends=()`, so dep resolution alone won't pull the stack. After `pacman -S` a
-**lockstep guard** verifies the installed versions actually encode this script's pins
-(Astal/appmenu pkgver = `r<sha7>`, ags = the tag) — because a repo that lags a pin bump
-makes `pacman -S` "succeed" with STALE versions, which the source fallback would never
-catch on its own. Only on a clean match does it set `DEPS_FROM_REPO=yes` so §2 (Astal) +
-§4 (AGS) skip their from-source build. **Any repo miss** (down, missing package, or the
+**Status (validated E2E in a clean VM, 2026-06-21; the list has shrunk since):** `install.sh` §1
+registers `[nidara]` in `/etc/pacman.conf` (idempotent) and `pacman -S`'s what is left of the
+stack **explicitly** — since 2026-08-18 that is **one package, `libastal-auth`**, which declares
+`depends=()`, so dep resolution alone won't pull it. After `pacman -S` a
+**lockstep guard** verifies the installed version actually encodes this script's pin
+(pkgver = `r<sha7>`) — because a repo that lags a pin bump
+makes `pacman -S` "succeed" with a STALE version, which the source fallback would never
+catch on its own. Only on a clean match does it set `DEPS_FROM_REPO=yes` so §2 skips its
+from-source build. **Any repo miss** (down, missing package, or the
 version guard failing) leaves `DEPS_FROM_REPO=no` and falls through to the source build —
 the installer still succeeds, just slower. That fallback is exactly why install.sh keeps
 its own `*_REF` pins (also recorded to `PINS_FILE` for the update pin-skip). Both branches
@@ -85,11 +86,10 @@ caught up to → guard WARN → source build). See tech-debt #21 and `packaging/
 ### Install steps (in order)
 
 1. `pacman` deps (also registers `[nidara]` in `pacman.conf`).
-2. Install the Astal stack from `nidara-repo` (prebuilt). **Fallback** (repo down/incomplete) builds from source: `io`, `quarrel`, `gtk4`, `auth`, `lang/gjs`. Everything else has been absorbed into `core/` — see the Astal row in `architecture.md`; `appmenu-glib-translator` left with `libastal-tray` on 2026-08-18.
-3. The `ags` CLI (`aylurs-gtk-shell`) — same: from `nidara-repo`, else source.
-4. Build — **dev-like installs only**: `npm install` + SCSS compile + `ags bundle --gtk 4` × 3 (shell, greeter, lockscreen). System installs skip this: the build happens inside makepkg (or comes prebuilt).
-5. Install system files — **system**: the nidara *package* (prebuilt from nidara-repo, else local makepkg — see `--system` above). **Dev**: direct copies of binaries/configs/session entry/portals into /usr (package removed first). Pins recorded either way (untracked installer bookkeeping).
-6. First-time setup via **`nidara-setup`** (see above): seeds `~/.config/nidara/` (**never overwrites existing user config**), uwsm env + NVIDIA, greetd (**only if recognizably ours or no other DM is enabled**), enables pipewire/wireplumber (user), power-profiles-daemon + bluetooth (system). install.sh itself only writes the install-mode markers (`.dev`/`.source`).
+2. Install `libastal-auth` from `nidara-repo` (prebuilt). **Fallback** (repo down/incomplete) builds it from source. It is the ONLY Astal package left — everything else was absorbed into `core/` (see the Astal row in `architecture.md`), `appmenu-glib-translator` left with `libastal-tray`, and `aylurs-gtk-shell`/`astal-gjs`/`libastal-io`/`astal-quarrel`/`libastal-gtk4` left with the toolchain, all on 2026-08-18. **install.sh has 6 steps now, not 7** — the AGS CLI build was §4.
+3. Build — **dev-like installs only**: `npm install` + SCSS compile + `scripts/bundle.sh` × 3 (shell, greeter, lockscreen). System installs skip this: the build happens inside makepkg (or comes prebuilt).
+4. Install system files — **system**: the nidara *package* (prebuilt from nidara-repo, else local makepkg — see `--system` above). **Dev**: direct copies of binaries/configs/session entry/portals into /usr (package removed first). Pins recorded either way (untracked installer bookkeeping).
+5. First-time setup via **`nidara-setup`** (see above): seeds `~/.config/nidara/` (**never overwrites existing user config**), uwsm env + NVIDIA, greetd (**only if recognizably ours or no other DM is enabled**), enables pipewire/wireplumber (user), power-profiles-daemon + bluetooth (system). install.sh itself only writes the install-mode markers (`.dev`/`.source`).
 
 ### Detection (no questions asked)
 
@@ -101,7 +101,7 @@ caught up to → guard WARN → source build). See tech-debt #21 and `packaging/
 ### Install targets
 
 - `/usr/bin/{nidara, nidara-ui, nidara-greeter, nidara-lock, nidara-game-mode, nidara-setup, nidara-update, …}`
-- `/usr/share/nidara/` — configs, bundles, `VERSION`, wallpaper, plus the setup payloads `defaults/` (minus wallpaper) and `config/greetd/` that `nidara-setup` reads — same layout whether shipped by the package or by install.sh §6
+- `/usr/share/nidara/` — configs, bundles, `VERSION`, wallpaper, plus the setup payloads `defaults/` (minus wallpaper) and `config/greetd/` that `nidara-setup` reads — same layout whether shipped by the package or by install.sh §5
 - `/usr/share/themes/nidara/gtk-4.0/gtk.css` — the greeter's **blank** GTK4 theme (zero rules). The greeter starts with `GTK_THEME=nidara` so only its own app CSS applies; **GTK silently falls back to Adwaita if this theme isn't on disk** (a real bite — the install step was missing post-rename). The step also `rm -rf`s the pre-rename `crystal-shell` orphan. Source: `ui/greeter/theme/gtk.css`.
 - `/usr/share/wayland-sessions/nidara.desktop`
 - `/usr/share/applications/`
@@ -161,9 +161,9 @@ resort for the missing-file case.
 Super+Shift+R                            # reload UI in a graphical session
 tail -f "$XDG_RUNTIME_DIR/nidara-ui.log"  # logs (per-user; falls back to /tmp)
 killall gjs                              # nuke stale GJS holding the old UI
-cd ui/shell && ags types -d .           # (re)generate @girs/ typings — see below
+./scripts/gen-types.sh                  # (re)generate @girs/ typings — see below
 cd ui/shell && npm run typecheck        # needs @girs/
-cd ui/shell && npm run build            # SCSS + ags bundle (--gtk 4 — see below)
+cd ui/shell && npm run build            # SCSS + scripts/bundle.sh (needs the `esbuild` package)
 nidara-ipc toggleAppGrid                # send an IPC command
 ```
 
@@ -213,7 +213,7 @@ there is a fake daemon:
 
 ```bash
 python3 scripts/dev/fake-greetd.py /tmp/greetd.sock /tmp/req.jsonl &   # add --big-endian for the control
-ags bundle --gtk 4 scripts/dev/greetd-probe.ts /tmp/greetd-probe
+scripts/bundle.sh scripts/dev/greetd-probe.ts /tmp/greetd-probe
 GREETD_SOCK=/tmp/greetd.sock /tmp/greetd-probe                        # expect: PROBE-RESULT ALL PASS
 ```
 
@@ -254,7 +254,7 @@ To try it without installing (handy for a throwaway test script):
 GI_TYPELIB_PATH=lib/nidara-wl/build LD_LIBRARY_PATH=lib/nidara-wl/build gjs -m test.js
 ```
 
-⚠️ **Two things go stale silently.** The `.gir` in `/usr/share/gir-1.0/` is what `ags types -d .`
+⚠️ **Two things go stale silently.** The `.gir` in `/usr/share/gir-1.0/` is what `scripts/gen-types.sh`
 reads to generate `@girs/NidaraWl-1.0` — skip installing it and the local typecheck reports the new
 API as nonexistent. And CI's typecheck uses the **`@girs/` snapshot from the `ci-assets` release**,
 which knows nothing about `NidaraWl` until a maintainer refreshes it; the first PR that imports the
@@ -711,7 +711,7 @@ because Hyprland cannot boot with zero DRM devices: aquamarine's GBM allocator w
 and `HYPRLAND_HEADLESS_ONLY` is set by hyprtester but read by NOTHING, verified on v0.55.2
 and main), then a privileged `archlinux:latest` container builds the pinned
 Astal/AGS/appmenu stack straight from `install.sh`'s refs (so a broken source build fails
-CI, not a user's clean install), `ags bundle`s the shell, boots Hyprland with the SHIPPED
+CI, not a user's clean install), bundles the shell with `scripts/bundle.sh`, boots Hyprland with the SHIPPED
 `config/hypr/hyprland.lua` on the vkms display (seatd session + systemd-udevd for device
 enumeration; rendering is kms_swrast/llvmpipe), runs the bundle exactly as production does
 (`NIDARA_SHELL_ROOT` + cwd = shell root), and FAILS if the process dies, `nidara-ipc
@@ -724,26 +724,28 @@ re-runs the script as an unprivileged `ci` user (`run` subcommand). Note the smo
 builds the COMMITTED tree (it does not re-run the widget codegen — staleness is the
 `widgets-gen` job's gate).
 
-⚠️ **The list of Astal libs to build lives in TWO files** — `install.sh`'s `astal_pkgs` and the
-smoke's `astal_subdirs` — and they must move together. Until 2026-08-17 the cache key hashed
-only `install.sh`, which made "we no longer need lib X" **unfalsifiable in CI**: drop X from the
-smoke list alone and the restored tarball still contains it, so the shell boots and the removal
-looks proven. The key now hashes both files. When you drop a lib, the smoke building the stack
-WITHOUT it and still booting is the proof — check the run actually rebuilt (cache miss), or it
-proved nothing.
+⚰️ **Historical, kept because the trap generalises.** While the smoke built the Astal stack from
+source, the list of libs lived in TWO files — `install.sh`'s `astal_pkgs` and the smoke's
+`astal_subdirs` — and the dependency-cache key hashed only `install.sh`, which made "we no longer
+need lib X" **unfalsifiable in CI**: drop X from the smoke list alone and the restored tarball
+still contained it, so the shell booted and the removal looked proven. The fix was to hash both
+files. Both the source build and the cache are gone as of 2026-08-18 (nothing is built from source
+in the smoke any more), but the shape of the trap is worth keeping: **when a cache key does not
+cover every input that decides what gets built, a green run can prove the opposite of what you
+think.**
 
-🔑 **A missing Astal lib does not necessarily break the shell, and that cuts both ways.**
-astal-gjs's `overrides.ts` imports ~10 `gi://Astal*` modules through a `suppress()` wrapper that
-swallows the failure, so an absent lib silently skips its array-getter patches instead of
-throwing. Live proof that this path is real, not theoretical: **`AstalPowerProfiles` is in that
-list and has never been installed on any Nidara machine** — it is not in `install.sh`'s package
-set at all — and the shell has always booted. So (a) removing a lib we do not import is safe by
-construction, and (b) you cannot conclude "the lib is needed" from the shell merely *starting*.
+🔑 **A missing Astal lib did not necessarily break the shell, and that cut both ways** — the reason
+"it still boots" was never proof that a lib was unnecessary. astal-gjs's `overrides.ts` imported
+~10 `gi://Astal*` modules through a `suppress()` wrapper that swallowed the failure, so an absent
+lib silently skipped its array-getter patches instead of throwing. Live proof that the path was
+real: **`AstalPowerProfiles` was in that list and was never installed on any Nidara machine**, and
+the shell always booted. astal-gjs itself is gone now, but the lesson survives it: **you cannot
+conclude "the dependency is needed" from the shell merely *starting*.**
 
 The SCSS job is pure JS. The typecheck job can't run
-`ags types` (no ags binary / Astal libs on a runner), so it downloads a ~4 MB compressed
+`scripts/gen-types.sh` (a runner has no GI stack to read), so it downloads a ~4 MB compressed
 snapshot of `@girs/` from the repo's `ci-assets` release and runs `tsc --noEmit` against it —
-the repo's own `types.d.ts` declares the `ags/*` modules ambiently, so no `node_modules` is
+no `node_modules` is
 needed. **If CI typecheck fails on a type that exists locally, the snapshot is stale**: a
 maintainer refreshes it with `scripts/dev/publish-ci-typings.sh` (re-run after any GTK/Astal
 update that changes the typings).
@@ -756,7 +758,7 @@ the trace:
 ```bash
 systemctl --user stop nidara
 NIDARA_SHELL_ROOT="$PWD/ui/shell" G_DEBUG=fatal-criticals timeout 20 \
-  bash -c 'cd ui/shell && ags run --gtk 4 app.ts' > /tmp/fatal-crit.log 2>&1
+  bash -c 'cd ui/shell && ../../scripts/run.sh app.ts' > /tmp/fatal-crit.log 2>&1
 systemctl --user start nidara      # restore the session UI immediately
 coredumpctl gdb -1 --debugger-arguments="-batch -ex 'bt 30'"
 ```
@@ -800,7 +802,7 @@ Hyprland binding). Details and governance (`ai.json.allowMcp` / `allowComputerUs
 `references/state-and-ipc.md`.
 
 **Regenerating `@girs/` (and the trap it sets).** `@girs/` is git-ignored, so a fresh clone / a new
-environment has none. Regenerate with `cd ui/shell && ags types -d .` (offline — reads the system
+environment has none. Regenerate with `./scripts/gen-types.sh` (offline — reads the system
 `.gir` files; ~208 `.d.ts`; do **not** pass `-u`, which would rewrite the committed `tsconfig`).
 **The trap:** without `@girs/`, `npm run typecheck` doesn't fail loudly — it floods you with ~57
 *false* `Namespace 'Gtk' has no exported member 'Box'`-style errors. Real errors hide in
@@ -865,7 +867,7 @@ Pango's **per-glyph fallback** — `noto-fonts-cjk`/`noto-fonts-emoji` are hard 
 channels — so there is no per-language font switching and none is needed.
 
 Which **regional Han variant** (SC/TC/JP/KR/HK) serves those fallback glyphs is decided by
-`config/fontconfig/65-0-nidara-noto-cjk.conf` (shipped by the pacman package AND install.sh §6 as
+`config/fontconfig/65-0-nidara-noto-cjk.conf` (shipped by the pacman package AND install.sh §5 as
 `/usr/share/fontconfig/conf.avail/…` + symlink in `/etc/fonts/conf.d/`). **The `65-0-` filename is
 load-bearing**: fontconfig's own `65-nonlatin.conf` hardcodes the KR face in its fallback list, and
 among fallback families earlier list position wins — renamed to `70-` the rules load but every CJK
@@ -997,7 +999,7 @@ and are gone with it (2026-08-17).
 be exercised without the shell:
 
 ```bash
-ags bundle --gtk 4 scripts/dev/mpris-probe.ts /tmp/mpris-probe
+scripts/bundle.sh scripts/dev/mpris-probe.ts /tmp/mpris-probe
 /tmp/mpris-probe            # from the repo root; spawns its own fakes → PROBE-RESULT ALL PASS
 ```
 
@@ -1014,7 +1016,7 @@ is the negative control — it must report FAIL.
 the shell — and without hardware:
 
 ```bash
-ags bundle --gtk 4 scripts/dev/bluez-probe.ts /tmp/bluez-probe
+scripts/bundle.sh scripts/dev/bluez-probe.ts /tmp/bluez-probe
 /tmp/bluez-probe                                  # roster half only
 sudo scripts/dev/fake-bluetooth.sh start          # python-dbusmock bluez5
 /tmp/bluez-probe                                  # -> PROBE-RESULT ALL PASS (19)
@@ -1051,7 +1053,7 @@ Unlike the BlueZ/MPRIS probes there are no fakes: PipeWire is running on any
 machine with sound, so the probe drives the REAL graph and puts it back.
 
 ```bash
-ags bundle --gtk 4 scripts/dev/wp-probe.ts /tmp/wp-probe
+scripts/bundle.sh scripts/dev/wp-probe.ts /tmp/wp-probe
 /tmp/wp-probe                                     # -> ALL PASS (24)
 /tmp/wp-probe --linear                            # negative control #1
 PIPEWIRE_REMOTE=nonexistent /tmp/wp-probe         # negative control #2
@@ -1105,7 +1107,7 @@ too — it brings the module up and then talks to it over D-Bus exactly as
 `notify-send` does.
 
 ```bash
-ags bundle --gtk 4 scripts/dev/notifd-probe.ts /tmp/notifd-probe
+scripts/bundle.sh scripts/dev/notifd-probe.ts /tmp/notifd-probe
 XDG_CACHE_HOME=$(mktemp -d) dbus-run-session -- /tmp/notifd-probe    # 32 checks
 ```
 
@@ -1157,37 +1159,37 @@ It needs a **live graphical Hyprland session** — it opens real windows and ask
 compositor what class it filed them under.
 
 ```bash
-ags bundle --gtk 4 --alias "@host=./ui/lib/host" \
-    scripts/dev/host-probe.ts /tmp/host-probe
-LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so /tmp/host-probe     # → 14 checks
+scripts/bundle.sh scripts/dev/host-probe.ts /tmp/host-probe --alias:@host=./ui/lib/host
+/tmp/host-probe                                                # → 14 checks
 ```
 
-The `--alias` is the whole trick: the probe imports `@host`, so the SAME source can
-be pointed at either host.
+(Extra arguments after the outfile go straight to esbuild — note the flag spelling
+changed with the bundler: `--alias:@host=…`, not `--alias "@host=…"`. The wrapper
+sets `LD_PRELOAD` itself.)
+
+The alias is the whole trick: the probe imports `@host`, so the SAME source could be
+pointed at either host.
+
+⚰️ **The AGS control is RETIRED and cannot be re-run** — `ags` is not installed any
+more, so `@host=/usr/share/ags/js/lib/gtk4/app.ts` resolves to nothing. Its result is
+the evidence for the migration and is recorded here so nobody re-derives it: it went
+red on exactly six checks — the `application-id` we asked for (AGS overwrote it with
+`io.Astal.<instance>`), the Hyprland class that follows from it, the per-window
+override's "process id untouched" companion, `prgname`, the application name, and
+`Adw.is_initialized()` — while staying GREEN on `LD_PRELOAD`, `hold()`, CSS
+apply/reset and GTK-initialised-at-import, the behaviours the replacement had to
+KEEP. The control that still runs is the LD_PRELOAD one:
 
 ```bash
-ags bundle --gtk 4 --alias "@host=/usr/share/ags/js/lib/gtk4/app.ts" \
-    scripts/dev/host-probe.ts /tmp/host-probe-astal
-LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so /tmp/host-probe-astal   # → 6 RED
-
-env -u LD_PRELOAD gjs -m "$XDG_RUNTIME_DIR"/<hash>-ags.js         # → 13 pass, 2 SKIPPED
+env -u LD_PRELOAD gjs -m "$XDG_RUNTIME_DIR"/host-probe-<hash>.js   # → 13 pass, 2 SKIPPED
 ```
-
-🔑 **The `--astal` run is the evidence, not just a control**, and WHICH side each
-check falls on is the point. It goes red on exactly six: the `application-id` we
-asked for (AGS overwrites it with `io.Astal.<instance>`), the Hyprland class that
-follows from it, the per-window override's "process id untouched" companion,
-`prgname`, the application name, and `Adw.is_initialized()`. It
-stays GREEN on `LD_PRELOAD`, `hold()`, CSS apply/reset and GTK-initialised-at-import
-— those are behaviours the replacement had to KEEP, and a red there means something
-was lost. (Run it and the `Adwaita-WARNING` prints in the control's output too.)
 
 ⚠️ The LD_PRELOAD check **arms itself**: the probe reads its own
 `/proc/self/environ` — the exec-time environment, which `unsetenv` cannot change —
 so "it was set when we started and is not set now" is a real before/after. Started
 without it, the check is SKIPPED with a message rather than scored green, because
 "gone now" proves nothing if nobody ever set it. **And dropping the `LD_PRELOAD=`
-prefix does not disarm it**: `ags bundle` emits a shell wrapper that sets the
+prefix does not disarm it**: the bundler emits a shell wrapper that sets the
 variable itself, so the honest control runs the decoded JS the wrapper leaves in
 `$XDG_RUNTIME_DIR`. That was written as a working control and was not one until it
 was actually run.
@@ -1206,7 +1208,7 @@ probe — this one has to BE the watcher, and it brings its own tray app
 (`scripts/dev/fake-sni.js`, a real SNI item with a real dbusmenu).
 
 ```bash
-ags bundle --gtk 4 scripts/dev/tray-probe.ts /tmp/tray-probe
+scripts/bundle.sh scripts/dev/tray-probe.ts /tmp/tray-probe
 dbus-run-session -- /tmp/tray-probe            # from the repo root → 35 checks
 ```
 
@@ -1258,7 +1260,7 @@ testing.**
 launcher proves nothing about the 55 apps that did NOT come back.
 
 ```bash
-ags bundle --gtk 4 scripts/dev/apps-probe.ts /tmp/apps-probe
+scripts/bundle.sh scripts/dev/apps-probe.ts /tmp/apps-probe
 /tmp/apps-probe             # from the repo root → PROBE-RESULT ALL PASS
 ```
 
@@ -1288,7 +1290,7 @@ means blinking the user's desktop. `scripts/dev/hypr-state-probe.ts` runs the sa
 process of its own:
 
 ```bash
-ags bundle --gtk 4 scripts/dev/hypr-state-probe.ts /tmp/hypr-probe
+scripts/bundle.sh scripts/dev/hypr-state-probe.ts /tmp/hypr-probe
 /tmp/hypr-probe 15      # then drive Hyprland from another terminal
 ```
 

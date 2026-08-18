@@ -1,8 +1,10 @@
 // host-probe.ts — exercises `ui/lib/host.ts` (the `ags/gtk4/app` replacement)
 // against the live compositor, in a process of its own.
 //
-//   ags bundle --gtk 4 --alias "@host=./ui/lib/host" scripts/dev/host-probe.ts /tmp/host-probe
-//   LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so /tmp/host-probe
+//   scripts/bundle.sh scripts/dev/host-probe.ts /tmp/host-probe --alias:@host=./ui/lib/host
+//   /tmp/host-probe
+//
+// (The wrapper sets LD_PRELOAD itself — see scripts/bundle.sh.)
 //
 // The host is the one piece of AGS that was not scaffolding, and almost
 // everything it does is invisible when it stops happening: an app-id nobody
@@ -10,28 +12,30 @@
 // `hold()` whose absence looks like a clean exit. So each check here is one of
 // those silent facts, stated out loud.
 //
-// ⚠️ Prove it can FAIL before believing a green run. TWO controls, and they fail
-// in DIFFERENT places:
+// ⚠️ Prove it can FAIL before believing a green run.
 //
-//   ags bundle --gtk 4 --alias "@host=ags/gtk4/app" scripts/dev/host-probe.ts /tmp/host-probe-astal
-//   LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so /tmp/host-probe-astal
-//     The SAME probe source against AGS's host. This is the evidence, not just a
-//     control: it must go RED on the app-id (AGS overwrites ours with
-//     `io.Astal.<instance>` — that is where the Settings window's Hyprland class
-//     came from), on the Wayland class that follows from it, on libadwaita being
-//     initialised behind our back, and on the process name. It must stay GREEN on
-//     LD_PRELOAD, `hold()` and CSS — those are the behaviours we had to KEEP, and
-//     a red there means the replacement lost something.
+// ⚰️ The FIRST control is RETIRED, and that is worth stating rather than leaving
+//     a command that no longer runs. It was the same probe source bundled with
+//     `--alias @host=ags/gtk4/app`, i.e. against AGS's own host, and it went RED
+//     on the app-id, the Wayland class, libadwaita being initialised behind our
+//     back and the process name, while staying GREEN on LD_PRELOAD, `hold()` and
+//     CSS — the behaviours we had to KEEP. It cannot be run any more: AGS is not
+//     installed (its bundler left on 2026-08-18, the last of it), so `ags/gtk4`
+//     resolves to nothing. Its evidence is in PR #194; do not re-derive it.
 //
-//   env -u LD_PRELOAD gjs -m "$XDG_RUNTIME_DIR"/<hash>-ags.js
+// The control that still works, and still has to be run:
+//
+//   env -u LD_PRELOAD gjs -m "$XDG_RUNTIME_DIR"/host-probe-<hash>.js
 //     Disarms the LD_PRELOAD check: the probe reads its own /proc/self/environ,
 //     sees the variable was never set at exec, and SKIPS rather than scoring a
 //     check that cannot distinguish "the host unset it" from "nobody ever set
 //     it" (measured: 13 passed, 2 skipped). ⚠️ Dropping the `LD_PRELOAD=…` prefix
-//     from the command line does NOT disarm it — `ags bundle` emits a shell
+//     from the command line does NOT disarm it — the bundler emits a shell
 //     wrapper that sets the variable itself before calling gjs, which is why the
-//     control has to go at the decoded JS the wrapper writes. A control that
-//     cannot fail is worse than no control; this one could not, until it was run.
+//     control has to go at the decoded JS the wrapper writes (its path is printed
+//     inside the wrapper; `scripts/run.sh` writes the same JS under a predictable
+//     name). A control that cannot fail is worse than no control; this one could
+//     not, until it was run.
 
 import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"

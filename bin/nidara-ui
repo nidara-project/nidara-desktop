@@ -46,8 +46,9 @@ if [ -f "$DEV_FILE" ]; then
     APP_TS="$SOURCE_DIR/ui/shell/app.ts"
     if [ -f "$APP_TS" ]; then
         echo "[$(date '+%H:%M:%S')] nidara-ui: DEV mode — $SOURCE_DIR" | tee -a "$LOG"
-        # Asset root for the shell (core/Paths.ts). We start in ui/shell so `ags run`
-        # bundles, but the process then chdirs to $HOME so launched apps open there;
+        # Asset root for the shell (core/Paths.ts). We start in ui/shell so the
+        # bundler resolves from there, but the process then chdirs to $HOME so
+        # launched apps open there;
         # assets resolve against this fixed root, not the live CWD.
         export NIDARA_SHELL_ROOT="$SOURCE_DIR/ui/shell"
         cd "$SOURCE_DIR/ui/shell"
@@ -59,9 +60,10 @@ if [ -f "$DEV_FILE" ]; then
             node "$SOURCE_DIR/scripts/gen-widget-index.mjs" >> "$LOG" 2>&1 \
                 || echo "[$(date '+%H:%M:%S')] nidara-ui: WARN — widget codegen failed, running with committed widgets.gen.ts" | tee -a "$LOG"
         fi
-        # --gtk 4 is REQUIRED, not decoration: the bundler used to infer the
-        # toolkit from an `ags/gtk4` import, and nothing imports that any more.
-        exec ags run --gtk 4 app.ts >> "$LOG" 2>&1
+        # scripts/run.sh is Nidara's own bundler+runner (esbuild + gjs) since
+        # 2026-08-18. It is in the SOURCE tree, not in /usr/bin: dev mode is the
+        # only mode that runs from source, so the repo is always at hand.
+        exec "$SOURCE_DIR/scripts/run.sh" app.ts >> "$LOG" 2>&1
     else
         echo "[$(date '+%H:%M:%S')] nidara-ui: WARNING — .dev points to '$SOURCE_DIR' but app.ts not found" | tee -a "$LOG"
     fi

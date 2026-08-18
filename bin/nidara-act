@@ -45,13 +45,13 @@ function emit(obj) { print(JSON.stringify(obj, null, 2)) }
 // Never blocks or fails the action if the shell isn't reachable.
 //
 // Gio, NOT spawn_command_line_async: the latter cannot redirect stdio, so the child
-// INHERITS ours and the `ags` CLI's reply ("ok") lands on OUR stdout — right after
+// INHERITS ours and the IPC client's reply ("ok") lands on OUR stdout — right after
 // the JSON we just printed. That breaks the one-JSON-per-helper contract the daemon
 // parses. Worst of all here, because we only ping when the action SUCCEEDED
 // (`result === true`): the tool reported failure exactly when it had worked.
 function pingShell() {
     try {
-        Gio.Subprocess.new(["ags", "request", "notifyComputerAction"],
+        Gio.Subprocess.new(["nidara-ipc", "notifyComputerAction"],
             Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE)
     } catch {}
 }

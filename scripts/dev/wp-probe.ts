@@ -1,7 +1,7 @@
 // wp-probe.ts — exercises core/wireplumber.ts (the AstalWp replacement) against
 // the live PipeWire graph, in a process of its own.
 //
-//   ags bundle --gtk 4 scripts/dev/wp-probe.ts /tmp/wp-probe
+//   scripts/bundle.sh scripts/dev/wp-probe.ts /tmp/wp-probe
 //   /tmp/wp-probe                      # from the repo root
 //   /tmp/wp-probe --linear             # negative control, see below
 //

@@ -1,6 +1,6 @@
 # Nidara
 
-Nidara is a full **Wayland desktop environment** built on **Hyprland** and **AGS v3 (Aylur's GTK Shell)**, designed to be fast, visually premium, and tightly optimized for **Arch Linux**.
+Nidara is a full **Wayland desktop environment** built on **Hyprland**, **GTK4** and **GJS**, designed to be fast, visually premium, and tightly optimized for **Arch Linux**.
 
 It is also **AI-native** — not as a bolt-on, but in how it is built and maintained. Nidara is
 developed with AI coding agents, ships a first-class interface for an agent to *see and operate*
@@ -27,7 +27,7 @@ so every clone is ready to be worked on by an agent out of the box.
 ## Features
 
 - **Compositor**: Hyprland (Wayland) — smooth animations, tiling + floating window management.
-- **Shell**: TypeScript on GTK4, bundled with AGS v3 — modular UI, custom-painted with Cairo.
+- **Shell**: TypeScript on GTK4, bundled with esbuild — modular UI, custom-painted with Cairo.
 - **Bar**: Live clock, workspaces, system tray, resource indicators, system menu with inline power actions.
 - **Activity Island**: A capsule at the center of the bar that morphs into whatever is happening — workspace dots at rest, then media playback, screen recording, a low-battery warning, or the built-in Assistant — and expands into a panel for it.
 - **Assistant**: A built-in AI assistant that lives in the Activity Island (`Super + A`). Bring your own key — Anthropic, OpenAI, Google or SpaceXAI — or run it fully local against Ollama or any OpenAI-compatible endpoint, no key needed. It can read and change Nidara's own settings for you; everything it is allowed to touch is a switch in **Settings → AI**.
@@ -42,7 +42,7 @@ so every clone is ready to be worked on by an agent out of the box.
 - **Nidara Design System**: Dynamic accent colors, glassmorphism tokens, dark/light mode.
 - **AI-native**: A built-in Assistant ships with the desktop, and an MCP server (`nidara-mcp`) lets any external coding agent perceive and drive the live desktop through the same official interface; an in-repo agent skill and a PR-based contribution model are built for AI-authored improvements. Built with AI, operable by AI, improved by AI — see [Using an AI agent](#using-an-ai-agent-with-your-desktop) and [Contributing](#contributing).
 - **Game Mode**: Steam games auto-move to a dedicated `gamespace` workspace (no blur/shadow/animations, `immediate` mode), optional library-art wallpaper and performance power profile; `Super + B` floats the bar above any fullscreen window.
-- **Login & Lock**: Custom AGS apps — a greetd-based greeter (`nidara-greeter`) and a lock screen (`nidara-lock`) built on `ext-session-lock-v1`, both sharing the Nidara look. The greeter is launched directly by greetd (no regreet); the lock screen uses no hyprlock.
+- **Login & Lock**: Custom GTK4 apps — a greetd-based greeter (`nidara-greeter`) and a lock screen (`nidara-lock`) built on `ext-session-lock-v1`, both sharing the Nidara look. The greeter is launched directly by greetd (no regreet); the lock screen uses no hyprlock.
 - **Idle management**: hypridle — configurable screen-off, lock, and suspend timers.
 - **Internationalization**: The shell ships in 12 languages — English, Spanish, French, German, Italian, Brazilian Portuguese, European Portuguese, Polish, Dutch, Russian, Simplified Chinese, and Japanese (Settings → Language & Region). Clocks and dates follow the system regional format (`LC_TIME`), including on the login and lock screens.
 
@@ -122,7 +122,7 @@ removal with `pacman -R nidara`, no untracked drift. If the repo is ever unreach
 doesn't serve your exact release yet, the installer builds the same pinned sources locally with
 the very recipe the repo uses. It:
 
-1. Installs system dependencies (Hyprland, GTK4, GJS, the Astal libraries + AGS CLI, audio/network/bluetooth stacks, fonts).
+1. Installs system dependencies (Hyprland, GTK4, GJS, esbuild, audio/network/bluetooth stacks, fonts).
 2. Installs the `nidara` package — the session entry point (`/usr/bin/nidara`), helper binaries,
    the shell/greeter/lock-screen bundles and shared configs under `/usr/share/nidara/`, and the
    `/usr/share/wayland-sessions/nidara.desktop` session entry. Prebuilt when the repo serves this
@@ -304,7 +304,7 @@ cd ~/Dev/nidara
 ./install.sh --dev
 ```
 
-`--dev` installs system binaries normally but writes `~/.config/nidara/.dev` pointing to your repo. The `nidara-ui` launcher detects this file and runs `ags run app.ts` from source — no full rebuild needed to see changes.
+`--dev` installs system binaries normally but writes `~/.config/nidara/.dev` pointing to your repo. The `nidara-ui` launcher detects this file and runs `scripts/run.sh app.ts` from source — no full rebuild needed to see changes.
 
 ```bash
 cd ui/shell
@@ -313,7 +313,7 @@ npm install   # IDE support (TypeScript autocomplete)
 
 ### Project Structure
 
-Nidara is **three independent AGS bundles** (shell, greeter, lock screen), plus the
+Nidara is **three independent bundles** (shell, greeter, lock screen), plus the
 provisioning and Hyprland config:
 
 ```
@@ -341,7 +341,7 @@ nidara/
 ├── VERSION                    # Current version (semver)
 ├── install.sh                 # Provisioning script (system / --dev)
 └── ui/
-    ├── shell/                 # Main shell (TypeScript + AGS v3)
+    ├── shell/                 # Main shell (TypeScript → GJS on GTK4)
     │   ├── app.ts             # Entry point + IPC request handler
     │   ├── core/              # State (Status), theme engine (NidaraTheme), services
     │   ├── surfaces/          # Whole surfaces (Bar, Dock, AppGrid, Control Center, Settings…)
@@ -349,7 +349,7 @@ nidara/
     │   ├── common/            # Shared UI pieces (Slider, SquircleContainer, fade…)
     │   ├── styles/            # Modular SCSS (tokens, glass mixin, per-component)
     │   ├── style.css          # Compiled CSS — generated from styles/ (gitignored)
-    │   └── build/nidara    # Bundle output from `ags bundle` (gitignored)
+    │   └── build/nidara    # Bundle output from scripts/bundle.sh (gitignored)
     ├── greeter/               # Login screen (greetd + AstalGreet)
     ├── lockscreen/            # Lock screen (ext-session-lock-v1, shares greeter CSS)
     └── lib/nidara-kit/        # GTK4 primitive widgets (no Adwaita): SplitView, Scrolled, Button…
@@ -396,7 +396,9 @@ All participation is governed by our [Code of Conduct](CODE_OF_CONDUCT.md).
 Nidara stands on the work of some excellent open-source projects:
 
 - **[Aylur](https://github.com/Aylur)** — [AGS](https://github.com/Aylur/ags) and the
-  [Astal](https://github.com/Aylur/astal) libraries: the framework the entire Nidara UI is built on.
+  [Astal](https://github.com/Aylur/astal) libraries: the framework Nidara was built on, and the
+  reason it got off the ground. Nidara has since grown its own application host, bundler and
+  services; `libastal-auth` (PAM) is the last piece still in use.
 - **[Hyprland](https://hyprland.org)** — the Wayland compositor at Nidara's core, along with
   hypridle, hyprsunset, and xdg-desktop-portal-hyprland from the same ecosystem.
 - **[GNOME](https://www.gnome.org)** — GTK4 and GJS, the toolkit and runtime under every Nidara surface.
@@ -417,8 +419,8 @@ See [`LICENSE`](LICENSE) for the full text.
 
 Copyright (C) 2026 The Nidara Authors.
 
-This is the same license used by AGS, and is compatible with the LGPL-2.1
-libraries it builds on (GTK4, Astal). You're free to use, study, modify, and
+This is the same license used by AGS, the project Nidara grew out of, and is compatible with the
+LGPL-2.1 libraries it builds on (GTK4, Astal). You're free to use, study, modify, and
 redistribute it — derivative works must remain open under the same terms.
 
 ## Trademarks

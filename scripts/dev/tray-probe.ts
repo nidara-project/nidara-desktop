@@ -1,7 +1,7 @@
 // tray-probe.ts — exercises core/tray.ts + core/dbusmenu.ts (the AstalTray and
 // appmenu-glib-translator replacements) against a fake tray app it starts itself.
 //
-//   ags bundle --gtk 4 scripts/dev/tray-probe.ts /tmp/tray-probe
+//   scripts/bundle.sh scripts/dev/tray-probe.ts /tmp/tray-probe
 //   dbus-run-session -- /tmp/tray-probe          # from the repo root
 //
 // `dbus-run-session` is not optional: this probe IS a StatusNotifierWatcher, and

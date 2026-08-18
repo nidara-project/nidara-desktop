@@ -174,7 +174,7 @@ auto-merge — every PR is human-reviewed.
    (not the thin H/V wrappers), and account for any area flagged in `references/tech-debt.md`.
 2. **Make CI-passable.** CI gates the SCSS compile AND the typecheck. Run
    `cd ui/shell && npm run build` and `npm run typecheck` (regenerate `@girs/` first if
-   missing — `ags types -d .`). A red PR wastes everyone's time.
+   missing — `./scripts/gen-types.sh`). A red PR wastes everyone's time.
 3. **Gather evidence.** Run `nidara-doctor` and attach its Markdown report — it
    captures versions, hardware (GPU, adapters), monitor state, and recent log errors in one
    shot. Especially for hardware/compat fixes, add what was broken and what you verified

@@ -33,15 +33,21 @@ and **remove the package first** so `pacman -Syu` can't clobber the copies.
 
 ## The source-built dependencies
 
-Nidara depends on two things that are **not in the official Arch repos** and
-that we pin to a known-good revision rather than track upstream HEAD:
+Nidara depends on **one** thing that is **not in the official Arch repos**, and we pin it to a
+known-good revision rather than track upstream HEAD:
 
 | What | Pinned by | Why we build it |
 |---|---|---|
-| Astal libs (`libastal-io`, `-gtk4`, `-auth`, `astal-quarrel`, `astal-gjs`) | `ASTAL_REF` (github `Aylur/astal`, no tags → SHA) | the scaffolding AGS itself binds, plus PAM auth |
-| `aylurs-gtk-shell` (the `ags` CLI) | `AGS_REF` (github `Aylur/ags`, release tag) | bundles/runs the TSX → GJS shell |
+| `libastal-auth` | `ASTAL_REF` (github `Aylur/astal`, no tags → SHA) | C against PAM, ships its own `/etc/pam.d` file — the lockscreen authenticates through it |
 
-The pins live in **`install.sh`** (`*_REF` near the top). That is the single source of
+It used to be six. `aylurs-gtk-shell` (the `ags` CLI), `astal-gjs`, `libastal-io`, `astal-quarrel`
+and `libastal-gtk4` were the runtime and the toolchain, and both became ours on 2026-08-18
+(`ui/lib/host.ts`, `scripts/bundle.sh`) — the bundler is now the `esbuild` package from Arch's own
+`extra`. ⚠️ **`nidara-repo` must be told to stop building them**, in its `pins.env` +
+`scripts/gen-pkgbuilds.sh`; nothing here fails if it keeps doing so, it just burns CI time and
+keeps a dead `AGS_REF` alive in a second place.
+
+The pins live in **`install.sh`** (`ASTAL_REF` near the top). That is the single source of
 truth; bump them there and re-test a clean install before tagging a release.
 
 ## Why packages instead of `meson install`
@@ -97,15 +103,15 @@ This is the local/dev form. The intended end state for the distributable DE:
 2. ✅ **DONE (2026-06-21, Phase 3)** — `install.sh` consumes `nidara-repo`: it registers the
    repo in `pacman.conf` and `pacman -S`'s the stack — **no build toolchain on the user's
    machine**, identical pinned binaries for everyone, dep bumps propagate via `pacman -Syu`.
-   The from-source build (§2/§4) remains as the automatic fallback when the repo is
-   unreachable or lags the pins (lockstep guard).
+   The from-source build (§2) remains as the automatic fallback when the repo is
+   unreachable or lags the pin (lockstep guard).
 3. At that point tighten `depends=()` to real runtime deps and add `provides`/`conflicts`
    so the packages coexist cleanly with any future AUR/official Astal packages.
 
 `install.sh --dev` keeps building from source locally for development either way.
 
 > **Lockstep pins (permanent):** the pinned revisions live in **two** places —
-> `install.sh`'s `ASTAL_REF`/`AGS_REF` (kept for the from-source fallback and
+> `install.sh`'s `ASTAL_REF` (kept for the from-source fallback and
 > the update pin-skip record) and `nidara-repo/pins.env` (the repo build). Bump **both**
 > together, always. `pins.env` additionally carries `NIDARA_REF` — the nidara-desktop release
 > tag the published `nidara` package is built from (see the top of this file).

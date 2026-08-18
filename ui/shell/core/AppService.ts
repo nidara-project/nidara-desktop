@@ -115,7 +115,7 @@ class AppService {
         // 2026-06-12. The real fix lives in bin/nidara-ui, which exports
         // XDG_DATA_DIRS before gjs starts. This patch still matters as a safety net
         // for the env *inherited by launched children* (gtk-launch under `uwsm app`)
-        // when the shell was started some other way (e.g. `ags run` by hand).
+        // when the shell was started some other way (e.g. scripts/run.sh by hand).
         const home = GLib.get_home_dir()
         // The "share" roots whose applications/ and icons/ subdirs Flatpak/Snap export to
         const extraShares = [

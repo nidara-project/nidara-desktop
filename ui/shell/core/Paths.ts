@@ -3,14 +3,14 @@ import GLib from "gi://GLib"
 /**
  * Root of the shell's bundled resources (assets/, style.css, icons).
  *
- * The launcher starts the AGS process inside ui/shell (so `ags run app.ts`
+ * The launcher starts the shell process inside ui/shell (so scripts/run.sh
  * bundles and finds style.css) and exports NIDARA_SHELL_ROOT pointing there.
  * We capture it here and then immediately move the process CWD to $HOME (below) —
  * otherwise every app launched from the dock/AppGrid inherits ui/shell as its
  * working directory instead of $HOME (kitty opening in the source tree, etc.).
  *
  * So: assets resolve against SHELL_ROOT (fixed), never the live CWD. The env var
- * is the source of truth; the get_current_dir() fallback covers a bare `ags run`.
+ * is the source of truth; get_current_dir() covers a bare scripts/run.sh.
  */
 export const SHELL_ROOT = GLib.getenv("NIDARA_SHELL_ROOT") || GLib.get_current_dir()
 

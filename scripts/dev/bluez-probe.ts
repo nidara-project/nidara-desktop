@@ -1,7 +1,7 @@
 // bluez-probe.ts — exercises core/bluez.ts (the AstalBluetooth replacement)
 // against whatever org.bluez is on the SYSTEM bus, in a process of its own.
 //
-//   ags bundle --gtk 4 scripts/dev/bluez-probe.ts /tmp/bluez-probe
+//   scripts/bundle.sh scripts/dev/bluez-probe.ts /tmp/bluez-probe
 //   /tmp/bluez-probe
 //
 // Two halves, and the probe says which one it could run:

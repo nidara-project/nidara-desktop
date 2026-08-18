@@ -2,7 +2,7 @@
 // REAL notification server: the probe brings the module up, and then talks to it
 // over D-Bus exactly as `notify-send` does, from the outside.
 //
-//   ags bundle --gtk 4 scripts/dev/notifd-probe.ts /tmp/notifd-probe
+//   scripts/bundle.sh scripts/dev/notifd-probe.ts /tmp/notifd-probe
 //   XDG_CACHE_HOME=$(mktemp -d) dbus-run-session -- /tmp/notifd-probe
 //
 // ⚠️ Both wrappers are load-bearing, and the probe refuses to run without them:

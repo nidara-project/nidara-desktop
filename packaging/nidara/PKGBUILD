@@ -7,23 +7,23 @@
 # local fallback when the published repo lags a release.
 #
 # pkgver MUST equal the repo's VERSION file (bumped together in the release
-# commit; CI enforces the match). The build mirrors install.sh §5 (npm + sass +
-# `ags bundle` × 3) and the nidara-input compile from §6; package() mirrors
-# §6's file layout. First-time system/user setup (greetd, services, per-user
+# commit; CI enforces the match). The build mirrors install.sh §4 (npm + sass +
+# scripts/bundle.sh × 3) and the nidara-input compile from §5; package() mirrors
+# §5's file layout. First-time system/user setup (greetd, services, per-user
 # config seeding) is NOT packaging's job — see install.sh / nidara-setup.
 pkgname=nidara
 pkgver=0.7.2
 pkgrel=1
-pkgdesc="Nidara — a fluid, glassmorphic desktop environment (Hyprland + AGS/GTK4)"
+pkgdesc="Nidara — a fluid, glassmorphic desktop environment (Hyprland + GTK4/GJS)"
 arch=(x86_64)
 url="https://github.com/nidara-project/nidara-desktop"
 license=(GPL-3.0-only)
 install=nidara.install
 
 # Runtime deps: PACMAN_DEPS from install.sh minus the build toolchain, plus the
-# pinned Astal/AGS stack from [nidara]. The libastal-* packages still declare
-# depends=() (see packaging/README.md), so their real runtime deps must be
-# listed HERE for a bare `pacman -S nidara` to pull a working system.
+# one pinned Astal package left in [nidara]. libastal-auth still declares
+# depends=() (see packaging/README.md), so its real runtime deps must be listed
+# HERE for a bare `pacman -S nidara` to pull a working system.
 depends=(
   # compositor + session plumbing
   # 'hyprland>=0.56': config/hypr/hyprland.lua's `glow` block is 0.56-only (added
@@ -39,19 +39,23 @@ depends=(
   gnome-keyring libsecret
   # GTK/GJS runtime
   gjs gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 wayland
-  # pinned Astal/AGS stack (served by the [nidara] repo)
-  aylurs-gtk-shell astal-gjs
+  # The LAST pinned Astal package (served by the [nidara] repo): C against PAM,
+  # ships its own /etc/pam.d file, used by the lockscreen. It leaves when the PAM
+  # work vendors it.
+  libastal-auth
   # (no libastal-network / libastal-gtk3 / libastal-greet / libastal-battery /
   # libastal-hyprland / libastal-mpris / libastal-apps / libastal-bluetooth /
   # libastal-wireplumber / libastal-notifd / libastal-tray — see install.sh's
   # astal_pkgs for why each one went, and note that libastal-tray took
   # appmenu-glib-translator with it: that package was in this list ONLY as the
   # tray's dbusmenu→GMenuModel translator, and core/dbusmenu.ts replaced it.
-  # This list is the pacman package's half of that decision and it has to be
+  # And no aylurs-gtk-shell / astal-gjs / libastal-io / astal-quarrel /
+  # libastal-gtk4: those were the RUNTIME AND TOOLCHAIN, and both are ours since
+  # 2026-08-18 — ui/lib/host.ts hosts the app, scripts/bundle.sh builds it.
+  # This list is the pacman package's half of those decisions and it has to be
   # edited in the same change: libastal-wireplumber outlived #188 here by a day
   # because only install.sh was updated, and nothing catches that while
   # nidara-repo still serves the package.)
-  libastal-io astal-quarrel libastal-gtk4 libastal-auth
   # services the shell talks to. networkmanager is load-bearing TWICE over: the
   # daemon, and `libnm` (its dep) for the NM-1.0 typelib core/NetworkService.ts
   # imports — that typelib used to arrive via libastal-network. `upower` is now
@@ -88,7 +92,10 @@ depends=(
 # wayland-client) and `gtk4` (lib/nidara-wl/build.sh compiles and g-ir-scans
 # against it) were in exactly that position: never declared, present only because
 # the astal packages built before nidara happened to pull them in.
-makedepends=(nodejs npm wlr-protocols wayland-protocols hyprland-protocols
+# `esbuild` is in exactly the position this comment warns about: scripts/bundle.sh
+# is the bundler now, and it is the ONE thing build() reaches for that no runtime
+# dep would drag in.
+makedepends=(nodejs npm esbuild wlr-protocols wayland-protocols hyprland-protocols
              wayland gtk4 gobject-introspection pkgconf)
 backup=(etc/xdg-desktop-portal/hyprland-portals.conf)
 options=(!debug)
@@ -102,32 +109,31 @@ sha256sums=('SKIP')
 build() {
   cd "$srcdir/nidara-desktop-$pkgver"
 
-  # Shell: SCSS → CSS, TSX → GJS bundle (mirrors install.sh §5).
-  # `npm install`, not `npm ci`: the lockfile is deliberately NOT committed —
-  # it records the ags/gnim file: deps as checkout-depth-relative paths (see
-  # the repo's .gitignore). Only sass + lucide-static resolve from the
-  # registry, both build-time-only.
+  # Shell: SCSS → CSS, TSX → GJS bundle (mirrors install.sh §4).
+  # `npm install`, not `npm ci`: the lockfile is deliberately NOT committed (see
+  # the repo's .gitignore). Only sass + lucide-static resolve from the registry,
+  # both build-time-only — the bundler itself is the system `esbuild`.
   cd ui/shell
   npm install
   npx sass --no-charset style.scss style.css
   sed -i '/@charset/d' style.css
   mkdir -p build
-  ags bundle app.ts build/nidara
+  ../../scripts/bundle.sh app.ts build/nidara
 
   # Greeter (reuses the shell's sass install; no npm tree of its own)
   npx sass --no-charset ../greeter/style.scss ../greeter/style.css
   sed -i '/@charset/d' ../greeter/style.css
   cd ../greeter
   mkdir -p build
-  ags bundle app.ts build/nidara-greeter
+  ../../scripts/bundle.sh app.ts build/nidara-greeter
 
   # Lockscreen (shares the greeter's style.css)
   cd ../lockscreen
   mkdir -p build
-  ags bundle app.ts build/nidara-lock
+  ../../scripts/bundle.sh app.ts build/nidara-lock
 
   # nidara-input: zwlr_virtual_pointer_v1 client for the computer-use pointer
-  # (mirrors install.sh §6 — wayland-scanner generates the protocol glue)
+  # (mirrors install.sh §5 — wayland-scanner generates the protocol glue)
   cd "$srcdir/nidara-desktop-$pkgver"
   local xml=/usr/share/wlr-protocols/unstable/wlr-virtual-pointer-unstable-v1.xml
   mkdir -p build
@@ -137,18 +143,18 @@ build() {
      -Ibuild $(pkg-config --cflags --libs wayland-client) -o build/nidara-input
 
   # nidara-ipc: the D-Bus client every hyprland.lua keybind runs (mirrors
-  # install.sh §6). C, not GJS — see the file's header for the 30 ms vs 2.9 ms.
+  # install.sh §5). C, not GJS — see the file's header for the 30 ms vs 2.9 ms.
   cc -O2 bin/nidara-ipc.c $(pkg-config --cflags --libs gio-2.0) -o build/nidara-ipc
 
   # libnidara-wl: window capture + hyprland-surface visible region, reachable
-  # from GJS via introspection (mirrors install.sh §6)
+  # from GJS via introspection (mirrors install.sh §5)
   lib/nidara-wl/build.sh "$srcdir/nidara-desktop-$pkgver/build/nidara-wl"
 }
 
 package() {
   cd "$srcdir/nidara-desktop-$pkgver"
 
-  # /usr/bin — session launchers, helpers, agent toolkit (install.sh §6 list)
+  # /usr/bin — session launchers, helpers, agent toolkit (install.sh §5 list)
   local b
   for b in nidara nidara-ui nidara-greeter nidara-lock nidara-before-sleep \
            nidara-after-sleep nidara-game-mode nidara-doctor nidara-portal \

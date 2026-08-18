@@ -1,6 +1,6 @@
 ---
 name: nidara
-description: "Authoritative reference for working on the Nidara desktop environment codebase — a full Wayland session for Arch Linux built with TypeScript/TSX → GJS on GTK4 + Hyprland (AGS v3 is build tooling only). Use this skill whenever the user mentions Nidara, nidara-project, the shell bar, dock, control center, notification center, prism/search, app grid, overview, system menu, settings window, lockscreen, or greeter; asks to edit files under `ui/shell/`, `ui/greeter/`, `ui/lockscreen/`, or `ui/lib/nidara-kit/`; wants to modify `hyprland.lua`, SCSS in `styles/`, a `core/` service, or run `install.sh`. Also trigger on questions about reloading the UI (Super+Shift+R), `nidara-ipc` / `ags request` IPC, `Status.ts`, the three build bundles, or the Nidara design system. ALWAYS consult this skill BEFORE editing files in this repo — strict conventions (no `Adw.OverlaySplitView`, no transform scale on clickables, no hardcoded colors, scoped CSS only, IPC via `ShellActions` not `globalThis`) are easy to violate without it."
+description: "Authoritative reference for working on the Nidara desktop environment codebase — a full Wayland session for Arch Linux built with TypeScript/TSX → GJS on GTK4 + Hyprland (no AGS, no Astal). Use this skill whenever the user mentions Nidara, nidara-project, the shell bar, dock, control center, notification center, prism/search, app grid, overview, system menu, settings window, lockscreen, or greeter; asks to edit files under `ui/shell/`, `ui/greeter/`, `ui/lockscreen/`, or `ui/lib/nidara-kit/`; wants to modify `hyprland.lua`, SCSS in `styles/`, a `core/` service, or run `install.sh`. Also trigger on questions about reloading the UI (Super+Shift+R), `nidara-ipc` IPC, `Status.ts`, the three build bundles, or the Nidara design system. ALWAYS consult this skill BEFORE editing files in this repo — strict conventions (no `Adw.OverlaySplitView`, no transform scale on clickables, no hardcoded colors, scoped CSS only, IPC via `ShellActions` not `globalThis`) are easy to violate without it."
 ---
 
 # Nidara
@@ -9,9 +9,23 @@ description: "Authoritative reference for working on the Nidara desktop environm
 
 ## What this project is
 
-Nidara is a **full Wayland desktop environment** for Arch Linux — not a theme, not a set of scripts. It registers as a proper Wayland session (like GNOME/KDE) and is launched by the display manager. The compositor is **Hyprland**; the UI is **TypeScript → GJS** on **GTK4 + gtk4-layer-shell** (libadwaita fully removed), hosted by **our own `Gtk.Application` in `ui/lib/host.ts`** and bundled — for now — by **AGS v3's `ags bundle`**, styled with **SCSS** and painted with **Cairo** where shapes get custom (dock squircles, workspace dots, resource rings, schematic).
+Nidara is a **full Wayland desktop environment** for Arch Linux — not a theme, not a set of scripts. It registers as a proper Wayland session (like GNOME/KDE) and is launched by the display manager. The compositor is **Hyprland**; the UI is **TypeScript → GJS** on **GTK4 + gtk4-layer-shell** (libadwaita fully removed), hosted by **our own `Gtk.Application` in `ui/lib/host.ts`** and bundled by **our own `scripts/bundle.sh`** (esbuild), styled with **SCSS** and painted with **Cairo** where shapes get custom (dock squircles, workspace dots, resource rings, schematic).
 
-⚠️ AGS is **build tooling only** since 2026-08-18 (`ags bundle`, `ags types`, the deprecated `ags request`). Nothing imports `ags/*` at runtime; `ui/lib/{host,process,file,app-id}.ts` replaced all four modules. See `references/architecture.md` → "The application host is OURS".
+⚠️ **AGS is GONE, entirely, since 2026-08-18** — runtime first (`ui/lib/{host,process,file,app-id}.ts` replaced its four modules), toolchain the same day:
+
+| was | is | what it actually was |
+|---|---|---|
+| `ags bundle` | `scripts/bundle.sh` | esbuild with a fixed flag set + a bash wrapper around the JS |
+| `ags run` | `scripts/run.sh` | the same bundle, executed by `gjs` |
+| `ags types -d .` | `scripts/gen-types.sh` | one `npx @ts-for-gir/cli generate` call |
+| `ags request` | `nidara-ipc` | a D-Bus call to `io.Astal.ags`, now `org.nidara.Shell` |
+
+The flags in `bundle.sh` are AGS's, transcribed and **verified**: all three bundles come out
+byte-identical to what `ags bundle` produced. Two of them are load-bearing and their comments say
+so — `--tsconfig` (via `target: ES2020` it turns `useDefineForClassFields` OFF, and define-semantics
+on a GObject subclass would shadow the property accessors) and the wrapper's `LD_PRELOAD` (no
+gtk4-layer-shell ⇒ no bar, no dock, nothing in the log). See `references/architecture.md` →
+"The application host is OURS" and `references/dev-workflow.md` → "The toolchain is ours".
 
 ⚠️ **Widgets are built imperatively — there is no JSX in this repo** and none of Gnim's reactive
 primitives are used, despite the `.tsx` extensions. Read `references/architecture.md` ("There is no
@@ -31,7 +45,7 @@ This is the single most important fact to internalize before touching anything:
 | **Greeter** | `ui/greeter/` | `build/nidara-greeter` | Login (greetd, spoken directly — no AstalGreet) |
 | **Lockscreen** | `ui/lockscreen/` | `build/nidara-lock` | Lock via `Gtk4SessionLock` (OVERLAY-layer fallback) |
 
-Each has its own `app.ts`, its own `package.json`, its own `ags bundle` invocation. Code shared between the greeter and the lockscreen is currently duplicated (see `references/tech-debt.md`).
+Each has its own `app.ts`, its own `package.json`, its own `scripts/bundle.sh` invocation. Code shared between the greeter and the lockscreen is currently duplicated (see `references/tech-debt.md`).
 
 ## The ten inviolable commandments
 
@@ -76,11 +90,11 @@ The references are short and load-on-demand. Don't try to hold the whole project
 ./install.sh --dev                       # one-time setup: system binaries + ~/.config/nidara/.dev
 # ... edit TSX/SCSS in ui/shell/ ...
 # In a graphical session:
-Super+Shift+R                            # reload the UI (re-runs nidara-ui → ags run)
+Super+Shift+R                            # reload the UI (re-runs nidara-ui → scripts/run.sh)
 tail -f "$XDG_RUNTIME_DIR/nidara-ui.log"  # logs (per-user; falls back to /tmp)
 killall gjs                              # nuke stuck old UI when reload misbehaves
 cd ui/shell && npm run typecheck        # local typecheck (needs the git-ignored @girs/)
-cd ui/shell && npm run build            # SCSS compile + ags bundle
+cd ui/shell && npm run build            # SCSS compile + scripts/bundle.sh (needs the `esbuild` package)
 nidara-ipc listActions                  # discover the shell's IPC surface (JSON)
 nidara-ipc dumpState                    # live shell state as JSON (overlays, version, effective Hyprland config…)
 nidara-ipc describeConfig               # agent-facing settings: schema + current values (JSON)
@@ -105,7 +119,7 @@ CI gates SCSS compile, typecheck, widget-registry freshness, **translation parit
 translation ledger** (`scripts/ci/i18n-check.mjs` — the bulk-translated locales are allowed to owe
 keys, but the debt can't move without the number moving in the PR's diff; see `dev-workflow.md`)
 **and a headless boot smoke**:
-the smoke job builds the pinned Astal/AGS stack in an Arch container, bundles the shell,
+the smoke job installs only official Arch packages in a container, bundles the shell,
 boots it on a real Hyprland over a virtual display (kernel vkms + llvmpipe) and fails on death, silent IPC,
 or JS errors; screenshots are uploaded as artifacts for human review. The typecheck job
 downloads a compressed `@girs/` snapshot from the repo's `ci-assets` release (`@girs/`
@@ -114,7 +128,7 @@ see `references/dev-workflow.md`.
 
 ## When in doubt
 
-- The codebase is intentionally **pure GTK4 + Cairo** for anything custom-painted (Dock, Bar, dots, rings, schematic) and **AGS/GTK + custom CSS** for floating overlays. **libadwaita has been fully removed** — windows are `Gtk.Window`, `Adw.AlertDialog` → `showNidaraAlert`, `Adw.Clamp` → `NidaraClamp`, and dark/light is driven by `Gtk.Settings.gtk_application_prefer_dark_theme` (no `Adw.init()`). Don't reintroduce any `Adw.*`. See `references/design-system.md`.
+- The codebase is intentionally **pure GTK4 + Cairo** for anything custom-painted (Dock, Bar, dots, rings, schematic) and **GTK + custom CSS** for floating overlays. **libadwaita has been fully removed** — windows are `Gtk.Window`, `Adw.AlertDialog` → `showNidaraAlert`, `Adw.Clamp` → `NidaraClamp`, and dark/light is driven by `Gtk.Settings.gtk_application_prefer_dark_theme` (no `Adw.init()`). Don't reintroduce any `Adw.*`. See `references/design-system.md`.
 - The state model is **one central GObject (`Status.ts`)** with mutually-exclusive overlay setters. Subscribe via `notify::prop`. See `references/state-and-ipc.md`.
 - The dock H/V split is **already deduplicated**: `DockHorizontal.tsx` and `DockVertical.tsx` are 7-line wrappers; shared logic lives in `DockCore.tsx` with axis differences isolated in `DockAxis.ts`. Edit those, not the wrappers — see `references/tech-debt.md`.
 - Dock springs integrate via `stepSpring` in `DockPhysics.ts`, which **substeps internally (≤1/60 s per substep)**. Never integrate a spring with a raw frame `dt`: semi-implicit Euler diverges when `damping·dt > 2`, and the frame clock can stall/fall back to ~60 Hz (e.g. a fullscreen window occludes the dock) pushing `dt` to the `MAX_DT` clamp — that exact combination exploded the auto-hide slide to 1e+68 px (2026-07-18). Stability comes from the substep, not from `MAX_DT`.

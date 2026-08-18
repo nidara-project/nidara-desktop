@@ -1,13 +1,13 @@
 {
   "scripts": {
     "predev": "node ../../scripts/gen-widget-index.mjs",
-    "dev": "sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css && ags run --gtk 4 app.ts",
+    "dev": "sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css && ../../scripts/run.sh app.ts",
     "prerun": "node ../../scripts/gen-widget-index.mjs",
-    "run": "ags run --gtk 4 app.ts",
-    "pretypecheck": "[ -d @girs ] || ags types -d .",
+    "run": "../../scripts/run.sh app.ts",
+    "pretypecheck": "[ -d @girs ] || ../../scripts/gen-types.sh .",
     "typecheck": "npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json",
     "prebuild": "node ../../scripts/gen-widget-index.mjs",
-    "build": "mkdir -p build && sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css && ags bundle --gtk 4 app.ts build/nidara"
+    "build": "mkdir -p build && sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css && ../../scripts/bundle.sh app.ts build/nidara"
   },
   "dependencies": {
     "sass": "^1.97.3"

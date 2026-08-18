@@ -149,7 +149,7 @@ export default {
     "settings.about.group.environment": "Ambiente",
     "settings.about.group.system": "Sistema",
     "settings.about.title": "Sobre",
-    "settings.about.shell.desc": "AGS v3 / GJS + GTK4",
+    "settings.about.shell.desc": "TypeScript → GJS / GTK4",
     "settings.about.uptime.desc": "Desde a última inicialização",
     "settings.about.desktop.desc": "Gerenciador de janelas",
     "settings.about.cpu.desc": "Processador",

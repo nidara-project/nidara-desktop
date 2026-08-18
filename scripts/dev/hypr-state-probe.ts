@@ -2,7 +2,7 @@
 // process of its own, so the state layer can be exercised without restarting the
 // user's shell (which is their desktop).
 //
-//   ags bundle --gtk 4 scripts/dev/hypr-state-probe.ts /tmp/hypr-probe
+//   scripts/bundle.sh scripts/dev/hypr-state-probe.ts /tmp/hypr-probe
 //   /tmp/hypr-probe [seconds]
 //
 // Then drive Hyprland from another terminal — switch workspace, focus another

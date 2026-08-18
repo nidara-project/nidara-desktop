@@ -1,7 +1,7 @@
 {
   "scripts": {
-    "dev": "cd ../shell && npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@charset/d' ../greeter/style.css && cd ../greeter && ags run --gtk 4 app.ts",
-    "build": "mkdir -p build && cd ../shell && npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@charset/d' ../greeter/style.css && cd ../greeter && ags bundle --gtk 4 app.ts build/nidara-greeter"
+    "dev": "cd ../shell && npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@charset/d' ../greeter/style.css && cd ../greeter && ../../scripts/run.sh app.ts",
+    "build": "mkdir -p build && cd ../shell && npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@charset/d' ../greeter/style.css && cd ../greeter && ../../scripts/bundle.sh app.ts build/nidara-greeter"
   },
   "prettier": {
     "semi": false,

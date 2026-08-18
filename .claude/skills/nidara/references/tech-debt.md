@@ -306,7 +306,8 @@ defaults to `1` (only descendants) → attaching to the systemd-spawned shell ne
 cracked this: break `gsk_renderer_render` → `gdk_surface_get_height((void*)gsk_renderer_get_surface((void*)$rdi))`
 to ID the surface; break `gtk_widget_queue_draw` / `g_idle_add_full` → `call (void)gjs_dumpstack()`
 (prints the JS stack to `/tmp/nidara-ui.log`) to find the JS culprit; map bundle line
-numbers by reading `/run/user/$UID/ags.js`.
+numbers by reading the bundle's decoded JS in `$XDG_RUNTIME_DIR` (the wrapper names it
+`nidara-<hash>.js`; `scripts/run.sh` writes `nidara-run-app.js`).
 
 Historical detail (SUPERSEDED — the "zone surface" claim is WRONG, see above):
 
@@ -763,13 +764,14 @@ swap, guard the focused-client read path.
 
 ### 21. `nidara-repo` — install.sh consumes it (DONE); signed (DONE); residual = permanent pin lockstep
 `github.com/nidara-project/nidara-repo` (public, 2026-06-21) is a pacman binary repo serving the 18
-deps (appmenu + 16 Astal + ags; down to 5 by 2026-08-18 — see the Astal absorption below), GitHub Pages (`https://nidara-project.github.io/nidara-repo/$arch`,
+deps (appmenu + 16 Astal + ags; down to **1** — `libastal-auth` — by 2026-08-18, see the Astal
+absorption below), GitHub Pages (`https://nidara-project.github.io/nidara-repo/$arch`,
 repo name `nidara`, **GPG-signed since 2026-07-05**: CI signs packages + db, clients use
 `SigLevel = Required DatabaseOptional`, key bundled at `packaging/nidara-repo.gpg`, imported/lsigned
 by install.sh which also migrates unsigned-era `Optional TrustAll` entries). **`install.sh` now consumes it**
 (validated E2E in a clean VM 2026-06-21): §1 registers `[nidara]` + `pacman -S`'s them explicitly
-(the `libastal-*` declare `depends=()`, so they must be listed — resolution won't pull them), §2/§4
-skip the source build when `DEPS_FROM_REPO=yes`; **the from-source build stays as the fallback** on any
+(the `libastal-*` declare `depends=()`, so they must be listed — resolution won't pull them), §2
+skips the source build when `DEPS_FROM_REPO=yes`; **the from-source build stays as the fallback** on any
 repo failure (installer still succeeds, slower). A **lockstep guard** after `pacman -S` verifies the
 installed versions encode this script's pins (pkgver carries `r<sha7>`/the tag) and only then sets
 `DEPS_FROM_REPO=yes` — otherwise a repo lagging a pin bump would `pacman -S` "successfully" with stale
@@ -1725,8 +1727,8 @@ These were paid down; the *rule* remains:
   toggle-hide. **Raising across workspaces:** `gtk_window_present()` alone does NOT jump to the
   window when it's on another workspace — its Wayland activation is ignored by Hyprland
   (`misc:focus_on_activate=false`). So `raiseSettings()` (app.ts) present()s *and* dispatches an
-  explicit `hyprlandState.focusWindow(addr)` (found by class `io.Astal.ags` + title
-  `Nidara Settings`), which switches to its workspace like clicking any running dock app.
+  explicit `hyprlandState.focusWindow(addr)` (found by class `nidara-settings` + title
+  `Nidara Settings` — the class was AGS's `io.Astal.ags` until 2026-08-18), which switches to its workspace like clicking any running dock app.
   Same pattern applies to any normal (non-layer-shell) window the shell wants to summon.
   `toggleSettings` is kept as a **compat alias** (the `hyprland.lua` Super+S
   keybind / user scripts) — don't drop it without updating those. `status.settings_open`
@@ -1829,7 +1831,7 @@ These were paid down; the *rule* remains:
   `%a/%A/%b/%B` are `.trim()`-ed too — some locales (ja_JP's `abmon`) pad abbreviated
   names to fixed width for tabular alignment, which otherwise leaks a stray space.
   It's triplicated across `ui/shell/core/i18n/dateNames.ts`, `ui/greeter/lib/dateNames.ts`,
-  `ui/lockscreen/lib/dateNames.ts` (separate ags bundles) but is still PURE LOGIC — no
+  `ui/lockscreen/lib/dateNames.ts` (separate bundles) but is still PURE LOGIC — no
   per-language data, so adding a language needs zero changes there, CJK included.
   Only the `settings.region.date.*` preview labels are hand-localized per catalog and must
   match `formatDatePart` output for that language's typical locale — when it matters,
@@ -4190,3 +4192,34 @@ stale silently.** It is written only by an `install.sh --dev` run, and dev mode 
 `.dev` marker wins), so it sits at whatever version was current the last time the installer ran —
 0.4.0 on the author's machine against a repo at 0.7.2. Harmless until someone flips back to system
 mode and the shell starts reporting a version from months ago.
+
+### 76. What the toolchain swap left behind (2026-08-18)
+
+`ags bundle`/`ags run`/`ags types` became `scripts/{bundle,run,gen-types}.sh` and the last five
+AGS/Astal-runtime packages left the dependency list. Three residuals, none of them urgent, all of
+them the kind that go quiet:
+
+- **CI no longer builds anything from source, so it no longer proves `install.sh`'s source
+  fallback.** The smoke used to build the pinned Astal stack (and cache it) as a side effect of
+  needing it; now every package it installs comes from Arch's own repos. The one remaining
+  from-source path — `libastal-auth` when `nidara-repo` is unreachable — is exercised only by a VM
+  sweep. Do not "fix" this by rebuilding a dependency the smoke does not use: the honest options are
+  a VM run before a release (what we do) or, if it ever matters, a separate job that runs
+  `install.sh`'s §2 alone.
+- **`ts-for-gir` is unpinned** (`npx -y @ts-for-gir/cli`, as it was under AGS). Its output is
+  regenerated, never committed, and CI consumes a published snapshot instead — so a breaking release
+  shows up as a failed local `gen-types.sh`, not as a red PR. Pin via `TS_FOR_GIR=` if that day
+  comes.
+- **The compatibility door `io.Astal.ags` and `nidara-ipc`'s fallback to it are still alive**, and
+  the smoke still asserts the door answers (with `gdbus` now — the CLI that used to knock is gone).
+  They exist for `hyprland-user.lua` files written before #184. Delete the three together — door,
+  fallback, assertion — when the compatibility window closes.
+
+🔑 And the finding worth keeping from doing it: **`ags bundle` was ~40 lines of esbuild options.**
+The way that was established is the reusable part — transcribe the options out of the tool's source,
+then diff the OUTPUT byte for byte (all three bundles matched). A rewrite that "looks equivalent" is
+a guess; a rewrite whose bytes match is not. Two of those options are load-bearing in ways no
+comment upstream mentioned: `--tsconfig` (it decides `useDefineForClassFields`, which decides
+whether a class field on a GObject subclass shadows the property accessor) and the wrapper's
+`LD_PRELOAD` (no bar, no dock, no log line).
+

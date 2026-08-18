@@ -47,7 +47,7 @@ function emit(obj) { print(JSON.stringify(obj, null, 2)) }
 // Never blocks or fails the action if the shell isn't reachable.
 //
 // Gio, NOT spawn_command_line_async: the latter cannot redirect stdio, so the
-// child INHERITS ours and the `ags` CLI's reply ("ok") lands on OUR stdout — right
+// child INHERITS ours and the IPC client's reply ("ok") lands on OUR stdout — right
 // after the JSON we just printed. That breaks the one-JSON-per-helper contract the
 // daemon parses, so a successful injection came back to the model as a FAILURE, and
 // deterministically: the daemon reads to EOF, and the pipe's write end stays open

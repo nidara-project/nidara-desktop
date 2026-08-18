@@ -96,7 +96,7 @@ function cursorPos() {
 // VISUAL — an enhancement, never a gate: any failure (shell down, old shell
 // without the command) is a silent no-op and the injection proceeds. `wait`
 // blocks until the fake cursor LANDS (the request resolves on landing);
-// `timeout 2` bounds a hung shell. The `--` is load-bearing: the ags CLI
+// `timeout 2` bounds a hung shell. The `--` is load-bearing: the IPC client
 // otherwise parses a negative coordinate (monitor left/above the origin) as a
 // flag and errors out (verified live 2026-07-12). The async path silences
 // stdio like pingShell (inherited stdout would pollute the JSON contract);

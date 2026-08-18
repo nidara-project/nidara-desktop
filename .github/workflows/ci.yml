@@ -8,11 +8,11 @@
 #   - styles: the SCSS stylesheet compiles (catches CSS syntax errors). Pure JS,
 #     no system libraries needed.
 #   - typecheck: `tsc --noEmit` over ui/shell. The GI typings it needs (@girs/,
-#     ~58 MB generated, git-ignored) can't be produced on a runner — `ags types`
-#     needs the ags binary + Astal libs. Instead a maintainer publishes a ~4 MB
+#     ~58 MB generated, git-ignored) can't be produced on a runner —
+#     scripts/gen-types.sh reads the system's .gir files, which means a machine
+#     with the whole GI stack installed. Instead a maintainer publishes a ~4 MB
 #     compressed snapshot as an asset on the `ci-assets` release
-#     (scripts/dev/publish-ci-typings.sh) and this job downloads it. The repo's
-#     own types.d.ts declares the "ags/*" modules ambiently, so tsc needs no
+#     (scripts/dev/publish-ci-typings.sh) and this job downloads it. tsc needs no
 #     node_modules at all. If this job fails on a type that exists locally, the
 #     snapshot is stale → re-run the publish script.
 #   - widgets-gen: the committed widgets.gen.ts (widget auto-registration) is
@@ -30,9 +30,9 @@
 #     long enough to wrap, i.e. in a locale or text size that is not yours. Logic in
 #     scripts/ci/wrapping-prose-check.mjs.
 #   - smoke: the REAL thing — load the kernel's vkms (virtual KMS) on the
-#     runner, then in a privileged Arch container build the pinned Astal/AGS
-#     stack (proves install.sh's source builds still work), `ags bundle` the
-#     shell, boot Hyprland on the virtual display (llvmpipe software GL), boot
+#     runner, then in a privileged Arch container install ONLY official Arch
+#     packages, bundle the shell with scripts/bundle.sh (esbuild), boot Hyprland
+#     on the virtual display (llvmpipe software GL), boot
 #     the bundle on it, and require: process stays alive, IPC answers
 #     (listActions/dumpState), no JS errors in the boot log. Screenshots are
 #     uploaded as artifacts for HUMAN review — deliberately not a pixel diff.
@@ -188,40 +188,19 @@ jobs:
           sudo apt-get install -y -qq "linux-modules-extra-$(uname -r)"
           sudo modprobe vkms
           ls -l /dev/dri
-      # The built Astal/AGS stack is cached as a tarball. Key parts:
-      #   - install.sh hash → covers the pinned refs (they live there)
-      #   - headless-smoke.sh hash → covers WHICH libs get built. Keying on
-      #     install.sh alone was a trap: the subdir list lives in the smoke
-      #     script, so dropping a lib there would have restored a tarball that
-      #     still contained it and "proved" a removal that never happened.
-      #   - month stamp → archlinux:latest moves; a monthly rebuild bounds the
-      #     window for soname drift between cached binaries and fresh pacman libs
-      - name: Compute cache month stamp
-        id: stamp
-        run: echo "month=$(date +%Y-%m)" >> "$GITHUB_OUTPUT"
-      # restore/save split (not plain actions/cache): the combined action only
-      # saves in its post step when the JOB succeeds, so a red smoke run would
-      # rebuild the whole stack on every iteration — exactly when the cache is
-      # most valuable. save with if:always() persists it even on failure.
-      - name: Restore built dependency stack
-        id: deps-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: deps-cache/nidara-deps.tar.zst
-          key: smoke-deps-v2-${{ steps.stamp.outputs.month }}-${{ hashFiles('install.sh', 'scripts/ci/headless-smoke.sh') }}
-      - name: Build deps + bundle + headless boot (Arch container on vkms)
+      # No dependency cache any more (2026-08-18): the smoke used to build the
+      # pinned Astal/AGS stack from source and cache the result as a tarball.
+      # Nothing is built from source here now — every package comes from Arch's
+      # own repos — so the cache, its month stamp and its two-file hash key are
+      # gone with it. (That key was itself a trap worth remembering: it hashed
+      # BOTH install.sh and headless-smoke.sh because the pins live in one and
+      # the library list in the other, and keying on just one would have restored
+      # a tarball proving a removal that never happened.)
+      - name: Bundle + headless boot (Arch container on vkms)
         run: |
-          mkdir -p deps-cache
           docker run --rm --privileged \
-            -v "$PWD:/repo" -v "$PWD/deps-cache:/depscache" \
-            -e DEPS_TARBALL=/depscache/nidara-deps.tar.zst \
+            -v "$PWD:/repo" \
             archlinux:latest bash /repo/scripts/ci/headless-smoke.sh
-      - name: Save built dependency stack
-        if: always() && steps.deps-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: deps-cache/nidara-deps.tar.zst
-          key: smoke-deps-v2-${{ steps.stamp.outputs.month }}-${{ hashFiles('install.sh', 'scripts/ci/headless-smoke.sh') }}
       - name: Upload screenshots + logs
         if: always()
         uses: actions/upload-artifact@v4

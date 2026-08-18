@@ -2,7 +2,7 @@
 // (the AstalApps replacement) against a fixture AND against this machine's real
 // .desktop files, in a process of its own.
 //
-//   ags bundle --gtk 4 scripts/dev/apps-probe.ts /tmp/apps-probe
+//   scripts/bundle.sh scripts/dev/apps-probe.ts /tmp/apps-probe
 //   /tmp/apps-probe                 # ours
 //   /tmp/apps-probe --astal         # the SAME live checks, answered by AstalApps
 //

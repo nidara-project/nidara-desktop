@@ -149,7 +149,7 @@ export default {
     "settings.about.group.environment": "环境",
     "settings.about.group.system": "系统",
     "settings.about.title": "关于",
-    "settings.about.shell.desc": "AGS v3 / GJS + GTK4",
+    "settings.about.shell.desc": "TypeScript → GJS / GTK4",
     "settings.about.uptime.desc": "自上次启动以来",
     "settings.about.desktop.desc": "窗口管理器",
     "settings.about.cpu.desc": "处理器",

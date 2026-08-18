@@ -12,7 +12,7 @@
 #   • services: pipewire/wireplumber (user), power-profiles-daemon, bluetooth
 #
 # Payloads are read from /usr/share/nidara/{defaults,config} — shipped both by
-# the nidara package and by install.sh §6, so this script behaves identically
+# the nidara package and by install.sh §5, so this script behaves identically
 # after `pacman -S nidara` and after a script install. install.sh (§7) and
 # nidara-update call it; a pacman-only user runs it by hand once:
 #

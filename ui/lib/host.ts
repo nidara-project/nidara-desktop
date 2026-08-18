@@ -19,10 +19,10 @@
 //     initialisation order is preserved exactly.
 //  2. `GLib.unsetenv("LD_PRELOAD")`. All three bundles are started with
 //     `LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so` so layer-shell can hook GDK
-//     before it opens the display — and it is `ags bundle`/`ags run` that put it
-//     there, in the shell wrapper they generate around the JS, NOT
-//     `bin/nidara-ui`. (Worth knowing twice over: whatever replaces the bundler
-//     has to keep emitting it, or there is no bar and no dock at all.) That
+//     before it opens the display — and it is `scripts/bundle.sh` (in the shell
+//     wrapper it generates around the JS) and `scripts/run.sh` that put it
+//     there, NOT `bin/nidara-ui`. Both of them say so in their headers, because
+//     dropping it costs you the bar and the dock with nothing in the log. That
 //     variable is INHERITED, so without this line every app the dock launches —
 //     and every `hyprctl`, `wpctl`, `nmcli` we spawn — gets it too.
 //  3. `hold()`. The shell's windows are all created inside `main()`, and two of
@@ -44,7 +44,7 @@
 //    assumed: with an `application-id` set, GTK4 hands the Wayland compositor
 //    exactly that string and IGNORES `prgname`; with no id it falls back to
 //    `prgname` (which GJS leaves as "gjs").
-//  - `HANDLES_COMMAND_LINE` + `vfunc_command_line`. That was how `ags run`
+//  - `HANDLES_COMMAND_LINE` + `vfunc_command_line`. That was how AGS's runner
 //     forwarded a request to an already-running instance. `nidara-ipc` talks to
 //     the bus directly (`bin/nidara-ipc.c`), so a second invocation activating
 //     the primary instance is the behaviour we want.

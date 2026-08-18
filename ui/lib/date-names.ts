@@ -9,7 +9,7 @@
 //
 // ── ONE FILE, THREE BUNDLES (since 2026-08-10) ──────────────────────────────
 // This lived three times — `ui/shell/core/i18n/`, `ui/greeter/lib/`,
-// `ui/lockscreen/lib/` — because they are separate `ags bundle` invocations, and
+// `ui/lockscreen/lib/` — because they are separate bundler invocations, and
 // each copy said so in its own header. `formatDatePart` was byte-identical in all
 // three; what differed was only HOW the probe ran, and the greeter's version was a
 // strict superset (below). So this is the greeter's, with the shell's fuller

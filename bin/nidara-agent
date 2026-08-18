@@ -100,7 +100,7 @@ function readAiJson() {
 // ── File frontier (tier 1) ───────────────────────────────────────────────────
 // The assistant's file tools are DAEMON-LOCAL, not IPC actions: external MCP
 // clients bring their own file tools, so there is nothing to mirror onto that
-// surface, and routing file contents through the ags socket would put blocking
+// surface, and routing file contents through the IPC socket would put blocking
 // I/O on the shell's main loop for no gain.
 //
 // Two frontiers, and they are deliberately NOT the same shape:

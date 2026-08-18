@@ -79,12 +79,12 @@ function load() {
                 return
             }
             // The shell and libnidara-wl ship together, but they are installed
-            // separately (install.sh §6 / the PKGBUILD), so a checkout rebuilt without
+            // separately (install.sh §5 / the PKGBUILD), so a checkout rebuilt without
             // reinstalling the library is a real state — and the symptom would be a
             // TypeError deep inside a grab rather than an honest degrade. Verify the
             // whole surface we use, not just that the module loaded.
             if (typeof wl.focus_grab_add_surface !== "function") {
-                console.error("[FocusGrab] libnidara-wl is OLDER than this shell — reinstall it (install.sh §6). Until then nothing will dismiss on an outside click: the catchers are gone.")
+                console.error("[FocusGrab] libnidara-wl is OLDER than this shell — reinstall it (install.sh §5). Until then nothing will dismiss on an outside click: the catchers are gone.")
                 return
             }
             shim = wl

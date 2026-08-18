@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // nidara-ipc — the shell's command surface, spoken directly.
-// Compiled to /usr/bin/nidara-ipc (install.sh §6, PKGBUILD build()).
+// Compiled to /usr/bin/nidara-ipc (install.sh §5, PKGBUILD build()).
 //
 //   nidara-ipc listActions              # discover every command
 //   nidara-ipc dumpState                # live shell state as JSON

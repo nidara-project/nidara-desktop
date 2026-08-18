@@ -53,12 +53,12 @@ user clicks bar pill
 
 This is the canonical pattern: **events go up through actions, state changes propagate down through `notify::` signals.**
 
-## IPC contract: `nidara-ipc` (and `ags request`, deprecated)
+## IPC contract: `nidara-ipc` (and the deprecated `io.Astal.ags` door)
 
 **There are two doors and ONE dispatcher.** `dispatchRequest(argv, res)` in `app.ts` is the
-function; `app.start({ requestHandler })` hands AGS's door to it, and `exportShellBusName()`
-publishes a second one of our own. Adding a command reaches both automatically — never wire a
-command to one door only.
+function; `exportShellBusName()` publishes our name and `exportLegacyAgsBusName()` publishes the
+compatibility one. Adding a command reaches both automatically — never wire a command to one door
+only.
 
 `ags request <cmd>` was never a protocol of AGS's invention. It is a D-Bus method call, and you
 can make it with no AGS in sight — which is how this was verified rather than assumed:
@@ -77,23 +77,25 @@ come free with AGS's runtime. It carries `Request` and `Quit` only — AGS also 
 fallback in `bin/nidara-ipc.c`, together: the smoke test asserts both doors answer identically.
 
 **Use `nidara-ipc <cmd>` in new code.** It is `bin/nidara-ipc.c`, a ~145-line C client compiled by
-install.sh §6 and the PKGBUILD (same idiom as `bin/nidara-input.c`), which tries `org.nidara.Shell`
+install.sh §5 and the PKGBUILD (same idiom as `bin/nidara-input.c`), which tries `org.nidara.Shell`
 and **falls back to `io.Astal.ags`**, so it works against a shell from before this change and after
 it.
 
 **The migration is DONE (2026-08-18):** every caller in this repo says `nidara-ipc` — the seven
 keybinds in `hyprland.lua`, all the `bin/nidara-*` helpers, the dev scripts, and the two
-user-facing strings in all twelve locales. Exactly **one** `ags request` survives, an assertion in
-the CI smoke, and it is deliberate: users' own `hyprland-user.lua` keybinds still call that door,
-and without a test nothing would notice the day it broke. Delete that assertion and the client's
-fallback together, when AGS's host goes — not before.
+user-facing strings in all twelve locales. The old door is still asserted in the CI smoke, and that
+is deliberate: users' own `hyprland-user.lua` keybinds still call it, and without a test nothing
+would notice the day it broke. ⚠️ Since the `ags` CLI itself is gone (2026-08-18) that assertion
+knocks with **`gdbus`** — it unwraps the GVariant tuple with `jq -r .` and compares the payload
+against `nidara-ipc`'s stdout (verified: byte-identical). Delete the assertion and the client's
+fallback together when the compatibility window closes — not before.
 
 ⚠️ **C on purpose, and this is the one thing not to "clean up" into GJS.** Every other
 `nidara-*` helper is GJS; this one is on a KEYBIND — `hyprland.lua` binds Super+Space, Super+A and
 five more to it, so it runs on every press. Measured 2026-08-18, cheapest possible request, per
 invocation:
 
-| `ags request` | `gdbus` (C) | a GJS client |
+| `ags request` (then) | `gdbus` (C) | a GJS client |
 |---|---|---|
 | 2.9 ms | 3.1 ms | **30 ms** |
 
