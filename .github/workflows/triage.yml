@@ -53,6 +53,7 @@ jobs:
   triage:
     name: Compute triage labels and summary
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Triage PR
         env:

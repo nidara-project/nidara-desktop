@@ -682,6 +682,15 @@ Gotchas that cost real debugging time:
 CI gates **SCSS compile + typecheck + widgets-gen freshness + headless boot smoke + Assistant
 loop** (`agent-loop`, see below).
 
+⚠️ **Every job carries a `timeout-minutes`, and it is load-bearing.** GitHub's default is SIX
+HOURS, and the jobs that install packages (`pacman -Syu` in the smoke container, `apt-get` in
+`agent-loop`, `lua` in `hypr-config`) are the ones that hang: an Arch mirror serving a 404 for a
+package its own DB still lists is a routine flake, and twice in two days it left a job sitting in
+`in_progress` with nothing to report, holding the whole run — and therefore the merge queue —
+open. The budgets are ~4× the observed runtime (10 min for the second-long jobs, 15 for typecheck
+and `agent-loop`, 45 for the smoke). A job that trips its budget is a flake to re-run, not a
+failure to debug: read the log before assuming the diff caused it.
+
 ⚠️ **`ci.yml` triggers on `pull_request` AND `merge_group`, and dropping the second one breaks
 merges silently.** `main` uses a merge queue: the queue builds a temporary `merge_group` ref
 (the PR merged onto the current `main`) and waits for the four REQUIRED checks — styles,

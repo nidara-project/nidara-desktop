@@ -66,6 +66,7 @@ jobs:
   styles:
     name: Build styles (SCSS)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -90,6 +91,7 @@ jobs:
   pkgbuild:
     name: PKGBUILD parses
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       # `bash -n` only, not a full makepkg: this catches the class that actually
@@ -112,6 +114,7 @@ jobs:
   typecheck:
     name: Typecheck (tsc)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -230,6 +233,7 @@ jobs:
   widgets-gen:
     name: Widget registry freshness
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -248,6 +252,7 @@ jobs:
   hypr-config:
     name: Hyprland config (parses + game mode)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Install lua
@@ -267,6 +272,7 @@ jobs:
   skill-docs:
     name: Docs + prose shape
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -284,6 +290,7 @@ jobs:
   i18n:
     name: Translations (parity + ledger)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -300,6 +307,7 @@ jobs:
   agent-loop:
     name: Assistant loop (nidara-agent)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       # The daemon is plain GJS (no Node) and imports gi://Secret, so the runner
