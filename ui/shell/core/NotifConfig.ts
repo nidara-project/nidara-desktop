@@ -4,10 +4,10 @@ import { loadKnown } from "./configFile"
 
 const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/notif-config.json`
 
-// 🔑 Do-not-disturb is deliberately NOT in here. It lives in AstalNotifd, whose
-// `dont_disturb` is backed by GSettings (`io.astal.notifd dont-disturb`) and so
-// already persists across sessions. A second copy here could only disagree with
-// it — which is exactly what the old `dndDefault` did (removed 2026-08-16).
+// 🔑 Do-not-disturb is deliberately NOT in here. It is the notification daemon's
+// own live flag (core/NotifService.ts), which persists it across sessions itself.
+// A second copy here could only disagree with it — which is exactly what the old
+// `dndDefault` did (removed 2026-08-16).
 interface NotifSettings {
     popupTimeout: number  // seconds, default 6
 }

@@ -1,18 +1,16 @@
-import AstalNotifd from "gi://AstalNotifd"
 import { listGroup, pageBox, toggleRow, sliderRow } from "../SettingsHelpers"
 import notifConfig from "../../../core/NotifConfig"
-import { safeDisconnect } from "../../../core/signals"
+import { dontDisturb, setDontDisturb, watchDnd } from "../../../core/NotifService"
 import { t } from "../../../core/i18n"
 
 export default function NotificationsPage() {
     const page = pageBox("notifications-page")
 
     // ── Do not disturb ────────────────────────────────────────────────────────
-    // 🔑 This row is the LIVE flag, not a preference about it. AstalNotifd's
-    // `dont_disturb` is a straight accessor over GSettings (`io.astal.notifd
-    // dont-disturb`), so it already persists in dconf across sessions and reboots
-    // with no help from us — which is why GNOME, whose DnD is the same shape,
-    // also ships exactly one control for it and no "start with it on" option.
+    // 🔑 This row is the LIVE flag, not a preference about it. The daemon persists
+    // `dont_disturb` itself, so it survives sessions and reboots with no help from
+    // us — which is why GNOME, whose DnD is the same shape, also ships exactly one
+    // control for it and no "start with it on" option.
     //
     // It replaced an "Enable on login" toggle (removed 2026-08-16) that could
     // only ever set the flag TRUE, from `main()` — i.e. on every UI reload, not
@@ -30,14 +28,11 @@ export default function NotificationsPage() {
     dndGroup.listBox.append(toggleRow(
         t("settings.notif.dnd"),
         t("settings.notif.dnd.desc"),
-        AstalNotifd.get_default()?.dont_disturb ?? false,
-        (v) => { const nd = AstalNotifd.get_default(); if (nd) nd.dont_disturb = v },
+        dontDisturb(),
+        setDontDisturb,
         (apply) => {
-            const nd = AstalNotifd.get_default()
-            if (!nd) return () => {}
-            apply(nd.dont_disturb)
-            const id = nd.connect("notify::dont-disturb", () => apply(nd.dont_disturb))
-            return () => safeDisconnect(nd, id)
+            apply(dontDisturb())
+            return watchDnd(() => apply(dontDisturb()))
         },
     ))
 

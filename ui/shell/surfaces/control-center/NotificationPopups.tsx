@@ -1,18 +1,16 @@
 import { Gtk } from "ags/gtk4"
-import AstalNotifd from "gi://AstalNotifd"
 import GLib from "gi://GLib"
 import { NotificationCapsule } from "./NotificationCenter"
 import { GRID_WIDTH } from "./CCLayoutManager"
 import { ScaleRevealer, attachSwipeDismiss } from "../../common/ScaleRevealer"
 import notifConfig from "../../core/NotifConfig"
+import { type Notification, getNotification, isCritical, dontDisturb, watchNotified, watchResolved } from "../../core/NotifService"
 import status from "../../core/Status"
 
 const MAX_VISIBLE = 4       // cap stacked banners; oldest gets retired first
 const ANIM_MS = 300         // grow/shrink in+out duration
 
 export function NotificationPopupsWidget() {
-    const notifd = AstalNotifd.get_default()
-
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 12,
@@ -25,7 +23,7 @@ export function NotificationPopupsWidget() {
         width_request: GRID_WIDTH,
     })
 
-    interface Entry { revealer: ScaleRevealer, capsule: Gtk.Widget, order: number, n: AstalNotifd.Notification }
+    interface Entry { revealer: ScaleRevealer, capsule: Gtk.Widget, order: number, n: Notification }
     const entries = new Map<number, Entry>()
     const timerMap = new Map<number, number>()
     let orderSeq = 0
@@ -58,9 +56,9 @@ export function NotificationPopupsWidget() {
     // while the pointer is on it. freedesktop expiry semantics: CRITICAL never
     // auto-expires (it stays until acted on — macOS alerts, GNOME does the same),
     // expire_timeout 0 = never, >0 = app-requested ms, -1 = our default.
-    const startTimer = (id: number, n: AstalNotifd.Notification) => {
+    const startTimer = (id: number, n: Notification) => {
         clearTimer(id)
-        if (n.urgency === AstalNotifd.Urgency.CRITICAL || n.expire_timeout === 0) return
+        if (isCritical(n) || n.expire_timeout === 0) return
         const ms = n.expire_timeout > 0 ? n.expire_timeout : notifConfig.popupTimeoutMs
         timerMap.set(id, GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
             timerMap.delete(id)
@@ -88,7 +86,7 @@ export function NotificationPopupsWidget() {
     const retireEntry = (id: number) => {
         const entry = entries.get(id)
         hardRemove(id)
-        if (entry?.n.transient && notifd.get_notification(id)) entry.n.dismiss()
+        if (entry?.n.transient && getNotification(id)) entry.n.dismiss()
     }
 
     // Animated dismiss: shrink back under the clock capsule, then drop the widget.
@@ -101,7 +99,7 @@ export function NotificationPopupsWidget() {
 
     // Capsule + its banner behaviours (hover pause, swipe). Factored out because
     // a replacement builds a fresh capsule into the EXISTING revealer.
-    const buildCapsule = (n: AstalNotifd.Notification, id: number, revealer: ScaleRevealer) => {
+    const buildCapsule = (n: Notification, id: number, revealer: ScaleRevealer) => {
         const capsule = NotificationCapsule({ n, isPopup: true, onClose: () => animateOut(id) })
 
         // Hover pauses the auto-dismiss; leaving restarts it.
@@ -124,12 +122,12 @@ export function NotificationPopupsWidget() {
         return capsule
     }
 
-    const onNotified = (_: any, id: number, replaced: boolean) => {
-        const n = notifd.get_notification(id)
+    const onNotified = (id: number, replaced: boolean) => {
+        const n = getNotification(id)
         if (!n) return
         // CRITICAL cuts through DND (that's what critical is for — battery dying);
         // an open CC/NC still suppresses banners (the user is looking right there).
-        const dndSuppressed = notifd.dont_disturb && n.urgency !== AstalNotifd.Urgency.CRITICAL
+        const dndSuppressed = dontDisturb() && !isCritical(n)
         if (dndSuppressed || status.cc_open || status.nc_open) {
             // A transient that never gets its banner has nowhere else to live (the
             // NC excludes it) — drop it so it doesn't linger invisible in notifd.
@@ -183,7 +181,7 @@ export function NotificationPopupsWidget() {
         startTimer(id, n)
     }
 
-    const onResolved = (_: any, id: number) => animateOut(id)
+    const onResolved = (id: number) => animateOut(id)
 
     // New banners are already suppressed while the CC/NC is open (see onNotified),
     // but a banner ALREADY on screen would sit on top of the opening panel — the
@@ -193,8 +191,8 @@ export function NotificationPopupsWidget() {
     status.connect("notify::cc-open", retireForPanel)
     status.connect("notify::nc-open", retireForPanel)
 
-    notifd.connect("notified", (s, id, replaced) => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { onNotified(s, id, replaced); return GLib.SOURCE_REMOVE }))
-    notifd.connect("resolved", (s, id) => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { onResolved(s, id); return GLib.SOURCE_REMOVE }))
+    watchNotified((id, replaced) => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { onNotified(id, replaced); return GLib.SOURCE_REMOVE }))
+    watchResolved((id) => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { onResolved(id); return GLib.SOURCE_REMOVE }))
 
     return box
 }

@@ -1,6 +1,5 @@
 import { Astal, Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
-import AstalNotifd from "gi://AstalNotifd"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
@@ -19,6 +18,7 @@ import status from "../../core/Status"
 import inputYield from "../../core/InputYield"
 import widgetConfig from "../../core/WidgetConfig"
 import regionConfig from "../../core/RegionConfig"
+import { notifications, watchNotified, watchResolved } from "../../core/NotifService"
 import registry, { widgetAvailable, watchWidgetAvailability } from "../../widgets/index"
 import Tray from "./Tray"
 import { SystemMenuOverlay } from "./SystemMenu"
@@ -1065,13 +1065,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   regionConfig.connect("changed", updateClock)
   updateClock()
   const bellIcon = new Gtk.Image({ gicon: Icons.bell, pixel_size: 16, visible: false , css_classes: ["nd-icon"] })
-  try {
-    const notifd = AstalNotifd.get_default()
-    const syncBell = () => { bellIcon.set_visible(notifd.notifications.length > 0) }
-    notifd.connect("notified", syncBell)
-    notifd.connect("resolved", syncBell)
-    syncBell()
-  } catch {}
+  const syncBell = () => { bellIcon.set_visible(notifications().length > 0) }
+  watchNotified(syncBell)
+  watchResolved(syncBell)
+  syncBell()
   timeContent.append(bellIcon); timeContent.append(timeLabel)
 
   // Optional bar widgets (before Tray, reactive to config changes)

@@ -899,9 +899,9 @@ function exportShellBusName(): void {
 app.start({
   applicationId: "org.nidara.desktop",
     main() {
-    // (No DnD seeding here. AstalNotifd's `dont_disturb` is GSettings-backed and
-    // persists on its own; the block that used to force it true at every main()
-    // — which is every UI RELOAD, not just login — was removed 2026-08-16.)
+    // (No DnD seeding here. The notification daemon persists `dont_disturb` on its
+    // own — see core/NotifService.ts; the block that used to force it true at every
+    // main() — which is every UI RELOAD, not just login — was removed 2026-08-16.)
 
     // Reduce motion: apply the current value to Hyprland (a separate process that
     // knows nothing about dconf) and keep watching. The shell-side readers are

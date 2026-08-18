@@ -507,7 +507,8 @@ second instance.** Recording the result so it is not re-run blindly:
   keeps one shared subscribed state, and brightness `pollWhileMapped`s.
 - **Captures that remain, and why each is not this bug:** `buildCCDetail`/`buildBarExpanded`
   (volume.ts) resolve when the panel is opened, by which time the endpoint exists;
-  `NotificationPopups` captures AstalNotifd, which cannot be absent because the shell IS that daemon;
+  `NotificationPopups` used to capture the notifd singleton, which cannot be absent because the shell
+  IS that daemon (it goes through `core/NotifService` since 2026-08-18 and captures nothing);
   `battery.ts`/`common/BatteryGlyph.ts` capture the UPower client at module import, but read
   `is_present`/`percentage` live through it, so only a null client at import would bite.
 - ⚠️ **Wi-Fi and Ethernet look exactly like the family and must NOT be "fixed" the same way.**

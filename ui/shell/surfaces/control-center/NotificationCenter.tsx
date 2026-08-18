@@ -1,5 +1,4 @@
 import { Astal, Gtk, Gdk } from "ags/gtk4"
-import AstalNotifd from "gi://AstalNotifd"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
@@ -19,8 +18,9 @@ import { UNIT, GAP, GRID_WIDTH } from "./CCLayoutManager"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import { safeDisconnect } from "../../core/signals"
+import { type Notification, notifications as allNotifications, watchNotified, watchResolved } from "../../core/NotifService"
 
-export function createIconWidget(n: AstalNotifd.Notification, size: number) {
+export function createIconWidget(n: Notification, size: number) {
     const entry = n.desktop_entry || n.app_name || ""
     const appRes = appService.getResolvedApp(entry)
     const img = new Gtk.Image({ pixel_size: size, halign: Gtk.Align.START, valign: Gtk.Align.CENTER })
@@ -58,7 +58,7 @@ export function createIconWidget(n: AstalNotifd.Notification, size: number) {
 // A "hero" image (image-path / image-data hint) — screenshot thumbnails, album art,
 // chat avatars sent as content rather than the app icon. Null when the hint is absent,
 // is an icon name (handled by the app icon), or points at a missing file.
-function heroImagePath(n: AstalNotifd.Notification): string | null {
+function heroImagePath(n: Notification): string | null {
     const raw = n.image
     if (!raw) return null
     const path = raw.replace("file://", "")
@@ -66,7 +66,7 @@ function heroImagePath(n: AstalNotifd.Notification): string | null {
     return path
 }
 
-export function createHeroWidget(n: AstalNotifd.Notification, size: number): Gtk.Widget | null {
+export function createHeroWidget(n: Notification, size: number): Gtk.Widget | null {
     const path = heroImagePath(n)
     if (!path) return null
     let pixbuf: any = null
@@ -82,14 +82,14 @@ export function createHeroWidget(n: AstalNotifd.Notification, size: number): Gtk
 // avatars are typically 64-160px — are excluded: cover-fitting one to ~320px is mush,
 // so they keep the thumbnail even when expanded. Banners never take this path.
 const HERO_BIG_MIN_SOURCE = 240
-export function hasExpandedHero(n: AstalNotifd.Notification): boolean {
+export function hasExpandedHero(n: Notification): boolean {
     const path = heroImagePath(n)
     if (!path) return false
     const [format, pw] = GdkPixbuf.Pixbuf.get_file_info(path)   // header read only, no decode
     return !!format && pw >= HERO_BIG_MIN_SOURCE
 }
 
-export function createExpandedHeroWidget(n: AstalNotifd.Notification, width: number): Gtk.Widget | null {
+export function createExpandedHeroWidget(n: Notification, width: number): Gtk.Widget | null {
     const path = heroImagePath(n)
     if (!path) return null
     const [format, pw, ph] = GdkPixbuf.Pixbuf.get_file_info(path)
@@ -140,7 +140,7 @@ export function GroupControlHeader(props: { name: string, count: number, onToggl
     return header
 }
 
-export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupCount?: number, isExpanded?: boolean, onToggle?: () => void, onClearGroup?: () => void, isPopup?: boolean, itemExpanded?: boolean, onToggleItem?: () => void, onClose: () => void, onTimeLabel?: (label: Gtk.Label, time: number) => void, startHovered?: boolean }) {
+export function NotificationCapsule(props: { n: Notification, groupCount?: number, isExpanded?: boolean, onToggle?: () => void, onClearGroup?: () => void, isPopup?: boolean, itemExpanded?: boolean, onToggleItem?: () => void, onClose: () => void, onTimeLabel?: (label: Gtk.Label, time: number) => void, startHovered?: boolean }) {
     const { n, groupCount = 1, isExpanded = false, onToggle, onClearGroup, isPopup = false, itemExpanded = false, onToggleItem, onClose, onTimeLabel, startHovered = false } = props
     // Strip markup tags first, THEN decode entities (a decoded "<" must not read as a
     // tag), with &amp; last so "&amp;lt;" stays a literal "&lt;". Labels are plain text
@@ -421,7 +421,6 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
 }
 
 export default function NotificationCenter() {
-    const notifd = AstalNotifd.get_default()
     const expandedGroups = new Set<string>()
     const expandedItems = new Set<number>()   // individual notifs (by n.id) in expanded size
     // The row whose chevron was just clicked — its rebuilt capsule starts in the hover
@@ -492,7 +491,7 @@ export default function NotificationCenter() {
     const updateNotifs = () => {
         // `transient` (freedesktop) = excluded from persistence: banner only, never
         // an NC row. The popups side dismisses them when their banner retires.
-        const notifs = notifd.notifications.filter(n => !n.transient); const groups = new Map<string, AstalNotifd.Notification[]>()
+        const notifs = allNotifications().filter(n => !n.transient); const groups = new Map<string, Notification[]>()
         notifs.forEach(n => {
             const id = appService.getResolvedApp(n.desktop_entry || n.app_name)?.id || n.app_name || "unknown"
             const list = groups.get(id) || []; list.push(n); groups.set(id, list)
@@ -618,7 +617,7 @@ export default function NotificationCenter() {
     // the panel wall like any translate in the scroller — exiting through the edge IS
     // the look, no ghosts needed. Expanded-group control headers are swipe rows too
     // (their swipe clears the group), so they fling out in sequence like any row.
-    let pendingClear: AstalNotifd.Notification[] | null = null
+    let pendingClear: Notification[] | null = null
     const finishClear = () => {
         const list = pendingClear; pendingClear = null
         list?.forEach(n => n.dismiss())
@@ -641,7 +640,7 @@ export default function NotificationCenter() {
     // Fling `rows` out top to bottom with the stagger, then dismiss `snapshot` once the
     // last row lands. Shared by clear-all (every row) and the group-header swipe (that
     // group's remaining rows).
-    const cascadeOut = (rows: ScaleRevealer[], snapshot: AstalNotifd.Notification[]) => {
+    const cascadeOut = (rows: ScaleRevealer[], snapshot: Notification[]) => {
         if (pendingClear || snapshot.length === 0) return
         if (rows.length === 0) { snapshot.forEach(n => n.dismiss()); return }
         pendingClear = snapshot
@@ -653,7 +652,7 @@ export default function NotificationCenter() {
             })
         })
     }
-    const clearAllAnimated = () => cascadeOut(collectRows(notificationItemsBox), [...notifd.notifications])
+    const clearAllAnimated = () => cascadeOut(collectRows(notificationItemsBox), allNotifications())
 
     // Restamp the relative timestamps ("2m" → "3m") in place. A full updateNotifs()
     // used to do this via a minute bucket in the cache signature — tearing down and
@@ -685,8 +684,8 @@ export default function NotificationCenter() {
     })
     // Only rebuild when NC is open — opening NC always calls updateNotifs() above;
     // a running clear cascade defers rebuilds to finishClear.
-    notifd.connect("notified", () => { if (status.nc_open && !pendingClear) updateNotifs() })
-    notifd.connect("resolved", () => { if (status.nc_open && !pendingClear) updateNotifs() })
+    watchNotified(() => { if (status.nc_open && !pendingClear) updateNotifs() })
+    watchResolved(() => { if (status.nc_open && !pendingClear) updateNotifs() })
     updateNotifs()
 
     // Bar owns the panel geometry and pushes the vertical budget (bar→dock gap)
