@@ -523,6 +523,40 @@ focused state is a live check.
 enough that a single number fits two readings; compare DELTAS between nodes measured in the
 same run — that rule is why the probe prints the pairs itself.
 
+### What the icon theme SAYS vs what it PAINTS (`scripts/dev/icon-theme-probe.js`)
+
+For any "the icons are wrong" report. Run it inside a session, as the session user:
+
+```bash
+gjs -m scripts/dev/icon-theme-probe.js                  # snapshot: names + resolved FILES
+SET=Papirus gjs -m scripts/dev/icon-theme-probe.js      # …then watch a change land
+```
+
+It prints, together, the gsettings value, `Gtk.Settings:gtk-icon-theme-name`,
+`Gtk.IconTheme.get_theme_name()` and — the part that decides it — the absolute FILE
+`lookup_icon()` resolves for each specimen. A name reading "Papirus" over a path under
+`/usr/share/icons/Adwaita` is the whole bug in two lines, and no screenshot can tell those two
+apart.
+
+**Why it had to exist** (2026-08-18): on the first session of a clean install the desktop painted
+Adwaita icons while gsettings said Papirus, and a shell restart fixed it. Three different causes
+produce that same picture — gsettings not seeded yet, GTK reporting a theme it does not paint
+from, or one of our surfaces caching a resolved file. The probe eliminated the middle one in one
+run (GTK follows the change perfectly, name AND file, within the same process), which left the
+two that were real: the gsetting is only written ~2 s into the session (fixed by seeding it in
+`bin/nidara-setup`), and the dock caches its art (fixed in `DockCore`; see
+`architecture.md` → `AppService.ts`).
+
+🔑 **Reproducing the first boot costs two commands, so never test this by reinstalling:**
+
+```bash
+dconf reset /org/gnome/desktop/interface/icon-theme    # back to the schema default
+systemctl --user restart nidara                        # the shell starts on it, as on day one
+```
+
+Screenshot at ~1.5 s: that is the window the seeding closes. The same pair is the falsifiable
+test for any future fix here — before the seeding it shows Adwaita, after it shows Papirus.
+
 ### Verifying the CURSOR — five instruments lie, and they lie in your favour
 
 Two sessions (2026-08-16/17) went almost entirely into instruments rather than the fix. Read this

@@ -11,6 +11,7 @@
 
 import app from "../../../lib/host"
 import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
 import { execAsync } from "../../../lib/process"
 import GLib from "gi://GLib"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
@@ -84,7 +85,22 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     const initialPinned = [...pinnedState.list]
     let totalStaticMain = calculateStableMain(initialPinned)
     const widgetCache = new Map<string, Gtk.Widget>()
-    let lastIconTheme = Theme.iconTheme
+    /**
+     * The icon theme GTK is actually PAINTING from — not `Theme.iconTheme`, which
+     * is our own appearance.json value. Dock items rasterize their icon into a
+     * 128px GdkPixbuf once (DockItem.tsx) and paint that, so a theme change has to
+     * drop the cached widgets or the dock keeps the old art forever. Watching the
+     * config value could never see the two cases that matter, because in both of
+     * them it does not move: on a virgin account it already reads "Papirus" while
+     * GTK is still on the schema default, and a theme changed from outside
+     * (gsettings, another DE's control panel) never passes through it at all.
+     * Measured in the VM 2026-08-18 — `scripts/dev/icon-theme-probe.js` shows the
+     * name and the resolved FILE moving together, which is what makes this the
+     * right thing to compare.
+     */
+    const liveIconTheme = () =>
+        Gtk.IconTheme.get_for_display(Gdk.Display.get_default()!)?.get_theme_name() ?? ""
+    let lastIconTheme = liveIconTheme()
     let firstRender = true
     let orderedIds: string[] = []
     let smoothedBarMain = totalStaticMain
@@ -533,7 +549,12 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         }
         updateLock = true
         try {
-            const currentIconTheme = Theme.iconTheme
+            // AppService rebuilds its registry on GtkIconTheme::changed and emits
+            // afterwards, and that emit is what brings us here (`aConn` below) —
+            // so by the time this runs the names/paths we are about to ask for
+            // have already been re-resolved under the new theme. Order matters:
+            // rebuilding on the raw `changed` signal would re-read the old cache.
+            const currentIconTheme = liveIconTheme()
             if (currentIconTheme !== lastIconTheme) {
                 widgetCache.clear()
                 lastIconTheme = currentIconTheme

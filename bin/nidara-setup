@@ -66,6 +66,23 @@ run_user() {
     if [ "$(id -u)" -eq 0 ]; then sudo -u "$REAL_USER" -H "$@"; else "$@"; fi
 }
 
+# gsettings writes are dconf writes, and dconf commits through dconf-service on
+# the USER's session bus — with no bus reachable the write is simply lost, and
+# under sudo it is lost QUIETLY. Point at the live bus when the user has one;
+# otherwise spin a throwaway session just for the write. dconf-service on any bus
+# writes the same ~/.config/dconf/user, which is what lets an account be seeded
+# before it has ever logged in.
+run_user_dconf() {
+    local uid bus; uid="$(id -u "$REAL_USER")"; bus="/run/user/$uid/bus"
+    if [ -S "$bus" ]; then
+        run_user env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=$bus" "$@"
+    elif command -v dbus-run-session >/dev/null 2>&1; then
+        run_user env XDG_RUNTIME_DIR="/run/user/$uid" dbus-run-session -- "$@"
+    else
+        run_user "$@"
+    fi
+}
+
 # `systemctl --user` must reach the USER's manager, not root's, when invoked
 # via sudo. Point it at the user's runtime dir; best-effort like every service
 # step below (a TTY-only session without a user manager just skips).
@@ -201,6 +218,31 @@ for f in appearance.json; do
         echo "  [Init] $CONFIG_DIR/$f"
     fi
 done
+
+# The icon theme has to be in gsettings BEFORE the shell's first frame, not after.
+# GTK resolves every icon through the value the settings portal serves from
+# gsettings (settings.ini loses to it), while ThemeManager only pushes
+# appearance.json's iconTheme once it is already running — about two seconds in.
+# On a virgin account those two seconds are the whole first session: everything
+# rasterized before them keeps the schema default (Adwaita), and the dock, which
+# caches its icons as pixbufs, kept it until the shell was restarted (measured in
+# the VM 2026-08-18; `scripts/dev/icon-theme-probe.js` is the instrument).
+#
+# Seeded from the same appearance.json the shell will read — one source of truth,
+# so a user who edited it gets THEIR theme — and only while the key has never been
+# set: an empty `dconf read` is exactly what separates a virgin account from
+# someone who deliberately picked Adwaita, which we must never overwrite.
+_icon_theme="$(sed -n 's/.*"iconTheme"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "$CONFIG_DIR/appearance.json" 2>/dev/null | head -1)"
+if [ -n "$_icon_theme" ] \
+   && [ -z "$(run_user_dconf dconf read /org/gnome/desktop/interface/icon-theme 2>/dev/null)" ]; then
+    if run_user_dconf gsettings set org.gnome.desktop.interface icon-theme "$_icon_theme" 2>/dev/null; then
+        echo "  [Init] Icon theme → $_icon_theme (seeded before first login)"
+    else
+        echo "  [WARN] could not seed the icon theme; the first session will paint"
+        echo "         the default icons until the shell applies $_icon_theme."
+    fi
+fi
 
 # Default file manager: `xdg-open <folder>` (the dock's Files item, apps' "open
 # containing folder", …) needs inode/directory to point at nautilus. A fresh Arch
