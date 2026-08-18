@@ -753,11 +753,11 @@ swap, guard the focused-client read path.
 
 ### 21. `nidara-repo` — install.sh consumes it (DONE); signed (DONE); residual = permanent pin lockstep
 `github.com/nidara-project/nidara-repo` (public, 2026-06-21) is a pacman binary repo serving the 18
-deps (appmenu + 16 Astal + ags), GitHub Pages (`https://nidara-project.github.io/nidara-repo/$arch`,
+deps (appmenu + 16 Astal + ags; down to 5 by 2026-08-18 — see the Astal absorption below), GitHub Pages (`https://nidara-project.github.io/nidara-repo/$arch`,
 repo name `nidara`, **GPG-signed since 2026-07-05**: CI signs packages + db, clients use
 `SigLevel = Required DatabaseOptional`, key bundled at `packaging/nidara-repo.gpg`, imported/lsigned
 by install.sh which also migrates unsigned-era `Optional TrustAll` entries). **`install.sh` now consumes it**
-(validated E2E in a clean VM 2026-06-21): §1 registers `[nidara]` + `pacman -S`'s the 18 explicitly
+(validated E2E in a clean VM 2026-06-21): §1 registers `[nidara]` + `pacman -S`'s them explicitly
 (the `libastal-*` declare `depends=()`, so they must be listed — resolution won't pull them), §2/§4
 skip the source build when `DEPS_FROM_REPO=yes`; **the from-source build stays as the fallback** on any
 repo failure (installer still succeeds, slower). A **lockstep guard** after `pacman -S` verifies the
@@ -830,7 +830,8 @@ The coherence redesign landed and was verified live. **Done:**
 
 **Residual (NOT Phase 3 — product decision / cosmetic, left as-is):**
 - **Tray icon coherence (partly unsolvable).** Symbolic tray icons follow the theme/pin; pixmap-only ones
-  can't (inherent to SNI). A uniform policy is a product decision, not a bug.
+  can't (inherent to SNI — `core/tray.ts` decodes the ARGB32 pixels the app sent, and pixels have no
+  theme). A uniform policy is a product decision, not a bug.
 - Minor drift: `_base.scss` static `--nidara-bg: rgba(30,30,30,…)` vs the engine `rgba(36,36,36,…)` (only the
   instant before tokens load).
 
@@ -4129,3 +4130,15 @@ entries (that is what those 7 fallbacks were). The grid now logs a warning and f
 spawning `Exec=` under `uwsm app` — still inside the systemd slice, unlike the `AppInfo.launch()`
 fallback it replaced, which spawned the app as a child of the shell. **Nobody has diagnosed WHY
 gtk-launch fails for those entries**; the warning is there so the next person has a thread to pull.
+
+### 74. Tray context menus don't draw checkmarks or row icons (deferred, 2026-08-18)
+`core/dbusmenu.ts` reads `toggle-type`/`toggle-state` and builds STATEFUL actions for them, and it
+reads `icon-name` per row — but `common/NidaraMenu.ts` renders labels, actions and links only, so a
+checked "Mute notifications" looks exactly like an unchecked one. **Not a regression**:
+`appmenu-glib-translator` produced the same state and NidaraMenu ignored it just the same, so this is
+older than the replacement. It is deferred rather than done because drawing a check is a design
+decision about the menu row (where the mark sits, whether a row icon is allowed at all, how it reads
+against the glass), not a plumbing one — the state is already there when someone wants it.
+
+Same file, same class: `disposition` (`informative`/`warning`/`alert`) is not requested and not drawn.
+No app Nidara ships with has ever sent one.

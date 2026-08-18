@@ -85,7 +85,7 @@ caught up to → guard WARN → source build). See tech-debt #21 and `packaging/
 ### Install steps (in order)
 
 1. `pacman` deps (also registers `[nidara]` in `pacman.conf`).
-2. Install the Astal stack + `appmenu-glib-translator` from `nidara-repo` (prebuilt). **Fallback** (repo down/incomplete) builds from source: `io`, `gtk3`, `gtk4`, `apps`, `hyprland`, `mpris`, `network`, `battery`, `notifd`, `bluetooth`, `tray`, `greet`, `auth`, `lang/gjs` + `appmenu-glib-translator`.
+2. Install the Astal stack from `nidara-repo` (prebuilt). **Fallback** (repo down/incomplete) builds from source: `io`, `quarrel`, `gtk4`, `auth`, `lang/gjs`. Everything else has been absorbed into `core/` — see the Astal row in `architecture.md`; `appmenu-glib-translator` left with `libastal-tray` on 2026-08-18.
 3. The `ags` CLI (`aylurs-gtk-shell`) — same: from `nidara-repo`, else source.
 4. Build — **dev-like installs only**: `npm install` + SCSS compile + `ags bundle` × 3 (shell, greeter, lockscreen). System installs skip this: the build happens inside makepkg (or comes prebuilt).
 5. Install system files — **system**: the nidara *package* (prebuilt from nidara-repo, else local makepkg — see `--system` above). **Dev**: direct copies of binaries/configs/session entry/portals into /usr (package removed first). Pins recorded either way (untracked installer bookkeeping).
@@ -749,7 +749,8 @@ maintainer refreshes it with `scripts/dev/publish-ci-typings.sh` (re-run after a
 update that changes the typings).
 
 **Getting a native backtrace from a GLib CRITICAL/WARNING** (proven 2026-06-09 — this is how
-the boot-time `g_list_store_remove` CRITICAL was attributed to libastal-tray): stop the unit,
+the boot-time `g_list_store_remove` CRITICAL was attributed to libastal-tray, which is gone
+as of 2026-08-18 — the technique is not): stop the unit,
 run the shell once with criticals made fatal so it aborts and leaves a coredump, restore, read
 the trace:
 ```bash
@@ -1145,6 +1146,59 @@ notify-send "Hero" "" --hint=string:image-path:/path/to.png
 python3 -c '...'   # image-data: raw pixels, decoded to ~/.cache/nidara/notifd/images/
 cat ~/.cache/nidara/notifd/state.json | python3 -m json.tool
 ```
+
+### Exercising the system tray (`core/tray.ts` + `core/dbusmenu.ts`)
+
+The shell IS this desktop's StatusNotifierWatcher, so — like the notification
+probe — this one has to BE the watcher, and it brings its own tray app
+(`scripts/dev/fake-sni.js`, a real SNI item with a real dbusmenu).
+
+```bash
+ags bundle --gtk 4 scripts/dev/tray-probe.ts /tmp/tray-probe
+dbus-run-session -- /tmp/tray-probe            # from the repo root → 35 checks
+```
+
+⚠️ **`dbus-run-session` is load-bearing and the probe refuses without it.** On the
+real session bus the running shell owns `org.kde.StatusNotifierWatcher`, so the
+probe would quietly become a mere host and measure the SHELL instead of itself.
+
+Three controls, each failing on a DIFFERENT line:
+
+```bash
+DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent /tmp/tray-probe
+    # → precondition 1: no session bus at all
+/tmp/tray-probe                                 # no dbus-run-session
+    # → precondition 2: the watcher name is already owned
+dbus-run-session -- /tmp/tray-probe --astal     # the library being replaced
+    # → 6 RED. It is evidence, not just a control (see below).
+```
+
+🔑 **What `--astal` turns red is the changelog of this replacement**: a
+`visible: false` row is DRAWN, a submenu arrives with NO children (and a third
+level never at all — the translator walks `GetLayout` one level at a time,
+asynchronously, so a consumer that flattens the model on render sees an empty
+submenu), `ItemIsMenu` defaults to true, `ItemsPropertiesUpdated` emits no
+`items-changed`, and killing an app that published TWO items from one connection
+leaves the first icon stuck in the bar forever.
+
+The fake is also usable by hand — run it inside a live session and an icon appears
+in the bar:
+
+```bash
+gjs scripts/dev/fake-sni.js --deep      # extra submenu level
+gjs scripts/dev/fake-sni.js --pixmap    # no IconName, only ARGB32 pixels
+gjs scripts/dev/fake-sni.js --two       # one app, two icons
+```
+
+⚠️ **A GVariant already built cannot be a member of a format string.** Writing
+`new GLib.Variant("(ia{sv}av)", [id, propsVariant, kids])` in the fake threw
+INSIDE the D-Bus method handler, so the handler never replied and the module under
+test saw a plain TIMEOUT — indistinguishable from "the host never called". Tuples
+containing built variants go through `GLib.Variant.new_tuple`. That cost a full
+debugging round, which is why every handler in `fake-sni.js` now runs inside a
+`guard()` that turns a throw into a D-Bus error: **a fake that fails silently is
+worse than no fake, because its silence is attributed to the code you are
+testing.**
 
 ### Checking app search without opening the launcher
 

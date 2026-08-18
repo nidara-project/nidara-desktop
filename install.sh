@@ -11,7 +11,7 @@
 # from there, and discards it. No per-user source copy: the source of truth is the
 # git remote + what's installed in /usr/share. (The runtime is system-wide, so a
 # per-user clone made no sense and diverged between users.) The pinned Astal/AGS/
-# appmenu stack is still rebuilt ONLY when the pins changed (/usr/share/nidara/pins).
+# Astal/AGS stack is still rebuilt ONLY when the pins changed (/usr/share/nidara/pins).
 # A --dev install registers the developer's own clone (~/.config/nidara/.dev +
 # .source) and updates from there, following its branch (same pin-skip). A plain
 # `./install.sh` (system) always rebuilds the whole stack — the escape hatch — and
@@ -60,17 +60,18 @@ for arg in "$@"; do
 done
 
 # ── Pinned upstream versions ──────────────────────────────────────────────────
-# The Astal/AGS/appmenu libraries are built from source. Building against an
+# The Astal/AGS libraries are built from source. Building against an
 # upstream's moving HEAD has bitten us before (e.g. the GJS 1.88 break of
 # `nidara-ipc`), so each source build is pinned to a known-good revision.
 #
 # MAINTAINERS: bump these and re-test a clean install before tagging a release.
 # Astal has no git tags, so it is pinned by commit SHA.
-ASTAL_REF="948805f6e8cf7f8c08eba06ab1db1eef0e75e3a0"   # github.com/aylur/astal @ main (includes tray unregister fix, PR #451)
+ASTAL_REF="948805f6e8cf7f8c08eba06ab1db1eef0e75e3a0"   # github.com/aylur/astal @ main
 AGS_REF="v3.1.2"                                        # github.com/aylur/ags release tag
-APPMENU_REF="aea4ea398b7c75494f23f5e5bdb4f495d615059f"  # gitlab vala-panel-appmenu @ master
+# (APPMENU_REF is gone: vala-panel-appmenu was here ONLY as libastal-tray's
+#  dbusmenu→GMenuModel translator, and both left with core/tray.ts on 2026-08-18.)
 
-# Build dir for the source-built dependency packages (Astal libs, AGS, appmenu).
+# Build dir for the source-built dependency packages (Astal libs, AGS).
 PKG_CACHE="${REAL_HOME}/.cache/nidara/pkgbuild"
 
 # Run a command as the unprivileged user. makepkg refuses to run as root, so when
@@ -95,7 +96,8 @@ ensure_pkg_cache() {
 # makepkg the PKGBUILD in dir $1, then hand the result to pacman. We --overwrite
 # because earlier Nidara releases `meson install`-ed these libs straight into
 # /usr as UNTRACKED files (invisible to `pacman -Qo`, unupgradable, unremovable —
-# the exact blind spot that hid a stale, crashing appmenu-glib-translator). This
+# the exact blind spot that hid a stale, crashing appmenu-glib-translator, which
+# is gone as of 2026-08-18). This
 # transition gives those paths to pacman; from here they upgrade/remove cleanly.
 build_install_pkg() {
     local dir="$1"
@@ -229,7 +231,7 @@ if [ "$MODE" = "system" ] && [ -d "$REPO_DIR/.git" ] \
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Decide whether the pinned dependency stack (Astal libs + AGS + appmenu) must be
+# Decide whether the pinned dependency stack (Astal libs + AGS) must be
 # rebuilt. It's expensive to build from source, so it's skipped when the pins
 # recorded at the last install ($PINS_FILE) already match this script's pins —
 # then phases 1, 2 and 4 are skipped and only Nidara's own artifacts are rebuilt.
@@ -268,7 +270,7 @@ PACMAN_DEPS="base-devel glib2-devel cmake meson ninja gobject-introspection vala
     papirus-icon-theme adwaita-icon-theme adwaita-cursors xdg-utils gsettings-desktop-schemas
     awww lz4"
 DEPS_LIST_SHA="$(printf '%s' "$PACMAN_DEPS" | sha256sum | awk '{print $1}')"
-# Set to "yes" once the Astal/AGS/appmenu stack is installed as prebuilt packages
+# Set to "yes" once the Astal/AGS stack is installed as prebuilt packages
 # from nidara-repo (the binary pacman repo). When yes, the from-source build steps
 # (§2, §4) are skipped — they remain only as the fallback when the repo is
 # unreachable or incomplete.
@@ -280,7 +282,7 @@ DEV_LIKE="no"
 [ "$MODE" = "dev" ] && DEV_LIKE="yes"
 [ "$MODE" = "update-apply" ] && [ -f "$CONFIG_DIR/.dev" ] && DEV_LIKE="yes"
 if [ "$MODE" = "update-apply" ] || [ "$MODE" = "dev" ]; then
-    new_pins="$(printf 'ASTAL_REF=%s\nAGS_REF=%s\nAPPMENU_REF=%s\n' "$ASTAL_REF" "$AGS_REF" "$APPMENU_REF")"
+    new_pins="$(printf 'ASTAL_REF=%s\nAGS_REF=%s\n' "$ASTAL_REF" "$AGS_REF")"
     if [ -f "$PINS_FILE" ] && [ "$new_pins" = "$(cat "$PINS_FILE")" ]; then
         REBUILD_DEPS="no"
         echo "  Dependency pins unchanged — skipping the Astal/AGS rebuild."
@@ -315,7 +317,7 @@ fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # nidara-repo trust & registration
-# The binary pacman repo (GitHub Pages) ships the Astal/AGS/appmenu stack
+# The binary pacman repo (GitHub Pages) ships the Astal/AGS stack
 # prebuilt. Its CI GPG-signs every package and the repo db (since 2026-07-05);
 # the public key travels with this repo (packaging/nidara-repo.gpg) so a fresh
 # install needs no extra network fetch to establish trust.
@@ -361,7 +363,7 @@ echo "[1/7] Installing system dependencies..."
 # can be compared on updates. Unquoted on purpose: word-splitting wanted.
 sudo pacman -Syu --needed --noconfirm $PACMAN_DEPS
 
-# Install the Astal/AGS/appmenu stack from nidara-repo (prebuilt binaries) instead
+# Install the Astal/AGS stack from nidara-repo (prebuilt binaries) instead
 # of compiling it. aylurs-gtk-shell only depends on astal-gjs + gjs, and every
 # libastal-* package declares depends=() (its real runtime deps came from the
 # pacman -S above), so the whole stack must be listed explicitly — dep resolution
@@ -369,31 +371,29 @@ sudo pacman -Syu --needed --noconfirm $PACMAN_DEPS
 # missing, version skew) we leave DEPS_FROM_REPO=no and fall through to the
 # from-source build in §2/§4 — the installer still succeeds, just slower.
 # NOTE (lockstep): this package list mirrors nidara-repo (built from its pins.env);
-# keep it in sync with §2's astal_pkgs + §4's ags + the appmenu package name.
+# keep it in sync with §2's astal_pkgs + §4's ags.
 echo "  Installing the Astal/AGS stack from nidara-repo (prebuilt)..."
 if sudo pacman -S --needed --noconfirm \
-    aylurs-gtk-shell appmenu-glib-translator \
+    aylurs-gtk-shell \
     libastal-io astal-quarrel libastal-gtk4 \
-    libastal-tray libastal-auth; then
+    libastal-auth; then
     # Lockstep guard: `pacman -S` can "succeed" with STALE versions when nidara-repo
     # hasn't been rebuilt for a pin bump yet (its packages still predate the new
     # *_REF). That would silently install outdated deps AND let §6 record the new
     # pins as if they matched — a mismatch the source fallback would never catch on
-    # its own. The package versions encode the pins (Astal/appmenu = r<sha7>, ags =
+    # its own. The package versions encode the pins (Astal = r<sha7>, ags =
     # the tag), so verify the installed versions match THIS script's pins; if any
     # don't, treat it as a repo miss and fall through to the from-source build below
     # (which always builds the exact pinned revision).
     _astal_v="$(pacman -Q libastal-io 2>/dev/null | awk '{print $2}')"
     _ags_v="$(pacman -Q aylurs-gtk-shell 2>/dev/null | awk '{print $2}')"
-    _appmenu_v="$(pacman -Q appmenu-glib-translator 2>/dev/null | awk '{print $2}')"
     if [[ "$_astal_v" == *"r${ASTAL_REF:0:7}"* ]] \
-    && [[ "$_ags_v" == "${AGS_REF#v}-"* ]] \
-    && [[ "$_appmenu_v" == *"r${APPMENU_REF:0:7}"* ]]; then
+    && [[ "$_ags_v" == "${AGS_REF#v}-"* ]]; then
         DEPS_FROM_REPO="yes"
         echo "  [OK] Astal/AGS stack installed from nidara-repo (pins verified) — skipping source builds."
     else
         echo "  [WARN] nidara-repo versions don't match the current pins — the repo was"
-        echo "         likely not rebuilt for this bump yet (astal=$_astal_v ags=$_ags_v appmenu=$_appmenu_v)."
+        echo "         likely not rebuilt for this bump yet (astal=$_astal_v ags=$_ags_v)."
         echo "         Falling back to building the Astal/AGS stack from source."
     fi
 else
@@ -412,39 +412,6 @@ elif [ "$DEPS_FROM_REPO" = "yes" ]; then
 echo "  Skipped (installed from nidara-repo)."
 else
 ensure_pkg_cache
-
-# ── appmenu-glib-translator (build/runtime dep of libastal-tray) ──────────────
-# Build this FIRST: libastal-tray links it. Pinned by $APPMENU_REF.
-echo "  Packaging appmenu-glib-translator..."
-appmenu_dir="$PKG_CACHE/appmenu-glib-translator"
-mkdir -p "$appmenu_dir"
-cat > "$appmenu_dir/PKGBUILD" <<PKGB
-pkgname=appmenu-glib-translator
-pkgver=25.04.r${APPMENU_REF:0:7}
-_commit=$APPMENU_REF
-PKGB
-cat >> "$appmenu_dir/PKGBUILD" <<'PKGB'
-pkgrel=1
-pkgdesc="DBusMenu→GMenuModel translator (pinned for Nidara)"
-arch=(x86_64)
-url="https://gitlab.com/vala-panel-project/vala-panel-appmenu"
-license=(LGPL3)
-depends=()
-makedepends=(meson ninja vala gobject-introspection git glib2-devel)
-options=(!debug)
-source=("vala-panel-appmenu::git+https://gitlab.com/vala-panel-project/vala-panel-appmenu.git#commit=$_commit")
-sha256sums=('SKIP')
-build() {
-  cd "$srcdir/vala-panel-appmenu/subprojects/appmenu-glib-translator"
-  meson setup build --prefix=/usr --buildtype=release
-  meson compile -C build
-}
-package() {
-  cd "$srcdir/vala-panel-appmenu/subprojects/appmenu-glib-translator"
-  DESTDIR="$pkgdir" meson install -C build
-}
-PKGB
-build_install_pkg "$appmenu_dir"
 
 # ── Astal libraries ───────────────────────────────────────────────────────────
 # Astal has no root meson.build: each lib is built standalone and finds the others
@@ -501,7 +468,6 @@ astal_pkgs=(
     "lib/astal/io|libastal-io"
     "lib/quarrel|astal-quarrel"
     "lib/astal/gtk4|libastal-gtk4"
-    "lib/tray|libastal-tray"
     "lib/auth|libastal-auth"
     "lang/gjs|astal-gjs"
 )
@@ -905,7 +871,7 @@ fi
 # them to decide whether the Astal/AGS stack needs rebuilding. Both install
 # paths: these live UNTRACKED next to the package's files in /usr/share/nidara
 # (installer bookkeeping, deliberately not owned by the package).
-printf 'ASTAL_REF=%s\nAGS_REF=%s\nAPPMENU_REF=%s\n' "$ASTAL_REF" "$AGS_REF" "$APPMENU_REF" \
+printf 'ASTAL_REF=%s\nAGS_REF=%s\n' "$ASTAL_REF" "$AGS_REF" \
     | sudo tee "$PINS_FILE" > /dev/null
 # And the pacman list fingerprint — --update compares it to decide whether
 # phase 1 (package sync) can be skipped.

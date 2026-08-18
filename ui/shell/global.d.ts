@@ -5,12 +5,6 @@ namespace AstalHyprland {
     export type Hyprland = any;
     export type Client = any;
 }
-namespace AstalTray {
-    export type Item = any;
-}
-namespace AstalBattery {
-    export type Device = any;
-}
 namespace Astal {
     export type Window = any;
     export const WindowAnchor: any;

@@ -1,8 +1,9 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 
-// MenuModelLike / ActionGroupLike aren't surfaced by the @girs stub here, and
-// AstalTray hands them over loosely typed anyway — alias them.
+// MenuModelLike / ActionGroupLike aren't surfaced by the @girs stub here — alias
+// them. The three callers pass a real Gio.MenuModel: the dock and app grid build
+// theirs from desktop-entry actions, and the tray's comes from `core/dbusmenu.ts`.
 type MenuModelLike = any
 type ActionGroupLike = any
 

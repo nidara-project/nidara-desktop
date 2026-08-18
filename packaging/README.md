@@ -33,13 +33,12 @@ and **remove the package first** so `pacman -Syu` can't clobber the copies.
 
 ## The source-built dependencies
 
-Nidara depends on three things that are **not in the official Arch repos** and
+Nidara depends on two things that are **not in the official Arch repos** and
 that we pin to a known-good revision rather than track upstream HEAD:
 
 | What | Pinned by | Why we build it |
 |---|---|---|
-| `appmenu-glib-translator` | `APPMENU_REF` (gitlab `vala-panel-appmenu`) | DBusMenu→GMenuModel translator; runtime dep of `libastal-tray` |
-| Astal libs (`libastal-io`, `-gtk4`, `-tray`, …, `astal-gjs`) | `ASTAL_REF` (github `Aylur/astal`, no tags → SHA) | the service libraries the shell binds |
+| Astal libs (`libastal-io`, `-gtk4`, `-auth`, `astal-quarrel`, `astal-gjs`) | `ASTAL_REF` (github `Aylur/astal`, no tags → SHA) | the scaffolding AGS itself binds, plus PAM auth |
 | `aylurs-gtk-shell` (the `ags` CLI) | `AGS_REF` (github `Aylur/ags`, release tag) | bundles/runs the TSX → GJS shell |
 
 The pins live in **`install.sh`** (`*_REF` near the top). That is the single source of
@@ -50,11 +49,13 @@ truth; bump them there and re-test a clean install before tagging a release.
 Earlier releases ran `sudo meson install` straight into `/usr`. Those files were
 **untracked**: `pacman -Qo` reported "no package owns", so they were invisible,
 un-upgradable and un-removable. That blind spot is exactly what let a stale, crashing
-`appmenu-glib-translator` sit frozen for weeks with no way to see it.
+`appmenu-glib-translator` sit frozen for weeks with no way to see it. (That package is
+gone as of 2026-08-18 — it was only ever `libastal-tray`'s dbusmenu translator, and both
+left together — but the reason for packaging everything stands.)
 
 `install.sh` now generates a tiny **PKGBUILD per component** and installs via
 `makepkg` + `pacman -U`. The libraries become first-class pacman packages — `pacman -Qo
-/usr/lib/libastal-tray.so` now names the package and version, upgrades replace cleanly,
+/usr/lib/libastal-gtk4.so` now names the package and version, upgrades replace cleanly,
 and removal is clean.
 
 ## How the build works (`install.sh` §2 and §4)
@@ -63,7 +64,6 @@ and removal is clean.
   others via `pkg-config`, so they are built **in dependency order** (`io` first) and
   each is installed before the next is built. One package per lib (mirrors the AUR
   `libastal-*` layout).
-- `appmenu-glib-translator` is built **first** (`libastal-tray` links it).
 - The astal git source is cloned **once** into a shared `SRCDEST` and reused across the
   14 component builds.
 - `makepkg` runs as the unprivileged user (it refuses root); `pacman -U` runs via sudo.
@@ -105,7 +105,7 @@ This is the local/dev form. The intended end state for the distributable DE:
 `install.sh --dev` keeps building from source locally for development either way.
 
 > **Lockstep pins (permanent):** the pinned revisions live in **two** places —
-> `install.sh`'s `ASTAL_REF`/`AGS_REF`/`APPMENU_REF` (kept for the from-source fallback and
+> `install.sh`'s `ASTAL_REF`/`AGS_REF` (kept for the from-source fallback and
 > the update pin-skip record) and `nidara-repo/pins.env` (the repo build). Bump **both**
 > together, always. `pins.env` additionally carries `NIDARA_REF` — the nidara-desktop release
 > tag the published `nidara` package is built from (see the top of this file).

@@ -1,7 +1,7 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-import AstalTray from "gi://AstalTray"
+import { getDefault as getTray } from "../../core/tray"
 import { getServiceSafe } from "../../utils"
 import { renderMenuModel } from "../../common/NidaraMenu"
 import status from "../../core/Status"
@@ -28,17 +28,19 @@ export default function Tray(openMenu?: OpenMenu) {
     // id → the item's top-level capsule (the child appended to `box`). We keep the
     // capsule (not the raw button) so removeItem detaches the whole thing.
     const items = new Map<string, Gtk.Widget>()
-    // Per-item teardown: disconnect EVERY signal handler we attached to the
-    // (churny) AstalTray TrayItem when the item goes away. Antigravity re-registers
-    // its tray item periodically; leaving `notify::` closures dangling on a TrayItem
-    // the library is about to free is what feeds the GParamSpec over-unref that the
-    // GC later trips on (g_param_spec_unref UAF → whole-UI segfault ~minutes later).
+    // Per-item teardown: drop EVERY subscription we took on the (churny) TrayItem
+    // when the item goes away. Antigravity re-registers its tray item periodically.
+    // Under AstalTray these were `notify::` closures on a GObject the library was
+    // about to free, which fed a GParamSpec over-unref the GC tripped on minutes
+    // later (whole-UI segfault); `core/tray.ts` items are plain objects with plain
+    // callback sets, but they still have to be released or the closures keep the
+    // dead item — and this widget — alive.
     const cleanups = new Map<string, () => void>()
 
-    const createItem = (tray: any, id: string) => {
+    const createItem = (tray: ReturnType<typeof getTray>, id: string) => {
         if (items.has(id)) return;
 
-        const item = tray.items.find((i: any) => i.item_id === id)
+        const item = tray.getItem(id)
         if (!item) return;
 
         if (!item.gicon && (!item.icon_name || item.icon_name.length === 0) && !item.title) return;
@@ -64,8 +66,10 @@ export default function Tray(openMenu?: OpenMenu) {
         // Use icon_name when the active icon theme knows the icon (or its -symbolic
         // variant). CSS `-gtk-icon-style: symbolic` then makes GTK prefer the
         // *-symbolic version automatically and recolor it via the `color` property.
-        // Fall back to gicon (AstalTray's composed icon) for apps without a
-        // recognized name in the current theme (e.g. apps that only send a pixmap).
+        // Fall back to gicon (the icon core/tray.ts composed — a themed icon, a
+        // file from the item's own IconThemePath, or a pixbuf it decoded from the
+        // item's ARGB32 pixmaps) for apps without a recognized name in the current
+        // theme, e.g. apps that only ever send pixels.
         const displayTheme = (() => {
             try { return Gtk.IconTheme.get_for_display(Gdk.Display.get_default()!) } catch { return null }
         })()
@@ -86,9 +90,8 @@ export default function Tray(openMenu?: OpenMenu) {
             if (name)        { img.set_from_icon_name(name) }
         }
         syncIcon()
-        const handlerIds: number[] = []
-        handlerIds.push(item.connect("notify::gicon", syncIcon))
-        handlerIds.push(item.connect("notify::icon-name", syncIcon))
+        const unsubs: Array<() => void> = []
+        unsubs.push(item.onIconChanged(syncIcon))
 
         const btn = new Gtk.Button({
             css_classes: ["bar-tray-btn"],
@@ -100,22 +103,21 @@ export default function Tray(openMenu?: OpenMenu) {
         // pointer aims up at the icon (and GTK won't auto-flip it).
         attachTooltip(btn, () => item.tooltip_markup || item.title || id, { markup: true, position: Gtk.PositionType.BOTTOM })
 
-        // LAZY context menu — the DBus menu (appmenu-glib-translator's DbusMenuModel)
-        // is only iterated/parsed when the user actually opens it, never at boot.
+        // LAZY context menu — the item's dbusmenu layout is only fetched when the
+        // user actually opens it, never at boot. That was originally a workaround:
+        // appmenu-glib-translator parsed the remote app's layout the moment anything
+        // iterated the model or called about_to_show(), and its incremental parser
+        // (`layout_parse`/`get_layout_idle`, the pair in the coredump) eventually
+        // read a corrupt GVariant length and aborted on a g_malloc of ~140 TB.
+        // `core/dbusmenu.ts` has no incremental parser to corrupt, so the reason is
+        // now plain economy: N tray items would otherwise mean N GetLayout round
+        // trips at boot, waking every tray app to build a menu nobody asked for.
         //
-        // Why: that translator (the crashy `layout_parse`/`get_layout_idle` in the
-        // coredump) parses the remote app's menu layout the moment something iterates
-        // the model or calls about_to_show(). Doing that eagerly for every item at
-        // startup kept a buggy parser live for the whole session, re-parsing each
-        // LayoutUpdated — which eventually read a corrupt GVariant length and aborted
-        // (g_malloc of ~140 TB). Building on demand shrinks that window to "while the
-        // menu is open" and removes the deterministic boot-time g_list_store_remove.
-        // Built once, on first open, then cached and reused. about_to_show()
-        // and model iteration (the two things that kick the buggy translator into
-        // parsing) therefore run exactly ONCE per item, on demand — not per open and
-        // not at boot. A single items-changed connection (torn down in removeItem)
-        // keeps the cached menu fresh; nothing fragile hangs off onClose, so an
-        // outside-click dismiss can't leak a connection.
+        // The wrapper and its `items-changed` connection are built once and cached;
+        // `about_to_show()` runs on EVERY open, which is what the spec asks for (an
+        // app updates its rows in response) and is what keeps a stale "Mute"/"Unmute"
+        // from being shown. The refresh is async, so an app that never answers
+        // costs a stale menu, not a frozen bar.
         let menuWrapper: Gtk.Box | null = null
         let menuChangedId = 0
         const showContextMenu = () => {
@@ -132,18 +134,21 @@ export default function Tray(openMenu?: OpenMenu) {
                     try { wrapper.append(renderMenuModel(menuModel, actionGroup, onClose)) } catch (e) { }
                 }
                 repopulate()
+                // The model object is stable across rebuilds (core/dbusmenu.ts mutates
+                // it in place), so ONE connection covers every future layout update.
                 try { menuChangedId = menuModel.connect("items-changed", repopulate) } catch (e) { }
-                try { item.about_to_show() } catch (e) { }   // request layout, ONCE
                 menuWrapper = wrapper
             }
+            item.about_to_show()
             openMenu!(btn, () => menuWrapper!)
         }
 
-        // Left click → activate the app. But items flagged is_menu have NO activate
-        // action (AstalTray docstring: "only supports the menu, so showing the menu
-        // should be preferred over calling activate") — most Electron / libappindicator
-        // trays are like this, so activate(0,0) is a silent no-op. For those, left-click
-        // opens the menu instead of doing nothing.
+        // Left click → activate the app. But items that declare `ItemIsMenu` have NO
+        // activate action — the SNI spec says the menu should be shown instead — so
+        // activate(0,0) would be a silent no-op. For those, left-click opens the menu.
+        // ⚠️ The property DEFAULTS TO FALSE and core/tray.ts honours that; AstalTray
+        // defaulted it to true, which routed every app that omits the property (most
+        // of them) down this branch whether or not it had a window to raise.
         // Resolve the PID that owns this item's DBus connection — the STRONGEST link
         // between a tray item and its Wayland window (SNI carries no window handle).
         // item_id is "<busname>/<objectpath>"; the bus name owns the SNI connection,
@@ -218,7 +223,7 @@ export default function Tray(openMenu?: OpenMenu) {
         }
 
         cleanups.set(id, () => {
-            for (const hid of handlerIds) safeDisconnect(item, hid)
+            for (const off of unsubs) { try { off() } catch (e) { } }
             if (menuChangedId) safeDisconnect(item.menu_model, menuChangedId)
         })
         // Wrap each item in its own glass capsule — identical construction to the
@@ -249,8 +254,8 @@ export default function Tray(openMenu?: OpenMenu) {
         }
     }
 
-    // Sync Tray Mechanism 📥
-    getServiceSafe(() => AstalTray.get_default(), "Tray").then(tray => {
+    // Sync Tray Mechanism
+    getServiceSafe(() => getTray(), "Tray").then(tray => {
         if (!tray) return;
 
         const syncVisibility = () => box.set_visible(items.size > 0)
@@ -267,16 +272,17 @@ export default function Tray(openMenu?: OpenMenu) {
             syncVisibility()
         }
 
-        tray.connect("item-added", (_, id) => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { addItem(id); return GLib.SOURCE_REMOVE }))
-        tray.connect("item-removed", (_, id) => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { delItem(id); return GLib.SOURCE_REMOVE }))
+        // Still routed through an idle: an item can register and vanish inside one
+        // main-loop turn (an app that crashes on start), and building a capsule for
+        // a dead item is wasted work either way.
+        tray.onItemAdded(id => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { addItem(id); return GLib.SOURCE_REMOVE }))
+        tray.onItemRemoved(id => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { delItem(id); return GLib.SOURCE_REMOVE }))
 
+        // Seed whatever registered before this widget existed. The service is
+        // constructed by the first getTray() above, so at this point items are
+        // still arriving asynchronously — the subscriptions above catch those.
         GLib.idle_add(GLib.PRIORITY_LOW, () => {
-            try {
-                const current = tray.items || []
-                current.forEach(item => {
-                    if (item && item.item_id) addItem(item.item_id)
-                })
-            } catch (e) { }
+            for (const item of tray.items) addItem(item.item_id)
             syncVisibility()
             return GLib.SOURCE_REMOVE
         })

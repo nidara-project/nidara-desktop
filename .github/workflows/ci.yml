@@ -188,7 +188,7 @@ jobs:
           sudo apt-get install -y -qq "linux-modules-extra-$(uname -r)"
           sudo modprobe vkms
           ls -l /dev/dri
-      # The built Astal/AGS/appmenu stack is cached as a tarball. Key parts:
+      # The built Astal/AGS stack is cached as a tarball. Key parts:
       #   - install.sh hash → covers the pinned refs (they live there)
       #   - headless-smoke.sh hash → covers WHICH libs get built. Keying on
       #     install.sh alone was a trap: the subdir list lives in the smoke
