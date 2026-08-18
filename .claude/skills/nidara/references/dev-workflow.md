@@ -1080,10 +1080,26 @@ away, and the precondition must fail hard — an earlier version of the module l
 pass, because a failed connect and a machine with no sound card both look like an
 empty roster (the same trap bluez-probe caught).
 
-⚠️ Two GJS facts about libwireplumber, both of which cost a debugging round:
-`Wp.init()` installs a GLib log writer, so calling it TWICE in one process aborts
+⚠️ **`Wp.init(Wp.InitFlags.ALL)` takes the whole shell's log away, and nothing
+reports it.** `ALL` includes `SET_GLIB_LOG`, which routes ALL GLib logging — every
+`console.log` in the shell, not just WirePlumber's — through WirePlumber's writer,
+which applies its own level filter. With `WIREPLUMBER_DEBUG` unset (the normal
+case) that filter drops MESSAGE level, so from the moment the audio graph comes up
+`tail -f nidara-ui.log` goes silent: the last line of every session was
+"[ThemeManager] Global Styles READY!", and `[IPC] serving org.nidara.Shell` — a
+line that had been there for weeks — simply stopped appearing. `print`/`printerr`
+keep working, which is what makes it look like the shell is still logging. The
+module therefore passes `PIPEWIRE | SPA_TYPES | SET_PW_LOG` and leaves
+`SET_GLIB_LOG` out; the flag exists for CLIs like `wpctl` that want one log format
+for their own output. **Symptom to recognise: the log stops mid-startup with no
+error.** Confirm with `WIREPLUMBER_DEBUG=M` — the missing lines come back in
+WirePlumber's format.
+
+⚠️ Two more GJS facts about libwireplumber, both of which cost a debugging round:
+`Wp.init()` installs that writer, so calling it TWICE in one process aborts
 (`g_log_set_writer_func() called multiple times`) — the probe must not re-init what
-the module already did. And `Wp.Core`'s `connect`/`disconnect` are PipeWire's, not
+the module already did, and that stays true with the narrower flags. And
+`Wp.Core`'s `connect`/`disconnect` are PipeWire's, not
 GObject's: `core.connect("disconnected", cb)` does not throw, does not warn, and
 does not attach the handler. Use `GObject.Object.prototype.connect.call(core, …)`.
 That is the exact case `watchDevices` exists for — `notify::devices` covers only

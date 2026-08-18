@@ -338,10 +338,28 @@ export class Audio extends GObject.Object {
     constructor() {
         super()
 
-        // ⚠️ Exactly once per process: `Wp.init` installs a GLib log writer, and
-        // GLib aborts the process on a second `g_log_set_writer_func()`. This class
-        // is a singleton, which is what keeps that true.
-        Wp.init(Wp.InitFlags.ALL)
+        // ⚠️ **Not `InitFlags.ALL`, and the flag left out is `SET_GLIB_LOG`.**
+        //
+        // That flag routes ALL of GLib's logging — the whole shell's, not just
+        // WirePlumber's — through WirePlumber's writer, which then applies its own
+        // level filter. With `WIREPLUMBER_DEBUG` unset (the normal case) that
+        // filter drops MESSAGE level, so from the instant the audio graph came up
+        // every `console.log` in the shell went to /dev/null: `[IPC] serving
+        // org.nidara.Shell`, every service's boot line, every debug print anyone
+        // adds while chasing something. `tail -f nidara-ui.log` — the way this
+        // project is debugged — quietly ended at "[ThemeManager] Global Styles
+        // READY!". Nothing errors; the log just stops. (Measured: with
+        // `WIREPLUMBER_DEBUG=M` the missing lines come back, reformatted.)
+        //
+        // Nothing here needs it. It exists for CLIs like `wpctl`, which want one
+        // log format for their own output. `print`/`printerr` were unaffected,
+        // which is why the shell looked like it was still logging.
+        //
+        // ⚠️ Still exactly once per process: `SET_PW_LOG` and the GLib writer are
+        // both one-shot, and GLib aborts the process on a second
+        // `g_log_set_writer_func()`. This class is a singleton, which is what
+        // keeps that true.
+        Wp.init(Wp.InitFlags.PIPEWIRE | Wp.InitFlags.SPA_TYPES | Wp.InitFlags.SET_PW_LOG)
         this._core = Wp.Core.new(null, null, null)
 
         gobjectConnect(this._core, "connected", () => { this._connected = true })
