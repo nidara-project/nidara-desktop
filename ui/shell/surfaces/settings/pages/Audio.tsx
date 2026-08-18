@@ -1,5 +1,4 @@
 import { Gtk } from "ags/gtk4"
-import AstalWp from "gi://AstalWp"
 import { listGroup, pageBox, bindWhileRealized } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
@@ -68,7 +67,7 @@ function createVolumeRow(
     const row = NidaraRow(title, "", trailing, [], undefined, leadingIcon, slider)
 
     // ⚠️ The mute icon's subscription must die with the ROW, because the target does
-    // not: an AstalWp endpoint outlives every row ever built for it. This was a bare
+    // not: an audio endpoint outlives every row ever built for it. This was a bare
     // `target.connect("notify::mute", …)` — and the rows are rebuilt on every device
     // change AND on every realize of the page, so each visit hung another permanent
     // handler on the same endpoint, each holding a discarded widget alive. The
@@ -138,10 +137,14 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AudioPage() {
-    const wp    = AstalWp.get_default()
-    const audio = wp?.audio
-    if (!audio) return new Gtk.Label({ label: t("settings.audio.error.no-service") })
-
+    // 🔑 The graph is asked for on every use, never captured — not even to decide
+    // whether to build the page. Settings caches a page for the window's lifetime,
+    // so a one-time `if (!audio) return "no service"` freezes that verdict forever,
+    // and `core/wireplumber.ts` answers null until PipeWire has replied (AstalWp
+    // handed back an object immediately and filled it in later, which is what hid
+    // this shape). Every accessor below defaults to the live graph, and the two
+    // placeholders — "no service" is gone, "no hardware" stays — are decided in
+    // `applyVisibility`, which runs on every realize.
     const page = pageBox("audio-page")
 
     // Settings caches every page for the window's lifetime, so audio-hardware
@@ -169,9 +172,9 @@ export default function AudioPage() {
     // purpose: absence of a section IS the message, and the Control Center's
     // volume popover is the surface where that string still earns its keep.
     const applyVisibility = () => {
-        const speakers = AudioSvc.speakers(audio).length
-        const mics     = AudioSvc.microphones(audio).length
-        const streams  = AudioSvc.streams(audio).length
+        const speakers = AudioSvc.speakers().length
+        const mics     = AudioSvc.microphones().length
+        const streams  = AudioSvc.streams().length
 
         banner.visible = speakers === 0 && mics === 0
         speakerGroup.box.visible = speakers > 0
@@ -186,14 +189,14 @@ export default function AudioPage() {
             while (c) { g.listBox.remove(c); c = g.listBox.get_first_child() }
         })
 
-        const defaultSpk = AudioSvc.defaultSpeaker(audio)
-        const defaultMic = AudioSvc.defaultMicrophone(audio)
+        const defaultSpk = AudioSvc.defaultSpeaker()
+        const defaultMic = AudioSvc.defaultMicrophone()
 
-        AudioSvc.speakers(audio).forEach(ep => {
+        AudioSvc.speakers().forEach(ep => {
             const isDef = defaultSpk && ep.id === defaultSpk.id
             speakerGroup.listBox.append(createDeviceRow(ep, false, isDef, () => AudioSvc.setDefault(ep)))
         })
-        AudioSvc.microphones(audio).forEach(ep => {
+        AudioSvc.microphones().forEach(ep => {
             const isDef = defaultMic && ep.id === defaultMic.id
             micGroup.listBox.append(createDeviceRow(ep, true, isDef, () => AudioSvc.setDefault(ep)))
         })
@@ -206,7 +209,7 @@ export default function AudioPage() {
         let c = streamGroup.listBox.get_first_child()
         while (c) { streamGroup.listBox.remove(c); c = streamGroup.listBox.get_first_child() }
 
-        AudioSvc.streams(audio).forEach(s => streamGroup.listBox.append(createStreamRow(s)))
+        AudioSvc.streams().forEach(s => streamGroup.listBox.append(createStreamRow(s)))
         applyVisibility()
     }
 
@@ -215,8 +218,8 @@ export default function AudioPage() {
     // device and stream lists frozen at whatever was plugged in the first time the
     // user opened this page. The refresh belongs inside for the same reason.
     bindWhileRealized(page, () => {
-        const disposeDevices = AudioSvc.watchDevices(refreshDevices, audio)
-        const disposeStreams = AudioSvc.watchStreams(refreshStreams, audio)
+        const disposeDevices = AudioSvc.watchDevices(refreshDevices)
+        const disposeStreams = AudioSvc.watchStreams(refreshStreams)
         refreshDevices()
         refreshStreams()
         return () => { disposeDevices(); disposeStreams() }

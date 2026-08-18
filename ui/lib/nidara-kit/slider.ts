@@ -365,8 +365,23 @@ export function makeVerticalFillTile(
     })
     iconImg.set_can_target(false)
     if (iconSubscribe) {
-        const cleanup = iconSubscribe(() => { iconImg.gicon = getIcon() })
-        iconImg.connect("unrealize", cleanup)
+        // 🔑 Same rule as the VALUE a few lines down, and for the same reason: a CC
+        // tile is built ONCE, at shell start, so `getIcon()` above runs at a moment
+        // when the service it reads may still be empty — and a one-shot
+        // `iconSubscribe(...)` + cleanup on "unrealize" is a subscription that
+        // survives exactly one hide.
+        //
+        // This half was missed when the value was fixed (0.7.1's volume tile read
+        // 0 %), and it stayed invisible only because AstalWp handed out a permanent
+        // endpoint object: the subscription was live even when built too early, so
+        // the icon corrected itself on the first change. Against a service that
+        // answers null before its roster arrives — ours does — the same code froze
+        // the volume tile on the MUTED glyph for the whole session, with the gauge
+        // beside it correctly reading 86 %.
+        bindWhileRealized(iconImg, () => {
+            iconImg.gicon = getIcon()
+            return iconSubscribe(() => { iconImg.gicon = getIcon() })
+        })
     }
 
     const slider = makeSlider({
@@ -401,7 +416,7 @@ export function makeHSlider(opts: Omit<SliderOpts, "orientation" | "length"> & {
     return makeSlider({ ...rest, orientation: "horizontal", length: width_request })
 }
 
-/** Volume slider bound to an AstalWp endpoint/stream (`target` has a 0–1 `volume`).
+/** Volume slider bound to an audio endpoint/stream (`target` has a 0–1 `volume`).
  *  Fill + thumb are drawn together (no native Gtk.Scale highlight/slider split) and
  *  the sync guards stop the WirePlumber feedback from fighting the drag. Used by the
  *  Audio settings page, the CC volume detail, and the bar volume panel — they all had
@@ -424,7 +439,7 @@ export function makeVolumeSlider(target: any, opts: {
             // built, and this hook runs again on every realize (bindWhileRealized), so
             // reading here is what makes a re-opened panel show the CURRENT volume
             // rather than the one it was built with — and what covers an endpoint whose
-            // properties AstalWp had not populated yet at build time. Without it the
+            // properties the audio graph had not populated yet at build time. Without it the
             // widget only ever learns about volume changes that happen while it is on
             // screen; the Control Center's own tile shipped that way in 0.7.1 and read
             // 0% from login (see surfaces/control-center/Sliders.tsx).

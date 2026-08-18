@@ -1,6 +1,5 @@
 import { Gtk } from "ags/gtk4"
 import { PANEL_W } from "../common/widget-kit"
-import AstalWp from "gi://AstalWp"
 import { makeVolumeSlider, bindWhileRealized } from "../../lib/nidara-kit"
 import { VolumeWidget } from "../surfaces/control-center/Sliders"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
@@ -25,12 +24,7 @@ function buildBarContent(): Gtk.Widget {
     // Re-read AND re-subscribed on every realize, and re-targeted when the default
     // endpoint changes: a bare unrealize-cleanup is a subscription that survives
     // exactly one hide.
-    bindWhileRealized(image, () => {
-        image.gicon = getIcon()
-        const stopDevices = AudioSvc.watchDevices(() => { image.gicon = getIcon() })
-        const stopVolume = AudioSvc.watchVolume(speaker(), () => { image.gicon = getIcon() })
-        return () => { stopVolume(); stopDevices() }
-    })
+    bindWhileRealized(image, () => AudioSvc.watchDefaultSpeaker(() => { image.gicon = getIcon() }))
 
     return image
 }
@@ -38,7 +32,7 @@ function buildBarContent(): Gtk.Widget {
 // ── Bar expansion panel content ───────────────────────────────────────────────
 
 function buildBarExpanded(_onClose: () => void): Gtk.Widget {
-    const speaker = AstalWp.get_default()?.audio?.default_speaker
+    const speaker = AudioSvc.defaultSpeaker()
 
     const volLabel = new Gtk.Label({
         label: speaker ? `${Math.round(speaker.volume * 100)}%` : "–",
@@ -172,7 +166,7 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
 }
 
 function buildCCDetail(_onClose: () => void): Gtk.Widget {
-    const audio = AstalWp.get_default()?.audio
+    const audio = AudioSvc.audio()
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
 
     if (!audio) {
@@ -249,13 +243,15 @@ const volumeWidget: AtomicWidget = {
     ccDetailRows: 4,
     // Gauge fill for the TALL tile only — SINGLE (icon) and FULL_WIDTH (its own
     // inline slider row) aren't a whole-island gauge, so they get 0 (no fill).
-    getFill: (size) => size === WidgetSize.TALL ? (AstalWp.get_default()?.audio?.default_speaker?.volume ?? 0) : 0,
-    watchActive: (cb) => {
-        const speaker = AstalWp.get_default()?.audio?.default_speaker
-        if (!speaker) return () => {}
-        const id = speaker.connect("notify::volume", cb)
-        return () => safeDisconnect(speaker, id)
-    },
+    getFill: (size) => size === WidgetSize.TALL ? (AudioSvc.defaultSpeaker()?.volume ?? 0) : 0,
+    // 🔑 The GAUGE's repaint trigger, and the third place in this widget that must
+    // not capture the endpoint. A CC spec is built ONCE at shell start; resolving
+    // the speaker here bound the fill to whatever existed at that instant, and to
+    // NOTHING on a machine where PipeWire settles after the shell — the label and
+    // the icon kept up (they have their own subscriptions) while the pink fill
+    // stayed frozen at the level of the first paint. Seen on screen: 86 % → 5 %
+    // with the capsule still full.
+    watchActive: (cb) => AudioSvc.watchDefaultSpeaker(cb),
 }
 
 export default volumeWidget

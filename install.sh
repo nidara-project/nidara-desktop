@@ -256,7 +256,7 @@ PACMAN_DEPS="base-devel glib2-devel cmake meson ninja gobject-introspection vala
     libpulse networkmanager bluez bluez-libs bluez-utils upower libnotify
     intltool scdoc brightnessctl pamixer playerctl
     jq curl slurp grim wf-recorder wl-clipboard cliphist mesa pam
-    pipewire pipewire-audio pipewire-alsa pipewire-pulse wireplumber
+    pipewire pipewire-audio pipewire-alsa pipewire-pulse wireplumber libwireplumber
     git nodejs npm gjs go
     at-spi2-core wtype wlr-protocols wayland wayland-protocols hyprland-protocols
     accountsservice greetd pavucontrol rust cargo
@@ -374,7 +374,7 @@ echo "  Installing the Astal/AGS stack from nidara-repo (prebuilt)..."
 if sudo pacman -S --needed --noconfirm \
     aylurs-gtk-shell appmenu-glib-translator \
     libastal-io astal-quarrel libastal-gtk4 \
-    libastal-notifd libastal-tray libastal-wireplumber \
+    libastal-notifd libastal-tray \
     libastal-auth; then
     # Lockstep guard: `pacman -S` can "succeed" with STALE versions when nidara-repo
     # hasn't been rebuilt for a pin bump yet (its packages still predate the new
@@ -494,7 +494,6 @@ astal_pkgs=(
     "lib/astal/gtk4|libastal-gtk4"
     "lib/notifd|libastal-notifd"
     "lib/tray|libastal-tray"
-    "lib/wireplumber|libastal-wireplumber"
     "lib/auth|libastal-auth"
     "lang/gjs|astal-gjs"
 )

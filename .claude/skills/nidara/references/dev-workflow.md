@@ -1043,6 +1043,40 @@ python3 -c "import dbus; dbus.SystemBus().get_object('org.bluez',
 ```
 
 Settings -> Bluetooth must move that device from "Detected" to "Paired" on its own.
+
+### Exercising WirePlumber (`core/wireplumber.ts`)
+
+Unlike the BlueZ/MPRIS probes there are no fakes: PipeWire is running on any
+machine with sound, so the probe drives the REAL graph and puts it back.
+
+```bash
+ags bundle --gtk 4 scripts/dev/wp-probe.ts /tmp/wp-probe
+/tmp/wp-probe                                     # -> ALL PASS (24)
+/tmp/wp-probe --linear                            # negative control #1
+PIPEWIRE_REMOTE=nonexistent /tmp/wp-probe         # negative control #2
+```
+
+It changes the machine's volume and briefly plays silence through `pw-cat`; the
+last check asserts the restore landed. It imports `core/wireplumber` and nothing
+else from the shell — importing `core/AudioService` would pull in `AppService`,
+which needs a display open BEFORE the import (see apps-probe).
+
+🔑 **The check that matters most is the boring one: our volume equals what `wpctl`
+prints.** `mixer-api` starts in LINEAR scale and AstalWp set it to CUBIC — measured
+on the same sink at the same instant, 0.6361 vs 0.8600. A module that forgets
+`scale` is not broken in any visible way; it just reads 64 % where the system says
+86 %. That is why control #1 exists: `--linear` makes the probe compare `wpctl`
+against a linear reading, and that check MUST go red. Control #2 takes the graph
+away, and the precondition must fail hard — an earlier version of the module let it
+pass, because a failed connect and a machine with no sound card both look like an
+empty roster (the same trap bluez-probe caught).
+
+⚠️ Two GJS facts about libwireplumber, both of which cost a debugging round:
+`Wp.init()` installs a GLib log writer, so calling it TWICE in one process aborts
+(`g_log_set_writer_func() called multiple times`) — the probe must not re-init what
+the module already did. And `Wp.Core`'s `connect`/`disconnect` are PipeWire's, not
+GObject's: `core.connect("disconnected", cb)` does not throw, does not warn, and
+does not attach the handler. Use `GObject.Object.prototype.connect.call(core, …)`.
 That is the exact case `watchDevices` exists for — `notify::devices` covers only
 add/remove, so an in-place pairing change would otherwise leave the device in the
 wrong list until a full rebuild.

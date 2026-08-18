@@ -3,7 +3,6 @@
 
 declare module "gi://AstalNotifd" { const v: any; export default v; }
 declare module "gi://AstalTray" { const v: any; export default v; }
-declare module "gi://AstalWp" { const v: any; export default v; }
 declare module "gi://AstalBattery" { const v: any; export default v; }
 declare module "gi://AstalAuth" { const v: any; export default v; }
 declare module "gi://GLib" { const v: any; export default v; }

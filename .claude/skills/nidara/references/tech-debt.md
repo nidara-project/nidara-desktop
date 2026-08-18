@@ -520,6 +520,37 @@ second instance.** Recording the result so it is not re-run blindly:
   that these two are a different bug: the volume endpoint DID exist and populate later and the widget
   was the thing holding it wrong; here the widget is right and its source is empty.
 
+⚠️ **The 2026-08-17 sweep asked the right question about VALUES and never asked it about
+SUBSCRIPTIONS — and that is where the rest of the family was hiding** (found 2026-08-18, by running
+the UI after `core/wireplumber.ts` replaced AstalWp). Four widgets drawing the default output wrote
+`watchVolume(defaultSpeaker(), cb)` by hand, resolving the endpoint once at build or at realize:
+
+- the **bar** volume icon, the **CC 1×1** icon, the **CC TALL** icon (via `makeVerticalFillTile`'s
+  `iconSubscribe`), and `watchActive` — the CC gauge's REPAINT trigger.
+- `watchVolume(null, …)` is a **silent no-op**, so each looked subscribed and never heard again.
+  On screen: the bar icon stuck on MUTED with the sink at 95 %, and the TALL tile's label and icon
+  keeping up while the pink fill stayed frozen at its first paint (86 % → 5 %, capsule still full).
+
+🔑 **Why it was invisible until the library changed, and this generalises beyond audio:** AstalWp's
+`default_speaker` was a PERMANENT proxy object that swapped its inner node underneath — never null,
+so a subscription taken too early was still live and self-corrected on the first change. (It also
+never emitted `notify::default-speaker`; nothing in the library emits it, so the re-target branches
+those widgets carried had never once run.) A service that answers **null before its roster arrives**
+— ours does, deliberately — turns the same code from "works by accident" into "dead for the
+session". **When you replace a library, the bugs you inherit are the ones its shape was hiding.**
+
+**Fix:** `AudioService.watchDefaultSpeaker(cb)` — subscribes to whichever endpoint is currently the
+default, follows it when the default changes, and primes on subscribe. All four sites are one line
+now. `makeVerticalFillTile` also moved its icon onto `bindWhileRealized`, which the VALUE beside it
+had used since 0.7.1 and the icon never did.
+
+Two more of the same shape, closed in the same pass:
+- **Settings → Audio** opened with `if (!audio) return "no service"`. A page is cached for the
+  window's lifetime, so that verdict was permanent; every accessor is now resolved live and the
+  placeholder decision moved into `applyVisibility`.
+- **`core/wireplumber.ts` emitted `speaker-added` BEFORE resolving the defaults**, so a handler that
+  asked "who is the default?" for the very node that had just become it was answered "nobody".
+
 ### 13. Lockscreen GTK4 segfault when a wl_output vanishes — upstream, mitigated by watchdog
 On wake-from-suspend the DP link re-trains and the wl_output disappears for ~1 s; GTK
 destroys the session-lock window bound to that output and segfaults inside

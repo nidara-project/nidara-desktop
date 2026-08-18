@@ -55,7 +55,7 @@ phase_deps() {
         base-devel git cmake meson ninja vala gobject-introspection glib2-devel \
         gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 \
         libpulse networkmanager bluez-libs upower libnotify \
-        pipewire wireplumber \
+        pipewire wireplumber libwireplumber \
         nodejs npm gjs go \
         hyprland mesa dbus zstd seatd systemd \
         wayland-protocols hyprland-protocols wlr-protocols \
@@ -103,13 +103,14 @@ phase_deps() {
     # Same set install.sh's astal_pkgs builds, and for the same reasons — the two
     # lists must move together (the cache key hashes BOTH files so a drift can't
     # be masked by a stale tarball). lib/network, lib/astal/gtk3, lib/battery,
-    # lib/hyprland, lib/mpris, lib/apps and lib/bluetooth are absent on purpose;
+    # lib/hyprland, lib/mpris, lib/apps, lib/bluetooth and lib/wireplumber are
+    # absent on purpose;
     # booting the shell here is what proves they are not needed — and for hyprland
     # that is a real test, since the smoke boots a compositor and the shell has to
     # model it.
     local astal_subdirs=(
         lib/astal/io lib/quarrel lib/astal/gtk4
-        lib/notifd lib/tray lib/wireplumber lang/gjs
+        lib/notifd lib/tray lang/gjs
     )
     local sub
     for sub in "${astal_subdirs[@]}"; do

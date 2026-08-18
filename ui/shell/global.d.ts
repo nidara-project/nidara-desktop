@@ -11,9 +11,6 @@ namespace AstalNotifd {
 namespace AstalTray {
     export type Item = any;
 }
-namespace AstalWp {
-    export type Wp = any;
-}
 namespace AstalBattery {
     export type Device = any;
 }

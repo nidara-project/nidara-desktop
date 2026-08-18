@@ -55,7 +55,7 @@ export type { NidaraWindowOpts, NidaraWindowResult } from "./window"
 
 // makeSlider — the ONE slider (Cairo, horizontal/vertical; there is no Gtk.Scale
 // anywhere in Nidara). makeHSlider is the horizontal wrapper, makeVolumeSlider binds
-// one to an AstalWp endpoint, makeVerticalFillTile is the 1×2 CC gauge tile.
+// one to an audio endpoint, makeVerticalFillTile is the 1×2 CC gauge tile.
 export type { SliderOpts, SliderOrientation } from "./slider"
 export { makeSlider, makeHSlider, makeVerticalFillTile, makeVolumeSlider } from "./slider"
 

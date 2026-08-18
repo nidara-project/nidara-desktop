@@ -77,18 +77,13 @@ function buildVolumeIcon(speaker: () => any): Gtk.Widget {
     // on "unrealize" is a subscription that survives exactly one hide (same trap the
     // kit's slider documents), and it also has to re-target when the default endpoint
     // changes.
-    bindWhileRealized(btn, () => {
-        icon.gicon = getIcon()
-        const stopDevices = AudioSvc.watchDevices(() => { icon.gicon = getIcon() })
-        const stopVolume = AudioSvc.watchVolume(speaker(), () => { icon.gicon = getIcon() })
-        return () => { stopVolume(); stopDevices() }
-    })
+    bindWhileRealized(btn, () => AudioSvc.watchDefaultSpeaker(() => { icon.gicon = getIcon() }))
     return btn
 }
 
 export function VolumeWidget(): CCWidgetSpec {
     // 🔑 Resolved on every use, NEVER captured. This spec is built once, at shell
-    // start, and two things are false at that moment: AstalWp has not populated the
+    // start, and two things are false at that moment: the audio graph has not populated the
     // endpoint's properties yet (`volume` reads 0 even when the sink is at 40%), and
     // on a machine where pipewire settles after the shell there may be no default
     // speaker at all — captured, that null is permanent and the tile is dead for the
@@ -126,7 +121,8 @@ export function VolumeWidget(): CCWidgetSpec {
             return buildVerticalSlider(
                 () => { const s = speaker(); return s ? AudioSvc.targetVolumeIcon(s) : Icons.volumeMuted },
                 () => getValue() * 100, onChange, onExtChange,
-                (sync) => AudioSvc.watchVolume(speaker(), sync),
+                // Follows the default endpoint; never captures it.
+                (sync) => AudioSvc.watchDefaultSpeaker(sync),
             )
         }
         return buildHorizontalSlider(Icons.volumeLow, Icons.volumeHigh, () => getValue() * 100, onChange, onExtChange)
