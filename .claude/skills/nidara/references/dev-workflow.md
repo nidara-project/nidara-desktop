@@ -682,15 +682,6 @@ Gotchas that cost real debugging time:
 CI gates **SCSS compile + typecheck + widgets-gen freshness + headless boot smoke + Assistant
 loop** (`agent-loop`, see below).
 
-⚠️ **Every job carries a `timeout-minutes`, and it is load-bearing.** GitHub's default is SIX
-HOURS, and the jobs that install packages (`pacman -Syu` in the smoke container, `apt-get` in
-`agent-loop`, `lua` in `hypr-config`) are the ones that hang: an Arch mirror serving a 404 for a
-package its own DB still lists is a routine flake, and twice in two days it left a job sitting in
-`in_progress` with nothing to report, holding the whole run — and therefore the merge queue —
-open. The budgets are ~4× the observed runtime (10 min for the second-long jobs, 15 for typecheck
-and `agent-loop`, 45 for the smoke). A job that trips its budget is a flake to re-run, not a
-failure to debug: read the log before assuming the diff caused it.
-
 ⚠️ **`ci.yml` triggers on `pull_request` AND `merge_group`, and dropping the second one breaks
 merges silently.** `main` uses a merge queue: the queue builds a temporary `merge_group` ref
 (the PR merged onto the current `main`) and waits for the four REQUIRED checks — styles,
@@ -1105,6 +1096,55 @@ does not attach the handler. Use `GObject.Object.prototype.connect.call(core, �
 That is the exact case `watchDevices` exists for — `notify::devices` covers only
 add/remove, so an in-place pairing change would otherwise leave the device in the
 wrong list until a full rebuild.
+
+### Exercising the notification server (`core/notifd.ts`)
+
+The shell IS this desktop's notification daemon, so the probe has to BE the server
+too — it brings the module up and then talks to it over D-Bus exactly as
+`notify-send` does.
+
+```bash
+ags bundle --gtk 4 scripts/dev/notifd-probe.ts /tmp/notifd-probe
+XDG_CACHE_HOME=$(mktemp -d) dbus-run-session -- /tmp/notifd-probe    # 32 checks
+```
+
+⚠️ **Both wrappers are load-bearing and the probe refuses to run without them.**
+`dbus-run-session` gives it a private bus — on the real session bus the running
+shell owns `org.freedesktop.Notifications` and the probe would lose that race and
+test nothing. `XDG_CACHE_HOME` points the store somewhere disposable — without it
+the probe writes its test notifications into the user's own
+`~/.cache/nidara/notifd/state.json` and they appear in the NC.
+
+Three controls, each failing on a DIFFERENT line (an empty roster looks identical
+in all of them, which is the whole reason they are separate):
+
+```bash
+XDG_CACHE_HOME=$(mktemp -d) DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent /tmp/notifd-probe
+    # → "the session bus is reachable" fails
+XDG_CACHE_HOME=$(mktemp -d) /tmp/notifd-probe        # no dbus-run-session
+    # → "we own org.freedesktop.Notifications" fails: the shell holds it.
+    #   Same state a user gets with dunst or mako left running.
+dbus-run-session -- /tmp/notifd-probe                # no XDG_CACHE_HOME
+    # → refuses outright rather than writing into the real store
+```
+
+⚠️ **A probe that is also a server must call the bus ASYNCHRONOUSLY.** The first
+version used `call_sync` and deadlocked on its own first `Notify`: the call blocks
+the main loop that has to dispatch the method being called. ⚠️ And start `main()`
+from a `GLib.idle_add`, not directly — the precondition checks run before the
+first `await`, so a failing precondition called `loop.quit()` on a loop that had
+not started, and the probe hung instead of refusing.
+
+To watch the real thing instead, `notify-send` covers every branch:
+
+```bash
+notify-send -a Discord -u critical "Critical" "never auto-expires"
+notify-send -t 3000 "Expires" "server-side timeout"                 # gone in 3 s
+notify-send "Transient" "banner only" --hint=int:transient:1        # no NC row
+notify-send "Hero" "" --hint=string:image-path:/path/to.png
+python3 -c '...'   # image-data: raw pixels, decoded to ~/.cache/nidara/notifd/images/
+cat ~/.cache/nidara/notifd/state.json | python3 -m json.tool
+```
 
 ### Checking app search without opening the launcher
 

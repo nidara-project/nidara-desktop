@@ -10,6 +10,7 @@ import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT } 
 import inputYield from "./core/InputYield"
 import { selectedPlayer } from "./core/MediaService"
 import shellActions from "./core/ShellActions"
+import { startNotifServer } from "./core/notifd"
 import { currentLocale } from "./core/i18n"
 import { readFile } from "ags/file"
 import { exec, execAsync } from "ags/process"
@@ -899,9 +900,16 @@ function exportShellBusName(): void {
 app.start({
   applicationId: "org.nidara.desktop",
     main() {
-    // (No DnD seeding here. The notification daemon persists `dont_disturb` on its
-    // own — see core/NotifService.ts; the block that used to force it true at every
-    // main() — which is every UI RELOAD, not just login — was removed 2026-08-16.)
+    // The shell IS this desktop's notification server: `core/notifd.ts` owns
+    // `org.freedesktop.Notifications`. Started HERE, explicitly, and not left to
+    // whichever widget happens to ask first — the bar's bell was that widget, so
+    // deleting or reordering it would have quietly stopped the desktop receiving
+    // notifications at all, with no error anywhere.
+    startNotifServer()
+
+    // (No DnD seeding here. `notif-config.json` persists the flag on its own — see
+    // core/NotifConfig.ts; the block that used to force it true at every main() —
+    // which is every UI RELOAD, not just login — was removed 2026-08-16.)
 
     // Reduce motion: apply the current value to Hyprland (a separate process that
     // knows nothing about dconf) and keep watching. The shell-side readers are

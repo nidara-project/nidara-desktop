@@ -374,8 +374,7 @@ echo "  Installing the Astal/AGS stack from nidara-repo (prebuilt)..."
 if sudo pacman -S --needed --noconfirm \
     aylurs-gtk-shell appmenu-glib-translator \
     libastal-io astal-quarrel libastal-gtk4 \
-    libastal-notifd libastal-tray \
-    libastal-auth; then
+    libastal-tray libastal-auth; then
     # Lockstep guard: `pacman -S` can "succeed" with STALE versions when nidara-repo
     # hasn't been rebuilt for a pin bump yet (its packages still predate the new
     # *_REF). That would silently install outdated deps AND let §6 record the new
@@ -488,11 +487,20 @@ echo "  Packaging Astal components (in dependency order)..."
 #     no library beneath it — and the WRITE half (the org.bluez.Agent1 pairing
 #     agent) was already raw D-Bus in core/BluetoothService.ts. core/bluez.ts is
 #     the read half (2026-08-18).
+#   - lib/wireplumber: the first of these WITH a real library beneath it —
+#     libwireplumber ships its own Wp-0.5 typelib and is already a hard dep of the
+#     session (that is why `libwireplumber` joined PACMAN_DEPS above).
+#     core/wireplumber.ts is mixer-api + default-nodes-api + one object manager
+#     (2026-08-18).
+#   - lib/notifd: org.freedesktop.Notifications is a freedesktop SPEC with no
+#     library beneath it, and the shell is the SERVER — same shape as mpris and
+#     bluetooth. core/notifd.ts is that server, and it also stopped answering
+#     GetCapabilities with three capabilities Nidara does not honour (2026-08-18).
+#     Note this is the only package that shipped a GSettings schema.
 astal_pkgs=(
     "lib/astal/io|libastal-io"
     "lib/quarrel|astal-quarrel"
     "lib/astal/gtk4|libastal-gtk4"
-    "lib/notifd|libastal-notifd"
     "lib/tray|libastal-tray"
     "lib/auth|libastal-auth"
     "lang/gjs|astal-gjs"

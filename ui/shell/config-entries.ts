@@ -109,10 +109,10 @@ export function registerConfigEntries() {
         set: v => notifConfig.setPopupTimeout(v as number),
     })
     // The LIVE flag, not a preference about it: this is the same bit the Control
-    // Center's focus tile and Settings → Notifications flip, and the daemon persists
-    // it on its own, so setting it here survives across sessions with no help from
-    // us. It replaced `notifications.dndDefault` (2026-08-16), which only seeded the
-    // flag TRUE at startup and could never clear it.
+    // Center's focus tile and Settings → Notifications flip, and it persists in
+    // `notif-config.json`, so setting it here survives across sessions. It replaced
+    // `notifications.dndDefault` (2026-08-16), which only seeded the flag TRUE at
+    // startup and could never clear it.
     registerConfig("notifications.doNotDisturb", {
         desc: "Do Not Disturb: suppress notification popups (critical ones still show). Persists across sessions until turned off.",
         type: "boolean",

@@ -7,10 +7,10 @@ export default function NotificationsPage() {
     const page = pageBox("notifications-page")
 
     // ── Do not disturb ────────────────────────────────────────────────────────
-    // 🔑 This row is the LIVE flag, not a preference about it. The daemon persists
-    // `dont_disturb` itself, so it survives sessions and reboots with no help from
-    // us — which is why GNOME, whose DnD is the same shape, also ships exactly one
-    // control for it and no "start with it on" option.
+    // 🔑 This row is the LIVE flag, not a preference about it. It persists in
+    // `notif-config.json` and survives sessions and reboots — which is why GNOME,
+    // whose DnD is the same shape, also ships exactly one control for it and no
+    // "start with it on" option.
     //
     // It replaced an "Enable on login" toggle (removed 2026-08-16) that could
     // only ever set the flag TRUE, from `main()` — i.e. on every UI reload, not

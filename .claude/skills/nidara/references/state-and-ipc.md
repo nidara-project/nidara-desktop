@@ -680,10 +680,10 @@ Rules:
   import widget state) with a real `desc` (that string is the agent-facing documentation)
   and delegate `set` to the owning service's setter. That's ALL it takes to appear in
   `describeConfig`.
-- **Before adding a persisted setting, check whether the Astal library ALREADY persists it.**
-  Astal properties are not all in-memory: `AstalNotifd.dont_disturb` is a straight accessor over
-  GSettings (`io.astal.notifd dont-disturb`, schema in `/usr/share/glib-2.0/schemas/`), so it
-  survives logout and reboot in dconf with no help from us. Nidara had shadowed it anyway with a
+- **Before adding a persisted setting, check whether the layer below ALREADY persists it.**
+  Library properties are not all in-memory: `AstalNotifd.dont_disturb` used to be a straight
+  accessor over GSettings (`io.astal.notifd dont-disturb`), so it survived logout and reboot in
+  dconf with no help from us. Nidara had shadowed it anyway with a
   `notifications.dndDefault` boolean in `notif-config.json` plus a "Enable on login" toggle in
   Settings → Notifications, and a seeding block in `app.ts` `main()`. Two settings, one bit — and
   the copy could only ever *set* it, never clear it, so its OFF position promised sessions would
@@ -693,6 +693,15 @@ Rules:
   state like GNOME does. **The check is one command:** `gsettings list-recursively io.astal.<lib>`,
   or read the `.vala` property — if the getter hits `settings.get_*`, it persists. A shadow copy
   can only ever disagree with the real one.
+
+  ⚠️ **That flag is ours now** (2026-08-18, when `core/notifd.ts` replaced AstalNotifd): it lives
+  in `notif-config.json` via `core/NotifConfig.ts`, because DnD was never daemon behaviour —
+  AstalNotifd kept it in GSettings so its PROXIES could share the bit, and Nidara has none. The
+  lesson survives its example: the question is still "who already stores this", and the answer is
+  still "exactly one place". ⚠️ And when a library that owned a GSettings schema goes, **never
+  read the old schema to migrate**: `Gio.Settings.new()` on a schema that is no longer installed
+  ABORTS the process (guard with `Gio.SettingsSchemaSource.get_default().lookup()` if you ever
+  must). Users get the default once; a notification flag is not worth a crash loop.
 - **Reading an effective Hyprland option: `getOptionInt` is INT-TYPED ONLY.** A bool
   option's `hyprctl getoption -j` carries no `int` field at all —
   `animations:enabled` answers `{"option":…,"bool":false,"set":true}` — so

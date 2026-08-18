@@ -5,9 +5,6 @@ namespace AstalHyprland {
     export type Hyprland = any;
     export type Client = any;
 }
-namespace AstalNotifd {
-    export type Notification = any;
-}
 namespace AstalTray {
     export type Item = any;
 }

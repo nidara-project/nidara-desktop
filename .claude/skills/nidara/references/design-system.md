@@ -1703,7 +1703,7 @@ quick-settings convention), not just the icon. Wired via `AtomicWidget.getActive
 the exact same `resolveDrawParams`/`drawSquircle` path a real tile already uses — no separate CSS
 shape to keep in sync, no mismatched corners. `watchActive(cb)` only exists because the container
 can't know the state changed on its own (it's driven by the widget's own domain signal — BT
-power, `notifd`'s `dont_disturb`, `Theme` changed, an nmcli poll); it just calls `cb` to trigger
+power, the Do Not Disturb flag, `Theme` changed, an nmcli poll); it just calls `cb` to trigger
 `da.queue_draw()`. Live on **dark_mode, night_light, focus, bt, vpn** — action/stateless widgets
 (screenshot, clipboard) have nothing to fill and omit both props. `wifi`/`ethernet` don't have this
 either: their WIDE tile has no toggle button at all (see `buildSplitCapsuleContent` above), so
