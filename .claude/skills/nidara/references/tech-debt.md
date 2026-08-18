@@ -4162,3 +4162,31 @@ against the glass), not a plumbing one — the state is already there when someo
 
 Same file, same class: `disposition` (`informative`/`warning`/`alert`) is not requested and not drawn.
 No app Nidara ships with has ever sent one.
+
+### 75. `readShellVersion()`'s last resort invents a version instead of admitting it has none (2026-08-18)
+
+Noticed from the CI smoke's own log line — `IPC OK — shell version 0.1.0` — which is correct
+behaviour and still reads like a defect, because the number is plausible.
+
+`core/Paths.ts` resolves the shell's version in three steps: the `.dev` marker → the repo's
+`VERSION` (0.7.2 on a dev box); then `/usr/share/nidara/VERSION`, written by `install.sh` §685 and
+by the PKGBUILD's `install -Dm644 VERSION`; then `return "0.1.0"`. The smoke boots the bundle from
+the committed tree with neither, so it lands on the third — and the gate is honest about it, since
+it asserts the field EXISTS (`jq -e '.shell.version'`) and only prints the value.
+
+**Why it is worth changing anyway:** `"0.1.0"` is a lie that looks like an answer, and two things
+consume it. `surfaces/settings/pages/About.tsx` shows it as the version row, and — the one that
+bites — line 98 feeds it to `isNewerVersion(latest, readShellVersion())`, so a shell that fell
+through would believe it is 0.1.0 and advertise an update **permanently**. A bug report from such an
+install would also say "0.1.0" with no hint that nobody knew. `"unknown"` costs nothing, makes
+`isNewerVersion` decline to compare, and tells the truth.
+
+**Why it is only debt:** the third step is close to unreachable in production — both install paths
+write the file — so this is about what happens when something has ALREADY gone wrong, which is
+exactly when a made-up number is worst and also when nobody is watching.
+
+⚠️ Related and separate, found in the same look: **a dev box's `/usr/share/nidara/VERSION` goes
+stale silently.** It is written only by an `install.sh --dev` run, and dev mode never reads it (the
+`.dev` marker wins), so it sits at whatever version was current the last time the installer ran —
+0.4.0 on the author's machine against a repo at 0.7.2. Harmless until someone flips back to system
+mode and the shell starts reporting a version from months ago.

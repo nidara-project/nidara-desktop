@@ -5,7 +5,7 @@ description: "Authoritative reference for working on the Nidara desktop environm
 
 # Nidara
 
-> Repo: `github.com/nidara-project/nidara-desktop` · License: GPL-3.0 · Version in `VERSION` (0.1.0).
+> Repo: `github.com/nidara-project/nidara-desktop` · License: GPL-3.0 · Version: read `VERSION` at the repo root (do not restate it here — this line said 0.1.0 while the file said 0.7.2).
 
 ## What this project is
 
