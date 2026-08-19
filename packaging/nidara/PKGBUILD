@@ -39,23 +39,7 @@ depends=(
   gnome-keyring libsecret
   # GTK/GJS runtime
   gjs gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 wayland
-  # The LAST pinned Astal package (served by the [nidara] repo): C against PAM,
-  # ships its own /etc/pam.d file, used by the lockscreen. It leaves when the PAM
-  # work vendors it.
-  libastal-auth
-  # (no libastal-network / libastal-gtk3 / libastal-greet / libastal-battery /
-  # libastal-hyprland / libastal-mpris / libastal-apps / libastal-bluetooth /
-  # libastal-wireplumber / libastal-notifd / libastal-tray — see install.sh's
-  # astal_pkgs for why each one went, and note that libastal-tray took
-  # appmenu-glib-translator with it: that package was in this list ONLY as the
-  # tray's dbusmenu→GMenuModel translator, and core/dbusmenu.ts replaced it.
-  # And no aylurs-gtk-shell / astal-gjs / libastal-io / astal-quarrel /
-  # libastal-gtk4: those were the RUNTIME AND TOOLCHAIN, and both are ours since
-  # 2026-08-18 — ui/lib/host.ts hosts the app, scripts/bundle.sh builds it.
-  # This list is the pacman package's half of those decisions and it has to be
-  # edited in the same change: libastal-wireplumber outlived #188 here by a day
-  # because only install.sh was updated, and nothing catches that while
-  # nidara-repo still serves the package.)
+  # (no libastal-* packages — all services, runtime, and PAM auth are native C/TS)
   # services the shell talks to. networkmanager is load-bearing TWICE over: the
   # daemon, and `libnm` (its dep) for the NM-1.0 typelib core/NetworkService.ts
   # imports — that typelib used to arrive via libastal-network. `upower` is now
@@ -149,10 +133,17 @@ build() {
   # libnidara-wl: window capture + hyprland-surface visible region, reachable
   # from GJS via introspection (mirrors install.sh §5)
   lib/nidara-wl/build.sh "$srcdir/nidara-desktop-$pkgver/build/nidara-wl"
+
+  # libnidara-auth: PAM authentication for the lockscreen, reachable
+  # from GJS via introspection (mirrors install.sh §5)
+  lib/nidara-auth/build.sh "$srcdir/nidara-desktop-$pkgver/build/nidara-auth"
 }
 
 package() {
   cd "$srcdir/nidara-desktop-$pkgver"
+
+  # PAM configuration for lockscreen
+  install -Dm644 config/pam/nidara-lock "$pkgdir/etc/pam.d/nidara-lock"
 
   # /usr/bin — session launchers, helpers, agent toolkit (install.sh §5 list)
   local b
@@ -177,6 +168,16 @@ package() {
     "$pkgdir/usr/lib/girepository-1.0/NidaraWl-1.0.typelib"
   install -Dm644 build/nidara-wl/NidaraWl-1.0.gir \
     "$pkgdir/usr/share/gir-1.0/NidaraWl-1.0.gir"
+
+  # libnidara-auth + its typelib (PAM authentication for the lockscreen)
+  install -Dm755 build/nidara-auth/libnidara-auth.so.0.0.0 \
+    "$pkgdir/usr/lib/libnidara-auth.so.0.0.0"
+  ln -sf libnidara-auth.so.0.0.0 "$pkgdir/usr/lib/libnidara-auth.so.0"
+  ln -sf libnidara-auth.so.0     "$pkgdir/usr/lib/libnidara-auth.so"
+  install -Dm644 build/nidara-auth/NidaraAuth-1.0.typelib \
+    "$pkgdir/usr/lib/girepository-1.0/NidaraAuth-1.0.typelib"
+  install -Dm644 build/nidara-auth/NidaraAuth-1.0.gir \
+    "$pkgdir/usr/share/gir-1.0/NidaraAuth-1.0.gir"
 
   # /usr/share/nidara — bundles, styles, assets, shared config
   install -Dm644 VERSION "$pkgdir/usr/share/nidara/VERSION"

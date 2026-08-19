@@ -31,24 +31,14 @@ path): `sudo pacman -S nidara && nidara-setup` is a complete install.
 Dev installs (`install.sh --dev`) keep copying source files into /usr directly
 and **remove the package first** so `pacman -Syu` can't clobber the copies.
 
-## The source-built dependencies
+## Native C libraries & dependencies
 
-Nidara depends on **one** thing that is **not in the official Arch repos**, and we pin it to a
-known-good revision rather than track upstream HEAD:
+Nidara has **zero external Astal dependencies**. Everything is either native TypeScript or native C with GObject Introspection typelibs compiled directly during build:
 
-| What | Pinned by | Why we build it |
-|---|---|---|
-| `libastal-auth` | `ASTAL_REF` (github `Aylur/astal`, no tags → SHA) | C against PAM, ships its own `/etc/pam.d` file — the lockscreen authenticates through it |
+- **`lib/nidara-wl/`** (`gi://NidaraWl`): Wayland protocol wrappers (virtual pointer, layer shell visible region, window capture, focus grab).
+- **`lib/nidara-auth/`** (`gi://NidaraAuth`): PAM authentication wrapper and async conversation broker for the lockscreen (`/etc/pam.d/nidara-lock`).
 
-It used to be six. `aylurs-gtk-shell` (the `ags` CLI), `astal-gjs`, `libastal-io`, `astal-quarrel`
-and `libastal-gtk4` were the runtime and the toolchain, and both became ours on 2026-08-18
-(`ui/lib/host.ts`, `scripts/bundle.sh`) — the bundler is now the `esbuild` package from Arch's own
-`extra`. ⚠️ **`nidara-repo` must be told to stop building them**, in its `pins.env` +
-`scripts/gen-pkgbuilds.sh`; nothing here fails if it keeps doing so, it just burns CI time and
-keeps a dead `AGS_REF` alive in a second place.
-
-The pins live in **`install.sh`** (`ASTAL_REF` near the top). That is the single source of
-truth; bump them there and re-test a clean install before tagging a release.
+All package dependencies are standard packages available in the official Arch Linux repositories (`extra`).
 
 ## Why packages instead of `meson install`
 

@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 // @ts-ignore
-import AstalAuth from "gi://AstalAuth"
+import NidaraAuth from "gi://NidaraAuth"
 import { getCurrentUser } from "../../lib/users"
 import { buildAuthCard } from "../../lib/auth-card"
 import { t } from "../lib/i18n"
@@ -36,7 +36,7 @@ export default function LockCard(onUnlock: () => void): Gtk.Widget {
     setLoading(true)
     card.clearError()
 
-    const pam = new AstalAuth.Pam()
+    const pam = new NidaraAuth.Pam()
     pam.username = user.username
 
     pam.connect("success", () => { onUnlock() })

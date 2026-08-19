@@ -35,6 +35,8 @@ ui/*/build/
 # are committed, same rule as nidara-input.
 lib/nidara-wl/build/
 /build/nidara-wl/
+lib/nidara-auth/build/
+/build/nidara-auth/
 
 # Media & Recordings
 *.mkv

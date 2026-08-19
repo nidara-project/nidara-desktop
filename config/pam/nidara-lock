@@ -1,0 +1,7 @@
+#%PAM-1.0
+# Nidara lockscreen PAM service configuration
+# Installed to /etc/pam.d/nidara-lock
+
+auth        include     system-auth
+account     include     system-auth
+session     include     system-auth

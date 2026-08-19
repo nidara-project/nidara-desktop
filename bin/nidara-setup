@@ -693,13 +693,13 @@ if [ -z "$USER_ONLY" ]; then
 # ~15 MiB, most of it the `ags` binary — small, but it is dead code with a
 # `/usr/bin` entry, and the user is the only one who can decide to remove it.
 # Say so, list exactly what is there, and let them run it. Never remove packages
-# on someone's behalf. (`libastal-auth` is deliberately NOT here: the lockscreen
-# and greeter still authenticate through it.)
+# on someone's behalf.
 _retired=""
 for p in aylurs-gtk-shell astal-gjs astal-quarrel appmenu-glib-translator \
          libastal-io libastal-gtk3 libastal-gtk4 libastal-apps libastal-battery \
          libastal-bluetooth libastal-greet libastal-hyprland libastal-mpris \
-         libastal-network libastal-notifd libastal-tray libastal-wireplumber; do
+         libastal-network libastal-notifd libastal-tray libastal-wireplumber \
+         libastal-auth; do
     pacman -Qq "$p" >/dev/null 2>&1 && _retired="$_retired $p"
 done
 if [ -n "$_retired" ]; then

@@ -7,7 +7,7 @@ Read this when running the installer, debugging a reload that won't take, lookin
 Arch-only provisioning. Three modes:
 
 - **`--system` (default):** installs Nidara **as a pacman package** (§6): it tries the prebuilt `nidara` package from the `[nidara]` repo — only when the tree IS the release it was built from (clean checkout of the `v$VERSION` tag, or a git-less release tarball) and with a version==VERSION lockstep guard — and on ANY miss (repo down, repo lagging the release, non-release tree) it builds the **same** `packaging/nidara/PKGBUILD` locally: the working tree is packed as the tarball makepkg expects (uncommitted changes included — the escape hatch installs what's here) and `pacman -U`'d. Either way **every installed file is pacman-owned** (upgradeable, removable, `pacman -Qo`-visible); `--overwrite '*'` hands over files that script-era installs wrote untracked into /usr, and known orphans (ags-v3 tree, crystal-shell theme, wallpaper.png, misplaced portal .conf) are cleaned explicitly. First-time setup then runs via `nidara-setup` (below). It keeps **no** persistent source copy and **migrates away** any legacy `~/.local/share/nidara/src` + `.source` from the old per-user model; the user's original download is disposable. **Release channel:** on a clean `main` checkout with `v*` tags available, it jumps to the newest tag and re-execs itself from there, so fresh installs get the latest release (never an unlabelled main snapshot that the first update would silently downgrade). Dirty trees, other branches/commits, and `--dev` are deliberate opt-outs; before the first release exists it's a no-op.
-- **`--dev`:** installs system binaries **and** writes `~/.config/nidara/.dev` pointing at the source tree. The UI launcher will then run `scripts/run.sh app.ts` from source instead of running the bundle. Registers the developer's own clone in `.source` (no managed copy). Dev installs keep the **direct-copy** flow (§4 build + §5 copies into /usr) — and **remove the `nidara` package first if present**, so a later `pacman -Syu` can't clobber the dev copies (this also makes the dev↔system toggle safe: going back to system reinstalls the package fresh). **Honours the pin-skip too:** re-running `./install.sh --dev` skips the pacman + libastal-auth rebuild when `/usr/share/nidara/pins` already match this script's pins (only a *positive* match skips — a missing pins file means a fresh machine, so it still builds). So iterating on the shell doesn't recompile Astal. Note you usually don't need to re-run it at all for UI changes — the shell runs from source, so Super+Shift+R reload suffices; re-run only when you touch system files (`bin/`, `config/`, portals, `.desktop`) or the install flow.
+- **`--dev`:** installs system binaries **and** writes `~/.config/nidara/.dev` pointing at the source tree. The UI launcher will then run `scripts/run.sh app.ts` from source instead of running the bundle. Registers the developer's own clone in `.source` (no managed copy). Dev installs keep the **direct-copy** flow (§3 build + §4 copies into /usr) — and **remove the `nidara` package first if present**, so a later `pacman -Syu` can't clobber the dev copies (this also makes the dev↔system toggle safe: going back to system reinstalls the package fresh). Iterating on the UI runs from source, so Super+Shift+R reload suffices; re-run `install.sh --dev` only when you touch system files (`bin/`, `config/`, native C libs, portals, `.desktop`) or the install flow.
 - **`nidara-setup`** (`/usr/bin/nidara-setup`): the idempotent first-time/system setup that *packaging can't do* — GI env in `/etc/environment`, per-user config seeding under `~/.config/nidara` plus a default `~/.config/kitty/` (never overwrites), uwsm env files + NVIDIA autodetect, greetd/DM setup (only when recognizably ours or no DM at all), service enablement (pipewire/wireplumber user units, power-profiles-daemon, bluetooth). System-environment detection (keyboard layout / timezone / locale) lives here too, next to its consumers. Reads payloads from `/usr/share/nidara/{defaults,config}` — shipped identically by the nidara package and by install.sh §5, so it behaves the same after `pacman -S nidara` and after a script install. Called by install.sh §5 and by `nidara-update`'s package path; a pacman-only user runs it once by hand: `sudo pacman -S nidara && nidara-setup`. (The old `--dev-repo` flag is gone — it symlinked hypridle.conf into the dev repo, but Settings → Power writes that file now, so UI changes were dirtying the repo working tree; it's seeded as a per-user copy like everything else, with a migration that preserves the old link's content. Idle-suspend default: the hypridle.conf seed gets a 30-min suspend listener appended ONLY when a battery is present — desktops default to never; Settings → Power overrides either way.) **`--user` mode = the first-login bootstrap** (issue #23): runs ONLY the per-user steps (config seeding incl. `.mcp.json`, uwsm env + NVIDIA autodetect, user services) and never touches sudo. `bin/nidara` (the session entry) invokes it at session start whenever `~/.config/nidara` is missing — so a user created AFTER install time (Settings → Users, `useradd`, archinstall, Calamares) gets seeded on first login, before Hyprland loads its config, and a deleted config dir self-heals. Fail-soft by design (`|| true`, log at `${XDG_RUNTIME_DIR:-/tmp}/nidara-first-login.log`): a seeding hiccup must never block the session. GTK/dconf theming for that new user then converges at shell boot (ThemeManager reconciles appearance.json → settings.ini + gsettings).
 - **`nidara-update`** (`/usr/bin/nidara-update`): three paths, tried in order.
   **Dev** — a dev install updates from its own registered clone (`.dev`/`.source`): `nidara-update` hands over to `install.sh --update`, which refuses on a dirty tree, fetches, fast-forwards the dev branch, then re-execs `--update-apply`.
@@ -15,81 +15,22 @@ Arch-only provisioning. Three modes:
   **Stateless (script-era installs)** — resolves the newest `v*` release tag on the remote with `git ls-remote`, shallow-clones just that tag (`--depth 1`) into a throwaway temp dir under `~/.cache/nidara/`, runs that clone's `install.sh --update-apply`, deletes the temp. Running this once on a pre-package install **migrates it to the package** (the clone's §6 installs nidara as a package, `--overwrite` takes over the untracked files), so every later update takes the package path.
   The apply pass behaves like `--system` but (a) writes **no** source marker, and (b) skips pacman + the Astal/AGS/appmenu rebuild when the pins (`/usr/share/nidara/pins`) match. It restarts `nidara.service` at the end. Settings → About checks the latest GitHub release and shows an update row (silent if the API is unreachable). **Carried local patches:** if `~/.config/nidara/.patches` exists (an agent keeps not-contributed repo fixes for this user — clone path inside; see `agent-contribution.md`, "Carrying a GLOBAL fix locally"), `nidara-update` refuses both blind paths and defers to the agent's flow (rebase `local/patches` onto the new tag → `install.sh --update-apply`, which builds a local package from the patched tree); `install.sh --update` likewise refuses to `checkout` a release over local-only commits instead of silently dropping them.
 
-### Pinned upstreams
+### Upstream dependencies
 
-These are bumped + clean-install-tested before tagging:
+**Zero external Astal dependencies (since 2026-08-20).**
+All previous Astal services were absorbed into native TypeScript (`core/`), the application host and bundler are native (`ui/lib/host.ts`, `scripts/bundle.sh`), and PAM authentication is native C (`lib/nidara-auth/`, `gi://NidaraAuth`).
 
-- `ASTAL_REF` — commit SHA, no tags. **The only one left**: it now pins `libastal-auth` alone.
-  (`AGS_REF` went with the toolchain on 2026-08-18, `APPMENU_REF` with the tray on the same day.)
+### Binary repo (`nidara-repo`) & packaging
 
-**Pins live in TWO places (permanent lockstep):** the ref also lives in
-`nidara-project/nidara-repo`'s `pins.env`. Bump **both** together — and note nidara-repo still
-builds packages this project no longer installs (the AGS/Astal-runtime five); pruning them there
-is a follow-up in that repo. This does **not** go away
-now that install.sh consumes the repo (below): install.sh keeps its `*_REF` for the
-from-source fallback and the update pin-skip record, so the two must stay in sync.
-
-### Binary repo (`nidara-repo`) — consumed by install.sh (source build = fallback)
-
-`github.com/nidara-project/nidara-repo` (public) is a **pacman binary repository** that
-ships pre-built copies of exactly the 18 packages `install.sh` would otherwise build from
-source (appmenu + 16 Astal libs + ags). CI builds them in an Arch container and publishes to
-GitHub Pages: `https://nidara-project.github.io/nidara-repo/$arch` (pacman repo name
-`nidara`, **GPG-signed since 2026-07-05**: every package + the repo db are signed in CI;
-clients use `SigLevel = Required DatabaseOptional`, and `install.sh` imports + lsigns the
-public key bundled at `packaging/nidara-repo.gpg` — it also migrates unsigned-era installs
-away from `Optional TrustAll`, in an unconditional block that runs even when phase 1 is
-pin-skipped). The committed
-PKGBUILDs there are generated from `pins.env` by `scripts/gen-pkgbuilds.sh`; their
-`build()`/`package()` are lifted verbatim from `install.sh`'s §2/§4 generators, but their
-**`makedepends` deliberately are NOT** — see the box below. Since the packaging switch it also ships
-**`nidara` itself**: `build-repo.sh` builds it LAST (the dep loop just installed the whole
-stack into the build host) from the release tag pinned by `NIDARA_REF` in `pins.env`, using
-the PKGBUILD found INSIDE that tag's tarball (`packaging/nidara/`) — the recipe travels with
-the release, so it can never drift from the tree it packages, and a lockstep gate refuses to
-publish if tag / `VERSION` / `pkgver` disagree.
-
-**The build toolchain there is DERIVED from the makedepends (2026-08-12), so
-`packaging/nidara/PKGBUILD`'s `makedepends` is load-bearing.** `build-repo.sh` runs
-`makepkg --nodeps` on purpose — the chain `pacman -U`s each package into the build host, so
-makepkg must not resolve anything — which means *nothing* installs a package's build deps for
-it. That job used to belong to a hand-typed list in the workflow, and it drifted in silence:
-`hyprland-protocols` was declared correctly here and missing there, so v0.7.0 (the first
-release to generate Wayland protocol glue) died on
-`missing protocol: …/hyprland-focus-grab-v1.xml`. Now `nidara-repo/scripts/build-deps.sh`
-unions the `makedepends` of every PKGBUILD it builds — including this one, read out of the
-release tag — so **anything `build()` reaches for must be named in `makedepends` or it will
-not exist in the build container**. `install.sh`'s own generators keep a minimal list on
-purpose (§1's `pacman -S` ran first); the authoritative per-lib lists live in that repo's
-`gen-pkgbuilds.sh`, derived from each lib's `meson.build` at the pinned revision.
-
-**A clean-install VM does not cover this, by construction** — there the deps arrive with the
-rest of the system. The two test beds are complementary: the VM proves the installer on a
-virgin box, the build container proves the dependency chain. nidara-repo builds pull requests
-now (unsigned, no publish) precisely so that chain can be proven before it lands.
-
-**Status (validated E2E in a clean VM, 2026-06-21; the list has shrunk since):** `install.sh` §1
-registers `[nidara]` in `/etc/pacman.conf` (idempotent) and `pacman -S`'s what is left of the
-stack **explicitly** — since 2026-08-18 that is **one package, `libastal-auth`**, which declares
-`depends=()`, so dep resolution alone won't pull it. After `pacman -S` a
-**lockstep guard** verifies the installed version actually encodes this script's pin
-(pkgver = `r<sha7>`) — because a repo that lags a pin bump
-makes `pacman -S` "succeed" with a STALE version, which the source fallback would never
-catch on its own. Only on a clean match does it set `DEPS_FROM_REPO=yes` so §2 skips its
-from-source build. **Any repo miss** (down, missing package, or the
-version guard failing) leaves `DEPS_FROM_REPO=no` and falls through to the source build —
-the installer still succeeds, just slower. That fallback is exactly why install.sh keeps
-its own `*_REF` pins (also recorded to `PINS_FILE` for the update pin-skip). Both branches
-validated E2E in a clean VM (repo current → "pins verified" skip; pin bump the repo hadn't
-caught up to → guard WARN → source build). See tech-debt #21 and `packaging/README.md`.
+`github.com/nidara-project/nidara-repo` publishes `nidara` itself as a signed pacman package (`https://nidara-project.github.io/nidara-repo/$arch`). The PKGBUILD lives inside this repository (`packaging/nidara/PKGBUILD`), which compiles and packages the shell bundles, shims, assets, and both native C libraries (`libnidara-wl` and `libnidara-auth`).
 
 ### Install steps (in order)
 
-1. `pacman` deps (also registers `[nidara]` in `pacman.conf`).
-2. Install `libastal-auth` from `nidara-repo` (prebuilt). **Fallback** (repo down/incomplete) builds it from source. It is the ONLY Astal package left — everything else was absorbed into `core/` (see the Astal row in `architecture.md`), `appmenu-glib-translator` left with `libastal-tray`, and `aylurs-gtk-shell`/`astal-gjs`/`libastal-io`/`astal-quarrel`/`libastal-gtk4` left with the toolchain, all on 2026-08-18. **install.sh has 6 steps now, not 7** — the AGS CLI build was §4.
+1. `pacman` dependencies (from official Arch repos).
+2. Configure GObject Introspection (`ldconfig`).
 3. Build — **dev-like installs only**: `npm install` + SCSS compile + `scripts/bundle.sh` × 3 (shell, greeter, lockscreen). System installs skip this: the build happens inside makepkg (or comes prebuilt).
-4. Install system files — **system**: the nidara *package* (prebuilt from nidara-repo, else local makepkg — see `--system` above). **Dev**: direct copies of binaries/configs/session entry/portals into /usr (package removed first). Pins recorded either way (untracked installer bookkeeping).
-5. First-time setup via **`nidara-setup`** (see above): seeds `~/.config/nidara/` (**never overwrites existing user config**), uwsm env + NVIDIA, greetd (**only if recognizably ours or no other DM is enabled**), enables pipewire/wireplumber (user), power-profiles-daemon + bluetooth (system). install.sh itself only writes the install-mode markers (`.dev`/`.source`).
+4. Install system files — **system**: the nidara *package* (prebuilt from nidara-repo, else local makepkg). **Dev**: direct copies of binaries/configs/session entry/portals into `/usr` + compilation and installation of native C libraries (`libnidara-wl` and `libnidara-auth`) and `/etc/pam.d/nidara-lock`.
+5. First-time setup via **`nidara-setup`**: seeds `~/.config/nidara/` (**never overwrites existing user config**), uwsm env + NVIDIA, greetd (**only if recognizably ours or no other DM is enabled**), enables pipewire/wireplumber (user), power-profiles-daemon + bluetooth (system). `install.sh` itself only writes the install-mode markers (`.dev`/`.source`).
 
 ### Detection (no questions asked)
 

@@ -4223,3 +4223,12 @@ comment upstream mentioned: `--tsconfig` (it decides `useDefineForClassFields`, 
 whether a class field on a GObject subclass shadows the property accessor) and the wrapper's
 `LD_PRELOAD` (no bar, no dock, no log line).
 
+### 77. Native PAM Authentication & Zero-Astal State (2026-08-20)
+
+`libastal-auth` was the very last external Astal dependency. It was vendored and replaced by **`lib/nidara-auth/`** (our own native C library + GObject Introspection typelib `NidaraAuth-1.0.typelib` / `gi://NidaraAuth`).
+
+- **Architecture:** `NidaraAuthPam` runs PAM authentication in a background worker `GThread`, marshals conversation prompt callbacks via GLib `g_idle_add` to ensure thread-safe GJS signal delivery, blocks on `GMutex`/`GCond` until `supply_secret` is called, wipes secrets with `explicit_bzero`, and auto-resolves between `/etc/pam.d/nidara-lock` and `system-auth`.
+- **Packaging:** `packaging/nidara/PKGBUILD` and `install.sh` compile and install `libnidara-auth` directly (via `build.sh`) alongside `libnidara-wl`.
+- **Result:** Astal is 100% eliminated from the desktop environment — 0 external git clones, 0 external AUR packages, 0 pinned ASTAL_REF SHAs. All runtime services are pure TypeScript, native C, and standard Arch packages.
+
+
