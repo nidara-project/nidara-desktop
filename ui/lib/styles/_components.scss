@@ -512,33 +512,9 @@ dropdown popover {
 
     listview {
         @include nidara-reset;
-        // The row-fill halo — SIDES ONLY, and that asymmetry is the point.
-        //
-        // Horizontally it is the usual two constraints in one number: (1) CONCENTRIC —
-        // a radius-md corner holding radius-sm rows wants 16 − 10 = 6 (`rowInsetFor` in
-        // tokens.ts); (2) ALIGNMENT AXIS — the list is the trigger OPENED, so an option
-        // sits on the same left edge as the value it replaces: 1 (border) + 6 + the row's
-        // 9 = the trigger's 16 (2px border + 14 padding).
-        //
-        // 🔑 Vertically there is NO inset, because on a natively-scrollable list a
-        // vertical inset is not air — it is VIEWPORT. `GtkListView` is a `GtkScrollable`,
-        // so the ScrolledWindow hands it the whole card and it scrolls inside its own
-        // allocation: 6px of margin (or of padding — measured, they behave identically)
-        // takes the page size from 400 to 388 and the content is then CUT 6px inside the
-        // card instead of at its edge. A dead band, and the user read it as the top and
-        // bottom being more separated than the sides — which is exactly what it is.
-        // Everywhere else in the shell a list's vertical padding scrolls away with the
-        // content, because those lists sit in a `GtkViewport`; this one cannot (see
-        // NidaraDropDown for why the viewport is not an option here), so it gives up the
-        // air rather than clip at an inset. Measured with `scripts/dev/gtk-probe.js`:
-        // page_size 400 of 400.
-        //
-        // ⚠️ `nidara-reset` clears background/border/shadow/outline — NOT margin, and not
-        // padding. GTK's own theme ships `dropdown popover listview { margin: 8px }`
-        // (verified in Default-dark.css, extracted from libgtk's gresource) — all four
-        // sides, dead band included — so this line is also what stops a stranger's number
-        // from deciding the axis.
-        margin: 0 6px;
+        // The row-fill halo — 6px on all sides ensures breathing room and concentricity
+        // with the popover's border radius ($nidara-radius-md: 16px) across top, bottom and sides.
+        margin: 6px;
 
         // GTK's own item node carries NOTHING: no padding, no fill, no radius. The fill
         // lives on `.nidara-dropdown-item`, a box `NidaraDropDown` hands the factory,
