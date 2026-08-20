@@ -115,6 +115,33 @@ const ACCOUNT_IFACE_XML = `
   </interface>
 </node>`
 
+const BACKGROUND_IFACE_XML = `
+<node>
+  <interface name="org.freedesktop.impl.portal.Background">
+    <method name="GetAppState">
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantMap"/>
+      <arg type="a{sv}" name="apps" direction="out"/>
+    </method>
+    <method name="NotifyBackground">
+      <arg type="o" name="handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="name" direction="in"/>
+      <arg type="u" name="response" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out1" value="QVariantMap"/>
+      <arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <method name="EnableAutostart">
+      <arg type="s" name="app_id" direction="in"/>
+      <arg type="b" name="enable" direction="in"/>
+      <arg type="as" name="commandline" direction="in"/>
+      <arg type="u" name="flags" direction="in"/>
+      <arg type="b" name="result" direction="out"/>
+    </method>
+    <signal name="RunningApplicationsChanged">
+    </signal>
+  </interface>
+</node>`
+
 const interfaceSettings = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
 let a11ySettings = null
 try {
@@ -351,16 +378,57 @@ class AccountBackend {
     }
 }
 
+// ── Background Backend ──────────────────────────────────────────────────────
+class BackgroundBackend {
+    GetAppStateAsync(params, invocation) {
+        // Return mapping of app states (0=Background, 1=Running, 2=Active)
+        invocation.return_value(new GLib.Variant("(a{sv})", [{}]))
+    }
+
+    NotifyBackgroundAsync(params, invocation) {
+        const [, appId, name] = params
+        print(`[nidara-portal] NotifyBackground requested for "${name || appId || "unknown"}"`)
+        // 1 = Allow background activity
+        const results = {
+            result: new GLib.Variant("u", 1),
+        }
+        invocation.return_value(new GLib.Variant("(ua{sv})", [0, results]))
+    }
+
+    EnableAutostartAsync(params, invocation) {
+        const [appId, enable, commandline] = params
+        print(`[nidara-portal] EnableAutostart requested for ${appId}: ${enable}`)
+        const autostartDir = `${GLib.get_user_config_dir()}/autostart`
+        GLib.mkdir_with_parents(autostartDir, 0o755)
+        const desktopPath = `${autostartDir}/${appId}.desktop`
+
+        if (enable) {
+            const exec = (commandline && commandline.length > 0) ? commandline.join(" ") : appId
+            const content = `[Desktop Entry]\nType=Application\nName=${appId}\nExec=${exec}\nX-GNOME-Autostart-enabled=true\n`
+            GLib.file_set_contents(desktopPath, content)
+        } else {
+            if (GLib.file_test(desktopPath, GLib.FileTest.EXISTS)) {
+                try {
+                    Gio.File.new_for_path(desktopPath).delete(null)
+                } catch (_) {}
+            }
+        }
+        invocation.return_value(new GLib.Variant("(b)", [true]))
+    }
+}
+
 const loop = new GLib.MainLoop(null, false)
 const settingsBackend = new SettingsBackend()
 const wallpaperBackend = new WallpaperBackend()
 const dynamicLauncherBackend = new DynamicLauncherBackend()
 const accountBackend = new AccountBackend()
+const backgroundBackend = new BackgroundBackend()
 
 const exportedSettings = Gio.DBusExportedObject.wrapJSObject(SETTINGS_IFACE_XML, settingsBackend)
 const exportedWallpaper = Gio.DBusExportedObject.wrapJSObject(WALLPAPER_IFACE_XML, wallpaperBackend)
 const exportedDynamicLauncher = Gio.DBusExportedObject.wrapJSObject(DYNAMIC_LAUNCHER_IFACE_XML, dynamicLauncherBackend)
 const exportedAccount = Gio.DBusExportedObject.wrapJSObject(ACCOUNT_IFACE_XML, accountBackend)
+const exportedBackground = Gio.DBusExportedObject.wrapJSObject(BACKGROUND_IFACE_XML, backgroundBackend)
 
 Gio.bus_own_name(
     Gio.BusType.SESSION,
@@ -371,6 +439,7 @@ Gio.bus_own_name(
         exportedWallpaper.export(connection, OBJECT_PATH)
         exportedDynamicLauncher.export(connection, OBJECT_PATH)
         exportedAccount.export(connection, OBJECT_PATH)
+        exportedBackground.export(connection, OBJECT_PATH)
 
         // Live appearance updates
         interfaceSettings.connect("changed::accent-color", () => {
@@ -396,7 +465,7 @@ Gio.bus_own_name(
             })
         }
 
-        print(`[nidara-portal] serving Settings + Wallpaper + DynamicLauncher + Account on ${BUS_NAME}`)
+        print(`[nidara-portal] serving Settings + Wallpaper + DynamicLauncher + Account + Background on ${BUS_NAME}`)
     },
     null,
     () => {
