@@ -1,5 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
+import Gio from "gi://Gio"
 import GLib from "gi://GLib"
+import Icons from "../core/Icons"
 
 // MenuModelLike / ActionGroupLike aren't surfaced by the @girs stub here — alias
 // them. The three callers pass a real Gio.MenuModel: the dock and app grid build
@@ -25,6 +27,42 @@ const MAX_DEPTH = 4
 function variantStr(v: GLib.Variant | null): string | null {
     if (!v) return null
     try { return v.unpack() as string } catch { return null }
+}
+
+function variantBool(v: GLib.Variant | null): boolean | null {
+    if (!v) return null
+    try {
+        const val = v.unpack()
+        if (typeof val === "boolean") return val
+        if (typeof val === "number") return val === 1
+        return null
+    } catch { return null }
+}
+
+function getIconFromModel(
+    safeAttr: (m: MenuModelLike, i: number, name: string) => GLib.Variant | null,
+    m: MenuModelLike,
+    i: number,
+): { gicon?: any; iconName?: string } | null {
+    const iconVar = safeAttr(m, i, "icon")
+    if (iconVar) {
+        try {
+            const gicon = Gio.Icon.deserialize(iconVar)
+            if (gicon) return { gicon }
+        } catch {}
+        try {
+            const str = iconVar.unpack()
+            if (typeof str === "string" && str) return { iconName: str }
+        } catch {}
+    }
+    const iconNameVar = safeAttr(m, i, "icon-name")
+    if (iconNameVar) {
+        try {
+            const str = iconNameVar.unpack()
+            if (typeof str === "string" && str) return { iconName: str }
+        } catch {}
+    }
+    return null
 }
 
 export function renderMenuModel(
@@ -65,13 +103,35 @@ export function renderMenuModel(
         css_classes: ["nidara-menu-header"],
     })
 
-    const makeRow = (label: string, onClick: () => void): Gtk.Button => {
-        const inner = new Gtk.Box({ spacing: 12 })
+    const makeRow = (
+        label: string,
+        onClick: () => void,
+        opts: { iconInfo?: { gicon?: any; iconName?: string } | null; checked?: boolean; sensitive?: boolean } = {}
+    ): Gtk.Button => {
+        const inner = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
+        if (opts.iconInfo?.gicon) {
+            inner.append(new Gtk.Image({ gicon: opts.iconInfo.gicon, pixel_size: 15, valign: Gtk.Align.CENTER }))
+        } else if (opts.iconInfo?.iconName) {
+            inner.append(new Gtk.Image({ icon_name: opts.iconInfo.iconName, pixel_size: 15, valign: Gtk.Align.CENTER }))
+        }
         inner.append(new Gtk.Label({
             label, halign: Gtk.Align.START, hexpand: true, xalign: 0, ellipsize: 3, max_width_chars: 34,
             css_classes: ["nidara-menu-label"],
         }))
-        const btn = new Gtk.Button({ child: inner, css_classes: ["nidara-menu-row"], hexpand: true })
+        if (opts.checked) {
+            inner.append(new Gtk.Image({
+                gicon: Icons.check,
+                pixel_size: 15,
+                css_classes: ["nd-icon"],
+                valign: Gtk.Align.CENTER,
+            }))
+        }
+        const btn = new Gtk.Button({
+            child: inner,
+            css_classes: ["nidara-menu-row"],
+            hexpand: true,
+            sensitive: opts.sensitive ?? true,
+        })
         btn.connect("clicked", onClick)
         return btn
     }
@@ -106,9 +166,21 @@ export function renderMenuModel(
                 const action = variantStr(safeAttr(m, i, "action"))
                 if (!label && !action) continue   // stray placeholder
                 const target = safeAttr(m, i, "target")
+
+                const iconInfo = getIconFromModel(safeAttr, m, i)
+                const toggleType = variantStr(safeAttr(m, i, "toggle-type"))
+                const toggleState = variantBool(safeAttr(m, i, "toggle-state"))
+                const isChecked = (toggleType === "checkmark" || toggleType === "radio") && toggleState === true
+
+                const enabledAttr = variantBool(safeAttr(m, i, "enabled")) ?? variantBool(safeAttr(m, i, "sensitive"))
+
                 box.append(makeRow(label || "…", () => {
                     onClose()
                     if (action) activateLater(action, target)
+                }, {
+                    iconInfo,
+                    checked: isChecked,
+                    sensitive: enabledAttr ?? true,
                 }))
             } catch { /* skip a bad item, never take down the UI */ }
         }

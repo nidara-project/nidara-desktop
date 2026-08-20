@@ -4153,14 +4153,15 @@ spawning `Exec=` under `uwsm app` — still inside the systemd slice, unlike the
 fallback it replaced, which spawned the app as a child of the shell. **Nobody has diagnosed WHY
 gtk-launch fails for those entries**; the warning is there so the next person has a thread to pull.
 
-### 74. Tray context menus don't draw checkmarks or row icons (deferred, 2026-08-18)
-`core/dbusmenu.ts` reads `toggle-type`/`toggle-state` and builds STATEFUL actions for them, and it
-reads `icon-name` per row — but `common/NidaraMenu.ts` renders labels, actions and links only, so a
-checked "Mute notifications" looks exactly like an unchecked one. **Not a regression**:
-`appmenu-glib-translator` produced the same state and NidaraMenu ignored it just the same, so this is
-older than the replacement. It is deferred rather than done because drawing a check is a design
-decision about the menu row (where the mark sits, whether a row icon is allowed at all, how it reads
-against the glass), not a plumbing one — the state is already there when someone wants it.
+### 74. ✅ FIXED — Tray context menus draw checkmarks, row icons and sensitivity (2026-08-18 → 2026-08-20)
+
+Fixed in `core/dbusmenu.ts` (propagates `icon-name`, `toggle-type`, `toggle-state`, and `enabled` attributes
+onto `Gio.MenuItem`) and `common/NidaraMenu.ts` (renders trailing `Icons.check` when `toggle-state` is true,
+leading icons when provided, and sets row sensitivity from `enabled`).
+
+`core/dbusmenu.ts` reads `toggle-type`/`toggle-state` and builds stateful actions for them, and it
+reads `icon-name` per row. `common/NidaraMenu.ts` now reads these attributes and draws trailing checkmarks
+and optional leading icons matching the universal menu design convention in `MenuRow.ts`.
 
 Same file, same class: `disposition` (`informative`/`warning`/`alert`) is not requested and not drawn.
 No app Nidara ships with has ever sent one.

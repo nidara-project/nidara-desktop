@@ -22,10 +22,9 @@
 // and it is why `surfaces/bar/Tray.tsx` builds its menus lazily. There is no
 // incremental parser here to corrupt.
 //
-// ⚠️ Deliberate parity gap: `toggle-type`/`toggle-state` become stateful actions
-// but nothing DRAWS a checkmark — NidaraMenu reads labels/actions/links only. That
-// was already true with the translator, so this is not a regression; see
-// `references/tech-debt.md`.
+// Toggle and icon attributes (`toggle-type`, `toggle-state`, `icon-name`) are
+// attached to `Gio.MenuItem` instances so `common/NidaraMenu.ts` renders
+// checkmarks and icons while keeping actions stateful.
 
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
@@ -192,7 +191,18 @@ export class DbusMenu {
                 const name = `id-${child.id}`
                 seen.add(name)
                 this.ensureAction(name, child.id, p)
-                section.append(label || "…", `dbusmenu.${name}`)
+                const item = Gio.MenuItem.new(label || "…", `dbusmenu.${name}`)
+                if (p["icon-name"]) {
+                    item.set_attribute_value("icon-name", GLib.Variant.new_string(String(p["icon-name"])))
+                }
+                if (p["toggle-type"]) {
+                    item.set_attribute_value("toggle-type", GLib.Variant.new_string(String(p["toggle-type"])))
+                    item.set_attribute_value("toggle-state", GLib.Variant.new_boolean(p["toggle-state"] === 1))
+                }
+                if (p["enabled"] !== undefined) {
+                    item.set_attribute_value("enabled", GLib.Variant.new_boolean(isTrue(p["enabled"], true)))
+                }
+                section.append_item(item)
             }
             flush()
         }
