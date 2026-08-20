@@ -56,7 +56,7 @@ class WallpaperManager extends GObject.Object {
     private _preview: any = null
     private _previewPath = ""
     private _previewLoading = false
-    private _bgSettings: Gio.Settings | null = null
+    private _bgSettings: any = null
     private _syncingGsettings = false
 
     constructor() {
