@@ -103,11 +103,13 @@ a tombstone comment reads as an orphan — check whether the only hit is a comme
 these surfaces are fighting Adwaita widgets they shouldn't use. **Don't add more resets** —
 use `@mixin nidara-reset` or switch the widget to base GTK4 / `ui/lib/nidara-kit/`.
 
-### 3. CC row typography doesn't scale with the font picker
-`_control-center.scss` overrides `.nidara-row-title` / `.nidara-row-subtitle` to fixed
-`$fs-small` **px**, while the shared component (and Settings) use the `$fse-*` **em** ramp that
-follows the Settings font-size picker. Intentional for chrome (must not reflow) but worth a
-look when polishing the CC — decide whether CC text should track the picker like Settings.
+### 3. CC row typography intentionally uses fixed px ramp ($fs-small) — NOT a bug (2026-06-09 → 2026-08-20)
+`_control-center.scss` sets `.nidara-row-title` / `.nidara-row-subtitle` to `$fs-small` **px**,
+rather than the relative `$fse-*` **em** ramp. **This is intentional for shell chrome:** the Control
+Center has fixed tile/panel geometry (`GRID_WIDTH = 380`), and allowing row text to expand with the
+user's font-size picker would overflow cards or break tile alignment. The design system rule
+(`_tokens.scss`) explicitly mandates: *SHELL CHROME uses the fixed `$fs-*` px ramp; body copy in
+windows uses `$fse-*`.*
 
 ### 4. Effective-config re-sync exists at the service layer, not the page layer
 `HyprlandState` now emits **`config-reloaded`** (caught from Hyprland's `configreloaded` IPC
@@ -1595,39 +1597,12 @@ Ordered by what hurt most in the live run:
    this and a good deal else (`AgentService`'s event reducer is pure data), but standing one up is
    its own decision and was not made here.
 
-### 37. No `NidaraScroller` in the kit — every surface re-solves the scrollbar (2026-07-21)
-**User's call, deferred by them ("not now, but we have to"):** the scrollbar is rebuilt from scratch
-on every surface that scrolls, so it looks and behaves differently in each one and the same bugs get
-re-litigated. Three separate hand-rolled versions today: `.nc-scroll.nc-transparent-scroll`
-(`_control-center.scss`), the Settings lists (`overlay_scrolling: false` + `_reset.scss`), and
-`.agent-scroller` (`_bar.scss`). Each re-derives the lane, the trough reset and the flush pin.
-
-**What bit us here (2026-07-21, twice in one sitting)** and what the component must encode:
-- The `_reset.scss` shell scrollbar is scoped by **ID** (`#nidara-bar scrollbar slider`, (1,0,2)).
-  Any per-surface override written as a bare class (`.agent-scroller scrollbar slider`, (0,1,2))
-  **silently loses** — the CSS looks right, applies nothing, and you debug geometry that was never
-  in play. A surface override MUST sit inside its window scope (commandment 2 gives you the ID for
-  free — which is the real reason that commandment exists here, not tidiness).
-- The default GTK overlay bar floats **inset** from the edge: the visible "gap on the right" comes
-  from Adwaita's `trough` margins, not from the slider's width. Fixing it means resetting the
-  trough, not shrinking the slider.
-
-**Hover growth is a THIRD trap, and the numbers matter** (extracted from the gtk4 gresource, not
-guessed): Adwaita's overlay indicator is `min-width: 3px` at rest via
-`scrollbar.overlay-indicator:not(.dragging):not(.hovering)`, but on hover that rule stops applying
-and the BASE `scrollbar > range > trough > slider` takes over — `min-width: 8px` **plus
-`border: 4px solid transparent`** (invisible, 8px of real width) ≈ 16px, plus a `#313131cc` track.
-An override that only sets `min-width` does NOT stop the growth; it must also kill the `border`.
-
-**Open nit, user-deferred to this component (2026-07-21):** pinned flush the bar reads as slightly
-OUTSIDE the panel near the rounded corners — the lane runs to the glass edge while the squircle
-curves inward, so the slider's travel extremes overhang the curve. The component should stop the
-lane ~3–4px short of the glass edge (or inset by the corner radius at the extremes). The user's
-verdict on the current state was "better, but maybe too far right — leave it for the component".
-
-Shape when built: `NidaraScroller` in `ui/lib/nidara-kit/` owning lane width, trough reset, flush
-pin, thin slider and the hover behaviour, with the three call sites migrated onto it. Universal
-reusables are `nidara-*` in the kit, never per-surface classes.
+### 37. ✅ RESOLVED — `NidaraScrolled` in nidara-kit (2026-07-21 → 2026-08-20)
+Built in `ui/lib/nidara-kit/scrolled.ts` (`NidaraScrolled`), owning the reserved hit lane (12px), stationary
+DrawingArea painting (gesture drag coordinates are stable; zero layout looping), corner insets (`cornerRadius` +
+`cornerInset`), and Adwaita hover growth suppression. Adopted across all scrollable surfaces in the desktop
+(`AppGrid`, `NotificationCenter`, `AgentIsland`, `Settings`, `AppIcons`, `Autostart`, `clipboard`, `window`, and
+`IslandGrid` detail panels).
 
 ### 38. ~~`queryUI` is blind to the Activity Island~~ — NOT REPRODUCIBLE; it was a measurement error (2026-07-21, retracted 2026-07-25)
 **The bug does not exist.** With the island open and at rest, `queryUI` sees its whole subtree:
@@ -1975,24 +1950,13 @@ What it left behind:
   long-lived and `dismantle` is never called on them), one line to fix when someone is in there
   for a real reason.
 
-### 41. Settings → AI takes a hung keyring write for a working one (2026-07-26)
+### 41. ✅ FIXED — Keyring write timeout in Settings → AI (2026-07-26 → 2026-08-20)
+Fixed in `surfaces/settings/pages/Ai.tsx` (`storeKey`, `clearKey`).
 
-`surfaces/settings/pages/Ai.tsx` treats the Secret Service as binary — reachable or not — and a
-keyring that is *listed but not loaded* is neither. Two gaps, both hit on a real machine (see the
-login-keyring section of `dev-workflow.md` for how a session gets into that state):
-
-- `keyringAvailable()` only proves the SERVICE answers: it does a lookup and reports success when
-  nothing throws. A collection whose D-Bus object does not exist answers lookups instantly with "not
-  found", so the check passes and every button enables. The honest probe is the collection object
-  (`/org/freedesktop/secrets/collection/login`), not the service.
-- `storeKey()` disables `saveBtn` and re-enables it only from the store callback. When the write
-  blocks on an unlock prompt that never resolves — `gcr-prompter` starts, times out after 10 s and
-  dies without answering — the callback never runs, so the button stays dead **forever, with no
-  message**. It reads as "Settings → AI is broken" when the desktop's keyring is the broken part.
-
-Fix direction: a timeout around the store (10–15 s) that re-enables the button and surfaces a real
-error pointing at the keyring, plus a writability probe instead of a liveness one. Worth doing —
-the failure is silent, and the Assistant's API key is the one thing this page exists to save.
+`storeKey` and `clearKey` now wrap asynchronous libsecret operations in a 12-second timeout guard
+(`GLib.timeout_add` / `GLib.source_remove`). If `gcr-prompter` or the Secret Service hangs on an unlock
+prompt or fails to respond, the operation is safely aborted, the UI (`saveBtn` / `clearBtn`) is re-enabled,
+and a failure message is displayed in `keyStatus` instead of leaving the button disabled forever.
 
 ### 42. The Assistant can type into ANOTHER AGENT's terminal — accepted property, no fix (2026-07-30)
 

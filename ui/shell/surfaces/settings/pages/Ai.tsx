@@ -1,4 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
+import GLib from "gi://GLib"
 import Secret from "gi://Secret"
 import { listGroup, pageBox, toggleRow, createRow, createStackedRow, dropdownRow, staticLabel, actionRow, fieldWithActions, bindWhileRealized, onPageShown } from "../SettingsHelpers"
 import { NidaraButton, NidaraDropDown } from "../../../../lib/nidara-kit"
@@ -33,6 +34,8 @@ const KEY_SCHEMA = Secret.Schema.new(
     { provider: Secret.SchemaAttributeType.STRING },
 )
 
+const KEYRING_TIMEOUT_MS = 12000
+
 function keyringAvailable(): boolean {
     // A lookup for a non-existent attribute returns null when the service is up and
     // throws when it's down — the cheapest liveness probe.
@@ -63,6 +66,26 @@ function hasKey(provider: string): boolean {
 // lookup answers immediately even with no keyring at all (it reports "not found"),
 // so opening this page is safe.
 function storeKey(provider: string, key: string, done: (ok: boolean) => void): void {
+    let finished = false
+    let timeoutId: number | null = null
+
+    const finish = (ok: boolean) => {
+        if (finished) return
+        finished = true
+        if (timeoutId !== null) {
+            GLib.source_remove(timeoutId)
+            timeoutId = null
+        }
+        done(ok)
+    }
+
+    timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, KEYRING_TIMEOUT_MS, () => {
+        timeoutId = null
+        console.warn(`[Ai] keyring store timed out after ${KEYRING_TIMEOUT_MS}ms for provider ${provider}`)
+        finish(false)
+        return GLib.SOURCE_REMOVE
+    })
+
     try {
         Secret.password_store(
             KEY_SCHEMA, { provider }, Secret.COLLECTION_DEFAULT,
@@ -72,26 +95,46 @@ function storeKey(provider: string, key: string, done: (ok: boolean) => void): v
                 try { ok = Secret.password_store_finish(res) } catch (e) {
                     console.error("[Ai] keyring store failed:", e)
                 }
-                done(ok)
+                finish(ok)
             },
         )
     } catch (e) {
         console.error("[Ai] keyring store failed:", e)
-        done(false)
+        finish(false)
     }
 }
 
 function clearKey(provider: string, done: () => void): void {
+    let finished = false
+    let timeoutId: number | null = null
+
+    const finish = () => {
+        if (finished) return
+        finished = true
+        if (timeoutId !== null) {
+            GLib.source_remove(timeoutId)
+            timeoutId = null
+        }
+        done()
+    }
+
+    timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, KEYRING_TIMEOUT_MS, () => {
+        timeoutId = null
+        console.warn(`[Ai] keyring clear timed out after ${KEYRING_TIMEOUT_MS}ms for provider ${provider}`)
+        finish()
+        return GLib.SOURCE_REMOVE
+    })
+
     try {
         Secret.password_clear(KEY_SCHEMA, { provider }, null, (_src: any, res: any) => {
             try { Secret.password_clear_finish(res) } catch (e) {
                 console.error("[Ai] keyring clear failed:", e)
             }
-            done()
+            finish()
         })
     } catch (e) {
         console.error("[Ai] keyring clear failed:", e)
-        done()
+        finish()
     }
 }
 
