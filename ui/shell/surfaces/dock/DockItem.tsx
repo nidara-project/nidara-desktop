@@ -20,8 +20,7 @@ import shellActions from "../../core/ShellActions"
 import { safeDisconnect } from "../../core/signals"
 import { attachTooltip } from "../../common/Tooltip"
 import { renderMenuModel } from "../../common/NidaraMenu"
-import { sideFor, paintGlassBubble, ARROW_H, BUF } from "../../common/GlassBubble"
-import { RADIUS, rowInsetFor } from "../../../lib/tokens"
+import GlassBubbleMenu from "../../common/GlassBubbleMenu"
 
 // hypr kept as alias for hs to minimise diff surface in this file
 const hypr = hs
@@ -494,7 +493,7 @@ export function DockItem(
 
     const tip = attachTooltip(iconBox, computeTitle, {
         position: tooltipPosition,
-        suppress: () => !!(popover && popover.visible), // never while the context menu is open
+        suppress: () => !!(bubbleMenu && bubbleMenu.popover.visible), // never while the context menu is open
     })
 
     // MENU
@@ -504,53 +503,20 @@ export function DockItem(
     // aimed back at the dock item — and the rows are the unified nidara menu
     // (renderMenuModel, same component as the bar tray menu). It's its own surface,
     // so it picks up Hyprland's dock-layer popup blur (the painter floors at 0.38).
-    let popover: Gtk.Popover | null = null
-    let menuRows: Gtk.Box | null = null   // stable host; rows are rebuilt per show
-    let menuThemeId = 0                    // glass repaint on appearance/opacity change
+    let bubbleMenu: GlassBubbleMenu | null = null
     let popupIdleId: number | null = null
 
     const toSentenceCase = (str: string) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : ""
 
     const ensurePopover = () => {
-        if (popover) return
-        const side = sideFor(tooltipPosition)
-        popover = new Gtk.Popover({
-            autohide: true,             // grabs focus; dismiss on outside click
-            has_arrow: false,           // we paint our own pointer in Cairo
-            css_classes: ["nidara-menu-popover"],
+        if (bubbleMenu) return
+        bubbleMenu = new GlassBubbleMenu({
+            parent: iconBox,
+            position: tooltipPosition,
         })
-        ;(popover as any).position = tooltipPosition
-        popover.set_has_tooltip(false)
-
-        // Glass bubble painted behind the rows; rows rebuilt per show into the stable
-        // menuRows box (one Theme subscription, not one per show). Same arrow as the
-        // tooltip (GlassBubble's shared default) — reserve its protrusion in the margins.
-        const grid = new Gtk.Grid()
-        const da = new Gtk.DrawingArea({
-            hexpand: true, vexpand: true,
-            halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
-        })
-        da.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, side, { radiusMax: RADIUS.lg, n: 3.2 }))
-        grid.attach(da, 0, 0, 1, 1)
-
-        menuRows = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nidara-menu"] })
-        // Same halo AND the same silhouette as every other menu of rows: the bubble is
-        // painted at radius lg with the shell's squircle exponent (see the draw func
-        // above), so it reads as the system menu with a pointer, not as its own shape
-        // language. A bubble is not a different kind of menu just because it has an arrow.
-        const PAD = rowInsetFor(RADIUS.lg)
-        menuRows.margin_top    = BUF + PAD + (side === "top"    ? ARROW_H : 0)
-        menuRows.margin_bottom = BUF + PAD + (side === "bottom" ? ARROW_H : 0)
-        menuRows.margin_start  = BUF + PAD + (side === "left"   ? ARROW_H : 0)
-        menuRows.margin_end    = BUF + PAD + (side === "right"  ? ARROW_H : 0)
-        grid.attach(menuRows, 0, 0, 1, 1)
-
-        menuThemeId = Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
-        popover.set_child(grid)
-        popover.set_parent(iconBox)
-        popover.connect("notify::visible", () => {
-            if (popover?.visible) {
-                _activeDockMenu = popover
+        bubbleMenu.popover.connect("notify::visible", () => {
+            if (bubbleMenu?.popover.visible) {
+                _activeDockMenu = bubbleMenu.popover
                 changeMenuCount(1)
             } else {
                 _activeDockMenu = null
@@ -651,22 +617,21 @@ export function DockItem(
         // activates actions on the passed group directly (stripping the "dock."
         // prefix), so no widget action group is needed. The returned box closes
         // over actionGroup, keeping it alive as long as the rows live.
-        if (menuRows) {
-            let c = menuRows.get_first_child()
-            while (c) { const next = c.get_next_sibling(); menuRows.remove(c); c = next }
-            menuRows.append(renderMenuModel(menuModel, actionGroup, () => popover?.popdown()))
+        if (bubbleMenu) {
+            bubbleMenu.clearRows()
+            bubbleMenu.rows.append(renderMenuModel(menuModel, actionGroup, () => bubbleMenu?.popdown()))
         }
     }
 
     const rightClick = new Gtk.GestureClick({ button: 3 })
     rightClick.connect("released", () => {
         if (popupIdleId !== null) { GLib.source_remove(popupIdleId); popupIdleId = null }
-        if (popover && popover.visible) { popover.popdown(); return }
+        if (bubbleMenu && bubbleMenu.popover.visible) { bubbleMenu.popdown(); return }
         ensurePopover()
         updateMenuModel()
         popupIdleId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
             popupIdleId = null
-            if (popover) popover.popup()
+            if (bubbleMenu) bubbleMenu.popup()
             return GLib.SOURCE_REMOVE
         })
     })
@@ -829,8 +794,12 @@ export function DockItem(
         if (popupIdleId !== null) { GLib.source_remove(popupIdleId); popupIdleId = null }
         // Unparent the context menu + drop its glass repaint subscription when the
         // dock is rebuilt on layout changes.
-        if (menuThemeId) { safeDisconnect(Theme, menuThemeId); menuThemeId = 0 }
-        if (popover) { popover.popdown(); popover.unparent(); popover = null; menuRows = null }
+        if (bubbleMenu) {
+            bubbleMenu.popdown()
+            bubbleMenu.destroy()
+            bubbleMenu.popover.unparent()
+            bubbleMenu = null
+        }
         if (unsubTrash) { unsubTrash(); unsubTrash = null }
     })
     sync()

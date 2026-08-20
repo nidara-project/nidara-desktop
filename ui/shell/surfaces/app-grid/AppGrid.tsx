@@ -13,7 +13,7 @@ import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
 import SquircleContainer from "../../common/SquircleContainer"
-import { RADIUS, rowInsetFor } from "../../../lib/tokens"
+import { RADIUS } from "../../../lib/tokens"
 import Theme from "../../core/ThemeManager"
 import Cairo from "gi://cairo"
 import shellActions from "../../core/ShellActions"
@@ -21,7 +21,7 @@ import { createSchematicMap } from "../../common/WorkspaceSchematic"
 import { safeDisconnect } from "../../core/signals"
 import { attachTooltip } from "../../common/Tooltip"
 import { renderMenuModel } from "../../common/NidaraMenu"
-import { sideFor, paintGlassBubble, ARROW_H, BUF, type ArrowSide } from "../../common/GlassBubble"
+import GlassBubbleMenu from "../../common/GlassBubbleMenu"
 
 // Extract just the desktop basename, stripping path and .desktop extension
 const normId = (s: string) => {
@@ -419,50 +419,14 @@ export default function AppGridPanel(
         // OVERLAY layer (blur_popups). The pointer is painted by us, so we choose
         // the open direction ourselves (the item can sit anywhere in the grid) and
         // aim the arrow back at it — GTK's own flip would desync a fixed Cairo arrow.
-        let menuPopover: Gtk.Popover | null = null
-        let menuRows: Gtk.Box | null = null
-        let menuDraw: Gtk.DrawingArea | null = null
-        let menuSide: ArrowSide = "top"
+        let bubbleMenu: GlassBubbleMenu | null = null
 
         const ensureMenu = () => {
-            if (menuPopover) return
-            menuPopover = new Gtk.Popover({
-                autohide: true,        // grabs focus; dismiss on outside click
-                has_arrow: false,      // we paint our own pointer in Cairo
-                css_classes: ["nidara-menu-popover"],
+            if (bubbleMenu) return
+            bubbleMenu = new GlassBubbleMenu({
+                parent: item,
+                position: Gtk.PositionType.BOTTOM,
             })
-            menuPopover.set_has_tooltip(false)
-
-            const grid = new Gtk.Grid()
-            menuDraw = new Gtk.DrawingArea({
-                hexpand: true, vexpand: true,
-                halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
-            })
-            menuDraw.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, menuSide, { radiusMax: RADIUS.lg, n: 3.2 }))
-            grid.attach(menuDraw, 0, 0, 1, 1)
-
-            menuRows = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nidara-menu"] })
-            grid.attach(menuRows, 0, 0, 1, 1)
-
-            const themeId = Theme.connect("changed", () => { if (menuDraw?.get_mapped()) menuDraw.queue_draw() })
-            menuPopover.connect("destroy", () => safeDisconnect(Theme, themeId))
-            menuPopover.set_child(grid)
-            menuPopover.set_parent(item)
-            // Nothing to do on "closed": the popup evicted our focus grab when it
-            // opened, and FocusGrab notices the popover in this window's widget tree,
-            // SUSPENDS the lease and retakes it here by itself (common/FocusGrab.ts).
-        }
-
-        const layoutMenu = () => {
-            if (!menuRows) return
-            // Same halo and silhouette as every other menu of rows (system menu, CC
-            // context menu, bar panels): lg squircle body, arrow spliced in. The row's
-            // hover fill spans this box, so this margin is the fill's own halo.
-            const PAD = rowInsetFor(RADIUS.lg)
-            menuRows.margin_top    = BUF + PAD + (menuSide === "top"    ? ARROW_H : 0)
-            menuRows.margin_bottom = BUF + PAD + (menuSide === "bottom" ? ARROW_H : 0)
-            menuRows.margin_start  = BUF + PAD + (menuSide === "left"   ? ARROW_H : 0)
-            menuRows.margin_end    = BUF + PAD + (menuSide === "right"  ? ARROW_H : 0)
         }
 
         const updateMenu = () => {
@@ -481,16 +445,15 @@ export default function AppGridPanel(
             actionGroup.add_action(pinAction)
             menuModel.append(isPinned ? t("settings.dock.dockitem.unpin") : t("app-grid.menu.pin"), "pin")
 
-            if (menuRows) {
-                let c = menuRows.get_first_child()
-                while (c) { const next = c.get_next_sibling(); menuRows.remove(c); c = next }
-                menuRows.append(renderMenuModel(menuModel, actionGroup, () => menuPopover?.popdown()))
+            if (bubbleMenu) {
+                bubbleMenu.clearRows()
+                bubbleMenu.rows.append(renderMenuModel(menuModel, actionGroup, () => bubbleMenu?.popdown()))
             }
         }
 
         const rightClick = new Gtk.GestureClick({ button: 3 })
         rightClick.connect("released", () => {
-            if (menuPopover?.visible) { menuPopover.popdown(); return }
+            if (bubbleMenu?.popover.visible) { bubbleMenu.popdown(); return }
             ensureMenu()
             // Open downward by default; flip up for items low in the launcher so the
             // menu stays on screen and the arrow still points back at the item.
@@ -502,13 +465,10 @@ export default function AppGridPanel(
                     pos = Gtk.PositionType.TOP
                 }
             }
-            menuPopover!.set_position(pos)
-            menuSide = sideFor(pos)
-            layoutMenu()
-            menuDraw?.queue_draw()
+            bubbleMenu!.setPosition(pos)
             updateMenu()
             GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-                menuPopover?.popup()
+                bubbleMenu?.popup()
                 return GLib.SOURCE_REMOVE
             })
         })

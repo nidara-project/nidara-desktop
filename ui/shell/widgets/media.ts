@@ -14,8 +14,7 @@ import * as media from "../core/MediaService"
 import Theme from "../core/ThemeManager"
 import { attachTooltip } from "../common/Tooltip"
 import { menuRow, menuSeparator } from "../common/MenuRow"
-import { sideFor, paintGlassBubble, ARROW_H, BUF, type ArrowSide } from "../common/GlassBubble"
-import { RADIUS, rowInsetFor } from "../../lib/tokens"
+import GlassBubbleMenu from "../common/GlassBubbleMenu"
 
 // NO bar variant. The Activity Island already carries the player as an activity
 // (IslandActivities' mediaActivity: cover art in the compact capsule the moment
@@ -111,52 +110,27 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
     })
     attachTooltip(sourceBtn, () => t("cc.media.source"))
 
-    let srcPopover: Gtk.Popover | null = null
-    let srcRows: Gtk.Box | null = null
-    let srcDraw: Gtk.DrawingArea | null = null
-    let srcSide: ArrowSide = "top"
-    let srcThemeId = 0
+    let bubbleMenu: GlassBubbleMenu | null = null
 
     const ensureSourceMenu = () => {
-        if (srcPopover) return
-        srcPopover = new Gtk.Popover({
-            autohide: true,        // grabs focus; dismiss on outside click
-            has_arrow: false,      // we paint our own pointer in Cairo
-            css_classes: ["nidara-menu-popover"],
+        if (bubbleMenu) return
+        bubbleMenu = new GlassBubbleMenu({
+            parent: sourceBtn,
+            position: Gtk.PositionType.BOTTOM,
+            side: "top",
         })
-        srcPopover.set_has_tooltip(false)
-        const grid = new Gtk.Grid()
-        srcDraw = new Gtk.DrawingArea({ hexpand: true, vexpand: true, halign: Gtk.Align.FILL, valign: Gtk.Align.FILL })
-        srcDraw.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, srcSide, { radiusMax: RADIUS.lg, n: 3.2 }))
-        grid.attach(srcDraw, 0, 0, 1, 1)
-        srcRows = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nidara-menu"] })
-        grid.attach(srcRows, 0, 0, 1, 1)
-        srcThemeId = Theme.connect("changed", () => { if (srcDraw?.get_mapped()) srcDraw.queue_draw() })
-        srcPopover.set_child(grid)
-        srcPopover.set_parent(sourceBtn)
-    }
-
-    const layoutSourceMenu = () => {
-        if (!srcRows) return
-        // Same halo and silhouette as every other menu of rows (lg squircle + arrow).
-        const PAD = rowInsetFor(RADIUS.lg)
-        srcRows.margin_top    = BUF + PAD + (srcSide === "top"    ? ARROW_H : 0)
-        srcRows.margin_bottom = BUF + PAD + (srcSide === "bottom" ? ARROW_H : 0)
-        srcRows.margin_start  = BUF + PAD + (srcSide === "left"   ? ARROW_H : 0)
-        srcRows.margin_end    = BUF + PAD + (srcSide === "right"  ? ARROW_H : 0)
     }
 
     const rebuildSourceRows = () => {
-        if (!srcRows) return
-        let c = srcRows.get_first_child()
-        while (c) { const next = c.get_next_sibling(); srcRows.remove(c); c = next }
-        srcRows.append(menuRow({
+        if (!bubbleMenu) return
+        bubbleMenu.clearRows()
+        bubbleMenu.rows.append(menuRow({
             label: t("cc.media.source.auto"),
             checked: media.pinnedBus() === null,
-            onClick: () => { media.pinPlayer(null); srcPopover?.popdown() },
+            onClick: () => { media.pinPlayer(null); bubbleMenu?.popdown() },
         }))
         const list = media.players()
-        if (list.length > 0) srcRows.append(menuSeparator())
+        if (list.length > 0) bubbleMenu.rows.append(menuSeparator())
         for (const pl of list) {
             // Dim current-title hint so two windows of the same app stay tellable apart
             const hint = new Gtk.Label({
@@ -164,19 +138,19 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
                 opacity: 0.55, ellipsize: 3, max_width_chars: 14, visible: !!pl.title,
             })
             const rowIcon = media.playerAppIcon(pl)
-            srcRows.append(menuRow({
+            bubbleMenu.rows.append(menuRow({
                 label: media.playerLabel(pl),
                 icon: rowIcon ?? Icons.play,
                 appIcon: !!rowIcon,
                 checked: media.pinnedBus() === pl.bus_name,
                 trailing: hint,
-                onClick: () => { media.pinPlayer(pl.bus_name); srcPopover?.popdown() },
+                onClick: () => { media.pinPlayer(pl.bus_name); bubbleMenu?.popdown() },
             }))
         }
     }
 
     sourceBtn.connect("clicked", () => {
-        if (srcPopover?.visible) { srcPopover.popdown(); return }
+        if (bubbleMenu?.popover.visible) { bubbleMenu.popdown(); return }
         ensureSourceMenu()
         // Open downward by default; flip up when the button sits low on screen so
         // the menu stays visible and the fixed Cairo arrow still points at it.
@@ -189,11 +163,9 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
                 pos = Gtk.PositionType.TOP
             }
         }
-        srcSide = sideFor(pos)
-        ;(srcPopover as any).position = pos
-        layoutSourceMenu()
+        bubbleMenu!.setPosition(pos)
         rebuildSourceRows()
-        srcPopover!.popup()
+        bubbleMenu!.popup()
     })
 
     const topRow = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
@@ -324,8 +296,11 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
         if (progressTimer !== null) { try { GLib.source_remove(progressTimer) } catch {} ; progressTimer = null }
         // The popover is parented to sourceBtn, not a child of root — release it
         // explicitly or GTK warns on dispose. Nulled so a re-realize would rebuild.
-        safeDisconnect(Theme, srcThemeId); srcThemeId = 0
-        if (srcPopover) { try { srcPopover.unparent() } catch {} ; srcPopover = null; srcRows = null; srcDraw = null }
+        if (bubbleMenu) {
+            bubbleMenu.destroy()
+            try { bubbleMenu.popover.unparent() } catch {}
+            bubbleMenu = null
+        }
     })
 
     updatePlayer()
