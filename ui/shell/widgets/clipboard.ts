@@ -253,7 +253,7 @@ function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh:
                     loadThumb(entry).then(pixbuf => {
                         // refresh() may have torn this row down while we decoded.
                         if (!pixbuf || !slot.get_parent()) return
-                        slot.append(squircleThumb(pixbuf, THUMB, THUMB, THUMB_RADIUS, "clip-thumb"))
+                        slot.append(squircleThumb(pixbuf, THUMB, THUMB, undefined, "clip-thumb"))
                     }).catch(() => { })
                 }
                 // Per-row delete. captureClick so the press never reaches the row's own

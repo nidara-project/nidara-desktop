@@ -73,7 +73,7 @@ export function createHeroWidget(n: Notification, size: number): Gtk.Widget | nu
     let pixbuf: any = null
     try { pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, size * 2, size * 2, true) } catch { return null }
     if (!pixbuf) return null
-    const da = squircleThumb(pixbuf, size, size, 12, "nc-hero")
+    const da = squircleThumb(pixbuf, size, size, undefined, "nc-hero")
     da.halign = Gtk.Align.END; da.valign = Gtk.Align.CENTER
     return da
 }
@@ -101,7 +101,7 @@ export function createExpandedHeroWidget(n: Notification, width: number): Gtk.Wi
     let pixbuf: any = null
     try { pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, width * 2, width * 2, true) } catch { return null }
     if (!pixbuf) return null
-    return squircleThumb(pixbuf, width, height, 16, "nc-hero-big")
+    return squircleThumb(pixbuf, width, height, undefined, "nc-hero-big")
 }
 
 // Relative timestamp for the NC cards. A helper (not inlined) so the per-minute

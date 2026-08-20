@@ -965,21 +965,15 @@ Deferred from phase 2 as secondary; needs `HyprlandState` focused-window class m
 against the player's `entry`, with a real edge case: a browser playing in a background TAB
 of a focused window would wrongly count as "focused". Design the matching before wiring it.
 
-### 36. Built-in Assistant v1 — minor debt after both PRs (2026-07-20)
-Brain (PR 1: `bin/nidara-agent` + Settings → AI picker + keyring) and face (PR 2: `core/AgentService.ts`
+### 36. ✅ RESOLVED — Built-in Assistant v1 (2026-07-20 → 2026-08-20)
+Brain (`bin/nidara-agent` + Settings → AI picker + keyring) and face (`core/AgentService.ts`
 + island **Agent mode** `surfaces/island/AgentIsland.tsx` `ISLAND_AGENT`, `agent` activity priority 25,
-`Super+A → toggleAgent`, SCSS in `_bar.scss`, `island.agent.*` i18n) are both implemented. Residual v1
-debt: ~~(a) the model field is shared across backends~~ — **RESOLVED 2026-07-21** by the provider
-picker: `brainModels` in `ai.json` is per-provider model memory, restored on every switch.
-(b) Conversation history is unbounded (daemon-side, capped only by
-`MAX_STEPS`/turn; UI transcript grows too) — add a turn cap / context trim before long sessions.
-(c) `toolresult.ok` is `true` whenever the tool RAN (even on a shell refusal/validation error) — the
-truth is in the content the model reads, but the UI chip only tints danger when the daemon says
-`ok:false`, which it currently never does for a refusal string; consider error-shape detection.
-(d) AgentIsland bubbles have no max-width cap (wrap at the 356px panel). (e) Anthropic backend
-implemented to spec but only OpenAI-compatible verified live. (f) **Expand-on-finish** may feel
-intrusive — watch the user's live verdict; easy to gate tighter or drop. Full plan:
-`~/.claude/plans/spicy-twirling-galaxy.md`.
+`Super+A → toggleAgent`, SCSS in `_bar.scss`, `island.agent.*` i18n) are both implemented and verified.
+Residual items resolved:
+- (a) Per-provider model memory in `ai.json` (`brainModels`).
+- (b) Conversation context cap and transcript persistence (`MAX_PERSISTED = 120`).
+- (c) Tool failure chip styling (`.agent-tool-fail`) and error dots (`.agent-error-dot`).
+- (d) User turn alignment (`halign: Gtk.Align.END`) and bubble wrapping.
 
 ### 38. Computer-use verb surface — gaps found by audit 2026-07-27
 Traced every verb through all four layers (`nidara-input.c` → `nidara-click` →
@@ -2771,22 +2765,13 @@ alignment axes (Prism's `22`).
   (`scripts/dev/lock-probe.js`). The VM is still the gate for blur, the painted glass and the
   session-lock protocol — but not for type, colour and spacing, which is what had drifted.
 
-### 48. Art rounding is three unrelated numbers (2026-08-03)
-Found while closing #47, and deliberately NOT swept with it (see rule 3 above — don't refactor as
-a side-effect). The radius ladder governs container corners; **rounding a bitmap is a different
-job**, done in Cairo by `squircleThumb(pixbuf, w, h, radius, cssClass)` because GTK4's
-`border-radius` does not clip a child's rendering. Those radii are art proportions, not rungs —
-but right now they do not agree with each other either:
+### 48. ✅ RESOLVED — Art rounding unified as THUMB_RADIUS_RATIO in squircleThumb (2026-08-03 → 2026-08-20)
+Unified in `ui/shell/common/DrawingUtils.ts` (`squircleThumb`).
 
-- `widgets/clipboard.ts` — `THUMB_RADIUS 8` on a 32px thumb = **25 %**, the macOS icon ratio.
-- `NotificationCenter.tsx:75` — `12` on a hero whose `size` is a **parameter**, so the ratio
-  changes with the caller.
-- `NotificationCenter.tsx:103` — `16` on the big hero, width and height variable.
-
-The likely answer is one exported ratio (~25 %) applied to the art's short side, with a floor so
-a small thumb does not go nearly-circular. Low priority: it is visible only on notification art
-and clipboard image rows, and changing it moves how every notification looks — worth doing when
-something else is already touching that surface.
+`squircleThumb` now defaults `radius` to `THUMB_RADIUS_RATIO = 0.25` (25% macOS squircle ratio applied
+to `Math.min(w, h)`, with a 6px floor and `RADIUS.md` (16px) ceiling). Callers across `widgets/clipboard.ts`
+and `NotificationCenter.tsx` (`createHeroWidget`, `createExpandedHeroWidget`) consume the default ratio
+instead of hardcoding disparate pixel radii.
 
 ### 49. ✅ FIXED — The bubble menu is unified as GlassBubbleMenu (2026-08-03 → 2026-08-20)
 
