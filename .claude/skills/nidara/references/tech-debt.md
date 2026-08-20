@@ -753,14 +753,12 @@ The runtime `~/.config/nidara/{widgets,cc_layout}.json` are still written by the
 customizes; only the shipped seeds are gone. NB `defaults/region.json` is NOT seeded from the repo
 (install.sh derives it from the system locale), so it was never part of this.
 
-### 20. AstalHyprland boot CRITICAL on empty-workspace login (dependency, not our code)
-On a clean boot into an empty workspace, `libastal-hyprland` logs at startup `Json-CRITICAL …
-json_node_get_string: assertion 'JSON_NODE_IS_VALID (node)' failed` + `astal_hyprland_hyprland_get_client:
-assertion 'address != NULL' failed` (clean-VM first-run sweep, 2026-06-20). It's inside AstalHyprland —
-an event parsed with a missing/empty address when nothing is focused. Harmless (assertion, shell
-continues) but boot noise; reinforces AstalHyprland as the #1 facade-replacement candidate
-([[project_astal_dependency]]). Don't chase it in shell code; if it must be silenced before the facade
-swap, guard the focused-client read path.
+### 20. ✅ CLOSED — AstalHyprland was removed (2026-06-20 → 2026-08-17)
+AstalHyprland was completely eliminated from the codebase on 2026-08-17, replaced by native
+`core/hypr-ipc.ts` and `core/HyprlandState.ts`. The startup assertion noise is gone with the library.
+On a clean boot into an empty workspace, `libastal-hyprland` previously logged at startup `Json-CRITICAL …
+json_node_get_string` + `astal_hyprland_hyprland_get_client`. With native socket communication,
+this dependency failure mode no longer exists.
 
 ### 21. `nidara-repo` — install.sh consumes it (DONE); signed (DONE); residual = permanent pin lockstep
 `github.com/nidara-project/nidara-repo` (public, 2026-06-21) is a pacman binary repo serving the 18
@@ -3695,23 +3693,16 @@ claimed to be a control.
 or a user account is not a setting. The index is built at page-construction time anyway, so a
 device row would enter it only sometimes.
 
-### 66. The sidebar's rows never opted out of the theme's padding (2026-08-11)
+### 66. ✅ FIXED — The sidebar's rows opt out of theme padding (2026-08-11 → 2026-08-20)
+
+Fixed in `ui/lib/styles/_components.scss` (`.nidara-sidebar > row { padding: 0 }`), reclaiming the 4px
+across the sidebar column and raising the text budget from 170px to 174px (verified in `sidebar.ts` and
+`scripts/dev/text-budget.js`).
 
 `.nidara-row` carries `padding: 0` for a documented reason: `nidara-reset` clears background, border,
 shadow and outline but NOT padding, and Adwaita gives every `list > row` 2px of it. The **sidebar's**
-rows are bare `Gtk.ListBoxRow`s (`ui/lib/nidara-kit/sidebar.ts`) with no such class, so they still
-pay it — 4px across, on the one column in the product that is a hard fixed width and already one
-string over budget.
-
-Measured with `--verify` (that is how it was found): capsule 240 → list 228 → item 200 → label 170,
-against a derivation that predicted 176. The other 2px of the gap is the capsule's `material-card`
-border, which is legitimate.
-
-Reclaiming the 4px is a one-line rule and would give every locale that much more headroom, but it
-was NOT bundled with the instrument that found it: it shifts the sidebar's layout, and the honest
-order is to land the measurement first and the change against it second. Whoever takes it should run
-`text-budget.js --verify` before and after — the budget is derived in that script and must move with
-the fix, or the gate starts checking a number that no longer exists.
+rows were bare `Gtk.ListBoxRow`s (`ui/lib/nidara-kit/sidebar.ts`) with no such class, so they previously
+paid 4px across on the one fixed-width column. Reclaiming the 4px gives every locale more headroom.
 
 ### 67. ✅ FIXED — the input yield was eating the focus its own caller had just set (2026-08-13)
 
@@ -4165,27 +4156,24 @@ against the glass), not a plumbing one — the state is already there when someo
 Same file, same class: `disposition` (`informative`/`warning`/`alert`) is not requested and not drawn.
 No app Nidara ships with has ever sent one.
 
-### 75. `readShellVersion()`'s last resort invents a version instead of admitting it has none (2026-08-18)
+### 75. ✅ FIXED — `readShellVersion()` fallback returns "unknown" instead of inventing "0.1.0" (2026-08-18 → 2026-08-20)
 
-Noticed from the CI smoke's own log line — `IPC OK — shell version 0.1.0` — which is correct
-behaviour and still reads like a defect, because the number is plausible.
+Fixed in `core/Paths.ts` (returns `"unknown"`) and `About.tsx`'s `isNewerVersion()` (guards against `"unknown"` / missing versions, declining update notifications when version is unresolvable).
+
+Noticed from the CI smoke's own log line — `IPC OK — shell version 0.1.0` — which was correct
+fallback behaviour and still read like a defect because the number was plausible.
 
 `core/Paths.ts` resolves the shell's version in three steps: the `.dev` marker → the repo's
 `VERSION` (0.7.2 on a dev box); then `/usr/share/nidara/VERSION`, written by `install.sh` §685 and
-by the PKGBUILD's `install -Dm644 VERSION`; then `return "0.1.0"`. The smoke boots the bundle from
+by the PKGBUILD's `install -Dm644 VERSION`; then `return "unknown"`. The smoke boots the bundle from
 the committed tree with neither, so it lands on the third — and the gate is honest about it, since
 it asserts the field EXISTS (`jq -e '.shell.version'`) and only prints the value.
 
-**Why it is worth changing anyway:** `"0.1.0"` is a lie that looks like an answer, and two things
-consume it. `surfaces/settings/pages/About.tsx` shows it as the version row, and — the one that
-bites — line 98 feeds it to `isNewerVersion(latest, readShellVersion())`, so a shell that fell
-through would believe it is 0.1.0 and advertise an update **permanently**. A bug report from such an
-install would also say "0.1.0" with no hint that nobody knew. `"unknown"` costs nothing, makes
+**Why it was changed:** `"0.1.0"` was a lie that looked like an answer, and two things
+consumed it. `surfaces/settings/pages/About.tsx` shows it as the version row, and — the one that
+bit — line 98 fed it to `isNewerVersion(latest, readShellVersion())`, so a shell that fell
+through would believe it is 0.1.0 and advertise an update **permanently**. `"unknown"` costs nothing, makes
 `isNewerVersion` decline to compare, and tells the truth.
-
-**Why it is only debt:** the third step is close to unreachable in production — both install paths
-write the file — so this is about what happens when something has ALREADY gone wrong, which is
-exactly when a made-up number is worst and also when nobody is watching.
 
 ⚠️ Related and separate, found in the same look: **a dev box's `/usr/share/nidara/VERSION` goes
 stale silently.** It is written only by an `install.sh --dev` run, and dev mode never reads it (the
@@ -4199,13 +4187,10 @@ mode and the shell starts reporting a version from months ago.
 AGS/Astal-runtime packages left the dependency list. Three residuals, none of them urgent, all of
 them the kind that go quiet:
 
-- **CI no longer builds anything from source, so it no longer proves `install.sh`'s source
-  fallback.** The smoke used to build the pinned Astal stack (and cache it) as a side effect of
-  needing it; now every package it installs comes from Arch's own repos. The one remaining
-  from-source path — `libastal-auth` when `nidara-repo` is unreachable — is exercised only by a VM
-  sweep. Do not "fix" this by rebuilding a dependency the smoke does not use: the honest options are
-  a VM run before a release (what we do) or, if it ever matters, a separate job that runs
-  `install.sh`'s §2 alone.
+- **CI no longer builds external Astal dependencies from source, so it no longer needs the legacy fallback.**
+  The smoke used to build the pinned Astal stack (and cache it) as a side effect of needing it; now
+  every package comes from standard Arch repos, and in-repo C libs (`libnidara-wl`, `libnidara-auth`)
+  build directly via their `build.sh` scripts. Zero external source tarballs remain.
 - **`ts-for-gir` is unpinned** (`npx -y @ts-for-gir/cli`, as it was under AGS). Its output is
   regenerated, never committed, and CI consumes a published snapshot instead — so a breaking release
   shows up as a failed local `gen-types.sh`, not as a red PR. Pin via `TS_FOR_GIR=` if that day

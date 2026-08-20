@@ -117,16 +117,9 @@ const iconSize    = num(/new Gtk\.Image\(\{\s*pixel_size:\s*(\d+)/, "the leading
  *   `.nidara-sidebar-capsule { margin: 8px 0 8px 8px }`   →  8  (_settings.scss)
  *   `@include material-card`'s 1px border, both sides     →  2  (_mixins.scss)
  *   `.nidara-sidebar         { padding: 6px }`            → 12  (_components.scss)
- *   Adwaita's `list > row { padding: 2px }`, both sides    →  4  (the THEME)
- *
- * ⚠️ The last two terms are why `--verify` exists, and it earned its keep the day
- * it was written: `sidebar.ts` documented this budget as 176px and the real
- * allocation measured **170px**. The comment had missed the capsule's borders and
- * that stray theme padding — the very 2px `.nidara-row` exists to clear, which the
- * sidebar's bare `Gtk.ListBoxRow`s never opted out of. Six pixels the sidebar
- * never had, in the one place already known to be one string over budget.
+ *   `.nidara-sidebar > row   { padding: 0 }`              →  0  (_components.scss)
  */
-const CSS_CHROME = 8 + 2 + 12 + 4
+const CSS_CHROME = 8 + 2 + 12 + 0
 
 const BUDGET = sidebarWidth - (CSS_CHROME + itemMargins + itemSpacing + iconSize)
 

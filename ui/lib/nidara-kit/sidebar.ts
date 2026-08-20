@@ -81,12 +81,9 @@ export function NidaraSidebar(
         // width IS its natural width, so a long string makes the capsule demand more
         // than its column reserves and it overruns the content pane.
         //
-        // The budget is **170px**, and it is smaller than it looks: 250 − 8 capsule
-        // margin − 2 capsule BORDER − 12 list padding − 4 Adwaita `list > row`
-        // padding − 24 row margins − 18 icon − 12 spacing. The last two of those cost
-        // 6px that an earlier version of this comment missed (it claimed 176) — the
-        // theme's stray 2px is the very padding `.nidara-row` exists to clear, and
-        // these rows are bare `Gtk.ListBoxRow`s that never opted out of it.
+        // The budget is **174px**, and it is smaller than it looks: 250 − 8 capsule
+        // margin − 2 capsule BORDER − 12 list padding − 0 row padding (opted out via
+        // padding: 0) − 24 row margins − 18 icon − 12 spacing.
         //
         // Russian "Специальные возможности" needed 200px AT THE DEFAULT SIZE — broken
         // in a shipped locale before any accessibility scaling — and is abbreviated in

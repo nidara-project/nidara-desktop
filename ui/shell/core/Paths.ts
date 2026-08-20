@@ -41,5 +41,6 @@ export function readShellVersion(): string {
         if (ok) return new TextDecoder().decode(bytes).trim()
     } catch {}
 
-    return "0.1.0"
+    return "unknown"
 }
+

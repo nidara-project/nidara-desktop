@@ -40,6 +40,7 @@ function readCpuInfo(): string {
  * True when `latest` is a strictly newer dotted version than `current`.
  */
 function isNewerVersion(latest: string, current: string): boolean {
+    if (!latest || latest === "unknown" || !current || current === "unknown") return false
     const a = latest.split(".").map(n => parseInt(n, 10) || 0)
     const b = current.split(".").map(n => parseInt(n, 10) || 0)
     for (let i = 0; i < Math.max(a.length, b.length); i++) {

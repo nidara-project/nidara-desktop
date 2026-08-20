@@ -212,6 +212,7 @@ selection {
 
     > row {
         @include nidara-reset;
+        padding: 0;
         border-radius: $nidara-radius-sm;
         margin: 1px 0;
         min-height: 36px;
