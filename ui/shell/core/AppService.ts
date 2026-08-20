@@ -5,6 +5,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import { readFile } from "../../lib/file"
 import { rankApps } from "./app-search"
+import appFrequency from "./AppFrequency"
 
 export interface AppData {
     id: string
@@ -711,6 +712,7 @@ class AppService {
             get_icon: () => info?.get_icon(),
             launch: () => {
                 const launchId = data?.id || info?.get_id() || id
+                appFrequency.recordLaunch(launchId)
                 const freshInfo = this.getAppInfo(launchId)
                 let command = freshInfo?.get_commandline() || data?.exec || launchId
                 // Absolute Isolation Sanitization
@@ -718,6 +720,13 @@ class AppService {
                 GLib.spawn_command_line_async(`uwsm app -- sh -c ${GLib.shell_quote(command)}`)
             }
         }
+    }
+
+    /**
+     * Record a launch for frequency tracking with temporal decay.
+     */
+    recordLaunch(id: string): void {
+        appFrequency.recordLaunch(id)
     }
 
     /**
@@ -743,7 +752,7 @@ class AppService {
      * for the ranking — and for what AstalApps' `fuzzy_query` was doing instead.
      */
     queryApps(query: string): AppData[] {
-        return rankApps(query, this.listApps())
+        return rankApps(query, this.listApps(), appFrequency.getFrequencies())
     }
 
     // ── Icon Overlay (per-app overrides) ──────────────────────────────────────
@@ -847,7 +856,7 @@ class AppService {
      * the rescue unreachable for the case it was written for.
      */
     search(query: string): AppData[] {
-        const ranked = rankApps(query, this.cache.values())
+        const ranked = rankApps(query, this.cache.values(), appFrequency.getFrequencies())
         // A hidden entry that shares its display name with a visible one is a
         // duplicate, not a second app — `com.google.Chrome.desktop` sits next to
         // `google-chrome.desktop` on this machine, and "chrom" listed "Google

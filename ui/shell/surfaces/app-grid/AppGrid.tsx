@@ -484,6 +484,7 @@ export default function AppGridPanel(
             // Origin-aware command (gtk-launch / flatpak run) — see AppService.
             // getLaunchCommand. cd $HOME so the app doesn't inherit the shell
             // process's CWD (ui/shell).
+            appService.recordLaunch(id || app.exec)
             const cmd = appService.getLaunchCommand(id || app.exec)
             execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`])
                 // gtk-launch fails when the desktop id isn't in the XDG index, and

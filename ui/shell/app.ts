@@ -641,6 +641,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       if (!q) return "usage: launchApp <name-or-id> (e.g. `launchApp calculator`; see listApps)"
       const { app: target, error } = resolveApp(q)
       if (!target) return error!
+      appService.recordLaunch(target.id)
       const cmd = appService.getLaunchCommand(target.id)
       const before = new Set(
         ((hyprlandState.clients ?? []) as any[]).map(c => (c.address ?? "").toLowerCase().replace(/^0x/, "")),

@@ -150,6 +150,8 @@ export interface Searchable {
     /** Executable BASENAME. Never the `Exec=` line: that is the Chrome-PWA trap. */
     exec: string
     keywords: string[]
+    /** Decayed launch frequency count (optional). */
+    frequency?: number
 }
 
 /**
@@ -230,7 +232,10 @@ export const scoreApp = (query: string[], app: Searchable): number => {
     for (const kw of app.keywords) {
         best = Math.max(best, scoreField(query, kw, KEYWORD_TIERS) * KEYWORD_WEIGHT)
     }
-    if (best > 0) return best
+    if (best > 0) {
+        const freqBonus = Math.min(Math.log1p(app.frequency ?? 0) * 0.15, 0.45)
+        return best + freqBonus
+    }
 
     // Rescue: a query with a word too many. Substring matching only survives a
     // query that is a PIECE of the name; the names people and window titles
@@ -244,25 +249,43 @@ export const scoreApp = (query: string[], app: Searchable): number => {
         const t = nameTokens(s)
         return t.length > 0 && t.every(tok => wanted.has(tok))
     }
-    if (coveredBy(app.name) || (app.id && coveredBy(app.id))) return COVERED
+    if (coveredBy(app.name) || (app.id && coveredBy(app.id))) {
+        const freqBonus = Math.min(Math.log1p(app.frequency ?? 0) * 0.15, 0.45)
+        return COVERED + freqBonus
+    }
     return 0
 }
 
 /**
  * Rank `apps` against `query`, best first, dropping everything that doesn't match.
- * Equal scores fall back to the app name so the order is total — a GTK sort
- * function keyed on this must not shuffle between two identical queries.
+ * Equal scores fall back to frequency, then to the app name so the order is total.
  */
-export const rankApps = <T extends Searchable>(query: string, apps: Iterable<T>): T[] => {
+export const rankApps = <T extends Searchable>(
+    query: string,
+    apps: Iterable<T>,
+    frequencies?: Map<string, number>
+): T[] => {
     const q = fold(query.trim())
     if (!q.length) return []
 
     const hits: { app: T, score: number }[] = []
     for (const app of apps) {
-        const score = scoreApp(q, app)
-        if (score > 0) hits.push({ app, score })
+        let appToScore = app
+        if (frequencies && app.frequency === undefined) {
+            const baseId = (app.id || "").split("/").pop() || app.id || ""
+            const normKey = baseId.toLowerCase().replace(/\.desktop$/, "").trim()
+            const freq = frequencies.get(normKey) ?? 0
+            if (freq > 0) {
+                appToScore = { ...app, frequency: freq }
+            }
+        }
+        const score = scoreApp(q, appToScore)
+        if (score > 0) hits.push({ app: appToScore, score })
     }
     hits.sort((a, b) =>
-        b.score - a.score || a.app.name.localeCompare(b.app.name))
+        b.score - a.score ||
+        ((b.app.frequency ?? 0) - (a.app.frequency ?? 0)) ||
+        a.app.name.localeCompare(b.app.name)
+    )
     return hits.map(h => h.app)
 }

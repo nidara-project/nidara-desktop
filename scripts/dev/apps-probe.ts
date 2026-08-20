@@ -126,6 +126,15 @@ const fixtureHalf = () => {
     check("fold() is 1:1 (index-safe for word starts)",
         fold("Configuración").length === "Configuración".length &&
         fold("Configuración").join("") === "configuracion")
+
+    // Frequency ranking: higher frequency boosts an app within its tier
+    const fFreqMap = new Map<string, number>([
+        ["org.gnome.nautilus", 25.0], // Files
+        ["firefox", 1.0],            // Firefox
+    ])
+    const fWithFreq = rankApps("f", FIXTURE, fFreqMap)
+    check("launch frequency prioritizes frequently launched apps within tier",
+        fWithFreq[0]?.name === "Files" && fWithFreq[1]?.name === "Firefox", names(fWithFreq))
 }
 
 // ── Half 2: the live catalogue ──────────────────────────────────────────────

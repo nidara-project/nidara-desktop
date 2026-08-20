@@ -6,6 +6,6 @@
 // touch `Gtk.IconTheme.get_for_display(Gdk.Display.get_default())` at construction
 // time (core/AppService) throw on a null display, so the probe imports this FIRST
 // and its own imports after.
-import { Gtk } from "ags/gtk4"
+import Gtk from "gi://Gtk?version=4.0"
 
 Gtk.init()

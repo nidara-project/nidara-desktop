@@ -741,6 +741,7 @@ export function DockItem(
                     // getLaunchCommand. cd $HOME because children inherit the launcher's
                     // CWD (verified) and would open in the AGS process's dir (ui/shell).
                     // `exec` so the command replaces the shell (clean tree under uwsm).
+                    appService.recordLaunch(appId)
                     const cmd = appService.getLaunchCommand(appId)
                     execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`])
                         .catch(() => { try { appItem.launch() } catch (_) {} })

@@ -123,6 +123,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     const getLaunch = (lid: string) => {
         return () => {
             // Origin-aware command (gtk-launch / flatpak run) — see AppService.getLaunchCommand.
+            appService.recordLaunch(lid)
             const cmd = appService.getLaunchCommand(lid)
             execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`])
                 .catch(() => { try { appService.getAppInfo(lid)?.launch?.([], null) } catch (_) {} })
