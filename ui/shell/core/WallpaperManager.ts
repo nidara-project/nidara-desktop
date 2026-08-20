@@ -56,14 +56,64 @@ class WallpaperManager extends GObject.Object {
     private _preview: any = null
     private _previewPath = ""
     private _previewLoading = false
+    private _bgSettings: Gio.Settings | null = null
+    private _syncingGsettings = false
 
     constructor() {
         super()
         this._loadSaved()
+        this._initGsettingsSync()
     }
 
     get current() { return this._current }
     get transition() { return this._transition }
+
+    private _initGsettingsSync() {
+        try {
+            this._bgSettings = new Gio.Settings({ schema_id: "org.gnome.desktop.background" })
+            const onGsettingsChange = () => {
+                if (this._syncingGsettings || !this._bgSettings) return
+                const uriDark = this._bgSettings.get_string("picture-uri-dark")
+                const uri = uriDark || this._bgSettings.get_string("picture-uri")
+                if (!uri) return
+                let path: string | null = null
+                if (uri.startsWith("file://")) {
+                    try {
+                        const [p] = GLib.filename_from_uri(uri)
+                        path = p
+                    } catch (_) {
+                        path = decodeURIComponent(uri.replace(/^file:\/\//, ""))
+                    }
+                } else if (uri.startsWith("/")) {
+                    path = uri
+                }
+                if (path && path !== this._current && GLib.file_test(path, GLib.FileTest.EXISTS)) {
+                    console.log(`[WallpaperManager] Detected external background change via gsettings: ${path}`)
+                    this.setWallpaper(path)
+                }
+            }
+            this._bgSettings.connect("changed::picture-uri", onGsettingsChange)
+            this._bgSettings.connect("changed::picture-uri-dark", onGsettingsChange)
+        } catch (e) {
+            console.warn("[WallpaperManager] org.gnome.desktop.background schema not available:", e)
+        }
+    }
+
+    private _syncToGsettings(path: string) {
+        if (!this._bgSettings) return
+        try {
+            this._syncingGsettings = true
+            const uri = GLib.filename_to_uri(path, null)
+            if (uri) {
+                if (this._bgSettings.get_string("picture-uri") !== uri) this._bgSettings.set_string("picture-uri", uri)
+                if (this._bgSettings.get_string("picture-uri-dark") !== uri) this._bgSettings.set_string("picture-uri-dark", uri)
+            }
+        } catch (e) {
+            console.warn("[WallpaperManager] Failed to sync wallpaper to gsettings:", e)
+        } finally {
+            this._syncingGsettings = false
+        }
+    }
 
     private _loadSaved() {
         // `path` is stored only as a hint for the Settings preview — awww restores
@@ -92,6 +142,7 @@ class WallpaperManager extends GObject.Object {
         this._current = path
         this._transition = t
         this._save()
+        this._syncToGsettings(path)
         try {
             await execAsync(["awww", "img", path, "--transition-type", t])
             this.emit("changed")

@@ -634,6 +634,8 @@ sudo rm -f /usr/share/xdg-desktop-portal/portals/nidara.conf  # misplaced legacy
 sudo cp "$REPO_DIR/config/portal/nidara.portal" /usr/share/xdg-desktop-portal/portals/nidara.portal
 sudo cp "$REPO_DIR/config/portal/org.freedesktop.impl.portal.desktop.nidara.service" /usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.nidara.service
 sudo cp "$REPO_DIR/config/portal/hyprland-portals.conf" /etc/xdg-desktop-portal/hyprland-portals.conf
+pkill -f nidara-portal 2>/dev/null || true
+systemctl --user restart xdg-desktop-portal 2>/dev/null || true
 
 # fontconfig: per-language CJK variant. Arch's noto-fonts-cjk ships no
 # fontconfig rules and fontconfig's own 65-nonlatin.conf hardcodes the KR face,

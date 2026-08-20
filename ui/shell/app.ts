@@ -25,6 +25,7 @@ import { initReduceMotion } from "./core/ReduceMotion"
 import { bindCursorThemeRefresh } from "./common/CursorRefresh"
 import hyprlandState from "./core/HyprlandState"
 import queryUI from "./core/UITree"
+import Wallpaper from "./core/WallpaperManager"
 
 // @ts-ignore
 import type { Monitor } from "gi://Gdk?version=4.0"
@@ -251,6 +252,17 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: args => ipc.openSettingsPage?.(args[0] ?? ""),
   },
   toggleOverview: { desc: "Toggle the workspaces overview", run: () => ipc.toggleOverview?.() },
+  setWallpaper: {
+    desc: "Set the desktop wallpaper (`setWallpaper <path> [transition]`). Transition defaults to random if omitted.",
+    aliases: ["set-wallpaper"],
+    run: (args: string[]) => {
+      const path = args[0]
+      if (!path) return "error: missing wallpaper path"
+      const transition = args[1] as any
+      Wallpaper.setWallpaper(path, transition || undefined)
+      return "ok"
+    },
+  },
   togglePlayer: {
     desc: "Toggle the media player island (the bar capsule's expanded player). Needs an MPRIS player on the bus — verify via dumpState `overlays.island`",
     run: () => selectedPlayer() ? void status.toggleIsland(ISLAND_PLAYER) : "no media player on the bus",

@@ -1,28 +1,18 @@
 #!/usr/bin/env -S gjs -m
 // ─────────────────────────────────────────────────────────────────────────────
-// nidara-portal — Nidara's xdg-desktop-portal Settings backend
+// nidara-portal — Nidara's xdg-desktop-portal Settings & Wallpaper backend
 // Installed to /usr/bin/nidara-portal, D-Bus-activated as
 // org.freedesktop.impl.portal.desktop.nidara (see the .portal + .service
 // files installed by install.sh).
 //
-// WHY THIS EXISTS: under Hyprland no portal backend serves
-// `org.freedesktop.appearance accent-color`, so libadwaita/GNOME apps
-// (Calendar, nautilus…) never see the Nidara accent — they stay on their
-// default blue even though gsettings is set correctly (libadwaita reads the
-// PORTAL, not gsettings, and does not fall back per-key).
-//
-// This backend serves EXACTLY ONE key: org.freedesktop.appearance
-// accent-color, as the (ddd) RGB tuple the spec defines. Everything else
-// (color-scheme, contrast) intentionally returns "not found" so the portal
-// frontend falls through to the next backend in portals.conf
-// (`org.freedesktop.impl.portal.Settings=nidara;gtk`) — verified against
-// xdg-desktop-portal 1.20 src/settings.c: ReadAll merges ALL configured
-// impls (earlier in the list wins) and Read takes the first impl that has
-// the key.
-//
-// Source of truth: gsettings org.gnome.desktop.interface accent-color (the
-// accent NAME — ThemeManager keeps it in sync with the Settings UI, both
-// ways), mapped to the Nidara hex below. Live updates via SettingChanged.
+// WHY THIS EXISTS:
+// 1. Under Hyprland no standard portal backend serves `org.freedesktop.appearance
+//    accent-color`, so libadwaita/GNOME apps stay on their default blue.
+//    This daemon serves the complete `org.freedesktop.appearance` namespace
+//    (accent-color, color-scheme, contrast).
+// 2. Under Hyprland no portal backend implements `org.freedesktop.impl.portal.Wallpaper`,
+//    so "Set as Desktop Background" in browsers (Firefox, Chrome) and image viewers
+//    fails. This daemon implements SetWallpaperURI to apply and persist wallpapers.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import Gio from "gi://Gio"
@@ -47,7 +37,7 @@ const APPEARANCE_NS = "org.freedesktop.appearance"
 const BUS_NAME = "org.freedesktop.impl.portal.desktop.nidara"
 const OBJECT_PATH = "/org/freedesktop/portal/desktop"
 
-const IFACE_XML = `
+const SETTINGS_IFACE_XML = `
 <node>
   <interface name="org.freedesktop.impl.portal.Settings">
     <property name="version" type="u" access="read"/>
@@ -68,7 +58,25 @@ const IFACE_XML = `
   </interface>
 </node>`
 
+const WALLPAPER_IFACE_XML = `
+<node>
+  <interface name="org.freedesktop.impl.portal.Wallpaper">
+    <method name="SetWallpaperURI">
+      <arg type="o" name="handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="parent_window" direction="in"/>
+      <arg type="s" name="uri" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/>
+    </method>
+  </interface>
+</node>`
+
 const interfaceSettings = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
+let a11ySettings = null
+try {
+    a11ySettings = new Gio.Settings({ schema_id: "org.gnome.desktop.a11y.interface" })
+} catch (_) {}
 
 function accentRgbVariant() {
     const name = interfaceSettings.get_string("accent-color")
@@ -79,61 +87,192 @@ function accentRgbVariant() {
     return new GLib.Variant("(ddd)", [r, g, b])
 }
 
-// xdg-desktop-portal passes the requesting app's namespace patterns through;
-// glob per the spec ("" or missing list = everything).
+function colorSchemeVariant() {
+    // 0: no preference, 1: prefer-dark, 2: prefer-light
+    const scheme = interfaceSettings.get_string("color-scheme")
+    const val = scheme === "prefer-light" ? 2 : 1
+    return new GLib.Variant("u", val)
+}
+
+function contrastVariant() {
+    // 0: no preference, 1: high contrast
+    let val = 0
+    if (a11ySettings) {
+        try {
+            if (a11ySettings.get_boolean("high-contrast")) val = 1
+        } catch (_) {}
+    }
+    return new GLib.Variant("u", val)
+}
+
 function nsMatches(patterns) {
     if (!patterns || patterns.length === 0) return true
     return patterns.some(p => p === "" || GLib.pattern_match_simple(p, APPEARANCE_NS))
 }
 
-// Async variants (manual reply): GJS's automatic return-marshalling mishandles
-// a bare `v` out-arg (the reply never goes out → client timeout), so both
-// methods reply explicitly with the full tuple.
+function decodeUriToPath(uri) {
+    if (!uri) return null
+    if (uri.startsWith("file://")) {
+        try {
+            const [path] = GLib.filename_from_uri(uri)
+            return path
+        } catch (_) {
+            return decodeURIComponent(uri.replace(/^file:\/\//, ""))
+        }
+    }
+    if (uri.startsWith("/")) return uri
+    return null
+}
+
+function applyWallpaperFallback(path) {
+    const configDir = `${GLib.get_user_config_dir()}/nidara`
+    GLib.mkdir_with_parents(configDir, 0o755)
+    const cfgPath = `${configDir}/wallpaper`
+    let cfg = {}
+    try {
+        const [ok, contents] = GLib.file_get_contents(cfgPath)
+        if (ok) cfg = JSON.parse(new TextDecoder().decode(contents))
+    } catch (_) {}
+    cfg.path = path
+    cfg.transition = cfg.transition || "random"
+    GLib.file_set_contents(cfgPath, JSON.stringify(cfg))
+    try {
+        GLib.spawn_command_line_async(`awww img "${path}" --transition-type "${cfg.transition}"`)
+    } catch (e) {
+        printerr(`[nidara-portal] awww fallback failed: ${e}`)
+    }
+}
+
+// ── Settings Backend ─────────────────────────────────────────────────────────
 class SettingsBackend {
     get version() { return 1 }
 
     ReadAllAsync(params, invocation) {
         const [namespaces] = params
         const dict = nsMatches(namespaces)
-            ? { [APPEARANCE_NS]: { "accent-color": accentRgbVariant() } }
+            ? {
+                [APPEARANCE_NS]: {
+                    "accent-color": accentRgbVariant(),
+                    "color-scheme": colorSchemeVariant(),
+                    "contrast": contrastVariant(),
+                },
+            }
             : {}
         invocation.return_value(new GLib.Variant("(a{sa{sv}})", [dict]))
     }
 
     ReadAsync(params, invocation) {
         const [namespace, key] = params
-        if (namespace === APPEARANCE_NS && key === "accent-color") {
-            invocation.return_value(new GLib.Variant("(v)", [accentRgbVariant()]))
-        } else {
-            // Anything else: error out so the frontend falls through to the
-            // next backend in portals.conf (gtk serves color-scheme/contrast).
-            invocation.return_dbus_error(
-                "org.freedesktop.portal.Error.NotFound",
-                `nidara-portal does not serve ${namespace} ${key}`,
-            )
+        if (namespace === APPEARANCE_NS) {
+            if (key === "accent-color") {
+                invocation.return_value(new GLib.Variant("(v)", [accentRgbVariant()]))
+                return
+            }
+            if (key === "color-scheme") {
+                invocation.return_value(new GLib.Variant("(v)", [colorSchemeVariant()]))
+                return
+            }
+            if (key === "contrast") {
+                invocation.return_value(new GLib.Variant("(v)", [contrastVariant()]))
+                return
+            }
         }
+        // Fall through to other portal backends in portals.conf (e.g. gtk for font-name)
+        invocation.return_dbus_error(
+            "org.freedesktop.portal.Error.NotFound",
+            `nidara-portal does not serve ${namespace} ${key}`,
+        )
+    }
+}
+
+// ── Wallpaper Backend ────────────────────────────────────────────────────────
+class WallpaperBackend {
+    SetWallpaperURIAsync(params, invocation) {
+        const [, appId, , uri] = params
+        print(`[nidara-portal] SetWallpaperURI requested by ${appId || "unknown"}: ${uri}`)
+
+        const srcPath = decodeUriToPath(uri)
+        if (!srcPath || !GLib.file_test(srcPath, GLib.FileTest.EXISTS)) {
+            printerr(`[nidara-portal] Wallpaper file does not exist: ${srcPath}`)
+            // Response 2 = Failed
+            invocation.return_value(new GLib.Variant("(u)", [2]))
+            return
+        }
+
+        let targetPath = srcPath
+        // If image is in a temporary or sandbox location (/tmp, /run/user/..., /doc/),
+        // copy it to user's persistent wallpapers folder so it persists after the app closes.
+        if (srcPath.startsWith("/tmp/") || srcPath.startsWith("/run/user/") || srcPath.includes("/doc/")) {
+            const wallDir = `${GLib.get_user_data_dir()}/nidara/wallpapers`
+            GLib.mkdir_with_parents(wallDir, 0o755)
+            const baseName = GLib.path_get_basename(srcPath)
+            const destPath = `${wallDir}/${Date.now()}_${baseName}`
+            try {
+                const srcFile = Gio.File.new_for_path(srcPath)
+                const destFile = Gio.File.new_for_path(destPath)
+                srcFile.copy(destFile, Gio.FileCopyFlags.OVERWRITE, null, null)
+                targetPath = destPath
+                print(`[nidara-portal] Cached temporary wallpaper to: ${targetPath}`)
+            } catch (e) {
+                printerr(`[nidara-portal] Failed to copy temporary wallpaper: ${e}`)
+            }
+        }
+
+        // Apply wallpaper via nidara-ipc (if shell running) or fallback
+        try {
+            const [, , , exitStatus] = GLib.spawn_command_line_sync(`nidara-ipc setWallpaper "${targetPath}"`)
+            if (exitStatus !== 0) {
+                applyWallpaperFallback(targetPath)
+            }
+        } catch (_) {
+            applyWallpaperFallback(targetPath)
+        }
+
+        // Response 0 = Success
+        invocation.return_value(new GLib.Variant("(u)", [0]))
     }
 }
 
 const loop = new GLib.MainLoop(null, false)
-const backend = new SettingsBackend()
-const exported = Gio.DBusExportedObject.wrapJSObject(IFACE_XML, backend)
+const settingsBackend = new SettingsBackend()
+const wallpaperBackend = new WallpaperBackend()
+
+const exportedSettings = Gio.DBusExportedObject.wrapJSObject(SETTINGS_IFACE_XML, settingsBackend)
+const exportedWallpaper = Gio.DBusExportedObject.wrapJSObject(WALLPAPER_IFACE_XML, wallpaperBackend)
 
 Gio.bus_own_name(
     Gio.BusType.SESSION,
     BUS_NAME,
     Gio.BusNameOwnerFlags.NONE,
     (connection) => {
-        exported.export(connection, OBJECT_PATH)
-        // Live updates: accent changed in Nidara Settings (or anywhere) →
-        // ThemeManager syncs gsettings → we notify every portal client.
+        exportedSettings.export(connection, OBJECT_PATH)
+        exportedWallpaper.export(connection, OBJECT_PATH)
+
+        // Live appearance updates
         interfaceSettings.connect("changed::accent-color", () => {
-            exported.emit_signal(
+            exportedSettings.emit_signal(
                 "SettingChanged",
                 new GLib.Variant("(ssv)", [APPEARANCE_NS, "accent-color", accentRgbVariant()]),
             )
         })
-        print(`[nidara-portal] serving ${APPEARANCE_NS} accent-color on ${BUS_NAME}`)
+
+        interfaceSettings.connect("changed::color-scheme", () => {
+            exportedSettings.emit_signal(
+                "SettingChanged",
+                new GLib.Variant("(ssv)", [APPEARANCE_NS, "color-scheme", colorSchemeVariant()]),
+            )
+        })
+
+        if (a11ySettings) {
+            a11ySettings.connect("changed::high-contrast", () => {
+                exportedSettings.emit_signal(
+                    "SettingChanged",
+                    new GLib.Variant("(ssv)", [APPEARANCE_NS, "contrast", contrastVariant()]),
+                )
+            })
+        }
+
+        print(`[nidara-portal] serving Settings + Wallpaper on ${BUS_NAME}`)
     },
     null,
     () => {
