@@ -175,6 +175,25 @@ export const nameTokens = (s: string): string[] => (s || "")
     .filter(t => t && !NAME_NOISE.has(t))
 
 /**
+ * Test whether two application names or class identifiers refer to the same app.
+ * Kept identical in logic to bin/nidara-{a11y,act,click,type} and verified in CI.
+ */
+export function sameApp(a: string, b: string): boolean {
+    const la = (a || "").toLowerCase(), lb = (b || "").toLowerCase()
+    if (!la || !lb) return false
+    if (la === lb || la.includes(lb) || lb.includes(la)) return true
+    const ta = nameTokens(a), tb = nameTokens(b)
+    if (ta.length && tb.length) {
+        const [small, big] = ta.length <= tb.length ? [ta, tb] : [tb, ta]
+        const set = new Set(big)
+        if (small.every(t => set.has(t))) return true
+    }
+    const bare = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "")
+    const x = bare(a), y = bare(b)
+    return x.length > 2 && y.length > 2 && (x.includes(y) || y.includes(x))
+}
+
+/**
  * What each field is worth and which tiers it may use.
  *
  * The weights order the FIELDS the way the tiers order the shapes: an app named

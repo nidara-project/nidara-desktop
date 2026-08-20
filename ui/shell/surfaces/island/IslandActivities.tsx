@@ -3,6 +3,8 @@ import GLib from "gi://GLib"
 import * as Battery from "../../core/BatteryService"
 import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT, ISLAND_RECORDING, recordingElapsed } from "../../core/Status"
 import * as media from "../../core/MediaService"
+import HyprlandState from "../../core/HyprlandState"
+import { sameApp } from "../../core/app-search"
 import { safeDisconnect } from "../../core/signals"
 import { PlayerCompact, makeArtGhost } from "./PlayerIsland"
 import { AgentCompact } from "./AgentIsland"
@@ -12,6 +14,48 @@ import { makeBatteryGlyph, batteryPresent, batteryFrac } from "../../common/Batt
 import { makeWorkspaceDot, makeActiveDotGlyph, WS_COUNT } from "../../common/WorkspaceDot"
 import Icons from "../../core/Icons"
 import type { IslandActivity } from "./ActivityIsland"
+
+// ── Browser and Foreground Player Matching ──────────────────────────────────
+const BROWSER_CLASSES = new Set([
+    "google-chrome", "chrome", "chromium", "firefox", "brave-browser", "brave",
+    "vivaldi", "opera", "microsoft-edge", "edge", "zen", "zen-browser", "floorp",
+    "waterfox", "librewolf", "tor-browser", "epiphany",
+])
+
+function isBrowserClass(cls?: string): boolean {
+    if (!cls) return false
+    const l = cls.toLowerCase()
+    return BROWSER_CLASSES.has(l) || Array.from(BROWSER_CLASSES).some(b => l.includes(b))
+}
+
+/** Check if the currently focused window / tab is directly showing this player. */
+function isPlayerForeground(player: any): boolean {
+    if (!player) return false
+    const focused = HyprlandState.focusedClient
+    if (!focused) return false
+
+    const playerEntry = player.entry || player.identity || player.bus_name || ""
+    const appMatches = sameApp(focused.class, playerEntry) ||
+        sameApp(focused.initialClass, playerEntry)
+
+    if (!appMatches) return false
+
+    // For web browsers, check whether the active tab matches the playing media title/artist
+    if (isBrowserClass(focused.class) || isBrowserClass(focused.initialClass)) {
+        const trackTitle = (player.title || "").trim().toLowerCase()
+        const trackArtist = (player.artist || "").trim().toLowerCase()
+        const windowTitle = (focused.title || "").toLowerCase()
+
+        if (trackTitle && windowTitle.includes(trackTitle)) return true
+        if (trackArtist && trackArtist.length > 2 && windowTitle.includes(trackArtist)) return true
+
+        // Browser is focused on a different tab — music is in a background tab
+        return false
+    }
+
+    // Native media player window is directly focused in foreground
+    return true
+}
 
 // The island's ACTIVITIES — the concrete things the capsule can show live
 // status for, declared as data for ActivityIsland's arbitration engine (see
@@ -75,7 +119,8 @@ function mediaActivity(): IslandActivity {
     const PAUSE_GRACE_S = 12
     let grace: number | null = null
     let curPlayer: any = null
-    let sig: number | null = null
+    let statusSig: number | null = null
+    let metaSig: number | null = null
     let wasPlaying = false
     let changed: () => void = () => {}
 
@@ -96,10 +141,16 @@ function mediaActivity(): IslandActivity {
         changed()
     }
     const rewire = () => {
-        safeDisconnect(curPlayer, sig); sig = null
+        safeDisconnect(curPlayer, statusSig); statusSig = null
+        safeDisconnect(curPlayer, metaSig); metaSig = null
         curPlayer = media.selectedPlayer()
-        if (curPlayer) sig = curPlayer.connect("notify::playback-status", onStatus)
-        else { cancelGrace(); wasPlaying = false }
+        if (curPlayer) {
+            statusSig = curPlayer.connect("notify::playback-status", onStatus)
+            metaSig = curPlayer.connect("notify::metadata", onStatus)
+        } else {
+            cancelGrace()
+            wasPlaying = false
+        }
         onStatus()
     }
     return {
@@ -114,23 +165,23 @@ function mediaActivity(): IslandActivity {
             makeGhost: makeArtGhost,
             getSource: () => ((compact as any).artDa as Gtk.Widget) ?? null,
         },
-        // A music glyph, like every other chip — NOT the cover art. The chip is
-        // a 24px circle (28px row height less SquircleContainer's 2px technical
-        // inset per side, `perfect` → radius h/2), and the largest square that
-        // fits INSIDE a 24px circle is 24/√2 ≈ 17px: the compact's 20px cover
-        // poked out of the glass on all four sides, and shrinking it to 17 would
-        // fill the circle edge to edge and eat the glass ring that makes a chip
-        // read as a chip. A square and a circle of nearly the same size cannot
-        // both survive — so the art stays where it is legible (the compact's
-        // 20px slot beside the title, the panel's 96px), and the chip says
-        // "music" the way rec says "capture" and the assistant says "assistant":
-        // one monochrome glyph on glass. (User-caught 2026-08-03.)
         indicator: () => new Gtk.Image({ gicon: Icons.music, pixel_size: 16, css_classes: ["nd-icon"] }),
-        watch: (cb) => { changed = cb; media.subscribe(rewire); rewire() },
-        // The open player panel HOLDS liveness while a player exists (a grace
-        // expiring under the open panel must not yank the compact); closing
-        // the panel re-arbitrates (the engine listens on island-mode).
-        isLive: () =>
+        watch: (cb) => {
+            changed = cb
+            media.subscribe(rewire)
+            rewire()
+            HyprlandState.connect("changed", () => changed())
+            HyprlandState.connect("title-changed", () => changed())
+        },
+        // Front the capsule only when media is active AND running in the background.
+        isLive: () => {
+            const hasMedia = curPlayer?.playback_status === media.PlaybackStatus.PLAYING || grace !== null
+            if (!hasMedia) return status.island_mode === ISLAND_PLAYER && !!curPlayer
+            if (status.island_mode === ISLAND_PLAYER) return true
+            return !isPlayerForeground(curPlayer)
+        },
+        // The indicator chip remains available in the row whenever media is active
+        isIndicated: () =>
             curPlayer?.playback_status === media.PlaybackStatus.PLAYING ||
             grace !== null ||
             (!!curPlayer && status.island_mode === ISLAND_PLAYER),

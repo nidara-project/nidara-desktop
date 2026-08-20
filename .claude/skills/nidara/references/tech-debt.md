@@ -957,13 +957,15 @@ would change real focus behavior just to silence someone else's warning. The rig
 one-liner upstream (`if (!p || …)` at that line); reporting to GNOME/gtk is pending (no
 GitLab account yet).
 
-### 35. Island media compact: focus-aware mutation deferred (2026-07-19)
-The capsule's compact content mutates to the media form whenever the selected player is
-PLAYING. The agreed ideal is stricter: only mutate while the playing app is NOT focused
-(music in the foreground app doesn't need an ambient indicator — you're looking at it).
-Deferred from phase 2 as secondary; needs `HyprlandState` focused-window class matched
-against the player's `entry`, with a real edge case: a browser playing in a background TAB
-of a focused window would wrongly count as "focused". Design the matching before wiring it.
+### 35. ✅ RESOLVED — Focus & Tab-Aware Island Media Mutation (2026-07-19 → 2026-08-21)
+Implemented in `surfaces/island/IslandActivities.tsx` (`mediaActivity`, `isPlayerForeground`, `isBrowserClass`).
+
+The capsule's compact content only fronts the media player when playback is active AND the player
+is running in the background. If the user focuses the native media app (e.g. Spotify, VLC), or focuses
+the active playing tab in a web browser (matching `player.title`/`player.artist` against the browser's
+window title), the capsule leaves the front for the workspace dots. When playing in a background browser
+tab (e.g. YouTube while browsing PRs), the capsule recognizes the tab divergence and presents the compact
+widget. Re-arbitrates live on `HyprlandState` "changed" and "title-changed" signals.
 
 ### 36. ✅ RESOLVED — Built-in Assistant v1 (2026-07-20 → 2026-08-20)
 Brain (`bin/nidara-agent` + Settings → AI picker + keyring) and face (`core/AgentService.ts`

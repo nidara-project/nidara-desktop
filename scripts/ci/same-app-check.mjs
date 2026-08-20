@@ -68,25 +68,37 @@ function extractSameApp(filePath) {
     }
 }
 
-function extractAppSearchTokens() {
+function extractAppSearchModule() {
     const src = readFileSync(APP_SEARCH_FILE, "utf8")
     const noiseStart = src.indexOf('const NAME_NOISE = new Set(["org", "com", "io", "net", "app", "desktop"])')
-    const tokensStart = src.indexOf("export const nameTokens = (s: string): string[] =>", noiseStart)
-    const tokensEnd = src.indexOf(".filter(t => t && !NAME_NOISE.has(t))", tokensStart) + ".filter(t => t && !NAME_NOISE.has(t))".length
+    if (noiseStart === -1) {
+        throw new Error(`Could not find NAME_NOISE declaration in ${APP_SEARCH_FILE}`)
+    }
+    const endMatch = src.indexOf("return x.length > 2 && y.length > 2 && (x.includes(y) || y.includes(x))\n}", noiseStart)
+    if (endMatch === -1) {
+        throw new Error(`Could not find end of sameApp in ${APP_SEARCH_FILE}`)
+    }
+    const endIdx = endMatch + "return x.length > 2 && y.length > 2 && (x.includes(y) || y.includes(x))\n}".length
 
-    const block = src.slice(noiseStart, tokensEnd)
-    // Strip TypeScript type annotations and export
+    const block = src.slice(noiseStart, endIdx)
     const jsBlock = block
-        .replace(/export\s+/, "")
+        .replace(/export\s+/g, "")
         .replace(/\(s:\s*string\):\s*string\[\]/g, "(s)")
+        .replace(/\(a:\s*string,\s*b:\s*string\):\s*boolean/g, "(a, b)")
+        .replace(/:\s*string/g, "")
 
     const execCode = `
         ${jsBlock};
-        ({ nameTokens })
+        ({ nameTokens, sameApp })
     `
     const context = vm.createContext({})
     const exported = vm.runInContext(execCode, context)
-    return exported.nameTokens
+    return {
+        file: APP_SEARCH_FILE,
+        nameTokens: exported.nameTokens,
+        sameApp: exported.sameApp,
+        rawBlock: jsBlock.replace(/\s+/g, " ").trim(),
+    }
 }
 
 const TEST_PAIRS = [
@@ -138,7 +150,7 @@ const pass = (msg) => console.log(`  PASS  ${msg}`)
 
 log("same-app-check — validating consistency across helper scripts and shell")
 
-// 1. Extract from all bin files
+// 1. Extract from all bin files and app-search
 const extracted = []
 for (const file of BIN_FILES) {
     try {
@@ -149,13 +161,21 @@ for (const file of BIN_FILES) {
     }
 }
 
+try {
+    const appSearch = extractAppSearchModule()
+    extracted.push(appSearch)
+    pass(`Extracted sameApp & nameTokens from ${APP_SEARCH_FILE}`)
+} catch (e) {
+    error(`Could not parse ${APP_SEARCH_FILE}: ${e.message}`)
+}
+
 // 2. Assert that bin/ implementations match each other in logic & structure
 if (extracted.length > 1) {
     // Normalize comments and whitespace for code comparison
     const norm = s => s.replace(/\/\/[^\n]*/g, "").replace(/\s+/g, " ").trim()
     const base = extracted[0]
     const baseNorm = norm(base.rawBlock)
-    for (let i = 1; i < extracted.length; i++) {
+    for (let i = 1; i < extracted.length - 1; i++) {
         const other = extracted[i]
         const otherNorm = norm(other.rawBlock)
         if (otherNorm !== baseNorm) {
@@ -168,13 +188,13 @@ if (extracted.length > 1) {
 
 // 3. Test app-search.ts nameTokens against bin/ nameTokens
 try {
-    const appSearchTokens = extractAppSearchTokens()
+    const appSearch = extracted.find(e => e.file === APP_SEARCH_FILE)
     const binTokens = extracted[0]?.nameTokens
-    if (binTokens && appSearchTokens) {
+    if (binTokens && appSearch?.nameTokens) {
         let tokenMismatch = false
         for (const str of TOKEN_TEST_STRINGS) {
             const tBin = binTokens(str)
-            const tSearch = appSearchTokens(str)
+            const tSearch = appSearch.nameTokens(str)
             if (JSON.stringify(tBin) !== JSON.stringify(tSearch)) {
                 error(`Token mismatch for "${str}": bin=${JSON.stringify(tBin)} vs app-search=${JSON.stringify(tSearch)}`)
                 tokenMismatch = true
