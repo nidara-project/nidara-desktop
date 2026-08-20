@@ -265,6 +265,9 @@ jobs:
       # the text-size setting, i.e. on someone else's machine.
       - name: Wrapping prose fills its column (must succeed)
         run: node scripts/ci/wrapping-prose-check.mjs
+      # Verify that sameApp/nameTokens logic across bin/ helpers and app-search remain identical
+      - name: sameApp helper consistency (must succeed)
+        run: node scripts/ci/same-app-check.mjs
 
   i18n:
     name: Translations (parity + ledger)

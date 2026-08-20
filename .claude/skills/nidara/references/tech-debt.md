@@ -2086,21 +2086,15 @@ it narrows it to that preview model. The consequence is that **the growing histo
 block, is the lever** — the step-4 `query_app` dump (11 KB, no `match`) was resent on all nine
 following steps, ≈25k of the turn's 127k tokens.
 
-### 45. `sameApp()` is duplicated in four helpers (2026-08-01)
+### 45. ✅ RESOLVED — `sameApp()` consistency enforced in CI (2026-08-01 → 2026-08-20)
 
-`bin/nidara-{a11y,act,click,type}` each carry a **verbatim copy** of `sameApp`/`nameTokens`, and
-`AppService.nameTokens` is a fifth expression of the same rule in TypeScript. That is deliberate for
-now: the four helpers are standalone GJS scripts, each `sudo cp`'d to `/usr/bin` on its own by
-`install.sh`, so there is no import path they could share without inventing one (a `/usr/share/nidara/bin/`
-module + a resolver that also works when running from the repo). The existing convention in these
-files is comment-enforced duplication ("Kept identical in nidara-type"), and this follows it.
+`bin/nidara-{a11y,act,click,type}` each carry standalone copies of `sameApp`/`nameTokens`, and
+`ui/shell/core/app-search.ts` implements the TypeScript counterpart for launcher search.
 
-**The reason it is debt and not just a choice:** the whole POINT of the function is that all five
-sites agree on what an app is called. A drifted copy reintroduces exactly the failure it was written
-to kill, and nothing catches it — there is no test that runs the four helpers against each other
-(same gap as #44(c): these need a live AT-SPI bus, and `agent-loop` stubs them). If a GJS unit runner
-ever lands, the first thing to put in it is one table of name pairs asserted against all five copies.
-Until then: **grep for `sameApp` before touching any of them.**
+To prevent silent drift, `scripts/ci/same-app-check.mjs` was added to CI: it extracts the live
+implementations directly from all four helper scripts and `app-search.ts`, asserts source and logic
+parity, and executes a canonical test matrix of application name pairs (camelCase, digit seams,
+reverse-DNS, packaging prefixes, and negative non-matches) across every implementation.
 
 ---
 
