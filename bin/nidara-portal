@@ -72,6 +72,32 @@ const WALLPAPER_IFACE_XML = `
   </interface>
 </node>`
 
+const DYNAMIC_LAUNCHER_IFACE_XML = `
+<node>
+  <interface name="org.freedesktop.impl.portal.DynamicLauncher">
+    <property name="version" type="u" access="read"/>
+    <property name="SupportedLauncherTypes" type="u" access="read"/>
+    <method name="PrepareInstall">
+      <arg type="o" name="handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="parent_window" direction="in"/>
+      <arg type="s" name="name" direction="in"/>
+      <arg type="v" name="icon_v" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In5" value="QVariantMap"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out1" value="QVariantMap"/>
+      <arg type="a{sv}" name="results" direction="out"/>
+    </method>
+    <method name="RequestInstallToken">
+      <arg type="s" name="app_id" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In1" value="QVariantMap"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/>
+    </method>
+  </interface>
+</node>`
+
 const interfaceSettings = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
 let a11ySettings = null
 try {
@@ -233,12 +259,39 @@ class WallpaperBackend {
     }
 }
 
+// ── Dynamic Launcher Backend ────────────────────────────────────────────────
+class DynamicLauncherBackend {
+    get version() { return 1 }
+    get SupportedLauncherTypes() { return 3 } // 1 (App) + 2 (Webapp)
+
+    PrepareInstallAsync(params, invocation) {
+        const [, appId, , name, iconVariant] = params
+        print(`[nidara-portal] PrepareInstall requested for "${name}" by ${appId || "unknown"}`)
+
+        // Return 0 (Success) with the chosen name and icon for xdg-desktop-portal to install
+        const results = {
+            name: new GLib.Variant("s", name || "Web App"),
+            icon: iconVariant,
+        }
+        invocation.return_value(new GLib.Variant("(ua{sv})", [0, results]))
+    }
+
+    RequestInstallTokenAsync(params, invocation) {
+        const [appId] = params
+        print(`[nidara-portal] RequestInstallToken requested by ${appId || "unknown"}`)
+        // Response 0 = Allowed
+        invocation.return_value(new GLib.Variant("(u)", [0]))
+    }
+}
+
 const loop = new GLib.MainLoop(null, false)
 const settingsBackend = new SettingsBackend()
 const wallpaperBackend = new WallpaperBackend()
+const dynamicLauncherBackend = new DynamicLauncherBackend()
 
 const exportedSettings = Gio.DBusExportedObject.wrapJSObject(SETTINGS_IFACE_XML, settingsBackend)
 const exportedWallpaper = Gio.DBusExportedObject.wrapJSObject(WALLPAPER_IFACE_XML, wallpaperBackend)
+const exportedDynamicLauncher = Gio.DBusExportedObject.wrapJSObject(DYNAMIC_LAUNCHER_IFACE_XML, dynamicLauncherBackend)
 
 Gio.bus_own_name(
     Gio.BusType.SESSION,
@@ -247,6 +300,7 @@ Gio.bus_own_name(
     (connection) => {
         exportedSettings.export(connection, OBJECT_PATH)
         exportedWallpaper.export(connection, OBJECT_PATH)
+        exportedDynamicLauncher.export(connection, OBJECT_PATH)
 
         // Live appearance updates
         interfaceSettings.connect("changed::accent-color", () => {
@@ -272,7 +326,7 @@ Gio.bus_own_name(
             })
         }
 
-        print(`[nidara-portal] serving Settings + Wallpaper on ${BUS_NAME}`)
+        print(`[nidara-portal] serving Settings + Wallpaper + DynamicLauncher on ${BUS_NAME}`)
     },
     null,
     () => {
