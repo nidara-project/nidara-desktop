@@ -574,13 +574,11 @@ lock over. Real fix is upstream (GTK4 / gtk4-layer-shell `Gtk4SessionLock`); if 
 reproducer emerges, file it there. Don't try to "handle" output removal in lockscreen JS —
 the crash happens below us, during Wayland event dispatch.
 
-### 14. Two more flat-menu row implementations could migrate to `MenuRow.ts`
+### 14. Flat-menu row implementations migrated to `MenuRow.ts` (2026-06-11 → 2026-08-20)
 `common/MenuRow.ts` (2026-06-11) is the shared builder for flat `nidara-menu-row`
-lists; the CC context menu and the bar window menu use it. Two hand-rolled siblings remain:
-`NidaraMenu.ts` `makeRow` (renders Gio menu models — tray **and now the dock context menu**;
-different shape: model iteration, submenus flattened to headers, section labels → headers) and
-`Bar.tsx` `buildOverflowList` rows. Migrate opportunistically if already editing those files;
-not worth a standalone pass.
+lists; the CC context menu, the bar window menu, the bar overflow list (`Bar.tsx` `buildOverflowList`),
+and widget menus (clipboard, media) use it. `NidaraMenu.ts` renders Gio menu models with its own dynamic
+model iteration (`makeRow`), submenus, and section headers.
 
 **The dock AND app-grid context menus were migrated off native `Gtk.PopoverMenu`
 (dock 2026-06-27, app-grid 2026-06-28):** both are now plain `Gtk.Popover`s whose body is the

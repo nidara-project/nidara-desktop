@@ -11,6 +11,7 @@ import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
 
 import SquircleContainer, { GLASS_INSET } from "../../common/SquircleContainer"
+import { menuRow } from "../../common/MenuRow"
 import { RADIUS, rowInsetFor } from "../../../lib/tokens"
 import { CAPSULE_BORDER } from "./capsule"
 import Theme from "../../core/ThemeManager"
@@ -1084,21 +1085,21 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (!w) continue
       const hasExpand = !!w.buildBarExpanded
       const hasCCDetail = !!w.buildCCDetail
-      const row = new Gtk.Box({ spacing: 12 })
-      row.append(new Gtk.Image({ gicon: w.icon, pixel_size: 16, css_classes: ["nd-icon"] }))
-      row.append(new Gtk.Label({ label: w.name, halign: Gtk.Align.START, hexpand: true }))
-      const btn = new Gtk.Button({ child: row, css_classes: ["nidara-menu-row"], hexpand: true })
-      btn.connect("clicked", () => {
-        // Same first refusal as a visible pill (see rebuildBarWidgets) — an
-        // overflowed widget must not behave differently from a shown one.
-        if (w.barClick?.()) { status.bar_expanded_id = ""; return }
-        if (hasExpand) {
-          status.bar_expanded_id = id
-        } else if (hasCCDetail) {
-          status.bar_expanded_id = ""
-          status.cc_open = true
-          status.cc_detail_id = id
-        }
+      const btn = menuRow({
+        label: w.name,
+        icon: w.icon,
+        onClick: () => {
+          // Same first refusal as a visible pill (see rebuildBarWidgets) — an
+          // overflowed widget must not behave differently from a shown one.
+          if (w.barClick?.()) { status.bar_expanded_id = ""; return }
+          if (hasExpand) {
+            status.bar_expanded_id = id
+          } else if (hasCCDetail) {
+            status.bar_expanded_id = ""
+            status.cc_open = true
+            status.cc_detail_id = id
+          }
+        },
       })
       box.append(btn)
     }

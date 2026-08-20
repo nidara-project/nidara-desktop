@@ -4,8 +4,8 @@ import Icons from "../core/Icons"
 
 // Shared menu-row builders for flat nidara menus (.nidara-menu-row lists in a
 // SquircleContainer, never Gtk.Popover — see project_nidara_ui). Used by the
-// CC context menu and the bar window menu; NidaraMenu.ts (Gio model renderer)
-// and the bar overflow list keep their own shapes.
+// CC context menu, the bar window menu, the bar overflow list, and clipboard/media widgets;
+// NidaraMenu.ts renders Gio menu models.
 
 export interface MenuRowOpts {
     label: string
