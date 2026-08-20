@@ -744,11 +744,12 @@ cross-referencing a frame: `https://raw.githubusercontent.com/Aylur/astal/<ASTAL
 install.sh>/lib/<lib>/src/…`.
 
 **`nidara-portal`** (installed to `/usr/bin`, D-Bus-activated as
-`org.freedesktop.impl.portal.desktop.nidara`) is Nidara's xdg-desktop-portal **Settings, Wallpaper, and DynamicLauncher
+`org.freedesktop.impl.portal.desktop.nidara`) is Nidara's xdg-desktop-portal **Settings, Wallpaper, DynamicLauncher, and Account
 backend**:
 1. **Settings**: serves the complete `org.freedesktop.appearance` namespace (`accent-color` as `(ddd)` RGB tuple, `color-scheme` as uint32 1=dark/2=light, and `contrast` as uint32) — so libadwaita/GNOME apps (Calendar, nautilus) and Qt apps follow the Nidara accent and dark/light mode under Hyprland. Other namespaces (font-name, cursor-theme) fall through to the gtk backend (`org.freedesktop.impl.portal.Settings=nidara;gtk` in `/etc/xdg-desktop-portal/hyprland-portals.conf`). Live updates: the daemon watches gsettings `accent-color` and `color-scheme` and emits `SettingChanged`. Its accent table is a deliberate copy of `ui/lib/accent.ts` `ACCENT_HEX` — keep them in sync.
 2. **Wallpaper**: implements `org.freedesktop.impl.portal.Wallpaper.SetWallpaperURI` — so "Set as Desktop Background" in browsers (Firefox, Chrome, Brave) and image viewers (Loupe, Eye of GNOME) automatically applies and persists the wallpaper via `nidara-ipc setWallpaper` (with automatic caching of temporary/sandboxed images to `~/.local/share/nidara/wallpapers/`).
 3. **DynamicLauncher**: implements `org.freedesktop.impl.portal.DynamicLauncher` (`PrepareInstall` and `RequestInstallToken`) — so web browsers (Google Chrome, Chromium, Brave, Edge, Firefox) and sandboxed apps can seamlessly install Progressive Web Apps (PWAs) and desktop shortcuts into `~/.local/share/applications/` and `~/.local/share/icons/`, automatically indexed live by Nidara's `AppService`.
+4. **Account**: implements `org.freedesktop.impl.portal.Account` (`GetUserInformation`) — serves the user's username, real name, and avatar image URI (`~/.face` / `AccountsService` / `nidara/avatar.png`) to sandboxed apps and chat clients.
 Testing gotcha: `XDG_DESKTOP_PORTAL_DIR` redirects BOTH `.portal` discovery AND
 `portals.conf` lookup; GJS gotcha: a bare `v` out-arg needs the `*Async` + manual
 `invocation.return_value` pattern (auto-marshalling hangs the reply).
