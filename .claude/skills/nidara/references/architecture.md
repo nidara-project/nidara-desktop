@@ -1495,3 +1495,17 @@ This is the right place for new shared, Adwaita-free primitives.
   These handlers have a **test harness** that needs neither Hyprland nor Steam — `scripts/dev/hypr-game-mode-test.lua`, a CI gate; see `dev-workflow.md`.
 - **`nidara-game-mode` script (`Super+Shift+G`)** + **`GamingManager.ts` + Settings → Gaming (`gaming.json`):** `wallpaperMode` (artwork/custom/none), transition, `performanceProfile`.
 - **`Super+B` → `toggleBarOverlay`** (alias `toggleGameOverlay`): promotes **only the Bar** to OVERLAY layer over any fullscreen window (requires an active fullscreen window to activate; deactivation always allowed). Not game-specific — it lives here because games are the main fullscreen use case.
+
+## Planned Enhancements & Roadmap
+
+Backlog of designed desktop enhancements to prioritize for upcoming iterations:
+
+1. **Lockscreen Media Player Controls (`ui/lockscreen/widget/Media.ts`)**:
+   - Compact glass capsule rendered on `nidara-lock` below the clock when an MPRIS player (Spotify, browser, etc.) is active.
+   - Album artwork, track title, artist name, and touch/click Play/Pause, Next, and Previous track controls.
+2. **Lockscreen Battery & Charging State Indicator (`ui/lockscreen/widget/Battery.ts`)**:
+   - Subtle battery percentage and AC charging status indicator integrated into the lockscreen bottom power bar or header.
+3. **Settings Visual Keyboard Shortcuts Explorer (`pages/Shortcuts.tsx`)**:
+   - Categorized and searchable visual explorer in Settings for all Hyprland and Nidara keybindings (Windows, Launchers, Media, Screenshots, AI/Agent).
+4. **Config Backup & Restore Manager (`nidara-backup` / Settings UI)**:
+   - One-click export/import bundle (`.tar.gz` or JSON) of user preferences (`~/.config/nidara/`: appearance, wallpapers, dock pins, widget layout, autostart).
