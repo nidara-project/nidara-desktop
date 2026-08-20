@@ -898,17 +898,14 @@ that cannot cover its own output, and no amount of invalidation from our side fi
 ghost**, so an interaction-driven check reports a pass it did not earn. Park the pointer, or
 have a human look.
 
-### 30. Users page form dialogs are unstyled Gtk.Windows — need a nidara-kit form-dialog primitive (2026-07-10)
-Settings → Users has three dialogs with two different skins: Delete User goes through
-`showNidaraAlert` (nidara-kit `alert-dialog.ts`, full design-system chrome), while Add User and
-Change Password are hand-rolled plain `Gtk.Window`s — only their `NidaraButton`s are styled; the
-window, labels and entries render with GTK defaults, so they visibly belong to another family
-(user-flagged in the 07-10 VM pass). Deliberate deferral to keep PR #22 functional-only. The fix
-is NOT to hand-style those two windows: build a reusable **form-dialog primitive in
-`ui/lib/nidara-kit`** (window + heading + body slot + response row, sharing the alert-dialog's
-chrome/classes) and rebuild both dialogs on it — per the universal-components rule, so every
-future form dialog is born coherent. Design decisions pending: CSD header vs headerless card,
-glass level, entry styling (`nidara-alert-entry` already exists as a starting point).
+### 30. ✅ FIXED — Form-dialog primitive in nidara-kit (2026-07-10 → 2026-08-20)
+
+Built `showNidaraFormDialog` (`FormDialogHandle`, `FormResponse`, `NidaraFormDialogOpts`) in
+`ui/lib/nidara-kit/form-dialog.ts`. Encapsulates undecorated floating-glass `Gtk.Window` chrome,
+heading + optional subtitle, arbitrary content slot, horizontal separator, and `.nidara-alert-buttons`
+footer with dynamic response sensitivity and labels (`setResponseSensitive`, `setResponseLabel`).
+Migrated both Add User and Change Password dialogs in `Settings → Users` (`ui/shell/surfaces/settings/pages/Users.tsx`)
+from unstyled raw `Gtk.Window`s onto `showNidaraFormDialog`.
 
 ### 31. Legacy `~/.config/hypr/hyprland-user.lua` is edited in place, never migrated (2026-07-11)
 The Autostart page (now Settings → Apps → Autostart) resolves the effective override file the

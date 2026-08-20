@@ -112,7 +112,7 @@ const WINDOWS = [
         // transient is a sibling root, so its classes are not Settings' to reach.
         // Leaving it in was how the dead `window.nidara-settings-window
         // window.nidara-alert-dialog` passed this audit for three days.
-        not: ["alert-dialog.ts"],
+        not: ["alert-dialog.ts", "form-dialog.ts"],
         own: ["window.nidara-settings-window", ".nidara-settings-window"],
     },
     {
@@ -122,7 +122,7 @@ const WINDOWS = [
     },
     {
         name: "alert",
-        files: ["../lib/nidara-kit/alert-dialog.ts"],
+        files: ["../lib/nidara-kit/alert-dialog.ts", "../lib/nidara-kit/form-dialog.ts"],
         own: ["window.nidara-alert-dialog"],
     },
 ]

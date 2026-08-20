@@ -81,3 +81,8 @@ export { bindWhileRealized } from "./lifetime"
 // showNidaraAlert — modal confirmation dialog (replaces Adw.AlertDialog)
 export type { AlertResponse, AlertHandle } from "./alert-dialog"
 export { showNidaraAlert } from "./alert-dialog"
+
+// showNidaraFormDialog — modal form dialog with floating glass styling
+export type { FormResponse, FormDialogHandle, NidaraFormDialogOpts } from "./form-dialog"
+export { showNidaraFormDialog } from "./form-dialog"
+

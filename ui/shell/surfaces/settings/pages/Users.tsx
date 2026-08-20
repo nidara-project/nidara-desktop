@@ -5,7 +5,7 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "../../../../lib/process"
-import { showNidaraAlert, NidaraButton, NidaraRow, NidaraEmptyRow, ROW_H_SINGLE } from "../../../../lib/nidara-kit"
+import { showNidaraAlert, showNidaraFormDialog, NidaraButton, NidaraRow, NidaraEmptyRow, ROW_H_SINGLE } from "../../../../lib/nidara-kit"
 import { getUsers, getCurrentUser, type User } from "../../../../lib/users"
 import { listGroup, createRow, createStackedRow, fieldWithActions, pageBox, onPageShown } from "../SettingsHelpers"
 import { showAvatarCropper } from "../../../common/AvatarCropper"
@@ -116,23 +116,9 @@ function spawnTerminalWithCommand(cmd: string) {
 // ── "Add user" dialog ─────────────────────────────────────────────────────────
 
 function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) {
-    // Modal children of the Settings window, and Hyprland files them as clients of
-    // their own — so they declare Settings' app-id too, exactly as they resolved
-    // to it under the old remap. See ui/lib/app-id.ts.
-    const dialog = new Gtk.Window({
-        title: t("settings.users.other.add"),
-        modal: true,
-        resizable: false,
-        default_width: 380,
-    })
-    setWindowAppId(dialog, "nidara-settings")
-    if (parentWin) dialog.set_transient_for(parentWin)
-
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 12,
-        margin_start: 24, margin_end: 24,
-        margin_top: 24, margin_bottom: 24,
     })
 
     const field = (label: string, widget: Gtk.Widget) => {
@@ -162,20 +148,81 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
         halign: Gtk.Align.FILL, hexpand: true, xalign: 0, wrap: true,
     })
 
-    const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
-    const cancelBtn = NidaraButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
-    const createBtn = NidaraButton({ label: t("settings.users.other.create"), variant: "primary", pill: true, sensitive: false })
-    btnRow.append(cancelBtn)
-    btnRow.append(createBtn)
-
     box.append(field(t("settings.users.other.fullname"), nameEntry))
     box.append(field(t("settings.users.other.username"), unameEntry))
     box.append(field(t("settings.users.other.pw"),  pwEntry))
     box.append(field(t("settings.users.other.pw2"), pw2Entry))
     box.append(adminRow)
     box.append(statusLabel)
-    box.append(btnRow)
-    dialog.set_child(box)
+
+    // useradd succeeded but chpasswd is still pending/failed — a re-click must
+    // retry only the password step, never a second useradd.
+    let created = false
+
+    const handle = showNidaraFormDialog({
+        parent: parentWin,
+        heading: t("settings.users.other.add"),
+        width: 380,
+        content: box,
+        responses: [
+            { id: "cancel", label: t("settings.users.other.cancel") },
+            { id: "create", label: t("settings.users.other.create"), suggested: true, sensitive: false },
+        ],
+        onResponse: (id, h) => {
+            if (id === "cancel") { h.close(); return }
+            if (id === "create") {
+                const uname = unameEntry.text.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "")
+                // ':' and newlines would corrupt the passwd GECOS entry — useradd rejects
+                // them with an unhelpful generic error, so strip them up front.
+                const fname = nameEntry.text.trim().replace(/[:\n\r]/g, "")
+                const pw    = pwEntry.text
+
+                h.setResponseSensitive("create", false)
+                statusLabel.visible = false
+
+                const setPassword = () => {
+                    const proc = Gio.Subprocess.new(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
+                    proc.communicate_utf8_async(`${uname}:${pw}\n`, null, (_: any, res: any) => {
+                        // finish() only throws on IO errors — a non-zero exit (e.g. the
+                        // pkexec prompt was cancelled) must be read from get_successful().
+                        let ok = false
+                        try { proc.communicate_utf8_finish(res); ok = proc.get_successful() }
+                        catch (e) { console.error("[Users] chpasswd:", e) }
+                        if (ok) { h.close(); return }
+                        statusLabel.label = t("settings.users.other.err.pw-set")
+                        statusLabel.visible = true
+                        h.setResponseSensitive("create", true)
+                    })
+                }
+
+                if (created) { setPassword(); return }
+
+                const addCmd = ["pkexec", "useradd", "-m",
+                    ...(adminSwitch.active ? ["-G", "wheel"] : []),
+                    ...(fname ? ["-c", fname] : []),
+                    uname]
+
+                execAsync(addCmd).then(() => {
+                    created = true
+                    // The account exists now whatever happens to the password — freeze
+                    // its identity fields and refresh the list behind the dialog.
+                    nameEntry.sensitive = false
+                    unameEntry.sensitive = false
+                    adminSwitch.sensitive = false
+                    onCreated()
+                    if (pw.length === 0) { h.close(); return }
+                    setPassword()
+                }).catch(e => {
+                    console.error("[Users] useradd:", e)
+                    statusLabel.label = String(e?.message ?? e).includes("already exists")
+                        ? t("settings.users.other.err.exists")
+                        : t("settings.users.other.err.create")
+                    statusLabel.visible = true
+                    h.setResponseSensitive("create", true)
+                })
+            }
+        },
+    })
 
     const validateCreate = () => {
         const uname = unameEntry.text.trim()
@@ -183,7 +230,8 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
         const pw2 = pw2Entry.text
         // A blank password is allowed: the account is created locked, as the
         // password placeholder promises.
-        createBtn.sensitive = uname.length > 0 && pw === pw2
+        const isValid = uname.length > 0 && pw === pw2
+        handle.setResponseSensitive("create", isValid)
         if (pw2.length > 0 && pw !== pw2) {
             statusLabel.label = t("settings.users.other.err.pwmatch"); statusLabel.visible = true
         } else { statusLabel.visible = false }
@@ -191,88 +239,14 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
     unameEntry.connect("notify::text", validateCreate)
     pwEntry.connect("notify::text",    validateCreate)
     pw2Entry.connect("notify::text",   validateCreate)
-
-    cancelBtn.connect("clicked", () => dialog.close())
-
-    // useradd succeeded but chpasswd is still pending/failed — a re-click must
-    // retry only the password step, never a second useradd.
-    let created = false
-
-    createBtn.connect("clicked", () => {
-        const uname = unameEntry.text.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "")
-        // ':' and newlines would corrupt the passwd GECOS entry — useradd rejects
-        // them with an unhelpful generic error, so strip them up front.
-        const fname = nameEntry.text.trim().replace(/[:\n\r]/g, "")
-        const pw    = pwEntry.text
-
-        createBtn.sensitive = false
-        statusLabel.visible = false
-
-        const setPassword = () => {
-            const proc = Gio.Subprocess.new(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
-            proc.communicate_utf8_async(`${uname}:${pw}\n`, null, (_: any, res: any) => {
-                // finish() only throws on IO errors — a non-zero exit (e.g. the
-                // pkexec prompt was cancelled) must be read from get_successful().
-                let ok = false
-                try { proc.communicate_utf8_finish(res); ok = proc.get_successful() }
-                catch (e) { console.error("[Users] chpasswd:", e) }
-                if (ok) { dialog.close(); return }
-                statusLabel.label = t("settings.users.other.err.pw-set")
-                statusLabel.visible = true
-                createBtn.sensitive = true
-            })
-        }
-
-        if (created) { setPassword(); return }
-
-        const addCmd = ["pkexec", "useradd", "-m",
-            ...(adminSwitch.active ? ["-G", "wheel"] : []),
-            ...(fname ? ["-c", fname] : []),
-            uname]
-
-        execAsync(addCmd).then(() => {
-            created = true
-            // The account exists now whatever happens to the password — freeze
-            // its identity fields and refresh the list behind the dialog.
-            nameEntry.sensitive = false
-            unameEntry.sensitive = false
-            adminSwitch.sensitive = false
-            onCreated()
-            if (pw.length === 0) { dialog.close(); return }
-            setPassword()
-        }).catch(e => {
-            console.error("[Users] useradd:", e)
-            statusLabel.label = String(e?.message ?? e).includes("already exists")
-                ? t("settings.users.other.err.exists")
-                : t("settings.users.other.err.create")
-            statusLabel.visible = true
-            createBtn.sensitive = true
-        })
-    })
-
-    dialog.present()
 }
 
 // ── "Change password" dialog ──────────────────────────────────────────────────
 
 function showChangePasswordDialog(user: User, parentWin: Gtk.Window | null) {
-    // Modal children of the Settings window, and Hyprland files them as clients of
-    // their own — so they declare Settings' app-id too, exactly as they resolved
-    // to it under the old remap. See ui/lib/app-id.ts.
-    const dialog = new Gtk.Window({
-        title: `${t("settings.users.other.pw.change")} — ${user.displayName}`,
-        modal: true,
-        resizable: false,
-        default_width: 360,
-    })
-    setWindowAppId(dialog, "nidara-settings")
-    if (parentWin) dialog.set_transient_for(parentWin)
-
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 12,
-        margin_start: 24, margin_end: 24,
-        margin_top: 24, margin_bottom: 24,
     })
 
     const field = (label: string, widget: Gtk.Widget) => {
@@ -293,50 +267,52 @@ function showChangePasswordDialog(user: User, parentWin: Gtk.Window | null) {
         halign: Gtk.Align.FILL, hexpand: true, xalign: 0, wrap: true,
     })
 
-    const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
-    const cancelBtn = NidaraButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
-    const applyBtn  = NidaraButton({ label: t("settings.users.other.pw.apply"), variant: "primary", pill: true, sensitive: false })
-    btnRow.append(cancelBtn)
-    btnRow.append(applyBtn)
+    box.append(field(t("settings.users.other.pw"),  pwEntry))
+    box.append(field(t("settings.users.other.pw2"), pw2Entry))
+    box.append(statusLabel)
+
+    const handle = showNidaraFormDialog({
+        parent: parentWin,
+        heading: `${t("settings.users.other.pw.change")} — ${user.displayName}`,
+        width: 360,
+        content: box,
+        responses: [
+            { id: "cancel", label: t("settings.users.other.cancel") },
+            { id: "apply", label: t("settings.users.other.pw.apply"), suggested: true, sensitive: false },
+        ],
+        onResponse: (id, h) => {
+            if (id === "cancel") { h.close(); return }
+            if (id === "apply") {
+                const pw = pwEntry.text
+                h.setResponseSensitive("apply", false)
+                statusLabel.visible = false
+
+                const proc = Gio.Subprocess.new(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
+                proc.communicate_utf8_async(`${user.username}:${pw}\n`, null, (_: any, res: any) => {
+                    // finish() only throws on IO errors — a non-zero exit (e.g. the
+                    // pkexec prompt was cancelled) must be read from get_successful().
+                    let ok = false
+                    try { proc.communicate_utf8_finish(res); ok = proc.get_successful() }
+                    catch (e) { console.error("[Users] chpasswd:", e) }
+                    if (ok) { h.close(); return }
+                    statusLabel.label = t("settings.users.other.err.pw")
+                    statusLabel.visible = true
+                    h.setResponseSensitive("apply", true)
+                })
+            }
+        },
+    })
 
     const validate = () => {
         const pw = pwEntry.text; const pw2 = pw2Entry.text
-        applyBtn.sensitive = pw.length > 0 && pw === pw2
+        const isValid = pw.length > 0 && pw === pw2
+        handle.setResponseSensitive("apply", isValid)
         if (pw2.length > 0 && pw !== pw2) {
             statusLabel.label = t("settings.users.other.err.pwmatch"); statusLabel.visible = true
         } else { statusLabel.visible = false }
     }
     pwEntry.connect("notify::text",  validate)
     pw2Entry.connect("notify::text", validate)
-
-    box.append(field(t("settings.users.other.pw"),  pwEntry))
-    box.append(field(t("settings.users.other.pw2"), pw2Entry))
-    box.append(statusLabel)
-    box.append(btnRow)
-    dialog.set_child(box)
-
-    cancelBtn.connect("clicked", () => dialog.close())
-
-    applyBtn.connect("clicked", () => {
-        const pw = pwEntry.text
-        applyBtn.sensitive = false
-        statusLabel.visible = false
-
-        const proc = Gio.Subprocess.new(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
-        proc.communicate_utf8_async(`${user.username}:${pw}\n`, null, (_: any, res: any) => {
-            // finish() only throws on IO errors — a non-zero exit (e.g. the
-            // pkexec prompt was cancelled) must be read from get_successful().
-            let ok = false
-            try { proc.communicate_utf8_finish(res); ok = proc.get_successful() }
-            catch (e) { console.error("[Users] chpasswd:", e) }
-            if (ok) { dialog.close(); return }
-            statusLabel.label = t("settings.users.other.err.pw")
-            statusLabel.visible = true
-            applyBtn.sensitive = true
-        })
-    })
-
-    dialog.present()
 }
 
 // ── Other-user row ─────────────────────────────────────────────────────────────
