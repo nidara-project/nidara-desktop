@@ -482,7 +482,6 @@ window.nidara-settings-window {
             border-radius: $nidara-radius-md;
             border: 2px solid var(--nidara-border);
             background-color: var(--nidara-surface);
-            margin: 0 auto;
         }
     }
 
@@ -491,8 +490,6 @@ window.nidara-settings-window {
         &:hover { background-color: transparent; }
 
         .wallpaper-thumbnails-box {
-            margin: 0 auto;
-
             button.wallpaper-thumb-btn {
                 @include nidara-reset;
                 padding: 2px;
