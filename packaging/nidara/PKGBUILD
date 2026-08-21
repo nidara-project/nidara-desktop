@@ -182,6 +182,11 @@ package() {
   # /usr/share/nidara — bundles, styles, assets, shared config
   install -Dm644 VERSION "$pkgdir/usr/share/nidara/VERSION"
   install -Dm644 defaults/wallpaper/wallpaper.jpg "$pkgdir/usr/share/nidara/wallpaper.jpg"
+  if [ -f defaults/wallpaper/wallpaper-greeter.jpg ]; then
+    install -Dm644 defaults/wallpaper/wallpaper-greeter.jpg "$pkgdir/usr/share/nidara/wallpaper-greeter.jpg"
+  fi
+  mkdir -p "$pkgdir/usr/share/nidara/wallpapers"
+  install -m644 defaults/wallpaper/*.jpg "$pkgdir/usr/share/nidara/wallpapers/"
   install -Dm755 ui/shell/build/nidara "$pkgdir/usr/share/nidara/ui/shell/build/nidara"
   install -Dm644 ui/shell/style.css "$pkgdir/usr/share/nidara/ui/shell/style.css"
   cp -r ui/shell/assets "$pkgdir/usr/share/nidara/ui/shell/assets"

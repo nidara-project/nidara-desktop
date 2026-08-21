@@ -475,12 +475,16 @@ sudo cp -r "$REPO_DIR/config/greetd" /usr/share/nidara/config/greetd
 sudo rm -rf /usr/share/nidara/skills
 sudo cp -r "$REPO_DIR/skills" /usr/share/nidara/skills
 
-# Default wallpaper (jpg since 2026-07). The stale wallpaper.png can go now:
-# the DM block re-syncs a Nidara-owned /etc/greetd in this same run (tech-debt
-# #16 fix), so the greeter .lua points at wallpaper.jpg again; a foreign
-# DM/greeter never referenced our wallpaper in the first place.
-if [ -f "$REPO_DIR/defaults/wallpaper/wallpaper.jpg" ]; then
-    sudo cp "$REPO_DIR/defaults/wallpaper/wallpaper.jpg" /usr/share/nidara/wallpaper.jpg
+# Default wallpapers (desktop, greeter, and bundled offline collection).
+if [ -d "$REPO_DIR/defaults/wallpaper" ]; then
+    sudo mkdir -p /usr/share/nidara/wallpapers
+    sudo cp -f "$REPO_DIR/defaults/wallpaper/"*.jpg /usr/share/nidara/wallpapers/ 2>/dev/null || true
+    if [ -f "$REPO_DIR/defaults/wallpaper/wallpaper.jpg" ]; then
+        sudo cp "$REPO_DIR/defaults/wallpaper/wallpaper.jpg" /usr/share/nidara/wallpaper.jpg
+    fi
+    if [ -f "$REPO_DIR/defaults/wallpaper/wallpaper-greeter.jpg" ]; then
+        sudo cp "$REPO_DIR/defaults/wallpaper/wallpaper-greeter.jpg" /usr/share/nidara/wallpaper-greeter.jpg
+    fi
     sudo rm -f /usr/share/nidara/wallpaper.png
 fi
 

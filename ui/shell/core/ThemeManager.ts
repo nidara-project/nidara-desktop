@@ -202,7 +202,7 @@ class ThemeManager extends GObject.Object {
 
     getAvailableGtkThemes(): string[] {
         const paths = ["/usr/share/themes", `${GLib.get_home_dir()}/.local/share/themes`, `${GLib.get_home_dir()}/.themes`]
-        return this.listDirs(paths).filter(t => !["Default", "Emacs"].includes(t))
+        return this.listDirs(paths).filter(t => !["Default", "Emacs", "nidara"].includes(t))
     }
 
     getAvailableIconThemes(): string[] {
@@ -770,8 +770,9 @@ class ThemeManager extends GObject.Object {
                 if (Object.keys(data).length === 0) this.syncFromSystem()
             }
 
+            const rawTheme = data.themeFamily as string
             this.state = {
-                themeFamily: (data.themeFamily as string) ?? this.state.themeFamily,
+                themeFamily: (rawTheme && rawTheme !== "nidara") ? rawTheme : (this.state.themeFamily || "Adwaita"),
                 iconTheme:   (data.iconTheme as string)   ?? this.state.iconTheme,
                 cursorTheme: (data.cursorTheme as string) ?? this.state.cursorTheme,
                 isDark:      (data.isDark as boolean)     ?? this.state.isDark,
@@ -798,10 +799,12 @@ class ThemeManager extends GObject.Object {
             this.state.cursorTheme = s.get_string("cursor-theme")
             this.state.isDark = s.get_string("color-scheme") === "prefer-dark"
             const gtk = s.get_string("gtk-theme")
-            if (gtk) this.state.themeFamily = gtk
+            this.state.themeFamily = (gtk && gtk !== "nidara") ? gtk : "Adwaita"
             const sysAccent = s.get_string("accent-color") as AccentKey
             if (sysAccent && sysAccent in ACCENT_PALETTE) this.fcConfig.accent = sysAccent
-        } catch (e) { }
+        } catch (e) {
+            this.state.themeFamily = "Adwaita"
+        }
     }
 }
 

@@ -12,7 +12,7 @@ hl.env("XDG_CONFIG_HOME","/var/lib/greeter/.config")
 -- ── Startup ───────────────────────────────────────────────────────────────────
 hl.on("hyprland.start", function()
     hl.exec_cmd("awww-daemon")
-    hl.exec_cmd("sleep 1 && awww img /usr/share/nidara/wallpaper.jpg --transition-type fade --transition-duration 1")
+    hl.exec_cmd("sleep 1 && if [ -f /usr/share/nidara/wallpaper-greeter.jpg ]; then awww img /usr/share/nidara/wallpaper-greeter.jpg --transition-type fade --transition-duration 1; else awww img /usr/share/nidara/wallpaper.jpg --transition-type fade --transition-duration 1; fi")
     -- Launch greeter; exit Hyprland when it closes
     -- (Lua parser: the legacy `hyprctl dispatch exit` errors out and the
     -- greeter compositor would never exit)

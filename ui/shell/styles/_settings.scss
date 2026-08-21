@@ -473,7 +473,7 @@ window.nidara-settings-window {
         }
     }
 
-    // ── Wallpaper preview ─────────────────────────────────────────────────────────
+    // ── Wallpaper preview & gallery ─────────────────────────────────────────────
     row.wallpaper-preview-row {
         padding: $space-3;
         &:hover { background-color: transparent; }
@@ -482,6 +482,40 @@ window.nidara-settings-window {
             border-radius: $nidara-radius-md;
             border: 2px solid var(--nidara-border);
             background-color: var(--nidara-surface);
+            margin: 0 auto;
+        }
+    }
+
+    row.wallpaper-gallery-row {
+        padding: $space-1 $space-3 $space-3;
+        &:hover { background-color: transparent; }
+
+        .wallpaper-thumbnails-box {
+            margin: 0 auto;
+
+            button.wallpaper-thumb-btn {
+                @include nidara-reset;
+                padding: 2px;
+                border-radius: $nidara-radius-sm;
+                border: 2px solid transparent;
+                background: transparent;
+                transition: border-color 0.15s ease, transform 0.15s ease;
+
+                picture {
+                    border-radius: calc(#{$nidara-radius-sm} - 2px);
+                    border: 1px solid var(--nidara-border);
+                    background-color: var(--nidara-surface);
+                }
+
+                &:hover {
+                    border-color: var(--nidara-surface-strong);
+                    transform: scale(1.04);
+                }
+
+                &.active {
+                    border-color: var(--nidara-accent);
+                }
+            }
         }
     }
 

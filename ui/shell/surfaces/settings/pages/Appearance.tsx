@@ -7,6 +7,7 @@ import Theme from "../../../core/ThemeManager"
 import { NidaraButton, NidaraFontButton, makeHSlider } from "../../../../lib/nidara-kit"
 import NightLight from "../../../core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
+import { getBundledWallpapers } from "../../../../lib/wallpaper"
 import { ACCENT_PALETTE, type AccentKey, type ShellAppearance } from "../../../core/NidaraTheme"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
@@ -41,8 +42,20 @@ export default function AppearancePage() {
     const darkSwitch = new Gtk.Switch({ active: Theme.isDark, valign: Gtk.Align.CENTER })
     let syncingDark = false
     darkSwitch.connect("state-set", (_: any, state: boolean) => {
-        if (!syncingDark) Theme.setDarkMode(state)
+        if (!syncingDark) {
+            syncingDark = true
+            Theme.setDarkMode(state).finally(() => {
+                syncingDark = false
+            })
+        }
         return false
+    })
+    onTheme(() => Theme.isDark)((dark) => {
+        if (darkSwitch.get_active() !== dark) {
+            syncingDark = true
+            darkSwitch.set_active(dark)
+            syncingDark = false
+        }
     })
     styleGroup.listBox.append(createRow(
         t("settings.appearance.dark-mode"),
@@ -94,9 +107,87 @@ export default function AppearancePage() {
     updatePreview(Wallpaper.current)
     Wallpaper.refreshFromDaemon()
 
-    const previewRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row", "wallpaper-preview-row"] })
-    previewRow.set_child(preview)
+    const previewCenter = new Gtk.CenterBox({
+        center_widget: preview,
+        hexpand: true,
+    })
+    const previewRow = new Gtk.ListBoxRow({
+        css_classes: ["nidara-row", "wallpaper-preview-row"],
+        activatable: false,
+        selectable: false,
+    })
+    previewRow.set_child(previewCenter)
     wallGroup.listBox.append(previewRow)
+
+    // Bundled wallpapers gallery
+    const bundled = getBundledWallpapers().filter(p => !p.includes("wallpaper-greeter"))
+    if (bundled.length > 0) {
+        const thumbBox = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: 8,
+            halign: Gtk.Align.CENTER,
+            valign: Gtk.Align.CENTER,
+            hexpand: false,
+            css_classes: ["wallpaper-thumbnails-box"],
+        })
+
+        const thumbButtons: { path: string; btn: Gtk.Button }[] = []
+
+        const refreshThumbActive = (currentPath: string) => {
+            const curBase = currentPath ? currentPath.split("/").pop() : ""
+            for (const item of thumbButtons) {
+                const itemBase = item.path.split("/").pop()
+                if (item.path === currentPath || (curBase && itemBase === curBase)) {
+                    item.btn.add_css_class("active")
+                } else {
+                    item.btn.remove_css_class("active")
+                }
+            }
+        }
+
+        for (const wallPath of bundled) {
+            const thumbPic = new Gtk.Picture({
+                width_request: 80,
+                height_request: 45,
+                content_fit: Gtk.ContentFit.COVER,
+            })
+            try {
+                const pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(wallPath, 160, 90, true)
+                if (pixbuf) thumbPic.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
+            } catch (_) {
+                thumbPic.set_filename(wallPath)
+            }
+
+            const btn = new Gtk.Button({
+                css_classes: ["wallpaper-thumb-btn"],
+                valign: Gtk.Align.CENTER,
+            })
+            btn.set_child(thumbPic)
+            btn.connect("clicked", () => {
+                Wallpaper.setWallpaper(wallPath)
+                updatePreview(wallPath)
+                refreshThumbActive(wallPath)
+            })
+
+            thumbBox.append(btn)
+            thumbButtons.push({ path: wallPath, btn })
+        }
+
+        refreshThumbActive(Wallpaper.current)
+        Wallpaper.connect("changed", () => refreshThumbActive(Wallpaper.current))
+
+        const centerBox = new Gtk.CenterBox({
+            center_widget: thumbBox,
+            hexpand: true,
+        })
+        const galleryRow = new Gtk.ListBoxRow({
+            css_classes: ["nidara-row", "wallpaper-gallery-row"],
+            activatable: false,
+            selectable: false,
+        })
+        galleryRow.set_child(centerBox)
+        wallGroup.listBox.append(galleryRow)
+    }
 
     // Transition selector
     const transitions = Object.keys(TRANSITION_LABELS) as TransitionType[]
