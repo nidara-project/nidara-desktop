@@ -4147,4 +4147,12 @@ whether a class field on a GObject subclass shadows the property accessor) and t
 - **Packaging:** `packaging/nidara/PKGBUILD` and `install.sh` compile and install `libnidara-auth` directly (via `build.sh`) alongside `libnidara-wl`.
 - **Result:** Astal is 100% eliminated from the desktop environment — 0 external git clones, 0 external AUR packages, 0 pinned ASTAL_REF SHAs. All runtime services are pure TypeScript, native C, and standard Arch packages.
 
+### 78. ✅ RESOLVED — GTK4 Height-for-Width Layout Safety & BlueZ Pairing Resilience (2026-08-21)
+
+- **`ScaleRevealer` Height-for-Width Protection:** Added `Math.max(for_size, minW)` clamping in `vfunc_measure` and `vfunc_size_allocate` (`common/ScaleRevealer.ts`) so GTK4 never receives an undersized width constraint during vertical size allocation passes. In `NotificationCenter.tsx`, added `ellipsize: 3, lines: 1, max_width_chars: 24` to `GroupControlHeader`'s application name label, preventing notification cards from requesting widths beyond the notification column.
+- **BlueZ Pairing Agent Resilience:** In `core/BluetoothService.ts`, handled `org.bluez.Error.AlreadyExists` by calling `UnregisterAgent` on `/org/bluez` for `/org/nidara/bluetooth/agent` and retrying registration automatically. Chained `RequestDefaultAgent` sequentially after `RegisterAgent` succeeds to avoid race conditions upon UI restarts (`Super+Shift+R`).
+- **Build Cleanliness & Property Collisions:** Decoupled `ui/greeter` and `ui/lockscreen` build scripts from `../shell` directory hops, allowing each bundle to build and bundle cleanly in isolation. Renamed internal `GlassCapsule.hasFocus()` to `isFocused()` (`lib/glass-capsule.ts`) to avoid conflicting with `Gtk.Widget`/`Gtk.Box`'s `hasFocus` property accessor.
+- **GTK4 CSS Syntax:** Removed invalid `margin: 0 auto;` declarations from `_settings.scss` (wallpaper preview and thumbnails box; centering is handled via `Gtk.CenterBox` and `halign`), keeping startup logs completely clean with 0 warnings.
+
+
 
