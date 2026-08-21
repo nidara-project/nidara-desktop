@@ -308,7 +308,12 @@ export class ScaleRevealer extends Gtk.Widget {
     // animateLayout: the layout height follows the animated scale so stacked
     // siblings reflow. Otherwise pure pass-through (Gtk.Bin semantics).
     vfunc_measure(orientation: Gtk.Orientation, for_size: number): [number, number, number, number] {
-        const [min, nat] = this.child.measure(orientation, for_size)
+        let targetSize = for_size
+        if (for_size >= 0 && orientation === Gtk.Orientation.VERTICAL) {
+            const [minW] = this.child.measure(Gtk.Orientation.HORIZONTAL, -1)
+            targetSize = Math.max(for_size, minW)
+        }
+        const [min, nat] = this.child.measure(orientation, targetSize)
         if (!this.animateLayout || orientation === Gtk.Orientation.HORIZONTAL) return [min, nat, -1, -1]
         const s = this.currentScale()
         let sMin = Math.floor(min * s)
@@ -325,7 +330,8 @@ export class ScaleRevealer extends Gtk.Widget {
     // pass-through mode fills like a Gtk.Bin.
     vfunc_size_allocate(width: number, height: number, baseline: number) {
         if (this.animateLayout) {
-            const [, nat] = this.child.measure(Gtk.Orientation.VERTICAL, width)
+            const [minW] = this.child.measure(Gtk.Orientation.HORIZONTAL, -1)
+            const [, nat] = this.child.measure(Gtk.Orientation.VERTICAL, Math.max(width, minW))
             this.child.allocate(width, nat, baseline, null)
         } else {
             this.child.allocate(width, height, baseline, null)

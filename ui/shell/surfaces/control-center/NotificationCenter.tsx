@@ -118,7 +118,7 @@ export function GroupControlHeader(props: { name: string, count: number, onToggl
     const { name, count, onToggle, onClearGroup } = props
     const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8, valign: Gtk.Align.CENTER, hexpand: true, margin_start: 12, margin_end: 8, margin_top: 4, margin_bottom: 4 })
     const labelBox = new Gtk.Box({ spacing: 8, hexpand: true, valign: Gtk.Align.CENTER })
-    labelBox.append(new Gtk.Label({ label: name, css_classes: ["nc-group-header-name"], halign: Gtk.Align.START }))
+    labelBox.append(new Gtk.Label({ label: name, css_classes: ["nc-group-header-name"], halign: Gtk.Align.START, ellipsize: 3, lines: 1, max_width_chars: 24, xalign: 0 }))
     labelBox.append(new Gtk.Label({ label: `${count}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
     // captureClick: the header capsule below carries a release-phase tap (collapse) and
     // a swipe gesture — the buttons claim on press so they beat both.
