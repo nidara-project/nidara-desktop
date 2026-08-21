@@ -333,14 +333,41 @@ export function registerPairingAgent(h: PairingAgentHandler): void {
         agentConn = Gio.bus_get_sync(Gio.BusType.SYSTEM, null)
         agentImpl = (Gio as any).DBusExportedObject.wrapJSObject(AGENT_IFACE, makeAgent())
         agentImpl.export(agentConn, AGENT_PATH)
-        const call = (method: string, args: GLib.Variant) =>
-            agentConn!.call("org.bluez", "/org/bluez", "org.bluez.AgentManager1", method,
-                args, null, Gio.DBusCallFlags.NONE, -1, null,
+
+        const requestDefault = () => {
+            agentConn!.call("org.bluez", "/org/bluez", "org.bluez.AgentManager1", "RequestDefaultAgent",
+                new GLib.Variant("(o)", [AGENT_PATH]), null, Gio.DBusCallFlags.NONE, -1, null,
                 (c: any, res: any) => {
-                    try { c.call_finish(res) } catch (e) { console.error(`[BT] agent ${method}:`, e) }
+                    try { c.call_finish(res) } catch (e) { console.error("[BT] agent RequestDefaultAgent:", e) }
                 })
-        call("RegisterAgent", new GLib.Variant("(os)", [AGENT_PATH, "KeyboardDisplay"]))
-        call("RequestDefaultAgent", new GLib.Variant("(o)", [AGENT_PATH]))
+        }
+
+        const register = (isRetry = false) => {
+            agentConn!.call("org.bluez", "/org/bluez", "org.bluez.AgentManager1", "RegisterAgent",
+                new GLib.Variant("(os)", [AGENT_PATH, "KeyboardDisplay"]), null, Gio.DBusCallFlags.NONE, -1, null,
+                (c: any, res: any) => {
+                    try {
+                        c.call_finish(res)
+                        requestDefault()
+                    } catch (e: any) {
+                        const msg = String(e?.message ?? e)
+                        if (!isRetry && msg.includes("org.bluez.Error.AlreadyExists")) {
+                            // Another agent was registered under this path (e.g. from prior shell instance).
+                            // Unregister the stale registration and retry once.
+                            agentConn!.call("org.bluez", "/org/bluez", "org.bluez.AgentManager1", "UnregisterAgent",
+                                new GLib.Variant("(o)", [AGENT_PATH]), null, Gio.DBusCallFlags.NONE, -1, null,
+                                (cUnreg: any, resUnreg: any) => {
+                                    try { cUnreg.call_finish(resUnreg) } catch {}
+                                    register(true)
+                                })
+                        } else {
+                            console.error("[BT] agent RegisterAgent:", e)
+                        }
+                    }
+                })
+        }
+
+        register()
     } catch (e) {
         console.error("[BT] agent registration failed:", e)
         try { agentImpl?.unexport() } catch {}
