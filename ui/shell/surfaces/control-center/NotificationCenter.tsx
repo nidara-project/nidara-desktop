@@ -7,7 +7,7 @@ import hs from "../../core/HyprlandState"
 import { drawSquircle, squircleThumb } from "../../common/DrawingUtils"
 import { NidaraScrolled } from "../../../lib/nidara-kit"
 import SquircleContainer, { Shape } from "../../common/SquircleContainer"
-import { RADIUS } from "../../../lib/tokens"
+import { RADIUS, GLASS_TINT } from "../../../lib/tokens"
 import { ScaleRevealer, attachGhostSwipeDismiss } from "../../common/ScaleRevealer"
 import IconButton from "../../common/IconButton"
 import Theme from "../../core/ThemeManager"
@@ -394,7 +394,9 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
     const da = new Gtk.DrawingArea({ height_request: stripH })
     da.set_draw_func((_da: any, cr: any, w: number, _h: number) => {
         if (w <= 0 || _h <= 0) return
-        const color = Theme.chromeIsDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }   // shell skin — follows appearance pin
+        const color = Theme.chromeIsDark
+            ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
+            : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }   // shell skin — follows appearance pin
         for (let i = layers - 1; i >= 0; i--) {
             // Inset >= the card's corner radius so each ghost's straight top edge sits under the
             // STRAIGHT part of the card's bottom (clear of the rounded corners) — no corner gap.

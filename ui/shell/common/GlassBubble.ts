@@ -1,5 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Theme from "../core/ThemeManager"
+import { GLASS_TINT } from "../../lib/tokens"
 
 // The Nidara glass bubble: a rounded body with a pointer spliced into one side,
 // painted in Cairo as a SINGLE continuous shape (one glass fill, one 1px inner
@@ -163,7 +164,9 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
     if (w <= 0 || h <= 0) return
     // Shell skin follows the pinned appearance; app-mode (About) follows the system mode.
     const dark = chrome ? Theme.chromeIsDark : Theme.isDark
-    const tint = dark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
+    const tint = dark
+        ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
+        : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
     // Glass alpha tracks the overlay slider, but FLOORED at 0.38. This is a popup,
     // and Hyprland blurs popups with `popups_ignorealpha = 0.30` (NOT the bar/dock
     // layer's 0.01/0.04 — see hyprland.lua). Below that the bubble stops blurring

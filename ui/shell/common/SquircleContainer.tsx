@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { drawSquircle, hexToFloatRgb } from "./DrawingUtils"
 import Theme from "../core/ThemeManager"
-import { RADIUS } from "../../lib/tokens"
+import { RADIUS, GLASS_TINT } from "../../lib/tokens"
 
 export enum Shape {
     SQUIRCLE,
@@ -163,8 +163,11 @@ export default function SquircleContainer({
         // Shell-skin capsules (default) follow the pinned shell appearance;
         // app-mode surfaces (chrome:false, e.g. About) follow the system mode.
         const dark = chrome ? Theme.chromeIsDark : Theme.isDark
-        const themeColor = dark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
-        const baseColor = color || (useShellOpacity ? themeColor : { r: 1, g: 1, b: 1 })
+        const themeColor = dark
+            ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
+            : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
+        const defaultLight = { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
+        const baseColor = color || (useShellOpacity ? themeColor : defaultLight)
         // Explicit alpha always wins (even with useShellOpacity, so a surface can
         // stay theme-coloured + redraw-on-toggle yet be near-opaque — e.g. the CC
         // context menu, which floats over content with no real internal blur).

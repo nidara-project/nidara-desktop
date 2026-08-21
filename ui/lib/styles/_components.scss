@@ -474,7 +474,7 @@ dropdown popover {
     // lighter always-opaque block. (`dropdown popover` is REQUIRED: GTK4 puts `.combo`
     // on the dropdown's button but NOT its popover, so popover.combo never matched.)
     > contents {
-        background-color: var(--nidara-popover-bg, rgba(36, 36, 36, 0.85));
+        background-color: var(--nidara-popover-bg, rgba(22, 22, 34, 0.85));
         border: 1px solid var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
         border-radius: $nidara-radius-md;
         // ⚠️ margin 0 + no shadow, TOGETHER. GTK gives `popover > contents` a ~17px margin
@@ -504,7 +504,7 @@ dropdown popover {
     }
 
     > arrow {
-        background-color: var(--nidara-popover-bg, rgba(36, 36, 36, 0.85));
+        background-color: var(--nidara-popover-bg, rgba(22, 22, 34, 0.85));
         border-color: var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
     }
 

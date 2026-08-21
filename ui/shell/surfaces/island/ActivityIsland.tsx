@@ -5,6 +5,7 @@ import SquircleContainer from "../../common/SquircleContainer"
 import { MorphRevealer, MorphGlass, MorphPair } from "../../common/MorphRevealer"
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
 import { CAPSULE_BORDER } from "../bar/capsule"
+import { GLASS_TINT } from "../../../lib/tokens"
 import Theme from "../../core/ThemeManager"
 import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT, ISLAND_RECORDING } from "../../core/Status"
 import WorkspaceOverview, { WO_GLASS } from "../overview/WorkspaceOverview"
@@ -382,7 +383,9 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
 
     // Both morph endpoints paint chrome glass (SquircleContainer chrome:true):
     // tint pinned by shellAppearance, alpha from the bar/overlay opacity axes.
-    const chromeGlassColor = () => Theme.chromeIsDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
+    const chromeGlassColor = () => Theme.chromeIsDark
+        ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
+        : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
     // Pill of the compact capsule (perfect pill ≡ n=2, radius null = h/2).
     const compactGlass = (): MorphGlass => ({ alpha: Theme.barOpacity, color: chromeGlassColor(), border: CAPSULE_BORDER, n: 2.0, radius: null })
 

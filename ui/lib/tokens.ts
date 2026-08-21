@@ -84,6 +84,31 @@ const cornerReach = (n: number) => Math.SQRT2 * (1 - Math.pow(2, -1 / n))
 
 
 /**
+ * Canonical glass tint colors for all surfaces (Cairo painters & CSS token engine).
+ *
+ * Dark mode uses an Apple HIG / macOS Vibrancy-inspired Deep Slate (#161622 / RGB 22, 22, 34):
+ * a dark base with a subtle cool undertone that provides material body, avoids
+ * muddy/dirty color degradation on warm or complex wallpapers, and unifies Cairo
+ * surfaces (Bar/Dock/CC/Island) with CSS windows (Settings/About).
+ */
+export const GLASS_TINT = {
+    dark: {
+        r: 22 / 255,
+        g: 22 / 255,
+        b: 34 / 255,
+        rgb: "22, 22, 34",
+        hex: "#161622",
+    },
+    light: {
+        r: 1,
+        g: 1,
+        b: 1,
+        rgb: "250, 250, 250",
+        hex: "#fafafa",
+    },
+} as const
+
+/**
  * The lockscreen / greeter GLASS, as premultiplied 0..1 components.
  *
  * ⚠️ MIRROR of `--nidara-glass`, `--nidara-glass-border` and

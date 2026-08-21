@@ -838,6 +838,13 @@ How the flip works:
     **`kitAppearance().surfaceIsDark(widget)`**, not by importing `Theme` — a kit component may
     not import from `ui/shell/`. Same method, injected. A shared painter that stays in
     `ui/shell/common/` still calls `Theme.surfaceIsDark` directly.
+- **Glass base color is unified via `GLASS_TINT` in `tokens.ts`**:
+  All Cairo painters (`SquircleContainer`, `DockAxis`, `GlassBubble`, `NotificationCenter`, `ActivityIsland`)
+  and CSS tokens (`--nidara-bg`, `--nidara-popover-bg`, `--nidara-material-*` in `NidaraTheme.ts`)
+  read from `GLASS_TINT` in `ui/lib/tokens.ts`. In dark mode, it is an Apple HIG / macOS Vibrancy-inspired
+  **Deep Slate (`#161622` / RGB `22, 22, 34`)** rather than pure black `#000000` — providing material
+  body and preventing muddy/dirty desaturation over warm/complex wallpapers while maintaining
+  pixel-perfect coherence between windows and shell overlays.
 - **Light-mode text ramp is nudged up:** `--nidara-text-secondary`/`-dim` are `rgba(fg, 0.85/0.72)`
   in light vs `0.8/0.6` in dark (`nidaraVars`). Black ink over translucent light glass (on an
   arbitrary wallpaper) reads washed-out at the dark-mode alphas; white-on-dark needs less ink.

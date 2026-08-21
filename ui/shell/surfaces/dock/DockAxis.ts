@@ -18,6 +18,7 @@ import Cairo from "gi://cairo"
 import { DOCK_CONSTANTS, calculateDockItemMetrics } from "./DockPhysics"
 import { drawSquircle } from "../../common/DrawingUtils"
 import { setVisibleRect } from "../../common/VisibleRegion"
+import { GLASS_TINT } from "../../../lib/tokens"
 import Theme from "../../core/ThemeManager"
 import inputYield from "../../core/InputYield"
 import { dockSettings, dockSideState } from "./state"
@@ -204,7 +205,9 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 if (w <= 0 || _h <= 0) return
                 const dark = Theme.chromeIsDark   // dock = chrome → follows appearance.shellAppearance
                 const dockAlpha = Theme.dockOpacity
-                const dockColor = dark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
+                const dockColor = dark
+                    ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
+                    : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
                 const borderCol = dark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
                 drawSquircle(cr, w, _h, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, 0)
             })
@@ -552,7 +555,9 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 }
                 const dark = Theme.chromeIsDark   // dock = chrome → follows appearance.shellAppearance
                 const dockAlpha = Theme.dockOpacity
-                const dockColor = dark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
+                const dockColor = dark
+                    ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
+                    : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
                 const borderCol = dark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
                 const pw = DOCK_CONSTANTS.PILL_HEIGHT
                 const ph = smoothedBarMain + DOCK_CONSTANTS.BASE_MARGIN * 2

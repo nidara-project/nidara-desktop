@@ -9,6 +9,7 @@ import GLib from "gi://GLib"
 import { readFile, writeFile } from "../../lib/file"
 import { ACCENT_HEX, ACCENT_NAMES, hexToRgb, type AccentKey } from "../../lib/accent"
 import { DANGER_HEX, SUCCESS_HEX } from "../../lib/status-colors"
+import { GLASS_TINT } from "../../lib/tokens"
 
 // -- COLOR PALETTES ---------------------------------------------------
 // The accent palette is the single source of truth in ui/lib/accent.ts.
@@ -100,7 +101,7 @@ function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[] {
   const bgAlphaNum = config.windowOpacity
   const bgAlpha = bgAlphaNum.toFixed(2)
 
-  const popoverBg = isDark ? "#242424" : "#fafafa"
+  const popoverBg = isDark ? GLASS_TINT.dark.hex : GLASS_TINT.light.hex
   const popoverAlpha = Math.max(bgAlphaNum, 0.38).toFixed(2)
   const popoverBorder = isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.10)"
 
@@ -109,7 +110,7 @@ function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[] {
   const g = parseInt(accent.slice(3, 5), 16)
   const b = parseInt(accent.slice(5, 7), 16)
   const fg = isDark ? "255, 255, 255" : "0, 0, 0"
-  const bg = isDark ? "36, 36, 36" : "250, 250, 250"
+  const bg = isDark ? GLASS_TINT.dark.rgb : GLASS_TINT.light.rgb
   const pbR = parseInt(popoverBg.slice(1, 3), 16)
   const pbG = parseInt(popoverBg.slice(3, 5), 16)
   const pbB = parseInt(popoverBg.slice(5, 7), 16)
