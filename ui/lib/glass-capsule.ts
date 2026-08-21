@@ -295,7 +295,7 @@ export class GlassCapsule extends Gtk.Box {
     if (followFocus) child.connect("state-flags-changed", () => this.queue_draw())
   }
 
-  hasFocus(): boolean {
+  isFocused(): boolean {
     if (!this.followFocus) return false
     // FOCUS_WITHIN as well as FOCUSED: in a GTK4 composite entry the focus
     // lands on the inner `text` node, so the outer widget is never :focus.
@@ -353,7 +353,7 @@ export class GlassCapsule extends Gtk.Box {
         // rendered ACCENT BLUE the moment it took focus. Caught on the first
         // offscreen render of the textureless case, and it could not have been
         // caught any other way.
-        const rimColour = this.hasFocus()
+        const rimColour = this.isFocused()
           ? accentRim
           : this.rim === "strong" ? RIM_STRONG : RIM_SUBTLE
 
