@@ -255,7 +255,7 @@ still has its global `allowMcp` floor; local `nidara-ipc` is always available.
 
 - **Reads** (ungated, like `dumpState`): `listWindows` (authoritative, async — reads `hyprctl
   clients -j` via `HyprlandState.getClientsJson`; carries `floating`/`fullscreen`/`pinned`/`grouped`,
-  which the cached `AstalHyprland.Client` props get wrong) and `listWorkspaces`
+  which the event-sourced cache in `HyprlandState` gets wrong) and `listWorkspaces`
   (`HyprlandState.getWorkspacesJson`; `active` = focused, plus the window count and special flag).
 - **Actions**: `focusWorkspace <id|±1|name>` (absolute id, relative `+1`/`-1` → the cycle-incl-empty
   `e±1` the wheel binds use, or a Hyprland workspace string like `previous`/`name:foo`),
@@ -296,23 +296,29 @@ still has its global `allowMcp` floor; local `nidara-ipc` is always available.
   If wanted later: verify the Lua dispatcher name first (don't guess), and consider that they only
   make sense right after a deterministic `focusWindow`.
 
-### `Client.fullscreen` is an enum, not a boolean (maximize ≠ fullscreen)
+### `HyprClient.fullscreen` is an INT, not a boolean (maximize ≠ fullscreen)
 
-`AstalHyprland.Client.fullscreen` is the `Fullscreen` **enum** (`NONE`/`MAXIMIZED`/`FULLSCREEN`),
+`HyprClient.fullscreen` is Hyprland's **FSMODE int** (`0` none / `1` maximized / `2` fullscreen),
 NOT a boolean — a plain `!!client.fullscreen` is truthy for **maximize** (`Super+M`, FSMODE 1)
-too, not just real fullscreen (FSMODE 2). That mismatch used to make maximizing a window hide the
+too, not just real fullscreen (FSMODE 2). (It was `AstalHyprland.Client.fullscreen`, a
+`Fullscreen` enum over the same int, until 2026-08-18; the trap is identical either way, and
+`core/hypr-ipc.ts` says so on the field itself.) That mismatch used to make maximizing a window hide the
 dock, blank the bar and release its top reservation, because the bar/dock chrome-hiding watchers
 rode that truthy check. Chrome-hiding now keys off **`HyprlandState.isRealFullscreen(client)`**
 (true only for `FULLSCREEN`), so **maximize deliberately keeps all chrome visible + clickable**
 (fill-the-workspace, the Windows/GNOME maximize convention). Only real fullscreen hides the bar,
 and `Super+B` / `toggleBarOverlay` still promotes it to the OVERLAY layer above the fullscreen
-window. When you need the authoritative int instead of the cached enum, read `HyprlandState.
-getClientJson(addr).fullscreen` (`hyprctl clients -j`: `0` none / `1` maximized / `2` fullscreen).
+window. When you need the authoritative value instead of the cached one, read `HyprlandState.
+getClientJson(addr).fullscreen` (a live `hyprctl clients -j`) — same int, but read now rather
+than at the last event. Compare against `Hypr.FSMODE_FULLSCREEN`, never against a literal.
 
 ### Hyprland reports "no active window" when OUR OWN layer surface drops a keyboard grab
 
-Read `HyprlandState.focusedClient`, **never `AstalHyprland.get_default().focused_client`** — the raw
-property lies, and it stays lying.
+Read `HyprlandState.focusedClient`, **never the raw active-window read underneath it**
+(`Hypr.getActiveClientAddress()` in `core/hypr-ipc.ts`; it was
+`AstalHyprland.get_default().focused_client` before 2026-08-18, and swapping the library
+changed nothing) — the raw property lies, and it stays lying. `focusedClient` is the getter
+that reconciles it; nothing else should read the raw one.
 
 Measured on the Hyprland event socket (2026-07-26, one open/close of the island's overview):
 

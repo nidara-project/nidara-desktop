@@ -920,7 +920,7 @@ icons match every other bar icon. The click→window-focus wiring (PID-first mat
 
 ## Real blur = compositor, not widget
 
-GTK has no true `backdrop-filter`. CSS only sets the translucent background, sheen, and border. The `backdrop-filter: blur()` you see in SCSS is **web-preview only** and is ignored by AGS at runtime. Real blur comes from Hyprland `layerrule blur, <namespace>`. Don't try to "fix" the absent blur from inside CSS — it's not a CSS problem.
+GTK has no true `backdrop-filter`. CSS only sets the translucent background, sheen, and border. Real blur comes from Hyprland `layerrule blur, <namespace>`. Don't try to "fix" the absent blur from inside CSS — it's not a CSS problem, and no amount of CSS will make it one. There are **no `backdrop-filter` declarations left in the tree** (the last went with #53 on 2026-07-26; this paragraph described them as web-preview-only leftovers "ignored by AGS" long after both the declarations and AGS were gone) — so if you find yourself adding one back, that is the mistake this paragraph exists to stop.
 
 ### Blur is per SURFACE, and it can only ever reach DOWNWARD
 
@@ -972,9 +972,76 @@ edge pixels (alpha = glass × coverage) show the blurred backdrop and were thoug
 to glow at the curved ends. **Re-measured** with offline renders + live grim
 captures over a real *light* wallpaper through Hyprland's actual blur: the halo is
 **negligible** (the soft edge just blends into its surroundings), while NONE's
-stair-stepped curves were clearly visible. So AA wins. The border/rim strokes
-(steps 2-3) still clip to the path so their inner AA can't spill outward. **Don't
+stair-stepped curves were clearly visible. So AA wins. **Don't
 "fix" this back to NONE** thinking AA causes a halo — it was checked on real pixels.
+(This paragraph used to add that "the border/rim strokes still clip to the path so their inner
+AA can't spill outward". That is now true of `GlassBubble` only — `drawSquircle` stopped
+clipping its rim in #230; see the next section for what replaced it.)
+
+## The squircle path is analytical Béziers, and the rim is ONE Fresnel ramp
+
+Both halves of the glass recipe were rewritten on 2026-08-22 (#225 then #230). The visual result
+is meant to be a refinement, not a redesign — but the *mechanism* underneath changed enough that
+older notes describing either one will mislead you.
+
+### The corner: two cubic Béziers, not a chord loop
+
+`createSquirclePath` (`common/DrawingUtils.ts`) used to walk the superellipse and emit a run of
+straight `lineTo` chords. It now emits **two `curveTo` segments per corner**, meeting at the
+corner's 45° point:
+
+```
+mid = 0.5 ** (1 / n)          // where the superellipse crosses its own diagonal
+mx = my = (1 - mid) * r       // that crossing, as an offset from the corner box
+a = 0.3100, b = 0.1950        // the two control-point weights, in units of r
+```
+
+so a corner is `curveTo(→ the 45° joint)` + `curveTo(→ the next edge)`. The code's own claim is
+**99.96% agreement with the true n=3.2 superellipse (< 0.012 px deviation)** — which is well under
+a pixel, so the point of the change is not accuracy, it is that Cairo now rasterizes a *curve*
+instead of a polygon and can therefore antialias it subpixel-smoothly at any size or scale.
+Chords looked fine at dock-icon size and faceted on a large panel.
+
+⚠️ `n` did NOT go away — it still selects the superellipse (default 3.2), it just parameterizes
+`mid` now instead of a sampling loop. Everything built on the exponent still holds: `cornerReach`,
+`rowInsetFor`, the `k(n)·R` diagonal reach documented elsewhere in this file. And the `perfect`
+branch is untouched — a pill is still four real `arc()` calls, because a pill is a circle-capped
+rectangle and there is no superellipse to approximate.
+
+### The rim: one continuous gradient, in tokens, unclipped
+
+The 1px glass edge used to be **four stacked strokes** — a flat white base, a top zenith
+highlight, a bottom shelf reflection, and a lateral dark contour, each its own gradient and its
+own `strokePreserve()`. It is now a **single stroke** through one vertical `LinearGradient` with
+seven stops:
+
+| stop | 0.0 | 0.18 | 0.35 | 0.50 | 0.65 | 0.82 | 1.0 |
+|---|---|---|---|---|---|---|---|
+| alpha | .42 | .32 | .16 | **.08** | .13 | .19 | .24 |
+
+Read it as **Fresnel**: an edge reflects most where you meet it at a grazing angle — the top rim
+(key light, .42) and the bottom rim (ground bounce, .24) — and least where you are looking
+straight through the glass, which is the flank at mid-height (.08). The dip in the middle is the
+whole point; the old lateral *dark* contour was faking the same effect by painting black over the
+sides, which read as a drawn outline rather than as material.
+
+Two things about it that are easy to undo by accident:
+
+- **The colour is `GLASS_TINT`, not a float literal.** The old strokes hardcoded `0.96, 0.98, 1.0`
+  and `0, 0, 0`. Both painters now destructure `GLASS_TINT.light` / `GLASS_TINT.dark` from
+  `ui/lib/tokens.ts`, which is commandment 10 finally reaching the Cairo rim — a retint (the Deep
+  Slate pass, #223/#224) now moves the glass *and* its edge together instead of leaving the edge
+  behind.
+- **`drawSquircle` no longer clips its rim.** It offsets the path inward by half the line width
+  (`strokeOffset = -borderWidth * 0.5`) and strokes at 1×, so the stroke lands entirely inside the
+  silhouette by construction. `GlassBubble` still uses the older idiom for the same result — clip
+  to the silhouette, then stroke at `BORDER_W * 2` and let the clip discard the outer half. **Two
+  different techniques, same 1px inner rim**; don't "unify" them without checking, the bubble's
+  arrow tip is why it wants the clip.
+
+⚠️ The seven stops are **duplicated verbatim** in `DrawingUtils.ts` and `GlassBubble.ts`, and only
+the DARK ramp is shared — light mode differs on purpose (`drawSquircle` fades white into a dark
+lower rim; the bubble paints one flat `GLASS_TINT.dark` edge at .12). Tracked in `tech-debt.md`.
 
 ## A CSS pill at `--nidara-radius-pill` seams at the middle of each cap
 

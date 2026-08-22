@@ -108,20 +108,28 @@ cd ui/shell && npm run build            # SCSS + scripts/bundle.sh (needs the `e
 nidara-ipc toggleAppGrid                # send an IPC command
 ```
 
-### ⚠️ The greeter and the lockscreen have NO dev mode — building them changes nothing
+### ⚠️ The lockscreen has a dev mode now; the GREETER still has none
 
 `--dev` makes the SHELL run from the source tree (`bin/nidara-ui` sets
 `NIDARA_SHELL_ROOT` to `repo/ui/shell`), which is why `Super+Shift+R` is enough for it.
-**`bin/nidara-greeter` and `bin/nidara-lock` have no such branch**: both hardcode
-`/usr/share/nidara/ui/{greeter,lockscreen}/build/…`, and the lockscreen reads its CSS from
-the greeter's *installed* `style.css`. So `npm run build` in either bundle produces a
-perfectly good artifact that the running system never looks at.
+
+**`bin/nidara-lock` grew the same branch** (2026-08-19, commit `25681ad6`): it reads
+`~/.config/nidara/.dev`, and if that path holds a `ui/lockscreen/app.ts` it `cd`s there and
+runs `scripts/run.sh app.ts` instead of the installed bundle. So on a `--dev` install the
+lockscreen you get from `loginctl lock-session` IS your working tree — no install step, and
+the crash-watchdog loop wraps the dev path exactly as it wraps the installed one.
+
+**`bin/nidara-greeter` still has no such branch.** It hardcodes
+`/usr/share/nidara/ui/greeter/build/nidara-greeter` and `exec`s it or dies; the lockscreen
+still reads its CSS from the greeter's *installed* `style.css`, so **a greeter SCSS edit is
+invisible to a dev lockscreen too**. For those, `npm run build` produces a perfectly good
+artifact that the running system never looks at.
 
 The failure mode is silent and reads as "my change didn't work": the bundle builds, the SCSS
 compiles, `git status` shows the edit, and the screen is identical (2026-08-09 — cost a round
-trip on the design-system pass). **Whenever you touch `ui/greeter/`, `ui/lockscreen/` or
-anything in `ui/lib/` they consume, the change is not testable until it is installed.** The
-three files `install.sh` copies (its lines ~725/727/740) are:
+trip on the design-system pass). **Whenever you touch `ui/greeter/`, or any `style.scss` the
+lockscreen inherits from it, the change is not testable until it is installed.** The
+three files `install.sh` copies (its lines ~505/506/518) are:
 
 ```bash
 cd ui/greeter && npm run build && cd ../lockscreen && npm run build && cd ../..
@@ -781,15 +789,27 @@ that noise, so a regression can sit unnoticed (it did: typecheck silently went 0
 sessions). **If you see "has no exported member" on GI types, you're missing `@girs/` — regenerate
 before trusting any typecheck result.**
 
-**i18n: add every string to BOTH `en.ts` AND `es.ts`, with a real Spanish translation.**
-English and Spanish are both first-class working languages, kept in sync by hand at all times —
-the maintainer runs the shell in Spanish, so an `en`-only key shows stray English (runtime
-fallback is `es → en → key`). Doing es alongside en also validates the wording immediately.
-*Other* locales (fr, pt, de…) are the only ones deferred to a single bulk pass at publication —
-don't hand-translate them mid-development.
+**i18n: a new string lands in ALL TWELVE catalogs, in the same PR.** ⚠️ **This policy changed on
+2026-08-23** — the old one deferred everything but `en`/`es` to a bulk pass at publication, and
+you will still find that phrasing quoted in older notes.
+
+What changed is that the debt is **gone**: since #206 all twelve locales sit at **698/698, zero
+untranslated, zero stale** — the first time that has ever been true. The bulk-pass policy existed
+to manage a backlog, and managing a backlog is a different job from not having one. Letting a
+single key slip re-opens it, and the whole cost of the ledger below was learning that a backlog
+nobody is looking at grows silently (v0.6.0 and v0.7.0 each shipped 82 keys short, and it reached
+84 without anything noting the move). **Keep the zero.** `node scripts/ci/i18n-check.mjs` prints
+the table; a PR that leaves it non-zero is a PR that re-opened the backlog, and should say so out
+loud rather than let the ledger absorb it.
+
+English and Spanish remain the two **working** languages — written first and by hand, never
+machine-passed. The maintainer runs the shell in Spanish, so an `en`-only key shows stray English
+(runtime fallback is `es → en → key`), and writing es beside en validates the wording immediately.
+The other ten are translated to that finished wording.
 
 Type-wise, `t()` is typed `key: keyof typeof en` (`en` is the canonical key source), so a missing
-`es` entry is **not** a type error — that's a safety net for the bulk-translated locales, not a
+entry in any other catalog is **not** a type error — the gate below is what catches it, not the
+compiler. That was originally described as a safety net for the bulk-translated locales, not a
 licence to skip es. (It used to derive from `es`, which broke the typecheck on every new key —
 fixed in `core/i18n/index.ts`.)
 
@@ -802,11 +822,12 @@ node scripts/ci/i18n-check.mjs --sync              # after adding/rewriting ENGL
 node scripts/ci/i18n-check.mjs --translated de,fr  # after actually TRANSLATING those locales
 ```
 
-Deferring ten locales to a bulk pass is the policy; having no record of what that pass owes was
-the bug. v0.6.0 and v0.7.0 both shipped 82 keys short in those ten, and the number reached 84
-with nothing anywhere noting it had moved. `ui/shell/core/i18n/translation-state.json` is the
-record — committed, machine-managed — and the gate fails when it no longer matches the catalogs,
-so **a PR that adds an untranslated string carries the new count in its own diff**.
+The ledger was built to make a backlog visible; with the backlog at zero its job is to **defend
+the zero**, and it does that unchanged — it fails when it no longer matches the catalogs, so
+**a PR that adds an untranslated string carries the new count in its own diff** and cannot land
+the debt quietly. That is exactly what was missing when v0.6.0 and v0.7.0 both shipped 82 keys
+short and the number reached 84 with nothing anywhere noting it had moved.
+`ui/shell/core/i18n/translation-state.json` is the record — committed, machine-managed.
 
 It tracks the invisible failure too. A key can be present *and* wrong: translated once, then the
 English rewritten underneath it. That renders a confident sentence that no longer matches the
@@ -942,9 +963,12 @@ The bluez5 template has **two quirks the script works around**, plus one hard li
   still up → `sudo scripts/dev/fake-bluetooth.sh stop`).
 
 This setup surfaced a real latent bug, fixed in `BluetoothService.setPowered`:
-`AstalBluetooth.Bluetooth.is_powered` is **read-only** (writing it throws "not writable"),
-so the old `bt.is_powered = state` toggle flipped the switch visually but never powered the
-radio. Drive `bt.adapter.powered` instead.
+`is_powered` is **DERIVED from the adapter**, not a setting of its own — writing it throws
+"not writable" — so the old `bt.is_powered = state` toggle flipped the switch visually but
+never powered the radio. Drive `bt.adapter.powered` instead; `is_powered` re-derives from it
+and still emits `notify::is-powered`. The bug was found on AstalBluetooth and the shape
+**survived the rewrite on purpose**: `core/bluez.ts` (ours since 2026-08-18) keeps the same
+derived/writable split, so the trap is still there to fall into.
 
 ### Testing media players (MPRIS) without making a sound
 

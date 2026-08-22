@@ -129,8 +129,13 @@ memory/
 AGENTS.md
 HEARTBEAT.md
 
-# AI assistant files
-CLAUDE.md
+# NOTE: CLAUDE.md is deliberately NOT ignored. It used to be, from the 2026-05-30
+# "untrack AI/runtime files" sweep that also caught MEMORY.md and HEARTBEAT.md —
+# but those are personal agent state and CLAUDE.md is not: it is the file the
+# harness loads automatically in this directory, and it is what points a
+# contributor's agent at the skill below before it starts editing. Keep it a thin
+# pointer; the skill is the source of truth.
+
 # Ignore everything under .claude/ (personal Claude Code state) EXCEPT the skill,
 # which ships with the project so any user's agent can extend it and contribute back.
 .claude/*
