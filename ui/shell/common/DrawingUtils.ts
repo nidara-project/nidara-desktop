@@ -161,12 +161,11 @@ export const drawSquircle = (
     }
     cr.restore()
 
-    // 2. BASE BORDER — GRAY stroke inside a NONE hard clip
+    // 2. BASE BORDER — GRAY stroke inside an AA clip
     cr.save()
-    cr.setAntialias(1) // NONE for clip
+    cr.setAntialias(2) // GRAY for smooth AA clip
     createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
     cr.clip()
-    cr.setAntialias(2) // GRAY for smooth stroke inside clip
     const strokeOffset = -borderWidth // fully inset: outer edge at -borderWidth/2, AA can't reach glass boundary
     createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, strokeOffset)
     cr.setLineWidth(borderWidth)
@@ -179,31 +178,66 @@ export const drawSquircle = (
     cr.stroke()
     cr.restore()
 
-    // 3. SPECULAR RIMS — GRAY strokes inside NONE clip, only when gloss is enabled
+    // 3. SPECULAR RIMS, FRESNEL EDGES & BEVEL HIGHLIGHTS — inside AA clip
     if (enableGloss) {
         cr.save()
-        cr.setAntialias(1) // NONE for clip
+        cr.setAntialias(2) // GRAY for smooth AA clip
         createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
         cr.clip()
-        cr.setAntialias(2) // GRAY for smooth rim strokes inside clip
+
+        const rimIntensity = borderWidth > 1.0 ? 0.36 : 0.28
+        const cx = x + drawW * 0.5
+        const cy = y + drawH * 0.5
+
+        // A) TOP INNER BEVEL BLOOM: Subtle diffuse highlight inside the top edge (2-4px)
+        // simulating the physical thickness and frosted bevel of real glass.
+        const bloomH = Math.min(4.0, Math.max(2.0, drawH * 0.12))
+        const topBloom = new Cairo.LinearGradient(cx, y, cx, y + bloomH)
+        topBloom.addColorStopRGBA(0.0, 0.95, 0.97, 1.0, rimIntensity * 0.20)
+        topBloom.addColorStopRGBA(1.0, 0.95, 0.97, 1.0, 0.0)
+        cr.rectangle(x, y, drawW, bloomH)
+        cr.setSource(topBloom)
+        cr.fill()
+
+        // B) BOTTOM INNER BEVEL BLOOM: Symmetrical diffuse highlight inside the bottom edge (2-4px)
+        const botBloom = new Cairo.LinearGradient(cx, y + drawH, cx, y + drawH - bloomH)
+        botBloom.addColorStopRGBA(0.0, 0.95, 0.97, 1.0, rimIntensity * 0.20)
+        botBloom.addColorStopRGBA(1.0, 0.95, 0.97, 1.0, 0.0)
+        cr.rectangle(x, y + drawH - bloomH, drawW, bloomH)
+        cr.setSource(botBloom)
+        cr.fill()
+
+        // C) 1PX CONTOUR STROKES: Symmetrical horizontal glass rims + dark lateral contour
         createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, -0.5)
         cr.setLineWidth(1.0)
 
-        const rimIntensity = borderWidth > 1.0 ? 0.4 : 0.3
-        const cx = x + drawW * 0.5
-
-        // Top rim: top edge → center, bright highlight
-        const rimTop = new Cairo.LinearGradient(cx, y, cx, y + drawH * 0.5)
-        rimTop.addColorStopRGBA(0.0, 1, 1, 1, rimIntensity)
-        rimTop.addColorStopRGBA(1.0, 1, 1, 1, 0.0)
+        // 1. Top rim: bright highlight dropping off smoothly toward the upper curves
+        const reach = Math.min(16.0, drawH * 0.45)
+        const rimTop = new Cairo.LinearGradient(cx, y, cx, y + reach)
+        rimTop.addColorStopRGBA(0.0, 0.96, 0.98, 1.0, rimIntensity)
+        rimTop.addColorStopRGBA(1.0, 0.96, 0.98, 1.0, 0.0)
         cr.setSource(rimTop)
         cr.strokePreserve()
 
-        // Bottom rim: subtle reflected light
-        const rimBot = new Cairo.LinearGradient(cx, y + drawH, cx, y + drawH * 0.5)
-        rimBot.addColorStopRGBA(0.0, 1, 1, 1, rimIntensity * 0.35)
-        rimBot.addColorStopRGBA(1.0, 1, 1, 1, 0.0)
+        // 2. Bottom rim: symmetrical bright highlight dropping off smoothly toward lower curves
+        const rimBot = new Cairo.LinearGradient(cx, y + drawH, cx, y + drawH - reach)
+        rimBot.addColorStopRGBA(0.0, 0.96, 0.98, 1.0, rimIntensity)
+        rimBot.addColorStopRGBA(1.0, 0.96, 0.98, 1.0, 0.0)
         cr.setSource(rimBot)
+        cr.strokePreserve()
+
+        // 3. Lateral rims: dark 1px contour stroke along left and right curved edges
+        // creating the continuous light-and-shade rim without darkening the glass body.
+        const sideReach = Math.min(24.0, Math.max(8.0, drawW * 0.10))
+        const rimSides = new Cairo.LinearGradient(x, cy, x + drawW, cy)
+        const leftStop = Math.max(0.01, sideReach / drawW)
+        const rightStop = Math.min(0.99, 1.0 - sideReach / drawW)
+        const darkRimAlpha = 0.22
+        rimSides.addColorStopRGBA(0.0, 0, 0, 0, darkRimAlpha)
+        rimSides.addColorStopRGBA(leftStop, 0, 0, 0, 0.0)
+        rimSides.addColorStopRGBA(rightStop, 0, 0, 0, 0.0)
+        rimSides.addColorStopRGBA(1.0, 0, 0, 0, darkRimAlpha)
+        cr.setSource(rimSides)
         cr.stroke()
 
         cr.restore()
