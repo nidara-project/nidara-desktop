@@ -219,56 +219,40 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
         const cx = bx + bw * 0.5
         const cy = by + bh * 0.5
 
+        const { r: lr, g: lg, b: lb } = GLASS_TINT.light
+        const { r: dr, g: dg, b: db } = GLASS_TINT.dark
+
         // A) TOP INNER BEVEL BLOOM: Subtle diffuse highlight inside the upper portion of the bubble (2-3px)
         const topBloomH = Math.min(3.5, Math.max(2.0, bh * 0.12))
         const topBloom = new Cairo.LinearGradient(cx, by, cx, by + topBloomH)
-        topBloom.addColorStopRGBA(0.0, 0.95, 0.97, 1.0, 0.06)
-        topBloom.addColorStopRGBA(1.0, 0.95, 0.97, 1.0, 0.0)
+        topBloom.addColorStopRGBA(0.0, lr, lg, lb, 0.06)
+        topBloom.addColorStopRGBA(1.0, lr, lg, lb, 0.0)
         cr.rectangle(bx, by, bw, topBloomH)
         cr.setSource(topBloom)
         cr.fill()
 
-        // B) BASE BORDER & SPECULAR STROKES (Zenith Top + Base Shelf + Dark Lateral)
-        // Stroking at double width inside the clip leaves a crisp inner 1px rim.
+        // B) 1PX CONTINUOUS RIM GRADIENT (Zenith highlight -> subtle lateral rim -> bottom reflection)
         bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n)
         cr.setLineWidth(BORDER_W * 2)
 
-        // 1. Base subtle white edge
-        cr.setSourceRGBA(1, 1, 1, 0.10)
-        cr.strokePreserve()
+        const rimGradient = new Cairo.LinearGradient(cx, by, cx, by + bh)
 
-        // 2. Top zenith highlight
-        const reach = Math.min(14.0, bh * 0.45)
-        const rimTop = new Cairo.LinearGradient(cx, by, cx, by + reach)
-        rimTop.addColorStopRGBA(0.0, 0.96, 0.98, 1.0, 0.26)
-        rimTop.addColorStopRGBA(1.0, 0.96, 0.98, 1.0, 0.0)
-        cr.setSource(rimTop)
-        cr.strokePreserve()
+        rimGradient.addColorStopRGBA(0.0, lr, lg, lb, 0.42)
+        rimGradient.addColorStopRGBA(0.18, lr, lg, lb, 0.32)
+        rimGradient.addColorStopRGBA(0.35, lr, lg, lb, 0.16)
+        rimGradient.addColorStopRGBA(0.50, lr, lg, lb, 0.08)
+        rimGradient.addColorStopRGBA(0.65, lr, lg, lb, 0.13)
+        rimGradient.addColorStopRGBA(0.82, lr, lg, lb, 0.19)
+        rimGradient.addColorStopRGBA(1.0, lr, lg, lb, 0.24)
 
-        // 3. Bottom shelf reflection
-        const rimBot = new Cairo.LinearGradient(cx, by + bh, cx, by + bh - reach)
-        rimBot.addColorStopRGBA(0.0, 0.96, 0.98, 1.0, 0.26)
-        rimBot.addColorStopRGBA(1.0, 0.96, 0.98, 1.0, 0.0)
-        cr.setSource(rimBot)
-        cr.strokePreserve()
-
-        // 4. Lateral dark contour
-        const sideReach = Math.min(20.0, Math.max(6.0, bw * 0.10))
-        const rimSides = new Cairo.LinearGradient(bx, cy, bx + bw, cy)
-        const leftStop = Math.max(0.01, sideReach / bw)
-        const rightStop = Math.min(0.99, 1.0 - sideReach / bw)
-        const darkRimAlpha = 0.20
-        rimSides.addColorStopRGBA(0.0, 0, 0, 0, darkRimAlpha)
-        rimSides.addColorStopRGBA(leftStop, 0, 0, 0, 0.0)
-        rimSides.addColorStopRGBA(rightStop, 0, 0, 0, 0.0)
-        rimSides.addColorStopRGBA(1.0, 0, 0, 0, darkRimAlpha)
-        cr.setSource(rimSides)
+        cr.setSource(rimGradient)
         cr.stroke()
     } else {
-        // Light mode: clean dark edge
+        // Light mode: clean dark edge using canonical GLASS_TINT.dark
+        const { r: dr, g: dg, b: db } = GLASS_TINT.dark
         bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n)
         cr.setLineWidth(BORDER_W * 2)
-        cr.setSourceRGBA(0, 0, 0, 0.12)
+        cr.setSourceRGBA(dr, dg, db, 0.12)
         cr.stroke()
     }
 
