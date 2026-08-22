@@ -68,22 +68,38 @@ export function SystemMenuOverlay() {
     showPage(confirmBox)
   }
 
+  // ── Single-action guard per menu opening ───────────────────────────────
+  // Protects against accidental double-clicks or chattering mouse switches
+  // triggering conflicting actions while the menu is closing (e.g. double-click
+  // on Suspend sending an immediate wakeup interrupt to the kernel).
+  let actionDispatched = false
+
   const closeAndRun = (cmd: string[]) => {
+    if (actionDispatched) return
+    actionDispatched = true
+    pageHost.sensitive = false
     status.system_menu_open = false
     execAsync(cmd).catch(console.error)
   }
 
+  const dispatchAction = (action: () => void) => {
+    if (actionDispatched) return
+    actionDispatched = true
+    pageHost.sensitive = false
+    status.system_menu_open = false
+    action()
+  }
+
   menuBox.append(makeRow(Icons.info, t("bar.system-menu.about"), false, () => {
-    status.system_menu_open = false; status.toggleAbout()
+    dispatchAction(() => status.toggleAbout())
   }))
   menuBox.append(sep())
   menuBox.append(makeRow(Icons.settings, t("bar.system-menu.settings"), false, () => {
-    status.system_menu_open = false; shellActions.openSettings?.()
+    dispatchAction(() => shellActions.openSettings?.())
   }))
   menuBox.append(sep())
   menuBox.append(makeRow(Icons.lock, t("bar.system-menu.lock"), false, () => {
-    status.system_menu_open = false
-    execAsync(["nidara-lock"]).catch(console.error)
+    dispatchAction(() => { execAsync(["nidara-lock"]).catch(console.error) })
   }))
   menuBox.append(makeRow(Icons.moon, t("bar.system-menu.suspend"), false, () =>
     closeAndRun(["systemctl", "suspend"])
@@ -120,6 +136,9 @@ export function SystemMenuOverlay() {
 
   const confirmActionBtn = new Gtk.Button({ label: "", css_classes: ["nidara-menu-row", "nidara-confirm-primary"], hexpand: true })
   confirmActionBtn.connect("clicked", () => {
+    if (actionDispatched) return
+    actionDispatched = true
+    pageHost.sensitive = false
     pendingCmd?.()
     pendingCmd = null
     showPage(menuBox)
@@ -144,12 +163,17 @@ export function SystemMenuOverlay() {
   confirmBox.append(confirmQuestion)
   confirmBox.append(confirmBtnRow)
 
-  // Reset to menu page when closed
+  // Reset to menu page and restore sensitivity when closed / reopened
   status.connect("notify::system-menu-open", () => {
-    if (!status.system_menu_open) {
+    if (status.system_menu_open) {
+      actionDispatched = false
+      pageHost.sensitive = true
+    } else {
       GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
         showPage(menuBox)
         pendingCmd = null
+        actionDispatched = false
+        pageHost.sensitive = true
         return GLib.SOURCE_REMOVE
       })
     }
