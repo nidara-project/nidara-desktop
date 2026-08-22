@@ -952,6 +952,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   islandRow.append(center)
   center.hexpand = true           // halign CENTER inside a full-width row
   islandWin.mount(islandRow, island.hitTargets, island.revealers)
+
+  const ISLAND_GAP = 16
+  const BAR_MARGIN = 8
+
+  // Forward declaration for layout sync across the left/right flanks and Activity Island
+  let scheduleBarLayoutSync: (delayMs?: number) => void = () => {}
+
   // Keep the island level with the bar. Both surfaces are full-rect at y=0 in the
   // normal case, so this is a no-op — it only matters when something reserves
   // space ABOVE the bar (Hyprland's config-error bar), which slides the bar down
@@ -1009,16 +1016,22 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // activity changes, and a media title of a different length reshapes the pill
   // with no page change at all. The glass DrawingArea's `resize` fires on
   // exactly those, and only those.
-  ;(island.capsule as any).glassArea?.connect("resize", () => islandWin.updateInputRegion())
+  ;(island.capsule as any).glassArea?.connect("resize", () => {
+    islandWin.updateInputRegion()
+    syncLeftBudget()
+    scheduleBarLayoutSync()
+  })
   // A chip appearing or leaving moves the capsule sideways WITHOUT resizing it,
   // so the resize hook above never fires for it and both the chip's rect and the
   // capsule's displaced one would stay unstamped. Re-stamped after the reveal
   // lands (the slide takes COMPACT_SWAP_MS; the capsule may still be settling,
   // and while it is, the resize hook keeps stamping anyway).
   island.onBackgroundChanged(() => {
+    syncLeftBudget()
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
       islandWin.updateInputRegion(); return GLib.SOURCE_REMOVE
     })
+    scheduleBarLayoutSync()
   })
   // …and again when the slide actually ENDS, which is the frame the row's final
   // rects exist. The 400ms above is a guess at that moment and it only has to be
@@ -1026,7 +1039,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // the row was still moving leaves that chip painted where the compositor sends
   // nothing, for as long as the layout holds. Both are kept — the timer covers a
   // reveal that never animates, this covers one that outlasts it.
-  island.onChipsSettled(() => islandWin.updateInputRegion())
+  island.onChipsSettled(() => {
+    islandWin.updateInputRegion()
+    syncLeftBudget()
+    scheduleBarLayoutSync()
+  })
   // …and the moment the chips re-ENTER the hit set at all. `hitTargets()` returns
   // the capsule alone while the row is faded to nothing, so every stamp taken with
   // a mode open drops the chips' rects deliberately — and that becomes the reported
@@ -1041,20 +1058,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     const hidden = island.indicatorRow.opacity === 0
     if (chipsWereHidden && !hidden) islandWin.updateInputRegion()
     chipsWereHidden = hidden
+    syncLeftBudget()
+    scheduleBarLayoutSync()
   })
   const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 8 })
-  // Absorbs SizeGroup slack so actual capsules stay pinned to the right edge.
-  // When left > right (long window title), SizeGroup widens the right allocation;
-  // without this spacer, children would pack from the left of that wider slot.
+  // Absorbs remaining space so actual capsules stay pinned to the right edge.
   const rightSpacer = new Gtk.Box({ hexpand: true })
   right.append(rightSpacer)
-
-  // Keep workspace capsule at the true monitor center regardless of how wide the
-  // right side grows.  SizeGroup makes both sides request max(left, right) width,
-  // so CenterBox always sees equal flanks and places center at exactly width/2.
-  const sideGroup = new Gtk.SizeGroup({ mode: Gtk.SizeGroupMode.HORIZONTAL })
-  sideGroup.add_widget(left)
-  sideGroup.add_widget(right)
 
   const timeContent = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16 })
   const timeLabel = new Gtk.Label({ label: "...", css_classes: ["bar-time-label"] })
@@ -1182,13 +1192,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     }
   }
   widgetConfig.connect("changed", () => {
-      // measureOverflow rebuilds against the full set, measures, then caps —
-      // so it recovers correctly when widgets are added/removed.
-      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { measureOverflow(); return GLib.SOURCE_REMOVE })
+      scheduleBarLayoutSync()
   })
   // Hardware appearing/disappearing (BT dongle, wifi device…) re-runs the same path.
   watchWidgetAvailability(() => {
-      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { measureOverflow(); return GLib.SOURCE_REMOVE })
+      scheduleBarLayoutSync()
   })
   rebuildBarWidgets()
 
@@ -1197,7 +1205,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Tray items each carry their own glass capsule (built in Tray.tsx), so there's
   // no outer grouping capsule here — the tray is a plain spacing container that
   // manages its own visibility (hidden while empty).
-  const trayInner = Tray(openCustomExpansion)
+  const trayInner = Tray(openCustomExpansion, () => scheduleBarLayoutSync())
   right.append(trayInner)
   const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(searchCapsule)
@@ -1228,12 +1236,79 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   right.append(timeCapsule)
 
   // No center widget: the capsule that used to sit there paints on the island's
-  // surface now. The SizeGroup below already forces equal flanks, so CenterBox
-  // still places everything as before — it just has nothing to centre.
+  // surface now. CenterBox places left at START and right at END.
   barBox.set_start_widget(left); barBox.set_end_widget(right)
+
+  // ── Flank budget & dynamic collision prevention ───────────────────────────
+  // Calculate available space on each flank before reaching the Activity Island zone,
+  // guaranteeing consistent ISLAND_GAP separation regardless of island mutation or title length.
+  const getAvailableFlankWidth = () => {
+    const monW = geo().width
+    const islandW = center.measure(Gtk.Orientation.HORIZONTAL, -1)[1] || 100
+    return Math.max(0, (monW / 2) - (islandW / 2) - BAR_MARGIN - ISLAND_GAP)
+  }
+
+  const syncLeftBudget = () => {
+    const flankW = getAvailableFlankWidth()
+    const sysMenuW = sysMenuWidget.measure(Gtk.Orientation.HORIZONTAL, -1)[1] || 48
+    const spacing = 8
+    const appTitleBudget = Math.max(0, flankW - sysMenuW - spacing)
+    appTitle.setMaxWidth(appTitleBudget)
+  }
+
+  hs.connect("changed", () => syncLeftBudget())
+  hs.connect("title-changed", () => syncLeftBudget())
+  syncLeftBudget()
+
+  // Measure actual available space and greedy-fill icons; rebuild if overflow needed.
+  const measureOverflow = () => {
+    cachedMaxIcons = null
+    rebuildBarWidgets()
+
+    const natW = (w: Gtk.Widget) => w.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
+
+    const iconWidths: number[] = []
+    let c: Gtk.Widget | null = optWidgets.get_first_child()
+    while (c) { iconWidths.push(natW(c)); c = c.get_next_sibling() }
+    if (iconWidths.length === 0) return
+
+    const spacing = 8
+    const fixedCapsules: Gtk.Widget[] = [trayInner, searchCapsule, ccBtn, timeCapsule]
+    const fixedW = fixedCapsules.reduce((s, w) => s + (w.get_visible() ? natW(w) + spacing : 0), 0)
+
+    const flankW = getAvailableFlankWidth()
+    const budget = flankW - fixedW
+
+    let total = 0
+    let fitsCount = 0
+    for (let i = 0; i < iconWidths.length; i++) {
+      const cost = i === 0 ? iconWidths[i] : iconWidths[i] + spacing
+      if (total + cost > budget) break
+      total += cost
+      fitsCount++
+    }
+
+    cachedMaxIcons = fitsCount
+    if (widgetConfig.barWidgetIds().length > fitsCount) {
+      rebuildBarWidgets()
+    }
+  }
+
+  let barLayoutSyncTimeout = 0
+  scheduleBarLayoutSync = (delayMs = 50) => {
+    syncLeftBudget()
+    if (barLayoutSyncTimeout) GLib.source_remove(barLayoutSyncTimeout)
+    barLayoutSyncTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delayMs, () => {
+      barLayoutSyncTimeout = 0
+      syncLeftBudget()
+      measureOverflow()
+      return GLib.SOURCE_REMOVE
+    })
+  }
 
   onBarSettingsChanged((s) => {
     appTitleWidget.set_visible(s.showAppTitle)
+    scheduleBarLayoutSync()
   })
 
   const monitorHeight = gdkmonitor.get_geometry().height
@@ -1289,50 +1364,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Present invisible → measure → show, so the bar is never visible with a wrong layout.
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => { win.present(); return GLib.SOURCE_REMOVE })
 
-  // Measure actual available space and greedy-fill icons; rebuild if overflow needed.
-  // Uses measure() (natural/preferred width) instead of get_width() (allocated width)
-  // so that a squished/overflowed bar state doesn't fool the calculation.
-  const measureOverflow = () => {
-      // Measure against the full, uncapped widget set. A previously collapsed bar
-      // only contains the "···" pill, so measuring the live children would size the
-      // pill instead of the real widgets and could never recover. Reset the cache
-      // and rebuild (getMaxIcons → Infinity) so every widget is present first.
-      cachedMaxIcons = null
-      rebuildBarWidgets()
-
-      const natW = (w: Gtk.Widget) => w.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
-
-      const iconWidths: number[] = []
-      let c: Gtk.Widget | null = optWidgets.get_first_child()
-      while (c) { iconWidths.push(natW(c)); c = c.get_next_sibling() }
-      if (iconWidths.length === 0) return
-
-      const spacing = 8
-      const fixedCapsules: Gtk.Widget[] = [trayInner, searchCapsule, ccBtn, timeCapsule]
-      const fixedW = fixedCapsules.reduce((s, w) => s + (w.get_visible() ? natW(w) + spacing : 0), 0)
-      // Budget = space available to optWidgets before the right side would overlap the
-      // workspace capsule. The workspace is centered, so each side gets at most:
-      //   (geo().width - 16(bar margins) - workspace_nat) / 2
-      // minus fixedW, minus the barBox margin_end (8px).
-      const workspaceNat = natW(center)
-      const budget = (geo().width - 16 - workspaceNat) / 2 - fixedW
-
-      let total = 0
-      let fitsCount = 0
-      for (let i = 0; i < iconWidths.length; i++) {
-          const cost = i === 0 ? iconWidths[i] : iconWidths[i] + spacing
-          if (total + cost > budget) break
-          total += cost
-          fitsCount++
-      }
-
-      cachedMaxIcons = fitsCount
-      if (widgetConfig.barWidgetIds().length > fitsCount) {
-          rebuildBarWidgets()
-      }
-  }
   // Measure after first layout pass (bar realized but still invisible)
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 220, () => { measureOverflow(); return GLib.SOURCE_REMOVE })
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 220, () => { scheduleBarLayoutSync(0); return GLib.SOURCE_REMOVE })
 
   // ── The monitor changed shape ──────────────────────────────────────────────
   //
@@ -1355,7 +1388,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       geometrySync = 0
       applyPanelHeights()
       appTitle.setMonitorWidth(geo().width)
-      measureOverflow()
+      scheduleBarLayoutSync(0)
       // The island's own numbers: its top margin is measured against the
       // monitor's Y (which moves when outputs are re-arranged), and its overview
       // solves the card size from the monitor's width.

@@ -67,6 +67,7 @@ export function getWordmark(client: HyprClient | null, focusedWorkspace: HyprWor
         "firefox": "Firefox",
         "code-url-handler": "Visual Studio Code",
         "code": "Visual Studio Code",
+        "antigravity": "Antigravity",
         "thunar": "Archivos",
         "foot": "Terminal",
         "kitty": "Terminal",
@@ -90,6 +91,7 @@ export function getWordmark(client: HyprClient | null, focusedWorkspace: HyprWor
         " - Google Chrome",
         " - Visual Studio Code",
         " - VSCodium",
+        " - Antigravity",
         " - Terminal",
         " - File Manager"
     ]

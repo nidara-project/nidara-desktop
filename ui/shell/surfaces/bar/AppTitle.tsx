@@ -16,35 +16,110 @@ type OpenMenu = (anchor: Gtk.Widget, build: (onClose: () => void) => Gtk.Widget,
 // Bar-left capsule showing the focused window's app name (wordmark), kept in
 // sync with Hyprland's focused client and its title changes. Clicking it (any
 // button) opens the window-options menu (WindowMenu.ts).
-/** The capsule, plus the one number it derives from the monitor. */
 export interface AppTitleHandle {
   widget: Gtk.Widget
-  /** Re-derive the label's cap after a resolution change. The width arrives as a
-   *  CONSTRUCTION argument, which made this the one flavour of the stale-geometry
-   *  bug a live `monGeo` does not fix on its own (user-caught 2026-08-10: the
-   *  panel opened in the wrong place after switching to 1080p). The chain is
-   *  monitor width → max label chars → the capsule's measured width → where the
-   *  bar centres the expansion panel under it, so a stale cap moves a panel that
-   *  never reads the monitor at all. */
+  /** Re-derive the label's cap after a resolution change. */
   setMonitorWidth: (px: number) => void
+  /** Dynamically constrain the label's maximum allocated width in pixels so it never collides with the island. */
+  setMaxWidth: (px: number) => void
+}
+
+const PAD_PX = 32 // 16px margin_start + 16px margin_end
+
+/**
+ * Uses Pango layout to measure the exact rendered width in pixels of the text,
+ * finding the maximal substring that fits inside maxPx with an ellipsis.
+ */
+function fitTextToPixels(widget: Gtk.Widget, text: string, maxPx: number): string {
+  if (!text || maxPx <= 0) return ""
+  const layout = widget.create_pango_layout(text)
+  if (!layout) return text
+  const [fullW] = layout.get_pixel_size()
+  if (fullW <= maxPx) return text
+
+  const ellipsis = "…"
+  let low = 1
+  let high = text.length
+  let best = text.slice(0, 1) + ellipsis
+
+  while (low <= high) {
+    const mid = (low + high) >> 1
+    const candidate = text.slice(0, mid) + ellipsis
+    layout.set_text(candidate, -1)
+    const [w] = layout.get_pixel_size()
+    if (w <= maxPx) {
+      best = candidate
+      low = mid + 1
+    } else {
+      high = mid - 1
+    }
+  }
+  return best
 }
 
 export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHandle {
-  // Max label width = half monitor - center capsule est. (100px) - icon capsule + gap overhead (~100px)
-  const maxCharsFor = (w: number) => Math.max(15, Math.floor((w / 2 - 200) / 8))
+  let targetBudgetPx = Math.max(100, (monitorWidth / 2) - 200)
+  let currentBudgetPx = targetBudgetPx
+  let rawTitle = "—"
+  let animTickId: number | null = null
+
   const appName = new Gtk.Label({
     label: "—",
     css_classes: ["bar-app-name"],
-    ellipsize: Pango.EllipsizeMode.END,
-    max_width_chars: maxCharsFor(monitorWidth),
     margin_start: 16,
     margin_end: 16,
   })
 
+  const updateLabel = () => {
+    const maxTextPx = Math.max(20, currentBudgetPx - PAD_PX)
+    const fitted = fitTextToPixels(appName, rawTitle, maxTextPx)
+    if (appName.label !== fitted) appName.label = fitted
+  }
+
+  const capsule = SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+
+  const startBudgetAnimation = (targetPx: number) => {
+    targetBudgetPx = targetPx
+    if (Math.abs(currentBudgetPx - targetBudgetPx) < 1) {
+      currentBudgetPx = targetBudgetPx
+      updateLabel()
+      return
+    }
+
+    if (animTickId !== null) return
+
+    let lastTimeUs = 0
+    animTickId = capsule.add_tick_callback((_, clock) => {
+      const now = clock.get_frame_time()
+      if (lastTimeUs === 0) {
+        lastTimeUs = now
+        return GLib.SOURCE_CONTINUE
+      }
+      const dt = Math.min(0.05, (now - lastTimeUs) / 1_000_000)
+      lastTimeUs = now
+
+      const diff = targetBudgetPx - currentBudgetPx
+      if (Math.abs(diff) < 1) {
+        currentBudgetPx = targetBudgetPx
+        updateLabel()
+        animTickId = null
+        return GLib.SOURCE_REMOVE
+      }
+
+      // Smooth exponential approach (~180ms settling)
+      currentBudgetPx += diff * (1 - Math.exp(-16 * dt))
+      updateLabel()
+      return GLib.SOURCE_CONTINUE
+    })
+  }
+
   GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
     const sync = () => {
-      const label = getWordmark(hs.focusedClient, hs.focusedWorkspace)
-      if (label && label !== appName.label) appName.label = label
+      const label = getWordmark(hs.focusedClient, hs.focusedWorkspace) || "—"
+      if (label !== rawTitle) {
+        rawTitle = label
+        updateLabel()
+      }
     }
 
     // TWO signals, because a rename is not a structural change. "changed" fires
@@ -60,8 +135,6 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
     sync()
     return GLib.SOURCE_REMOVE
   })
-
-  const capsule = SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
 
   if (openMenu) {
     let menuOpen = false
@@ -96,7 +169,8 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
 
   return {
     widget: capsule,
-    setMonitorWidth: (px) => { appName.max_width_chars = maxCharsFor(px) },
+    setMonitorWidth: (px) => { startBudgetAnimation(Math.max(100, (px / 2) - 200)) },
+    setMaxWidth: (px) => { startBudgetAnimation(px) },
   }
 }
 

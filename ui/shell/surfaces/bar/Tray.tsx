@@ -16,7 +16,7 @@ import hs from "../../core/HyprlandState"
 // under the given widget (same system as the bar widget popovers). Injected by Bar.
 type OpenMenu = (anchor: Gtk.Widget, build: (onClose: () => void) => Gtk.Widget, align?: "center" | "start") => void
 
-export default function Tray(openMenu?: OpenMenu) {
+export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void) {
     // Spacing container only — each tray item now carries its OWN glass capsule
     // (see createItem), so there's no outer grouping pill and no interior padding
     // here. 8px matches the gap between the other right-side bar capsules.
@@ -265,12 +265,14 @@ export default function Tray(openMenu?: OpenMenu) {
             if (!id || items.has(id)) return
             createItem(tray, id)
             syncVisibility()
+            onItemsChanged?.()
         }
 
         const delItem = (id: string) => {
             if (!id) return
             removeItem(id)
             syncVisibility()
+            onItemsChanged?.()
         }
 
         // Still routed through an idle: an item can register and vanish inside one
@@ -285,6 +287,7 @@ export default function Tray(openMenu?: OpenMenu) {
         GLib.idle_add(GLib.PRIORITY_LOW, () => {
             for (const item of tray.items) addItem(item.item_id)
             syncVisibility()
+            onItemsChanged?.()
             return GLib.SOURCE_REMOVE
         })
     })
