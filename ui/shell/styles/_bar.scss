@@ -171,6 +171,11 @@ window#nidara-bar-zone {
         letter-spacing: 0.04em;
     }
 
+    /* Clock/Date capsule label — tabular numbers prevent jitter as digits tick */
+    .bar-time-label {
+        font-variant-numeric: tabular-nums;
+    }
+
     /* --- Window menu (AppTitle expansion) --- */
     // Inline move-to-workspace strip: flat numbered buttons, current one accented
     // and disabled. Rows/headers/separators come from the shared nidara-menu-*

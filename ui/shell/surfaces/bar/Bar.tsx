@@ -1057,7 +1057,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   sideGroup.add_widget(right)
 
   const timeContent = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16 })
-  const timeLabel = new Gtk.Label({ label: "..." })
+  const timeLabel = new Gtk.Label({ label: "...", css_classes: ["bar-time-label"] })
   const updateClock = () => {
     const next = regionConfig.formatClock()
     if (timeLabel.label !== next) timeLabel.label = next
