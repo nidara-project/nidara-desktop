@@ -89,7 +89,7 @@
   // LOCK_GLASS in ui/lib/tokens.ts — the CSS copies below are what is left for
   // the handful of surfaces still drawn by CSS (the avatar ring, the dropdown
   // popovers, the separator). Change one, change the other.
-  --nidara-glass:          rgba(18, 18, 28, 0.55);
+  --nidara-glass:          rgba(22, 22, 34, 0.55);
   --nidara-glass-border:   rgba(255, 255, 255, 0.22);
   --nidara-glass-border-sm:rgba(255, 255, 255, 0.14);
 
@@ -133,7 +133,7 @@
   --nidara-danger:         #ff3b30;
   --nidara-danger-rgb:     255, 59, 48;
   --nidara-shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.40), 0 2px 6px rgba(0, 0, 0, 0.24);
-  --nidara-bg:             rgba(30, 30, 30, 0.5);
+  --nidara-bg:             rgba(22, 22, 34, 0.5);
 
   // The two exceptions to "verbatim", and both are the same reason: the shell
   // floors its popover alpha at 0.85 so Hyprland's popup blur has something to

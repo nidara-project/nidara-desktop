@@ -129,8 +129,8 @@ export const GLASS_TINT = {
  * the half of the mirror both surfaces can see.
  */
 export const LOCK_GLASS = {
-    /** Body fill, over the blurred backdrop. `--nidara-glass`. */
-    fill: { r: 18 / 255, g: 18 / 255, b: 28 / 255, a: 0.55 },
+    /** Body fill, over the blurred backdrop. `--nidara-glass`. Synchronized with GLASS_TINT.dark. */
+    fill: { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b, a: 0.55 },
     /** 1px rim, primary controls. `--nidara-glass-border`. */
     rimStrong: { r: 1, g: 1, b: 1, a: 0.22 },
     /** 1px rim, everything else — the shell's `--nidara-edge` colour exactly. */
