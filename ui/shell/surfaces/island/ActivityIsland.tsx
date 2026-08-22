@@ -278,97 +278,101 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         if (backChanged) for (const cb of backgroundSubs) cb()
     }
 
-    // A chip click: take the front, and open IF opening means expanding the
-    // island in place. Not just open — the row's whole claim is that the
-    // capsule shows what you are dealing with, so picking one has to move it
-    // there. But an activity whose destination is another surface entirely
-    // (recording → the Control Center) only gets promoted: switching the
-    // capsule to it is not the same act as asking to go there, and one click
-    // should not do both. Its second click, on the capsule, does the jump.
+    // A chip click: take the front in the compact capsule without auto-expanding.
+    // The chip swaps into the capsule so you can see and control it in the bar.
+    // A second click, on the capsule itself, expands the island surface.
     const promote = (a: IslandActivity) => {
-        // Only a LIVE activity can be pinned. The pin settles who owns the
-        // capsule among things that are RUNNING; a merely INDICATED chip (the
-        // idle assistant) has nothing to hold it with, and pinning it would
-        // either be cleared on the spot by the liveness check or — worse, if it
-        // weren't — park an idle activity in the capsule forever. Clicking it
-        // just opens it, which is what makes it live: the same path Super+A
-        // takes, where the island-mode change is what re-arbitrates the compact.
         if (a.isLive()) {
             pinned = a
             arbitrate()
-            openAfterSwap(a)
         } else if (a.expandMode) {
             status.island_mode = a.expandMode
         } else {
-            // Nothing to promote it to and no island mode: "go there" is the
-            // only meaning the click has left. (Unreachable today — the one
-            // indicated-but-idle activity is the assistant, which has a mode.)
             a.onExpand?.()
         }
     }
-    // ── The indicator row ────────────────────────────────────────────────────
-    // The live activities that are NOT fronting, as chips beside the capsule —
-    // the iOS split: one pill carrying the current thing, small circles for the
-    // rest. Every chip is built ONCE and packed in DESCENDING priority order,
-    // which buys two things: the visible subset is automatically in priority
-    // order without ever reordering the box (icons that swap places under the
-    // cursor were the thing to avoid), and each chip's rect stays put for the
-    // input region.
-    // No box spacing here or in the bar's centre box: a collapsed Gtk.Revealer
-    // still counts as a visible child, so spacing would reserve 8px per chip
-    // forever and push the capsule off-centre in an idle session. The gap rides
-    // each chip's margin_start instead, so it slides in WITH the chip and
-    // collapses to nothing with it.
+    // ── The indicator row (Dynamic indicator slots) ─────────────────────────
+    // Instead of a fixed revealer per activity (which causes overlapping cross-slides
+    // when activities swap), we use dynamic indicator slots.
+    // Each slot has its own Gtk.Revealer, and inside it a Gtk.Stack that crossfades
+    // between activity indicator glyphs in place.
     const indicatorRow = new Gtk.Box({ halign: Gtk.Align.CENTER })
-    const chips = new Map<string, { revealer: Gtk.Revealer, hit: Gtk.Widget }>()
-    // Fires when a chip's slide ENDS, which is the frame its final rect exists —
-    // see onChipsSettled below for why the chips needed a trigger of their own.
     const chipSettledSubs: (() => void)[] = []
-    for (const a of [...activities].sort((x, y) => y.priority - x.priority)) {
-        const glyph = a.indicator()
-        glyph.halign = Gtk.Align.CENTER
-        glyph.valign = Gtk.Align.CENTER
-        // Same glass recipe as the capsule — a sibling shape, not a new
-        // material. `perfect` makes the radius h/2, so at CHIP_W ≈ the row
-        // height it lands as a circle. Same hover accent too: a chip is a
-        // control, and it answers a click the way the capsule does.
-        const chip = SquircleContainer({ child: glyph, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => promote(a) })
+
+    interface IndicatorSlot {
+        revealer: Gtk.Revealer
+        stack: Gtk.Stack
+        chip: Gtk.Widget
+        currentActivity: IslandActivity | null
+    }
+
+    const slots: IndicatorSlot[] = []
+
+    for (let i = 0; i < INDICATOR_MAX; i++) {
+        const stack = new Gtk.Stack({
+            transition_type: Gtk.StackTransitionType.CROSSFADE,
+            transition_duration: COMPACT_SWAP_MS,
+            halign: Gtk.Align.CENTER,
+            valign: Gtk.Align.CENTER,
+        })
+        for (const a of activities) {
+            const glyph = a.indicator()
+            glyph.halign = Gtk.Align.CENTER
+            glyph.valign = Gtk.Align.CENTER
+            stack.add_named(glyph, a.id)
+        }
+
+        let slotRef: IndicatorSlot
+        const chip = SquircleContainer({
+            child: stack,
+            gloss: true,
+            useShellOpacity: true,
+            chrome: true,
+            opacityRole: "bar",
+            borderColor: CAPSULE_BORDER,
+            hoverBorderAccent: true,
+            perfect: true,
+            onClick: () => {
+                if (slotRef.currentActivity) promote(slotRef.currentActivity)
+            },
+        })
         chip.width_request = CHIP_W
         chip.margin_start = CHIP_GAP
-        // For the input-region trap only (IslandWindow's traceStamp): which chip
-        // this is, and whether it is MEANT to be on screen. The stamp's target
-        // COUNT cannot answer the second question — `hitTargets()` always returns
-        // all five chips and three of them are legitimately collapsed, so "live
-        // but unmeasurable" and "deliberately absent" look identical in the
-        // numbers. That conflation is why the count-based checks kept reading
-        // healthy while these chips took no input.
-        ;(chip as any).islandTargetId = a.id
-        ;(chip as any).islandRevealed = () => revealer.reveal_child
-        // Gtk.Revealer, not ScaleRevealer: this is a HORIZONTAL appearance and
-        // ScaleRevealer animates the measured HEIGHT only (it passes width
-        // straight through), so a chip would pop to full width and shove the
-        // capsule sideways in one frame. SLIDE_RIGHT is the bar's existing
-        // idiom for an element that comes and goes (widgets/bar-helpers.ts).
-        // Duration = the compact swap's, so when a chip appears BECAUSE the
-        // front changed, the capsule's width interpolation and the row's
-        // widening are one settling movement instead of two.
+        ;(chip as any).islandTargetId = `chip-${i}`
+
         const revealer = new Gtk.Revealer({
             transition_type: Gtk.RevealerTransitionType.SLIDE_RIGHT,
             transition_duration: COMPACT_SWAP_MS,
             reveal_child: false,
         })
         revealer.set_child(chip)
-        // `child-revealed` flips when the slide FINISHES, in both directions — the
-        // one moment the row's final geometry exists. Everything before it is a
-        // frame of an animation whose rects are already out of date by the time
-        // they are stamped.
-        revealer.connect("notify::child-revealed", () => { for (const cb of chipSettledSubs) cb() })
+        ;(chip as any).islandRevealed = () => revealer.reveal_child
+
+        revealer.connect("notify::child-revealed", () => {
+            for (const cb of chipSettledSubs) cb()
+        })
         indicatorRow.append(revealer)
-        chips.set(a.id, { revealer, hit: chip })
+
+        slotRef = { revealer, stack, chip, currentActivity: null }
+        slots.push(slotRef)
     }
+
     const syncIndicators = () => {
-        const shown = new Set(background.slice(0, INDICATOR_MAX).map(a => a.id))
-        for (const [id, c] of chips) c.revealer.reveal_child = shown.has(id)
+        const shown = background.slice(0, INDICATOR_MAX)
+        const count = shown.length
+
+        for (let i = 0; i < INDICATOR_MAX; i++) {
+            const slot = slots[i]
+            if (i < count) {
+                const a = shown[i]
+                slot.currentActivity = a
+                slot.stack.visible_child_name = a.id
+                slot.revealer.reveal_child = true
+            } else {
+                slot.currentActivity = null
+                slot.revealer.reveal_child = false
+            }
+        }
     }
     backgroundSubs.push(syncIndicators)
 
@@ -509,7 +513,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
          *  chips fall out on the caller's zero-size guard. */
         hitTargets: () => indicatorRow.opacity === 0
             ? [capsule as Gtk.Widget]
-            : [capsule as Gtk.Widget, ...[...chips.values()].map(c => c.hit)],
+            : [capsule as Gtk.Widget, ...slots.map(s => s.chip)],
         /** Every LIVE activity that is NOT fronting the capsule, highest
          *  priority first — the model the indicator row paints. Idle session =
          *  only the dots are live = empty list, which is why the bar looks
