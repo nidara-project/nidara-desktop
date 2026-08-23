@@ -1071,15 +1071,26 @@ highlight, a bottom shelf reflection, and a lateral dark contour, each its own g
 own `strokePreserve()`. It is now a **single stroke** through one vertical `LinearGradient` with
 seven stops:
 
-| stop | 0.0 | 0.18 | 0.35 | 0.50 | 0.65 | 0.82 | 1.0 |
+| stop | 0.0 | 0.16 | 0.30 | **0.50** | 0.70 | 0.84 | 1.0 |
 |---|---|---|---|---|---|---|---|
-| alpha | .42 | .32 | .16 | **.08** | .13 | .19 | .24 |
+| colour | white | white | white | **`GLASS_TINT.dark`** | white | white | white |
+| alpha | .42 | .26 | .04 | **`FLANK_DEPTH`** | .06 | .18 | .24 |
 
 Read it as **Fresnel**: an edge reflects most where you meet it at a grazing angle — the top rim
-(key light, .42) and the bottom rim (ground bounce, .24) — and least where you are looking
-straight through the glass, which is the flank at mid-height (.08). The dip in the middle is the
-whole point; the old lateral *dark* contour was faking the same effect by painting black over the
-sides, which read as a drawn outline rather than as material.
+(key light, .42) and the bottom rim (ground bounce, .24). At mid-height you are not looking at the
+edge, you are looking **through** it, so what belongs there is the thickness of the material: dark.
+
+⚠️ **The flank was white `.08` until 2026-08-23, which made it LIGHTER than the body it edges** —
+measured over a bright wallpaper, flank `27,149,182` against a body of `7,139,175`. The capsule had
+no dark side at all, which is why it read flat over pale wallpapers: on those the contrast has to
+come from the edge, because the fill cannot supply it without going opaque. `FLANK_DEPTH` in
+`DrawingUtils.ts` is the one number to move if the sides read as too much or too little.
+
+⚠️ **This reopened a decision, deliberately.** #230 removed a lateral dark contour because it "read
+as a drawn outline rather than as material" — but that judgement was made while `blur:brightness`
+was still painting a hard dark step along every antialiased edge (resolved debt #81), so the
+outline it rejected was partly the artefact. The owner reopened it once that was fixed. If you are
+about to remove the dark flank again, know that you are re-deciding this, and say why.
 
 Three things about it that are easy to undo by accident:
 

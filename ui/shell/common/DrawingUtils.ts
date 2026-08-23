@@ -140,6 +140,27 @@ export const createSquirclePath = (
     cr.closePath()
 }
 
+/** How dark the FLANK of the rim goes, as `GLASS_TINT.dark` alpha at mid-height.
+ *
+ *  This is the one number to move if the sides read as too much or too little. It is
+ *  a look decision with a physical argument behind it: at the top and bottom you meet
+ *  the edge at a grazing angle and it REFLECTS (white, .42 and .24), but at mid-height
+ *  you are looking straight THROUGH the edge, so what you should see is the thickness
+ *  of the material — dark — not a highlight.
+ *
+ *  ⚠️ It was white `.08` there until 2026-08-23, which made the flank LIGHTER than the
+ *  body it edges (measured over a bright wallpaper: flank 27,149,182 against a body of
+ *  7,139,175). The capsule therefore had no dark side at all, which is why it read
+ *  flat over pale wallpapers — the contrast the glass needs there has to come from the
+ *  edge, because the fill cannot supply it without going opaque.
+ *
+ *  ⚠️ This reopens #230, which removed a lateral dark contour on the grounds that it
+ *  "read as a drawn outline rather than as material". That judgement was made while
+ *  `blur:brightness` was still painting a hard dark step along every antialiased edge
+ *  (resolved debt #81) — the outline it rejected was partly the artefact. Reopened
+ *  deliberately, by the owner, after that was fixed. */
+const FLANK_DEPTH = 0.18
+
 /** The 1px inner rim of every glass surface, as a vertical gradient over a box of
  *  `height` starting at `top`. `cx` only fixes the gradient's axis — it is vertical,
  *  so any x on the shape does.
@@ -178,12 +199,13 @@ export const glassRimGradient = (cx: number, top: number, height: number, dark: 
     const g = new Cairo.LinearGradient(cx, top, cx, top + height)
     const { r: lr, g: lg, b: lb } = GLASS_SPECULAR
     if (dark) {
+        const { r: fr, g: fg, b: fb } = GLASS_TINT.dark
         g.addColorStopRGBA(0.0, lr, lg, lb, 0.42)
-        g.addColorStopRGBA(0.18, lr, lg, lb, 0.32)
-        g.addColorStopRGBA(0.35, lr, lg, lb, 0.16)
-        g.addColorStopRGBA(0.50, lr, lg, lb, 0.08)
-        g.addColorStopRGBA(0.65, lr, lg, lb, 0.13)
-        g.addColorStopRGBA(0.82, lr, lg, lb, 0.19)
+        g.addColorStopRGBA(0.16, lr, lg, lb, 0.26)
+        g.addColorStopRGBA(0.30, lr, lg, lb, 0.04)
+        g.addColorStopRGBA(0.50, fr, fg, fb, FLANK_DEPTH)
+        g.addColorStopRGBA(0.70, lr, lg, lb, 0.06)
+        g.addColorStopRGBA(0.84, lr, lg, lb, 0.18)
         g.addColorStopRGBA(1.0, lr, lg, lb, 0.24)
     } else {
         const { r: dr, g: dg, b: db } = GLASS_TINT.dark
