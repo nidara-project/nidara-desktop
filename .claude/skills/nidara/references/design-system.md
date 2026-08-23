@@ -1031,7 +1031,12 @@ instead of a polygon and can therefore antialias it subpixel-smoothly at any siz
 Chords looked fine at dock-icon size and faceted on a large panel.
 
 ⚠️ `n` did NOT go away — it still selects the superellipse (default 3.2), it just parameterizes
-`mid` now instead of a sampling loop. Everything built on the exponent still holds: `cornerReach`,
+`mid` now instead of a sampling loop. ⚠️ But the two Bézier tangent lengths (`a`, `b`) are fitted
+for **n = 3.2 and only 3.2** — 0.011px there, 0.322px at n=4.5 (radius 32). Every Bézier silhouette
+in the shell is 3.2 since Prism joined its siblings on 2026-08-23 (it had carried 4.5 in through a
+refactor, 2.35px off the shape it was asking for); `n = 2` never reaches this code because it comes
+with `perfect`, which is four real arcs. Pass a different `n` and refit them — the numbers are in
+`DrawingUtils.ts`. Everything built on the exponent still holds: `cornerReach`,
 `rowInsetFor`, the `k(n)·R` diagonal reach documented elsewhere in this file. And the `perfect`
 branch is untouched — a pill is still four real `arc()` calls, because a pill is a circle-capped
 rectangle and there is no superellipse to approximate.
@@ -1070,10 +1075,15 @@ Three things about it that are easy to undo by accident:
   together); what left is only the misuse of the light one.
 - **`drawSquircle` no longer clips its rim.** It offsets the path inward by half the line width
   (`strokeOffset = -borderWidth * 0.5`) and strokes at 1×, so the stroke lands entirely inside the
-  silhouette by construction. `GlassBubble` still uses the older idiom for the same result — clip
-  to the silhouette, then stroke at `BORDER_W * 2` and let the clip discard the outer half. **Two
-  different techniques, same 1px inner rim**; don't "unify" them without checking, the bubble's
-  arrow tip is why it wants the clip.
+  silhouette by construction. `GlassBubble` still uses the older idiom — clip to the silhouette,
+  then stroke at `BORDER_W * 2` and let the clip discard the outer half; its arrow tip is why it
+  wants the clip (`bubblePath` takes no offset, so the offset trick is not available to it).
+  ⚠️ **They are NOT the same rim, and this file claimed they were until it was measured**
+  (2026-08-23). On straight runs they agree to the byte. On the CURVES they do not: an antialiased
+  clip MULTIPLIES coverages (clip × stroke), so where coverage is fractional the bubble's rim comes
+  out weaker — **280 pixels differ, every one of them in a corner, up to 8/255.** Small, but it is
+  the capsule-vs-bubble coherence #230 and #234 were about, and it is in the curvature. Tracked as
+  open debt #84; do not "unify" the techniques without reading it first.
 
 ## A CSS pill at `--nidara-radius-pill` seams at the middle of each cap
 

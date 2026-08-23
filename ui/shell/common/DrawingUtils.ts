@@ -47,10 +47,25 @@ export const createSquirclePath = (
         cr.arc(ox + safe_rd, oy + safe_rd, safe_rd, Math.PI, 3 * Math.PI / 2) // TL
         cr.lineTo(ox + ow - safe_rd, oy)
     } else {
-        // SQUIRCLE (Superellipse n=3.2) — Continuous Analytical Cubic Bézier Splines
+        // SQUIRCLE (Superellipse) — Continuous Analytical Cubic Bézier Splines.
         // Replaces polygon chords (stacked straight lineTo segments) with exact continuous
-        // cubic Bézier curves (cr.curveTo). Matches the n=3.2 superellipse with 99.96% accuracy
-        // (< 0.012px deviation) while ensuring 100% smooth, continuous subpixel rasterization.
+        // cubic Bézier curves (cr.curveTo), for smooth, continuous subpixel rasterization.
+        //
+        // ⚠️ `a` AND `b` ARE FITTED FOR n = 3.2 AND ONLY FOR n = 3.2. They are the two
+        // tangent lengths of the fit; `mid` follows `n`, they do not. The accuracy this
+        // comment used to claim ("99.96%, < 0.012px") is true at 3.2 and nowhere else.
+        // Max radial error against the true superellipse, at corner radius 32:
+        //
+        //      n     3.2     3.5     4.0     4.5     5.0
+        //      px   0.011   0.054   0.180   0.322   0.466
+        //
+        // Everything in the shell paints at 3.2 — every island, the overview, the app
+        // grid, Prism (which sat at 4.5 until 2026-08-23, carried in by a refactor, and
+        // was the one surface visibly off its own silhouette). n = 2 never reaches here:
+        // it comes with `perfect`, which is four real arcs. So the fixed pair is right for
+        // every caller today — but if you pass a different `n`, refit them (a minimax
+        // sweep gets n=4.5 to 0.012px with a≈0.423, b≈0.155) rather than assuming the
+        // curve you get is the superellipse you asked for.
         const mid = Math.pow(0.5, 1 / n)
         const a = 0.3100
         const b = 0.1950
@@ -221,7 +236,12 @@ export const drawSquircle = (
     let r = cornerRadius ?? (minDim * 0.5)
     if (r > minDim * 0.5) r = minDim * 0.5
 
-    const AA_QUALITY = 6 // CAIRO_ANTIALIAS_BEST
+    // CAIRO_ANTIALIAS_BEST. ⚠️ MEASURED 2026-08-23: on the image backend this is
+    // byte-for-byte identical to ANTIALIAS_GRAY (2) for these shapes — 0 subpixels
+    // differ across a full capsule, fill and rim — and costs the same (0.148 vs
+    // 0.144 ms per render). Keep it, but do not believe it is buying quality, and do
+    // not "fix" a rendering problem by reaching for it: it is already GRAY.
+    const AA_QUALITY = 6
 
     // 1. MAIN GLASS BODY — AA fill, smooth silhouette.
     cr.save()

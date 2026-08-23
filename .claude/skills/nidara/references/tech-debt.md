@@ -7,7 +7,7 @@ and leave its line in the index at the bottom of this file. It must match realit
 
 **This file is what is still OWED.** It holds three genres, and they are not the same thing:
 
-- **Open debt** — work still to do (#2, #62, #63, #80, #82, #83…).
+- **Open debt** — work still to do (#2, #62, #63, #80, #82, #83, #84…).
 - **Partial** — one half shipped, the other did not; the heading says which (#43, #64, #68).
 - **Standing decisions** — *not* debt: things that are deliberately this way, or upstream bugs
   we will not chase. #3 ("NOT a bug"), #13, #17, #34, #38 (retracted — a measurement error),
@@ -2789,6 +2789,43 @@ So the floor is uniform today (`GLASS_RANGE`, one range), and per-surface floors
 redesigning the mixer: either the master stops claiming uniformity (per-axis normalised position
 rather than a shared value), or the floors become a display concern and the stored value stays raw.
 The owner wants the mixers reviewed regardless.
+
+### 84. ⚠️ OPEN — the bubble's rim is weaker than the capsule's, and only on the curves (2026-08-23)
+
+Found by measurement while auditing Cairo after the artefact hunt (#81), not by looking. This file
+and `design-system.md` both said the two rim techniques produced "the same 1px inner rim". They do
+not.
+
+`drawSquircle` offsets the path inward by half the line width and strokes at 1× — no clip, coverage
+evaluated once. `GlassBubble` cannot do that (`bubblePath` takes no offset, and its arrow tip is why
+it wants the clip), so it clips to the silhouette with AA and strokes at 2×, letting the clip
+discard the outer half. **An antialiased clip multiplies coverages**: where the stroke's own AA is
+fractional, the result is clip × stroke rather than stroke.
+
+Rendered both idioms over the same real `createSquirclePath` geometry, same gradient, same fill:
+
+| | pixels differing | max channel delta |
+|---|---|---|
+| straight runs | **0** | 0 |
+| corners | **280** | **8/255** |
+
+Exactly the split the mechanism predicts: on an axis-aligned edge the path lands on a pixel boundary,
+coverage is 1 or 0, and squaring changes nothing; on the curve it is fractional everywhere.
+
+Small in absolute terms, and nobody has reported it — but it is capsule-vs-bubble coherence, which
+is what #230 and #234 were both about, and it lives in the curvature, which is where the eye was
+already being drawn. The tooltip and the dock context menu are the two consumers.
+
+**The fix is not "remove the clip"** — that is what the arrow tip needs. It is to give `bubblePath`
+the `offset` parameter `createSquirclePath` already has, so the bubble can use the same
+offset-and-stroke-1× idiom and the clip disappears entirely. Offsetting a path that contains a
+tangent-joined arrow tip is the fiddly part: the tip radius has to shrink with the offset or the
+point deforms. Not attempted here because it is a shape change to a surface nobody complained about,
+and it deserves its own before/after render.
+
+⚠️ **Do NOT "fix" it by setting the clip back to `ANTIALIAS_NONE`** (its value before #225). That
+removes the multiplication, but it also puts back the hard, aliased clip edge #225 removed — trading
+a measured 8/255 on the curve for a visibly stepped one.
 
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
