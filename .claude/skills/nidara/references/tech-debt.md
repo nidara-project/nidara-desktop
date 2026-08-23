@@ -2819,6 +2819,65 @@ Three things a future pass should know:
   measurement for this too — the bevel is the rim and the shadow considered together, and that probe
   already separates them.
 
+### 86. ⛔ STANDING DECISION — the glass painters stay on Cairo; do NOT propose GSK (2026-08-23)
+
+Asked by the owner, decided on measurements rather than on which API is newer: *"Cairo is old and
+everyone uses GSK now — and the GPU is already busy with the blur, so should the CPU keep some of
+this?"* The second half of that question is the right instinct and it is the reason the answer is
+no.
+
+**It is not blocked by capability.** Verified on this GTK (4.22) from GJS, not assumed:
+`Gsk.PathBuilder`, `Gtk.Snapshot.append_fill`, `append_stroke` and `cubic_to` all exist and work, so
+`createSquirclePath` and `bubblePath` COULD be re-expressed as `GskPath`. The decision is about cost,
+not about possibility.
+
+**What Cairo actually costs here** (`scripts/dev/cairo-bench.ts`, run 2026-08-23 on the owner's
+machine — re-run it before re-opening this, do not quote these numbers as eternal):
+
+| surface | per REDRAW |
+|---|---|
+| CC panel 356x610 | **0.44 ms** |
+| dock capsule 1200x92 | 0.15 ms |
+| CC tile 160x88 | 0.09 ms |
+| island pill 420x44 | 0.06 ms |
+
+A 144 Hz frame is 6.9 ms, so the most expensive glass surface in the shell is **~6 % of one frame**
+— and a `draw_func` runs on INVALIDATION, not per frame. Cairo is not the load.
+
+🔑 **The GPU is the scarce resource and the CPU is the abundant one, so moving raster to the GPU is
+the trade backwards.** Hyprland runs dual-Kawase over three or four monitor-sized layers, and #46
+already measured continuous animation at ~40 % GPU. Relieving the CPU at the GPU's expense is the
+wrong direction on this machine class.
+
+**And the cheap GSK node cannot draw our shape.** `GskRoundedRect` — the native, GPU-side one — is a
+true rounded rect, i.e. n = 2. The squircle is n = 3.2 and it IS the brand (see `design-system.md`).
+Getting it in GSK means `GskPath` + fill/stroke nodes, which is GSK's slow lane; a complex path fill
+can end up rasterised on the CPU inside GSK anyway. The likely outcome of a migration is the same
+work with more indirection, plus a rewrite of every painter.
+
+⚠️ **"Cairo is old" is true and is not the same as deprecated.** GTK4 keeps the cairo node as a
+first-class escape hatch and uses cairo for its own fallback paths. There is no deprecation to get
+ahead of, so "modernising" is not a reason on its own.
+
+**Where the real margin is, if performance ever becomes a complaint.** The same bench splits the
+cost, and the answer is not the renderer: the **rim** (gradient + stroke) dominates, not the fill,
+and a cached-surface replay would save **70–94 %** depending on the surface. The first lever is
+*not redrawing*, and it lives inside the current architecture without touching the look.
+
+**What is already GSK, and stays that way** — this is not "Cairo everywhere":
+`common/WindowThumbnail.ts` (`vfunc_snapshot` + `append_texture` inside a `Gsk.RoundedClipNode`;
+`architecture.md` carries the rule that captures must NEVER go through a Cairo `draw_func`, which
+would download the texture off the GPU on every draw) and `ui/lib/glass-capsule.ts` (blur nodes +
+`Gsk.RoundedRect`). The split is: **GSK for textures, clips and blur; Cairo for shapes that are
+ours.**
+
+**What would re-open this**, and nothing less: animating a glass surface's GEOMETRY every frame. The
+closest thing today is the dock's magnification, which `queue_draw()`s the capsule per spring step —
+0.15 ms against a 6.9 ms budget, about 2 %. Measurable, not a problem. If that ever changes, the
+honest test is a live A/B on the damage harness with the fps discipline from #46 (⚠️ a Cairo
+`draw_func` is not a valid damage source — it throttles the client and makes the two arms carry
+different loads).
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
