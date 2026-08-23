@@ -1833,6 +1833,34 @@ to this in 2026-06):
 | Scan / Search / other plain actions | `secondary` | `true` | label |
 
 - **`danger` is for destructive only.** Disconnect is reversible → `secondary`, NOT danger.
+### A label class inside a capsule must carry its OWN colour (2026-08-24)
+
+`.bar-left / .bar-center / .bar-right { label, image { color: var(--nidara-text) } }` in
+`_bar.scss` colours capsule content by ANCESTRY, and that is enough right up until a
+**morph ghost** exists. `MorphRevealer` paints twins of the capsule's content as its own
+direct children — the whole point being that they travel OUTSIDE the box they belong to —
+so a ghost matches no `.bar-*` ancestor, falls back to the GTK theme's own label colour,
+and renders **white**.
+
+🔑 **In dark mode that is accidentally correct, so the bug only exists in light mode**, which
+is exactly how it was reported: the media title flashed white for the first third of every
+island open and close, and nowhere else. A defect that is invisible in one theme is a defect
+nobody finds by looking at the theme they use.
+
+⚠️ It also produced a misleading first measurement. Sampling the title band during the LATE
+frames showed dark text ramping in and no pixel ever brighter than the glass — a clean,
+wrong answer, because the ghost lives in `[0, SOURCE_FADE_END]` = the first 35 % and the
+sampling started past 50 %. The user's own observation (*"only in light mode, opening AND
+closing"*) is what said the mechanism had to be a colour and not an opacity ramp: a fade
+looks the same in both modes.
+
+The split that made it diagnosable: the same ghost's **Cairo** parts stayed correct
+throughout, because they read `Theme.chromeIsDark` directly. Text wrong, EQ bars right ⇒ the
+fault is in CSS inheritance, not in the theme.
+
+So: **any label class used inside a capsule declares its own `color`** — `.bar-widget-label`
+does now. Do not rely on an ancestor rule for anything a ghost can clone.
+
 - **`ghost`** (transparent, dim text) reads as *text with a hover*, not a button — use it only
   for subtle nav affordances (e.g. a row "details" chevron), never for a real action like Scan.
 - For a button whose intent toggles at runtime (e.g. connect⇄disconnect), build it with

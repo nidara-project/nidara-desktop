@@ -65,6 +65,22 @@ window#nidara-bar-zone {
         margin-top: 8px;
     }
 
+    /* --- Widget labels ---
+       ⚠️ EXPLICIT, and NOT left to the `.bar-left/.bar-center/.bar-right` rule below.
+       That rule colours by ANCESTRY, and a morph ghost has none: `MorphRevealer`
+       paints twins of the capsule's content as its own direct children, precisely so
+       they can travel OUTSIDE the box they belong to. A ghost therefore matches no
+       `.bar-*` ancestor, falls back to the GTK theme's own label colour, and renders
+       WHITE — which is invisible in dark mode (it happens to be right) and obvious in
+       light mode, where the player's title flashed white for the first third of every
+       open and close until a user reported it (2026-08-24).
+       So any label class used inside a capsule must carry its own colour. The Cairo
+       parts of the same ghost were never affected: they read `Theme.chromeIsDark`
+       directly, which is what made the split diagnosable — text wrong, EQ bars right. */
+    .bar-widget-label {
+        color: var(--nidara-text);
+    }
+
     /* --- Left/Center/Right capsules --- */
     .bar-left,
     .bar-center,
