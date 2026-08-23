@@ -2714,6 +2714,41 @@ both are the kind of thing that silently drifts.
   **Do not "fix" this by editing one half**: whichever side moves, something on screen changes,
   so it needs a decision about which value is the canonical one and a look at the result.
 
+### 80. ⚠️ OPEN — what the `nidara-auth` audit left (2026-08-23)
+
+The critical one is fixed (an informational PAM message could open the secret gate and let the next
+password prompt answer itself with an empty string — see `lib/nidara-auth/nidara-auth.h`, which now
+carries the conversation contract, and `scripts/dev/auth-probe.js`, which fails without the fix).
+Three things were deliberately left:
+
+- **There is no cancellation.** The worker holds a strong reference for its whole life, so
+  `finalize()` cannot run while it is alive — which makes its `cancelled = TRUE` unreachable, not a
+  cancel path. If the lock surface goes away while PAM is blocked waiting for a secret, that thread
+  and its `pam_handle_t` wait forever; only process exit reaps them. Bounded in practice (the
+  lockscreen is short-lived and `bin/nidara-lock` restarts it), which is why this is not urgent.
+  A real fix is a `GCancellable`, or a generation counter the worker re-checks on wake.
+
+- **`PAM_PROMPT_ECHO_ON` is answered blind.** `LockCard` replies with the empty string and logs a
+  warning. That prompt is normally the username — which cannot happen here, since `pam_start` is
+  given the user — but it is also how several second-factor modules ask for a code. So a stack with
+  2FA fails to unlock and there is nowhere to type the code. Surfacing the prompt text into the card's
+  entry is the feature that fixes it; until then the failure is at least loud in the log.
+  ⚠️ Do NOT "fix" it by leaving the prompt unanswered: a prompt that is never answered hangs the
+  attempt, which is worse than a wrong answer.
+
+- **An unknown `msg_style` is ignored** (`default: break`, response left NULL, conversation still
+  returns `PAM_SUCCESS`). AstalAuth refused the whole conversation with `PAM_CONV_ERR` instead. Ours
+  is the more forgiving choice and it is deliberate — aborting authentication over a message style we
+  do not recognise would break a working stack — but it is a judgement call, recorded here so the
+  next reader knows it was one.
+
+⚠️ **`scripts/dev/test-auth.js` cannot catch this class and never could.** It drives the happy path
+against the real `nidara-lock` service: one prompt, no informational messages. It was the validation
+for #200 and it stayed green the whole time the bug was live. It also **counts a faillock failure
+against your real account** (deny=3 / unlock_time=600 on Arch) — three runs lock you out of your own
+session for ten minutes; `faillock --user $USER --reset` clears it. `auth-probe.js` exists because of
+both problems: it uses a throwaway service with no faillock, and it asserts the ordering.
+
 ---
 
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)

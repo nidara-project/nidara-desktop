@@ -1,7 +1,15 @@
 #%PAM-1.0
 # Nidara lockscreen PAM service configuration
 # Installed to /etc/pam.d/nidara-lock
+#
+# `auth` verifies the credential; `account` says whether the account may be used
+# at all (expired, administratively locked, pam_time windows). BOTH are exercised
+# by lib/nidara-auth — pam_authenticate() then pam_acct_mgmt(). Until 2026-08-23
+# only the first ran, so this file declared checks that never happened.
+#
+# No `session` stack: the lockscreen authenticates against a session that is
+# already open. It never calls pam_open_session()/pam_close_session(), so a
+# session stack here would be config nobody runs.
 
 auth        include     system-auth
 account     include     system-auth
-session     include     system-auth

@@ -1,0 +1,13 @@
+#%PAM-1.0
+# Nidara auth probe — a throwaway PAM service for scripts/dev/auth-probe.js.
+# Install:  sudo install -Dm644 scripts/dev/pam-auth-probe /etc/pam.d/nidara-auth-probe
+#
+# pam_echo emits a PAM_TEXT_INFO *before* pam_unix prompts. That ordering is the
+# whole point: it is what `pam_faillock preauth` does on a real Arch stack once an
+# account has recorded failures, and it is what used to steal the next password.
+#
+# ⚠️ Deliberately NO pam_faillock here — running the probe must never count
+# failures against your real account or lock you out of your own session.
+auth        optional    pam_echo.so     nidara-auth-probe: informational message before the prompt
+auth        required    pam_unix.so
+account     required    pam_permit.so

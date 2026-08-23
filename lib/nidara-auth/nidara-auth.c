@@ -17,6 +17,18 @@ struct _NidaraAuthPam {
 
     gchar *secret;
     gboolean secret_ready;
+    /* TRUE only while the worker is actually blocked on a PAM prompt. Guards
+     * `supply_secret` against arming the gate when nothing is waiting at it —
+     * see the contract in nidara-auth.h. */
+    gboolean prompt_pending;
+    /* Which prompt is waiting, and which prompt the main loop is currently
+     * delivering. An answer counts only when they agree — see supply_secret.
+     * `prompt_gen` MUST stay monotonic for the whole attempt (it restarts only in
+     * start_authenticate): if a second prompt reused the first one's number, a
+     * late answer to the first would be accepted as the answer to the second —
+     * the same crossing-over this guard exists to stop, one prompt narrower. */
+    guint64 prompt_gen;
+    guint64 dispatched_gen;
     gboolean cancelled;
     gboolean is_authenticating;
 
@@ -49,6 +61,8 @@ typedef struct {
     GWeakRef weak_ref;
     guint signal_id;
     gchar *msg;
+    gboolean is_prompt;
+    guint64 gen;
 } IdleSignalData;
 
 static gboolean dispatch_signal_idle(gpointer user_data) {
@@ -56,6 +70,14 @@ static gboolean dispatch_signal_idle(gpointer user_data) {
     NidaraAuthPam *self = g_weak_ref_get(&data->weak_ref);
 
     if (self) {
+        /* Publish WHICH prompt is being delivered before running the handlers,
+         * so an answer supplied from inside one (or later, asynchronously, by a
+         * UI that had to wait for the user) can be matched to it. */
+        if (data->is_prompt) {
+            g_mutex_lock(&self->mutex);
+            self->dispatched_gen = data->gen;
+            g_mutex_unlock(&self->mutex);
+        }
         if (data->signal_id == signals[SIGNAL_SUCCESS]) {
             g_signal_emit(self, data->signal_id, 0);
         } else {
@@ -70,12 +92,41 @@ static gboolean dispatch_signal_idle(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
-static void emit_signal_from_thread(NidaraAuthPam *self, guint signal_id, const gchar *msg) {
+static void emit_tagged_from_thread(NidaraAuthPam *self, guint signal_id, const gchar *msg,
+                                    gboolean is_prompt, guint64 gen) {
     IdleSignalData *data = g_new0(IdleSignalData, 1);
     g_weak_ref_init(&data->weak_ref, self);
     data->signal_id = signal_id;
     if (msg) data->msg = g_strdup(msg);
+    data->is_prompt = is_prompt;
+    data->gen = gen;
     g_idle_add(dispatch_signal_idle, data);
+}
+
+static void emit_signal_from_thread(NidaraAuthPam *self, guint signal_id, const gchar *msg) {
+    emit_tagged_from_thread(self, signal_id, msg, FALSE, 0);
+}
+
+/* Wipe and drop the pending secret. Caller must hold `self->mutex`. */
+static void wipe_secret_locked(NidaraAuthPam *self) {
+    if (self->secret) {
+        explicit_bzero(self->secret, strlen(self->secret));
+        g_free(self->secret);
+        self->secret = NULL;
+    }
+}
+
+/* Free a partially-filled reply array, wiping any answer already written into
+ * it. Reached on cancellation, where PAM never takes ownership and would
+ * otherwise leave plaintext answers on the heap. */
+static void free_replies(struct pam_response *reply, int n) {
+    for (int i = 0; i < n; i++) {
+        if (reply[i].resp) {
+            explicit_bzero(reply[i].resp, strlen(reply[i].resp));
+            free(reply[i].resp);
+        }
+    }
+    free(reply);
 }
 
 static int pam_conv_cb(int num_msg, const struct pam_message **msg,
@@ -92,49 +143,46 @@ static int pam_conv_cb(int num_msg, const struct pam_message **msg,
 
         switch (m->msg_style) {
             case PAM_PROMPT_ECHO_OFF:
-                emit_signal_from_thread(self, signals[SIGNAL_PROMPT_HIDDEN], m->msg);
+            case PAM_PROMPT_ECHO_ON: {
+                /* ⚠️ ORDER MATTERS. `prompt_pending` is raised, and the signal
+                 * emitted, while HOLDING the mutex — the handler runs on the
+                 * main thread and calls `supply_secret`, which takes the same
+                 * mutex, so it cannot run until `g_cond_wait` below releases
+                 * it. Raising the flag after the emit would leave a window in
+                 * which the answer arrives, finds nothing pending, is dropped,
+                 * and the worker then waits forever. */
+                guint sig = (m->msg_style == PAM_PROMPT_ECHO_OFF)
+                    ? signals[SIGNAL_PROMPT_HIDDEN]
+                    : signals[SIGNAL_PROMPT_VISIBLE];
+
                 g_mutex_lock(&self->mutex);
+                self->prompt_pending = TRUE;
+                self->prompt_gen++;
+                emit_tagged_from_thread(self, sig, m->msg, TRUE, self->prompt_gen);
                 while (!self->secret_ready && !self->cancelled) {
                     g_cond_wait(&self->cond, &self->mutex);
                 }
                 if (self->cancelled) {
+                    self->prompt_pending = FALSE;
                     g_mutex_unlock(&self->mutex);
-                    free(reply);
+                    free_replies(reply, num_msg);
                     return PAM_CONV_ERR;
                 }
                 reply[i].resp = self->secret ? strdup(self->secret) : strdup("");
                 reply[i].resp_retcode = 0;
-                if (self->secret) {
-                    explicit_bzero(self->secret, strlen(self->secret));
-                    g_free(self->secret);
-                    self->secret = NULL;
-                }
+                wipe_secret_locked(self);
                 self->secret_ready = FALSE;
+                self->prompt_pending = FALSE;
                 g_mutex_unlock(&self->mutex);
                 break;
+            }
 
-            case PAM_PROMPT_ECHO_ON:
-                emit_signal_from_thread(self, signals[SIGNAL_PROMPT_VISIBLE], m->msg);
-                g_mutex_lock(&self->mutex);
-                while (!self->secret_ready && !self->cancelled) {
-                    g_cond_wait(&self->cond, &self->mutex);
-                }
-                if (self->cancelled) {
-                    g_mutex_unlock(&self->mutex);
-                    free(reply);
-                    return PAM_CONV_ERR;
-                }
-                reply[i].resp = self->secret ? strdup(self->secret) : strdup("");
-                reply[i].resp_retcode = 0;
-                if (self->secret) {
-                    explicit_bzero(self->secret, strlen(self->secret));
-                    g_free(self->secret);
-                    self->secret = NULL;
-                }
-                self->secret_ready = FALSE;
-                g_mutex_unlock(&self->mutex);
-                break;
-
+            /* Informational messages carry NO response — PAM neither expects
+             * nor reads one, so these emit and move on. A handler must NOT
+             * answer them with `supply_secret`; `supply_secret` drops such a
+             * stray answer precisely so it cannot survive to satisfy the next
+             * real prompt. (AstalAuth blocked here too and REQUIRED the ack;
+             * this library deliberately does not — see nidara-auth.h.) */
             case PAM_TEXT_INFO:
                 emit_signal_from_thread(self, signals[SIGNAL_INFO], m->msg);
                 break;
@@ -168,10 +216,22 @@ static gpointer auth_worker_func(gpointer user_data) {
         .appdata_ptr = self,
     };
 
-    const char *service = resolve_service(self->service);
-    const char *user = (self->username && self->username[0]) ? self->username : g_get_user_name();
+    /* Snapshot both strings under the mutex. The setters g_free the old value,
+     * and a GJS caller can assign `pam.username` at any moment — reading the
+     * live pointers here raced with that and could hand pam_start freed memory. */
+    g_mutex_lock(&self->mutex);
+    gchar *username_copy = g_strdup(self->username);
+    gchar *service_copy  = g_strdup(self->service);
+    g_mutex_unlock(&self->mutex);
+
+    const char *service = resolve_service(service_copy);
+    const char *user = (username_copy && username_copy[0]) ? username_copy : g_get_user_name();
 
     int status = pam_start(service, user, &conv, &pamh);
+    /* pam_start copies both, so the snapshots are done as soon as it returns. */
+    g_free(username_copy);
+    g_free(service_copy);
+
     if (status != PAM_SUCCESS) {
         const char *err_msg = pam_strerror(pamh, status);
         emit_signal_from_thread(self, signals[SIGNAL_FAIL], err_msg);
@@ -185,7 +245,33 @@ static gpointer auth_worker_func(gpointer user_data) {
 
     status = pam_authenticate(pamh, 0);
 
-    if (status == PAM_SUCCESS && !self->cancelled) {
+    /* pam_authenticate only proves the CREDENTIAL. The account stack is what
+     * says whether this account may be used at all right now — expired account,
+     * administratively locked (`usermod -L`), pam_time windows. Our own
+     * /etc/pam.d/nidara-lock declares that stack, so not running it meant the
+     * config promised checks the code never performed. */
+    if (status == PAM_SUCCESS) {
+        int acct = pam_acct_mgmt(pamh, 0);
+        if (acct == PAM_NEW_AUTHTOK_REQD) {
+            /* Password expired. We still UNLOCK, deliberately: this is a screen
+             * lock over a session that is already running and already belongs to
+             * this user. Refusing would trap them inside their own desktop with
+             * no way to reach a prompt to change the password — a worse outcome
+             * than the policy being a moment late. The renewal belongs to the
+             * next LOGIN, which is where PAM can actually run pam_chauthtok. */
+            emit_signal_from_thread(self, signals[SIGNAL_INFO],
+                                    "Your password has expired — change it at your next login.");
+        } else if (acct != PAM_SUCCESS) {
+            /* Everything else here is a deliberate administrative denial. */
+            status = acct;
+        }
+    }
+
+    g_mutex_lock(&self->mutex);
+    gboolean was_cancelled = self->cancelled;
+    g_mutex_unlock(&self->mutex);
+
+    if (status == PAM_SUCCESS && !was_cancelled) {
         emit_signal_from_thread(self, signals[SIGNAL_SUCCESS], NULL);
     } else {
         const char *err_msg = pam_strerror(pamh, status);
@@ -218,11 +304,10 @@ void nidara_auth_pam_start_authenticate(NidaraAuthPam *self) {
     self->is_authenticating = TRUE;
     self->cancelled = FALSE;
     self->secret_ready = FALSE;
-    if (self->secret) {
-        explicit_bzero(self->secret, strlen(self->secret));
-        g_free(self->secret);
-        self->secret = NULL;
-    }
+    self->prompt_pending = FALSE;
+    self->prompt_gen = 0;
+    self->dispatched_gen = 0;
+    wipe_secret_locked(self);
     g_mutex_unlock(&self->mutex);
 
     g_object_ref(self);
@@ -234,16 +319,39 @@ void nidara_auth_pam_supply_secret(NidaraAuthPam *self, const char *secret) {
     g_return_if_fail(NIDARA_AUTH_IS_PAM(self));
 
     g_mutex_lock(&self->mutex);
-    if (self->secret) {
-        explicit_bzero(self->secret, strlen(self->secret));
-        g_free(self->secret);
+
+    /* ⚠️ THE BUG THIS GUARD EXISTS FOR (fixed 2026-08-23). Without it, an answer
+     * that arrives while NOTHING is waiting still armed the gate — and the next
+     * real password prompt then found it already open, did not wait, and replied
+     * with an EMPTY password the user never typed. The lockscreen's auth-info /
+     * auth-error handlers used to answer every message (correct under AstalAuth,
+     * which blocked on those too), so on Arch a single `pam_faillock preauth`
+     * message was enough to make every later attempt fail instantly with the
+     * correct password never reaching PAM. A stray answer is now DROPPED.
+     *
+     * ⚠️ A plain "is a prompt waiting?" boolean is NOT enough, and the first
+     * attempt at this fix used one. Signals reach the main loop through
+     * `g_idle_add`, and the worker does not wait for them to be delivered — so
+     * the answer to an informational message can be dispatched AFTER the worker
+     * has already begun waiting on a LATER prompt. The boolean saw "yes, a
+     * prompt is waiting" and let the stale answer through perhaps one run in
+     * five. Hence the generation: `dispatched_gen` is the prompt the main loop
+     * is currently delivering, `prompt_gen` is the one actually waiting, and an
+     * answer counts only when they are the same prompt. */
+    if (!self->prompt_pending || self->dispatched_gen != self->prompt_gen) {
+        g_mutex_unlock(&self->mutex);
+        return;
     }
+
+    wipe_secret_locked(self);
     self->secret = secret ? g_strdup(secret) : NULL;
     self->secret_ready = TRUE;
     g_cond_signal(&self->cond);
     g_mutex_unlock(&self->mutex);
 }
 
+/* (transfer none) — valid until the next set_username. Callers on the main
+ * thread are fine; the worker takes its own snapshot instead. */
 const char *nidara_auth_pam_get_username(NidaraAuthPam *self) {
     g_return_val_if_fail(NIDARA_AUTH_IS_PAM(self), NULL);
     return self->username;
@@ -251,8 +359,12 @@ const char *nidara_auth_pam_get_username(NidaraAuthPam *self) {
 
 void nidara_auth_pam_set_username(NidaraAuthPam *self, const char *username) {
     g_return_if_fail(NIDARA_AUTH_IS_PAM(self));
+    /* Under the mutex: the worker snapshots this. Notify OUTSIDE it — a handler
+     * could call back in and deadlock on a non-recursive GMutex. */
+    g_mutex_lock(&self->mutex);
     g_free(self->username);
     self->username = g_strdup(username);
+    g_mutex_unlock(&self->mutex);
     g_object_notify_by_pspec(G_OBJECT(self), properties[PROP_USERNAME]);
 }
 
@@ -263,8 +375,10 @@ const char *nidara_auth_pam_get_service(NidaraAuthPam *self) {
 
 void nidara_auth_pam_set_service(NidaraAuthPam *self, const char *service) {
     g_return_if_fail(NIDARA_AUTH_IS_PAM(self));
+    g_mutex_lock(&self->mutex);
     g_free(self->service);
     self->service = g_strdup(service);
+    g_mutex_unlock(&self->mutex);
     g_object_notify_by_pspec(G_OBJECT(self), properties[PROP_SERVICE]);
 }
 
@@ -303,6 +417,12 @@ static void nidara_auth_pam_set_property(GObject *object, guint prop_id,
 static void nidara_auth_pam_finalize(GObject *object) {
     NidaraAuthPam *self = NIDARA_AUTH_PAM(object);
 
+    /* ⚠️ This is NOT the cancellation path, and it cannot be: the worker holds a
+     * strong reference for its whole life, so finalize is only ever reached
+     * AFTER it has returned. The flag and the signal below are belt-and-braces
+     * for a future caller that drops that reference — nothing observes them
+     * today. Real cancellation (tearing the lock down while PAM is waiting for
+     * a secret) has no mechanism yet; see tech-debt. */
     g_mutex_lock(&self->mutex);
     self->cancelled = TRUE;
     g_cond_signal(&self->cond);
@@ -311,10 +431,8 @@ static void nidara_auth_pam_finalize(GObject *object) {
     g_mutex_clear(&self->mutex);
     g_cond_clear(&self->cond);
 
-    if (self->secret) {
-        explicit_bzero(self->secret, strlen(self->secret));
-        g_free(self->secret);
-    }
+    /* No lock to hold any more, and no other thread left to race with. */
+    wipe_secret_locked(self);
     g_free(self->username);
     g_free(self->service);
 

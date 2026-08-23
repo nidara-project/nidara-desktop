@@ -55,10 +55,27 @@ export default function LockCard(onUnlock: () => void): Gtk.Widget {
       card.passwordEntry.grab_focus()
     })
 
+    // ⚠️ ONLY prompts get answered. `auth-info`/`auth-error` are messages to
+    // SHOW — PAM expects no response and the worker does not wait for one.
+    // Both used to call `supply_secret(null)` here, which was correct under
+    // AstalAuth (it blocked on those signals too) and became a real bug when
+    // this moved to lib/nidara-auth: the stray answer armed the gate, and the
+    // next password prompt consumed it and replied with an EMPTY password
+    // nobody typed. On Arch that is reachable from `pam_faillock preauth`,
+    // which emits an error message before the prompt once the account has
+    // recorded failures — so after three wrong passwords the correct one
+    // stopped reaching PAM at all. The library now drops a stray answer, but
+    // the contract is in `lib/nidara-auth/nidara-auth.h`: do not answer these.
     pam.connect("auth-prompt-hidden", () => { pam.supply_secret(password) })
-    pam.connect("auth-prompt-visible", () => { pam.supply_secret("") })
-    pam.connect("auth-info",  (_: any, msg: string) => { console.log("[Lock] PAM info:", msg);  pam.supply_secret(null) })
-    pam.connect("auth-error", (_: any, msg: string) => { console.warn("[Lock] PAM error:", msg); pam.supply_secret(null) })
+    // ECHO_ON is the username prompt, which cannot happen here (pam_start is
+    // given the user) — or a second factor, which this card has no field for.
+    // Answer so the attempt cannot hang, and say so in the log.
+    pam.connect("auth-prompt-visible", (_: any, msg: string) => {
+      console.warn("[Lock] unexpected visible prompt, answering empty:", msg)
+      pam.supply_secret("")
+    })
+    pam.connect("auth-info",  (_: any, msg: string) => { console.log("[Lock] PAM info:", msg) })
+    pam.connect("auth-error", (_: any, msg: string) => { console.warn("[Lock] PAM error:", msg) })
 
     pam.start_authenticate()
   }

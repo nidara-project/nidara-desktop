@@ -1,4 +1,19 @@
 #!/usr/bin/env gjs -m
+// ─────────────────────────────────────────────────────────────────────────────
+// test-auth — end-to-end smoke of lib/nidara-auth against the REAL lock service.
+//
+// ⚠️ THIS COUNTS A FAILLOCK FAILURE AGAINST YOUR ACCOUNT. It authenticates
+// through `nidara-lock` → `system-auth`, which starts with `pam_faillock`. Arch's
+// defaults are deny=3 / unlock_time=600, so running this three times locks you out
+// of your own session for ten minutes. Clear it with `faillock --user $USER --reset`.
+//
+// ⚠️ AND IT CANNOT CATCH THE CONVERSATION-ORDERING BUG. This drives the happy
+// path: one prompt, no informational messages, so it never exercises what a
+// chatty PAM stack does. It was the validation for #200 and it passed while the
+// library was answering the next prompt with an empty password (see
+// `scripts/dev/auth-probe.js`, which is the one that can fail). A green here
+// means "the wiring works", not "the conversation is correct".
+// ─────────────────────────────────────────────────────────────────────────────
 import GLib from "gi://GLib"
 // @ts-ignore
 import NidaraAuth from "gi://NidaraAuth"

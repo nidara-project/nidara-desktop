@@ -81,7 +81,10 @@ depends=(
 # dep would drag in.
 makedepends=(nodejs npm esbuild wlr-protocols wayland-protocols hyprland-protocols
              wayland gtk4 gobject-introspection pkgconf)
-backup=(etc/xdg-desktop-portal/hyprland-portals.conf)
+# etc/pam.d/nidara-lock is tracked so a local customization survives an upgrade —
+# this is where someone adds fprintd or a hardware key to the unlock stack.
+backup=(etc/xdg-desktop-portal/hyprland-portals.conf
+        etc/pam.d/nidara-lock)
 options=(!debug)
 
 source=("nidara-desktop-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")

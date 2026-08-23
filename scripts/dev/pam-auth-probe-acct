@@ -1,0 +1,11 @@
+#%PAM-1.0
+# Nidara auth probe — the ACCOUNT half, for scripts/dev/auth-probe.js.
+# Install:  sudo install -Dm644 scripts/dev/pam-auth-probe-acct /etc/pam.d/nidara-auth-probe-acct
+#
+# `auth` is a freebie (pam_permit, no password asked) so that the ONLY thing under
+# test is the real `account` stack — the one lib/nidara-auth started running on
+# 2026-08-23 via pam_acct_mgmt(). Adding that call is the change that could lock
+# everyone out if the account stack denies, so this asserts on THIS machine's real
+# stack that it does not. No password, no faillock, nothing to lock out.
+auth        required    pam_permit.so
+account     include     system-auth
