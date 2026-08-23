@@ -240,9 +240,11 @@ export const glassRimGradient = (cx: number, top: number, height: number, radius
     return g
 }
 
-/** A soft outer shadow for a glass surface, painted as concentric strokes of the
- *  SAME silhouette rather than as a blurred mask — no blur pass, no temporary
- *  surface, four strokes.
+/** A soft outer shadow for a SQUIRCLE glass surface: six nested fills of the same
+ *  silhouette, grown outward, rather than a blurred mask — no blur pass and no
+ *  temporary surface. The algorithm is `drawShadowFromPath` below, which this only
+ *  hands a squircle to; read its header before changing how the falloff is built.
+ *  (It used to say "four strokes", and strokes are exactly what it must NOT be.)
  *
  *  Why a glass surface wants one at all: the rim is a MATERIAL highlight, not a
  *  delimiter. Its top and bottom stops are white, so against a white backdrop they
@@ -285,19 +287,56 @@ export const drawGlassShadow = (
      *  enough to spare it; keep it near zero on tight shadows. */
     drop: number = 1,
 ) => {
-    if (w <= 0 || h <= 0 || spread <= 0 || alpha <= 0) return
-    // ⚠️ NESTED FILLS, NOT CONCENTRIC STROKES. The first version of this stroked N rings
-    // of decreasing offset and increasing alpha, which LOOKS like a falloff and is not
-    // one: neighbouring strokes overlap, the overlaps composite, and the accumulated
-    // alpha stops being monotonic — an outer band covered by two strokes comes out
-    // DARKER than an inner band covered by one. At spread 2 the rings are packed tightly
-    // enough that it happened to come out clean; at 4 and 6 it produced a visibly lighter
-    // gap between the shadow and the rim, reported by the owner and then measured across
-    // the flank: 254 248 235 217 **230** 211, rising where it had to keep falling.
-    //
-    // Filling nested shapes largest-first cannot do that. Every layer covers everything
-    // inside it, so coverage counts increase monotonically inward by construction, and
-    // the result is a staircase with no way to be non-monotonic.
+    if (w <= 0 || h <= 0) return
+    const m = spread + 2
+    drawShadowFromPath(
+        cr,
+        (offset, dy) => createSquirclePath(cr, x, y + dy, w, h, r, n, perfect, offset),
+        x - m, y - m, w + m * 2, h + m * 2,
+        spread, alpha, drop,
+    )
+}
+
+/** The shadow ALGORITHM, separated from the squircle so a second silhouette can use
+ *  it. `path(offset, dy)` must emit the surface's outline grown outward by `offset`
+ *  (0 = the silhouette itself) and translated down by `dy`; `bx/by/bw/bh` is the
+ *  rectangle the shadow is punched out of, which must contain the whole grown outline.
+ *
+ *  Two callers: `drawGlassShadow` above (every capsule, tile and panel) and
+ *  `paintGlassBubble`'s (`common/GlassBubble.ts`), whose outline includes the pointer.
+ *  Splitting it was what let the bubble join without a second recipe — the numbers in
+ *  `GLASS_SHADOW` are the shell's, not the squircle's.
+ *
+ *  ⚠️ NESTED FILLS, NOT CONCENTRIC STROKES. The first version of this stroked N rings
+ *  of decreasing offset and increasing alpha, which LOOKS like a falloff and is not
+ *  one: neighbouring strokes overlap, the overlaps composite, and the accumulated
+ *  alpha stops being monotonic — an outer band covered by two strokes comes out
+ *  DARKER than an inner band covered by one. At spread 2 the rings are packed tightly
+ *  enough that it happened to come out clean; at 4 and 6 it produced a visibly lighter
+ *  gap between the shadow and the rim, reported by the owner and then measured across
+ *  the flank: 254 248 235 217 **230** 211, rising where it had to keep falling.
+ *
+ *  Filling nested shapes largest-first cannot do that. Every layer covers everything
+ *  inside it, so coverage counts increase monotonically inward by construction, and
+ *  the result is a staircase with no way to be non-monotonic.
+ *
+ *  ⚠️ THE OUTLINE'S OFFSET IS PERPENDICULAR TO ITS EDGES, WHICH IS NOT THE SAME AS
+ *  `spread` PX IN EVERY DIRECTION. On a convex corner of interior half-angle θ the
+ *  outline's vertex travels `offset / sin θ`, so a sharp point reaches further than a
+ *  flat run does — a 90° corner by 1.41 x `spread`. A caller that reserves exactly
+ *  `spread` px of room gets the tip of its shadow clipped flat, UNLESS that corner is
+ *  rounded and its radius grows with the offset, which pulls the arc back toward the
+ *  shape. That is exactly what saves the glass bubble's pointer; see specimen E of
+ *  `scripts/dev/bubble-probe.ts`. Measure a new sharp-cornered caller, do not assume. */
+export const drawShadowFromPath = (
+    cr: any,
+    path: (offset: number, dy: number) => void,
+    bx: number, by: number, bw: number, bh: number,
+    spread: number = 4,
+    alpha: number = 0.18,
+    drop: number = 1,
+) => {
+    if (bw <= 0 || bh <= 0 || spread <= 0 || alpha <= 0) return
     const LAYERS = 6
     // `alpha` is the TOTAL at the silhouette, which is the number that matters: it is
     // what a layer's `ignore_alpha` is compared against. Per-layer alpha is derived so
@@ -311,14 +350,13 @@ export const drawGlassShadow = (
     // tile over white, the body went 253 → 233 while the shadow was doing its job
     // outside. A drop shadow must not tint the thing it is under. EVEN_ODD punches the
     // hole: outer rectangle plus the silhouette, so only what is OUTSIDE gets painted.
-    const m = spread + 2
-    cr.rectangle(x - m, y - m, w + m * 2, h + m * 2)
-    createSquirclePath(cr, x, y, w, h, r, n, perfect, 0)
+    cr.rectangle(bx, by, bw, bh)
+    path(0, 0)
     cr.setFillRule(1) // EVEN_ODD
     cr.clip()
     cr.setFillRule(0) // back to WINDING for the shapes themselves
     for (let i = LAYERS; i >= 1; i--) {
-        createSquirclePath(cr, x, y + drop, w, h, r, n, perfect, spread * (i / LAYERS))
+        path(spread * (i / LAYERS), drop)
         cr.setSourceRGBA(0, 0, 0, per)
         cr.fill()
     }

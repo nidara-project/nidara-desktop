@@ -2,7 +2,8 @@ import Gtk from "gi://Gtk?version=4.0"
 import Cairo from "gi://cairo"
 import Theme from "../core/ThemeManager"
 import { GLASS_TINT, GLASS_SPECULAR } from "../../lib/tokens"
-import { glassRimGradient, squircleCorner } from "./DrawingUtils"
+import { glassRimGradient, squircleCorner, drawShadowFromPath } from "./DrawingUtils"
+import { GLASS_SHADOW } from "./SquircleContainer"
 
 // The Nidara glass bubble: a rounded body with a pointer spliced into one side,
 // painted in Cairo as a SINGLE continuous shape (one glass fill, one 1px inner
@@ -213,6 +214,39 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
     const off = Math.max(-maxOff, Math.min(maxOff, opts.arrowOffset ?? 0))
 
     cr.setOperator(2) // OVER
+
+    // 0) DROP SHADOW — the shell's one recipe (`GLASS_SHADOW`) through the shell's one
+    // algorithm (`drawShadowFromPath`), handed THIS outline instead of a squircle. The
+    // bubble was the last glass surface without a shadow, and the reason was the
+    // pointer: a shadow has to wrap it, which only became expressible when `bubblePath`
+    // learned `offset` for the rim (#242). Nothing about the widget changes — same size,
+    // same body rect, same anchor separation — because the room is already reserved:
+    // `BUF` is 2 and so is `GLASS_SHADOW.spread`, and BUF's job (keep the silhouette off
+    // the DrawingArea edge) is what `GLASS_INSET` does for the capsule.
+    //
+    // ⚠️ THE TIP FITS, AND THE ARITHMETIC SAYS IT SHOULD NOT — which is why it was
+    // measured rather than assumed. An offset outline moves each vertex along its
+    // bisector by `offset / sin θ`, so this ~90° apex should reach 1.41 x spread = 2.83
+    // px into 2 px of BUF. It does not, because the tip is an ARC and not a vertex:
+    // `bubblePath` grows `tipR` by the offset too, and a fatter arc sits further back
+    // from the vertex it rounds, which cancels most of the excess. `bubble-probe.ts`
+    // specimen E sweeps four sides, three sizes and a slid pointer: 0 px clipped, 1 px
+    // of slack at the pointer, 0 on the flat runs, control tripping at 12 px.
+    // ⚠️ So `tipR + offset` over in `bubblePath` is load-bearing for THIS, not just for
+    // the rim: delete it and the shadow's apex lands outside the widget.
+    //
+    // ⚠️ It cannot make the compositor blur behind it, which is the check debt #237 is
+    // about. This is a POPUP of a layer surface, so the threshold that applies is
+    // `popups_ignorealpha` = 0.30 (config/hypr/hyprland.lua), and the shadow's TOTAL at
+    // the silhouette is GLASS_SHADOW.alpha = 0.18. The bubble's glass floor of 0.38 sits
+    // on the other side of that same 0.30 on purpose, so one number separates both.
+    const shM = GLASS_SHADOW.spread * 2 + 2
+    drawShadowFromPath(
+        cr,
+        (offset, dy) => bubblePath(cr, bx, by + dy, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n, offset),
+        -shM, -shM, w + shM * 2, h + shM * 2,
+        GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop,
+    )
 
     // 1) Glass fill — AA (smooth silhouette).
     cr.save()

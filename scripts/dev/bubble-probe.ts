@@ -32,7 +32,8 @@ import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 import System from "system"
 import { createSquirclePath, glassRimGradient } from "../../ui/shell/common/DrawingUtils"
-import { bubblePath, paintGlassBubble, ARROW_W, ARROW_H, BUF } from "../../ui/shell/common/GlassBubble"
+import { bubblePath, paintGlassBubble, ARROW_W, ARROW_H, BUF, type ArrowSide } from "../../ui/shell/common/GlassBubble"
+import { GLASS_SHADOW } from "../../ui/shell/common/SquircleContainer"
 import { GLASS_TINT } from "../../ui/lib/tokens"
 
 const out = System.programArgs[0] || "/tmp/bubble-probe"
@@ -388,6 +389,100 @@ say(`D  max channel delta       ${dMax}/255`)
 say(`#  rim STRENGTH = mean |pixel − the same fill with no rim|, over what the rim touches`)
 say(`D  corners   before ${sOldC.toFixed(2)}   after ${sNewC.toFixed(2)}   ${((sNewC / sOldC - 1) * 100).toFixed(1)}%`)
 say(`D  straights before ${sOldS.toFixed(2)}   after ${sNewS.toFixed(2)}   ${((sNewS / sOldS - 1) * 100).toFixed(1)}%`)
+say()
+
+// ── SPECIMEN E — does the drop shadow fit in the room the bubble reserves? ──────
+// The bubble keeps `BUF` = 2 px of transparent margin on every side, and
+// `GLASS_SHADOW.spread` is 2, so on the flat runs the shadow fits exactly — the same
+// deal the capsule has with `GLASS_INSET`. The POINTER is the part that had to be
+// measured, and the arithmetic says it should NOT fit: growing an outline moves each
+// vertex along its bisector by `offset / sin θ`, so the pointer's ~90° apex should
+// reach 1.41 x spread = 2.83 px into 2 px of room.
+//
+// It fits anyway, and specimen E is the record of why: the tip is an ARC, not a vertex.
+// `bubblePath` grows `tipR` by the offset too, and a fatter arc sits FURTHER BACK from
+// the vertex it rounds — which cancels most of the 1.41. Do not delete that `tipR +
+// offset` line thinking it is cosmetic; it is what keeps the shadow inside the widget.
+//
+// Method: draw the bubble into a surface with `M` px of spare canvas on every side and
+// the drawing translated by `M`, so nothing can be clipped. Then count painted pixels
+// that fall OUTSIDE where the real widget ends — those are exactly what ships clipped.
+// Swept over the four pointer sides, two sizes and a slid pointer, because one geometry
+// is not a sweep: `paintGlassBubble` clamps `aw` and `r` on a small box, and a clamped
+// pointer is a different triangle.
+//
+// ⚠️ POSITIVE CONTROL: the same count is repeated against a widget rect deliberately
+// shrunk by 1 px on the pointer's side. If that does not report clipped pixels, the
+// probe is not looking where the pointer is and none of its zeroes mean anything.
+
+const E_M = 16            // spare canvas on every side
+const E_GROUND = 1.0      // white — the backdrop the whole shadow exists for
+
+interface ECase { name: string; w: number; h: number; side: ArrowSide; off: number }
+const eCases: ECase[] = [
+    { name: "menu  300x112  bottom", w: 300, h: 112, side: "bottom", off: 0 },
+    { name: "menu  300x112  top   ", w: 300, h: 112, side: "top",    off: 0 },
+    { name: "menu  300x112  slid  ", w: 300, h: 112, side: "bottom", off: 96 },
+    { name: "tip    92x 40  bottom", w: 92,  h: 40,  side: "bottom", off: 0 },
+    { name: "tip    40x 34  bottom", w: 40,  h: 34,  side: "bottom", off: 0 },
+    { name: "side  112x 90  left  ", w: 112, h: 90,  side: "left",   off: 0 },
+    { name: "side  112x 90  right ", w: 112, h: 90,  side: "right",  off: 0 },
+]
+
+/** Paint one case with `E_M` px of spare canvas all round, then find how far the
+ *  painted result actually extends in each direction. Returns the SLACK on each side —
+ *  px of unused room between the outermost painted pixel and the widget's edge.
+ *  Negative slack means the shipping widget clips the shadow. `shrink` pretends the
+ *  widget is that much smaller on the pointer's side, which is the positive control. */
+const eMeasure = (c: ECase, shrink = 0) => {
+    const sw = c.w + E_M * 2, sh = c.h + E_M * 2
+    const surf = new Cairo.ImageSurface(Cairo.Format.ARGB32, sw, sh)
+    const cr = new Cairo.Context(surf) as any
+    cr.setSourceRGB(E_GROUND, E_GROUND, E_GROUND); cr.paint()
+    cr.save(); cr.translate(E_M, E_M)
+    paintGlassBubble(cr, c.w, c.h, c.side, { chrome: true, radiusMax: 18, n: 3.2, arrowOffset: c.off })
+    cr.restore()
+    surf.flush()
+    const buf = Gdk.pixbuf_get_from_surface(surf, 0, 0, sw, sh)!
+    const px = buf.get_pixels(), stride = buf.get_rowstride(), nch = buf.get_n_channels()
+    let minX = sw, maxX = -1, minY = sh, maxY = -1, outside = 0, darkest = 255
+    // The widget rect in surface coords, shrunk on the pointer's own side only.
+    const x0 = E_M + (c.side === "left" ? shrink : 0), x1 = E_M + c.w - (c.side === "right" ? shrink : 0)
+    const y0 = E_M + (c.side === "top" ? shrink : 0),  y1 = E_M + c.h - (c.side === "bottom" ? shrink : 0)
+    for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) {
+        const o = y * stride + x * nch
+        if (Math.min(px[o], px[o + 1], px[o + 2]) >= 255) continue
+        if (x < minX) minX = x; if (x > maxX) maxX = x
+        if (y < minY) minY = y; if (y > maxY) maxY = y
+        if (x < x0 || x >= x1 || y < y0 || y >= y1) {
+            outside++; darkest = Math.min(darkest, Math.min(px[o], px[o + 1], px[o + 2]))
+        }
+    }
+    // Slack per side; the pointer's side is the one the arithmetic said would fail.
+    const slack = { top: minY - E_M, left: minX - E_M, bottom: (E_M + c.h - 1) - maxY, right: (E_M + c.w - 1) - maxX }
+    return { outside, darkest, slack, ptr: slack[c.side] }
+}
+
+say(`# SPECIMEN E — does the shadow fit inside the widget, POINTER INCLUDED?`)
+say(`#   spread ${GLASS_SHADOW.spread}, alpha ${GLASS_SHADOW.alpha}, over WHITE; BUF=${BUF}px of room on every side`)
+say(`#   slack = px of UNUSED room between the outermost painted pixel and the widget edge.`)
+say(`#   Negative = the shipping widget clips its own shadow. "ptr" is the pointer's side.`)
+say(`#   control  = the same measurement against a rect shrunk 3px on the pointer's side,`)
+say(`#             which MUST come out negative or the probe is not looking at the pointer.`)
+say(`#   case                     ptr slack   min slack   outside      control`)
+let eAllFit = true, eControlOk = true
+for (const c of eCases) {
+    const real = eMeasure(c, 0), ctrl = eMeasure(c, 3)
+    const mins = Math.min(real.slack.top, real.slack.bottom, real.slack.left, real.slack.right)
+    if (real.outside > 0 || mins < 0) eAllFit = false
+    if (ctrl.outside === 0) eControlOk = false
+    say(`E  ${c.name}     ${String(real.ptr).padStart(6)} px   ${String(mins).padStart(6)} px   ${String(real.outside).padStart(5)} px`
+        + `      ${String(ctrl.outside).padStart(4)} px @ ${ctrl.darkest}/255`)
+}
+say(eAllFit && eControlOk
+    ? `E  OK — nothing is clipped anywhere, and the probe proves it can still see clipping.`
+    : eControlOk ? `E  ⚠️ THE SHADOW IS CLIPPED — see the negative slack above.`
+                 : `E  ⚠️ CONTROL FAILED — a shrunk rect clipped nothing; the numbers above mean nothing.`)
 say()
 
 // ── the sheet, for eyes ─────────────────────────────────────────────────────────

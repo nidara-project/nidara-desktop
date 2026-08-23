@@ -1247,8 +1247,30 @@ absorbs the pad. ⚠️ The one residual: `da.margin_start` is clamped at 0, so 
 of the monitor's width the capsule would shift — it was ~14 px before the pad, so the pad narrows an
 edge case rather than creating one.
 
-Not yet, and for its own reason: **`GlassBubble`** — its shadow would have to wrap the arrow tip,
-which is new geometry.
+The **glass bubble** was the last one, and the only one whose shadow had to wrap a POINTER. It
+could be written at all because `bubblePath` already knew how to grow its own outline: the `offset`
+argument the rim got in #242 offsets the body box AND the pointer's three corners, so the shadow is
+the same outline at six sizes. What that needed on the shadow's side was splitting the algorithm
+from the shape — **`drawShadowFromPath`** in `DrawingUtils.ts` now owns the nested fills and the
+punch-out, and `drawGlassShadow` is a caller that happens to hand it a squircle. There is still one
+recipe and one falloff.
+
+🔑 **The pointer fits in the room the bubble already had, and the arithmetic says it should not.**
+`BUF` is 2 px and so is `spread`, which is the same deal `GLASS_INSET` gives the capsule — but an
+offset outline moves each vertex along its bisector by `offset / sin θ`, so the ~90° apex should
+reach 1.41 × spread = 2.83 px into 2 px. It does not, because **the tip is an arc, not a vertex**:
+`bubblePath` grows `tipR` by the offset too, and a fatter arc sits further back from the vertex it
+rounds, which cancels most of the excess. Measured across four pointer sides, three body sizes and a
+slid pointer (`scripts/dev/bubble-probe.ts`, specimen E): **0 px clipped anywhere, 1 px of slack on
+the pointer's side, 0 px on the flat runs** — with a positive control that loses 12 px the moment the
+widget rect is shrunk by 3. ⚠️ So `tipR + offset` in `bubblePath` is not cosmetic; deleting it puts
+the shadow's apex outside the widget. Nothing about the popover changed: same size, same body rect,
+same anchor separation.
+
+⚠️ **A bubble is a POPUP, so it is not the layer's threshold that applies to it** — it is
+`popups_ignorealpha` (**0.30**). The shadow's total at the silhouette is 0.18 and the bubble floors
+its glass at 0.38, so one number separates both, deliberately: the glass stays blurred and the
+shadow cannot drag a halo behind it.
 
 ⚠️ **A shadow interacts with compositor blur, and that decides WHERE it can exist.** Hyprland
 decides where to blur by an alpha threshold per layer (`ignore_alpha`), and a shadow is by
@@ -1260,8 +1282,9 @@ reserved comes out of the painted glass.
 | surface | layer | `ignore_alpha` | what it can take |
 |---|---|---|---|
 | dock capsule | its own `nidara-dock` | **0.23** | an outer shadow, with room to spare |
-| CC / NC / Prism / system menu / overview | guests on `nidara-bar` | **0.01** | nothing outside, unless the bar's threshold is raised |
-| the Activity Island | its own `nidara-island` | **0.01** | same |
+| CC / NC / Prism / system menu / overview | guests on `nidara-bar` | **0.23** | an outer shadow — the bar was raised from 0.01 for it (#243) |
+| the Activity Island | its own `nidara-island` | **0.23** | same, raised in #246 |
+| the tooltip / dock menu bubble | a POPUP, not a layer | `popups_ignorealpha` **0.30** | an outer shadow; 0.18 is under it and the 0.38 glass floor is over it |
 
 ⚠️ **Raising a threshold has a cost that is temporal, so no screenshot shows it — and it turned out
 not to be visible either.** The overlays fade on close (`ScaleRevealer` animates opacity) and a
