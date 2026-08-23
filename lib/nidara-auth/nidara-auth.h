@@ -43,21 +43,35 @@ G_DECLARE_FINAL_TYPE(NidaraAuthPam, nidara_auth_pam, NIDARA_AUTH, PAM, GObject)
  * so the mistake is inert rather than dangerous — but write consumers to the
  * contract above, not to AstalAuth's.
  *
- * # What is checked
+ * # What is checked, and the two signals that qualify the verdict
  *
  * Both `pam_authenticate()` (the credential) and `pam_acct_mgmt()` (whether the
- * account may be used at all) run before `success` is emitted. One deliberate
- * exception: an EXPIRED PASSWORD (`PAM_NEW_AUTHTOK_REQD`) still succeeds, with
- * an `auth-info` warning — this authenticates against an already-running
- * session, and refusing would trap the user inside their own desktop with no
- * way to reach a prompt to change it.
+ * account may be used at all) run before `success` is emitted. Two signals carry
+ * what `success`/`fail` cannot say on their own. Both are emitted BEFORE the
+ * verdict they qualify, and every signal goes through `g_idle_add`, which is
+ * FIFO — so a handler always has them in hand by the time the verdict arrives:
+ *
+ * - `password-expired` (no argument) then `success`. An expired password
+ *   (`PAM_NEW_AUTHTOK_REQD`) still UNLOCKS, deliberately: this authenticates
+ *   against an already-running session, and refusing would trap the user inside
+ *   their own desktop with no way to reach a prompt to change it. **Tell them.**
+ *   It carries no text on purpose — a user-visible string built in C reaches no
+ *   translation catalog, and this desktop ships twelve languages, so the wording
+ *   belongs to the consumer.
+ *
+ * - `account-denied` (the PAM error string, for the log) then `fail`. The
+ *   account stack refused: expired account, `usermod -L`, outside a `pam_time`
+ *   window. **This is not a wrong password**, and a UI that says so invites the
+ *   user to retry a correct password until `pam_faillock` locks them out for
+ *   real. Say the account is unavailable, not that the password is wrong.
  *
  * # Threading
  *
- * Signals are delivered on the thread-default main context via `g_idle_add`, so
- * handlers run on the main loop and may touch the UI. The object holds itself
- * alive for the duration of an attempt. There is no cancellation: once a prompt
- * is waiting, only supply_secret() can release it.
+ * Signals are delivered through `g_idle_add`, so handlers run on the DEFAULT
+ * main context (`g_main_context_default()` — not the thread-default one) and may
+ * touch the UI. The object holds itself alive for the duration of an attempt.
+ * There is no cancellation: once a prompt is waiting, only supply_secret() can
+ * release it.
  */
 NidaraAuthPam *nidara_auth_pam_new(void);
 

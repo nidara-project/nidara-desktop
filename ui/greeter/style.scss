@@ -450,9 +450,10 @@ window > contents {
 // would also have been the fragile version, since the right number is the user's
 // UI font, not a constant.
 //
-// One line really is the worst case: all 36 real messages (12 locales ×
-// wrongPassword/noSession/loginError) measure 24px, none wraps, and the widest is
-// 216px against the card's 280.
+// One line really is the worst case: all 48 real messages (12 locales ×
+// wrongPassword/noSession/loginError/accountUnavailable) measure 24px, none wraps,
+// and the widest is 216px against the card's 280 — the lockscreen's
+// `accountUnavailable`, added 2026-08-23, peaks at 187px in Russian.
 .greeter-error-slot {
   // Fading suits what this is now: a message that expires on its own should leave
   // the way it came rather than blink out.

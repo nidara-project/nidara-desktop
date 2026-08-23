@@ -52,7 +52,7 @@ phase_deps() {
     # list in lib/nidara-wl/build.sh for why the wlr XML has to be scanned too.
     pacman -Syu --needed --noconfirm \
         base-devel git gobject-introspection glib2-devel esbuild \
-        gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 \
+        gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 pam \
         libpulse networkmanager bluez-libs upower libnotify \
         pipewire wireplumber libwireplumber \
         nodejs npm gjs \
@@ -82,6 +82,30 @@ phase_bundle() {
         /usr/lib/girepository-1.0/NidaraWl-1.0.typelib
     ldconfig
     log "libnidara-wl OK"
+
+    # libnidara-auth. NOT for this boot — the shell never loads it, the
+    # LOCKSCREEN does, and the lockscreen is not part of the smoke. It is here
+    # because until 2026-08-23 it was the ONLY C library in the repo that no CI
+    # job compiled, and it is the one that authenticates: a C error or a broken
+    # build.sh reached people at `install.sh` time instead of failing here.
+    #
+    # The signal list is the second half of the gate. GJS resolves a signal name
+    # at `connect()` time, so a renamed or dropped signal is not a compile error
+    # anywhere — it is an exception thrown the first time someone locks their
+    # screen, on a surface no automated boot visits. These eight are the ones
+    # ui/lockscreen/widget/LockCard.ts connects to.
+    log "libnidara-auth…"
+    local auth_build="$REPO/build/nidara-auth"
+    "$REPO/lib/nidara-auth/build.sh" "$auth_build" >/dev/null
+    local sig
+    for sig in success fail auth-prompt-hidden auth-prompt-visible \
+               auth-info auth-error password-expired account-denied; do
+        if ! grep -q "glib:signal name=\"$sig\"" "$auth_build/NidaraAuth-1.0.gir"; then
+            log "FATAL: libnidara-auth exposes no \"$sig\" signal — the lockscreen connects to it."
+            return 1
+        fi
+    done
+    log "libnidara-auth OK (8 signals)"
 
     cd "$REPO/ui/shell"
     log "npm install…"

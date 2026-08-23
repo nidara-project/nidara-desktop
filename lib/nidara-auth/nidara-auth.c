@@ -49,6 +49,8 @@ enum {
     SIGNAL_PROMPT_VISIBLE,
     SIGNAL_INFO,
     SIGNAL_ERROR,
+    SIGNAL_PASSWORD_EXPIRED,
+    SIGNAL_ACCOUNT_DENIED,
     N_SIGNALS
 };
 
@@ -61,6 +63,10 @@ typedef struct {
     GWeakRef weak_ref;
     guint signal_id;
     gchar *msg;
+    /* TRUE for the signals that take no argument. Explicit, not inferred from a
+     * NULL `msg`: `fail` and `auth-info` legitimately arrive without one and are
+     * emitted with "" — inferring would emit them with the wrong signature. */
+    gboolean bare;
     gboolean is_prompt;
     guint64 gen;
 } IdleSignalData;
@@ -78,7 +84,7 @@ static gboolean dispatch_signal_idle(gpointer user_data) {
             self->dispatched_gen = data->gen;
             g_mutex_unlock(&self->mutex);
         }
-        if (data->signal_id == signals[SIGNAL_SUCCESS]) {
+        if (data->bare) {
             g_signal_emit(self, data->signal_id, 0);
         } else {
             g_signal_emit(self, data->signal_id, 0, data->msg ? data->msg : "");
@@ -105,6 +111,15 @@ static void emit_tagged_from_thread(NidaraAuthPam *self, guint signal_id, const 
 
 static void emit_signal_from_thread(NidaraAuthPam *self, guint signal_id, const gchar *msg) {
     emit_tagged_from_thread(self, signal_id, msg, FALSE, 0);
+}
+
+/* The argument-less signals (`success`, `password-expired`). */
+static void emit_bare_from_thread(NidaraAuthPam *self, guint signal_id) {
+    IdleSignalData *data = g_new0(IdleSignalData, 1);
+    g_weak_ref_init(&data->weak_ref, self);
+    data->signal_id = signal_id;
+    data->bare = TRUE;
+    g_idle_add(dispatch_signal_idle, data);
 }
 
 /* Wipe and drop the pending secret. Caller must hold `self->mutex`. */
@@ -258,11 +273,24 @@ static gpointer auth_worker_func(gpointer user_data) {
              * this user. Refusing would trap them inside their own desktop with
              * no way to reach a prompt to change the password — a worse outcome
              * than the policy being a moment late. The renewal belongs to the
-             * next LOGIN, which is where PAM can actually run pam_chauthtok. */
-            emit_signal_from_thread(self, signals[SIGNAL_INFO],
-                                    "Your password has expired — change it at your next login.");
+             * next LOGIN, which is where PAM can actually run pam_chauthtok.
+             *
+             * A BARE signal, carrying no text. It used to emit `auth-info` with
+             * an English sentence: a user-visible string from a C library reaches
+             * no translation catalog, and this DE ships twelve. The wording is the
+             * consumer's, in the consumer's language. */
+            emit_bare_from_thread(self, signals[SIGNAL_PASSWORD_EXPIRED]);
         } else if (acct != PAM_SUCCESS) {
-            /* Everything else here is a deliberate administrative denial. */
+            /* Everything else here is a deliberate administrative denial —
+             * expired account, `usermod -L`, outside a pam_time window. Told
+             * apart from a wrong password ON PURPOSE: they are the same `fail`
+             * to the consumer, and a lock screen that answers "wrong password"
+             * to an administrative denial invites the user to retry a correct
+             * password until faillock locks them out for real. Emitted BEFORE
+             * `fail`, and both go through g_idle_add, which is FIFO — so a
+             * handler has this in hand by the time the verdict arrives. */
+            emit_signal_from_thread(self, signals[SIGNAL_ACCOUNT_DENIED],
+                                    pam_strerror(pamh, acct));
             status = acct;
         }
     }
@@ -272,7 +300,7 @@ static gpointer auth_worker_func(gpointer user_data) {
     g_mutex_unlock(&self->mutex);
 
     if (status == PAM_SUCCESS && !was_cancelled) {
-        emit_signal_from_thread(self, signals[SIGNAL_SUCCESS], NULL);
+        emit_bare_from_thread(self, signals[SIGNAL_SUCCESS]);
     } else {
         const char *err_msg = pam_strerror(pamh, status);
         emit_signal_from_thread(self, signals[SIGNAL_FAIL], err_msg);
@@ -488,6 +516,19 @@ static void nidara_auth_pam_class_init(NidaraAuthPamClass *klass) {
 
     signals[SIGNAL_ERROR] = g_signal_new(
         "auth-error", G_TYPE_FROM_CLASS(klass),
+        G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,
+        G_TYPE_NONE, 1, G_TYPE_STRING);
+
+    /* Both are VERDICT-adjacent, not conversation messages: they say something
+     * about the outcome that `success`/`fail` alone cannot carry. See the
+     * contract in nidara-auth.h. */
+    signals[SIGNAL_PASSWORD_EXPIRED] = g_signal_new(
+        "password-expired", G_TYPE_FROM_CLASS(klass),
+        G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,
+        G_TYPE_NONE, 0);
+
+    signals[SIGNAL_ACCOUNT_DENIED] = g_signal_new(
+        "account-denied", G_TYPE_FROM_CLASS(klass),
         G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,
         G_TYPE_NONE, 1, G_TYPE_STRING);
 }

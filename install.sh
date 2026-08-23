@@ -599,7 +599,18 @@ sudo install -Dm644 "$AUTH_BUILD/NidaraAuth-1.0.typelib" \
     /usr/lib/girepository-1.0/NidaraAuth-1.0.typelib
 sudo install -Dm644 "$AUTH_BUILD/NidaraAuth-1.0.gir" \
     /usr/share/gir-1.0/NidaraAuth-1.0.gir
-sudo install -Dm644 "$REPO_DIR/config/pam/nidara-lock" /etc/pam.d/nidara-lock
+# ⚠️ NEVER clobber an existing one. This file is in the package's `backup=()`
+# precisely because it is where someone adds fprintd or a hardware key to the
+# unlock stack — a promise the pacman path keeps and this one used to break on
+# every re-run. Same three cases pacman has: absent → install; identical →
+# nothing; changed → keep theirs, drop ours beside it, say so.
+if [ ! -f /etc/pam.d/nidara-lock ]; then
+    sudo install -Dm644 "$REPO_DIR/config/pam/nidara-lock" /etc/pam.d/nidara-lock
+elif ! cmp -s "$REPO_DIR/config/pam/nidara-lock" /etc/pam.d/nidara-lock; then
+    sudo install -Dm644 "$REPO_DIR/config/pam/nidara-lock" /etc/pam.d/nidara-lock.new
+    echo "  [WARN] /etc/pam.d/nidara-lock differs from the shipped version and was KEPT."
+    echo "         The new one is at /etc/pam.d/nidara-lock.new — diff them if unlocking misbehaves."
+fi
 sudo ldconfig
 rm -rf "$AUTH_BUILD"
 

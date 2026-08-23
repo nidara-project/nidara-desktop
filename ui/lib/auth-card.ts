@@ -167,9 +167,14 @@ export function buildAuthCard(opts: AuthCardOpts): AuthCard {
     // Gtk.Label still measures one line, so this capsule is 24px tall whether it
     // holds a message or nothing. A `min-height` on the slot looked like the
     // mechanism and was not — removed after a mutation test showed setting it to 0
-    // changed nothing. One line is the true worst case: all 36 real messages
-    // (12 locales × wrongPassword/noSession/loginError) measure 24px, none wraps,
-    // widest 216px against the card's 280.
+    // changed nothing. One line is the true worst case: all 48 real messages
+    // (12 locales × wrongPassword/noSession/loginError/accountUnavailable) measure
+    // 24px, none wraps, widest 216px against the card's 280.
+    // ⚠️ RE-MEASURE BEFORE ADDING A MESSAGE. `accountUnavailable` (2026-08-23)
+    // was measured the same way the other three were, with the real compiled
+    // sheet and the shipped font: widest is Russian at 187px. A string that
+    // breaches 280 wraps, and the jump this whole slot exists to prevent comes
+    // back — in one locale, invisible from here.
     //
     // The cost, stated plainly: the strip is always reserved, so with no error on
     // screen the card sits 15px higher than it used to. That is the same 15px —

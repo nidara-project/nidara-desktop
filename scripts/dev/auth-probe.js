@@ -164,6 +164,60 @@ head("The real account stack allows this user (pam_acct_mgmt)")
               `           with pam_acct_mgmt() in place, unlocking would be impossible.`)
 }
 
+// ── 4. An account denial is TOLD APART from a wrong password ────────────────
+// `pam_acct_mgmt()` can refuse a perfectly correct password (expired account,
+// `usermod -L`, a pam_time window). The library says so with `account-denied`,
+// emitted BEFORE `fail`, so the lockscreen can show "account unavailable"
+// instead of sending the user to retry the right password until pam_faillock
+// locks them out for real. The service under test hands out `auth` for free and
+// always refuses `account`.
+const DENY_SERVICE = "nidara-auth-probe-deny"
+head("An account denial arrives before the verdict (account-denied)")
+{
+    const loop = new GLib.MainLoop(null, false)
+    const pam = new NidaraAuth.Pam()
+    pam.username = GLib.get_user_name()
+    pam.service = DENY_SERVICE
+    let denied = null
+    let deniedFirst = false
+    let settled = null
+    // ⚠️ In a GLib-signal world a MISSING signal is not a quiet false — `connect`
+    // throws, and an uncaught throw here kills the probe mid-run: the checks
+    // above have already printed their ✅, the summary never prints, and what you
+    // read is three greens and a stack trace. Verified against `--old HEAD`,
+    // which is exactly the library this check exists to fail on.
+    let connected = false
+    try {
+        pam.connect("account-denied", (_o, msg) => {
+            denied = msg
+            deniedFirst = settled === null
+            print(`     · account-denied: ${msg}`)
+        })
+        connected = true
+    } catch (e) {
+        fail(`this library has no "account-denied" signal (${e.message}) — a denial by the\n` +
+             `           account stack is indistinguishable from a wrong password, so the card\n` +
+             `           tells the user to retry a password that IS correct.`)
+    }
+    pam.connect("success", () => { settled = "success"; loop.quit() })
+    pam.connect("fail", (_o, m) => { settled = `fail: ${m}`; loop.quit() })
+    pam.start_authenticate()
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, SETTLE_MS, () => { loop.quit(); return GLib.SOURCE_REMOVE })
+    loop.run()
+    if (!connected) { /* already reported */ }
+    else if (settled === null)
+        fail(`no verdict — is /etc/pam.d/${DENY_SERVICE} installed?`)
+    else if (settled === "success")
+        fail("the account stack denied and the library unlocked anyway — pam_acct_mgmt() is not being run")
+    else if (!denied)
+        fail(`refused with "${settled}" but never emitted account-denied — the UI cannot tell this\n` +
+             `           apart from a wrong password, and will tell the user to retry.`)
+    else if (!deniedFirst)
+        fail("account-denied arrived AFTER the verdict — too late for the fail handler to use it")
+    else
+        pass(`denial reported before the verdict → ${settled}`)
+}
+
 print(failures === 0
     ? "\n✅ auth-probe: all checks passed\n"
     : `\n❌ auth-probe: ${failures} check(s) failed\n`)

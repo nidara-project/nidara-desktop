@@ -2742,6 +2742,23 @@ Three things were deliberately left:
   do not recognise would break a working stack — but it is a judgement call, recorded here so the
   next reader knows it was one.
 
+⚠️ **Two rules came out of the review pass on the same change, both cheap to break again.**
+
+- **No user-visible string is built in C.** The expired-password warning shipped as an English
+  sentence emitted from `nidara-auth.c` — a string that reaches no catalog in a desktop that
+  ships twelve languages, and which the only consumer then dropped into `console.log`, so
+  nobody ever saw it in any language. The library now emits `password-expired` carrying NO
+  text; the wording belongs to the bundle, and the lockscreen posts it as a notification (the
+  card is about to vanish, so an in-card warning is shown to nobody).
+- **The lock card must not call every failure a wrong password.** `pam_acct_mgmt()` refuses
+  correct passwords by design (expired account, `usermod -L`, a `pam_time` window). Hence
+  `account-denied`, emitted BEFORE `fail`. Getting this wrong is not cosmetic: the user retries
+  a password that IS correct until `pam_faillock` locks them out for real.
+- ⚠️ **Before adding a fourth message to the card, MEASURE IT.** The error slot's one-line
+  budget is a measured invariant (`ui/lib/auth-card.ts`), not a hope: a string over 280px wraps
+  and the whole card jumps — in one locale, invisible from the one you are working in.
+  `accountUnavailable` was measured across all twelve (widest: Russian, 187px).
+
 ⚠️ **`scripts/dev/test-auth.js` cannot catch this class and never could.** It drives the happy path
 against the real `nidara-lock` service: one prompt, no informational messages. It was the validation
 for #200 and it stayed green the whole time the bug was live. It also **counts a faillock failure

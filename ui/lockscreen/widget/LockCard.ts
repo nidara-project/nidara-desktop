@@ -2,6 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 // @ts-ignore
 import NidaraAuth from "gi://NidaraAuth"
 import { getCurrentUser } from "../../lib/users"
+import { execAsync } from "../../lib/process"
 import { buildAuthCard } from "../../lib/auth-card"
 import { t } from "../lib/i18n"
 
@@ -39,11 +40,49 @@ export default function LockCard(onUnlock: () => void): Gtk.Widget {
     const pam = new NidaraAuth.Pam()
     pam.username = user.username
 
-    pam.connect("success", () => { onUnlock() })
+    // Both are emitted BEFORE the verdict they qualify, and every signal from
+    // the library goes through g_idle_add (FIFO), so these are set by the time
+    // `success`/`fail` runs. See lib/nidara-auth/nidara-auth.h.
+    let accountDenied = false
+    let passwordExpired = false
+
+    pam.connect("account-denied", (_: any, msg: string) => {
+      console.warn("[Lock] account stack denied:", msg)
+      accountDenied = true
+    })
+    pam.connect("password-expired", () => { passwordExpired = true })
+
+    pam.connect("success", () => {
+      // An expired password still unlocks (deliberate — see the library's
+      // header). Telling the user IN THE CARD would show the warning for
+      // exactly as long as it takes the lock surface to vanish, which is to say
+      // nobody would read it. A notification outlives the unlock, and the
+      // spawned child outlives this process, so it arrives either way.
+      //
+      // ⚠️ CRITICAL urgency on purpose, and it is not decoration: our own daemon
+      // reads it as "never auto-expires, and cuts through Do Not Disturb"
+      // (core/NotifService.ts → isCritical). At NORMAL this would fade after a
+      // few seconds, or be swallowed outright by DND — which is the same
+      // outcome as the bug it replaces, where the warning went to a log file.
+      //
+      // `-i` is a courtesy to any OTHER daemon: ours resolves the icon from the
+      // app NAME through the app registry and never looks at `app_icon` when
+      // that resolves (NotificationCenter.tsx), so on Nidara this shows the
+      // Nidara mark. Verified on screen 2026-08-23.
+      if (passwordExpired) {
+        execAsync(["notify-send", "-u", "critical", "-a", "Nidara", "-i", "dialog-password",
+                   t("passwordExpired"), t("passwordExpiredHow")]).catch(() => {})
+      }
+      onUnlock()
+    })
 
     pam.connect("fail", (_: any, msg: string) => {
       console.error("[Lock] auth fail:", msg)
-      card.showError(t("wrongPassword"))
+      // NOT always "wrong password": the account stack (expired account,
+      // `usermod -L`, a pam_time window) refuses a perfectly correct one. Saying
+      // the password is wrong would send the user retrying the right password
+      // until pam_faillock locks them out for real.
+      card.showError(accountDenied ? t("accountUnavailable") : t("wrongPassword"))
       // setLoading(false) FIRST: it re-enables the entry, and an insensitive
       // widget cannot take focus — grab_focus() before it was a silent no-op,
       // which is why a wrong password left you having to click or Tab back in.

@@ -7,11 +7,12 @@
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-for svc in nidara-auth-probe nidara-auth-probe-acct; do
+for svc in nidara-auth-probe nidara-auth-probe-acct nidara-auth-probe-deny; do
     [ -f "/etc/pam.d/$svc" ] && continue
-    echo "missing /etc/pam.d/$svc — install both probe services first:" >&2
+    echo "missing /etc/pam.d/$svc — install the three probe services first:" >&2
     echo "  sudo install -Dm644 $REPO/scripts/dev/pam-auth-probe      /etc/pam.d/nidara-auth-probe \\" >&2
-    echo "   && sudo install -Dm644 $REPO/scripts/dev/pam-auth-probe-acct /etc/pam.d/nidara-auth-probe-acct" >&2
+    echo "   && sudo install -Dm644 $REPO/scripts/dev/pam-auth-probe-acct /etc/pam.d/nidara-auth-probe-acct \\" >&2
+    echo "   && sudo install -Dm644 $REPO/scripts/dev/pam-auth-probe-deny /etc/pam.d/nidara-auth-probe-deny" >&2
     exit 2
 done
 

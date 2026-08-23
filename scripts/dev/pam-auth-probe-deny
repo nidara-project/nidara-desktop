@@ -1,0 +1,14 @@
+#%PAM-1.0
+# Nidara auth probe — the DENIAL half, for scripts/dev/auth-probe.js.
+# Install:  sudo install -Dm644 scripts/dev/pam-auth-probe-deny /etc/pam.d/nidara-auth-probe-deny
+#
+# `auth` is free (pam_permit, no password) and `account` always refuses, which is
+# what an expired account, a `usermod -L` or a closed pam_time window look like
+# from the caller's side. It exists to prove the `account-denied` signal fires
+# BEFORE `fail`: without it the lockscreen tells the user "wrong password" for a
+# denial no password can fix, and every retry feeds pam_faillock.
+#
+# ⚠️ No pam_unix and no pam_faillock anywhere: running this cannot count a
+# failure against your real account.
+auth        required    pam_permit.so
+account     required    pam_deny.so
