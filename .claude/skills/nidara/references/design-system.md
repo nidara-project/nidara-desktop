@@ -952,6 +952,29 @@ GTK has no true `backdrop-filter`. CSS only sets the translucent background, she
 
 ### Blur is per SURFACE, and it can only ever reach DOWNWARD
 
+⚠️ **`ignore_alpha` sits in the gap between the glass and what you want it to cut, and it is now a
+CI GATE.** It decides where the compositor blurs at all: below it, the backdrop stays sharp. Above,
+`GLASS_RANGE.min` = 0.24 → **61/255**. Below, the thing worth cutting: a MAGNIFIED dock icon is
+taller than its own capsule (`maxIconSize` 128 vs `PILL_HEIGHT` 92), so its soft edge falls on bare
+wallpaper — and measured on the shipped icons, half of firefox's 1544 semi-transparent pixels are
+under alpha 12 and three quarters under 43. The dock's **0.23** (58.7/255) is as high as it goes
+while staying under the glass.
+⚠️ **Crossing it does not degrade a surface, it stops blurring it outright** — and silently: the
+config parses, the shell boots, the smoke passes. The two numbers live in different files in
+different languages, so `scripts/ci/blur-threshold-check.mjs` compares them, each layer against the
+glass IT paints — `GLASS_RANGE.min` for the shell, `LOCK_GLASS.fill.a` for the GREETER, which is a
+separate bundle with a fixed glass and no slider. It reported a false failure on its first run by
+measuring the login surfaces against the shell's floor, which is how that distinction got encoded.
+⚠️ **`nidara-lock` is skipped, and loudly**: the lockscreen people actually run is an
+ext-session-lock-v1 surface, not a layer surface, so no `layer_rule` reaches it — that is precisely
+why it blurs its own copy of the wallpaper. The namespace exists only on `LockOverlay()`, the
+fallback, which paints the wallpaper itself too. The rule is inert on both paths and predates the
+rename; do not read it as evidence that the lock gets compositor blur.
+⚠️ **Only the dock can take a high value, and the reason is animation.** The surface alpha during a
+`ScaleRevealer` close is `glass × widget-opacity`, so the blur pops off at `threshold / glass` — 4%
+opacity at 0.01, but 96% at 0.23, i.e. in the first frames of every close. The bar (which hosts
+CC/NC/Prism/system menu/overview) and the app grid all fade. The dock never does: it slides.
+
 The corollary that costs people hours: Hyprland blurs what was composited **behind
 a surface**, once, at composite time. Everything painted inside one GTK window
 lands in **one buffer**, so **nothing can blur its siblings** — two widgets in the
@@ -960,7 +983,7 @@ it: a translucent panel sits visibly on top of another widget, and that widget
 shows through **sharp**, which reads as "the blur isn't applied" or "that widget is
 on top". Neither is true. This is what forced the Activity Island onto its own
 layer surface (`IslandWindow.ts`) — it is the only overlay that covers the bar row,
-and at the default `overlayOpacity` of 0.05 the bar capsules read straight through
+and at the default `overlayOpacity` (0.05 then, `GLASS_RANGE.min` now) the bar capsules read straight through
 it. A surface on a HIGHER layer level is composited after, so its blur samples the
 one below. **Verified live, 2026-07-25** (Hyprland 0.55.4): an OVERLAY-level layer
 with `ignore_alpha = 0.01` blurred the TOP-level bar underneath at glass alphas
@@ -971,7 +994,7 @@ background, and `xray` is off.
 
 | Surface kind | Knob | Value here | Practical floor for the glass |
 |---|---|---|---|
-| Layer (bar, dock, island) | `ignore_alpha` per `layer_rule` | 0.01 bar/island, 0.04 dock | none — 0.05 glass blurs fine |
+| Layer (bar, dock, island) | `ignore_alpha` per `layer_rule` | 0.01 bar/island, **0.23 dock**, 0.04 app-grid, 0.3 greeter | gated by `blur-threshold-check`; the `nidara-lock` rule is INERT |
 | Popup of a layer (tooltip, dock menu) | `popups_ignorealpha` (global) | 0.30 | ≈0.38 (`NidaraTheme.popoverAlpha`) |
 | Popup of a window (Settings dropdown) | `decoration:blur:popups` + same 0.30 | 0.30 | ≈0.38 |
 

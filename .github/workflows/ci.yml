@@ -28,7 +28,11 @@
 #     rather than picking its own break point — a rule design-system.md already
 #     stated and six labels violated anyway, because it only shows once a string is
 #     long enough to wrap, i.e. in a locale or text size that is not yours. Logic in
-#     scripts/ci/wrapping-prose-check.mjs.
+#     scripts/ci/wrapping-prose-check.mjs. (3) Every layer's `ignore_alpha` is still
+#     BELOW the glass that layer actually paints — the shell's GLASS_RANGE.min or, for
+#     the login surfaces, LOCK_GLASS.fill.a. Those live in TypeScript, the thresholds
+#     live in Lua, and crossing them does not degrade a surface, it stops blurring it
+#     outright, with nothing else noticing. Logic in scripts/ci/blur-threshold-check.mjs.
 #   - smoke: the REAL thing — load the kernel's vkms (virtual KMS) on the
 #     runner, then in a privileged Arch container install ONLY official Arch
 #     packages, bundle the shell with scripts/bundle.sh (esbuild), boot Hyprland
@@ -268,6 +272,11 @@ jobs:
       # Verify that sameApp/nameTokens logic across bin/ helpers and app-search remain identical
       - name: sameApp helper consistency (must succeed)
         run: node scripts/ci/same-app-check.mjs
+      # The glass floor (TS) and every layer's ignore_alpha (Lua) are ONE decision in
+      # two languages. Cross it and the surface stops being blurred entirely — and it
+      # fails SILENTLY: the config parses, the shell boots, the smoke passes.
+      - name: Blur thresholds stay under the glass (must succeed)
+        run: node scripts/ci/blur-threshold-check.mjs
 
   i18n:
     name: Translations (parity + ledger)

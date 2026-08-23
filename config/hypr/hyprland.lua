@@ -716,15 +716,64 @@ hl.window_rule({
 -- 2026-08-03). Any layer that can open a Gtk.Popover needs the flag.
 -- nidara-app-grid: the app grid got its OWN surface on 2026-08-09 (it used to be a
 -- child of the dock's window, which had to hand its whole blur region back for as
--- long as the grid was up — see AppGridWindow.ts). It keeps the DOCK's 0.04 rather
--- than the bar's 0.01 on purpose: 0.04 is what it has been blurred at all along,
--- and the reason the dock is not at 0.01 is app ICONS haloing, which is most of
--- what this surface paints. It opens context menus, hence blur_popups — the exact
--- flag the island shipped without when IT moved out of the bar.
+-- long as the grid was up — see AppGridWindow.ts). It stays at 0.04 and CANNOT
+-- follow the dock to 0.20, for the reason spelled out below: it fades.
+--
+-- ── The dock is at 0.23, and it is the only surface that can be (2026-08-23) ──
+-- The threshold decides WHERE the compositor blurs: a pixel whose alpha is below it
+-- keeps a sharp backdrop. It has to sit in the gap between the two things it is
+-- separating, and both of them are measured, not guessed.
+--
+-- 1. WHAT IT SHOULD CUT — icon shadows. `maxIconSize` (128 by default) is larger
+--    than PILL_HEIGHT (iconSize + 2·PILL_PAD = 92), so a MAGNIFIED dock icon
+--    overflows its own capsule and its soft edge lands on bare wallpaper. That is
+--    the ONLY place on this surface where the threshold decides anything: an icon
+--    sitting ON the capsule already has the glass under it. Measured on the shipped
+--    icons at 128px, firefox has 1544 semi-transparent pixels and half of them are
+--    below alpha 12, three quarters below 43 — the shadow's mass ends around 47.
+-- 2. WHAT IT MUST NOT CUT — the glass itself. `GLASS_RANGE.min` = 0.24, which Cairo
+--    lands on 61/255 (measured off a real drawSquircle render).
+--
+-- 0.23 is 58.7/255: as high as it goes while staying under the glass. That is safe
+-- because NOTHING between the two ends modifies the alpha, which was verified rather
+-- than assumed — `dockAlpha` is `Theme.dockOpacity` straight into `drawSquircle` with
+-- no multiplier, `clampOpacity` floors it at GLASS_RANGE.min, the dock never touches
+-- its own opacity anywhere (it auto-hides by SLIDING), and the app grid has had its
+-- own surface since 2026-08-09 so its fade cannot reach this one.
+--
+-- ⚠️ The real hazard is not headroom, it is that these two numbers live in different
+-- files in different languages and nothing used to compare them. Lower
+-- GLASS_RANGE.min under this value and the dock stops being blurred ENTIRELY — not
+-- degraded, gone — while the config still parses, the shell still boots and the
+-- smoke still passes. `scripts/ci/blur-threshold-check.mjs` is now that comparison.
+--
+-- ⚠️ NO OTHER LAYER CAN TAKE THIS VALUE, and the reason is animation, not taste.
+-- `nidara-bar` hosts CC, NC, Prism, the system menu and the overview, and
+-- `nidara-app-grid` is itself one of those panels — every one wrapped in a
+-- `ScaleRevealer`, which animates OPACITY on open/close. The surface alpha during a
+-- close is `glass × widget-opacity`, so the blur pops off at `threshold / glass`:
+-- at 0.01 that is 4% opacity (invisible), at 0.20 it is 83%, i.e. in the first
+-- frames of every close. The dock is the only one of the four that never animates
+-- its opacity at all — it auto-hides by sliding — which is what makes 0.20 safe
+-- HERE and wrong everywhere else.
+--
+-- It opens context menus, hence blur_popups — the exact flag the island shipped
+-- without when IT moved out of the bar.
 hl.layer_rule({ match = { namespace = "nidara-bar" },      blur = true, blur_popups = true, ignore_alpha = 0.01  })
 hl.layer_rule({ match = { namespace = "nidara-island" },   blur = true, blur_popups = true, ignore_alpha = 0.01  })
-hl.layer_rule({ match = { namespace = "nidara-dock" },     blur = true, blur_popups = true, ignore_alpha = 0.04 })
+hl.layer_rule({ match = { namespace = "nidara-dock" },     blur = true, blur_popups = true, ignore_alpha = 0.23 })
 hl.layer_rule({ match = { namespace = "nidara-app-grid" }, blur = true, blur_popups = true, ignore_alpha = 0.04 })
+-- ⚠️ nidara-lock is INERT and kept only for the fallback. The lockscreen people
+-- actually run is an ext-session-lock-v1 surface (`Gtk4SessionLock`, ui/lockscreen/
+-- app.ts) — NOT a layer surface, so no layer_rule matches it, and Hyprland paints an
+-- opaque primer over everything behind it anyway. That is exactly why the lock blurs
+-- its OWN copy of the wallpaper instead of asking the compositor. The namespace only
+-- exists on `LockOverlay()`, the layer-shell fallback for a compositor without the
+-- protocol — and even there `buildWindow` paints the wallpaper itself, so there is
+-- nothing behind the surface for this rule to blur. Do not read it as evidence that
+-- the lock gets compositor blur; it does not, and `misc:session_lock_blur` only works
+-- ANDed with xray, which returns the whole workspace (see tech-debt / the lockscreen
+-- blur notes). It predates the Nidara rename.
 hl.layer_rule({ match = { namespace = "nidara-lock" },     blur = true, ignore_alpha = 0.3   })
 
 

@@ -273,7 +273,8 @@ export function generateTokensCss(config: NidaraThemeConfig, isDark: boolean): s
  * Scope = the entire bar window AND the entire dock window — `window#nidara-bar`
  * hosts the bar content AND every floating overlay (CC/NC/Prism/system menu/
  * overview/expansion panel, all children of the bar's Gtk.Overlay), and
- * `window#nidara-dock` hosts the dock + the app grid. So the pin covers the full
+ * `window#nidara-dock` hosts the dock (the app grid moved to its OWN surface on
+ * 2026-08-09 and is scoped separately). So the pin covers the full
  * shell skin. App-mode windows — Settings (`nidara-settings-window`) and About
  * (`nidara-about`) — are SEPARATE toplevels, deliberately NOT in the scope, so
  * they keep the system mode like any third-party app. The `.nd-icon` filter is
