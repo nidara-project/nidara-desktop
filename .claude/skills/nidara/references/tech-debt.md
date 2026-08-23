@@ -7,7 +7,7 @@ and leave its line in the index at the bottom of this file. It must match realit
 
 **This file is what is still OWED.** It holds three genres, and they are not the same thing:
 
-- **Open debt** — work still to do (#2, #62, #63, #79…).
+- **Open debt** — work still to do (#2, #62, #63, #80…).
 - **Partial** — one half shipped, the other did not; the heading says which (#43, #64, #68).
 - **Standing decisions** — *not* debt: things that are deliberately this way, or upstream bugs
   we will not chase. #3 ("NOT a bug"), #13, #17, #34, #38 (retracted — a measurement error),
@@ -2690,30 +2690,6 @@ comment upstream mentioned: `--tsconfig` (it decides `useDefineForClassFields`, 
 whether a class field on a GObject subclass shadows the property accessor) and the wrapper's
 `LD_PRELOAD` (no bar, no dock, no log line).
 
-### 79. ⚠️ OPEN — The Fresnel rim ramp is duplicated, and `GLASS_TINT.light` disagrees with itself (found 2026-08-23)
-
-Both found while syncing the skill to #225/#230, not while chasing a bug. Neither is urgent;
-both are the kind of thing that silently drifts.
-
-- **The seven-stop rim gradient is copy-pasted.** `common/DrawingUtils.ts` (`drawSquircle`, dark
-  branch) and `common/GlassBubble.ts` carry byte-identical stop tables — `.42/.32/.16/.08/.13/
-  .19/.24`. #230's whole point was to unify the rim into one continuous ramp; it unified the
-  *shape* and left two copies of the *numbers*. A tweak to one is a silent divergence between the
-  capsules and the bubbles. It cannot simply move into `ui/lib/tokens.ts` as-is, because only the
-  dark ramp is shared (light mode legitimately differs: `drawSquircle` fades white into a dark
-  lower rim, the bubble paints one flat edge at .12) — so the fix is a small exported helper that
-  takes the mode, not a bare constant.
-
-- **`GLASS_TINT.light` says `#fafafa` and hands Cairo pure white.** In `ui/lib/tokens.ts` the
-  entry is `{ r: 1, g: 1, b: 1, rgb: "250, 250, 250", hex: "#fafafa" }` — the float triple is
-  `#ffffff`, the strings are `#fafafa`. Consumers take different halves: the Cairo painters
-  destructure `{r,g,b}` (white), the CSS token engine reads `rgb`/`hex` (250). So light glass is
-  ~2% brighter in Cairo than in CSS, in exactly the place the Deep Slate pass (#223/#224) was
-  trying to make the two agree — and the comments in `DrawingUtils.ts` that say "canonical
-  `GLASS_TINT.light` (#fafafa)" describe the strings, not the value being painted.
-  **Do not "fix" this by editing one half**: whichever side moves, something on screen changes,
-  so it needs a decision about which value is the canonical one and a look at the result.
-
 ### 80. ⚠️ OPEN — what the `nidara-auth` audit left (2026-08-23)
 
 The critical one is fixed (an informational PAM message could open the secret gate and let the next
@@ -2771,7 +2747,7 @@ both problems: it uses a throwaway service with no faillock, and it asserts the 
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
-number is never accidentally reused. 43 items, split out 2026-08-23.
+number is never accidentally reused. 44 items, split out 2026-08-23.
 
 - **#7** — `pageHeader()` removed — RESOLVED → `tech-debt-resolved.md`
 - **#9** — The per-boot Adwaita-WARNING — ✅ RESOLVED 2026-08-18 (the host went) → `tech-debt-resolved.md`
@@ -2816,3 +2792,4 @@ number is never accidentally reused. 43 items, split out 2026-08-23.
 - **#75** — FIXED — `readShellVersion()` fallback returns "unknown" instead of inventing "0.1.0" (2026-08-18 → 2026-08-20) → `tech-debt-resolved.md`
 - **#77** — Native PAM Authentication & Zero-Astal State (2026-08-20) → `tech-debt-resolved.md`
 - **#78** — RESOLVED — GTK4 Height-for-Width Layout Safety & BlueZ Pairing Resilience (2026-08-21) → `tech-debt-resolved.md`
+- **#79** — RESOLVED — one rim ramp, and `GLASS_TINT.light` stopped disagreeing with itself (2026-08-23) → `tech-debt-resolved.md`

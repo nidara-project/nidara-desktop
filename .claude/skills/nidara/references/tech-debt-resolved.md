@@ -1501,3 +1501,67 @@ mode and the shell starts reporting a version from months ago.
 - **BlueZ Pairing Agent Resilience:** In `core/BluetoothService.ts`, handled `org.bluez.Error.AlreadyExists` by calling `UnregisterAgent` on `/org/bluez` for `/org/nidara/bluetooth/agent` and retrying registration automatically. Chained `RequestDefaultAgent` sequentially after `RegisterAgent` succeeds to avoid race conditions upon UI restarts (`Super+Shift+R`).
 - **Build Cleanliness & Property Collisions:** Decoupled `ui/greeter` and `ui/lockscreen` build scripts from `../shell` directory hops, allowing each bundle to build and bundle cleanly in isolation. Renamed internal `GlassCapsule.hasFocus()` to `isFocused()` (`lib/glass-capsule.ts`) to avoid conflicting with `Gtk.Widget`/`Gtk.Box`'s `hasFocus` property accessor.
 - **GTK4 CSS Syntax:** Removed invalid `margin: 0 auto;` declarations from `_settings.scss` (wallpaper preview and thumbnails box; centering is handled via `Gtk.CenterBox` and `halign`), keeping startup logs completely clean with 0 warnings.
+
+### 79. ✅ RESOLVED — one rim ramp, and `GLASS_TINT.light` stopped disagreeing with itself (2026-08-23)
+
+Both were found while syncing the skill to #225/#230, not while chasing a bug — neither had a
+symptom anyone had reported, which is exactly why they had survived.
+
+**The seven-stop rim gradient was copy-pasted.** `common/DrawingUtils.ts` (`drawSquircle`, dark
+branch) and `common/GlassBubble.ts` carried byte-identical stop tables. #230's whole point was to
+unify the rim into one continuous ramp; it unified the *shape* and left two copies of the
+*numbers*, so a tweak to one would have been a silent divergence between the capsules and the
+bubbles — visible in one mode only, months later, in a screenshot.
+
+It is now **`glassRimGradient(cx, top, height, dark)`**, exported from `DrawingUtils.ts` and called
+by both. It takes the mode rather than being a bare constant, because only the DARK ramp is shared:
+light mode legitimately differs (`drawSquircle` fades white into a dark lower rim, the bubble paints
+one flat `GLASS_TINT.dark` edge at .12), so the bubble passes `true` and keeps its own light branch
+below. **Unifying that half is still a visual decision, not a refactor** — do not do it silently.
+
+**`GLASS_TINT.light` said `#fafafa` and handed Cairo pure white.** The entry was
+`{ r: 1, g: 1, b: 1, rgb: "250, 250, 250", hex: "#fafafa" }` — the float triple is `#ffffff`, the
+strings are `#fafafa` — and consumers took different halves: the Cairo painters destructure
+`{r,g,b}`, the CSS token engine reads `rgb`/`hex`. So light glass was ~2% brighter in the shell than
+in Settings, in exactly the place the Deep Slate pass (#223/#224) was making the two agree, and the
+comments citing "canonical `GLASS_TINT.light` (#fafafa)" were describing the strings rather than the
+value being painted. It shipped that way from the day the token was born (#223).
+
+`#fafafa` is the canonical one, and the history is what decided it rather than taste: the CSS half
+had been `250, 250, 250` / `#fafafa` **before** the token existed (#223 only routed it through), the
+Cairo half had been a bare `{ r: 1, g: 1, b: 1 }`, and light vibrancy is off-white in the prior art
+this design follows. So the floats moved to `250 / 255`.
+
+**The half that made this worth doing carefully: the rim's white is NOT the surface's white.** Both
+painters were reading `GLASS_TINT.light` for the specular key light, so retinting light-mode glass
+would have dimmed the highlight on every DARK capsule in the desktop — a change nobody asked for, in
+the mode almost everyone runs, arriving as a side effect of an unrelated edit. The key light is now
+its own token, **`GLASS_SPECULAR`** (pure white), because it is the colour of the *light*, not of
+the *surface*. Two quantities that merely shared a number.
+
+⚠️ **`GLASS_TINT.light` must stay above 0.8.** `drawSquircle` takes no mode argument: it infers one
+by sniffing the fill (`color.r > 0.8 && color.g > 0.8 && color.b > 0.8`). A light tint taken below
+that threshold does not look slightly darker — it silently takes the DARK branch and paints the
+Fresnel rim on a light capsule. `250/255` = 0.98 has room; a future "warmer, deeper" light glass
+might not. Both `tokens.ts` and the call site now say so.
+
+**Verification — `scripts/dev/glass-probe.ts`, new here and reusable.** It bundles the REAL painters
+and renders the dock's own capsule call to an offscreen Cairo `ImageSurface` (no display, no
+compositor), then dumps two traverses per specimen: the centre COLUMN (the axis the gradient runs
+along — top key light to bottom ground bounce) and the mid-height ROW (the only place the lateral
+`.08` dip lands; it appears at neither end of the column). `diff before.txt after.txt` is then an
+exact statement of what a change did.
+
+Measured across 284 sampled pixels per specimen:
+
+| specimen | pixels moved | max channel delta |
+|---|---|---|
+| dark capsule | **0 of 284** | 0 |
+| light capsule | 284 of 284 | **2** |
+
+Which is the whole claim, stated in pixels: dark mode is bit-identical, and light mode moved by at
+most 2/255 — toward the value its own strings had always named.
+
+⚠️ The probe was **proved able to fail first**: perturbing a single stop (the mid-flank `.08` → `.20`)
+moved exactly the two flank pixels, `85 → 106`, and nothing else in either specimen. An instrument
+that reports "no change" is worthless until you have seen it report a change.

@@ -1,7 +1,8 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Cairo from "gi://cairo"
 import Theme from "../core/ThemeManager"
-import { GLASS_TINT } from "../../lib/tokens"
+import { GLASS_TINT, GLASS_SPECULAR } from "../../lib/tokens"
+import { glassRimGradient } from "./DrawingUtils"
 
 // The Nidara glass bubble: a rounded body with a pointer spliced into one side,
 // painted in Cairo as a SINGLE continuous shape (one glass fill, one 1px inner
@@ -217,10 +218,7 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
 
     if (dark) {
         const cx = bx + bw * 0.5
-        const cy = by + bh * 0.5
-
-        const { r: lr, g: lg, b: lb } = GLASS_TINT.light
-        const { r: dr, g: dg, b: db } = GLASS_TINT.dark
+        const { r: lr, g: lg, b: lb } = GLASS_SPECULAR
 
         // A) TOP INNER BEVEL BLOOM: Subtle diffuse highlight inside the upper portion of the bubble (2-3px)
         const topBloomH = Math.min(3.5, Math.max(2.0, bh * 0.12))
@@ -231,21 +229,15 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
         cr.setSource(topBloom)
         cr.fill()
 
-        // B) 1PX CONTINUOUS RIM GRADIENT (Zenith highlight -> subtle lateral rim -> bottom reflection)
+        // B) 1PX CONTINUOUS RIM GRADIENT (Zenith highlight -> subtle lateral rim -> bottom reflection).
+        // The ramp is `drawSquircle`'s, from the one place it lives — a bubble and a
+        // capsule are the same material and must reflect the same way. Only the
+        // TECHNIQUE differs: the arrow tip is why this one clips and strokes at 2×
+        // instead of offsetting the path inward. `true` because the bubble shares the
+        // DARK ramp only; its light edge is its own, below.
         bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n)
         cr.setLineWidth(BORDER_W * 2)
-
-        const rimGradient = new Cairo.LinearGradient(cx, by, cx, by + bh)
-
-        rimGradient.addColorStopRGBA(0.0, lr, lg, lb, 0.42)
-        rimGradient.addColorStopRGBA(0.18, lr, lg, lb, 0.32)
-        rimGradient.addColorStopRGBA(0.35, lr, lg, lb, 0.16)
-        rimGradient.addColorStopRGBA(0.50, lr, lg, lb, 0.08)
-        rimGradient.addColorStopRGBA(0.65, lr, lg, lb, 0.13)
-        rimGradient.addColorStopRGBA(0.82, lr, lg, lb, 0.19)
-        rimGradient.addColorStopRGBA(1.0, lr, lg, lb, 0.24)
-
-        cr.setSource(rimGradient)
+        cr.setSource(glassRimGradient(cx, by, bh, true))
         cr.stroke()
     } else {
         // Light mode: clean dark edge using canonical GLASS_TINT.dark

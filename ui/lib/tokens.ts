@@ -90,6 +90,25 @@ const cornerReach = (n: number) => Math.SQRT2 * (1 - Math.pow(2, -1 / n))
  * a dark base with a subtle cool undertone that provides material body, avoids
  * muddy/dirty color degradation on warm or complex wallpapers, and unifies Cairo
  * surfaces (Bar/Dock/CC/Island) with CSS windows (Settings/About).
+ *
+ * ⚠️ THE FLOATS AND THE STRINGS MUST NAME THE SAME COLOUR. They are two encodings
+ * of one value for two consumers — the Cairo painters destructure `{r,g,b}`, the
+ * CSS token engine (`core/NidaraTheme.ts`) reads `rgb`/`hex` — and nothing checks
+ * that they agree. `light` shipped as `{1,1,1}` + `#fafafa` from the day this token
+ * was born (#223) until 2026-08-23: light glass was pure white in Cairo and
+ * `#fafafa` in CSS, in exactly the place the Deep Slate pass was unifying, and
+ * every comment that cited "canonical GLASS_TINT.light (#fafafa)" was describing
+ * the strings rather than the value being painted. `#fafafa` won because it is what
+ * the CSS half had always shipped (it predates the token) and because light
+ * vibrancy is off-white in the prior art we follow — pure white has no material.
+ *
+ * ⚠️ `light` MUST STAY ABOVE 0.8. `drawSquircle` has no mode argument: it infers
+ * one by sniffing the fill (`color.r > 0.8 && color.g > 0.8 && color.b > 0.8`). A
+ * light tint taken below that threshold does not look slightly darker — it silently
+ * takes the DARK branch and paints the Fresnel rim on a light capsule.
+ *
+ * ⚠️ This is NOT the rim's white. A specular highlight is the colour of the LIGHT,
+ * not of the surface: see `GLASS_SPECULAR`.
  */
 export const GLASS_TINT = {
     dark: {
@@ -100,13 +119,27 @@ export const GLASS_TINT = {
         hex: "#161622",
     },
     light: {
-        r: 1,
-        g: 1,
-        b: 1,
+        r: 250 / 255,
+        g: 250 / 255,
+        b: 250 / 255,
         rgb: "250, 250, 250",
         hex: "#fafafa",
     },
 } as const
+
+/**
+ * The key light — the white the glass REFLECTS, in the rim ramps and the top bevel
+ * bloom (`common/DrawingUtils.ts`, `common/GlassBubble.ts`).
+ *
+ * It is pure white and it is deliberately its own token rather than a reuse of
+ * `GLASS_TINT.light`, which is what the painters read before 2026-08-23. Those are
+ * two different quantities that merely happened to share a number: one is the tint
+ * of the material, the other is the colour of the light falling on it. Tied
+ * together, retinting the light-mode surface would have dimmed the highlight on
+ * every DARK capsule in the desktop — a change nobody asked for, in the mode almost
+ * everyone runs, arriving as a side effect of an unrelated edit.
+ */
+export const GLASS_SPECULAR = { r: 1, g: 1, b: 1 } as const
 
 /**
  * The lockscreen / greeter GLASS, as premultiplied 0..1 components.

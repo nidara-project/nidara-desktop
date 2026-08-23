@@ -472,6 +472,36 @@ focused state is a live check.
 enough that a single number fits two readings; compare DELTAS between nodes measured in the
 same run — that rule is why the probe prints the pairs itself.
 
+### Reading the glass in PIXELS (`scripts/dev/glass-probe.ts`)
+
+For any question about the tint or the rim: "does this retint move anything?", "is the rim still
+the same ramp?", "did that refactor change a single pixel?". Needs no display and no compositor —
+`drawSquircle` takes a Cairo context, so an offscreen `ImageSurface` is a complete stage for it.
+
+```bash
+scripts/bundle.sh --js scripts/dev/glass-probe.ts /tmp/glass-probe.js
+gjs -m /tmp/glass-probe.js /tmp/before      # → /tmp/before.png + /tmp/before.txt
+# …edit the tint or the ramp, rebundle, run again as /tmp/after…
+diff /tmp/before.txt /tmp/after.txt         # empty = the render did not move by one bit
+```
+
+It bundles the REAL painters (not a copy of their maths — that is how an instrument catches the
+patient's disease) and renders the dock's own capsule call, in both modes, over an opaque mid-grey.
+The `.txt` is the instrument and the PNG is for eyes. Per specimen it dumps **two** traverses, and
+it takes both: the centre COLUMN is the axis the gradient runs along (top key light → bottom ground
+bounce), while the mid-height ROW is the only place the lateral stops land — **the `.08` mid-flank
+dip, which is the entire point of the Fresnel ramp, appears at neither end of the column.**
+
+**Why it had to exist** (2026-08-23, tech-debt #79): `GLASS_TINT.light` had shipped for two months
+saying `#fafafa` in its strings while handing Cairo pure white, and nothing anywhere rendered the
+two halves, so the disagreement was invisible to reading and invisible to looking. Fixing it needed
+a claim in pixels — the fix moved the dark capsule by **0 of 284** sampled pixels and the light one
+by at most **2/255** — and that claim is not something you can get from a screenshot of a desktop.
+
+⚠️ **Prove it can fail before believing a green diff.** Perturb one stop of the ramp (`.08` → `.20`
+in `glassRimGradient`) and re-run: exactly the two flank pixels must move, `85 → 106`, and nothing
+else. An empty diff from an instrument you have never seen react is not evidence.
+
 ### What the icon theme SAYS vs what it PAINTS (`scripts/dev/icon-theme-probe.js`)
 
 For any "the icons are wrong" report. Run it inside a session, as the session user:

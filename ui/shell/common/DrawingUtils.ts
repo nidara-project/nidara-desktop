@@ -2,7 +2,7 @@ import Cairo from "gi://cairo"
 import GdkPixbuf from "gi://GdkPixbuf"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
-import { GLASS_TINT } from "../../lib/tokens"
+import { GLASS_TINT, GLASS_SPECULAR } from "../../lib/tokens"
 
 /** The single hex → Cairo-float conversion point. It now lives beside the accent
  *  palette in `ui/lib/accent.ts`, because the kit's slider paints the accent and a
@@ -125,6 +125,61 @@ export const createSquirclePath = (
     cr.closePath()
 }
 
+/** The 1px inner rim of every glass surface, as a vertical gradient over a box of
+ *  `height` starting at `top`. `cx` only fixes the gradient's axis — it is vertical,
+ *  so any x on the shape does.
+ *
+ *  ⚠️ THIS IS THE ONLY COPY OF THESE NUMBERS. `GlassBubble.ts` paints the same rim
+ *  with a different technique (clip + double-width stroke, because of its arrow tip)
+ *  and used to carry its own byte-identical table of the seven dark stops. #230
+ *  unified the SHAPE of the rim and left two copies of the values, which is a
+ *  divergence waiting for the next tweak: capsules and bubbles would drift apart one
+ *  stop at a time, and only in one mode, which is the kind of thing you see six
+ *  months later in a screenshot.
+ *
+ *  DARK — a seven-stop **Fresnel** ramp:
+ *
+ *      pos    | 0.0 | .18 | .35 | .50  | .65 | .82 | 1.0
+ *      alpha  | .42 | .32 | .16 | .08  | .13 | .19 | .24
+ *
+ *  An edge reflects most where you meet it at a grazing angle — the top rim (key
+ *  light, .42) and the bottom rim (ground bounce, .24) — and least where you look
+ *  straight through the glass, the flank at mid-height (.08). **The dip in the
+ *  middle is the whole point**: the lateral dark contour it replaced was faking the
+ *  same effect by painting black down the sides, which read as a drawn outline
+ *  rather than as material.
+ *
+ *  LIGHT — four stops, and a different idea: a white specular top fading into a
+ *  dark lower rim, because on light glass the thing that needs defining is the
+ *  BOTTOM edge against the content below it. `GlassBubble` does not share this half
+ *  (it paints one flat `GLASS_TINT.dark` edge at .12); that divergence is deliberate
+ *  and unifying it is a visual decision, not a refactor.
+ *
+ *  The white is `GLASS_SPECULAR`, not `GLASS_TINT.light`: it is the colour of the
+ *  light, not of the surface. They were the same token until 2026-08-23, which meant
+ *  a retint of light-mode glass would have dimmed the highlight on every dark
+ *  capsule in the desktop. */
+export const glassRimGradient = (cx: number, top: number, height: number, dark: boolean) => {
+    const g = new Cairo.LinearGradient(cx, top, cx, top + height)
+    const { r: lr, g: lg, b: lb } = GLASS_SPECULAR
+    if (dark) {
+        g.addColorStopRGBA(0.0, lr, lg, lb, 0.42)
+        g.addColorStopRGBA(0.18, lr, lg, lb, 0.32)
+        g.addColorStopRGBA(0.35, lr, lg, lb, 0.16)
+        g.addColorStopRGBA(0.50, lr, lg, lb, 0.08)
+        g.addColorStopRGBA(0.65, lr, lg, lb, 0.13)
+        g.addColorStopRGBA(0.82, lr, lg, lb, 0.19)
+        g.addColorStopRGBA(1.0, lr, lg, lb, 0.24)
+    } else {
+        const { r: dr, g: dg, b: db } = GLASS_TINT.dark
+        g.addColorStopRGBA(0.0, lr, lg, lb, 0.55)
+        g.addColorStopRGBA(0.20, lr, lg, lb, 0.25)
+        g.addColorStopRGBA(0.50, dr, dg, db, 0.10)
+        g.addColorStopRGBA(1.0, dr, dg, db, 0.14)
+    }
+    return g
+}
+
 // Shared drawSquircle utility for consistent visual approach across Dock and CC
 export const drawSquircle = (
     cr: any,
@@ -199,36 +254,12 @@ export const drawSquircle = (
         // Explicit solid border (e.g. hover accent color on bar capsules)
         cr.setSourceRGBA(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
     } else if (enableGloss) {
+        // No mode argument reaches here, so the fill is asked what mode it is. Keep
+        // GLASS_TINT.light above this threshold (tokens.ts says so too) — below it a
+        // light capsule silently takes the dark branch.
         const isDark = !(color && color.r > 0.8 && color.g > 0.8 && color.b > 0.8)
         const cx = x + drawW * 0.5
-        const rimGradient = new Cairo.LinearGradient(cx, y, cx, y + drawH)
-
-        if (isDark) {
-            // Dark mode: Pure macOS Liquid Glass Fresnel Gradient using canonical GLASS_TINT.light (#fafafa)
-            // Top: Crisp specular key light
-            // Sides: Smooth cosine falloff to subtle translucent glass, letting GLASS_TINT.dark (#161622) dominate
-            // Bottom: Ambient ground bounce reflection
-            const { r: lr, g: lg, b: lb } = GLASS_TINT.light
-            rimGradient.addColorStopRGBA(0.0, lr, lg, lb, 0.42)
-            rimGradient.addColorStopRGBA(0.18, lr, lg, lb, 0.32)
-            rimGradient.addColorStopRGBA(0.35, lr, lg, lb, 0.16)
-            rimGradient.addColorStopRGBA(0.50, lr, lg, lb, 0.08)
-            rimGradient.addColorStopRGBA(0.65, lr, lg, lb, 0.13)
-            rimGradient.addColorStopRGBA(0.82, lr, lg, lb, 0.19)
-            rimGradient.addColorStopRGBA(1.0, lr, lg, lb, 0.24)
-        } else {
-            // Light mode: Clean glass definition
-            // Top: White specular highlight (#fafafa)
-            // Sides & Bottom: Crisp subtle dark rim using canonical GLASS_TINT.dark (#161622)
-            const { r: lr, g: lg, b: lb } = GLASS_TINT.light
-            const { r: dr, g: dg, b: db } = GLASS_TINT.dark
-            rimGradient.addColorStopRGBA(0.0, lr, lg, lb, 0.55)
-            rimGradient.addColorStopRGBA(0.20, lr, lg, lb, 0.25)
-            rimGradient.addColorStopRGBA(0.50, dr, dg, db, 0.10)
-            rimGradient.addColorStopRGBA(1.0, dr, dg, db, 0.14)
-        }
-
-        cr.setSource(rimGradient)
+        cr.setSource(glassRimGradient(cx, y, drawH, isDark))
     } else {
         const baseAlpha = borderColor ? borderColor.a : (borderWidth > 1.0 ? 0.12 : 0.10)
         const baseR = borderColor ? borderColor.r : 1

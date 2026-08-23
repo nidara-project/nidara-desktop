@@ -845,6 +845,12 @@ How the flip works:
   **Deep Slate (`#161622` / RGB `22, 22, 34`)** rather than pure black `#000000` — providing material
   body and preventing muddy/dirty desaturation over warm/complex wallpapers while maintaining
   pixel-perfect coherence between windows and shell overlays.
+  ⚠️ Each entry carries the SAME colour twice — floats for Cairo, `rgb`/`hex` strings for the CSS
+  engine — and **nothing checks that the two halves agree**. `light` disagreed with itself from the
+  day the token was born until 2026-08-23 (`{1,1,1}` painted, `#fafafa` written), so light glass was
+  pure white in the shell and `#fafafa` in Settings while every comment cited "#fafafa". `#fafafa`
+  won: it is what the CSS half had always shipped, and light vibrancy is off-white in the prior art
+  we follow. Measure a retint with `scripts/dev/glass-probe.ts` rather than reasoning about it.
 - **Light-mode text ramp is nudged up:** `--nidara-text-secondary`/`-dim` are `rgba(fg, 0.85/0.72)`
   in light vs `0.8/0.6` in dark (`nidaraVars`). Black ink over translucent light glass (on an
   arbitrary wallpaper) reads washed-out at the dark-mode alphas; white-on-dark needs less ink.
@@ -1025,23 +1031,27 @@ straight through the glass, which is the flank at mid-height (.08). The dip in t
 whole point; the old lateral *dark* contour was faking the same effect by painting black over the
 sides, which read as a drawn outline rather than as material.
 
-Two things about it that are easy to undo by accident:
+Three things about it that are easy to undo by accident:
 
-- **The colour is `GLASS_TINT`, not a float literal.** The old strokes hardcoded `0.96, 0.98, 1.0`
-  and `0, 0, 0`. Both painters now destructure `GLASS_TINT.light` / `GLASS_TINT.dark` from
-  `ui/lib/tokens.ts`, which is commandment 10 finally reaching the Cairo rim — a retint (the Deep
-  Slate pass, #223/#224) now moves the glass *and* its edge together instead of leaving the edge
-  behind.
+- **There is ONE copy of those stops: `glassRimGradient` in `DrawingUtils.ts`.** It takes the mode
+  and returns the gradient; `GlassBubble` calls it too. Until 2026-08-23 the table was written out
+  twice, byte-identical — #230 unified the *shape* of the rim and left two copies of the *numbers*,
+  which is a divergence waiting for the next tweak. Only the DARK ramp is shared: light mode
+  differs on purpose (`drawSquircle` fades white into a dark lower rim; the bubble paints one flat
+  `GLASS_TINT.dark` edge at .12), so the bubble passes `true` and keeps its own light branch.
+  Unifying *that* half is a visual decision, not a refactor.
+- **The white is `GLASS_SPECULAR`, not `GLASS_TINT.light`.** Both are pure white and for two months
+  they were the same token, which is the trap: they are the colour of the *light* and the colour of
+  the *surface*, and tying them together means a retint of light-mode glass silently dims the
+  highlight on every dark capsule in the desktop. The dark tint still comes from `GLASS_TINT.dark`
+  (commandment 10 reaching the Cairo rim — the Deep Slate pass moves the glass *and* its lower edge
+  together); what left is only the misuse of the light one.
 - **`drawSquircle` no longer clips its rim.** It offsets the path inward by half the line width
   (`strokeOffset = -borderWidth * 0.5`) and strokes at 1×, so the stroke lands entirely inside the
   silhouette by construction. `GlassBubble` still uses the older idiom for the same result — clip
   to the silhouette, then stroke at `BORDER_W * 2` and let the clip discard the outer half. **Two
   different techniques, same 1px inner rim**; don't "unify" them without checking, the bubble's
   arrow tip is why it wants the clip.
-
-⚠️ The seven stops are **duplicated verbatim** in `DrawingUtils.ts` and `GlassBubble.ts`, and only
-the DARK ramp is shared — light mode differs on purpose (`drawSquircle` fades white into a dark
-lower rim; the bubble paints one flat `GLASS_TINT.dark` edge at .12). Tracked in `tech-debt.md`.
 
 ## A CSS pill at `--nidara-radius-pill` seams at the middle of each cap
 
