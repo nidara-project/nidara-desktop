@@ -18,6 +18,7 @@ import {
     ACCENT_PALETTE,
     generateTokensCss,
     generateChromeTokenScope,
+    CHROME_SCOPE_WINDOWS,
 } from "./NidaraTheme"
 import { SHELL_ROOT } from "./Paths"
 import hs from "./HyprlandState"
@@ -312,12 +313,19 @@ class ThemeManager extends GObject.Object {
      *  both the CC/system-menu AND Settings) can't use one global flag: a slider in
      *  a shell overlay must follow the shell pin (chromeIsDark), while the same
      *  component in Settings/About follows the app/system mode (isDark). Resolved by
-     *  the widget's ROOT window name — overlays are children of `nidara-bar`, the
-     *  app grid of `nidara-dock`; anything else (Settings/About/unrealized) → isDark. */
+     *  the widget's ROOT window name against `CHROME_SCOPE_WINDOWS` — the same list
+     *  the CSS pin uses, so a Cairo widget and the tokens around it can never
+     *  disagree about which mode a surface is in. Anything else (Settings/About/
+     *  unrealized) → isDark.
+     *
+     *  ⚠️ This used to hardcode `nidara-bar || nidara-dock` and its comment said the
+     *  app grid was a child of the dock. Both stopped being true when the island and
+     *  the app grid moved to their own surfaces; see the note on
+     *  `generateChromeTokenScope`. */
     surfaceIsDark(widget: Gtk.Widget): boolean {
         try {
             const name = (widget.get_root() as Gtk.Window | null)?.get_name?.() ?? ""
-            if (name === "nidara-bar" || name === "nidara-dock") return this.chromeIsDark
+            if ((CHROME_SCOPE_WINDOWS as readonly string[]).includes(name)) return this.chromeIsDark
         } catch (_) { /* not realized yet → fall through to the app/system mode */ }
         return this.state.isDark
     }

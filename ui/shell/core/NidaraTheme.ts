@@ -270,15 +270,29 @@ export function generateTokensCss(config: NidaraThemeConfig, isDark: boolean): s
  * independent of the system mode (appearance.shellAppearance). Returns empty
  * when it already matches the system (the global `* {}` block covers it).
  *
- * Scope = the entire bar window AND the entire dock window — `window#nidara-bar`
- * hosts the bar content AND every floating overlay (CC/NC/Prism/system menu/
- * overview/expansion panel, all children of the bar's Gtk.Overlay), and
- * `window#nidara-dock` hosts the dock (the app grid moved to its OWN surface on
- * 2026-08-09 and is scoped separately). So the pin covers the full
- * shell skin. App-mode windows — Settings (`nidara-settings-window`) and About
+ * Scope = every toplevel of the shell skin, listed in `CHROME_SCOPE_WINDOWS`.
+ * `window#nidara-bar` hosts the bar content AND the floating overlays that are
+ * still children of its `Gtk.Overlay` (CC/NC/Prism/system menu/overview/expansion
+ * panel); the dock, the Activity Island and the app grid are each their own
+ * toplevel. App-mode windows — Settings (`nidara-settings-window`) and About
  * (`nidara-about`) — are SEPARATE toplevels, deliberately NOT in the scope, so
  * they keep the system mode like any third-party app. The `.nd-icon` filter is
  * mirrored too: symbolic icons invert in dark and not in light.
+ *
+ * ⚠️ THIS LIST IS A COUPLING TO WHICH SURFACES EXIST, AND IT HAS BEEN WRONG
+ * BEFORE. It said "bar and dock" from the days when the island and the app grid
+ * were children of the bar's window. Both later moved out to their own surfaces
+ * (island 2026-07-26, app grid 2026-08-09) and neither was added here, so from
+ * then until 2026-08-24 a user who pinned the shell to Dark on a Light system —
+ * or the reverse — got a bar and a dock that obeyed and an island and an app grid
+ * that did not: wrong tokens AND uninverted icons. The doc comment even claimed
+ * the app grid was "scoped separately", which was never true.
+ *
+ * The same move broke `blur_popups` for the island in the same way (see
+ * `config/hypr/hyprland.lua`). A surface leaving the bar's window silently leaves
+ * everything that was scoped to the bar's window, which is why
+ * `scripts/ci/chrome-scope-check.mjs` now compares this list against the
+ * namespaces that actually exist.
  *
  * The selector must hit every DESCENDANT directly (`window#nidara-bar *`), not
  * just the container: GTK4 custom properties don't inherit reliably, and the
@@ -287,16 +301,26 @@ export function generateTokensCss(config: NidaraThemeConfig, isDark: boolean): s
  * children keep the global value (glass flipped but text stayed). An id-qualified
  * universal beats `*` on specificity.
  */
+export const CHROME_SCOPE_WINDOWS = [
+  "nidara-bar",
+  "nidara-dock",
+  "nidara-island",
+  "nidara-app-grid",
+] as const
+
 export function generateChromeTokenScope(
   config: NidaraThemeConfig,
   chromeIsDark: boolean,
   systemIsDark: boolean,
 ): string {
   if (chromeIsDark === systemIsDark) return "/* shell skin follows system mode */"
-  const sel = "window#nidara-bar, window#nidara-bar *, window#nidara-dock, window#nidara-dock *"
+  // An id-qualified universal per window: the bare container selector does not
+  // reach the children (see the note above about GTK4 custom properties).
+  const sel = CHROME_SCOPE_WINDOWS.map((w) => `window#${w}, window#${w} *`).join(", ")
+  const iconSel = CHROME_SCOPE_WINDOWS.map((w) => `window#${w} .nd-icon`).join(", ")
   const body = nidaraVars(config, chromeIsDark).join("\n")
   const iconFilter = chromeIsDark ? "invert(1)" : "none"
   return `${sel} {\n${body}\n}\n`
-    + `window#nidara-bar .nd-icon, window#nidara-dock .nd-icon { -gtk-icon-filter: ${iconFilter}; }`
+    + `${iconSel} { -gtk-icon-filter: ${iconFilter}; }`
 }
 

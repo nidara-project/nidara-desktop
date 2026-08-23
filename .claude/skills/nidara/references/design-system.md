@@ -821,9 +821,25 @@ flips the **whole token family** (text AND surfaces/edges/shadows), never just `
 How the flip works:
 - **CSS side:** `NidaraTheme.generateChromeTokenScope()` re-emits the full `--nidara-*` block
   (factored into `nidaraVars()`) under a scoped selector when the shell differs from the system.
-  - **Scope = `window#nidara-bar *, window#nidara-dock *`** (both windows + descendants). The
-    bar window's `Gtk.Overlay` hosts ALL the overlays, so scoping the whole window covers them;
-    Settings/About are separate toplevels, so they're excluded automatically.
+  - **Scope = every toplevel in `CHROME_SCOPE_WINDOWS`** (each window + its descendants):
+    `nidara-bar`, `nidara-dock`, `nidara-island`, `nidara-app-grid`. The bar window's
+    `Gtk.Overlay` still hosts CC/NC/Prism/system menu/overview, so scoping that window covers
+    them; the island and the app grid are their own toplevels and must be listed by name.
+    Settings/About are separate toplevels too, and are excluded on purpose.
+  - 🔑 **THAT LIST IS A COUPLING TO WHICH SURFACES EXIST, AND IT WAS WRONG FOR A MONTH.** It
+    said "bar and dock" from the days when the island and the app grid were children of the
+    bar's window. The island moved out on 2026-07-26 and the app grid on 2026-08-09; neither
+    was added, so pinning the shell to Dark on a Light system (or the reverse) gave a bar and
+    a dock that obeyed and an island and an app grid that did not — wrong tokens **and**
+    uninverted icons. Owner-caught 2026-08-24 on the island's icons.
+    ⚠️ The same move cost the island its `blur_popups` flag in `hyprland.lua`, which is the
+    identical failure in a different file: **a surface leaving the bar's window silently leaves
+    everything that was scoped to the bar's window**. `scripts/ci/chrome-scope-check.mjs` is
+    now the gate — it compares the list against the namespaces that actually exist, requires
+    each window's GTK `name:` to equal its Wayland namespace (the selector is `window#<name>`),
+    and rejects a list entry no surface declares. The agent pointer is the one exemption, with
+    its reason recorded in the check: it paints from `chromeIsDark` in Cairo and carries no
+    CSS tokens.
   - **GOTCHA:** the selector must hit every **descendant** directly — GTK4 custom properties
     don't inherit reliably and the global `* { --nidara-* }` matches every node directly, so a
     bare `window#nidara-bar { --nidara-* }` only overrides the container. An id-qualified
@@ -834,7 +850,10 @@ How the flip works:
   battery glyph, and the CC/NC/app-grid Cairo. Non-shell (Settings/About) keep `Theme.isDark`.
   - **Shared Cairo widget drawn into BOTH** (the slider, in CC/system-menu AND Settings) can't
     pick a global flag — it calls **`Theme.surfaceIsDark(widget)`**, which resolves by the
-    widget's ROOT window name (`nidara-bar`/`nidara-dock` → `chromeIsDark`, else → `isDark`).
+    widget's ROOT window name against the SAME `CHROME_SCOPE_WINDOWS` list (in it →
+    `chromeIsDark`, else → `isDark`), so a Cairo widget and the tokens around it cannot
+    disagree about which mode a surface is in. It used to hardcode `nidara-bar`/`nidara-dock`
+    and went stale with the pin, for the same reason.
     The slider uses it for the neutral track colour. Use this for any future shared painter.
     ⚠️ Since the slider moved to the kit (2026-08-15) it reaches that method through
     **`kitAppearance().surfaceIsDark(widget)`**, not by importing `Theme` — a kit component may

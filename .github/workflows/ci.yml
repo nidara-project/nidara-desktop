@@ -33,6 +33,11 @@
 #     the login surfaces, LOCK_GLASS.fill.a. Those live in TypeScript, the thresholds
 #     live in Lua, and crossing them does not degrade a surface, it stops blurring it
 #     outright, with nothing else noticing. Logic in scripts/ci/blur-threshold-check.mjs.
+#     (4) Every layer-shell surface of the shell is inside the Appearance pin
+#     (CHROME_SCOPE_WINDOWS) or explicitly exempt, and its GTK window name equals its
+#     Wayland namespace — the pin selects by `window#<name>`. A surface that leaves the
+#     bar's window leaves the pin with it, and only a user who pinned the shell AGAINST
+#     their system mode ever sees the result. Logic in scripts/ci/chrome-scope-check.mjs.
 #   - smoke: the REAL thing — load the kernel's vkms (virtual KMS) on the
 #     runner, then in a privileged Arch container install ONLY official Arch
 #     packages, bundle the shell with scripts/bundle.sh (esbuild), boot Hyprland
@@ -292,6 +297,12 @@ jobs:
       # fails SILENTLY: the config parses, the shell boots, the smoke passes.
       - name: Blur thresholds stay under the glass (must succeed)
         run: node scripts/ci/blur-threshold-check.mjs
+      # Every shell-skin surface must be inside the Appearance pin. A surface that
+      # moves OUT of the bar's window silently leaves everything scoped to it — this
+      # already cost the island and the app grid their pinned dark/light, and only a
+      # user who pinned AGAINST their system mode ever sees it.
+      - name: Shell surfaces stay inside the appearance pin (must succeed)
+        run: node scripts/ci/chrome-scope-check.mjs
 
   i18n:
     name: Translations (parity + ledger)
