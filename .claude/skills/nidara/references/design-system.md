@@ -965,11 +965,13 @@ different languages, so `scripts/ci/blur-threshold-check.mjs` compares them, eac
 glass IT paints — `GLASS_RANGE.min` for the shell, `LOCK_GLASS.fill.a` for the GREETER, which is a
 separate bundle with a fixed glass and no slider. It reported a false failure on its first run by
 measuring the login surfaces against the shell's floor, which is how that distinction got encoded.
-⚠️ **`nidara-lock` is skipped, and loudly**: the lockscreen people actually run is an
-ext-session-lock-v1 surface, not a layer surface, so no `layer_rule` reaches it — that is precisely
-why it blurs its own copy of the wallpaper. The namespace exists only on `LockOverlay()`, the
-fallback, which paints the wallpaper itself too. The rule is inert on both paths and predates the
-rename; do not read it as evidence that the lock gets compositor blur.
+⚠️ **There is no `nidara-lock` rule any more, and adding one back would be wrong.** The lockscreen
+people actually run is an ext-session-lock-v1 surface, not a layer surface, so no `layer_rule`
+reaches it — that is precisely why it blurs its own copy of the wallpaper. The namespace exists only
+on `LockOverlay()`, the fallback, which paints the wallpaper itself too. The rule was inert on both
+paths, predated the rename, and read as evidence that the lock gets compositor blur; it was removed
+2026-08-23. The gate still names `nidara-lock` explicitly, so a re-add is caught rather than
+silently measured against a floor that means nothing to it.
 ⚠️ **Only the dock can take a high value, and the reason is animation.** The surface alpha during a
 `ScaleRevealer` close is `glass × widget-opacity`, so the blur pops off at `threshold / glass` — 4%
 opacity at 0.01, but 96% at 0.23, i.e. in the first frames of every close. The bar (which hosts
@@ -994,7 +996,7 @@ background, and `xray` is off.
 
 | Surface kind | Knob | Value here | Practical floor for the glass |
 |---|---|---|---|
-| Layer (bar, dock, island) | `ignore_alpha` per `layer_rule` | 0.01 bar/island, **0.23 dock**, 0.04 app-grid, 0.3 greeter | gated by `blur-threshold-check`; the `nidara-lock` rule is INERT |
+| Layer (bar, dock, island) | `ignore_alpha` per `layer_rule` | 0.01 bar/island, **0.23 dock**, 0.04 app-grid, 0.3 greeter | gated by `blur-threshold-check`; there is deliberately no lock rule |
 | Popup of a layer (tooltip, dock menu) | `popups_ignorealpha` (global) | 0.30 | ≈0.38 (`NidaraTheme.popoverAlpha`) |
 | Popup of a window (Settings dropdown) | `decoration:blur:popups` + same 0.30 | 0.30 | ≈0.38 |
 

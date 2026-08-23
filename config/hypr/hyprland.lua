@@ -763,18 +763,17 @@ hl.layer_rule({ match = { namespace = "nidara-bar" },      blur = true, blur_pop
 hl.layer_rule({ match = { namespace = "nidara-island" },   blur = true, blur_popups = true, ignore_alpha = 0.01  })
 hl.layer_rule({ match = { namespace = "nidara-dock" },     blur = true, blur_popups = true, ignore_alpha = 0.23 })
 hl.layer_rule({ match = { namespace = "nidara-app-grid" }, blur = true, blur_popups = true, ignore_alpha = 0.04 })
--- ⚠️ nidara-lock is INERT and kept only for the fallback. The lockscreen people
--- actually run is an ext-session-lock-v1 surface (`Gtk4SessionLock`, ui/lockscreen/
--- app.ts) — NOT a layer surface, so no layer_rule matches it, and Hyprland paints an
--- opaque primer over everything behind it anyway. That is exactly why the lock blurs
--- its OWN copy of the wallpaper instead of asking the compositor. The namespace only
--- exists on `LockOverlay()`, the layer-shell fallback for a compositor without the
--- protocol — and even there `buildWindow` paints the wallpaper itself, so there is
--- nothing behind the surface for this rule to blur. Do not read it as evidence that
--- the lock gets compositor blur; it does not, and `misc:session_lock_blur` only works
--- ANDed with xray, which returns the whole workspace (see tech-debt / the lockscreen
--- blur notes). It predates the Nidara rename.
-hl.layer_rule({ match = { namespace = "nidara-lock" },     blur = true, ignore_alpha = 0.3   })
+-- ⚠️ There is deliberately NO rule for `nidara-lock`, and do not add one back. The
+-- lockscreen is an ext-session-lock-v1 surface (`Gtk4SessionLock`, ui/lockscreen/
+-- app.ts) — not a layer surface, so no layer_rule can reach it — and Hyprland paints
+-- an opaque primer over everything behind it. That is exactly why the lock blurs its
+-- OWN copy of the wallpaper instead of asking the compositor. The namespace exists
+-- only on `LockOverlay()`, the layer-shell fallback for a compositor without the
+-- protocol, and even there `buildWindow` paints the wallpaper itself — so there is
+-- nothing behind that surface either. A rule sat here from before the Nidara rename
+-- doing nothing, while reading as if the lock were compositor-blurred; removed
+-- 2026-08-23. `misc:session_lock_blur` is not a way back in: it applies only ANDed
+-- with xray, which returns the whole workspace, windows included.
 
 
 -- ── Lock screen submap ────────────────────────────────────────────────────────
