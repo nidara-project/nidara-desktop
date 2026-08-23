@@ -241,6 +241,91 @@ export const glassRimGradient = (cx: number, top: number, height: number, dark: 
     return g
 }
 
+/** A soft outer shadow for a glass surface, painted as concentric strokes of the
+ *  SAME silhouette rather than as a blurred mask — no blur pass, no temporary
+ *  surface, four strokes.
+ *
+ *  Why a glass surface wants one at all: the rim is a MATERIAL highlight, not a
+ *  delimiter. Its top and bottom stops are white, so against a white backdrop they
+ *  vanish and all that survives is the dark flank — the surface reads as two vertical
+ *  lines. That is the failure the owner reported over a white window, and it is the
+ *  same failure macOS avoids by separating floating surfaces with a shadow rather
+ *  than with their edge. A shadow also scales itself to the problem: over a busy
+ *  colourful wallpaper it reads as depth and is nearly invisible, over flat white it
+ *  becomes the only separator left.
+ *
+ *  ⚠️ IT NEEDS ROOM OUTSIDE THE SILHOUETTE, and that room is `inset` — the caller must
+ *  reserve at least `spread` px or the falloff is simply clipped by the DrawingArea.
+ *  `SquircleContainer`'s `GLASS_INSET` is 2.0, so a tile gets a 2px shadow unless it
+ *  is given more, and buying more shrinks the painted glass by the same amount.
+ *
+ *  ⚠️ AND IT INTERACTS WITH COMPOSITOR BLUR. Hyprland decides where to blur by an
+ *  alpha threshold per layer (`ignore_alpha`), and a shadow is by definition a band of
+ *  LOW alpha outside the glass. If the shadow's alpha clears the layer's threshold,
+ *  Hyprland blurs the backdrop behind the shadow — a smeared halo tracking the
+ *  silhouette, which is exactly debt #237 (the dock blurring behind its magnified icon
+ *  shadows). Check the layer's rule in `config/hypr/hyprland.lua` before enabling this
+ *  on a new surface: `nidara-dock` sits at 0.23 and has room to spare, while
+ *  `nidara-bar` and `nidara-island` sit at 0.01 and will blur behind almost any
+ *  shadow. `scripts/ci/blur-threshold-check.mjs` guards the other end of that coupling
+ *  (a threshold reaching the glass floor kills the blur entirely) but it does NOT know
+ *  about shadows — this comment is the only warning there is. */
+export const drawGlassShadow = (
+    cr: any,
+    x: number, y: number, w: number, h: number, r: number,
+    n: number = 3.2,
+    perfect: boolean = false,
+    spread: number = 4,
+    alpha: number = 0.18,
+    /** Vertical offset, for the "lit from above" reading. ⚠️ It is SUBTRACTED from the
+     *  top edge, and on a small `spread` that is most of what the top has: the rim's top
+     *  stop is white, so against a white backdrop the shadow is the ONLY thing defining
+     *  that edge. Measured on a CC tile at spread 2 — darkest contour pixel, 255 means
+     *  nothing is there: sides 211, bottom 211, and the top going 218 / 227 / 239 / 244
+     *  at drop 0 / 0.5 / 1 / 2. So a drop only pays for itself once `spread` is big
+     *  enough to spare it; keep it near zero on tight shadows. */
+    drop: number = 1,
+) => {
+    if (w <= 0 || h <= 0 || spread <= 0 || alpha <= 0) return
+    // ⚠️ NESTED FILLS, NOT CONCENTRIC STROKES. The first version of this stroked N rings
+    // of decreasing offset and increasing alpha, which LOOKS like a falloff and is not
+    // one: neighbouring strokes overlap, the overlaps composite, and the accumulated
+    // alpha stops being monotonic — an outer band covered by two strokes comes out
+    // DARKER than an inner band covered by one. At spread 2 the rings are packed tightly
+    // enough that it happened to come out clean; at 4 and 6 it produced a visibly lighter
+    // gap between the shadow and the rim, reported by the owner and then measured across
+    // the flank: 254 248 235 217 **230** 211, rising where it had to keep falling.
+    //
+    // Filling nested shapes largest-first cannot do that. Every layer covers everything
+    // inside it, so coverage counts increase monotonically inward by construction, and
+    // the result is a staircase with no way to be non-monotonic.
+    const LAYERS = 6
+    // `alpha` is the TOTAL at the silhouette, which is the number that matters: it is
+    // what a layer's `ignore_alpha` is compared against. Per-layer alpha is derived so
+    // that N of them compose to it, rather than being a knob nobody can reason about.
+    const per = 1 - Math.pow(1 - Math.min(0.95, alpha), 1 / LAYERS)
+    cr.save()
+    cr.setAntialias(6)
+    // ⚠️ And clip the silhouette OUT before filling anything. Nested fills cover the
+    // interior too, and the glass on top is translucent (0.55), so without this the
+    // shadow shows straight through and darkens the whole surface — measured on a CC
+    // tile over white, the body went 253 → 233 while the shadow was doing its job
+    // outside. A drop shadow must not tint the thing it is under. EVEN_ODD punches the
+    // hole: outer rectangle plus the silhouette, so only what is OUTSIDE gets painted.
+    const m = spread + 2
+    cr.rectangle(x - m, y - m, w + m * 2, h + m * 2)
+    createSquirclePath(cr, x, y, w, h, r, n, perfect, 0)
+    cr.setFillRule(1) // EVEN_ODD
+    cr.clip()
+    cr.setFillRule(0) // back to WINDING for the shapes themselves
+    for (let i = LAYERS; i >= 1; i--) {
+        createSquirclePath(cr, x, y + drop, w, h, r, n, perfect, spread * (i / LAYERS))
+        cr.setSourceRGBA(0, 0, 0, per)
+        cr.fill()
+    }
+    cr.restore()
+}
+
 // Shared drawSquircle utility for consistent visual approach across Dock and CC
 export const drawSquircle = (
     cr: any,

@@ -1135,6 +1135,57 @@ Three things about it that are easy to undo by accident:
   the capsule-vs-bubble coherence #230 and #234 were about, and it is in the curvature. Tracked as
   open debt #84; do not "unify" the techniques without reading it first.
 
+### The rim is a HIGHLIGHT, not a delimiter — that is what the shadow is for (2026-08-23)
+
+Against a flat white backdrop — a maximised white window under the control centre — a glass
+surface nearly disappears, and the way it disappears is specific: the ramp's top and bottom stops
+are **white**, so they vanish, and the only thing left is the dark flank. The surface reads as two
+vertical lines. That is not a bug in the ramp. The rim describes a material; **delimiting is not
+its job**, which is also how macOS treats it — a menu over a white document is separated by its
+drop shadow, and its own hairline is just as invisible there.
+
+`drawGlassShadow` is the missing piece. It self-scales to the problem: over a busy colourful
+wallpaper it reads as depth and is nearly invisible, over flat white it becomes the only separator
+left. Three things about it are load-bearing:
+
+- **Nested FILLS, never concentric strokes.** The first version stroked N rings of decreasing
+  offset and increasing alpha. That looks like a falloff and is not one — neighbouring strokes
+  overlap, the overlaps composite, and the accumulated alpha stops being monotonic: measured across
+  a flank, `254 248 235 217 230 211`, rising where it had to keep falling, which reads as a lighter
+  gap between the shadow and the rim. Filling nested shapes largest-first cannot do that.
+- **Clip the silhouette OUT (EVEN_ODD) before filling.** Nested fills cover the interior too, and
+  the glass on top is translucent, so without the clip the shadow shows through and tints the whole
+  surface — the body of a CC tile went 253 to 233 while the shadow was doing its job outside. A
+  drop shadow must not darken the thing it is under.
+- **`drop` is subtracted from the top edge, and the top is where the rim already gives up.** On a
+  small `spread` it costs more than it buys. Measured on a CC tile at `spread 2` — darkest contour
+  pixel, 255 meaning nothing is there — sides 211, and the top going 218 / 227 / 239 / 244 at drop
+  0 / 0.5 / 1 / 2. Round the corner arc it is the 60-90 degree band that dies. So keep `drop` near
+  zero on tight shadows and only spend it once `spread` can spare it.
+
+⚠️ **A shadow interacts with compositor blur, and that decides WHERE it can exist.** Hyprland
+decides where to blur by an alpha threshold per layer (`ignore_alpha`), and a shadow is by
+definition a band of low alpha OUTSIDE the glass. If it clears the threshold, Hyprland blurs the
+backdrop behind it — a smeared halo tracking the silhouette, which is debt #237 exactly. `spread`
+is also **room**: the shadow lives in the surface's `inset`, so anything wider than what is already
+reserved comes out of the painted glass.
+
+| surface | layer | `ignore_alpha` | what it can take |
+|---|---|---|---|
+| dock capsule | its own `nidara-dock` | **0.23** | an outer shadow, with room to spare |
+| CC / NC / Prism / system menu / overview | guests on `nidara-bar` | **0.01** | nothing outside, unless the bar's threshold is raised |
+| the Activity Island | its own `nidara-island` | **0.01** | same |
+
+⚠️ **Raising a threshold has a cost no screenshot shows, because it is temporal.** The overlays fade
+on close (`ScaleRevealer` animates opacity) and a glass pixel's alpha is `glassOpacity x
+widgetOpacity`, so the blur switches off the moment that product drops under the threshold. At the
+glass floor (`GLASS_RANGE.min` = 0.24) that is `widgetOpacity = threshold / 0.24`: **4.2 % at 0.01,
+21 % at 0.05, 96 % at 0.23** — i.e. at the dock's value the backdrop blur pops off in the first
+frames of every close, with the panel still fully on screen. The bar was already walked back from
+0.05 to 0.01 once for this. `scripts/ci/blur-threshold-check.mjs` guards the *other* end of the
+coupling (a threshold reaching the glass floor kills the blur entirely) and knows nothing about
+shadows or about this.
+
 ## A CSS pill at `--nidara-radius-pill` seams at the middle of each cap
 
 `--nidara-radius-pill` is `9999px`, and GTK clamps it to **exactly half the

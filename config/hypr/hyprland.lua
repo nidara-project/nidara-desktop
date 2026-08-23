@@ -690,6 +690,17 @@ hl.window_rule({
 
 
 -- ── Layer rules ───────────────────────────────────────────────────────────────
+-- ⚠️ EXPERIMENT (2026-08-23, owner-requested): nidara-bar is at 0.23 — the DOCK's
+-- value — and not at the 0.01 the paragraph below argues for, so that the control
+-- centre's islands can carry a drop shadow without Hyprland blurring the backdrop
+-- behind it (debt #237's mechanism). WHAT TO WATCH FOR, because it is a TEMPORAL
+-- artefact no screenshot shows: the overlays fade on close (`ScaleRevealer` animates
+-- opacity), and a glass pixel's alpha is `glassOpacity x widgetOpacity`, so the blur
+-- switches off the moment that product drops under the threshold. At the glass FLOOR
+-- (GLASS_RANGE.min = 0.24) that is widgetOpacity 0.958 — i.e. the backdrop blur pops
+-- off in the first frames of every close, with the panel still fully on screen. At
+-- 0.01 it happened at 0.042, when nothing was left to see. The bar was already walked
+-- back from 0.05 to 0.01 once for this. Revert = this line plus BaseIsland's `shadow`.
 -- nidara-bar at 0.01 (was 0.05): during the overlays' close animation the glass
 -- alpha drops below the threshold and the backdrop blur pops off; at 0.01 that
 -- happens when the panel is already near-invisible. Verified no AA-edge halos
@@ -759,7 +770,7 @@ hl.window_rule({
 --
 -- It opens context menus, hence blur_popups — the exact flag the island shipped
 -- without when IT moved out of the bar.
-hl.layer_rule({ match = { namespace = "nidara-bar" },      blur = true, blur_popups = true, ignore_alpha = 0.01  })
+hl.layer_rule({ match = { namespace = "nidara-bar" },      blur = true, blur_popups = true, ignore_alpha = 0.23  })
 hl.layer_rule({ match = { namespace = "nidara-island" },   blur = true, blur_popups = true, ignore_alpha = 0.01  })
 hl.layer_rule({ match = { namespace = "nidara-dock" },     blur = true, blur_popups = true, ignore_alpha = 0.23 })
 hl.layer_rule({ match = { namespace = "nidara-app-grid" }, blur = true, blur_popups = true, ignore_alpha = 0.04 })

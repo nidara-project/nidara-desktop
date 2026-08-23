@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { drawSquircle, hexToFloatRgb } from "./DrawingUtils"
+import { drawGlassShadow, drawSquircle, hexToFloatRgb } from "./DrawingUtils"
 import Theme from "../core/ThemeManager"
 import { RADIUS, GLASS_TINT } from "../../lib/tokens"
 
@@ -11,6 +11,13 @@ export enum Shape {
 }
 
 interface SquircleContainerProps {
+    /** Soft outer shadow, for surfaces that must stay legible against a FLAT backdrop
+     *  (a white window behind the control centre) where the rim's white top and bottom
+     *  stops vanish and only the dark flank survives. `spread` doubles as how much room
+     *  the shadow needs: it forces `inset` up to at least that, which SHRINKS the
+     *  painted glass by the same amount. ⚠️ Read `drawGlassShadow` before enabling it on
+     *  a surface whose layer has a low `ignore_alpha` — the shadow gets blurred. */
+    shadow?: { spread?: number, alpha?: number, drop?: number }
     child: Gtk.Widget
     radius?: number
     gloss?: boolean
@@ -139,6 +146,7 @@ export default function SquircleContainer({
     activeColorHex,
     watchActive,
     getFill,
+    shadow,
 }: SquircleContainerProps) {
     const container = new Gtk.Grid({
         css_classes,
@@ -152,7 +160,10 @@ export default function SquircleContainer({
     })
 
     let isHovered = false
-    const techInset = inset !== undefined ? inset : GLASS_INSET
+    // The shadow lives OUTSIDE the silhouette, so the inset is what reserves its room:
+    // without this a `spread` larger than GLASS_INSET is simply clipped by the widget.
+    const shadowSpread = shadow ? (shadow.spread ?? 4) : 0
+    const techInset = Math.max(inset !== undefined ? inset : GLASS_INSET, shadowSpread)
 
     if (useShellOpacity || chrome) {
         Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
@@ -207,6 +218,16 @@ export default function SquircleContainer({
         cr.setOperator(2) // OVER
 
         const { radius: drawRadius, n: drawN, perfect: drawPerfect } = resolveDrawParams(shape, radius, n, perfect, w, h)
+
+        // The shadow goes down FIRST, outside the silhouette, in the room `techInset`
+        // reserved for it above. Same geometry as the glass, so it tracks the shape.
+        if (shadow) {
+            drawGlassShadow(
+                cr, techInset, techInset, w - techInset * 2, h - techInset * 2,
+                drawRadius, drawN, drawPerfect,
+                shadow.spread ?? 4, shadow.alpha ?? 0.18, shadow.drop ?? 1,
+            )
+        }
 
         drawSquircle(
             cr, w, h, undefined,
