@@ -706,6 +706,12 @@ hl.window_rule({
 -- tracking a panel that is scaling and fading — a computed threshold crossing is not
 -- the same thing as a seen one. Keep the number; do not re-derive it from the
 -- formula and "fix" it back.
+--
+-- nidara-island is at 0.23 for the same reason, with one difference worth watching:
+-- its morph ramps opacity over 300 ms in / 220 ms out, so its close is HALF AGAIN as
+-- long as the bar's 150 ms — the crossing is the same, the eye has more time to catch
+-- it. Judged on the bar first and carried here deliberately. If a pop ever shows up
+-- anywhere, this is the surface it shows up on.
 -- nidara-bar at 0.01 (was 0.05): during the overlays' close animation the glass
 -- alpha drops below the threshold and the backdrop blur pops off; at 0.01 that
 -- happens when the panel is already near-invisible. Verified no AA-edge halos
@@ -776,7 +782,7 @@ hl.window_rule({
 -- It opens context menus, hence blur_popups — the exact flag the island shipped
 -- without when IT moved out of the bar.
 hl.layer_rule({ match = { namespace = "nidara-bar" },      blur = true, blur_popups = true, ignore_alpha = 0.23  })
-hl.layer_rule({ match = { namespace = "nidara-island" },   blur = true, blur_popups = true, ignore_alpha = 0.01  })
+hl.layer_rule({ match = { namespace = "nidara-island" },   blur = true, blur_popups = true, ignore_alpha = 0.23 })
 hl.layer_rule({ match = { namespace = "nidara-dock" },     blur = true, blur_popups = true, ignore_alpha = 0.23 })
 hl.layer_rule({ match = { namespace = "nidara-app-grid" }, blur = true, blur_popups = true, ignore_alpha = 0.04 })
 -- ⚠️ There is deliberately NO rule for `nidara-lock`, and do not add one back. The

@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
-import SquircleContainer from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { MorphRevealer, MorphGlass, MorphPair } from "../../common/MorphRevealer"
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
 import { CAPSULE_BORDER } from "../bar/capsule"
@@ -185,7 +185,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         if (front?.expandMode) status.toggleIsland(front.expandMode)
         else front?.onExpand?.()
     }
-    const capsule = SquircleContainer({ child: compactStack, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => openFront() })
+    const capsule = SquircleContainer({ child: compactStack, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => openFront() })
     // See the chips' equivalent below — the capsule is permanent furniture, so it
     // is always "revealed" and its rect is the one that has never gone missing.
     ;(capsule as any).islandTargetId = "capsule"
@@ -324,6 +324,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
 
         let slotRef: IndicatorSlot
         const chip = SquircleContainer({
+            shadow: GLASS_SHADOW,
             child: stack,
             gloss: true,
             useShellOpacity: true,

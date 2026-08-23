@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
-import SquircleContainer from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/tokens"
 import { PANEL_W } from "../../common/widget-kit"
 import { NidaraButton, NidaraScrolled } from "../../../lib/nidara-kit"
@@ -380,6 +380,7 @@ export default function AgentIsland() {
 
     // Glass + morph wrapper, same shape as PlayerIsland/BatteryIsland.
     const squircle = SquircleContainer({
+        shadow: GLASS_SHADOW,
         child: inner,
         n: AGENT_GLASS.n,
         radius: AGENT_GLASS.radius,

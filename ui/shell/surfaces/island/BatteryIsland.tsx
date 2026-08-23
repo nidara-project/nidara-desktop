@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import SquircleContainer from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/tokens"
 import { PANEL_W } from "../../common/widget-kit"
 import { makeBatteryGlyph, batteryFrac } from "../../common/BatteryGlyph"
@@ -46,6 +46,7 @@ export default function BatteryIsland(): Gtk.Widget {
     inner.append(sub)
 
     const squircle = SquircleContainer({
+        shadow: GLASS_SHADOW,
         child: inner,
         n: BATTERY_GLASS.n,
         radius: BATTERY_GLASS.radius,

@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import SquircleContainer from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/tokens"
 import { NidaraButton } from "../../../lib/nidara-kit/button"
 import { PANEL_W } from "../../common/widget-kit"
@@ -90,6 +90,7 @@ export default function RecordingIsland(): Gtk.Widget {
     inner.append(stopBtn)
 
     const squircle = SquircleContainer({
+        shadow: GLASS_SHADOW,
         child: inner,
         n: RECORDING_GLASS.n,
         radius: RECORDING_GLASS.radius,

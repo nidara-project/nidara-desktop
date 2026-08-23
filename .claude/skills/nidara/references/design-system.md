@@ -1220,9 +1220,13 @@ Against a white window a bar capsule therefore renders as **two disconnected sid
 or bottom at all**: measured, darkest contour pixel with 255 meaning nothing is there, sides 213 and
 top/bottom **254**. With the shared recipe: 213 and 218. A tile degrades on white; a pill breaks.
 
-Not yet, and each for its own reason: **the dock capsule** (paints at `inset: 0`, so it has
+The **Activity Island** has it on all six of its outer glasses — the compact capsule, the chip, and
+the four expanded modes — and its layer went to 0.23 with them. ⚠️ Its morph ramps opacity over
+300 ms in / **220 ms out**, half again as long as the bar's 150 ms close, so it is the surface where
+a threshold pop would show first if it ever shows at all.
+
+Not yet, and for its own reason: **the dock capsule** (paints at `inset: 0`, so it has
 no room outside its silhouette at all and needs its `DrawingArea` grown and its margins recoloured),
-**the Activity Island** (own surface at `ignore_alpha` 0.01, which reopens the threshold question),
 and **`GlassBubble`** (its shadow would have to wrap the arrow tip, which is new geometry).
 
 ⚠️ **A shadow interacts with compositor blur, and that decides WHERE it can exist.** Hyprland

@@ -2,7 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
-import SquircleContainer from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/tokens"
 import { createSquirclePath } from "../../common/DrawingUtils"
 import { PANEL_W } from "../../common/widget-kit"
@@ -43,6 +43,7 @@ export default function PlayerIsland() {
     const inner = new Gtk.Box({ margin_top: 16, margin_bottom: 16, margin_start: 20, margin_end: 20 })
     inner.append(panel)
     const squircle = SquircleContainer({
+        shadow: GLASS_SHADOW,
         child: inner,
         n: PLAYER_GLASS.n,
         radius: PLAYER_GLASS.radius,
