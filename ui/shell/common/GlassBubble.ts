@@ -2,7 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Cairo from "gi://cairo"
 import Theme from "../core/ThemeManager"
 import { GLASS_TINT, GLASS_SPECULAR } from "../../lib/tokens"
-import { glassRimGradient } from "./DrawingUtils"
+import { glassRimGradient, squircleCorner } from "./DrawingUtils"
 
 // The Nidara glass bubble: a rounded body with a pointer spliced into one side,
 // painted in Cairo as a SINGLE continuous shape (one glass fill, one 1px inner
@@ -70,25 +70,6 @@ const corner = (
     else           cr.arcNegative(ccx, ccy, reff, a1, a2)
 }
 
-// One BODY corner as a SUPERELLIPSE quarter — `drawSquircle`'s own path,
-// |x/r|ⁿ + |y/r|ⁿ = 1, so a bubble can wear the same silhouette as the squircle cards it
-// is a sibling of. Emitted in the direction `cr.arc` would have taken: `sx`/`sy` place
-// the quarter around its centre, and `fromTop` says whether the path arrives along the
-// axis where py = r. The circular case is NOT routed through here — callers keep their
-// `cr.arc`, so the tooltip's stadium ends stay exact arcs rather than a polyline.
-const bodyCorner = (
-    cr: any, cx: number, cy: number, r: number, n: number,
-    sx: number, sy: number, fromTop: boolean,
-) => {
-    const STEPS = 48
-    for (let i = 0; i <= STEPS; i++) {
-        const t = (fromTop ? STEPS - i : i) / STEPS * (Math.PI / 2)
-        const px = r * Math.pow(Math.abs(Math.cos(t)), 2 / n)
-        const py = r * Math.pow(Math.abs(Math.sin(t)), 2 / n)
-        cr.lineTo(cx + sx * px, cy + sy * py)
-    }
-}
-
 // ONE continuous path: a rounded rect (perfect arcs) with a pointer spliced into
 // `side`, centred on the edge plus `off` (the slide correction — see paintGlassBubble).
 // The pointer is a triangle whose THREE corners are all circular arcs — the tip
@@ -98,12 +79,43 @@ const bodyCorner = (
 // inner edge — the rim then wraps body AND pointer as one outline.
 export const bubblePath = (
     cr: any, x: number, y: number, w: number, h: number, r: number, side: ArrowSide,
-    off: number = 0,
+    slide: number = 0,
     aw: number = ARROW_W, ah: number = ARROW_H, tipR: number = TIP_R, baseR: number = BASE_R,
     n: number = 2,
+    offset: number = 0,
 ) => {
+    // `offset` grows the whole SILHOUETTE outward (negative = inward), exactly like
+    // `createSquirclePath`'s: it is what lets the rim be a path offset inward by half a
+    // line width and stroked once, instead of a 2x stroke clipped to itself.
+    //
+    // The body box takes it the same way the squircle does. The pointer cannot — it is a
+    // triangle, and a triangle's offset is not its box scaled. Each of its three corners
+    // moves along its own bisector, so with L the diagonal's length:
+    //
+    //   • the apex travels `offset/sin(θ)` where θ is its half-angle → since the edge it
+    //     is measured from already moved by `offset`, the PROTRUSION changes by only the
+    //     difference, `offset·(L/(aw/2) − 1)`. Miss this and a 0.5 px rim shortens the
+    //     pointer by 1.2 px instead of 0.2, which is visible on an 8 px point.
+    //   • each base join slides outward ALONG the edge by `offset·(L − aw/2)/ah`, so the
+    //     base widens; the diagonals stay parallel to their originals, which is the whole
+    //     definition of an offset.
+    //   • the tip arc is convex → its radius GROWS by `offset`. The two base joins are
+    //     reflex (the pointer sticks out of the body) → theirs SHRINKS. This is the bit
+    //     the debt entry warned about: keep `tipR` fixed while the triangle shrinks and
+    //     the arc eats the straight diagonals until the point reads as a bell.
+    if (offset !== 0) {
+        const halfBase = Math.max(0.5, aw / 2)
+        const L = Math.hypot(ah, halfBase)
+        aw = Math.max(2, aw + 2 * offset * (L - halfBase) / Math.max(0.5, ah))
+        ah = Math.max(1, ah + offset * (L / halfBase - 1))
+        tipR = Math.max(0.5, tipR + offset)
+        baseR = Math.max(0.5, baseR - offset)
+        x -= offset; y -= offset
+        w += offset * 2; h += offset * 2
+        r = Math.min(Math.max(0, r + offset), Math.min(w, h) / 2)
+    }
     const x2 = x + w, y2 = y + h
-    const cx = x + w / 2 + off, cy = y + h / 2 + off
+    const cx = x + w / 2 + slide, cy = y + h / 2 + slide
     const HALF = Math.PI / 2
     cr.moveTo(x + r, y)
     if (side === "top") {
@@ -113,7 +125,7 @@ export const bubblePath = (
     }
     cr.lineTo(x2 - r, y)
     if (n === 2) cr.arc(x2 - r, y + r, r, -HALF, 0)           // top-right
-    else bodyCorner(cr, x2 - r, y + r, r, n, +1, -1, true)
+    else squircleCorner(cr, x2 - r, y + r, r, n, +1, -1, true)
     if (side === "right") {
         corner(cr, x2, y + r,       x2, cy - aw / 2,     x2 + ah, cy,       baseR)
         corner(cr, x2, cy - aw / 2, x2 + ah, cy,         x2, cy + aw / 2,   tipR)
@@ -121,7 +133,7 @@ export const bubblePath = (
     }
     cr.lineTo(x2, y2 - r)
     if (n === 2) cr.arc(x2 - r, y2 - r, r, 0, HALF)           // bottom-right
-    else bodyCorner(cr, x2 - r, y2 - r, r, n, +1, +1, false)
+    else squircleCorner(cr, x2 - r, y2 - r, r, n, +1, +1, false)
     if (side === "bottom") {
         corner(cr, x2 - r, y2,      cx + aw / 2, y2,     cx, y2 + ah,       baseR)
         corner(cr, cx + aw / 2, y2, cx, y2 + ah,         cx - aw / 2, y2,   tipR)
@@ -129,7 +141,7 @@ export const bubblePath = (
     }
     cr.lineTo(x + r, y2)
     if (n === 2) cr.arc(x + r, y2 - r, r, HALF, Math.PI)      // bottom-left
-    else bodyCorner(cr, x + r, y2 - r, r, n, -1, +1, true)
+    else squircleCorner(cr, x + r, y2 - r, r, n, -1, +1, true)
     if (side === "left") {
         corner(cr, x, y2 - r,       x, cy + aw / 2,      x - ah, cy,        baseR)
         corner(cr, x, cy + aw / 2,  x - ah, cy,          x, cy - aw / 2,    tipR)
@@ -137,7 +149,7 @@ export const bubblePath = (
     }
     cr.lineTo(x, y + r)
     if (n === 2) cr.arc(x + r, y + r, r, Math.PI, 3 * HALF)   // top-left
-    else bodyCorner(cr, x + r, y + r, r, n, -1, -1, false)
+    else squircleCorner(cr, x + r, y + r, r, n, -1, -1, false)
     cr.closePath()
 }
 
@@ -210,43 +222,60 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
     cr.fill()
     cr.restore()
 
-    // 2) Inner edge & physical glass highlights — clip to the silhouette with AA (2).
+    // 2) Inner edge & physical glass highlights.
+    //
+    // ⚠️ The rim is NOT clipped, and that is the fix for debt #84. It used to stroke at
+    // 2x inside an antialiased clip of its own silhouette, letting the clip discard the
+    // outer half. An antialiased clip MULTIPLIES coverages, so wherever the stroke's own
+    // AA was fractional the result was clip x stroke rather than stroke — which is
+    // nowhere on a straight run (coverage is 1 or 0 there) and everywhere on a curve.
+    // Measured against the capsule's idiom over one geometry (`scripts/dev/bubble-probe.ts`):
+    // 0 pixels differing on the straight runs, 130 on the corners at r=18, rising with the
+    // radius — 299 at r=40.
+    //
+    // ⚠️ But #84 read that difference as the bubble's rim being WEAKER, and the probe
+    // does not support it. Measuring strength directly — mean |pixel − the same fill with
+    // no rim at all|, over the pixels the rim touches — the corners go 15.34 → 15.36, or
+    // +0.1%, and the straight runs do not move. The two idioms disagree about where the
+    // coverage lands, not about how much rim there is. So do NOT reach for this change to
+    // make a rim read stronger: it will not. What it buys is that there is one idiom
+    // instead of two to keep in step, which is what #230 and #234 were also about.
+    //
+    // `bubblePath` now takes an `offset`, so this is the capsule's own idiom verbatim:
+    // push the path inward by half the line width, stroke it once, no clip.
+    const rimPath = () => bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n, -BORDER_W / 2)
+
+    const cx = bx + bw * 0.5
+    const { r: lr, g: lg, b: lb } = GLASS_SPECULAR
+
+    // A) TOP INNER BEVEL BLOOM: a subtle diffuse highlight inside the upper 2-3px.
+    // This one KEEPS its clip: it is a rectangle FILL that has to stop at the
+    // silhouette, and containing a fill is what an AA clip is for — the doubling
+    // above only bites a stroke that straddles the clip edge.
     cr.save()
-    cr.setAntialias(2) // GRAY for smooth AA clip
+    cr.setAntialias(2)
     bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n)
     cr.clip()
+    const topBloomH = Math.min(3.5, Math.max(2.0, bh * 0.12))
+    const topBloom = new Cairo.LinearGradient(cx, by, cx, by + topBloomH)
+    topBloom.addColorStopRGBA(0.0, lr, lg, lb, 0.06)
+    topBloom.addColorStopRGBA(1.0, lr, lg, lb, 0.0)
+    cr.rectangle(bx, by, bw, topBloomH)
+    cr.setSource(topBloom)
+    cr.fill()
+    cr.restore()
 
-    if (dark) {
-        const cx = bx + bw * 0.5
-        const { r: lr, g: lg, b: lb } = GLASS_SPECULAR
-
-        // A) TOP INNER BEVEL BLOOM: Subtle diffuse highlight inside the upper portion of the bubble (2-3px)
-        const topBloomH = Math.min(3.5, Math.max(2.0, bh * 0.12))
-        const topBloom = new Cairo.LinearGradient(cx, by, cx, by + topBloomH)
-        topBloom.addColorStopRGBA(0.0, lr, lg, lb, 0.06)
-        topBloom.addColorStopRGBA(1.0, lr, lg, lb, 0.0)
-        cr.rectangle(bx, by, bw, topBloomH)
-        cr.setSource(topBloom)
-        cr.fill()
-
-        // B) 1PX CONTINUOUS RIM GRADIENT (Zenith highlight -> subtle lateral rim -> bottom reflection).
-        // The ramp is `drawSquircle`'s, from the one place it lives — a bubble and a
-        // capsule are the same material and must reflect the same way. Only the
-        // TECHNIQUE differs: the arrow tip is why this one clips and strokes at 2×
-        // instead of offsetting the path inward. `true` because the bubble shares the
-        // DARK ramp only; its light edge is its own, below.
-        bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n)
-        cr.setLineWidth(BORDER_W * 2)
-        cr.setSource(glassRimGradient(cx, by, bh, true, r))
-        cr.stroke()
-    } else {
-        // Light mode: clean dark edge using canonical GLASS_TINT.dark
-        const { r: dr, g: dg, b: db } = GLASS_TINT.dark
-        bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n)
-        cr.setLineWidth(BORDER_W * 2)
-        cr.setSourceRGBA(dr, dg, db, 0.12)
-        cr.stroke()
-    }
-
+    // B) 1PX CONTINUOUS RIM GRADIENT (zenith highlight → lateral flank → bottom
+    // reflection). The ramp is `drawSquircle`'s, from the one place it lives — a bubble
+    // and a capsule are the same material, so they get the same edge. There is no light
+    // branch here any more: there used to be three tables for one edge (this one a FLAT
+    // `GLASS_TINT.dark` at .12 with no gradient at all), and measured over a real
+    // backdrop the mode was never what the difference was about.
+    cr.save()
+    cr.setAntialias(2)
+    rimPath()
+    cr.setLineWidth(BORDER_W)
+    cr.setSource(glassRimGradient(cx, by, bh, r))
+    cr.stroke()
     cr.restore()
 }

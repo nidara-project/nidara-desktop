@@ -1628,3 +1628,84 @@ approximates the superellipse with cubic Béziers using two FIXED constants (`a 
 0.010px there (26×) and also improves 3.2 by 3×. It is a shape error, not a colour one, so it does
 NOT produce dark pixels — it was simply why the search "reproduced differently". Not fixed here to
 keep the artefact fix free of shape changes.
+
+---
+
+### 84. ✅ RESOLVED — the bubble spoke a second dialect of the same curve, and of the same rim (2026-08-23)
+
+Found by measurement while auditing Cairo after the artefact hunt (#81), not by looking. This file
+and `design-system.md` both said the two rim techniques produced "the same 1px inner rim". They do
+not.
+
+`drawSquircle` offsets the path inward by half the line width and strokes at 1× — no clip, coverage
+evaluated once. `GlassBubble` cannot do that (`bubblePath` takes no offset, and its arrow tip is why
+it wants the clip), so it clips to the silhouette with AA and strokes at 2×, letting the clip
+discard the outer half. **An antialiased clip multiplies coverages**: where the stroke's own AA is
+fractional, the result is clip × stroke rather than stroke.
+
+Rendered both idioms over the same real `createSquirclePath` geometry, same gradient, same fill:
+
+| | pixels differing | max channel delta |
+|---|---|---|
+| straight runs | **0** | 0 |
+| corners | **280** | **8/255** |
+
+Exactly the split the mechanism predicts: on an axis-aligned edge the path lands on a pixel boundary,
+coverage is 1 or 0, and squaring changes nothing; on the curve it is fractional everywhere.
+
+Small in absolute terms, and nobody has reported it — but it is capsule-vs-bubble coherence, which
+is what #230 and #234 were both about, and it lives in the curvature, which is where the eye was
+already being drawn. The tooltip and the dock context menu are the two consumers.
+
+**The fix is not "remove the clip"** — that is what the arrow tip needs. It is to give `bubblePath`
+the `offset` parameter `createSquirclePath` already has, so the bubble can use the same
+offset-and-stroke-1× idiom and the clip disappears entirely. Offsetting a path that contains a
+tangent-joined arrow tip is the fiddly part: the tip radius has to shrink with the offset or the
+point deforms. Not attempted here because it is a shape change to a surface nobody complained about,
+and it deserves its own before/after render.
+
+⚠️ **Do NOT "fix" it by setting the clip back to `ANTIALIAS_NONE`** (its value before #225). That
+removes the multiplication, but it also puts back the hard, aliased clip edge #225 removed — trading
+a measured 8/255 on the curve for a visibly stepped one.
+
+#### How it was resolved — and the part of this entry that turned out to be wrong
+
+Fixed the same day, with `scripts/dev/bubble-probe.ts` written first so the claim could be
+checked rather than argued.
+
+**The fix.** `bubblePath` grew a trailing `offset` parameter with `createSquirclePath`'s exact
+semantics, so `paintGlassBubble` now paints its rim the capsule's way — path offset inward by half
+the line width, stroked once, no clip. The clip survives only around the top bevel bloom, which is
+a *fill* that has to stop at the silhouette; the doubling only ever bit a stroke straddling the
+clip edge. Offsetting the pointer is the fiddly half this entry predicted: a triangle does not
+offset like a box, so each of its three corners moves along its own bisector — the protrusion
+changes by `offset·(L/(aw/2) − 1)` and not by `offset`, the base widens, the convex tip arc grows
+by `offset` while the two reflex base joins shrink by it. The formulas are in the function.
+
+**And the geometry was a second dialect nobody had noticed.** `bodyCorner` emitted each body corner
+as 48 straight chords — the technique `createSquirclePath`'s own header says it replaced. So the
+bubble and the capsule were not merely reflecting differently, they were not the same silhouette:
+127 pixels of coverage differ at r=18, all of them in the corners, up to 17/255. Both now call
+`squircleCorner`, extracted from `createSquirclePath` and the only thing in the repo that knows how
+a rounded corner is shaped. The extraction was verified byte-for-byte: `glass-probe` renders
+identical PNGs and identical pixel dumps before and after it.
+
+🔑 **The part this entry got wrong.** It read a *difference* measurement as the bubble's rim being
+WEAKER, and `design-system.md` repeated it. Difference is not strength. Measured directly — mean
+|pixel − the same fill with no rim at all|, over the pixels the rim actually touches — the corners
+go **15.34 → 15.36 (+0.1 %)** and the straight runs do not move. The two idioms disagree about
+where the coverage lands, not about how much rim there is. Nothing about this change is visible,
+and the first draft of the probe hid that: it counted which idiom came out *brighter*, which splits
+roughly down the middle either way because the rim is bright at the top and dark at the flank — a
+number that looks like a result and measures nothing.
+
+So the reasons to have done it are the ones that survive: one silhouette instead of two, one rim
+idiom instead of two to keep in step, and a path 11.6× cheaper to build (0.0023 ms vs 0.0268 ms at
+300×100 — the three menu bubbles built theirs twice per draw). ⚠️ **Do not reach for this idiom to
+make a rim read stronger.** It will not.
+
+⚠️ **The chord polyline was the more accurate curve, not the less.** Against the true superellipse
+its error is 0.0043 px at r=32 versus the Bézier fit's 0.0112 px — 2.6× closer, because its
+vertices sit exactly on the curve while the fit runs consistently inside it. Unifying made the
+bubble marginally *less* faithful to the ideal. At two orders of magnitude below a pixel that
+buys coherence for nothing, but do not let a later reader think the chords were the sloppy option.

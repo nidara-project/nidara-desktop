@@ -12,6 +12,63 @@ import { GLASS_TINT, GLASS_SPECULAR } from "../../lib/tokens"
  *  hardcoding their OWN float copies of a color instead of parsing the real hex live. */
 export { hexToFloatRgb } from "../../lib/accent"
 
+/** ONE quarter of a superellipse |x/r|ⁿ + |y/r|ⁿ = 1, as two continuous cubic Bézier
+ *  splines — the only place in this repo that knows how a rounded corner is shaped.
+ *
+ *  Placement follows `cr.arc`'s vocabulary so a caller reads like the arc it replaced:
+ *  the corner is centred on (`cx`, `cy`), `sx`/`sy` (±1) put the quarter in one of the
+ *  four quadrants around it, and `fromTop` says which end the path arrives at — true =
+ *  start on the vertical axis at (cx, cy + sy·r) and finish on the horizontal one at
+ *  (cx + sx·r, cy), false = the reverse. The control net is symmetric under that
+ *  reversal, so the two directions are the same curve walked opposite ways. The caller
+ *  owns the start point (a `moveTo` or the `lineTo` that closes the previous edge).
+ *
+ *  ⚠️ `a` AND `b` ARE FITTED FOR n = 3.2 AND ONLY FOR n = 3.2. They are the two tangent
+ *  lengths of the fit; `mid` follows `n`, they do not. MEASURED against the true
+ *  superellipse (`scripts/dev/bubble-probe.ts`, specimen C) — max radial error, which
+ *  grows linearly with the radius:
+ *
+ *      r      12       18       24       32       48
+ *      px   0.0042   0.0063   0.0084   0.0112   0.0168
+ *
+ *  and against `n`, at corner radius 32:
+ *
+ *      n     3.2     3.5     4.0     4.5     5.0
+ *      px   0.011   0.054   0.180   0.322   0.466
+ *
+ *  Everything in the shell paints at 3.2 — every island, the overview, the app grid,
+ *  Prism (which sat at 4.5 until 2026-08-23, carried in by a refactor, and was the one
+ *  surface visibly off its own silhouette), and since the bubble was unified, the
+ *  tooltip and the context menus. n = 2 never reaches here: it comes with `perfect`, or
+ *  with `bubblePath`'s own arc branch, and both are four real arcs. So the fixed pair is
+ *  right for every caller today — but if you pass a different `n`, refit them (a minimax
+ *  sweep gets n=4.5 to 0.012px with a≈0.423, b≈0.155) rather than assuming the curve you
+ *  get is the superellipse you asked for.
+ *
+ *  ⚠️ And it is a FIT, not the curve: it runs consistently INSIDE the true superellipse.
+ *  The 48-chord polyline this replaced in `GlassBubble` was 2.6× closer to the ideal
+ *  (0.0043 px at r=32) and 11.6× more expensive to build. Both are two orders of
+ *  magnitude below one pixel; what you can actually see is two sibling surfaces wearing
+ *  two different silhouettes, which is why there is now one. */
+export const squircleCorner = (
+    cr: any, cx: number, cy: number, r: number, n: number,
+    sx: number, sy: number, fromTop: boolean,
+) => {
+    const mid = Math.pow(0.5, 1 / n) * r
+    const a = 0.3100 * r
+    const b = 0.1950 * r
+    // The control net, as magnitudes in the first quadrant, from the vertical axis to
+    // the horizontal one: P0, C1, C2, P3(=the 45° junction), C1', C2', P3'.
+    const net: number[][] = [
+        [0, r], [a, r], [mid - b, mid + b], [mid, mid], [mid + b, mid - b], [r, a], [r, 0],
+    ]
+    if (!fromTop) net.reverse()
+    const px = (i: number) => cx + sx * net[i][0]
+    const py = (i: number) => cy + sy * net[i][1]
+    cr.curveTo(px(1), py(1), px(2), py(2), px(3), py(3))
+    cr.curveTo(px(4), py(4), px(5), py(5), px(6), py(6))
+}
+
 // Reusable path generator for clipping or drawing
 export const createSquirclePath = (
     cr: any,
@@ -47,112 +104,56 @@ export const createSquirclePath = (
         cr.arc(ox + safe_rd, oy + safe_rd, safe_rd, Math.PI, 3 * Math.PI / 2) // TL
         cr.lineTo(ox + ow - safe_rd, oy)
     } else {
-        // SQUIRCLE (Superellipse) — Continuous Analytical Cubic Bézier Splines.
-        // Replaces polygon chords (stacked straight lineTo segments) with exact continuous
-        // cubic Bézier curves (cr.curveTo), for smooth, continuous subpixel rasterization.
-        //
-        // ⚠️ `a` AND `b` ARE FITTED FOR n = 3.2 AND ONLY FOR n = 3.2. They are the two
-        // tangent lengths of the fit; `mid` follows `n`, they do not. The accuracy this
-        // comment used to claim ("99.96%, < 0.012px") is true at 3.2 and nowhere else.
-        // Max radial error against the true superellipse, at corner radius 32:
-        //
-        //      n     3.2     3.5     4.0     4.5     5.0
-        //      px   0.011   0.054   0.180   0.322   0.466
-        //
-        // Everything in the shell paints at 3.2 — every island, the overview, the app
-        // grid, Prism (which sat at 4.5 until 2026-08-23, carried in by a refactor, and
-        // was the one surface visibly off its own silhouette). n = 2 never reaches here:
-        // it comes with `perfect`, which is four real arcs. So the fixed pair is right for
-        // every caller today — but if you pass a different `n`, refit them (a minimax
-        // sweep gets n=4.5 to 0.012px with a≈0.423, b≈0.155) rather than assuming the
-        // curve you get is the superellipse you asked for.
-        const mid = Math.pow(0.5, 1 / n)
-        const a = 0.3100
-        const b = 0.1950
-        const mx = (1 - mid) * safe_rd
-        const my = (1 - mid) * safe_rd
-
-        // Top edge: horizontal straight line to top-right joint
+        // SQUIRCLE (Superellipse) — four quarters, every one of them `squircleCorner`.
+        // The straight edges are emitted here; the curvature is not this function's to
+        // know. Right Edge / Left Edge stay conditional: on a pill there is no straight
+        // run and a zero-length lineTo would put a degenerate segment in the path.
         cr.moveTo(ox + safe_rd, oy)
         cr.lineTo(ox + ow - safe_rd, oy)
-
-        // Top-right Corner: (ox + ow - safe_rd, oy) -> (ox + ow, oy + safe_rd)
-        cr.curveTo(
-            ox + ow - safe_rd + (a * safe_rd), oy,
-            ox + ow - mx - (b * safe_rd), oy + my - (b * safe_rd),
-            ox + ow - mx, oy + my
-        )
-        cr.curveTo(
-            ox + ow - mx + (b * safe_rd), oy + my + (b * safe_rd),
-            ox + ow, oy + safe_rd - (a * safe_rd),
-            ox + ow, oy + safe_rd
-        )
-
-        // Right Edge (only if straight segment has positive height)
-        if (oh - (2 * safe_rd) > 0.01) {
-            cr.lineTo(ox + ow, oy + oh - safe_rd)
-        }
-
-        // Bottom-right Corner: (ox + ow, oy + oh - safe_rd) -> (ox + ow - safe_rd, oy + oh)
-        cr.curveTo(
-            ox + ow, oy + oh - safe_rd + (a * safe_rd),
-            ox + ow - mx + (b * safe_rd), oy + oh - my - (b * safe_rd),
-            ox + ow - mx, oy + oh - my
-        )
-        cr.curveTo(
-            ox + ow - mx - (b * safe_rd), oy + oh - my + (b * safe_rd),
-            ox + ow - safe_rd + (a * safe_rd), oy + oh,
-            ox + ow - safe_rd, oy + oh
-        )
-
-        // Bottom Edge: horizontal straight line to bottom-left joint
+        squircleCorner(cr, ox + ow - safe_rd, oy + safe_rd, safe_rd, n, +1, -1, true)
+        if (oh - (2 * safe_rd) > 0.01) cr.lineTo(ox + ow, oy + oh - safe_rd)
+        squircleCorner(cr, ox + ow - safe_rd, oy + oh - safe_rd, safe_rd, n, +1, +1, false)
         cr.lineTo(ox + safe_rd, oy + oh)
-
-        // Bottom-left Corner: (ox + safe_rd, oy + oh) -> (ox, oy + oh - safe_rd)
-        cr.curveTo(
-            ox + safe_rd - (a * safe_rd), oy + oh,
-            ox + mx + (b * safe_rd), oy + oh - my + (b * safe_rd),
-            ox + mx, oy + oh - my
-        )
-        cr.curveTo(
-            ox + mx - (b * safe_rd), oy + oh - my - (b * safe_rd),
-            ox, oy + oh - safe_rd + (a * safe_rd),
-            ox, oy + oh - safe_rd
-        )
-
-        // Left Edge (only if straight segment has positive height)
-        if (oh - (2 * safe_rd) > 0.01) {
-            cr.lineTo(ox, oy + safe_rd)
-        }
-
-        // Top-left Corner: (ox, oy + safe_rd) -> (ox + safe_rd, oy)
-        cr.curveTo(
-            ox, oy + safe_rd - (a * safe_rd),
-            ox + mx - (b * safe_rd), oy + my + (b * safe_rd),
-            ox + mx, oy + my
-        )
-        cr.curveTo(
-            ox + mx + (b * safe_rd), oy + my - (b * safe_rd),
-            ox + safe_rd - (a * safe_rd), oy,
-            ox + safe_rd, oy
-        )
+        squircleCorner(cr, ox + safe_rd, oy + oh - safe_rd, safe_rd, n, -1, +1, true)
+        if (oh - (2 * safe_rd) > 0.01) cr.lineTo(ox, oy + safe_rd)
+        squircleCorner(cr, ox + safe_rd, oy + safe_rd, safe_rd, n, -1, -1, false)
     }
     cr.closePath()
 }
 
-/** How dark the FLANK of the rim goes, as `GLASS_TINT.dark` alpha at mid-height.
+/** How dark the FLANK of the rim goes, as `GLASS_TINT.dark` alpha along the side.
+ *  ONE number, for both modes — see `glassRimGradient` for why there is no second one.
  *
- *  This is the one number to move if the sides read as too much or too little. It is
- *  a look decision with a physical argument behind it: at the top and bottom you meet
- *  the edge at a grazing angle and it REFLECTS (white, .42 and .24), but at mid-height
- *  you are looking straight THROUGH the edge, so what you should see is the thickness
- *  of the material — dark — not a highlight.
+ *  This is the one thing to move if the sides read as too much or too little. It is a
+ *  look decision with a physical argument behind it: at the top and bottom you meet the
+ *  edge at a grazing angle and it REFLECTS, but at mid-height you are looking straight
+ *  THROUGH the edge, so what you should see is the thickness of the material — dark —
+ *  not a highlight.
  *
- *  ⚠️ It was white `.08` there until 2026-08-23, which made the flank LIGHTER than the
- *  body it edges (measured over a bright wallpaper: flank 27,149,182 against a body of
- *  7,139,175). The capsule therefore had no dark side at all, which is why it read
- *  flat over pale wallpapers — the contrast the glass needs there has to come from the
- *  edge, because the fill cannot supply it without going opaque.
+ *  ⚠️ Measure it RELATIVE to the body it edges, never as a raw pixel delta. The same
+ *  alpha over a bright body and over a dark one produce very different absolute numbers
+ *  and very similar perceived ones, and comparing the absolutes inverts the conclusion —
+ *  it is how this file spent an afternoon claiming light glass had the stronger flank.
+ *  Over a real blurred bright wallpaper (`scripts/dev/rim-backdrop-probe.ts`), same
+ *  pixel with the rim against without it:
+ *
+ *      dark glass    −13.7 %   (−13.8 levels of 255)
+ *      light glass   −16.2 %   (−36.7 levels)
+ *
+ *  Two and a half points apart on one shared number — less than the wallpaper behind it
+ *  moves either of them. That is the measurement that says one number is enough.
+ *
+ *  ⚠️ It was white `.08` until 2026-08-23, which made the flank LIGHTER than the body it
+ *  edges. The capsule therefore had no dark side at all, which is why it read flat over
+ *  pale wallpapers — the contrast the glass needs there has to come from the edge,
+ *  because the fill cannot supply it without going opaque.
+ *
+ *  ⚠️ Over a DARK wallpaper the dark-mode flank inverts: the tint ends up lighter than
+ *  the composited body, so the side comes out +13.8 % — but that is **+1.9 levels of 255
+ *  on a body sitting at 13.4**, which nobody can see. Documented so the next person who
+ *  measures it does not go hunting. It is not a reason to make the flank mode-aware, or
+ *  backdrop-aware; if it ever needs fixing the honest fix is a MULTIPLY pass, not a
+ *  second table.
  *
  *  ⚠️ This reopens #230, which removed a lateral dark contour on the grounds that it
  *  "read as a drawn outline rather than as material". That judgement was made while
@@ -179,65 +180,63 @@ const FLANK_SPREAD = 0.35
  *  `height` starting at `top`. `cx` only fixes the gradient's axis — it is vertical,
  *  so any x on the shape does.
  *
- *  ⚠️ THIS IS THE ONLY COPY OF THESE NUMBERS. `GlassBubble.ts` paints the same rim
- *  with a different technique (clip + double-width stroke, because of its arrow tip)
- *  and used to carry its own byte-identical table of the seven dark stops. #230
- *  unified the SHAPE of the rim and left two copies of the values, which is a
- *  divergence waiting for the next tweak: capsules and bubbles would drift apart one
- *  stop at a time, and only in one mode, which is the kind of thing you see six
- *  months later in a screenshot.
+ *  ⚠️ THIS IS THE ONLY COPY OF THESE NUMBERS, and since 2026-08-23 it does not know
+ *  what MODE it is in. There used to be two ramps here, a seven-stop one for dark and a
+ *  four-stop one for light, and they disagreed in four places: the key light (.42 vs
+ *  .55), the second stop (.16 vs .25), the flank (a plateau tied to the radius vs
+ *  `GLASS_TINT.dark` at .10 pinned to a single stop at 50 %), and the bottom (a white
+ *  ground bounce vs a dark lower edge). None of the four was ever derived — they were
+ *  two tables written months apart, and the light one still carried, in light mode only,
+ *  exactly the "very small darker bit" defect #239 fixed for dark.
  *
- *  DARK — a seven-stop **Fresnel** ramp:
+ *  Unified and then MEASURED over real blurred wallpapers rather than argued: one ramp
+ *  puts the two modes 2.5 points apart in perceived edge contrast, inside the spread the
+ *  backdrop itself causes. So a rim describes the same physical edge in both modes and is
+ *  now literally the same gradient — no `dark` argument, and `drawSquircle` no longer has
+ *  to guess the mode from its fill colour.
  *
- *      pos    | 0.0 | .18 | .35 | .50  | .65 | .82 | 1.0
- *      alpha  | .42 | .32 | .16 | .08  | .13 | .19 | .24
+ *  A **Fresnel** ramp, top to bottom:
  *
- *  An edge reflects most where you meet it at a grazing angle — the top rim (key
- *  light, .42) and the bottom rim (ground bounce, .24) — and least where you look
- *  straight through the glass, the flank at mid-height (.08). **The dip in the
- *  middle is the whole point**: the lateral dark contour it replaced was faking the
- *  same effect by painting black down the sides, which read as a drawn outline
- *  rather than as material.
+ *      key light .42  →  (roll-off .16)  →  flank FLANK_DEPTH  →  (roll-on .14)  →  .24
  *
- *  LIGHT — four stops, and a different idea: a white specular top fading into a
- *  dark lower rim, because on light glass the thing that needs defining is the
- *  BOTTOM edge against the content below it. `GlassBubble` does not share this half
- *  (it paints one flat `GLASS_TINT.dark` edge at .12); that divergence is deliberate
- *  and unifying it is a visual decision, not a refactor.
+ *  An edge reflects most where you meet it at a grazing angle — the top rim (key light)
+ *  and the bottom rim (ground bounce) — and least where you look straight through the
+ *  glass, the flank. **The dip in the middle is the whole point**: the lateral dark
+ *  contour it replaced was faking the same effect by painting black down the sides,
+ *  which read as a drawn outline rather than as material.
  *
- *  The white is `GLASS_SPECULAR`, not `GLASS_TINT.light`: it is the colour of the
- *  light, not of the surface. They were the same token until 2026-08-23, which meant
- *  a retint of light-mode glass would have dimmed the highlight on every dark
- *  capsule in the desktop. */
-export const glassRimGradient = (cx: number, top: number, height: number, dark: boolean, radius = 0) => {
+ *  The white is `GLASS_SPECULAR`, not `GLASS_TINT.light`: it is the colour of the light,
+ *  not of the surface — which is also why it does not belong to a mode. They were the
+ *  same token until 2026-08-23, which meant a retint of light-mode glass would have
+ *  dimmed the highlight on every dark capsule in the desktop.
+ *
+ *  ⚠️ Before adding a branch here, read the paragraph above: every divergence this ramp
+ *  has ever had was found by measuring, after the fact, never proposed by one. If some
+ *  surface really needs a different edge, give it a PARAMETER, not a second table. */
+export const glassRimGradient = (cx: number, top: number, height: number, radius = 0) => {
     const g = new Cairo.LinearGradient(cx, top, cx, top + height)
     const { r: lr, g: lg, b: lb } = GLASS_SPECULAR
-    if (dark) {
-        const { r: fr, g: fg, b: fb } = GLASS_TINT.dark
-        // WHERE the sides actually are. The straight vertical run of the silhouette
-        // spans y ∈ [radius, height − radius], so as a fraction of the height it is
-        // [radius/height, 1 − radius/height] — and that is what has to be dark, not a
-        // fixed percentage. A dock capsule (92 tall, r 32) is dark over .35–.65; a CC
-        // panel (600 tall, same radius) over .05–.95. One constant cannot serve both:
-        // pinning the dark to 0.50 puts it at a POINT in the middle of the side, which
-        // is what shipped in #239 and what the owner saw — "a very small darker bit".
-        // On a pill (height = 2·radius) the two collapse to 0.5, which is correct:
-        // a pill has no straight side, its widest point IS mid-height.
-        const t = Math.min(0.5, Math.max(0, radius / Math.max(1, height))) * FLANK_SPREAD
-        const top2 = t, bot2 = 1 - t
-        g.addColorStopRGBA(0.0, lr, lg, lb, 0.42)              // top rim: key light
-        if (top2 > 0.06) g.addColorStopRGBA(top2 * 0.55, lr, lg, lb, 0.16)
-        g.addColorStopRGBA(top2, fr, fg, fb, FLANK_DEPTH)      // ── the side starts
-        g.addColorStopRGBA(bot2, fr, fg, fb, FLANK_DEPTH)      // ── the side ends
-        if (bot2 < 0.94) g.addColorStopRGBA(bot2 + (1 - bot2) * 0.45, lr, lg, lb, 0.14)
-        g.addColorStopRGBA(1.0, lr, lg, lb, 0.24)              // bottom rim: ground bounce
-    } else {
-        const { r: dr, g: dg, b: db } = GLASS_TINT.dark
-        g.addColorStopRGBA(0.0, lr, lg, lb, 0.55)
-        g.addColorStopRGBA(0.20, lr, lg, lb, 0.25)
-        g.addColorStopRGBA(0.50, dr, dg, db, 0.10)
-        g.addColorStopRGBA(1.0, dr, dg, db, 0.14)
-    }
+    const { r: fr, g: fg, b: fb } = GLASS_TINT.dark
+
+    // WHERE the sides actually are. The straight vertical run of the silhouette spans
+    // y ∈ [radius, height − radius], so as a fraction of the height it is
+    // [radius/height, 1 − radius/height] — and that is what has to be dark, not a fixed
+    // percentage. A dock capsule (92 tall, r 32) is dark over .12–.88; a CC panel (610
+    // tall, r 24) over .01–.99. One constant cannot serve both: pinning the dark to 0.50
+    // puts it at a POINT in the middle of the side, which is what shipped in #239 and
+    // what the owner saw — "a very small darker bit". It is also exactly what the LIGHT
+    // ramp still did until this ramp was unified. On a pill (height = 2·radius) the two
+    // collapse to 0.5, which is correct: a pill has no straight side, its widest point
+    // IS mid-height.
+    const t = Math.min(0.5, Math.max(0, radius / Math.max(1, height))) * FLANK_SPREAD
+    const top2 = t, bot2 = 1 - t
+
+    g.addColorStopRGBA(0.0, lr, lg, lb, 0.42)              // top rim: key light
+    if (top2 > 0.06) g.addColorStopRGBA(top2 * 0.55, lr, lg, lb, 0.16)
+    g.addColorStopRGBA(top2, fr, fg, fb, FLANK_DEPTH)      // ── the side starts
+    g.addColorStopRGBA(bot2, fr, fg, fb, FLANK_DEPTH)      // ── the side ends
+    if (bot2 < 0.94) g.addColorStopRGBA(bot2 + (1 - bot2) * 0.45, lr, lg, lb, 0.14)
+    g.addColorStopRGBA(1.0, lr, lg, lb, 0.24)              // bottom rim: ground bounce
     return g
 }
 
@@ -320,12 +319,13 @@ export const drawSquircle = (
         // Explicit solid border (e.g. hover accent color on bar capsules)
         cr.setSourceRGBA(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
     } else if (enableGloss) {
-        // No mode argument reaches here, so the fill is asked what mode it is. Keep
-        // GLASS_TINT.light above this threshold (tokens.ts says so too) — below it a
-        // light capsule silently takes the dark branch.
-        const isDark = !(color && color.r > 0.8 && color.g > 0.8 && color.b > 0.8)
+        // 🔑 No mode argument reaches here, and since the ramp was unified none is needed.
+        // This used to sniff the mode out of the FILL COLOUR — `color.r > 0.8 && …` — with
+        // a warning attached that `GLASS_TINT.light` had to stay above that threshold or a
+        // light capsule would silently take the dark branch. One ramp deletes the guess and
+        // the footgun with it.
         const cx = x + drawW * 0.5
-        cr.setSource(glassRimGradient(cx, y, drawH, isDark, r))
+        cr.setSource(glassRimGradient(cx, y, drawH, r))
     } else {
         const baseAlpha = borderColor ? borderColor.a : (borderWidth > 1.0 ? 0.12 : 0.10)
         const baseR = borderColor ? borderColor.r : 1

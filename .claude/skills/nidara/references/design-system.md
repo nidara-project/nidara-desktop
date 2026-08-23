@@ -485,8 +485,10 @@ bar panel: `lg` means **any floating popup of the shell**, so the three menu bub
 painted at `radiusMax: RADIUS.lg` with `n: 3.2`, the shell's squircle. **The arrow is the only
 thing that distinguishes a bubble menu; the box it hangs off is the same card as the system
 menu's.** `paintGlassBubble` grew an `n` for this and defaults it to **2** — the tooltip is a
-near-pill whose ends genuinely are stadium arcs, and it stays exact `cr.arc` rather than a
-polyline. (`radiusMax` is a CAP, not a ladder rung — `paintGlassBubble` computes a near-pill
+near-pill whose ends genuinely are stadium arcs, and it stays exact `cr.arc`. (At `n = 3.2` the
+bubble's body corners are `squircleCorner`, the same four Béziers the capsules use; until #84 they
+were a 48-chord polyline of their own, which was 2.6× closer to the ideal superellipse and 11.6×
+slower to build.) (`radiusMax` is a CAP, not a ladder rung — `paintGlassBubble` computes a near-pill
 `min(w,h)/2` first — but it *is* the surface radius `rowInsetFor` derives from, so the two come
 from one token.) (`radiusMax` in those calls is **not** a ladder rung and must not
 be swept onto one.)
@@ -1028,8 +1030,9 @@ captures over a real *light* wallpaper through Hyprland's actual blur: the halo 
 stair-stepped curves were clearly visible. So AA wins. **Don't
 "fix" this back to NONE** thinking AA causes a halo — it was checked on real pixels.
 (This paragraph used to add that "the border/rim strokes still clip to the path so their inner
-AA can't spill outward". That is now true of `GlassBubble` only — `drawSquircle` stopped
-clipping its rim in #230; see the next section for what replaced it.)
+AA can't spill outward". No rim clips any more — `drawSquircle` stopped in #230 and `GlassBubble`
+followed when #84 closed; see the next section for what replaced it. `GlassBubble` still clips its
+top bevel bloom, which is a *fill* that has to stop at the silhouette.)
 
 ## The squircle path is analytical Béziers, and the rim is ONE Fresnel ramp
 
@@ -1075,13 +1078,51 @@ seven stops:
 
 | stop | 0.0 | `t·0.55` | **`t`** | **`1−t`** | `1−t+t·0.45` | 1.0 |
 |---|---|---|---|---|---|---|
-| colour | white | white | **`GLASS_TINT.dark`** | **`GLASS_TINT.dark`** | white | white |
+| colour | white | white | **`GLASS_TINT.dark`** | **`GLASS_TINT.dark`** | white¹ | white¹ |
 | alpha | .42 | .16 | **`FLANK_DEPTH`** | **`FLANK_DEPTH`** | .14 | .24 |
 
 Read it as **Fresnel**: an edge reflects most where you meet it at a grazing angle — the top rim
 (key light, .42) and the bottom rim (ground bounce, .24). Along the SIDES you are not looking at
 the edge, you are looking **through** it, so what belongs there is the thickness of the material:
 dark, held as a plateau rather than a single stop.
+
+⚠️ **ONE ramp serves both modes, and it does not take a mode argument** (2026-08-23). There used
+to be two: this seven-stop one for dark and a four-stop one for light, disagreeing in four places
+— key light (.42 vs .55), second stop (.16 vs .25), flank (this radius-tied plateau vs
+`GLASS_TINT.dark` at .10 pinned to a single stop at 50 %), and the bottom (white bounce vs dark
+lower edge). None was derived; they were two tables written months apart, and the light one still
+carried — in light mode only — exactly the "very small darker bit" defect #239 fixed for dark.
+`GlassBubble` was a third table again: a FLAT `GLASS_TINT.dark` at .12, no gradient at all.
+
+The unification was **measured, not argued**. Over real blurred wallpapers, comparing the same
+pixel with the rim against without it (`scripts/dev/rim-backdrop-probe.ts`):
+
+| | dark glass | light glass |
+|---|---|---|
+| over a bright wallpaper | **−13.7 %** (−13.8 levels) | **−16.2 %** (−36.7 levels) |
+| over a dark wallpaper | +13.8 % (**+1.9 levels**) | −15.1 % (−21.0 levels) |
+| light, before unifying | — | −8.0 % → −11.0 %, drifting; **+3.7 %** at the top of a CC panel |
+
+2.5 points apart on one shared number, less than the spread the wallpaper itself causes. That is
+what says one number is enough. The `+3.7 %` in the last row is the top of a light CC panel having
+had, in practice, an *inverted* edge — brighter than the body it was supposed to define.
+
+⚠️ **Always measure the rim RELATIVE to the body it edges, and against the same pixel with no rim
+on it.** Two traps, both of which produced a confidently wrong answer here first: raw pixel deltas
+across bodies of different brightness invert the conclusion (they briefly "showed" light glass with
+the stronger flank), and sampling the body a few pixels inboard measures the *wallpaper's* own
+gradient, not the rim (that one "showed" the dark flank turning bright over a dark wallpaper, at
++13.8 %).
+
+⚠️ **Over a dark wallpaper the dark-mode flank really does inverts sign** — the tint ends up
+lighter than the composited body — but it is +1.9 levels of 255 on a body sitting at 13.4. Real,
+invisible, and not a reason to reintroduce a branch. If it ever needs fixing, the honest fix is a
+MULTIPLY pass for the flank, not a second table.
+
+⚠️ **The mode-sniffing in `drawSquircle` is gone with it.** It used to infer dark/light from the
+FILL COLOUR (`color.r > 0.8 && …`), with a warning that `GLASS_TINT.light` had to stay above that
+threshold or a light capsule would silently take the dark branch. One ramp deletes the guess and
+the footgun together.
 
 ⚠️ **`t` is computed, not a constant, and that is the whole point.** The straight vertical run of
 the silhouette spans `y ∈ [radius, height − radius]`, so as a fraction of the height it is
@@ -1111,29 +1152,29 @@ about to remove the dark flank again, know that you are re-deciding this, and sa
 Three things about it that are easy to undo by accident:
 
 - **There is ONE copy of those stops: `glassRimGradient` in `DrawingUtils.ts`.** It takes the mode
-  and returns the gradient; `GlassBubble` calls it too. Until 2026-08-23 the table was written out
-  twice, byte-identical — #230 unified the *shape* of the rim and left two copies of the *numbers*,
-  which is a divergence waiting for the next tweak. Only the DARK ramp is shared: light mode
-  differs on purpose (`drawSquircle` fades white into a dark lower rim; the bubble paints one flat
-  `GLASS_TINT.dark` edge at .12), so the bubble passes `true` and keeps its own light branch.
-  Unifying *that* half is a visual decision, not a refactor.
+  and returns the gradient — no mode argument at all since 2026-08-23; `GlassBubble` makes the
+  same call. #230 unified the *shape* and left copies of the *numbers*; every round of this has
+  been a divergence found after the fact, never one anybody proposed. If you are about to write a
+  branch here, that is the signal to add a PARAMETER instead.
 - **The white is `GLASS_SPECULAR`, not `GLASS_TINT.light`.** Both are pure white and for two months
   they were the same token, which is the trap: they are the colour of the *light* and the colour of
   the *surface*, and tying them together means a retint of light-mode glass silently dims the
   highlight on every dark capsule in the desktop. The dark tint still comes from `GLASS_TINT.dark`
   (commandment 10 reaching the Cairo rim — the Deep Slate pass moves the glass *and* its lower edge
   together); what left is only the misuse of the light one.
-- **`drawSquircle` no longer clips its rim.** It offsets the path inward by half the line width
-  (`strokeOffset = -borderWidth * 0.5`) and strokes at 1×, so the stroke lands entirely inside the
-  silhouette by construction. `GlassBubble` still uses the older idiom — clip to the silhouette,
-  then stroke at `BORDER_W * 2` and let the clip discard the outer half; its arrow tip is why it
-  wants the clip (`bubblePath` takes no offset, so the offset trick is not available to it).
-  ⚠️ **They are NOT the same rim, and this file claimed they were until it was measured**
-  (2026-08-23). On straight runs they agree to the byte. On the CURVES they do not: an antialiased
-  clip MULTIPLIES coverages (clip × stroke), so where coverage is fractional the bubble's rim comes
-  out weaker — **280 pixels differ, every one of them in a corner, up to 8/255.** Small, but it is
-  the capsule-vs-bubble coherence #230 and #234 were about, and it is in the curvature. Tracked as
-  open debt #84; do not "unify" the techniques without reading it first.
+- **No rim clips itself any more — capsule and bubble share ONE idiom.** Offset the path inward by
+  half the line width and stroke it once (`drawSquircle`'s `strokeOffset = -borderWidth * 0.5`;
+  `bubblePath`'s trailing `offset` parameter, added when #84 closed), so the stroke lands entirely
+  inside the silhouette by construction. The bubble used to clip to its own silhouette and stroke
+  at `BORDER_W * 2`, letting the clip discard the outer half, because `bubblePath` took no offset.
+  An antialiased clip MULTIPLIES coverages (clip × stroke), so the two idioms agree to the byte on
+  straight runs and disagree on every curve — 130 pixels at r=18, 299 at r=40, all of them in a
+  corner. ⚠️ **What that difference is NOT is a weaker rim**, which is how #84 read it and how this
+  file said it. Measured directly — mean |pixel − the same fill with no rim| over the pixels the rim
+  touches — the corners move **15.34 → 15.36, +0.1 %**, and the straight runs do not move at all.
+  The idioms disagree about where the coverage lands, not about how much rim there is. Reach for
+  this idiom for coherence and for the path being 11.6× cheaper to build, never to make a rim read
+  stronger. `scripts/dev/bubble-probe.ts` is the instrument for all of it.
 
 ## A CSS pill at `--nidara-radius-pill` seams at the middle of each cap
 
