@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
-import SquircleContainer, { Shape } from "../../common/SquircleContainer"
+import SquircleContainer, { Shape, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/tokens"
 import { WidgetSize } from "./Types"
 
@@ -109,27 +109,10 @@ export default function BaseIsland({
         shape,
         css_classes: ["cc-island", `cc-${name}-island`],
         inset: 2.0,
-        // ⚠️ EXPERIMENT (2026-08-23, owner-requested). The CC is the surface that sits
-        // over other people's WINDOWS, so it is the one that meets a flat white backdrop
-        // — and there the rim's white top and bottom stops vanish and a tile reads as two
-        // dark vertical lines. A shadow is what macOS separates floating glass with.
-        //
-        // 🔑 `spread` is FREE at 2 and only at 2: the shadow lives in the inset, and these
-        // islands already reserve exactly `inset: 2.0`. So the glass does not shrink, the
-        // grid does not move, and the experiment changes ONE thing. Going to 4 or 6 reads
-        // better against white but comes out of the tile — every island's painted glass
-        // shrinks by that much in each dimension.
-        //
-        // The other half is not free: the CC is a guest on the BAR's layer surface, so
-        // this needs `nidara-bar`'s `ignore_alpha` at the dock's 0.23. At the shipped 0.01
-        // Hyprland blurs the backdrop behind every one of these shadows (debt #237), and
-        // raising it has its own cost — read the note on the layer rules. Both halves
-        // revert together; see `drawGlassShadow`.
-        // `alpha` is the TOTAL at the silhouette, which is the number that has to stay
-        // under the layer's `ignore_alpha` (0.23 with the bar raised) — 0.18 leaves margin.
-        // drop 0: at spread 2 a downward offset costs the TOP edge more than it buys
-        // in depth — it is the only thing defining that edge against a white window.
-        shadow: { spread: 2, alpha: 0.18, drop: 0 },
+        // The CC has no panel — these islands ARE its outer glass, which is why they
+        // carry the shadow while a control inside a panel must not. One recipe for the
+        // whole shell; see GLASS_SHADOW.
+        shadow: GLASS_SHADOW,
         padding: islandPadding(size),
         getActive,
         watchActive,

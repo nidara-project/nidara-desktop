@@ -6,7 +6,7 @@ import { execAsync } from "../../../lib/process"
 import hs from "../../core/HyprlandState"
 import { drawSquircle, squircleThumb } from "../../common/DrawingUtils"
 import { NidaraScrolled } from "../../../lib/nidara-kit"
-import SquircleContainer, { Shape } from "../../common/SquircleContainer"
+import SquircleContainer, { Shape, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, GLASS_TINT } from "../../../lib/tokens"
 import { ScaleRevealer, attachGhostSwipeDismiss } from "../../common/ScaleRevealer"
 import IconButton from "../../common/IconButton"
@@ -333,7 +333,7 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
     // CRITICAL urgency gets no visual decoration — macOS/GNOME don't mark it
     // either: never auto-expiring IS the signal. The 1px inner edge is part of
     // the glass sheen, not an indicator channel.
-    const capsule = SquircleContainer({ child: ov, radius: RADIUS.xl, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true })
+    const capsule = SquircleContainer({ child: ov, radius: RADIUS.xl, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true, shadow: GLASS_SHADOW })
     // Hover ⇄ rest (leave restores). The timestamp only swaps out when a chevron takes
     // its place — with the close in the corner, hiding it otherwise buys nothing.
     // enter/leave fire on the capsule's whole territory — a child crossing is not a leave.
@@ -466,6 +466,7 @@ export default function NotificationCenter() {
 
     const CAL_H = 3 * UNIT + 2 * GAP      // 3 rows = 264px
     const calendarIsland = SquircleContainer({
+        shadow: GLASS_SHADOW,
         child: new Gtk.Calendar({ hexpand: true, vexpand: true, css_classes: ["nc-calendar-widget"] }),
         radius: RADIUS.xl, gloss: true, useShellOpacity: true,
         borderColor: { r: 1, g: 1, b: 1, a: 0.05 },

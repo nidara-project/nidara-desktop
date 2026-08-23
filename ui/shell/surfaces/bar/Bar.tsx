@@ -10,7 +10,7 @@ import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
 
-import SquircleContainer, { GLASS_INSET } from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { menuRow } from "../../common/MenuRow"
 import { RADIUS, rowInsetFor } from "../../../lib/tokens"
 import { CAPSULE_BORDER } from "./capsule"
@@ -140,6 +140,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // the halo above drops from 14 to 6 — the reason this panel read airy next to a menu
   // sitting right under it.
   const expansionCapsule = new ScaleRevealer(SquircleContainer({
+      shadow: GLASS_SHADOW,
       child: expansionInner, gloss: true, useShellOpacity: true,
       borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, radius: RADIUS.lg,
       css_classes: ["bar-expansion-panel"],

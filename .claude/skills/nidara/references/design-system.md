@@ -1204,6 +1204,20 @@ left. Three things about it are load-bearing:
   0 / 0.5 / 1 / 2. Round the corner arc it is the 60-90 degree band that dies. So keep `drop` near
   zero on tight shadows and only spend it once `spread` can spare it.
 
+**One recipe, `GLASS_SHADOW` in `SquircleContainer.tsx`** — `{ spread: 2, alpha: 0.18, drop: 0 }`,
+chosen because `spread 2` is what `GLASS_INSET` already reserves, so no surface's glass shrinks and
+nothing moves. It goes on the OUTERMOST glass of a surface and nowhere else: a shadow on a control
+that sits inside another glass panel is a shadow inside a window, and reads as dirt rather than as
+depth. Currently: the CC's islands and the NC's cards and calendar (neither has a panel — their
+cards ARE the outer glass), Prism's wrapper, the system menu's wrapper, the overview's panel, and
+the bar's expansion panel.
+
+Not yet, and each for its own reason: **the bar's own capsules** (numerous, small and adjacent — a
+visual question rather than a technical one), **the dock capsule** (paints at `inset: 0`, so it has
+no room outside its silhouette at all and needs its `DrawingArea` grown and its margins recoloured),
+**the Activity Island** (own surface at `ignore_alpha` 0.01, which reopens the threshold question),
+and **`GlassBubble`** (its shadow would have to wrap the arrow tip, which is new geometry).
+
 ⚠️ **A shadow interacts with compositor blur, and that decides WHERE it can exist.** Hyprland
 decides where to blur by an alpha threshold per layer (`ignore_alpha`), and a shadow is by
 definition a band of low alpha OUTSIDE the glass. If it clears the threshold, Hyprland blurs the
@@ -1217,15 +1231,24 @@ reserved comes out of the painted glass.
 | CC / NC / Prism / system menu / overview | guests on `nidara-bar` | **0.01** | nothing outside, unless the bar's threshold is raised |
 | the Activity Island | its own `nidara-island` | **0.01** | same |
 
-⚠️ **Raising a threshold has a cost no screenshot shows, because it is temporal.** The overlays fade
-on close (`ScaleRevealer` animates opacity) and a glass pixel's alpha is `glassOpacity x
-widgetOpacity`, so the blur switches off the moment that product drops under the threshold. At the
-glass floor (`GLASS_RANGE.min` = 0.24) that is `widgetOpacity = threshold / 0.24`: **4.2 % at 0.01,
-21 % at 0.05, 96 % at 0.23** — i.e. at the dock's value the backdrop blur pops off in the first
-frames of every close, with the panel still fully on screen. The bar was already walked back from
-0.05 to 0.01 once for this. `scripts/ci/blur-threshold-check.mjs` guards the *other* end of the
-coupling (a threshold reaching the glass floor kills the blur entirely) and knows nothing about
-shadows or about this.
+⚠️ **Raising a threshold has a cost that is temporal, so no screenshot shows it — and it turned out
+not to be visible either.** The overlays fade on close (`ScaleRevealer` animates opacity) and a
+glass pixel's alpha is `glassOpacity x widgetOpacity`, so the blur switches off the moment that
+product drops under the threshold. At the glass floor (`GLASS_RANGE.min` = 0.24) that is
+`widgetOpacity = threshold / 0.24`: **4.2 % at 0.01, 21 % at 0.05, 96 % at 0.23** — i.e. at the
+dock's value the backdrop blur leaves in the first frames of every close, with the panel still
+fully on screen. That reasoning is why the bar had been walked back from 0.05 to 0.01 once before,
+and why `nidara-bar` at 0.23 shipped as an experiment.
+
+🔑 **Watched on a real close over a detailed window, the pop is not perceptible** (owner, 2026-08-23).
+The close is 150 ms and the blur leaves while the eye is still tracking a panel that is scaling and
+fading; **a computed threshold crossing is not the same thing as a seen one**. Keep the number — do
+not re-derive it from the formula and "fix" it back. What the formula is still good for is
+predicting *where* the crossing lands, which is what makes 0.23 safe on a fast fade and would not
+make it safe on a slow one.
+
+`scripts/ci/blur-threshold-check.mjs` guards the *other* end of the coupling (a threshold reaching
+the glass floor kills the blur entirely) and knows nothing about shadows or about this.
 
 ## A CSS pill at `--nidara-radius-pill` seams at the middle of each cap
 

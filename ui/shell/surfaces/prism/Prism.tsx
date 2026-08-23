@@ -6,7 +6,7 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import appService, { AppData } from "../../core/AppService"
 import status from "../../core/Status"
-import SquircleContainer from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/tokens"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -89,7 +89,7 @@ export default function Prism() {
     contentBox.append(searchContainer)
     contentBox.append(revealer)
 
-    const prismWrapper = SquircleContainer({ child: contentBox, radius: RADIUS.xl, n: 3.2, css_classes: ["prism-wrapper"], useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.15 } })
+    const prismWrapper = SquircleContainer({ child: contentBox, radius: RADIUS.xl, n: 3.2, css_classes: ["prism-wrapper"], useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.15 }, shadow: GLASS_SHADOW })
 
     const clearList = () => {
         let child = resultsList.get_first_child()

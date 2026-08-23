@@ -5,7 +5,7 @@ import { execAsync } from "../../../lib/process"
 import status from "../../core/Status"
 import Icons from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
-import SquircleContainer, { GLASS_INSET } from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/tokens"
 import { t } from "../../core/i18n"
 
@@ -182,6 +182,7 @@ export function SystemMenuOverlay() {
   showPage(menuBox)
 
   const squircleWrapper = SquircleContainer({
+    shadow: GLASS_SHADOW,
     child: pageHost,
     radius: RADIUS.lg,
     gloss: true,

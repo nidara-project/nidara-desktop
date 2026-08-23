@@ -690,17 +690,22 @@ hl.window_rule({
 
 
 -- ── Layer rules ───────────────────────────────────────────────────────────────
--- ⚠️ EXPERIMENT (2026-08-23, owner-requested): nidara-bar is at 0.23 — the DOCK's
--- value — and not at the 0.01 the paragraph below argues for, so that the control
--- centre's islands can carry a drop shadow without Hyprland blurring the backdrop
--- behind it (debt #237's mechanism). WHAT TO WATCH FOR, because it is a TEMPORAL
--- artefact no screenshot shows: the overlays fade on close (`ScaleRevealer` animates
--- opacity), and a glass pixel's alpha is `glassOpacity x widgetOpacity`, so the blur
--- switches off the moment that product drops under the threshold. At the glass FLOOR
--- (GLASS_RANGE.min = 0.24) that is widgetOpacity 0.958 — i.e. the backdrop blur pops
--- off in the first frames of every close, with the panel still fully on screen. At
--- 0.01 it happened at 0.042, when nothing was left to see. The bar was already walked
--- back from 0.05 to 0.01 once for this. Revert = this line plus BaseIsland's `shadow`.
+-- ⚠️ nidara-bar is at 0.23 — the DOCK's value, not the 0.01 the paragraph below
+-- argues for — so that the surfaces hosted on it can carry a drop shadow without
+-- Hyprland blurring the backdrop behind it (debt #237's mechanism).
+--
+-- 🔑 THE ARITHMETIC SAID THIS WOULD BE VISIBLE AND IT IS NOT. The overlays fade on
+-- close (`ScaleRevealer` animates opacity) and a glass pixel's alpha is
+-- `glassOpacity x widgetOpacity`, so the blur switches off the moment that product
+-- drops under the threshold: at the glass floor (GLASS_RANGE.min = 0.24) that is
+-- widgetOpacity 0.958, i.e. the first frames of every close, with the panel still
+-- fully on screen. At 0.01 it happened at 0.042. That reasoning is why the bar was
+-- walked back from 0.05 to 0.01 once before, and it is why this shipped as an
+-- experiment. Watched on a real close over a detailed window: the pop is NOT
+-- perceptible. The close is 150 ms and the blur leaves while the eye is still
+-- tracking a panel that is scaling and fading — a computed threshold crossing is not
+-- the same thing as a seen one. Keep the number; do not re-derive it from the
+-- formula and "fix" it back.
 -- nidara-bar at 0.01 (was 0.05): during the overlays' close animation the glass
 -- alpha drops below the threshold and the backdrop blur pops off; at 0.01 that
 -- happens when the panel is already near-invisible. Verified no AA-edge halos

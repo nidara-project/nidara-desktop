@@ -2,7 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 import status, { ISLAND_OVERVIEW } from "../../core/Status"
-import SquircleContainer from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/tokens"
 import { t } from "../../core/i18n"
 import { createSchematicMap } from "../../common/WorkspaceSchematic"
@@ -110,6 +110,7 @@ export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
 
     // SquircleContainer wraps the entire overview, providing a unified glass background
     const overviewSquircle = SquircleContainer({
+        shadow: GLASS_SHADOW,
         child: overview,
         n: WO_GLASS.n,
         radius: WO_GLASS.radius,
