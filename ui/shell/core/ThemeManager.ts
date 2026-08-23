@@ -12,6 +12,9 @@ import {
     type AccentKey,
     type ShellAppearance,
     DEFAULT_CONFIG,
+    GLASS_MODEL,
+    clampGlass,
+    readGlass,
     ACCENT_PALETTE,
     generateTokensCss,
     generateChromeTokenScope,
@@ -529,8 +532,9 @@ class ThemeManager extends GObject.Object {
         hs.evalLua(`hl.config({ group = { groupbar = { col = { active = '${col}', locked_active = '${col}' } } } })`)
     }
 
-    // One opacity range for every shell surface (WYSIWYG, no floor).
-    private clampOpacity(v: number) { return Math.max(0.05, Math.min(0.80, v)) }
+    // One opacity range for every shell surface. The bounds and the reason the
+    // floor is what it is live in ONE place — `GLASS_RANGE` in NidaraTheme.ts.
+    private clampOpacity(v: number) { return clampGlass(v) }
 
     async setBarOpacity(value: number) {
         this.fcConfig.barOpacity = this.clampOpacity(value)
@@ -737,6 +741,7 @@ class ThemeManager extends GObject.Object {
             dockOpacity: this.fcConfig.dockOpacity,
             windowOpacity: this.fcConfig.windowOpacity,
             shellAppearance: this.fcConfig.shellAppearance,
+            glassModel: GLASS_MODEL,
         }
         const json = JSON.stringify(merged, null, 2)
         writeFile(this.configPath, json)
@@ -777,15 +782,31 @@ class ThemeManager extends GObject.Object {
                 cursorTheme: (data.cursorTheme as string) ?? this.state.cursorTheme,
                 isDark:      (data.isDark as boolean)     ?? this.state.isDark,
             }
+            // ⚠️ The glass migration applies ONLY to a value that was actually
+            // stored. Running it over DEFAULT_CONFIG would move a fresh install's
+            // floor to 0.392 — the defaults are already expressed in the new model.
+            const staleGlass = data.glassModel !== GLASS_MODEL
+            const glass = (stored: unknown, dflt: number) => readGlass(stored, dflt, staleGlass)
             this.fcConfig = {
                 accent:       (data.accent as AccentKey)                  ?? DEFAULT_CONFIG.accent,
                 // Migrate: the old single `shellOpacity` seeds both bar + overlays.
-                barOpacity:     (data.barOpacity as number)     ?? (data.shellOpacity as number) ?? DEFAULT_CONFIG.barOpacity,
-                overlayOpacity: (data.overlayOpacity as number) ?? (data.shellOpacity as number) ?? DEFAULT_CONFIG.overlayOpacity,
-                dockOpacity:    (data.dockOpacity as number)    ?? DEFAULT_CONFIG.dockOpacity,
+                barOpacity:     glass(data.barOpacity     ?? data.shellOpacity, DEFAULT_CONFIG.barOpacity),
+                overlayOpacity: glass(data.overlayOpacity ?? data.shellOpacity, DEFAULT_CONFIG.overlayOpacity),
+                dockOpacity:    glass(data.dockOpacity,                         DEFAULT_CONFIG.dockOpacity),
                 // Migrate the old `transparency` (transparency sense) → window OPACITY (1 − t).
-                windowOpacity:  (data.windowOpacity as number)  ?? (typeof data.transparency === "number" ? 1 - (data.transparency as number) : DEFAULT_CONFIG.windowOpacity),
+                windowOpacity:  glass(data.windowOpacity ?? (typeof data.transparency === "number" ? 1 - (data.transparency as number) : undefined),
+                                      DEFAULT_CONFIG.windowOpacity),
                 shellAppearance: (data.shellAppearance as ShellAppearance) ?? DEFAULT_CONFIG.shellAppearance,
+            }
+            // Stamp the new model NOW, not through the 500 ms persistence debounce.
+            // The migration is idempotent only because this marker stops it running a
+            // second time (`0.2 + 0.8·0.24 = 0.392`), so a shell that died inside the
+            // debounce window would come back and migrate an already-migrated file.
+            // Its own try/catch: a stamp that cannot be written must not throw into the
+            // outer catch, which would discard a config we just read correctly.
+            if (staleGlass) {
+                try { this.saveSettings() }
+                catch (e) { console.warn("[ThemeManager] could not stamp glassModel:", e) }
             }
         } catch (e) {
             this.syncFromSystem()

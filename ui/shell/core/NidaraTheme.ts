@@ -45,15 +45,78 @@ export interface NidaraThemeConfig {
   shellAppearance: ShellAppearance  // Whole shell-skin dark/light, independent of app mode
 }
 
+/**
+ * The glass opacity range, for every surface and every slider that sets one.
+ *
+ * ⚠️ ONE definition. It used to be six literals — `clampOpacity` plus the master
+ * and the four per-surface sliders in `settings/pages/Appearance.tsx` — which is
+ * five chances for a slider to offer a value the clamp then silently refuses, a
+ * control that lies about its own range.
+ *
+ * **Why the floor is 0.24 and not 0.05** (2026-08-23). Until then the floor was
+ * 0.05 and the range was documented as "WYSIWYG — no floor": you could drag the
+ * glass down to illegible, deliberately. That decision was sound while it was
+ * made, because 5% glass was NOT actually 5% of anything — Hyprland's
+ * `decoration:blur:brightness = 0.8` was dimming the blurred backdrop under every
+ * one of our surfaces by 20%, so the material had a body no token in this repo
+ * accounted for. That brightness had to go (it applies at FULL strength the
+ * instant a pixel clears `ignore_alpha`, which draws a hard dark step along every
+ * antialiased edge — see `tech-debt.md` #81), and removing it took the hidden body
+ * with it: white text on 5% glass over a bright wallpaper measured **2.78:1**.
+ *
+ * 0.24 is the arithmetic of what was removed, not a taste: compositing at alpha α
+ * over a backdrop dimmed to 80% is the same coverage as compositing at
+ * `0.2 + 0.8·α` over an undimmed one, and `0.2 + 0.8 × 0.05 = 0.24`. So the new
+ * floor IS the old default, honestly named — which is also why stored values are
+ * migrated through that exact expression (`ThemeManager.loadSettings`).
+ *
+ * ⚠️ It is a floor, NOT a legibility guarantee, and do not describe it as one. On
+ * a pure-white wallpaper white text on 24% glass is 1.69:1; nothing below **0.59**
+ * clears 4.5:1 there, and at 0.59 the material stops reading as glass at all. The
+ * real fix is to give the TEXT its own legibility (vibrancy / shadow / a scrim
+ * under labels) so the glass can go thin again — `tech-debt.md` #82.
+ *
+ * ⚠️ ONE floor for all four surfaces, and that is load-bearing.
+ * `ThemeManager.setGlassOpacity` writes one value to all four through one clamp,
+ * and the master slider renders "—" and mutes itself whenever they disagree
+ * (`glassUniform`). Give the window a different floor and the master goes mixed —
+ * and greys out — the moment you drag it below that floor, i.e. across the whole
+ * lower half of its travel. Per-surface floors need the mixer redesigned first: `tech-debt.md` #83.
+ */
+export const GLASS_RANGE = { min: 0.24, max: 0.80 } as const
+
+/** Bumped when the MEANING of a stored opacity changes, so `loadSettings` knows
+ *  whether a file predates the change. 2 = post-`brightness 1.0` (2026-08-23). */
+export const GLASS_MODEL = 2
+
+/** The one clamp. Every setter and every slider bound goes through it. */
+export const clampGlass = (v: number) => Math.max(GLASS_RANGE.min, Math.min(GLASS_RANGE.max, v))
+
+/**
+ * Read ONE stored opacity, migrating it if the file predates `GLASS_MODEL`.
+ *
+ * ⚠️ The `typeof stored !== "number"` guard is the whole safety of this function,
+ * not a null-check habit: a fresh install has no stored value, and running the
+ * migration over `DEFAULT_CONFIG` would move its floor to 0.392. Defaults are
+ * already expressed in the new model — only what a USER stored gets migrated.
+ *
+ * The expression is `0.2 + 0.8·α` because compositing glass at α over a backdrop
+ * the compositor dimmed to 80% covers exactly as much as compositing at
+ * `0.2 + 0.8·α` over an undimmed one. See `GLASS_RANGE` for why the dimming left.
+ */
+export const readGlass = (stored: unknown, dflt: number, stale: boolean) =>
+    typeof stored !== "number" ? dflt : clampGlass(stale ? 0.2 + 0.8 * stored : stored)
+
 export const DEFAULT_CONFIG: NidaraThemeConfig = {
   accent: "blue",
-  // Default to the glassiest end of the range (5% = the [0.05, 0.80] minimum). All
-  // four surfaces share it so a fresh boot is uniform — the master "Glass" slider
-  // reads a clean 5%, not the "—" mixed state.
-  barOpacity: 0.05,
-  overlayOpacity: 0.05,
-  dockOpacity: 0.05,
-  windowOpacity: 0.05,
+  // The glassiest end of the range — which is now GLASS_RANGE.min, exactly as it
+  // was before: the floor moved, the intent did not. All four surfaces share it so
+  // a fresh boot is uniform and the master "Glass" slider reads a clean number
+  // rather than the "—" mixed state.
+  barOpacity: GLASS_RANGE.min,
+  overlayOpacity: GLASS_RANGE.min,
+  dockOpacity: GLASS_RANGE.min,
+  windowOpacity: GLASS_RANGE.min,
   shellAppearance: "system",
 }
 

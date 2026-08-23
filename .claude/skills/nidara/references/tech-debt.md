@@ -7,7 +7,7 @@ and leave its line in the index at the bottom of this file. It must match realit
 
 **This file is what is still OWED.** It holds three genres, and they are not the same thing:
 
-- **Open debt** — work still to do (#2, #62, #63, #80…).
+- **Open debt** — work still to do (#2, #62, #63, #80, #82, #83…).
 - **Partial** — one half shipped, the other did not; the heading says which (#43, #64, #68).
 - **Standing decisions** — *not* debt: things that are deliberately this way, or upstream bugs
   we will not chase. #3 ("NOT a bug"), #13, #17, #34, #38 (retracted — a measurement error),
@@ -2744,10 +2744,56 @@ both problems: it uses a throwaway service with no faillock, and it asserts the 
 
 ---
 
+### 82. ⚠️ OPEN — thin glass cannot carry white text over a bright wallpaper (2026-08-23)
+
+Found while fixing #81, and it is the part a floor cannot fix. Measured (sRGB composite, WCAG
+contrast, `GLASS_TINT.dark` over the wallpaper, white text on top):
+
+| wallpaper | α=0.24 | 0.30 | 0.40 | 0.59 |
+|---|---|---|---|---|
+| mid grey | 5.71 | 6.28 | 7.38 | — |
+| a bright cyan | 3.95 | 4.44 | 5.46 | — |
+| **pure white** | **1.69** | 1.95 | 2.55 | **4.50** |
+
+Nothing below **0.59** clears 4.5:1 on a white wallpaper, and at 0.59 the material does not read as
+glass any more — so the range cannot be floored out of this. Light mode is the mirror image (black
+text, dark wallpaper) and needs 0.465.
+
+⚠️ **This was always true; it was only ever masked.** Before #81 the compositor was dimming the
+backdrop 20% under every surface, so the same white wallpaper measured 1.76:1 at the old default —
+also a fail. The fix did not create the problem, it removed the thing that made it *slightly* less
+bad while nobody was looking at the number.
+
+The answer is the one macOS uses: give the **text** its own legibility rather than paying for it in
+material — vibrancy, a shadow, or a scrim under labels — after which the glass could go thin again
+and `GLASS_RANGE.min` could come back down. Not attempted here: it touches every surface that puts
+text on glass (bar labels, CC/NC section text, Prism results) and it is a look decision, not a
+number. Do NOT "fix" this by raising the floor further; that trades the whole aesthetic for a
+wallpaper most users do not have.
+
+### 83. ⚠️ OPEN — the glass mixer cannot express per-surface floors (2026-08-23)
+
+The owner asked the right question while #81 was landing: should the Settings window get a higher
+floor than the shell? It should — it is a document surface and carries far more text — but it
+**cannot**, and the reason is mechanical rather than aesthetic.
+
+`ThemeManager.setGlassOpacity` writes ONE value to all four axes through ONE clamp, and the master
+slider (`settings/pages/Appearance.tsx`) is an indeterminate control: it renders `—` and drops to
+opacity 0.55 whenever `glassUniform()` is false. Give the window a floor of, say, 0.46 while the
+shell sits at 0.24 and dragging the master anywhere below 46% clamps the window differently from
+its three siblings — so the four never agree, and the master goes mixed and greys itself out across
+the whole lower half of its travel, immediately after the user let go of it. The control would read
+as broken because it would BE broken.
+
+So the floor is uniform today (`GLASS_RANGE`, one range), and per-surface floors are blocked on
+redesigning the mixer: either the master stops claiming uniformity (per-axis normalised position
+rather than a shared value), or the floors become a display concern and the stored value stays raw.
+The owner wants the mixers reviewed regardless.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
-number is never accidentally reused. 44 items, split out 2026-08-23.
+number is never accidentally reused. 45 items, split out 2026-08-23.
 
 - **#7** — `pageHeader()` removed — RESOLVED → `tech-debt-resolved.md`
 - **#9** — The per-boot Adwaita-WARNING — ✅ RESOLVED 2026-08-18 (the host went) → `tech-debt-resolved.md`
@@ -2793,3 +2839,4 @@ number is never accidentally reused. 44 items, split out 2026-08-23.
 - **#77** — Native PAM Authentication & Zero-Astal State (2026-08-20) → `tech-debt-resolved.md`
 - **#78** — RESOLVED — GTK4 Height-for-Width Layout Safety & BlueZ Pairing Resilience (2026-08-21) → `tech-debt-resolved.md`
 - **#79** — RESOLVED — one rim ramp, and `GLASS_TINT.light` stopped disagreeing with itself (2026-08-23) → `tech-debt-resolved.md`
+- **#81** — RESOLVED — a dark step traced every curved edge, and it was `blur:brightness` (2026-08-23) → `tech-debt-resolved.md`

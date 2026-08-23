@@ -103,7 +103,26 @@ hl.config({
             xray               = false,
             noise              = 0.01,
             contrast           = 1.2,
-            brightness         = 0.8,
+            -- ⚠️ KEEP AT 1.0. It was 0.8 from the first config this project ever had
+            -- (May 2026, pre-Lua) and was never a decision — and it drew a hard dark
+            -- line along the curved edge of every capsule in the shell.
+            --
+            -- Why: Hyprland decides WHERE to blur by an alpha threshold
+            -- (`ignore_alpha`, per layer rule below), and it applies this brightness
+            -- to the blurred backdrop at FULL strength the instant a pixel clears
+            -- that threshold — regardless of how little glass actually covers it. So
+            -- at the antialiased edge a pixel with ~4% glass on it gets its backdrop
+            -- dimmed 20% while its neighbour at ~3.9% gets none: a 20% luminance step
+            -- tracing the silhouette, worst where the curve crosses the pixel grid at
+            -- a shallow angle. Bisected live 2026-08-23 against `enabled=false`,
+            -- all-neutral, noise-only and contrast-only, with a positive control;
+            -- `contrast`, `noise` and `vibrancy_darkness` were each exonerated.
+            -- Cairo was ruled out first, offscreen: `scripts/dev/glass-probe.ts`.
+            --
+            -- Raising it removed 20% of body the glass was silently getting, which is
+            -- why `GLASS_RANGE.min` moved 0.05 → 0.24 in the same change. The two
+            -- ship together; move one alone and the desktop washes out.
+            brightness         = 1.0,
             vibrancy           = 0.4,
             vibrancy_darkness  = 0.1,
         },

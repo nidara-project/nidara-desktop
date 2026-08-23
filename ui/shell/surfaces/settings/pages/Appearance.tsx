@@ -8,7 +8,7 @@ import { NidaraButton, NidaraFontButton, makeHSlider } from "../../../../lib/nid
 import NightLight from "../../../core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
 import { getBundledWallpapers } from "../../../../lib/wallpaper"
-import { ACCENT_PALETTE, type AccentKey, type ShellAppearance } from "../../../core/NidaraTheme"
+import { ACCENT_PALETTE, GLASS_RANGE, type AccentKey, type ShellAppearance } from "../../../core/NidaraTheme"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { listGroup, createRow, toggleRow, dropdownRow, sliderRow, pageBox, bindWhileRealized } from "../SettingsHelpers"
@@ -276,7 +276,15 @@ export default function AppearancePage() {
 
     // Opacity model: ONE master "Glass" slider governs bar + overlays + dock + window
     // together; an "Advanced" disclosure (below) breaks them apart. All are plain
-    // opacities (higher = more opaque), one [0.05, 0.80] range, WYSIWYG — no floor.
+    // opacities (higher = more opaque) over ONE `GLASS_RANGE`, imported rather than
+    // retyped — the bounds used to be five literals here plus a sixth in
+    // `clampOpacity`, which is five chances to offer a value the clamp refuses.
+    //
+    // ⚠️ This range used to be [0.05, 0.80] and was documented as "WYSIWYG — no
+    // floor". The floor is now 0.24 and that is not a reversal of the WYSIWYG idea:
+    // 5% glass was never 5% of anything (the compositor was adding 20% of body
+    // under it), so the old bottom of the range was the honest 24% all along. The
+    // reasoning, the numbers and what a floor does NOT buy you are on GLASS_RANGE.
     const OPACITY_OPTS = { pct: true, icons: [Icons.minus, Icons.plus] as [Gio.FileIcon, Gio.FileIcon] }
     // Live external-sync so the master and the advanced sliders stay consistent when
     // either changes the underlying value (guarded against the cb→set→changed→cb loop
@@ -300,7 +308,7 @@ export default function AppearancePage() {
 
     const masterValue = new Gtk.Label({ css_classes: ["slider-value-label"], width_chars: 5, xalign: 1.0 })
     const masterSlider = makeHSlider({
-        min: 0.05, max: 0.80, value: glassRepr(),
+        min: GLASS_RANGE.min, max: GLASS_RANGE.max, value: glassRepr(),
         onChange: (v) => Theme.setGlassOpacity(v),
         onValueChanged: (v) => { masterValue.label = `${Math.round(v * 100)}%` }, // drag unifies → show %
         onExtChange: onTheme(glassRepr),
@@ -340,22 +348,22 @@ export default function AppearancePage() {
     const advInner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
     advInner.append(sliderRow(
         t("settings.appearance.bar-opacity"), t("settings.appearance.bar-opacity.desc"),
-        Theme.barOpacity, 0.05, 0.80, (v) => Theme.setBarOpacity(v),
+        Theme.barOpacity, GLASS_RANGE.min, GLASS_RANGE.max, (v) => Theme.setBarOpacity(v),
         { ...OPACITY_OPTS, onExtChange: onTheme(() => Theme.barOpacity) },
     ))
     advInner.append(sliderRow(
         t("settings.appearance.overlay-opacity"), t("settings.appearance.overlay-opacity.desc"),
-        Theme.overlayOpacity, 0.05, 0.80, (v) => Theme.setOverlayOpacity(v),
+        Theme.overlayOpacity, GLASS_RANGE.min, GLASS_RANGE.max, (v) => Theme.setOverlayOpacity(v),
         { ...OPACITY_OPTS, onExtChange: onTheme(() => Theme.overlayOpacity) },
     ))
     advInner.append(sliderRow(
         t("settings.appearance.dock-opacity"), t("settings.appearance.dock-opacity.desc"),
-        Theme.dockOpacity, 0.05, 0.80, (v) => Theme.setDockOpacity(v),
+        Theme.dockOpacity, GLASS_RANGE.min, GLASS_RANGE.max, (v) => Theme.setDockOpacity(v),
         { ...OPACITY_OPTS, onExtChange: onTheme(() => Theme.dockOpacity) },
     ))
     advInner.append(sliderRow(
         t("settings.appearance.window-glass"), t("settings.appearance.window-glass.desc"),
-        Theme.windowOpacity, 0.05, 0.80, (v) => Theme.setWindowOpacity(v),
+        Theme.windowOpacity, GLASS_RANGE.min, GLASS_RANGE.max, (v) => Theme.setWindowOpacity(v),
         { ...OPACITY_OPTS, onExtChange: onTheme(() => Theme.windowOpacity) },
     ))
     const advRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN, reveal_child: false })

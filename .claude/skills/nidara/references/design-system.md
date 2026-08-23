@@ -863,18 +863,40 @@ shell text follows the pin automatically.
 
 ### Opacity — one master + Advanced, four surfaces, WYSIWYG
 
-There is **no opacity floor** (an old light-mode 0.40 floor was removed — pinning painted opacity
-above the slider value is incoherent). Glass opacity is **WYSIWYG with the slider**; legibility is
-the user's call (raise it, or pin the shell to dark). Four independent opacities, all plain
-"opacity" (higher = more opaque), one range `[0.05, 0.80]`:
+Glass opacity is **WYSIWYG with the slider** — what you set is what is painted, and no code pins it
+higher (an old light-mode 0.40 floor was removed for exactly that reason). But the RANGE itself now
+has a floor, and the range lives in ONE place: **`GLASS_RANGE` in `core/NidaraTheme.ts`**, imported
+by `clampOpacity` and by all five sliders. Do not retype the bounds; that was six literals until
+2026-08-23, i.e. five chances for a slider to offer a value the clamp then silently refuses.
+
+⚠️ **The floor is `0.24`, and it was `0.05` with "no floor" until 2026-08-23.** That is not a
+reversal of WYSIWYG: 5% glass was never 5% of anything. Hyprland's `decoration:blur:brightness`
+was `0.8`, so the blurred backdrop under every surface was being dimmed 20% — body the material
+had and no token accounted for. That brightness had to go (it draws a hard dark step along every
+antialiased edge — resolved debt #81), and `0.2 + 0.8·α` is the arithmetic of what it was worth, so
+`0.2 + 0.8 × 0.05 = 0.24` **is the old default, honestly named**. Stored values migrate through the
+same expression (`readGlass`, gated by `GLASS_MODEL`).
+
+⚠️ **A floor is not a legibility guarantee — never document it as one.** White text on 24% glass
+over a pure-white wallpaper measures 1.69:1; nothing under **0.59** clears 4.5:1 there, and 0.59
+does not read as glass. Legibility over thin glass is open debt #82, and its answer is to give the
+TEXT its own contrast (vibrancy / shadow / a scrim), not to keep raising the floor.
+
+⚠️ **ONE floor for all four surfaces, and that is load-bearing** (see the master below): a
+per-surface floor makes the master go mixed — and grey itself out — across the whole part of its
+travel below the highest floor. Per-surface floors need the mixer redesigned first: open debt #83.
+
+Four independent opacities, all plain "opacity" (higher = more opaque), over that one range:
 - `barOpacity` → bar capsules (Cairo) — `SquircleContainer({ opacityRole: "bar" })`.
 - `overlayOpacity` → overlays CC/NC/Prism/app-grid (Cairo) — `opacityRole: "overlay"` (default).
 - `dockOpacity` → dock (Cairo, `DockAxis`).
 - `windowOpacity` → Settings/About windows = the **CSS token path** (`--nidara-bg`/materials/
   popovers in `nidaraVars`). Those windows are CSS-painted, not Cairo — hence a separate axis.
 
-All four **default to `0.05`** (the range minimum, the glassiest end) — uniform, so a fresh boot
-reads a clean 5% on the master rather than the mixed state below.
+All four **default to `GLASS_RANGE.min`** (the glassiest end of the range) — uniform, so a fresh
+boot reads a clean number on the master rather than the mixed state below. The default is written
+as `GLASS_RANGE.min`, not as a repeated literal, because "the default is the floor" is the intent
+and it survived the floor moving.
 
 `Theme.setGlassOpacity()` is the **master** — it *writes* all four, so it must also *read* all four.
 The master slider in `pages/Appearance.tsx` is therefore an **indeterminate control** (Figma "Mixed"

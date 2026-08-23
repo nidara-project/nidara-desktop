@@ -1565,3 +1565,66 @@ most 2/255 — toward the value its own strings had always named.
 ⚠️ The probe was **proved able to fail first**: perturbing a single stop (the mid-flank `.08` → `.20`)
 moved exactly the two flank pixels, `85 → 106`, and nothing else in either specimen. An instrument
 that reports "no change" is worthless until you have seen it report a change.
+
+### 81. ✅ RESOLVED — a dark step traced every curved edge, and it was `blur:brightness` (2026-08-23)
+
+Reported by the owner as long-standing "pixelation / artefacts": **darker pixels along the ends of
+the segments forming the side curvatures**, reproducing DIFFERENTLY on the search surface — which
+was the clue that mattered, because Prism is the only surface at `n = 4.5`.
+
+**Cairo was eliminated first, offscreen.** `scripts/dev/glass-probe.ts` renders the real painters to
+an `ImageSurface` with no GTK and no compositor. Sweeping the whole contour of three curvatures
+(n=3.2, n=4.5, pill) over a light and a dark backdrop, looking for any pixel darker than BOTH the
+body and the backdrop: **zero, in all six combinations.** Neither the path, nor the antialiasing,
+nor our compositing order makes them — which left GTK4's GskGL renderer and Hyprland's blur.
+
+**Then bisected live, on the owner's screen, with a positive control.** The instrument is a guarded
+A/B on the supported user-config layer (`hyprland-user.lua`, sourced after the `decoration` block, so
+it wins) — each block restates the WHOLE blur table with one value changed, so `hl.config` merge
+semantics cannot influence the result, and every apply prints the live `hyprctl getoption` values
+because under the Lua parser **`ok` never means "it happened"**.
+
+| run | enabled | noise | contrast | brightness | vib_dark | dark pixels |
+|---|---|---|---|---|---|---|
+| original | true | 0.01 | 1.2 | 0.8 | 0.1 | **yes** |
+| blur off | false | — | — | — | — | no |
+| all neutral | true | 0 | 1.0 | 1.0 | 0 | no |
+| noise only | true | 0.01 | 1.0 | 1.0 | 0 | no |
+| **brightness only** | true | 0 | 1.0 | **0.8** | 0 | **yes** |
+| contrast only | true | 0 | 1.2 | 1.0 | 0 | no |
+| **original again (control)** | true | 0.01 | 1.2 | 0.8 | 0.1 | **yes** |
+
+⚠️ **The control row is the one that makes the rest mean anything.** Three negatives in a row is
+also what "the reload fixed it" looks like; restoring the original config and watching the artefact
+COME BACK is what separates a cause from a coincidence. Run it before believing a bisection.
+
+**Mechanism.** Hyprland chooses WHERE to blur by an alpha threshold (`ignore_alpha`, per layer rule)
+and applies `brightness` to the blurred backdrop **at full strength the instant a pixel clears that
+threshold** — regardless of how little glass actually covers it. At the antialiased edge a pixel
+with ~4% glass gets its backdrop dimmed 20% while its neighbour at ~3.9% gets none: a 20% luminance
+step tracing the silhouette, worst where the curve crosses the pixel grid at a shallow angle, which
+is exactly "the ends of the segments forming the curvature". It is the same root as the 2026-06-24
+*bright halo* (blur decided by alpha, not geometry) with the sign flipped by the brightness value.
+
+**Fix: `brightness = 0.8 → 1.0`.** That 0.8 was never a decision — it is in the first config this
+project ever had (May 2026, pre-Lua, `hyprland.conf`) and was carried through the Lua migration
+untouched. Confirmed on the owner's screen: artefact gone, and they preferred the result.
+
+⚠️ **It does not ship alone.** Raising it removes 20% of body the glass was silently getting, so
+`GLASS_RANGE.min` moved `0.05 → 0.24` in the same change and stored values migrate through
+`0.2 + 0.8·α` (`readGlass`, gated by `GLASS_MODEL`). Move one without the other and every existing
+desktop washes out. The migration is deliberately NOT paired with the matching tint compensation
+(`tint · α/α'`) that would make the composite bit-identical — leaving the tint alone is what makes
+the glass ~5/255 lighter, which is the improvement the owner asked to keep.
+
+**Two things this uncovered rather than caused**, both now open: text legibility over thin glass on
+a bright wallpaper (#82) and the mixer that cannot express per-surface floors (#83).
+
+⚠️ **A found-on-the-way defect that is NOT this bug and is still open.** `createSquirclePath`
+approximates the superellipse with cubic Béziers using two FIXED constants (`a = 0.3100`,
+`b = 0.1950`) fitted for `n = 3.2` alone — the code's own comment claims "< 0.012px", true only at
+3.2. Measured max radial error against the true superellipse at radius 32: **0.011px at n=3.2, but
+0.322px at n=4.5**, outward, and Prism is the only surface at 4.5. A per-`n` minimax fit reaches
+0.010px there (26×) and also improves 3.2 by 3×. It is a shape error, not a colour one, so it does
+NOT produce dark pixels — it was simply why the search "reproduced differently". Not fixed here to
+keep the artefact fix free of shape changes.
