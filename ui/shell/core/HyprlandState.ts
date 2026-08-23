@@ -368,6 +368,31 @@ class HyprlandStateClass extends GObject.Object {
         return null
     }
 
+    /** Is layer surface `a` stacked ABOVE `b`? `null` when either is not up, or when
+     *  they are on different levels (where the LEVEL decides and this question does
+     *  not apply). Within one level Hyprland's array order IS the stacking order:
+     *  later = on top, and the last surface to commit is appended.
+     *
+     *  Exists because that ordering is not something a client can set. There is no
+     *  "raise" in layer-shell — `set_layer` to the value you already have is a no-op
+     *  (measured: `scripts/dev/layer-order-probe.ts`), so the only lever is to leave
+     *  the level and come back, and whether that WORKED is a question only the
+     *  compositor can answer. `IslandWindow.raise()` asks it after every attempt. */
+    async isLayerAbove(a: string, b: string): Promise<boolean | null> {
+        try {
+            const byMonitor = JSON.parse(await execAsync(["hyprctl", "layers", "-j"]))
+            for (const mon of Object.values<any>(byMonitor)) {
+                for (const level of Object.values<any>(mon?.levels ?? {})) {
+                    const list = level as any[]
+                    const ia = list.findIndex((l) => l?.namespace === a)
+                    const ib = list.findIndex((l) => l?.namespace === b)
+                    if (ia >= 0 && ib >= 0) return ia > ib
+                }
+            }
+        } catch (e) { console.error("[HyprlandState] isLayerAbove", a, b, e) }
+        return null
+    }
+
     /** Run a Lua-parser eval — the ONLY way to change Hyprland config live (the Lua
      *  parser rejects `hyprctl keyword`). Failures are logged with the offending call. */
     evalLua(luaCall: string) {

@@ -850,6 +850,33 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     never blur the bar capsules it grows over — at the default `overlayOpacity`
     of 0.05 they read through it sharp, which is exactly what it looked like.
     A higher layer level is composited after the bar, so the blur pass sees it.
+
+    🔑 **"One level above the bar" stops being true in the game overlay, and there is
+    no call that fixes it.** Super+B under a fullscreen window moves the BAR to
+    OVERLAY too — the bar's own level, TOP, renders below a fullscreen window — and
+    inside a level Hyprland stacks by COMMIT ORDER: last to commit is on top. The
+    bar's layer change reaches the compositor after the island's `present()` in the
+    same turn, so the bar lands above. Two things break at once: the island stops
+    blurring the bar (the reason it is a separate surface at all), and it goes
+    **completely dead to the pointer while looking perfectly fine** — `Bar.tsx`
+    unconditionally claims `{0,0,width,BAR_H}` of input and the capsule is painted
+    at y=8..40, inside that strip, so the bar eats every click meant for it. The
+    input region is correctly stamped the whole time, which is what makes it such a
+    bad one to chase (owner-caught 2026-08-24).
+
+    ⚠️ **There is no raise in layer-shell, and `set_layer` to the value you already
+    have is a NO-OP** — which is what `IslandWindow.raise()` was. Measured with
+    `scripts/dev/layer-order-probe.ts`, two throwaway surfaces on one level:
+    baseline (B mapped last) → B on top; `set_layer(OVERLAY)` again → **B still on
+    top**; bounce TOP → OVERLAY across separate commits → A on top; unmap + remap →
+    A on top. The only lever is to leave the level and come back, and it needs TWO
+    commits: both requests inside one commit collapse to a final value equal to the
+    current one, i.e. the no-op again.
+    ⚠️ The half-done state is worse than the bug — a surface parked on TOP is under
+    the fullscreen window, i.e. gone — so the return leg is armed twice (frame clock
+    AND timeout) and never made conditional on a signal arriving. And because this is
+    ordering we do not control, `raise()` asks the compositor whether it worked
+    (`HyprlandState.isLayerAbove`) and logs when it did not.
     Verified live before building (2026-07-25, Hyprland 0.55.4). A `Gtk.Popover`
     would also be blurred, but under `popups_ignorealpha = 0.30` — a different
     knob from a layer's `ignore_alpha`, and unlowerable without haloing the

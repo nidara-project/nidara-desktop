@@ -9,6 +9,7 @@ import { createRegionStamper, type VisibleRect } from "../../common/VisibleRegio
 import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import status from "../../core/Status"
 import inputYield from "../../core/InputYield"
+import hyprlandState from "../../core/HyprlandState"
 
 // The Activity Island's OWN layer surface — the one documented exception to
 // "overlays live inside the Bar's window" (skill commandment #5).
@@ -610,6 +611,78 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     // dock's app-grid state — by scanning `windows` for the named surface.
     ;(win as any).occupiedRect = occupiedRect
 
+    // ── Getting BACK on top of the bar, which is not a call anyone can make ─────
+    //
+    // 🔑 `set_layer(OVERLAY)` on a window that is ALREADY on OVERLAY does NOTHING, and
+    // that is what this used to be. Measured with `scripts/dev/layer-order-probe.ts`,
+    // two throwaway surfaces on one level:
+    //
+    //     1. baseline (B mapped last)        A@1 B@2  → B on top
+    //     2. A: set_layer(OVERLAY) again     A@1 B@2  → B on top     ← the old raise()
+    //     3. A: bounce TOP → OVERLAY         A@2 B@1  → A on top
+    //     4. A: unmap + remap                A@2 B@1  → A on top
+    //
+    // WHY IT MATTERS. Under a fullscreen window, Super+B moves the BAR to OVERLAY —
+    // the level this surface lives on — and the last surface to commit there is the
+    // top one. The bar's layer change reaches the compositor after our `present()`
+    // in the same turn, so the bar lands above us. It then eats every click meant for
+    // the capsule, because `Bar.tsx` unconditionally claims `{0,0,width,BAR_H}` of
+    // input and the capsule is painted at y=8..40, inside that strip. The symptom is
+    // an island that is fully visible and completely dead — and the input region is
+    // perfectly stamped the whole time, which is what makes it so confusing to chase.
+    // (It also inverts the blur: this surface is above the bar precisely so it can
+    // blur the bar's capsules under it.)
+    //
+    // So: bounce out of the level and back in, across TWO commits. One commit is not
+    // enough — both requests would collapse into one final value equal to the current
+    // one, which is candidate 2 again.
+    //
+    // ⚠️ The cost is one frame on TOP, which is BELOW a fullscreen window: the capsule
+    // blinks out for that frame. That is the price of the only mechanism that works,
+    // and it rides a transition the user already triggered.
+    //
+    // ⚠️ AND THE HALF-DONE STATE IS WORSE THAN THE BUG: a bounce that never completes
+    // leaves this surface on TOP, i.e. UNDER the fullscreen window, i.e. gone. So the
+    // return trip is armed TWICE — the frame clock and a timeout — and whichever
+    // arrives first performs it. Never make the second leg conditional on a signal.
+    let raiseSource = 0
+    let raiseFrameHandler = 0
+    let raisePending = false
+    const finishRaise = () => {
+        if (!raisePending) return
+        raisePending = false
+        if (raiseSource) { GLib.source_remove(raiseSource); raiseSource = 0 }
+        try { Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY) } catch (e) {}
+        // Ask the compositor whether it actually worked rather than assuming. This is
+        // ordering we do not control, and a silent failure here is invisible until a
+        // user reports dead controls — which is exactly how it was found.
+        hyprlandState.isLayerAbove(NAMESPACE, "nidara-bar").then((above) => {
+            if (above === false)
+                console.error("[IslandWindow] raise: still under nidara-bar after the bounce —"
+                    + " the capsule will take no input while the bar is on OVERLAY")
+        }).catch(() => {})
+    }
+    const raiseAboveSiblings = () => {
+        if (!win.get_visible() || raisePending) return
+        try { Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP) } catch (e) { return }
+        raisePending = true
+        // A commit has to land between the two calls, and the frame clock is the exact
+        // signal for that. The timeout is NOT an else-branch: it is the guarantee that
+        // the surface leaves TOP even if no frame ever comes.
+        const clock = win.get_frame_clock()
+        if (clock && !raiseFrameHandler) {
+            raiseFrameHandler = clock.connect("after-paint", () => {
+                clock.disconnect(raiseFrameHandler); raiseFrameHandler = 0
+                finishRaise()
+            })
+            clock.begin_updating()
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1, () => { clock.end_updating(); return GLib.SOURCE_REMOVE })
+        }
+        raiseSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 48, () => {
+            raiseSource = 0; finishRaise(); return GLib.SOURCE_REMOVE
+        })
+    }
+
     return {
         win,
         root: () => root,
@@ -681,9 +754,7 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             if (shown) { win.present(); updateInputRegion() }
             else win.set_visible(false)
         },
-        raise: () => {
-            try { Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY) } catch (e) {}
-        },
+        raise: raiseAboveSiblings,
         setTopOffset: (px) => {
             const v = Math.max(0, Math.round(px))
             if (v === topOffset) return
