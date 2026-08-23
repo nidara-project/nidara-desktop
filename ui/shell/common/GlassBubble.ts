@@ -237,7 +237,7 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
         // DARK ramp only; its light edge is its own, below.
         bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n)
         cr.setLineWidth(BORDER_W * 2)
-        cr.setSource(glassRimGradient(cx, by, bh, true))
+        cr.setSource(glassRimGradient(cx, by, bh, true, r))
         cr.stroke()
     } else {
         // Light mode: clean dark edge using canonical GLASS_TINT.dark

@@ -498,9 +498,19 @@ two halves, so the disagreement was invisible to reading and invisible to lookin
 a claim in pixels — the fix moved the dark capsule by **0 of 284** sampled pixels and the light one
 by at most **2/255** — and that claim is not something you can get from a screenshot of a desktop.
 
-⚠️ **Prove it can fail before believing a green diff.** Perturb one stop of the ramp (`.08` → `.20`
-in `glassRimGradient`) and re-run: exactly the two flank pixels must move, `85 → 106`, and nothing
-else. An empty diff from an instrument you have never seen react is not evidence.
+⚠️ **Prove it can fail before believing a green diff.** Perturb one stop of the ramp (`FLANK_DEPTH`,
+or a white stop) and re-run: only the pixels that stop governs may move. An empty diff from an
+instrument you have never seen react is not evidence.
+
+⚠️ **Two sampling traps, both of which produced a confident wrong reading in one session (2026-08-23):**
+- **A fixed window near an edge only measures the edge where it happens to be.** Sampling a column
+  at a constant x reads the flank at mid-height and the BACKGROUND everywhere else — and background
+  is a perfectly plausible-looking number. Find the edge per row (first pixel that differs from the
+  backdrop) before reading it.
+- **A single pixel on a DIAGONAL edge under-reads the stroke.** A 1px stroke crossing the grid at an
+  angle spreads its coverage over several pixels, so each one is a blend of stroke, body and
+  backdrop: the same rim measures ~97 on a straight run and ~126 on the corner. That is dilution,
+  not a lighter rim. On curves, trust the render (and the eye) over a point sample.
 
 ### What the icon theme SAYS vs what it PAINTS (`scripts/dev/icon-theme-probe.js`)
 

@@ -161,6 +161,20 @@ export const createSquirclePath = (
  *  deliberately, by the owner, after that was fixed. */
 const FLANK_DEPTH = 0.18
 
+/** How far the dark wraps INTO the corner arcs, as a fraction of the corner.
+ *
+ *  1.0 keeps the dark to the straight side only — geometrically pure, and on a wide
+ *  short capsule that is a very short run (a dock capsule is 92 tall with a radius of
+ *  32, so only 28px of its side is straight) which reads as "a small darker bit"
+ *  rather than a dark side. Lower values carry the dark round the corner and leave the
+ *  key light on the CAPS, which is the effect being asked for: bright top and bottom,
+ *  dark sides.
+ *
+ *  0.35 means the dark starts about a third of the way up each corner. On a pill,
+ *  where `radius/height` is 0.5 and there is no straight side at all, it still leaves
+ *  a bright cap at each end instead of collapsing to a point. */
+const FLANK_SPREAD = 0.35
+
 /** The 1px inner rim of every glass surface, as a vertical gradient over a box of
  *  `height` starting at `top`. `cx` only fixes the gradient's axis — it is vertical,
  *  so any x on the shape does.
@@ -195,18 +209,28 @@ const FLANK_DEPTH = 0.18
  *  light, not of the surface. They were the same token until 2026-08-23, which meant
  *  a retint of light-mode glass would have dimmed the highlight on every dark
  *  capsule in the desktop. */
-export const glassRimGradient = (cx: number, top: number, height: number, dark: boolean) => {
+export const glassRimGradient = (cx: number, top: number, height: number, dark: boolean, radius = 0) => {
     const g = new Cairo.LinearGradient(cx, top, cx, top + height)
     const { r: lr, g: lg, b: lb } = GLASS_SPECULAR
     if (dark) {
         const { r: fr, g: fg, b: fb } = GLASS_TINT.dark
-        g.addColorStopRGBA(0.0, lr, lg, lb, 0.42)
-        g.addColorStopRGBA(0.16, lr, lg, lb, 0.26)
-        g.addColorStopRGBA(0.30, lr, lg, lb, 0.04)
-        g.addColorStopRGBA(0.50, fr, fg, fb, FLANK_DEPTH)
-        g.addColorStopRGBA(0.70, lr, lg, lb, 0.06)
-        g.addColorStopRGBA(0.84, lr, lg, lb, 0.18)
-        g.addColorStopRGBA(1.0, lr, lg, lb, 0.24)
+        // WHERE the sides actually are. The straight vertical run of the silhouette
+        // spans y ∈ [radius, height − radius], so as a fraction of the height it is
+        // [radius/height, 1 − radius/height] — and that is what has to be dark, not a
+        // fixed percentage. A dock capsule (92 tall, r 32) is dark over .35–.65; a CC
+        // panel (600 tall, same radius) over .05–.95. One constant cannot serve both:
+        // pinning the dark to 0.50 puts it at a POINT in the middle of the side, which
+        // is what shipped in #239 and what the owner saw — "a very small darker bit".
+        // On a pill (height = 2·radius) the two collapse to 0.5, which is correct:
+        // a pill has no straight side, its widest point IS mid-height.
+        const t = Math.min(0.5, Math.max(0, radius / Math.max(1, height))) * FLANK_SPREAD
+        const top2 = t, bot2 = 1 - t
+        g.addColorStopRGBA(0.0, lr, lg, lb, 0.42)              // top rim: key light
+        if (top2 > 0.06) g.addColorStopRGBA(top2 * 0.55, lr, lg, lb, 0.16)
+        g.addColorStopRGBA(top2, fr, fg, fb, FLANK_DEPTH)      // ── the side starts
+        g.addColorStopRGBA(bot2, fr, fg, fb, FLANK_DEPTH)      // ── the side ends
+        if (bot2 < 0.94) g.addColorStopRGBA(bot2 + (1 - bot2) * 0.45, lr, lg, lb, 0.14)
+        g.addColorStopRGBA(1.0, lr, lg, lb, 0.24)              // bottom rim: ground bounce
     } else {
         const { r: dr, g: dg, b: db } = GLASS_TINT.dark
         g.addColorStopRGBA(0.0, lr, lg, lb, 0.55)
@@ -301,7 +325,7 @@ export const drawSquircle = (
         // light capsule silently takes the dark branch.
         const isDark = !(color && color.r > 0.8 && color.g > 0.8 && color.b > 0.8)
         const cx = x + drawW * 0.5
-        cr.setSource(glassRimGradient(cx, y, drawH, isDark))
+        cr.setSource(glassRimGradient(cx, y, drawH, isDark, r))
     } else {
         const baseAlpha = borderColor ? borderColor.a : (borderWidth > 1.0 ? 0.12 : 0.10)
         const baseR = borderColor ? borderColor.r : 1

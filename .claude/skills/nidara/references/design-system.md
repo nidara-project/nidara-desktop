@@ -1073,14 +1073,28 @@ highlight, a bottom shelf reflection, and a lateral dark contour, each its own g
 own `strokePreserve()`. It is now a **single stroke** through one vertical `LinearGradient` with
 seven stops:
 
-| stop | 0.0 | 0.16 | 0.30 | **0.50** | 0.70 | 0.84 | 1.0 |
-|---|---|---|---|---|---|---|---|
-| colour | white | white | white | **`GLASS_TINT.dark`** | white | white | white |
-| alpha | .42 | .26 | .04 | **`FLANK_DEPTH`** | .06 | .18 | .24 |
+| stop | 0.0 | `t·0.55` | **`t`** | **`1−t`** | `1−t+t·0.45` | 1.0 |
+|---|---|---|---|---|---|---|
+| colour | white | white | **`GLASS_TINT.dark`** | **`GLASS_TINT.dark`** | white | white |
+| alpha | .42 | .16 | **`FLANK_DEPTH`** | **`FLANK_DEPTH`** | .14 | .24 |
 
 Read it as **Fresnel**: an edge reflects most where you meet it at a grazing angle — the top rim
-(key light, .42) and the bottom rim (ground bounce, .24). At mid-height you are not looking at the
-edge, you are looking **through** it, so what belongs there is the thickness of the material: dark.
+(key light, .42) and the bottom rim (ground bounce, .24). Along the SIDES you are not looking at
+the edge, you are looking **through** it, so what belongs there is the thickness of the material:
+dark, held as a plateau rather than a single stop.
+
+⚠️ **`t` is computed, not a constant, and that is the whole point.** The straight vertical run of
+the silhouette spans `y ∈ [radius, height − radius]`, so as a fraction of the height it is
+`radius/height` — which differs per surface: a dock capsule (92 tall, radius 32) has its side at
+.35–.65, while a CC panel at the same radius has it at .05–.95. `glassRimGradient` therefore takes
+the radius. Pinning the dark to a fixed 0.50 puts it at a POINT in the middle of the side; that
+shipped in #239 and the owner saw it immediately — *"a very small darker bit"*.
+
+⚠️ **`FLANK_SPREAD` (0.35) then carries the dark INTO the corner arcs**, and without it the effect
+still under-delivers on wide short capsules: only 28px of a dock capsule's 92px side is straight,
+the rest is corner. Spreading it leaves the key light on the CAPS — bright top and bottom, dark
+sides — which is the effect. On a pill, where `radius/height` is 0.5 and there is no straight side
+at all, it still leaves a bright cap at each end instead of collapsing to a point.
 
 ⚠️ **The flank was white `.08` until 2026-08-23, which made it LIGHTER than the body it edges** —
 measured over a bright wallpaper, flank `27,149,182` against a body of `7,139,175`. The capsule had
