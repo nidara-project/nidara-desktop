@@ -7,7 +7,7 @@ and leave its line in the index at the bottom of this file. It must match realit
 
 **This file is what is still OWED.** It holds three genres, and they are not the same thing:
 
-- **Open debt** — work still to do (#2, #62, #63, #80, #82, #83…).
+- **Open debt** — work still to do (#2, #62, #63, #80, #82, #83, #85…).
 - **Partial** — one half shipped, the other did not; the heading says which (#43, #64, #68).
 - **Standing decisions** — *not* debt: things that are deliberately this way, or upstream bugs
   we will not chase. #3 ("NOT a bug"), #13, #17, #34, #38 (retracted — a measurement error),
@@ -2789,6 +2789,35 @@ So the floor is uniform today (`GLASS_RANGE`, one range), and per-surface floors
 redesigning the mixer: either the master stops claiming uniformity (per-axis normalised position
 rather than a shared value), or the floors become a display concern and the stored value stays raw.
 The owner wants the mixers reviewed regardless.
+
+### 85. ⚠️ OPEN — the shadow meeting the rim reads as a BEVEL, and nobody decided that (2026-08-23)
+
+Owner observation once every glass surface had its shadow: where the drop shadow meets the rim's
+white specular — above it on the top edge, below it on the bottom — the pair reads as a **bevelled
+edge** rather than as a flat sheet with a shadow under it. The verdict was "not bad, but it may want
+polishing", and the work was deliberately deferred; this is the note so it does not evaporate.
+
+It is worth saying what it is, because it is not a bug: the shadow and the specular are two separate
+decisions that happen to sit one pixel apart, and a dark band adjacent to a light band is what a
+bevel IS. Nobody chose it — it emerged when the two shipped together, in #243→#247. The question to
+answer before touching anything is whether the bevel is the desired reading, in which case it should
+be *tuned* (the pairing is currently accidental and its strength varies with the backdrop), or an
+artefact of two features colliding, in which case one of them gives ground.
+
+Three things a future pass should know:
+
+- **It is strongest exactly where the rim is weakest.** The rim's top and bottom stops are white, so
+  on a light backdrop they vanish and the shadow carries the edge alone; on a dark backdrop the
+  specular is at full strength right next to the shadow. So the bevel is a function of what is
+  BEHIND the glass, not of the glass. Judge it over several wallpapers or the answer is a local one.
+- **`drop` is the obvious knob and it is already spent.** It is 0 in `GLASS_SHADOW` because at
+  `spread 2` a downward offset costs the top edge more than it buys — see the measurements there.
+  Reaching for asymmetry to shape the bevel means buying `spread` first, which comes out of the
+  glass (the shadow lives in `GLASS_INSET`).
+- **The instruments already exist.** `rim-backdrop-probe` renders any surface over a real blurred
+  wallpaper and measures the same pixel with the rim against without it, which is the right shape of
+  measurement for this too — the bevel is the rim and the shadow considered together, and that probe
+  already separates them.
 
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 

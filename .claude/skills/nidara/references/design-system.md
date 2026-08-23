@@ -1225,9 +1225,30 @@ the four expanded modes — and its layer went to 0.23 with them. ⚠️ Its mor
 300 ms in / **220 ms out**, half again as long as the bar's 150 ms close, so it is the surface where
 a threshold pop would show first if it ever shows at all.
 
-Not yet, and for its own reason: **the dock capsule** (paints at `inset: 0`, so it has
-no room outside its silhouette at all and needs its `DrawingArea` grown and its margins recoloured),
-and **`GlassBubble`** (its shadow would have to wrap the arrow tip, which is new geometry).
+The **dock capsule** has it too, and it is the only surface where the shadow could not be added by
+passing a prop. Its gloss `DrawingArea` **is** the capsule (`inset: 0`), so making room outside the
+silhouette meant growing that widget and subtracting the same `DOCK_SHADOW_PAD` from its margins in
+the same breath, then drawing the capsule at `inset = pad`.
+
+🔑 **The invariant is that the painted capsule does not move by one pixel.** Everything the dock is
+tuned around — `PILL_PADDING` (the air between an icon and the capsule wall), `BASE_MARGIN` (the
+side air), `ICON_MARGIN`, the running-dot zone, `EXCLUSIVE_ZONE` — is derived from `iconSize` in
+`DockPhysics.deriveConstants`, and none of it changes. The icons, separators and indicators live in
+`bar`/`shim`/`dotZone`, which the change does not go near: that is the *structural* reason the
+dock's spacing cannot drift from a shadow. `scripts/dev/dock-capsule-probe.ts` renders it both ways
+and reports **0 differing pixels**, with a positive control that trips at 576 when the compensation
+is off by one.
+
+There was room because the dock's window is the FULL monitor height (`WIN_H`), not the exclusive
+zone — which is also how a magnified icon overflows above the capsule — and the blur region already
+pads `BLUR_PAD_CROSS`/`BLUR_PAD_MAIN` = 24 px on every side. The VERTICAL axis needed no layout
+change at all: there `da` spans the surface and the capsule is placed by a `cr.translate`, which
+absorbs the pad. ⚠️ The one residual: `da.margin_start` is clamped at 0, so on a dock within ~18 px
+of the monitor's width the capsule would shift — it was ~14 px before the pad, so the pad narrows an
+edge case rather than creating one.
+
+Not yet, and for its own reason: **`GlassBubble`** — its shadow would have to wrap the arrow tip,
+which is new geometry.
 
 ⚠️ **A shadow interacts with compositor blur, and that decides WHERE it can exist.** Hyprland
 decides where to blur by an alpha threshold per layer (`ignore_alpha`), and a shadow is by

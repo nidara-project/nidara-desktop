@@ -16,9 +16,10 @@ import GLib from "gi://GLib"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import { DOCK_CONSTANTS, calculateDockItemMetrics } from "./DockPhysics"
-import { drawSquircle } from "../../common/DrawingUtils"
+import { drawSquircle, drawGlassShadow } from "../../common/DrawingUtils"
 import { setVisibleRect } from "../../common/VisibleRegion"
 import { GLASS_TINT } from "../../../lib/tokens"
+import { GLASS_SHADOW } from "../../common/SquircleContainer"
 import Theme from "../../core/ThemeManager"
 import inputYield from "../../core/InputYield"
 import { dockSettings, dockSideState } from "./state"
@@ -196,8 +197,8 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 name: "dock-gloss-layer",
                 valign: Gtk.Align.END,
                 halign: Gtk.Align.START,
-                height_request: DOCK_CONSTANTS.PILL_HEIGHT,
-                margin_bottom: dockSettings.screenGap,
+                height_request: DOCK_CONSTANTS.PILL_HEIGHT + DOCK_SHADOW_PAD * 2,
+                margin_bottom: Math.max(0, dockSettings.screenGap - DOCK_SHADOW_PAD),
                 can_focus: false,
             })
             // theme→redraw handled by DockCore (single, disconnected on destroy)
@@ -209,12 +210,18 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                     ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
                     : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
                 const borderCol = dark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
-                drawSquircle(cr, w, _h, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, 0)
+                // The pad is the `inset`, so the capsule lands where it always did; the
+                // shadow gets the ring the DrawingArea grew to hold it.
+                drawGlassShadow(cr, DOCK_SHADOW_PAD, DOCK_SHADOW_PAD,
+                    w - DOCK_SHADOW_PAD * 2, _h - DOCK_SHADOW_PAD * 2,
+                    (_h - DOCK_SHADOW_PAD * 2) / 2, 3.2, false,
+                    GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop)
+                drawSquircle(cr, w, _h, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
             })
 
             const initialMargin = Math.round((monMain - initialSmoothedMain) / 2)
             bar.margin_start = Math.max(0, initialMargin)
-            da.margin_start = Math.max(0, initialMargin - DOCK_CONSTANTS.BASE_MARGIN)
+            da.margin_start = Math.max(0, initialMargin - DOCK_CONSTANTS.BASE_MARGIN - DOCK_SHADOW_PAD)
 
             shim = new Gtk.Box({
                 valign: Gtk.Align.END,
@@ -240,7 +247,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             lastRenderedWidth = s
             bar.set_size_request(s, -1)
             const targetW = s + (DOCK_CONSTANTS.BASE_MARGIN * 2)
-            da.set_size_request(targetW, DOCK_CONSTANTS.PILL_HEIGHT)
+            da.set_size_request(targetW + DOCK_SHADOW_PAD * 2, DOCK_CONSTANTS.PILL_HEIGHT + DOCK_SHADOW_PAD * 2)
             da.queue_draw()
         },
 
@@ -248,7 +255,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             const barM = Math.round((monMain - totalMain) / 2)
             if (bar.margin_start !== barM) {
                 bar.margin_start = barM
-                da.margin_start = barM - DOCK_CONSTANTS.BASE_MARGIN
+                da.margin_start = barM - DOCK_CONSTANTS.BASE_MARGIN - DOCK_SHADOW_PAD
             }
         },
 
@@ -448,13 +455,34 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
 
         mainStart: (extent: number) => Math.max(0, (monMain - extent) / 2),
         onSettingsResize() {
-            da.height_request = DOCK_CONSTANTS.PILL_HEIGHT
+            da.height_request = DOCK_CONSTANTS.PILL_HEIGHT + DOCK_SHADOW_PAD * 2
             shim.height_request = DOCK_CONSTANTS.PILL_HEIGHT
-            da.margin_bottom = dockSettings.screenGap
+            da.margin_bottom = Math.max(0, dockSettings.screenGap - DOCK_SHADOW_PAD)
             shim.margin_bottom = dockSettings.screenGap
         },
     }
 }
+
+/** Room reserved OUTSIDE the capsule so its drop shadow has somewhere to land.
+ *
+ *  🔑 THE INVARIANT: the painted capsule must not move by one pixel. Everything the
+ *  dock's geometry is tuned around — `PILL_PADDING` (the air between an icon and the
+ *  capsule wall), `BASE_MARGIN` (the side air), `ICON_MARGIN`, the running-dot zone,
+ *  `EXCLUSIVE_ZONE` — is derived from `iconSize` in `DockPhysics.deriveConstants` and
+ *  none of it changes here. This pad is added to the gloss `DrawingArea`'s SIZE and
+ *  subtracted from its MARGINS in the same breath, and the capsule is then drawn at
+ *  `inset = DOCK_SHADOW_PAD`, so it lands on exactly the pixels it landed on before.
+ *  If you touch one of the two halves, touch the other.
+ *
+ *  The icons, the separators and the indicators live in `bar`/`shim`/`dotZone`, which
+ *  this does not go near — that is the structural reason the dock's spacing cannot
+ *  drift from a shadow.
+ *
+ *  There is room for it: the dock's window is the FULL monitor height (`WIN_H`), not
+ *  the exclusive zone, which is also how a magnified icon overflows above the capsule.
+ *  And the blur region already pads by `BLUR_PAD_CROSS`/`BLUR_PAD_MAIN` = 24 px on
+ *  every side, so 2 px of shadow is well inside what is already declared. */
+const DOCK_SHADOW_PAD = GLASS_SHADOW.spread
 
 // ─── VERTICAL (left/right) ────────────────────────────────────────────────────
 
@@ -565,8 +593,14 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 const px = position === 'right'
                     ? _w - DOCK_CONSTANTS.EXCLUSIVE_ZONE
                     : dockSettings.screenGap
-                cr.translate(px, py)
-                drawSquircle(cr, pw, ph, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, 0)
+                // No layout change on this axis: `da` spans the surface and the capsule is
+                // placed by this translate, so the pad is absorbed here. Cairo clips a shadow
+                // that runs past the screen wall, which is where it would be invisible anyway.
+                cr.translate(px - DOCK_SHADOW_PAD, py - DOCK_SHADOW_PAD)
+                drawGlassShadow(cr, DOCK_SHADOW_PAD, DOCK_SHADOW_PAD, pw, ph, pw / 2, 3.2, false,
+                    GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop)
+                drawSquircle(cr, pw + DOCK_SHADOW_PAD * 2, ph + DOCK_SHADOW_PAD * 2, undefined,
+                    dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
             })
 
             // Shim: positioned by margin_top (set dynamically via updateSize → getGtkCenter).
