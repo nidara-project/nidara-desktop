@@ -51,8 +51,23 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
+  # ⚠️ There is deliberately NO `push: branches: [main]`, and adding one back is how
+  # this workflow came to run three times per change. Removed 2026-08-23.
+  #
+  # Every merge here goes through the merge queue, and the queue's `merge_group` run
+  # below tests the EXACT commit that becomes main — PR grafted onto the current base,
+  # which is what a post-merge run would test a minute later. Measured over the last
+  # nine merges: nine `merge_group` runs and nine `push` runs, one for one, the push
+  # starting seconds after the queue's had gone green on the same tree. A third of all
+  # CI was re-proving a result that already existed.
+  #
+  # It is not free to leave in, either: the smoke installs Arch packages, and a mirror
+  # 404 there is enough to kick a PR out of the queue — three shots at that per change
+  # instead of two.
+  #
+  # ⚠️ PUT IT BACK if the merge queue is ever turned off. Without the queue nothing
+  # tests the merged result, only the PR in isolation, and two PRs that are each green
+  # can break main together. The queue is what makes this safe; they move as a pair.
   pull_request:
   # ⚠️ REQUIRED BY THE MERGE QUEUE, and the way it fails is a stall, not an error.
   # A queued PR waits for the four required checks (styles / typecheck / smoke /

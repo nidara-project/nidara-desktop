@@ -710,6 +710,19 @@ branch — so a green PR check has always been a statement about the merge, not 
 What the queue adds is that the statement is re-made against the `main` that is actually current
 at merge time.
 
+⚠️ **There is deliberately no `push: branches: [main]`, and it is only safe to leave out BECAUSE
+the queue exists** (removed 2026-08-23). The `merge_group` run tests the exact commit that becomes
+`main`, so a post-merge run re-proves a result that already exists — measured over nine merges,
+nine queue runs and nine push runs, one for one, the push starting *seconds* after the queue's had
+gone green on the same tree. That was a third of all CI. It also cost reliability rather than
+buying it: the smoke installs Arch packages and a mirror 404 there is enough to kick a PR out of
+the queue, so the third run was a third shot at that per change.
+**Put it back if the merge queue is ever turned off** — without the queue nothing tests the merged
+result, only each PR in isolation, and two PRs that are individually green can break `main`
+together. The trigger and the queue move as a pair.
+⚠️ One consequence to know: after a merge there is no longer a `main` run to open. The queue's run
+is the authoritative one, and it is no longer "orphaned" — it is the only one.
+
 **What `main` actually gates, so a contributor's agent does not assume otherwise** (2026-08-16):
 the four checks above, plus linear history, no force pushes, no deletions. It does **not**
 require an approving review — that requirement existed until today and was unsatisfiable (one
