@@ -8,7 +8,7 @@ import { renderMenuModel } from "../../common/NidaraMenu"
 import status from "../../core/Status"
 import { safeDisconnect } from "../../core/signals"
 import { attachTooltip } from "../../common/Tooltip"
-import SquircleContainer from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { CAPSULE_BORDER } from "./capsule"
 import hs from "../../core/HyprlandState"
 
@@ -234,7 +234,7 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void) {
         // SquircleContainer only paints the glass + hover-accent border.
         const capsule = SquircleContainer({
             child: btn, gloss: true, useShellOpacity: true, chrome: true,
-            opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true,
+            opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true,
         })
         items.set(id, capsule)
         box.append(capsule)

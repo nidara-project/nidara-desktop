@@ -2,7 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Pango from "gi://Pango"
 import GLib from "gi://GLib"
 import { getWordmark } from "../../utils"
-import SquircleContainer from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { CAPSULE_BORDER } from "./capsule"
 import hs from "../../core/HyprlandState"
 import status from "../../core/Status"
@@ -76,7 +76,7 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
     if (appName.label !== fitted) appName.label = fitted
   }
 
-  const capsule = SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  const capsule = SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
 
   const startBudgetAnimation = (targetPx: number) => {
     targetBudgetPx = targetPx

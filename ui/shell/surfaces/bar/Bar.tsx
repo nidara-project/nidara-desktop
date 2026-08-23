@@ -72,7 +72,7 @@ function SystemMenuIcon(): Gtk.Widget {
   applyIcon()
   onBarSettingsChanged(applyIcon)
 
-  return SquircleContainer({ child: img, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => status.toggleSystemMenu() })
+  return SquircleContainer({ child: img, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => status.toggleSystemMenu() })
 }
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
@@ -1161,7 +1161,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           }
           : undefined
       const capsule = SquircleContainer({
-          child: w.buildBarContent(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar",
+          child: w.buildBarContent(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW,
           borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true,
       })
       if (onRelease) {
@@ -1179,7 +1179,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       overflowContentBuilder = () => buildOverflowList(hiddenIds)
       const overflowLabel = new Gtk.Label({ label: "···", css_classes: ["bar-overflow-label"], margin_start: 12, margin_end: 12 })
       const overflowCapsule = SquircleContainer({
-          child: overflowLabel, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar",
+          child: overflowLabel, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW,
           borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true,
       })
       const g = new Gtk.GestureClick()
@@ -1208,7 +1208,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // manages its own visibility (hidden while empty).
   const trayInner = Tray(openCustomExpansion, () => scheduleBarLayoutSync())
   right.append(trayInner)
-  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(searchCapsule)
   // CC capsule layout: [16px left pad][gear 16px][16px right-gap] = 48px (matches the
   // search capsule). The status-indicator dot (recording / AI control) sits in that right
@@ -1231,9 +1231,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const ccOverlay = new Gtk.Overlay()
   ccOverlay.set_child(ccInner)
   ccOverlay.add_overlay(ccDot)
-  const ccBtn = SquircleContainer({ child: ccOverlay, onClick: () => status.toggleCC(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  const ccBtn = SquircleContainer({ child: ccOverlay, onClick: () => status.toggleCC(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(ccBtn)
-  const timeCapsule = SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  const timeCapsule = SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(timeCapsule)
 
   // No center widget: the capsule that used to sit there paints on the island's

@@ -1209,11 +1209,18 @@ chosen because `spread 2` is what `GLASS_INSET` already reserves, so no surface'
 nothing moves. It goes on the OUTERMOST glass of a surface and nowhere else: a shadow on a control
 that sits inside another glass panel is a shadow inside a window, and reads as dirt rather than as
 depth. Currently: the CC's islands and the NC's cards and calendar (neither has a panel — their
-cards ARE the outer glass), Prism's wrapper, the system menu's wrapper, the overview's panel, and
-the bar's expansion panel.
+cards ARE the outer glass), Prism's wrapper, the system menu's wrapper, the overview's panel, the
+bar's expansion panel, and **every bar capsule** (all eight of them, discriminated by
+`opacityRole: "bar"` — each sits directly on the bar, none inside another panel).
 
-Not yet, and each for its own reason: **the bar's own capsules** (numerous, small and adjacent — a
-visual question rather than a technical one), **the dock capsule** (paints at `inset: 0`, so it has
+🔑 **The bar capsules turned out to be the strongest case, not the marginal one, and the reason is
+geometric.** They are PILLS, so `radius = height/2`, so `t` collapses to `0.5 × FLANK_SPREAD` and
+the dark flank spans only .175–.825 of the height — everything outside that is the white caps.
+Against a white window a bar capsule therefore renders as **two disconnected side arcs with no top
+or bottom at all**: measured, darkest contour pixel with 255 meaning nothing is there, sides 213 and
+top/bottom **254**. With the shared recipe: 213 and 218. A tile degrades on white; a pill breaks.
+
+Not yet, and each for its own reason: **the dock capsule** (paints at `inset: 0`, so it has
 no room outside its silhouette at all and needs its `DrawingArea` grown and its margins recoloured),
 **the Activity Island** (own surface at `ignore_alpha` 0.01, which reopens the threshold question),
 and **`GlassBubble`** (its shadow would have to wrap the arrow tip, which is new geometry).
