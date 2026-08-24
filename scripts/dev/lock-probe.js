@@ -72,6 +72,12 @@
  *                missing icons. When the glyphs are absent for any reason the render
  *                says so in a band across its own top-left, because the PNG outlives
  *                the stdout.
+ *   PLATFORM_THEME=1  render under the DEVELOPER's GTK theme instead of the blank one
+ *                the real surfaces use. ⚠️ Off by default since 2026-08-24: `app.ts`
+ *                sets `GTK_THEME=nidara` (a theme that does not exist, on purpose), and
+ *                borrowing Adwaita instead made the probe draw three dropdown chevrons
+ *                the real greeter does not have. Use it only for the A/B that tells you
+ *                whether something you are looking at is theme-supplied.
  *   LOCALE=xx    which catalog to render (default `es`; the twelve of
  *                ui/greeter/lib/i18n.ts, three of them quoted keys — pt-BR, pt-PT,
  *                zh-CN). Strings are READ FROM THAT FILE, never typed here. Sweeping it
@@ -164,6 +170,24 @@ const t = (key) => {
     if (v === undefined) { printerr(`[lock-probe] no "${key}" in the ${LOCALE} catalog`); system.exit(1) }
     return v
 }
+
+/* ⚠️ THE BLANK THEME IS PART OF THE SURFACE, and running without it hid a real bug.
+ *
+ * `ui/greeter/app.ts` sets `GTK_THEME=nidara` — a theme that does not exist, on purpose,
+ * so the greeter's own sheet has nothing beneath it to fight. This probe DESCRIBED that
+ * (see the `[css]` block below) and then rendered under the developer's real platform
+ * theme anyway, which is not the same widget stack.
+ *
+ * What that cost, on 2026-08-24: all three of the greeter's dropdown chevrons draw
+ * nothing on the real login screen, because an `arrow` is a builtin-icon node whose
+ * `-gtk-icon-source` comes from the theme. Under the probe's borrowed Adwaita they
+ * appeared perfectly. So the instrument was rendering a control the product does not
+ * have — the opposite failure to ICONS defaulting off, and worse, because a probe that
+ * invents a MISSING thing can only ever be caught by the VM.
+ *
+ * Must be set before `Gtk.init()`; GTK reads it once. `PLATFORM_THEME=1` opts out, for
+ * the A/B that identifies a defect as theme-supplied in the first place. */
+if (GLib.getenv("PLATFORM_THEME") !== "1") GLib.setenv("GTK_THEME", "nidara", true)
 
 Gtk.init()
 const display = Gdk.Display.get_default()

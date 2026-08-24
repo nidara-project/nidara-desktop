@@ -602,7 +602,25 @@ dropdown > button {
   image { color: inherit; -gtk-icon-size: 10px; }
   // GtkDropDown's chevron is an `arrow` node, not `image` — uncapped it renders
   // at 16px and makes the combo visibly taller than its sibling buttons.
-  arrow { color: inherit; -gtk-icon-size: 10px; }
+  //
+  // ⚠️ AND IT NEEDS ITS SOURCE SPELLED OUT HERE, which is the whole reason this line
+  // has three properties instead of two. `arrow` is a BUILTIN-ICON node: it has no
+  // content of its own and draws whatever `-gtk-icon-source` names. That normally
+  // comes from the platform theme — but `ui/greeter/app.ts` sets `GTK_THEME=nidara`,
+  // a theme that does not exist, deliberately, so that this sheet has nothing beneath
+  // it to fight. No theme means no `-gtk-icon-source`, so until 2026-08-24 all THREE
+  // chevrons on this screen (the session selector and the locale bar's two) kept
+  // their 10px box and drew NOTHING.
+  //
+  // 🔑 Why it survived so long: the peek icon in the password field and every shipped
+  // Lucide glyph render fine, because those are `icon-name`/`gicon` set in CODE and
+  // owe the theme nothing. Only the CSS-sourced node goes blank — so the screen looks
+  // like it has icons, and one specific kind of icon is missing.
+  arrow {
+    color: inherit;
+    -gtk-icon-size: 10px;
+    -gtk-icon-source: -gtk-icontheme("pan-down-symbolic");
+  }
 }
 
 // Session selector — visible, medium weight
