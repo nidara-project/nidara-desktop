@@ -950,6 +950,71 @@ same shell invocation** (`nidara-ipc toggleAgent; nidara-ipc queryUI …`), and 
 broken". Both return `count: 0`. Sanity-check the walk itself against a class that is always live
 (`.bar-centerbox`).
 
+### 90. ⚠️ OPEN — the shell segfaults opening the app grid, and it is GTK's icon thread inside Pango (2026-08-24)
+
+Owner-reported: "se me acaba de reiniciar sola la UI al abrir el appgrid, pero no veo nada en el
+log". Both halves are real and the second one is the reason the first is hard to see.
+
+**Why the log is empty, and always will be for this class.** `$XDG_RUNTIME_DIR/nidara-ui.log`
+carries stdout/stderr and JS exceptions. This is a SIGSEGV in native code — the process is gone
+before anything can be written, and systemd restarts it, so the only trace is that the UI blinked.
+**The log being silent is evidence about the KIND of crash, not the absence of one.** Read
+`journalctl --user -u nidara.service` and `coredumpctl` instead; the trace is there in full.
+
+**What the core says** (`coredumpctl debug 347331`, 2026-08-24 14:25). Two threads were inside
+Pango at the same moment:
+
+- **main** — `gtk_widget_snapshot_child` recursion (entered from JS: `ffi_call` is at the bottom of
+  the frame list, so it is one of our snapshot-time widgets), then `pango_renderer_draw_layout` →
+  GTK's snapshot pango renderer → `pango_glyph_string_extents_range`, which is `gsk_text_node_new`
+  measuring the glyphs it is about to wrap in a node. SEGV inside `libpangocairo`, `SEGV_MAPERR`.
+- **a `g_task_thread_pool_thread` worker** — entry point inside libgtk's icon-theme region
+  (between `gtk_icon_theme_get_display` and `gtk_icon_paintable_get_type`, so a static in
+  `gtkicontheme.c`: the icon LOAD thread), then the `gsk_render_node_draw` recursion (the statics
+  between `gsk_renderer_render_texture` and `gsk_render_node_draw`), ending in
+  `pango_cairo_show_glyph_string` → `pango_renderer_activate`.
+
+Pango's font map and its scaled-font caches are not thread-safe. Two threads in them at once is the
+whole bug, and it is **upstream, not ours**: nothing in this repo asks for a threaded icon load (no
+call site passes `GTK_ICON_LOOKUP_PRELOAD` — checked), GTK does it on its own.
+
+**Why the app grid and why now.** GTK 4.22 dropped librsvg for its OWN SVG renderer (`gtk_svg_*`
+exported symbols) and that renderer speaks `text`, `tspan`, `font-family`, `font-size` and
+`text-anchor` — so an SVG icon containing `<text>` renders through Pango, on whichever thread
+rasterises it. The app grid is the one surface that asks for dozens of icons at once *while* laying
+out dozens of labels, which is exactly the overlap the race needs. On this machine the reachable
+trigger is `rofi`: it has no icon in Papirus-Dark or Papirus, so it falls through to
+`/usr/share/icons/hicolor/scalable/apps/rofi.svg`, which carries three `<text>` elements —
+confirmed by resolving it through the live theme. It is the only installed app icon like that
+(`org.gnome.Screenshot` is the other text-carrying SVG, but Papirus has its own copy, which wins).
+
+⚠️ **NOT REPRODUCED, and the negative means nothing yet.** A probe that mimics the grid (90 tiles
+cycling fresh `GFileIcon`s while the main thread rewrites every label) survived 600 rounds with the
+real rofi icon, with a synthetic 200-`<text>` SVG, and with a no-text control. Then the instrument
+was checked: 40 `eu-stack` samples of the running probe never caught a worker thread inside gsk or
+pango at all. **The probe never exercised the mechanism, so its three green runs are not evidence
+of anything** — they are an instrument that cannot fail. Whoever picks this up starts by proving
+the icon really loads off the main thread (a `GTK_DEBUG` channel, `perf record -g`, or an
+`LD_PRELOAD` shim on `pango_renderer_activate` that records `gettid`), and only then runs the
+experiment. The probe is `scripts/dev/icon-text-race.js`, and its header says the same thing —
+a probe whose green is meaningless has to announce that in the artefact, not only in the ticket.
+
+Recurrence, from `coredumpctl`: gjs SIGSEGVs on 08-05, 08-17 (x3), 08-22 and 08-24. The 08-22 one
+crashed in `gsk_render_replay_filter_node`, a different frame — so this is a class of rare native
+crash, not one bug seen twice. Only the 08-24 core is still on disk (`present`); the rest were
+already reaped, which is its own lesson: **keep the core the day it happens.**
+
+**The upstream report is NOT filed yet** (2026-08-24). GTK lives on `gitlab.gnome.org/GNOME/gtk`,
+not GitHub, so it needs a GNOME account this machine does not have. Everything the report needs is
+in this entry — both stacks, the symbol bracketing, the versions, the trigger, and the honest
+"not reproduced, and here is why my negative is worthless". **Link the issue here when it is
+filed**, and if a maintainer explains what makes GTK pick the threaded path for a `GFileIcon`, put
+that in this entry too: it is the one piece missing to make the probe able to fail.
+
+A workaround here would be pre-rasterising every app icon before handing it to `Gtk.Image`. That
+trades a rare crash for a permanent cost, on every icon, forever — do not reach for it before the
+upstream answer, and do not reach for it at all if the answer is a GTK fix.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
