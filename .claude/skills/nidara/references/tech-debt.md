@@ -2894,10 +2894,23 @@ white: on a pale wallpaper it disappears entirely, so a user with no photo gets 
 around an inverted glyph. Same family as (a) — a token that assumes a dark backdrop, on the one
 surface whose backdrop is the user's own wallpaper.
 
-**c. The password field's focus ring is a loud saturated blue** against the muted glass. It may be
-correct (the accent IS the focus state, commandment 10 territory) or it may be a GTK default
-leaking through — NOT yet determined. Read where `setAccentRim` gets its hex on the greeter before
-touching it.
+⚠️ **(a) and (b) SURVIVED the VM pass without being tested, and that is a gap, not a pass.** The
+VM's default wallpaper is dark blue, so both read fine there — which is exactly the condition under
+which they are not defects. Testing them needs a PALE wallpaper on the greeter, which means writing
+one into the greeter's own config path, not the user's. Do not read "the VM looked fine" as
+evidence on these two.
+
+**c. ✅ FIXED 2026-08-24 — the focus ring was the accent's DEFAULT, on a screen that had read the
+user's choice and dropped it.** It was on this list as "loud blue, may be ours, may be a GTK
+default leaking, not determined". It was neither: `ui/greeter/app.ts`'s `loadAccentCss()` never
+called `setAccentRim()`, while `ui/lockscreen/app.ts`'s copy of the same function — same name, same
+input, same job — always had, with the comment explaining why (a Cairo painter cannot read a CSS
+custom property, so it needs the accent as a VALUE). So the greeter's painted rim was permanently
+`#0088FF` while every CSS-driven accent beside it followed the user. Proven in the VM: with
+`{"accent":"green"}` in the world-readable mirror, the ring is now green. 🔑 The generalisable
+part: **two functions with the same name, the same input and the same job, one line apart in
+behaviour** is the exact shape #60 keeps predicting for these two bundles — look for it by DIFFING
+the pair, not by reading either one.
 
 **d. ✅ FIXED 2026-08-24 — `scripts/dev/lock-probe.js` had two fidelity defects, and one of them
 faked the exact symptom a reporter is likely to describe.** Kept here rather than moved, because
@@ -2931,10 +2944,19 @@ the LESSON binds and the fix is small:
   (zh-CN) to 441px (nl)**, a 59 % spread. Single-locale renders could not have shown that, and it
   is the kind of number the login screen's text budget actually turns on.
 
-**e. The probe cannot see four things at all**, so they still need the VM: the avatar GLYPH (the
-probe stubs the avatar as a plain box), the multi-user switcher chips (also stubbed), the caps-lock
-warning, and the greeter running as the `greeter` system user — a different asset and permission
-path from the developer's.
+**e. ✅ ANSWERED by the VM, 2026-08-24 — and the answer was mostly "it works".** The probe cannot
+see the avatar GLYPH (it stubs the avatar as a plain box), the multi-user switcher chips (also
+stubbed), the caps-lock warning, or the greeter running as the `greeter` system user. Swept on a
+clean install: **the avatar glyph renders** (white `user-round`, ring visible), the power-bar and
+locale-bar glyphs render, the greeter user reaches `/usr/share/nidara` fine, and the greetd journal
+is clean — no errors, no criticals. The multi-user switcher and caps-lock stay untested (one user,
+no keyboard state to force).
+
+⚠️ **But the VM found what the probe could not, and it was the user's original report.** All three
+dropdown chevrons drew nothing on the real greeter — see the fix in `design-system.md`. The probe
+had been rendering them because it borrowed the developer's platform theme instead of the blank one
+`app.ts` installs. That is the lesson of (d) with the sign flipped: an instrument that INVENTS a
+working control is worse than one that invents a broken one, because only the VM can catch it.
 
 **f. Nothing gates a shadow against a layer's `ignore_alpha`.** `blur-threshold-check.mjs` guards
 the floor (a threshold that kills the blur) and knows nothing about the ceiling (a shadow low

@@ -1575,8 +1575,19 @@ button was measuring the wrong string. The rules those left:
   from the catalog the same way.
 - **The honest full render is the DEFAULT, and every degraded mode announces itself in the PNG**
   (a warning band across the top-left), not only on stdout. The image is what travels.
+- **It renders under the SAME BLANK THEME the real surfaces use** (`GTK_THEME=nidara`), since
+  2026-08-24. It did not before, and that hid a shipped bug: an `arrow` is a builtin-icon node
+  whose `-gtk-icon-source` comes from the platform theme, so with no theme all three of the
+  greeter's dropdown chevrons kept their 10px box and drew NOTHING — while the probe, borrowing
+  the developer's Adwaita, drew them perfectly. The sheet now names the source itself
+  (`-gtk-icontheme("pan-down-symbolic")`). ⚠️ **Every other icon on that screen renders**, because
+  the peek eye and the Lucide glyphs are `icon-name`/`gicon` set in CODE and owe the theme nothing
+  — only the CSS-sourced node goes blank, which is why the screen looks like it has icons and one
+  specific kind is missing. `PLATFORM_THEME=1` restores the old behaviour for the A/B that tells
+  you whether something is theme-supplied.
 - **The avatar and the switcher chips are still plain boxes.** Nothing it renders can answer a
-  question about the avatar GLYPH or the multi-user row — those need the VM.
+  question about the avatar GLYPH or the multi-user row — those need the VM. (Swept 2026-08-24:
+  the glyph renders correctly on a real install.)
 
 ## The greeter wears the kit (2026-08-10)
 
