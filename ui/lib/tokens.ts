@@ -102,10 +102,13 @@ const cornerReach = (n: number) => Math.SQRT2 * (1 - Math.pow(2, -1 / n))
  * the CSS half had always shipped (it predates the token) and because light
  * vibrancy is off-white in the prior art we follow — pure white has no material.
  *
- * ⚠️ `light` MUST STAY ABOVE 0.8. `drawSquircle` has no mode argument: it infers
- * one by sniffing the fill (`color.r > 0.8 && color.g > 0.8 && color.b > 0.8`). A
- * light tint taken below that threshold does not look slightly darker — it silently
- * takes the DARK branch and paints the Fresnel rim on a light capsule.
+ * ⚠️ ~~`light` MUST STAY ABOVE 0.8, because `drawSquircle` infers the mode by sniffing
+ * the fill (`color.r > 0.8 && …`).~~ **STALE — the sniff is gone.** #234 unified the two
+ * rim ramps into one that does not know what mode it is in, and #242 then deleted the
+ * inference `drawSquircle` was using it for. There is no threshold left to fall under;
+ * `light` is free to be any value the design wants. Struck through rather than deleted
+ * because the warning outlived the mechanism by a day and the next reader deserves to
+ * know it was a real constraint, not a mistake.
  *
  * ⚠️ This is NOT the rim's white. A specular highlight is the colour of the LIGHT,
  * not of the surface: see `GLASS_SPECULAR`.

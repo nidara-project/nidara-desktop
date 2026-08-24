@@ -98,26 +98,11 @@ interface SquircleContainerProps {
  */
 export const GLASS_INSET = 2.0
 
-/** The shell's one drop-shadow recipe, for glass that FLOATS OVER CONTENT.
- *
- *  `spread: 2` is the value that costs nothing: the shadow lives in the surface's
- *  `inset`, and `GLASS_INSET` already reserves exactly that — so the painted glass
- *  does not shrink and nothing moves. Anything wider comes out of the glass.
- *
- *  `drop: 0` because at this spread a downward offset costs the TOP edge more than
- *  it buys in depth, and the top is precisely where the rim gives up: its top stop is
- *  white, so against a white backdrop the shadow is the only thing defining that edge.
- *  Measured on a CC tile — darkest contour pixel, 255 meaning nothing is there — the
- *  sides sit at 211 while the top goes 218 / 227 / 239 / 244 at drop 0 / 0.5 / 1 / 2.
- *
- *  `alpha` is the TOTAL at the silhouette, which is the number that has to stay under
- *  the layer's `ignore_alpha` — 0.18 against the 0.23 the bar and the dock both use.
- *
- *  ⚠️ Give this to the OUTERMOST glass of a surface only. A shadow on a control that
- *  sits inside another glass panel is a shadow inside a window: it reads as dirt, not
- *  as depth. The control centre and the notification centre are the apparent
- *  exception and are not one — they have no panel, their cards ARE the outer glass. */
-export const GLASS_SHADOW = { spread: 2, alpha: 0.18, drop: 0 } as const
+/** The one drop-shadow recipe, moved to `ui/lib/glass-paint.ts` on 2026-08-24 with the
+ *  primitives it parameterises, so the greeter and the lockscreen float their glass on
+ *  the SAME numbers instead of on none. Re-exported here: this is still where the shell
+ *  reads it from, and the doc lives beside the algorithm it feeds. */
+export { GLASS_SHADOW } from "../../lib/glass-paint"
 
 /** Resolves a shape's actual paint params for an allocated size. CIRCLE/CAPSULE
  *  always collapse to a perfect arc sized to the smaller dimension (the curve

@@ -2878,6 +2878,58 @@ honest test is a live A/B on the damage harness with the fps discipline from #46
 `draw_func` is not a valid damage source — it throttles the client and makes the two arms carry
 different loads).
 
+### 87. ⚠️ OPEN — what the greeter audit of 2026-08-24 left after the glass reached it
+
+The glass half is done: `ui/lib/glass-paint.ts` now holds the rim ramp, the silhouette and the
+shadow recipe, and the greeter/lockscreen capsule paints them (see `design-system.md`). Four things
+that audit found are NOT fixed, and one of them is about the instrument rather than the product.
+
+**a. The username is white text with no glass under it.** On a pale wallpaper `Ángel` sits directly
+on the backdrop at marginal contrast. This is #82 (thin glass cannot carry white text over a bright
+wallpaper) landing on the login screen, and the shadow does not help it — a label has no silhouette
+to shadow. It needs the #82 decision, not a local patch.
+
+**b. The avatar's ring is `2px solid var(--nidara-glass-border)`** (`.greeter-avatar`), a translucent
+white: on a pale wallpaper it disappears entirely, so a user with no photo gets an invisible circle
+around an inverted glyph. Same family as (a) — a token that assumes a dark backdrop, on the one
+surface whose backdrop is the user's own wallpaper.
+
+**c. The password field's focus ring is a loud saturated blue** against the muted glass. It may be
+correct (the accent IS the focus state, commandment 10 territory) or it may be a GTK default
+leaking through — NOT yet determined. Read where `setAccentRim` gets its hex on the greeter before
+touching it.
+
+**d. ⚠️ `scripts/dev/lock-probe.js` HAS TWO FIDELITY DEFECTS, and one of them fakes the exact
+symptom a reporter is likely to describe.** Both cost real time on 2026-08-24:
+
+  - **Power-bar icons are OFF unless `ICONS=1`.** The default render therefore shows
+    "Suspend / Restart / Shut down" as bare text — which is indistinguishable from the shipped
+    greeter having lost its icons. With `ICONS=1` all three render correctly, dark and light. The
+    flag's own comment explains why it defaults off (a missing-glyph placeholder measures
+    differently, and the probe exists for type questions) and that reasoning is sound for
+    MEASURING; it is a trap for LOOKING. Either flip the default, or make the render stamp
+    "icons: off" on itself.
+  - **The primary button is hardcoded `"Desbloquear"` even under `SCOPE=greeter`.** The real
+    greeter says `t("login")` — a longer string — so any text-budget or width verdict the probe
+    gives for that button is the LOCKSCREEN's, not the greeter's.
+
+  Neither is a bug in the desktop, and that is the point: an instrument that reproduces the
+  patient's symptom from its own defaults will be believed. See the `feedback` memory on captures
+  hiding artefacts; this is the same lesson from the other side.
+
+**e. The probe cannot see four things at all**, so they still need the VM: the avatar GLYPH (the
+probe stubs the avatar as a plain box), the multi-user switcher chips (also stubbed), the caps-lock
+warning, and the greeter running as the `greeter` system user — a different asset and permission
+path from the developer's.
+
+**f. Nothing gates a shadow against a layer's `ignore_alpha`.** `blur-threshold-check.mjs` guards
+the floor (a threshold that kills the blur) and knows nothing about the ceiling (a shadow low
+enough to be blurred behind, = #237). The greeter was checked by hand — 0.18 vs 0.3, 30.6 levels of
+margin — and the lockscreen cannot be affected. A gate was considered and NOT written: shadows are
+opt-in per widget (`SquircleContainer`'s `shadow` prop, `DockAxis`, `GlassBubble`), not per layer,
+so mapping surface → shadow statically is not a ten-line script, and a gate that fails for a
+surface with no shadow would block the merge queue for nothing. Write it properly or not at all.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a

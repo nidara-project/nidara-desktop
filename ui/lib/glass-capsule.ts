@@ -5,6 +5,7 @@ import Graphene from "gi://Graphene"
 import Gsk from "gi://Gsk"
 import cairo from "gi://cairo"
 import { LOCK_GLASS } from "./tokens"
+import { glassRimGradient, drawShadowFromPath, GLASS_SHADOW } from "./glass-paint"
 
 // The glass capsule of the greeter and the lockscreen — painted, not CSS-drawn.
 //
@@ -105,6 +106,23 @@ export function setAccentRim(hex: string | null | undefined) {
 }
 
 export type RimWeight = "strong" | "subtle"
+
+/** The rim WEIGHTS, as a multiplier on the one Fresnel ramp (`glassRimGradient`).
+ *
+ *  Derived from the two tokens rather than typed: `strong` IS the canonical ramp, and
+ *  `subtle` is the ratio `rimSubtle.a / rimStrong.a` those two have always expressed
+ *  (0.14 / 0.22 = 0.64). Keeping the arithmetic here rather than writing 0.64 is what
+ *  stops the two halves from drifting the day someone retints the CSS mirror.
+ *
+ *  ⚠️ These two used to be the rim ITSELF — a flat white at .22 / .14 — because until
+ *  2026-08-24 this painter could not reach the shell's ramp. A flat rim has no key
+ *  light and no flank, so over a pale wallpaper the capsule had nothing to separate it
+ *  from the backdrop and read as a grey slab; that, plus the missing shadow, is what
+ *  made the login screen look like a different product from the desktop. */
+const RIM_SCALE: Record<RimWeight, number> = {
+  strong: 1,
+  subtle: RIM_SUBTLE.a / RIM_STRONG.a,
+}
 
 const RIM_W = 1
 
@@ -325,6 +343,44 @@ export class GlassCapsule extends Gtk.Box {
         const outer = new Gsk.RoundedRect()
         outer.init_from_rect(outerBox, radius)
 
+        // 0) The DROP SHADOW, outside the silhouette and under everything else.
+        //
+        // The rim is a MATERIAL highlight, not a delimiter: its top and bottom stops
+        // are white, so over a bright wallpaper they vanish and only the dark flank
+        // survives — the capsule reads as two vertical lines. The desktop's glass got
+        // this on 2026-08-23 (#243/#244) and these two screens did not, which is the
+        // defect this whole change exists for.
+        //
+        // ⚠️ IT MUST NOT MAKE THE COMPOSITOR BLUR BEHIND IT. Hyprland blurs a layer
+        // wherever alpha clears `ignore_alpha`, and a shadow is by definition a band of
+        // low alpha OUTSIDE the glass — that is debt #237, the dock smearing behind its
+        // icon shadows. Checked, not assumed: `GLASS_SHADOW.alpha` is 0.18 at the
+        // silhouette and falls off outward, against the greeter layer's 0.3
+        // (`config/greetd/hyprland-greeter.lua`), so it never reaches the threshold. The
+        // LOCKSCREEN cannot be affected at all — it gets no compositor blur, it paints
+        // its own. Re-check this line if either number moves.
+        //
+        // Room comes from the snapshot, not from an inset: the cairo node is bigger than
+        // the widget and GTK4 does not clip a widget to its allocation, so the falloff
+        // costs the capsule no painted glass — unlike the shell, where `GLASS_INSET`
+        // has to buy it.
+        {
+          const m = GLASS_SHADOW.spread + 2
+          const shadowBox = new Graphene.Rect()
+          shadowBox.init(-m, -m, w + m * 2, h + m * 2)
+          const scr = snapshot.append_cairo(shadowBox)
+          drawShadowFromPath(
+            scr,
+            (offset, dy) => pillPath(
+              scr, -offset, -offset + dy,
+              w + offset * 2, h + offset * 2, radius + offset,
+            ),
+            -m, -m, w + m * 2, h + m * 2,
+            GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop,
+          )
+          scr.$dispose()
+        }
+
         // 1) The BODY, filling the whole pill: blurred wallpaper first when
         //    there is one, then the glass tint over it — the order the CSS had.
         snapshot.push_rounded_clip(outer)
@@ -353,16 +409,22 @@ export class GlassCapsule extends Gtk.Box {
         // rendered ACCENT BLUE the moment it took focus. Caught on the first
         // offscreen render of the textureless case, and it could not have been
         // caught any other way.
-        const rimColour = this.isFocused()
-          ? accentRim
-          : this.rim === "strong" ? RIM_STRONG : RIM_SUBTLE
-
+        // FOCUS stays a FLAT accent, and that is deliberate. The Fresnel ramp describes
+        // a physical edge lit from above; focus is not a material, it is a state, and it
+        // has to read as one crisp bright ring at a glance. Running the accent through
+        // the ramp would dim it at exactly the mid-height where the eye lands.
         const cr = snapshot.append_cairo(outerBox)
         cr.setFillRule(cairo.FillRule.EVEN_ODD)
         pillPath(cr, 0, 0, w, h, radius)
         pillPath(cr, RIM_W, RIM_W, Math.max(0, w - RIM_W * 2), Math.max(0, h - RIM_W * 2),
                  Math.max(0, radius - RIM_W))
-        cr.setSourceRGBA(rimColour.r, rimColour.g, rimColour.b, rimColour.a)
+        if (this.isFocused()) {
+          cr.setSourceRGBA(accentRim.r, accentRim.g, accentRim.b, accentRim.a)
+        } else {
+          // The shell's ONE ramp, scaled to this capsule's weight — see RIM_SCALE. The
+          // gradient is vertical, so its x only fixes the axis; any x on the shape does.
+          cr.setSource(glassRimGradient(w / 2, 0, h, radius, RIM_SCALE[this.rim]))
+        }
         cr.fill()
         cr.$dispose()
       }

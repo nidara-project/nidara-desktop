@@ -1061,7 +1061,7 @@ older notes describing either one will mislead you.
 
 ### The corner: two cubic Béziers, not a chord loop
 
-`createSquirclePath` (`common/DrawingUtils.ts`) used to walk the superellipse and emit a run of
+`createSquirclePath` (`ui/lib/glass-paint.ts`) used to walk the superellipse and emit a run of
 straight `lineTo` chords. It now emits **two `curveTo` segments per corner**, meeting at the
 corner's 45° point:
 
@@ -1083,7 +1083,7 @@ for **n = 3.2 and only 3.2** — 0.011px there, 0.322px at n=4.5 (radius 32). Ev
 in the shell is 3.2 since Prism joined its siblings on 2026-08-23 (it had carried 4.5 in through a
 refactor, 2.35px off the shape it was asking for); `n = 2` never reaches this code because it comes
 with `perfect`, which is four real arcs. Pass a different `n` and refit them — the numbers are in
-`DrawingUtils.ts`. Everything built on the exponent still holds: `cornerReach`,
+`glass-paint.ts`. Everything built on the exponent still holds: `cornerReach`,
 `rowInsetFor`, the `k(n)·R` diagonal reach documented elsewhere in this file. And the `perfect`
 branch is untouched — a pill is still four real `arc()` calls, because a pill is a circle-capped
 rectangle and there is no superellipse to approximate.
@@ -1160,7 +1160,7 @@ at all, it still leaves a bright cap at each end instead of collapsing to a poin
 measured over a bright wallpaper, flank `27,149,182` against a body of `7,139,175`. The capsule had
 no dark side at all, which is why it read flat over pale wallpapers: on those the contrast has to
 come from the edge, because the fill cannot supply it without going opaque. `FLANK_DEPTH` in
-`DrawingUtils.ts` is the one number to move if the sides read as too much or too little.
+`glass-paint.ts` is the one number to move if the sides read as too much or too little.
 
 ⚠️ **This reopened a decision, deliberately.** #230 removed a lateral dark contour because it "read
 as a drawn outline rather than as material" — but that judgement was made while `blur:brightness`
@@ -1170,11 +1170,22 @@ about to remove the dark flank again, know that you are re-deciding this, and sa
 
 Three things about it that are easy to undo by accident:
 
-- **There is ONE copy of those stops: `glassRimGradient` in `DrawingUtils.ts`.** It takes the mode
-  and returns the gradient — no mode argument at all since 2026-08-23; `GlassBubble` makes the
-  same call. #230 unified the *shape* and left copies of the *numbers*; every round of this has
-  been a divergence found after the fact, never one anybody proposed. If you are about to write a
-  branch here, that is the signal to add a PARAMETER instead.
+- **There is ONE copy of those stops: `glassRimGradient` in `ui/lib/glass-paint.ts`.** No mode
+  argument at all since 2026-08-23; `GlassBubble` makes the same call, and since 2026-08-24 so do
+  the greeter and the lockscreen. #230 unified the *shape* and left copies of the *numbers*; every
+  round of this has been a divergence found after the fact, never one anybody proposed. If you are
+  about to write a branch here, that is the signal to add a PARAMETER instead — which is exactly
+  what the login surfaces got: a `scale` that multiplies every alpha, so their two rim WEIGHTS
+  (`LOCK_GLASS.rimStrong` on the primary control, `rimSubtle` on everything else) survive as a
+  ratio of the tokens they already had, without a second table of stops.
+- ⚠️ **It lives in `ui/lib/`, not in the shell, and that is load-bearing.** It sat in
+  `ui/shell/common/DrawingUtils.ts` until 2026-08-24, and `ui/lib/` may not import from `ui/shell/`
+  — so for as long as it did, `ui/lib/glass-capsule.ts` (the greeter's and the lockscreen's only
+  capsule) *could not reach it* and painted a flat rim with no shadow instead. Nothing said so; the
+  #234–#248 wave simply stopped at a directory boundary and the login screen kept the old glass.
+  `DrawingUtils.ts` re-exports every name, so the shell's import paths are unchanged. **If you add
+  a primitive that defines what glass looks like, it goes in `glass-paint.ts` — putting it in the
+  shell is how a surface silently gets left behind.**
 - **The white is `GLASS_SPECULAR`, not `GLASS_TINT.light`.** Both are pure white and for two months
   they were the same token, which is the trap: they are the colour of the *light* and the colour of
   the *surface*, and tying them together means a retint of light-mode glass silently dims the
@@ -1223,14 +1234,32 @@ left. Three things about it are load-bearing:
   0 / 0.5 / 1 / 2. Round the corner arc it is the 60-90 degree band that dies. So keep `drop` near
   zero on tight shadows and only spend it once `spread` can spare it.
 
-**One recipe, `GLASS_SHADOW` in `SquircleContainer.tsx`** — `{ spread: 2, alpha: 0.18, drop: 0 }`,
+**One recipe, `GLASS_SHADOW` in `ui/lib/glass-paint.ts`** — `{ spread: 2, alpha: 0.18, drop: 0 }`,
 chosen because `spread 2` is what `GLASS_INSET` already reserves, so no surface's glass shrinks and
-nothing moves. It goes on the OUTERMOST glass of a surface and nowhere else: a shadow on a control
-that sits inside another glass panel is a shadow inside a window, and reads as dirt rather than as
-depth. Currently: the CC's islands and the NC's cards and calendar (neither has a panel — their
-cards ARE the outer glass), Prism's wrapper, the system menu's wrapper, the overview's panel, the
-bar's expansion panel, and **every bar capsule** (all eight of them, discriminated by
-`opacityRole: "bar"` — each sits directly on the bar, none inside another panel).
+nothing moves. (It lived in `SquircleContainer.tsx` until 2026-08-24 and moved down with the
+primitives it parameterises, for the reason in the rim section above; that file re-exports it.) It
+goes on the OUTERMOST glass of a surface and nowhere else: a shadow on a control that sits inside
+another glass panel is a shadow inside a window, and reads as dirt rather than as depth. Currently:
+the CC's islands and the NC's cards and calendar (neither has a panel — their cards ARE the outer
+glass), Prism's wrapper, the system menu's wrapper, the overview's panel, the bar's expansion panel,
+**every bar capsule** (all eight of them, discriminated by `opacityRole: "bar"` — each sits directly
+on the bar, none inside another panel), and since 2026-08-24 **every greeter/lockscreen capsule**
+(there is no card behind them either — each one floats on the wallpaper).
+
+⚠️ **On the login surfaces the shadow needs no `inset`, and that is a real difference.** In the
+shell the falloff has to be bought out of the surface's own `inset`; `GlassCapsule` instead sizes
+its Cairo node bigger than the widget, and GTK4 does not clip a widget to its allocation — so the
+shadow costs no painted glass and **nothing in the layout moves** (verified: card 280×257 and power
+bar 339×32 before and after, to the pixel). Only reach for this where the widget genuinely has no
+clipping ancestor.
+
+⚠️ **Check the layer's `ignore_alpha` before shadowing a NEW surface, and there is still no gate
+for it.** A shadow is a band of low alpha *outside* the glass, so if it clears the threshold
+Hyprland blurs behind it — a smeared halo tracking the silhouette, which is debt #237. For the
+greeter the numbers are: shadow `alpha 0.18` = 45.9/255 against the layer's `ignore_alpha 0.3` =
+76.5/255, **30.6 levels of margin**. The lockscreen cannot be affected at all (no compositor blur;
+it paints its own). `scripts/ci/blur-threshold-check.mjs` guards the *other* end of that coupling —
+a threshold reaching the glass FLOOR, which kills the blur — and knows nothing about shadows.
 
 🔑 **The bar capsules turned out to be the strongest case, not the marginal one, and the reason is
 geometric.** They are PILLS, so `radius = height/2`, so `t` collapses to `0.5 × FLANK_SPREAD` and
@@ -1270,7 +1299,7 @@ The **glass bubble** was the last one, and the only one whose shadow had to wrap
 could be written at all because `bubblePath` already knew how to grow its own outline: the `offset`
 argument the rim got in #242 offsets the body box AND the pointer's three corners, so the shadow is
 the same outline at six sizes. What that needed on the shadow's side was splitting the algorithm
-from the shape — **`drawShadowFromPath`** in `DrawingUtils.ts` now owns the nested fills and the
+from the shape — **`drawShadowFromPath`** in `ui/lib/glass-paint.ts` now owns the nested fills and the
 punch-out, and `drawGlassShadow` is a caller that happens to hand it a squircle. There is still one
 recipe and one falloff.
 
@@ -1454,6 +1483,19 @@ lockscreen. It draws the body inside a rounded clip at radius exactly `min(w,h)/
 pill, which CSS cannot deliver (see the tangency section above: a dot at half, a flat run one
 under, no third setting) — and the rim as a **1px ring, filled through an even-odd Cairo path**,
 never stroked and never a border primitive.
+
+Since 2026-08-24 that ring is filled with the shell's **`glassRimGradient`** (scaled by rim weight)
+and the pill gets the shared **`GLASS_SHADOW`**, so these two screens wear the same glass as the
+desktop. Before that they had a FLAT white rim (`.22` / `.14`) and no shadow — not by decision, but
+because the primitives lived in `ui/shell/` and `ui/lib/` may not import from there. Measured on the
+login button over a pale backdrop, grey levels at the contour: top rim **133 → 159** (the key light
+arriving), flank **150 → 91** (now darker than the body it edges, which is what makes it read as
+thickness), bottom **120 → 135**, and outside the silhouette a shadow of **−27 levels** decaying
+monotonically over ~3px where there had been nothing at all.
+
+🔑 **FOCUS stays a flat accent — it is not run through the ramp.** The Fresnel ramp describes a
+physical edge lit from above; focus is a STATE and has to read as one crisp bright ring at a glance.
+Sending the accent through the ramp dims it at exactly the mid-height the eye lands on.
 
 **The only difference between the two surfaces is where the pixels behind the glass come
 from, and that is a property of the compositor rather than a design decision.** The greeter is
