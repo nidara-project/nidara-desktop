@@ -2981,6 +2981,39 @@ opt-in per widget (`SquircleContainer`'s `shadow` prop, `DockAxis`, `GlassBubble
 so mapping surface → shadow statically is not a ten-line script, and a gate that fails for a
 surface with no shadow would block the merge queue for nothing. Write it properly or not at all.
 
+### 88. ⚠️ OPEN — the glass sliders show TWO controls for one decision (2026-08-24)
+
+Settings → Appearance ships a master "Glass" slider AND, behind an "Advanced" disclosure, four
+per-surface sliders. Both govern the same thing, so the master has to be an INDETERMINATE control:
+when the four disagree it reads "—" and mutes (`glassUniform`, Appearance.tsx). That was tolerable
+while the shipped defaults were uniform. They stopped being uniform the same day — dock at
+`GLASS_RANGE.min`, everything else at `GLASS_DEFAULT` — so **a fresh install now opens Appearance
+on a muted slider showing a dash**, which is the first thing a new user sees there.
+
+**Interim, shipped:** the disclosure is open by default. That does not fix the design, it makes the
+dash legible — the four differing values sit right under it. Do not re-collapse it without also
+making the defaults uniform.
+
+**The design the owner wants (their words, 2026-08-24):** the per-surface sliders stop being hidden
+and secondary and become what you see by DEFAULT; a checkbox switches to a single general slider
+*instead of* them. One mode or the other, **never both on screen at once** — which is precisely
+what forces the master to be indeterminate today.
+
+What it costs, so nobody under-estimates it into a release:
+
+- **A PERSISTED preference.** It cannot be derived from whether the four values happen to agree:
+  dragging one per-surface slider into agreement would silently flip the UI into the other mode.
+  So it is a new field on the theme config, with its setter and its persistence.
+- **A new i18n key in ALL TWELVE locales, in the same PR** (policy since 2026-08-23, gated by
+  `i18n-check`).
+- A decision this list cannot make for you: whether the general slider, when switched on, WRITES
+  one value to all four (today's `setGlassOpacity` behaviour) or shadows them and restores the
+  per-surface values when switched off. The first is simpler and loses information; the second is
+  what a user who toggles it twice will expect.
+
+⚠️ Do not do this piecemeal with the pending "rediseñar el tema sliders de cristal" the owner also
+has open — it is the same surface twice.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a

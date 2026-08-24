@@ -341,7 +341,22 @@ export default function AppearancePage() {
     // chevron) and the four sliders reveal as further rows of the very card whose master
     // they refine. The revealer rides in a passive wrapper row so the slide-down happens
     // within the card; row-activated on the shared ListBox drives the toggle.
-    const advChevron = new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 16, css_classes: ["nd-icon"] })
+    //
+    // ⚠️ OPEN BY DEFAULT since 2026-08-24, and that is not a cosmetic preference — it is
+    // what makes the master's "—" READABLE. The shipped defaults stopped being uniform
+    // that day (dock at the floor, everything else at GLASS_DEFAULT), so a fresh install
+    // meets a muted master showing a dash. With the four sliders collapsed underneath,
+    // that dash is a mystery; with them visible it is self-evidently "these four differ,
+    // here they are". Do not close it again without also making the surfaces uniform.
+    //
+    // 📌 INTERIM. The owner's design (2026-08-24) retires the disclosure entirely: the
+    // per-surface sliders become the DEFAULT view, and a checkbox switches to a single
+    // general slider INSTEAD of them — one mode or the other, never both on screen at
+    // once, which is what makes today's master indeterminate in the first place. That
+    // needs a persisted preference (it cannot be derived from whether the values happen
+    // to agree, or dragging one slider into agreement would silently change modes) plus
+    // a new i18n key in all twelve locales, so it is its own change. tech-debt #88.
+    const advChevron = new Gtk.Image({ gicon: Icons.chevronDown, pixel_size: 16, css_classes: ["nd-icon"] })
     const advToggleRow = createRow(t("settings.appearance.advanced"), "", advChevron)
     fcGroup.listBox.append(advToggleRow)
 
@@ -366,7 +381,7 @@ export default function AppearancePage() {
         Theme.windowOpacity, GLASS_RANGE.min, GLASS_RANGE.max, (v) => Theme.setWindowOpacity(v),
         { ...OPACITY_OPTS, onExtChange: onTheme(() => Theme.windowOpacity) },
     ))
-    const advRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN, reveal_child: false })
+    const advRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN, reveal_child: true })
     advRevealer.set_child(advInner)
     const advRevealerRow = new Gtk.ListBoxRow({ activatable: false, selectable: false, css_classes: ["settings-adv-revealer-row"] })
     advRevealerRow.set_child(advRevealer)
