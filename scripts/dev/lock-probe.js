@@ -64,6 +64,19 @@
  *                selectors with the real `NidaraDropDown`. Without it they are
  *                bare `Gtk.DropDown`s and the kit's construction-time work — the
  *                list factory, `adoptGtkScrolled` — never runs. See below.
+ *   ICONS=0      strip the shipped Lucide glyphs (power bar, locale bar) for a pure
+ *                type pass. ⚠️ ON by default since 2026-08-24, and the default MATTERS:
+ *                while it was off, the standard render showed the power bar as three
+ *                bare labels, which is exactly what a greeter that had lost its icons
+ *                looks like — and it was read that way, by someone chasing a report of
+ *                missing icons. When the glyphs are absent for any reason the render
+ *                says so in a band across its own top-left, because the PNG outlives
+ *                the stdout.
+ *   LOCALE=xx    which catalog to render (default `es`; the twelve of
+ *                ui/greeter/lib/i18n.ts, three of them quoted keys — pt-BR, pt-PT,
+ *                zh-CN). Strings are READ FROM THAT FILE, never typed here. Sweeping it
+ *                is how you find out that the power bar is 278px wide in zh-CN and
+ *                441px in nl — a 59 % spread that no single-locale render can show.
  *   W, H         surface size, used only when FULLSCREEN=0. Both real surfaces
  *                cover the screen, so the probe fullscreens by default: on a
  *                TILING compositor W/H are a request that gets ignored anyway,
@@ -90,6 +103,7 @@ import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import Gsk from "gi://Gsk"
+import Graphene from "gi://Graphene"
 import Gio from "gi://Gio"
 import system from "system"
 
@@ -102,6 +116,54 @@ const SCOPE = GLib.getenv("SCOPE") || "greeter"
 const ICON_DIR = `${GLib.getenv("NIDARA_SHELL_ROOT") ?? "/usr/share/nidara/ui/shell"}/assets/icons/hicolor/scalable/actions`
 const W = parseInt(GLib.getenv("W") || "1280", 10)
 const H = parseInt(GLib.getenv("H") || "800", 10)
+const LOCALE = GLib.getenv("LOCALE") || "es"
+
+/* ── The STRINGS come from the shipped catalog, never from this file ──────────
+ *
+ * Every label below used to be a Spanish literal typed here, and on 2026-08-24 one
+ * of them was found to be simply WRONG: the primary button said "Desbloquear" under
+ * `SCOPE=greeter` too, so every width and text-budget verdict this probe gave for the
+ * login button was measuring the LOCKSCREEN's shorter word. The real greeter says
+ * `t("login")` — "Iniciar sesión", four characters and a space longer.
+ *
+ * A hardcoded copy of a string cannot be right for more than as long as nobody edits
+ * the original, and this probe exists to answer questions about TYPE. So it parses
+ * `ui/greeter/lib/i18n.ts` — gjs cannot import TypeScript, and a regex over an object
+ * literal of plain string values is honest here in a way it would not be over code.
+ *
+ * ⚠️ THIS ALSO MAKES THE PROBE MULTILINGUAL, which is the point rather than a bonus.
+ * "Does the button fit?" has twelve answers, and the ones that break are never the two
+ * a Spanish-speaking maintainer looks at — the same reason `wrapping-prose-check` had
+ * to become a CI gate after the rule was documented and then violated six times. Sweep
+ * with LOCALE=de (Anmelden/Entsperren), LOCALE=fr (Se connecter), LOCALE=it, … */
+const CATALOG = (() => {
+    const path = `${REPO}/ui/greeter/lib/i18n.ts`
+    const [ok, bytes] = GLib.file_get_contents(path)
+    if (!ok) { printerr(`[lock-probe] cannot read the catalog at ${path}`); system.exit(1) }
+    const src = new TextDecoder().decode(bytes)
+    // The locale's own block: `\n  es: {` up to the first `\n  },`.
+    // ⚠️ THE KEY MAY BE QUOTED. Three of the twelve are — `"pt-BR"`, `"pt-PT"`, `"zh-CN"`
+    // — because a hyphen is not a bare JS identifier. An unquoted-only pattern reads the
+    // catalog as having nine locales and refuses the other three; caught by sweeping them
+    // all rather than by testing `de` and calling it done.
+    const block = src.match(new RegExp(`\\n  "?${LOCALE}"?:\\s*\\{([\\s\\S]*?)\\n  \\},`))
+    if (!block) {
+        printerr(`[lock-probe] no "${LOCALE}" block in ${path} — known: ` +
+                 [...src.matchAll(/\n  "?([a-zA-Z]{2}(?:-[A-Za-z]{2})?)"?:\s*\{/g)].map(m => m[1]).join(" "))
+        system.exit(1)
+    }
+    const out = {}
+    for (const m of block[1].matchAll(/(\w+):\s*"((?:[^"\\]|\\.)*)"/g)) out[m[1]] = m[2]
+    return out
+})()
+
+/** One catalog string. Throws rather than rendering a placeholder: a probe that draws
+ *  `[missing]` at a different width than the real word is measuring its own bug. */
+const t = (key) => {
+    const v = CATALOG[key]
+    if (v === undefined) { printerr(`[lock-probe] no "${key}" in the ${LOCALE} catalog`); system.exit(1) }
+    return v
+}
 
 Gtk.init()
 const display = Gdk.Display.get_default()
@@ -208,13 +270,16 @@ card.append(new Gtk.Label({
     css_classes: ["greeter-username"], halign: Gtk.Align.CENTER, margin_top: 10,
 }))
 const entry = new Gtk.PasswordEntry({
-    placeholder_text: "Contraseña", show_peek_icon: true,
+    placeholder_text: t("password"), show_peek_icon: true,
     css_classes: ["greeter-password"], halign: Gtk.Align.CENTER,
     width_request: 280, margin_top: 20,
 })
 card.append(wrap(entry, "subtle", true))
 card.append(wrap(new Gtk.Button({
-    label: "Desbloquear", css_classes: ["greeter-login-btn"],
+    // The GREETER signs in, the LOCKSCREEN unlocks — two different words, and the
+    // longer one belongs to the surface whose button this probe is usually asked about.
+    label: SCOPE === "greeter" ? t("login") : t("unlock"),
+    css_classes: ["greeter-login-btn"],
     halign: Gtk.Align.CENTER, width_request: 280, margin_top: 8,
 }), "strong"))
 // ERROR=1 renders the failure line, hidden at rest in the real card, because
@@ -238,7 +303,7 @@ if (SCOPE === "greeter") {
 }
 if (GLib.getenv("ERROR")) {
     const errWrap = wrap(new Gtk.Label({
-        label: "Contraseña incorrecta", css_classes: ["greeter-error"],
+        label: t("wrongPassword"), css_classes: ["greeter-error"],
         wrap: true, halign: Gtk.Align.CENTER,
     }))
     errWrap.halign = Gtk.Align.CENTER
@@ -268,31 +333,52 @@ if (SCOPE === "greeter") {
     }
 }
 
-// Power bar — PowerBar.ts. ICONS=1 loads the shipped Lucide glyphs the way
+// Power bar — PowerBar.ts. The shipped Lucide glyphs are loaded the way
 // ui/lib/icons.ts does at runtime, which is the only way to see whether the
-// `nd-icon` invert actually lands (they render BLACK unloaded, so a missing
-// invert is invisible in the source and obvious here). Off by default: a
-// missing-glyph placeholder measures differently from the real thing, and the
-// type questions this probe exists for are about the labels.
-const POWER_ICONS = { Suspender: "moon", Reiniciar: "rotate-ccw", Apagar: "power" }
+// `nd-icon` invert actually lands (they render BLACK unloaded, so a missing invert
+// is invisible in the source and obvious here).
+//
+// ⚠️ THIS USED TO BE OFF BY DEFAULT, AND THAT MADE THE PROBE LIE. The default render
+// showed the power bar as three bare labels — which is indistinguishable from the
+// shipped greeter having lost its icons, and on 2026-08-24 it was read exactly that
+// way, by someone chasing a report of missing icons. An instrument that reproduces
+// the patient's symptom from its own defaults will be believed.
+//
+// The old reasoning ("a missing-glyph placeholder measures differently, and the type
+// questions this probe exists for are about the labels") was sound for MEASURING and
+// wrong for LOOKING — and it was already redundant, because the `file_test` below
+// means a missing glyph draws NOTHING rather than a placeholder. So: on by default,
+// `ICONS=0` to strip them for a pure type pass, and either way `iconState` says which
+// you got, on stdout AND stamped into the PNG when it is not the honest full render.
+const ICONS_ON = (GLib.getenv("ICONS") ?? "1") !== "0"
+const POWER_ROWS = [["suspend", "moon"], ["restart", "rotate-ccw"], ["shutdown", "power"]]
+let iconsMissing = 0
 const powerBar = new Gtk.Box({
     spacing: 4, halign: Gtk.Align.CENTER, valign: Gtk.Align.END,
     css_classes: ["greeter-power-bar"], margin_bottom: 40,
 })
-for (const label of ["Suspender", "Reiniciar", "Apagar"]) {
+for (const [key, glyph] of POWER_ROWS) {
     const inner = new Gtk.Box({ spacing: 6, halign: Gtk.Align.CENTER })
-    if (GLib.getenv("ICONS")) {
-        const path = `${ICON_DIR}/${POWER_ICONS[label]}.svg`
+    if (ICONS_ON) {
+        const path = `${ICON_DIR}/${glyph}.svg`
         if (GLib.file_test(path, GLib.FileTest.EXISTS)) {
             inner.append(new Gtk.Image({
                 gicon: Gio.FileIcon.new(Gio.File.new_for_path(path)),
                 pixel_size: 14, css_classes: ["nd-icon"],
             }))
-        } else print(`  ! no shipped icon at ${path}`)
+        } else { iconsMissing++; printerr(`  ! no shipped icon at ${path}`) }
     }
-    inner.append(new Gtk.Label({ label }))
+    inner.append(new Gtk.Label({ label: t(key) }))
     powerBar.append(new Gtk.Button({ css_classes: ["greeter-power-btn"], child: inner }))
 }
+
+/** What the render is actually showing, as a short phrase — or null when it is the
+ *  full honest thing and there is nothing to warn about. */
+const iconState = !ICONS_ON
+    ? "ICONS=0 — power bar drawn WITHOUT its glyphs"
+    : iconsMissing
+        ? `${iconsMissing}/3 power glyphs MISSING under ${ICON_DIR}`
+        : null
 
 // Locale bar — greeter only, bottom-left. Two dropdowns and a separator inside
 // a painted pill; it is the last thing on either screen that was CSS-drawn.
@@ -303,9 +389,11 @@ const localeBar = (() => {
         margin_start: 40, margin_bottom: 40,
         css_classes: ["locale-bar"],
     })
+    // Same gate as the power bar's: one flag decides whether the render carries the
+    // shipped glyphs, so `ICONS=0` cannot leave the two halves disagreeing about it.
     const icon = new Gtk.Image({ pixel_size: 12, css_classes: ["locale-bar-icon"] })
     const glyph = `${ICON_DIR}/keyboard.svg`
-    if (GLib.file_test(glyph, GLib.FileTest.EXISTS)) {
+    if (ICONS_ON && GLib.file_test(glyph, GLib.FileTest.EXISTS)) {
         icon.gicon = Gio.FileIcon.new(Gio.File.new_for_path(glyph))
         icon.add_css_class("nd-icon")
     }
@@ -347,11 +435,38 @@ const boundsIn = (w, root) => {
 }
 const fmt = (b) => b ? `${b.w.toFixed(0)}x${b.h.toFixed(0)} at (${b.x.toFixed(0)},${b.y.toFixed(0)})` : "(unallocated)"
 
-function savePng(widget, path) {
+/** Burn a warning into the top-left of a render that is NOT the honest full thing.
+ *
+ *  ⚠️ THE PNG OUTLIVES THE STDOUT, and that is the whole argument for this. A probe
+ *  image gets cropped, attached to a PR, pasted into a report and reasoned about hours
+ *  later by someone who never saw the terminal — so a degraded render has to carry its
+ *  own caveat or it will eventually be read as the product. (2026-08-24: it was.)
+ *
+ *  Drawn only on the FULL-SCREEN render — `stamp` is never passed for the crops, where
+ *  a text overlay would cover the very thing being measured — and only in a corner both
+ *  surfaces leave empty (the clock is top-centre, the locale bar bottom-left). */
+function stampWarning(snapshot, w, text) {
+    const band = Math.min(w, 1200)
+    const rect = new Graphene.Rect()
+    rect.init(0, 0, band, 40)
+    const cr = snapshot.append_cairo(rect)
+    cr.selectFontFace("monospace", 0, 1)
+    cr.setFontSize(15)
+    cr.setSourceRGBA(0, 0, 0, 0.55)
+    cr.rectangle(0, 0, band, 26)
+    cr.fill()
+    cr.setSourceRGBA(1, 0.75, 0.2, 1)
+    cr.moveTo(10, 18)
+    cr.showText(`[lock-probe] ${text}`)
+    cr.$dispose()
+}
+
+function savePng(widget, path, stamp = null) {
     const w = widget.get_width(), h = widget.get_height()
     if (w <= 0 || h <= 0) return print(`  ! ${path}: unallocated`)
     const snapshot = Gtk.Snapshot.new()
     Gtk.WidgetPaintable.new(widget).snapshot(snapshot, w, h)
+    if (stamp) stampWarning(snapshot, w, stamp)
     const node = snapshot.to_node()
     if (!node) return print(`  ! ${path}: nothing drawn`)
     const renderer = Gsk.CairoRenderer.new()
@@ -442,7 +557,7 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, 700, () => {
         savePng(localeCapsule, `${OUT}-locale.png`)
     }
 
-    savePng(overlay, `${OUT}.png`)
+    savePng(overlay, `${OUT}.png`, iconState)
     savePng(card, `${OUT}-card.png`)
     savePng(clockBox, `${OUT}-hero.png`)
 

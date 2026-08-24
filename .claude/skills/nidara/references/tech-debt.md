@@ -2899,23 +2899,37 @@ correct (the accent IS the focus state, commandment 10 territory) or it may be a
 leaking through — NOT yet determined. Read where `setAccentRim` gets its hex on the greeter before
 touching it.
 
-**d. ⚠️ `scripts/dev/lock-probe.js` HAS TWO FIDELITY DEFECTS, and one of them fakes the exact
-symptom a reporter is likely to describe.** Both cost real time on 2026-08-24:
+**d. ✅ FIXED 2026-08-24 — `scripts/dev/lock-probe.js` had two fidelity defects, and one of them
+faked the exact symptom a reporter is likely to describe.** Kept here rather than moved, because
+the LESSON binds and the fix is small:
 
-  - **Power-bar icons are OFF unless `ICONS=1`.** The default render therefore shows
-    "Suspend / Restart / Shut down" as bare text — which is indistinguishable from the shipped
-    greeter having lost its icons. With `ICONS=1` all three render correctly, dark and light. The
-    flag's own comment explains why it defaults off (a missing-glyph placeholder measures
-    differently, and the probe exists for type questions) and that reasoning is sound for
-    MEASURING; it is a trap for LOOKING. Either flip the default, or make the render stamp
-    "icons: off" on itself.
-  - **The primary button is hardcoded `"Desbloquear"` even under `SCOPE=greeter`.** The real
-    greeter says `t("login")` — a longer string — so any text-budget or width verdict the probe
-    gives for that button is the LOCKSCREEN's, not the greeter's.
+  - **Power-bar icons were OFF unless `ICONS=1`,** so the default render showed three bare labels —
+    indistinguishable from a greeter that had lost its icons, and read that way. The flag's comment
+    justified the default ("a missing-glyph placeholder measures differently, and the probe exists
+    for type questions"), which is sound for MEASURING and a trap for LOOKING; it was also already
+    redundant, since the `file_test` beside it means a missing glyph draws nothing at all. Now ON
+    by default, `ICONS=0` to strip them, and **any render that is not the honest full thing stamps
+    a warning band across its own top-left** — because the PNG outlives the stdout, and a probe
+    image gets cropped, attached and reasoned about hours later by someone who never saw the
+    terminal.
+  - **The primary button was hardcoded `"Desbloquear"` even under `SCOPE=greeter`** (the real
+    greeter says `t("login")`), so every width verdict it ever gave for that button was the
+    LOCKSCREEN's. Fixed at the root rather than by typing a second literal: the probe now PARSES
+    `ui/greeter/lib/i18n.ts` and takes every string from the shipped catalog, so it cannot
+    disagree with the product again — and `LOCALE=xx` renders any of the twelve. ⚠️ Three keys are
+    QUOTED (`"pt-BR"`, `"pt-PT"`, `"zh-CN"`, because a hyphen is not a bare identifier); an
+    unquoted-only pattern silently sees nine locales, which is what the first version did and what
+    sweeping all twelve caught.
 
-  Neither is a bug in the desktop, and that is the point: an instrument that reproduces the
-  patient's symptom from its own defaults will be believed. See the `feedback` memory on captures
-  hiding artefacts; this is the same lesson from the other side.
+  🔑 **The rule this leaves.** Neither was a bug in the desktop — that is the point. An instrument
+  that reproduces the patient's symptom from its own defaults WILL be believed, so a probe's
+  default must be the honest render and every degraded mode must announce itself in the artefact
+  it produces, not only in the terminal. Same lesson as the `feedback` memory on captures hiding
+  artefacts, from the other side.
+
+  📈 And the fix paid immediately: sweeping the twelve locales, the power bar runs from **278px
+  (zh-CN) to 441px (nl)**, a 59 % spread. Single-locale renders could not have shown that, and it
+  is the kind of number the login screen's text budget actually turns on.
 
 **e. The probe cannot see four things at all**, so they still need the VM: the avatar GLYPH (the
 probe stubs the avatar as a plain box), the multi-user switcher chips (also stubbed), the caps-lock

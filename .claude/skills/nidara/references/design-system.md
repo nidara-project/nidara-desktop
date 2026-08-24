@@ -1557,8 +1557,26 @@ for a before/after pair, and run it at least twice with different `BG=` — **le
 is a question about the WALLPAPER**, and that is exactly what it caught: on a light backdrop
 the date, the clock and the username all wash out, because they are the only text on the
 screen with no glass behind it. Read its header before trusting a number: it does not show
-blur, the painted rim, or `:focus-visible`, and on a tiling compositor the window size is a
-request, so **crop from the bounds it prints, never from a remembered offset**.
+blur or `:focus-visible`, and on a tiling compositor the window size is a request, so **crop
+from the bounds it prints, never from a remembered offset**. (It DOES show the painted rim and
+shadow, given `PAINTER=`; that stopped being a gap on 2026-08-24.)
+
+⚠️ **It is a REIMPLEMENTATION of the two cards, not an import of them, and that is where its
+lies come from.** It cannot import the real widgets — they are TypeScript and they talk to
+greetd — so every defect it has is a divergence between its copy and the product. Two were found
+on 2026-08-24 and fixed (tech-debt #87d): the power-bar glyphs were OFF by default, which drew
+the exact symptom of a greeter that had lost its icons; and the primary button said the
+LOCKSCREEN's word under `SCOPE=greeter`, so every width verdict it had ever given for the login
+button was measuring the wrong string. The rules those left:
+
+- **Its strings now come from `ui/greeter/lib/i18n.ts`, parsed at run time** — never typed into
+  the probe. `LOCALE=xx` renders any of the twelve, and sweeping them is the only way to see that
+  the power bar runs 278px (zh-CN) to 441px (nl). If you add a label to these screens, take it
+  from the catalog the same way.
+- **The honest full render is the DEFAULT, and every degraded mode announces itself in the PNG**
+  (a warning band across the top-left), not only on stdout. The image is what travels.
+- **The avatar and the switcher chips are still plain boxes.** Nothing it renders can answer a
+  question about the avatar GLYPH or the multi-user row — those need the VM.
 
 ## The greeter wears the kit (2026-08-10)
 
