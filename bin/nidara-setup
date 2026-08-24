@@ -711,6 +711,36 @@ if [ -n "$_retired" ]; then
     echo "      sudo pacman -Rns$_retired"
     echo ""
 fi
+
+# ── Superseded font (system — skipped by --user) ─────────────────────────────
+# Exactly the shape of the block above, with a much bigger number. 0.8.1 swapped
+# ttf-jetbrains-mono-nerd (232 MiB: the typeface with ~10k pictograms patched
+# into every weight and style) for the plain typeface plus a 2.4 MiB symbols
+# font that fontconfig falls back to. install.sh's list simply stopped naming
+# it, so an UPDATED machine keeps carrying it forever — pacman recorded it as
+# explicitly installed, and `pacman -Qdt` will never mention it.
+#
+# Unlike the Astal stack this is not dead code: it is a perfectly good font, and
+# someone may have pointed an editor or another terminal at it. So say what it
+# is, say what it costs, and leave the decision where it belongs. Never remove
+# packages on someone's behalf.
+if pacman -Qq ttf-jetbrains-mono-nerd >/dev/null 2>&1; then
+    # LC_ALL=C, or this reads nothing on a translated system: pacman -Qi prints
+    # "Tamaño instalado" in Spanish, "Größe" in German, and the fallback literal
+    # would quietly hide that the number was never read. Caught by running the
+    # block on a Spanish machine instead of trusting it.
+    _nerd_size=$(LC_ALL=C pacman -Qi ttf-jetbrains-mono-nerd 2>/dev/null \
+                 | awk -F': *' '/^Installed Size/{print $2; exit}')
+    echo ""
+    echo "  Note: Nidara no longer uses the patched \"Nerd Font\" build of JetBrains Mono"
+    echo "  (${_nerd_size:-232 MiB}) — it ships the plain typeface plus a small symbols font,"
+    echo "  and your terminal is already using those. The old one is still installed from"
+    echo "  an earlier version. If nothing else on this machine asks for the family"
+    echo "  \"JetBrainsMono Nerd Font\", you can reclaim the space with:"
+    echo ""
+    echo "      sudo pacman -Rns ttf-jetbrains-mono-nerd"
+    echo ""
+fi
 fi  # USER_ONLY
 
 echo ""

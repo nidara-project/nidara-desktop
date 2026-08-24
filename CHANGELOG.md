@@ -5,6 +5,42 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] — 2026-08-24
+
+0.8.0 shipped a system menu that could not turn the computer off. This fixes that, and
+gives the terminal two changes it had coming.
+
+### Fixed
+
+- **Shutting down, restarting and logging out work again.** In 0.8.0 the confirmation
+  page appeared, the button clicked, and nothing happened — the menu just stayed open
+  and stopped responding. The guard that stops a double click from firing two power
+  actions at once was being armed by the confirm button itself, one step before the
+  action it was confirming checked that same guard and gave up. Suspend and Lock were
+  never affected; they don't ask for confirmation, so they never went through it.
+
+### Changed
+
+- **The terminal is dark now, whatever theme the rest of the desktop is in.** It used to
+  follow the light/dark toggle, and a light terminal reads plain text beautifully while
+  quietly ruining coloured output: seven of the fourteen ANSI colours fell below a 3:1
+  contrast ratio on the light palette, bright yellow at 1.2:1, which is not dim but
+  invisible. `ls`, `git` and every full-screen terminal program pick their colours
+  against a dark background, so that is what Nidara gives them now. Terminals you have
+  already configured are left exactly as they are, and kitty can still switch on its own
+  if you want it to — the config file explains how, and `scripts/dev/terminal-contrast.py`
+  will tell you whether the palette you write is readable before you live with it.
+
+- **222 MB less on disk, for the same terminal font.** Nidara shipped JetBrains Mono in
+  its "Nerd Font" build — the same typeface with some ten thousand pictograms patched
+  into every weight and style, at 232 MB. It now ships the plain typeface plus those
+  pictograms as a small separate font, 9.8 MB between them, and tells the terminal
+  exactly which font draws which symbols instead of leaving it to chance. On screen the
+  Powerline separators in a shell prompt come out identical pixel for pixel; the icons
+  are about a pixel heavier. If you are updating rather than installing fresh, the old
+  font stays on your disk — pacman was told you wanted it, so nothing will ever call it
+  unused — and setup now says so and prints the single line that removes it.
+
 ## [0.8.0] — 2026-08-24
 
 The release where Nidara stops running on anybody else's code. AGS and Astal are gone —
