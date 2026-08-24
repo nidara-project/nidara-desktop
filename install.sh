@@ -10,13 +10,15 @@
 # the newest release tag from the remote into a throwaway temp dir, builds/installs
 # from there, and discards it. No per-user source copy: the source of truth is the
 # git remote + what's installed in /usr/share. (The runtime is system-wide, so a
-# per-user clone made no sense and diverged between users.) The one pinned
-# dependency left (libastal-auth) is rebuilt ONLY when its pin changed
-# (/usr/share/nidara/pins).
+# per-user clone made no sense and diverged between users.) Since 0.8.0 there are
+# NO pinned upstream dependencies at all — every Astal/AGS package is gone, so
+# there is nothing left for a pin file to gate and /usr/share/nidara/pins is no
+# longer written or read. What phases still skip on an update is the pacman sync,
+# and that has its own fingerprint ($PACMAN_SHA_FILE, below).
 # A --dev install registers the developer's own clone (~/.config/nidara/.dev +
-# .source) and updates from there, following its branch (same pin-skip). A plain
-# `./install.sh` (system) always rebuilds the whole stack — the escape hatch — and
-# migrates away any legacy ~/.local/share/nidara/src.
+# .source) and updates from there, following its branch. A plain `./install.sh`
+# (system) always rebuilds everything — the escape hatch — and migrates away any
+# legacy ~/.local/share/nidara/src.
 # Agent-carried local patches (clone path recorded in ~/.config/nidara/.patches —
 # see the in-repo nidara skill, "Carrying a GLOBAL fix locally") make nidara-update
 # refuse the blind stateless path: the agent rebases the patch branch onto the new
@@ -81,7 +83,6 @@ PKG_CACHE="${REAL_HOME}/.cache/nidara/pkgbuild"
 # are stateless) — kept here only so a system install can migrate it away.
 SRC_CANON="${REAL_HOME}/.local/share/nidara/src"
 SOURCE_FILE="$CONFIG_DIR/.source"
-PINS_FILE="/usr/share/nidara/pins"
 REPO_URL="https://github.com/nidara-project/nidara-desktop.git"
 
 # ── Mode selection ────────────────────────────────────────────────────────────
@@ -256,26 +257,15 @@ if [ "$MODE" = "system" ] && [ -d "$REPO_DIR/.git" ] \
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Decide whether the pinned dependency (libastal-auth) must be rebuilt. It's
-# expensive to build from source, so it's skipped when the pin recorded at the
-# last install ($PINS_FILE) already matches this script's — then phases 1 and 2
-# are skipped and only Nidara's own artifacts are rebuilt.
+# Phase 1 (pacman) carries its own fingerprint: an update skips the sync when the
+# package list has not changed, but a CHANGED list (e.g. a new runtime tool like
+# playerctl) must still run — otherwise updated installs silently miss
+# dependencies that fresh installs get.
 #
-# Which modes consult the pins:
-#   update-apply : skip on a pin match; ALSO skip when no pins are recorded yet
-#                  (pre-pin-era install whose stack is assumed current).
-#   dev          : skip ONLY on a positive pin match. A missing pins file means
-#                  it was never built on this machine, so it must build — this is
-#                  what makes re-running `./install.sh --dev` while iterating on
-#                  the shell cheap (no Astal recompile).
-#   system       : never skipped. Plain `./install.sh` is the documented
-#                  "rebuild everything from scratch" escape hatch.
+# This used to sit beside a second fingerprint, the upstream pins, which decided
+# whether the Astal stack had to be recompiled. There is no upstream stack left
+# to recompile since 0.8.0, so this is the only one.
 # ─────────────────────────────────────────────────────────────────────────────
-REBUILD_DEPS="yes"
-# Phase 1 (pacman) has its own fingerprint, separate from the source-build pins:
-# a pin match skips the expensive Astal rebuild, but a CHANGED package list
-# (e.g. a new runtime tool like playerctl) must still sync packages — otherwise
-# updated installs silently miss dependencies that fresh installs get.
 PACMAN_SHA_FILE="/usr/share/nidara/pins-pacman"
 SYNC_PACMAN="yes"
 PACMAN_DEPS="base-devel glib2-devel cmake meson ninja gobject-introspection vala
@@ -315,8 +305,9 @@ fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # nidara-repo trust & registration
-# The binary pacman repo (GitHub Pages) ships libastal-auth (and the `nidara`
-# package itself) prebuilt. Its CI GPG-signs every package and the repo db (since 2026-07-05);
+# The binary pacman repo (GitHub Pages) ships the `nidara` package itself
+# prebuilt — since 0.8.0 that is the only package this project consumes from it.
+# Its CI GPG-signs every package and the repo db (since 2026-07-05);
 # the public key travels with this repo (packaging/nidara-repo.gpg) so a fresh
 # install needs no extra network fetch to establish trust.
 #

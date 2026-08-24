@@ -12,7 +12,7 @@
 # §5's file layout. First-time system/user setup (greetd, services, per-user
 # config seeding) is NOT packaging's job — see install.sh / nidara-setup.
 pkgname=nidara
-pkgver=0.7.2
+pkgver=0.8.0
 pkgrel=1
 pkgdesc="Nidara — a fluid, glassmorphic desktop environment (Hyprland + GTK4/GJS)"
 arch=(x86_64)
@@ -20,10 +20,10 @@ url="https://github.com/nidara-project/nidara-desktop"
 license=(GPL-3.0-only)
 install=nidara.install
 
-# Runtime deps: PACMAN_DEPS from install.sh minus the build toolchain, plus the
-# one pinned Astal package left in [nidara]. libastal-auth still declares
-# depends=() (see packaging/README.md), so its real runtime deps must be listed
-# HERE for a bare `pacman -S nidara` to pull a working system.
+# Runtime deps: PACMAN_DEPS from install.sh minus the build toolchain. Since
+# 0.8.0 nothing here comes from [nidara] but the `nidara` package itself — the
+# last pinned Astal package (libastal-auth) went with the native PAM library —
+# so every runtime dep a bare `pacman -S nidara` needs must be listed HERE.
 depends=(
   # compositor + session plumbing
   # 'hyprland>=0.56': config/hypr/hyprland.lua's `glow` block is 0.56-only (added

@@ -5,6 +5,144 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-08-24
+
+The release where Nidara stops running on anybody else's code. AGS and Astal are gone —
+the application host, the bundler, the IPC client, the thirteen services and the PAM
+authentication that unlocks your screen are all ours now — and with them went the last
+pinned upstream: your machine no longer builds anything from source except Nidara itself.
+On top of that the glass got its real material (one rim, one corner, a drop shadow that
+keeps a panel visible over a white window) and now ships at 48% instead of its thinnest
+setting, in whatever theme your system asks for rather than the dark one Nidara used to
+force on you.
+
+### Removed
+
+- **Eighteen packages of AGS and Astal.** Every service the shell used to borrow is
+  native TypeScript now — network, Wi-Fi and Ethernet, battery, Hyprland, MPRIS, apps,
+  Bluetooth, audio, notifications and the system tray — and so are the two pieces
+  underneath them: the runtime that hosted the three bundles and the bundler that built
+  them. PAM authentication moved into a C library of ours (`lib/nidara-auth`), which was
+  the last one left. Nothing about this is visible while you use the desktop; what is
+  visible is that `install.sh` no longer compiles a stack of Vala before it gets to
+  Nidara, and that a clean install now finishes in a couple of minutes.
+
+- **The old packages on machines that updated.** Stopping the install of something is not
+  removing it: pacman had recorded all eighteen as explicitly installed, so nothing would
+  ever have flagged them (~14.7 MB, 11.2 of it `/usr/bin/ags`). Setup now lists the ones
+  actually present on your system and prints the exact `pacman -Rns` line. It does not
+  remove anything — that is your call, not a setup script's.
+
+- **Three portal permission backends that never asked you anything.** `Account`,
+  `DynamicLauncher` and `Background` were implemented approving every request: your real
+  name and avatar handed to any application that asked, a web app installed with the name
+  and icon it chose for itself, background activity always allowed. Two of the three were
+  already being served by a backend that shows a dialog, so naming ourselves did not fill
+  a gap — it removed a question. They are unrouted until they can say no.
+
+### Added
+
+- **A drop shadow under every piece of glass that floats.** Over a maximised white window
+  a glass panel used to nearly vanish, and the way it vanished was specific: the rim's
+  bright half disappears into the white and the panel reads as broken rather than
+  transparent. The control centre, the notification centre, the bar's capsules, the
+  Activity Island, the dock, the app grid, Prism and the bubble menus all sit on a shadow
+  now.
+
+- **A 4K wallpaper collection, and a gallery that does not need the network.** A cohesive
+  Liquid Glass and caustics set (Milad Fakurian, Unsplash License) ships with the desktop,
+  with its own wallpaper for the login screen, and Settings → Appearance shows them as
+  centred thumbnails.
+
+- **Search learns which applications you actually open.** Launches are counted with a
+  14-day half-life, and frequent applications win ties within their matching tier — the
+  ranking stays honest (a better textual match still wins), it just stops asking you to
+  disambiguate the same two names every day.
+
+- **Tray menus render what applications declare.** Checkmarks on toggle items, the icons
+  an application asks for, and greyed-out rows where it says a row is unavailable.
+
+- **A wallpaper portal, and GNOME apps that agree with the shell.** Setting a wallpaper
+  from Nautilus or Loupe works, and the shell's own wallpaper stays in sync with
+  `org.gnome.desktop.background` in both directions.
+
+- **The Activity Island reads media that plays in a background tab.** For Chrome, Firefox,
+  Brave, Edge and Zen it matches the window title against the track, so the island stays
+  compact when the player is what you are looking at and expands when it is not.
+
+- **The other eleven languages caught up.** German, French, Italian, Japanese, Dutch,
+  Polish, both Portuguese variants, Russian and Chinese are complete at 698/698 keys, and
+  the Spanish catalogue was reworked for the terms desktops actually use.
+
+### Changed
+
+- **Glass ships at 48%, the dock at its floor, and dark mode is no longer forced.** All
+  four surfaces used to default to the thinnest glass in the range, which is thin enough
+  that white text over a bright wallpaper lands near 3:1 — legible on the developer's dark
+  wallpaper and not on yours. The dock stays at the floor deliberately: it sits over the
+  wallpaper, not over windows. And Nidara no longer decides you want a dark desktop; it
+  starts from what your system asks for. Existing installs keep the settings they have.
+
+- **One material, everywhere, including the login screen.** The dark tint is a single
+  Deep Slate token across every Cairo surface and every CSS window; the rim is one Fresnel
+  ramp instead of three tables that had already disagreed in four places; corners are
+  continuous cubic Bézier squircles rather than a polygon; and the greeter and the
+  lockscreen — which live behind a directory boundary that had quietly excluded them from
+  the whole wave — got the same optics, the same blur and the same glass floor.
+
+- **The dark line along every curved edge is gone.** It was read as a Cairo artefact for
+  months and it was not: the compositor's `blur:brightness` sat at 0.8, which darkens
+  exactly the pixels a curve puts at the edge of a blurred region.
+
+- **The dock stops blurring behind the shadows of magnified icons**, now that the glass
+  floor is high enough for the blur threshold to rise without the panel thinning out.
+
+- **CI stops running the same jobs three times per change**, and every job has a timeout —
+  a hung package install once sat there for six hours.
+
+### Fixed
+
+- **A Wi-Fi adapter plugged in after login stayed invisible for the whole session.** The
+  device list was resolved once, at startup, and nothing subscribed to NetworkManager's
+  device-added signal.
+
+- **The first session of a clean install ran in Adwaita icons.** Nothing wrote the icon
+  theme until the shell was already about two seconds into the session, and everything
+  drawn before that had already been rasterized.
+
+- **Enter in the app grid opened nothing until you pressed an arrow key.** Typing a query
+  that left one obvious result did nothing on Enter; every other launcher on the machine
+  opens the top result.
+
+- **The shell's log had been dying at "Global Styles READY!"** since the audio rewrite —
+  a WirePlumber init flag routes the whole process's GLib logging through its own writer,
+  which then filters nearly all of it away. Nothing reported the loss.
+
+- **Two faults in the unlock path.** An informational PAM message (an expiry warning, a
+  failed-login count) could answer the next password prompt with an empty string; and the
+  expired-password warning PAM sends was being discarded, so the one message that explains
+  why login keeps failing was the one nobody could see.
+
+- **Bluetooth pairing recovers from a registration that was already in place**, instead of
+  refusing to pair for the rest of the session.
+
+- **Settings → AI no longer hangs if the keyring does not answer.** Saving or clearing an
+  API key gives up after 12 seconds and tells you, rather than leaving the buttons dead.
+
+- **The clock stopped shoving the rest of the bar sideways** every time a digit changed
+  (proportional digits, now tabular), and the bar no longer collides with the Activity
+  Island when both grow.
+
+- **The Activity Island**: it stayed on screen and completely dead to input under the game
+  overlay; its title flashed white while opening or closing the player in light mode; and
+  it — along with the app grid — never obeyed the appearance pin in Settings.
+
+- **Smaller ones**: dropdown popovers lost their top and bottom margins when libadwaita
+  left the process; Settings' sidebar rows carried 2 px of padding that belonged to
+  Adwaita; the About page invented a version number when it could not read one and now
+  says so; the system menu could act twice on a double click; and the wallpaper gallery
+  had an invalid margin.
+
 ## [0.7.2] — 2026-08-17
 
 Two volume fixes, both found by running the released build rather than reading it.

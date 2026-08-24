@@ -238,12 +238,14 @@ skips the source build when `DEPS_FROM_REPO=yes`; **the from-source build stays 
 repo failure (installer still succeeds, slower). A **lockstep guard** after `pacman -S` verifies the
 installed versions encode this script's pins (pkgver carries `r<sha7>`/the tag) and only then sets
 `DEPS_FROM_REPO=yes` — otherwise a repo lagging a pin bump would `pacman -S` "successfully" with stale
-versions and the fallback would never fire (both branches VM-validated 2026-06-22). Because of that
-fallback (and the update pin-skip
-record), `install.sh` keeps its own `*_REF` pins → **pins still live in two places** (`install.sh`
-`*_REF` + `nidara-repo/pins.env`) and must be bumped **in lockstep**. This is now *permanent*, not
-transitional — the earlier "Phase 3 collapses to one SoT" plan does **not** apply (the fallback needs
-the refs). **Build toolchain: DERIVED, not retyped (2026-08-12).** The workflow used to carry a hand-written
+versions and the fallback would never fire (both branches VM-validated 2026-06-22). ~~Because of that fallback (and the update pin-skip record), `install.sh` keeps its own `*_REF`
+pins → **pins still live in two places** … This is now *permanent*.~~ **RETIRED 2026-08-24 (0.8.0).**
+The absorption removed the last upstream to pin: `install.sh` has no `*_REF` of any kind, no pin file
+is written or read (`/usr/share/nidara/pins` is a dead leftover on updated machines), and the
+PKGBUILD declares no `libastal-*`. There is exactly ONE pin left in the whole distribution chain and
+it lives in ONE place — `NIDARA_REF` in `nidara-repo/pins.env`, bumped AFTER the tag exists. The
+lockstep this paragraph called permanent lasted until the thing on the other end of it stopped
+existing. **Build toolchain: DERIVED, not retyped (2026-08-12).** The workflow used to carry a hand-written
 union of the PKGBUILDs' `makedepends`, which drifted silently because `build-repo.sh` runs
 `makepkg --nodeps` on purpose — a declared makedepend missing from the workflow is simply absent,
 with no warning (it killed v0.7.0 on `missing protocol: …/hyprland-focus-grab-v1.xml`).
@@ -1020,6 +1022,13 @@ that in this entry too: it is the one piece missing to make the probe able to fa
 A workaround here would be pre-rasterising every app icon before handing it to `Gtk.Image`. That
 trades a rare crash for a permanent cost, on every icon, forever — do not reach for it before the
 upstream answer, and do not reach for it at all if the answer is a GTK fix.
+
+⛔ **This does NOT block a release, and that is decided — do not re-raise it as one.** Owner's call
+on 2026-08-24, with the data in front of them: *"solo ha pasado una vez; si descubrimos el error y
+lo solucionamos, pues lo actualizamos"*. So **0.8.0 ships with this open**, with no upstream issue
+filed, and the fix lands as an update if and when one appears. One occurrence, an upstream cause,
+and no reproduction at will is not a reason to hold a release — it is a reason to keep the core and
+the stacks, which this entry does.
 
 ## Resolved — rules that still apply
 
