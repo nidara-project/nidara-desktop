@@ -699,10 +699,16 @@ class ThemeManager extends GObject.Object {
             // also kills the accessibility text scale outright — see `fontToPoints`.
             this.interfaceSettings.set_string("font-name", "Inter 11")
         // Same deal for the monospace font: the schema default ("Adwaita Mono 11")
-        // names a font we don't even install, while ttf-jetbrains-mono-nerd ships
-        // with every Nidara install. Seed it once; never clobber a user's pick.
+        // names a font we don't even install, while ttf-jetbrains-mono ships with
+        // every Nidara install. Seed it once; never clobber a user's pick.
+        // ⚠️ The family is "JetBrains Mono", NOT "JetBrainsMono Nerd Font" — that
+        // was the patched build, dropped for costing 232 MiB where the plain
+        // typeface plus ttf-nerd-fonts-symbols-mono cost 9.8 MiB. Naming the old
+        // family here would not error; it would silently resolve to whatever
+        // fontconfig substitutes, which is how a machine ends up rendering
+        // something nobody chose (it happened once already with Noto Sans).
         if (this.interfaceSettings.get_user_value("monospace-font-name") === null)
-            this.interfaceSettings.set_string("monospace-font-name", "JetBrainsMono Nerd Font 11")
+            this.interfaceSettings.set_string("monospace-font-name", "JetBrains Mono 11")
 
         // Undo #123/#124 on machines that already ran them: a font stored in absolute
         // pixels makes the accessibility text slider a no-op. Idempotent.

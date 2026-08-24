@@ -1765,12 +1765,28 @@ verified-live model. Two tiers, cleanly split:
 One seeded config lives OUTSIDE both dirs: `~/.config/kitty/` (from `defaults/kitty/`,
 kitty ships no config of its own). `kitty.conf` sets the padding that keeps text clear
 of Hyprland's 24px rounded corners, names the shipped JetBrains Mono (kitty doesn't
-read the gsettings monospace pref), and enables glass (`background_opacity` +
-`dynamic_background_opacity`); the `{dark,light,no-preference}-theme.auto.conf` trio
-makes kitty follow the Appearance dark/light toggle live via the settings portal
-(kitty ≥0.38 reads `org.freedesktop.appearance color-scheme`, which ThemeManager keeps
-as `prefer-dark`/`prefer-light`). Seeded ONLY when the user has no `kitty.conf` at all —
-an existing kitty setup is never touched, not even to add the theme files.
+read the gsettings monospace pref), pins the Nerd Font pictogram ranges to
+`Symbols Nerd Font Mono` with `symbol_map`, enables glass (`background_opacity` +
+`dynamic_background_opacity`), and carries a **dark** palette. Seeded ONLY when the
+user has no `kitty.conf` at all — an existing kitty setup is never touched.
+
+⚠️ **The terminal is the one surface that deliberately ignores the Appearance
+light/dark toggle**, so don't "fix" it. Nidara used to seed a
+`{dark,light,no-preference}-theme.auto.conf` trio and follow the scheme live; it was
+dropped 2026-08-24 because the light half broke colored output. The measurement,
+reproducible with `scripts/dev/terminal-contrast.py`: on that light palette SEVEN of
+the fourteen ANSI colors fell below 3:1, bright yellow at 1.2:1 — invisible — while on
+the dark one none do. Plain text was never the issue (8.7:1 measured on screen through
+the glass, past WCAG AAA); the color was, because `ls`, `git` and every TUI choose
+their colors against a dark background. A light palette can come back — it has to pass
+that script first. The `symbol_map` is load-bearing for the same reason of not leaving
+things to chance: Adwaita Mono and Inter also claim U+E0B0, so without it fontconfig's
+ranking decides how a prompt's Powerline separators look.
+
+⚠️ **The font is `ttf-jetbrains-mono` + `ttf-nerd-fonts-symbols-mono`, not
+`ttf-jetbrains-mono-nerd`** (dropped 2026-08-24: 232 MiB against 9.8 MiB for the pair,
+on every install). Naming the patched family anywhere does not error — it silently
+resolves to whatever fontconfig substitutes.
 
 **NOTHING goes in `~/.config/hypr/`.** Mainline Hyprland defaults to
 `~/.config/hypr/hyprland.lua`, but Nidara deliberately keeps that directory

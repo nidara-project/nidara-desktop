@@ -262,16 +262,16 @@ fi
 # Default kitty config — kitty ships no config file, and without window_padding
 # the first/last rows of text get clipped by Hyprland's 24px rounded corners.
 # Also names the JetBrains Mono we ship (kitty doesn't read the gsettings
-# monospace preference) and seeds the *-theme.auto.conf trio so kitty follows
-# the Appearance dark/light toggle live via the settings portal. Seeded ONLY
-# when the user has no kitty.conf at all — an existing kitty setup is never
-# touched, not even to add the theme files.
+# monospace preference), pins the Nerd Font pictogram ranges to the separate
+# symbols font, and carries a DARK palette that deliberately does not follow the
+# Appearance toggle — the file says why, with the numbers. Seeded ONLY when the
+# user has no kitty.conf at all; an existing kitty setup is never touched.
 KITTY_DIR="${REAL_HOME}/.config/kitty"
 if [ ! -f "$KITTY_DIR/kitty.conf" ] && [ -d "$SHARE/defaults/kitty" ]; then
     mkdir -p "$KITTY_DIR"
     cp "$SHARE/defaults/kitty/"*.conf "$KITTY_DIR/"
     chown -R "$REAL_USER" "$KITTY_DIR"
-    echo "  [Init] $KITTY_DIR (padding, JetBrains Mono, glass, auto dark/light)"
+    echo "  [Init] $KITTY_DIR (padding, JetBrains Mono + Nerd symbols, glass, dark palette)"
 fi
 
 # .mcp.json — MCP manifest for the user's AI agent (Claude Code et al). Points at

@@ -3174,7 +3174,7 @@ wrong with it.
    6 thumb positions changed nothing**, and a mono base of a different size stepped at different
    positions than the UI. A pixel is the coarsest possible step for a continuous control.
 
-So: **`gtk-font-name` holds a POINT size** (seeded `Inter 11` / `JetBrainsMono Nerd Font 11`, the
+So: **`gtk-font-name` holds a POINT size** (seeded `Inter 11` / `JetBrains Mono 11`, the
 same 11 every install has shipped since PR #6), `ThemeManager.fontToPoints` converts any pick —
 and any px font left by a previous version or by nwg-look/Tweaks — to whole points on the way in,
 and `migrateFontsToPoints` runs it once at boot so an upgraded install is repaired. Nothing in

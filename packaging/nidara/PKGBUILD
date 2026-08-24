@@ -58,7 +58,17 @@ depends=(
   # greeter and lockscreen ship zh-CN/ja catalogs AND every user sees the
   # 简体中文/日本語 endonyms in the language pickers — without it they render
   # as tofu boxes (VM sweep 2026-07-13)
-  ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji noto-fonts-cjk
+  # The typeface, plus the Nerd Font pictograms as a SEPARATE font that
+  # fontconfig falls back to. `ttf-jetbrains-mono-nerd` is the same typeface
+  # with those pictograms patched into every weight and style, and it costs
+  # 232 MiB against 9.8 MiB for these two — on every install, for glyphs a
+  # terminal reaches through fallback anyway. Verified on screen, not
+  # reasoned about: the Powerline separators (the ones that must tile with
+  # the cell) come out pixel-identical, and the pictograms render about one
+  # pixel heavier because the standalone font carries its own metrics
+  # instead of being rescaled to the typeface's cell.
+  ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono
+  inter-font noto-fonts-emoji noto-fonts-cjk
   # adwaita-cursors = the default cursorTheme in defaults/appearance.json; listed
   # explicitly instead of relying on adwaita-icon-theme happening to depend on it
   papirus-icon-theme adwaita-icon-theme adwaita-cursors
