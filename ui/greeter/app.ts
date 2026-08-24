@@ -4,7 +4,8 @@ import GLib from "gi://GLib"
 import Greeter from "./widget/Greeter"
 import { getPreferredUser } from "./lib/greeter-prefs"
 import { initProcessLocale } from "./lib/i18n"
-import { accentCssFor } from "../lib/accent"
+import { accentCssFor, ACCENT_HEX, type AccentKey } from "../lib/accent"
+import { setAccentRim } from "../lib/glass-capsule"
 import { applyCrispFontRendering } from "../lib/font-rendering"
 
 // Use our blank theme instead of Adwaita.
@@ -37,6 +38,15 @@ function readAppearanceJson(): Record<string, unknown> | null {
 function loadAccentCss(): string {
   try {
     const cfg = readAppearanceJson()
+    // ⚠️ THE PAINTED RIM NEEDS THE ACCENT AS A VALUE, not as a CSS custom property —
+    // the capsules are drawn in Cairo and cannot read one. The lockscreen's copy of
+    // this function has always done this; the greeter's did not, so its focus ring was
+    // hardcoded `#0088ff` (the `accentRim` default) no matter what accent the user
+    // picked, while every CSS-driven accent on the same screen followed them. Two
+    // functions with the same name, the same input and the same job, one line apart in
+    // behaviour — which is the shape this repo keeps finding under "the greeter and the
+    // lockscreen duplicate code" (tech-debt #60).
+    setAccentRim(ACCENT_HEX[cfg?.accent as AccentKey] ?? ACCENT_HEX.blue)
     return accentCssFor(cfg?.accent as string | undefined)
   } catch {
     return ""
