@@ -13,6 +13,24 @@
 // 2. Under Hyprland no portal backend implements `org.freedesktop.impl.portal.Wallpaper`,
 //    so "Set as Desktop Background" in browsers (Firefox, Chrome) and image viewers
 //    fails. This daemon implements SetWallpaperURI to apply and persist wallpapers.
+//
+// ⚠️ THREE BACKENDS BELOW ARE IMPLEMENTED BUT NOT ROUTED (2026-08-24):
+// Account, DynamicLauncher and Background. They are still exported on the bus, but
+// `config/portal/nidara.portal` no longer advertises those interfaces and
+// `hyprland-portals.conf` no longer names us for them, so xdg-desktop-portal does
+// not send them here.
+//
+// WHY: all three GRANT WITHOUT ASKING. `GetUserInformation` hands the real name and
+// avatar to any caller; `PrepareInstall` / `RequestInstallToken` approve a launcher
+// with the caller's own name and icon unreviewed; `NotifyBackground` always answers
+// "allow". An `impl.portal` backend IS the place where the desktop asks the user —
+// one that says yes to everything has implemented the interface and deleted the
+// policy. And for Account and DynamicLauncher it was a REGRESSION, not a gap:
+// `gtk.portal` declares both and shows a real dialog.
+//
+// The code is kept, not deleted, because the shape is right and only the consent
+// step is missing. Read tech-debt #89 before re-routing any of them: it says what
+// "asks" has to mean, and it is more than showing a dialog.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import Gio from "gi://Gio"
@@ -184,8 +202,15 @@ function accentRgbVariant() {
 
 function colorSchemeVariant() {
     // 0: no preference, 1: prefer-dark, 2: prefer-light
+    //
+    // ⚠️ THE ENUM HAS THREE VALUES, NOT TWO. `gsettings range` gives
+    // `default | prefer-dark | prefer-light`, and this used to read
+    // `scheme === "prefer-light" ? 2 : 1` — which reported `default` as "prefer
+    // DARK" to every app that asked. Nidara now seeds `prefer-light` explicitly
+    // (defaults/appearance.json + ThemeManager.applyAll), so the bad branch is
+    // rarely reached on our own installs; it was wrong for everyone else.
     const scheme = interfaceSettings.get_string("color-scheme")
-    const val = scheme === "prefer-light" ? 2 : 1
+    const val = scheme === "prefer-light" ? 2 : scheme === "prefer-dark" ? 1 : 0
     return new GLib.Variant("u", val)
 }
 
@@ -231,8 +256,19 @@ function applyWallpaperFallback(path) {
     cfg.path = path
     cfg.transition = cfg.transition || "random"
     GLib.file_set_contents(cfgPath, JSON.stringify(cfg))
+    // ⚠️ ARGV, NOT A COMMAND STRING. `path` arrives inside a URI handed over by ANY
+    // app that calls the Wallpaper portal, and `cfg.transition` is read back out of a
+    // JSON file on disk. Interpolating either into a string and letting
+    // `spawn_command_line_async` split it means a filename containing a quote injects
+    // extra arguments into awww. (It is argument injection rather than command
+    // execution — `g_shell_parse_argv` does not run a shell — but the fix is the same
+    // and it is the rule the computer-use helpers already follow: fixed argv, never a
+    // shell.)
     try {
-        GLib.spawn_command_line_async(`awww img "${path}" --transition-type "${cfg.transition}"`)
+        Gio.Subprocess.new(
+            ["awww", "img", path, "--transition-type", String(cfg.transition)],
+            Gio.SubprocessFlags.NONE,
+        )
     } catch (e) {
         printerr(`[nidara-portal] awww fallback failed: ${e}`)
     }
@@ -314,9 +350,14 @@ class WallpaperBackend {
         }
 
         // Apply wallpaper via nidara-ipc (if shell running) or fallback
+        // Same argv rule as the fallback below — `targetPath` is caller-supplied.
         try {
-            const [, , , exitStatus] = GLib.spawn_command_line_sync(`nidara-ipc setWallpaper "${targetPath}"`)
-            if (exitStatus !== 0) {
+            const proc = Gio.Subprocess.new(
+                ["nidara-ipc", "setWallpaper", targetPath],
+                Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE,
+            )
+            proc.wait(null)
+            if (!proc.get_successful()) {
                 applyWallpaperFallback(targetPath)
             }
         } catch (_) {

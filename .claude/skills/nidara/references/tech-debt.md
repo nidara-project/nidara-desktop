@@ -3021,6 +3021,51 @@ What it costs, so nobody under-estimates it into a release:
 ⚠️ Do not do this piecemeal with the pending "rediseñar el tema sliders de cristal" the owner also
 has open — it is the same surface twice.
 
+### 89. ⚠️ OPEN — three portal backends grant without asking, and are unrouted until they do (2026-08-24)
+
+`bin/nidara-portal` implements `Account`, `DynamicLauncher` and `Background`. All three return
+success immediately: `GetUserInformation` hands over the real name and avatar URI, `PrepareInstall`
+returns the caller's own name and icon for installation unreviewed, `RequestInstallToken` always
+allows, `NotifyBackground` always answers `result: 1`. As of 2026-08-24 they are **no longer
+routed** — trimmed from BOTH `config/portal/nidara.portal` (the `Interfaces=` line) and
+`config/portal/hyprland-portals.conf` (`[preferred]`), because xdg-desktop-portal reads both.
+
+🔑 **The framing that matters, and the one this got wrong.** An `impl.portal` backend IS the place
+where the desktop asks the user. Implementing one that answers yes to everything is not an
+incomplete implementation — it is implementing the interface and deleting the policy.
+
+⚠️ **For Account and DynamicLauncher it was a REGRESSION, not a gap.** `gtk.portal` declares both
+and shows a real dialog; naming nidara in `[preferred]` took the question away. Verified by reading
+`/usr/share/xdg-desktop-portal/portals/gtk.portal`. Background is a genuine gap — nothing under
+Hyprland implements it — and the honest state of that gap is `RequestBackground` failing, which is
+better than granting silently: the entire reason the portal exists is that a sandboxed app CANNOT
+write `~/.config/autostart` itself.
+
+**Why it is easy to get wrong, and hard to catch:** auto-approving makes everything WORK. The
+webapp installs, the app receives the user info, background is granted. Every manual test is green.
+A backend that always says yes is indistinguishable from a correct one until you ask what it should
+have REFUSED — and nothing exercises that.
+
+**What re-routing requires, beyond "show a dialog":**
+
+- A real prompt per interface, naming the calling app, with the `reason` string the caller supplied
+  (Background passes one; showing the request without it tells the user nothing).
+- `PrepareInstall` must let the user EDIT the name and icon before returning them — that review is
+  the method's purpose, not decoration.
+- A persisted decision, or every launch re-prompts. That is a permission store, and it is where
+  most of the work is.
+- i18n for every string, all twelve locales, same PR (policy since 2026-08-23).
+- ⚠️ `EnableAutostart` is marked **deprecated in the spec** ("New versions of xdg-desktop-portal
+  will not call this method"). Installed xdp is 1.22.1 and still carries the symbols, so whether
+  ours is ever reached was NOT determined — find out before spending effort hardening it. If it is
+  reached, it currently writes `~/.config/autostart/<app_id>.desktop` with an unvalidated `app_id`
+  (traversal) and an unvalidated `Exec` line joined from `commandline`.
+
+**Fixed in the same change, because Settings and Wallpaper STAY routed and these were live:**
+`colorSchemeVariant()` reported the `default` enum value as *prefer-dark* (the enum is
+`default|prefer-dark|prefer-light`; it now returns 0), and both spawn sites built a command STRING
+from caller-supplied paths — now `Gio.Subprocess` with fixed argv.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
