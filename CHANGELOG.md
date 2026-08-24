@@ -37,9 +37,13 @@ gives the terminal two changes it had coming.
   pictograms as a small separate font, 9.8 MB between them, and tells the terminal
   exactly which font draws which symbols instead of leaving it to chance. On screen the
   Powerline separators in a shell prompt come out identical pixel for pixel; the icons
-  are about a pixel heavier. If you are updating rather than installing fresh, the old
-  font stays on your disk — pacman was told you wanted it, so nothing will ever call it
-  unused — and setup now says so and prints the single line that removes it.
+  are about a pixel heavier. **If you are updating rather than installing fresh, nothing
+  changes for you until you ask.** Nidara seeds a terminal config once and never rewrites
+  it, so your `kitty.conf` — and the desktop's monospace font setting — still name the
+  patched font, and it stays on your disk doing its job. Setup now tells you that, what
+  the old font costs on your machine, and what to point at instead if you want the space
+  back. It does not touch either file, and it does not suggest removing a font your own
+  configuration is still asking for.
 
 ## [0.8.0] — 2026-08-24
 

@@ -731,14 +731,48 @@ if pacman -Qq ttf-jetbrains-mono-nerd >/dev/null 2>&1; then
     # block on a Spanish machine instead of trusting it.
     _nerd_size=$(LC_ALL=C pacman -Qi ttf-jetbrains-mono-nerd 2>/dev/null \
                  | awk -F': *' '/^Installed Size/{print $2; exit}')
+    _nerd_size="${_nerd_size:-232 MiB}"
+
+    # ⚠️ Never say "you can remove it" without checking whether this machine still
+    # ASKS for it. An install that updated from 0.8.0 keeps its own kitty.conf
+    # (Nidara seeds that file once and never rewrites it) and its own
+    # monospace-font-name gsetting — both of which name the patched family. On
+    # such a machine the old font is still doing the work, and removing it would
+    # swap the terminal's typeface for whatever fontconfig picks next. Caught in
+    # a VM sweep: the note shipped one revision earlier claimed "your terminal is
+    # already using those", which was true of a fresh install and false of every
+    # update.
+    # The kitty.conf half is the load-bearing one and is verified in a VM, both
+    # ways round. The gsettings half is best effort: read from a TTY with no
+    # session bus it may come back empty even on a machine that has the value
+    # set, so treat a miss as "don't know", never as "nothing names it".
+    _still_named=""
+    grep -qs "JetBrainsMono Nerd Font" "${REAL_HOME}/.config/kitty/kitty.conf" \
+        && _still_named="your kitty.conf"
+    if run_user gsettings get org.gnome.desktop.interface monospace-font-name 2>/dev/null \
+        | grep -q "JetBrainsMono Nerd Font"; then
+        [ -n "$_still_named" ] && _still_named="$_still_named and the desktop's monospace font setting" \
+                               || _still_named="the desktop's monospace font setting"
+    fi
+
     echo ""
-    echo "  Note: Nidara no longer uses the patched \"Nerd Font\" build of JetBrains Mono"
-    echo "  (${_nerd_size:-232 MiB}) — it ships the plain typeface plus a small symbols font,"
-    echo "  and your terminal is already using those. The old one is still installed from"
-    echo "  an earlier version. If nothing else on this machine asks for the family"
-    echo "  \"JetBrainsMono Nerd Font\", you can reclaim the space with:"
-    echo ""
-    echo "      sudo pacman -Rns ttf-jetbrains-mono-nerd"
+    if [ -n "$_still_named" ]; then
+        echo "  Note: Nidara now ships JetBrains Mono as the plain typeface plus a small"
+        echo "  symbols font (9.8 MiB together) instead of the patched \"Nerd Font\" build"
+        echo "  ($_nerd_size). Your setup predates that: $_still_named still asks"
+        echo "  for the family \"JetBrainsMono Nerd Font\", so the old font is still doing"
+        echo "  the work here and removing it would change how your terminal looks."
+        echo "  To move over, point them at \"JetBrains Mono\" and copy the symbol_map"
+        echo "  block from /usr/share/nidara/defaults/kitty/kitty.conf — then"
+        echo "  \`sudo pacman -Rns ttf-jetbrains-mono-nerd\` reclaims the $_nerd_size."
+    else
+        echo "  Note: Nidara no longer uses the patched \"Nerd Font\" build of JetBrains Mono"
+        echo "  ($_nerd_size) — it ships the plain typeface plus a small symbols font, and"
+        echo "  nothing here still asks for the old family. It is installed from an earlier"
+        echo "  version; to reclaim the space:"
+        echo ""
+        echo "      sudo pacman -Rns ttf-jetbrains-mono-nerd"
+    fi
     echo ""
 fi
 fi  # USER_ONLY
