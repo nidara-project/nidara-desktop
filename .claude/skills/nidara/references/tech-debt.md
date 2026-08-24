@@ -961,6 +961,12 @@ before anything can be written, and systemd restarts it, so the only trace is th
 **The log being silent is evidence about the KIND of crash, not the absence of one.** Read
 `journalctl --user -u nidara.service` and `coredumpctl` instead; the trace is there in full.
 
+**The environment, pinned** — a stack trace without it ages into a guess, and this machine will
+have moved on by the time anyone files upstream: Arch Linux, `gtk4 1:4.22.4-1`, `pango 1:1.58.2-1`,
+`cairo 1.18.4-1`, `glib2 2.88.3-1`, `gjs 2:1.88.1-1`, Wayland/Hyprland, Vulkan renderer on
+`libvulkan_radeon`. Re-read them with `pacman -Q gtk4 pango cairo gjs glib2` **only** to describe a
+NEW core — the numbers above belong to the 2026-08-24 one and must not be refreshed in place.
+
 **What the core says** (`coredumpctl debug 347331`, 2026-08-24 14:25). Two threads were inside
 Pango at the same moment:
 
