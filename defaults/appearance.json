@@ -2,9 +2,8 @@
   "themeFamily": "Adwaita",
   "iconTheme": "Papirus",
   "cursorTheme": "Adwaita",
-  "isDark": true,
+  "isDark": false,
   "accent": "blue",
-  "transparency": 0.5,
   "tintStrength": 0,
   "tintPanels": {
     "controlCenter": false,

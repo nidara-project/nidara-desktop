@@ -107,16 +107,34 @@ export const clampGlass = (v: number) => Math.max(GLASS_RANGE.min, Math.min(GLAS
 export const readGlass = (stored: unknown, dflt: number, stale: boolean) =>
     typeof stored !== "number" ? dflt : clampGlass(stale ? 0.2 + 0.8 * stored : stored)
 
+/** The out-of-the-box glass for everything except the dock (2026-08-24, owner's call).
+ *
+ *  Chosen for LEGIBILITY first: at `GLASS_RANGE.min` the glass is thin enough that white
+ *  text over a bright backdrop lands near 3:1 (measured on the login screen, which had been
+ *  put on the same floor — see tech-debt #82), and a first boot should not ship a contrast
+ *  problem. 0.48 is a little under the middle of the range: enough body to carry text over
+ *  any wallpaper, still visibly glass rather than a painted panel.
+ *
+ *  ⚠️ It is a DEFAULT, not a floor. Existing installs keep whatever they stored — only a
+ *  config with no value for a surface takes this. */
+export const GLASS_DEFAULT = 0.48
+
 export const DEFAULT_CONFIG: NidaraThemeConfig = {
   accent: "blue",
-  // The glassiest end of the range — which is now GLASS_RANGE.min, exactly as it
-  // was before: the floor moved, the intent did not. All four surfaces share it so
-  // a fresh boot is uniform and the master "Glass" slider reads a clean number
-  // rather than the "—" mixed state.
-  barOpacity: GLASS_RANGE.min,
-  overlayOpacity: GLASS_RANGE.min,
+  // ⚠️ NOT UNIFORM ANY MORE, deliberately, and that has a visible consequence: the master
+  // "Glass" slider in Settings → Appearance is an INDETERMINATE control, so out of the box
+  // it reads "—" and mutes to 0.55 opacity instead of showing a number (`glassUniform` in
+  // Appearance.tsx). That is the control being honest — the surfaces really do differ — and
+  // it was accepted rather than overlooked. The four per-surface sliders under "Advanced"
+  // are where the difference is legible, and dragging the master re-unifies everything.
+  //
+  // The dock stays at the floor because it is the one surface that sits over the WALLPAPER
+  // with nothing behind it and never carries body text — its icons are opaque. Thin glass
+  // costs it nothing and buys the most backdrop.
+  barOpacity: GLASS_DEFAULT,
+  overlayOpacity: GLASS_DEFAULT,
   dockOpacity: GLASS_RANGE.min,
-  windowOpacity: GLASS_RANGE.min,
+  windowOpacity: GLASS_DEFAULT,
   shellAppearance: "system",
 }
 
