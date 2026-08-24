@@ -1240,11 +1240,31 @@ nothing moves. (It lived in `SquircleContainer.tsx` until 2026-08-24 and moved d
 primitives it parameterises, for the reason in the rim section above; that file re-exports it.) It
 goes on the OUTERMOST glass of a surface and nowhere else: a shadow on a control that sits inside
 another glass panel is a shadow inside a window, and reads as dirt rather than as depth. Currently:
-the CC's islands and the NC's cards and calendar (neither has a panel — their cards ARE the outer
-glass), Prism's wrapper, the system menu's wrapper, the overview's panel, the bar's expansion panel,
-**every bar capsule** (all eight of them, discriminated by `opacityRole: "bar"` — each sits directly
-on the bar, none inside another panel), and since 2026-08-24 **every greeter/lockscreen capsule**
-(there is no card behind them either — each one floats on the wallpaper).
+**everything the CC and the NC paint** (neither has a panel — their tiles and cards ARE the outer
+glass, and so is everything that floats beside them: the islands, the detail island the grid swaps
+itself for, the status banner, the tile context menu, the notification cards, the calendar, the
+group headers, and the `Editar` / `Borrar notificaciones` / empty-state pills), Prism's wrapper, the
+system menu's wrapper, the overview's panel, the bar's expansion panel, **every bar capsule** (all
+eight of them, discriminated by `opacityRole: "bar"` — each sits directly on the bar, none inside
+another panel), and since 2026-08-24 **every greeter/lockscreen capsule** (there is no card behind
+them either — each one floats on the wallpaper). The one deliberate exclusion inside those two
+surfaces is a notification banner's ACTION buttons: those genuinely sit inside a card.
+
+🔑 **The pills were missed for six days because the rollout enumerated SURFACES and the pills are
+CONTROLS.** #244's list reads "the NC's notification cards and calendar island, Prism's wrapper,
+…" — nobody writing it thought of the `Editar` button as glass that floats, and it does: it hangs
+under the grid with nothing behind it but the wallpaper. Owner-reported 2026-08-24. When you apply
+a surface-level recipe, walk the widget TREE of each surface for `SquircleContainer` calls and ask
+of each one "what is behind this?", instead of listing the surfaces you can name. `grep -n
+'SquircleContainer({'` over `ui/shell` is the whole audit; today exactly two call sites still pass
+no shadow — a notification banner's action buttons (correct: inside a card) and the app grid's
+panel (deferred, for the reason below).
+
+⚠️ **The app grid's panel is the one outer glass still without it, and NOT by oversight.**
+`nidara-app-grid` runs at `ignore_alpha 0.04` (it is its own surface, unmapped when closed — see
+`architecture.md`), and the shadow's `alpha 0.18` = 45.9/255 sits ABOVE that threshold, so Hyprland
+would blur behind the shadow band and smear a halo along the silhouette. Raising the layer's
+threshold is the prerequisite, and that reopens the fade-out question #244 settled only for 0.23.
 
 ⚠️ **On the login surfaces the shadow needs no `inset`, and that is a real difference.** In the
 shell the falloff has to be bought out of the surface's own `inset`; `GlassCapsule` instead sizes

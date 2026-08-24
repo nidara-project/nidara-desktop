@@ -11,7 +11,7 @@ import widgetConfig from "../../core/WidgetConfig"
 import registry, { widgetAvailable, watchWidgetAvailability } from "../../widgets/index"
 import Icons from "../../core/Icons"
 import { t } from "../../core/i18n"
-import SquircleContainer, { Shape, resolveDrawParams, GLASS_INSET } from "../../common/SquircleContainer"
+import SquircleContainer, { Shape, resolveDrawParams, GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/tokens"
 import { drawSquircle, hexToFloatRgb } from "../../common/DrawingUtils"
 import Theme from "../../core/ThemeManager"
@@ -378,6 +378,9 @@ export default function IslandGrid() {
             useShellOpacity: true,
             borderColor: { r: 1, g: 1, b: 1, a: 0.12 },
             radius: RADIUS.lg,
+            // Outer glass: in detail mode this island REPLACES the grid, so it floats on
+            // the wallpaper exactly like the tiles it stands in for — same shadow.
+            shadow: GLASS_SHADOW,
         })
         detailPage.append(detailIsland)
         mainStack.set_visible_child_name("detail")
@@ -582,7 +585,7 @@ export default function IslandGrid() {
     fixed.add_controller(dropTarget)
 
     const editLabel = new Gtk.Label({ label: t("cc.grid.edit"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 })
-    const editBtn = SquircleContainer({ child: editLabel, shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, css_classes: ["cc-edit-pill"] })
+    const editBtn = SquircleContainer({ child: editLabel, shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, css_classes: ["cc-edit-pill"], shadow: GLASS_SHADOW })
     const editBtnWrapper = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, margin_top: 24, margin_bottom: 12 })
     editBtnWrapper.append(editBtn)
 

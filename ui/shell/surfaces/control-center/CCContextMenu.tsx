@@ -5,7 +5,7 @@ import widgetConfig from "../../core/WidgetConfig"
 import registry from "../../widgets/index"
 import Icons from "../../core/Icons"
 import { t } from "../../core/i18n"
-import SquircleContainer, { GLASS_INSET } from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/tokens"
 import { menuRow, menuSeparator } from "../../common/MenuRow"
 
@@ -80,6 +80,9 @@ export function createCCContextMenu(opts: CCContextMenuOpts = {}): CCContextMenu
         alpha: 0.97,
         borderColor: { r: 1, g: 1, b: 1, a: 0.1 },
         css_classes: ["cc-context-menu"],
+        // Outer glass of a floating element — it sits OVER the tiles, not inside one.
+        // Same recipe as the system menu's wrapper.
+        shadow: GLASS_SHADOW,
     })
 
     const menu = new Gtk.Box({

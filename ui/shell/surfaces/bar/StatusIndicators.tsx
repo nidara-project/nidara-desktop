@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import agentConfig from "../../core/AgentConfig"
 import { GRID_WIDTH } from "../control-center/CCLayoutManager"
-import SquircleContainer, { Shape } from "../../common/SquircleContainer"
+import SquircleContainer, { Shape, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { NidaraButton } from "../../../lib/nidara-kit/button"
 import { t } from "../../core/i18n"
 
@@ -168,6 +168,10 @@ export function ccStatusBanner(): Gtk.Widget {
         // the reset wins and the Stop button loses its background and border
         // entirely. `.cc-status-banner` carries the transparent background itself.
         css_classes: ["cc-status-banner"],
+        // BaseIsland's numbers include its shadow: this banner sits in the CC's grid
+        // with no panel behind it, so it is outer glass exactly like the tiles it
+        // shares an edge with.
+        shadow: GLASS_SHADOW,
     })
     banner.set_size_request(GRID_WIDTH, -1)
     banner.halign = Gtk.Align.END      // the grid is END-aligned; share its right edge
