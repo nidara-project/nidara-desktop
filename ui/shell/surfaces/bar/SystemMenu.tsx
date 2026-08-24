@@ -136,11 +136,22 @@ export function SystemMenuOverlay() {
 
   const confirmActionBtn = new Gtk.Button({ label: "", css_classes: ["nidara-menu-row", "nidara-confirm-primary"], hexpand: true })
   confirmActionBtn.connect("clicked", () => {
-    if (actionDispatched) return
-    actionDispatched = true
-    pageHost.sensitive = false
-    pendingCmd?.()
+    // ⚠️ This button must NOT arm `actionDispatched`. Every command it runs goes
+    // through closeAndRun/dispatchAction, and both of those START by returning
+    // when the flag is already set — so arming it here made the button disarm
+    // the very action it was trying to fire. Shipped that way in v0.8.0 (#227):
+    // log out, restart and shut down all did nothing, and because closeAndRun is
+    // also what closes the menu, the card stayed open and dead. Suspend and Lock
+    // were unaffected, which is the tell — they never pass through this page.
+    // The flag has exactly two writers, closeAndRun and dispatchAction; keep it
+    // that way.
+    //
+    // This button still needs a guard of its own against a double click, and
+    // taking the command OUT of pendingCmd before running it IS that guard: a
+    // second click finds nothing left to run.
+    const cmd = pendingCmd
     pendingCmd = null
+    cmd?.()
     showPage(menuBox)
   })
 
