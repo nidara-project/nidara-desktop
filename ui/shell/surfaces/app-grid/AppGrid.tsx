@@ -12,7 +12,7 @@ import { pinnedState, savePinned } from "../dock/state"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
-import SquircleContainer from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/tokens"
 import Theme from "../../core/ThemeManager"
 import Cairo from "gi://cairo"
@@ -301,6 +301,12 @@ export default function AppGridPanel(
         inset: 2.0,
         hexpand: false,
         vexpand: false,
+        // The last outer glass to get the shadow, and it had to wait for its LAYER:
+        // the band is `alpha 0.18` and this surface sat at `ignore_alpha 0.04`, so
+        // Hyprland blurred behind the shadow and smeared a halo along the silhouette.
+        // The threshold moved to 0.23 (`hyprland.lua`) in the same change; do not put
+        // this back on a surface whose threshold is under 0.18.
+        shadow: GLASS_SHADOW,
     })
     // Shared overlay pop — same grow+fade as CC/NC/Prism. The docks call
     // setVisible() instead of toggling .visible directly so it animates.

@@ -1244,11 +1244,12 @@ another glass panel is a shadow inside a window, and reads as dirt rather than a
 glass, and so is everything that floats beside them: the islands, the detail island the grid swaps
 itself for, the status banner, the tile context menu, the notification cards, the calendar, the
 group headers, and the `Editar` / `Borrar notificaciones` / empty-state pills), Prism's wrapper, the
-system menu's wrapper, the overview's panel, the bar's expansion panel, **every bar capsule** (all
-eight of them, discriminated by `opacityRole: "bar"` — each sits directly on the bar, none inside
-another panel), and since 2026-08-24 **every greeter/lockscreen capsule** (there is no card behind
-them either — each one floats on the wallpaper). The one deliberate exclusion inside those two
-surfaces is a notification banner's ACTION buttons: those genuinely sit inside a card.
+system menu's wrapper, the overview's panel, the bar's expansion panel, the app grid's panel,
+**every bar capsule** (all eight of them, discriminated by `opacityRole: "bar"` — each sits directly
+on the bar, none inside another panel), and since 2026-08-24 **every greeter/lockscreen capsule**
+(there is no card behind them either — each one floats on the wallpaper). The one deliberate
+exclusion inside those two surfaces is a notification banner's ACTION buttons: those genuinely sit
+inside a card.
 
 🔑 **The pills were missed for six days because the rollout enumerated SURFACES and the pills are
 CONTROLS.** #244's list reads "the NC's notification cards and calendar island, Prism's wrapper,
@@ -1256,15 +1257,20 @@ CONTROLS.** #244's list reads "the NC's notification cards and calendar island, 
 under the grid with nothing behind it but the wallpaper. Owner-reported 2026-08-24. When you apply
 a surface-level recipe, walk the widget TREE of each surface for `SquircleContainer` calls and ask
 of each one "what is behind this?", instead of listing the surfaces you can name. `grep -n
-'SquircleContainer({'` over `ui/shell` is the whole audit; today exactly two call sites still pass
-no shadow — a notification banner's action buttons (correct: inside a card) and the app grid's
-panel (deferred, for the reason below).
+'SquircleContainer({'` over `ui/shell` is the whole audit; today exactly one call site still passes
+no shadow — a notification banner's action buttons, and that one is correct: they sit inside a card.
 
-⚠️ **The app grid's panel is the one outer glass still without it, and NOT by oversight.**
-`nidara-app-grid` runs at `ignore_alpha 0.04` (it is its own surface, unmapped when closed — see
-`architecture.md`), and the shadow's `alpha 0.18` = 45.9/255 sits ABOVE that threshold, so Hyprland
-would blur behind the shadow band and smear a halo along the silhouette. Raising the layer's
-threshold is the prerequisite, and that reopens the fade-out question #244 settled only for 0.23.
+🔑 **The app grid was the last one in, and the blocker was its LAYER, not its widget tree.**
+`nidara-app-grid` is its own surface (unmapped when closed — see `architecture.md`) and it ran at
+`ignore_alpha 0.04`, under the shadow's `alpha 0.18` = 45.9/255 — so Hyprland blurred *behind* the
+shadow band and would have smeared a halo along the silhouette. **A shadow is a band of low alpha
+outside the glass, so adding one to a surface is a decision about that surface's threshold, and you
+have to make it in the same change.** It moved to 0.23 on 2026-08-24, joining the other three, on
+two facts rather than on precedent: its close is `OVERLAY_POP.durationOut` = 150 ms (the bar's
+number, the one #244 actually watched — not the island's 220 ms, which was flagged as the surface a
+pop would surface on first), and its layer carries nothing but the panel, so raising the threshold
+takes blur away from nothing except the band itself. `scripts/ci/blur-threshold-check.mjs` still
+guards the other end: 0.23 stays 2.5 levels under `GLASS_RANGE.min`.
 
 ⚠️ **On the login surfaces the shadow needs no `inset`, and that is a real difference.** In the
 shell the falloff has to be bought out of the surface's own `inset`; `GlassCapsule` instead sizes

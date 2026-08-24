@@ -738,8 +738,16 @@ hl.window_rule({
 -- 2026-08-03). Any layer that can open a Gtk.Popover needs the flag.
 -- nidara-app-grid: the app grid got its OWN surface on 2026-08-09 (it used to be a
 -- child of the dock's window, which had to hand its whole blur region back for as
--- long as the grid was up — see AppGridWindow.ts). It stays at 0.04 and CANNOT
--- follow the dock to 0.20, for the reason spelled out below: it fades.
+-- long as the grid was up — see AppGridWindow.ts). It went 0.04 → 0.23 on 2026-08-24,
+-- the last of the four to move, so that its panel could carry the drop shadow: the
+-- band is `alpha 0.18` and at 0.04 Hyprland blurred BEHIND it, smearing a halo along
+-- the silhouette. Two things made it safe, and neither is "the others did it":
+--   1. Its close is `OVERLAY_POP.durationOut` = 150 ms — the BAR's number, the one
+--      #244 actually watched, not the island's 220 ms that was flagged as the surface
+--      a pop would show up on first.
+--   2. Its surface carries NOTHING but the panel (the rect is the panel's plus
+--      BLUR_PAD; there is no scrim), so raising the threshold takes blur away from
+--      nothing except the shadow band — which is the entire point.
 --
 -- ── The dock is at 0.23, and it is the only surface that can be (2026-08-23) ──
 -- The threshold decides WHERE the compositor blurs: a pixel whose alpha is below it
@@ -769,22 +777,28 @@ hl.window_rule({
 -- degraded, gone — while the config still parses, the shell still boots and the
 -- smoke still passes. `scripts/ci/blur-threshold-check.mjs` is now that comparison.
 --
--- ⚠️ NO OTHER LAYER CAN TAKE THIS VALUE, and the reason is animation, not taste.
+-- ⚠️ THIS PARAGRAPH USED TO SAY "NO OTHER LAYER CAN TAKE THIS VALUE". All four do
+-- now (bar and island in #244, the app grid on 2026-08-24), so the claim is kept here
+-- only as the ARGUMENT, which is still the right one to make — it was the CONCLUSION
+-- that was drawn too early, from arithmetic instead of from a screen.
 -- `nidara-bar` hosts CC, NC, Prism, the system menu and the overview, and
 -- `nidara-app-grid` is itself one of those panels — every one wrapped in a
 -- `ScaleRevealer`, which animates OPACITY on open/close. The surface alpha during a
 -- close is `glass × widget-opacity`, so the blur pops off at `threshold / glass`:
--- at 0.01 that is 4% opacity (invisible), at 0.20 it is 83%, i.e. in the first
--- frames of every close. The dock is the only one of the four that never animates
--- its opacity at all — it auto-hides by sliding — which is what makes 0.20 safe
--- HERE and wrong everywhere else.
+-- at 0.01 that is 4% opacity (invisible), at 0.23 it is 96%, i.e. in the first frames
+-- of every close. The dock is the only one of the four that never animates its
+-- opacity at all — it auto-hides by sliding, so for IT the crossing never happens.
+-- For the other three it happens on every close and is NOT PERCEPTIBLE, which is a
+-- fact about a 150 ms fade under a moving eye and not something the formula can tell
+-- you. Keep the burden of proof where #244 put it: a new layer joins this value by
+-- being WATCHED closing over detailed content, not by citing this line.
 --
 -- It opens context menus, hence blur_popups — the exact flag the island shipped
 -- without when IT moved out of the bar.
 hl.layer_rule({ match = { namespace = "nidara-bar" },      blur = true, blur_popups = true, ignore_alpha = 0.23  })
 hl.layer_rule({ match = { namespace = "nidara-island" },   blur = true, blur_popups = true, ignore_alpha = 0.23 })
 hl.layer_rule({ match = { namespace = "nidara-dock" },     blur = true, blur_popups = true, ignore_alpha = 0.23 })
-hl.layer_rule({ match = { namespace = "nidara-app-grid" }, blur = true, blur_popups = true, ignore_alpha = 0.04 })
+hl.layer_rule({ match = { namespace = "nidara-app-grid" }, blur = true, blur_popups = true, ignore_alpha = 0.23 })
 -- ⚠️ There is deliberately NO rule for `nidara-lock`, and do not add one back. The
 -- lockscreen is an ext-session-lock-v1 surface (`Gtk4SessionLock`, ui/lockscreen/
 -- app.ts) — not a layer surface, so no layer_rule can reach it — and Hyprland paints
