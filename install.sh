@@ -36,7 +36,45 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 # When run via `sudo bash install.sh`, $HOME is /root. Use SUDO_USER's home instead.
 REAL_USER="${SUDO_USER:-$USER}"
 REAL_HOME="$(getent passwd "$REAL_USER" | cut -d: -f6)"
+
+# ⚠️ EVERY PATH BELOW IS BUILT ON $REAL_HOME, and an empty one does not fail — it
+# rebases the whole installer onto /. Guarded because that exact class of bug had been
+# live in this file for four days (see PKG_CACHE below): an empty prefix produces a
+# VALID path, so nothing errors at the point of the mistake. `$USER` is normally set
+# even over ssh, so this guard is hardening rather than a fix for something observed —
+# but it costs one comparison and it is the difference between a clear message and
+# `mkdir /src`.
+if [ -z "$REAL_USER" ] || [ -z "$REAL_HOME" ]; then
+    echo "  [ERR] Cannot determine the installing user's home directory." >&2
+    echo "        REAL_USER='${REAL_USER}' (from \$SUDO_USER or \$USER), REAL_HOME='${REAL_HOME}'." >&2
+    echo "        Run the installer from a login shell, or pass it explicitly:" >&2
+    echo "          sudo SUDO_USER=\"\$(id -un)\" ./install.sh" >&2
+    exit 1
+fi
+
 CONFIG_DIR="${REAL_HOME}/.config/nidara"
+
+# Where makepkg builds the local `nidara` package and caches its sources.
+#
+# ⚠️ RESTORED 2026-08-24 — it had been UNSET since #200 (2026-08-20). That PR removed
+# the last from-source dependency and deleted this assignment along with the code that
+# used it, but FOUR uses survived, in `ensure_pkg_cache`, `build_install_pkg` and
+# `build_local_nidara_pkg`. All three are still reachable through the local-package
+# fallback — the "correct but slow" path taken whenever the tree is not exactly the
+# published release, which includes every branch, and every user whenever nidara-repo
+# has not published the current version yet.
+#
+# With it empty, that path built `/src`, `/nidara` and `SRCDEST=/src`:
+#   - run normally (install.sh runs as the USER and sudo's per command), it DIES at
+#     `mkdir -p /src` — found in the VM, 2026-08-24;
+#   - run as `sudo ./install.sh`, the same lines SUCCEED as root and write two
+#     directories into the root filesystem, with `rm -rf "$pdir"` meaning `rm -rf
+#     /nidara`.
+#
+# Four days without anyone noticing, because CI never runs install.sh on a real
+# system and an empty prefix makes a valid path rather than an error. That is the
+# whole argument for the REAL_HOME guard above, and for the VM.
+PKG_CACHE="${REAL_HOME}/.cache/nidara/pkgbuild"
 
 # Update plumbing (see header). SOURCE_FILE records a DEV install's source clone.
 # SRC_CANON is the LEGACY per-user source copy: no longer created (stable updates
