@@ -1579,8 +1579,17 @@ button was measuring the wrong string. The rules those left:
   2026-08-24. It did not before, and that hid a shipped bug: an `arrow` is a builtin-icon node
   whose `-gtk-icon-source` comes from the platform theme, so with no theme all three of the
   greeter's dropdown chevrons kept their 10px box and drew NOTHING — while the probe, borrowing
-  the developer's Adwaita, drew them perfectly. The sheet now names the source itself
-  (`-gtk-icontheme("pan-down-symbolic")`). ⚠️ **Every other icon on that screen renders**, because
+  the developer's Adwaita, drew them perfectly. The sheet now names the source itself — and
+  names it as a **PATH to our own shipped Lucide `chevron-down.svg`**, not as
+  `-gtk-icontheme("pan-down-symbolic")`. That distinction is commandment 10: an icon NAME
+  resolves against the ICON theme (a different thing from the blank GTK theme, and not ours —
+  ~40 installed themes provide that name on one dev box), so it would make the login screen's
+  chevron take whatever shape the `greeter` system user's icon theme happened to supply. Exactly
+  the defect `ui/lib/icons.ts` was written to end for the power glyphs. The path is relative so it
+  holds both installed and from source; the `-gtk-icon-filter: invert(1)` beside it is not
+  optional, because a Lucide SVG is non-symbolic and GTK paints it BLACK — the `.nd-icon`
+  mechanism, applied to a CSS node because an `arrow` has no widget to hang a class on.
+  ⚠️ **Every other icon on that screen renders**, because
   the peek eye and the Lucide glyphs are `icon-name`/`gicon` set in CODE and owe the theme nothing
   — only the CSS-sourced node goes blank, which is why the screen looks like it has icons and one
   specific kind is missing. `PLATFORM_THEME=1` restores the old behaviour for the A/B that tells

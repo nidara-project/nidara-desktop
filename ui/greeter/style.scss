@@ -619,7 +619,32 @@ dropdown > button {
   arrow {
     color: inherit;
     -gtk-icon-size: 10px;
-    -gtk-icon-source: -gtk-icontheme("pan-down-symbolic");
+    // ⚠️ OUR chevron, by PATH — not `-gtk-icontheme("pan-down-symbolic")`.
+    //
+    // That name resolves against the ICON theme, which is a different thing from the
+    // blank GTK theme above and is NOT ours: on this dev host alone ~40 installed
+    // themes provide it (Adwaita, Papirus — which install.sh installs — MacTahoe,
+    // Colloid…). Using it would make the shape of the login screen's chevron depend on
+    // whichever icon theme the `greeter` system user happens to have, which is exactly
+    // the defect `ui/lib/icons.ts` was written to end for the power glyphs:
+    // "Nidara's own power bar was the one surface in the DE not using Nidara's icons.
+    // Commandment 10." A chevron is no different.
+    //
+    // So: the shipped Lucide glyph, reached relatively. The path holds in both layouts —
+    // installed (`/usr/share/nidara/ui/greeter/` → `../shell/assets/…`) and from source
+    // (`ui/greeter/` → `../shell/assets/…`) — which is why it is not absolute.
+    //
+    // ⚠️ The invert is not optional and not cosmetic: these are Lucide SVGs, non-symbolic
+    // (`stroke=currentColor`), so GTK loads them as a plain image and paints them BLACK.
+    // Same mechanism as the `.nd-icon` class, applied to a CSS node because an `arrow`
+    // has no widget to hang a class on. Unconditional is safe for the same documented
+    // reason: both these surfaces are permanently dark glass.
+    //
+    // Consequence to know: the chevron no longer follows `color`, so it does not brighten
+    // with the label on `:hover`. That is already true of every other shipped glyph on
+    // these two screens, so it is consistent — but it IS a change from the symbolic icon.
+    -gtk-icon-source: url("../shell/assets/icons/hicolor/scalable/actions/chevron-down.svg");
+    -gtk-icon-filter: invert(1);
   }
 }
 
