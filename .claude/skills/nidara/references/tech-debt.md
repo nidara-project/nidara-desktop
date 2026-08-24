@@ -3006,10 +3006,17 @@ What it costs, so nobody under-estimates it into a release:
   So it is a new field on the theme config, with its setter and its persistence.
 - **A new i18n key in ALL TWELVE locales, in the same PR** (policy since 2026-08-23, gated by
   `i18n-check`).
-- A decision this list cannot make for you: whether the general slider, when switched on, WRITES
-  one value to all four (today's `setGlassOpacity` behaviour) or shadows them and restores the
-  per-surface values when switched off. The first is simpler and loses information; the second is
-  what a user who toggles it twice will expect.
+- ▶️ **The general slider should SHADOW the per-surface values, not overwrite them** — owner's
+  lean, 2026-08-24, still to be confirmed. Today's `setGlassOpacity` writes one value to all four
+  and destroys whatever was configured. Shadowing lets a user go from "I want everything dark" back
+  to "my own configuration", which is what anyone who toggles the checkbox twice expects.
+  ⚠️ It is also the harder half: the per-surface values have to survive somewhere while the general
+  mode is on, so it is a storage decision as much as a UI one.
+
+  📌 And it is the door to something bigger the owner wants later: **saved profiles**, possibly
+  bound to light/dark mode ("this glass configuration when I'm in dark, that one in light").
+  Overwriting forecloses it; shadowing is the first half of it already built. Do not pick the
+  simpler behaviour without knowing you are closing that door.
 
 ⚠️ Do not do this piecemeal with the pending "rediseñar el tema sliders de cristal" the owner also
 has open — it is the same surface twice.
