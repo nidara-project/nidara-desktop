@@ -59,7 +59,12 @@ import { glassRimGradient, drawShadowFromPath, GLASS_SHADOW } from "./glass-pain
 const BLUR_SIZE = 2
 const BLUR_PASSES = 2
 const CONTRAST = 1.2
-const BRIGHTNESS = 0.8
+// ⚠️ 0.8 → 1.0 on 2026-08-24. The comment above says these are "kept in lockstep with
+// `blur { … }` in config/hypr/hyprland.lua" — and that sentence had been FALSE since
+// #235 raised the shell's brightness a day earlier and did not reach this file. A
+// lockstep that nothing enforces is a claim, not a mechanism; the reasoning for 1.0
+// lives beside the shell's copy.
+const BRIGHTNESS = 1.0
 const VIBRANCY = 0.4
 
 // GSK takes a single gaussian radius; Hyprland runs dual-Kawase, where every
@@ -355,8 +360,12 @@ export class GlassCapsule extends Gtk.Box {
         // wherever alpha clears `ignore_alpha`, and a shadow is by definition a band of
         // low alpha OUTSIDE the glass — that is debt #237, the dock smearing behind its
         // icon shadows. Checked, not assumed: `GLASS_SHADOW.alpha` is 0.18 at the
-        // silhouette and falls off outward, against the greeter layer's 0.3
-        // (`config/greetd/hyprland-greeter.lua`), so it never reaches the threshold. The
+        // silhouette and falls off outward, against the greeter layer's `ignore_alpha`
+        // (`config/greetd/hyprland-greeter.lua`), so it never reaches the threshold.
+        // ⚠️ That threshold moved 0.3 → 0.23 later the same day, when this layer was put
+        // on the shell's numbers: the margin went 30.6 → 12.8 levels of 255. Still clear,
+        // and it is exactly the margin the dock has lived on since #237 — but it is now
+        // the tight configuration, not the roomy one. Re-measure if either number moves. The
         // LOCKSCREEN cannot be affected at all — it gets no compositor blur, it paints
         // its own. Re-check this line if either number moves.
         //

@@ -165,8 +165,20 @@ export const GLASS_SPECULAR = { r: 1, g: 1, b: 1 } as const
  * the half of the mirror both surfaces can see.
  */
 export const LOCK_GLASS = {
-    /** Body fill, over the blurred backdrop. `--nidara-glass`. Synchronized with GLASS_TINT.dark. */
-    fill: { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b, a: 0.55 },
+    /** Body fill, over the blurred backdrop. `--nidara-glass`. Synchronized with GLASS_TINT.dark.
+     *
+     *  ⚠️ 0.55 → 0.24 on 2026-08-24, and the number is not free-standing: it is the SHELL's
+     *  `GLASS_RANGE.min` (ui/shell/core/NidaraTheme.ts), so the login screen wears the same
+     *  material as the desktop at its thinnest rather than a heavier one nobody chose.
+     *
+     *  It moves as a PAIR with the greeter layer's `ignore_alpha` (config/greetd/
+     *  hyprland-greeter.lua, now 0.23 like the shell's surfaces). Alone, either one breaks
+     *  the other silently: a threshold at or above the glass means Hyprland stops blurring
+     *  that layer entirely — no error, no crash, just a flat login screen nobody is diffing.
+     *  `scripts/ci/blur-threshold-check.mjs` reads both and is the only thing that notices.
+     *
+     *  ⚠️ MIRRORED as `--nidara-glass` in ui/greeter/style.scss. Change one, change the other. */
+    fill: { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b, a: 0.24 },
     /** 1px rim, primary controls. `--nidara-glass-border`. */
     rimStrong: { r: 1, g: 1, b: 1, a: 0.22 },
     /** 1px rim, everything else — the shell's `--nidara-edge` colour exactly. */

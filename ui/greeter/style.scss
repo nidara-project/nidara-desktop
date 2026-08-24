@@ -89,7 +89,7 @@
   // LOCK_GLASS in ui/lib/tokens.ts — the CSS copies below are what is left for
   // the handful of surfaces still drawn by CSS (the avatar ring, the dropdown
   // popovers, the separator). Change one, change the other.
-  --nidara-glass:          rgba(22, 22, 34, 0.55);
+  --nidara-glass:          rgba(22, 22, 34, 0.24);  // = LOCK_GLASS.fill.a = the shell's GLASS_RANGE.min
   --nidara-glass-border:   rgba(255, 255, 255, 0.22);
   --nidara-glass-border-sm:rgba(255, 255, 255, 0.14);
 

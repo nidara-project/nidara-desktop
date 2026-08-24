@@ -1256,8 +1256,10 @@ clipping ancestor.
 ⚠️ **Check the layer's `ignore_alpha` before shadowing a NEW surface, and there is still no gate
 for it.** A shadow is a band of low alpha *outside* the glass, so if it clears the threshold
 Hyprland blurs behind it — a smeared halo tracking the silhouette, which is debt #237. For the
-greeter the numbers are: shadow `alpha 0.18` = 45.9/255 against the layer's `ignore_alpha 0.3` =
-76.5/255, **30.6 levels of margin**. The lockscreen cannot be affected at all (no compositor blur;
+greeter the numbers are: shadow `alpha 0.18` = 45.9/255 against the layer's `ignore_alpha 0.23` =
+58.7/255, **12.8 levels of margin** — it was 30.6 until the greeter layer was put on the shell's
+numbers (2026-08-24), so this is now the same tight configuration the dock has lived on since #237,
+not a roomy one. The lockscreen cannot be affected at all (no compositor blur;
 it paints its own). `scripts/ci/blur-threshold-check.mjs` guards the *other* end of that coupling —
 a threshold reaching the glass FLOOR, which kills the blur — and knows nothing about shadows.
 

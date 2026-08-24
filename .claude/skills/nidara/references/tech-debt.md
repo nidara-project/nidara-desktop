@@ -2894,11 +2894,26 @@ white: on a pale wallpaper it disappears entirely, so a user with no photo gets 
 around an inverted glyph. Same family as (a) — a token that assumes a dark backdrop, on the one
 surface whose backdrop is the user's own wallpaper.
 
-⚠️ **(a) and (b) SURVIVED the VM pass without being tested, and that is a gap, not a pass.** The
-VM's default wallpaper is dark blue, so both read fine there — which is exactly the condition under
-which they are not defects. Testing them needs a PALE wallpaper on the greeter, which means writing
-one into the greeter's own config path, not the user's. Do not read "the VM looked fine" as
-evidence on these two.
+✅ **(a) and (b) CONFIRMED 2026-08-24**, once the greeter was rendered against a genuinely pale
+wallpaper (mean luminance 223/255, dropped at `/usr/share/nidara/wallpaper-greeter.jpg`). Both fail
+exactly as predicted: the username is white on bare wallpaper, and the avatar's ring is gone.
+
+🔑 **And the same capture reframed all three as ONE debt, not three.** With the login surfaces moved
+to the shell's optics (`LOCK_GLASS.fill.a` 0.55 → 0.24, the desktop's shipped value — `DEFAULT_CONFIG`
+sets all four shell surfaces to `GLASS_RANGE.min`), the primary controls joined them: white label on
+a 150/255 glass body is **~2.8:1**, under WCAG AA. That is #82 — "thin glass cannot carry white text
+over a bright wallpaper" — arriving at the login screen. Not a new greeter defect; the DE-wide open
+debt, now shared consistently.
+
+⚠️ **What is NOT the problem, measured:** separation. The capsules stand off the wallpaper cleanly —
+the drop shadow does the job it was added for (#243/#244). The failure is text ON the glass, which a
+shadow cannot help.
+
+⚠️ **The compositor blur does not mitigate it, and betting on that is the trap.** The offscreen probe
+predicted body 150/255 over a flat pale backdrop and the real greeter, with Hyprland's blur and its
+`contrast 1.2 / vibrancy 0.4`, measured **150/255**. Blurring a uniformly pale wallpaper yields a
+pale backdrop. Do not assume the compositor will rescue a contrast number — it did not move it by
+one level.
 
 **c. ✅ FIXED 2026-08-24 — the focus ring was the accent's DEFAULT, on a screen that had read the
 user's choice and dropped it.** It was on this list as "loud blue, may be ours, may be a GTK
