@@ -24,6 +24,41 @@ All previous Astal services were absorbed into native TypeScript (`core/`), the 
 
 `github.com/nidara-project/nidara-repo` publishes `nidara` itself as a signed pacman package (`https://nidara-project.github.io/nidara-repo/$arch`). The PKGBUILD lives inside this repository (`packaging/nidara/PKGBUILD`), which compiles and packages the shell bundles, shims, assets, and both native C libraries (`libnidara-wl` and `libnidara-auth`).
 
+### The operating system's identity is NOT this repo's job (`nidara-release`)
+
+`install.sh` runs on an Arch someone already uses and **must not rename their operating
+system** — on that machine About correctly reads "Arch Linux" for the OS and "Nidara Desktop"
+for the environment, and both are true. The product's identity travels in a **separate package
+in a separate repo**: `nidara-release` (in `nidara-iso`) owns `/etc/os-release` and carries the
+PRODUCT's version, which is declared by cutting an image, not derived from anything here. The
+decision record is `nidara-iso/PRODUCT.md`; do not re-derive it.
+
+**Two numbers, neither derived from the other**, and About is the one screen that shows both:
+
+| number | comes from | reaches About via |
+|---|---|---|
+| the product's ("Nidara 0.1.0") | `nidara-release` → `/etc/os-release` `PRETTY_NAME` | the header line under the brand |
+| this repo's ("Nidara Desktop 0.8.1") | `VERSION` → `readShellVersion()` | the labelled row above Hyprland/GTK/GJS |
+
+So the OS name in About **changes by itself** the day that package lands — no shell change is
+needed, and none should be added. `AboutWindow` prints the brand ("Nidara"), then the OS's own
+name with the brand stripped when they are the same product (so the product reads "Nidara /
+0.1.0", not "Nidara / Nidara 0.1.0"), and someone's Arch still reads "Nidara / Arch Linux".
+
+⚠️ **Two facts about `/etc/os-release` that were MEASURED (2026-08-25), because both look the
+other way round from the outside** (`pacman -U` into a scratch root under `fakeroot`, and
+`systemd-tmpfiles --root=`, each with a positive control):
+
+1. **No package owns `/etc/os-release`** — `filesystem` ships only `/usr/lib/os-release`. But
+   the path is *not free*: systemd's `/usr/lib/tmpfiles.d/etc.conf` puts a symlink there. A
+   package shipping the real file therefore hits **"exists in filesystem"** on a machine that
+   already booted, which is why the installer passes `--overwrite /etc/os-release` for exactly
+   that one path (it is a no-op when the file is already ours).
+2. Once the real file is in place, **tmpfiles leaves it alone forever**: the line is `L`, not
+   `L+` (contrast `/etc/mtab` two lines below, which IS `L+` and would clobber). So no pacman
+   hook is needed — which is the EndeavourOS mechanism, and it is worse: theirs overwrites a
+   file `filesystem` owns and leaves `pacman -Qkk filesystem` dirty for good.
+
 ### Install steps (in order)
 
 1. `pacman` dependencies (from official Arch repos).

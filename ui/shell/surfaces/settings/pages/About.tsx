@@ -73,7 +73,10 @@ export default function AboutPage() {
     // ── Nidara ──────────────────────────────────────────────────────────
     const { box: shellBox, listBox: shellList } = listGroup(t("settings.about.group.nidara"))
 
-    shellList.append(createRow(t("settings.about.version"), "Nidara", staticLabel(readShellVersion())))
+    // The row's subtitle names a COMPONENT, so it is the component's full name:
+    // this number is the desktop environment's, not the operating system's (the
+    // System group below carries that one). nidara-iso/PRODUCT.md draws the line.
+    shellList.append(createRow(t("settings.about.version"), "Nidara Desktop", staticLabel(readShellVersion())))
     shellList.append(createRow(t("settings.about.shell"), t("settings.about.shell.desc"), staticLabel("Hyprland WM")))
 
     // Update check — installed version vs the latest GitHub release. The row is

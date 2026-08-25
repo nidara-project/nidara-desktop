@@ -58,7 +58,9 @@ window#nidara-about,
         font-size: $fs-caption;
         font-weight: $fw-medium;
         opacity: 0.55;
-        min-width: 80px;
+        // TWIN of KEY_COL in AboutWindow.tsx — move the two together. Its comment
+        // carries the measurement (92 fits "Nidara Desktop", 80 did not).
+        min-width: 92px;
     }
 
     .about-spec-val {
