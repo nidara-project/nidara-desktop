@@ -111,6 +111,13 @@ hl.config({
 -- and that; it reads BOTH numbers, so move them together or it fails.
 --
 -- `blur_popups` is not optional at this glass: the dropdown popovers are drawn in CSS
--- with `--nidara-glass`, and at 0.24 alpha an unblurred popup over a busy wallpaper is
--- not legible. The shell has had it on all four of its layers for the same reason.
+-- with `--nidara-popover-bg`, and an unblurred popup over a busy wallpaper is not
+-- legible. The shell has had it on all four of its layers for the same reason.
+--
+-- ⚠️ For two months that sentence was true of the config and false of the sheet: the
+-- greeter's `--nidara-popover-bg` was still 0.97, a leftover from before this line
+-- existed, so the popovers were opaque slabs and the blur underneath them was doing
+-- nothing at all. Fixed 2026-08-25 by giving them the shell's rule — `max(bgAlpha,
+-- 0.38)`, which is 0.48 — so the number to keep above `popups_ignorealpha` (0.30)
+-- now lives in ui/greeter/style.scss and is the one actually painted.
 hl.layer_rule({ match = { namespace = "nidara-greeter" }, blur = true, blur_popups = true, ignore_alpha = 0.23 })

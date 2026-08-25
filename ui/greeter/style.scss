@@ -135,16 +135,22 @@
   --nidara-shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.40), 0 2px 6px rgba(0, 0, 0, 0.24);
   --nidara-bg:             rgba(22, 22, 34, 0.5);
 
-  // The two exceptions to "verbatim", and both are the same reason: the shell
-  // floors its popover alpha at 0.85 so Hyprland's popup blur has something to
-  // work with. These screens do NOT get that blur — the greeter runs its own
-  // compositor config (hyprland-greeter.lua) and the lockscreen's popups sit
-  // above the session lock — so an 85 %-opaque list would read as a grey haze
-  // over the wallpaper. `rgba(14, 14, 22, 0.97)` is this sheet's own value,
-  // chosen for exactly that; it was called `--nidara-popup-bg` until the kit
-  // arrived with the contract name for the same thing. Renamed, not duplicated:
-  // its only two consumers were the popover block the kit now owns.
-  --nidara-popover-bg:     rgba(14, 14, 22, 0.97);
+  // ⚠️ THIS PREMISE EXPIRED, and the value outlived it by long enough to ship.
+  // It used to read "these screens do NOT get popup blur", and 0.97 was chosen so a
+  // near-opaque list would stay legible without any. The greeter's compositor config
+  // has carried `blur_popups = true, popups_ignorealpha = 0.30` since the glass moved
+  // to LOCK_GLASS — its own comment says blur_popups "is not optional at this glass" —
+  // so the blur has been there all along and the popovers were simply painting over
+  // it: solid slabs on a screen made of glass, which is what they looked like.
+  //
+  // Now the shell's rule, applied here: `popoverAlpha = max(bgAlpha, 0.38)`
+  // (ui/shell/core/NidaraTheme.ts), which with the shipped 0.48 glass is 0.48. Above
+  // `popups_ignorealpha` (0.30) with room to spare, so the popup is blurred rather
+  // than merely transparent. The tone comes with it: `rgba(22, 22, 34, …)` is what
+  // `--nidara-bg` above already uses verbatim from the shell, and the darker
+  // `14, 14, 22` only existed to keep an opaque slab from reading as a grey haze —
+  // the reason died with the opacity.
+  --nidara-popover-bg:     rgba(22, 22, 34, 0.48);
   --nidara-popover-border: rgba(255, 255, 255, 0.14);
 }
 
@@ -184,20 +190,44 @@ window > contents {
 // nothing has to be read over it. GNOME, Windows 11 and iOS all scrim their lock
 // wallpaper; none of the four systems leaves the text bare.
 //
-// 🔑 THE 0.3 CEILING IS NOT A STYLE CHOICE, IT IS WHAT KEEPS THE TWO SCREENS
-// IDENTICAL. The greeter is a transparent layer over awww's wallpaper with
-// `blur = true, ignore_alpha = 0.3` (config/greetd/hyprland-greeter.lua); the
-// lockscreen paints its own wallpaper and gets no compositor blur at all. Any
-// pixel of ours ABOVE 0.3 therefore has blurred wallpaper behind it on the login
-// screen and sharp wallpaper on the lock screen. Everything here peaks at 0.28.
-// If a future value needs to go higher, it has to go higher on the lock's
-// painter too, or the screens stop matching.
+// 🔑 THE CEILING IS NOT A STYLE CHOICE, IT IS THE BLUR THRESHOLD. The greeter is a
+// transparent layer over awww's wallpaper with `blur = true, ignore_alpha = 0.23`
+// (config/greetd/hyprland-greeter.lua); the lockscreen paints its own wallpaper and
+// gets no compositor blur at all. Any pixel of ours at or above that threshold has
+// BLURRED wallpaper behind it on the login screen and sharp wallpaper on the lock —
+// so the two screens stop matching, and worse, the blur lands wherever a GRADIENT
+// happens to cross the number, as a hard edge across the wallpaper.
+//
+// ⚠️ That is not hypothetical: it shipped. This block was written against
+// `ignore_alpha = 0.3` and capped at 0.28 for exactly that reason. The threshold
+// later moved to 0.23 (the glass dropped to LOCK_GLASS 0.24 and the rule has to sit
+// under it — see the lua), the cap did not move with it, and the login screen grew a
+// frosted band across the top and bottom third with a visible line where the
+// gradient crossed 0.23. MEASURED 2026-08-25 in a VM: the boundary sat at 85.8 % of
+// the screen's height, which is where 0.16 → 0.28 crosses 0.23, to the pixel.
+//
+// 🔑 THE INVARIANT, and it is about the COMPOSITE, not any single declaration:
+// everything we paint that must keep sharp wallpaper behind it — this scrim, plus
+// the hero's text-shadow ON TOP of it — has to add up to less than `ignore_alpha`:
+//
+//     a_total = 1 − (1 − a_scrim)(1 − a_shadow1)(1 − a_shadow2)  <  0.23
+//
+// At the clock (72px down, so the gradient is still near its top value) that is
+// 1 − 0.87 × 0.95 × 0.96 = 0.20, with 0.03 of headroom. Anything that raises one of
+// the three has to lower another. `scripts/ci/blur-threshold-check.mjs` computes
+// this sum and fails on it, because this is the second time these numbers drifted
+// apart in different files and neither time did anything break loudly.
+//
+// The cost is honest and worth knowing: the protection this scrim gives the hero on
+// a LIGHT wallpaper is weaker than the 0.28 it had. Making it stronger again means
+// either giving the hero a glass body of its own (it deliberately has none) or
+// frosting the whole wallpaper uniformly — a design decision, not a tweak.
 .greeter-scrim {
   background-image: linear-gradient(to bottom,
-    rgba(0, 0, 0, 0.28) 0%,
-    rgba(0, 0, 0, 0.16) 34%,
-    rgba(0, 0, 0, 0.16) 66%,
-    rgba(0, 0, 0, 0.28) 100%);
+    rgba(0, 0, 0, 0.13) 0%,
+    rgba(0, 0, 0, 0.08) 34%,
+    rgba(0, 0, 0, 0.08) 66%,
+    rgba(0, 0, 0, 0.13) 100%);
 }
 
 // ── Text with no glass behind it ─────────────────────────────────────────────
@@ -219,7 +249,12 @@ window > contents {
 .greeter-date,
 .greeter-clock,
 .greeter-username {
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.28), 0 0 14px rgba(0, 0, 0, 0.26);
+  // ⚠️ These two alphas are HALF of the sum the scrim's comment governs — they are
+  // painted over it, so they compound with it. At 0.28/0.26 the clock carried a
+  // frosted halo the shape of its own shadow: every pixel of the falloff above 0.23
+  // had blurred wallpaper behind it, and the ring ended in a hard edge where the
+  // falloff crossed the threshold. Read the invariant there before changing these.
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.05), 0 0 14px rgba(0, 0, 0, 0.04);
 }
 
 .greeter-date {
@@ -265,7 +300,24 @@ window > contents {
 // same mechanism as the shell's _reset.scss. The greeter card is always dark
 // glass, so an unconditional invert is safe here.
 .greeter-avatar-fallback {
-  background: rgba(255, 255, 255, 0.10);
+  // ⚠️ 0.24, and the number is NOT a tone choice — it is the blur threshold again,
+  // from the side the scrim's comment does not cover. This is a BODY: it is supposed
+  // to have frosted wallpaper behind it, like every other glass on this screen. To
+  // get that it has to clear `ignore_alpha` (0.23) BY ITSELF.
+  //
+  // At 0.10 it never did. It cleared it by leaning on the scrim underneath —
+  // 1 − 0.84 × 0.90 = 0.244, four thousandths over the line — which nothing said
+  // anywhere, and which stopped being true the moment the scrim was capped
+  // (0.16 → 0.08 gives 0.172, and the circle went sharp). Caught on screen, not by
+  // reading. The other bodies here were never exposed to it: the card, the password
+  // field and the power pills are painted with `--nidara-glass` (0.24), which clears
+  // the threshold alone.
+  //
+  // White, not `--nidara-glass`: this circle is deliberately a LIGHT surface — it
+  // exists to give the outline a visible body when there is no photo — and the dark
+  // glass renders it as a disc noticeably darker than its surroundings. Rendered both
+  // in a VM before choosing. Same alpha as the glass, opposite tone, on purpose.
+  background: rgba(255, 255, 255, 0.24);
   color: var(--nidara-text-secondary);
 }
 // (the invert itself is the shared `.nd-icon` rule at the top of this file)
@@ -619,6 +671,13 @@ dropdown > button {
   arrow {
     color: inherit;
     -gtk-icon-size: 10px;
+    // The gap the comment above refused to add by accident, added on purpose: with
+    // the chevron finally RENDERING (it drew nothing until 2026-08-24) it sat flush
+    // against the last glyph of its label and read as part of the word. 5px is the
+    // same optical gap the kit gives a Settings trigger, minus the 3px of visual
+    // padding the Lucide glyph carries inside its own box. `margin-left`, not
+    // `margin-start`: GTK4 has no logical margin longhands — see above.
+    margin-left: 5px;
     // ⚠️ OUR chevron, by PATH — not `-gtk-icontheme("pan-down-symbolic")`.
     //
     // That name resolves against the ICON theme, which is a different thing from the

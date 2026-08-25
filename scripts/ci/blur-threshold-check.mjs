@@ -83,9 +83,88 @@ for (const [, ns, raw] of rules) {
                 (ok ? `  — ${(f.value * 255 - t * 255).toFixed(1)} levels under it`
                     : `  — AT OR ABOVE IT: this layer would stop blurring`))
 }
+// ── The OTHER side of the same threshold ─────────────────────────────────────────
+// Everything above asks "is our glass thick enough to still be blurred?". This asks
+// the opposite, and it is the question that shipped a bug: "is everything we paint
+// that must NOT be blurred thin enough to stay under the line?"
+//
+// The login surfaces put two translucent layers straight onto the wallpaper with no
+// glass body: `.greeter-scrim` (a gradient, the whole screen) and the hero's
+// `text-shadow` (date/clock/username), which is painted ON TOP of the scrim and so
+// COMPOUNDS with it. Every pixel of that sum at or above `ignore_alpha` gets blurred
+// wallpaper behind it — and because a gradient crosses the number somewhere in the
+// middle of the screen, the result is a frosted band ending in a hard line.
+//
+// That is not a hypothetical: with `ignore_alpha` at 0.3 the cap was 0.28 and fine;
+// the threshold moved to 0.23 and the cap did not follow, so the login screen shipped
+// with a blurred band across its top and bottom third and a halo around the clock.
+// Nothing failed — same silence as the floor above, from the same two numbers living
+// in two files. Hence a second gate rather than a second comment.
+const scss = readFileSync("ui/greeter/style.scss", "utf8")
+
+const alphasIn = (block, what) => {
+    const found = [...block.matchAll(/rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([0-9.]+)\s*\)/g)].map(m => parseFloat(m[1]))
+    if (found.length === 0) { console.error(`blur-threshold-check: no rgba() alphas in ${what}`); process.exit(1) }
+    return found
+}
+const blockAfter = (marker, what) => {
+    const i = scss.indexOf(marker)
+    if (i < 0) { console.error(`blur-threshold-check: could not find ${what} (looked for ${marker})`); process.exit(1) }
+    const end = scss.indexOf("}", i)
+    return scss.slice(i, end)
+}
+
+// The scrim's gradient: its DARKEST stop is the one that decides.
+const scrimMax = Math.max(...alphasIn(blockAfter(".greeter-scrim {", "the scrim rule"), ".greeter-scrim"))
+// The hero shadow: both layers of it, and they stack with each other as well.
+const heroBlock = blockAfter(".greeter-username {", "the hero text rule")
+const shadowLine = heroBlock.split("\n").find(l => l.includes("text-shadow"))
+if (!shadowLine) { console.error("blur-threshold-check: no text-shadow in the hero text rule"); process.exit(1) }
+const heroAlphas = alphasIn(shadowLine, "the hero text-shadow")
+
+// Alpha compositing, not addition: a_total = 1 − Π(1 − aᵢ)
+const composite = 1 - [scrimMax, ...heroAlphas].reduce((acc, a) => acc * (1 - a), 1)
+
+const greeterRule = rules.find(([, ns]) => ns === "nidara-greeter")
+if (!greeterRule) { console.error("blur-threshold-check: no layer_rule for nidara-greeter to measure the ceiling against"); process.exit(1) }
+const greeterThreshold = parseFloat(greeterRule[2])
+
+// ── And the same threshold from the third side ───────────────────────────────────
+// The two checks above are "thick enough to blur" (the glass) and "thin enough not
+// to" (the scrim + hero shadow). This is a body that is neither painted with the
+// glass token nor meant to stay sharp: the avatar's fallback circle, a plain CSS
+// fill. It has to clear the threshold ALONE.
+//
+// It shipped at 0.10 and appeared to work, because the scrim underneath carried it
+// over the line (1 − 0.84 × 0.90 = 0.244, four thousandths of margin). Capping the
+// scrim took that away and the circle went sharp — a body that stops being glass
+// because a DIFFERENT rule changed. Named explicitly here so the coupling cannot come
+// back silently: if a fill needs the layer to blur behind it, its own alpha says so.
+const avatarBlock = blockAfter(".greeter-avatar-fallback {", "the avatar fallback rule")
+const avatarLine = avatarBlock.split("\n").find(l => /background\s*:/.test(l))
+if (!avatarLine) { console.error("blur-threshold-check: no background in .greeter-avatar-fallback"); process.exit(1) }
+const avatarAlpha = alphasIn(avatarLine, ".greeter-avatar-fallback")[0]
+
+const parts = [`scrim ${scrimMax}`, ...heroAlphas.map(a => `shadow ${a}`)].join(" + ")
+const ceilingOk = composite < greeterThreshold
+console.log(`\nun-blurred paint on the login surfaces (composited): ${parts} = ${composite.toFixed(3)}`)
+console.log(`  ${ceilingOk ? "ok  " : "FAIL"}  vs nidara-greeter ignore_alpha ${greeterThreshold}` +
+            (ceilingOk ? `  — ${(greeterThreshold - composite).toFixed(3)} of headroom`
+                       : `  — AT OR ABOVE IT: the wallpaper behind this paint gets blurred, in a band with a visible edge`))
+if (!ceilingOk) bad++
+
+const avatarOk = avatarAlpha >= greeterThreshold
+console.log(`\nlogin bodies that are NOT painted with --nidara-glass: .greeter-avatar-fallback = ${avatarAlpha}`)
+console.log(`  ${avatarOk ? "ok  " : "FAIL"}  vs nidara-greeter ignore_alpha ${greeterThreshold}` +
+            (avatarOk ? `  — clears it on its own`
+                      : `  — UNDER IT: nothing frosts behind this body unless another layer carries it`))
+if (!avatarOk) bad++
+
 if (bad) {
-    console.error(`\nblur-threshold-check: ${bad} layer rule(s) at or above the glass floor.`)
-    console.error("Either lower the threshold or raise the glass it is measured against — they are one decision.")
+    console.error(`\nblur-threshold-check: ${bad} problem(s).`)
+    console.error("The glass floor, the layer thresholds and the scrim/shadow ceiling are ONE decision:")
+    console.error("what we paint thick enough to frost has to stay above the line, and what we paint")
+    console.error("over bare wallpaper has to stay under it.")
     process.exit(1)
 }
-console.log("\nblur-threshold-check: every layer threshold is under the glass floor.")
+console.log("\nblur-threshold-check: thresholds under the glass floor, un-blurred paint under the thresholds.")
