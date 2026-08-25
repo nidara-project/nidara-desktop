@@ -1030,64 +1030,6 @@ filed, and the fix lands as an update if and when one appears. One occurrence, a
 and no reproduction at will is not a reason to hold a release — it is a reason to keep the core and
 the stacks, which this entry does.
 
-### 94. The two About surfaces were filled, not designed — owner-deferred redesign (2026-08-25)
-
-Nidara has **two** About surfaces and they do not agree about what they are for: the About
-**window** (`surfaces/about/AboutWindow.tsx`, "About This Computer", opened from the system menu)
-and Settings → About (`surfaces/settings/pages/About.tsx`). Owner, after the identity work landed:
-*"no dicen lo mismo o de la misma forma, y en Settings se duplican cosas, sale Hyprland tres
-veces… parece que se han puesto cosas para rellenar, más que con sentido y lógica"*. He is right,
-and this entry is the inventory so the pass that fixes it does not start by re-deriving it.
-
-⚠️ **DEFERRED ON PURPOSE, and not a licence to redecorate.** Both surfaces are correct today and
-neither is urgent. Do NOT touch this as a side quest inside another change: it is a content
-decision (what belongs where, under which name) and it wants to be taken once, deliberately.
-
-**What each surface holds today**
-
-| fact | About window | Settings → About |
-|---|---|---|
-| Nidara Desktop version | row "Nidara Desktop" | row "Version" / subtitle "Nidara Desktop" |
-| OS (`PRETTY_NAME`) | row "Operating system" | row "Operating system" / subtitle = the raw `ID` |
-| Device (hostname) | row "Device" | — |
-| CPU | row | row (different helper, same string) |
-| RAM | row, `Math.round` → **"31 GB"** | row, `toFixed(1)` → **"31.3 GB"** |
-| Graphics (GPU model) | row | — |
-| Kernel / Uptime | rows | rows |
-| Hyprland version | row | row |
-| Session type (wayland) | — | row "Graphics protocol" / subtitle "Session type" |
-| `XDG_CURRENT_DESKTOP` | — | row "Desktop" / subtitle "Window Manager" |
-| "Shell" | — | row, value **"Hyprland WM"**, subtitle "TypeScript → GJS / GTK4" |
-| Update check (GitHub) | — | row, appended when it answers |
-
-**The four concrete defects, worst first**
-
-1. **Hyprland appears three times in Settings** — as the value of the "Shell" row ("Hyprland WM"),
-   as the "Desktop" row (`XDG_CURRENT_DESKTOP`), and as the "Hyprland" version row. Two of the
-   three are also *wrong in kind*: Nidara's shell is not "Hyprland WM" (that row's own subtitle
-   says "TypeScript → GJS / GTK4", describing OUR shell while its value names the compositor), and
-   "Desktop / Window Manager" restates the compositor a third time.
-2. **The same fact renders differently in the two surfaces.** RAM is the provable case: 31 GB in
-   one window and 31.3 GB in the other, from two separate readers of `/proc/meminfo`. The row
-   builders, the labels and the helpers are all duplicated per surface.
-3. **Raw machine values as human text.** Settings' OS row uses `ID` (`endeavouros`, `nidara`) as
-   the subtitle a person reads.
-4. **The split has no rule.** The GPU is only in the window; the update check and the session type
-   are only in Settings; everything else is in both. Nobody decided that — it accreted.
-
-**The constraint the redesign must respect** (`nidara-iso/PRODUCT.md`, and it is what makes this
-worth doing now rather than earlier): **Nidara** is the product/OS and **Nidara Desktop** is the
-component, they carry independent versions, and "Nidara Desktop" is only used where components are
-being discussed. Both surfaces are such places; the header of the About window is not (it prints
-the desktop's name alone — see #93's sibling change, 2026-08-25). A pass that ignores this will
-re-create the stutter that entry removed.
-
-**What the pass has to decide, before moving a single row:** what each surface is FOR. The window
-is the macOS "About This Computer" — the machine and what runs on it, glanceable, no controls.
-Settings → About is a settings page — it can hold the update check and the things a person acts
-on. Once that line exists, most rows sort themselves, and the shared readers (CPU/RAM/kernel/
-uptime/os-release) should be one implementation, not two.
-
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
@@ -3332,3 +3274,4 @@ number is never accidentally reused. 45 items, split out 2026-08-23.
 - **#81** — RESOLVED — a dark step traced every curved edge, and it was `blur:brightness` (2026-08-23) → `tech-debt-resolved.md`
 - **#84** — RESOLVED — one silhouette and one rim idiom for capsule and bubble, and "weaker" was an inference the pixels do not support (2026-08-23) → `tech-debt-resolved.md`
 - **#93** — FIXED same day — About's key column was a constant, and a constant is a locale bug with a delay on it (2026-08-25) → `tech-debt-resolved.md`
+- **#94** — RESOLVED same day — the two About surfaces are a summary and its detail, and one reader answers both (2026-08-25) → `tech-debt-resolved.md`

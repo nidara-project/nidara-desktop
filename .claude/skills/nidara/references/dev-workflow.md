@@ -951,6 +951,24 @@ orphan key left behind by a retired English one, an `en` key missing from `es`, 
 greeter/lockscreen mini-catalog missing a language or a key (those two are duplicated per bundle
 by hand, so their parity is checked rather than assumed).
 
+#### Countable and date-shaped strings go through `Intl`, not through keys
+
+⚠️ **Before adding a key for anything with a number in it, check whether ICU already knows it.**
+GJS's SpiderMonkey ships full ICU, so `Intl.NumberFormat(locale, {style:"unit", unit:"hour",
+unitDisplay:"long"})` and `Intl.ListFormat` render "3 days and 8 hours", "3 días y 8 horas", "3 дня
+и 8 часов", "3 dni i 8 godzin" — correct plural forms in all twelve locales, verified in `gjs`.
+Hand-written keys for day/hour/minute would have needed plural variants that Russian and Polish
+have three of each, and would have been wrong in exactly the locales nobody here can proofread.
+This is how About's uptime row is built (`core/SystemInfo.ts`); `uptime -p`, which it replaced,
+answers in the PROCESS's locale, so a Spanish page read "3 days, 8 hours, 3 minutes".
+
+⚠️ Reaching for it costs one line of `ui/shell/tsconfig.json`, already there:
+`"lib": ["ES2020", "ES2021.Intl", "DOM"]`. `target` stays ES2020 (it is what keeps
+`useDefineForClassFields` off — see `scripts/bundle.sh`), and the ES2020 lib does not DECLARE
+`Intl.ListFormat`. **Keep `DOM` in that list**: naming `lib` at all replaces the default, and
+dropping DOM takes `TextDecoder` with it. esbuild ignores `lib` — the bundle was verified
+byte-identical (same md5) before and after the line.
+
 ### Fonts & CJK variants
 
 The UI font is **Inter** (ThemeManager seeds `Inter 11` into the `font-name` gsetting on first

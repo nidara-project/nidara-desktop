@@ -3,6 +3,15 @@
     "allowJs": true,
     "checkJs": false,
     "jsx": "react",
+    // Default lib for target ES2020 + the ES2021 Intl slice. GJS's SpiderMonkey
+    // ships full ICU — `Intl.ListFormat` and friends work at runtime — but the
+    // ES2020 lib does not DECLARE them, and `target` cannot be raised to reach
+    // them: it is pinned at ES2020 on purpose (it is what keeps
+    // `useDefineForClassFields` off, without which define-semantics would shadow
+    // the property accessors on every GObject subclass — see scripts/bundle.sh).
+    // esbuild reads target/jsx from this file and ignores `lib`, so the bundle is
+    // byte-identical with and without this line (checked).
+    "lib": ["ES2020", "ES2021.Intl", "DOM"],
     "module": "ES2022",
     "moduleResolution": "node",
     "noEmit": true,

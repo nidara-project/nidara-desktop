@@ -1,40 +1,21 @@
-import Gtk from "gi://Gtk?version=4.0"
-import GLib from "gi://GLib"
 import { execAsync } from "../../../../lib/process"
 import { listGroup, createRow, pageBox, staticLabel, onPageShown } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import { readShellVersion } from "../../../core/Paths"
 import hs from "../../../core/HyprlandState"
+import * as sys from "../../../core/SystemInfo"
 
 /**
- * Reads a field from /etc/os-release synchronously.
+ * Settings → About is the DETAIL half of the pair (owner's call, 2026-08-25,
+ * closing debt #94). The About window is the glanceable card — the machine, the
+ * OS, the desktop's version, and a button that lands here; this page is a strict
+ * SUPERSET of it plus the one thing a settings page can hold and a card cannot:
+ * something to act on (the update check).
+ *
+ * Nothing here reads a file or an environment variable itself. Every fact comes
+ * from `core/SystemInfo`, which is what stopped the two surfaces from disagreeing
+ * about the same machine (RAM was 31 GB in one window and 31.3 GB in the other).
  */
-function readOsRelease(field: string): string {
-    try {
-        const [ok, bytes] = GLib.file_get_contents("/etc/os-release")
-        if (!ok) return "Unknown"
-        const content = new TextDecoder().decode(bytes)
-        const match = content.match(new RegExp(`^${field}="?([^"\n]+)"?`, "m"))
-        return match ? match[1].trim() : "Unknown"
-    } catch {
-        return "Unknown"
-    }
-}
-
-/**
- * Reads the first matching line from /proc/cpuinfo.
- */
-function readCpuInfo(): string {
-    try {
-        const [ok, bytes] = GLib.file_get_contents("/proc/cpuinfo")
-        if (!ok) return "Unknown"
-        const content = new TextDecoder().decode(bytes)
-        const match = content.match(/^model name\s*:\s*(.+)$/m)
-        return match ? match[1].trim() : "Unknown"
-    } catch {
-        return "Unknown"
-    }
-}
 
 /**
  * True when `latest` is a strictly newer dotted version than `current`.
@@ -49,35 +30,30 @@ function isNewerVersion(latest: string, current: string): boolean {
     return false
 }
 
-/**
- * Reads total RAM from /proc/meminfo.
- */
-function readTotalRam(): string {
-    try {
-        const [ok, bytes] = GLib.file_get_contents("/proc/meminfo")
-        if (!ok) return "Unknown"
-        const content = new TextDecoder().decode(bytes)
-        const match = content.match(/^MemTotal:\s+(\d+)\s+kB/m)
-        if (!match) return "Unknown"
-        const kb = parseInt(match[1])
-        const gb = (kb / 1024 / 1024).toFixed(1)
-        return `${gb} GB`
-    } catch {
-        return "Unknown"
-    }
+/** Every value on this page goes through the same "" → placeholder contract. */
+const shown = (v: string) => staticLabel(v || t("settings.about.unavailable"))
+
+/** A row whose value arrives later; `SystemInfo` never rejects, so there is no catch. */
+function asyncRow(label: string, subtitle: string, src: Promise<string>) {
+    const lbl = staticLabel("…")
+    src.then(v => { lbl.label = v || t("settings.about.unavailable") })
+    return createRow(label, subtitle, lbl)
 }
 
 export default function AboutPage() {
     const page = pageBox("about-page")
 
     // ── Nidara ──────────────────────────────────────────────────────────
+    // The desktop, and what you can DO about it. It used to also carry a "Shell"
+    // row whose value read "Hyprland WM" while its own subtitle described ours —
+    // one of the three places this page named the compositor. The compositor has
+    // exactly one row now, in Environment, where the other component versions are.
     const { box: shellBox, listBox: shellList } = listGroup(t("settings.about.group.nidara"))
 
     // The row's subtitle names a COMPONENT, so it is the component's full name:
     // this number is the desktop environment's, not the operating system's (the
     // System group below carries that one). nidara-iso/PRODUCT.md draws the line.
     shellList.append(createRow(t("settings.about.version"), "Nidara Desktop", staticLabel(readShellVersion())))
-    shellList.append(createRow(t("settings.about.shell"), t("settings.about.shell.desc"), staticLabel("Hyprland WM")))
 
     // Update check — installed version vs the latest GitHub release. The row is
     // appended only when the check resolves: on network failure or while no
@@ -111,47 +87,45 @@ export default function AboutPage() {
 
     page.append(shellBox)
 
-    // ── Sistema ────────────────────────────────────────────────────────────────
+    // ── System ─────────────────────────────────────────────────────────────────
+    // The machine and the system on it — the About window's block, in the same
+    // order, plus the two it does not show (kernel, uptime). The OS row's subtitle
+    // used to be os-release's raw `ID` ("endeavouros"), a machine value printed at
+    // a person; the value is the OS's own PRETTY_NAME and the subtitle now says
+    // what the value IS.
     const { box: sysBox, listBox: sysList } = listGroup(t("settings.about.group.system"))
 
-    const osName = readOsRelease("PRETTY_NAME")
-    const osId   = readOsRelease("ID")
+    sysList.append(createRow(t("settings.about.device"), t("settings.about.device.desc"), shown(sys.deviceName())))
+    sysList.append(createRow(t("settings.about.os"), t("settings.about.os.desc"), shown(sys.osName())))
+    sysList.append(createRow(t("settings.about.cpu"), t("settings.about.cpu.desc"), shown(sys.cpuModel())))
+    sysList.append(createRow(t("settings.about.ram"), t("settings.about.ram.desc"), shown(sys.totalRam())))
+    sysList.append(asyncRow(t("settings.about.graphics"), t("settings.about.graphics.desc"), sys.graphics()))
+    sysList.append(asyncRow(t("settings.about.kernel"), t("settings.about.kernel.desc"), sys.kernel()))
 
-    sysList.append(createRow(t("settings.about.os"), osId, staticLabel(osName)))
-    sysList.append(createRow(t("settings.about.cpu"), t("settings.about.cpu.desc"), staticLabel(readCpuInfo())))
-    sysList.append(createRow(t("settings.about.ram"), t("settings.about.ram.desc"), staticLabel(readTotalRam())))
-
-    // Kernel — async
-    const kernelLabel = staticLabel("…")
-    sysList.append(createRow(t("settings.about.kernel"), t("settings.about.kernel.desc"), kernelLabel))
-    execAsync(["uname", "-r"]).then(v => { kernelLabel.label = v.trim() }).catch(() => {})
-
-    // Uptime — async, and the one value on this page that is wrong the moment
-    // after it is read. Everything else here is fixed for the session (kernel, CPU,
-    // RAM, OS); this one is a clock, so it gets re-read whenever the page is shown.
+    // Uptime — the one value on this page that is wrong the moment after it is
+    // read. Everything else here is fixed for the session (kernel, CPU, RAM, OS);
+    // this one is a clock, so it gets re-read whenever the page is shown.
     const uptimeLabel = staticLabel("…")
     sysList.append(createRow(t("settings.about.uptime"), t("settings.about.uptime.desc"), uptimeLabel))
     onPageShown(() => {
-        execAsync(["uptime", "-p"]).then(v => { uptimeLabel.label = v.trim().replace(/^up /, "") }).catch(() => {})
+        uptimeLabel.label = sys.uptime() || t("settings.about.unavailable")
     })
 
     page.append(sysBox)
 
-    // ── Entorno ────────────────────────────────────────────────────────────────
+    // ── Environment ────────────────────────────────────────────────────────────
+    // What the desktop runs ON: the compositor, the toolkit, the runtime, and the
+    // display protocol. These are the rows the About window dropped when it became
+    // the summary — diagnostics, not identity — so this is where they live.
+    // `XDG_CURRENT_DESKTOP` is gone: it printed "Hyprland" a third time and told
+    // nobody anything the Hyprland row below does not.
     const { box: envBox, listBox: envList } = listGroup(t("settings.about.group.environment"))
 
-    const sessionType = GLib.getenv("XDG_SESSION_TYPE") || "wayland"
-    const desktopEnv = GLib.getenv("XDG_CURRENT_DESKTOP") || "Hyprland"
-
-    envList.append(createRow(t("settings.about.graphics-protocol"), t("settings.about.graphics-protocol.desc"), staticLabel(sessionType)))
-    envList.append(createRow(t("settings.about.desktop"), t("settings.about.desktop.desc"), staticLabel(desktopEnv)))
-
-    // Hyprland version — async
-    const hyprLabel = staticLabel("…")
-    envList.append(createRow(t("settings.about.hyprland"), t("settings.about.hyprland.desc"), hyprLabel))
-    hs.version().then(v => {
-        hyprLabel.label = v || t("settings.about.unavailable")
-    }).catch(() => { hyprLabel.label = t("settings.about.unavailable") })
+    envList.append(asyncRow(t("settings.about.hyprland"), t("settings.about.hyprland.desc"),
+        hs.version().then(v => v || "").catch(() => "")))
+    envList.append(createRow("GTK", t("settings.about.gtk.desc"), staticLabel(sys.gtkVersion())))
+    envList.append(createRow("GJS", t("settings.about.gjs.desc"), staticLabel(sys.gjsVersion())))
+    envList.append(createRow(t("settings.about.windowing"), t("settings.about.windowing.desc"), shown(sys.sessionType())))
 
     page.append(envBox)
 

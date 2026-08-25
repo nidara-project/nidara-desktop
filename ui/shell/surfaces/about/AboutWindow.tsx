@@ -1,58 +1,16 @@
 import app from "../../../lib/host"
-import System from "system"
 import { setWindowAppId } from "../../../lib/app-id"
 import Gtk from "gi://Gtk?version=4.0"
-import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-import { execAsync } from "../../../lib/process"
+import { NidaraButton, NidaraClamp } from "../../../lib/nidara-kit"
 import IconButton from "../../common/IconButton"
 import status from "../../core/Status"
-import hs from "../../core/HyprlandState"
+import shellActions from "../../core/ShellActions"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import { SHELL_ROOT, readShellVersion } from "../../core/Paths"
 import { safeDisconnect } from "../../core/signals"
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-
-function readOsRelease(field: string): string {
-    try {
-        const [ok, bytes] = GLib.file_get_contents("/etc/os-release")
-        if (!ok) return "Unknown"
-        const text = new TextDecoder().decode(bytes)
-        const m = text.match(new RegExp(`^${field}="?([^"\\n]+)"?`, "m"))
-        return m ? m[1].trim() : "Unknown"
-    } catch { return "Unknown" }
-}
-
-function readCpu(): string {
-    try {
-        const [ok, bytes] = GLib.file_get_contents("/proc/cpuinfo")
-        if (!ok) return "Unknown"
-        const text = new TextDecoder().decode(bytes)
-        const m = text.match(/^model name\s*:\s*(.+)$/m)
-        if (!m) return "Unknown"
-        return m[1].trim()
-            .replace(/\(R\)|\(TM\)/g, "")
-            .replace(/\s+CPU\s+/, " ")
-            .replace(/\s+@\s+[\d.]+GHz/, "")
-            .replace(/\s+/g, " ")
-            .trim()
-    } catch { return "Unknown" }
-}
-
-function readRam(): string {
-    try {
-        const [ok, bytes] = GLib.file_get_contents("/proc/meminfo")
-        if (!ok) return "Unknown"
-        const text = new TextDecoder().decode(bytes)
-        const m = text.match(/^MemTotal:\s+(\d+)\s+kB/m)
-        if (!m) return "Unknown"
-        const gb = Math.round(parseInt(m[1]) / 1024 / 1024)
-        return `${gb} GB`
-    } catch { return "Unknown" }
-}
+import * as sys from "../../core/SystemInfo"
 
 // ── Row builders ───────────────────────────────────────────────────────────────
 
@@ -74,6 +32,25 @@ function readRam(): string {
  */
 const KEY_GUTTER = 8
 
+/**
+ * The card's width, and it is a CEILING as well as a floor.
+ *
+ * `width_request` alone is only the floor: GTK sizes an undecorated window to its
+ * content's NATURAL width, and a `Gtk.Label` reports its whole string as natural
+ * however it ellipsizes. So one long value decided how wide this window was — the
+ * raw GPU row ("Advanced Micro Devices, Inc. [AMD/ATI] Navi 10 [Radeon RX 5600
+ * OEM/5600 XT / 5700/5700 XT]") stretched the card to ~750px on this host and left
+ * every short row swimming in it.
+ *
+ * ⚠️ The obvious fix is the wrong one: `max_width_chars` caps what GTK4 ELLIPSIZES
+ * to, not just what the label requests, so a value of 12 rendered "AMD Ryzen 5 5…"
+ * inside a column with 236px of room going spare (seen on screen before this).
+ * The ceiling has to be imposed by the PARENT, which is what `NidaraClamp` is —
+ * min = max = one constant width, and the labels ellipsize into whatever the row
+ * leaves them.
+ */
+const CARD_WIDTH = 380
+
 function specRow(keyCol: Gtk.SizeGroup, label: string, value: string): Gtk.Box {
     const box = new Gtk.Box({ spacing: KEY_GUTTER, margin_top: 4, margin_bottom: 4 })
     const key = new Gtk.Label({ label, css_classes: ["about-spec-key"], halign: Gtk.Align.START, xalign: 0 })
@@ -83,10 +60,11 @@ function specRow(keyCol: Gtk.SizeGroup, label: string, value: string): Gtk.Box {
     return box
 }
 
-function asyncSpecRow(keyCol: Gtk.SizeGroup, label: string, src: string[] | Promise<string>): Gtk.Box {
+function asyncSpecRow(keyCol: Gtk.SizeGroup, label: string, src: Promise<string>): Gtk.Box {
     const val = new Gtk.Label({ label: "…", css_classes: ["about-spec-val"], halign: Gtk.Align.START, hexpand: true, xalign: 0, ellipsize: 3 })
-    const promise = Array.isArray(src) ? execAsync(src) : src
-    promise.then(v => { val.label = v.trim() || "—" }).catch(() => { val.label = "—" })
+    // `core/SystemInfo` never rejects and answers "" for unknown, so the only
+    // fallback left is the one both surfaces share.
+    src.then(v => { val.label = v || t("settings.about.unavailable") })
     const box = new Gtk.Box({ spacing: KEY_GUTTER, margin_top: 4, margin_bottom: 4 })
     const key = new Gtk.Label({ label, css_classes: ["about-spec-key"], halign: Gtk.Align.START, xalign: 0 })
     keyCol.add_widget(key)
@@ -94,6 +72,9 @@ function asyncSpecRow(keyCol: Gtk.SizeGroup, label: string, src: string[] | Prom
     box.append(val)
     return box
 }
+
+/** A sync value, with the same "" → placeholder contract as the async rows. */
+const shown = (v: string): string => v || t("settings.about.unavailable")
 
 // ── Singleton guard ─────────────────────────────────────────────────────────────
 let _instance: Gtk.Window | null = null
@@ -110,9 +91,6 @@ export default function AboutWindow(): Gtk.Window | null {
         _instance.present()
         return _instance
     }
-
-    const cpu = readCpu()
-    const ram = readRam()
 
     // Every key label joins this, so the value column starts at the same x on
     // every row whatever the locale does to the words. See the note above it.
@@ -135,48 +113,53 @@ export default function AboutWindow(): Gtk.Window | null {
     // versions live — a fact among facts, not part of the brand.
     headerBox.append(new Gtk.Label({ label: "Nidara", css_classes: ["about-shell-name"], halign: Gtk.Align.CENTER }))
 
-    // ── Specs ─────────────────────────────────────────────────────────────────
-    // Device (hostname) first, like GNOME/Windows About — it disambiguates the
-    // machine's name from "Nidara" in the header (which is the desktop, not the box).
+    // ── What this computer is ─────────────────────────────────────────────────
+    // This window is the SHORT one, deliberately: the machine, the system it
+    // runs, and the desktop's own version — the four or five facts somebody
+    // opens "About This Computer" to read. Kernel, uptime, Hyprland, GTK and GJS
+    // used to be here too; they are diagnostics, they belong to the page that can
+    // afford them, and Settings → About now holds a strict SUPERSET of this
+    // window. That is the rule (owner's call, 2026-08-25, closing debt #94):
+    // window = glanceable summary + a way through, page = the whole detail.
+    // macOS draws the same line — "About This Mac" is a card with More Info…
+    // under it, and the full list lives in System Settings.
+    //
+    // Device (hostname) first, like GNOME/Windows About: it disambiguates the
+    // machine's name from "Nidara" in the header, which is the desktop, not the box.
     const specsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_top: 8, margin_bottom: 8, margin_start: 16, margin_end: 16 })
-    specsBox.append(specRow(keyCol, t("settings.about.device"), GLib.get_host_name()))
-    specsBox.append(specRow(keyCol, t("settings.about.cpu"), cpu))
-    specsBox.append(specRow(keyCol, t("settings.about.ram"), ram))
-    specsBox.append(asyncSpecRow(keyCol, t("settings.about.graphics"), ["bash", "-c",
-        "lspci 2>/dev/null | grep -i 'vga\\|3d\\|display' | head -1 | sed 's/.*: //' | sed 's/(.*)//' | xargs || echo '—'"
-    ]))
-    specsBox.append(asyncSpecRow(keyCol, t("settings.about.kernel"), ["uname", "-r"]))
-    specsBox.append(asyncSpecRow(keyCol, t("settings.about.uptime"), ["bash", "-c", "uptime -p | sed 's/^up //'"] ))
+    specsBox.append(specRow(keyCol, t("settings.about.device"), shown(sys.deviceName())))
+    specsBox.append(specRow(keyCol, t("settings.about.cpu"), shown(sys.cpuModel())))
+    specsBox.append(specRow(keyCol, t("settings.about.ram"), shown(sys.totalRam())))
+    specsBox.append(asyncSpecRow(keyCol, t("settings.about.graphics"), sys.graphics()))
 
-    // ── Versions ──────────────────────────────────────────────────────────────
-    const verBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_top: 8, margin_bottom: 8, margin_start: 16, margin_end: 16 })
-    // The two independent versions, adjacent and each saying which thing it counts
-    // — that adjacency is the whole reason this window exists in PRODUCT.md.
+    // ── The two versions ──────────────────────────────────────────────────────
+    // Adjacent and each saying which thing it counts — that adjacency is the
+    // whole reason this window exists in PRODUCT.md.
     //
     // OS: whatever /etc/os-release calls this machine. "Nidara 0.1.0" on the
     // product (the `nidara-release` package owns that file), "Arch Linux" on
     // somebody's own Arch running install.sh — both true, and the second is a
-    // supported outcome, not a fallback: install.sh must never rename anyone's
-    // operating system.
+    // supported outcome, not a fallback.
     //
     // Nidara Desktop: this tree's VERSION in a dev checkout, /usr/share/nidara's
-    // copy when installed. It is a proper noun, so no translation key (same as GTK
-    // and GJS), and it is the one place in this window that name is the right one.
+    // copy when installed. It is a proper noun, so no translation key, and it is
+    // the one place in this window where that name is the right one.
     //
     // Neither number derives from the other, which is why both rows are labelled:
     // "0.1.0" and "0.8.1" under one brand read as a contradiction unless each says
     // what it is counting.
-    verBox.append(specRow(keyCol, t("settings.about.os"), readOsRelease("PRETTY_NAME")))
+    const verBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_top: 8, margin_bottom: 8, margin_start: 16, margin_end: 16 })
+    verBox.append(specRow(keyCol, t("settings.about.os"), shown(sys.osName())))
     verBox.append(specRow(keyCol, "Nidara Desktop", readShellVersion()))
-    verBox.append(asyncSpecRow(keyCol, t("settings.about.hyprland"), hs.version()))
-    // Was a hardcoded `specRow("AGS", "v3 (GJS + GTK4)")`. It stopped being true
-    // the day the shell got its own application host — AGS is now a build-time
-    // tool at most — and a hardcoded string cannot go stale loudly. These two read
-    // the actual runtime. Both labels are proper nouns, so neither needs a
-    // translation key.
-    verBox.append(specRow(keyCol, "GTK", `${Gtk.get_major_version()}.${Gtk.get_minor_version()}.${Gtk.get_micro_version()}`))
-    // GJS packs its version as major*10000 + minor*100 + micro (18801 = 1.88.1).
-    verBox.append(specRow(keyCol, "GJS", `${Math.floor(System.version / 10000)}.${Math.floor(System.version / 100) % 100}.${System.version % 100}`))
+
+    // ── The way through to the detail ─────────────────────────────────────────
+    // Without this the summary is a dead end and the rows it dropped are simply
+    // gone as far as the person reading is concerned. `openSettingsPage` raises
+    // Settings (creating it if needed) and navigates it; the About window stays
+    // open behind it, the same way macOS leaves the card up.
+    const moreBtn = NidaraButton({ label: t("settings.about.more-info"), halign: Gtk.Align.CENTER })
+    moreBtn.margin_top = 16
+    moreBtn.connect("clicked", () => { shellActions.openSettingsPage?.("about") })
 
     // ── Close button ──────────────────────────────────────────────────────────
     // Same kit IconButton as the Settings header close. margin_top 12 + the
@@ -194,12 +177,13 @@ export default function AboutWindow(): Gtk.Window | null {
     closeBtn.margin_top = 12
 
     // ── Card ──────────────────────────────────────────────────────────────────
-    const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, margin_top: 12, margin_bottom: 24, margin_start: 24, margin_end: 24, width_request: 380 })
+    const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, margin_top: 12, margin_bottom: 24, margin_start: 24, margin_end: 24, width_request: CARD_WIDTH })
     card.append(closeBtn)
     card.append(headerBox)
     card.append(specsBox)
     card.append(new Gtk.Separator({ css_classes: ["about-sep"], margin_top: 8, margin_bottom: 8 }))
     card.append(verBox)
+    card.append(moreBtn)
 
     // Window chrome = the SAME CSS glass as Settings (.nidara-window-glass →
     // glass(floating)), NOT a Cairo SquircleContainer. A real window already gets
@@ -209,7 +193,9 @@ export default function AboutWindow(): Gtk.Window | null {
     // border no borderColor tweak can turn off. The CSS route also makes the
     // About follow the user's window-opacity token instead of a hardcoded alpha.
     const glass = new Gtk.Box({ css_classes: ["nidara-window-glass", "about-window-card"] })
-    glass.append(card)
+    // min = max = CARD_WIDTH: the clamp is the ceiling the card's own
+    // `width_request` cannot be (see the note on the constant).
+    glass.append(NidaraClamp(card, CARD_WIDTH + 48, false, CARD_WIDTH + 48))
 
     // ── Window ────────────────────────────────────────────────────────────────
     const win = new Gtk.Window({

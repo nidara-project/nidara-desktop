@@ -134,21 +134,15 @@
     "settings.about.group.environment": "d443a118",
     "settings.about.group.system": "bc0792d8",
     "settings.about.title": "6b21fb79",
-    "settings.about.shell.desc": "a95b4ebe",
     "settings.about.uptime.desc": "2aaa9dff",
-    "settings.about.desktop.desc": "a35e3f13",
     "settings.about.cpu.desc": "b74d0d4b",
-    "settings.about.graphics-protocol.desc": "04313a4f",
     "settings.about.ram.desc": "696a58ed",
     "settings.about.hyprland.desc": "e30a0a59",
     "settings.about.kernel.desc": "ac9b85e8",
     "settings.about.cpu": "ff221d47",
-    "settings.about.desktop": "532c67fe",
     "settings.about.hyprland": "9573c76f",
     "settings.about.kernel": "74808d3d",
     "settings.about.ram": "ac698b84",
-    "settings.about.graphics-protocol": "f600b0a1",
-    "settings.about.shell": "bdc1fd5d",
     "settings.about.os": "5a35209b",
     "settings.about.device": "a5a74a6d",
     "settings.about.uptime": "6aafa80c",
@@ -156,6 +150,14 @@
     "settings.about.unavailable": "d1a17af1",
     "settings.about.graphics": "ab255c27",
     "settings.about.close": "bbfa773e",
+    "settings.about.device.desc": "38499566",
+    "settings.about.os.desc": "0def63b0",
+    "settings.about.graphics.desc": "1650a0da",
+    "settings.about.gtk.desc": "7849b64c",
+    "settings.about.gjs.desc": "20c3c12c",
+    "settings.about.windowing": "300f2134",
+    "settings.about.windowing.desc": "04313a4f",
+    "settings.about.more-info": "72b1821e",
     "settings.about.update": "c85f756a",
     "settings.about.update.up-to-date": "c82b2193",
     "settings.about.update.available.desc": "368da6d5",
@@ -702,68 +704,68 @@
   },
   "locales": {
     "de": {
-      "translated": 698,
-      "of": 698,
+      "translated": 700,
+      "of": 700,
       "untranslated": [],
       "stale": []
     },
     "es": {
-      "translated": 698,
-      "of": 698,
+      "translated": 700,
+      "of": 700,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 698,
-      "of": 698,
+      "translated": 700,
+      "of": 700,
       "untranslated": [],
       "stale": []
     },
     "it": {
-      "translated": 698,
-      "of": 698,
+      "translated": 700,
+      "of": 700,
       "untranslated": [],
       "stale": []
     },
     "ja": {
-      "translated": 698,
-      "of": 698,
+      "translated": 700,
+      "of": 700,
       "untranslated": [],
       "stale": []
     },
     "nl": {
-      "translated": 698,
-      "of": 698,
+      "translated": 700,
+      "of": 700,
       "untranslated": [],
       "stale": []
     },
     "pl": {
-      "translated": 698,
-      "of": 698,
+      "translated": 700,
+      "of": 700,
       "untranslated": [],
       "stale": []
     },
     "pt-BR": {
-      "translated": 698,
-      "of": 698,
+      "translated": 700,
+      "of": 700,
       "untranslated": [],
       "stale": []
     },
     "pt-PT": {
-      "translated": 698,
-      "of": 698,
+      "translated": 700,
+      "of": 700,
       "untranslated": [],
       "stale": []
     },
     "ru": {
-      "translated": 698,
-      "of": 698,
+      "translated": 700,
+      "of": 700,
       "untranslated": [],
       "stale": []
     },
     "zh-CN": {
-      "translated": 698,
-      "of": 698,
+      "translated": 700,
+      "of": 700,
       "untranslated": [],
       "stale": []
     }

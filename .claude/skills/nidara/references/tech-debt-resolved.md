@@ -1739,3 +1739,82 @@ its error is 0.0043 px at r=32 versus the Bézier fit's 0.0112 px — 2.6× clos
 vertices sit exactly on the curve while the fit runs consistently inside it. Unifying made the
 bubble marginally *less* faithful to the ideal. At two orders of magnitude below a pixel that
 buys coherence for nothing, but do not let a later reader think the chords were the sloppy option.
+
+---
+
+### 94. The two About surfaces were filled, not designed — RESOLVED the same day (2026-08-25)
+
+Filed as deferred in the morning and taken deliberately in the afternoon, which is what it asked
+for: the owner picked the rule before a single row moved.
+
+**THE RULE, and everything else follows from it.** The About **window** is the glanceable summary
+and Settings → **About** is the detail — macOS's own split, where "About This Mac" is a card with
+`More Info…` under it and the full list lives in System Settings. Two consequences that are worth
+stating as rules rather than as history:
+
+- **The page is a strict SUPERSET of the window.** No fact may exist in the window and not in the
+  page. That is what makes the summary safe to trim: nothing is lost, it is one click away.
+- **The window has exactly one way through** — a `More information…` button wired to
+  `shellActions.openSettingsPage("about")`. Without it, trimming the card just deletes information
+  as far as the person reading is concerned.
+
+Today: the window holds Device / CPU / RAM / Graphics, then the two versions (Operating system,
+Nidara Desktop) and the button. The page holds all of those plus Kernel, Uptime, Hyprland, GTK,
+GJS, Windowing system, and the one thing a card cannot carry — the update check.
+
+**One reader for both surfaces: `ui/shell/core/SystemInfo.ts`.** ⚠️ This is the rule most likely to
+be broken by an innocent-looking change: *a surface asks, it never reads.* The two surfaces each
+had their own copy of the same regexes over /proc and /etc, and the divergence reached the user
+before it reached us — the same machine said **31 GB** in one window and **31.3 GB** in the other,
+because one rounded `MemTotal` and the other printed a decimal. **The duplication that produced
+that was in the FORMATTING**, so formatting lives in the reader too, not at the call site. Unknown
+is the empty string, never a human word; both surfaces render `settings.about.unavailable`.
+
+The four defects the inventory listed, and what closed each:
+
+1. **Hyprland three times in Settings** — the "Shell" row (whose value said "Hyprland WM" while its
+   own subtitle described OUR shell) and the `XDG_CURRENT_DESKTOP` row are both gone. The
+   compositor has one row, in Environment, beside the other component versions.
+2. **The same fact rendering differently** — `SystemInfo` (above). RAM is one implementation and
+   reports **installed** memory: `MemTotal` is what the kernel can hand out, so the raw number
+   makes the desktop claim the person has less RAM than they bought (32778376 kB = 31.26 GiB of 32
+   GiB). Ceiling to the whole GiB restores it; the reserve is a few percent, far under the 1 GiB it
+   would take to round to the wrong number.
+3. **Raw machine values as human text** — os-release's `ID` ("endeavouros") is gone from the OS
+   row's subtitle, and `XDG_SESSION_TYPE` is normalised to "Wayland"/"X11" in the reader, so no
+   surface can reintroduce the lowercase env-var spelling.
+4. **The split had no rule** — it has one now, at the top of this entry.
+
+**Three traps found while doing it, each of which cost a build:**
+
+⚠️ **`width_request` on a window's content is a FLOOR, and `max_width_chars` is not the ceiling.**
+GTK sizes an undecorated window to its content's NATURAL width, and a `Gtk.Label` reports its whole
+string as natural however it ellipsizes — so the raw GPU string ("Advanced Micro Devices, Inc.
+[AMD/ATI] Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700 XT]") stretched the 380px card to ~750px.
+The obvious fix is wrong: **GTK4's `max-width-chars` caps what the label ELLIPSIZES to**, not just
+what it requests, so a value of 12 rendered "AMD Ryzen 5 5…" with 236px of column going spare (seen
+on screen). The ceiling has to come from the PARENT — `NidaraClamp(card, W, false, W)`, min = max —
+and then the labels ellipsize into whatever the row leaves them.
+
+⚠️ **An unanchored vendor regex matched inside another word.** `/ati/i` for AMD hits
+"Corpor**ati**on", so every Intel GPU came back branded AMD. It was caught by running `gpuName()`
+over six real lspci strings (AMD, NVIDIA, two Intel, virtio, VMware) — this host has an AMD card,
+so the machine that wrote the function could never have seen the bug. Ask Intel BEFORE AMD, and
+anchor every alternative with `\b`.
+
+⚠️ **`uptime -p` speaks the PROCESS's locale, not the desktop's** — a Spanish page printed "3 days,
+8 hours, 3 minutes". It is also the row no `t()` key fixes cheaply, because day/hour/minute need
+plural forms and Russian and Polish have three each. **GJS's `Intl` is ICU and already knows all of
+them**: `Intl.NumberFormat(loc, {style:"unit", unit:"hour", unitDisplay:"long"})` +
+`Intl.ListFormat` gives "3 días y 8 horas", "3 дня и 8 часов", "3 dni i 8 godzin" — zero new
+translation keys. Reach for `Intl` before inventing keys for anything countable or date-shaped.
+
+⚠️ Using it needed one line of `ui/shell/tsconfig.json`: `"lib": ["ES2020", "ES2021.Intl", "DOM"]`,
+because `target` is pinned at ES2020 for an unrelated reason (`useDefineForClassFields`) and the
+ES2020 lib does not DECLARE `Intl.ListFormat`. **`DOM` must stay in that list** — dropping it takes
+`TextDecoder` with it. esbuild ignores `lib`, and the bundle was verified byte-identical (same
+md5) before and after the line.
+
+Verified on screen, in Spanish, on the real shell: both surfaces agreeing on 32 GB, Hyprland
+appearing once, "Tiempo activo · 3 días y 8 horas", and the card holding a constant width with the
+GPU value ellipsized in the summary and complete in the page.
