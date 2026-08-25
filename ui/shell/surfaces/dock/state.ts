@@ -100,9 +100,12 @@ export const pinnedState = {
 // launcher): Settings first, then the terminal. List only apps install.sh
 // guarantees; the dock skips any id that doesn't resolve to an installed app, so
 // an optional app shipped only by the ISO (e.g. a browser) is safe to add here
-// too. Applied in memory only — persisted the first time the user pins/unpins,
+// too. `nidara-installer` is present on the live ISO medium but absent on an
+// installed system; `pruneOrphanedPins` (in DockCore.tsx) prunes pins that do not
+// resolve to an installed app, so on an installed system it safely vanishes.
+// Applied in memory only — persisted the first time the user pins/unpins,
 // after which it stops applying.
-const DEFAULT_PINNED = ["nidara-settings", "kitty"]
+const DEFAULT_PINNED = ["nidara-settings", "kitty", "nidara-installer"]
 
 const sanitizePinned = (raw: string[]) =>
     [...new Set(raw)]
