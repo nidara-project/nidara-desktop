@@ -1,8 +1,7 @@
-// Shared installer state — collects user answers across flow steps.
+// Answers collected by the installer steps before execution.
 //
-// In-memory state only. Passwords are never written to disk or logs in plaintext.
-// The collected answers are consumed by `lib/plan.ts` (T5) to generate the
-// archinstall configuration and credentials files.
+// Kept in memory — not written to disk or logged, because the account step
+// collects a password and nothing should persist it until archinstall runs.
 
 export interface DiskAnswer {
   name: string
@@ -18,33 +17,24 @@ export interface AccountAnswer {
   password: string
 }
 
-export interface InstallerAnswers {
+export interface Answers {
   disk: DiskAnswer | null
   account: AccountAnswer | null
 }
 
-const _answers: InstallerAnswers = {
+const _answers: Answers = {
   disk: null,
   account: null,
 }
 
-const _listeners = new Set<() => void>()
-
-export function getAnswers(): InstallerAnswers {
+export function getAnswers(): Readonly<Answers> {
   return _answers
 }
 
-export function setDiskAnswer(disk: DiskAnswer | null) {
+export function setDiskAnswer(disk: DiskAnswer | null): void {
   _answers.disk = disk
-  _listeners.forEach(fn => fn())
 }
 
-export function setAccountAnswer(account: AccountAnswer | null) {
+export function setAccountAnswer(account: AccountAnswer | null): void {
   _answers.account = account
-  _listeners.forEach(fn => fn())
-}
-
-export function onAnswersChanged(fn: () => void): () => void {
-  _listeners.add(fn)
-  return () => _listeners.delete(fn)
 }

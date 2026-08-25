@@ -13,7 +13,8 @@ import { Flow, type Step } from "../lib/flow"
 import { WelcomeStep } from "../steps/welcome"
 import { DiskStep } from "../steps/disk"
 import { AccountStep } from "../steps/account"
-import { PendingStep } from "../steps/pending"
+import { SummaryStep } from "../steps/summary"
+import { RunStep } from "../steps/run"
 import { t } from "../lib/i18n"
 
 /**
@@ -64,7 +65,13 @@ export interface InstallerWindowOpts {
 }
 
 export function InstallerWindow(opts: InstallerWindowOpts): Gtk.Window {
-  const steps: Step[] = [WelcomeStep(), DiskStep(), AccountStep(), PendingStep()]
+  const steps: Step[] = [
+    WelcomeStep(),
+    DiskStep(),
+    AccountStep(),
+    SummaryStep(),
+    RunStep(),
+  ]
   const flow = Flow(steps)
 
   const win = new Gtk.Window({
@@ -121,7 +128,8 @@ export function InstallerWindow(opts: InstallerWindowOpts): Gtk.Window {
     const step = flow.current()
     const index = steps.indexOf(step) + 1
     head.set(step.title, `${index} ${t("of")} ${steps.length}`)
-    back.visible = flow.canBack()
+    back.visible = flow.canBack() && step.id !== "run"
+    next.visible = step.id !== "run"
     next.set_label(step.nextLabel)
     // A step that cannot be left forward disables the button rather than hiding
     // it: the disabled control is what says "there is a way on, and it is not
