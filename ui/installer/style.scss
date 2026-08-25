@@ -31,8 +31,17 @@ window.nidara-installer-window {
   --nidara-radius-md:       14px;
   --nidara-radius-lg:       20px;
 
-  background-color: rgba(20, 20, 22, 0.86);
-  border-radius: var(--nidara-radius-lg);
+  // The glass itself, painted by `.nidara-window-glass` on the root BOX rather
+  // than on this node — the same arrangement About and Settings use, and not a
+  // stylistic echo: the toplevel stays fully transparent so the compositor has a
+  // low-alpha region to blur, and the card inside is what carries the colour.
+  // Painting an 0.86 background on the window instead gave a pane you could read
+  // the file manager through, unblurred (seen 2026-08-25, before this changed).
+  --nidara-bg:              rgba(22, 22, 34, 0.5);
+  --nidara-edge:            1px solid rgba(255, 255, 255, 0.14);
+  --nidara-shadow-lg:       0 8px 24px rgba(0, 0, 0, 0.40), 0 2px 6px rgba(0, 0, 0, 0.24);
+
+  background-color: transparent;
   color: var(--nidara-text);
 }
 
@@ -45,13 +54,15 @@ window.nidara-installer-window.installer-light {
   --nidara-text-dim:        rgba(0, 0, 0, 0.72);
   --nidara-surface:         rgba(0, 0, 0, 0.06);
   --nidara-surface-raised:  rgba(0, 0, 0, 0.10);
-
-  background-color: rgba(246, 246, 248, 0.9);
+  --nidara-bg:              rgba(246, 246, 250, 0.62);
+  --nidara-edge:            1px solid rgba(0, 0, 0, 0.10);
 }
 
 // ── The frame ────────────────────────────────────────────────────────────────
 window.nidara-installer-window {
-  .installer-root { padding: 0; }
+  // The card. `.nidara-window-glass` (the kit's, @include glass(floating)) is
+  // what paints it; only the radius clip is ours.
+  .installer-root { padding: 0; border-radius: var(--nidara-radius-lg); }
 
   .installer-header {
     padding: 18px 28px 12px 28px;

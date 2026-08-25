@@ -103,7 +103,11 @@ export function InstallerWindow(opts: InstallerWindowOpts): Gtk.Window {
   // window adds margin and never re-flows the prose.
   const content = NidaraClamp(flow.widget, CONTENT_WIDTH, true, CONTENT_WIDTH)
 
+  // The glass is painted HERE, not on the window: the toplevel stays transparent
+  // so the compositor has something to blur, which is how About and Settings are
+  // built and why they look like Nidara rather than like a dark rectangle.
   const root = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+  root.add_css_class("nidara-window-glass")
   root.add_css_class("installer-root")
   root.append(head.widget)
   root.append(content)
