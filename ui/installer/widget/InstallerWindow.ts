@@ -11,6 +11,7 @@ import { setWindowAppId } from "../../lib/app-id"
 import { NidaraButton, NidaraClamp } from "../../lib/nidara-kit"
 import { Flow, type Step } from "../lib/flow"
 import { WelcomeStep } from "../steps/welcome"
+import { DiskStep } from "../steps/disk"
 import { PendingStep } from "../steps/pending"
 import { t } from "../lib/i18n"
 
@@ -62,7 +63,7 @@ export interface InstallerWindowOpts {
 }
 
 export function InstallerWindow(opts: InstallerWindowOpts): Gtk.Window {
-  const steps: Step[] = [WelcomeStep(), PendingStep()]
+  const steps: Step[] = [WelcomeStep(), DiskStep(), PendingStep()]
   const flow = Flow(steps)
 
   const win = new Gtk.Window({

@@ -14,7 +14,7 @@ export interface Step {
   /** Shown in the window's header while this step is current. */
   title: string
   /** Built once, the first time the step is reached. */
-  build(): Gtk.Widget
+  build(notifyReady?: () => void): Gtk.Widget
   /**
    * Label for the button that leaves this step forward. Every step says it in
    * its own words — "Continue" on a question, "Install" on the last summary —
@@ -61,7 +61,7 @@ export function Flow(steps: Step[]): FlowResult {
   function show(i: number) {
     const step = steps[i]
     if (!built.has(step.id)) {
-      stack.add_named(step.build(), step.id)
+      stack.add_named(step.build(changed), step.id)
       built.add(step.id)
     }
     // Backwards moves slide the other way, which is the whole reason the stack
