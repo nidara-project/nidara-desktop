@@ -21,6 +21,21 @@ window#nidara-about,
     background: transparent;
     background-color: transparent;
 
+    // ⚠️ EVERY label here needs the token EXPLICITLY. This window was the one
+    // surface of the shell whose text was left to GTK's default colour, and in
+    // LIGHT mode that default is white — so the card went white-on-near-white and
+    // could not be read at all. It survived because the failure is invisible in
+    // dark mode (white is what you wanted anyway) and because the neighbouring
+    // window hides it: Settings colours every string it draws, so nobody looking
+    // at the two side by side would guess the difference is in the sheet.
+    //
+    // 🔑 The tell, if it happens again on another surface: the LOGO flipped
+    // correctly to black while the text stayed white. `.about-logo` is the only
+    // node here that named `var(--nidara-text)`, which is the proof the token was
+    // right and the labels simply were not asking for it.
+    color: var(--nidara-text);
+    label { color: inherit; }
+
     .about-logo {
         margin-bottom: 8px;
         color: var(--nidara-text);   /* recolours the symbolic Nidara mark (dark/light) */

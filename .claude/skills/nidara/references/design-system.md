@@ -993,6 +993,31 @@ on `LockOverlay()`, the fallback, which paints the wallpaper itself too. The rul
 paths, predated the rename, and read as evidence that the lock gets compositor blur; it was removed
 2026-08-23. The gate still names `nidara-lock` explicitly, so a re-add is caught rather than
 silently measured against a floor that means nothing to it.
+⚠️ **The threshold cuts BOTH ways, and the second way shipped a bug.** Everything above asks
+whether our glass is thick enough to still be blurred. The opposite question — is everything we
+paint over BARE wallpaper thin enough to stay under the line? — has exactly one place it matters,
+the login surfaces, because they are the only ones that put translucent paint straight onto the
+wallpaper with no glass body: `.greeter-scrim` (a full-screen gradient) and the hero's
+`text-shadow` on date/clock/username, which is painted **over** the scrim and therefore composites
+with it:
+
+```
+a_total = 1 − Π(1 − aᵢ)     must stay < ignore_alpha (0.23)
+```
+
+Above that line Hyprland blurs the wallpaper behind the paint — and because a gradient crosses the
+number somewhere down the screen, what you get is a frosted BAND ending in a hard edge, plus a
+frosted halo the shape of the clock's shadow. That is not hypothetical: the block was written
+against `ignore_alpha = 0.3` and capped at 0.28, the threshold later moved to 0.23 (chasing the
+glass down to `LOCK_GLASS` 0.24) and the cap did not follow. Measured in a VM 2026-08-25 the
+boundary sat at 85.8 % of screen height — exactly where 0.16 → 0.28 crosses 0.23. Now: scrim
+0.13/0.08, hero shadow 0.05 + 0.04, composite **0.207**, and `blur-threshold-check.mjs` computes
+that sum and fails on it.
+🔑 **The consequence to accept before raising any of them again:** this ceiling is what protects the
+hero on a LIGHT wallpaper, and it is now much thinner than the 0.28 that was measured as necessary
+in 2026-08-09. More protection means a different mechanism — a glass body for the hero (it
+deliberately has none) or frosting the whole wallpaper uniformly — not a bigger number.
+
 ⚠️ **Only the dock can take a high value, and the reason is animation.** The surface alpha during a
 `ScaleRevealer` close is `glass × widget-opacity`, so the blur pops off at `threshold / glass` — 4%
 opacity at 0.01, but 96% at 0.23, i.e. in the first frames of every close. The bar (which hosts
@@ -1017,7 +1042,7 @@ background, and `xray` is off.
 
 | Surface kind | Knob | Value here | Practical floor for the glass |
 |---|---|---|---|
-| Layer (bar, dock, island) | `ignore_alpha` per `layer_rule` | 0.01 bar/island, **0.23 dock**, 0.04 app-grid, 0.3 greeter | gated by `blur-threshold-check`; there is deliberately no lock rule |
+| Layer (bar, dock, island) | `ignore_alpha` per `layer_rule` | **0.23** on all five (bar, island, dock, app-grid, greeter) | gated by `blur-threshold-check` from BOTH sides; there is deliberately no lock rule |
 | Popup of a layer (tooltip, dock menu) | `popups_ignorealpha` (global) | 0.30 | ≈0.38 (`NidaraTheme.popoverAlpha`) |
 | Popup of a window (Settings dropdown) | `decoration:blur:popups` + same 0.30 | 0.30 | ≈0.38 |
 
@@ -1287,7 +1312,8 @@ greeter the numbers are: shadow `alpha 0.18` = 45.9/255 against the layer's `ign
 numbers (2026-08-24), so this is now the same tight configuration the dock has lived on since #237,
 not a roomy one. The lockscreen cannot be affected at all (no compositor blur;
 it paints its own). `scripts/ci/blur-threshold-check.mjs` guards the *other* end of that coupling —
-a threshold reaching the glass FLOOR, which kills the blur — and knows nothing about shadows.
+a threshold reaching the glass FLOOR, which kills the blur — and, since 2026-08-25, the login
+surfaces' un-blurred paint as well (below). It still knows nothing about a WIDGET's drop shadow.
 
 🔑 **The bar capsules turned out to be the strongest case, not the marginal one, and the reason is
 geometric.** They are PILLS, so `radius = height/2`, so `t` collapses to `0.5 × FLANK_SPREAD` and
@@ -1541,7 +1567,7 @@ have been found by reading the code, and it was not in the lock's own rendering 
 appeared on the first offscreen render of the textureless case. When one consumer of a painter
 is opaque and another is not, render the transparent one.
 
-### Bare text on the wallpaper: the scrim, and the 0.3 ceiling that governs it
+### Bare text on the wallpaper: the scrim, and the threshold that governs it
 
 The hero date, the clock and the username are the only text on either screen with **no glass
 behind them**, and on a light wallpaper they do not dim — they vanish. Rendered on an
@@ -1555,15 +1581,22 @@ leans on a shadow with a slight dim, and none of the four leaves the text bare. 
 is stronger at the ends (where the clock and the power bar live) and lighter through the
 middle, so the wallpaper survives where nothing has to be read over it.
 
-🔑 **The 0.28 peak is not a taste value — it is what keeps the two screens identical, and it
-is the single most useful number to know about this pair.** The greeter is a *transparent*
-layer over awww's wallpaper carrying `blur = true, ignore_alpha = 0.3`
-(`config/greetd/hyprland-greeter.lua`); the lockscreen paints its *own* wallpaper and gets no
-compositor blur at all. **So any pixel of ours above 0.3 alpha has blurred wallpaper behind it
-on the login screen and sharp wallpaper on the lock screen.** Two surfaces, one stylesheet,
-same declaration, different result — and nothing warns you. That ceiling is why the shadow
-cannot simply be made stronger (a convincing one wants 0.5–0.6), and it is the first thing to
-check before adding any translucent element to this sheet.
+🔑 **The peak is not a taste value — it is the blur threshold, and it MOVED.** The greeter is a
+*transparent* layer over awww's wallpaper (`config/greetd/hyprland-greeter.lua`); the lockscreen
+paints its *own* wallpaper and gets no compositor blur at all. **So any pixel of ours at or above
+that layer's `ignore_alpha` has blurred wallpaper behind it on the login screen and sharp
+wallpaper on the lock screen.** Two surfaces, one stylesheet, same declaration, different result
+— and nothing warned you until 2026-08-25.
+
+⚠️ **This paragraph said 0.3 and 0.28 for two months after the threshold became 0.23**, and the
+sheet believed it: the login screen shipped with a frosted band across its top and bottom third,
+edged where the gradient crossed the line, and a halo around the clock. The live numbers, the
+compositing rule that governs them (the scrim and the shadow COMPOUND), and the CI gate that now
+computes the sum are under "Blur is per SURFACE" above — **read them there, they are not repeated
+here on purpose**. What belongs here is the design consequence: this ceiling is why the shadow
+cannot simply be made stronger (a convincing one wants 0.5–0.6), it is now thinner than the 0.28
+this section was written around, and it is the first thing to check before adding any translucent
+element to this sheet.
 
 ⚠️ A full-size child of a `Gtk.Overlay` **takes input by default**. The scrim sets
 `can_target: false` in both bundles; without it, it swallows every click meant for the card.
@@ -1984,6 +2017,21 @@ looks the same in both modes.
 The split that made it diagnosable: the same ghost's **Cairo** parts stayed correct
 throughout, because they read `Theme.chromeIsDark` directly. Text wrong, EQ bars right ⇒ the
 fault is in CSS inheritance, not in the theme.
+
+🔑 **Second instance, same family, found the same way (2026-08-25): the About window.** It was
+the one surface of the shell that declared no text colour at all, so every label fell back to
+GTK's default — white — and in LIGHT mode the card rendered white-on-near-white: the whole strip
+measured **2.68:1** of dynamic range, i.e. below the 4.5:1 minimum even between its most extreme
+pixels. Fixed with `color: var(--nidara-text)` + `label { color: inherit }` on the window scope
+(`_about.scss`), which reads 20:1 after.
+
+⚠️ **The tell to remember, because it is what makes this class findable:** the LOGO flipped to
+black correctly while the text stayed white. `.about-logo` was the only node in the sheet naming
+`var(--nidara-text)` — so the token was right, the mode was right, and the labels simply were not
+asking. When one element of a surface follows the mode and its neighbours do not, suspect an
+un-declared colour before suspecting the theme. Settings and the alert dialogs were never exposed
+(they colour every string they draw), which is also why the two windows side by side did not read
+as a difference in the STYLESHEET.
 
 So: **any label class used inside a capsule declares its own `color`** — `.bar-widget-label`
 does now. Do not rely on an ancestor rule for anything a ghost can clone.
