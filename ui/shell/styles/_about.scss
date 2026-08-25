@@ -48,19 +48,15 @@ window#nidara-about,
         letter-spacing: 0.02em;
     }
 
-    .about-os-name {
-        font-size: $fs-small;
-        font-weight: $fw-regular;
-        opacity: 0.7;
-    }
-
     .about-spec-key {
         font-size: $fs-caption;
         font-weight: $fw-medium;
         opacity: 0.55;
-        // TWIN of KEY_COL in AboutWindow.tsx — move the two together. Its comment
-        // carries the measurement (92 fits "Nidara Desktop", 80 did not).
-        min-width: 92px;
+        // FLOOR only. The real width comes from a Gtk.SizeGroup in
+        // AboutWindow.tsx (the widest key in the running locale — 53px in
+        // Chinese, 150px in French); this keeps the shortest columns from
+        // crowding their values.
+        min-width: 80px;
     }
 
     .about-spec-val {

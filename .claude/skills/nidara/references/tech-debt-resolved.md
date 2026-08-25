@@ -18,6 +18,36 @@ one of these describes, read it first.
 
 ---
 
+### 93. About's key column was a fixed width — FIXED the same day it was found (2026-08-25)
+
+`AboutWindow`'s spec rows are `[key | value]`, and the key label sat on a hardcoded 80px width
+request. A key WIDER than that is not clipped here: it pushes its own value right, so that one
+row stops lining up with the rest of the block.
+
+Measured with `text-budget.js`'s rig re-pointed at this window's scope (shipped font, all twelve
+locales), the widest key per locale runs from **53px (zh-CN)** to **150px (fr "Temps de
+fonctionnement", pt-PT)**, with **English at 102px** once "Operating system" joined the block.
+So the window was aligned in the language it is developed in and ragged in nine of the other
+eleven — the failure mode nobody sees, because English fit.
+
+**The fix is a `Gtk.SizeGroup` (HORIZONTAL) that every key label joins**, created per window (the
+window is create+destroy — a module-level group would hold refs to destroyed labels and carry
+stale widths into the next open). The column is then the widest key in whatever locale is running,
+with `.about-spec-key`'s `min-width` left as a FLOOR so the 53px Chinese column does not crowd its
+values, plus an 8px gutter so the longest key never touches its own value.
+
+⚠️ **The rule that survives: a fixed width on a label that carries a translated string is a locale
+bug with a delay on it.** It was found only because a new English row ("Nidara Desktop", 89px)
+happened to be the first English key over the old number — the nine broken locales had been
+shipping for months. Where GTK can measure it for you (`Gtk.SizeGroup`, `Gtk.Grid`), let it.
+
+⚠️ And the `text-budget` CI gate does NOT cover this class, by construction: it walks slots whose
+width is a hard constant and whose overflow CLIPS (the 250px Settings sidebar). These rows grow
+instead, so nothing fails — it just looks wrong. Catching it would need a different assertion
+("does every key fit its column"), not a different budget.
+
+---
+
 ### 7. `pageHeader()` removed — RESOLVED
 Settings page titles live in the **window header** as a breadcrumb (driven by
 `Settings.tsx`, shown via `NidaraWindow`'s `headerTitle`). The in-body `pageHeader()`

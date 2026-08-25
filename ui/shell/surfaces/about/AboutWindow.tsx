@@ -15,8 +15,6 @@ import { safeDisconnect } from "../../core/signals"
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-/** The product's name, as the header prints it and as /etc/os-release spells it. */
-const BRAND = "Nidara"
 
 function readOsRelease(field: string): string {
     try {
@@ -26,27 +24,6 @@ function readOsRelease(field: string): string {
         const m = text.match(new RegExp(`^${field}="?([^"\\n]+)"?`, "m"))
         return m ? m[1].trim() : "Unknown"
     } catch { return "Unknown" }
-}
-
-/**
- * The line under the brand: what this computer's OS calls itself, minus what the
- * brand line above already said.
- *
- * PRETTY_NAME is "Nidara 0.1.0" on the product (the `nidara-release` package owns
- * /etc/os-release) and "Arch Linux" on somebody's own Arch running install.sh —
- * both true, and the second one is a supported outcome, not a fallback. Printing
- * it whole would read "Nidara / Nidara 0.1.0" on the machine we ship, so when the
- * OS IS ours only the part the brand does not carry survives: "Nidara / 0.1.0",
- * the same shape as macOS's "macOS Sequoia / Version 15.1".
- *
- * The version this leaves is the PRODUCT's, and it is unrelated to the "Nidara
- * Desktop" row further down — different thing, different cadence, which is why
- * that row is labelled and this line is not. See nidara-iso/PRODUCT.md.
- */
-function osHeaderLine(): string {
-    const pretty = readOsRelease("PRETTY_NAME")
-    if (!pretty.startsWith(BRAND)) return pretty
-    return pretty.slice(BRAND.length).trim() || pretty
 }
 
 function readCpu(): string {
@@ -80,45 +57,40 @@ function readRam(): string {
 // ── Row builders ───────────────────────────────────────────────────────────────
 
 /**
- * Width of the key column, in px, and it has a TWIN: `.about-spec-key`'s
- * `min-width` in `_about.scss`. Both are set because the request keeps the
- * column standing if the sheet ever fails to load; move them together.
+ * The key column is not a fixed width: every key label joins a horizontal
+ * `Gtk.SizeGroup`, so the column IS the widest key, in whatever language the
+ * shell happens to be running.
  *
- * 92, not the old 80, because "Nidara Desktop" measures 89px at $fs-caption in
- * the shipped font (`scripts/dev/text-budget.js`'s rig, run against this window's
- * scope) — a key wider than the column pushes its own value right and that row
- * alone stops lining up with the others. Every English key fits either number;
- * this one is the first that did not.
+ * It used to be a constant, and a constant is a locale bug with a delay on it.
+ * Measured (`text-budget.js`'s rig, re-pointed at this window's scope, shipped
+ * font): the widest key is 53px in Chinese, 102px in English — "Operating
+ * system" — and 150px in French ("Temps de fonctionnement"). Against a fixed 80
+ * the block was aligned in English and ragged in nine of the twelve locales,
+ * because an over-wide key is not clipped here: it pushes its own value right and
+ * that row alone falls out of line. Nobody saw it because English fit.
  *
- * ⚠️ Longer localised keys already exceed BOTH (French "Temps de fonctionnement"
- * needs 150px), so in those locales the column is ragged today. That is
- * pre-existing and is tech-debt #93, not something this constant can fix: the
- * column would have to become the widest translated key, or the keys would have
- * to ellipsize.
- */
-const KEY_COL = 92
-
-/**
- * Gutter between the key and its value. It used to be zero, and the gap you saw
- * was whatever slack the key left inside KEY_COL — so the longest key got NO gap
- * at all: "Nidara Desktop0.8.1" (89px of key in a 92px column). Real spacing puts
- * the value column at KEY_COL + this for every row, longest key included.
+ * `.about-spec-key`'s `min-width` stays as the FLOOR (a Chinese column of 53px
+ * would crowd the values); the size group only ever grows past it.
  */
 const KEY_GUTTER = 8
 
-function specRow(label: string, value: string): Gtk.Box {
+function specRow(keyCol: Gtk.SizeGroup, label: string, value: string): Gtk.Box {
     const box = new Gtk.Box({ spacing: KEY_GUTTER, margin_top: 4, margin_bottom: 4 })
-    box.append(new Gtk.Label({ label, css_classes: ["about-spec-key"], halign: Gtk.Align.START, width_request: KEY_COL, xalign: 0 }))
+    const key = new Gtk.Label({ label, css_classes: ["about-spec-key"], halign: Gtk.Align.START, xalign: 0 })
+    keyCol.add_widget(key)
+    box.append(key)
     box.append(new Gtk.Label({ label: value, css_classes: ["about-spec-val"], halign: Gtk.Align.START, hexpand: true, xalign: 0, ellipsize: 3 }))
     return box
 }
 
-function asyncSpecRow(label: string, src: string[] | Promise<string>): Gtk.Box {
+function asyncSpecRow(keyCol: Gtk.SizeGroup, label: string, src: string[] | Promise<string>): Gtk.Box {
     const val = new Gtk.Label({ label: "…", css_classes: ["about-spec-val"], halign: Gtk.Align.START, hexpand: true, xalign: 0, ellipsize: 3 })
     const promise = Array.isArray(src) ? execAsync(src) : src
     promise.then(v => { val.label = v.trim() || "—" }).catch(() => { val.label = "—" })
     const box = new Gtk.Box({ spacing: KEY_GUTTER, margin_top: 4, margin_bottom: 4 })
-    box.append(new Gtk.Label({ label, css_classes: ["about-spec-key"], halign: Gtk.Align.START, width_request: KEY_COL, xalign: 0 }))
+    const key = new Gtk.Label({ label, css_classes: ["about-spec-key"], halign: Gtk.Align.START, xalign: 0 })
+    keyCol.add_widget(key)
+    box.append(key)
     box.append(val)
     return box
 }
@@ -139,9 +111,12 @@ export default function AboutWindow(): Gtk.Window | null {
         return _instance
     }
 
-    const osName = osHeaderLine()
-    const cpu    = readCpu()
-    const ram    = readRam()
+    const cpu = readCpu()
+    const ram = readRam()
+
+    // Every key label joins this, so the value column starts at the same x on
+    // every row whatever the locale does to the words. See the note above it.
+    const keyCol = new Gtk.SizeGroup({ mode: Gtk.SizeGroupMode.HORIZONTAL })
 
     // ── Header ────────────────────────────────────────────────────────────────
     // The Nidara mark, not a `distributor-logo-<id>` theme icon: that depends on
@@ -152,42 +127,56 @@ export default function AboutWindow(): Gtk.Window | null {
     const markPath = `${SHELL_ROOT}/assets/nidara/assets/nidara-symbolic.svg`
     const headerBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4, halign: Gtk.Align.CENTER, margin_bottom: 16 })
     headerBox.append(new Gtk.Image({ gicon: Gio.FileIcon.new(Gio.File.new_for_path(markPath)), pixel_size: 72, css_classes: ["about-logo"], halign: Gtk.Align.CENTER }))
-    headerBox.append(new Gtk.Label({ label: BRAND, css_classes: ["about-shell-name"], halign: Gtk.Align.CENTER }))
-    headerBox.append(new Gtk.Label({ label: osName, css_classes: ["about-os-name"], halign: Gtk.Align.CENTER }))
+    // The name under the mark is the DESKTOP's, and nothing else goes here. The
+    // operating system used to be printed underneath it, and that stacking made a
+    // claim the layout had no business making: on somebody's Arch it read
+    // "Nidara / Arch Linux", as if the two were one thing, and on the product it
+    // said the word twice. It is a labelled row now, in the block where the other
+    // versions live — a fact among facts, not part of the brand.
+    headerBox.append(new Gtk.Label({ label: "Nidara", css_classes: ["about-shell-name"], halign: Gtk.Align.CENTER }))
 
     // ── Specs ─────────────────────────────────────────────────────────────────
     // Device (hostname) first, like GNOME/Windows About — it disambiguates the
-    // machine's name from "Nidara" in the header (which is the OS, not the box).
+    // machine's name from "Nidara" in the header (which is the desktop, not the box).
     const specsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_top: 8, margin_bottom: 8, margin_start: 16, margin_end: 16 })
-    specsBox.append(specRow(t("settings.about.device"), GLib.get_host_name()))
-    specsBox.append(specRow(t("settings.about.cpu"), cpu))
-    specsBox.append(specRow(t("settings.about.ram"), ram))
-    specsBox.append(asyncSpecRow(t("settings.about.graphics"), ["bash", "-c",
+    specsBox.append(specRow(keyCol, t("settings.about.device"), GLib.get_host_name()))
+    specsBox.append(specRow(keyCol, t("settings.about.cpu"), cpu))
+    specsBox.append(specRow(keyCol, t("settings.about.ram"), ram))
+    specsBox.append(asyncSpecRow(keyCol, t("settings.about.graphics"), ["bash", "-c",
         "lspci 2>/dev/null | grep -i 'vga\\|3d\\|display' | head -1 | sed 's/.*: //' | sed 's/(.*)//' | xargs || echo '—'"
     ]))
-    specsBox.append(asyncSpecRow(t("settings.about.kernel"), ["uname", "-r"]))
-    specsBox.append(asyncSpecRow(t("settings.about.uptime"), ["bash", "-c", "uptime -p | sed 's/^up //'"] ))
+    specsBox.append(asyncSpecRow(keyCol, t("settings.about.kernel"), ["uname", "-r"]))
+    specsBox.append(asyncSpecRow(keyCol, t("settings.about.uptime"), ["bash", "-c", "uptime -p | sed 's/^up //'"] ))
 
     // ── Versions ──────────────────────────────────────────────────────────────
     const verBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_top: 8, margin_bottom: 8, margin_start: 16, margin_end: 16 })
-    // The COMPONENT's version, and the one row in this window where the name
-    // "Nidara Desktop" is the correct one: the header names the OS this computer
-    // runs, this names the desktop environment running on it. They are versioned
-    // independently and neither derives from the other (nidara-iso/PRODUCT.md), so
-    // "Nidara 0.1.0" above and "Nidara Desktop 0.8.1" here do not contradict —
-    // which is exactly why this row carries the full name and not just a number.
-    // Read from the tree's VERSION in a dev checkout, /usr/share/nidara/VERSION
-    // installed; a proper noun, so no translation key (same as GTK and GJS).
-    verBox.append(specRow("Nidara Desktop", readShellVersion()))
-    verBox.append(asyncSpecRow(t("settings.about.hyprland"), hs.version()))
+    // The two independent versions, adjacent and each saying which thing it counts
+    // — that adjacency is the whole reason this window exists in PRODUCT.md.
+    //
+    // OS: whatever /etc/os-release calls this machine. "Nidara 0.1.0" on the
+    // product (the `nidara-release` package owns that file), "Arch Linux" on
+    // somebody's own Arch running install.sh — both true, and the second is a
+    // supported outcome, not a fallback: install.sh must never rename anyone's
+    // operating system.
+    //
+    // Nidara Desktop: this tree's VERSION in a dev checkout, /usr/share/nidara's
+    // copy when installed. It is a proper noun, so no translation key (same as GTK
+    // and GJS), and it is the one place in this window that name is the right one.
+    //
+    // Neither number derives from the other, which is why both rows are labelled:
+    // "0.1.0" and "0.8.1" under one brand read as a contradiction unless each says
+    // what it is counting.
+    verBox.append(specRow(keyCol, t("settings.about.os"), readOsRelease("PRETTY_NAME")))
+    verBox.append(specRow(keyCol, "Nidara Desktop", readShellVersion()))
+    verBox.append(asyncSpecRow(keyCol, t("settings.about.hyprland"), hs.version()))
     // Was a hardcoded `specRow("AGS", "v3 (GJS + GTK4)")`. It stopped being true
     // the day the shell got its own application host — AGS is now a build-time
     // tool at most — and a hardcoded string cannot go stale loudly. These two read
     // the actual runtime. Both labels are proper nouns, so neither needs a
     // translation key.
-    verBox.append(specRow("GTK", `${Gtk.get_major_version()}.${Gtk.get_minor_version()}.${Gtk.get_micro_version()}`))
+    verBox.append(specRow(keyCol, "GTK", `${Gtk.get_major_version()}.${Gtk.get_minor_version()}.${Gtk.get_micro_version()}`))
     // GJS packs its version as major*10000 + minor*100 + micro (18801 = 1.88.1).
-    verBox.append(specRow("GJS", `${Math.floor(System.version / 10000)}.${Math.floor(System.version / 100) % 100}.${System.version % 100}`))
+    verBox.append(specRow(keyCol, "GJS", `${Math.floor(System.version / 10000)}.${Math.floor(System.version / 100) % 100}.${System.version % 100}`))
 
     // ── Close button ──────────────────────────────────────────────────────────
     // Same kit IconButton as the Settings header close. margin_top 12 + the

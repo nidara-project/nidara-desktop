@@ -1030,29 +1030,6 @@ filed, and the fix lands as an update if and when one appears. One occurrence, a
 and no reproduction at will is not a reason to hold a release — it is a reason to keep the core and
 the stacks, which this entry does.
 
-### 93. About's key column is ragged in half the shipped locales (2026-08-25)
-
-`AboutWindow`'s spec rows are `[key | value]` with the key on a fixed `KEY_COL` (92px, twinned
-with `.about-spec-key`'s `min-width`). A key WIDER than that does not wrap or ellipsize — it
-pushes its own value right, so that one row stops lining up with the rest of the block.
-
-Measured with `text-budget.js`'s rig re-pointed at this window's scope (shipped font, all 12
-locales, the six localised keys): the widest is French **"Temps de fonctionnement"** at **150px**
-— 58px over. Spanish "Tiempo activo" and the other long ones sit between. English fits, which is
-why nobody noticed: the window is aligned in the language it is developed in and ragged in the
-ones it ships in.
-
-Adding the "Nidara Desktop" row is what surfaced this (89px — the first ENGLISH key over the old
-80), and it was paid for only in English by moving the column to 92 + an 8px gutter. The real fix
-is one of two, both of which cost the value column width: size the column to the widest
-TRANSLATED key at build time, or let the key ellipsize with a tooltip. Not urgent — the window
-stays readable, just uneven — but it is a real defect and the numbers above are the input.
-
-⚠️ These rows are NOT covered by the `text-budget` CI gate: that gate walks slots whose width is
-a hard constant (the 250px Settings sidebar). Here the box grows instead of clipping, so nothing
-fails; it just looks wrong. A slot for it would need a different assertion ("does every key fit
-its column"), not a different budget.
-
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
@@ -3296,3 +3273,4 @@ number is never accidentally reused. 45 items, split out 2026-08-23.
 - **#79** — RESOLVED — one rim ramp, and `GLASS_TINT.light` stopped disagreeing with itself (2026-08-23) → `tech-debt-resolved.md`
 - **#81** — RESOLVED — a dark step traced every curved edge, and it was `blur:brightness` (2026-08-23) → `tech-debt-resolved.md`
 - **#84** — RESOLVED — one silhouette and one rim idiom for capsule and bubble, and "weaker" was an inference the pixels do not support (2026-08-23) → `tech-debt-resolved.md`
+- **#93** — FIXED same day — About's key column was a constant, and a constant is a locale bug with a delay on it (2026-08-25) → `tech-debt-resolved.md`

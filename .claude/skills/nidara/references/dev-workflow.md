@@ -37,13 +37,17 @@ decision record is `nidara-iso/PRODUCT.md`; do not re-derive it.
 
 | number | comes from | reaches About via |
 |---|---|---|
-| the product's ("Nidara 0.1.0") | `nidara-release` → `/etc/os-release` `PRETTY_NAME` | the header line under the brand |
-| this repo's ("Nidara Desktop 0.8.1") | `VERSION` → `readShellVersion()` | the labelled row above Hyprland/GTK/GJS |
+| the product's ("Nidara 0.1.0") | `nidara-release` → `/etc/os-release` `PRETTY_NAME` | the "Operating system" row |
+| this repo's ("Nidara Desktop 0.8.1") | `VERSION` → `readShellVersion()` | the "Nidara Desktop" row under it |
 
 So the OS name in About **changes by itself** the day that package lands — no shell change is
-needed, and none should be added. `AboutWindow` prints the brand ("Nidara"), then the OS's own
-name with the brand stripped when they are the same product (so the product reads "Nidara /
-0.1.0", not "Nidara / Nidara 0.1.0"), and someone's Arch still reads "Nidara / Arch Linux".
+needed, and none should be added.
+
+⚠️ **Nothing but the desktop's name goes under the mark.** The OS used to be printed there, as a
+second line under "Nidara", and the stacking made a claim the layout had no business making: on
+somebody's Arch it read "Nidara / Arch Linux" as if the two were one product, and on our own image
+it said the word twice. Both are labelled rows now, adjacent, each saying what it counts — which
+is the only arrangement where two different numbers under one brand are not a contradiction.
 
 ⚠️ **Two facts about `/etc/os-release` that were MEASURED (2026-08-25), because both look the
 other way round from the outside** (`pacman -U` into a scratch root under `fakeroot`, and
