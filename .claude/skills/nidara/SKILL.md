@@ -35,7 +35,7 @@ The aesthetic is "Nidara literal": heavy-blur glass capsules with a 1px inner wh
 
 It is also **AI-native by design**: this skill ships *inside* the repo so that any user's agent can extend, customize, and fix their own desktop — and propose globally-useful improvements back upstream. If you're helping a user with their installed copy rather than the project itself, start at `references/agent-contribution.md`.
 
-## The repo is THREE separate bundles, not one app
+## The repo is FOUR separate bundles, not one app
 
 This is the single most important fact to internalize before touching anything:
 
@@ -44,8 +44,28 @@ This is the single most important fact to internalize before touching anything:
 | **Shell** | `ui/shell/` | `build/nidara` | Desktop: bar, dock, overlays, settings |
 | **Greeter** | `ui/greeter/` | `build/nidara-greeter` | Login (greetd, spoken directly — no AstalGreet) |
 | **Lockscreen** | `ui/lockscreen/` | `build/nidara-lock` | Lock via `Gtk4SessionLock` (OVERLAY-layer fallback) |
+| **Installer** | `ui/installer/` | `build/nidara-installer` | The live medium's installer — a GTK4 front-end over `archinstall` |
 
 Each has its own `app.ts`, its own `package.json`, its own `scripts/bundle.sh` invocation. Code shared between the greeter and the lockscreen is currently duplicated (see `references/tech-debt.md`).
+
+⚠️ **The fourth one does not ship with the desktop.** `packaging/nidara/PKGBUILD` is a SPLIT
+package (since 2026-08-25): it builds `nidara` and `nidara-installer`, and only nidara-iso's
+`packages.x86_64` ever names the second — a system somebody is using must not carry a program
+whose job is to erase a disk. Two consequences that bite silently:
+
+- anything picking "the package makepkg just built" has to say WHICH. `install.sh` passes
+  `makepkg --pkg nidara` and matches the file by name; nidara-repo's `build-repo.sh` copies
+  every package produced instead of the newest one. The old `ls -t … | head -1` would have
+  installed an installer onto somebody's Arch.
+- `install=` and `backup=` live INSIDE `package_nidara()`. At the top level of a split PKGBUILD
+  they apply to every package.
+
+The installer is a bundle of the desktop's toolkit, but **what it installs is not in this repo**:
+its base archinstall config is airootfs content in nidara-iso
+(`/usr/share/nidara-installer/base.json`), so the product's package list changes without
+rebuilding anything here. `nidara-iso/INSTALLER.md` is the decision record — including why it is
+not Calamares, and the line it never crosses (it collects answers and runs one process; it never
+partitions, formats, pacstraps or writes a bootloader).
 
 ## The ten inviolable commandments
 
@@ -120,7 +140,7 @@ one with a `timeout-minutes`):
 
 | job | gates |
 |---|---|
-| `styles` | the SCSS of all three bundles compiles |
+| `styles` | the SCSS of the shell, the greeter/lock sheet and the installer compiles |
 | `typecheck` | `tsc --noEmit`, against a compressed `@girs/` snapshot pulled from the repo's `ci-assets` release (`@girs/` itself stays git-ignored, ≈58 MB generated; a maintainer refreshes the snapshot when it goes stale) |
 | `widgets-gen` | the generated widget registry matches `widgets/` |
 | `smoke` | **a real headless boot** — official Arch packages in a container, build both C libraries (`libnidara-wl`, `libnidara-auth` + its eight signals), bundle the shell, boot it on real Hyprland over a virtual display (kernel vkms + llvmpipe); fails on death, silent IPC or JS errors, and uploads screenshots as artifacts |

@@ -487,6 +487,20 @@ hl.window_rule({
     center = true,
 })
 
+-- The installer floats. It exists only on the live medium (the `nidara-installer`
+-- package, which nothing but the ISO's package list names), so on an installed
+-- system this rule matches nothing at all — and that is cheaper than teaching the
+-- medium to drop in a config of its own for one line.
+-- Without it the window is TILED like any other application, which is how it was
+-- first seen: a full-height pane sharing the screen with whatever else was open,
+-- when what it needs is to be the thing in front of you.
+hl.window_rule({
+    name   = "float-installer",
+    match  = { class = "^nidara-installer$" },
+    float  = true,
+    center = true,
+})
+
 
 -- ── Game mode — workspace, window rules & auto-return ────────────────────────
 local lastNonGameWs    = nil

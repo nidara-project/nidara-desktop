@@ -11,14 +11,28 @@
 # scripts/bundle.sh × 3) and the nidara-input compile from §5; package() mirrors
 # §5's file layout. First-time system/user setup (greetd, services, per-user
 # config seeding) is NOT packaging's job — see install.sh / nidara-setup.
-pkgname=nidara
+# TWO packages out of one build (2026-08-25). `nidara` is the desktop; the second
+# is the graphical installer, and it is separate because an installed system must
+# never carry code that partitions disks — only nidara-iso's package list names
+# `nidara-installer`, so that is enforced by packaging rather than promised in a
+# comment. One build serves both: the installer is a fourth bundle in this tree
+# (ui/installer/) and everything that makes it look like Nidara — the kit, the
+# bundler, the SCSS pipeline — is reachable only from inside it.
+#
+# ⚠️ Anything that picks "the package makepkg just built" must now say WHICH:
+# install.sh limits itself with `makepkg --pkg nidara` (it installs the desktop on
+# an Arch somebody already runs, and must never hand them an installer), and
+# nidara-repo copies every produced package rather than the newest one.
+pkgname=(nidara nidara-installer)
 pkgver=0.8.1
 pkgrel=1
 pkgdesc="Nidara — a fluid, glassmorphic desktop environment (Hyprland + GTK4/GJS)"
 arch=(x86_64)
 url="https://github.com/nidara-project/nidara-desktop"
 license=(GPL-3.0-only)
-install=nidara.install
+# `install=` and `backup=` are set inside package_nidara(): at the top level they
+# would apply to BOTH packages, and nidara.install's greetd/setup work has nothing
+# to do with the installer.
 
 # Runtime deps: PACMAN_DEPS from install.sh minus the build toolchain. Since
 # 0.8.0 nothing here comes from [nidara] but the `nidara` package itself — the
@@ -93,8 +107,6 @@ makedepends=(nodejs npm esbuild wlr-protocols wayland-protocols hyprland-protoco
              wayland gtk4 gobject-introspection pkgconf)
 # etc/pam.d/nidara-lock is tracked so a local customization survives an upgrade —
 # this is where someone adds fprintd or a hardware key to the unlock stack.
-backup=(etc/xdg-desktop-portal/hyprland-portals.conf
-        etc/pam.d/nidara-lock)
 options=(!debug)
 
 source=("nidara-desktop-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
@@ -120,6 +132,12 @@ build() {
   # Greeter (reuses the shell's sass install; no npm tree of its own)
   npx sass --no-charset ../greeter/style.scss ../greeter/style.css
   sed -i '/@charset/d' ../greeter/style.css
+
+  # Installer — same arrangement, its own sheet. Built here even when only
+  # `nidara` is being packaged (build() runs whole, `--pkg` only filters which
+  # package_*() functions run); it costs one sass call and one esbuild.
+  npx sass --no-charset ../installer/style.scss ../installer/style.css
+  sed -i '/@charset/d' ../installer/style.css
   cd ../greeter
   mkdir -p build
   ../../scripts/bundle.sh app.ts build/nidara-greeter
@@ -128,6 +146,11 @@ build() {
   cd ../lockscreen
   mkdir -p build
   ../../scripts/bundle.sh app.ts build/nidara-lock
+
+  # Installer (ISO-only package — see package_nidara-installer)
+  cd ../installer
+  mkdir -p build
+  ../../scripts/bundle.sh app.ts build/nidara-installer
 
   # nidara-input: zwlr_virtual_pointer_v1 client for the computer-use pointer
   # (mirrors install.sh §5 — wayland-scanner generates the protocol glue)
@@ -152,7 +175,11 @@ build() {
   lib/nidara-auth/build.sh "$srcdir/nidara-desktop-$pkgver/build/nidara-auth"
 }
 
-package() {
+package_nidara() {
+  install=nidara.install
+  backup=(etc/xdg-desktop-portal/hyprland-portals.conf
+          etc/pam.d/nidara-lock)
+
   cd "$srcdir/nidara-desktop-$pkgver"
 
   # PAM configuration for lockscreen
@@ -250,4 +277,35 @@ package() {
   install -d "$pkgdir/etc/fonts/conf.d"
   ln -s /usr/share/fontconfig/conf.avail/65-0-nidara-noto-cjk.conf \
     "$pkgdir/etc/fonts/conf.d/65-0-nidara-noto-cjk.conf"
+}
+
+# ── nidara-installer — the live medium's graphical installer ─────────────────
+#
+# Only nidara-iso's packages.x86_64 ever names this package, and that is the
+# whole point: the installer is a Nidara window like any other, but a system
+# somebody is USING has no business carrying a program whose job is to erase a
+# disk. Shipping it separately is what makes "the desktop does not contain the
+# installer" a fact about the package database rather than a claim.
+#
+# It depends on `nidara` and it is not shy about it: the window is drawn with the
+# desktop's kit, reads the running session's appearance, and expects the blank
+# `nidara` GTK theme to be installed. `archinstall` is the engine — this package
+# collects answers and hands them over; it partitions nothing itself.
+#
+# What it installs is NOT here: /usr/share/nidara-installer/base.json is airootfs
+# content in nidara-iso, because the package list is a product decision and this
+# is a bundle of the desktop's toolkit. See nidara-iso/INSTALLER.md.
+package_nidara-installer() {
+  pkgdesc="Nidara's graphical installer (live medium only)"
+  depends=(nidara archinstall)
+
+  cd "$srcdir/nidara-desktop-$pkgver"
+
+  # The bundle is a self-contained executable (scripts/bundle.sh wraps the JS),
+  # so it goes straight in /usr/bin — no bin/ launcher of its own, unlike the
+  # shell, which needs one to find its assets.
+  install -Dm755 ui/installer/build/nidara-installer "$pkgdir/usr/bin/nidara-installer"
+  install -Dm644 ui/installer/style.css "$pkgdir/usr/share/nidara/ui/installer/style.css"
+  install -Dm644 packaging/nidara-installer/nidara-installer.desktop \
+    "$pkgdir/usr/share/applications/nidara-installer.desktop"
 }

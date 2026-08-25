@@ -67,7 +67,7 @@ other way round from the outside** (`pacman -U` into a scratch root under `faker
 
 1. `pacman` dependencies (from official Arch repos).
 2. Configure GObject Introspection (`ldconfig`).
-3. Build — **dev-like installs only**: `npm install` + SCSS compile + `scripts/bundle.sh` × 3 (shell, greeter, lockscreen). System installs skip this: the build happens inside makepkg (or comes prebuilt).
+3. Build — **dev-like installs only**: `npm install` + SCSS compile + `scripts/bundle.sh` × 3 (shell, greeter, lockscreen). Still THREE, not four: `install.sh` does not build the installer bundle, because it must not install one (see "The fourth bundle" below). System installs skip this step: the build happens inside makepkg (or comes prebuilt) — and makepkg DOES build all four.
 4. Install system files — **system**: the nidara *package* (prebuilt from nidara-repo, else local makepkg). **Dev**: direct copies of binaries/configs/session entry/portals into `/usr` + compilation and installation of native C libraries (`libnidara-wl` and `libnidara-auth`) and `/etc/pam.d/nidara-lock`.
 5. First-time setup via **`nidara-setup`**: seeds `~/.config/nidara/` (**never overwrites existing user config**), uwsm env + NVIDIA, greetd (**only if recognizably ours or no other DM is enabled**), enables pipewire/wireplumber (user), power-profiles-daemon + bluetooth (system). `install.sh` itself only writes the install-mode markers (`.dev`/`.source`).
 
@@ -192,6 +192,39 @@ check a style change; look at it on the next login, in the VM, or offscreen with
 
 Note the asymmetry this creates in a review: the greeter and the lockscreen **share one
 stylesheet**, so every greeter-visible change ships whether or not anyone looked at it.
+
+### The fourth bundle: the installer builds everywhere and ships only on the ISO
+
+`ui/installer/` (2026-08-25) is a normal bundle — `npm run build` in it produces
+`build/nidara-installer`, and running that binary opens the window on any Nidara session, which
+is the whole point: it can be looked at without an ISO, unlike the greeter.
+
+What is different is where it GOES. `packaging/nidara/PKGBUILD` is a split package and emits
+`nidara-installer` beside `nidara`; only nidara-iso's `packages.x86_64` names it. So:
+
+- **`makepkg --pkg nidara`** is how you build just the desktop from that PKGBUILD. `build()`
+  still runs whole (one extra sass + esbuild), but `package_nidara-installer()` does not, and
+  no installer package file is produced. `install.sh` does exactly this.
+- A file glob for "the package that was just built" must be **anchored**: `nidara-*` matches
+  `nidara-installer-*` too.
+- `install=`/`backup=` belong inside `package_nidara()`; at the top level they would apply to
+  both packages.
+
+Two things it does NOT own, and both are deliberate. **What Nidara installs** is
+`/usr/share/nidara-installer/base.json`, airootfs content in nidara-iso — the app reads it and
+refuses to continue when it is absent (a development checkout is not an installation medium, and
+saying so is better than an installer that looks ready and fails at the end). **The dangerous
+half** — partitioning, `pacstrap`, the bootloader — is `archinstall`'s; this bundle collects
+answers, writes JSON and runs one process. `nidara-iso/INSTALLER.md` holds the decision and the
+screens still to be written.
+
+⚠️ It is **not translated yet**: its strings are English literals, not `t()` keys. That is debt,
+tracked as such — the first real screen is where the catalog has to arrive, and by this repo's
+i18n rule a new key lands in all twelve locales in the same PR.
+
+⚠️ Hyprland **tiles it** unless told otherwise, which is how it was first seen: a full-height
+pane sharing the screen. `config/hypr/hyprland.lua` carries a `float-installer` window rule
+matching the `nidara-installer` app-id; on an installed system it matches nothing.
 
 ### Testing the LOGIN itself, without a VM and without logging out
 

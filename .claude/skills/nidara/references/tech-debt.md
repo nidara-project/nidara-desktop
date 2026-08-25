@@ -1030,6 +1030,27 @@ filed, and the fix lands as an update if and when one appears. One occurrence, a
 and no reproduction at will is not a reason to hold a release — it is a reason to keep the core and
 the stacks, which this entry does.
 
+### 95. The installer bundle ships two known gaps on purpose (2026-08-25)
+
+`ui/installer/` landed as a skeleton — the frame, the step flow, the base-config seam and one
+placeholder step — and it carries two things that must not be mistaken for oversights:
+
+**(a) Its strings are English literals, not `t()` keys.** There is no catalog for this bundle
+yet. That is deliberate for a skeleton whose screens are about to be replaced, and it stops
+being acceptable the moment the first real screen lands: by this repo's i18n rule a new key
+enters all twelve locales in the same PR, so the catalog has to arrive WITH the first question,
+not after several of them. An installer that only speaks English is also the worst possible
+surface to leave untranslated — it is the first thing a user meets, before they have any way to
+change the language.
+
+**(b) It defines the `--nidara-*` custom properties a THIRD time.** The shell has them in
+`styles/_base.scss`, the greeter/lock sheet re-declares them scoped to its own windows, and now
+`ui/installer/style.scss` declares the subset it uses. This is the same duplication as #60 (the
+greeter/lock split), one bundle wider: the ramp is not importable because each copy is scoped to
+its own window selectors and GTK4 has no `:root`. If a token's VALUE moves, three files move.
+The fix is a shared partial that emits the ramp for a caller-supplied selector — cheap, and
+worth doing before a fourth copy exists rather than after.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:

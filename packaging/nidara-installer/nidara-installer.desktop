@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Install Nidara
+Comment=Install this system on a disk
+# A real Exec, unlike nidara-settings.desktop: the installer is an ordinary
+# application window with its own binary, not a shell surface reached through IPC.
+Exec=nidara-installer
+Icon=system-software-install
+Type=Application
+Categories=System;
+Keywords=install;installer;setup;
+StartupNotify=true

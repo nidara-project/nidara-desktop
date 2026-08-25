@@ -111,6 +111,8 @@ ui/shell/style.css
 ui/shell/style.css.map
 ui/greeter/style.css
 ui/greeter/style.css.map
+ui/installer/style.css
+ui/installer/style.css.map
 # User configs — generated at runtime, personal to each installation
 # (root-level only; defaults/ folder is intentionally tracked)
 theme_settings.json

@@ -125,15 +125,31 @@ ensure_pkg_cache() {
 # the exact blind spot that hid a stale, crashing appmenu-glib-translator, which
 # is gone as of 2026-08-18). This
 # transition gives those paths to pacman; from here they upgrade/remove cleanly.
+# $2 (optional) NAMES the split package to build and install. It is not a
+# refinement: since 2026-08-25 packaging/nidara/PKGBUILD emits TWO packages —
+# `nidara` and `nidara-installer` — and this script must never hand somebody the
+# second one. It runs on an Arch that is already in use, where a program whose job
+# is to erase a disk has no business being installed, and the old
+# `ls -t | head -1` would have picked whichever file makepkg happened to write
+# last. `--pkg` also skips building the package we do not want.
 build_install_pkg() {
     local dir="$1"
+    local want="${2:-}"
     ensure_pkg_cache
     chown -R "$REAL_USER" "$dir" 2>/dev/null || true
     # -f rebuild, --nodeps (install order is managed below), --skipinteg (git sources)
-    run_user bash -c "cd '$dir' && SRCDEST='$PKG_CACHE/src' makepkg -f --noconfirm --nodeps --skipinteg --noprogressbar"
+    local pkgarg=""
+    [ -n "$want" ] && pkgarg="--pkg '$want'"
+    run_user bash -c "cd '$dir' && SRCDEST='$PKG_CACHE/src' makepkg -f --noconfirm --nodeps --skipinteg --noprogressbar $pkgarg"
     local pkgfile
-    pkgfile="$(ls -t "$dir"/*.pkg.tar.* 2>/dev/null | head -1)"
-    [ -n "$pkgfile" ] || { echo "  [ERR] makepkg produced no package in $dir" >&2; exit 1; }
+    # Anchored to the requested name — `nidara-*` would also match
+    # `nidara-installer-*`, which is the exact mistake this guards.
+    if [ -n "$want" ]; then
+        pkgfile="$(ls -t "$dir/$want"-[0-9]*.pkg.tar.* 2>/dev/null | head -1)"
+    else
+        pkgfile="$(ls -t "$dir"/*.pkg.tar.* 2>/dev/null | head -1)"
+    fi
+    [ -n "$pkgfile" ] || { echo "  [ERR] makepkg produced no ${want:-} package in $dir" >&2; exit 1; }
     sudo pacman -U --noconfirm --overwrite '*' "$pkgfile"
 }
 
@@ -165,7 +181,7 @@ build_local_nidara_pkg() {
         --exclude='./packaging/nidara/src' --exclude='./packaging/nidara/pkg' \
         --exclude='./packaging/nidara/*.tar.*' \
         --transform "s|^\.|nidara-desktop-$pkgver|SH" .
-    build_install_pkg "$pdir"
+    build_install_pkg "$pdir" nidara
 }
 
 echo ""

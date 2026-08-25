@@ -1,0 +1,97 @@
+/* Nidara — Installer stylesheet
+   GTK_THEME=nidara loads a blank theme, so this is the ONLY CSS this process has.
+   GTK4 CSS subset: no color-mix(), no rgba(var(), n), no filter. */
+
+// The type ramp, the spacing and the radius ladder are the shell's. A size that
+// is not a `$fs-*` here is a bug — this is chrome, not Settings, so the FIXED px
+// ramp is the right one (a variable ramp re-flows a window whose width is a
+// constant by design).
+@use '../lib/styles/tokens' as *;
+@use '../lib/styles/mixins' as *;
+
+// The kit's stylesheet: NidaraButton and NidaraClamp are the two pieces this
+// bundle borrows, and they expect their classes to exist. Emitted BEFORE
+// everything below, so the rules in this file out-rank it at equal specificity.
+@use '../lib/styles/components';
+
+// ── The token ramp ───────────────────────────────────────────────────────────
+// Defined here rather than imported because the custom properties are the SHELL's
+// (styles/_base.scss) and the greeter's copy is scoped to the greeter's windows.
+// This is the third bundle to need them, which is a duplication worth naming —
+// see the skill's tech-debt entry for the greeter/lock split, now a three-way one.
+window.nidara-installer-window {
+  --nidara-accent:          #0088ff;
+  --nidara-text:            rgba(255, 255, 255, 0.95);
+  --nidara-text-secondary:  rgba(255, 255, 255, 0.8);
+  --nidara-text-dim:        rgba(255, 255, 255, 0.55);
+  --nidara-surface:         rgba(255, 255, 255, 0.08);
+  --nidara-surface-raised:  rgba(255, 255, 255, 0.12);
+  --nidara-border:          rgba(127, 127, 127, 0.15);
+  --nidara-radius-sm:       8px;
+  --nidara-radius-md:       14px;
+  --nidara-radius-lg:       20px;
+
+  background-color: rgba(20, 20, 22, 0.86);
+  border-radius: var(--nidara-radius-lg);
+  color: var(--nidara-text);
+}
+
+// The live session's light mode, set from app.ts. Only the ink and the pane
+// change: the glass alpha is the same number in both, because it is what the
+// compositor's `ignore_alpha` is tuned against.
+window.nidara-installer-window.installer-light {
+  --nidara-text:            rgba(0, 0, 0, 0.95);
+  --nidara-text-secondary:  rgba(0, 0, 0, 0.85);
+  --nidara-text-dim:        rgba(0, 0, 0, 0.72);
+  --nidara-surface:         rgba(0, 0, 0, 0.06);
+  --nidara-surface-raised:  rgba(0, 0, 0, 0.10);
+
+  background-color: rgba(246, 246, 248, 0.9);
+}
+
+// ── The frame ────────────────────────────────────────────────────────────────
+window.nidara-installer-window {
+  .installer-root { padding: 0; }
+
+  .installer-header {
+    padding: 18px 28px 12px 28px;
+    border-bottom: 1px solid var(--nidara-border);
+  }
+
+  .installer-title {
+    font-size: $fs-title-2;
+    font-weight: 600;
+    color: var(--nidara-text);
+  }
+
+  // "1 of 2" — a position, not a progress bar. It is the one honest indicator a
+  // flow can give before the steps that take time exist.
+  .installer-position {
+    font-size: $fs-caption;
+    color: var(--nidara-text-dim);
+  }
+
+  .installer-footer {
+    padding: 14px 28px 20px 28px;
+    border-top: 1px solid var(--nidara-border);
+  }
+
+  // ── Step content ───────────────────────────────────────────────────────────
+  .installer-heading {
+    font-size: $fs-title-3;
+    font-weight: 600;
+    color: var(--nidara-text);
+    margin-top: 26px;
+  }
+
+  .installer-prose {
+    font-size: $fs-body;
+    color: var(--nidara-text-secondary);
+  }
+
+  .installer-prose--dim     { color: var(--nidara-text-dim); }
+  // Not red: the disk warning is not an error, it is the one fact that has to be
+  // read. Full-strength ink is what makes it the loudest thing on the step
+  // without spending the red this DE reserves for recording and for failure.
+  .installer-prose--warning { color: var(--nidara-text); font-weight: 500; }
+}

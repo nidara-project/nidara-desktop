@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "dev": "npx --yes sass@1.97.3 --no-charset style.scss style.css && sed -i '/@charset/d' style.css && ../../scripts/run.sh app.ts",
+    "build": "mkdir -p build && npx --yes sass@1.97.3 --no-charset style.scss style.css && sed -i '/@charset/d' style.css && ../../scripts/bundle.sh app.ts build/nidara-installer"
+  },
+  "prettier": {
+    "semi": false,
+    "tabWidth": 2
+  }
+}

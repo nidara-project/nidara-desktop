@@ -116,6 +116,13 @@ jobs:
         working-directory: ui/shell
         run: npx --yes sass@1.97.3 --no-charset ../greeter/style.scss /tmp/greeter.css
 
+      # The installer's sheet, for the same reason as the greeter's: that bundle
+      # ships only on the live medium, so a break in it is invisible until an ISO
+      # is booted — the longest feedback loop in the project.
+      - name: Compile the installer SCSS (must succeed)
+        working-directory: ui/shell
+        run: npx --yes sass@1.97.3 --no-charset ../installer/style.scss /tmp/installer.css
+
   pkgbuild:
     name: PKGBUILD parses
     runs-on: ubuntu-latest
@@ -184,10 +191,10 @@ jobs:
       #
       # Both bundles are clean under this filter. Raise the ceiling by fixing the
       # typings, not by loosening the grep.
-      - name: No undefined identifiers in greeter / lockscreen
+      - name: No undefined identifiers in greeter / lockscreen / installer
         run: |
           fail=0
-          for b in greeter lockscreen; do
+          for b in greeter lockscreen installer; do
             out=$(cd "ui/$b" && npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json 2>&1 \
                   | grep -E 'TS2304|TS2552' || true)
             if [ -n "$out" ]; then

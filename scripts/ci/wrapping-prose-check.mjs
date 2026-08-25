@@ -22,7 +22,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 
-const ROOTS = ["ui/shell", "ui/lib", "ui/greeter", "ui/lockscreen"]
+const ROOTS = ["ui/shell", "ui/lib", "ui/greeter", "ui/lockscreen", "ui/installer"]
 const SKIP = new Set(["node_modules", "@girs", "build", "dist"])
 
 function* sources(dir) {
