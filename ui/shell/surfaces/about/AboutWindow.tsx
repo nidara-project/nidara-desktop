@@ -1,6 +1,7 @@
 import app from "../../../lib/host"
 import { setWindowAppId } from "../../../lib/app-id"
 import Gtk from "gi://Gtk?version=4.0"
+import Pango from "gi://Pango"
 import Gio from "gi://Gio"
 import { NidaraButton, NidaraClamp } from "../../../lib/nidara-kit"
 import IconButton from "../../common/IconButton"
@@ -33,42 +34,72 @@ import * as sys from "../../core/SystemInfo"
 const KEY_GUTTER = 8
 
 /**
- * The card's width, and it is a CEILING as well as a floor.
+ * The card's width, and it is a CEILING as well as a floor — but nothing here is
+ * ever CUT to respect it. Owner's rule, 2026-08-25: *"no vamos a cortar la
+ * información que el usuario quiere consultar"* — this window exists to be read,
+ * so a value that does not fit takes a second line, it does not lose its tail.
  *
  * `width_request` alone is only the floor: GTK sizes an undecorated window to its
- * content's NATURAL width, and a `Gtk.Label` reports its whole string as natural
- * however it ellipsizes. So one long value decided how wide this window was — the
- * raw GPU row ("Advanced Micro Devices, Inc. [AMD/ATI] Navi 10 [Radeon RX 5600
- * OEM/5600 XT / 5700/5700 XT]") stretched the card to ~750px on this host and left
- * every short row swimming in it.
+ * content's NATURAL width, and a `Gtk.Label` reports its whole string as natural.
+ * So without a ceiling one long value decides how wide this window is — the raw
+ * GPU row stretched the card to ~750px on this host.
  *
- * ⚠️ The obvious fix is the wrong one: `max_width_chars` caps what GTK4 ELLIPSIZES
- * to, not just what the label requests, so a value of 12 rendered "AMD Ryzen 5 5…"
- * inside a column with 236px of room going spare (seen on screen before this).
- * The ceiling has to be imposed by the PARENT, which is what `NidaraClamp` is —
- * min = max = one constant width, and the labels ellipsize into whatever the row
- * leaves them.
+ * ⚠️ Neither `ellipsize` nor `max_width_chars` may be the ceiling. `max-width-chars`
+ * caps what GTK4 ELLIPSIZES to, not just what the label requests, so it both cut the
+ * value AND left the column half empty ("AMD Ryzen 5 5…" with 236px going spare).
+ * The ceiling is the PARENT — `NidaraClamp`, min = max — and the values WRAP into
+ * whatever the row leaves them (`WORD_CHAR`, so a device name with no spaces breaks
+ * too rather than overflowing).
+ *
+ * 460 is measured, not chosen: at `.about-spec-val` in the shipped font this host's
+ * GPU string needs 302px and its CPU 222px, against a key column that runs 89px
+ * (zh-CN) to 143px (ja "オペレーティングシステム"). 460 − 32 margins − 8 gutter
+ * leaves 316px in English and 277px in Japanese, so every CPU and the common GPU
+ * names sit on one line everywhere, and the multi-SKU AMD string takes two lines in
+ * the three widest-key locales. Widening until THAT never happened would mean a
+ * ~500px card and still no guarantee — some device names are longer than any width
+ * one picks, which is exactly why wrapping is the mechanism and the width is only
+ * the comfort.
  */
-const CARD_WIDTH = 380
+const CARD_WIDTH = 460
+
+/**
+ * A value: wraps, never ellipsises, and FILLS its column — `halign: START` would
+ * allocate it Pango's line-balancing natural width instead of the card's, which is
+ * the rule `scripts/ci/wrapping-prose-check.mjs` enforces repo-wide.
+ */
+const valueLabel = (text: string): Gtk.Label => new Gtk.Label({
+    label: text,
+    css_classes: ["about-spec-val"],
+    halign: Gtk.Align.FILL, hexpand: true, xalign: 0,
+    wrap: true, wrap_mode: Pango.WrapMode.WORD_CHAR,
+})
+
+/** A key: one line, and pinned to the TOP so it stays level with the first line of
+ *  a value that wrapped. */
+const keyLabel = (keyCol: Gtk.SizeGroup, label: string): Gtk.Label => {
+    const key = new Gtk.Label({
+        label, css_classes: ["about-spec-key"],
+        halign: Gtk.Align.START, valign: Gtk.Align.START, xalign: 0,
+    })
+    keyCol.add_widget(key)
+    return key
+}
 
 function specRow(keyCol: Gtk.SizeGroup, label: string, value: string): Gtk.Box {
     const box = new Gtk.Box({ spacing: KEY_GUTTER, margin_top: 4, margin_bottom: 4 })
-    const key = new Gtk.Label({ label, css_classes: ["about-spec-key"], halign: Gtk.Align.START, xalign: 0 })
-    keyCol.add_widget(key)
-    box.append(key)
-    box.append(new Gtk.Label({ label: value, css_classes: ["about-spec-val"], halign: Gtk.Align.START, hexpand: true, xalign: 0, ellipsize: 3 }))
+    box.append(keyLabel(keyCol, label))
+    box.append(valueLabel(value))
     return box
 }
 
 function asyncSpecRow(keyCol: Gtk.SizeGroup, label: string, src: Promise<string>): Gtk.Box {
-    const val = new Gtk.Label({ label: "…", css_classes: ["about-spec-val"], halign: Gtk.Align.START, hexpand: true, xalign: 0, ellipsize: 3 })
+    const val = valueLabel("…")
     // `core/SystemInfo` never rejects and answers "" for unknown, so the only
     // fallback left is the one both surfaces share.
     src.then(v => { val.label = v || t("settings.about.unavailable") })
     const box = new Gtk.Box({ spacing: KEY_GUTTER, margin_top: 4, margin_bottom: 4 })
-    const key = new Gtk.Label({ label, css_classes: ["about-spec-key"], halign: Gtk.Align.START, xalign: 0 })
-    keyCol.add_widget(key)
-    box.append(key)
+    box.append(keyLabel(keyCol, label))
     box.append(val)
     return box
 }

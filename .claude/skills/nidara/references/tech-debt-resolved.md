@@ -1787,14 +1787,36 @@ The four defects the inventory listed, and what closed each:
 
 **Three traps found while doing it, each of which cost a build:**
 
-⚠️ **`width_request` on a window's content is a FLOOR, and `max_width_chars` is not the ceiling.**
-GTK sizes an undecorated window to its content's NATURAL width, and a `Gtk.Label` reports its whole
-string as natural however it ellipsizes — so the raw GPU string ("Advanced Micro Devices, Inc.
-[AMD/ATI] Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700 XT]") stretched the 380px card to ~750px.
-The obvious fix is wrong: **GTK4's `max-width-chars` caps what the label ELLIPSIZES to**, not just
-what it requests, so a value of 12 rendered "AMD Ryzen 5 5…" with 236px of column going spare (seen
-on screen). The ceiling has to come from the PARENT — `NidaraClamp(card, W, false, W)`, min = max —
-and then the labels ellipsize into whatever the row leaves them.
+⚠️ **`width_request` on a window's content is a FLOOR, and neither `ellipsize` nor
+`max_width_chars` may be the ceiling.** GTK sizes an undecorated window to its content's NATURAL
+width, and a `Gtk.Label` reports its whole string as natural however it ellipsizes — so the raw GPU
+string ("Advanced Micro Devices, Inc. [AMD/ATI] Navi 10 [Radeon RX 5600 OEM/5600 XT / 5700/5700
+XT]") stretched the 380px card to ~750px. **GTK4's `max-width-chars` caps what the label ELLIPSIZES
+to**, not just what it requests, so the obvious fix cut the value AND left the column half empty
+("AMD Ryzen 5 5…" with 236px of room going spare). The ceiling is the PARENT —
+`NidaraClamp(card, W, false, W)`, min = max.
+
+🔑 **And the values WRAP; they are never cut.** Owner's rule the same day, when the first fix
+shipped an ellipsis: *"no vamos a cortar la información que el usuario quiere consultar"* — a window
+whose entire job is to be read may not eat the tail of what it is showing. So every value is
+`halign: FILL, hexpand: true, xalign: 0, wrap: true, wrap_mode: WORD_CHAR` (the shape
+`scripts/ci/wrapping-prose-check.mjs` enforces; WORD_CHAR so a device name with no spaces breaks
+instead of overflowing), and the key label is `valign: START` so it stays level with the first line
+of a value that wrapped.
+
+The card is **460px, measured rather than chosen**: at `.about-spec-val` in the shipped font this
+host's GPU needs 302px and its CPU 222px, against a key column running 89px (zh-CN) to 143px (ja).
+460 − 32 margins − 8 gutter leaves 316px in English and 277px in Japanese, so every CPU and the
+common GPU names sit on one line everywhere and only the multi-SKU AMD string takes two in the
+three widest-key locales. Widening until that never happened would mean ~500px and still no
+guarantee — some device names are longer than any width one picks, which is why **wrapping is the
+mechanism and the width is only the comfort**.
+
+⚠️ The wrap path could not be seen on this machine, because this host's string fits — the shape of
+path that ships unlooked-at. It was verified by running the real shell against a **fake `lspci`**
+(a systemd drop-in prepending a scratch dir to the unit's `PATH`, removed afterwards) reporting a
+Navi 21 name: "AMD Radeon RX 6800/6800 XT / 6900 XT / W6800 Pro Graphics" took two lines, complete,
+with the card the same width and the key still on the first line.
 
 ⚠️ **An unanchored vendor regex matched inside another word.** `/ati/i` for AMD hits
 "Corpor**ati**on", so every Intel GPU came back branded AMD. It was caught by running `gpuName()`
