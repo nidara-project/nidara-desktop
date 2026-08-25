@@ -94,18 +94,6 @@ export const gtkVersion = (): string =>
 export const gjsVersion = (): string =>
     `${Math.floor(System.version / 10000)}.${Math.floor(System.version / 100) % 100}.${System.version % 100}`
 
-/**
- * The windowing system, as a proper noun — GNOME's "Windowing System / Wayland"
- * row, not the raw `wayland` the environment variable holds. Machine values are
- * not human text: that is the same defect as Settings printing os-release's `ID`
- * ("endeavouros") at somebody, and it is fixed in the reader so neither surface
- * can reintroduce it.
- */
-export function sessionType(): string {
-    const raw = (GLib.getenv("XDG_SESSION_TYPE") || "wayland").toLowerCase()
-    return raw === "wayland" ? "Wayland" : raw === "x11" ? "X11" : raw
-}
-
 // ── The three that need a process ──────────────────────────────────────────────
 // Each resolves to "" on failure (never rejects), so a call site is a one-liner
 // and can't forget the .catch that leaves a row saying "…" forever.

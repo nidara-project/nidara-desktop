@@ -114,18 +114,23 @@ export default function AboutPage() {
     page.append(sysBox)
 
     // ── Environment ────────────────────────────────────────────────────────────
-    // What the desktop runs ON: the compositor, the toolkit, the runtime, and the
-    // display protocol. These are the rows the About window dropped when it became
-    // the summary — diagnostics, not identity — so this is where they live.
-    // `XDG_CURRENT_DESKTOP` is gone: it printed "Hyprland" a third time and told
-    // nobody anything the Hyprland row below does not.
+    // What the desktop runs ON: the compositor, the toolkit, the runtime. These are
+    // the rows the About window dropped when it became the summary — diagnostics,
+    // not identity — so this is where they live.
+    //
+    // Two rows that were here are gone, and for the same reason: a row whose value
+    // is fixed is filler wearing a fact's clothes. `XDG_CURRENT_DESKTOP` printed
+    // "Hyprland" a third time; the windowing system could only ever read "Wayland",
+    // because Hyprland is a Wayland compositor and the shell needs
+    // gtk4-layer-shell to draw at all (owner's call, 2026-08-25 — GNOME's
+    // "Windowing System" row earns its place precisely because GNOME also runs on
+    // X11, and we do not).
     const { box: envBox, listBox: envList } = listGroup(t("settings.about.group.environment"))
 
     envList.append(asyncRow(t("settings.about.hyprland"), t("settings.about.hyprland.desc"),
         hs.version().then(v => v || "").catch(() => "")))
     envList.append(createRow("GTK", t("settings.about.gtk.desc"), staticLabel(sys.gtkVersion())))
     envList.append(createRow("GJS", t("settings.about.gjs.desc"), staticLabel(sys.gjsVersion())))
-    envList.append(createRow(t("settings.about.windowing"), t("settings.about.windowing.desc"), shown(sys.sessionType())))
 
     page.append(envBox)
 

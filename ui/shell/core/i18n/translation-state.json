@@ -151,12 +151,10 @@
     "settings.about.graphics": "ab255c27",
     "settings.about.close": "bbfa773e",
     "settings.about.device.desc": "38499566",
-    "settings.about.os.desc": "0def63b0",
+    "settings.about.os.desc": "c68ffe4f",
     "settings.about.graphics.desc": "1650a0da",
     "settings.about.gtk.desc": "7849b64c",
     "settings.about.gjs.desc": "20c3c12c",
-    "settings.about.windowing": "300f2134",
-    "settings.about.windowing.desc": "04313a4f",
     "settings.about.more-info": "72b1821e",
     "settings.about.update": "c85f756a",
     "settings.about.update.up-to-date": "c82b2193",
@@ -704,68 +702,68 @@
   },
   "locales": {
     "de": {
-      "translated": 700,
-      "of": 700,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "es": {
-      "translated": 700,
-      "of": 700,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 700,
-      "of": 700,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "it": {
-      "translated": 700,
-      "of": 700,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "ja": {
-      "translated": 700,
-      "of": 700,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "nl": {
-      "translated": 700,
-      "of": 700,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "pl": {
-      "translated": 700,
-      "of": 700,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "pt-BR": {
-      "translated": 700,
-      "of": 700,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "pt-PT": {
-      "translated": 700,
-      "of": 700,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "ru": {
-      "translated": 700,
-      "of": 700,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "zh-CN": {
-      "translated": 700,
-      "of": 700,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     }

@@ -1781,9 +1781,22 @@ The four defects the inventory listed, and what closed each:
    GiB). Ceiling to the whole GiB restores it; the reserve is a few percent, far under the 1 GiB it
    would take to round to the wrong number.
 3. **Raw machine values as human text** — os-release's `ID` ("endeavouros") is gone from the OS
-   row's subtitle, and `XDG_SESSION_TYPE` is normalised to "Wayland"/"X11" in the reader, so no
-   surface can reintroduce the lowercase env-var spelling.
+   row's subtitle. ⚠️ Its replacement, "Name and version", was wrong in the opposite direction and
+   the owner caught it on screen: it **promises a number the row often cannot show**. `PRETTY_NAME`
+   is by spec the presentable name INCLUDING the version, so where a version exists it is already
+   in the value (Fedora Linux 42, Ubuntu 24.04.1 LTS, Nidara 0.1.0), and where the distro is
+   rolling there is none anywhere (Arch and EndeavourOS: `BUILD_ID=rolling`, no `VERSION_ID`).
+   It reads "Installed distribution" now. **A subtitle names what the value IS; it must not
+   advertise a field.**
 4. **The split had no rule** — it has one now, at the top of this entry.
+
+🔑 **A row whose value is FIXED is filler wearing a fact's clothes**, and two left the Environment
+group for that one reason. `XDG_CURRENT_DESKTOP` printed "Hyprland" a third time. "Windowing
+system" could only ever read "Wayland" — Hyprland is a Wayland compositor and the shell cannot draw
+without gtk4-layer-shell — so the row was a constant with a reader attached (`sessionType()` went
+with it: it had exactly one consumer). GNOME ships that row and is right to: GNOME also runs on
+X11. Copying a row from a desktop that can answer it two ways into one that cannot is how a surface
+gets "filled rather than designed" in the first place.
 
 **Three traps found while doing it, each of which cost a build:**
 
