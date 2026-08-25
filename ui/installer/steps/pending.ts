@@ -9,19 +9,20 @@
 
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
-
-const REMAINING = [
-  "Disk — which one, and what is about to be destroyed",
-  "Account — name, user name, password",
-  "Summary — every default from this live session, editable",
-  "Progress — archinstall's own output, with the log behind a disclosure",
-]
+import { t } from "../lib/i18n"
 
 export function PendingStep(): Step {
+  const remaining = [
+    t("pendingDisk"),
+    t("pendingAccount"),
+    t("pendingSummary"),
+    t("pendingProgress"),
+  ]
+
   return {
     id: "pending",
-    title: "Not written yet",
-    nextLabel: "Continue",
+    title: t("pendingTitle"),
+    nextLabel: t("continue"),
 
     build() {
       const box = new Gtk.Box({
@@ -31,14 +32,14 @@ export function PendingStep(): Step {
       })
 
       box.append(new Gtk.Label({
-        label: "The remaining steps are not built yet",
+        label: t("pendingHeading"),
         css_classes: ["installer-heading"],
         halign: Gtk.Align.FILL,
         hexpand: true,
         xalign: 0,
       }))
 
-      for (const item of REMAINING) {
+      for (const item of remaining) {
         box.append(new Gtk.Label({
           label: `·  ${item}`,
           css_classes: ["installer-prose", "installer-prose--dim"],
@@ -51,9 +52,7 @@ export function PendingStep(): Step {
       }
 
       box.append(new Gtk.Label({
-        label: "Until they are, Nidara installs from a terminal: `archinstall`, "
-             + "with the medium's own configuration. nidara-iso/INSTALLER.md has "
-             + "the commands.",
+        label: t("pendingFallback"),
         css_classes: ["installer-prose"],
         halign: Gtk.Align.FILL,
         hexpand: true,

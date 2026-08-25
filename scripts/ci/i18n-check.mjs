@@ -64,7 +64,11 @@ import { readFileSync, writeFileSync, readdirSync } from "node:fs"
 
 const LOCALE_DIR = "ui/shell/core/i18n/locales"
 const STATE_PATH = "ui/shell/core/i18n/translation-state.json"
-const MINI_CATALOGS = ["ui/greeter/lib/i18n.ts", "ui/lockscreen/lib/i18n.ts"]
+const MINI_CATALOGS = [
+    "ui/greeter/lib/i18n.ts",
+    "ui/lockscreen/lib/i18n.ts",
+    "ui/installer/lib/i18n.ts",
+]
 const SOURCE = "en"
 /* es is hand-maintained alongside en on every new key; the rest are bulk passes. */
 const HAND_SYNCED = "es"

@@ -12,6 +12,7 @@ import { NidaraButton, NidaraClamp } from "../../lib/nidara-kit"
 import { Flow, type Step } from "../lib/flow"
 import { WelcomeStep } from "../steps/welcome"
 import { PendingStep } from "../steps/pending"
+import { t } from "../lib/i18n"
 
 /**
  * The reading width, and the window's own width follows from it.
@@ -80,8 +81,8 @@ export function InstallerWindow(opts: InstallerWindowOpts): Gtk.Window {
 
   const head = header()
 
-  const back = NidaraButton({ label: "Back", variant: "secondary" })
-  const next = NidaraButton({ label: "Continue", variant: "primary" })
+  const back = NidaraButton({ label: t("back"), variant: "secondary" })
+  const next = NidaraButton({ label: t("continue"), variant: "primary" })
 
   back.connect("clicked", () => flow.back())
   next.connect("clicked", () => {
@@ -117,7 +118,7 @@ export function InstallerWindow(opts: InstallerWindowOpts): Gtk.Window {
   function sync() {
     const step = flow.current()
     const index = steps.indexOf(step) + 1
-    head.set(step.title, `${index} of ${steps.length}`)
+    head.set(step.title, `${index} ${t("of")} ${steps.length}`)
     back.visible = flow.canBack()
     next.set_label(step.nextLabel)
     // A step that cannot be left forward disables the button rather than hiding

@@ -9,6 +9,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { readBaseConfig, basePackages } from "../lib/base-config"
+import { t } from "../lib/i18n"
 
 function heading(text: string): Gtk.Label {
   return new Gtk.Label({
@@ -37,8 +38,8 @@ export function WelcomeStep(): Step {
 
   return {
     id: "welcome",
-    title: "Install Nidara",
-    nextLabel: "Continue",
+    title: t("welcomeTitle"),
+    nextLabel: t("continue"),
     // Without the product's config there is nothing honest to continue TO, so
     // the flow stops here rather than collecting answers it cannot use.
     ready: () => base !== null,
@@ -50,15 +51,10 @@ export function WelcomeStep(): Step {
         hexpand: true,
       })
 
-      box.append(heading("Install Nidara on this computer"))
+      box.append(heading(t("welcomeHeading")))
+      box.append(prose(t("welcomeIntro")))
       box.append(prose(
-        "The installer asks for three things — which disk to use, the account to "
-        + "create, and a confirmation — and then installs the system you are "
-        + "looking at. Everything else it can read from this live session.",
-      ))
-      box.append(prose(
-        "The disk you choose is erased. Nothing else on this computer is touched, "
-        + "and nothing is written until you confirm.",
+        t("welcomeWarning"),
         "installer-prose--warning",
       ))
 
@@ -66,8 +62,8 @@ export function WelcomeStep(): Step {
         const packages = basePackages(base.config)
         box.append(prose(
           packages.length
-            ? `This medium installs: ${packages.join(", ")}.`
-            : `Reading what this medium installs from ${base.path}.`,
+            ? `${t("welcomeInstallsPrefix")}${packages.join(", ")}.`
+            : `${t("welcomeReadingPrefix")}${base.path}.`,
           "installer-prose--dim",
         ))
       } else {
@@ -75,9 +71,7 @@ export function WelcomeStep(): Step {
         // and fails at the end: the ISO ships this file, a development checkout
         // does not.
         box.append(prose(
-          "This is not a Nidara installation medium: the product configuration at "
-          + "/usr/share/nidara-installer/base.json is missing, so there is nothing "
-          + "to install from. The window is running, but installation is unavailable.",
+          t("welcomeNotMedium"),
           "installer-prose--warning",
         ))
       }
