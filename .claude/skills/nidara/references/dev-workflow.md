@@ -753,6 +753,14 @@ Gotchas that cost real debugging time:
 - **`-vga none` is mandatory** with `-device virtio-gpu-gl`/`virtio-vga-gl`: without it QEMU
   adds a default bochs VGA, the guest gets TWO DRM cards, Hyprland picks the 3D-less bochs
   one and dies instantly ("start-hyprland error" at the greeter, greetd hits start-limit).
+  ⚠️ **It also has a SILENT variant, and it is worse** (seen 2026-08-25 booting the ISO):
+  Hyprland picks the *right* card and runs — `hyprctl` answers, layer surfaces map, the log is
+  clean — while QEMU's window and QMP `screendump` show the OTHER card, which nothing draws on.
+  So the desktop looks dead and the compositor is fine. The tell is that a text console
+  (`ctrl+alt+f2`) IS visible while the desktop is black, and `dmesg` names `simple-framebuffer`
+  beside `virtio-gpu-pci`. Chasing the EGL errors it produces (`createImageFromDmaBufs failed`,
+  then `verifyDestinationDMABUF: FAIL, format is external-only`) is chasing the wrong device:
+  they disappear with the flag, and `AQ_NO_MODIFIERS=1` does not help.
 - `-display egl-headless` renders guest GL offscreen — verify via `grim` over SSH
   (`hostfwd` → port 2222), no window needed. (`gtk,gl=on` / `sdl,gl=on` may fail to create
   a GL context depending on the launching environment; egl-headless is the reliable one.)
