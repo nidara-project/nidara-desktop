@@ -4,7 +4,7 @@ import GObject from "gi://GObject"
 import Graphene from "gi://Graphene"
 import Gsk from "gi://Gsk"
 import cairo from "gi://cairo"
-import { LOCK_GLASS } from "./tokens"
+import { GLASS_TINT, LOCK_GLASS } from "./tokens"
 import { glassRimGradient, drawShadowFromPath, GLASS_SHADOW } from "./glass-paint"
 
 // The glass capsule of the greeter and the lockscreen — painted, not CSS-drawn.
@@ -58,14 +58,20 @@ import { glassRimGradient, drawShadowFromPath, GLASS_SHADOW } from "./glass-pain
 // Kept in lockstep with `blur { … }` in config/hypr/hyprland.lua.
 const BLUR_SIZE = 2
 const BLUR_PASSES = 2
-const CONTRAST = 1.2
-// ⚠️ 0.8 → 1.0 on 2026-08-24. The comment above says these are "kept in lockstep with
-// `blur { … }` in config/hypr/hyprland.lua" — and that sentence had been FALSE since
-// #235 raised the shell's brightness a day earlier and did not reach this file. A
-// lockstep that nothing enforces is a claim, not a mechanism; the reasoning for 1.0
-// lives beside the shell's copy.
-const BRIGHTNESS = 1.0
-const VIBRANCY = 0.4
+// ⚠️ `brightness` was 0.8 → 1.0 on 2026-08-24. The comment above says these are "kept
+// in lockstep with `blur { … }` in config/hypr/hyprland.lua" — and that sentence had
+// been FALSE since #235 raised the shell's brightness a day earlier and did not reach
+// this file. A lockstep that nothing enforces is a claim, not a mechanism; the
+// reasoning for 1.0 lives beside the shell's copy.
+//
+// EXPORTED because a second consumer appeared: `backdrop-skin.ts` has to model what is
+// actually behind the glass in order to choose a skin, and what is behind it is the
+// wallpaper AFTER this trim — not the file on disk. Two copies of these numbers would
+// be a third instance of the drift the paragraph above is about, so there is one.
+export const BACKDROP_TRIM = { contrast: 1.2, brightness: 1.0, vibrancy: 0.4 } as const
+const CONTRAST = BACKDROP_TRIM.contrast
+const BRIGHTNESS = BACKDROP_TRIM.brightness
+const VIBRANCY = BACKDROP_TRIM.vibrancy
 
 // GSK takes a single gaussian radius; Hyprland runs dual-Kawase, where every
 // pass HALVES the resolution — so its reach grows with 2^passes, not √passes.
@@ -91,6 +97,27 @@ const BLUR_RADIUS = BLUR_SIZE * Math.pow(2, BLUR_PASSES) * 2
 // (fixed dark palette; the accent only reaches the rim on focus), so they stay
 // constants — but shared ones.
 const { fill: GLASS_FILL, rimStrong: RIM_STRONG, rimSubtle: RIM_SUBTLE } = LOCK_GLASS
+
+// The body's TINT follows the skin; its alpha never does. See ui/lib/backdrop-skin.ts
+// for why the skin is chosen from the wallpaper (tech-debt #82) — the short version is
+// that no backdrop defeats both skins, so choosing beats thickening.
+//
+// ⚠️ THE ALPHA IS NOT A TONE CHOICE AND MUST NOT MOVE WITH THE SKIN. It is paired with
+// the greeter layer's `ignore_alpha` (0.23, config/greetd/hyprland-greeter.lua): glass
+// under that number is not blurred by the compositor AT ALL — no error, no crash, just
+// a flat login screen. `scripts/ci/blur-threshold-check.mjs` reads both. Swapping the
+// tint keeps LOCK_GLASS.fill.a on both sides of the swap, so the pairing holds.
+//
+// ⚠️ The RIM does not flip either. It is a specular — the colour of the light, not of
+// the surface — which is why the shell's light mode keeps a white edge too, and a
+// stronger one. Flipping it would paint a dark hairline where a highlight belongs.
+let glassFill = GLASS_FILL
+
+/** Dress the painted capsules in a skin. Call before any capsule is drawn. */
+export function setGlassSkin(skin: "dark" | "light") {
+  const tint = skin === "dark" ? GLASS_TINT.dark : GLASS_TINT.light
+  glassFill = { r: tint.r, g: tint.g, b: tint.b, a: GLASS_FILL.a }
+}
 
 // Focus. The CSS used to draw TWO things on focus: a soft outer ring
 // (box-shadow, still CSS — it lives outside the capsule) and a solid accent
@@ -401,7 +428,7 @@ export class GlassCapsule extends Gtk.Box {
           src.init(-bounds.get_x(), -bounds.get_y(), texture.get_width(), texture.get_height())
           snapshot.append_texture(texture, src)
         }
-        snapshot.append_color(rgba(GLASS_FILL), outerBox)
+        snapshot.append_color(rgba(glassFill), outerBox)
         snapshot.pop()
 
         // 2) The RIM, on top: a 1px ring, filled through an even-odd Cairo path

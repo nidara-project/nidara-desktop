@@ -2824,7 +2824,7 @@ both problems: it uses a throwaway service with no faillock, and it asserts the 
 
 ---
 
-### 82. ⚠️ OPEN — thin glass cannot carry white text over a bright wallpaper (2026-08-23)
+### 82. ⬒ HALF DONE — thin glass cannot carry white text over a bright wallpaper (2026-08-23)
 
 Found while fixing #81, and it is the part a floor cannot fix. Measured (sRGB composite, WCAG
 contrast, `GLASS_TINT.dark` over the wallpaper, white text on top):
@@ -2844,12 +2844,30 @@ backdrop 20% under every surface, so the same white wallpaper measured 1.76:1 at
 also a fail. The fix did not create the problem, it removed the thing that made it *slightly* less
 bad while nobody was looking at the number.
 
-The answer is the one macOS uses: give the **text** its own legibility rather than paying for it in
-material — vibrancy, a shadow, or a scrim under labels — after which the glass could go thin again
-and `GLASS_RANGE.min` could come back down. Not attempted here: it touches every surface that puts
-text on glass (bar labels, CC/NC section text, Prism results) and it is a look decision, not a
-number. Do NOT "fix" this by raising the floor further; that trades the whole aesthetic for a
-wallpaper most users do not have.
+✅ **ANSWERED AND SHIPPED FOR THE LOGIN SCREENS, 2026-08-25 — and the answer was a step earlier
+than this entry expected.** It said "give the text its own legibility (vibrancy, a shadow, a scrim)".
+What the measurement found is that the choice comes first: sweep the RGB cube (140,608 backdrops)
+and score both skins — white text on dark glass fails AA on **42.9 %** of them, black text on light
+glass on 14.9 %, and **the worst case for the BETTER of the two is 6.07:1**. No backdrop defeats
+both. So the legibility problem was never a shortage of material, it was a choice nobody was making.
+The greeter and the lockscreen now measure the wallpaper they are about to be painted over and wear
+the skin it can carry: `ui/lib/backdrop-skin.ts` + `ui/lib/login-skin.ts`, the light palette beside
+the dark one under `window.skin-light` in `ui/greeter/style.scss`. Full write-up, the prior art
+(Apple flips the material AND its glyphs; Windows' in-material blend layer is unreachable here) and
+the per-wallpaper table are in `design-system.md` → "The login screens choose their skin from the
+wallpaper". `wallpaper-chroma.jpg` — shipped, in the box — measured **2.50:1** and now measures
+13.71:1.
+
+⚠️ **STILL OPEN FOR THE SHELL, and not as a follow-up chore.** The mechanism is honest on the login
+screens because nothing but the wallpaper can be behind them. A shell surface can have a FULLSCREEN
+OR FLOATING WINDOW behind it, which no wallpaper measurement can see — so `shellAppearance: auto`
+would be right about the wallpaper case and blind about the other. Deciding that is a design call
+with a real blind spot in it; the owner deferred it on 2026-08-25 after seeing the numbers. Until
+then the shell's answer remains the appearance PIN, chosen by hand.
+
+Do NOT "fix" the remaining half by raising the floor; that trades the whole aesthetic for a
+wallpaper most users do not have, and the sweep above shows it cannot even work (0.55 still fails
+1.2 % of backdrops, and 0.59 has stopped being glass).
 
 ### 83. ⚠️ OPEN — the glass mixer cannot express per-surface floors (2026-08-23)
 
@@ -2963,6 +2981,13 @@ different loads).
 The glass half is done: `ui/lib/glass-paint.ts` now holds the rim ramp, the silhouette and the
 shadow recipe, and the greeter/lockscreen capsule paints them (see `design-system.md`). Four things
 that audit found are NOT fixed, and one of them is about the instrument rather than the product.
+
+✅ **(a) AND (b) FIXED 2026-08-25 by the skin the wallpaper chooses (#82).** Both were the same
+defect wearing two hats — a token that assumes a dark backdrop, on the surfaces whose backdrop is
+the user's own photograph — and both stop existing once the backdrop gets a vote: the username is
+black ink on a bright wallpaper instead of white, and the avatar's ring flips with
+`--nidara-glass-border`. What follows is the original report, kept because the DIAGNOSIS is the
+part that generalises.
 
 **a. The username is white text with no glass under it.** On a pale wallpaper `Ángel` sits directly
 on the backdrop at marginal contrast. This is #82 (thin glass cannot carry white text over a bright
@@ -3145,6 +3170,57 @@ have REFUSED — and nothing exercises that.
 `colorSchemeVariant()` reported the `default` enum value as *prefer-dark* (the enum is
 `default|prefer-dark|prefer-light`; it now returns 0), and both spawn sites built a command STRING
 from caller-supplied paths — now `Gio.Subprocess` with fixed argv.
+
+### 91. ⚠️ OPEN — the login screens wear the DOCK's material, and nobody chose that (2026-08-25)
+
+Found while answering #82, and it is a sequencing accident rather than a decision.
+
+**#254** gave the login surfaces `LOCK_GLASS.fill.a = 0.24`, and its comment says why: it is "the
+SHELL's `GLASS_RANGE.min` … so the login screen wears the same material as the desktop at its
+thinnest rather than a heavier one nobody chose." True when written.
+
+**#255**, the very next commit that day (`git merge-base --is-ancestor` confirms the order), raised
+the shipped glass to `GLASS_DEFAULT = 0.48` for every surface that carries text — bar, overlays,
+Settings/About — and left `GLASS_RANGE.min` on exactly one surface, the dock, with this reason in
+`NidaraTheme.ts`: *"the dock stays at the floor because it is the one surface that sits over the
+WALLPAPER with nothing behind it and never carries body text — its icons are opaque."*
+
+The login was not carried along. So the one screen that is ALL text — username, password, error,
+session selector, primary button, power bar — wears the material picked for the surface that has
+no text at all. #254's premise expired within hours and nothing noticed, because both numbers still
+agreed with a sentence somebody had written.
+
+**What it costs, measured** (white text on dark glass, over the shipped `wallpaper-chroma.jpg`,
+after the blur trim): **2.50:1 at 0.24 → 4.86:1 at 0.48.** It is most of the ~2.8:1 #87 reported.
+
+⛔ **The owner declined the change on 2026-08-25, with the numbers in front of them**, choosing to
+close #82's login half by flipping the SKIN instead and leave the material alone. That is why this
+is an entry and not a commit. It is recorded because the *reasoning* in `LOCK_GLASS`'s comment is
+now false — it cites a lockstep with the shell that has not existed since #255 — and a false
+justification is what produced this in the first place. If the material is ever revisited, the
+question is not "0.24 or 0.48" but "which of the shell's surfaces is the login screen LIKE".
+
+⚠️ Raising it is safe from the blur side and that is worth stating so it is not re-derived: the
+`ignore_alpha` pairing (0.23) is a FLOOR, so 0.48 clears it by more than 0.24 does. The scrim/hero
+ceiling is a separate quantity and is untouched by the body's alpha.
+
+### 92. ⚠️ OPEN — `--nidara-state-selected` never follows the accent on the login screens (2026-08-25)
+
+Small, and found by trying to give it a light-mode value. `ui/greeter/style.scss` declares
+`--nidara-state-selected: rgba(0, 136, 255, 0.22)` in its pre-load palette — the default blue —
+and `accentCssFor()`, which overwrites every other accent token at runtime, **does not emit this
+one**. So a user who picked green gets green everywhere on the login screen except the selected row
+of a dropdown, which stays blue forever. The shell is unaffected: `nidaraVars` emits it from the
+accent like everything else.
+
+The fix is one line in `accentCssFor()` (emit `--nidara-state-selected` with the mode's alpha), and
+it was NOT taken here on purpose: that function is shared with the shell's own token path, so it
+needs checking against both consumers rather than being tacked onto a skin change. Left with the
+alpha it has.
+
+⚠️ It is also why the light skin does not redefine it. `window.skin-light *` out-specifies
+`accentCssFor()`'s bare `*`, so a copy there would not be a lighter selection — it would PIN the
+accent to whatever was typed, for every user who chose a different one.
 
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 

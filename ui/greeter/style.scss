@@ -154,6 +154,96 @@
   --nidara-popover-border: rgba(255, 255, 255, 0.14);
 }
 
+// ── The LIGHT skin ──────────────────────────────────────────────────────────
+// ⚠️ THE PREMISE THREE COMMENTS ABOVE — "these two surfaces are permanently dark
+// glass over the user's wallpaper" — IS RETIRED HERE, and it is worth saying why
+// rather than just editing it out. It was never a design preference; it was a
+// description of what the code could do. What it costs is tech-debt #82: white text
+// on this glass over a pale wallpaper measures 1.69:1, and the material cannot be
+// thickened out of it (nothing under alpha 0.59 clears 4.5:1 on white, and 0.59 has
+// stopped being glass). The surfaces are still glass over the wallpaper. They are no
+// longer permanently dark.
+//
+// 🔑 WHY A SECOND SKIN AND NOT A STRONGER SCRIM. Sweeping the RGB cube (140,608
+// backdrops) under both skins: white-on-dark fails AA on 42.9 % of them, black-on-
+// light on 14.9 % — and the worst case for the BETTER of the two is 6.07:1. **No
+// backdrop defeats both.** So the legibility problem is not a shortage of material,
+// it is a choice nobody was making. `ui/lib/backdrop-skin.ts` makes it, from the
+// wallpaper, before the window maps; `ui/lib/login-skin.ts` puts the class on.
+// It is also where the prior art went: Apple's Liquid Glass flips the material AND
+// the glyphs on it by what is behind (WWDC25).
+//
+// The selector is the shell's proven shape (`generateChromeTokenScope`), for the
+// reason documented there: GTK4 custom properties do not reach descendants
+// reliably, so the scope has to hit every node DIRECTLY, and a class-qualified
+// universal out-specifies the bare `*` that defines the dark set above.
+//
+// ⚠️ WHAT IS DELIBERATELY NOT HERE, and each for a different reason.
+//   · `--nidara-danger`, `--nidara-warning`, `--nidara-accent-fg`, `--nidara-border`
+//     (a neutral grey by construction) mean the same thing in both skins. A token
+//     repeated for no reason is a token that can drift for no reason.
+//   · Every ACCENT token, including `--nidara-state-selected`. `accentCssFor()`
+//     rewrites those at runtime under a bare `*`, and this block out-specifies it —
+//     so a copy here would not be a lighter shade of the accent, it would PIN the
+//     accent to whatever was typed, for every user who picked a different one. The
+//     light skin therefore keeps dark's 0.22 selection instead of the shell's 0.16,
+//     which is a smaller wrong than the alternative.
+//   · `.greeter-avatar-fallback`'s white disc, which looks like an omission and is
+//     not. It is a LIGHT body so that the glyph on it is legible, and under this skin
+//     the glyph stops being inverted and renders black — so the disc must stay light
+//     for the same reason it was made light. What makes the circle visible on a pale
+//     wallpaper is its RING, and that flips to ink above. Its alpha (0.24) also has
+//     to clear `ignore_alpha` alone, which is a third reason not to touch it.
+window.skin-light,
+window.skin-light * {
+  // Ink. The primary keeps this sheet's own 0.95 rather than a flat black: the type
+  // here sits on glass over a photograph, and the last 5 % is what stops it reading
+  // as stamped on. Secondary and dim take the shell's LIGHT nudge (0.85 / 0.72
+  // against dark's 0.8 / 0.55) for the reason `nidaraVars` gives — black ink over
+  // translucent light glass reads washed-out at the dark-mode alphas.
+  --nidara-text:           rgba(0, 0, 0, 0.95);
+  --nidara-text-secondary: rgba(0, 0, 0, 0.85);
+  --nidara-text-dim:       rgba(0, 0, 0, 0.72);
+
+  // The glass. Same alpha, opposite tint — and the alpha is NOT free to move with
+  // the skin: it is paired with the greeter layer's `ignore_alpha` (0.23), so a
+  // lighter-looking number here would stop the compositor blurring this screen at
+  // all. `GLASS_TINT.light` is #fafafa, not pure white: light vibrancy is off-white
+  // in the prior art we follow, and pure white has no material.
+  --nidara-glass:          rgba(250, 250, 250, 0.24);
+
+  // 🔑 THIS PAIR IS TECH-DEBT #87(b). These are not the capsule's painted rim — that
+  // is a SPECULAR (the colour of the light, not of the surface) and stays white in
+  // both skins, exactly as the shell's `--nidara-edge` does in light mode. These two
+  // are ordinary CSS borders: the avatar's ring, the dropdown popovers, the
+  // separator. A translucent white ring on light glass over a pale wallpaper is
+  // invisible, which is what #87(b) reported — "a user with no photo gets an
+  // invisible circle around an inverted glyph". Here they are ink, same two alphas.
+  --nidara-glass-border:   rgba(0, 0, 0, 0.22);
+  --nidara-glass-border-sm:rgba(0, 0, 0, 0.14);
+  // The rim of light. WHITE in both skins, and stronger here — the shell's light
+  // value verbatim. A specular has to survive a bright body.
+  --nidara-edge:           1px solid rgba(255, 255, 255, 0.50);
+
+  // Fills that move toward the mode's contrast: same alphas, ink flipped. This is
+  // the trick the shell's interaction states rely on — they darken in light and
+  // lighten in dark, so hover and pressed stay visible over ANY wallpaper.
+  --nidara-surface-back:   rgba(0, 0, 0, 0.04);
+  --nidara-surface:        rgba(0, 0, 0, 0.08);
+  --nidara-surface-hover:  rgba(0, 0, 0, 0.12);
+  --nidara-surface-active: rgba(0, 0, 0, 0.16);
+  --nidara-surface-raised: rgba(0, 0, 0, 0.20);
+
+  // Bodies drawn by CSS rather than by the painter.
+  --nidara-bg:             rgba(250, 250, 250, 0.5);
+  --nidara-popover-bg:     rgba(250, 250, 250, 0.48);
+  --nidara-popover-border: rgba(0, 0, 0, 0.10);
+
+  // Light shadows are not the dark ones dimmed — there is more ambient contrast to
+  // work with, so they run at a fraction of the alpha. The shell's light set.
+  --nidara-shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
 // ── Shipped icons ───────────────────────────────────────────────────────────
 // Same rule, same reason as the shell's _reset.scss: the Lucide SVGs we ship
 // are not symbolic icons (GTK only recolours a file whose name ends in
@@ -163,6 +253,12 @@
 // Consumers: ui/lib/icons.ts (power bar, keyboard glyph) and the avatar
 // fallback in ui/lib/avatar.ts, which used to carry its own copy of this rule.
 .nd-icon { -gtk-icon-filter: invert(1); }
+// ...and under the light skin it is the invert that would break them: they render
+// black, which is already the ink of that skin. This is the shell's `_reset.scss`
+// conditional arriving here with the mode that made it necessary — the sentence
+// above ("permanently dark glass, so the invert is unconditional") was true for as
+// long as there was one skin.
+window.skin-light .nd-icon { -gtk-icon-filter: none; }
 
 // ── Window ─────────────────────────────────────────────────────────────────
 window,
@@ -230,6 +326,27 @@ window > contents {
     rgba(0, 0, 0, 0.13) 100%);
 }
 
+// The light skin's scrim — same gradient, same stops, same alphas, opposite ink.
+//
+// 🔑 IT HAS TO FLIP, AND THAT IS THE WHOLE ARGUMENT FOR IT. A scrim does not darken;
+// it lifts the contrast under text that has none. Under the dark skin the text is
+// white, so the lift is downward. Under the light skin the text is black and the
+// wallpaper is bright (that is WHY the light skin was chosen), so a dark scrim would
+// push the backdrop toward the ink and take contrast away from the block it exists to
+// protect. Leaving it black would have been the silent half-fix: everything on glass
+// would flip and the one block with no glass — the hero — would quietly get worse.
+//
+// The alphas do not change, so the composite the invariant above governs does not
+// change either. `scripts/ci/blur-threshold-check.mjs` measures BOTH skins and takes
+// the worse, so this cannot drift out from under the ceiling on its own.
+window.skin-light .greeter-scrim {
+  background-image: linear-gradient(to bottom,
+    rgba(255, 255, 255, 0.13) 0%,
+    rgba(255, 255, 255, 0.08) 34%,
+    rgba(255, 255, 255, 0.08) 66%,
+    rgba(255, 255, 255, 0.13) 100%);
+}
+
 // ── Text with no glass behind it ─────────────────────────────────────────────
 // THE MEMBERSHIP RULE, not a list of favourites: everything on either screen
 // that sits DIRECTLY on the wallpaper goes here. Anything inside a painted
@@ -255,6 +372,18 @@ window > contents {
   // had blurred wallpaper behind it, and the ring ended in a hard edge where the
   // falloff crossed the threshold. Read the invariant there before changing these.
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.05), 0 0 14px rgba(0, 0, 0, 0.04);
+}
+
+// The same shadow for the light skin, in the opposite ink — and the SAME two alphas,
+// which is the point. A shadow's job here is to give the glyph an edge against a
+// backdrop that could be anything; under the light skin the glyph is black and the
+// backdrop is bright, so the edge has to be light or it does nothing. Keeping the
+// alphas identical keeps the composite identical, so the ceiling
+// (`a_total < ignore_alpha`) is unchanged by the skin — the gate checks both.
+window.skin-light .greeter-date,
+window.skin-light .greeter-clock,
+window.skin-light .greeter-username {
+  text-shadow: 0 1px 4px rgba(255, 255, 255, 0.05), 0 0 14px rgba(255, 255, 255, 0.04);
 }
 
 .greeter-date {

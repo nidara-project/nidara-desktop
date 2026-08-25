@@ -123,6 +123,15 @@ const ICON_DIR = `${GLib.getenv("NIDARA_SHELL_ROOT") ?? "/usr/share/nidara/ui/sh
 const W = parseInt(GLib.getenv("W") || "1280", 10)
 const H = parseInt(GLib.getenv("H") || "800", 10)
 const LOCALE = GLib.getenv("LOCALE") || "es"
+// SKIN=dark|light — which skin the surface wears (ui/lib/login-skin.ts). In the product
+// this is MEASURED from the wallpaper (tech-debt #82); here it is chosen by hand, which
+// is the point: it is how the two are compared over the SAME backdrop.
+//
+// ⚠️ Not a degraded mode, so it does not stamp the warning band: both values are real
+// product states. What it must not do is disagree with the backdrop it is rendered
+// over — a light skin over a dark BG is a legitimate thing to look at ("what would the
+// wrong choice look like?") and a meaningless thing to measure.
+const SKIN = GLib.getenv("SKIN") || "dark"
 
 /* ── The STRINGS come from the shipped catalog, never from this file ──────────
  *
@@ -220,8 +229,15 @@ const PAINTER = GLib.getenv("PAINTER")
 if (PAINTER) {
     const mod = await import(`file://${PAINTER}`)
     if (GLib.file_test(BG, GLib.FileTest.EXISTS) && SCOPE === "lock") mod.setCapsuleBackdrop(BG)
+    // SKIN reaches the PAINTER as well as the sheet, and it has to: the capsule's body
+    // is Cairo, which cannot read a CSS custom property (the wall `setAccentRim` exists
+    // for). Rendering the light class without this gives light TYPE on a dark BODY —
+    // a specimen that exists nowhere, and the most convincing kind of wrong answer.
+    if (SKIN === "light") mod.setGlassSkin("light")
     wrap = (w, rim = "subtle", followFocus = false) => mod.withGlassCapsule(w, rim, followFocus)
     print(`[painter] ${PAINTER}${SCOPE === "lock" ? " (with backdrop)" : ""}`)
+} else if (SKIN === "light") {
+    print("[warn] SKIN=light without PAINTER — the capsule bodies will not be in it")
 }
 
 // KIT=<bundled ui/lib/nidara-kit/scrolled.js> — build the three selectors with the
@@ -246,6 +262,10 @@ if (KIT) {
 
 // ── the specimen: Lock.ts's buildWindow(), minus the parts that need a session ──
 const classes = SCOPE === "lock" ? ["greeter-window", "nidara-lock-window"] : ["greeter-window"]
+// The skin is a class on the WINDOW — `applyLoginSkin` puts it there in both bundles,
+// and the stylesheet's light block is scoped to it (`window.skin-light *`), so it has
+// to be on the toplevel and not on the card.
+if (SKIN === "light") classes.push("skin-light")
 const win = new Gtk.Window({ default_width: W, default_height: H, css_classes: classes })
 
 const backdrop = GLib.file_test(BG, GLib.FileTest.EXISTS)

@@ -107,20 +107,38 @@ const alphasIn = (block, what) => {
     if (found.length === 0) { console.error(`blur-threshold-check: no rgba() alphas in ${what}`); process.exit(1) }
     return found
 }
-const blockAfter = (marker, what) => {
-    const i = scss.indexOf(marker)
-    if (i < 0) { console.error(`blur-threshold-check: could not find ${what} (looked for ${marker})`); process.exit(1) }
-    const end = scss.indexOf("}", i)
-    return scss.slice(i, end)
+// ⚠️ EVERY block, not the first one — and that is not tidiness, it is the difference
+// between a gate and a gate-shaped comment. Since the login screens gained a LIGHT
+// skin (`window.skin-light …`, tech-debt #82) each of these rules exists twice: the
+// dark one and the light one, same alphas, opposite ink. `indexOf` would have found
+// the dark one, passed, and never looked at the other — so the new branch would be
+// the only un-audited paint on the two surfaces that have a CI gate precisely because
+// their paint is un-auditable by eye. A rule that stops being measured is exactly how
+// the 0.28-vs-0.23 drift shipped in the first place.
+const blocksFor = (marker, what) => {
+    const out = []
+    for (let i = scss.indexOf(marker); i >= 0; i = scss.indexOf(marker, i + 1)) {
+        out.push(scss.slice(i, scss.indexOf("}", i)))
+    }
+    if (out.length === 0) { console.error(`blur-threshold-check: could not find ${what} (looked for ${marker})`); process.exit(1) }
+    return out
 }
 
-// The scrim's gradient: its DARKEST stop is the one that decides.
-const scrimMax = Math.max(...alphasIn(blockAfter(".greeter-scrim {", "the scrim rule"), ".greeter-scrim"))
-// The hero shadow: both layers of it, and they stack with each other as well.
-const heroBlock = blockAfter(".greeter-username {", "the hero text rule")
-const shadowLine = heroBlock.split("\n").find(l => l.includes("text-shadow"))
-if (!shadowLine) { console.error("blur-threshold-check: no text-shadow in the hero text rule"); process.exit(1) }
-const heroAlphas = alphasIn(shadowLine, "the hero text-shadow")
+// The scrim's gradient: its DARKEST stop is the one that decides — across both skins.
+const scrimMax = Math.max(...blocksFor(".greeter-scrim {", "the scrim rule")
+    .flatMap((b, i) => alphasIn(b, `.greeter-scrim #${i + 1}`)))
+
+// The hero shadow: both layers of it, and they stack with each other as well. The
+// marker matches the shadow rule AND `.greeter-username`'s own type rule, so the
+// blocks without a text-shadow are not an error — they are the other rule.
+const shadowLines = blocksFor(".greeter-username {", "the hero text rule")
+    .map(b => b.split("\n").find(l => l.includes("text-shadow")))
+    .filter(Boolean)
+if (shadowLines.length === 0) { console.error("blur-threshold-check: no text-shadow in any .greeter-username rule"); process.exit(1) }
+// Position by position, the worst any skin declares.
+const perSkin = shadowLines.map((l, i) => alphasIn(l, `the hero text-shadow #${i + 1}`))
+const layers = Math.max(...perSkin.map(a => a.length))
+const heroAlphas = Array.from({ length: layers }, (_, i) => Math.max(...perSkin.map(a => a[i] ?? 0)))
 
 // Alpha compositing, not addition: a_total = 1 − Π(1 − aᵢ)
 const composite = 1 - [scrimMax, ...heroAlphas].reduce((acc, a) => acc * (1 - a), 1)
@@ -140,10 +158,14 @@ const greeterThreshold = parseFloat(greeterRule[2])
 // scrim took that away and the circle went sharp — a body that stops being glass
 // because a DIFFERENT rule changed. Named explicitly here so the coupling cannot come
 // back silently: if a fill needs the layer to blur behind it, its own alpha says so.
-const avatarBlock = blockAfter(".greeter-avatar-fallback {", "the avatar fallback rule")
-const avatarLine = avatarBlock.split("\n").find(l => /background\s*:/.test(l))
-if (!avatarLine) { console.error("blur-threshold-check: no background in .greeter-avatar-fallback"); process.exit(1) }
-const avatarAlpha = alphasIn(avatarLine, ".greeter-avatar-fallback")[0]
+// Every skin's version of it, and the THINNEST wins the argument: this body has to
+// clear the threshold on its own, so the one closest to the line is the one that
+// decides whether the circle goes sharp.
+const avatarLines = blocksFor(".greeter-avatar-fallback {", "the avatar fallback rule")
+    .map(b => b.split("\n").find(l => /background\s*:/.test(l)))
+    .filter(Boolean)
+if (avatarLines.length === 0) { console.error("blur-threshold-check: no background in .greeter-avatar-fallback"); process.exit(1) }
+const avatarAlpha = Math.min(...avatarLines.map((l, i) => alphasIn(l, `.greeter-avatar-fallback #${i + 1}`)[0]))
 
 const parts = [`scrim ${scrimMax}`, ...heroAlphas.map(a => `shadow ${a}`)].join(" + ")
 const ceilingOk = composite < greeterThreshold
