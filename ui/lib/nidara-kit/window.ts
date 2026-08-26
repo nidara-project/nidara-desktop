@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
-import { NidaraAppWindow } from "./app-window"
+import { NidaraAppWindow, type NidaraCloseMode } from "./app-window"
 import { NidaraScrolled } from "./scrolled"
 import { NidaraSplitView, type NidaraSplitViewResult } from "./split-view"
 import { RADIUS, WINDOW_LAYOUT, collapseAtFor, minWindowWidthFor } from "../tokens"
@@ -14,47 +14,82 @@ import { RADIUS, WINDOW_LAYOUT, collapseAtFor, minWindowWidthFor } from "../toke
 export const NIDARA_WINDOW_RADIUS = RADIUS.lg
 export const NIDARA_CARD_RADIUS = RADIUS.md
 
-export interface NidaraWindowOpts {
-    app: any
-    title: string
-    /** Sidebar navigation widget — e.g. NidaraSidebar(...).widget. */
-    sidebar: Gtk.Widget
-    /** Main content widget (the caller swaps its children). */
-    content: Gtk.Widget
-    /** Icon for the sidebar toggle button (passed in so the lib stays free of the
-     *  app's icon set). */
+/**
+ * The sidebar, and everything that only means anything WITH one.
+ *
+ * Grouped rather than flattened so the signature stays honest: a window without a
+ * sidebar has no sidebar options to ignore, and adding one later is filling in
+ * this object rather than migrating to a different component.
+ */
+export interface NidaraWindowSidebar {
+    /** The navigation widget — e.g. `NidaraSidebar(...).widget`, or a wizard's step list. */
+    widget: Gtk.Widget
+    /** Icon for the toggle button (passed in so the kit stays free of the app's icon set). */
     toggleIcon: Gio.FileIcon
-    /** Optional widget centered in the header (rarely used now). */
-    headerCenter?: Gtk.Widget
-    /** Optional widget in the header start, after the toggle + nav (e.g. a title /
-     *  breadcrumb). */
-    headerTitle?: Gtk.Widget
-    /** Optional widget at the header's end (a close button, etc.). */
-    headerEnd?: Gtk.Widget
-    /** Optional widget pinned at the top of the sidebar capsule (e.g. a search box). */
-    sidebarTop?: Gtk.Widget
-    /** Optional widget placed in the header next to the toggle (e.g. a back/forward
-     *  nav capsule). */
-    toolbarExtra?: Gtk.Widget
-    sidebarWidth?: number
+    /** Pinned at the top of the sidebar capsule, above the list (e.g. a search box). */
+    top?: Gtk.Widget
+    width?: number
     /**
      * The content pane's CONSTANT width (see WINDOW_LAYOUT). It is not a hint: it
      * sets the sidebar's breakpoint and the width the window opens at, and the
      * caller is expected to clamp its pages to the same number.
      */
     contentWidth?: number
-    /** Only a floor for the OPENING size — see `openWidth`. The window's minimum is
-     *  the distress width, not this. */
+}
+
+export interface NidaraWindowHeaderSlots {
+    /**
+     * The leading row. An ARRAY because a header start is a row of things — a nav
+     * capsule and a breadcrumb sit in ONE spacing-8 box, and wrapping them in a
+     * second one would double the gap. With a sidebar, the toggle button is
+     * prepended to whatever is here.
+     */
+    start?: Gtk.Widget | Gtk.Widget[]
+    center?: Gtk.Widget
+    /** Conventionally the close button (`NidaraCircleButton`). */
+    end?: Gtk.Widget
+    cssClasses?: string[]
+}
+
+export interface NidaraWindowOpts {
+    app: any
+    title: string
+    /** The main content (the caller swaps its children). */
+    content: Gtk.Widget
+    /**
+     * Give it a sidebar, or do not. **This is an option, not a different kind of
+     * window** — see the note on `NidaraWindow` below.
+     */
+    sidebar?: NidaraWindowSidebar
+    header?: NidaraWindowHeaderSlots
+    /** Pinned below everything — a wizard's Back/Continue row. Spans the card,
+     *  under the sidebar and the content alike. */
+    footer?: Gtk.Widget
+
+    /** Hide or destroy on close. Default `"destroy"`; Settings wants `"hide"`. */
+    closeMode?: NidaraCloseMode
+    /** Return `true` to REFUSE the close. See NidaraAppWindow. */
+    onClose?: () => boolean | void
+    closeOnEscape?: boolean
+    resizable?: boolean
+
+    /** Only a floor for the OPENING size — with a sidebar, the window still opens
+     *  at least wide enough to dock it. The window's MINIMUM is the distress width. */
     defaultWidth?: number
     defaultHeight?: number
-    /** Extra css classes on the Gtk.Window. */
+    /** Overrides the distress floor. Rarely wanted with a sidebar. */
+    minWidth?: number
+    minHeight?: number
+
     cssClasses?: string[]
+    /** Extra classes beside `nidara-window-glass` on the card. */
+    glassClasses?: string[]
     /** Gtk.Window name (for #id CSS / Hyprland matching). */
     name?: string
     /**
      * The Wayland app-id this window declares for ITSELF, instead of inheriting
-     * the process-wide one. A settings-style window is a real application window
-     * and the compositor should file it as one — see `ui/lib/app-id.ts`.
+     * the process-wide one. A real application window is one the compositor should
+     * file as one — see `ui/lib/app-id.ts`.
      */
     appId?: string
     // No tooltip opt for the toggle ON PURPOSE — native GTK tooltips are
@@ -63,32 +98,83 @@ export interface NidaraWindowOpts {
 
 export interface NidaraWindowResult {
     window: Gtk.Window
-    /** Toggle visibility (presents on show). */
+    /** The glass card. */
+    glass: Gtk.Box
+    /** Show, or hide if already visible. */
     toggle: () => void
-    splitView: NidaraSplitViewResult
-    /** The sidebar toggle button. */
-    sidebarToggle: Gtk.Button
+    /** Run the close policy — what a close button should call. */
+    close: () => void
+    /** Only when a `sidebar` was given. */
+    splitView?: NidaraSplitViewResult
+    /** Only when a `sidebar` was given. */
+    sidebarToggle?: Gtk.Button
 }
 
 /**
- * NidaraWindow — the ONE place a settings-style window shell is assembled.
+ * NidaraWindow — the ONE window in this desktop, sidebar optional.
  *
- * Undecorated glass window + NidaraSplitView (sidebar capsule | content) and a
- * draggable header. The toggle + nav capsule + title live permanently in the
- * header start (toggle · nav · title … end); the sidebar capsule top holds an
- * optional search box. The caller supplies the sidebar, the content, and optional
- * header/sidebar widgets — so any new window is built by reusing this, not by
- * re-assembling the chrome. See feedback_universal_components.
+ * Undecorated glass card, a draggable header, one close path, its own app-id;
+ * and, if you pass a `sidebar`, a full-height capsule beside the content with the
+ * split view and the breakpoint that docks it.
+ *
+ * ⚠️ **The sidebar is an OPTION, not a second component, and that was learned the
+ * hard way (2026-08-26).** For one afternoon there were two exported names — a
+ * base and a sidebar version — and the split looked principled because the two
+ * layouts really are different (with a sidebar the header sits over the CONTENT,
+ * beside a full-height capsule; without one it crosses the whole card). But
+ * "does this app have a sidebar" is a per-app choice, not a per-class one —
+ * Finder and System Settings differ on it, and the installer will want a step
+ * list the day it stops being a two-button wizard. With two names, adding a
+ * sidebar meant migrating a window to a different component; with one, it is
+ * filling in an object. The base still exists — `app-window.ts`, which builds the
+ * toplevel, the glass and the close policy — but it is INTERNAL. There is one
+ * name to choose.
+ *
+ * The header placement is DERIVED, not an option: a sidebar means the header goes
+ * over the content pane, because a full-height capsule is what that layout is. If
+ * a real case ever wants Finder's spanning toolbar with a sidebar, add the axis
+ * then — a parameter nobody uses today is a third way for two windows to drift.
  */
 export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     const {
-        app, title, sidebar, content, toggleIcon,
-        headerCenter, headerTitle, headerEnd, sidebarTop, toolbarExtra,
-        sidebarWidth = WINDOW_LAYOUT.sidebar,
-        contentWidth = WINDOW_LAYOUT.content,
-        defaultWidth, defaultHeight = 760,
-        cssClasses = [], name, appId,
+        app, title, content, sidebar, header, footer,
+        closeMode, onClose, closeOnEscape, resizable,
+        defaultWidth, defaultHeight, minWidth, minHeight,
+        cssClasses = [], glassClasses = [], name, appId,
     } = opts
+
+    const headerStartWidgets = (): Gtk.Widget[] => {
+        const st = header?.start
+        return st ? (Array.isArray(st) ? st : [st]) : []
+    }
+
+    // ── No sidebar: the header crosses the card, and the base is the whole thing ──
+    if (!sidebar) {
+        const start = headerStartWidgets()
+        let startWidget: Gtk.Widget | undefined
+        if (start.length === 1) {
+            startWidget = start[0]
+        } else if (start.length > 1) {
+            const row = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER, css_classes: ["nidara-window-tools"] })
+            for (const w of start) row.append(w)
+            startWidget = row
+        }
+        const base = NidaraAppWindow({
+            app, title, content, footer,
+            header: header && {
+                start: startWidget, center: header.center, end: header.end,
+                cssClasses: header.cssClasses,
+            },
+            closeMode, onClose, closeOnEscape, resizable,
+            defaultWidth, defaultHeight, minWidth, minHeight,
+            cssClasses, glassClasses, name, appId,
+        })
+        return { window: base.window, glass: base.glass, toggle: base.toggle, close: base.close }
+    }
+
+    // ── With a sidebar ────────────────────────────────────────────────────────
+    const sidebarWidth = sidebar.width ?? WINDOW_LAYOUT.sidebar
+    const contentWidth = sidebar.contentWidth ?? WINDOW_LAYOUT.content
 
     // The window opens WIDE ENOUGH TO BE ITSELF: sidebar docked and the pane at its
     // full width. A default below the breakpoint would greet every user with the
@@ -117,7 +203,6 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     // `tiled-left`, `tiled-right`, `tiled-bottom` AND `maximized`. As a signal for
     // "someone else decides how wide I am" it is stuck on, so a floor that reads it
     // is a floor that never comes back.
-    // (The floor reaches the toplevel through NidaraAppWindow's `minWidth`/`minHeight`.)
 
     // ── Sidebar capsule (toolbar on top, scrolling list below) ────────────────
     // NidaraScrolled, like every other scroll view in the DE — a window's sidebar is
@@ -131,7 +216,7 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     // capsule, high-contrast selection). The inset does not have to be as wide as the lane:
     // these rows have no trailing control for the pill to reach.
     const { widget: sidebarScrollWidget, scrolled: sidebarScroll } = NidaraScrolled({
-        child: sidebar,
+        child: sidebar.widget,
         reserveLane: false,
         // Flush with the capsule's rounded bottom, so the pill stops short of it.
         cornerRadius: NIDARA_CARD_RADIUS,
@@ -150,24 +235,26 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         vexpand: true,
     })
     // Optional search box pinned above the navigation list.
-    if (sidebarTop) {
+    if (sidebar.top) {
         const topSlot = new Gtk.Box({ css_classes: ["nidara-sidebar-top"] })
-        topSlot.append(sidebarTop)
+        topSlot.append(sidebar.top)
         sidebarColumn.append(topSlot)
     }
     sidebarColumn.append(sidebarScrollWidget)
 
     // ── Sidebar toggle ────────────────────────────────────────────────────────
     const sidebarToggle = new Gtk.Button({
-        child: new Gtk.Image({ gicon: toggleIcon, pixel_size: 16, css_classes: ["nd-icon"] }),
+        child: new Gtk.Image({ gicon: sidebar.toggleIcon, pixel_size: 16, css_classes: ["nd-icon"] }),
         css_classes: ["nidara-icon-btn", "sidebar-toggle"],
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
     })
 
-    // ── Header over the content (draggable) ───────────────────────────────────
-    // Toggle + nav capsule + title live here permanently (no reparenting): the
-    // toggle stays reachable whether the sidebar is docked, collapsed or hidden.
+    // ── Header over the CONTENT (draggable) ───────────────────────────────────
+    // Not across the card: the sidebar capsule is full height, so a header spanning
+    // the window would cross it. The toggle leads the row permanently (no
+    // reparenting) — it stays reachable whether the sidebar is docked, collapsed or
+    // hidden — and the caller's own widgets follow it in the same spacing-8 box.
     const headerStart = new Gtk.Box({
         spacing: 8,
         valign: Gtk.Align.CENTER,
@@ -175,13 +262,14 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         css_classes: ["nidara-window-tools"],
     })
     headerStart.append(sidebarToggle)
-    if (toolbarExtra) headerStart.append(toolbarExtra)
-    if (headerTitle) headerStart.append(headerTitle)
+    for (const w of headerStartWidgets()) headerStart.append(w)
 
-    const contentHeader = new Gtk.CenterBox({ css_classes: ["nidara-window-header"] })
+    const contentHeader = new Gtk.CenterBox({
+        css_classes: ["nidara-window-header", ...(header?.cssClasses ?? [])],
+    })
     contentHeader.set_start_widget(headerStart)
-    if (headerCenter) contentHeader.set_center_widget(headerCenter)
-    if (headerEnd) contentHeader.set_end_widget(headerEnd)
+    if (header?.center) contentHeader.set_center_widget(header.center)
+    if (header?.end) contentHeader.set_end_widget(header.end)
 
     const headerHandle = new Gtk.WindowHandle()
     headerHandle.set_child(contentHeader)
@@ -211,25 +299,29 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         splitView.setShowSidebar(!splitView.showSidebar)
     })
 
-    // ── The window ────────────────────────────────────────────────────────────
-    // `header` is deliberately NOT passed: this window's header belongs INSIDE the
-    // content column (built above), because the sidebar capsule is full-height
-    // beside it — a header spanning the whole card would cross the capsule. Every
-    // other decision a Nidara window makes is the base's.
-    //
-    // `closeMode: "hide"` because this window is reused across toggles: rebuilding
-    // its 21 pages on every open is visible, and `categories.forEach` builds them
-    // eagerly.
+    // No `header` passed to the base: this layout's header is inside the content
+    // column above, which is the one thing the sidebar changes about the chrome.
     const base = NidaraAppWindow({
-        app, title, content: splitView.widget,
-        closeMode: "hide",
+        app, title, content: splitView.widget, footer,
+        closeMode, onClose, closeOnEscape, resizable,
         defaultWidth: openWidth,
-        defaultHeight,
-        minWidth: minFloorWidth,
-        minHeight: WINDOW_LAYOUT.minHeight,
-        cssClasses, name, appId,
+        // 760 is the SIDEBAR layout's default, not every window's: a two-pane
+        // window that opens short looks broken, while About is 429 tall because
+        // that is its content. Defaulting it for everyone made About 760 the first
+        // time this component was unified (caught on screen, 2026-08-26).
+        defaultHeight: defaultHeight ?? 760,
+        minWidth: minWidth ?? minFloorWidth,
+        minHeight: minHeight ?? WINDOW_LAYOUT.minHeight,
+        cssClasses, glassClasses, name, appId,
     })
     base.glass.set_name("nidara-window-glass")
 
-    return { window: base.window, toggle: base.toggle, splitView, sidebarToggle }
+    return {
+        window: base.window,
+        glass: base.glass,
+        toggle: base.toggle,
+        close: base.close,
+        splitView,
+        sidebarToggle,
+    }
 }

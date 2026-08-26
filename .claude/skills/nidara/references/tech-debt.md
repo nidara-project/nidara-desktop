@@ -1032,8 +1032,8 @@ the stacks, which this entry does.
 
 ### 96. Window chrome: three of five windows are on the kit's base (2026-08-26)
 
-`NidaraAppWindow` (architecture.md) is the base now, and **Settings, About and the installer are
-on it**. Two are not, and the reason is the same one that keeps them out of every other migration:
+`NidaraWindow` (architecture.md) is the one window now — sidebar optional — and **Settings, About
+and the installer are on it**. Two are not, and the reason is the same one that keeps them out of every other migration:
 **the greeter and the lockscreen have no dev mode**, their installed `style.css` outranks a
 source one, and a mistake there locks somebody out of their own machine. They also want less of
 the base than the others do — no header, no close button, no Escape — so the honest question is

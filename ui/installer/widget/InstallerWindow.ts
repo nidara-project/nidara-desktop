@@ -8,8 +8,8 @@
 import Gtk from "gi://Gtk?version=4.0"
 import app from "../../lib/host"
 import {
-  NidaraAppWindow, NidaraButton, NidaraCircleButton, NidaraClamp,
-  type NidaraAppWindowResult,
+  NidaraButton, NidaraCircleButton, NidaraClamp, NidaraWindow,
+  type NidaraWindowResult,
 } from "../../lib/nidara-kit"
 import { ndIcon } from "../../lib/icons"
 import { Flow, type Step } from "../lib/flow"
@@ -158,7 +158,7 @@ export function InstallerWindow(): Gtk.Window {
   // what it calls — so the button gets a thunk rather than the function itself.
   // One path: this button, the compositor's close request and Escape all end in
   // `shell.close()`, which asks `canExit()` first.
-  let shell: NidaraAppWindowResult
+  let shell: NidaraWindowResult
   const head = header(() => shell.close())
 
   // The kit owns the chrome: the undecorated toplevel, the glass card (painted by
@@ -166,7 +166,13 @@ export function InstallerWindow(): Gtk.Window {
   // header, the app-id, and ONE close path that the button, the compositor's
   // request and Escape all go through. What is left here is what an installer
   // actually is — a flow, and the two buttons that move through it.
-  shell = NidaraAppWindow({
+  //
+  // No `sidebar` today, and that is the only thing standing between this and a
+  // step list you can jump around in: fill in `sidebar: { widget, toggleIcon }`
+  // and the capsule, the split view and the docking breakpoint arrive with it.
+  // (Whether a wizard SHOULD let you skip ahead is a product question — the steps
+  // depend on each other's answers — but it is no longer a structural one.)
+  shell = NidaraWindow({
     app,
     title: "Nidara Installer",
     name: "nidara-installer",

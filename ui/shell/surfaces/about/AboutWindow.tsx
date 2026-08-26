@@ -2,7 +2,7 @@ import app from "../../../lib/host"
 import Gtk from "gi://Gtk?version=4.0"
 import Pango from "gi://Pango"
 import Gio from "gi://Gio"
-import { NidaraAppWindow, NidaraButton, NidaraClamp, type NidaraAppWindowResult } from "../../../lib/nidara-kit"
+import { NidaraButton, NidaraClamp, NidaraWindow, type NidaraWindowResult } from "../../../lib/nidara-kit"
 import IconButton from "../../common/IconButton"
 import status from "../../core/Status"
 import shellActions from "../../core/ShellActions"
@@ -226,17 +226,18 @@ export default function AboutWindow(): Gtk.Window | null {
     // border no borderColor tweak can turn off. The CSS route also makes the
     // About follow the user's window-opacity token instead of a hardcoded alpha.
     // ── Window ────────────────────────────────────────────────────────────────
-    // The kit's base since 2026-08-26: the undecorated toplevel, the glass card,
-    // the per-window app-id, Escape, and ONE close path that the card's button,
-    // the compositor's request and the status flag all go through. About passes no
-    // `header` — its close button lives INSIDE the card, on the corner diagonal.
+    // The kit's window: the undecorated toplevel, the glass card, the per-window
+    // app-id, Escape, and ONE close path that the card's button, the compositor's
+    // request and the status flag all go through. About passes no `header` — its
+    // close button lives INSIDE the card, on the corner diagonal — and no
+    // `sidebar`, which is the only thing that would make it the two-pane layout.
     //
     // Float + center come from a static window rule in hyprland.lua (matched by the
     // "About Nidara" title). The old `hyprctl keyword windowrulev2` calls here
     // were rejected by the Lua parser ("Use eval.") and have been removed.
     let sigId = 0
-    let shell: NidaraAppWindowResult
-    shell = NidaraAppWindow({
+    let shell: NidaraWindowResult
+    shell = NidaraWindow({
         app,
         title: "About Nidara",
         name: "nidara-about",

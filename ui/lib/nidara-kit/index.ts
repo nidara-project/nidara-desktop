@@ -55,19 +55,16 @@ export type { NidaraListResult } from "./list"
 export { NidaraSidebar } from "./sidebar"
 export type { NidaraSidebarItem, NidaraSidebarResult } from "./sidebar"
 
-// NidaraAppWindow — the BASE every Nidara application window is built from: the
-// undecorated toplevel, the glass card, an optional draggable header, one close
-// policy (button + compositor request + Escape all through it) and the per-window
-// app-id. Use it directly for a window with no sidebar; NidaraWindow is this plus
-// a sidebar and a split view.
-export { NidaraAppWindow } from "./app-window"
-export type {
-  NidaraAppWindowOpts, NidaraAppWindowResult, NidaraAppWindowHeader, NidaraCloseMode,
-} from "./app-window"
-
-// NidaraWindow — settings-style window shell (glass + split + reparenting header)
+// NidaraWindow — THE window of this desktop: undecorated glass card, draggable
+// header, one close path, its own app-id, and a sidebar + split view IF you pass
+// one. The sidebar is an option, not a second component — see the note on the
+// function. `app-window.ts` is the layer underneath and is deliberately not
+// exported: there is one name to choose.
 export { NidaraWindow, NIDARA_WINDOW_RADIUS, NIDARA_CARD_RADIUS } from "./window"
-export type { NidaraWindowOpts, NidaraWindowResult } from "./window"
+export type {
+  NidaraWindowOpts, NidaraWindowResult, NidaraWindowSidebar, NidaraWindowHeaderSlots,
+} from "./window"
+export type { NidaraCloseMode } from "./app-window"
 
 // makeSlider — the ONE slider (Cairo, horizontal/vertical; there is no Gtk.Scale
 // anywhere in Nidara). makeHSlider is the horizontal wrapper, makeVolumeSlider binds

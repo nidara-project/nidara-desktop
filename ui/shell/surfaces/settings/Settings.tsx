@@ -436,7 +436,11 @@ export default function Settings(monitor: Gdk.Monitor) {
         variant: "danger",
         tooltip: t("settings.window.close"),
         tooltipChrome: false,   // app-mode window: tooltip follows the system mode
-        onClick: () => cw.window.set_visible(false),
+        // The window's own close path, not a `set_visible` of its own: with
+        // `closeMode: "hide"` the two are the same today, and the point of having
+        // one path is that they stay the same if this window ever grows an
+        // `onClose` (an unsaved-changes guard, say).
+        onClick: () => cw.close(),
     })
 
     const cw = NidaraWindow({
@@ -448,15 +452,22 @@ export default function Settings(monitor: Gdk.Monitor) {
         // through the plain registry lookup — no remap. See ui/lib/app-id.ts.
         appId: "nidara-settings",
         cssClasses: ["nd-ignore", "nidara-settings-window"],
-        sidebar: sidebar.widget,
         content: contentArea,
-        toggleIcon: Icons.sidebar,
-        sidebarTop: searchEntry,
-        headerTitle: breadcrumb,
-        headerEnd: closeBtn,
-        toolbarExtra: navCapsule,
-        sidebarWidth: WINDOW_LAYOUT.sidebar,
-        contentWidth: PANE_W,
+        // The sidebar and everything that only means anything with one. Passing it
+        // is what turns this into the two-pane layout — same component either way.
+        sidebar: {
+            widget: sidebar.widget,
+            toggleIcon: Icons.sidebar,
+            top: searchEntry,
+            width: WINDOW_LAYOUT.sidebar,
+            contentWidth: PANE_W,
+        },
+        // `start` is a ROW: the nav capsule then the breadcrumb, both in the same
+        // spacing-8 box the toggle leads. The window prepends the toggle itself.
+        header: { start: [navCapsule, breadcrumb], end: closeBtn },
+        // Reused across toggles: rebuilding the 21 eagerly-built pages on every
+        // open is visible.
+        closeMode: "hide",
         defaultHeight: 760,
     })
     const win = cw.window
