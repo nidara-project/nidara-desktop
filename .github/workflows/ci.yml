@@ -123,6 +123,17 @@ jobs:
         working-directory: ui/shell
         run: npx --yes sass@1.97.3 --no-charset ../installer/style.scss /tmp/installer.css
 
+      # Compiling is not the same as being PAINTABLE. A bundle that borrows a kit
+      # widget also borrows the `--nidara-*` tokens its rules name, and an
+      # undefined custom property is not an error in GTK4 — the declaration is
+      # silently dropped, so the control ships with a hover that does nothing.
+      # That is exactly how the installer's close button shipped (2026-08-26).
+      # Deliberately a STEP of this job, not a job of its own: a new REQUIRED
+      # check has to be added to the merge queue's list too, and one that is not
+      # stalls every entry with nothing reporting an error.
+      - name: Every bundle defines the tokens it paints with
+        run: node scripts/ci/token-contract-check.mjs
+
   pkgbuild:
     name: PKGBUILD parses
     runs-on: ubuntu-latest

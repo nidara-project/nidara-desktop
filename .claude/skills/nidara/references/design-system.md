@@ -1496,6 +1496,14 @@ appearance seam all came across untouched. What did not come across is the **sys
 the components, and every one of the four holes has the same shape: a kit widget whose rule
 names something the borrowing bundle's sheet never defined.
 
+✅ **Holes 1 and 4 are CLOSED (2026-08-26) by `installAppearance()`** — see architecture.md,
+`ui/lib/appearance.ts`. The installer no longer has a colour ramp of its own at all: the engine
+generates the whole thing from the user's real accent, mode and opacity, and
+`scripts/ci/token-contract-check.mjs` now fails the build if any bundle paints with a token
+nothing defines. Holes 2 and 3 stay as written — they are rules about writing a bundle's sheet,
+not about where the values come from. The four are kept in full because each one is a different
+way for GTK4 to fail without saying anything.
+
 1. **`--nidara-surface-strong` did not exist in the installer's ramp.** It is the hover of
    anything whose resting fill is `--nidara-surface-raised` — which is every round icon
    button. The rule was there, the token was not, so the button's hover resolved to nothing

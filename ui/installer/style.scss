@@ -17,80 +17,41 @@
 * {
   @include radius-vars;
 
-  --nidara-accent:          #0088ff;
-  --nidara-accent-rgb:      0, 136, 255;
-  --nidara-text:            rgba(255, 255, 255, 0.95);
-  --nidara-text-secondary:  rgba(255, 255, 255, 0.8);
-  --nidara-text-dim:        rgba(255, 255, 255, 0.55);
-  --nidara-surface-back:    rgba(255, 255, 255, 0.04);
-  --nidara-surface:         rgba(255, 255, 255, 0.08);
-  --nidara-surface-hover:   rgba(255, 255, 255, 0.12);
-  --nidara-surface-active:  rgba(255, 255, 255, 0.16);
-  --nidara-surface-raised:  rgba(255, 255, 255, 0.20);
-  // One step above raised — the hover of anything whose resting fill is raised
-  // (the header's close button). Missing here until 2026-08-26, which made that
-  // button's hover resolve to nothing at all.
-  --nidara-surface-strong:  rgba(255, 255, 255, 0.30);
-  --nidara-state-selected:  rgba(0, 136, 255, 0.22);
-  --nidara-border:          rgba(127, 127, 127, 0.15);
-  --nidara-radius-sm:       8px;
-  --nidara-radius-md:       14px;
-  --nidara-radius-lg:       20px;
-  --nidara-bg:              rgba(22, 22, 34, 0.5);
-  --nidara-edge:            1px solid rgba(255, 255, 255, 0.14);
-  --nidara-shadow-lg:       0 8px 24px rgba(0, 0, 0, 0.40), 0 2px 6px rgba(0, 0, 0, 0.24);
-  --nidara-accent-fg:       #ffffff;
-  // (--nidara-danger / -rgb are emitted at runtime from DANGER_HEX in app.ts.
-  // The single source of truth for a semantic colour is ui/lib/status-colors.ts,
-  // and SCSS cannot import it.)
-  --nidara-popover-bg:      rgba(22, 22, 34, 0.48);
-  --nidara-popover-border:  rgba(255, 255, 255, 0.14);
+  // ⚠️ THE COLOUR RAMP IS NOT HERE ANY MORE (2026-08-26).
+  // `installAppearance()` (ui/lib/appearance-css.ts) generates all ~37
+  // `--nidara-*` colour tokens at runtime from the user's actual accent, mode and
+  // window opacity, and loads them at a HIGHER provider priority than this sheet.
+  // Two of the three things that made a hand-typed ramp wrong are unfixable in
+  // SCSS — the accent and the opacity are the USER's — and the third is what a
+  // second copy always does: this file was missing `--nidara-surface-strong`, so a
+  // kit button's hover resolved to nothing and nobody was told.
+  //
+  // `--nidara-border` is the one exception, and only because the engine does not
+  // emit it either (the shell has it as a static value in `styles/_base.scss`).
+  // It is mode-independent, so a single value is honest here.
+  --nidara-border: rgba(127, 127, 127, 0.15);
 }
 
-// ⚠️ The window node ONLY — never `window.nidara-installer-window *`.
-// That descendant form has specificity (0,1,1) and `.nidara-window-glass` has
-// (0,1,0), so a universal `background-color: transparent` wins over the glass and
-// the card stops painting: an installer you can read the file manager through,
-// with its prose floating on the wallpaper. Seen on screen 2026-08-26.
-// `color` needs no help reaching the children — it inherits.
+// The toplevel stays fully transparent so the compositor has a low-alpha region to
+// blur; the CARD inside (`.nidara-window-glass` on the root box) is what carries
+// the colour. Painting the window itself gave a pane you could read the file
+// manager through, unblurred.
+//
+// ⚠️ The WINDOW NODE ONLY — never `window.nidara-installer-window *`. That
+// descendant form is (0,1,1) and `.nidara-window-glass` is (0,1,0), so a blanket
+// transparent background out-ranks the glass and the card stops painting. `color`
+// needs no help reaching the children: it inherits.
 window.nidara-installer-window {
   background-color: transparent;
   color: var(--nidara-text);
 }
 
-// The live session's light mode, set from app.ts. Only the ink and the pane
-// change: the glass alpha is the same number in both, because it is what the
-// compositor's `ignore_alpha` is tuned against.
-// Same rule as above: the class goes on the WINDOW, and the custom properties it
-// redefines reach the children through the `* { }` block at the top — which is
-// what carries the ramp, precisely because GTK4 does not inherit them reliably.
-window.nidara-installer-window.installer-light,
-window.nidara-installer-window.installer-light * {
-  --nidara-text:            rgba(0, 0, 0, 0.95);
-  --nidara-text-secondary:  rgba(0, 0, 0, 0.85);
-  --nidara-text-dim:        rgba(0, 0, 0, 0.72);
-  --nidara-surface-back:    rgba(0, 0, 0, 0.04);
-  --nidara-surface:         rgba(0, 0, 0, 0.08);
-  --nidara-surface-hover:   rgba(0, 0, 0, 0.12);
-  --nidara-surface-active:  rgba(0, 0, 0, 0.16);
-  --nidara-surface-raised:  rgba(0, 0, 0, 0.20);
-  --nidara-surface-strong:  rgba(0, 0, 0, 0.30);
-  // --nidara-bg / -edge / -shadow-lg are NOT repeated here. app.ts computes them
-  // for both modes (they depend on the user's window opacity, which no sheet can
-  // know) and loads them at a HIGHER provider priority, so a copy in this block
-  // would never win — it would only be a second place for the light palette to
-  // drift from the first.
-}
-
-// The shipped icons are Lucide SVGs: they render BLACK and only turn white
-// through this filter (see ui/lib/icons.ts). Without it the header's close glyph
-// is black-on-dark-glass — a button you cannot see. The shell has the same rule
-// in _reset.scss and the greeter in its own sheet; this bundle had neither, and
-// it is the fourth to need it.
+// The shipped icons are Lucide SVGs: they render BLACK and only turn white through
+// this filter (see ui/lib/icons.ts). Light mode wants them black again — and that
+// half is emitted BY THE ENGINE (`generateTokensCss` appends the `none` rule when
+// the mode is light), at a higher priority than this sheet, which is why there is
+// no `.installer-light .nd-icon` rule here to keep in sync.
 .nd-icon { -gtk-icon-filter: invert(1); }
-// …and light mode wants the glyph BLACK, so the invert comes back off. Scoped to
-// the window class app.ts toggles, so it follows a live mode change.
-window.nidara-installer-window.installer-light .nd-icon { -gtk-icon-filter: none; }
 
 // ── The frame ────────────────────────────────────────────────────────────────
 window.nidara-installer-window {

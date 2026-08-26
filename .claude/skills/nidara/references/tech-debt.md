@@ -1056,7 +1056,20 @@ partial would still hand-roll the live half — which is precisely what `ui/inst
 does today, in a `dynamicAppearanceCss()` that emits ~12 of the ~60 tokens, and got two of them
 wrong on the way (a hover token it never defined, a `DANGER_HEX` retyped as a literal).
 
-**The right fix is that the engine already exists and is in the wrong directory.**
+✅ **DONE for the installer, 2026-08-26 — and this is now a two-bundle item, not a three.**
+The engine moved to `ui/lib/theme-tokens.ts` (`ui/shell/core/NidaraTheme.ts` re-exports it and
+keeps only `CHROME_SCOPE_WINDOWS`, which is genuinely shell knowledge), `ui/lib/appearance.ts`
+is the one reader, and `installAppearance()` wires a bundle up in one call. The installer's
+`app.ts` went from 190 lines to 60 and its stylesheet lost both hand-typed ramps.
+
+▶️ **STILL OWED: the greeter and the lockscreen.** They keep `accentCssFor()` (six tokens) and
+their own two-mode ramp in `ui/greeter/style.scss`. The migration is the same three lines the
+installer took, but the risk is not the same: those two surfaces have no dev mode, an installed
+`style.css` outranks a source one, and getting it wrong locks somebody out of their desktop. Do
+it against `scripts/dev/lock-probe.js` or a VM, seeing each screen, not by reasoning about the
+diff — and note the greeter must pass `{ portal: false }` (it runs as another user).
+
+**The reasoning, kept because it is why the FIRST proposed fix was wrong:**
 `ui/shell/core/NidaraTheme.ts` — `nidaraVars()`, mode-aware, opacity-aware, the full ramp —
 imports `ui/lib/{file,accent,status-colors,tokens}` and NOTHING from the shell. It is shell-local
 by history, not by coupling. Moving it to `ui/lib/` plus one shared reader for `appearance.json`

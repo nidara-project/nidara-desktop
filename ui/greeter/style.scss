@@ -126,6 +126,11 @@
   --nidara-surface-hover:  rgba(255, 255, 255, 0.12);
   --nidara-surface-active: rgba(255, 255, 255, 0.16);
   --nidara-surface-raised: rgba(255, 255, 255, 0.20);
+  // One step above raised: the hover of anything whose resting fill IS raised.
+  // Added 2026-08-26 with `.nidara-circle-btn` joining the kit's sheet — this
+  // sheet compiles the kit, so it owes every token the kit's rules name, whether
+  // or not this bundle builds the widget yet (`scripts/ci/token-contract-check.mjs`).
+  --nidara-surface-strong: rgba(255, 255, 255, 0.30);
   --nidara-state-selected: rgba(0, 136, 255, 0.22);
   --nidara-border:         rgba(127, 127, 127, 0.15);
   --nidara-edge:           1px solid rgba(255, 255, 255, 0.14);
@@ -233,6 +238,7 @@ window.skin-light * {
   --nidara-surface-hover:  rgba(0, 0, 0, 0.12);
   --nidara-surface-active: rgba(0, 0, 0, 0.16);
   --nidara-surface-raised: rgba(0, 0, 0, 0.20);
+  --nidara-surface-strong: rgba(0, 0, 0, 0.30);
 
   // Bodies drawn by CSS rather than by the painter.
   --nidara-bg:             rgba(250, 250, 250, 0.5);

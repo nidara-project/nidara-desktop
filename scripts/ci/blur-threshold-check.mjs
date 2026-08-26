@@ -15,11 +15,13 @@
 // is an innocent edit to a constant in a different language in a different directory.
 import { readFileSync } from "node:fs"
 
-const theme  = readFileSync("ui/shell/core/NidaraTheme.ts", "utf8")
+// The token engine moved to ui/lib on 2026-08-26 so every bundle could have it;
+// `ui/shell/core/NidaraTheme.ts` is now a re-export and holds no constants.
+const theme  = readFileSync("ui/lib/theme-tokens.ts", "utf8")
 const tokens = readFileSync("ui/lib/tokens.ts", "utf8")
 
 const m = theme.match(/GLASS_RANGE\s*=\s*\{\s*min:\s*([0-9.]+)\s*,\s*max:\s*([0-9.]+)/)
-if (!m) { console.error("blur-threshold-check: could not read GLASS_RANGE from NidaraTheme.ts"); process.exit(1) }
+if (!m) { console.error("blur-threshold-check: could not read GLASS_RANGE from ui/lib/theme-tokens.ts"); process.exit(1) }
 const shellFloor = parseFloat(m[1])
 
 // ⚠️ The login surfaces do NOT use GLASS_RANGE — they are separate bundles with a

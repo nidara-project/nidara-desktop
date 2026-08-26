@@ -52,6 +52,34 @@ const ACCENT_HEX = {
 }
 
 const APPEARANCE_NS = "org.freedesktop.appearance"
+
+// ── Our own namespace ────────────────────────────────────────────────────────
+// `org.freedesktop.appearance` is a THREE-KEY spec: accent, colour scheme,
+// contrast. It is the right channel for those and the reason third-party GTK apps
+// follow Nidara's accent at all — but it has no room for the desktop's own
+// vocabulary, and the accent it carries is an (r,g,b) triple, not the palette KEY
+// our surfaces index by.
+//
+// So Nidara serves a second namespace beside it. The Settings portal's ReadAll
+// takes a LIST of namespaces and merges what every impl backend answers, so a
+// caller asks for both in one round trip and gets one dictionary back. That is
+// what makes this worth doing instead of every bundle opening the file itself:
+// one read, one `SettingChanged` signal, and it crosses a sandbox boundary — a
+// Flatpak app cannot see `~/.config/nidara/appearance.json` and can see this.
+//
+// ⚠️ The file remains the SOURCE; this is a view of it. `ThemeManager` owns
+// appearance.json and always will, because one surface cannot reach the portal at
+// all: the greeter runs as the `greeter` system user, in its own compositor, with
+// no session portal — and a portal there would answer for the wrong user anyway.
+// Any consumer therefore needs the file fallback regardless (see
+// `ui/lib/appearance.ts`), and this namespace must never become the only copy.
+const NIDARA_NS = "org.nidara.appearance"
+
+/** Where ThemeManager writes, in the order `ui/lib/appearance.ts` also tries. */
+const APPEARANCE_PATHS = [
+    `${GLib.get_user_config_dir()}/nidara/appearance.json`,
+    "/var/tmp/nidara/appearance.json",
+]
 const BUS_NAME = "org.freedesktop.impl.portal.desktop.nidara"
 const OBJECT_PATH = "/org/freedesktop/portal/desktop"
 
@@ -214,6 +242,43 @@ function colorSchemeVariant() {
     return new GLib.Variant("u", val)
 }
 
+/** The desktop's own appearance state, as ThemeManager last wrote it. */
+function readNidaraAppearance() {
+    for (const path of APPEARANCE_PATHS) {
+        try {
+            const [ok, data] = GLib.file_get_contents(path)
+            if (!ok) continue
+            return JSON.parse(new TextDecoder().decode(data))
+        } catch (_) { /* try the next one */ }
+    }
+    return {}
+}
+
+/**
+ * Our namespace's payload. Kebab-case keys, like every other portal namespace.
+ *
+ * Only what a SECOND process needs to look like Nidara. Not the whole file: the
+ * icon/cursor/font settings already reach apps through `org.gnome.desktop.interface`
+ * (the gtk backend serves that from gsettings, which ThemeManager writes), and
+ * duplicating them here would create a second answer to a question that already
+ * has one.
+ */
+function nidaraKeys() {
+    const a = readNidaraAppearance()
+    const num = (v, dflt) => (typeof v === "number" && isFinite(v) ? v : dflt)
+    return {
+        "accent": new GLib.Variant("s", typeof a.accent === "string" ? a.accent : "blue"),
+        // A MISSING key means light, matching the shell's own DEFAULT_CONFIG.
+        "is-dark": new GLib.Variant("b", a.isDark === true),
+        "window-opacity": new GLib.Variant("d", num(a.windowOpacity, 0.48)),
+        "bar-opacity": new GLib.Variant("d", num(a.barOpacity, 0.48)),
+        "overlay-opacity": new GLib.Variant("d", num(a.overlayOpacity, 0.48)),
+        "dock-opacity": new GLib.Variant("d", num(a.dockOpacity, 0.24)),
+        "shell-appearance": new GLib.Variant("s",
+            typeof a.shellAppearance === "string" ? a.shellAppearance : "system"),
+    }
+}
+
 function contrastVariant() {
     // 0: no preference, 1: high contrast
     let val = 0
@@ -225,9 +290,15 @@ function contrastVariant() {
     return new GLib.Variant("u", val)
 }
 
-function nsMatches(patterns) {
+/**
+ * Does this ReadAll's namespace list ask for `ns`?
+ *
+ * An empty list (or an empty pattern in it) means "everything", per the portal
+ * spec — and the patterns are glob-style, so `org.freedesktop.*` has to match.
+ */
+function nsMatches(patterns, ns) {
     if (!patterns || patterns.length === 0) return true
-    return patterns.some(p => p === "" || GLib.pattern_match_simple(p, APPEARANCE_NS))
+    return patterns.some(p => p === "" || GLib.pattern_match_simple(p, ns))
 }
 
 function decodeUriToPath(uri) {
@@ -280,15 +351,15 @@ class SettingsBackend {
 
     ReadAllAsync(params, invocation) {
         const [namespaces] = params
-        const dict = nsMatches(namespaces)
-            ? {
-                [APPEARANCE_NS]: {
-                    "accent-color": accentRgbVariant(),
-                    "color-scheme": colorSchemeVariant(),
-                    "contrast": contrastVariant(),
-                },
+        const dict = {}
+        if (nsMatches(namespaces, APPEARANCE_NS)) {
+            dict[APPEARANCE_NS] = {
+                "accent-color": accentRgbVariant(),
+                "color-scheme": colorSchemeVariant(),
+                "contrast": contrastVariant(),
             }
-            : {}
+        }
+        if (nsMatches(namespaces, NIDARA_NS)) dict[NIDARA_NS] = nidaraKeys()
         invocation.return_value(new GLib.Variant("(a{sa{sv}})", [dict]))
     }
 
@@ -305,6 +376,13 @@ class SettingsBackend {
             }
             if (key === "contrast") {
                 invocation.return_value(new GLib.Variant("(v)", [contrastVariant()]))
+                return
+            }
+        }
+        if (namespace === NIDARA_NS) {
+            const keys = nidaraKeys()
+            if (keys[key]) {
+                invocation.return_value(new GLib.Variant("(v)", [keys[key]]))
                 return
             }
         }
@@ -458,6 +536,40 @@ class BackgroundBackend {
     }
 }
 
+/**
+ * Watch the appearance file and report the keys whose value changed.
+ *
+ * Returns the monitor, which the caller MUST keep — see the note at the call site.
+ * The file that gets watched is the first one that exists, in the same order the
+ * reader tries: a session normally has `~/.config`, and `/var/tmp` is the mirror.
+ */
+function watchNidaraAppearance(onChanged) {
+    const path = APPEARANCE_PATHS.find(p => GLib.file_test(p, GLib.FileTest.EXISTS))
+    if (!path) return null
+
+    let previous = nidaraKeys()
+    let monitor = null
+    try {
+        monitor = Gio.File.new_for_path(path).monitor_file(Gio.FileMonitorFlags.NONE, null)
+    } catch (e) {
+        printerr(`[nidara-portal] cannot watch ${path}: ${e}`)
+        return null
+    }
+
+    monitor.connect("changed", () => {
+        const next = nidaraKeys()
+        for (const key of Object.keys(next)) {
+            // `equal()` compares the VALUE, not the boxed variant's identity.
+            if (previous[key] && next[key].equal(previous[key])) continue
+            onChanged(key, next[key])
+        }
+        previous = next
+    })
+    return monitor
+}
+
+let appearanceMonitor = null
+
 const loop = new GLib.MainLoop(null, false)
 const settingsBackend = new SettingsBackend()
 const wallpaperBackend = new WallpaperBackend()
@@ -505,6 +617,22 @@ Gio.bus_own_name(
                 )
             })
         }
+
+        // Our namespace changes when the FILE changes, so the signal comes from a
+        // file monitor rather than a gsettings key. Held in a module-level
+        // variable: an unreferenced Gio.FileMonitor is collected and stops
+        // delivering with no error at all.
+        //
+        // Only the keys that actually MOVED are announced. The file is rewritten
+        // on every frame of an opacity slider drag, and a namespace that re-emits
+        // all seven keys per write would make every listener rebuild its whole
+        // stylesheet sixty times a second.
+        appearanceMonitor = watchNidaraAppearance((key, value) => {
+            exportedSettings.emit_signal(
+                "SettingChanged",
+                new GLib.Variant("(ssv)", [NIDARA_NS, key, value]),
+            )
+        })
 
         print(`[nidara-portal] serving Settings + Wallpaper + DynamicLauncher + Account + Background on ${BUS_NAME}`)
     },

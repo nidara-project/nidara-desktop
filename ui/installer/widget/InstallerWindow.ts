@@ -77,17 +77,16 @@ function header(onClose: () => void): {
   }
 }
 
-export interface InstallerWindowOpts {
-  /**
-   * The live session's mode, read from the shell's appearance mirror. The
-   * installer has no toggle of its own on purpose: it is a window inside a
-   * running Nidara, and a second opinion about light and dark on the same
-   * screen is not a feature.
-   */
-  isDark: boolean
-}
-
-export function InstallerWindow(opts: InstallerWindowOpts): Gtk.Window {
+/**
+ * No options.
+ *
+ * There used to be an `isDark`, because the window carried a class that swapped
+ * the ink. It does not any more: `installAppearance()` generates the whole token
+ * ramp for whichever mode the session is in, so this frame never learns which one
+ * that is — the same reason it has no light/dark toggle of its own. A second
+ * opinion about light and dark on one screen is not a feature.
+ */
+export function InstallerWindow(): Gtk.Window {
   const steps: Step[] = [
     WelcomeStep(),
     DiskStep(),
@@ -105,7 +104,6 @@ export function InstallerWindow(opts: InstallerWindowOpts): Gtk.Window {
     default_width: CONTENT_WIDTH + 120,
     default_height: 620,
   })
-  if (!opts.isDark) win.add_css_class("installer-light")
   // A real application window declares its own app-id, so the compositor files
   // it under a name the desktop registry has — not under the process-wide one.
   setWindowAppId(win, "nidara-installer")
@@ -172,14 +170,26 @@ export function InstallerWindow(opts: InstallerWindowOpts): Gtk.Window {
   // The glass is painted HERE, not on the window: the toplevel stays transparent
   // so the compositor has something to blur, which is how About and Settings are
   // built and why they look like Nidara rather than like a dark rectangle.
-  // A height floor, not a width one. The steps have visibly different content
-  // heights (three lines of prose, then a disk list, then four fields) and a frame
-  // that resized under each one would read as a different window every time. Width
-  // is left alone on purpose: the clamp above already holds the prose at a
-  // constant, and a width_request would stop the window fitting a small screen —
-  // which a live medium meets far more often than a desktop does.
+  // ⚠️ THE SIZE COMES FROM HERE, NOT FROM `default_width`.
+  //
+  // Measured 2026-08-26: with `default_width: 900` set on the window, GTK itself
+  // reports `get_width() === 622` — the content's natural width (the 620 clamp
+  // plus its margins). The default size is not being honoured for this window at
+  // all, and the same is true of the version on `main`, so it is not something
+  // this file changed. Until that is understood, the size request is the only
+  // mechanism that actually decides, and a window whose prose runs edge to edge
+  // is what happens when nothing does.
+  //
+  // The width is a floor of 740 = the 620 reading column plus 120 of air. That
+  // still fits the smallest screen a live medium plausibly meets (1024×768), which
+  // is what the earlier worry about width requests was really about.
+  //
+  // The height floor is a separate concern: the steps have visibly different
+  // content heights (three lines of prose, then a disk list, then four fields) and
+  // a frame that resized under each one would read as a different window each time.
   const root = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
+    width_request: CONTENT_WIDTH + 120,
     height_request: 620,
   })
   root.add_css_class("nidara-window-glass")

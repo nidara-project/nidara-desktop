@@ -140,7 +140,7 @@ one with a `timeout-minutes`):
 
 | job | gates |
 |---|---|
-| `styles` | the SCSS of the shell, the greeter/lock sheet and the installer compiles |
+| `styles` | the SCSS of the shell, the greeter/lock sheet and the installer compiles — **and every bundle defines the `--nidara-*` tokens its rules paint with** (`token-contract-check.mjs`; an undefined custom property is silently dropped by GTK4, never an error) |
 | `typecheck` | `tsc --noEmit`, against a compressed `@girs/` snapshot pulled from the repo's `ci-assets` release (`@girs/` itself stays git-ignored, ≈58 MB generated; a maintainer refreshes the snapshot when it goes stale) |
 | `widgets-gen` | the generated widget registry matches `widgets/` |
 | `smoke` | **a real headless boot** — official Arch packages in a container, build both C libraries (`libnidara-wl`, `libnidara-auth` + its eight signals), bundle the shell, boot it on real Hyprland over a virtual display (kernel vkms + llvmpipe); fails on death, silent IPC or JS errors, and uploads screenshots as artifacts |
