@@ -8,7 +8,8 @@
 import Gtk from "gi://Gtk?version=4.0"
 import app from "../../lib/host"
 import { setWindowAppId } from "../../lib/app-id"
-import { NidaraButton, NidaraClamp } from "../../lib/nidara-kit"
+import { NidaraButton, NidaraCircleButton, NidaraClamp } from "../../lib/nidara-kit"
+import { ndIcon } from "../../lib/icons"
 import { Flow, type Step } from "../lib/flow"
 import { WelcomeStep } from "../steps/welcome"
 import { DiskStep } from "../steps/disk"
@@ -27,7 +28,7 @@ import { t } from "../lib/i18n"
  */
 const CONTENT_WIDTH = 620
 
-function header(): { widget: Gtk.Widget; set: (title: string, position: string) => void } {
+function header(onClose: () => void): { widget: Gtk.Widget; set: (title: string, position: string) => void } {
   const title = new Gtk.Label({
     css_classes: ["installer-title"],
     halign: Gtk.Align.START,
@@ -37,12 +38,25 @@ function header(): { widget: Gtk.Widget; set: (title: string, position: string) 
   const position = new Gtk.Label({
     css_classes: ["installer-position"],
     halign: Gtk.Align.END,
+    valign: Gtk.Align.CENTER,
   })
+
+  // Round glass close button matching Settings and About headers
+  const closeBtn = NidaraCircleButton({
+    icon: ndIcon("x"),
+    iconName: "window-close-symbolic",
+    variant: "danger",
+    valign: Gtk.Align.CENTER,
+    halign: Gtk.Align.END,
+    onClick: onClose,
+  })
+  closeBtn.name = "installer-close"
 
   const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12 })
   box.add_css_class("installer-header")
   box.append(title)
   box.append(position)
+  box.append(closeBtn)
 
   // The header is the drag handle: the window is undecorated, so without this it
   // can only be moved with a compositor keybind.
@@ -79,7 +93,7 @@ export function InstallerWindow(opts: InstallerWindowOpts): Gtk.Window {
     name: "nidara-installer",
     css_classes: ["nidara-installer-window"],
     decorated: false,
-    resizable: true,
+    resizable: false,
     default_width: CONTENT_WIDTH + 120,
     default_height: 620,
   })
@@ -88,7 +102,28 @@ export function InstallerWindow(opts: InstallerWindowOpts): Gtk.Window {
   // it under a name the desktop registry has — not under the process-wide one.
   setWindowAppId(win, "nidara-installer")
 
-  const head = header()
+  const close = () => {
+    win.destroy()
+    app.quit()
+  }
+
+  win.connect("close-request", () => {
+    close()
+    return false
+  })
+
+  // Escape key closes window
+  const escKey = new Gtk.EventControllerKey()
+  escKey.connect("key-pressed", (_c, keyval) => {
+    if (keyval === 65307) {
+      close()
+      return true
+    }
+    return false
+  })
+  win.add_controller(escKey)
+
+  const head = header(close)
 
   const back = NidaraButton({ label: t("back"), variant: "secondary" })
   const next = NidaraButton({ label: t("continue"), variant: "primary" })
@@ -116,7 +151,11 @@ export function InstallerWindow(opts: InstallerWindowOpts): Gtk.Window {
   // The glass is painted HERE, not on the window: the toplevel stays transparent
   // so the compositor has something to blur, which is how About and Settings are
   // built and why they look like Nidara rather than like a dark rectangle.
-  const root = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+  const root = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    width_request: CONTENT_WIDTH + 120,
+    height_request: 620,
+  })
   root.add_css_class("nidara-window-glass")
   root.add_css_class("installer-root")
   root.append(head.widget)

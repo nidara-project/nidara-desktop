@@ -31,8 +31,8 @@ export type { NidaraSplitViewResult } from "./split-view"
 export { NidaraSplitView } from "./split-view"
 
 // NidaraButton — unified button component (replaces suggested-action / destructive-action / pill)
-export type { NidaraButtonVariant, NidaraButtonOpts } from "./button"
-export { NidaraButton } from "./button"
+export type { NidaraButtonVariant, NidaraButtonOpts, NidaraCircleButtonOpts } from "./button"
+export { NidaraButton, NidaraCircleButton } from "./button"
 
 // NidaraFontButton — pill font picker (replaces Gtk.FontButton)
 export type { NidaraFontButtonOpts } from "./fontbutton"

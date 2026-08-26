@@ -59,3 +59,39 @@ export function NidaraButton(opts: NidaraButtonOpts = {}): Gtk.Button {
 
     return btn
 }
+
+export interface NidaraCircleButtonOpts {
+    /** Gio.Icon or GIcon instance */
+    icon?: any
+    /** Theme icon name fallback */
+    iconName?: string
+    /** Icon pixel size (default: 14) */
+    iconSize?: number
+    /** Hover color intent (default: "danger") */
+    variant?: "danger" | "neutral"
+    sensitive?: boolean
+    valign?: Gtk.Align
+    halign?: Gtk.Align
+    onClick?: () => void
+}
+
+/**
+ * NidaraCircleButton — circular glass icon button for window chrome & actions.
+ */
+export function NidaraCircleButton(opts: NidaraCircleButtonOpts): Gtk.Button {
+    const { iconSize = 14, variant = "danger" } = opts
+    const child = opts.icon
+        ? new Gtk.Image({ gicon: opts.icon, pixel_size: iconSize, css_classes: ["nd-icon"] })
+        : new Gtk.Image({ icon_name: opts.iconName ?? "window-close-symbolic", pixel_size: iconSize })
+
+    const btn = new Gtk.Button({
+        child,
+        css_classes: ["nidara-circle-btn", `is-${variant}`],
+        valign: opts.valign ?? Gtk.Align.CENTER,
+        halign: opts.halign ?? Gtk.Align.CENTER,
+        sensitive: opts.sensitive ?? true,
+    })
+    if (opts.onClick) btn.connect("clicked", opts.onClick)
+    return btn
+}
+

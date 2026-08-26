@@ -408,6 +408,26 @@ button.nidara-btn {
     }
 }
 
+/* --- Round glass icon button (close, dismiss, action) ---------------------- */
+button.nidara-circle-btn,
+.nidara-circle-btn {
+    padding: 4px;
+    min-width: 0;
+    min-height: 0;
+    background: var(--nidara-surface-raised);
+    border: none;
+    border-radius: $nidara-radius-pill;
+    transition: background-color 0.15s ease;
+
+    image { margin: 0; }
+
+    &:hover { background: var(--nidara-surface-strong); }
+    &.is-danger:hover {
+        background: var(--nidara-danger);
+        color: #ffffff;
+    }
+}
+
 // ── Gtk.DropDown ─────────────────────────────────────────────────────────────
 // GTK4 native dropdown — auto-positions above/below available space, and its popover
 // is a real Wayland surface, so the compositor's popup blur frosts it. The in-window

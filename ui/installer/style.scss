@@ -14,33 +14,36 @@
 // everything below, so the rules in this file out-rank it at equal specificity.
 @use '../lib/styles/components';
 
-// ── The token ramp ───────────────────────────────────────────────────────────
-// Defined here rather than imported because the custom properties are the SHELL's
-// (styles/_base.scss) and the greeter's copy is scoped to the greeter's windows.
-// This is the third bundle to need them, which is a duplication worth naming —
-// see the skill's tech-debt entry for the greeter/lock split, now a three-way one.
-window.nidara-installer-window {
+* {
+  @include radius-vars;
+
   --nidara-accent:          #0088ff;
+  --nidara-accent-rgb:      0, 136, 255;
   --nidara-text:            rgba(255, 255, 255, 0.95);
   --nidara-text-secondary:  rgba(255, 255, 255, 0.8);
   --nidara-text-dim:        rgba(255, 255, 255, 0.55);
+  --nidara-surface-back:    rgba(255, 255, 255, 0.04);
   --nidara-surface:         rgba(255, 255, 255, 0.08);
-  --nidara-surface-raised:  rgba(255, 255, 255, 0.12);
+  --nidara-surface-hover:   rgba(255, 255, 255, 0.12);
+  --nidara-surface-active:  rgba(255, 255, 255, 0.16);
+  --nidara-surface-raised:  rgba(255, 255, 255, 0.20);
+  --nidara-state-selected:  rgba(0, 136, 255, 0.22);
   --nidara-border:          rgba(127, 127, 127, 0.15);
   --nidara-radius-sm:       8px;
   --nidara-radius-md:       14px;
   --nidara-radius-lg:       20px;
-
-  // The glass itself, painted by `.nidara-window-glass` on the root BOX rather
-  // than on this node — the same arrangement About and Settings use, and not a
-  // stylistic echo: the toplevel stays fully transparent so the compositor has a
-  // low-alpha region to blur, and the card inside is what carries the colour.
-  // Painting an 0.86 background on the window instead gave a pane you could read
-  // the file manager through, unblurred (seen 2026-08-25, before this changed).
   --nidara-bg:              rgba(22, 22, 34, 0.5);
   --nidara-edge:            1px solid rgba(255, 255, 255, 0.14);
   --nidara-shadow-lg:       0 8px 24px rgba(0, 0, 0, 0.40), 0 2px 6px rgba(0, 0, 0, 0.24);
+  --nidara-accent-fg:       #ffffff;
+  --nidara-danger:          #ff3b30;
+  --nidara-danger-rgb:      255, 59, 48;
+  --nidara-popover-bg:      rgba(22, 22, 34, 0.48);
+  --nidara-popover-border:  rgba(255, 255, 255, 0.14);
+}
 
+window.nidara-installer-window,
+window.nidara-installer-window * {
   background-color: transparent;
   color: var(--nidara-text);
 }
@@ -48,14 +51,19 @@ window.nidara-installer-window {
 // The live session's light mode, set from app.ts. Only the ink and the pane
 // change: the glass alpha is the same number in both, because it is what the
 // compositor's `ignore_alpha` is tuned against.
-window.nidara-installer-window.installer-light {
+window.nidara-installer-window.installer-light,
+window.nidara-installer-window.installer-light * {
   --nidara-text:            rgba(0, 0, 0, 0.95);
   --nidara-text-secondary:  rgba(0, 0, 0, 0.85);
   --nidara-text-dim:        rgba(0, 0, 0, 0.72);
-  --nidara-surface:         rgba(0, 0, 0, 0.06);
-  --nidara-surface-raised:  rgba(0, 0, 0, 0.10);
+  --nidara-surface-back:    rgba(0, 0, 0, 0.04);
+  --nidara-surface:         rgba(0, 0, 0, 0.08);
+  --nidara-surface-hover:   rgba(0, 0, 0, 0.12);
+  --nidara-surface-active:  rgba(0, 0, 0, 0.16);
+  --nidara-surface-raised:  rgba(0, 0, 0, 0.20);
   --nidara-bg:              rgba(246, 246, 250, 0.62);
   --nidara-edge:            1px solid rgba(0, 0, 0, 0.10);
+  --nidara-shadow-lg:       0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 // ── The frame ────────────────────────────────────────────────────────────────
