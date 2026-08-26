@@ -41,12 +41,21 @@ export function SummaryStep(): Step {
       const baseResult = readBaseConfig()
       const packages = baseResult ? basePackages(baseResult.config) : []
 
-      // Row 1: Target Disk
+      // Row 1: Target Disk / Partitions
       if (disk) {
-        const gib = (disk.size / (1024 ** 3)).toFixed(1)
-        const diskTitle = disk.model || disk.name
-        const diskSubtitle = `${gib} GiB · ${disk.path}${disk.rm ? ` · ${t("diskRemovable")}` : ""}`
-        listBox.append(NidaraRow(t("summaryDisk"), `${diskTitle} (${diskSubtitle})`))
+        if (disk.mode === "entire_disk") {
+          const d = disk.disk
+          const gib = (d.size / (1024 ** 3)).toFixed(1)
+          const diskTitle = d.model || d.name
+          const fsLabel = disk.filesystem.toUpperCase()
+          const diskSubtitle = `${gib} GiB · ${d.path} · ${fsLabel}${d.rm ? ` · ${t("diskRemovable")}` : ""}`
+          listBox.append(NidaraRow(t("summaryDisk"), `${diskTitle} (${diskSubtitle})`))
+        } else if (disk.mode === "manual") {
+          const breakdown = disk.mounts
+            .map(m => `${m.path} → ${m.mountpoint} (${m.format ? `${m.filesystem} [${t("diskFormat")}]` : t("diskKeep")})`)
+            .join(", ")
+          listBox.append(NidaraRow(t("summaryPartitionLayout"), breakdown))
+        }
       }
 
       // Row 2: Account

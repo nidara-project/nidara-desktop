@@ -82,8 +82,7 @@ export function KeyboardStep(): Step {
         const radio = radioMap.get(item)
         if (radio && !radio.active) radio.active = true
 
-        // Apply immediately to the live session
-        execAsync(["localectl", "set-x11-keymap", item.layout, "pc105", item.variant]).catch(() => {})
+        // Apply immediately to the live session (Hyprland keyword without polkit prompt)
         execAsync(["hyprctl", "keyword", "input:kb_layout", item.layout]).catch(() => {})
         if (item.variant) {
           execAsync(["hyprctl", "keyword", "input:kb_variant", item.variant]).catch(() => {})

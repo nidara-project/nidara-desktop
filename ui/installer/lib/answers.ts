@@ -3,13 +3,40 @@
 // Kept in memory — not written to disk or logged, because the account step
 // collects a password and nothing should persist it until archinstall runs.
 
-export interface DiskAnswer {
+export type DiskInstallMode = "entire_disk" | "manual"
+export type FilesystemType = "btrfs" | "ext4" | "xfs" | "f2fs" | "vfat"
+
+export interface BlockDevice {
   name: string
   path: string
   size: number
   model: string | null
   rm: boolean
 }
+
+export interface EntireDiskAnswer {
+  mode: "entire_disk"
+  disk: BlockDevice
+  filesystem: FilesystemType
+}
+
+export interface ManualPartitionMount {
+  name: string
+  path: string
+  size: number
+  fsType: string | null
+  label: string | null
+  mountpoint: string // "/", "/boot", "/boot/efi", "/efi", "/home", "swap"
+  filesystem: FilesystemType
+  format: boolean
+}
+
+export interface ManualDiskAnswer {
+  mode: "manual"
+  mounts: ManualPartitionMount[]
+}
+
+export type DiskAnswer = EntireDiskAnswer | ManualDiskAnswer
 
 export interface AccountAnswer {
   fullName: string
