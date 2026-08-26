@@ -436,18 +436,18 @@ button.nidara-btn {
     /* Neutral hover (e.g. the collapse chevron): brighter fill — no border (it left corner dots). */
     &:hover { background: var(--nidara-surface-strong); }
 
-    /* Destructive (close/remove): red on hover.
-       ⚠️ This rule is a RESTORATION, not a new decision. `IconButton` has
-       documented "danger turns red on hover" since it was written, but the rule
-       was deleted on 2026-06-23 by the orphan sweep in d87e5e0a, which searched
-       for the literal string `is-danger` and found no consumer — the consumer
-       builds the class by interpolation (`is-${variant}`), the exact dynamic-class
-       trap that same commit message lists for `.accent-*`. So between then and
-       now every close button in the shell claimed a red hover it did not have. */
-    &.is-danger:hover {
-        background: var(--nidara-danger);
-        color: #ffffff;
-    }
+    /* ⛔ NO `&.is-danger:hover { background: var(--nidara-danger) }`. The variant
+       class is still emitted (`is-${variant}`) and still carries the INTENT, but
+       both variants hover the same neutral grey — owner's call, 2026-08-26.
+       A red wash on the control you use to leave a window spends the red this DE
+       reserves for recording and for failure, on the most routine click there is.
+       The rule did exist until 2026-06-23, when the orphan sweep in d87e5e0a
+       deleted it for having "no consumer" — it grepped the literal `is-danger`
+       while the consumer assembles the class by interpolation, the same
+       dynamic-class trap that commit lists for `.accent-*`. It was proposed back
+       on 2026-08-26 and declined on the merits, so this is a DECISION now, not an
+       oversight: do not restore it, and fix `IconButton`'s prose instead if it
+       still promises red. */
 }
 
 // ── Gtk.DropDown ─────────────────────────────────────────────────────────────

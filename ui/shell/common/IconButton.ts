@@ -14,7 +14,11 @@ export interface IconButtonProps {
      * Default 14.
      */
     iconSize?: number
-    /** Hover color: "danger" → red, "neutral" → grey. Default "danger". */
+    /** Destructive intent ("danger", the default) vs plain ("neutral"). ⚠️ BOTH
+     *  hover the same neutral grey today — the red wash was declined on
+     *  2026-08-26 (it spends the DE's red budget on the most routine click there
+     *  is). The class is still emitted, so the intent is recorded and one CSS
+     *  rule would turn it on again; nothing reads it otherwise. */
     variant?: IconBtnVariant
     onClick?: () => void
     /** Shown as the Nidara glass tooltip (attachTooltip), NOT GTK's native one —

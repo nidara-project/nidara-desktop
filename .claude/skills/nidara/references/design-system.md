@@ -1528,13 +1528,22 @@ tooltip, the capture-phase click). A fourth bundle asking for a close button is 
 moment a shell-local "single source of truth" stops being one — and copying it instead would
 have given one process two definitions of one class, since the shell compiles both sheets.
 
-⚠️ Its `&.is-danger:hover` red came BACK in that move, and the story is a warning about
-orphan sweeps: the rule was deleted on 2026-06-23 (`d87e5e0a`) for having "no consumer",
-because the sweep grepped the literal `is-danger` while `IconButton` builds the class by
-interpolation — `is-${variant}` — the exact dynamic-class trap that same commit lists for
-`.accent-*`. For two months every close button in the shell documented a red hover it did not
-have. **Grep a class before deleting it, then grep the fragments a template could assemble it
-from.**
+⛔ **Its `&.is-danger:hover` red stays OFF — decided 2026-08-26, do not restore it.** Both
+variants hover the same neutral grey; the class is still emitted, so the intent is recorded and
+one rule would turn it on. Reason: a red wash on the control you use to LEAVE a window spends
+the red budget (see "the red BUDGET is smaller than that") on the most routine click in the
+DE. It was proposed in that same move and declined on the merits, which makes it a decision
+rather than an oversight — and `IconButton`'s doc comment, which promised red for two years,
+was corrected to match.
+
+⚠️ The rule's history is still worth carrying, because it is a warning about orphan sweeps: it
+was deleted on 2026-06-23 (`d87e5e0a`) for having "no consumer", because the sweep grepped the
+literal `is-danger` while the consumer builds the class by interpolation — `is-${variant}` —
+the exact dynamic-class trap that same commit lists for `.accent-*`. So for two months the
+shell documented a hover it did not have, and nobody could tell whether that was a decision or
+a bug. **Grep a class before deleting it, then grep the fragments a template could assemble it
+from** — and when the answer is "we don't want it", say so in the sheet instead of deleting the
+rule silently.
 
 **Its sibling `ui/lib/styles/_mixins.scss` (2026-08-10) holds the mixins the KIT needs** —
 `nidara-reset`, `glass`, `material-card`, `nidara-row-states`, `nidara-tile-states` — for the
