@@ -28,6 +28,19 @@ export interface Step {
    * `notifyReady` it was handed at build time.
    */
   ready?(): boolean
+  /**
+   * Is this step in the middle of something the user must not interrupt?
+   *
+   * The frame asks before it lets anyone out of the window — the close button and
+   * Escape are both refused while this is true. It exists because the last step
+   * hands a disk and a password to a root process: quitting there would leave
+   * `archinstall` running with nobody watching it, the plaintext credentials file
+   * still in /tmp, and no window to say so.
+   *
+   * A step that reports busy MUST call the `notifyReady` it was handed when the
+   * answer changes, or the frame will still be showing the state from before.
+   */
+  busy?(): boolean
 }
 
 export interface FlowResult {

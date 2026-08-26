@@ -1035,21 +1035,46 @@ the stacks, which this entry does.
 `ui/installer/` landed as a skeleton — the frame, the step flow, the base-config seam and one
 placeholder step — and it carries two things that must not be mistaken for oversights:
 
-**(a) Its strings are English literals, not `t()` keys.** There is no catalog for this bundle
-yet. That is deliberate for a skeleton whose screens are about to be replaced, and it stops
-being acceptable the moment the first real screen lands: by this repo's i18n rule a new key
-enters all twelve locales in the same PR, so the catalog has to arrive WITH the first question,
-not after several of them. An installer that only speaks English is also the worst possible
-surface to leave untranslated — it is the first thing a user meets, before they have any way to
-change the language.
+**(a) ~~Its strings are English literals, not `t()` keys.~~ CLOSED 2026-08-25 (#271):
+`ui/installer/lib/i18n.ts` is a 42-key × 12-locale catalog, and it landed with the first real
+screen, which is the rule this item was written to enforce.** The rule stands for the next
+screen: a key that a step needs enters all twelve locales in the same PR. An installer that
+only speaks English is the worst possible surface to leave untranslated — it is the first thing
+a user meets, before they have any way to change the language.
 
 **(b) It defines the `--nidara-*` custom properties a THIRD time.** The shell has them in
 `styles/_base.scss`, the greeter/lock sheet re-declares them scoped to its own windows, and now
 `ui/installer/style.scss` declares the subset it uses. This is the same duplication as #60 (the
 greeter/lock split), one bundle wider: the ramp is not importable because each copy is scoped to
 its own window selectors and GTK4 has no `:root`. If a token's VALUE moves, three files move.
-The fix is a shared partial that emits the ramp for a caller-supplied selector — cheap, and
-worth doing before a fourth copy exists rather than after.
+
+⚠️ **The fix first written here — "a shared SCSS partial that emits the ramp for a
+caller-supplied selector" — is the WRONG one, and 2026-08-26 is when that became clear.** A
+static partial can carry the ink and the radii. It cannot carry the two values that actually
+matter, because they are the USER's: the accent and the window opacity. So a bundle taking the
+partial would still hand-roll the live half — which is precisely what `ui/installer/app.ts`
+does today, in a `dynamicAppearanceCss()` that emits ~12 of the ~60 tokens, and got two of them
+wrong on the way (a hover token it never defined, a `DANGER_HEX` retyped as a literal).
+
+**The right fix is that the engine already exists and is in the wrong directory.**
+`ui/shell/core/NidaraTheme.ts` — `nidaraVars()`, mode-aware, opacity-aware, the full ramp —
+imports `ui/lib/{file,accent,status-colors,tokens}` and NOTHING from the shell. It is shell-local
+by history, not by coupling. Moving it to `ui/lib/` plus one shared reader for `appearance.json`
+(three bundles have their own copy of `readAppearance()`) deletes `dynamicAppearanceCss()` AND
+both hand-written ramps in `style.scss` AND `accentCssFor()`'s six-token subset in
+`ui/lib/accent.ts`, and gives the greeter, the lock screen and the installer the user's live
+accent and opacity for free — which is the actual complaint behind this item, not the
+duplication itself. The kit's appearance seam (`nidara-kit/appearance.ts`) grows the opacity at
+the same time, since Cairo widgets need it as a number and today it only carries the accent and
+the mode.
+
+**(c) Its exit is refused, not confirmed, while `archinstall` runs.** `Step.busy()` (2026-08-26)
+is what the frame asks before the close button or Escape may quit: on the last step, from the
+moment the plan is handed to a root process until it exits, the answer is no. Quitting there
+would leave `archinstall` repartitioning with nobody watching, the plaintext credentials file
+still in `/tmp`, and no window to say so. A confirmation dialog would be better than a greyed
+button — it could offer "abandon anyway" for a hung install — and it needs strings, so it needs
+twelve locales; that is why it is not there yet.
 
 ## Resolved — rules that still apply
 

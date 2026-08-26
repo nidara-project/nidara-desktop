@@ -60,33 +60,58 @@ export function NidaraButton(opts: NidaraButtonOpts = {}): Gtk.Button {
     return btn
 }
 
+export type NidaraCircleVariant = "danger" | "neutral"
+
 export interface NidaraCircleButtonOpts {
-    /** Gio.Icon or GIcon instance */
+    /** A GIcon (as produced by the shell's core/Icons or by lib/icons.ndIcon).
+     *  Typed loosely — the GI typings don't export Gio.Icon. */
     icon?: any
-    /** Theme icon name fallback */
+    /** Theme icon name, used when `icon` is null (ndIcon returns null when the
+     *  shipped asset tree is missing). */
     iconName?: string
-    /** Icon pixel size (default: 14) */
+    /**
+     * Icon pixel size. The button sizes itself from this + the CSS padding, so the
+     * glyph renders crisp — NOT scaled by set_size_request. Default 14.
+     */
     iconSize?: number
-    /** Hover color intent (default: "danger") */
-    variant?: "danger" | "neutral"
+    /** Hover colour: "danger" → red, "neutral" → grey. Default "danger". */
+    variant?: NidaraCircleVariant
     sensitive?: boolean
     valign?: Gtk.Align
     halign?: Gtk.Align
+    /** Extra classes, appended after the kit's own. */
+    cssClasses?: string[]
     onClick?: () => void
 }
 
 /**
- * NidaraCircleButton — circular glass icon button for window chrome & actions.
+ * NidaraCircleButton — the round glass icon button: close, remove, collapse.
+ *
+ * One implementation for every bundle. The shell's `common/IconButton.ts` is a
+ * thin wrapper that adds the two things only the shell can provide (the glass
+ * tooltip, and the capture-phase click that stops a clickable parent from also
+ * firing); it does NOT build its own button any more.
+ *
+ * ⚠️ A shipped Nidara icon is a Lucide SVG — it renders BLACK and only becomes
+ * white through the `.nd-icon` class, which is why one is added here. A bundle
+ * whose stylesheet has no `.nd-icon` rule gets a black glyph on dark glass, i.e.
+ * an invisible button. The shell has it in `_reset.scss`, the greeter/lock and
+ * the installer in their own sheets.
  */
 export function NidaraCircleButton(opts: NidaraCircleButtonOpts): Gtk.Button {
-    const { iconSize = 14, variant = "danger" } = opts
+    const iconSize = opts.iconSize ?? 14
+    const variant = opts.variant ?? "danger"
+
+    // `nd-icon` rides along only on the SHIPPED icon: a theme fallback is a
+    // symbolic icon that already follows the CSS colour, and inverting it would
+    // paint it the wrong way round. Same rule as lib/icons.ndImage.
     const child = opts.icon
         ? new Gtk.Image({ gicon: opts.icon, pixel_size: iconSize, css_classes: ["nd-icon"] })
         : new Gtk.Image({ icon_name: opts.iconName ?? "window-close-symbolic", pixel_size: iconSize })
 
     const btn = new Gtk.Button({
         child,
-        css_classes: ["nidara-circle-btn", `is-${variant}`],
+        css_classes: ["nidara-circle-btn", `is-${variant}`, ...(opts.cssClasses ?? [])],
         valign: opts.valign ?? Gtk.Align.CENTER,
         halign: opts.halign ?? Gtk.Align.CENTER,
         sensitive: opts.sensitive ?? true,
@@ -94,4 +119,3 @@ export function NidaraCircleButton(opts: NidaraCircleButtonOpts): Gtk.Button {
     if (opts.onClick) btn.connect("clicked", opts.onClick)
     return btn
 }
-

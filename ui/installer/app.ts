@@ -18,6 +18,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import { setKitAppearance } from "../lib/nidara-kit"
 import { ACCENT_HEX, hexToRgb, type AccentKey } from "../lib/accent"
+import { DANGER_HEX } from "../lib/status-colors"
 import { setAccentRim } from "../lib/glass-capsule"
 import { applyCrispFontRendering } from "../lib/font-rendering"
 import { InstallerWindow } from "./widget/InstallerWindow"
@@ -39,7 +40,7 @@ const cssPath = GLib.file_test("./style.css", GLib.FileTest.EXISTS)
  * ThemeManager keeps for exactly this kind of second process (the greeter reads
  * the same pair of paths, and for the same reason).
  */
-function readAppearance(): Record<string, unknown> {
+function readAppearance(): { state: Record<string, unknown>; path: string | null } {
   const candidates = [
     `${GLib.get_user_config_dir()}/nidara/appearance.json`,
     "/var/tmp/nidara/appearance.json",
@@ -48,14 +49,39 @@ function readAppearance(): Record<string, unknown> {
     try {
       const [ok, data] = GLib.file_get_contents(path)
       if (!ok) continue
-      return JSON.parse(new TextDecoder().decode(data as Uint8Array))
+      return { state: JSON.parse(new TextDecoder().decode(data as Uint8Array)), path }
     } catch { /* try the next one */ }
   }
-  return {}
+  return { state: {}, path: null }
 }
 
+/**
+ * Is the session dark? A MISSING key means light, not dark.
+ *
+ * `isDark === true`, never `!== false`: the shell's own DEFAULT_CONFIG ships
+ * light, so an installer that defaulted the other way would wear the opposite of
+ * the desktop it was launched from the moment the mirror is unreadable — which is
+ * exactly the case where nobody is around to notice the file was missing.
+ */
+function readIsDark(state: Record<string, unknown>): boolean {
+  return state.isDark === true
+}
+
+/**
+ * The half of the token ramp that only a running session can know: the accent the
+ * user picked and the opacity they set for windows. `style.scss` carries the rest
+ * (the ink, the surfaces, the radii) and its values here are the fallback for when
+ * this block never loads.
+ *
+ * ⚠️ This is a hand-rolled subset of what `ui/shell/core/NidaraTheme.ts`
+ * (`nidaraVars`) already emits in full — mode-aware, opacity-aware, ~60 tokens.
+ * That engine imports nothing from the shell; it is simply in `ui/shell/` for
+ * historical reasons, so three bundles re-derive a partial copy of it. Moving it
+ * to `ui/lib/` deletes this function and the two ramps in `style.scss` with it.
+ * See the skill's tech-debt #95(b).
+ */
 function dynamicAppearanceCss(appearance: Record<string, unknown>): string {
-  const isDark = appearance.isDark !== false
+  const isDark = readIsDark(appearance)
   const accentKey = (appearance.accent as AccentKey) ?? "blue"
   const accent = ACCENT_HEX[accentKey] ?? ACCENT_HEX.blue
   const rgb = hexToRgb(accent)
@@ -80,11 +106,21 @@ function dynamicAppearanceCss(appearance: Record<string, unknown>): string {
       --nidara-accent-60:       rgba(${rgb}, 0.60);
       --nidara-state-selected:  rgba(${rgb}, ${isDark ? "0.22" : "0.16"});
       --nidara-bg:              rgba(${tintRgb}, ${windowOpacity});
+      --nidara-danger:          ${DANGER_HEX};
+      --nidara-danger-rgb:      ${hexToRgb(DANGER_HEX)};
       --nidara-edge:            1px solid ${edgeColor};
       --nidara-shadow-lg:       ${shadowLg};
     }
   `
 }
+
+/**
+ * Held for the process's lifetime, at module scope on purpose: a `Gio.FileMonitor`
+ * that nothing references is collected, and its "changed" signal then stops
+ * arriving with no error and no log line — a live-update feature that silently
+ * works for a few seconds and then does not.
+ */
+let appearanceMonitor: Gio.FileMonitor | null = null
 
 app.start({
   applicationId: "org.nidara.installer",
@@ -97,9 +133,10 @@ app.start({
     // ThemeManager in this process to do it later.
     applyCrispFontRendering()
 
-    let currentAppearance = readAppearance()
+    const first = readAppearance()
+    let currentAppearance = first.state
     let currentAccent = ACCENT_HEX[currentAppearance.accent as AccentKey] ?? ACCENT_HEX.blue
-    let currentIsDark = currentAppearance.isDark !== false
+    let currentIsDark = readIsDark(currentAppearance)
 
     const listeners = new Set<() => void>()
 
@@ -117,6 +154,11 @@ app.start({
     })
     setAccentRim(currentAccent)
 
+    // Above the base sheet (which `app.start({ css })` loads at USER priority), so
+    // the values computed from the live session win over the sheet's fallbacks —
+    // in GTK4 the provider's priority is decided before specificity is looked at.
+    // A provider rather than `app.apply_css`, because this one is RELOADED on
+    // every change and only a provider we keep a handle to can be replaced.
     const dynamicProvider = new Gtk.CssProvider()
     const display = Gdk.Display.get_default()
     if (display) {
@@ -130,7 +172,7 @@ app.start({
     const applyAppearance = (appState: Record<string, unknown>, win?: Gtk.Window) => {
       currentAppearance = appState
       currentAccent = ACCENT_HEX[appState.accent as AccentKey] ?? ACCENT_HEX.blue
-      currentIsDark = appState.isDark !== false
+      currentIsDark = readIsDark(appState)
 
       setAccentRim(currentAccent)
       try {
@@ -153,16 +195,21 @@ app.start({
 
     const win = InstallerWindow({ isDark: currentIsDark })
 
-    // Watch appearance.json for live settings changes (Settings → Appearance)
-    const configPath = `${GLib.get_user_config_dir()}/nidara/appearance.json`
-    const configFile = Gio.File.new_for_path(configPath)
-    try {
-      const monitor = configFile.monitor_file(Gio.FileMonitorFlags.NONE, null)
-      monitor.connect("changed", () => {
-        const next = readAppearance()
-        applyAppearance(next, win)
-      })
-    } catch { /* ignore if monitoring not supported */ }
+    // Follow Settings → Appearance while the installer is open: the user trying
+    // the desktop may well change the accent WITH the installer on screen, and a
+    // window that stayed on the old one would look like a foreign application.
+    //
+    // The watched path is the one that actually answered, not a fixed guess: if
+    // the session's config dir was unreadable and the /var/tmp mirror is what we
+    // read, that mirror is what changes.
+    if (first.path) {
+      try {
+        const monitor = Gio.File.new_for_path(first.path)
+          .monitor_file(Gio.FileMonitorFlags.NONE, null)
+        monitor.connect("changed", () => applyAppearance(readAppearance().state, win))
+        appearanceMonitor = monitor
+      } catch { /* a filesystem without change notification: the window keeps what it read */ }
+    }
 
     win.present()
   },

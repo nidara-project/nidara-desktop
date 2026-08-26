@@ -57,13 +57,18 @@ function cleanupTempFiles() {
 }
 
 export function RunStep(): Step {
+  // True from the moment archinstall is handed the plan until it has exited, one
+  // way or the other. The frame reads it through `busy()` to refuse an exit.
+  let running = false
+
   return {
     id: "run",
     title: t("runTitle"),
     nextLabel: "",
     ready: () => false,
+    busy: () => running,
 
-    build() {
+    build(notifyReady) {
       const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 16,
@@ -150,8 +155,12 @@ export function RunStep(): Step {
       }
 
       // Start execution when the step is built
+      running = true
+      notifyReady?.()
       GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         startInstallation(appendLog, (success, errorMsg) => {
+          running = false
+          notifyReady?.()
           spinner.spinning = false
           spinner.visible = false
           progressBar.visible = false
@@ -196,10 +205,19 @@ function startInstallation(
 
     const { config, creds } = assemblePlan(answers)
 
-    // Write creds with 0600 mode
+    // The user's password, in the clear, in a world-readable directory: it is
+    // created 0600 and never widened, rather than written and then narrowed.
+    // `file_set_contents` + `chmod` leaves the file at the umask (0644 on Arch)
+    // for the width of two syscalls — small, but /tmp is the one place on the
+    // system where anything at all can be watching. `FileCreateFlags.PRIVATE` is
+    // "only the current user can read it" applied AT creation; the unlink first
+    // is because `replace` on an existing file would inherit ITS permissions.
     const credsJson = JSON.stringify(creds, null, 2)
-    GLib.file_set_contents(CREDS_PATH, credsJson)
-    GLib.chmod(CREDS_PATH, 0o600)
+    if (GLib.file_test(CREDS_PATH, GLib.FileTest.EXISTS)) GLib.unlink(CREDS_PATH)
+    const credsStream = Gio.File.new_for_path(CREDS_PATH)
+      .replace(null, false, Gio.FileCreateFlags.PRIVATE, null)
+    credsStream.write_all(new TextEncoder().encode(credsJson), null)
+    credsStream.close(null)
 
     // Write initial plan
     GLib.file_set_contents(PLAN_PATH, JSON.stringify(config, null, 2))

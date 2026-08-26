@@ -9,11 +9,12 @@
 // (a rule goes there iff the widget wearing it is built in `ui/lib/`).
 //
 // So a `nidara-*` name here is NOT a leftover to sweep. `.nidara-menu*`,
-// `.nidara-confirm-*`, `.nidara-tooltip`, `.nidara-circle-btn`, `.nidara-switch`
+// `.nidara-confirm-*`, `.nidara-tooltip`, `.nidara-switch`
 // and `.nidara-seg-btn` are all worn by widgets built in `ui/shell/common/` or
 // `widgets/`: universal ACROSS THIS BUNDLE'S WINDOWS, which is what the prefix
 // promises, but not yet part of the kit. They cross over when a component does,
-// in the same change — never ahead of it.
+// in the same change — never ahead of it. `.nidara-circle-btn` did exactly that
+// on 2026-08-26 and is the worked example.
 //
 // Still global, still unscoped, and still the deliberate exception to
 // commandment 2: an atomic widget is placed by the USER (bar today, CC grid
@@ -369,27 +370,11 @@ button.settings-icon-btn {
    page builds those two "A"s, not the component. .slider-value-label followed the
    slider ROW to the kit on 2026-08-16.) */
 
-/* Shared round glass icon button (see common/IconButton.ts). Single source of
-   truth for close/remove/collapse controls. Size is set inline per use; shape/icon/hover
-   are identical everywhere. NB: named -circle- to avoid the existing .nidara-icon-btn
-   in _settings.scss (the sidebar toggle), whose `button.` specificity would win. */
-.nidara-circle-btn {
-    /* Padding (not set_size_request) sizes the button to its glyph — crisp icon, circle
-       centred on it (same approach as the Settings close button). */
-    padding: 4px;
-    min-width: 0;
-    min-height: 0;
-    /* Same fill as the count badge (nc-badge-header): simple, unified, no special tokens. */
-    background: var(--nidara-surface-raised);
-    border: none;
-    border-radius: var(--nidara-radius-pill);
-    transition: background-color 0.15s #{$ease};
-
-    image { margin: 0; }
-
-    /* Neutral hover (e.g. the collapse chevron): brighter fill — no border (it left corner dots). */
-    &:hover { background: var(--nidara-surface-strong); }
-}
+/* (.nidara-circle-btn moved to ui/lib/styles/_components.scss on 2026-08-26,
+   with its widget: common/IconButton.ts is now a thin wrapper over the kit's
+   NidaraCircleButton, so by this sheet's own test the rule belongs to the kit.
+   The installer needed the same button and copying it would have given one
+   process two definitions of one class.) */
 
 /* Time spin buttons — Settings (Night Light schedule) AND the CC's night-light
    widget (widgets/night-light.ts) render the same control in two windows.

@@ -408,20 +408,42 @@ button.nidara-btn {
     }
 }
 
-/* --- Round glass icon button (close, dismiss, action) ---------------------- */
-button.nidara-circle-btn,
+/* --- Round glass icon button (NidaraCircleButton) --------------------------
+   The single source of truth for close/remove/collapse controls, in every
+   bundle. MOVED here from `ui/shell/styles/_components.scss` when the widget
+   moved to `nidara-kit/button.ts` — the mechanical test at the top of this file
+   (a rule lives here iff its widget is built in `ui/lib/`) flipped for it, and
+   the shell's copy went in the same change. Two copies of one class in one
+   process is how the shell's version and the installer's start to disagree.
+
+   Size is set inline per use; shape/icon/hover are identical everywhere.
+   Padding (not set_size_request) sizes the button to its glyph — crisp icon,
+   circle centred on it. NB: named -circle- to avoid the existing
+   .nidara-icon-btn in the shell's _settings.scss (the sidebar toggle), whose
+   `button.` specificity would win. */
 .nidara-circle-btn {
     padding: 4px;
     min-width: 0;
     min-height: 0;
+    /* Same fill as the count badge (nc-badge-header): simple, unified, no special tokens. */
     background: var(--nidara-surface-raised);
     border: none;
-    border-radius: $nidara-radius-pill;
-    transition: background-color 0.15s ease;
+    border-radius: var(--nidara-radius-pill);
+    transition: background-color 0.15s #{$ease};
 
     image { margin: 0; }
 
+    /* Neutral hover (e.g. the collapse chevron): brighter fill — no border (it left corner dots). */
     &:hover { background: var(--nidara-surface-strong); }
+
+    /* Destructive (close/remove): red on hover.
+       ⚠️ This rule is a RESTORATION, not a new decision. `IconButton` has
+       documented "danger turns red on hover" since it was written, but the rule
+       was deleted on 2026-06-23 by the orphan sweep in d87e5e0a, which searched
+       for the literal string `is-danger` and found no consumer — the consumer
+       builds the class by interpolation (`is-${variant}`), the exact dynamic-class
+       trap that same commit message lists for `.accent-*`. So between then and
+       now every close button in the shell claimed a red hover it did not have. */
     &.is-danger:hover {
         background: var(--nidara-danger);
         color: #ffffff;
