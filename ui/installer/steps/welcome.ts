@@ -10,38 +10,15 @@ import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { readBaseConfig, basePackages } from "../lib/base-config"
 import { t } from "../lib/i18n"
-
-function heading(text: string): Gtk.Label {
-  return new Gtk.Label({
-    label: text,
-    css_classes: ["installer-heading"],
-    halign: Gtk.Align.FILL,
-    hexpand: true,
-    xalign: 0,
-  })
-}
-
-function prose(text: string, extraClass?: string): Gtk.Label {
-  return new Gtk.Label({
-    label: text,
-    css_classes: extraClass ? ["installer-prose", extraClass] : ["installer-prose"],
-    halign: Gtk.Align.FILL,
-    hexpand: true,
-    xalign: 0,
-    wrap: true,
-    wrap_mode: 2, // Pango.WrapMode.WORD_CHAR
-  })
-}
+import { heading, prose } from "./common"
 
 export function WelcomeStep(): Step {
   const base = readBaseConfig()
 
   return {
     id: "welcome",
-    title: t("welcomeTitle"),
-    nextLabel: t("continue"),
-    // Without the product's config there is nothing honest to continue TO, so
-    // the flow stops here rather than collecting answers it cannot use.
+    title: () => t("welcomeTitle"),
+    nextLabel: () => t("continue"),
     ready: () => base !== null,
 
     build() {
@@ -67,9 +44,6 @@ export function WelcomeStep(): Step {
           "installer-prose--dim",
         ))
       } else {
-        // Said plainly, because the alternative is an installer that looks ready
-        // and fails at the end: the ISO ships this file, a development checkout
-        // does not.
         box.append(prose(
           t("welcomeNotMedium"),
           "installer-prose--warning",

@@ -1,4 +1,4 @@
-// Step 3 — account setup: full name, username, and password.
+// Step 6 — account setup: full name, username, and password.
 //
 // Collects account details, validates username and password matching, and stores
 // the answer in `lib/answers.ts`. Passwords stay in memory only (never logged
@@ -10,6 +10,7 @@ import type { Step } from "../lib/flow"
 import { NidaraList, NidaraStackedRow } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import { getAnswers, setAccountAnswer } from "../lib/answers"
+import { heading, prose } from "./common"
 
 const USERNAME_REGEX = /^[a-z_][a-z0-9_-]{0,31}$/
 
@@ -20,33 +21,11 @@ const SYSTEM_USERS = new Set([
   "systemd-timesync", "avahi", "polkitd", "rtkit", "live",
 ])
 
-function heading(text: string): Gtk.Label {
-  return new Gtk.Label({
-    label: text,
-    css_classes: ["installer-heading"],
-    halign: Gtk.Align.FILL,
-    hexpand: true,
-    xalign: 0,
-  })
-}
-
-function prose(text: string, extraClass?: string): Gtk.Label {
-  return new Gtk.Label({
-    label: text,
-    css_classes: extraClass ? ["installer-prose", extraClass] : ["installer-prose"],
-    halign: Gtk.Align.FILL,
-    hexpand: true,
-    xalign: 0,
-    wrap: true,
-    wrap_mode: Pango.WrapMode.WORD_CHAR,
-  })
-}
-
 export function AccountStep(): Step {
   return {
     id: "account",
-    title: t("accountTitle"),
-    nextLabel: t("continue"),
+    title: () => t("accountTitle"),
+    nextLabel: () => t("continue"),
     ready: () => getAnswers().account !== null,
 
     build(notifyReady) {
@@ -99,15 +78,6 @@ export function AccountStep(): Step {
       box.append(listCard)
       box.append(errorLabel)
 
-      // Restore previously entered values if user navigated back
-      const existing = getAnswers().account
-      if (existing) {
-        fullNameEntry.text = existing.fullName
-        usernameEntry.text = existing.username
-        pwEntry.text = existing.password
-        pw2Entry.text = existing.password
-      }
-
       const validate = () => {
         const fname = fullNameEntry.text.trim()
         const uname = usernameEntry.text.trim()
@@ -158,6 +128,16 @@ export function AccountStep(): Step {
       usernameEntry.connect("notify::text", validate)
       pwEntry.connect("notify::text", validate)
       pw2Entry.connect("notify::text", validate)
+
+      // Restore previously entered values if user navigated back
+      const existing = getAnswers().account
+      if (existing) {
+        fullNameEntry.text = existing.fullName
+        usernameEntry.text = existing.username
+        pwEntry.text = existing.password
+        pw2Entry.text = existing.password
+        validate()
+      }
 
       return box
     },

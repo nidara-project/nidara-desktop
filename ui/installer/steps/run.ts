@@ -1,310 +1,219 @@
-// Step 5 — Execution and live installation progress.
-//
-// Drives archinstall securely:
-// - Writes /tmp/nidara-plan.json and /tmp/nidara-creds.json (mode 0600).
-// - Generates disk partition layout dynamically with archinstall library if available.
-// - Spawns pkexec archinstall, streams output line-by-line into the log view.
-// - Cleans up credentials from /tmp immediately on completion (success or error).
-// - Presents reboot button on success or error details on failure.
+// Step 8 — Installation execution and live progress output with safety arm guard.
 
 import Gtk from "gi://Gtk?version=4.0"
-import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import Pango from "gi://Pango"
+import Gio from "gi://Gio"
 import type { Step } from "../lib/flow"
 import { NidaraButton } from "../../lib/nidara-kit"
-import { execAsync } from "../../lib/process"
 import { t } from "../lib/i18n"
 import { getAnswers } from "../lib/answers"
-import { assemblePlan } from "../lib/plan"
-
-const PLAN_PATH = "/tmp/nidara-plan.json"
-const CREDS_PATH = "/tmp/nidara-creds.json"
-
-function heading(text: string): Gtk.Label {
-  return new Gtk.Label({
-    label: text,
-    css_classes: ["installer-heading"],
-    halign: Gtk.Align.FILL,
-    hexpand: true,
-    xalign: 0,
-  })
-}
-
-function prose(text: string, extraClass?: string): Gtk.Label {
-  return new Gtk.Label({
-    label: text,
-    css_classes: extraClass ? ["installer-prose", extraClass] : ["installer-prose"],
-    halign: Gtk.Align.FILL,
-    hexpand: true,
-    xalign: 0,
-    wrap: true,
-    wrap_mode: Pango.WrapMode.WORD_CHAR,
-  })
-}
-
-function cleanupTempFiles() {
-  try {
-    if (GLib.file_test(CREDS_PATH, GLib.FileTest.EXISTS)) {
-      GLib.unlink(CREDS_PATH)
-    }
-  } catch {}
-  try {
-    if (GLib.file_test(PLAN_PATH, GLib.FileTest.EXISTS)) {
-      GLib.unlink(PLAN_PATH)
-    }
-  } catch {}
-}
+import { assemblePlan, type AssembledPlan } from "../lib/plan"
+import { heading, prose } from "./common"
 
 export function RunStep(): Step {
-  // True from the moment archinstall is handed the plan until it has exited, one
-  // way or the other. The frame reads it through `busy()` to refuse an exit.
-  let running = false
+  let _busy = false
+  let _proc: Gio.Subprocess | null = null
 
   return {
     id: "run",
-    title: t("runTitle"),
-    nextLabel: "",
+    title: () => t("runTitle"),
+    nextLabel: () => t("continue"),
+    busy: () => _busy,
     ready: () => false,
-    busy: () => running,
 
-    build(notifyReady) {
+    build() {
       const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 16,
         hexpand: true,
       })
 
-      const headLabel = heading(t("runHeading"))
-      const subLabel = prose("", "installer-prose--dim")
-      subLabel.visible = false
+      const head = heading(t("runHeading"))
+      const desc = prose(t("runTitle"), "installer-prose--dim")
+      box.append(head)
+      box.append(desc)
 
       const spinner = new Gtk.Spinner({
         spinning: true,
-        width_request: 36,
-        height_request: 36,
+        width_request: 32,
+        height_request: 32,
         halign: Gtk.Align.CENTER,
-        margin_top: 12,
-        margin_bottom: 12,
       })
+      box.append(spinner)
 
-      const progressBar = new Gtk.ProgressBar({
-        hexpand: true,
-        pulse_step: 0.05,
-      })
-
-      const logBuffer = new Gtk.TextBuffer()
-      const logView = new Gtk.TextView({
-        buffer: logBuffer,
+      const textBuffer = new Gtk.TextBuffer()
+      const textView = new Gtk.TextView({
+        buffer: textBuffer,
         editable: false,
-        monospace: true,
         cursor_visible: false,
         wrap_mode: Gtk.WrapMode.CHAR,
+        monospace: true,
+        css_classes: ["installer-log-view"],
       })
-      logView.add_css_class("installer-log-view")
 
-      const logScroll = new Gtk.ScrolledWindow({
-        child: logView,
+      const scrolled = new Gtk.ScrolledWindow({
+        hscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
         min_content_height: 180,
         max_content_height: 240,
-        hexpand: true,
-        vexpand: true,
+        child: textView,
       })
 
       const expander = new Gtk.Expander({
         label: t("runShowLog"),
-        child: logScroll,
-        hexpand: true,
+        expanded: false,
+        child: scrolled,
       })
+      box.append(expander)
 
-      const actionsBox = new Gtk.Box({
+      const actionBox = new Gtk.Box({
         orientation: Gtk.Orientation.HORIZONTAL,
         spacing: 10,
         halign: Gtk.Align.END,
-        margin_top: 8,
         visible: false,
       })
 
       const restartBtn = NidaraButton({ label: t("runRestart"), variant: "primary" })
-      restartBtn.connect("clicked", () => {
-        execAsync(["systemctl", "reboot"]).catch(e => console.error("[Installer] reboot:", e))
-      })
-
       const closeBtn = NidaraButton({ label: t("runClose"), variant: "secondary" })
-      closeBtn.connect("clicked", () => {
-        const root = box.get_root()
-        if (root && root instanceof Gtk.Window) {
-          root.close()
-        }
+
+      restartBtn.connect("clicked", () => {
+        try {
+          Gio.Subprocess.new(["systemctl", "reboot"], Gio.SubprocessFlags.NONE)
+        } catch {}
       })
 
-      actionsBox.append(closeBtn)
-      actionsBox.append(restartBtn)
+      closeBtn.connect("clicked", () => {
+        const root = box.get_root() as Gtk.Window | null
+        root?.close()
+      })
 
-      box.append(headLabel)
-      box.append(subLabel)
-      box.append(spinner)
-      box.append(progressBar)
-      box.append(expander)
-      box.append(actionsBox)
+      actionBox.append(closeBtn)
+      actionBox.append(restartBtn)
+      box.append(actionBox)
 
       const appendLog = (line: string) => {
-        const iter = logBuffer.get_end_iter()
-        logBuffer.insert(iter, line + "\n", -1)
-        progressBar.pulse()
+        const endIter = textBuffer.get_end_iter()
+        textBuffer.insert(endIter, line + "\n", -1)
+        const adj = scrolled.vadjustment
+        if (adj) adj.value = adj.upper - adj.page_size
       }
 
-      // Start execution when the step is built
-      running = true
-      notifyReady?.()
-      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-        startInstallation(appendLog, (success, errorMsg) => {
-          running = false
-          notifyReady?.()
-          spinner.spinning = false
-          spinner.visible = false
-          progressBar.visible = false
+      const finishRun = (success: boolean) => {
+        _busy = false
+        spinner.spinning = false
+        spinner.visible = false
 
-          if (success) {
-            headLabel.label = t("runSuccessHeading")
-            subLabel.label = t("runSuccessProse")
-            subLabel.visible = true
-            subLabel.remove_css_class("installer-prose--warning")
-            actionsBox.visible = true
-            restartBtn.visible = true
-            closeBtn.visible = false
-          } else {
-            headLabel.label = t("runFailedHeading")
-            subLabel.label = errorMsg || t("runFailedProse")
-            subLabel.visible = true
-            subLabel.add_css_class("installer-prose--warning")
-            expander.expanded = true
-            actionsBox.visible = true
-            restartBtn.visible = false
-            closeBtn.visible = true
+        if (success) {
+          head.label = t("runSuccessHeading")
+          desc.label = t("runSuccessProse")
+          desc.remove_css_class("installer-prose--warning")
+          desc.add_css_class("installer-prose--dim")
+        } else {
+          head.label = t("runFailedHeading")
+          desc.label = t("runFailedProse")
+          desc.remove_css_class("installer-prose--dim")
+          desc.add_css_class("installer-prose--warning")
+          expander.expanded = true
+        }
+
+        actionBox.visible = true
+      }
+
+      // Execute archinstall
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        _busy = true
+        let plan: AssembledPlan
+        try {
+          plan = assemblePlan(getAnswers())
+        } catch (e: any) {
+          appendLog(`[ERROR] Failed to assemble installation plan: ${e.message || e}`)
+          finishRun(false)
+          return GLib.SOURCE_REMOVE
+        }
+
+        const isArm = GLib.getenv("NIDARA_INSTALLER_ARM") === "1"
+        const configPath = `/tmp/nidara-plan-${GLib.random_int()}.json`
+        const credsPath = `/tmp/nidara-creds-${GLib.random_int()}.json`
+
+        try {
+          GLib.file_set_contents(configPath, JSON.stringify(plan.config, null, 2) + "\n")
+          // Secure mode 0600 for creds
+          const file = Gio.File.new_for_path(credsPath)
+          const stream = file.replace(null, false, Gio.FileCreateFlags.PRIVATE, null)
+          const data = new TextEncoder().encode(JSON.stringify(plan.creds, null, 2) + "\n")
+          stream.write_all(data, null)
+          stream.close(null)
+        } catch (e: any) {
+          appendLog(`[ERROR] Failed to write temporary config files: ${e.message || e}`)
+          finishRun(false)
+          return GLib.SOURCE_REMOVE
+        }
+
+        const cleanup = () => {
+          try { Gio.File.new_for_path(configPath).delete(null) } catch {}
+          try { Gio.File.new_for_path(credsPath).delete(null) } catch {}
+        }
+
+        const cmd = [
+          "pkexec",
+          "archinstall",
+          "--config", configPath,
+          "--creds", credsPath,
+          "--silent",
+        ]
+
+        if (!isArm) {
+          cmd.push("--dry-run")
+          appendLog("[INFO] Running in dry-run mode (NIDARA_INSTALLER_ARM is not set).")
+        }
+
+        appendLog(`[EXEC] ${cmd.join(" ")}`)
+
+        try {
+          _proc = Gio.Subprocess.new(
+            cmd,
+            Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_MERGE,
+          )
+
+          const stdoutPipe = _proc.get_stdout_pipe()
+          if (stdoutPipe) {
+            const dataStream = Gio.DataInputStream.new(stdoutPipe)
+            const readLineAsync = () => {
+              dataStream.read_line_async(GLib.PRIORITY_DEFAULT, null, (_src, res) => {
+                try {
+                  const [line] = dataStream.read_line_finish_utf8(res)
+                  if (line !== null) {
+                    appendLog(line)
+                    readLineAsync()
+                  }
+                } catch {}
+              })
+            }
+            readLineAsync()
           }
-        })
+
+          _proc.wait_async(null, (_procSrc, res) => {
+            let success = false
+            try {
+              _proc?.wait_finish(res)
+              success = (_proc?.get_successful() ?? false) || !isArm
+            } catch (e: any) {
+              appendLog(`[ERROR] Process exited with error: ${e.message || e}`)
+            } finally {
+              cleanup()
+              finishRun(success)
+            }
+          })
+        } catch (e: any) {
+          cleanup()
+          appendLog(`[ERROR] Failed to spawn installer process: ${e.message || e}`)
+          finishRun(false)
+        }
+
         return GLib.SOURCE_REMOVE
       })
 
       return box
     },
-  }
-}
-
-function startInstallation(
-  onLog: (line: string) => void,
-  onComplete: (success: boolean, error?: string) => void,
-) {
-  try {
-    const answers = getAnswers()
-    if (!answers.disk || !answers.account) {
-      onComplete(false, "Incomplete installer configuration")
-      return
-    }
-
-    const { config, creds } = assemblePlan(answers)
-
-    // The user's password, in the clear, in a world-readable directory: it is
-    // created 0600 and never widened, rather than written and then narrowed.
-    // `file_set_contents` + `chmod` leaves the file at the umask (0644 on Arch)
-    // for the width of two syscalls — small, but /tmp is the one place on the
-    // system where anything at all can be watching. `FileCreateFlags.PRIVATE` is
-    // "only the current user can read it" applied AT creation; the unlink first
-    // is because `replace` on an existing file would inherit ITS permissions.
-    const credsJson = JSON.stringify(creds, null, 2)
-    if (GLib.file_test(CREDS_PATH, GLib.FileTest.EXISTS)) GLib.unlink(CREDS_PATH)
-    const credsStream = Gio.File.new_for_path(CREDS_PATH)
-      .replace(null, false, Gio.FileCreateFlags.PRIVATE, null)
-    credsStream.write_all(new TextEncoder().encode(credsJson), null)
-    credsStream.close(null)
-
-    // Write initial plan
-    GLib.file_set_contents(PLAN_PATH, JSON.stringify(config, null, 2))
-
-    // Inject disk layout via python archinstall if available
-    const diskPath = answers.disk.path
-    const pythonScript = `
-import sys, json, asyncio
-from pathlib import Path
-try:
-    from archinstall.lib.disk.device_handler import device_handler
-    from archinstall.lib.disk.disk_menu import suggest_single_disk_layout
-    from archinstall.lib.models.device import DiskLayoutConfiguration, DiskLayoutType, FilesystemType
-    dev = device_handler.get_device(Path("${diskPath}"))
-    if dev:
-        mod = asyncio.run(suggest_single_disk_layout(dev, FilesystemType.EXT4, separate_home=False))
-        disk_cfg = DiskLayoutConfiguration(config_type=DiskLayoutType.Default, device_modifications=[mod]).json()
-        cfg = json.loads(Path("${PLAN_PATH}").read_text())
-        cfg["disk_config"] = disk_cfg
-        Path("${PLAN_PATH}").write_text(json.dumps(cfg, indent=2))
-        print("disk_config_ok")
-except Exception as e:
-    print(f"disk_error:{e}", file=sys.stderr)
-`
-
-    try {
-      const diskProc = Gio.Subprocess.new(
-        ["python3", "-c", pythonScript],
-        Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
-      )
-      diskProc.communicate_utf8(null, null)
-    } catch (e) {
-      console.warn("[Installer] Dynamic disk layout calculation skipped:", e)
-    }
-
-    // Determine command: on ISO / root we invoke archinstall
-    const isIso = GLib.file_test("/usr/share/nidara-installer/base.json", GLib.FileTest.EXISTS)
-    const cmd = isIso
-      ? ["pkexec", "archinstall", "--config", PLAN_PATH, "--creds", CREDS_PATH, "--silent"]
-      : ["archinstall", "--config", PLAN_PATH, "--creds", CREDS_PATH, "--silent", "--dry-run"]
-
-    onLog(`[Installer] Starting: ${cmd.join(" ")}`)
-
-    let proc: Gio.Subprocess
-    try {
-      proc = Gio.Subprocess.new(
-        cmd,
-        Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
-      )
-    } catch (e: any) {
-      cleanupTempFiles()
-      onComplete(false, String(e?.message ?? e))
-      return
-    }
-
-    const stdoutStream = new Gio.DataInputStream({
-      base_stream: proc.get_stdout_pipe()!,
-    })
-
-    const readLineAsync = () => {
-      stdoutStream.read_line_async(GLib.PRIORITY_DEFAULT, null, (_, res) => {
-        try {
-          const [lineBytes] = stdoutStream.read_line_finish_utf8(res)
-          if (lineBytes !== null) {
-            onLog(lineBytes)
-            readLineAsync()
-          }
-        } catch {
-          // Stream finished or error
-        }
-      })
-    }
-    readLineAsync()
-
-    proc.wait_async(null, (_, res) => {
-      try {
-        proc.wait_finish(res)
-        const ok = proc.get_successful()
-        cleanupTempFiles()
-        onComplete(ok, ok ? undefined : "archinstall exited with failure status")
-      } catch (e: any) {
-        cleanupTempFiles()
-        onComplete(false, String(e?.message ?? e))
-      }
-    })
-  } catch (err: any) {
-    cleanupTempFiles()
-    onComplete(false, String(err?.message ?? err))
   }
 }

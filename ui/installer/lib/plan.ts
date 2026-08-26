@@ -8,7 +8,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { exec } from "../../lib/process"
 import { readBaseConfig, type BaseConfigResult, type BaseConfig } from "./base-config"
-import type { InstallerAnswers } from "./answers"
+import type { Answers } from "./answers"
 
 export interface LocaleConfig {
   kb_layout: string
@@ -125,7 +125,7 @@ export function getLiveDefaults(): LiveDefaults {
  * Rewrites SUDO_USER in custom_commands with the selected user account.
  */
 export function assemblePlan(
-  answers: InstallerAnswers,
+  answers: Answers,
   baseResult: BaseConfigResult | null = readBaseConfig(),
 ): AssembledPlan {
   if (!baseResult) {
@@ -143,11 +143,11 @@ export function assemblePlan(
   const config: BaseConfig = JSON.parse(JSON.stringify(baseResult.config))
 
   config.hostname = live.hostname
-  config.timezone = live.timezone
+  config.timezone = answers.timezone?.timezone || live.timezone
   config.locale_config = {
-    kb_layout: live.localeConfig.kb_layout,
-    sys_enc: live.localeConfig.sys_enc,
-    sys_lang: live.localeConfig.sys_lang,
+    kb_layout: answers.keyboard?.layout || live.localeConfig.kb_layout,
+    sys_enc: answers.language?.sysEnc || live.localeConfig.sys_enc,
+    sys_lang: answers.language?.sysLang || live.localeConfig.sys_lang,
   }
 
   // Rewrite SUDO_USER in custom_commands so the first-boot setup runs for the chosen user

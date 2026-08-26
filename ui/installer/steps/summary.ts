@@ -1,44 +1,22 @@
-// Step 4 — Summary and final confirmation before execution.
+// Step 7 — Summary and final confirmation before execution.
 //
 // Shows the clear breakdown of what will happen: which disk is erased, the user account
-// created, live session defaults, and the software packages being installed.
+// created, language, keyboard, timezone, and the software packages being installed.
 
 import Gtk from "gi://Gtk?version=4.0"
-import Pango from "gi://Pango"
 import type { Step } from "../lib/flow"
 import { NidaraList, NidaraRow } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import { getAnswers } from "../lib/answers"
 import { readBaseConfig, basePackages } from "../lib/base-config"
 import { getLiveDefaults } from "../lib/plan"
-
-function heading(text: string): Gtk.Label {
-  return new Gtk.Label({
-    label: text,
-    css_classes: ["installer-heading"],
-    halign: Gtk.Align.FILL,
-    hexpand: true,
-    xalign: 0,
-  })
-}
-
-function prose(text: string, extraClass?: string): Gtk.Label {
-  return new Gtk.Label({
-    label: text,
-    css_classes: extraClass ? ["installer-prose", extraClass] : ["installer-prose"],
-    halign: Gtk.Align.FILL,
-    hexpand: true,
-    xalign: 0,
-    wrap: true,
-    wrap_mode: Pango.WrapMode.WORD_CHAR,
-  })
-}
+import { heading, prose } from "./common"
 
 export function SummaryStep(): Step {
   return {
     id: "summary",
-    title: t("summaryTitle"),
-    nextLabel: t("installNow"),
+    title: () => t("summaryTitle"),
+    nextLabel: () => t("installNow"),
     ready: () => {
       const answers = getAnswers()
       return answers.disk !== null && answers.account !== null
@@ -63,7 +41,7 @@ export function SummaryStep(): Step {
       const baseResult = readBaseConfig()
       const packages = baseResult ? basePackages(baseResult.config) : []
 
-      // Row 1: Disk
+      // Row 1: Target Disk
       if (disk) {
         const gib = (disk.size / (1024 ** 3)).toFixed(1)
         const diskTitle = disk.model || disk.name
@@ -79,13 +57,21 @@ export function SummaryStep(): Step {
         ))
       }
 
-      // Row 3: Timezone & locale
-      listBox.append(NidaraRow(
-        t("summaryTimezone"),
-        `${live.timezone} · ${live.localeConfig.kb_layout} · ${live.localeConfig.sys_lang}`,
-      ))
+      // Row 3: Language
+      const chosenLang = answers.language?.label ?? `${live.localeConfig.sys_lang}.${live.localeConfig.sys_enc}`
+      listBox.append(NidaraRow(t("summaryLanguage"), chosenLang))
 
-      // Row 4: Packages
+      // Row 4: Keyboard
+      const chosenKb = answers.keyboard?.label
+        ? `${answers.keyboard.label}${answers.keyboard.variant ? ` (${answers.keyboard.variant})` : ""}`
+        : live.localeConfig.kb_layout
+      listBox.append(NidaraRow(t("summaryKeyboard"), chosenKb))
+
+      // Row 5: Timezone
+      const chosenTz = answers.timezone?.timezone ?? live.timezone
+      listBox.append(NidaraRow(t("summaryTimezone"), chosenTz))
+
+      // Row 6: Packages
       if (packages.length > 0) {
         listBox.append(NidaraRow(
           t("summaryPackages"),
@@ -94,7 +80,6 @@ export function SummaryStep(): Step {
       }
 
       box.append(listCard)
-
       return box
     },
   }

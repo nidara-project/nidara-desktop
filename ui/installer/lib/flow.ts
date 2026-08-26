@@ -12,7 +12,7 @@ export interface Step {
   /** Stable id — the Gtk.Stack child name, and what a log line names. */
   id: string
   /** Shown in the window's header while this step is current. */
-  title: string
+  title: string | (() => string)
   /** Built once, the first time the step is reached. */
   build(notifyReady?: () => void): Gtk.Widget
   /**
@@ -21,7 +21,7 @@ export interface Step {
    * because a button that always says the same thing is how somebody clicks
    * past the point of no return without noticing it.
    */
-  nextLabel: string
+  nextLabel: string | (() => string)
   /**
    * Can the flow move on? Optional: a step with nothing to fill in is ready by
    * definition. A step that needs an answer keeps its own state and calls the
