@@ -1030,6 +1030,29 @@ filed, and the fix lands as an update if and when one appears. One occurrence, a
 and no reproduction at will is not a reason to hold a release — it is a reason to keep the core and
 the stacks, which this entry does.
 
+### 96. Window chrome: three of five windows are on the kit's base (2026-08-26)
+
+`NidaraAppWindow` (architecture.md) is the base now, and **Settings, About and the installer are
+on it**. Two are not, and the reason is the same one that keeps them out of every other migration:
+**the greeter and the lockscreen have no dev mode**, their installed `style.css` outranks a
+source one, and a mistake there locks somebody out of their own machine. They also want less of
+the base than the others do — no header, no close button, no Escape — so the honest question is
+whether they should wear it at all, not just when.
+
+What is worth doing FIRST is smaller and testable: they are the last two places building an
+undecorated toplevel by hand, so at minimum they should take the base's window construction (the
+app-id, the size floor, the glass card) even if they pass no header. Do it against
+`scripts/dev/lock-probe.js` or a VM, watching each screen.
+
+⚠️ And a fact that cost an hour on 2026-08-26, recorded so nobody re-derives it: **`default_width`
+is a request, and on Wayland the compositor answers it.** `win.get_width()` afterwards is the
+allocation the compositor handed back, NOT what GTK asked for — so a window coming up at its
+natural size is not evidence that GTK ignored anything. The installer floats and Hyprland gives it
+its natural width; the Settings window was measured "too narrow" the same afternoon for the plain
+reason that it was TILED. What survives a compositor is the MINIMUM (`set_size_request` →
+`xdg_toplevel.set_min_size`), which is why both windows carry a size floor and neither relies on
+its default.
+
 ### 95. The installer bundle ships two known gaps on purpose (2026-08-25)
 
 `ui/installer/` landed as a skeleton — the frame, the step flow, the base-config seam and one

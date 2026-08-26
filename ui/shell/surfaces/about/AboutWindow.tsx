@@ -1,9 +1,8 @@
 import app from "../../../lib/host"
-import { setWindowAppId } from "../../../lib/app-id"
 import Gtk from "gi://Gtk?version=4.0"
 import Pango from "gi://Pango"
 import Gio from "gi://Gio"
-import { NidaraButton, NidaraClamp } from "../../../lib/nidara-kit"
+import { NidaraAppWindow, NidaraButton, NidaraClamp, type NidaraAppWindowResult } from "../../../lib/nidara-kit"
 import IconButton from "../../common/IconButton"
 import status from "../../core/Status"
 import shellActions from "../../core/ShellActions"
@@ -203,7 +202,10 @@ export default function AboutWindow(): Gtk.Window | null {
         tooltip: t("settings.about.close"),
         tooltipChrome: false,   // app-mode window: tooltip follows the system mode
         halign: Gtk.Align.END,
-        onClick: () => { status.about_open = false },
+        // The window's own close path, not a status write: the button, Escape and
+        // the compositor's close request all end in the same place — see the
+        // NidaraAppWindow call below. A thunk because the window is built after.
+        onClick: () => shell.close(),
     })
     closeBtn.margin_top = 12
 
@@ -223,54 +225,49 @@ export default function AboutWindow(): Gtk.Window | null {
     // specular rims regardless of borderColor — together they read as a double
     // border no borderColor tweak can turn off. The CSS route also makes the
     // About follow the user's window-opacity token instead of a hardcoded alpha.
-    const glass = new Gtk.Box({ css_classes: ["nidara-window-glass", "about-window-card"] })
-    // min = max = CARD_WIDTH: the clamp is the ceiling the card's own
-    // `width_request` cannot be (see the note on the constant).
-    glass.append(NidaraClamp(card, CARD_WIDTH + 48, false, CARD_WIDTH + 48))
-
     // ── Window ────────────────────────────────────────────────────────────────
-    const win = new Gtk.Window({
-        name: "nidara-about",
-        application: app,
-        title: "About Nidara",
-        css_classes: ["about-floating-window"],
-        decorated: false,
-        resizable: false,
-    })
-    win.set_child(glass)
-    // Deliberately the SAME app-id as the Settings window: About is opened from
-    // Settings, has no desktop entry of its own, and under AGS both windows
-    // already resolved to `nidara-settings` through AppService's remap. Giving it
-    // a name of its own here would only cost it its icon everywhere.
-    setWindowAppId(win, "nidara-settings")
-    _instance = win
-
+    // The kit's base since 2026-08-26: the undecorated toplevel, the glass card,
+    // the per-window app-id, Escape, and ONE close path that the card's button,
+    // the compositor's request and the status flag all go through. About passes no
+    // `header` — its close button lives INSIDE the card, on the corner diagonal.
+    //
     // Float + center come from a static window rule in hyprland.lua (matched by the
     // "About Nidara" title). The old `hyprctl keyword windowrulev2` calls here
     // were rejected by the Lua parser ("Use eval.") and have been removed.
-
-    // Escape key
-    const escKey = new Gtk.EventControllerKey()
-    escKey.connect("key-pressed", (_c, keyval) => {
-        if (keyval === 65307) { status.about_open = false; return true }
-        return false
-    })
-    win.add_controller(escKey)
-
-    // On close: destroy window (not hide) so it doesn't block `ags quit`
-    win.connect("close-request", () => {
-        _instance = null
-        status.about_open = false
-        return false  // allow GTK default destroy
-    })
-
-    // If status is set to false externally, destroy the window
-    const sigId = status.connect("notify::about-open", () => {
-        if (!status.about_open && _instance === win) {
-            safeDisconnect(status, sigId)
+    let sigId = 0
+    let shell: NidaraAppWindowResult
+    shell = NidaraAppWindow({
+        app,
+        title: "About Nidara",
+        name: "nidara-about",
+        // Deliberately the SAME app-id as the Settings window: About is opened from
+        // Settings, has no desktop entry of its own, and under AGS both windows
+        // already resolved to `nidara-settings` through AppService's remap. Giving
+        // it a name of its own here would only cost it its icon everywhere.
+        appId: "nidara-settings",
+        cssClasses: ["about-floating-window"],
+        glassClasses: ["about-window-card"],
+        // min = max = CARD_WIDTH: the clamp is the ceiling the card's own
+        // `width_request` cannot be (see the note on the constant).
+        content: NidaraClamp(card, CARD_WIDTH + 48, false, CARD_WIDTH + 48),
+        resizable: false,
+        closeOnEscape: true,
+        // DESTROY, not hide: a hidden window keeps the application alive.
+        closeMode: "destroy",
+        onClose: () => {
+            if (sigId) safeDisconnect(status, sigId)
             _instance = null
-            win.destroy()
-        }
+            // Runs BEFORE the destroy, so the listener below sees `_instance`
+            // already null and does not ask to close a window that is closing.
+            status.about_open = false
+        },
+    })
+    const win = shell.window
+    _instance = win
+
+    // Closed from elsewhere (the Settings row, an IPC action) — same path.
+    sigId = status.connect("notify::about-open", () => {
+        if (!status.about_open && _instance === win) shell.close()
     })
 
     win.present()

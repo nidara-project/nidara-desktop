@@ -55,6 +55,16 @@ export type { NidaraListResult } from "./list"
 export { NidaraSidebar } from "./sidebar"
 export type { NidaraSidebarItem, NidaraSidebarResult } from "./sidebar"
 
+// NidaraAppWindow — the BASE every Nidara application window is built from: the
+// undecorated toplevel, the glass card, an optional draggable header, one close
+// policy (button + compositor request + Escape all through it) and the per-window
+// app-id. Use it directly for a window with no sidebar; NidaraWindow is this plus
+// a sidebar and a split view.
+export { NidaraAppWindow } from "./app-window"
+export type {
+  NidaraAppWindowOpts, NidaraAppWindowResult, NidaraAppWindowHeader, NidaraCloseMode,
+} from "./app-window"
+
 // NidaraWindow — settings-style window shell (glass + split + reparenting header)
 export { NidaraWindow, NIDARA_WINDOW_RADIUS, NIDARA_CARD_RADIUS } from "./window"
 export type { NidaraWindowOpts, NidaraWindowResult } from "./window"

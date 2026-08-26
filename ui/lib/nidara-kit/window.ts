@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { setWindowAppId } from "../app-id"
 import Gio from "gi://Gio"
+import { NidaraAppWindow } from "./app-window"
 import { NidaraScrolled } from "./scrolled"
 import { NidaraSplitView, type NidaraSplitViewResult } from "./split-view"
 import { RADIUS, WINDOW_LAYOUT, collapseAtFor, minWindowWidthFor } from "../tokens"
@@ -96,18 +96,6 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     const minFloorWidth = minWindowWidthFor(WINDOW_LAYOUT.contentFloor)
     const openWidth = Math.max(defaultWidth ?? 0, collapseAtFor(sidebarWidth, contentWidth) + 48)
 
-    // decorated:false + Gtk.WindowHandle on the header = custom CSD, no Adwaita.
-    const win = new Gtk.Window({
-        title,
-        application: app,
-        css_classes: cssClasses,
-        default_width: openWidth,
-        default_height: defaultHeight,
-        decorated: false,
-        visible: false,
-    })
-    if (name) win.set_name(name)
-    if (appId) setWindowAppId(win, appId)
     // ── The floor is the DISTRESS width, not the pane ─────────────────────────
     //
     // NidaraSplitView's ZeroMinOverlay deliberately severs the content's minimum
@@ -129,7 +117,7 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     // `tiled-left`, `tiled-right`, `tiled-bottom` AND `maximized`. As a signal for
     // "someone else decides how wide I am" it is stuck on, so a floor that reads it
     // is a floor that never comes back.
-    win.set_size_request(minFloorWidth, WINDOW_LAYOUT.minHeight)
+    // (The floor reaches the toplevel through NidaraAppWindow's `minWidth`/`minHeight`.)
 
     // ── Sidebar capsule (toolbar on top, scrolling list below) ────────────────
     // NidaraScrolled, like every other scroll view in the DE — a window's sidebar is
@@ -223,19 +211,25 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         splitView.setShowSidebar(!splitView.showSidebar)
     })
 
-    // ── Glass container ───────────────────────────────────────────────────────
-    const mainContainer = new Gtk.Box({ css_classes: ["nidara-window-glass"] })
-    mainContainer.set_name("nidara-window-glass")
-    mainContainer.append(splitView.widget)
-    win.set_child(mainContainer)
+    // ── The window ────────────────────────────────────────────────────────────
+    // `header` is deliberately NOT passed: this window's header belongs INSIDE the
+    // content column (built above), because the sidebar capsule is full-height
+    // beside it — a header spanning the whole card would cross the capsule. Every
+    // other decision a Nidara window makes is the base's.
+    //
+    // `closeMode: "hide"` because this window is reused across toggles: rebuilding
+    // its 21 pages on every open is visible, and `categories.forEach` builds them
+    // eagerly.
+    const base = NidaraAppWindow({
+        app, title, content: splitView.widget,
+        closeMode: "hide",
+        defaultWidth: openWidth,
+        defaultHeight,
+        minWidth: minFloorWidth,
+        minHeight: WINDOW_LAYOUT.minHeight,
+        cssClasses, name, appId,
+    })
+    base.glass.set_name("nidara-window-glass")
 
-    // Hide instead of destroy — the window is reused across toggles.
-    win.connect("close-request", () => { win.set_visible(false); return true })
-
-    const toggle = () => {
-        win.visible = !win.visible
-        if (win.visible) win.present()
-    }
-
-    return { window: win, toggle, splitView, sidebarToggle }
+    return { window: base.window, toggle: base.toggle, splitView, sidebarToggle }
 }

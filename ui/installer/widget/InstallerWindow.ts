@@ -6,10 +6,11 @@
 // asks. Adding a screen is adding an entry to the array at the bottom.
 
 import Gtk from "gi://Gtk?version=4.0"
-import Gdk from "gi://Gdk?version=4.0"
 import app from "../../lib/host"
-import { setWindowAppId } from "../../lib/app-id"
-import { NidaraButton, NidaraCircleButton, NidaraClamp } from "../../lib/nidara-kit"
+import {
+  NidaraAppWindow, NidaraButton, NidaraCircleButton, NidaraClamp,
+  type NidaraAppWindowResult,
+} from "../../lib/nidara-kit"
 import { ndIcon } from "../../lib/icons"
 import { Flow, type Step } from "../lib/flow"
 import { WelcomeStep } from "../steps/welcome"
@@ -29,8 +30,16 @@ import { t } from "../lib/i18n"
  */
 const CONTENT_WIDTH = 620
 
+/**
+ * The header's three slots, for `NidaraAppWindow` to place.
+ *
+ * It returns the widgets rather than a bar: the kit owns the `Gtk.CenterBox` and
+ * the `Gtk.WindowHandle` that makes an undecorated window draggable, so this file
+ * no longer builds either.
+ */
 function header(onClose: () => void): {
-  widget: Gtk.Widget
+  start: Gtk.Widget
+  end: Gtk.Widget
   set: (title: string, position: string) => void
   setCanClose: (can: boolean) => void
 } {
@@ -58,18 +67,13 @@ function header(onClose: () => void): {
   })
   closeBtn.name = "installer-close"
 
-  const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12 })
-  box.add_css_class("installer-header")
-  box.append(title)
-  box.append(position)
-  box.append(closeBtn)
-
-  // The header is the drag handle: the window is undecorated, so without this it
-  // can only be moved with a compositor keybind.
-  const drag = new Gtk.WindowHandle({ child: box })
+  const trailing = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12 })
+  trailing.append(position)
+  trailing.append(closeBtn)
 
   return {
-    widget: drag,
+    start: title,
+    end: trailing,
     set: (t: string, p: string) => { title.label = t; position.label = p },
     // Insensitive rather than hidden while the install runs: a control that
     // disappears reads as a bug, one that greys out reads as "not now".
@@ -96,18 +100,6 @@ export function InstallerWindow(): Gtk.Window {
   ]
   const flow = Flow(steps)
 
-  const win = new Gtk.Window({
-    application: app as any,
-    name: "nidara-installer",
-    css_classes: ["nidara-installer-window"],
-    decorated: false,
-    default_width: CONTENT_WIDTH + 120,
-    default_height: 620,
-  })
-  // A real application window declares its own app-id, so the compositor files
-  // it under a name the desktop registry has — not under the process-wide one.
-  setWindowAppId(win, "nidara-installer")
-
   /**
    * Can the window be left right now?
    *
@@ -119,30 +111,6 @@ export function InstallerWindow(): Gtk.Window {
    * plaintext credentials file it must delete afterwards.
    */
   const canExit = () => flow.current().busy?.() !== true
-
-  const close = () => {
-    if (!canExit()) return
-    win.destroy()
-    app.quit()
-  }
-
-  win.connect("close-request", () => {
-    close()
-    // TRUE either way: the default handler must not run. When the exit was
-    // allowed, `close()` has already destroyed the window; when it was refused,
-    // letting GTK close it anyway is exactly what the refusal is for.
-    return true
-  })
-
-  const escKey = new Gtk.EventControllerKey()
-  escKey.connect("key-pressed", (_c, keyval) => {
-    if (keyval !== Gdk.KEY_Escape) return false
-    close()
-    return true
-  })
-  win.add_controller(escKey)
-
-  const head = header(close)
 
   const back = NidaraButton({ label: t("back"), variant: "secondary" })
   const next = NidaraButton({ label: t("continue"), variant: "primary" })
@@ -166,38 +134,62 @@ export function InstallerWindow(): Gtk.Window {
   // maxWidth === minWidth: the content pane is a CONSTANT width, so widening the
   // window adds margin and never re-flows the prose.
   const content = NidaraClamp(flow.widget, CONTENT_WIDTH, true, CONTENT_WIDTH)
-
-  // The glass is painted HERE, not on the window: the toplevel stays transparent
-  // so the compositor has something to blur, which is how About and Settings are
-  // built and why they look like Nidara rather than like a dark rectangle.
-  // ⚠️ THE SIZE COMES FROM HERE, NOT FROM `default_width`.
+  // ⚠️ THE SIZE FLOOR IS WHAT DECIDES HERE, NOT `default_width`.
   //
-  // Measured 2026-08-26: with `default_width: 900` set on the window, GTK itself
-  // reports `get_width() === 622` — the content's natural width (the 620 clamp
-  // plus its margins). The default size is not being honoured for this window at
-  // all, and the same is true of the version on `main`, so it is not something
-  // this file changed. Until that is understood, the size request is the only
-  // mechanism that actually decides, and a window whose prose runs edge to edge
-  // is what happens when nothing does.
+  // Measured 2026-08-26: with `default_width: 900`, the window still came up 622
+  // wide — the content's natural width (the 620 clamp plus its margins) — with
+  // its prose running edge to edge. `main`'s build does the same, so it is not
+  // something this file changed.
+  //
+  // The default size is a REQUEST, and on Wayland the compositor answers it: what
+  // `get_width()` reports afterwards is the allocation Hyprland handed back, not
+  // GTK's intent. (Do not read that number as "GTK ignored the default" — this
+  // comment said exactly that for an hour, until the Settings window turned out
+  // to be sized the same way for the plain reason that it was TILED.) A minimum
+  // survives where a default does not: GTK forwards it as
+  // `xdg_toplevel.set_min_size`, which the compositor honours.
   //
   // The width is a floor of 740 = the 620 reading column plus 120 of air. That
-  // still fits the smallest screen a live medium plausibly meets (1024×768), which
-  // is what the earlier worry about width requests was really about.
-  //
+  // still fits the smallest screen a live medium plausibly meets (1024×768).
   // The height floor is a separate concern: the steps have visibly different
   // content heights (three lines of prose, then a disk list, then four fields) and
   // a frame that resized under each one would read as a different window each time.
-  const root = new Gtk.Box({
-    orientation: Gtk.Orientation.VERTICAL,
-    width_request: CONTENT_WIDTH + 120,
-    height_request: 620,
+  // The close button is built before the window, and the window's close policy is
+  // what it calls — so the button gets a thunk rather than the function itself.
+  // One path: this button, the compositor's close request and Escape all end in
+  // `shell.close()`, which asks `canExit()` first.
+  let shell: NidaraAppWindowResult
+  const head = header(() => shell.close())
+
+  // The kit owns the chrome: the undecorated toplevel, the glass card (painted by
+  // a BOX inside it so the compositor has something to blur), the draggable
+  // header, the app-id, and ONE close path that the button, the compositor's
+  // request and Escape all go through. What is left here is what an installer
+  // actually is — a flow, and the two buttons that move through it.
+  shell = NidaraAppWindow({
+    app,
+    title: "Nidara Installer",
+    name: "nidara-installer",
+    appId: "nidara-installer",
+    cssClasses: ["nidara-installer-window"],
+    glassClasses: ["installer-root"],
+    content,
+    footer,
+    header: { cssClasses: ["installer-header"], start: head.start, end: head.end },
+    closeOnEscape: true,
+    // Refusing is the whole point: `true` here means "not now".
+    onClose: () => !canExit(),
+    defaultWidth: CONTENT_WIDTH + 120,
+    defaultHeight: 620,
   })
-  root.add_css_class("nidara-window-glass")
-  root.add_css_class("installer-root")
-  root.append(head.widget)
-  root.append(content)
-  root.append(footer)
-  win.set_child(root)
+
+  const win = shell.window
+  // The size floor goes on the CARD, which is what holds the header, the content
+  // and the footer — the same node the old hand-built root box was.
+  shell.glass.set_size_request(CONTENT_WIDTH + 120, 620)
+  // Closing the installer ends the process — it is the only window there is, and a
+  // hidden one would keep the application alive with nothing on screen.
+  win.connect("destroy", () => app.quit())
 
   function sync() {
     const step = flow.current()
