@@ -119,13 +119,13 @@ window.nidara-installer-window {
 
     trough {
       min-height: 4px;
-      border-radius: var(--nidara-radius-full);
+      border-radius: $nidara-radius-pill;
       background-color: var(--nidara-surface);
     }
 
     progress {
       min-height: 4px;
-      border-radius: var(--nidara-radius-full);
+      border-radius: $nidara-radius-pill;
       background-color: var(--nidara-accent);
     }
   }
@@ -143,7 +143,7 @@ window.nidara-installer-window {
       slider {
         min-width: 6px;
         min-height: 24px;
-        border-radius: var(--nidara-radius-full);
+        border-radius: $nidara-radius-pill;
         background-color: var(--nidara-surface-active);
 
         &:hover {

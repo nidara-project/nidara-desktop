@@ -75,6 +75,7 @@
   --nidara-text:           rgba(255, 255, 255, 0.95);
   --nidara-text-secondary: rgba(255, 255, 255, 0.8);
   --nidara-text-dim:       rgba(255, 255, 255, 0.55);
+  --nidara-text-disabled:  rgba(255, 255, 255, 0.35);
 
   // The lock/greeter GLASS. No shell equivalent by name and that is correct:
   // the shell's capsules are painted in Cairo, not drawn by CSS, so it has no
