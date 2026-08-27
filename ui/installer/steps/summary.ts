@@ -1,12 +1,7 @@
-// Step 7 — Summary and final confirmation before execution.
-//
-// Shows the clear breakdown of what will happen: which disk is erased, the user account
-// created, language, keyboard, timezone, and the software packages being installed.
-
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { NidaraList, NidaraRow } from "../../lib/nidara-kit"
-import { t } from "../lib/i18n"
+import { t, onLocaleChange } from "../lib/i18n"
 import { getAnswers } from "../lib/answers"
 import { readBaseConfig, basePackages } from "../lib/base-config"
 import { getLiveDefaults } from "../lib/plan"
@@ -29,67 +24,86 @@ export function SummaryStep(): Step {
         hexpand: true,
       })
 
-      box.append(heading(t("summaryHeading")))
-      box.append(prose(t("summaryWarning"), "installer-prose--warning"))
+      const headLabel = heading(t("summaryHeading"))
+      const warnLabel = prose(t("summaryWarning"), "installer-prose--warning")
+      box.append(headLabel)
+      box.append(warnLabel)
 
       const { box: listCard, listBox } = NidaraList()
+      box.append(listCard)
 
-      const answers = getAnswers()
-      const disk = answers.disk
-      const account = answers.account
-      const live = getLiveDefaults()
-      const baseResult = readBaseConfig()
-      const packages = baseResult ? basePackages(baseResult.config) : []
+      const refresh = () => {
+        headLabel.label = t("summaryHeading")
+        warnLabel.label = t("summaryWarning")
 
-      // Row 1: Target Disk / Partitions
-      if (disk) {
-        if (disk.mode === "entire_disk") {
-          const d = disk.disk
-          const gib = (d.size / (1024 ** 3)).toFixed(1)
-          const diskTitle = d.model || d.name
-          const fsLabel = disk.filesystem.toUpperCase()
-          const diskSubtitle = `${gib} GiB · ${d.path} · ${fsLabel}${d.rm ? ` · ${t("diskRemovable")}` : ""}`
-          listBox.append(NidaraRow(t("summaryDisk"), `${diskTitle} (${diskSubtitle})`))
-        } else if (disk.mode === "manual") {
-          const breakdown = disk.mounts
-            .map(m => `${m.path} → ${m.mountpoint} (${m.format ? `${m.filesystem} [${t("diskFormat")}]` : t("diskKeep")})`)
-            .join(", ")
-          listBox.append(NidaraRow(t("summaryPartitionLayout"), breakdown))
+        let child = listBox.get_first_child()
+        while (child) {
+          const next = child.get_next_sibling()
+          listBox.remove(child)
+          child = next
+        }
+
+        const answers = getAnswers()
+        const disk = answers.disk
+        const account = answers.account
+        const live = getLiveDefaults()
+        const baseResult = readBaseConfig()
+        const packages = baseResult ? basePackages(baseResult.config) : []
+
+        // Row 1: Target Disk / Partitions
+        if (disk) {
+          if (disk.mode === "entire_disk") {
+            const d = disk.disk
+            const gib = (d.size / (1024 ** 3)).toFixed(1)
+            const diskTitle = d.model || d.name
+            const fsLabel = disk.filesystem.toUpperCase()
+            const diskSubtitle = `${gib} GiB · ${d.path} · ${fsLabel}${d.rm ? ` · ${t("diskRemovable")}` : ""}`
+            listBox.append(NidaraRow(t("summaryDisk"), `${diskTitle} (${diskSubtitle})`))
+          } else if (disk.mode === "manual") {
+            const breakdown = disk.mounts
+              .map(m => `${m.path} → ${m.mountpoint} (${m.format ? `${m.filesystem} [${t("diskFormat")}]` : t("diskKeep")})`)
+              .join(", ")
+            listBox.append(NidaraRow(t("summaryPartitionLayout"), breakdown))
+          }
+        }
+
+        // Row 2: Account
+        if (account) {
+          listBox.append(NidaraRow(
+            t("summaryAccount"),
+            `${account.fullName} (${account.username}) · sudo`,
+          ))
+        }
+
+        // Row 3: Language
+        const chosenLang = answers.language?.label ?? `${live.localeConfig.sys_lang}.${live.localeConfig.sys_enc}`
+        listBox.append(NidaraRow(t("summaryLanguage"), chosenLang))
+
+        // Row 4: Keyboard
+        const chosenKb = answers.keyboard?.label
+          ? `${answers.keyboard.label}${answers.keyboard.variant ? ` (${answers.keyboard.variant})` : ""}`
+          : live.localeConfig.kb_layout
+        listBox.append(NidaraRow(t("summaryKeyboard"), chosenKb))
+
+        // Row 5: Timezone
+        const chosenTz = answers.timezone?.timezone ?? live.timezone
+        listBox.append(NidaraRow(t("summaryTimezone"), chosenTz))
+
+        // Row 6: Packages
+        if (packages.length > 0) {
+          listBox.append(NidaraRow(
+            t("summaryPackages"),
+            packages.join(", "),
+          ))
         }
       }
 
-      // Row 2: Account
-      if (account) {
-        listBox.append(NidaraRow(
-          t("summaryAccount"),
-          `${account.fullName} (${account.username}) · sudo`,
-        ))
-      }
+      refresh()
+      box.connect("map", refresh)
+      onLocaleChange(refresh)
 
-      // Row 3: Language
-      const chosenLang = answers.language?.label ?? `${live.localeConfig.sys_lang}.${live.localeConfig.sys_enc}`
-      listBox.append(NidaraRow(t("summaryLanguage"), chosenLang))
-
-      // Row 4: Keyboard
-      const chosenKb = answers.keyboard?.label
-        ? `${answers.keyboard.label}${answers.keyboard.variant ? ` (${answers.keyboard.variant})` : ""}`
-        : live.localeConfig.kb_layout
-      listBox.append(NidaraRow(t("summaryKeyboard"), chosenKb))
-
-      // Row 5: Timezone
-      const chosenTz = answers.timezone?.timezone ?? live.timezone
-      listBox.append(NidaraRow(t("summaryTimezone"), chosenTz))
-
-      // Row 6: Packages
-      if (packages.length > 0) {
-        listBox.append(NidaraRow(
-          t("summaryPackages"),
-          packages.join(", "),
-        ))
-      }
-
-      box.append(listCard)
       return box
     },
   }
 }
+

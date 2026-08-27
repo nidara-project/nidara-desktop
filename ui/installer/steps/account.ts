@@ -42,21 +42,25 @@ export function AccountStep(): Step {
         placeholder_text: t("accountFullNamePlaceholder"),
         hexpand: true,
       })
+      fullNameEntry.update_property([Gtk.AccessibleProperty.LABEL], [t("accountFullName")])
 
       const usernameEntry = new Gtk.Entry({
         placeholder_text: t("accountUsernamePlaceholder"),
         hexpand: true,
       })
+      usernameEntry.update_property([Gtk.AccessibleProperty.LABEL], [t("accountUsername")])
 
       const pwEntry = new Gtk.PasswordEntry({
         show_peek_icon: true,
         hexpand: true,
       })
+      pwEntry.update_property([Gtk.AccessibleProperty.LABEL], [t("accountPassword")])
 
       const pw2Entry = new Gtk.PasswordEntry({
         show_peek_icon: true,
         hexpand: true,
       })
+      pw2Entry.update_property([Gtk.AccessibleProperty.LABEL], [t("accountConfirmPassword")])
 
       const errorLabel = new Gtk.Label({
         label: "",
