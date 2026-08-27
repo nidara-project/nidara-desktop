@@ -10,7 +10,14 @@ import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import type { Step } from "../lib/flow"
 import { exec, execAsync } from "../../lib/process"
-import { NidaraList, NidaraRow, NidaraEmptyRow } from "../../lib/nidara-kit"
+import {
+  NidaraList,
+  NidaraRow,
+  NidaraEmptyRow,
+  NidaraScrolled,
+  NidaraDropDown,
+  NidaraButton,
+} from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import {
   getAnswers,
@@ -195,6 +202,19 @@ export function DiskStep(): Step {
       const rowEntire = NidaraRow(t("diskModeEntire"), t("diskModeEntireDesc"), radioEntire)
       const rowManual = NidaraRow(t("diskModeManual"), t("diskModeManualDesc"), radioManual)
 
+      if (currentMode === "entire_disk") rowEntire.add_css_class("is-selected")
+      else rowManual.add_css_class("is-selected")
+
+      const updateModeSelection = (mode: "entire_disk" | "manual") => {
+        if (mode === "entire_disk") {
+          rowEntire.add_css_class("is-selected")
+          rowManual.remove_css_class("is-selected")
+        } else {
+          rowManual.add_css_class("is-selected")
+          rowEntire.remove_css_class("is-selected")
+        }
+      }
+
       modeListBox.append(rowEntire)
       modeListBox.append(rowManual)
 
@@ -217,6 +237,17 @@ export function DiskStep(): Step {
 
       const disks = listDisks()
       const { box: diskListBoxContainer, listBox: diskListBox } = NidaraList()
+      const diskRowMap = new Map<BlockDevice, Gtk.ListBoxRow>()
+
+      const updateDiskSelection = (activeDisk: BlockDevice) => {
+        for (const [d, row] of diskRowMap.entries()) {
+          if (d.path === activeDisk.path) {
+            row.add_css_class("is-selected")
+          } else {
+            row.remove_css_class("is-selected")
+          }
+        }
+      }
 
       if (disks.length === 0) {
         diskListBox.append(NidaraEmptyRow(t("diskNoDisks")))
@@ -240,10 +271,14 @@ export function DiskStep(): Step {
           const subtitle = `${gib} GiB · ${disk.path}${disk.rm ? ` · ${t("diskRemovable")}` : ""}`
 
           const row = NidaraRow(title, subtitle, radio)
+          diskRowMap.set(disk, row)
+
+          if (isCurrent) row.add_css_class("is-selected")
 
           const selectThisDisk = () => {
             selectedDisk = disk
             radio.active = true
+            updateDiskSelection(disk)
             syncAnswer()
           }
 
@@ -258,19 +293,20 @@ export function DiskStep(): Step {
           const idx = row.get_index()
           if (disks[idx]) {
             selectedDisk = disks[idx]
+            updateDiskSelection(disks[idx])
             syncAnswer()
           }
         })
       }
 
-      const diskScroll = new Gtk.ScrolledWindow({
-        hscrollbar_policy: Gtk.PolicyType.NEVER,
-        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        min_content_height: 120,
-        max_content_height: 160,
+      const { widget: diskScrollWidget } = NidaraScrolled({
         child: diskListBoxContainer,
+        minContentHeight: 120,
+        maxContentHeight: 160,
+        propagateNaturalHeight: true,
+        alwaysVisible: true,
       })
-      entireBox.append(diskScroll)
+      entireBox.append(diskScrollWidget)
 
       // Filesystem Choice for Entire Disk
       const { box: fsListBoxContainer, listBox: fsListBox } = NidaraList()
@@ -281,15 +317,30 @@ export function DiskStep(): Step {
       const rowBtrfs = NidaraRow(t("diskFsBtrfs"), null, radioBtrfs)
       const rowExt4 = NidaraRow(t("diskFsExt4"), null, radioExt4)
 
+      if (selectedFs === "btrfs") rowBtrfs.add_css_class("is-selected")
+      else rowExt4.add_css_class("is-selected")
+
+      const updateFsSelection = (fs: FilesystemType) => {
+        if (fs === "btrfs") {
+          rowBtrfs.add_css_class("is-selected")
+          rowExt4.remove_css_class("is-selected")
+        } else {
+          rowExt4.add_css_class("is-selected")
+          rowBtrfs.remove_css_class("is-selected")
+        }
+      }
+
       radioBtrfs.connect("toggled", () => {
         if (radioBtrfs.active) {
           selectedFs = "btrfs"
+          updateFsSelection("btrfs")
           syncAnswer()
         }
       })
       radioExt4.connect("toggled", () => {
         if (radioExt4.active) {
           selectedFs = "ext4"
+          updateFsSelection("ext4")
           syncAnswer()
         }
       })
@@ -314,9 +365,9 @@ export function DiskStep(): Step {
         halign: Gtk.Align.START,
       })
 
-      const gpartedBtn = new Gtk.Button({
+      const gpartedBtn = NidaraButton({
         label: t("diskLaunchGparted"),
-        css_classes: ["nidara-button", "nidara-button--secondary"],
+        variant: "secondary",
       })
       gpartedBtn.connect("clicked", () => {
         try {
@@ -326,9 +377,9 @@ export function DiskStep(): Step {
         }
       })
 
-      const refreshBtn = new Gtk.Button({
+      const refreshBtn = NidaraButton({
         label: t("diskRefresh"),
-        css_classes: ["nidara-button", "nidara-button--secondary"],
+        variant: "secondary",
       })
 
       manualActions.append(gpartedBtn)
@@ -369,7 +420,7 @@ export function DiskStep(): Step {
             // Mountpoint dropdown
             const mountStrings = MOUNT_OPTIONS.map(opt => t(opt.labelKey))
             const mountStringList = Gtk.StringList.new(mountStrings)
-            const mountDropDown = new Gtk.DropDown({
+            const mountDropDown = NidaraDropDown({
               model: mountStringList,
               valign: Gtk.Align.CENTER,
             })
@@ -390,7 +441,7 @@ export function DiskStep(): Step {
 
             // Filesystem dropdown
             const fsStringList = Gtk.StringList.new(FS_OPTIONS)
-            const fsDropDown = new Gtk.DropDown({
+            const fsDropDown = NidaraDropDown({
               model: fsStringList,
               valign: Gtk.Align.CENTER,
             })
@@ -447,15 +498,15 @@ export function DiskStep(): Step {
           }
         }
 
-        const partScroll = new Gtk.ScrolledWindow({
-          hscrollbar_policy: Gtk.PolicyType.NEVER,
-          vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-          min_content_height: 180,
-          max_content_height: 220,
+        const { widget: partScrollWidget } = NidaraScrolled({
           child: partListBoxContainer,
+          minContentHeight: 180,
+          maxContentHeight: 220,
+          propagateNaturalHeight: true,
+          alwaysVisible: true,
         })
 
-        partListHolder.append(partScroll)
+        partListHolder.append(partScrollWidget)
       }
 
       buildPartitionsList()
@@ -471,6 +522,7 @@ export function DiskStep(): Step {
       radioEntire.connect("toggled", () => {
         if (radioEntire.active) {
           currentMode = "entire_disk"
+          updateModeSelection("entire_disk")
           stack.set_visible_child_name("entire_disk")
           syncAnswer()
         }
@@ -479,6 +531,7 @@ export function DiskStep(): Step {
       radioManual.connect("toggled", () => {
         if (radioManual.active) {
           currentMode = "manual"
+          updateModeSelection("manual")
           stack.set_visible_child_name("manual")
           syncAnswer()
         }

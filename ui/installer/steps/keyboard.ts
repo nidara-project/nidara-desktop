@@ -6,7 +6,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { execAsync } from "../../lib/process"
-import { NidaraList, NidaraRow } from "../../lib/nidara-kit"
+import { NidaraList, NidaraRow, NidaraScrolled } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import { getAnswers, setKeyboardAnswer, type KeyboardAnswer } from "../lib/answers"
 import { heading, prose } from "./common"
@@ -71,7 +71,18 @@ export function KeyboardStep(): Step {
 
       let firstRadio: Gtk.CheckButton | null = null
       const radioMap = new Map<KeyboardLayoutItem, Gtk.CheckButton>()
-      const rowMap = new Map<Gtk.ListBoxRow, KeyboardLayoutItem>()
+      const rowItemMap = new Map<Gtk.ListBoxRow, KeyboardLayoutItem>()
+      const itemRowMap = new Map<KeyboardLayoutItem, Gtk.ListBoxRow>()
+
+      const updateRowSelection = (activeItem: KeyboardLayoutItem) => {
+        for (const [item, row] of itemRowMap.entries()) {
+          if (item === activeItem) {
+            row.add_css_class("is-selected")
+          } else {
+            row.remove_css_class("is-selected")
+          }
+        }
+      }
 
       const applyLayout = (item: KeyboardLayoutItem) => {
         setKeyboardAnswer({
@@ -81,6 +92,7 @@ export function KeyboardStep(): Step {
         })
         const radio = radioMap.get(item)
         if (radio && !radio.active) radio.active = true
+        updateRowSelection(item)
 
         // Apply immediately to the live session (Hyprland keyword without polkit prompt)
         execAsync(["hyprctl", "keyword", "input:kb_layout", item.layout]).catch(() => {})
@@ -101,35 +113,40 @@ export function KeyboardStep(): Step {
         }
         radioMap.set(item, radio)
 
+        const isCurrent = currentAnswer
+          ? currentAnswer.layout === item.layout && currentAnswer.variant === item.variant
+          : false
+
         const subtitle = item.variant ? `${item.layout} (${item.variant})` : item.layout
         const row = NidaraRow(item.label, subtitle, radio)
-        rowMap.set(row, item)
+        rowItemMap.set(row, item)
+        itemRowMap.set(item, row)
 
         radio.connect("toggled", () => {
           if (radio.active) applyLayout(item)
         })
 
-        if (currentAnswer && currentAnswer.layout === item.layout && currentAnswer.variant === item.variant) {
+        if (isCurrent) {
           radio.active = true
+          row.add_css_class("is-selected")
         }
 
         listBox.append(row)
       }
 
       listBox.connect("row-activated", (_, row) => {
-        const item = rowMap.get(row)
+        const item = rowItemMap.get(row)
         if (item) applyLayout(item)
       })
 
-      const scrolled = new Gtk.ScrolledWindow({
-        hscrollbar_policy: Gtk.PolicyType.NEVER,
-        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        max_content_height: 240,
-        propagate_natural_height: true,
+      const { widget: scrolledWidget } = NidaraScrolled({
         child: listBoxContainer,
+        maxContentHeight: 240,
+        propagateNaturalHeight: true,
+        alwaysVisible: true,
       })
 
-      box.append(scrolled)
+      box.append(scrolledWidget)
 
       // Interactive test input field
       const testEntry = new Gtk.Entry({

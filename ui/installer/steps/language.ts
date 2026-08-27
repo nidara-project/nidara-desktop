@@ -5,7 +5,7 @@
 
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
-import { NidaraList, NidaraRow } from "../../lib/nidara-kit"
+import { NidaraList, NidaraRow, NidaraScrolled } from "../../lib/nidara-kit"
 import { t, setLocale, getLocale, type Locale } from "../lib/i18n"
 import { getAnswers, setLanguageAnswer, type LanguageAnswer } from "../lib/answers"
 import { heading, prose } from "./common"
@@ -67,7 +67,18 @@ export function LanguageStep(): Step {
 
       let firstRadio: Gtk.CheckButton | null = null
       const radioMap = new Map<LocaleItem, Gtk.CheckButton>()
-      const rowMap = new Map<Gtk.ListBoxRow, LocaleItem>()
+      const rowItemMap = new Map<Gtk.ListBoxRow, LocaleItem>()
+      const itemRowMap = new Map<LocaleItem, Gtk.ListBoxRow>()
+
+      const updateRowSelection = (activeItem: LocaleItem) => {
+        for (const [item, row] of itemRowMap.entries()) {
+          if (item === activeItem) {
+            row.add_css_class("is-selected")
+          } else {
+            row.remove_css_class("is-selected")
+          }
+        }
+      }
 
       const selectLocale = (item: LocaleItem) => {
         setLanguageAnswer({
@@ -79,6 +90,7 @@ export function LanguageStep(): Step {
         setLocale(item.localeKey)
         const radio = radioMap.get(item)
         if (radio && !radio.active) radio.active = true
+        updateRowSelection(item)
         notifyReady?.()
       }
 
@@ -93,35 +105,36 @@ export function LanguageStep(): Step {
         }
         radioMap.set(item, radio)
 
+        const isCurrent = currentAnswer ? currentAnswer.locale === item.locale : item === found
         const row = NidaraRow(item.label, item.locale, radio)
-        rowMap.set(row, item)
+        rowItemMap.set(row, item)
+        itemRowMap.set(item, row)
 
         radio.connect("toggled", () => {
           if (radio.active) selectLocale(item)
         })
 
-        if (currentAnswer && currentAnswer.locale === item.locale) {
+        if (isCurrent) {
           radio.active = true
+          row.add_css_class("is-selected")
         }
 
         listBox.append(row)
       }
 
       listBox.connect("row-activated", (_, row) => {
-        const item = rowMap.get(row)
+        const item = rowItemMap.get(row)
         if (item) selectLocale(item)
       })
 
-      // Scrolled window so all locales fit comfortably
-      const scrolled = new Gtk.ScrolledWindow({
-        hscrollbar_policy: Gtk.PolicyType.NEVER,
-        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        max_content_height: 320,
-        propagate_natural_height: true,
+      const { widget: scrolledWidget } = NidaraScrolled({
         child: listBoxContainer,
+        maxContentHeight: 320,
+        propagateNaturalHeight: true,
+        alwaysVisible: true,
       })
 
-      box.append(scrolled)
+      box.append(scrolledWidget)
       return box
     },
   }

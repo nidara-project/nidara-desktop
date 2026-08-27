@@ -111,6 +111,89 @@ selection {
     color: var(--nidara-text);
 }
 
+/* --- CheckButton & RadioButton --------------------------------------------
+   GTK4 blank theme resets: check and radio subnodes.
+   Styled in surface colors, turning accent when checked. */
+checkbutton {
+    @include nidara-reset;
+    padding: 2px;
+    min-height: 20px;
+    min-width: 20px;
+    outline: none;
+    box-shadow: none;
+
+    > label {
+        margin-left: $space-2;
+        color: var(--nidara-text);
+        font-size: $fs-small;
+    }
+}
+
+check,
+radio,
+checkbutton check,
+checkbutton radio {
+    @include nidara-reset;
+    min-width: 18px;
+    min-height: 18px;
+    background-color: var(--nidara-surface);
+    border: 1.5px solid var(--nidara-border);
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+    margin: 0;
+    padding: 0;
+}
+
+check,
+checkbutton check {
+    border-radius: $nidara-radius-xs;
+}
+
+radio,
+checkbutton radio {
+    border-radius: var(--nidara-radius-pill);
+}
+
+checkbutton:hover check,
+checkbutton:hover radio,
+check:hover,
+radio:hover {
+    background-color: var(--nidara-surface-hover);
+    border-color: var(--nidara-surface-strong);
+}
+
+checkbutton:active check,
+checkbutton:active radio,
+check:active,
+radio:active {
+    background-color: var(--nidara-surface-active);
+}
+
+checkbutton:checked check,
+check:checked {
+    background-color: var(--nidara-accent);
+    border-color: var(--nidara-accent);
+    color: var(--nidara-accent-fg);
+    -gtk-icon-source: -gtk-icontheme("object-select-symbolic");
+}
+
+checkbutton:checked radio,
+radio:checked {
+    background-color: var(--nidara-accent);
+    border-color: var(--nidara-accent);
+    box-shadow: inset 0 0 0 4px var(--nidara-bg);
+}
+
+checkbutton:focus-visible check,
+checkbutton:focus-visible radio,
+check:focus-visible,
+radio:focus-visible {
+    @include nidara-focus-ring;
+}
+
+checkbutton:disabled {
+    opacity: 0.45;
+}
+
 /* ════════════════════════════════════════════════════════════════════════════
    UNIVERSAL INTERACTIVE COMPONENTS
    Reusable building blocks for ANY surface (settings, CC, bar, future windows).

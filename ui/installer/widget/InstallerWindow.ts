@@ -51,11 +51,13 @@ function header(onClose: () => void): {
     halign: Gtk.Align.START,
     hexpand: true,
     xalign: 0,
+    can_target: false,
   })
   const position = new Gtk.Label({
     css_classes: ["installer-position"],
     halign: Gtk.Align.END,
     valign: Gtk.Align.CENTER,
+    can_target: false,
   })
 
   // The kit's round glass icon button — the same control Settings and About wear
@@ -128,14 +130,23 @@ export function InstallerWindow(): Gtk.Window {
     flow.next()
   })
 
-  const footer = new Gtk.Box({
+  const navBox = new Gtk.Box({
     orientation: Gtk.Orientation.HORIZONTAL,
     spacing: 10,
     halign: Gtk.Align.END,
+  })
+  navBox.append(back)
+  navBox.append(next)
+
+  const footer = new Gtk.Box({
+    orientation: Gtk.Orientation.HORIZONTAL,
+    hexpand: true,
+    halign: Gtk.Align.FILL,
     css_classes: ["installer-footer"],
   })
-  footer.append(back)
-  footer.append(next)
+  const footerSpacer = new Gtk.Box({ hexpand: true })
+  footer.append(footerSpacer)
+  footer.append(navBox)
 
   // maxWidth === minWidth: the content pane is a CONSTANT width, so widening the
   // window adds margin and never re-flows the prose.
