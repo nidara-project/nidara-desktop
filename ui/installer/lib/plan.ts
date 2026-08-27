@@ -159,79 +159,11 @@ export function assemblePlan(
     return cmd.replace(/\bSUDO_USER=[a-zA-Z0-9_-]+/, `SUDO_USER=${username}`)
   })
 
-  // Generate disk_config based on chosen disk mode and filesystem
+  // Disk config: uses pre_mounted_config on /mnt which is prepared before archinstall runs
   if (answers.disk) {
-    if (answers.disk.mode === "entire_disk") {
-      const disk = answers.disk.disk
-      const fs = answers.disk.filesystem
-      if (fs === "btrfs") {
-        config.disk_config = {
-          config_type: "default",
-          device_modifications: [
-            {
-              device: disk.path,
-              wipe: true,
-              partitions: [
-                {
-                  type: "boot",
-                  size: { value: 512, unit: "MiB" },
-                  mountpoint: "/boot",
-                  filesystem: { format: "fat32" },
-                },
-                {
-                  type: "root",
-                  size: { value: 100, unit: "%" },
-                  mountpoint: "/",
-                  filesystem: { format: "btrfs", mount_options: ["compress=zstd"] },
-                  btrfs: {
-                    subvolumes: [
-                      { name: "@", mountpoint: "/" },
-                      { name: "@home", mountpoint: "/home" },
-                      { name: "@log", mountpoint: "/var/log" },
-                      { name: "@pkg", mountpoint: "/var/cache/pacman/pkg" },
-                      { name: "@snapshots", mountpoint: "/.snapshots" },
-                    ],
-                  },
-                },
-              ],
-            },
-          ],
-        }
-      } else {
-        config.disk_config = {
-          config_type: "default",
-          device_modifications: [
-            {
-              device: disk.path,
-              wipe: true,
-              partitions: [
-                {
-                  type: "boot",
-                  size: { value: 512, unit: "MiB" },
-                  mountpoint: "/boot",
-                  filesystem: { format: "fat32" },
-                },
-                {
-                  type: "root",
-                  size: { value: 100, unit: "%" },
-                  mountpoint: "/",
-                  filesystem: { format: fs },
-                },
-              ],
-            },
-          ],
-        }
-      }
-    } else if (answers.disk.mode === "manual") {
-      config.disk_config = {
-        config_type: "manual",
-        mounts: answers.disk.mounts.map(m => ({
-          partition: m.path,
-          mountpoint: m.mountpoint,
-          wipe: m.format,
-          filesystem: { format: m.format ? m.filesystem : (m.fsType || "ext4") },
-        })),
-      }
+    config.disk_config = {
+      config_type: "pre_mounted_config",
+      mountpoint: "/mnt",
     }
   }
 

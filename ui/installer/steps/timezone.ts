@@ -5,7 +5,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { execAsync } from "../../lib/process"
-import { NidaraList, NidaraRow, NidaraScrolled } from "../../lib/nidara-kit"
+import { NidaraList, NidaraRow } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import { getAnswers, setTimezoneAnswer, type TimezoneAnswer } from "../lib/answers"
 import { getLiveDefaults } from "../lib/plan"
@@ -136,14 +136,7 @@ export function TimezoneStep(): Step {
         if (tz) selectTz(tz)
       })
 
-      const { widget: scrolledWidget } = NidaraScrolled({
-        child: listBoxContainer,
-        maxContentHeight: 280,
-        propagateNaturalHeight: true,
-        alwaysVisible: true,
-      })
-
-      box.append(scrolledWidget)
+      box.append(listBoxContainer)
       return box
     },
   }

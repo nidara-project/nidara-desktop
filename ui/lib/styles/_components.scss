@@ -354,6 +354,80 @@ checkbutton:disabled {
     min-height: 50px;
     padding: 0 6px;
 }
+
+/* --- Split view & Sidebar Capsule (NidaraWindow with sidebar) ------------- */
+.nidara-split-view {
+    @include nidara-reset;
+}
+
+.nidara-sidebar-capsule {
+    @include material-card;
+    margin: 8px 0 8px 8px;
+    min-width: 210px;
+
+    viewport, list { @include nidara-reset; }
+}
+
+.nidara-sidebar-top {
+    padding: $space-2 $space-2 $space-1;
+}
+
+popover.nidara-sidebar-popup {
+    @include nidara-reset;
+    padding: 0;
+    margin: 0;
+    font-weight: $fw-regular;
+
+    > contents {
+        background: var(--nidara-popover-bg, rgba(22, 22, 34, 0.85));
+        border: 1px solid var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
+        border-radius: $nidara-radius-md;
+        box-shadow: none;
+        margin: 0;
+        padding: 0;
+        min-width: 0;
+    }
+
+    .nidara-sidebar-capsule {
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        margin: 0;
+        box-shadow: none;
+    }
+}
+
+/* --- Icon buttons in window chrome (Sidebar toggle, nav buttons, etc.) ----- */
+button.nidara-icon-btn {
+    @include nidara-reset;
+    padding: 7px;
+    min-width: 0;
+    min-height: 0;
+    border-radius: $nidara-radius-pill;
+    color: var(--nidara-text-dim);
+
+    &:hover {
+        background: var(--nidara-surface-hover);
+        background-image: none;
+        box-shadow: none;
+        color: var(--nidara-text);
+    }
+    &:active {
+        background: var(--nidara-surface-active);
+        background-image: none;
+        box-shadow: none;
+    }
+    &:disabled    { color: var(--nidara-text-disabled); }
+    &:focus-visible { @include nidara-focus-ring; }
+}
+
+button.nidara-icon-btn.sidebar-toggle {
+    padding: 8px;
+    background: var(--nidara-surface);
+    border: 1px solid var(--nidara-border);
+    &:hover { background: var(--nidara-surface-hover); }
+}
+
 // .nidara-window-sidebar-scroll has no rules on purpose: the sidebar is a
 // NidaraScrolled, whose bar lives on the wrapping overlay, so its gap to the search
 // slot is set on that overlay in window.ts — CSS here would move the view out from

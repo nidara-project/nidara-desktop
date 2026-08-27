@@ -1,14 +1,9 @@
-// The frame: a header that names the current step, the flow's content, and the
-// two buttons that move through it.
-//
-// Everything that varies lives in `lib/flow.ts` and in the steps — this file
-// renders whatever the flow says is current and never learns what any step
-// asks. Adding a screen is adding an entry to the array at the bottom.
-
 import Gtk from "gi://Gtk?version=4.0"
+import Gio from "gi://Gio"
 import app from "../../lib/host"
 import {
   NidaraButton, NidaraCircleButton, NidaraClamp, NidaraWindow,
+  NidaraScrolled, NidaraSidebar, NIDARA_WINDOW_RADIUS,
   type NidaraWindowResult,
 } from "../../lib/nidara-kit"
 import { ndIcon } from "../../lib/icons"
@@ -21,29 +16,13 @@ import { DiskStep } from "../steps/disk"
 import { AccountStep } from "../steps/account"
 import { SummaryStep } from "../steps/summary"
 import { RunStep } from "../steps/run"
+import { WINDOW_LAYOUT } from "../../lib/tokens"
 import { t, onLocaleChange } from "../lib/i18n"
 
-/**
- * The reading width, and the window's own width follows from it.
- *
- * Same rule as Settings' geometry law: the box is a constant and the text scales
- * inside it. An installer's prose is the only thing on screen for most of its
- * steps, so a window sized to its content would grow with the longest sentence
- * in whichever language it was translated into.
- */
-const CONTENT_WIDTH = 620
-
-/**
- * The header's three slots, for `NidaraAppWindow` to place.
- *
- * It returns the widgets rather than a bar: the kit owns the `Gtk.CenterBox` and
- * the `Gtk.WindowHandle` that makes an undecorated window draggable, so this file
- * no longer builds either.
- */
 function header(onClose: () => void): {
   start: Gtk.Widget
   end: Gtk.Widget
-  set: (title: string, position: string) => void
+  set: (title: string) => void
   setCanClose: (can: boolean) => void
 } {
   const title = new Gtk.Label({
@@ -53,15 +32,7 @@ function header(onClose: () => void): {
     xalign: 0,
     can_target: false,
   })
-  const position = new Gtk.Label({
-    css_classes: ["installer-position"],
-    halign: Gtk.Align.END,
-    valign: Gtk.Align.CENTER,
-    can_target: false,
-  })
 
-  // The kit's round glass icon button — the same control Settings and About wear
-  // in their headers, from the same file since it moved into `nidara-kit`.
   const closeBtn = NidaraCircleButton({
     icon: ndIcon("x"),
     iconName: "window-close-symbolic",
@@ -72,29 +43,14 @@ function header(onClose: () => void): {
   })
   closeBtn.name = "installer-close"
 
-  const trailing = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12 })
-  trailing.append(position)
-  trailing.append(closeBtn)
-
   return {
     start: title,
-    end: trailing,
-    set: (t: string, p: string) => { title.label = t; position.label = p },
-    // Insensitive rather than hidden while the install runs: a control that
-    // disappears reads as a bug, one that greys out reads as "not now".
+    end: closeBtn,
+    set: (t: string) => { title.label = t },
     setCanClose: (can: boolean) => { closeBtn.sensitive = can },
   }
 }
 
-/**
- * No options.
- *
- * There used to be an `isDark`, because the window carried a class that swapped
- * the ink. It does not any more: `installAppearance()` generates the whole token
- * ramp for whichever mode the session is in, so this frame never learns which one
- * that is — the same reason it has no light/dark toggle of its own. A second
- * opinion about light and dark on one screen is not a feature.
- */
 export function InstallerWindow(): Gtk.Window {
   const steps: Step[] = [
     WelcomeStep(),
@@ -108,26 +64,69 @@ export function InstallerWindow(): Gtk.Window {
   ]
   const flow = Flow(steps)
 
-  /**
-   * Can the window be left right now?
-   *
-   * Only the current step knows. On every screen but the last the answer is yes —
-   * nothing has been written, so quitting costs the user their answers and
-   * nothing else. On the last one, from the moment the plan is handed to
-   * `archinstall` until it exits, the answer is no: this process is the only
-   * thing watching a root process that is repartitioning a disk, and it owns the
-   * plaintext credentials file it must delete afterwards.
-   */
   const canExit = () => flow.current().busy?.() !== true
+
+  const sidebarDefs = [
+    { id: "welcome", titleKey: "welcomeTitle", iconName: "info" },
+    { id: "language", titleKey: "languageTitle", iconName: "globe" },
+    { id: "keyboard", titleKey: "keyboardTitle", iconName: "keyboard" },
+    { id: "timezone", titleKey: "timezoneTitle", iconName: "clock" },
+    { id: "disk", titleKey: "diskTitle", iconName: "cpu" },
+    { id: "account", titleKey: "accountTitle", iconName: "user" },
+    { id: "summary", titleKey: "summaryTitle", iconName: "clipboard" },
+    { id: "run", titleKey: "runTitle", iconName: "rocket" },
+  ]
+
+  const sidebar = NidaraSidebar(
+    sidebarDefs.map(d => ({
+      id: d.id,
+      label: t(d.titleKey as any),
+      icon: ndIcon(d.iconName) as any,
+    })),
+    (id) => {
+      if (flow.current().id === "run") return
+      flow.goTo(id)
+    },
+  )
+  sidebar.widget.set_name("nidara-installer-sidebar-list")
+
+  function updateSidebarLabels() {
+    for (let i = 0; ; i++) {
+      const row = sidebar.widget.get_row_at_index(i)
+      if (!row) break
+      const id = row.get_name()
+      const def = sidebarDefs.find(d => d.id === id)
+      if (def) {
+        const box = row.get_child() as Gtk.Box
+        if (box) {
+          let child = box.get_first_child()
+          while (child) {
+            if (child instanceof Gtk.Label) {
+              child.label = t(def.titleKey as any)
+            }
+            child = child.get_next_sibling()
+          }
+        }
+      }
+    }
+  }
 
   const back = NidaraButton({ label: t("back"), variant: "secondary" })
   const next = NidaraButton({ label: t("continue"), variant: "primary" })
+  const closeActionBtn = NidaraButton({ label: t("runClose"), variant: "secondary" })
+  const restartActionBtn = NidaraButton({ label: t("runRestart"), variant: "primary" })
 
   back.connect("clicked", () => flow.back())
   next.connect("clicked", () => {
     const step = flow.current()
     if (step.ready && !step.ready()) return
     flow.next()
+  })
+  closeActionBtn.connect("clicked", () => shell.close())
+  restartActionBtn.connect("clicked", () => {
+    try {
+      Gio.Subprocess.new(["systemctl", "reboot"], Gio.SubprocessFlags.NONE)
+    } catch {}
   })
 
   const navBox = new Gtk.Box({
@@ -137,6 +136,15 @@ export function InstallerWindow(): Gtk.Window {
   })
   navBox.append(back)
   navBox.append(next)
+  navBox.append(closeActionBtn)
+  navBox.append(restartActionBtn)
+
+  const position = new Gtk.Label({
+    css_classes: ["installer-position"],
+    halign: Gtk.Align.START,
+    valign: Gtk.Align.CENTER,
+    can_target: false,
+  })
 
   const footer = new Gtk.Box({
     orientation: Gtk.Orientation.HORIZONTAL,
@@ -144,51 +152,28 @@ export function InstallerWindow(): Gtk.Window {
     halign: Gtk.Align.FILL,
     css_classes: ["installer-footer"],
   })
+  footer.append(position)
   const footerSpacer = new Gtk.Box({ hexpand: true })
   footer.append(footerSpacer)
   footer.append(navBox)
 
-  // maxWidth === minWidth: the content pane is a CONSTANT width, so widening the
-  // window adds margin and never re-flows the prose.
-  const content = NidaraClamp(flow.widget, CONTENT_WIDTH, true, CONTENT_WIDTH)
-  // ⚠️ THE SIZE FLOOR IS WHAT DECIDES HERE, NOT `default_width`.
-  //
-  // Measured 2026-08-26: with `default_width: 900`, the window still came up 622
-  // wide — the content's natural width (the 620 clamp plus its margins) — with
-  // its prose running edge to edge. `main`'s build does the same, so it is not
-  // something this file changed.
-  //
-  // The default size is a REQUEST, and on Wayland the compositor answers it: what
-  // `get_width()` reports afterwards is the allocation Hyprland handed back, not
-  // GTK's intent. (Do not read that number as "GTK ignored the default" — this
-  // comment said exactly that for an hour, until the Settings window turned out
-  // to be sized the same way for the plain reason that it was TILED.) A minimum
-  // survives where a default does not: GTK forwards it as
-  // `xdg_toplevel.set_min_size`, which the compositor honours.
-  //
-  // The width is a floor of 740 = the 620 reading column plus 120 of air. That
-  // still fits the smallest screen a live medium plausibly meets (1024×768).
-  // The height floor is a separate concern: the steps have visibly different
-  // content heights (three lines of prose, then a disk list, then four fields) and
-  // a frame that resized under each one would read as a different window each time.
-  // The close button is built before the window, and the window's close policy is
-  // what it calls — so the button gets a thunk rather than the function itself.
-  // One path: this button, the compositor's close request and Escape all end in
-  // `shell.close()`, which asks `canExit()` first.
+  flow.widget.add_css_class("installer-body")
+  const { widget: scrolledContent, scrolled } = NidaraScrolled({
+    child: NidaraClamp(flow.widget, WINDOW_LAYOUT.wizardContent, true, WINDOW_LAYOUT.wizardContent),
+    reserveLane: false,
+    hscrollPolicy: Gtk.PolicyType.EXTERNAL,
+    cornerRadius: NIDARA_WINDOW_RADIUS,
+    cssClasses: ["installer-page-scroll"],
+  })
+  scrolled.hexpand = true
+  scrolled.vexpand = true
+  scrolledContent.hexpand = true
+  scrolledContent.vexpand = true
+
   let shell: NidaraWindowResult
   const head = header(() => shell.close())
+  const sidebarIcon = ndIcon("sidebar") ?? Gio.ThemedIcon.new("sidebar-symbolic")
 
-  // The kit owns the chrome: the undecorated toplevel, the glass card (painted by
-  // a BOX inside it so the compositor has something to blur), the draggable
-  // header, the app-id, and ONE close path that the button, the compositor's
-  // request and Escape all go through. What is left here is what an installer
-  // actually is — a flow, and the two buttons that move through it.
-  //
-  // No `sidebar` today, and that is the only thing standing between this and a
-  // step list you can jump around in: fill in `sidebar: { widget, toggleIcon }`
-  // and the capsule, the split view and the docking breakpoint arrive with it.
-  // (Whether a wizard SHOULD let you skip ahead is a product question — the steps
-  // depend on each other's answers — but it is no longer a structural one.)
   shell = NidaraWindow({
     app,
     title: "Nidara Installer",
@@ -196,40 +181,80 @@ export function InstallerWindow(): Gtk.Window {
     appId: "nidara-installer",
     cssClasses: ["nidara-installer-window"],
     glassClasses: ["installer-root"],
-    content,
+    content: scrolledContent,
+    sidebar: {
+      widget: sidebar.widget,
+      toggleIcon: sidebarIcon as any,
+      width: WINDOW_LAYOUT.sidebar,
+      contentWidth: WINDOW_LAYOUT.wizardContent,
+    },
     footer,
-    header: { cssClasses: ["installer-header"], start: head.start, end: head.end },
+    header: { start: head.start, end: head.end },
     closeOnEscape: true,
-    // Refusing is the whole point: `true` here means "not now".
     onClose: () => !canExit(),
-    defaultWidth: CONTENT_WIDTH + 120,
-    defaultHeight: 620,
+    defaultWidth: 960,
+    defaultHeight: 760,
+    minWidth: 960,
+    minHeight: 760,
+    resizable: true,
   })
 
   const win = shell.window
-  // The size floor goes on the CARD, which is what holds the header, the content
-  // and the footer — the same node the old hand-built root box was.
-  shell.glass.set_size_request(CONTENT_WIDTH + 120, 620)
-  // Closing the installer ends the process — it is the only window there is, and a
-  // hidden one would keep the application alive with nothing on screen.
   win.connect("destroy", () => app.quit())
 
   function sync() {
+    if (scrolled?.vadjustment) {
+      scrolled.vadjustment.value = 0
+    }
+
     const step = flow.current()
-    const index = steps.indexOf(step) + 1
+    const index = flow.currentIndex() + 1
     const title = typeof step.title === "function" ? step.title() : step.title
     const nextLabel = typeof step.nextLabel === "function" ? step.nextLabel() : step.nextLabel
-    head.set(title, `${index} ${t("of")} ${steps.length}`)
-    back.visible = flow.canBack() && step.id !== "run"
-    next.visible = step.id !== "run"
-    next.set_label(nextLabel)
-    back.set_label(t("back"))
-    // A step that cannot be left forward disables the button rather than hiding
-    // it: the disabled control is what says "there is a way on, and it is not
-    // available yet".
-    next.sensitive = step.ready ? step.ready() : true
-    // The last step has nowhere to go until the flow grows one.
-    if (index === steps.length) next.sensitive = false
+
+    const isRunStep = step.id === "run"
+    const isBusy = step.busy?.() === true
+    const maxIdx = flow.maxReachedIndex()
+
+    sidebar.select(step.id)
+    updateSidebarLabels()
+
+    sidebarDefs.forEach((def, i) => {
+      if (isRunStep || isBusy) {
+        sidebar.setItemSensitive(def.id, false)
+      } else {
+        sidebar.setItemSensitive(def.id, i <= maxIdx && def.id !== "run")
+      }
+    })
+
+    head.set(title)
+    position.label = `${index} ${t("of")} ${steps.length}`
+
+    if (step.id === "run") {
+      position.visible = false
+      back.visible = false
+      next.visible = false
+      if (step.busy?.() === true) {
+        closeActionBtn.visible = false
+        restartActionBtn.visible = false
+      } else {
+        closeActionBtn.visible = true
+        restartActionBtn.visible = true
+      }
+    } else {
+      position.visible = true
+      closeActionBtn.visible = false
+      restartActionBtn.visible = false
+      back.visible = flow.canBack()
+      next.visible = true
+      next.set_label(nextLabel)
+      back.set_label(t("back"))
+      next.sensitive = step.ready ? step.ready() : true
+      if (index === steps.length) next.sensitive = false
+    }
+
+    closeActionBtn.set_label(t("runClose"))
+    restartActionBtn.set_label(t("runRestart"))
     head.setCanClose(canExit())
   }
   flow.onChange(sync)

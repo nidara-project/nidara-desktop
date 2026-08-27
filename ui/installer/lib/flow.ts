@@ -47,9 +47,13 @@ export interface FlowResult {
   /** The widget the window puts in its content area. */
   widget: Gtk.Widget
   current(): Step
+  currentIndex(): number
   canBack(): boolean
   back(): void
   next(): void
+  goTo(id: string): boolean
+  goToIndex(i: number): boolean
+  maxReachedIndex(): number
   /** Called after every move, and whenever a step reports its readiness changed. */
   onChange(cb: () => void): void
   /** Steps call this (through a closure handed to build()) when `ready()` flips. */
@@ -60,30 +64,31 @@ export function Flow(steps: Step[]): FlowResult {
   if (steps.length === 0) throw Error("a flow needs at least one step")
 
   const stack = new Gtk.Stack({
-    transition_type: Gtk.StackTransitionType.SLIDE_LEFT_RIGHT,
-    transition_duration: 220,
+    transition_type: Gtk.StackTransitionType.NONE,
+    vhomogeneous: false,
+    hhomogeneous: true,
+    interpolate_size: true,
     hexpand: true,
     vexpand: true,
   })
 
   const built = new Set<string>()
   let index = 0
+  let maxReached = 0
   const listeners: (() => void)[] = []
   const changed = () => { for (const cb of listeners) cb() }
 
   function show(i: number) {
+    if (i < 0 || i >= steps.length) return
+    const currentStep = steps[index]
+    if (currentStep && (currentStep.busy?.() === true || (currentStep.id === "run" && i !== index))) return
     const step = steps[i]
     if (!built.has(step.id)) {
       stack.add_named(step.build(changed), step.id)
       built.add(step.id)
     }
-    // Backwards moves slide the other way, which is the whole reason the stack
-    // carries a transition: it is the only cue that a step was undone rather
-    // than answered.
-    stack.transition_type = i >= index
-      ? Gtk.StackTransitionType.SLIDE_LEFT
-      : Gtk.StackTransitionType.SLIDE_RIGHT
     index = i
+    if (i > maxReached) maxReached = i
     stack.set_visible_child_name(step.id)
     changed()
   }
@@ -93,9 +98,39 @@ export function Flow(steps: Step[]): FlowResult {
   return {
     widget: stack,
     current: () => steps[index],
-    canBack: () => index > 0,
-    back() { if (index > 0) show(index - 1) },
-    next() { if (index < steps.length - 1) show(index + 1) },
+    currentIndex: () => index,
+    canBack: () => index > 0 && steps[index]?.busy?.() !== true && steps[index]?.id !== "run",
+    back() { if (index > 0 && steps[index]?.id !== "run") show(index - 1) },
+    next() { if (index < steps.length - 1 && steps[index]?.id !== "run") show(index + 1) },
+    goTo(id: string): boolean {
+      if (steps[index]?.id === "run" || steps[index]?.busy?.() === true) return false
+      const target = steps.findIndex(s => s.id === id)
+      if (target === -1 || target === steps.length - 1) return false
+      if (target <= maxReached) {
+        show(target)
+        return true
+      }
+      let canAdvance = true
+      for (let j = 0; j < target; j++) {
+        if (steps[j].ready && !steps[j].ready!()) {
+          canAdvance = false
+          break
+        }
+      }
+      if (canAdvance) {
+        show(target)
+        return true
+      }
+      return false
+    },
+    goToIndex(i: number): boolean {
+      if (i >= 0 && i < steps.length) {
+        show(i)
+        return true
+      }
+      return false
+    },
+    maxReachedIndex: () => maxReached,
     onChange(cb) { listeners.push(cb) },
     notifyReady: changed,
   }

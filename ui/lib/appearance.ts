@@ -211,27 +211,34 @@ export function watchAppearance(
   cb: (state: AppearanceState) => void,
   opts: AppearanceOpts = {},
 ): () => void {
-  if (opts.portal !== false && lastSource === "portal") {
+  const unsubs: (() => void)[] = []
+
+  // 1. Portal signal subscription (catches both org.freedesktop.appearance and org.nidara.appearance)
+  if (opts.portal !== false && GLib.getenv("DBUS_SESSION_BUS_ADDRESS")) {
     try {
       const bus = Gio.DBus.session
-      const id = bus.signal_subscribe(
-        PORTAL_BUS, PORTAL_IFACE, "SettingChanged", PORTAL_PATH, NIDARA_NS,
-        Gio.DBusSignalFlags.NONE,
-        () => cb(readAppearance(opts)),
-      )
-      return () => { try { bus.signal_unsubscribe(id) } catch { /* bus already gone */ } }
-    } catch { /* fall through to the file */ }
+      if (bus) {
+        const id = bus.signal_subscribe(
+          PORTAL_BUS, PORTAL_IFACE, "SettingChanged", PORTAL_PATH, null,
+          Gio.DBusSignalFlags.NONE,
+          () => cb(readAppearance(opts)),
+        )
+        unsubs.push(() => { try { bus.signal_unsubscribe(id) } catch {} })
+      }
+    } catch {}
   }
 
-  const path = filePath()
-  if (!path) return () => {}
-  try {
-    const monitor = Gio.File.new_for_path(path).monitor_file(Gio.FileMonitorFlags.NONE, null)
-    const id = monitor.connect("changed", () => cb(readAppearance(opts)))
-    // The monitor is returned inside this closure, which is what keeps it alive:
-    // an unreferenced Gio.FileMonitor is collected and stops delivering silently.
-    return () => { monitor.disconnect(id); monitor.cancel() }
-  } catch {
-    return () => {}
+  // 2. File monitors on all known appearance paths
+  for (const path of FILE_PATHS) {
+    try {
+      const file = Gio.File.new_for_path(path)
+      const monitor = file.monitor_file(Gio.FileMonitorFlags.NONE, null)
+      const id = monitor.connect("changed", () => cb(readAppearance(opts)))
+      unsubs.push(() => { try { monitor.disconnect(id); monitor.cancel() } catch {} })
+    } catch {}
+  }
+
+  return () => {
+    for (const u of unsubs) u()
   }
 }

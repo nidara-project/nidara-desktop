@@ -5,7 +5,7 @@
 
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
-import { NidaraList, NidaraRow, NidaraScrolled } from "../../lib/nidara-kit"
+import { NidaraList, NidaraRow } from "../../lib/nidara-kit"
 import { t, setLocale, getLocale, type Locale } from "../lib/i18n"
 import { getAnswers, setLanguageAnswer, type LanguageAnswer } from "../lib/answers"
 import { heading, prose } from "./common"
@@ -127,14 +127,7 @@ export function LanguageStep(): Step {
         if (item) selectLocale(item)
       })
 
-      const { widget: scrolledWidget } = NidaraScrolled({
-        child: listBoxContainer,
-        maxContentHeight: 320,
-        propagateNaturalHeight: true,
-        alwaysVisible: true,
-      })
-
-      box.append(scrolledWidget)
+      box.append(listBoxContainer)
       return box
     },
   }

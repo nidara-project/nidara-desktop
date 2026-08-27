@@ -17,6 +17,8 @@ export interface NidaraSidebarResult {
     widget: Gtk.ListBox
     /** Select the row with this id programmatically (does NOT fire onSelect). */
     select: (id: string) => void
+    /** Set whether a specific row is sensitive, selectable and activatable. */
+    setItemSensitive: (id: string, sensitive: boolean) => void
     /** Clear the selection. */
     unselectAll: () => void
     /** Currently selected id, or null. */
@@ -109,7 +111,8 @@ export function NidaraSidebar(
     })
 
     list.connect("row-activated", (_: Gtk.ListBox, row: Gtk.ListBoxRow) => {
-        if (row?.name) onSelect(row.name)
+        const id = row?.get_name() || (row as any)?.name
+        if (id) onSelect(id)
     })
 
     const select = (id: string) => {
@@ -120,9 +123,23 @@ export function NidaraSidebar(
         }
     }
 
+    const setItemSensitive = (id: string, sensitive: boolean) => {
+        for (let i = 0; ; i++) {
+            const row = list.get_row_at_index(i)
+            if (!row) break
+            if (row.get_name() === id) {
+                row.set_sensitive(sensitive)
+                row.set_activatable(sensitive)
+                row.set_selectable(sensitive)
+                return
+            }
+        }
+    }
+
     return {
         widget: list,
         select,
+        setItemSensitive,
         unselectAll: () => list.unselect_all(),
         getSelectedId: () => list.get_selected_row()?.get_name() ?? null,
     }

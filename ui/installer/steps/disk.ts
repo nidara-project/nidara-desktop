@@ -14,7 +14,6 @@ import {
   NidaraList,
   NidaraRow,
   NidaraEmptyRow,
-  NidaraScrolled,
   NidaraDropDown,
   NidaraButton,
 } from "../../lib/nidara-kit"
@@ -254,6 +253,15 @@ export function DiskStep(): Step {
       } else {
         if (!selectedDisk) selectedDisk = disks[0]
         let firstRadio: Gtk.CheckButton | null = null
+        const diskRadioMap = new Map<BlockDevice, Gtk.CheckButton>()
+
+        const selectThisDisk = (disk: BlockDevice) => {
+          selectedDisk = disk
+          const r = diskRadioMap.get(disk)
+          if (r && !r.active) r.active = true
+          updateDiskSelection(disk)
+          syncAnswer()
+        }
 
         for (const disk of disks) {
           const radio = new Gtk.CheckButton()
@@ -265,6 +273,7 @@ export function DiskStep(): Step {
 
           const isCurrent = selectedDisk?.path === disk.path
           radio.active = isCurrent
+          diskRadioMap.set(disk, radio)
 
           const gib = (disk.size / (1024 ** 3)).toFixed(1)
           const title = disk.model || disk.name
@@ -275,15 +284,8 @@ export function DiskStep(): Step {
 
           if (isCurrent) row.add_css_class("is-selected")
 
-          const selectThisDisk = () => {
-            selectedDisk = disk
-            radio.active = true
-            updateDiskSelection(disk)
-            syncAnswer()
-          }
-
           radio.connect("toggled", () => {
-            if (radio.active) selectThisDisk()
+            if (radio.active) selectThisDisk(disk)
           })
 
           diskListBox.append(row)
@@ -292,21 +294,12 @@ export function DiskStep(): Step {
         diskListBox.connect("row-activated", (_, row) => {
           const idx = row.get_index()
           if (disks[idx]) {
-            selectedDisk = disks[idx]
-            updateDiskSelection(disks[idx])
-            syncAnswer()
+            selectThisDisk(disks[idx])
           }
         })
       }
 
-      const { widget: diskScrollWidget } = NidaraScrolled({
-        child: diskListBoxContainer,
-        minContentHeight: 120,
-        maxContentHeight: 160,
-        propagateNaturalHeight: true,
-        alwaysVisible: true,
-      })
-      entireBox.append(diskScrollWidget)
+      entireBox.append(diskListBoxContainer)
 
       // Filesystem Choice for Entire Disk
       const { box: fsListBoxContainer, listBox: fsListBox } = NidaraList()
@@ -342,6 +335,14 @@ export function DiskStep(): Step {
           selectedFs = "ext4"
           updateFsSelection("ext4")
           syncAnswer()
+        }
+      })
+
+      fsListBox.connect("row-activated", (_, row) => {
+        if (row === rowBtrfs) {
+          radioBtrfs.active = true
+        } else if (row === rowExt4) {
+          radioExt4.active = true
         }
       })
 
@@ -498,15 +499,7 @@ export function DiskStep(): Step {
           }
         }
 
-        const { widget: partScrollWidget } = NidaraScrolled({
-          child: partListBoxContainer,
-          minContentHeight: 180,
-          maxContentHeight: 220,
-          propagateNaturalHeight: true,
-          alwaysVisible: true,
-        })
-
-        partListHolder.append(partScrollWidget)
+        partListHolder.append(partListBoxContainer)
       }
 
       buildPartitionsList()

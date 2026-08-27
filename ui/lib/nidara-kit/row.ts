@@ -179,7 +179,9 @@ export function NidaraStackedRow(
     const row = new Gtk.ListBoxRow({
         activatable: false,
         selectable: false,
-        css_classes: ["nidara-row", rowHeightClass(subtitle), ...extraClasses],
+        focusable: false,
+        can_focus: false,
+        css_classes: ["nidara-row", "nidara-row--stacked", ...extraClasses],
     })
     row.set_child(box)
     return row

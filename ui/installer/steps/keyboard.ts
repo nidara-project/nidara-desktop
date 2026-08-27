@@ -6,7 +6,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { execAsync } from "../../lib/process"
-import { NidaraList, NidaraRow, NidaraScrolled } from "../../lib/nidara-kit"
+import { NidaraList, NidaraRow } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import { getAnswers, setKeyboardAnswer, type KeyboardAnswer } from "../lib/answers"
 import { heading, prose } from "./common"
@@ -139,14 +139,7 @@ export function KeyboardStep(): Step {
         if (item) applyLayout(item)
       })
 
-      const { widget: scrolledWidget } = NidaraScrolled({
-        child: listBoxContainer,
-        maxContentHeight: 240,
-        propagateNaturalHeight: true,
-        alwaysVisible: true,
-      })
-
-      box.append(scrolledWidget)
+      box.append(listBoxContainer)
 
       // Interactive test input field
       const testEntry = new Gtk.Entry({

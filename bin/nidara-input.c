@@ -158,12 +158,16 @@ int main(int argc, char **argv) {
     uint32_t t = now_ms();
     zwlr_virtual_pointer_v1_motion_absolute(vp, t, x, y, w, h);
     zwlr_virtual_pointer_v1_frame(vp);
+    wl_display_flush(dpy);
+    nap_ms(40);
 
     if (is_click || is_right) {
         uint32_t btn = is_right ? BTN_RIGHT : BTN_LEFT;
         t = now_ms();
         zwlr_virtual_pointer_v1_button(vp, t, btn, WL_POINTER_BUTTON_STATE_PRESSED);
         zwlr_virtual_pointer_v1_frame(vp);
+        wl_display_flush(dpy);
+        nap_ms(50);
         t = now_ms();
         zwlr_virtual_pointer_v1_button(vp, t, btn, WL_POINTER_BUTTON_STATE_RELEASED);
         zwlr_virtual_pointer_v1_frame(vp);

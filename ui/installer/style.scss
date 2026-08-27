@@ -59,13 +59,8 @@ window.nidara-installer-window {
   // what paints it; only the radius clip is ours.
   .installer-root { padding: 0; border-radius: var(--nidara-radius-lg); }
 
-  .installer-header {
-    padding: 18px 28px 12px 28px;
-    border-bottom: 1px solid var(--nidara-border);
-  }
-
   .installer-title {
-    font-size: $fs-title-2;
+    font-size: $fs-title-3;
     font-weight: 600;
     color: var(--nidara-text);
   }
@@ -77,17 +72,33 @@ window.nidara-installer-window {
     color: var(--nidara-text-dim);
   }
 
+  .nidara-sidebar {
+    listitem:disabled,
+    row:disabled,
+    listitem:disabled label,
+    row:disabled label,
+    listitem:disabled image,
+    row:disabled image {
+      opacity: 0.35;
+    }
+  }
+
   .installer-footer {
-    padding: 14px 28px 20px 28px;
+    padding: 16px 24px 24px 24px;
     border-top: 1px solid var(--nidara-border);
   }
 
   // ── Step content ───────────────────────────────────────────────────────────
+  .installer-body {
+    padding: 16px 0 16px 0;
+  }
+
   .installer-heading {
     font-size: $fs-title-3;
     font-weight: 600;
     color: var(--nidara-text);
-    margin-top: 26px;
+    margin-top: 0;
+    margin-bottom: 2px;
   }
 
   .installer-prose {
@@ -100,4 +111,98 @@ window.nidara-installer-window {
   // read. Full-strength ink is what makes it the loudest thing on the step
   // without spending the red this DE reserves for recording and for failure.
   .installer-prose--warning { color: var(--nidara-text); font-weight: 500; }
+
+  // ── Log View, ScrolledWindow & Expander ──────────────────────────────────
+  progressbar {
+    min-height: 4px;
+    margin: 8px 0;
+
+    trough {
+      min-height: 4px;
+      border-radius: var(--nidara-radius-full);
+      background-color: var(--nidara-surface);
+    }
+
+    progress {
+      min-height: 4px;
+      border-radius: var(--nidara-radius-full);
+      background-color: var(--nidara-accent);
+    }
+  }
+
+  scrolledwindow {
+    scrollbar {
+      background-color: transparent;
+      padding: 0;
+
+      &.vertical {
+        min-width: 8px;
+        margin: 2px;
+      }
+
+      slider {
+        min-width: 6px;
+        min-height: 24px;
+        border-radius: var(--nidara-radius-full);
+        background-color: var(--nidara-surface-active);
+
+        &:hover {
+          background-color: var(--nidara-text-dim);
+        }
+      }
+    }
+  }
+
+  .installer-expander {
+    margin-top: 8px;
+
+    title, > box > title, > title {
+      font-size: $fs-caption;
+      font-weight: 500;
+      color: var(--nidara-text-dim);
+      padding: 4px 0;
+      min-height: 24px;
+      transition: color 150ms ease;
+
+      &:hover {
+        color: var(--nidara-text);
+      }
+
+      arrow {
+        min-width: 14px;
+        min-height: 14px;
+        margin-right: 6px;
+        -gtk-icon-source: -gtk-icontheme("pan-end-symbolic");
+      }
+
+      &:checked arrow {
+        -gtk-icon-source: -gtk-icontheme("pan-down-symbolic");
+      }
+    }
+  }
+
+  .installer-log-card {
+    background-color: var(--nidara-surface);
+    border: 1px solid var(--nidara-border);
+    border-radius: var(--nidara-radius-md);
+    padding: 10px 14px;
+    margin-top: 4px;
+  }
+
+  .installer-log-view {
+    background-color: transparent;
+    color: var(--nidara-text-secondary);
+    font-family: monospace;
+    font-size: 11.5px;
+    line-height: 1.45;
+
+    text {
+      background-color: transparent;
+      color: var(--nidara-text-secondary);
+    }
+  }
 }
+
+
+
+

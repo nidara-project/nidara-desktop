@@ -278,8 +278,10 @@ export const rowInsetFor = (surfaceRadius: number, n: number = 3.2, rowRadius: n
 export const WINDOW_LAYOUT = {
     /** Docked sidebar column, including its 8px capsule margin. */
     sidebar: 250,
-    /** The content pane. A CONSTANT — see above. */
+    /** The content pane for standard system applications (Settings). A CONSTANT — see above. */
     content: 800,
+    /** Focused single-column content pane for step-by-step wizards and installers. */
+    wizardContent: 600,
     /** The distress width — only a compositor can push the pane here. */
     contentFloor: 560,
     /**

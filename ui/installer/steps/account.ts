@@ -5,6 +5,7 @@
 // or written in plain text).
 
 import Gtk from "gi://Gtk?version=4.0"
+import GLib from "gi://GLib"
 import Pango from "gi://Pango"
 import type { Step } from "../lib/flow"
 import { NidaraList, NidaraStackedRow } from "../../lib/nidara-kit"
@@ -83,10 +84,10 @@ export function AccountStep(): Step {
       box.append(errorLabel)
 
       const validate = () => {
-        const fname = fullNameEntry.text.trim()
-        const uname = usernameEntry.text.trim()
-        const pw = pwEntry.text
-        const pw2 = pw2Entry.text
+        const fname = (fullNameEntry.get_text?.() ?? fullNameEntry.text ?? "").trim()
+        const uname = (usernameEntry.get_text?.() ?? usernameEntry.text ?? "").trim()
+        const pw = pwEntry.get_text?.() ?? pwEntry.text ?? ""
+        const pw2 = pw2Entry.get_text?.() ?? pw2Entry.text ?? ""
 
         let error = ""
 
@@ -128,20 +129,38 @@ export function AccountStep(): Step {
         notifyReady?.()
       }
 
-      fullNameEntry.connect("notify::text", validate)
-      usernameEntry.connect("notify::text", validate)
-      pwEntry.connect("notify::text", validate)
-      pw2Entry.connect("notify::text", validate)
+      fullNameEntry.connect("changed", validate)
+      usernameEntry.connect("changed", validate)
+      pwEntry.connect("changed", validate)
+      pw2Entry.connect("changed", validate)
 
-      // Restore previously entered values if user navigated back
-      const existing = getAnswers().account
-      if (existing) {
-        fullNameEntry.text = existing.fullName
-        usernameEntry.text = existing.username
-        pwEntry.text = existing.password
-        pw2Entry.text = existing.password
-        validate()
+      // Restore previously entered values or populate default initial account
+      const existing = getAnswers().account ?? {
+        fullName: "Nidara User",
+        username: "nidara",
+        password: "nidara",
       }
+      if (typeof fullNameEntry.set_text === "function") fullNameEntry.set_text(existing.fullName)
+      else fullNameEntry.text = existing.fullName
+      if (typeof usernameEntry.set_text === "function") usernameEntry.set_text(existing.username)
+      else usernameEntry.text = existing.username
+      if (typeof pwEntry.set_text === "function") pwEntry.set_text(existing.password)
+      else pwEntry.text = existing.password
+      if (typeof pw2Entry.set_text === "function") pw2Entry.set_text(existing.password)
+      else pw2Entry.text = existing.password
+      validate()
+
+      box.connect("map", () => {
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+          fullNameEntry.grab_focus()
+          return GLib.SOURCE_REMOVE
+        })
+      })
+
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+        fullNameEntry.grab_focus()
+        return GLib.SOURCE_REMOVE
+      })
 
       return box
     },

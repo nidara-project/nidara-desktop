@@ -4,7 +4,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import type { Step } from "../lib/flow"
-import { NidaraButton } from "../../lib/nidara-kit"
+import { NidaraButton, NidaraScrolled } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import { getAnswers } from "../lib/answers"
 import { assemblePlan, type AssembledPlan } from "../lib/plan"
@@ -33,13 +33,17 @@ export function RunStep(): Step {
       box.append(head)
       box.append(desc)
 
-      const spinner = new Gtk.Spinner({
-        spinning: true,
-        width_request: 32,
-        height_request: 32,
-        halign: Gtk.Align.CENTER,
+      const progressBar = new Gtk.ProgressBar({
+        hexpand: true,
+        valign: Gtk.Align.CENTER,
       })
-      box.append(spinner)
+      box.append(progressBar)
+
+      const pulseId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => {
+        if (!_busy) return GLib.SOURCE_REMOVE
+        progressBar.pulse()
+        return GLib.SOURCE_CONTINUE
+      })
 
       const textBuffer = new Gtk.TextBuffer()
       const textView = new Gtk.TextView({
@@ -51,45 +55,29 @@ export function RunStep(): Step {
         css_classes: ["installer-log-view"],
       })
 
-      const scrolled = new Gtk.ScrolledWindow({
-        hscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        min_content_height: 180,
-        max_content_height: 240,
+      const { widget: logScrolledWidget, scrolled } = NidaraScrolled({
         child: textView,
+        minContentHeight: 180,
+        maxContentHeight: 240,
+        propagateNaturalHeight: false,
+        alwaysVisible: false,
+        reserveLane: false,
       })
+
+      const logCard = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        css_classes: ["installer-log-card"],
+        hexpand: true,
+      })
+      logCard.append(logScrolledWidget)
 
       const expander = new Gtk.Expander({
         label: t("runShowLog"),
         expanded: false,
-        child: scrolled,
+        css_classes: ["installer-expander"],
+        child: logCard,
       })
       box.append(expander)
-
-      const actionBox = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 10,
-        halign: Gtk.Align.END,
-        visible: false,
-      })
-
-      const restartBtn = NidaraButton({ label: t("runRestart"), variant: "primary" })
-      const closeBtn = NidaraButton({ label: t("runClose"), variant: "secondary" })
-
-      restartBtn.connect("clicked", () => {
-        try {
-          Gio.Subprocess.new(["systemctl", "reboot"], Gio.SubprocessFlags.NONE)
-        } catch {}
-      })
-
-      closeBtn.connect("clicked", () => {
-        const root = box.get_root() as Gtk.Window | null
-        root?.close()
-      })
-
-      actionBox.append(closeBtn)
-      actionBox.append(restartBtn)
-      box.append(actionBox)
 
       const appendLog = (line: string) => {
         const endIter = textBuffer.get_end_iter()
@@ -100,8 +88,10 @@ export function RunStep(): Step {
 
       const finishRun = (success: boolean) => {
         _busy = false
-        spinner.spinning = false
-        spinner.visible = false
+        progressBar.visible = false
+        if (progressBar.get_parent()) {
+          box.remove(progressBar)
+        }
 
         if (success) {
           head.label = t("runSuccessHeading")
@@ -113,25 +103,140 @@ export function RunStep(): Step {
           desc.label = t("runFailedProse")
           desc.remove_css_class("installer-prose--dim")
           desc.add_css_class("installer-prose--warning")
-          expander.expanded = true
+        }
+      }
+
+      // Prepare disks, subvolumes, and /mnt mount hierarchy
+      function prepareDiskAndMounts(disk: any, arm: boolean) {
+        const isRoot = GLib.get_user_name() === "root"
+        const sudoPrefix = isRoot ? [] : ["sudo", "-n"]
+        const runCmd = (args: string[]) => {
+          appendLog(`[PREP] ${args.join(" ")}`)
+          const fullCmd = [...sudoPrefix, ...args]
+          const proc = Gio.Subprocess.new(fullCmd, Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_MERGE)
+          proc.wait(null)
+          if (!proc.get_successful()) {
+            throw new Error(`Command failed: ${fullCmd.join(" ")}`)
+          }
         }
 
-        actionBox.visible = true
+        // Unmount anything currently under /mnt
+        try {
+          const proc = Gio.Subprocess.new([...sudoPrefix, "umount", "-R", "/mnt"], Gio.SubprocessFlags.NONE)
+          proc.wait(null)
+        } catch {}
+
+        if (disk.mode === "entire_disk") {
+          const dPath = disk.disk.path
+          const isNvme = dPath.includes("nvme") || dPath.includes("mmcblk")
+          const p1 = isNvme ? `${dPath}p1` : `${dPath}1`
+          const p2 = isNvme ? `${dPath}p2` : `${dPath}2`
+
+          if (arm) {
+            appendLog(`[PREP] Partitioning entire disk ${dPath}...`)
+            runCmd(["sgdisk", "--zap-all", dPath])
+            runCmd(["sgdisk", "-n", "1:1M:+512M", "-t", "1:ef00", dPath])
+            runCmd(["sgdisk", "-n", "2:0:0", "-t", "2:8300", dPath])
+            runCmd(["partprobe", dPath])
+
+            appendLog(`[PREP] Formatting EFI partition ${p1}...`)
+            runCmd(["mkfs.vfat", "-F32", p1])
+
+            if (disk.filesystem === "btrfs") {
+              appendLog(`[PREP] Formatting Btrfs root on ${p2}...`)
+              runCmd(["mkfs.btrfs", "-f", p2])
+              runCmd(["mkdir", "-p", "/mnt"])
+              runCmd(["mount", p2, "/mnt"])
+              runCmd(["btrfs", "subvolume", "create", "/mnt/@"])
+              runCmd(["btrfs", "subvolume", "create", "/mnt/@home"])
+              runCmd(["btrfs", "subvolume", "create", "/mnt/@log"])
+              runCmd(["btrfs", "subvolume", "create", "/mnt/@pkg"])
+              runCmd(["btrfs", "subvolume", "create", "/mnt/@snapshots"])
+              runCmd(["umount", "/mnt"])
+
+              runCmd(["mount", "-o", "compress=zstd,subvol=@", p2, "/mnt"])
+              runCmd(["mkdir", "-p", "/mnt/home", "/mnt/var/log", "/mnt/var/cache/pacman/pkg", "/mnt/.snapshots", "/mnt/boot"])
+              runCmd(["mount", "-o", "compress=zstd,subvol=@home", p2, "/mnt/home"])
+              runCmd(["mount", "-o", "compress=zstd,subvol=@log", p2, "/mnt/var/log"])
+              runCmd(["mount", "-o", "compress=zstd,subvol=@pkg", p2, "/mnt/var/cache/pacman/pkg"])
+              runCmd(["mount", "-o", "compress=zstd,subvol=@snapshots", p2, "/mnt/.snapshots"])
+              runCmd(["mount", p1, "/mnt/boot"])
+            } else {
+              appendLog(`[PREP] Formatting Ext4 root on ${p2}...`)
+              runCmd(["mkfs.ext4", "-F", p2])
+              runCmd(["mkdir", "-p", "/mnt"])
+              runCmd(["mount", p2, "/mnt"])
+              runCmd(["mkdir", "-p", "/mnt/boot"])
+              runCmd(["mount", p1, "/mnt/boot"])
+            }
+          } else {
+            // Dry-run mode: mount existing partitions if available for schema validation
+            try {
+              runCmd(["mkdir", "-p", "/mnt"])
+              runCmd(["mount", p2, "/mnt"])
+              runCmd(["mkdir", "-p", "/mnt/boot"])
+              runCmd(["mount", p1, "/mnt/boot"])
+            } catch {}
+          }
+        } else if (disk.mode === "manual") {
+          const sorted = [...disk.mounts].sort((a, b) => {
+            if (a.mountpoint === "/") return -1
+            if (b.mountpoint === "/") return 1
+            return a.mountpoint.localeCompare(b.mountpoint)
+          })
+
+          if (arm) {
+            for (const m of sorted) {
+              if (m.format) {
+                appendLog(`[PREP] Formatting ${m.path} as ${m.filesystem}...`)
+                if (m.filesystem === "btrfs") {
+                  runCmd(["mkfs.btrfs", "-f", m.path])
+                } else if (m.filesystem === "vfat") {
+                  runCmd(["mkfs.vfat", "-F32", m.path])
+                } else if (m.filesystem === "xfs") {
+                  runCmd(["mkfs.xfs", "-f", m.path])
+                } else if (m.filesystem === "f2fs") {
+                  runCmd(["mkfs.f2fs", "-f", m.path])
+                } else {
+                  runCmd(["mkfs.ext4", "-F", m.path])
+                }
+              }
+            }
+          }
+
+          for (const m of sorted) {
+            const target = m.mountpoint === "/" ? "/mnt" : `/mnt${m.mountpoint.startsWith("/") ? m.mountpoint : `/${m.mountpoint}`}`
+            runCmd(["mkdir", "-p", target])
+            runCmd(["mount", m.path, target])
+          }
+        }
       }
 
       // Execute archinstall
       GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         _busy = true
+        const answers = getAnswers()
+        const isArm = GLib.getenv("NIDARA_INSTALLER_ARM") === "1"
+
+        if (answers.disk) {
+          try {
+            prepareDiskAndMounts(answers.disk, isArm)
+          } catch (e: any) {
+            appendLog(`[ERROR] Failed to prepare disk partitions/mounts: ${e.message || e}`)
+            finishRun(false)
+            return GLib.SOURCE_REMOVE
+          }
+        }
+
         let plan: AssembledPlan
         try {
-          plan = assemblePlan(getAnswers())
+          plan = assemblePlan(answers)
         } catch (e: any) {
           appendLog(`[ERROR] Failed to assemble installation plan: ${e.message || e}`)
           finishRun(false)
           return GLib.SOURCE_REMOVE
         }
 
-        const isArm = GLib.getenv("NIDARA_INSTALLER_ARM") === "1"
         const configPath = `/tmp/nidara-plan-${GLib.random_int()}.json`
         const credsPath = `/tmp/nidara-creds-${GLib.random_int()}.json`
 
@@ -154,13 +259,10 @@ export function RunStep(): Step {
           try { Gio.File.new_for_path(credsPath).delete(null) } catch {}
         }
 
-        const cmd = [
-          "pkexec",
-          "archinstall",
-          "--config", configPath,
-          "--creds", credsPath,
-          "--silent",
-        ]
+        const isRoot = GLib.get_user_name() === "root"
+        const cmd = isRoot
+          ? ["archinstall", "--config", configPath, "--creds", credsPath, "--silent"]
+          : ["sudo", "-n", "archinstall", "--config", configPath, "--creds", credsPath, "--silent"]
 
         if (!isArm) {
           cmd.push("--dry-run")
@@ -196,7 +298,7 @@ export function RunStep(): Step {
             let success = false
             try {
               _proc?.wait_finish(res)
-              success = (_proc?.get_successful() ?? false) || !isArm
+              success = _proc?.get_successful() ?? false
             } catch (e: any) {
               appendLog(`[ERROR] Process exited with error: ${e.message || e}`)
             } finally {

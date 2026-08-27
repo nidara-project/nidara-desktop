@@ -224,10 +224,8 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     })
     sidebarScroll.vexpand = true
     sidebarScrollWidget.vexpand = true
-    // Gap to the search slot above. It lives on the OVERLAY, not on the view: the
-    // bar spans the overlay, so a margin on the view alone would leave the lane 4px
-    // taller than the viewport it maps to and the thumb would drift from the content.
-    sidebarScrollWidget.margin_top = 4
+    // Gap to the search slot above (when present).
+    sidebarScrollWidget.margin_top = sidebar.top ? 4 : 0
 
     const sidebarColumn = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
