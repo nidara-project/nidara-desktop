@@ -6,7 +6,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { execAsync } from "../../lib/process"
-import { NidaraList, NidaraRow } from "../../lib/nidara-kit"
+import { NidaraList, NidaraRow, NidaraSelectionCheck } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import { getAnswers, setKeyboardAnswer, type KeyboardAnswer } from "../lib/answers"
 import { heading, prose } from "./common"
@@ -69,17 +69,19 @@ export function KeyboardStep(): Step {
       const { box: listBoxContainer, listBox } = NidaraList()
       listBox.selection_mode = Gtk.SelectionMode.NONE
 
-      let firstRadio: Gtk.CheckButton | null = null
-      const radioMap = new Map<KeyboardLayoutItem, Gtk.CheckButton>()
+      const checkMap = new Map<KeyboardLayoutItem, Gtk.Widget>()
       const rowItemMap = new Map<Gtk.ListBoxRow, KeyboardLayoutItem>()
       const itemRowMap = new Map<KeyboardLayoutItem, Gtk.ListBoxRow>()
 
       const updateRowSelection = (activeItem: KeyboardLayoutItem) => {
         for (const [item, row] of itemRowMap.entries()) {
+          const check = checkMap.get(item)
           if (item === activeItem) {
             row.add_css_class("is-selected")
+            if (check) check.visible = true
           } else {
             row.remove_css_class("is-selected")
+            if (check) check.visible = false
           }
         }
       }
@@ -90,8 +92,6 @@ export function KeyboardStep(): Step {
           variant: item.variant,
           label: item.label,
         })
-        const radio = radioMap.get(item)
-        if (radio && !radio.active) radio.active = true
         updateRowSelection(item)
 
         // Apply immediately to the live session (Hyprland keyword without polkit prompt)
@@ -105,29 +105,20 @@ export function KeyboardStep(): Step {
       const currentAnswer = getAnswers().keyboard
 
       for (const item of KEYBOARD_LAYOUTS) {
-        const radio = new Gtk.CheckButton()
-        if (firstRadio) {
-          radio.set_group(firstRadio)
-        } else {
-          firstRadio = radio
-        }
-        radioMap.set(item, radio)
-
         const isCurrent = currentAnswer
           ? currentAnswer.layout === item.layout && currentAnswer.variant === item.variant
           : false
 
+        const check = NidaraSelectionCheck(16)
+        check.visible = isCurrent
+        checkMap.set(item, check)
+
         const subtitle = item.variant ? `${item.layout} (${item.variant})` : item.layout
-        const row = NidaraRow(item.label, subtitle, radio)
+        const row = NidaraRow(item.label, subtitle, check)
         rowItemMap.set(row, item)
         itemRowMap.set(item, row)
 
-        radio.connect("toggled", () => {
-          if (radio.active) applyLayout(item)
-        })
-
         if (isCurrent) {
-          radio.active = true
           row.add_css_class("is-selected")
         }
 

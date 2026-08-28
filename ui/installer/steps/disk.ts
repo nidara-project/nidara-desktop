@@ -16,6 +16,7 @@ import {
   NidaraEmptyRow,
   NidaraDropDown,
   NidaraButton,
+  NidaraSelectionCheck,
 } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import {
@@ -194,12 +195,13 @@ export function DiskStep(): Step {
       const { box: modeListBoxContainer, listBox: modeListBox } = NidaraList()
       modeListBoxContainer.set_margin_bottom(4)
 
-      const radioEntire = new Gtk.CheckButton({ active: currentMode === "entire_disk" })
-      const radioManual = new Gtk.CheckButton({ active: currentMode === "manual" })
-      radioManual.set_group(radioEntire)
+      const checkEntire = NidaraSelectionCheck(16)
+      const checkManual = NidaraSelectionCheck(16)
+      checkEntire.visible = currentMode === "entire_disk"
+      checkManual.visible = currentMode === "manual"
 
-      const rowEntire = NidaraRow(t("diskModeEntire"), t("diskModeEntireDesc"), radioEntire)
-      const rowManual = NidaraRow(t("diskModeManual"), t("diskModeManualDesc"), radioManual)
+      const rowEntire = NidaraRow(t("diskModeEntire"), t("diskModeEntireDesc"), checkEntire)
+      const rowManual = NidaraRow(t("diskModeManual"), t("diskModeManualDesc"), checkManual)
 
       if (currentMode === "entire_disk") rowEntire.add_css_class("is-selected")
       else rowManual.add_css_class("is-selected")
@@ -208,9 +210,13 @@ export function DiskStep(): Step {
         if (mode === "entire_disk") {
           rowEntire.add_css_class("is-selected")
           rowManual.remove_css_class("is-selected")
+          checkEntire.visible = true
+          checkManual.visible = false
         } else {
           rowManual.add_css_class("is-selected")
           rowEntire.remove_css_class("is-selected")
+          checkManual.visible = true
+          checkEntire.visible = false
         }
       }
 
@@ -237,13 +243,17 @@ export function DiskStep(): Step {
       const disks = listDisks()
       const { box: diskListBoxContainer, listBox: diskListBox } = NidaraList()
       const diskRowMap = new Map<BlockDevice, Gtk.ListBoxRow>()
+      const diskCheckMap = new Map<BlockDevice, Gtk.Widget>()
 
       const updateDiskSelection = (activeDisk: BlockDevice) => {
         for (const [d, row] of diskRowMap.entries()) {
+          const chk = diskCheckMap.get(d)
           if (d.path === activeDisk.path) {
             row.add_css_class("is-selected")
+            if (chk) chk.visible = true
           } else {
             row.remove_css_class("is-selected")
+            if (chk) chk.visible = false
           }
         }
       }
@@ -252,41 +262,27 @@ export function DiskStep(): Step {
         diskListBox.append(NidaraEmptyRow(t("diskNoDisks")))
       } else {
         if (!selectedDisk) selectedDisk = disks[0]
-        let firstRadio: Gtk.CheckButton | null = null
-        const diskRadioMap = new Map<BlockDevice, Gtk.CheckButton>()
 
         const selectThisDisk = (disk: BlockDevice) => {
           selectedDisk = disk
-          const r = diskRadioMap.get(disk)
-          if (r && !r.active) r.active = true
           updateDiskSelection(disk)
           syncAnswer()
         }
 
         for (const disk of disks) {
-          const radio = new Gtk.CheckButton()
-          if (firstRadio) {
-            radio.set_group(firstRadio)
-          } else {
-            firstRadio = radio
-          }
-
           const isCurrent = selectedDisk?.path === disk.path
-          radio.active = isCurrent
-          diskRadioMap.set(disk, radio)
+          const check = NidaraSelectionCheck(16)
+          check.visible = isCurrent
+          diskCheckMap.set(disk, check)
 
           const gib = (disk.size / (1024 ** 3)).toFixed(1)
           const title = disk.model || disk.name
           const subtitle = `${gib} GiB · ${disk.path}${disk.rm ? ` · ${t("diskRemovable")}` : ""}`
 
-          const row = NidaraRow(title, subtitle, radio)
+          const row = NidaraRow(title, subtitle, check)
           diskRowMap.set(disk, row)
 
           if (isCurrent) row.add_css_class("is-selected")
-
-          radio.connect("toggled", () => {
-            if (radio.active) selectThisDisk(disk)
-          })
 
           diskListBox.append(row)
         }
@@ -303,12 +299,13 @@ export function DiskStep(): Step {
 
       // Filesystem Choice for Entire Disk
       const { box: fsListBoxContainer, listBox: fsListBox } = NidaraList()
-      const radioBtrfs = new Gtk.CheckButton({ active: selectedFs === "btrfs" })
-      const radioExt4 = new Gtk.CheckButton({ active: selectedFs === "ext4" })
-      radioExt4.set_group(radioBtrfs)
+      const checkBtrfs = NidaraSelectionCheck(16)
+      const checkExt4 = NidaraSelectionCheck(16)
+      checkBtrfs.visible = selectedFs === "btrfs"
+      checkExt4.visible = selectedFs === "ext4"
 
-      const rowBtrfs = NidaraRow(t("diskFsBtrfs"), null, radioBtrfs)
-      const rowExt4 = NidaraRow(t("diskFsExt4"), null, radioExt4)
+      const rowBtrfs = NidaraRow(t("diskFsBtrfs"), null, checkBtrfs)
+      const rowExt4 = NidaraRow(t("diskFsExt4"), null, checkExt4)
 
       if (selectedFs === "btrfs") rowBtrfs.add_css_class("is-selected")
       else rowExt4.add_css_class("is-selected")
@@ -317,32 +314,25 @@ export function DiskStep(): Step {
         if (fs === "btrfs") {
           rowBtrfs.add_css_class("is-selected")
           rowExt4.remove_css_class("is-selected")
+          checkBtrfs.visible = true
+          checkExt4.visible = false
         } else {
           rowExt4.add_css_class("is-selected")
           rowBtrfs.remove_css_class("is-selected")
+          checkExt4.visible = true
+          checkBtrfs.visible = false
         }
       }
 
-      radioBtrfs.connect("toggled", () => {
-        if (radioBtrfs.active) {
+      fsListBox.connect("row-activated", (_, row) => {
+        if (row === rowBtrfs) {
           selectedFs = "btrfs"
           updateFsSelection("btrfs")
           syncAnswer()
-        }
-      })
-      radioExt4.connect("toggled", () => {
-        if (radioExt4.active) {
+        } else if (row === rowExt4) {
           selectedFs = "ext4"
           updateFsSelection("ext4")
           syncAnswer()
-        }
-      })
-
-      fsListBox.connect("row-activated", (_, row) => {
-        if (row === rowBtrfs) {
-          radioBtrfs.active = true
-        } else if (row === rowExt4) {
-          radioExt4.active = true
         }
       })
 
@@ -512,29 +502,17 @@ export function DiskStep(): Step {
       stack.add_named(manualBox, "manual")
 
       // Switch mode logic
-      radioEntire.connect("toggled", () => {
-        if (radioEntire.active) {
+      modeListBox.connect("row-activated", (_, row) => {
+        if (row === rowEntire) {
           currentMode = "entire_disk"
           updateModeSelection("entire_disk")
           stack.set_visible_child_name("entire_disk")
           syncAnswer()
-        }
-      })
-
-      radioManual.connect("toggled", () => {
-        if (radioManual.active) {
+        } else if (row === rowManual) {
           currentMode = "manual"
           updateModeSelection("manual")
           stack.set_visible_child_name("manual")
           syncAnswer()
-        }
-      })
-
-      modeListBox.connect("row-activated", (_, row) => {
-        if (row === rowEntire) {
-          radioEntire.active = true
-        } else if (row === rowManual) {
-          radioManual.active = true
         }
       })
 

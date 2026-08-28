@@ -1,15 +1,8 @@
-// Step 1 — what is about to happen, and whether this machine can do it.
-//
-// A welcome screen usually earns nothing. This one does two jobs: it states the
-// one destructive fact up front (a disk gets erased), and it answers a question
-// only this process can answer — is this a Nidara medium at all? The product's
-// base config is ISO-only content, so its absence is the difference between "the
-// installer is running" and "the installer can install".
-
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
-import { readBaseConfig, basePackages } from "../lib/base-config"
+import { readBaseConfig } from "../lib/base-config"
 import { t } from "../lib/i18n"
+import { nidaraLogoIcon } from "../../lib/icons"
 import { heading, prose } from "./common"
 
 export function WelcomeStep(): Step {
@@ -28,22 +21,24 @@ export function WelcomeStep(): Step {
         hexpand: true,
       })
 
+      const logoIcon = nidaraLogoIcon()
+      if (logoIcon) {
+        box.append(new Gtk.Image({
+          gicon: logoIcon,
+          pixel_size: 64,
+          css_classes: ["installer-logo"],
+          halign: Gtk.Align.START,
+        }))
+      }
+
       box.append(heading(t("welcomeHeading")))
       box.append(prose(t("welcomeIntro")))
       box.append(prose(
         t("welcomeWarning"),
-        "installer-prose--warning",
+        "installer-prose--dim",
       ))
 
-      if (base) {
-        const packages = basePackages(base.config)
-        box.append(prose(
-          packages.length
-            ? `${t("welcomeInstallsPrefix")}${packages.join(", ")}.`
-            : `${t("welcomeReadingPrefix")}${base.path}.`,
-          "installer-prose--dim",
-        ))
-      } else {
+      if (!base) {
         box.append(prose(
           t("welcomeNotMedium"),
           "installer-prose--warning",
