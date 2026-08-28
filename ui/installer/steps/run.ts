@@ -226,7 +226,10 @@ export function RunStep(): Step {
       GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         _busy = true
         const answers = getAnswers()
-        const isArm = GLib.getenv("NIDARA_INSTALLER_ARM") === "1"
+        const isLiveEnvironment = GLib.file_test("/run/archiso", GLib.FileTest.EXISTS)
+        const isExplicitArm = GLib.getenv("NIDARA_INSTALLER_ARM") === "1"
+        const isExplicitDryRun = GLib.getenv("NIDARA_INSTALLER_DRY_RUN") === "1"
+        const isArm = (isLiveEnvironment || isExplicitArm) && !isExplicitDryRun
 
         if (answers.disk) {
           try {
@@ -276,7 +279,9 @@ export function RunStep(): Step {
 
         if (!isArm) {
           cmd.push("--dry-run")
-          appendLog("[INFO] Running in dry-run mode (NIDARA_INSTALLER_ARM is not set).")
+          appendLog("[INFO] Running in dry-run mode (live medium or NIDARA_INSTALLER_ARM is not active).")
+        } else {
+          appendLog("[INFO] Running in live installation mode.")
         }
 
         appendLog(`[EXEC] ${cmd.join(" ")}`)
