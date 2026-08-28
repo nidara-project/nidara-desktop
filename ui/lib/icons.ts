@@ -44,6 +44,22 @@ export function ndIcon(name: string): Gio.Icon | null {
 }
 
 /**
+ * The official Nidara symbolic logo icon, recolourable by GTK CSS.
+ */
+export function nidaraLogoIcon(): Gio.Icon | null {
+    const candidates = [
+        `${SHELL_ROOT}/assets/nidara/assets/nidara-symbolic.svg`,
+        "/usr/share/nidara/ui/shell/assets/nidara/assets/nidara-symbolic.svg",
+    ]
+    for (const path of candidates) {
+        if (GLib.file_test(path, GLib.FileTest.EXISTS)) {
+            return Gio.FileIcon.new(Gio.File.new_for_path(path))
+        }
+    }
+    return null
+}
+
+/**
  * Properties for a `Gtk.Image` showing the shipped icon `name`, falling back to
  * the theme icon `themeFallback` when the asset tree is missing.
  *

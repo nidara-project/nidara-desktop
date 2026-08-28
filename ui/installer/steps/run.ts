@@ -26,6 +26,7 @@ export function RunStep(): Step {
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 16,
         hexpand: true,
+        vexpand: true,
       })
 
       const head = heading(t("runHeading"))
@@ -52,22 +53,28 @@ export function RunStep(): Step {
         cursor_visible: false,
         wrap_mode: Gtk.WrapMode.CHAR,
         monospace: true,
+        hexpand: true,
+        vexpand: true,
         css_classes: ["installer-log-view"],
       })
 
       const { widget: logScrolledWidget, scrolled } = NidaraScrolled({
         child: textView,
-        minContentHeight: 180,
-        maxContentHeight: 240,
+        minContentHeight: 220,
         propagateNaturalHeight: false,
         alwaysVisible: false,
         reserveLane: false,
       })
+      scrolled.vexpand = true
+      scrolled.hexpand = true
+      logScrolledWidget.vexpand = true
+      logScrolledWidget.hexpand = true
 
       const logCard = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         css_classes: ["installer-log-card"],
         hexpand: true,
+        vexpand: true,
       })
       logCard.append(logScrolledWidget)
 
@@ -76,6 +83,8 @@ export function RunStep(): Step {
         expanded: false,
         css_classes: ["installer-expander"],
         child: logCard,
+        vexpand: true,
+        hexpand: true,
       })
       box.append(expander)
 
@@ -103,6 +112,7 @@ export function RunStep(): Step {
           desc.label = t("runFailedProse")
           desc.remove_css_class("installer-prose--dim")
           desc.add_css_class("installer-prose--warning")
+          expander.expanded = true
         }
       }
 

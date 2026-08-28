@@ -5,7 +5,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { execAsync } from "../../lib/process"
-import { NidaraList, NidaraRow } from "../../lib/nidara-kit"
+import { NidaraList, NidaraRow, NidaraSelectionCheck } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import { getAnswers, setTimezoneAnswer, type TimezoneAnswer } from "../lib/answers"
 import { getLiveDefaults } from "../lib/plan"
@@ -75,17 +75,19 @@ export function TimezoneStep(): Step {
       const { box: listBoxContainer, listBox } = NidaraList()
       listBox.selection_mode = Gtk.SelectionMode.NONE
 
-      let firstRadio: Gtk.CheckButton | null = null
-      const radioMap = new Map<string, Gtk.CheckButton>()
+      const checkMap = new Map<string, Gtk.Widget>()
       const rowTzMap = new Map<Gtk.ListBoxRow, string>()
       const tzRowMap = new Map<string, Gtk.ListBoxRow>()
 
       const updateRowSelection = (activeTz: string) => {
         for (const [tz, row] of tzRowMap.entries()) {
+          const check = checkMap.get(tz)
           if (tz === activeTz) {
             row.add_css_class("is-selected")
+            if (check) check.visible = true
           } else {
             row.remove_css_class("is-selected")
+            if (check) check.visible = false
           }
         }
       }
@@ -93,8 +95,6 @@ export function TimezoneStep(): Step {
       const selectTz = (tz: string) => {
         setTimezoneAnswer({ timezone: tz })
         activeLabel.label = tz
-        const radio = radioMap.get(tz)
-        if (radio && !radio.active) radio.active = true
         updateRowSelection(tz)
         notifyReady?.()
       }
@@ -106,25 +106,17 @@ export function TimezoneStep(): Step {
       }
 
       for (const tz of tzList) {
-        const radio = new Gtk.CheckButton()
-        if (firstRadio) {
-          radio.set_group(firstRadio)
-        } else {
-          firstRadio = radio
-        }
-        radioMap.set(tz, radio)
+        const isCurrent = tz === currentTz
+        const check = NidaraSelectionCheck(16)
+        check.visible = isCurrent
+        checkMap.set(tz, check)
 
         const [region, city] = tz.includes("/") ? tz.split("/", 2) : ["General", tz]
-        const row = NidaraRow(city ? city.replace(/_/g, " ") : tz, region, radio)
+        const row = NidaraRow(city ? city.replace(/_/g, " ") : tz, region, check)
         rowTzMap.set(row, tz)
         tzRowMap.set(tz, row)
 
-        radio.connect("toggled", () => {
-          if (radio.active) selectTz(tz)
-        })
-
-        if (tz === currentTz) {
-          radio.active = true
+        if (isCurrent) {
           row.add_css_class("is-selected")
         }
 

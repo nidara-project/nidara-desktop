@@ -5,7 +5,7 @@
 
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
-import { NidaraList, NidaraRow } from "../../lib/nidara-kit"
+import { NidaraList, NidaraRow, NidaraSelectionCheck } from "../../lib/nidara-kit"
 import { t, setLocale, getLocale, type Locale } from "../lib/i18n"
 import { getAnswers, setLanguageAnswer, type LanguageAnswer } from "../lib/answers"
 import { heading, prose } from "./common"
@@ -65,17 +65,19 @@ export function LanguageStep(): Step {
       const { box: listBoxContainer, listBox } = NidaraList()
       listBox.selection_mode = Gtk.SelectionMode.NONE
 
-      let firstRadio: Gtk.CheckButton | null = null
-      const radioMap = new Map<LocaleItem, Gtk.CheckButton>()
+      const checkMap = new Map<LocaleItem, Gtk.Widget>()
       const rowItemMap = new Map<Gtk.ListBoxRow, LocaleItem>()
       const itemRowMap = new Map<LocaleItem, Gtk.ListBoxRow>()
 
       const updateRowSelection = (activeItem: LocaleItem) => {
         for (const [item, row] of itemRowMap.entries()) {
+          const check = checkMap.get(item)
           if (item === activeItem) {
             row.add_css_class("is-selected")
+            if (check) check.visible = true
           } else {
             row.remove_css_class("is-selected")
+            if (check) check.visible = false
           }
         }
       }
@@ -88,8 +90,6 @@ export function LanguageStep(): Step {
           label: item.label,
         })
         setLocale(item.localeKey)
-        const radio = radioMap.get(item)
-        if (radio && !radio.active) radio.active = true
         updateRowSelection(item)
         notifyReady?.()
       }
@@ -97,25 +97,16 @@ export function LanguageStep(): Step {
       const currentAnswer = getAnswers().language
 
       for (const item of SUPPORTED_LOCALES) {
-        const radio = new Gtk.CheckButton()
-        if (firstRadio) {
-          radio.set_group(firstRadio)
-        } else {
-          firstRadio = radio
-        }
-        radioMap.set(item, radio)
-
         const isCurrent = currentAnswer ? currentAnswer.locale === item.locale : item === found
-        const row = NidaraRow(item.label, item.locale, radio)
+        const check = NidaraSelectionCheck(16)
+        check.visible = isCurrent
+        checkMap.set(item, check)
+
+        const row = NidaraRow(item.label, item.locale, check)
         rowItemMap.set(row, item)
         itemRowMap.set(item, row)
 
-        radio.connect("toggled", () => {
-          if (radio.active) selectLocale(item)
-        })
-
         if (isCurrent) {
-          radio.active = true
           row.add_css_class("is-selected")
         }
 

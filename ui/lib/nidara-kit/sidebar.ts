@@ -119,7 +119,11 @@ export function NidaraSidebar(
         for (let i = 0; ; i++) {
             const row = list.get_row_at_index(i)
             if (!row) break
-            if (row.get_name() === id) { list.select_row(row); return }
+            if (row.get_name() === id) {
+                row.set_selectable(true)
+                list.select_row(row)
+                return
+            }
         }
     }
 

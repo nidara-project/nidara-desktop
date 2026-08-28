@@ -3,7 +3,6 @@ import type { Step } from "../lib/flow"
 import { NidaraList, NidaraRow } from "../../lib/nidara-kit"
 import { t, onLocaleChange } from "../lib/i18n"
 import { getAnswers } from "../lib/answers"
-import { readBaseConfig, basePackages } from "../lib/base-config"
 import { getLiveDefaults } from "../lib/plan"
 import { heading, prose } from "./common"
 
@@ -47,8 +46,6 @@ export function SummaryStep(): Step {
         const disk = answers.disk
         const account = answers.account
         const live = getLiveDefaults()
-        const baseResult = readBaseConfig()
-        const packages = baseResult ? basePackages(baseResult.config) : []
 
         // Row 1: Target Disk / Partitions
         if (disk) {
@@ -88,14 +85,6 @@ export function SummaryStep(): Step {
         // Row 5: Timezone
         const chosenTz = answers.timezone?.timezone ?? live.timezone
         listBox.append(NidaraRow(t("summaryTimezone"), chosenTz))
-
-        // Row 6: Packages
-        if (packages.length > 0) {
-          listBox.append(NidaraRow(
-            t("summaryPackages"),
-            packages.join(", "),
-          ))
-        }
       }
 
       refresh()

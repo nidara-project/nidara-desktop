@@ -67,13 +67,13 @@ export function InstallerWindow(): Gtk.Window {
   const canExit = () => flow.current().busy?.() !== true
 
   const sidebarDefs = [
-    { id: "welcome", titleKey: "welcomeTitle", iconName: "info" },
+    { id: "welcome", titleKey: "welcomeTitle", iconName: "hand" },
     { id: "language", titleKey: "languageTitle", iconName: "globe" },
     { id: "keyboard", titleKey: "keyboardTitle", iconName: "keyboard" },
     { id: "timezone", titleKey: "timezoneTitle", iconName: "clock" },
-    { id: "disk", titleKey: "diskTitle", iconName: "cpu" },
-    { id: "account", titleKey: "accountTitle", iconName: "user" },
-    { id: "summary", titleKey: "summaryTitle", iconName: "clipboard" },
+    { id: "disk", titleKey: "diskTitle", iconName: "hard-drive" },
+    { id: "account", titleKey: "accountTitle", iconName: "user-round" },
+    { id: "summary", titleKey: "summaryTitle", iconName: "clipboard-list" },
     { id: "run", titleKey: "runTitle", iconName: "rocket" },
   ]
 
@@ -216,9 +216,6 @@ export function InstallerWindow(): Gtk.Window {
     const isBusy = step.busy?.() === true
     const maxIdx = flow.maxReachedIndex()
 
-    sidebar.select(step.id)
-    updateSidebarLabels()
-
     sidebarDefs.forEach((def, i) => {
       if (isRunStep || isBusy) {
         sidebar.setItemSensitive(def.id, false)
@@ -226,6 +223,9 @@ export function InstallerWindow(): Gtk.Window {
         sidebar.setItemSensitive(def.id, i <= maxIdx && def.id !== "run")
       }
     })
+
+    sidebar.select(step.id)
+    updateSidebarLabels()
 
     head.set(title)
     position.label = `${index} ${t("of")} ${steps.length}`

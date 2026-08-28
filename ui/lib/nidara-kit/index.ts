@@ -50,6 +50,7 @@ export { NidaraRow, NidaraStackedRow, NidaraEmptyRow, ROW_H_SINGLE, ROW_H_DOUBLE
 export type { NidaraRowResult } from "./row"
 export { NidaraList } from "./list"
 export type { NidaraListResult } from "./list"
+export { NidaraSelectionCheck } from "./check"
 
 // NidaraSidebar — universal navigation list (icon+label rows, single-select)
 export { NidaraSidebar } from "./sidebar"

@@ -93,6 +93,12 @@ window.nidara-installer-window {
     padding: 16px 0 16px 0;
   }
 
+  .installer-logo {
+    margin-bottom: 8px;
+    color: var(--nidara-text);
+    -gtk-icon-filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
+  }
+
   .installer-heading {
     font-size: $fs-title-3;
     font-weight: 600;
@@ -154,7 +160,8 @@ window.nidara-installer-window {
   }
 
   .installer-expander {
-    margin-top: 8px;
+    margin-top: 4px;
+    margin-bottom: 8px;
 
     title, > box > title, > title {
       font-size: $fs-caption;
