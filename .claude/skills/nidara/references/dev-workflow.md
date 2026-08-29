@@ -37,8 +37,18 @@ decision record is `nidara-iso/PRODUCT.md`; do not re-derive it.
 
 | number | comes from | reaches About via |
 |---|---|---|
-| the product's ("Nidara 0.1.0") | `nidara-release` → `/etc/os-release` `PRETTY_NAME` | the "Operating system" row |
-| this repo's ("Nidara Desktop 0.8.1") | `VERSION` → `readShellVersion()` | the "Nidara Desktop" row under it |
+| the product's ("Nidara …") | `nidara-release` → `/etc/os-release` `PRETTY_NAME` | the "Operating system" row |
+| this repo's ("Nidara Desktop …") | `VERSION` → `readShellVersion()` | the "Nidara Desktop" row under it |
+
+⚠️ Neither number is written here on purpose — read `VERSION` and the published
+`nidara-release`. A version restated in prose is a version that goes stale silently; this table
+carried "0.8.1" into a release that was not.
+
+⚠️ And the product's half is changing: `nidara-iso/PRODUCT.md` decided on 2026-08-30 that a
+Nidara machine is **rolling and carries no version**, so `PRETTY_NAME` becomes `"Nidara"` with no
+number and images are named by date. `readShellVersion()` and the desktop's own semver are
+untouched — About's "Operating system" row simply stops carrying a number the day
+`nidara-release` drops it, with no shell change, exactly as the paragraph below describes.
 
 So the OS name in About **changes by itself** the day that package lands — no shell change is
 needed, and none should be added.

@@ -5,6 +5,70 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-08-30
+
+**Nidara can install itself.** This release adds the fourth thing in the repository that
+is a whole application: an installer, eight screens of it, that takes a live medium and
+turns a disk into a working Nidara. It does not ship with the desktop — it is a separate
+package that only the installation image ever names, because a computer somebody is
+using should not carry a program whose job is to erase a disk.
+
+Everything else in here is smaller, and most of it is About finally being able to answer
+what this computer actually is.
+
+### Added
+
+- **The installer.** Language, keyboard, timezone, disk, account, a summary that shows
+  you exactly what is about to happen, and a live log while it happens. It speaks all
+  twelve languages Nidara ships, and it changes language the moment you pick one — the
+  step titles, the buttons and the sidebar, not just the page you are on. The keyboard
+  step applies your layout to the live session immediately and gives you a box to type
+  in, so you find out whether it is the layout you meant before you install with it.
+
+- **Two ways to give it a disk.** *Erase the whole disk* detects the drives, warns in
+  plain words which one it is about to wipe, and lets you choose between Btrfs — with
+  the subvolume layout snapshots need, already laid out — and ext4. *Manual
+  partitioning* lists the partitions you already have and lets you assign mount points
+  one by one, with a button that opens GParted and a refresh for when you come back.
+  It knows what dual boot looks like: an existing EFI partition is left **unformatted**
+  by default, so the bootloader Windows or another Linux depends on survives.
+
+- **The machine boots quietly, and it boots as itself.** A system Nidara installs comes
+  up without the wall of kernel text, goes straight to the login screen, and the boot
+  menu entry says Nidara rather than Arch Linux. If another operating system is on the
+  disk, the menu waits for you; if Nidara is alone, it does not.
+
+- **You choose the computer's name.** The account step asks for it alongside the
+  username, so `you@your-machine` is something you decided.
+
+- **About knows what this computer is.** It reads the operating system, the desktop
+  version, the kernel, the hardware and the session, and shows the same facts as the
+  Settings page that goes into more detail — one reader answers both, so the two can no
+  longer disagree with each other.
+
+### Changed
+
+- **Logging in is quiet now.** The handover from the login screen to your desktop used
+  to leak Hyprland and session-manager messages onto the console for a moment, on every
+  single login. It does not any more. Nothing is lost: the logs still go to disk
+  exactly as before, they just stop being shown to you.
+
+- **The installer looks like Settings, because it is the same window.** The sidebar, the
+  header, the footer, the rows and the selection checkmarks all come from the shared
+  widget kit rather than being rebuilt, and it follows the accent colour and the window
+  transparency you chose in Settings — including while you change them.
+
+### Fixed
+
+- **The login screen and the lock screen stop washing out over pale wallpapers.** They
+  wore a single dark skin over every background; on a light wallpaper that read as a
+  grey sheet rather than glass. They now use the same material as the rest of the
+  desktop, with the same threshold for when a background is too bright to sit on
+  directly.
+
+- **About's text is readable in light mode.** It was being painted with a colour chosen
+  for a dark background.
+
 ## [0.8.1] — 2026-08-24
 
 0.8.0 shipped a system menu that could not turn the computer off. This fixes that, and
