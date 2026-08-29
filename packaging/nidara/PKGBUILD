@@ -86,15 +86,14 @@ depends=(
   # adwaita-cursors = the default cursorTheme in defaults/appearance.json; listed
   # explicitly instead of relying on adwaita-icon-theme happening to depend on it
   papirus-icon-theme adwaita-icon-theme adwaita-cursors
-  # plymouth: this package SHIPS a Plymouth theme (/usr/share/plymouth/themes/nidara,
-  # below), `nidara-setup` runs `plymouth-set-default-theme nidara`, and the installer
-  # injects `splash` + the `plymouth` mkinitcpio hook into the system it builds. All
-  # three of those are written defensively — they check for the binary and skip when it
-  # is missing — so without this line NOTHING failed and NOTHING happened either: the
-  # theme sat in /usr/share as decoration and the kernel booted with a `splash` nobody
-  # drew. Verified on an installed machine, 2026-08-29: `pacman -Qi plymouth` → not
-  # found. A package that ships a theme for X and configures X depends on X.
-  plymouth
+  # ⚠️ NO `plymouth` here, and it is a decision rather than an omission (2026-08-30).
+  # It was added on 08-29, correctly reasoning that a package shipping a Plymouth theme
+  # and running `plymouth-set-default-theme` must depend on Plymouth — and wrongly, one
+  # day later, because the theme should never have been in THIS package. The boot splash
+  # is the PRODUCT's branding, not the desktop's: `install.sh` puts this on an Arch
+  # somebody already uses, and repainting their boot is exactly what it must not do.
+  # GNOME Shell does not depend on Plymouth; Ubuntu ships a Plymouth theme. It moves to
+  # `nidara-system` in nidara-iso — see nidara-iso/PRODUCT.md, "Four layers".
 )
 # wayland-protocols + hyprland-protocols supply the XML that wayland-scanner turns
 # into libnidara-wl's glue; gobject-introspection supplies g-ir-scanner, without
@@ -254,8 +253,6 @@ package_nidara() {
   rm -rf "$pkgdir/usr/share/nidara/defaults/wallpaper"
 
   # Plymouth boot splash theme
-  mkdir -p "$pkgdir/usr/share/plymouth/themes"
-  cp -r config/plymouth/themes/nidara "$pkgdir/usr/share/plymouth/themes/nidara"
 
   # Assistant skills — markdown playbooks bin/nidara-agent loads on demand. This
   # is the path a PACKAGE install takes, and it is the one that matters most: a

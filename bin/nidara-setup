@@ -601,17 +601,6 @@ elif [ "$ACTIVE_DM" = "greetd" ]; then
 else
     echo "  Display manager '$ACTIVE_DM' already enabled — skipping greetd setup."
 fi
-    # Plymouth boot splash theme (if plymouth is available)
-    if command -v plymouth-set-default-theme >/dev/null 2>&1; then
-        if [ -d "$SHARE/config/plymouth/themes/nidara" ]; then
-            sudo mkdir -p /usr/share/plymouth/themes
-            sudo cp -r "$SHARE/config/plymouth/themes/nidara" /usr/share/plymouth/themes/nidara
-        fi
-        if [ -d "/usr/share/plymouth/themes/nidara" ]; then
-            sudo plymouth-set-default-theme nidara 2>/dev/null || true
-            echo "  [OK] Plymouth theme set to 'nidara'."
-        fi
-    fi
 fi  # USER_ONLY
 
 # ── Nidara unit ────────────────────────────────────────────────────────

@@ -299,7 +299,7 @@ PACMAN_DEPS="base-devel glib2-devel cmake meson ninja gobject-introspection vala
     xdg-desktop-portal-gtk xdg-desktop-portal-hyprland
     ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono inter-font noto-fonts-emoji noto-fonts-cjk
     papirus-icon-theme adwaita-icon-theme adwaita-cursors xdg-utils gsettings-desktop-schemas
-    plymouth awww lz4"
+    awww lz4"
 DEPS_LIST_SHA="$(printf '%s' "$PACMAN_DEPS" | sha256sum | awk '{print $1}')"
 OLD_VERSION="$(cat /usr/share/nidara/VERSION 2>/dev/null || echo "?")"
 # An update of a dev-mode install must keep dev semantics (config symlinks into
@@ -512,13 +512,6 @@ sudo rm -rf /usr/share/nidara/defaults /usr/share/nidara/config/greetd
 sudo cp -r "$REPO_DIR/defaults" /usr/share/nidara/defaults
 sudo rm -rf /usr/share/nidara/defaults/wallpaper
 sudo cp -r "$REPO_DIR/config/greetd" /usr/share/nidara/config/greetd
-
-# Plymouth boot splash theme
-sudo mkdir -p /usr/share/plymouth/themes
-sudo cp -r "$REPO_DIR/config/plymouth/themes/nidara" /usr/share/plymouth/themes/nidara
-if command -v plymouth-set-default-theme >/dev/null 2>&1; then
-    sudo plymouth-set-default-theme nidara 2>/dev/null || true
-fi
 
 # Assistant skills: markdown playbooks bin/nidara-agent loads on demand (its
 # load_skill tool). Replaced wholesale rather than merged, so a skill deleted

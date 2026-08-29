@@ -302,30 +302,38 @@ destructive path has to be genuinely reachable for the control to be worth anyth
 reproduce it is therefore a safety decision, not a convenience one. That one goes in the VM before
 it goes anywhere.
 
-### The boot splash is a property of INSTALLED systems, not of `install.sh`
+### The boot splash does not belong to this repo, and the theme here is waiting for its package
 
-`config/plymouth/themes/nidara/` is a real Plymouth theme (two-step module, watermark, a
-30-frame throbber), and three separate pieces of code reach for it: the PKGBUILD and `install.sh`
-copy it to `/usr/share/plymouth/themes/`, `bin/nidara-setup` runs `plymouth-set-default-theme
-nidara`, and the installer's `lib/bootloader.ts` injects `splash` + `fbcon=nodefer` into the
-kernel line and adds the `plymouth` hook to the target's `mkinitcpio.conf`.
+`config/plymouth/themes/nidara/` is a real Plymouth theme (two-step module, watermark, a 30-frame
+throbber) and **nothing in this repository installs it** as of 2026-08-30. That is deliberate, and
+the two-day round trip that got here is the lesson:
 
-⚠️ **All three are written defensively — they test for the binary and skip when it is absent —
-which is exactly how this shipped inert for four days.** `plymouth` was in nobody's dependency
-list: not `depends=()`, not `PACMAN_DEPS`, not `base.json`'s `packages`, not its
-`custom_commands`. So on a real installation the theme landed in `/usr/share` as decoration, the
-mkinitcpio hook was never added, and the kernel booted with a `splash` that nothing drew.
-Nothing failed; nothing happened. It was caught by asking an installed machine
-(`pacman -Qi plymouth` → not found), not by reading the code, because the code is correct — it
-is the *chain* that was broken. It is a `depends` now, in both lists.
+- **It shipped inert for four days.** The PKGBUILD and `install.sh` copied the theme,
+  `bin/nidara-setup` ran `plymouth-set-default-theme`, and `ui/installer/lib/bootloader.ts` added
+  `splash` plus the `plymouth` mkinitcpio hook to the target. All three are written defensively —
+  they test for the binary and skip when it is absent — and `plymouth` was in **nobody's**
+  dependency list. So the theme landed in `/usr/share` as decoration and the kernel booted with a
+  `splash` that nothing drew. Nothing failed; nothing happened. Caught by asking an installed
+  machine (`pacman -Qi plymouth` → not found), not by reading code that was individually correct.
+- **The fix — `depends=(plymouth)` here — was the wrong layer, and lasted a day.** A boot splash is
+  the PRODUCT's branding. `install.sh` puts this desktop on an Arch somebody already uses, and
+  repainting their boot is precisely what it must not do. GNOME Shell does not depend on Plymouth;
+  Ubuntu ships a Plymouth theme.
 
-There is still a boundary worth knowing, and it is intentional: **`install.sh` does not wire the
-splash, only the theme.** The hook and the kernel parameter are written exclusively by the
-installer, because the installer owns a machine it just created, while `install.sh` runs on
-somebody's existing Arch with a bootloader it did not choose (GRUB, rEFInd, whatever) and a
-cmdline it has no business rewriting. So: a machine installed from the ISO boots with the Nidara
-splash; a machine converted by `install.sh` has the theme set as default and will show it if its
-owner enables the hook themselves.
+⚠️ **So these files are orphaned on purpose and must not be re-wired here.** They move to
+`nidara-system`, a package in `nidara-iso` that does not exist yet — the decision, the four-layer
+model it belongs to and the ordered work are in `nidara-iso/PRODUCT.md` ("Four layers, and the
+third one had no owner"). Until that package exists, **no machine has a boot splash**, which is
+the same as every day before this feature was written.
+
+⚠️ `ui/installer/lib/bootloader.ts` still writes `plymouthd.conf` and the mkinitcpio hook onto the
+target, guarded by `/mnt/usr/bin/plymouth` existing. Leave it: those two are the genuinely
+per-machine half that stays with the installer even after `nidara-system` lands, and the guard is
+what keeps them inert in the meantime.
+
+**The rule this is an instance of, and it decides the next case too: if an Arch user installing
+only the desktop would not want it, it does not go in `nidara`.** Boot experience, system defaults
+and anything that repaints somebody's machine are the product's, not the desktop's.
 
 ### Testing the LOGIN itself, without a VM and without logging out
 
