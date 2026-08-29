@@ -24,7 +24,7 @@
 # an Arch somebody already runs, and must never hand them an installer), and
 # nidara-repo copies every produced package rather than the newest one.
 pkgname=(nidara nidara-installer)
-pkgver=0.8.1
+pkgver=0.9.0
 pkgrel=1
 pkgdesc="Nidara — a fluid, glassmorphic desktop environment (Hyprland + GTK4/GJS)"
 arch=(x86_64)
