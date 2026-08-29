@@ -196,8 +196,11 @@ stylesheet**, so every greeter-visible change ships whether or not anyone looked
 ### The fourth bundle: the installer builds everywhere and ships only on the ISO
 
 `ui/installer/` (2026-08-25) is a normal bundle — `npm run build` in it produces
-`build/nidara-installer`, and running that binary opens the window on any Nidara session, which
-is the whole point: it can be looked at without an ISO, unlike the greeter.
+`build/nidara-installer`.
+
+🔴 **It is RUN in a VM and nowhere else — dry run included. Never on the host.** The rule and the
+reasoning are below, under "The installer runs in a VM, or it does not run"; read it before you
+launch that binary, not after.
 
 What is different is where it GOES. `packaging/nidara/PKGBUILD` is a split package and emits
 `nidara-installer` beside `nidara`; only nidara-iso's `packages.x86_64` names it. So:
@@ -239,9 +242,9 @@ const isArm = (isLiveEnvironment || isExplicitArm) && !isExplicitDryRun
 ```
 
 - **`/run/archiso` exists ⇒ armed, with nothing to opt in to.** The live medium is the one place
-  where erasing the disk is the user's stated intent, so the ISO needs no flag. This is why the
-  binary can be opened on a normal Nidara session to be looked at: that session has no
-  `/run/archiso`, so it is a dry run by construction.
+  where erasing the disk is the user's stated intent, so the ISO needs no flag. A normal Nidara
+  session has no `/run/archiso`, so it is unarmed by construction — which is a property of the
+  code, **not a licence to run it there**. See the rule below.
 - **`NIDARA_INSTALLER_ARM=1`** arms it anywhere — that is the VM switch, and the only way to
   exercise the real path outside an ISO.
 - **`NIDARA_INSTALLER_DRY_RUN=1` wins over both**, including on the live medium. It is the
@@ -262,6 +265,35 @@ branch ever produced.
 
 `configureInstalledBootloader()` takes `arm` and early-returns; that one was right from the
 start.
+
+### The installer runs in a VM, or it does not run
+
+🔴 **`nidara-installer` is never launched on the development machine. Not armed, not unarmed, not
+"just to look at the window".** The VM harness is the only place it runs, in both modes. This is a
+standing instruction from the project owner (2026-08-29), and it exists because the failure it
+guards against has no small version: the host's `/dev/sda` carries Windows and the Linux install
+being used to do the work, and the disk step lists it by name and model, ready to select.
+
+The three arguments that make running it locally feel safe are all worth naming, because each one
+sounds sufficient on its own:
+
+- **"It is unarmed without `/run/archiso`."** True, and it is the property this file documents two
+  sections up. But it is a property of the code you are about to change — the first version of the
+  dry-run gate leaked three commands, which is why that section exists at all. When the safety of a
+  test rests on the correctness of the thing being tested, there is no test.
+- **"I shimmed `sgdisk`/`mkfs`/`mount` on `PATH`."** A `PATH` shim is a soft barrier. It holds only
+  while nothing resolves a binary by absolute path, nothing runs as root, and the environment is
+  inherited intact — three conditions you are not in a position to guarantee for code you did not
+  finish reading. Isolation is the VM boundary; a shim is a convenience inside it.
+- **"The destructive branch is behind `NIDARA_INSTALLER_ARM`."** That variable's entire purpose is
+  to arm the installer somewhere the live medium is not, which is to say: exactly the dangerous
+  case. Typing it outside a VM is the mistake, not a step towards catching one.
+
+⚠️ And the corollary for the positive control, which is otherwise a good habit
+(`feedback: prove the test can fail`): reproducing a partitioning bug **on purpose** means the
+destructive path has to be genuinely reachable for the control to be worth anything. Where you
+reproduce it is therefore a safety decision, not a convenience one. That one goes in the VM before
+it goes anywhere.
 
 ### The boot splash is a property of INSTALLED systems, not of `install.sh`
 
