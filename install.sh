@@ -299,7 +299,7 @@ PACMAN_DEPS="base-devel glib2-devel cmake meson ninja gobject-introspection vala
     xdg-desktop-portal-gtk xdg-desktop-portal-hyprland
     ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono inter-font noto-fonts-emoji noto-fonts-cjk
     papirus-icon-theme adwaita-icon-theme adwaita-cursors xdg-utils gsettings-desktop-schemas
-    awww lz4"
+    plymouth awww lz4"
 DEPS_LIST_SHA="$(printf '%s' "$PACMAN_DEPS" | sha256sum | awk '{print $1}')"
 OLD_VERSION="$(cat /usr/share/nidara/VERSION 2>/dev/null || echo "?")"
 # An update of a dev-mode install must keep dev semantics (config symlinks into

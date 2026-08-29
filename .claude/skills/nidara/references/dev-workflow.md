@@ -210,21 +210,83 @@ What is different is where it GOES. `packaging/nidara/PKGBUILD` is a split packa
 - `install=`/`backup=` belong inside `package_nidara()`; at the top level they would apply to
   both packages.
 
-Two things it does NOT own, and both are deliberate. **What Nidara installs** is
+One thing it does NOT own, and that is deliberate: **what Nidara installs** is
 `/usr/share/nidara-installer/base.json`, airootfs content in nidara-iso — the app reads it and
 refuses to continue when it is absent (a development checkout is not an installation medium, and
-saying so is better than an installer that looks ready and fails at the end). **The dangerous
-half** — partitioning, `pacstrap`, the bootloader — is `archinstall`'s; this bundle collects
-answers, writes JSON and runs one process. `nidara-iso/INSTALLER.md` holds the decision and the
-screens still to be written.
-
-⚠️ It is **not translated yet**: its strings are English literals, not `t()` keys. That is debt,
-tracked as such — the first real screen is where the catalog has to arrive, and by this repo's
-i18n rule a new key lands in all twelve locales in the same PR.
+saying so is better than an installer that looks ready and fails at the end).
 
 ⚠️ Hyprland **tiles it** unless told otherwise, which is how it was first seen: a full-height
 pane sharing the screen. `config/hypr/hyprland.lua` carries a `float-installer` window rule
 matching the `nidara-installer` app-id; on an installed system it matches nothing.
+
+### The installer partitions with its own hands now — and `arm` is the only thing between it and your disk
+
+Until 2026-08-28 this bundle collected answers, wrote JSON and ran one process; the dangerous
+half was `archinstall`'s. **That is no longer true, and several sentences written when it was
+are still lying around** (`nidara-iso/INSTALLER.md` is one). Today `steps/run.ts` runs
+`sgdisk --zap-all`, `mkfs.*`, `mount` and the Btrfs subvolume layout itself, and
+`lib/bootloader.ts` writes the loader entries, the kernel cmdline, `plymouthd.conf` and the
+mkinitcpio hook. `archinstall` was left owning the pacstrap and the fstab.
+
+So the question "is this armed?" is now load-bearing in a way it never was. One expression
+decides it, in `steps/run.ts`:
+
+```ts
+const isLiveEnvironment = GLib.file_test("/run/archiso", GLib.FileTest.EXISTS)
+const isExplicitArm     = GLib.getenv("NIDARA_INSTALLER_ARM") === "1"
+const isExplicitDryRun  = GLib.getenv("NIDARA_INSTALLER_DRY_RUN") === "1"
+const isArm = (isLiveEnvironment || isExplicitArm) && !isExplicitDryRun
+```
+
+- **`/run/archiso` exists ⇒ armed, with nothing to opt in to.** The live medium is the one place
+  where erasing the disk is the user's stated intent, so the ISO needs no flag. This is why the
+  binary can be opened on a normal Nidara session to be looked at: that session has no
+  `/run/archiso`, so it is a dry run by construction.
+- **`NIDARA_INSTALLER_ARM=1`** arms it anywhere — that is the VM switch, and the only way to
+  exercise the real path outside an ISO.
+- **`NIDARA_INSTALLER_DRY_RUN=1` wins over both**, including on the live medium. It is the
+  escape hatch for looking at the run screen on the ISO without consequences.
+
+⚠️ **A dry run must touch nothing, and the gate that guarantees that lives in `runCmd`, not in
+the callers.** It was written the other way first, and the lesson is worth more than the fix:
+gating the *destructive* commands (`sgdisk`, `mkfs`) reads as sufficient and is not. It left
+three things running under the "dry run" label — the `umount -R /mnt` at the top of
+`prepareDiskAndMounts`, an explicit else-branch that mounted the chosen disk's real partitions
+"for schema validation", and the entire manual-mode mount loop, which was never inside a guard
+at all. Nothing there destroys data; all of it mutates the machine of whoever is developing the
+installer, and two of the three were wrapped in a bare `catch {}`, so it did it in silence. With
+the gate one level down, in the command runner, a branch added later cannot escape it by
+forgetting to ask — and the dry run walks the same code path, logging
+`[PREP] (dry-run, not executed) …`, which is a better description of the plan than the old
+branch ever produced.
+
+`configureInstalledBootloader()` takes `arm` and early-returns; that one was right from the
+start.
+
+### The boot splash is a property of INSTALLED systems, not of `install.sh`
+
+`config/plymouth/themes/nidara/` is a real Plymouth theme (two-step module, watermark, a
+30-frame throbber), and three separate pieces of code reach for it: the PKGBUILD and `install.sh`
+copy it to `/usr/share/plymouth/themes/`, `bin/nidara-setup` runs `plymouth-set-default-theme
+nidara`, and the installer's `lib/bootloader.ts` injects `splash` + `fbcon=nodefer` into the
+kernel line and adds the `plymouth` hook to the target's `mkinitcpio.conf`.
+
+⚠️ **All three are written defensively — they test for the binary and skip when it is absent —
+which is exactly how this shipped inert for four days.** `plymouth` was in nobody's dependency
+list: not `depends=()`, not `PACMAN_DEPS`, not `base.json`'s `packages`, not its
+`custom_commands`. So on a real installation the theme landed in `/usr/share` as decoration, the
+mkinitcpio hook was never added, and the kernel booted with a `splash` that nothing drew.
+Nothing failed; nothing happened. It was caught by asking an installed machine
+(`pacman -Qi plymouth` → not found), not by reading the code, because the code is correct — it
+is the *chain* that was broken. It is a `depends` now, in both lists.
+
+There is still a boundary worth knowing, and it is intentional: **`install.sh` does not wire the
+splash, only the theme.** The hook and the kernel parameter are written exclusively by the
+installer, because the installer owns a machine it just created, while `install.sh` runs on
+somebody's existing Arch with a bootloader it did not choose (GRUB, rEFInd, whatever) and a
+cmdline it has no business rewriting. So: a machine installed from the ISO boots with the Nidara
+splash; a machine converted by `install.sh` has the theme set as default and will show it if its
+owner enables the hook themselves.
 
 ### Testing the LOGIN itself, without a VM and without logging out
 
