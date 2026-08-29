@@ -5,5 +5,5 @@
 vt = 1
 
 [default_session]
-command = "env HYPRLAND_CONFIG=/etc/greetd/hyprland-greeter.lua start-hyprland"
+command = "nidara-greeter-session"
 user = "greeter"

@@ -187,7 +187,7 @@ package_nidara() {
 
   # /usr/bin — session launchers, helpers, agent toolkit (install.sh §5 list)
   local b
-  for b in nidara nidara-ui nidara-greeter nidara-lock nidara-before-sleep \
+  for b in nidara nidara-ui nidara-greeter nidara-greeter-session nidara-lock nidara-before-sleep \
            nidara-after-sleep nidara-game-mode nidara-doctor nidara-portal \
            nidara-mcp nidara-agent nidara-a11y nidara-act nidara-type nidara-click \
            nidara-update nidara-setup; do

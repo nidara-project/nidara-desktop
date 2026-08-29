@@ -1,0 +1,12 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# nidara-greeter-session — Clean greeter compositor launcher
+# Installed to /usr/bin/nidara-greeter-session
+# Launched by greetd to run Hyprland silently without TTY text leaks.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Suppress stdout and stderr to prevent ASCII banner / early debug logs from leaking onto TTY
+exec 1>/dev/null 2>&1
+
+export HYPRLAND_CONFIG=/etc/greetd/hyprland-greeter.lua
+exec start-hyprland

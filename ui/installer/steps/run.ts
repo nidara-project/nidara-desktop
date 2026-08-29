@@ -8,6 +8,7 @@ import { NidaraButton, NidaraScrolled } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import { getAnswers } from "../lib/answers"
 import { assemblePlan, type AssembledPlan } from "../lib/plan"
+import { configureInstalledBootloader } from "../lib/bootloader"
 import { heading, prose } from "./common"
 
 export function RunStep(): Step {
@@ -314,6 +315,9 @@ export function RunStep(): Step {
             try {
               _proc?.wait_finish(res)
               success = _proc?.get_successful() ?? false
+              if (success) {
+                configureInstalledBootloader(isArm, answers, appendLog)
+              }
             } catch (e: any) {
               appendLog(`[ERROR] Process exited with error: ${e.message || e}`)
             } finally {
