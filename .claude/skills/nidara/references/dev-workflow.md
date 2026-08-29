@@ -231,24 +231,30 @@ are still lying around** (`nidara-iso/INSTALLER.md` is one). Today `steps/run.ts
 `lib/bootloader.ts` writes the loader entries, the kernel cmdline, `plymouthd.conf` and the
 mkinitcpio hook. `archinstall` was left owning the pacstrap and the fstab.
 
-So the question "is this armed?" is now load-bearing in a way it never was. One expression
-decides it, in `steps/run.ts`:
+So the question "is this armed?" is now load-bearing in a way it never was. There are two modes,
+and **where it runs picks one** — one expression in `steps/run.ts` decides:
 
 ```ts
-const isLiveEnvironment = GLib.file_test("/run/archiso", GLib.FileTest.EXISTS)
-const isExplicitArm     = GLib.getenv("NIDARA_INSTALLER_ARM") === "1"
-const isExplicitDryRun  = GLib.getenv("NIDARA_INSTALLER_DRY_RUN") === "1"
-const isArm = (isLiveEnvironment || isExplicitArm) && !isExplicitDryRun
+const isLiveMedium   = GLib.file_test("/run/archiso", GLib.FileTest.EXISTS)
+const isForcedDryRun = GLib.getenv("NIDARA_INSTALLER_DRY_RUN") === "1"
+const isArm = isLiveMedium && !isForcedDryRun
 ```
 
-- **`/run/archiso` exists ⇒ armed, with nothing to opt in to.** The live medium is the one place
-  where erasing the disk is the user's stated intent, so the ISO needs no flag. A normal Nidara
-  session has no `/run/archiso`, so it is unarmed by construction — which is a property of the
-  code, **not a licence to run it there**. See the rule below.
-- **`NIDARA_INSTALLER_ARM=1`** arms it anywhere — that is the VM switch, and the only way to
-  exercise the real path outside an ISO.
-- **`NIDARA_INSTALLER_DRY_RUN=1` wins over both**, including on the live medium. It is the
-  escape hatch for looking at the run screen on the ISO without consequences.
+- **`/run/archiso` exists ⇒ it installs for real**, with nothing to opt in to. The live medium is
+  the one place where erasing the disk is the user's stated intent, so the ISO needs no flag.
+- **Anywhere else ⇒ dry run, and there is no way to change that.** A normal session has no
+  `/run/archiso` and cannot be armed. That is a property of the code, **not a licence to run it
+  there** — see "The installer runs in a VM, or it does not run" below.
+- **`NIDARA_INSTALLER_DRY_RUN=1`** is the only variable, and it only ever points the safe way: it
+  forces a dry run on the medium, for looking at the run screen without consequences. The worst a
+  typo in it can do is refuse to install.
+
+⚠️ There used to be a third input, `NIDARA_INSTALLER_ARM=1`, which armed the installer anywhere.
+It was removed on 2026-08-29 and should not come back. Its only purpose was to arm the destructive
+path where the live medium is not — which is the dangerous case by definition, not a testing
+affordance: the real path is exercised by booting the ISO in a VM, which has `/run/archiso` and
+therefore needs no flag. Two switches where one direction is safe and the other is not is a design
+that asks to be typed wrong once.
 
 ⚠️ **A dry run must touch nothing, and the gate that guarantees that lives in `runCmd`, not in
 the callers.** It was written the other way first, and the lesson is worth more than the fix:
@@ -285,9 +291,10 @@ sounds sufficient on its own:
   while nothing resolves a binary by absolute path, nothing runs as root, and the environment is
   inherited intact — three conditions you are not in a position to guarantee for code you did not
   finish reading. Isolation is the VM boundary; a shim is a convenience inside it.
-- **"The destructive branch is behind `NIDARA_INSTALLER_ARM`."** That variable's entire purpose is
-  to arm the installer somewhere the live medium is not, which is to say: exactly the dangerous
-  case. Typing it outside a VM is the mistake, not a step towards catching one.
+- **"The destructive branch is behind a flag."** It was, and the flag's entire purpose was to arm
+  the installer somewhere the live medium is not — which is to say: exactly the dangerous case.
+  That is why `NIDARA_INSTALLER_ARM` no longer exists. Nothing outside an ISO can be armed today,
+  and that removes one of these three arguments rather than answering it.
 
 ⚠️ And the corollary for the positive control, which is otherwise a good habit
 (`feedback: prove the test can fail`): reproducing a partitioning bug **on purpose** means the

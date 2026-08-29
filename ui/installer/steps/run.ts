@@ -230,10 +230,13 @@ export function RunStep(): Step {
       GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         _busy = true
         const answers = getAnswers()
-        const isLiveEnvironment = GLib.file_test("/run/archiso", GLib.FileTest.EXISTS)
-        const isExplicitArm = GLib.getenv("NIDARA_INSTALLER_ARM") === "1"
-        const isExplicitDryRun = GLib.getenv("NIDARA_INSTALLER_DRY_RUN") === "1"
-        const isArm = (isLiveEnvironment || isExplicitArm) && !isExplicitDryRun
+        // Two modes, and WHERE it runs picks one: the live medium installs for real, anything
+        // else is a dry run. There is deliberately no variable that arms it elsewhere — the
+        // dangerous direction is unreachable, not merely discouraged. `NIDARA_INSTALLER_DRY_RUN`
+        // only ever points the safe way, so the worst a typo in it can do is refuse to install.
+        const isLiveMedium = GLib.file_test("/run/archiso", GLib.FileTest.EXISTS)
+        const isForcedDryRun = GLib.getenv("NIDARA_INSTALLER_DRY_RUN") === "1"
+        const isArm = isLiveMedium && !isForcedDryRun
 
         if (answers.disk) {
           try {
@@ -283,7 +286,11 @@ export function RunStep(): Step {
 
         if (!isArm) {
           cmd.push("--dry-run")
-          appendLog("[INFO] Running in dry-run mode (live medium or NIDARA_INSTALLER_ARM is not active).")
+          appendLog(
+            isLiveMedium
+              ? "[INFO] Dry-run mode: NIDARA_INSTALLER_DRY_RUN=1 is set. Nothing on disk will be touched."
+              : "[INFO] Dry-run mode: this is not an installation medium (no /run/archiso). Nothing on disk will be touched.",
+          )
         } else {
           appendLog("[INFO] Running in live installation mode.")
         }
