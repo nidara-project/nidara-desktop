@@ -86,6 +86,15 @@ depends=(
   # adwaita-cursors = the default cursorTheme in defaults/appearance.json; listed
   # explicitly instead of relying on adwaita-icon-theme happening to depend on it
   papirus-icon-theme adwaita-icon-theme adwaita-cursors
+  # plymouth: this package SHIPS a Plymouth theme (/usr/share/plymouth/themes/nidara,
+  # below), `nidara-setup` runs `plymouth-set-default-theme nidara`, and the installer
+  # injects `splash` + the `plymouth` mkinitcpio hook into the system it builds. All
+  # three of those are written defensively — they check for the binary and skip when it
+  # is missing — so without this line NOTHING failed and NOTHING happened either: the
+  # theme sat in /usr/share as decoration and the kernel booted with a `splash` nobody
+  # drew. Verified on an installed machine, 2026-08-29: `pacman -Qi plymouth` → not
+  # found. A package that ships a theme for X and configures X depends on X.
+  plymouth
 )
 # wayland-protocols + hyprland-protocols supply the XML that wayland-scanner turns
 # into libnidara-wl's glue; gobject-introspection supplies g-ir-scanner, without

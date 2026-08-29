@@ -3304,6 +3304,37 @@ alpha it has.
 `accentCssFor()`'s bare `*`, so a copy there would not be a lighter selection — it would PIN the
 accent to whatever was typed, for every user who chose a different one.
 
+### 97. ⚠️ OPEN — the universal checkmark was born as a copy of the one it was meant to replace (2026-08-29)
+
+`NidaraSelectionCheck` (`ui/lib/nidara-kit/check.ts`) landed with #282 to give every single-select
+row in the DE one glyph. Its own docstring says it "replaces raw radio buttons across Settings and
+Installer". **It replaced them in the installer only.** `ui/shell/surfaces/settings/pages/Power.tsx`
+still carries `buildSelectionCheck()` — the widget the kit component was modelled on, same Lucide
+path, same 24× scale, same ROUND caps, sitting six lines away from being deleted. Grep says it: the
+kit component has five call sites and all five are `ui/installer/steps/`.
+
+This is #276's finding a second time (`NidaraCircleButton` was a copy of `common/IconButton.ts`, and
+the resolution was to MOVE it, not to have two). The rule it keeps re-teaching: a component "for
+everyone" that the original surface does not consume is not a unification, it is a fork with a
+better name — and the second copy is the one that will drift, because it has no user watching it.
+
+Three real differences to reconcile when it is merged, none of them cosmetic:
+
+- **Where the colour comes from.** Power reads `Theme.isDark` and paints flat white/black,
+  reconnecting to `Theme::changed` to redraw. The kit reads `widget.get_color()` — the inherited
+  CSS colour — and connects to nothing. Power's long comment above `buildSelectionCheck` explains
+  why it is deliberately NOT accent-coloured (the row underneath already carries the accent, so an
+  accent check on it has almost no contrast). That reasoning has to survive the move.
+- **`power-profile-check` is not decoration.** The same comment records that the class is what makes
+  the active profile READABLE to `queryUI`, which drops nodes with no id, class or text. The kit
+  takes `extraClasses`, so this survives — but only if whoever migrates knows it is load-bearing,
+  which is exactly what this entry is for.
+- **Line width 2 vs 2.2.** Somebody changed it in the copy. Pick one on screen.
+
+Also unresolved and smaller: `.nidara-selection-check` is applied by the kit and styled nowhere.
+That is correct today (Cairo paints it, the class is for perception) but it looks like a missing
+rule to the next reader, and `token-contract-check` will not tell them either way.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a

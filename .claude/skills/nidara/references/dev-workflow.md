@@ -196,8 +196,11 @@ stylesheet**, so every greeter-visible change ships whether or not anyone looked
 ### The fourth bundle: the installer builds everywhere and ships only on the ISO
 
 `ui/installer/` (2026-08-25) is a normal bundle — `npm run build` in it produces
-`build/nidara-installer`, and running that binary opens the window on any Nidara session, which
-is the whole point: it can be looked at without an ISO, unlike the greeter.
+`build/nidara-installer`.
+
+🔴 **It is RUN in a VM and nowhere else — dry run included. Never on the host.** The rule and the
+reasoning are below, under "The installer runs in a VM, or it does not run"; read it before you
+launch that binary, not after.
 
 What is different is where it GOES. `packaging/nidara/PKGBUILD` is a split package and emits
 `nidara-installer` beside `nidara`; only nidara-iso's `packages.x86_64` names it. So:
@@ -210,21 +213,119 @@ What is different is where it GOES. `packaging/nidara/PKGBUILD` is a split packa
 - `install=`/`backup=` belong inside `package_nidara()`; at the top level they would apply to
   both packages.
 
-Two things it does NOT own, and both are deliberate. **What Nidara installs** is
+One thing it does NOT own, and that is deliberate: **what Nidara installs** is
 `/usr/share/nidara-installer/base.json`, airootfs content in nidara-iso — the app reads it and
 refuses to continue when it is absent (a development checkout is not an installation medium, and
-saying so is better than an installer that looks ready and fails at the end). **The dangerous
-half** — partitioning, `pacstrap`, the bootloader — is `archinstall`'s; this bundle collects
-answers, writes JSON and runs one process. `nidara-iso/INSTALLER.md` holds the decision and the
-screens still to be written.
-
-⚠️ It is **not translated yet**: its strings are English literals, not `t()` keys. That is debt,
-tracked as such — the first real screen is where the catalog has to arrive, and by this repo's
-i18n rule a new key lands in all twelve locales in the same PR.
+saying so is better than an installer that looks ready and fails at the end).
 
 ⚠️ Hyprland **tiles it** unless told otherwise, which is how it was first seen: a full-height
 pane sharing the screen. `config/hypr/hyprland.lua` carries a `float-installer` window rule
 matching the `nidara-installer` app-id; on an installed system it matches nothing.
+
+### The installer partitions with its own hands now — and `arm` is the only thing between it and your disk
+
+Until 2026-08-28 this bundle collected answers, wrote JSON and ran one process; the dangerous
+half was `archinstall`'s. **That is no longer true, and several sentences written when it was
+are still lying around** (`nidara-iso/INSTALLER.md` is one). Today `steps/run.ts` runs
+`sgdisk --zap-all`, `mkfs.*`, `mount` and the Btrfs subvolume layout itself, and
+`lib/bootloader.ts` writes the loader entries, the kernel cmdline, `plymouthd.conf` and the
+mkinitcpio hook. `archinstall` was left owning the pacstrap and the fstab.
+
+So the question "is this armed?" is now load-bearing in a way it never was. There are two modes,
+and **where it runs picks one** — one expression in `steps/run.ts` decides:
+
+```ts
+const isLiveMedium   = GLib.file_test("/run/archiso", GLib.FileTest.EXISTS)
+const isForcedDryRun = GLib.getenv("NIDARA_INSTALLER_DRY_RUN") === "1"
+const isArm = isLiveMedium && !isForcedDryRun
+```
+
+- **`/run/archiso` exists ⇒ it installs for real**, with nothing to opt in to. The live medium is
+  the one place where erasing the disk is the user's stated intent, so the ISO needs no flag.
+- **Anywhere else ⇒ dry run, and there is no way to change that.** A normal session has no
+  `/run/archiso` and cannot be armed. That is a property of the code, **not a licence to run it
+  there** — see "The installer runs in a VM, or it does not run" below.
+- **`NIDARA_INSTALLER_DRY_RUN=1`** is the only variable, and it only ever points the safe way: it
+  forces a dry run on the medium, for looking at the run screen without consequences. The worst a
+  typo in it can do is refuse to install.
+
+⚠️ There used to be a third input, `NIDARA_INSTALLER_ARM=1`, which armed the installer anywhere.
+It was removed on 2026-08-29 and should not come back. Its only purpose was to arm the destructive
+path where the live medium is not — which is the dangerous case by definition, not a testing
+affordance: the real path is exercised by booting the ISO in a VM, which has `/run/archiso` and
+therefore needs no flag. Two switches where one direction is safe and the other is not is a design
+that asks to be typed wrong once.
+
+⚠️ **A dry run must touch nothing, and the gate that guarantees that lives in `runCmd`, not in
+the callers.** It was written the other way first, and the lesson is worth more than the fix:
+gating the *destructive* commands (`sgdisk`, `mkfs`) reads as sufficient and is not. It left
+three things running under the "dry run" label — the `umount -R /mnt` at the top of
+`prepareDiskAndMounts`, an explicit else-branch that mounted the chosen disk's real partitions
+"for schema validation", and the entire manual-mode mount loop, which was never inside a guard
+at all. Nothing there destroys data; all of it mutates the machine of whoever is developing the
+installer, and two of the three were wrapped in a bare `catch {}`, so it did it in silence. With
+the gate one level down, in the command runner, a branch added later cannot escape it by
+forgetting to ask — and the dry run walks the same code path, logging
+`[PREP] (dry-run, not executed) …`, which is a better description of the plan than the old
+branch ever produced.
+
+`configureInstalledBootloader()` takes `arm` and early-returns; that one was right from the
+start.
+
+### The installer runs in a VM, or it does not run
+
+🔴 **`nidara-installer` is never launched on the development machine. Not armed, not unarmed, not
+"just to look at the window".** The VM harness is the only place it runs, in both modes. This is a
+standing instruction from the project owner (2026-08-29), and it exists because the failure it
+guards against has no small version: the host's `/dev/sda` carries Windows and the Linux install
+being used to do the work, and the disk step lists it by name and model, ready to select.
+
+The three arguments that make running it locally feel safe are all worth naming, because each one
+sounds sufficient on its own:
+
+- **"It is unarmed without `/run/archiso`."** True, and it is the property this file documents two
+  sections up. But it is a property of the code you are about to change — the first version of the
+  dry-run gate leaked three commands, which is why that section exists at all. When the safety of a
+  test rests on the correctness of the thing being tested, there is no test.
+- **"I shimmed `sgdisk`/`mkfs`/`mount` on `PATH`."** A `PATH` shim is a soft barrier. It holds only
+  while nothing resolves a binary by absolute path, nothing runs as root, and the environment is
+  inherited intact — three conditions you are not in a position to guarantee for code you did not
+  finish reading. Isolation is the VM boundary; a shim is a convenience inside it.
+- **"The destructive branch is behind a flag."** It was, and the flag's entire purpose was to arm
+  the installer somewhere the live medium is not — which is to say: exactly the dangerous case.
+  That is why `NIDARA_INSTALLER_ARM` no longer exists. Nothing outside an ISO can be armed today,
+  and that removes one of these three arguments rather than answering it.
+
+⚠️ And the corollary for the positive control, which is otherwise a good habit
+(`feedback: prove the test can fail`): reproducing a partitioning bug **on purpose** means the
+destructive path has to be genuinely reachable for the control to be worth anything. Where you
+reproduce it is therefore a safety decision, not a convenience one. That one goes in the VM before
+it goes anywhere.
+
+### The boot splash is a property of INSTALLED systems, not of `install.sh`
+
+`config/plymouth/themes/nidara/` is a real Plymouth theme (two-step module, watermark, a
+30-frame throbber), and three separate pieces of code reach for it: the PKGBUILD and `install.sh`
+copy it to `/usr/share/plymouth/themes/`, `bin/nidara-setup` runs `plymouth-set-default-theme
+nidara`, and the installer's `lib/bootloader.ts` injects `splash` + `fbcon=nodefer` into the
+kernel line and adds the `plymouth` hook to the target's `mkinitcpio.conf`.
+
+⚠️ **All three are written defensively — they test for the binary and skip when it is absent —
+which is exactly how this shipped inert for four days.** `plymouth` was in nobody's dependency
+list: not `depends=()`, not `PACMAN_DEPS`, not `base.json`'s `packages`, not its
+`custom_commands`. So on a real installation the theme landed in `/usr/share` as decoration, the
+mkinitcpio hook was never added, and the kernel booted with a `splash` that nothing drew.
+Nothing failed; nothing happened. It was caught by asking an installed machine
+(`pacman -Qi plymouth` → not found), not by reading the code, because the code is correct — it
+is the *chain* that was broken. It is a `depends` now, in both lists.
+
+There is still a boundary worth knowing, and it is intentional: **`install.sh` does not wire the
+splash, only the theme.** The hook and the kernel parameter are written exclusively by the
+installer, because the installer owns a machine it just created, while `install.sh` runs on
+somebody's existing Arch with a bootloader it did not choose (GRUB, rEFInd, whatever) and a
+cmdline it has no business rewriting. So: a machine installed from the ISO boots with the Nidara
+splash; a machine converted by `install.sh` has the theme set as default and will show it if its
+owner enables the hook themselves.
 
 ### Testing the LOGIN itself, without a VM and without logging out
 

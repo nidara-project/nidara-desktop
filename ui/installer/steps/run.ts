@@ -117,24 +117,39 @@ export function RunStep(): Step {
         }
       }
 
-      // Prepare disks, subvolumes, and /mnt mount hierarchy
+      // Prepare disks, subvolumes, and /mnt mount hierarchy.
+      //
+      // ⚠️ The `arm` gate lives in `runCmd`, deliberately, and NOT in the branches that
+      // call it. It used to guard only the destructive half (sgdisk/mkfs), which left three
+      // things running during what the UI was calling a dry run: the `umount -R /mnt` at the
+      // top, an explicit else-branch that mounted the chosen disk's real partitions "for
+      // schema validation", and the whole manual-mode mount loop, which was never inside a
+      // guard at all. None of that destroys data, and all of it mutates the machine of
+      // whoever is developing the installer — silently, because two of the three were wrapped
+      // in a bare `catch {}`. A dry run describes what it would do; it touches nothing. With
+      // the gate here, a branch added later cannot escape it by forgetting to ask.
       function prepareDiskAndMounts(disk: any, arm: boolean) {
         const isRoot = GLib.get_user_name() === "root"
         const sudoPrefix = isRoot ? [] : ["sudo", "-n"]
-        const runCmd = (args: string[]) => {
+        // `optional` = a command whose failure is a normal outcome, not an error (nothing was
+        // mounted under /mnt). It still gets logged, so the log shows the real sequence.
+        const runCmd = (args: string[], opts: { optional?: boolean } = {}) => {
+          if (!arm) {
+            appendLog(`[PREP] (dry-run, not executed) ${args.join(" ")}`)
+            return
+          }
           appendLog(`[PREP] ${args.join(" ")}`)
           const fullCmd = [...sudoPrefix, ...args]
           const proc = Gio.Subprocess.new(fullCmd, Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_MERGE)
           proc.wait(null)
-          if (!proc.get_successful()) {
+          if (!proc.get_successful() && !opts.optional) {
             throw new Error(`Command failed: ${fullCmd.join(" ")}`)
           }
         }
 
         // Unmount anything currently under /mnt
         try {
-          const proc = Gio.Subprocess.new([...sudoPrefix, "umount", "-R", "/mnt"], Gio.SubprocessFlags.NONE)
-          proc.wait(null)
+          runCmd(["umount", "-R", "/mnt"], { optional: true })
         } catch {}
 
         if (disk.mode === "entire_disk") {
@@ -143,51 +158,41 @@ export function RunStep(): Step {
           const p1 = isNvme ? `${dPath}p1` : `${dPath}1`
           const p2 = isNvme ? `${dPath}p2` : `${dPath}2`
 
-          if (arm) {
-            appendLog(`[PREP] Partitioning entire disk ${dPath}...`)
-            runCmd(["sgdisk", "--zap-all", dPath])
-            runCmd(["sgdisk", "-n", "1:1M:+512M", "-t", "1:ef00", dPath])
-            runCmd(["sgdisk", "-n", "2:0:0", "-t", "2:8300", dPath])
-            runCmd(["partprobe", dPath])
+          appendLog(`[PREP] Partitioning entire disk ${dPath}...`)
+          runCmd(["sgdisk", "--zap-all", dPath])
+          runCmd(["sgdisk", "-n", "1:1M:+512M", "-t", "1:ef00", dPath])
+          runCmd(["sgdisk", "-n", "2:0:0", "-t", "2:8300", dPath])
+          runCmd(["partprobe", dPath])
 
-            appendLog(`[PREP] Formatting EFI partition ${p1}...`)
-            runCmd(["mkfs.vfat", "-F32", p1])
+          appendLog(`[PREP] Formatting EFI partition ${p1}...`)
+          runCmd(["mkfs.vfat", "-F32", p1])
 
-            if (disk.filesystem === "btrfs") {
-              appendLog(`[PREP] Formatting Btrfs root on ${p2}...`)
-              runCmd(["mkfs.btrfs", "-f", p2])
-              runCmd(["mkdir", "-p", "/mnt"])
-              runCmd(["mount", p2, "/mnt"])
-              runCmd(["btrfs", "subvolume", "create", "/mnt/@"])
-              runCmd(["btrfs", "subvolume", "create", "/mnt/@home"])
-              runCmd(["btrfs", "subvolume", "create", "/mnt/@log"])
-              runCmd(["btrfs", "subvolume", "create", "/mnt/@pkg"])
-              runCmd(["btrfs", "subvolume", "create", "/mnt/@snapshots"])
-              runCmd(["umount", "/mnt"])
+          if (disk.filesystem === "btrfs") {
+            appendLog(`[PREP] Formatting Btrfs root on ${p2}...`)
+            runCmd(["mkfs.btrfs", "-f", p2])
+            runCmd(["mkdir", "-p", "/mnt"])
+            runCmd(["mount", p2, "/mnt"])
+            runCmd(["btrfs", "subvolume", "create", "/mnt/@"])
+            runCmd(["btrfs", "subvolume", "create", "/mnt/@home"])
+            runCmd(["btrfs", "subvolume", "create", "/mnt/@log"])
+            runCmd(["btrfs", "subvolume", "create", "/mnt/@pkg"])
+            runCmd(["btrfs", "subvolume", "create", "/mnt/@snapshots"])
+            runCmd(["umount", "/mnt"])
 
-              runCmd(["mount", "-o", "compress=zstd,subvol=@", p2, "/mnt"])
-              runCmd(["mkdir", "-p", "/mnt/home", "/mnt/var/log", "/mnt/var/cache/pacman/pkg", "/mnt/.snapshots", "/mnt/boot"])
-              runCmd(["mount", "-o", "compress=zstd,subvol=@home", p2, "/mnt/home"])
-              runCmd(["mount", "-o", "compress=zstd,subvol=@log", p2, "/mnt/var/log"])
-              runCmd(["mount", "-o", "compress=zstd,subvol=@pkg", p2, "/mnt/var/cache/pacman/pkg"])
-              runCmd(["mount", "-o", "compress=zstd,subvol=@snapshots", p2, "/mnt/.snapshots"])
-              runCmd(["mount", p1, "/mnt/boot"])
-            } else {
-              appendLog(`[PREP] Formatting Ext4 root on ${p2}...`)
-              runCmd(["mkfs.ext4", "-F", p2])
-              runCmd(["mkdir", "-p", "/mnt"])
-              runCmd(["mount", p2, "/mnt"])
-              runCmd(["mkdir", "-p", "/mnt/boot"])
-              runCmd(["mount", p1, "/mnt/boot"])
-            }
+            runCmd(["mount", "-o", "compress=zstd,subvol=@", p2, "/mnt"])
+            runCmd(["mkdir", "-p", "/mnt/home", "/mnt/var/log", "/mnt/var/cache/pacman/pkg", "/mnt/.snapshots", "/mnt/boot"])
+            runCmd(["mount", "-o", "compress=zstd,subvol=@home", p2, "/mnt/home"])
+            runCmd(["mount", "-o", "compress=zstd,subvol=@log", p2, "/mnt/var/log"])
+            runCmd(["mount", "-o", "compress=zstd,subvol=@pkg", p2, "/mnt/var/cache/pacman/pkg"])
+            runCmd(["mount", "-o", "compress=zstd,subvol=@snapshots", p2, "/mnt/.snapshots"])
+            runCmd(["mount", p1, "/mnt/boot"])
           } else {
-            // Dry-run mode: mount existing partitions if available for schema validation
-            try {
-              runCmd(["mkdir", "-p", "/mnt"])
-              runCmd(["mount", p2, "/mnt"])
-              runCmd(["mkdir", "-p", "/mnt/boot"])
-              runCmd(["mount", p1, "/mnt/boot"])
-            } catch {}
+            appendLog(`[PREP] Formatting Ext4 root on ${p2}...`)
+            runCmd(["mkfs.ext4", "-F", p2])
+            runCmd(["mkdir", "-p", "/mnt"])
+            runCmd(["mount", p2, "/mnt"])
+            runCmd(["mkdir", "-p", "/mnt/boot"])
+            runCmd(["mount", p1, "/mnt/boot"])
           }
         } else if (disk.mode === "manual") {
           const sorted = [...disk.mounts].sort((a, b) => {
@@ -196,21 +201,19 @@ export function RunStep(): Step {
             return a.mountpoint.localeCompare(b.mountpoint)
           })
 
-          if (arm) {
-            for (const m of sorted) {
-              if (m.format) {
-                appendLog(`[PREP] Formatting ${m.path} as ${m.filesystem}...`)
-                if (m.filesystem === "btrfs") {
-                  runCmd(["mkfs.btrfs", "-f", m.path])
-                } else if (m.filesystem === "vfat") {
-                  runCmd(["mkfs.vfat", "-F32", m.path])
-                } else if (m.filesystem === "xfs") {
-                  runCmd(["mkfs.xfs", "-f", m.path])
-                } else if (m.filesystem === "f2fs") {
-                  runCmd(["mkfs.f2fs", "-f", m.path])
-                } else {
-                  runCmd(["mkfs.ext4", "-F", m.path])
-                }
+          for (const m of sorted) {
+            if (m.format) {
+              appendLog(`[PREP] Formatting ${m.path} as ${m.filesystem}...`)
+              if (m.filesystem === "btrfs") {
+                runCmd(["mkfs.btrfs", "-f", m.path])
+              } else if (m.filesystem === "vfat") {
+                runCmd(["mkfs.vfat", "-F32", m.path])
+              } else if (m.filesystem === "xfs") {
+                runCmd(["mkfs.xfs", "-f", m.path])
+              } else if (m.filesystem === "f2fs") {
+                runCmd(["mkfs.f2fs", "-f", m.path])
+              } else {
+                runCmd(["mkfs.ext4", "-F", m.path])
               }
             }
           }
@@ -227,10 +230,13 @@ export function RunStep(): Step {
       GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         _busy = true
         const answers = getAnswers()
-        const isLiveEnvironment = GLib.file_test("/run/archiso", GLib.FileTest.EXISTS)
-        const isExplicitArm = GLib.getenv("NIDARA_INSTALLER_ARM") === "1"
-        const isExplicitDryRun = GLib.getenv("NIDARA_INSTALLER_DRY_RUN") === "1"
-        const isArm = (isLiveEnvironment || isExplicitArm) && !isExplicitDryRun
+        // Two modes, and WHERE it runs picks one: the live medium installs for real, anything
+        // else is a dry run. There is deliberately no variable that arms it elsewhere — the
+        // dangerous direction is unreachable, not merely discouraged. `NIDARA_INSTALLER_DRY_RUN`
+        // only ever points the safe way, so the worst a typo in it can do is refuse to install.
+        const isLiveMedium = GLib.file_test("/run/archiso", GLib.FileTest.EXISTS)
+        const isForcedDryRun = GLib.getenv("NIDARA_INSTALLER_DRY_RUN") === "1"
+        const isArm = isLiveMedium && !isForcedDryRun
 
         if (answers.disk) {
           try {
@@ -280,7 +286,11 @@ export function RunStep(): Step {
 
         if (!isArm) {
           cmd.push("--dry-run")
-          appendLog("[INFO] Running in dry-run mode (live medium or NIDARA_INSTALLER_ARM is not active).")
+          appendLog(
+            isLiveMedium
+              ? "[INFO] Dry-run mode: NIDARA_INSTALLER_DRY_RUN=1 is set. Nothing on disk will be touched."
+              : "[INFO] Dry-run mode: this is not an installation medium (no /run/archiso). Nothing on disk will be touched.",
+          )
         } else {
           appendLog("[INFO] Running in live installation mode.")
         }

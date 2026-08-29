@@ -64,8 +64,14 @@ The installer is a bundle of the desktop's toolkit, but **what it installs is no
 its base archinstall config is airootfs content in nidara-iso
 (`/usr/share/nidara-installer/base.json`), so the product's package list changes without
 rebuilding anything here. `nidara-iso/INSTALLER.md` is the decision record — including why it is
-not Calamares, and the line it never crosses (it collects answers and runs one process; it never
-partitions, formats, pacstraps or writes a bootloader).
+not Calamares.
+
+⚠️ **That record still says the bundle "never partitions, formats or writes a bootloader". It
+does, since 2026-08-28.** `steps/run.ts` runs `sgdisk`/`mkfs.*`/`mount` itself and
+`lib/bootloader.ts` writes the loader entries, the kernel cmdline and the mkinitcpio hook —
+`archinstall` was left owning only the pacstrap. Whatever you read about that boundary, read
+`references/dev-workflow.md` → "The installer partitions with its own hands now" first: the
+arming rule that decides whether any of it runs is the thing to know before you touch that file.
 
 ## The ten inviolable commandments
 
