@@ -229,8 +229,8 @@ hl.config({
         force_default_wallpaper      = 0,
         -- Fallback color shown for the brief window where awww-daemon is already
         -- torn down (background-graphical.slice stops early on logout/reboot) but
-        -- Hyprland hasn't exited yet. Dark neutral instead of Hyprland's gray+splash.
-        background_color             = 0x101014,
+        -- Hyprland hasn't exited yet. Pure black instead of Hyprland's gray+splash.
+        background_color             = 0xff000000,
         allow_session_lock_restore   = true,
         -- Compositor-level wake fallback: hypridle's on-resume only fires if its
         -- own idle tracking saw the timeout (a daemon restart or inhibitor churn

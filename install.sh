@@ -513,6 +513,13 @@ sudo cp -r "$REPO_DIR/defaults" /usr/share/nidara/defaults
 sudo rm -rf /usr/share/nidara/defaults/wallpaper
 sudo cp -r "$REPO_DIR/config/greetd" /usr/share/nidara/config/greetd
 
+# Plymouth boot splash theme
+sudo mkdir -p /usr/share/plymouth/themes
+sudo cp -r "$REPO_DIR/config/plymouth/themes/nidara" /usr/share/plymouth/themes/nidara
+if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+    sudo plymouth-set-default-theme nidara 2>/dev/null || true
+fi
+
 # Assistant skills: markdown playbooks bin/nidara-agent loads on demand (its
 # load_skill tool). Replaced wholesale rather than merged, so a skill deleted
 # upstream actually disappears. A --dev install reads the repo's skills/ directly

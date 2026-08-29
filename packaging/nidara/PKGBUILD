@@ -244,6 +244,10 @@ package_nidara() {
   cp -r defaults "$pkgdir/usr/share/nidara/defaults"
   rm -rf "$pkgdir/usr/share/nidara/defaults/wallpaper"
 
+  # Plymouth boot splash theme
+  mkdir -p "$pkgdir/usr/share/plymouth/themes"
+  cp -r config/plymouth/themes/nidara "$pkgdir/usr/share/plymouth/themes/nidara"
+
   # Assistant skills — markdown playbooks bin/nidara-agent loads on demand. This
   # is the path a PACKAGE install takes, and it is the one that matters most: a
   # --dev checkout reads the repo's skills/ directly, so forgetting this line
