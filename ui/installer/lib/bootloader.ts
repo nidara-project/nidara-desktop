@@ -71,8 +71,8 @@ export function configureInstalledBootloader(
     appendLog(`[BOOTLOADER] Note: Entry title adjustment skipped: ${e.message || e}`)
   }
 
-  // 2. Add Silent Boot parameters and disable hardware watchdog
-  const silentParams = "quiet loglevel=3 systemd.show_status=false vt.global_cursor_default=0 nowatchdog modprobe.blacklist=iTCO_wdt,sp5100_tco,i6300esb,wdat_wdt"
+  // 2. Add Silent Boot + Plymouth Splash parameters and disable hardware watchdog
+  const silentParams = "quiet splash loglevel=3 systemd.show_status=false vt.global_cursor_default=0 fbcon=nodefer nowatchdog modprobe.blacklist=iTCO_wdt,sp5100_tco,i6300esb,wdat_wdt"
   try {
     runCmd([
       "bash",
@@ -97,9 +97,23 @@ blacklist iTCO_vendor_support
 blacklist sp5100_tco
 blacklist i6300esb
 blacklist wdat_wdt
-EOF`,
+EOF
+
+      # Configure Plymouth if installed
+      if [ -f /mnt/usr/bin/plymouth ]; then
+        mkdir -p /mnt/etc/plymouth
+        cat > /mnt/etc/plymouth/plymouthd.conf << 'EOF'
+[Daemon]
+Theme=nidara
+ShowDelay=0
+EOF
+        if [ -f /mnt/etc/mkinitcpio.conf ] && ! grep -q "plymouth" /mnt/etc/mkinitcpio.conf; then
+          sed -i 's/HOOKS=(\\(.*\\)udev\\(.*\\))/HOOKS=(\\1udev plymouth\\2)/' /mnt/etc/mkinitcpio.conf || true
+          arch-chroot /mnt mkinitcpio -P 2>/dev/null || true
+        fi
+      fi`,
     ])
-    appendLog("[BOOTLOADER] Configured kernel silent boot parameters and disabled hardware watchdog.")
+    appendLog("[BOOTLOADER] Configured kernel silent boot + splash parameters and disabled hardware watchdog.")
   } catch (e: any) {
     appendLog(`[BOOTLOADER] Note: Silent boot parameters injection skipped: ${e.message || e}`)
   }

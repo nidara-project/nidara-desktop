@@ -8,5 +8,10 @@
 # Suppress stdout and stderr to prevent ASCII banner / early debug logs from leaking onto TTY
 exec 1>/dev/null 2>&1
 
+# Freeze Plymouth splash to avoid intermediate TTY flashes before compositor paints
+if command -v plymouth >/dev/null 2>&1; then
+    plymouth --ping 2>/dev/null && plymouth deactivate 2>/dev/null || true
+fi
+
 export HYPRLAND_CONFIG=/etc/greetd/hyprland-greeter.lua
 exec start-hyprland
