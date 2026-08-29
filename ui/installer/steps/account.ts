@@ -14,6 +14,7 @@ import { getAnswers, setAccountAnswer } from "../lib/answers"
 import { heading, prose } from "./common"
 
 const USERNAME_REGEX = /^[a-z_][a-z0-9_-]{0,31}$/
+const HOSTNAME_REGEX = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/
 
 const SYSTEM_USERS = new Set([
   "root", "daemon", "bin", "sys", "sync", "games", "man", "lp", "mail",
@@ -51,6 +52,12 @@ export function AccountStep(): Step {
       })
       usernameEntry.update_property([Gtk.AccessibleProperty.LABEL], [t("accountUsername")])
 
+      const hostnameEntry = new Gtk.Entry({
+        placeholder_text: t("accountHostnamePlaceholder"),
+        hexpand: true,
+      })
+      hostnameEntry.update_property([Gtk.AccessibleProperty.LABEL], [t("accountHostname")])
+
       const pwEntry = new Gtk.PasswordEntry({
         show_peek_icon: true,
         hexpand: true,
@@ -77,6 +84,7 @@ export function AccountStep(): Step {
       const { box: listCard, listBox } = NidaraList()
       listBox.append(NidaraStackedRow(t("accountFullName"), "", fullNameEntry))
       listBox.append(NidaraStackedRow(t("accountUsername"), "", usernameEntry))
+      listBox.append(NidaraStackedRow(t("accountHostname"), "", hostnameEntry))
       listBox.append(NidaraStackedRow(t("accountPassword"), "", pwEntry))
       listBox.append(NidaraStackedRow(t("accountConfirmPassword"), "", pw2Entry))
 
@@ -86,6 +94,7 @@ export function AccountStep(): Step {
       const validate = () => {
         const fname = (fullNameEntry.get_text?.() ?? fullNameEntry.text ?? "").trim()
         const uname = (usernameEntry.get_text?.() ?? usernameEntry.text ?? "").trim()
+        const hname = (hostnameEntry.get_text?.() ?? hostnameEntry.text ?? "").trim()
         const pw = pwEntry.get_text?.() ?? pwEntry.text ?? ""
         const pw2 = pw2Entry.get_text?.() ?? pw2Entry.text ?? ""
 
@@ -96,6 +105,12 @@ export function AccountStep(): Step {
             error = t("accountErrUsernameFormat")
           } else if (SYSTEM_USERS.has(uname)) {
             error = t("accountErrUsernameReserved")
+          }
+        }
+
+        if (!error && hname.length > 0) {
+          if (!HOSTNAME_REGEX.test(hname)) {
+            error = t("accountErrHostnameFormat")
           }
         }
 
@@ -113,6 +128,8 @@ export function AccountStep(): Step {
         const isValid = uname.length > 0
           && USERNAME_REGEX.test(uname)
           && !SYSTEM_USERS.has(uname)
+          && hname.length > 0
+          && HOSTNAME_REGEX.test(hname)
           && pw.length > 0
           && pw === pw2
 
@@ -120,6 +137,7 @@ export function AccountStep(): Step {
           setAccountAnswer({
             fullName: fname || uname,
             username: uname,
+            hostname: hname,
             password: pw,
           })
         } else {
@@ -131,6 +149,7 @@ export function AccountStep(): Step {
 
       fullNameEntry.connect("changed", validate)
       usernameEntry.connect("changed", validate)
+      hostnameEntry.connect("changed", validate)
       pwEntry.connect("changed", validate)
       pw2Entry.connect("changed", validate)
 
@@ -138,12 +157,15 @@ export function AccountStep(): Step {
       const existing = getAnswers().account ?? {
         fullName: "Nidara User",
         username: "nidara",
+        hostname: "nidara",
         password: "nidara",
       }
       if (typeof fullNameEntry.set_text === "function") fullNameEntry.set_text(existing.fullName)
       else fullNameEntry.text = existing.fullName
       if (typeof usernameEntry.set_text === "function") usernameEntry.set_text(existing.username)
       else usernameEntry.text = existing.username
+      if (typeof hostnameEntry.set_text === "function") hostnameEntry.set_text(existing.hostname || "nidara")
+      else hostnameEntry.text = existing.hostname || "nidara"
       if (typeof pwEntry.set_text === "function") pwEntry.set_text(existing.password)
       else pwEntry.text = existing.password
       if (typeof pw2Entry.set_text === "function") pw2Entry.set_text(existing.password)

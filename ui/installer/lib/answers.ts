@@ -42,6 +42,7 @@ export interface AccountAnswer {
   fullName: string
   username: string
   password: string
+  hostname: string
 }
 
 export interface LanguageAnswer {
