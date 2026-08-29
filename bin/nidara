@@ -5,6 +5,9 @@
 # Launched by the display manager via /usr/share/wayland-sessions/nidara.desktop
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Suppress stdout and stderr to prevent ASCII banner / early debug logs from leaking onto TTY
+exec 1>/dev/null 2>&1
+
 # Wayland environment
 export GDK_BACKEND=wayland,x11
 export XDG_SESSION_TYPE=wayland
