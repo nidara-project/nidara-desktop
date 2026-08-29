@@ -142,7 +142,7 @@ export function assemblePlan(
   // Deep copy base config
   const config: BaseConfig = JSON.parse(JSON.stringify(baseResult.config))
 
-  config.hostname = live.hostname
+  config.hostname = account.hostname?.trim() || live.hostname || "nidara"
   config.timezone = answers.timezone?.timezone || live.timezone
   config.locale_config = {
     kb_layout: answers.keyboard?.layout || live.localeConfig.kb_layout,

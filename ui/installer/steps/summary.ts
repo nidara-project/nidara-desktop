@@ -66,9 +66,10 @@ export function SummaryStep(): Step {
 
         // Row 2: Account
         if (account) {
+          const userAtHost = account.hostname ? `${account.username}@${account.hostname}` : account.username
           listBox.append(NidaraRow(
             t("summaryAccount"),
-            `${account.fullName} (${account.username}) · sudo`,
+            `${account.fullName} (${userAtHost}) · sudo`,
           ))
         }
 
