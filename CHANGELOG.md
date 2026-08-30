@@ -5,6 +5,42 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] — 2026-08-30
+
+**The icons are Papirus from the first frame.** On the first login of a machine installed
+from a Nidara image, the dock painted its icons in Adwaita for a couple of seconds and then
+switched. Only that path was affected — a desktop installed with `install.sh` on your own
+Arch never showed it.
+
+The theme is now a **system default** instead of a value written into each new account
+before its first login. The installer sets a machine up inside a chroot, for a person who
+has not logged in yet, and a per-user write cannot land there: the account's dconf storage
+does not exist until the first login. A system default needs no session, no runtime
+directory and no cooperation from the installer.
+
+It also says what was always meant: your own choice comes first. If you pick another icon
+theme, it stays — the default only answers for accounts that have not chosen.
+
+### Fixed
+
+- **The icon theme reaches GTK before anything is drawn**, through
+  `/etc/dconf/db/local.d/00-nidara-appearance` and `/etc/dconf/profile/user`, refreshed by a
+  pacman hook so an upgrade that changes the default takes effect at once. The keyfile is
+  generated when the package is built, from the same `defaults/appearance.json` the shell
+  reads, so the two cannot drift apart.
+
+- **`nidara-setup` no longer claims to have done it.** It printed "Icon theme → Papirus
+  (seeded before first login)" while writing nothing, because it checked the exit code of a
+  command that exits 0 while failing and sent the only report of the failure to a discarded
+  stderr. It now reads the result back and warns, naming the file that is missing, if the
+  default is not actually reachable.
+
+### Changed
+
+- **`dconf` is a declared dependency.** It was being called and had only ever arrived as a
+  transitive dependency of the GTK stack — present on every machine so far, guaranteed on
+  none.
+
 ## [0.10.0] — 2026-08-30
 
 **The package you install is now called `nidara-desktop`.** Nothing about the desktop itself
