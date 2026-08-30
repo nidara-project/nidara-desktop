@@ -153,12 +153,20 @@ export function AccountStep(): Step {
       pwEntry.connect("changed", validate)
       pw2Entry.connect("changed", validate)
 
-      // Restore previously entered values or populate default initial account
+      // Coming back to this step restores what was typed; arriving for the first
+      // time suggests the names and leaves the password ALONE.
+      //
+      // ⚠️ It used to suggest the password too — "nidara", in both fields, rendered
+      // as dots exactly like something a person had typed. Accepting the defaults
+      // therefore produced a machine whose sudo-capable user had a password nobody
+      // chose and nothing disclosed. A suggested NAME is a convenience; a suggested
+      // CREDENTIAL is a credential, and the interface cannot tell the person which
+      // of the two it just handed them.
       const existing = getAnswers().account ?? {
         fullName: "Nidara User",
         username: "nidara",
         hostname: "nidara",
-        password: "nidara",
+        password: "",
       }
       if (typeof fullNameEntry.set_text === "function") fullNameEntry.set_text(existing.fullName)
       else fullNameEntry.text = existing.fullName
