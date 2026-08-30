@@ -421,7 +421,7 @@ Nidara Desktop stands on the work of some excellent open-source projects:
   [Astal](https://github.com/Aylur/astal) libraries: the framework Nidara Desktop was built on,
   and the reason it got off the ground. None of it is loaded any more — the application host, the
   bundler, every service and the PAM authentication are the project's own since 0.8.0 — and the
-  credit stands anyway: it is what the first two years were built on.
+  credit stands anyway: from the first commit to that release, this was built on their work.
 - **[Hyprland](https://hyprland.org)** — the Wayland compositor at Nidara's core, along with
   hypridle, hyprsunset, and xdg-desktop-portal-hyprland from the same ecosystem.
 - **[GNOME](https://www.gnome.org)** — GTK4 and GJS, the toolkit and runtime under every Nidara surface.
