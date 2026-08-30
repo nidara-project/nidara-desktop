@@ -5,6 +5,38 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-08-30
+
+**The package you install is now called `nidara-desktop`.** Nothing about the desktop itself
+changed — this release exists to stop one name meaning two things.
+
+Nidara is an operating system; Nidara Desktop is the desktop environment inside it, and
+this repository is the second one. Until now the pacman package was called `nidara`, so
+`pacman -Qi nidara` answered "what version of Nidara do you have?" with the desktop's
+number, which is not the same question.
+
+### Changed
+
+- **`nidara` → `nidara-desktop`.** **You do not have to do anything.** The next
+  `pacman -Syu` — or `nidara-update`, which runs it for you — swaps the package over by
+  itself, keeps every file exactly where it is, and does not ask you anything. Your
+  configuration in `~/.config/nidara/` is untouched, as always.
+
+  Anything you have already written that says `nidara` keeps working: the old name still
+  resolves, so `sudo pacman -S nidara` installs the same thing. What changes is what you
+  see afterwards — `pacman -Qi nidara-desktop` for the desktop's version, and the
+  installed package list now reads `nidara-desktop`, `nidara-installer`, and (on a machine
+  installed from a Nidara image) `nidara-apps`, `nidara-system` and `nidara-release`. Five
+  names for five different things, and none of them borrowing the name of the whole.
+
+- **The README says which of the two things it is describing**, from the title down —
+  including, in Installation, that somebody who wants a whole operating system on a blank
+  disk is on the wrong page and where to go instead. Three claims that had stopped being
+  true went with it: a planned Calamares installer (reconsidered and dropped — the one that
+  exists is built from this repository's own toolkit), Astal's PAM library described as
+  still in use (nothing of Astal has been loaded since 0.8.0), and a trademark notice that
+  covered one name when there are two.
+
 ## [0.9.0] — 2026-08-30
 
 **Nidara can install itself.** This release adds the fourth thing in the repository that
