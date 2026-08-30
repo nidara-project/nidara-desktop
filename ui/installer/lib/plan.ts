@@ -30,7 +30,6 @@ export interface ArchinstallUser {
 
 export interface ArchinstallCreds {
   users: ArchinstallUser[]
-  root_enc_password: string
 }
 
 export interface AssembledPlan {
@@ -167,16 +166,26 @@ export function assemblePlan(
     }
   }
 
-  const encPassword = hashPassword(account.password)
+  // ── Root is left as Arch leaves it, and that is a decision ────────────────
+  //
+  // No `root_enc_password`. archinstall only touches root when that field is
+  // present (`scripts/guided.py`), so omitting it means the account keeps what
+  // `filesystem` ships in /etc/shadow — measured: `root:*:14871::::::`, an
+  // asterisk no password can ever match. The person administers with sudo, and
+  // recovery is the live medium we already hand out.
+  //
+  // What it replaces was never chosen: root carried the SAME hash as the user, so
+  // whoever knew that password had a root console without passing through sudo —
+  // one credential doing two jobs, silently. Ubuntu and Fedora both lock root and
+  // give sudo instead; this is that, and it is also plain Arch's own default.
   const creds: ArchinstallCreds = {
     users: [
       {
         username,
         sudo: true,
-        enc_password: encPassword,
+        enc_password: hashPassword(account.password),
       },
     ],
-    root_enc_password: encPassword,
   }
 
   // Dump support for debugging/inspection
