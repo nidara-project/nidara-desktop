@@ -1,0 +1,17 @@
+# Compile /etc/dconf/db/local.d/* into the binary database dconf actually reads.
+#
+# A keyfile in local.d does nothing on its own; `dconf update` is what produces
+# /etc/dconf/db/local. Doing it here rather than in nidara-setup is deliberate:
+# the database has to be correct after every upgrade that changes the keyfile,
+# and nidara-setup runs once, at install, and never again.
+[Trigger]
+Type = Path
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Target = etc/dconf/db/local.d/*
+
+[Action]
+Description = Compiling the system dconf database...
+When = PostTransaction
+Exec = /usr/bin/dconf update
