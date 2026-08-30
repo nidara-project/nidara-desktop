@@ -245,6 +245,44 @@ saying so is better than an installer that looks ready and fails at the end).
 pane sharing the screen. `config/hypr/hyprland.lua` carries a `float-installer` window rule
 matching the `nidara-installer` app-id; on an installed system it matches nothing.
 
+#### A window rule matches an IDENTIFIER, never interface text — and a float rule needs a `size`
+
+Two things that only look like separate problems.
+
+**1. Floating by class, on its own, comes up the size of the screen.** Not always: only when the
+window is the first one on its workspace. Measured on the live medium — the installer at
+`[0,-30] [1266,1219]` on a 1266x1282 monitor against `[153,200] [960,760]` for the same binary
+with anything else already open. The class is known before the client has settled a size, so the
+rule floats a window whose desired geometry is still the work area's.
+
+**Reproduced on the host with Settings** (a different bundle, the same `NidaraWindow`), which is
+how to check this without the ISO — its own size is 1098x760 and a temporary
+`{ class = "^nidara-settings$" }, float, center` rule on an empty workspace gives:
+
+    float + center only        at [8,48]     size [2544,1284]   the whole work area
+    + size = "1098 760"        at [731,310]  size [1098,760]    its own size, centred
+
+Different window addresses in the two arms, so both are real first maps. The fix is `size` in the
+rule: `CDefaultFloatingAlgorithm::newTarget` (0.56.2) overwrites `windowGeometry.w/h` from
+`m_ruleApplicator->static_.size` on `m_firstMap`, before `center` positions the result, so the
+client's desired size never gets a vote. `size` is a live Lua rule key taking a `"w h"` string —
+verified against a control that could fail (`size = "1234 567"` on a throwaway kitty class came up
+1234x567 centred; the same rule without the line gave kitty's own 700x500).
+
+⚠️ **The first arm of that probe used `size = "700 500"` and proved nothing**, because 700x500 is
+kitty's natural size — two identical captures, an instrument that cannot distinguish. Pick a number
+the client would never choose.
+
+**2. Matching on the TITLE also fixes it — and is the wrong fix.** By the time the title is known
+the client has committed its size, so `{ title = "^Nidara Installer$" }` produces 960x760 too. Do
+not take that shortcut: **a title is interface text.** It gets translated (none of ours are, yet —
+the day one is, that is one rule per locale), and an application's title follows its content
+besides. A class is an identifier, and our windows' classes are OURS: each declares its own app-id
+through `ui/lib/app-id.ts`. **Rules match identifiers here, never UI strings.**
+
+The one rule still matching a title is `float-about`, and only because About borrows Settings'
+app-id — debt #98, which is what has to land before that rule can move to a class.
+
 ### The installer partitions with its own hands now — and `arm` is the only thing between it and your disk
 
 Until 2026-08-28 this bundle collected answers, wrote JSON and ran one process; the dangerous

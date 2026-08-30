@@ -3364,6 +3364,23 @@ which is not a case we need). So every caller that reaches a window through the 
 switcher, notifications — focuses without raising, and the dock menu is simply where somebody
 noticed.
 
+### 99. ⚠️ OPEN — the installer cannot fit on a screen shorter than its own floor (2026-08-30)
+
+Found while pinning the installer's window rule to `size = "960 760"`, not caused by it.
+
+`ui/installer/widget/InstallerWindow.ts` sets `minWidth: 960, minHeight: 760` as well as the
+defaults, and a `set_size_request` is a floor GTK will not go under. On a 1366x768 laptop — the
+live medium boots on whatever hardware someone has — the usable height is 768 minus the bar (40)
+and the dock (100), i.e. 628. The window asks for 760, the clamp added in #299 tries to shrink it
+to 628, and GTK refuses; the excess goes out the top, which is the very shape #299 exists to
+prevent.
+
+Not measured on such a screen — derived from the numbers, and worth a VM at 1366x768 before
+deciding anything. The fix is not the rule: it is either a smaller floor (does the wizard's content
+survive a 1366x768 work area?) or a live-medium layout that gives the installer the screen. The
+window rule's `size` is the one part that is already right — see `dev-workflow.md` → "A window rule
+matches an IDENTIFIER, never interface text".
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a

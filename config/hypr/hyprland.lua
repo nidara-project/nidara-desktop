@@ -562,10 +562,36 @@ hl.window_rule({
 -- Without it the window is TILED like any other application, which is how it was
 -- first seen: a full-height pane sharing the screen with whatever else was open,
 -- when what it needs is to be the thing in front of you.
+--
+-- 🔑 `size` is not decoration, and it is the reason this rule can stay on the CLASS.
+-- Floating by class alone came up THE SIZE OF THE SCREEN, but only when the
+-- installer was the first window on its workspace — measured on the live medium,
+-- `[0,-30] [1266,1219]` on a 1266x1282 monitor with a window whose own default is
+-- 960x760, against `[153,200] [960,760]` for the same binary with anything else
+-- already open. The class is known before the client has settled a size, so the
+-- rule floats a window whose desired geometry is still the work area's.
+--
+-- ⚠️ Matching on the TITLE also produces 960x760 — verified, same binary, only the
+-- `match` changed — because by then the client has committed its size. Do not
+-- "simplify" this rule to that: a title is interface text. It gets translated (this
+-- one is not, yet — the day it is, one rule per locale), and an application's title
+-- follows its content besides. A class is an identifier, and this one is OURS:
+-- `ui/installer/widget/InstallerWindow.ts` declares `appId: "nidara-installer"`
+-- through `ui/lib/app-id.ts`. Rules match identifiers here, never UI strings.
+--
+-- Deterministic because Hyprland applies it in the same place it computes the
+-- floating geometry: `CDefaultFloatingAlgorithm::newTarget` (0.56.2) overwrites
+-- `windowGeometry.w/h` from `m_ruleApplicator->static_.size` on `m_firstMap`, before
+-- `center` positions the result — so the client's desired size never gets a vote.
+--
+-- ⚠️ 960x760 is the SAME pair as `defaultWidth`/`defaultHeight` (and the min) in
+-- `ui/installer/widget/InstallerWindow.ts`. Nothing keeps them in step; change one
+-- and change the other, or the rule starts fighting GTK's floor.
 hl.window_rule({
     name   = "float-installer",
     match  = { class = "^nidara-installer$" },
     float  = true,
+    size   = "960 760",
     center = true,
 })
 
