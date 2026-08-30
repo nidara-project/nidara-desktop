@@ -410,9 +410,77 @@ hl.bind(mainMod .. " + CTRL + left",  hl.dsp.focus({ workspace = "e-1" }))
 hl.bind(mainMod .. " + CTRL + SHIFT + right", hl.dsp.window.move({ workspace = "e+1" }))
 hl.bind(mainMod .. " + CTRL + SHIFT + left",  hl.dsp.window.move({ workspace = "e-1" }))
 
+-- ── Nothing floating hangs off the screen ────────────────────────────────────
+--
+-- A floating window keeps whatever size it asks for, and Hyprland does not shrink
+-- it to fit. Measured in `DefaultFloatingAlgorithm::newTarget` (0.56.2) and on
+-- screen: a window that FITS is centred in the usable area, and one that does NOT
+-- has its bottom edge pinned to the work area's bottom — so the entire excess goes
+-- out the TOP, under the bar and off the display. On a 1440-tall screen with our
+-- 40px bar and 100px dock, a window asking for the full 2560x1440 lands at
+-- y = -101: its floor sits exactly on the dock and its title bar is gone.
+--
+-- 🔑 It is not our windows misbehaving and it is not one app: the size comes from
+-- the CLIENT, and any app is free to ask for the monitor. Telegram does, because
+-- it remembers the geometry it had while maximized. The compositor only invents a
+-- size (640x400) when the client asks for nothing at all.
+--
+-- ⚠️ This cannot be a window rule, which is why it is code. `max_size` takes
+-- integers only, and rule expressions expose `monitor_w`/`monitor_h` but NOTHING
+-- for the usable area — so "the monitor minus the bar and the dock" is not
+-- expressible, and hardcoding one machine's numbers is not something a
+-- distribution can ship. Here we have `monitor.reserved`, which is exactly it.
+--
+-- What it does NOT do: touch tiled windows, or resize anything that already fits.
+-- A window that fits is left byte for byte where the compositor put it.
+local FLOAT_MARGIN = 8   -- gaps_out, so a clamped window lands where a tiled one would
+
+local function clampFloating(w)
+    if not w or not w.floating then return end
+
+    local mon = w.monitor
+    if not mon then return end
+
+    -- Named fields, not an order to guess: {top=, bottom=, left=, right=}.
+    local res    = mon.reserved or {}
+    local availW = mon.width  - (res.left or 0) - (res.right  or 0) - 2 * FLOAT_MARGIN
+    local availH = mon.height - (res.top  or 0) - (res.bottom or 0) - 2 * FLOAT_MARGIN
+    if availW <= 0 or availH <= 0 then return end
+
+    local curW, curH = w.size.x, w.size.y
+    if curW <= availW and curH <= availH then return end
+
+    local newW = math.min(curW, availW)
+    local newH = math.min(curH, availH)
+    local sel  = "address:" .. w.address
+
+    hl.dispatch(hl.dsp.window.resize({ x = newW, y = newH, window = sel }))
+    -- Centred in what is usable — the same placement Hyprland gives a window that
+    -- fits, so a clamped window looks placed rather than shoved. `move` is
+    -- ABSOLUTE (verified: two identical calls leave the window where it is), hence
+    -- the monitor's own origin for a multi-head setup.
+    hl.dispatch(hl.dsp.window.move({
+        x = math.floor((mon.x or 0) + (res.left or 0) + FLOAT_MARGIN + (availW - newW) / 2),
+        y = math.floor((mon.y or 0) + (res.top  or 0) + FLOAT_MARGIN + (availH - newH) / 2),
+        window = sel,
+    }))
+end
+
+-- The two ways a window ends up floating. `window.open` (openLate) already carries
+-- the settled size, the position and the floating flag — measured with a window
+-- floated by rule, which reports `floating=true` with its final geometry.
+hl.on("window.open", function(w) clampFloating(w) end)
+
+
 -- ── Keybinds — Window modes ──────────────────────────────────────────────────
 hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
-hl.bind(mainMod .. " + F", hl.dsp.window.float({ action = "toggle" }))
+-- The second way in: floating a window by hand. Nothing fires `window.open` here,
+-- so the toggle carries the clamp itself — after a beat, because the size the
+-- window lands on is not known until the compositor has applied the float.
+hl.bind(mainMod .. " + F", function()
+    hl.dispatch(hl.dsp.window.float({ action = "toggle" }))
+    hl.timer(function() clampFloating(hl.get_active_window()) end, { timeout = 60, type = "oneshot" })
+end)
 hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.fullscreen())
 -- Maximize = full working area WITHOUT covering the bar (fullscreen mode 1).
 hl.bind(mainMod .. " + M", hl.dsp.window.fullscreen({ mode = "maximized" }))
