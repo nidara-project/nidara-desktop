@@ -3420,6 +3420,38 @@ Settings, overlay and window-probe traffic), and what allocates it. The way to f
 a shell up and sample `smaps_rollup` on a schedule, with the desktop idle for one arm and exercised
 for the other — an idle arm that also grows is a different bug from one that does not.
 
+### 101. ⚠️ OPEN — the installer's log stops one command short of the end (2026-08-31)
+
+The log is legible now — `lib/ansi.ts` undresses the child's TTY escapes and the view names its
+font instead of asking fontconfig for one (see dev-workflow.md, "The installer's log is not a
+terminal"). What that did **not** fix is the third symptom found in the same place, because it is
+not in this repo's half of the pipe.
+
+Measured during a real install from the ISO: `nidara-setup` **ran and finished** — `install.log`
+records the call and `region.json` lands in the target — but its output appears nowhere.
+`/var/log/archinstall/cmd_output.txt` stops at the last pacman transaction, which is
+`custom_commands[3]` (`nidara-release`); `custom_commands[4]` is the `SUDO_USER=… nidara-setup`
+line, and it leaves no trace. The installer's own log view, which streams archinstall's stdout,
+shows the same cut.
+
+🔑 **Why this one matters more than a missing log line**: v0.10.1 put a new WARN inside
+`nidara-setup` — the check that the icon theme default was actually seeded. So the project's
+answer to "did the seeding work" is a message printed into a stream **nobody reads**. That is the
+same family as the message that lied (#295): a check whose result cannot reach anyone is not a
+check.
+
+Not diagnosed, and it cannot be diagnosed from here — it needs a real install, because the
+question is what archinstall does with the last entry of `custom_commands` and where that output
+goes. Do NOT guess at a fix: the two obvious ones (teeing inside the command, in nidara-iso's
+`base.json`; or reading `cmd_output.txt` from the installer) are both plausible and only one of
+them can be right, and which depends on the answer. The command itself lives in
+**nidara-iso**, not here.
+
+Sitting alongside it, from the same review and still open: the progress bar is a `pulse()` on an
+80 ms timeout with no phase behind it, the host name is asked for as the third field of the
+ACCOUNT card, and `nidara-setup` creates `.config/{hypr,kitty,nidara,uwsm}` as `1000:0` (an
+`install -d` with no `-g`) while its siblings come out `1000:1000`.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a

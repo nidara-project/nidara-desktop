@@ -434,6 +434,55 @@ destructive path has to be genuinely reachable for the control to be worth anyth
 reproduce it is therefore a safety decision, not a convenience one. That one goes in the VM before
 it goes anywhere.
 
+### The installer's log is not a terminal, and the children writing to it assume one
+
+Everything `steps/run.ts` spawns — archinstall, and pacman under it — writes for a TTY. Captured
+with `script`, one real `pacman -Qi` line is:
+
+```
+ESC[?25l ESC[0;1m Name : ESC[0m bash CR
+```
+
+A `GtkTextView` has no meaning for any of that, so it printed it: the stray `[?25h`, the coloured
+noise and the blocks of half-drawn progress bars in the installer's log were the child's bytes
+arriving **intact**, not corruption. `lib/ansi.ts` (`stripAnsi`) undresses a line before it lands,
+and `appendLog` is the single funnel it sits in — ours and the child's lines go through the same
+call, so a caller added later cannot forget it.
+
+Two things it does, and it should not learn a third:
+
+- **Escapes are deleted.** CSI, OSC, the short forms, and any leftover ESC — including a sequence
+  the child never finished writing, where removing the ESC alone leaves a literal `[` behind.
+- **A carriage return means the line was redrawn**, so only the last take is kept. A progress bar
+  redraws dozens of times inside what arrives as one line (`read_line` splits on LF alone), and a
+  log wants the final state, not the flip-book. ⚠️ The **trailing** CR is not a redraw — every line
+  of a CRLF stream carries one, and cutting at the last CR without dropping it first returns `""`
+  for every line a pty ever touched.
+
+⛔ It is not a terminal emulator and must not grow into one. Cursor movement, `ESC[K`, scroll
+regions: a log does not have a screen for any of them to mean anything on.
+
+The font that renders it is the other half of the same bug — see design-system.md, "A generic font
+alias is a value fontconfig chooses".
+
+**Looking at it without an ISO: `scripts/dev/installer-log-probe.js`.** Both defects were found by
+building an image and booting it, which is the longest loop in the project, and neither of them
+needed a disk or an archinstall to see. The probe builds just that view — the real classes, the
+real compiled sheet — feeds it bytes captured from a real `pacman` through a pty, and writes the
+pair `-raw` / `-fixed`: the same input with and without `stripAnsi`, which is what makes the "before"
+a control rather than a story.
+
+```bash
+gtk4-broadwayd :5 &
+cd ui/installer && npx --yes sass@1.97.3 --no-charset style.scss style.css && cd ../..
+GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 gjs -m scripts/dev/installer-log-probe.js /tmp/ilog
+```
+
+It prints the family Pango **loaded**, not the one the sheet asked for, and stamps that onto the
+PNGs when they differ — a dev box without `ttf-jetbrains-mono` renders a substitute, so the images
+are honest about layout and nothing else. Same 0-sized-children timing trap as the other probes: it
+waits 1500 ms, and at 600 ms the window is already `mapped` while every child still measures 0×0.
+
 ### The boot splash left this repo entirely — do not bring any of it back
 
 There is no Plymouth theme here any more, and `packaging/nidara/PKGBUILD`, `install.sh` and

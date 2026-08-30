@@ -10,6 +10,7 @@ import { getAnswers } from "../lib/answers"
 import { assemblePlan, type AssembledPlan } from "../lib/plan"
 import { configureInstalledBootloader } from "../lib/bootloader"
 import { applyRealName } from "../lib/real-name"
+import { stripAnsi } from "../lib/ansi"
 import { heading, prose } from "./common"
 
 export function RunStep(): Step {
@@ -90,7 +91,15 @@ export function RunStep(): Step {
       })
       box.append(expander)
 
-      const appendLog = (line: string) => {
+      // One funnel for every line, ours and the child's alike. The child's arrive
+      // TTY-shaped and have to be undressed (lib/ansi.ts); ours never carry an
+      // escape, so the call costs them nothing — and being HERE rather than at
+      // the pipe means a caller added later cannot forget it. A line that was
+      // something and is now nothing was pure terminal control: printing a blank
+      // row for it is how the log came out padded with gaps.
+      const appendLog = (raw: string) => {
+        const line = stripAnsi(raw)
+        if (line === "" && raw !== "") return
         const endIter = textBuffer.get_end_iter()
         textBuffer.insert(endIter, line + "\n", -1)
         const adj = scrolled.vadjustment

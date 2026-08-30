@@ -199,7 +199,13 @@ window.nidara-installer-window {
   .installer-log-view {
     background-color: transparent;
     color: var(--nidara-text-secondary);
-    font-family: monospace;
+    // The FAMILY, never the `monospace` alias on its own. The alias is resolved by
+    // fontconfig, not by us, and on the live medium it came out NotoSansCJK — a
+    // proportional-looking CJK face for a column of install output, with JetBrains
+    // Mono sitting right there (nidara-installer depends on nidara-desktop, which
+    // depends on ttf-jetbrains-mono, so it is present wherever this window opens).
+    // The generic stays last as a genuine fallback, the way the greeter names Inter.
+    font-family: "JetBrains Mono", monospace;
     font-size: 11.5px;
     line-height: 1.45;
 

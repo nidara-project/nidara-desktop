@@ -1605,6 +1605,28 @@ than throwing — a missing icon must cost an icon, never the login screen. They
 SVGs, not symbolic, so the consumer **must** add `nd-icon`; the sheet now carries that rule
 once instead of stapled to the avatar fallback.
 
+### A generic font alias is a value fontconfig chooses, not one we chose (2026-08-31)
+
+`font-family: monospace` — the alias alone, with no family in front of it — is not a decision.
+It is a question handed to fontconfig, answered by whatever that machine's substitution rules
+resolve first, and the answer is not the same on two machines.
+
+**Measured on the live medium**: the installer's log view asked for `monospace` and got
+**NotoSansCJK-Regular** — a CJK face rendering a column of pacman output — on a system where
+JetBrains Mono was installed, declared by the desktop and one string away. Nothing errored.
+Compare the greeter, which has named `"Inter", sans-serif` since it was written: a real family
+first, the generic kept behind it as a genuine last resort.
+
+So: **name the family, keep the generic as the fallback**. The canonical strings are
+`"Inter"` and `"JetBrains Mono"` — ⚠️ *not* `JetBrainsMono Nerd Font`, which was the patched
+232 MiB build and is not what any Nidara install carries (see `ThemeManager`'s seed of
+`monospace-font-name`, which carries the same warning for the same reason).
+
+The reason a bundle can rely on the family being there is packaging, and it is worth checking
+rather than assuming: `nidara-installer` depends on `nidara-desktop`, whose `depends=()` names
+`ttf-jetbrains-mono` — and the live medium installs `nidara-desktop`, which is also why the
+substitute it landed on was a CJK face at all (`noto-fonts-cjk` arrives by the same route).
+
 ### The capsule is PAINTED, on both surfaces — and the rim has to be a RING
 
 `ui/lib/glass-capsule.ts` (`withGlassCapsule`) is the one capsule of the greeter and the
