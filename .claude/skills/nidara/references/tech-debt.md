@@ -3348,7 +3348,16 @@ switcher, a taskbar someone else writes) is correct to put them together. About 
 related — #94 settled that they are a summary and its detail — but relation is not identity, and the
 dock is where the difference shows.
 
-⚠️ Not a rename-and-done: the app id is also what the dock's pin matches, so changing it without
+⚠️ **And not a move-the-rule-to-the-class either — measured after this item was written.** About
+floats through a `hl.window_rule` matched on `^About Nidara$`, and the reason that has always worked
+is not only the shared app-id: a title is on the toplevel from creation, while `setWindowAppId`
+stamps the class at MAP, *after* Hyprland has matched its rules once. A rule naming only the new
+class would be matched too late and About would come up the size of its tile — the whole work area
+on an empty workspace. So whatever lands has to put the BIRTH class (`org.nidara.shell`) into the
+match alongside the new one, exactly like `float-installer` now does. See `dev-workflow.md` → "A
+window rule matches an IDENTIFIER, never interface text — and our identifiers arrive LATE".
+
+⚠️ Not a rename-and-done either: the app id is also what the dock's pin matches, so changing it without
 looking at the pinned entry moves the problem rather than fixing it (a pinned `nidara-settings`
 would stop matching a window that now says `nidara-about`). Whatever lands has to answer what the
 dock shows for each of the two, and what the pin follows.
