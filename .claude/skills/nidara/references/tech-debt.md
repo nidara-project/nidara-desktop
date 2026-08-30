@@ -17,6 +17,32 @@ and leave its line in the index at the bottom of this file. It must match realit
 ⚠️ **Two pairs of items share a number** (#37 and #38 each appear twice, from a numbering slip
 that predates the split). Cite them by title, not by number alone.
 
+## Where this file stops and the issue tracker starts (2026-08-31)
+
+**This file is not the queue any more, and it never was a good one.** Since 2026-08-31 the open
+items also exist as GitHub issues (`nidara-project/nidara-desktop`, plus `nidara-iso` for anything
+whose fix lives there), and the split is by *kind*, not by convenience:
+
+| | the issue | this file |
+|---|---|---|
+| answers | what is next, in what order | what is true, and what not to do |
+| lifetime | dies when the PR merges | outlives it — several RESOLVED items still carry a binding rule |
+| lives in | GitHub | the checkout, so a contributor's agent gets it without asking |
+
+🔑 **The reason it is issues and not a third numbered list**: issues and PRs share ONE number space.
+`#302` is a PR and can never mean anything else, so `#305` names one thing in every conversation,
+commit message and document, forever. Three private numbering schemes — this file's `#1…#101`, a
+work-order artifact's `0…4`, a review artifact's `01…10` — collided on 2026-08-31 and cost a whole
+exchange to untangle, which is what prompted this.
+
+**The one rule that keeps it from becoming a graveyard**: a PR closing a queue item says
+`Closes #<n>` in its body. Nobody has to remember to tidy up; the merge does it. A repo with 300
+PRs and one issue in seven months is what happens otherwise.
+
+Numbers here are NOT renumbered to match issue numbers and never will be: the `#N` in a commit
+message from July still has to resolve. Each open item carries its queue entry in a line under its
+heading.
+
 ## Active debt
 
 ### 1. `@mixin glass()` underused — audited 2026-06-09, mostly NOT migratable
@@ -953,6 +979,8 @@ broken". Both return `count: 0`. Sanity-check the walk itself against a class th
 (`.bar-centerbox`).
 
 ### 90. ⚠️ OPEN — the shell segfaults opening the app grid, and it is GTK's icon thread inside Pango (2026-08-24)
+
+> **Queue entry: #313.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
 
 Owner-reported: "se me acaba de reiniciar sola la UI al abrir el appgrid, pero no veo nada en el
 log". Both halves are real and the second one is the reason the first is hard to see.
@@ -2591,6 +2619,8 @@ not the page-by-page pass:
 
 ### 64. ⬒ HALF DONE — the locale sweep exists and gates CI; the live half does not (2026-08-11)
 
+> **Queue entry: #314.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
+
 `scripts/dev/settings-geometry.mjs` asserts that every page renders the same pane width and that
 the window's floor holds. What it does not do is the part that keeps reopening this surface: run
 the same sweep across **locales** (`ru` was already overflowing the sidebar at factor 1.0 before
@@ -2854,6 +2884,8 @@ whether a class field on a GObject subclass shadows the property accessor) and t
 
 ### 80. ⚠️ OPEN — what the `nidara-auth` audit left (2026-08-23)
 
+> **Queue entry: #315.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
+
 The critical one is fixed (an informational PAM message could open the secret gate and let the next
 password prompt answer itself with an empty string — see `lib/nidara-auth/nidara-auth.h`, which now
 carries the conversation contract, and `scripts/dev/auth-probe.js`, which fails without the fix).
@@ -2908,6 +2940,8 @@ both problems: it uses a throwaway service with no faillock, and it asserts the 
 
 ### 82. ⬒ HALF DONE — thin glass cannot carry white text over a bright wallpaper (2026-08-23)
 
+> **Queue entry: #316.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
+
 Found while fixing #81, and it is the part a floor cannot fix. Measured (sRGB composite, WCAG
 contrast, `GLASS_TINT.dark` over the wallpaper, white text on top):
 
@@ -2953,6 +2987,8 @@ wallpaper most users do not have, and the sweep above shows it cannot even work 
 
 ### 83. ⚠️ OPEN — the glass mixer cannot express per-surface floors (2026-08-23)
 
+> **Queue entry: #317.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
+
 The owner asked the right question while #81 was landing: should the Settings window get a higher
 floor than the shell? It should — it is a document surface and carries far more text — but it
 **cannot**, and the reason is mechanical rather than aesthetic.
@@ -2971,6 +3007,8 @@ rather than a shared value), or the floors become a display concern and the stor
 The owner wants the mixers reviewed regardless.
 
 ### 85. ⚠️ OPEN — the shadow meeting the rim reads as a BEVEL, and nobody decided that (2026-08-23)
+
+> **Queue entry: #318.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
 
 Owner observation once every glass surface had its shadow: where the drop shadow meets the rim's
 white specular — above it on the top edge, below it on the bottom — the pair reads as a **bevelled
@@ -3059,6 +3097,8 @@ honest test is a live A/B on the damage harness with the fps discipline from #46
 different loads).
 
 ### 87. ⚠️ OPEN — what the greeter audit of 2026-08-24 left after the glass reached it
+
+> **Queue entry: #319.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
 
 The glass half is done: `ui/lib/glass-paint.ts` now holds the rim ramp, the silhouette and the
 shadow recipe, and the greeter/lockscreen capsule paints them (see `design-system.md`). Four things
@@ -3170,6 +3210,8 @@ surface with no shadow would block the merge queue for nothing. Write it properl
 
 ### 88. ⚠️ OPEN — the glass sliders show TWO controls for one decision (2026-08-24)
 
+> **Queue entry: #320.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
+
 Settings → Appearance ships a master "Glass" slider AND, behind an "Advanced" disclosure, four
 per-surface sliders. Both govern the same thing, so the master has to be an INDETERMINATE control:
 when the four disagree it reads "—" and mutes (`glassUniform`, Appearance.tsx). That was tolerable
@@ -3209,6 +3251,8 @@ What it costs, so nobody under-estimates it into a release:
 has open — it is the same surface twice.
 
 ### 89. ⚠️ OPEN — three portal backends grant without asking, and are unrouted until they do (2026-08-24)
+
+> **Queue entry: #321.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
 
 `bin/nidara-portal` implements `Account`, `DynamicLauncher` and `Background`. All three return
 success immediately: `GetUserInformation` hands over the real name and avatar URI, `PrepareInstall`
@@ -3255,6 +3299,8 @@ from caller-supplied paths — now `Gio.Subprocess` with fixed argv.
 
 ### 91. ⚠️ OPEN — the login screens wear the DOCK's material, and nobody chose that (2026-08-25)
 
+> **Queue entry: #322.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
+
 Found while answering #82, and it is a sequencing accident rather than a decision.
 
 **#254** gave the login surfaces `LOCK_GLASS.fill.a = 0.24`, and its comment says why: it is "the
@@ -3288,6 +3334,8 @@ ceiling is a separate quantity and is untouched by the body's alpha.
 
 ### 92. ⚠️ OPEN — `--nidara-state-selected` never follows the accent on the login screens (2026-08-25)
 
+> **Queue entry: #323.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
+
 Small, and found by trying to give it a light-mode value. `ui/greeter/style.scss` declares
 `--nidara-state-selected: rgba(0, 136, 255, 0.22)` in its pre-load palette — the default blue —
 and `accentCssFor()`, which overwrites every other accent token at runtime, **does not emit this
@@ -3305,6 +3353,8 @@ alpha it has.
 accent to whatever was typed, for every user who chose a different one.
 
 ### 97. ⚠️ OPEN — the universal checkmark was born as a copy of the one it was meant to replace (2026-08-29)
+
+> **Queue entry: #324.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
 
 `NidaraSelectionCheck` (`ui/lib/nidara-kit/check.ts`) landed with #282 to give every single-select
 row in the DE one glyph. Its own docstring says it "replaces raw radio buttons across Settings and
@@ -3336,6 +3386,8 @@ That is correct today (Cairo paints it, the class is for perception) but it look
 rule to the next reader, and `token-contract-check` will not tell them either way.
 
 ### 98. ⚠️ OPEN — About borrows Settings' identity, and the dock cannot tell them apart (2026-08-30)
+
+> **Queue entry: #304.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
 
 Reported from the desktop: opening **About** from the system menu makes it take over the pinned
 **Settings** icon in the dock, and when Settings is open too the dock shows them GROUPED under that
@@ -3375,6 +3427,8 @@ noticed.
 
 ### 99. ⚠️ OPEN — the installer cannot fit on a screen shorter than its own floor (2026-08-30)
 
+> **Queue entry: #312.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
+
 Found while chasing the installer's window rule, not caused by it.
 
 `ui/installer/widget/InstallerWindow.ts` sets `minWidth: 960, minHeight: 760` as well as the
@@ -3391,6 +3445,8 @@ window rule is not where this lives — see `dev-workflow.md` → "A window rule
 never interface text — and our identifiers arrive LATE".
 
 ### 100. ⚠️ OPEN — the shell grew 460 MB over 21 hours, and it is NOT the JS side (2026-08-30)
+
+> **Queue entry: #305.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
 
 Found while pricing whether Settings should be its own process. It should not be — but the number
 that came out of the measurement is worth more than the question that prompted it.
@@ -3421,6 +3477,8 @@ a shell up and sample `smaps_rollup` on a schedule, with the desktop idle for on
 for the other — an idle arm that also grows is a different bug from one that does not.
 
 ### 101. ⚠️ OPEN — the installer's log stops one command short of the end (2026-08-31)
+
+> **Queue entry: nidara-iso#10.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
 
 The log is legible now — `lib/ansi.ts` undresses the child's TTY escapes and the view names its
 font instead of asking fontconfig for one (see dev-workflow.md, "The installer's log is not a

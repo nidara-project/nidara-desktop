@@ -483,6 +483,30 @@ PNGs when they differ — a dev box without `ttf-jetbrains-mono` renders a subst
 are honest about layout and nothing else. Same 0-sized-children timing trap as the other probes: it
 waits 1500 ms, and at 600 ms the window is already `mapped` while every child still measures 0×0.
 
+### The queue is GitHub issues; the skill keeps the rules (2026-08-31)
+
+Two places, split by kind, and the split is the point:
+
+- **An issue** answers *what is next and in what order*. It dies when the PR merges.
+- **`references/tech-debt.md`** answers *what is true and what not to do*. It outlives the fix —
+  several RESOLVED items still carry a rule that binds — and it ships in the checkout, so a
+  contributor's agent has it without asking GitHub for anything.
+
+Each open debt carries its queue entry in a line under its heading; the debt numbers are NOT
+renumbered to match, because a `#N` in a commit message from July still has to resolve.
+
+**Close from the PR body with `Closes #<n>`.** That is the whole discipline. A tracker nobody
+empties is worse than no tracker, and this repo had 300 PRs against one issue before this.
+
+Milestones are the phases of the standing work order; labels name the area (`installer`,
+`hyprland`, `design-system`, `login-screens`) or the shape of the next step (`needs-vm`,
+`needs-measurement`, `debt`). An issue whose fix lives in **nidara-iso** or **nidara-repo** is
+filed in that repo and cross-referenced, never duplicated.
+
+⚠️ **Do not start a fourth list.** A report artifact records what a measuring session found, on a
+date, and stops there — the moment one starts carrying status it becomes a second queue with its
+own numbering, which is exactly the collision that produced this section.
+
 ### The boot splash left this repo entirely — do not bring any of it back
 
 There is no Plymouth theme here any more, and `packaging/nidara/PKGBUILD`, `install.sh` and
