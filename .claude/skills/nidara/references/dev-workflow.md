@@ -286,43 +286,60 @@ left a later "clean" kitty coming up 2544x1284 and looking like a regression the
 when the hook was off. Pass `-o remember_window_size=no -o initial_window_width=… -o
 initial_window_height=…` for every arm.
 
-#### A window rule matches an IDENTIFIER, never interface text — and a float rule needs a `size`
+#### A window rule matches an IDENTIFIER, never interface text — and our identifiers arrive LATE
 
-Two things that only look like separate problems.
+Two rules, and the second one is the one nobody sees coming.
 
-**1. Floating by class, on its own, comes up the size of the screen.** Not always: only when the
-window is the first one on its workspace. Measured on the live medium — the installer at
-`[0,-30] [1266,1219]` on a 1266x1282 monitor against `[153,200] [960,760]` for the same binary
-with anything else already open. The class is known before the client has settled a size, so the
-rule floats a window whose desired geometry is still the work area's.
+**1. Never match a title.** A title is interface text: it gets translated (none of ours are yet —
+the day one is, that would be one rule per locale) and an application's title follows its content
+besides. A class is an identifier. Rules here match identifiers, always.
 
-**Reproduced on the host with Settings** (a different bundle, the same `NidaraWindow`), which is
-how to check this without the ISO — its own size is 1098x760 and a temporary
-`{ class = "^nidara-settings$" }, float, center` rule on an empty workspace gives:
+**2. ⚠️ Our windows do not have their app-id when Hyprland first matches rules.** The shell, the
+greeter, the lockscreen and the installer all give a window its identity through
+`setWindowAppId` (`ui/lib/app-id.ts`), and that lands at **MAP** — after the compositor has
+already matched its rules once against the PROCESS app-id (`org.nidara.installer`,
+`org.nidara.shell`, …) that GTK put on the toplevel at creation.
 
-    float + center only        at [8,48]     size [2544,1284]   the whole work area
-    + size = "1098 760"        at [731,310]  size [1098,760]    its own size, centred
+So a rule naming only the final class is matched **too late**. The window spends its first frames
+TILED, GTK is told it is maximized and takes the tile as its size, and when the class finally
+arrives the rules are re-evaluated and the window floats **at the size it just adopted**. That is
+why the installer "opened at monitor size when it was the only window": the tile it adopts is the
+whole work area on an empty workspace, and half of it next to one other window.
 
-Different window addresses in the two arms, so both are real first maps. The fix is `size` in the
-rule: `CDefaultFloatingAlgorithm::newTarget` (0.56.2) overwrites `windowGeometry.w/h` from
-`m_ruleApplicator->static_.size` on `m_firstMap`, before `center` positions the result, so the
-client's desired size never gets a vote. `size` is a live Lua rule key taking a `"w h"` string —
-verified against a control that could fail (`size = "1234 567"` on a throwaway kitty class came up
-1234x567 centred; the same rule without the line gave kitty's own 700x500).
+Measured with a minimal GTK4 window — one variable per arm, same empty 2560x1440 screen, default
+size 960x760, rule `float + center`:
 
-⚠️ **The first arm of that probe used `size = "700 500"` and proved nothing**, because 700x500 is
-kitty's natural size — two identical captures, an instrument that cannot distinguish. Pick a number
-the client would never choose.
+| arm | result |
+|---|---|
+| app-id from birth | 960x760 ✔ |
+| + `set_size_request(960,760)` | 960x760 ✔ |
+| app-id stamped at map, rule on the LATE class | **2544x1284** ✘ the work area |
+| same, on a workspace with one other window | **1272x1284** ✘ half the tile |
+| app-id stamped at map, rule on an EARLY TITLE | 960x760 ✔ |
+| app-id stamped at map, rule on the BIRTH class | 960x760 ✔ |
 
-**2. Matching on the TITLE also fixes it — and is the wrong fix.** By the time the title is known
-the client has committed its size, so `{ title = "^Nidara Installer$" }` produces 960x760 too. Do
-not take that shortcut: **a title is interface text.** It gets translated (none of ours are, yet —
-the day one is, that is one rule per locale), and an application's title follows its content
-besides. A class is an identifier, and our windows' classes are OURS: each declares its own app-id
-through `ui/lib/app-id.ts`. **Rules match identifiers here, never UI strings.**
+**The fix is the alternation**, verified to work in Hyprland's matcher:
 
-The one rule still matching a title is `float-about`, and only because About borrows Settings'
-app-id — debt #98, which is what has to land before that rule can move to a class.
+    match = { class = "^(org\\.nidara\\.installer|nidara-installer)$" }
+
+⚠️ Things this explains, and one it warns about:
+
+- **About has never had this** because its rule is `^About Nidara$` and a title is on the toplevel
+  from creation. So the title match is not just a workaround for the shared app-id — it is also
+  what has been hiding this. When debt #98 gives About an app-id of its own, moving its rule to
+  that class walks straight into the trap; it needs the birth class in the alternation too.
+- `resizable` is NOT the difference, and neither is `set_size_request` — both were arms above, both
+  fine. Neither is the `maximized` flag on its own: every arm reported `maximized=true`, including
+  the ones that came up correctly. (Related and already known: **Hyprland never clears the `tiled`
+  toplevel state** — see the note in `ui/lib/tokens.ts` — so `maximized`/`tiled` are useless as a
+  signal for "someone else is sizing me".)
+- A `size` in the rule also fixes it, by overriding the adopted size after the fact. It works
+  (verified), but it duplicates a number that already lives in the window's own source, so prefer
+  the alternation.
+
+⚠️ **kitty remembers its window size**, so it is a contaminated instrument here: a probe run left a
+later "clean" kitty coming up 2544x1284 and looking like a regression, with the clamp switched off.
+Every arm needs `-o remember_window_size=no -o initial_window_width=… -o initial_window_height=…`.
 
 ### The installer partitions with its own hands now — and `arm` is the only thing between it and your disk
 

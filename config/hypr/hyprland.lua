@@ -589,35 +589,39 @@ hl.window_rule({
 -- first seen: a full-height pane sharing the screen with whatever else was open,
 -- when what it needs is to be the thing in front of you.
 --
--- 🔑 `size` is not decoration, and it is the reason this rule can stay on the CLASS.
--- Floating by class alone came up THE SIZE OF THE SCREEN, but only when the
--- installer was the first window on its workspace — measured on the live medium,
--- `[0,-30] [1266,1219]` on a 1266x1282 monitor with a window whose own default is
--- 960x760, against `[153,200] [960,760]` for the same binary with anything else
--- already open. The class is known before the client has settled a size, so the
--- rule floats a window whose desired geometry is still the work area's.
+-- 🔑 THE TWO CLASSES ARE ONE WINDOW, AND THE FIRST ONE IS LOAD-BEARING.
+-- `org.nidara.installer` is the PROCESS app-id, the one GTK puts on the toplevel at
+-- creation (`ui/installer/app.ts`). `nidara-installer` is the per-toplevel override
+-- `ui/lib/app-id.ts` stamps at MAP — which is after Hyprland has already matched its
+-- rules once. A rule that names only the second one is matched TOO LATE: the window
+-- spends its first frames TILED, GTK is told it is maximized and takes the tile as
+-- its size, and when the class finally arrives the rules are re-evaluated and it
+-- floats at the size it just adopted. That is the whole bug, and it is why it looked
+-- like "the installer opens at monitor size when it is the only window": the tile it
+-- adopts is the whole work area on an empty workspace, and half of it next to one
+-- other window.
 --
--- ⚠️ Matching on the TITLE also produces 960x760 — verified, same binary, only the
--- `match` changed — because by then the client has committed its size. Do not
--- "simplify" this rule to that: a title is interface text. It gets translated (this
--- one is not, yet — the day it is, one rule per locale), and an application's title
--- follows its content besides. A class is an identifier, and this one is OURS:
--- `ui/installer/widget/InstallerWindow.ts` declares `appId: "nidara-installer"`
--- through `ui/lib/app-id.ts`. Rules match identifiers here, never UI strings.
+-- Measured with a minimal GTK4 window (one variable per arm, all on the same empty
+-- 2560x1440 screen, default size 960x760):
 --
--- Deterministic because Hyprland applies it in the same place it computes the
--- floating geometry: `CDefaultFloatingAlgorithm::newTarget` (0.56.2) overwrites
--- `windowGeometry.w/h` from `m_ruleApplicator->static_.size` on `m_firstMap`, before
--- `center` positions the result — so the client's desired size never gets a vote.
+--     app-id from birth                                    960x760    ✔
+--     + set_size_request(960,760)                          960x760    ✔
+--     app-id stamped at map, rule on the LATE class       2544x1284   ✘  the work area
+--     same, but on a workspace with one window            1272x1284   ✘  half the tile
+--     app-id stamped at map, rule on an EARLY TITLE        960x760    ✔
+--     app-id stamped at map, rule on the BIRTH class       960x760    ✔
 --
--- ⚠️ 960x760 is the SAME pair as `defaultWidth`/`defaultHeight` (and the min) in
--- `ui/installer/widget/InstallerWindow.ts`. Nothing keeps them in step; change one
--- and change the other, or the rule starts fighting GTK's floor.
+-- The last two are why About has never had this: its rule is on `^About Nidara$`, and
+-- a title is on the toplevel from creation. ⚠️ So when debt #98 gives About an app-id
+-- of its own, moving its rule to that class walks straight into this — it needs the
+-- birth class in the alternation too, exactly like this one.
+--
+-- Rules still match IDENTIFIERS, never interface text. `org.nidara.installer` is an
+-- identifier as much as `nidara-installer` is; it is just the earlier one.
 hl.window_rule({
     name   = "float-installer",
-    match  = { class = "^nidara-installer$" },
+    match  = { class = "^(org\\.nidara\\.installer|nidara-installer)$" },
     float  = true,
-    size   = "960 760",
     center = true,
 })
 
