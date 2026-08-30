@@ -20,17 +20,33 @@
 # bundler, the SCSS pipeline — is reachable only from inside it.
 #
 # ⚠️ Anything that picks "the package makepkg just built" must now say WHICH:
-# install.sh limits itself with `makepkg --pkg nidara` (it installs the desktop on
-# an Arch somebody already runs, and must never hand them an installer), and
-# nidara-repo copies every produced package rather than the newest one.
-pkgname=(nidara nidara-installer)
+# install.sh limits itself with `makepkg --pkg nidara-desktop` (it installs the
+# desktop on an Arch somebody already runs, and must never hand them an installer),
+# and nidara-repo copies every produced package rather than the newest one.
+#
+# ⚠️ RENAMED `nidara` → `nidara-desktop` (2026-08-30). The bare name was the
+# PRODUCT's and this is one of its four layers, so `pacman -Qi nidara` answered
+# "what version of Nidara do you have" with the DESKTOP's number — the exact
+# confusion nidara-iso/PRODUCT.md exists to remove, and the last place still
+# making it now that /etc/os-release carries no version. Every package in this
+# project is `nidara-<thing>` from here: nidara-desktop, nidara-installer,
+# nidara-apps, nidara-system, nidara-release. It is also what everybody else does
+# — `ubuntu-desktop` is a metapackage, `gnome-shell` is the component; nobody
+# names the desktop after the distribution.
+#
+# The bare `nidara` is deliberately left FREE. If it ever comes back it should be
+# a metapackage meaning the product (desktop + apps + system + release), the way
+# `gnome` is in Arch. ⚠️ Do NOT create it while the `replaces=(nidara)` below is
+# still doing its job: a package named `nidara` and a package replacing `nidara`
+# in the same repository is a resolution somebody's `-Syu` has to guess at.
+pkgname=(nidara-desktop nidara-installer)
 pkgver=0.9.0
 pkgrel=1
 pkgdesc="Nidara — a fluid, glassmorphic desktop environment (Hyprland + GTK4/GJS)"
 arch=(x86_64)
 url="https://github.com/nidara-project/nidara-desktop"
 license=(GPL-3.0-only)
-# `install=` and `backup=` are set inside package_nidara(): at the top level they
+# `install=` and `backup=` are set inside package_nidara-desktop(): at the top level they
 # would apply to BOTH packages, and nidara.install's greetd/setup work has nothing
 # to do with the installer.
 
@@ -183,10 +199,24 @@ build() {
   lib/nidara-auth/build.sh "$srcdir/nidara-desktop-$pkgver/build/nidara-auth"
 }
 
-package_nidara() {
+package_nidara-desktop() {
   install=nidara.install
   backup=(etc/xdg-desktop-portal/hyprland-portals.conf
           etc/pam.d/nidara-lock)
+  # The rename dance, and all three are load-bearing:
+  #   replaces  — an existing install migrates on the next `pacman -Syu`, with no
+  #               instruction to anybody. This is the only one that touches
+  #               machines that are already out there.
+  #   conflicts — the two names are the same files; pacman must refuse to have both.
+  #   provides  — `pacman -S nidara` keeps resolving, so every script, note and
+  #               README line written before today still works. That is also why
+  #               the ISO and base.json can be updated at leisure instead of in
+  #               lockstep with this.
+  # Drop them only when no reachable install can still carry the old name — which
+  # is not a date, it is a decision somebody makes after the first public image.
+  provides=(nidara)
+  replaces=(nidara)
+  conflicts=(nidara)
 
   cd "$srcdir/nidara-desktop-$pkgver"
 
@@ -307,7 +337,7 @@ package_nidara() {
 # is a bundle of the desktop's toolkit. See nidara-iso/INSTALLER.md.
 package_nidara-installer() {
   pkgdesc="Nidara's graphical installer (live medium only)"
-  depends=(nidara archinstall)
+  depends=(nidara-desktop archinstall)
 
   cd "$srcdir/nidara-desktop-$pkgver"
 

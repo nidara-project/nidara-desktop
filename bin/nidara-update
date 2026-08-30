@@ -7,7 +7,8 @@
 #             written by `install.sh --dev`), update from THERE, following the dev
 #             branch. Hands over to that clone's install.sh so the updater itself
 #             updates with the repo.
-#   PACKAGE — nidara is installed as the pacman package (system installs since
+#   PACKAGE — the desktop is installed as the pacman package `nidara-desktop`
+#             (`nidara` before the 2026-08-30 rename; both are handled)
 #             the packaging switch): new releases arrive through the [nidara]
 #             repo on a plain full upgrade, pacman owns files and deps, no git
 #             involved. nidara-setup then re-applies the idempotent system/user
@@ -56,18 +57,34 @@ fi
 # NOTE this must stay AFTER the .patches guard: a patched install is a locally
 # built package, and a blind -Syu would replace it with pure upstream the
 # moment the repo serves a newer release — silently dropping the patches.
-if pacman -Qq nidara >/dev/null 2>&1; then
-    old_v="$(pacman -Q nidara | awk '{print $2}')"
-    echo "nidara-update: nidara is pacman-managed ($old_v) — running a full system upgrade…"
+# ⚠️ The package was renamed `nidara` → `nidara-desktop` on 2026-08-30, and the
+# upgrade below is the very thing that performs the rename on a machine that has
+# not taken it yet: `old_v` is read BEFORE it, possibly under the old name, and
+# `new_v` AFTER, necessarily under the new one. So both reads ask "whichever of
+# the two is installed" instead of naming one. A version read from a name pacman
+# has just retired comes back EMPTY and does not fail — it would make the
+# comparison below announce a change that did not happen, or miss one that did.
+_installed_desktop_pkg() {
+    for _p in nidara-desktop nidara; do
+        if pacman -Qq "$_p" >/dev/null 2>&1; then printf '%s\n' "$_p"; return 0; fi
+    done
+    return 1
+}
+
+if _pkg="$(_installed_desktop_pkg)"; then
+    old_v="$(pacman -Q "$_pkg" | awk '{print $2}')"
+    echo "nidara-update: the desktop is pacman-managed ($_pkg $old_v) — running a full system upgrade…"
     # Interactive on purpose (no --noconfirm): this is a FULL system upgrade,
     # the user should see what it pulls in. Declining aborts the update.
     sudo pacman -Syu
-    new_v="$(pacman -Q nidara | awk '{print $2}')"
+    # Re-resolve: the upgrade may have changed the package's NAME under us.
+    _pkg="$(_installed_desktop_pkg)" || { echo "nidara-update: the desktop package is gone after the upgrade — aborting." >&2; exit 1; }
+    new_v="$(pacman -Q "$_pkg" | awk '{print $2}')"
     nidara-setup
     if [ "$old_v" = "$new_v" ]; then
-        echo "nidara-update: nidara already up to date ($new_v)."
+        echo "nidara-update: already up to date ($_pkg $new_v)."
     else
-        echo "nidara-update: nidara $old_v → $new_v."
+        echo "nidara-update: $_pkg $old_v → $new_v."
         # Reload the running shell so the new bundle takes effect now; greeter
         # and lockscreen pick theirs up on next use.
         if systemctl --user is-active --quiet nidara.service 2>/dev/null; then
