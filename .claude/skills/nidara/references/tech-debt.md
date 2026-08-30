@@ -3348,7 +3348,16 @@ switcher, a taskbar someone else writes) is correct to put them together. About 
 related — #94 settled that they are a summary and its detail — but relation is not identity, and the
 dock is where the difference shows.
 
-⚠️ Not a rename-and-done: the app id is also what the dock's pin matches, so changing it without
+⚠️ **And not a move-the-rule-to-the-class either — measured after this item was written.** About
+floats through a `hl.window_rule` matched on `^About Nidara$`, and the reason that has always worked
+is not only the shared app-id: a title is on the toplevel from creation, while `setWindowAppId`
+stamps the class at MAP, *after* Hyprland has matched its rules once. A rule naming only the new
+class would be matched too late and About would come up the size of its tile — the whole work area
+on an empty workspace. So whatever lands has to put the BIRTH class (`org.nidara.shell`) into the
+match alongside the new one, exactly like `float-installer` now does. See `dev-workflow.md` → "A
+window rule matches an IDENTIFIER, never interface text — and our identifiers arrive LATE".
+
+⚠️ Not a rename-and-done either: the app id is also what the dock's pin matches, so changing it without
 looking at the pinned entry moves the problem rather than fixing it (a pinned `nidara-settings`
 would stop matching a window that now says `nidara-about`). Whatever lands has to answer what the
 dock shows for each of the two, and what the pin follows.
@@ -3363,6 +3372,53 @@ deprecated in favour of it, and the docs note it cannot put a floating window be
 which is not a case we need). So every caller that reaches a window through the shell — dock menu,
 switcher, notifications — focuses without raising, and the dock menu is simply where somebody
 noticed.
+
+### 99. ⚠️ OPEN — the installer cannot fit on a screen shorter than its own floor (2026-08-30)
+
+Found while chasing the installer's window rule, not caused by it.
+
+`ui/installer/widget/InstallerWindow.ts` sets `minWidth: 960, minHeight: 760` as well as the
+defaults, and a `set_size_request` is a floor GTK will not go under. On a 1366x768 laptop — the
+live medium boots on whatever hardware someone has — the usable height is 768 minus the bar (40)
+and the dock (100), i.e. 628. The window asks for 760, the clamp added in #299 tries to shrink it
+to 628, and GTK refuses; the excess goes out the top, which is the very shape #299 exists to
+prevent.
+
+Not measured on such a screen — derived from the numbers, and worth a VM at 1366x768 before
+deciding anything. The fix is not the rule: it is either a smaller floor (does the wizard's content
+survive a 1366x768 work area?) or a live-medium layout that gives the installer the screen. The
+window rule is not where this lives — see `dev-workflow.md` → "A window rule matches an IDENTIFIER,
+never interface text — and our identifiers arrive LATE".
+
+### 100. ⚠️ OPEN — the shell grew 460 MB over 21 hours, and it is NOT the JS side (2026-08-30)
+
+Found while pricing whether Settings should be its own process. It should not be — but the number
+that came out of the measurement is worth more than the question that prompted it.
+
+    fresh shell, Settings never opened      RSS 330.1 MB   PSS 202.7 MB   (stable over 30 s)
+    the same unit after 21 h 21 m uptime    RSS 792.5 MB   PSS 637.9 MB
+
+330 MB is the figure this project has always quoted as healthy, so the fresh number is right and the
+old one is growth, not a bad baseline. Where it sits, from the old process's `smaps` before it was
+restarted:
+
+    [heap]                453.1 MB     native malloc
+    /usr/lib/libLLVM      83.5 MB      Mesa's shader compiler, shared + clean, not ours
+    [anon:js-gc-heap]     42.1 MB      the JS side, and it is SMALL
+
+🔑 **So this is not widgets kept alive in JavaScript.** GJS's GC heap is 42 MB against 453 MB of C
+heap, which points at native allocations — Cairo/pixman surfaces, GdkTextures, Pango layouts — that
+something keeps a reference to, or that are never returned to the allocator.
+
+For scale, the thing it was measured against: **the hidden Settings window retains 15.3 MB**
+(345.4 with it built and hidden, 330.1 without it, and re-opening is free). Whatever is eating
+460 MB is thirty times that and has nothing to do with it.
+
+⚠️ Not yet characterised, and the evidence was destroyed by the restart that produced the clean
+baseline: whether the growth is monotonic with uptime or driven by activity (that session had heavy
+Settings, overlay and window-probe traffic), and what allocates it. The way to find out is to leave
+a shell up and sample `smaps_rollup` on a schedule, with the desktop idle for one arm and exercised
+for the other — an idle arm that also grows is a different bug from one that does not.
 
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 

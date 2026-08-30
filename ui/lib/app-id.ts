@@ -29,10 +29,30 @@
 //     moment later. Measured at three hooks (`map`, after-`map`,
 //     after-`present`): all three land, so this uses the earliest.
 //
-// Setting it at map is still early enough for the compositor's window rules:
-// `set_app_id` is a request sent in the same main-loop iteration, while the
-// surface has no buffer yet, and a Wayland surface is not MAPPED until its first
-// commit.
+// 🔴 IT IS NOT EARLY ENOUGH FOR WINDOW RULES. This paragraph used to claim the
+// opposite — that `set_app_id` goes out in the same main-loop iteration, with no
+// buffer yet, so the compositor has not matched rules — and it is FALSE, measured
+// 2026-08-30 with a minimal GTK4 window whose only variable was when the app-id
+// arrives. Hyprland matches its rules against the PROCESS app-id GTK put on the
+// toplevel at creation; a window whose rule names only the stamped class spends
+// its first frames TILED, and GTK, told it is maximized, ADOPTS the tile as its
+// size. On an empty workspace that is the whole work area — which is what "the
+// installer opens at monitor size" was.
+//
+//     app-id from birth ................... 960x760 (its own default)
+//     app-id stamped here, rule on it .... 2544x1284 (the work area)
+//     app-id stamped here, rule on the
+//       birth class or an early title .... 960x760
+//
+// ⚠️ So this function is right, and stamping is right — the dock, the desktop
+// registry and `resolveWindowApp` all read the final class and are correct. What
+// cannot be trusted is a WINDOW RULE keyed on it alone. Any rule matching one of
+// these classes must also name the birth class:
+//
+//     match = { class = "^(org\\.nidara\\.installer|nidara-installer)$" }
+//
+// See `.claude/skills/nidara/references/dev-workflow.md` → "A window rule matches
+// an IDENTIFIER, never interface text — and our identifiers arrive LATE".
 
 import Gtk from "gi://Gtk?version=4.0"
 // Side-effect import: see (1) above. Ships with gtk4 itself.

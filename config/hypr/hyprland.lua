@@ -466,10 +466,38 @@ local function clampFloating(w)
     }))
 end
 
--- The two ways a window ends up floating. `window.open` (openLate) already carries
--- the settled size, the position and the floating flag — measured with a window
--- floated by rule, which reports `floating=true` with its final geometry.
-hl.on("window.open", function(w) clampFloating(w) end)
+-- 🔑 ONE hook, not a list of the ways in. `window.open` catches a window that MAPS
+-- floating; `window.update_rules` catches every other route, because Hyprland
+-- re-evaluates a window's rules whenever its state changes — floating included —
+-- and hands the callback the settled geometry. Traced live across a float toggle
+-- driven by a raw `hyprctl dispatch` (deliberately NOT the keybind, so nothing of
+-- ours was in the path):
+--
+--     update_rules addr=0x…df700 floating=true size=2542x1282   still the tile
+--     update_rules addr=0x…df700 floating=true size=2560x1440   the settled one
+--
+-- ⚠️ Do NOT go back to hanging this off the entry points. The first version hooked
+-- `window.open` plus a 60 ms timer on Super+F, and it missed every OTHER way to
+-- float a window — the dock's window menu, `nidara-ipc toggleFloat`, the MCP verb,
+-- any keybind a user adds. That is how Chrome came up at [-1,-101] 2560x1440 on a
+-- machine whose config already had the clamp in it. The timer was never the
+-- problem: measured, the geometry is final 68 ms after the toggle and never moves.
+--
+-- Re-entrancy is bounded by the early return above: the clamp's own resize/move
+-- fire `update_rules` again, and by then the window fits, so the second pass is a
+-- no-op. `m_clamping` makes that explicit rather than load-bearing.
+local clamping = false
+
+local function clampFloatingGuarded(w)
+    if clamping then return end
+    clamping = true
+    local ok, err = pcall(clampFloating, w)
+    clamping = false
+    if not ok then print("Nidara: clampFloating failed: " .. tostring(err)) end
+end
+
+hl.on("window.open",         function(w) clampFloatingGuarded(w) end)
+hl.on("window.update_rules", function(w) clampFloatingGuarded(w) end)
 
 
 -- ── Keybinds — Window modes ──────────────────────────────────────────────────
@@ -477,10 +505,8 @@ hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
 -- The second way in: floating a window by hand. Nothing fires `window.open` here,
 -- so the toggle carries the clamp itself — after a beat, because the size the
 -- window lands on is not known until the compositor has applied the float.
-hl.bind(mainMod .. " + F", function()
-    hl.dispatch(hl.dsp.window.float({ action = "toggle" }))
-    hl.timer(function() clampFloating(hl.get_active_window()) end, { timeout = 60, type = "oneshot" })
-end)
+-- Plain toggle: `window.update_rules` clamps it, whoever floats it.
+hl.bind(mainMod .. " + F", hl.dsp.window.float({ action = "toggle" }))
 hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.fullscreen())
 -- Maximize = full working area WITHOUT covering the bar (fullscreen mode 1).
 hl.bind(mainMod .. " + M", hl.dsp.window.fullscreen({ mode = "maximized" }))
@@ -562,9 +588,39 @@ hl.window_rule({
 -- Without it the window is TILED like any other application, which is how it was
 -- first seen: a full-height pane sharing the screen with whatever else was open,
 -- when what it needs is to be the thing in front of you.
+--
+-- 🔑 THE TWO CLASSES ARE ONE WINDOW, AND THE FIRST ONE IS LOAD-BEARING.
+-- `org.nidara.installer` is the PROCESS app-id, the one GTK puts on the toplevel at
+-- creation (`ui/installer/app.ts`). `nidara-installer` is the per-toplevel override
+-- `ui/lib/app-id.ts` stamps at MAP — which is after Hyprland has already matched its
+-- rules once. A rule that names only the second one is matched TOO LATE: the window
+-- spends its first frames TILED, GTK is told it is maximized and takes the tile as
+-- its size, and when the class finally arrives the rules are re-evaluated and it
+-- floats at the size it just adopted. That is the whole bug, and it is why it looked
+-- like "the installer opens at monitor size when it is the only window": the tile it
+-- adopts is the whole work area on an empty workspace, and half of it next to one
+-- other window.
+--
+-- Measured with a minimal GTK4 window (one variable per arm, all on the same empty
+-- 2560x1440 screen, default size 960x760):
+--
+--     app-id from birth                                    960x760    ✔
+--     + set_size_request(960,760)                          960x760    ✔
+--     app-id stamped at map, rule on the LATE class       2544x1284   ✘  the work area
+--     same, but on a workspace with one window            1272x1284   ✘  half the tile
+--     app-id stamped at map, rule on an EARLY TITLE        960x760    ✔
+--     app-id stamped at map, rule on the BIRTH class       960x760    ✔
+--
+-- The last two are why About has never had this: its rule is on `^About Nidara$`, and
+-- a title is on the toplevel from creation. ⚠️ So when debt #98 gives About an app-id
+-- of its own, moving its rule to that class walks straight into this — it needs the
+-- birth class in the alternation too, exactly like this one.
+--
+-- Rules still match IDENTIFIERS, never interface text. `org.nidara.installer` is an
+-- identifier as much as `nidara-installer` is; it is just the earlier one.
 hl.window_rule({
     name   = "float-installer",
-    match  = { class = "^nidara-installer$" },
+    match  = { class = "^(org\\.nidara\\.installer|nidara-installer)$" },
     float  = true,
     center = true,
 })

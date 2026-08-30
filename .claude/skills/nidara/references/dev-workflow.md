@@ -203,6 +203,18 @@ check a style change; look at it on the next login, in the VM, or offscreen with
 Note the asymmetry this creates in a review: the greeter and the lockscreen **share one
 stylesheet**, so every greeter-visible change ships whether or not anyone looked at it.
 
+### ⛔ The `assets` branch is a published URL, not stale work — never merge or delete it
+
+`assets` is an ORPHAN branch (no merge base with `main`) holding the README's eight screenshots and
+nothing else. It exists so binaries stay out of `main`'s history, and **its branch name is part of a
+live URL**: `README.md` on `main` links every screenshot as
+`raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/*.webp`.
+
+⚠️ So it is exactly the shape that a branch sweep destroys — no PR, no shared history, one commit
+from July, a name that reads like a scratch branch. Deleting it, renaming it or merging it into
+`main` breaks all six images on the project's front page, and the break is invisible from a local
+checkout. Leave it alone; to change a screenshot, commit onto `assets` and push it.
+
 ### The fourth bundle: the installer builds everywhere and ships only on the ISO
 
 `ui/installer/` (2026-08-25) is a normal bundle — `npm run build` in it produces
@@ -244,6 +256,102 @@ saying so is better than an installer that looks ready and fails at the end).
 ⚠️ Hyprland **tiles it** unless told otherwise, which is how it was first seen: a full-height
 pane sharing the screen. `config/hypr/hyprland.lua` carries a `float-installer` window rule
 matching the `nidara-installer` app-id; on an installed system it matches nothing.
+
+#### Nothing floating hangs off the screen — and the hook is `window.update_rules`
+
+A floating window keeps whatever size the CLIENT asks for and Hyprland never shrinks it to fit, so
+any application that remembers a maximized geometry — Chrome does — lands with its title bar off
+the top of the display. `config/hypr/hyprland.lua` clamps it in Lua, because the config language
+cannot express "the monitor minus the bar and the dock" and Lua gets `monitor.reserved` as named
+fields.
+
+🔑 **The clamp hangs off `window.update_rules`, and that is the whole point.** Hyprland
+re-evaluates a window's rules whenever its state changes — floating included — and hands the
+callback the settled geometry. Traced live across a float toggle driven by a raw `hyprctl
+dispatch`, with nothing of ours in the path:
+
+    update_rules addr=0x…df700 floating=true size=2542x1282   still the tile
+    update_rules addr=0x…df700 floating=true size=2560x1440   the settled one
+
+⚠️ **Do not go back to hooking the entry points.** The first version (#299) used `window.open` plus
+a 60 ms one-shot timer on the Super+F keybind, and it missed every other way to float a window —
+the dock's window menu, `nidara-ipc toggleFloat`, the MCP verb, any keybind a user adds. Chrome came
+up at `[-1,-101] 2560x1440` on a machine whose config already contained that clamp. The timer was
+never the problem: measured, the geometry is final 68 ms after the toggle and never moves again.
+
+⛔ **`max_size` is NOT the global answer, and it looks like it is.** It does everything you want on
+paper — the compositor enforces it continuously, it accepts expressions (`max_size =
+"monitor_w-16 monitor_h-156"` capped a client asking 2560x1440 down to 2544x1284 at `[8,48]`), and
+it needs no events at all. **But a `max_size` rule makes the window FLOAT, unconditionally.**
+Measured in three arms on one throwaway class: with `max_size = "800 600"` the window floats at
+800x600; with the rule's other props and no `max_size` it tiles at 2542x1282; and with a cap the
+tile could never reach (`monitor_w-16 monitor_h-156`) it floats anyway. A blanket `class = ".*"`
+rule would turn a tiling desktop into a floating-only one. There is also no native option for this
+— the whole `HL.ConfigKey` list has nothing about keeping floating windows inside the work area.
+
+Both halves of the clamp are verified, and the second one matters as much: a window that FITS is
+left byte for byte where the compositor put it (same window, same toggle, hook on and hook off →
+`[1566,761] [700,500]` both times).
+
+⚠️ **kitty remembers its window size**, so it is a contaminated instrument for this: a probe run
+left a later "clean" kitty coming up 2544x1284 and looking like a regression the clamp had caused,
+when the hook was off. Pass `-o remember_window_size=no -o initial_window_width=… -o
+initial_window_height=…` for every arm.
+
+#### A window rule matches an IDENTIFIER, never interface text — and our identifiers arrive LATE
+
+Two rules, and the second one is the one nobody sees coming.
+
+**1. Never match a title.** A title is interface text: it gets translated (none of ours are yet —
+the day one is, that would be one rule per locale) and an application's title follows its content
+besides. A class is an identifier. Rules here match identifiers, always.
+
+**2. ⚠️ Our windows do not have their app-id when Hyprland first matches rules.** The shell, the
+greeter, the lockscreen and the installer all give a window its identity through
+`setWindowAppId` (`ui/lib/app-id.ts`), and that lands at **MAP** — after the compositor has
+already matched its rules once against the PROCESS app-id (`org.nidara.installer`,
+`org.nidara.shell`, …) that GTK put on the toplevel at creation.
+
+So a rule naming only the final class is matched **too late**. The window spends its first frames
+TILED, GTK is told it is maximized and takes the tile as its size, and when the class finally
+arrives the rules are re-evaluated and the window floats **at the size it just adopted**. That is
+why the installer "opened at monitor size when it was the only window": the tile it adopts is the
+whole work area on an empty workspace, and half of it next to one other window.
+
+Measured with a minimal GTK4 window — one variable per arm, same empty 2560x1440 screen, default
+size 960x760, rule `float + center`:
+
+| arm | result |
+|---|---|
+| app-id from birth | 960x760 ✔ |
+| + `set_size_request(960,760)` | 960x760 ✔ |
+| app-id stamped at map, rule on the LATE class | **2544x1284** ✘ the work area |
+| same, on a workspace with one other window | **1272x1284** ✘ half the tile |
+| app-id stamped at map, rule on an EARLY TITLE | 960x760 ✔ |
+| app-id stamped at map, rule on the BIRTH class | 960x760 ✔ |
+
+**The fix is the alternation**, verified to work in Hyprland's matcher:
+
+    match = { class = "^(org\\.nidara\\.installer|nidara-installer)$" }
+
+⚠️ Things this explains, and one it warns about:
+
+- **About has never had this** because its rule is `^About Nidara$` and a title is on the toplevel
+  from creation. So the title match is not just a workaround for the shared app-id — it is also
+  what has been hiding this. When debt #98 gives About an app-id of its own, moving its rule to
+  that class walks straight into the trap; it needs the birth class in the alternation too.
+- `resizable` is NOT the difference, and neither is `set_size_request` — both were arms above, both
+  fine. Neither is the `maximized` flag on its own: every arm reported `maximized=true`, including
+  the ones that came up correctly. (Related and already known: **Hyprland never clears the `tiled`
+  toplevel state** — see the note in `ui/lib/tokens.ts` — so `maximized`/`tiled` are useless as a
+  signal for "someone else is sizing me".)
+- A `size` in the rule also fixes it, by overriding the adopted size after the fact. It works
+  (verified), but it duplicates a number that already lives in the window's own source, so prefer
+  the alternation.
+
+⚠️ **kitty remembers its window size**, so it is a contaminated instrument here: a probe run left a
+later "clean" kitty coming up 2544x1284 and looking like a regression, with the clamp switched off.
+Every arm needs `-o remember_window_size=no -o initial_window_width=… -o initial_window_height=…`.
 
 ### The installer partitions with its own hands now — and `arm` is the only thing between it and your disk
 
