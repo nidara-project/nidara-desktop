@@ -220,27 +220,71 @@ for f in appearance.json; do
 done
 
 # The icon theme has to be in gsettings BEFORE the shell's first frame, not after.
-# GTK resolves every icon through the value the settings portal serves from
-# gsettings (settings.ini loses to it), while ThemeManager only pushes
-# appearance.json's iconTheme once it is already running — about two seconds in.
-# On a virgin account those two seconds are the whole first session: everything
-# rasterized before them keeps the schema default (Adwaita), and the dock, which
-# caches its icons as pixbufs, kept it until the shell was restarted (measured in
-# the VM 2026-08-18; `scripts/dev/icon-theme-probe.js` is the instrument).
+# GTK reads that value while it builds the first window, while ThemeManager only
+# pushes appearance.json's iconTheme once it is already running — about two
+# seconds in. On a virgin account those two seconds are the whole first session:
+# everything rasterized before them keeps the schema default (Adwaita), and the
+# dock, which caches its icons as pixbufs, kept it until the shell was restarted.
 #
-# Seeded from the same appearance.json the shell will read — one source of truth,
-# so a user who edited it gets THEIR theme — and only while the key has never been
-# set: an empty `dconf read` is exactly what separates a virgin account from
-# someone who deliberately picked Adwaita, which we must never overwrite.
-_icon_theme="$(sed -n 's/.*"iconTheme"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-    "$CONFIG_DIR/appearance.json" 2>/dev/null | head -1)"
-if [ -n "$_icon_theme" ] \
-   && [ -z "$(run_user_dconf dconf read /org/gnome/desktop/interface/icon-theme 2>/dev/null)" ]; then
-    if run_user_dconf gsettings set org.gnome.desktop.interface icon-theme "$_icon_theme" 2>/dev/null; then
-        echo "  [Init] Icon theme → $_icon_theme (seeded before first login)"
-    else
-        echo "  [WARN] could not seed the icon theme; the first session will paint"
-        echo "         the default icons until the shell applies $_icon_theme."
+# ⚠️ THIS NO LONGER WRITES ANYTHING. It used to seed the USER's dconf here, and
+# that had two defects, both measured on a real install (2026-08-30):
+#
+#   1. It did not work on the path that matters. The installer runs this inside
+#      arch-chroot for an account that has never logged in, so /run/user/$uid
+#      does not exist and dconf cannot commit — `~/.config/dconf` was born at
+#      FIRST LOGIN, not at install.
+#   2. It said it had worked. `gsettings set` exits 0 while failing and reports
+#      the failure only on stderr, which this script discarded with 2>/dev/null.
+#      So the success line printed and nothing was written — for months. A check
+#      whose command cannot fail is not a check.
+#
+# The default is now a SYSTEM one, shipped by the package: /etc/dconf/db/local.d/
+# (generated from the same defaults/appearance.json) compiled by a pacman hook,
+# and named by /etc/dconf/profile/user. No session, no runtime dir, nothing for a
+# chroot to withhold — and `user-db:user` comes first in that profile, so a person
+# who chose Adwaita keeps Adwaita without us having to guess at "never set".
+#
+# What is left here is the VERIFICATION, which is what was missing. Reading it
+# back through a profile that names ONLY the system database answers the question
+# the old code got wrong — "is the default actually in effect?" — without a user's
+# own override masking the answer either way.
+if command -v dconf >/dev/null 2>&1; then
+    _icon_theme="$(sed -n 's/.*"iconTheme"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+        "$SHARE/defaults/appearance.json" 2>/dev/null | head -1)"
+    if [ -n "$_icon_theme" ]; then
+        # The hook runs at package install, which is before this script. If the
+        # database is missing anyway (a source install, a hook that did not fire),
+        # compiling it here costs one call and removes the failure mode.
+        [ -f /etc/dconf/db/local ] || dconf update 2>/dev/null || true
+
+        # TWO conditions, because either one alone is blind to the other's
+        # failure — which this check learned the hard way. Reading through a
+        # profile that names only the system database proves the VALUE is
+        # compiled, and it deliberately ignores /etc/dconf/profile/user, so with
+        # that file missing the read still says Papirus while every real account
+        # sees Adwaita. The value being right and the value being REACHABLE are
+        # different claims and both have to be made.
+        _p="$(mktemp)"; echo "system-db:local" > "$_p"
+        _seen="$(DCONF_PROFILE="$_p" dconf read /org/gnome/desktop/interface/icon-theme 2>/dev/null | tr -d "'")"
+        rm -f "$_p"
+        _reachable=no
+        grep -qx "system-db:local" /etc/dconf/profile/user 2>/dev/null && _reachable=yes
+
+        if [ "$_seen" = "$_icon_theme" ] && [ "$_reachable" = yes ]; then
+            echo "  [OK] Icon theme default → $_icon_theme (system dconf database)"
+        else
+            echo "  [WARN] the system icon-theme default is not in effect."
+            echo "         The first session will paint Adwaita until the shell catches up."
+            if [ "$_seen" != "$_icon_theme" ]; then
+                echo "         The database says '${_seen:-nothing}', not '$_icon_theme' —"
+                echo "         /etc/dconf/db/local.d/00-nidara-appearance is missing or stale;"
+                echo "         run 'dconf update'."
+            fi
+            if [ "$_reachable" != yes ]; then
+                echo "         /etc/dconf/profile/user does not name 'system-db:local', so"
+                echo "         nothing reads that database at all, whatever it contains."
+            fi
+        fi
     fi
 fi
 

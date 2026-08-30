@@ -82,6 +82,12 @@ depends=(
   brightnessctl pamixer playerctl jq curl slurp grim wf-recorder
   wl-clipboard cliphist wtype at-spi2-core python-gobject libnotify
   xdg-utils gsettings-desktop-schemas awww lz4 mesa pam
+  # `dconf` — the BINARY, not the library. nidara-setup reads through it and the
+  # pacman hook below execs /usr/bin/dconf; it had been arriving as a transitive
+  # dependency of the GTK stack, which is the same shape of latent bug as the
+  # python-gobject one: present on every dev box, absent from nobody's until it
+  # is. Declared because we call it by path.
+  dconf
   # default apps wired into the UI (Super+T, Files item, calculator widget…)
   kitty nautilus gnome-calculator pavucontrol
   # fonts + icon fallbacks the design system assumes; CJK because the shell,
@@ -309,6 +315,43 @@ package_nidara-desktop() {
   install -Dm644 config/portal/org.freedesktop.impl.portal.desktop.nidara.service \
     "$pkgdir/usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.nidara.service"
   install -Dm644 config/portal/hyprland-portals.conf "$pkgdir/etc/xdg-desktop-portal/hyprland-portals.conf"
+
+  # ── the icon theme, as a SYSTEM DEFAULT rather than a per-user write ────────
+  # GTK resolves every icon through gsettings, and it reads that value while the
+  # first window is being built — so the theme has to be right BEFORE the shell's
+  # first frame, not two seconds in when ThemeManager pushes appearance.json.
+  #
+  # This used to be done by nidara-setup writing the user's own dconf before
+  # first login. That does not work when the account has never logged in, which
+  # is exactly the case on the path that matters — the installer runs it inside
+  # arch-chroot, where /run/user/$uid does not exist and dconf cannot commit.
+  # Worse, `gsettings set` EXITS 0 while failing and reports the failure only on
+  # stderr, which the script discarded: it printed "seeded before first login"
+  # and wrote nothing. Measured in a chroot on a real install.
+  #
+  # A system default needs no session, no runtime directory and no cooperation
+  # from the chroot, and it is a better expression of the intent: `user-db:user`
+  # comes first in the profile, so somebody who picks Adwaita keeps Adwaita —
+  # where the old code had to approximate that with "only write if the key has
+  # never been set".
+  #
+  # GENERATED from defaults/appearance.json, not committed twice: the value the
+  # shell will read and the value GTK starts with cannot disagree if there is
+  # only one place to edit.
+  install -Dm644 config/dconf/profile-user "$pkgdir/etc/dconf/profile/user"
+  local _icon_theme
+  _icon_theme="$(sed -n 's/.*"iconTheme"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+                 defaults/appearance.json | head -1)"
+  [ -n "$_icon_theme" ] || { echo "no iconTheme in defaults/appearance.json" >&2; return 1; }
+  install -Dm644 /dev/stdin "$pkgdir/etc/dconf/db/local.d/00-nidara-appearance" <<EOF
+# Generated from defaults/appearance.json when this package was built. Edit that
+# file, not this one — and note this is a DEFAULT: whatever the person chose in
+# their own dconf wins, because /etc/dconf/profile/user reads user-db first.
+[org/gnome/desktop/interface]
+icon-theme='$_icon_theme'
+EOF
+  install -Dm644 packaging/nidara/nidara-dconf.hook \
+    "$pkgdir/usr/share/libalpm/hooks/90-nidara-dconf.hook"
 
   # fontconfig: per-language CJK variant — the 65-0- filename MUST sort before
   # fontconfig's 65-nonlatin.conf (see the file's header comment)
