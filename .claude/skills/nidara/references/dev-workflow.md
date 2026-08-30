@@ -245,6 +245,47 @@ saying so is better than an installer that looks ready and fails at the end).
 pane sharing the screen. `config/hypr/hyprland.lua` carries a `float-installer` window rule
 matching the `nidara-installer` app-id; on an installed system it matches nothing.
 
+#### Nothing floating hangs off the screen — and the hook is `window.update_rules`
+
+A floating window keeps whatever size the CLIENT asks for and Hyprland never shrinks it to fit, so
+any application that remembers a maximized geometry — Chrome does — lands with its title bar off
+the top of the display. `config/hypr/hyprland.lua` clamps it in Lua, because the config language
+cannot express "the monitor minus the bar and the dock" and Lua gets `monitor.reserved` as named
+fields.
+
+🔑 **The clamp hangs off `window.update_rules`, and that is the whole point.** Hyprland
+re-evaluates a window's rules whenever its state changes — floating included — and hands the
+callback the settled geometry. Traced live across a float toggle driven by a raw `hyprctl
+dispatch`, with nothing of ours in the path:
+
+    update_rules addr=0x…df700 floating=true size=2542x1282   still the tile
+    update_rules addr=0x…df700 floating=true size=2560x1440   the settled one
+
+⚠️ **Do not go back to hooking the entry points.** The first version (#299) used `window.open` plus
+a 60 ms one-shot timer on the Super+F keybind, and it missed every other way to float a window —
+the dock's window menu, `nidara-ipc toggleFloat`, the MCP verb, any keybind a user adds. Chrome came
+up at `[-1,-101] 2560x1440` on a machine whose config already contained that clamp. The timer was
+never the problem: measured, the geometry is final 68 ms after the toggle and never moves again.
+
+⛔ **`max_size` is NOT the global answer, and it looks like it is.** It does everything you want on
+paper — the compositor enforces it continuously, it accepts expressions (`max_size =
+"monitor_w-16 monitor_h-156"` capped a client asking 2560x1440 down to 2544x1284 at `[8,48]`), and
+it needs no events at all. **But a `max_size` rule makes the window FLOAT, unconditionally.**
+Measured in three arms on one throwaway class: with `max_size = "800 600"` the window floats at
+800x600; with the rule's other props and no `max_size` it tiles at 2542x1282; and with a cap the
+tile could never reach (`monitor_w-16 monitor_h-156`) it floats anyway. A blanket `class = ".*"`
+rule would turn a tiling desktop into a floating-only one. There is also no native option for this
+— the whole `HL.ConfigKey` list has nothing about keeping floating windows inside the work area.
+
+Both halves of the clamp are verified, and the second one matters as much: a window that FITS is
+left byte for byte where the compositor put it (same window, same toggle, hook on and hook off →
+`[1566,761] [700,500]` both times).
+
+⚠️ **kitty remembers its window size**, so it is a contaminated instrument for this: a probe run
+left a later "clean" kitty coming up 2544x1284 and looking like a regression the clamp had caused,
+when the hook was off. Pass `-o remember_window_size=no -o initial_window_width=… -o
+initial_window_height=…` for every arm.
+
 #### A window rule matches an IDENTIFIER, never interface text — and a float rule needs a `size`
 
 Two things that only look like separate problems.
