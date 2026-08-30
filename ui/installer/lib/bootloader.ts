@@ -71,8 +71,35 @@ export function configureInstalledBootloader(
     appendLog(`[BOOTLOADER] Note: Entry title adjustment skipped: ${e.message || e}`)
   }
 
-  // 2. Add Silent Boot + Plymouth Splash parameters and disable hardware watchdog
-  const silentParams = "quiet splash loglevel=3 systemd.show_status=false vt.global_cursor_default=0 fbcon=nodefer nowatchdog modprobe.blacklist=iTCO_wdt,sp5100_tco,i6300esb,wdat_wdt"
+  // 2. The kernel command line — and ONLY the kernel command line.
+  //
+  // This function used to also write /etc/systemd/system.conf.d/00-watchdog.conf,
+  // /etc/modprobe.d/nowatchdog.conf, /etc/plymouth/plymouthd.conf and a `sed` into the
+  // target's mkinitcpio.conf. All four are now the `nidara-system` package's, installed
+  // by base.json alongside `nidara` — see nidara-iso/PRODUCT.md, "Four layers". They left
+  // for one reason: written here they were applied ONCE, at install, so a machine
+  // installed in August would never receive an improvement to its own boot. A package
+  // arrives by `pacman -Syu` like everything else.
+  //
+  // What stays is what genuinely cannot be packaged: these entries are archinstall's
+  // output, named after this machine's kernels, and nothing owns them. The loader
+  // timeout below is the same — it depends on what else is on THIS disk.
+  //
+  // ⚠️ `splash` is here and must be: the initramfs half arrives with the `nidara-system`
+  // package, a splash needs both halves, and the cmdline half has no owner but us.
+  //
+  // ⚠️ `nowatchdog` and `modprobe.blacklist=iTCO_wdt,…` were here too until 2026-08-30, to
+  // silence `watchdog: watchdog0: watchdog did not stop!` over the splash. They are gone,
+  // and the package's `RebootWatchdogSec=off` is expected to do the whole job on its own:
+  // that message appears because systemd ARMS the watchdog for the second phase of a
+  // reboot and the driver then cannot stop it, so not arming it leaves nothing to
+  // silence. Blacklisting the modules removes the watchdog device from every machine
+  // permanently — the big hammer for what the small one covers.
+  //
+  // If a VM pass shows the message surviving, the honest fix is to put the blacklist back
+  // HERE rather than in the package: a kernel parameter is per-machine and reversible by
+  // editing one loader entry, while a modprobe drop-in is a decision taken for everybody.
+  const silentParams = "quiet splash loglevel=3 systemd.show_status=false vt.global_cursor_default=0 fbcon=nodefer"
   try {
     runCmd([
       "bash",
@@ -81,39 +108,9 @@ export function configureInstalledBootloader(
         if [ -f "$f" ] && ! grep -q "quiet" "$f"; then
           sed -i '/^options/ s/$/ ${silentParams}/' "$f"
         fi
-      done
-      mkdir -p /mnt/etc/systemd/system.conf.d
-      cat > /mnt/etc/systemd/system.conf.d/00-watchdog.conf << 'EOF'
-[Manager]
-RuntimeWatchdogSec=off
-RebootWatchdogSec=off
-ShutdownWatchdogSec=off
-KExecWatchdogSec=off
-EOF
-      mkdir -p /mnt/etc/modprobe.d
-      cat > /mnt/etc/modprobe.d/nowatchdog.conf << 'EOF'
-blacklist iTCO_wdt
-blacklist iTCO_vendor_support
-blacklist sp5100_tco
-blacklist i6300esb
-blacklist wdat_wdt
-EOF
-
-      # Configure Plymouth if installed
-      if [ -f /mnt/usr/bin/plymouth ]; then
-        mkdir -p /mnt/etc/plymouth
-        cat > /mnt/etc/plymouth/plymouthd.conf << 'EOF'
-[Daemon]
-Theme=nidara
-ShowDelay=0
-EOF
-        if [ -f /mnt/etc/mkinitcpio.conf ] && ! grep -q "plymouth" /mnt/etc/mkinitcpio.conf; then
-          sed -i 's/HOOKS=(\\(.*\\)udev\\(.*\\))/HOOKS=(\\1udev plymouth\\2)/' /mnt/etc/mkinitcpio.conf || true
-          arch-chroot /mnt mkinitcpio -P 2>/dev/null || true
-        fi
-      fi`,
+      done`,
     ])
-    appendLog("[BOOTLOADER] Configured kernel silent boot + splash parameters and disabled hardware watchdog.")
+    appendLog("[BOOTLOADER] Added silent boot and splash parameters to the kernel command line.")
   } catch (e: any) {
     appendLog(`[BOOTLOADER] Note: Silent boot parameters injection skipped: ${e.message || e}`)
   }

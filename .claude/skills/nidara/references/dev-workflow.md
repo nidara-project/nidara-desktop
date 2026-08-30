@@ -238,8 +238,9 @@ Until 2026-08-28 this bundle collected answers, wrote JSON and ran one process; 
 half was `archinstall`'s. **That is no longer true, and several sentences written when it was
 are still lying around** (`nidara-iso/INSTALLER.md` is one). Today `steps/run.ts` runs
 `sgdisk --zap-all`, `mkfs.*`, `mount` and the Btrfs subvolume layout itself, and
-`lib/bootloader.ts` writes the loader entries, the kernel cmdline, `plymouthd.conf` and the
-mkinitcpio hook. `archinstall` was left owning the pacstrap and the fstab.
+`lib/bootloader.ts` writes the loader entries and the kernel cmdline. `archinstall` was left
+owning the pacstrap and the fstab. (It also wrote `plymouthd.conf`, the mkinitcpio hook and the
+watchdog drop-ins until 2026-08-30, when those moved to the `nidara-system` package — see below.)
 
 So the question "is this armed?" is now load-bearing in a way it never was. There are two modes,
 and **where it runs picks one** — one expression in `steps/run.ts` decides:
@@ -312,38 +313,48 @@ destructive path has to be genuinely reachable for the control to be worth anyth
 reproduce it is therefore a safety decision, not a convenience one. That one goes in the VM before
 it goes anywhere.
 
-### The boot splash does not belong to this repo, and the theme here is waiting for its package
+### The boot splash left this repo entirely — do not bring any of it back
 
-`config/plymouth/themes/nidara/` is a real Plymouth theme (two-step module, watermark, a 30-frame
-throbber) and **nothing in this repository installs it** as of 2026-08-30. That is deliberate, and
-the two-day round trip that got here is the lesson:
+There is no Plymouth theme here any more, and `packaging/nidara/PKGBUILD`, `install.sh` and
+`bin/nidara-setup` say nothing about Plymouth on purpose. It all lives in **`nidara-system`**, a
+package in `nidara-repo` — the third of four layers, documented in `nidara-iso/PRODUCT.md` ("Four
+layers, and the third one had no owner").
 
-- **It shipped inert for four days.** The PKGBUILD and `install.sh` copied the theme,
-  `bin/nidara-setup` ran `plymouth-set-default-theme`, and `ui/installer/lib/bootloader.ts` added
-  `splash` plus the `plymouth` mkinitcpio hook to the target. All three are written defensively —
-  they test for the binary and skip when it is absent — and `plymouth` was in **nobody's**
-  dependency list. So the theme landed in `/usr/share` as decoration and the kernel booted with a
-  `splash` that nothing drew. Nothing failed; nothing happened. Caught by asking an installed
-  machine (`pacman -Qi plymouth` → not found), not by reading code that was individually correct.
-- **The fix — `depends=(plymouth)` here — was the wrong layer, and lasted a day.** A boot splash is
-  the PRODUCT's branding. `install.sh` puts this desktop on an Arch somebody already uses, and
-  repainting their boot is precisely what it must not do. GNOME Shell does not depend on Plymouth;
-  Ubuntu ships a Plymouth theme.
+The three-day round trip is worth keeping, because each step looked right at the time:
 
-⚠️ **So these files are orphaned on purpose and must not be re-wired here.** They move to
-`nidara-system`, a package in `nidara-iso` that does not exist yet — the decision, the four-layer
-model it belongs to and the ordered work are in `nidara-iso/PRODUCT.md` ("Four layers, and the
-third one had no owner"). Until that package exists, **no machine has a boot splash**, which is
-the same as every day before this feature was written.
+1. **It shipped inert for four days.** The PKGBUILD and `install.sh` copied a theme,
+   `nidara-setup` ran `plymouth-set-default-theme`, and the installer added `splash` plus the
+   `plymouth` mkinitcpio hook. All three were written defensively — test for the binary, skip when
+   absent — and `plymouth` was in **nobody's** dependency list. Nothing failed; nothing happened.
+   Caught by asking an installed machine (`pacman -Qi plymouth` → not found), not by reading code
+   that was individually correct.
+2. **`depends=(plymouth)` fixed the chain and broke the layer.** A boot splash is the PRODUCT's
+   branding. `install.sh` puts this desktop on an Arch somebody already uses, and repainting their
+   boot is precisely what it must not do. GNOME Shell does not depend on Plymouth; Ubuntu ships a
+   Plymouth theme.
+3. **So the whole thing moved**, and with it the watchdog drop-ins and `plymouthd.conf` that
+   `lib/bootloader.ts` used to write into the target.
 
-⚠️ `ui/installer/lib/bootloader.ts` still writes `plymouthd.conf` and the mkinitcpio hook onto the
-target, guarded by `/mnt/usr/bin/plymouth` existing. Leave it: those two are the genuinely
-per-machine half that stays with the installer even after `nidara-system` lands, and the guard is
-what keeps them inert in the meantime.
+**The rule, and it decides the next case too: if an Arch user installing only the desktop would not
+want it, it does not go in `nidara`.** Boot experience, system defaults, anything that repaints
+somebody's machine — the product's, not the desktop's.
 
-**The rule this is an instance of, and it decides the next case too: if an Arch user installing
-only the desktop would not want it, it does not go in `nidara`.** Boot experience, system defaults
-and anything that repaints somebody's machine are the product's, not the desktop's.
+### What `lib/bootloader.ts` is allowed to keep
+
+It writes the **kernel command line and the loader timeout, and nothing else**. Those are
+archinstall's output, named after this machine's kernels, owned by no package — genuinely
+per-machine, which is the only test that keeps something in the installer.
+
+The four things it used to write left for one reason worth internalising: **written by an
+installer, a setting is applied once and never again.** A machine installed in August would never
+receive an improvement to its own boot. A package arrives by `pacman -Syu` like everything else.
+Any new "let's also configure X on the target" belongs in `nidara-system` unless it fails that
+per-machine test.
+
+⚠️ `splash` stays on the cmdline and must: the initramfs half comes with the package, a splash
+needs both, and the cmdline half has no owner but us. `nowatchdog` and `modprobe.blacklist=` are
+duplicated by the package's drop-ins deliberately — the cmdline reaches the kernel before anything
+in `/etc` is read.
 
 ### Testing the LOGIN itself, without a VM and without logging out
 
