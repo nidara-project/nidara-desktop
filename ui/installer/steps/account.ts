@@ -92,7 +92,10 @@ export function AccountStep(): Step {
       box.append(errorLabel)
 
       const validate = () => {
-        const fname = (fullNameEntry.get_text?.() ?? fullNameEntry.text ?? "").trim()
+        // ':' and newlines would corrupt the passwd GECOS entry this name ends up
+        // in, and `usermod` rejects them with a generic error — stripped up front,
+        // the same way Settings → Users does when it creates an account.
+        const fname = (fullNameEntry.get_text?.() ?? fullNameEntry.text ?? "").trim().replace(/[:\n\r]/g, "")
         const uname = (usernameEntry.get_text?.() ?? usernameEntry.text ?? "").trim()
         const hname = (hostnameEntry.get_text?.() ?? hostnameEntry.text ?? "").trim()
         const pw = pwEntry.get_text?.() ?? pwEntry.text ?? ""

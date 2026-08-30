@@ -9,6 +9,7 @@ import { t } from "../lib/i18n"
 import { getAnswers } from "../lib/answers"
 import { assemblePlan, type AssembledPlan } from "../lib/plan"
 import { configureInstalledBootloader } from "../lib/bootloader"
+import { applyRealName } from "../lib/real-name"
 import { heading, prose } from "./common"
 
 export function RunStep(): Step {
@@ -326,6 +327,7 @@ export function RunStep(): Step {
               _proc?.wait_finish(res)
               success = _proc?.get_successful() ?? false
               if (success) {
+                applyRealName(isArm, answers, appendLog)
                 configureInstalledBootloader(isArm, answers, appendLog)
               }
             } catch (e: any) {
