@@ -37,10 +37,17 @@ function osRelease(field: string): string {
 }
 
 /**
- * The operating system, as the OS names itself — "Nidara 0.1.0" on the product
+ * The operating system, as the OS names itself — "Nidara" on the product
  * (`nidara-release` owns that file), "Arch Linux" on somebody's own Arch that ran
  * install.sh. Both are true and the second is a supported outcome, not a
  * fallback: install.sh must never rename anyone's operating system.
+ *
+ * ⚠️ No version, and its absence is the product's decision rather than a gap
+ * here: a Nidara machine is rolling and `BUILD_ID=rolling` is the whole answer,
+ * so `PRETTY_NAME` is just "Nidara" (it read "Nidara 0.1.0" for five days). The
+ * numbers About shows come from the packages that actually change — this row is
+ * an identity. nidara-iso/PRODUCT.md, "The machine is rolling, the image has a
+ * date", is the record.
  */
 export const osName = (): string => osRelease("PRETTY_NAME")
 
