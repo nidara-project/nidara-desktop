@@ -3381,6 +3381,36 @@ survive a 1366x768 work area?) or a live-medium layout that gives the installer 
 window rule is not where this lives — see `dev-workflow.md` → "A window rule matches an IDENTIFIER,
 never interface text — and our identifiers arrive LATE".
 
+### 100. ⚠️ OPEN — the shell grew 460 MB over 21 hours, and it is NOT the JS side (2026-08-30)
+
+Found while pricing whether Settings should be its own process. It should not be — but the number
+that came out of the measurement is worth more than the question that prompted it.
+
+    fresh shell, Settings never opened      RSS 330.1 MB   PSS 202.7 MB   (stable over 30 s)
+    the same unit after 21 h 21 m uptime    RSS 792.5 MB   PSS 637.9 MB
+
+330 MB is the figure this project has always quoted as healthy, so the fresh number is right and the
+old one is growth, not a bad baseline. Where it sits, from the old process's `smaps` before it was
+restarted:
+
+    [heap]                453.1 MB     native malloc
+    /usr/lib/libLLVM      83.5 MB      Mesa's shader compiler, shared + clean, not ours
+    [anon:js-gc-heap]     42.1 MB      the JS side, and it is SMALL
+
+🔑 **So this is not widgets kept alive in JavaScript.** GJS's GC heap is 42 MB against 453 MB of C
+heap, which points at native allocations — Cairo/pixman surfaces, GdkTextures, Pango layouts — that
+something keeps a reference to, or that are never returned to the allocator.
+
+For scale, the thing it was measured against: **the hidden Settings window retains 15.3 MB**
+(345.4 with it built and hidden, 330.1 without it, and re-opening is free). Whatever is eating
+460 MB is thirty times that and has nothing to do with it.
+
+⚠️ Not yet characterised, and the evidence was destroyed by the restart that produced the clean
+baseline: whether the growth is monotonic with uptime or driven by activity (that session had heavy
+Settings, overlay and window-probe traffic), and what allocates it. The way to find out is to leave
+a shell up and sample `smaps_rollup` on a schedule, with the desktop idle for one arm and exercised
+for the other — an idle arm that also grows is a different bug from one that does not.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
