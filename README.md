@@ -135,14 +135,14 @@ everyone else; developers opt out with `--dev` or by checking out another branch
 The installer needs no AUR helper — everything lands as **real pacman packages, prebuilt from
 the project's signed repo** ([nidara-repo](https://github.com/nidara-project/nidara-repo)): every
 package and the repo database are GPG-signed by CI, and the installer imports the signing key and
-requires valid signatures. That includes **the desktop itself**: it ships as a `nidara`
+requires valid signatures. That includes **the desktop itself**: it ships as a `nidara-desktop`
 package, so pacman owns every installed file — clean upgrades with the rest of the system, clean
-removal with `pacman -R nidara`, no untracked drift. If the repo is ever unreachable, or it
+removal with `pacman -R nidara-desktop`, no untracked drift. If the repo is ever unreachable, or it
 doesn't serve your exact release yet, the installer builds the same pinned sources locally with
 the very recipe the repo uses. It:
 
 1. Installs system dependencies (Hyprland, GTK4, GJS, esbuild, audio/network/bluetooth stacks, fonts).
-2. Installs the `nidara` package — the session entry point (`/usr/bin/nidara`), helper binaries,
+2. Installs the `nidara-desktop` package — the session entry point (`/usr/bin/nidara`), helper binaries,
    the shell/greeter/lock-screen bundles and shared configs under `/usr/share/nidara/`, and the
    `/usr/share/wayland-sessions/nidara.desktop` session entry. Prebuilt when the repo serves this
    release, otherwise built on the spot from the same `packaging/nidara/PKGBUILD`.
@@ -156,7 +156,7 @@ the very recipe the repo uses. It:
 **To start:** reboot and select _Nidara_ from the login screen.
 
 With the `[nidara]` repo configured (the installer sets it up), the desktop is just a package
-from then on: `sudo pacman -S nidara && nidara-setup` is a complete install.
+from then on: `sudo pacman -S nidara-desktop && nidara-setup` is a complete install.
 
 ### Updating
 
@@ -172,7 +172,7 @@ is the wrapper that also handles setup and the live reload. Updates take a minut
 prebuilt packages, no local builds.
 
 Installs that predate the package model migrate by themselves: their first `nidara-update`
-fetches the latest release into a throwaway directory and installs it as the `nidara` package —
+fetches the latest release into a throwaway directory and installs it as the `nidara-desktop` package —
 pacman takes ownership of the files, and every later update takes the package path above. No
 source copy is kept on disk, so the folder you originally cloned stays disposable. Your config
 in `~/.config/nidara/` is never touched. **Settings → About** also tells you when a new release

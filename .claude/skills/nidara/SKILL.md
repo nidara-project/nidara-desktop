@@ -54,10 +54,10 @@ package (since 2026-08-25): it builds `nidara` and `nidara-installer`, and only 
 whose job is to erase a disk. Two consequences that bite silently:
 
 - anything picking "the package makepkg just built" has to say WHICH. `install.sh` passes
-  `makepkg --pkg nidara` and matches the file by name; nidara-repo's `build-repo.sh` copies
+  `makepkg --pkg nidara-desktop` and matches the file by name; nidara-repo's `build-repo.sh` copies
   every package produced instead of the newest one. The old `ls -t … | head -1` would have
   installed an installer onto somebody's Arch.
-- `install=` and `backup=` live INSIDE `package_nidara()`. At the top level of a split PKGBUILD
+- `install=` and `backup=` live INSIDE `package_nidara-desktop()`. At the top level of a split PKGBUILD
   they apply to every package.
 
 The installer is a bundle of the desktop's toolkit, but **what it installs is not in this repo**:

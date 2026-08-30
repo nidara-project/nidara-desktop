@@ -181,7 +181,7 @@ build_local_nidara_pkg() {
         --exclude='./packaging/nidara/src' --exclude='./packaging/nidara/pkg' \
         --exclude='./packaging/nidara/*.tar.*' \
         --transform "s|^\.|nidara-desktop-$pkgver|SH" .
-    build_install_pkg "$pdir" nidara
+    build_install_pkg "$pdir" nidara-desktop
 }
 
 echo ""
@@ -446,24 +446,24 @@ elif [ -z "$(run_user git -C "$REPO_DIR" status --porcelain 2>/dev/null)" ] \
 fi
 
 if [ "$_tree_is_release" = "yes" ]; then
-    echo "  Installing nidara from nidara-repo (prebuilt)..."
-    if sudo pacman -S --needed --noconfirm --overwrite '*' nidara; then
+    echo "  Installing nidara-desktop from nidara-repo (prebuilt)..."
+    if sudo pacman -S --needed --noconfirm --overwrite '*' nidara-desktop; then
         # Lockstep guard, same rationale as the Astal stack in §1: a repo that
         # lags the release "succeeds" with the PREVIOUS version — build locally
         # instead of silently keeping stale binaries.
-        _nidara_v="$(pacman -Q nidara 2>/dev/null | awk '{print $2}')"
+        _nidara_v="$(pacman -Q nidara-desktop 2>/dev/null | awk '{print $2}')"
         if [ "${_nidara_v%%-*}" = "$_ver" ]; then
             NIDARA_FROM_REPO="yes"
-            echo "  [OK] nidara $_nidara_v installed from nidara-repo."
+            echo "  [OK] nidara-desktop $_nidara_v installed from nidara-repo."
         else
             echo "  [WARN] nidara-repo serves $_nidara_v but this release is $_ver — the repo"
             echo "         likely wasn't rebuilt for this release yet. Building locally."
         fi
     else
-        echo "  [WARN] nidara unavailable from nidara-repo — building the package locally."
+        echo "  [WARN] nidara-desktop unavailable from nidara-repo — building the package locally."
     fi
 else
-    echo "  Tree is not exactly release v$_ver — building the nidara package from this tree."
+    echo "  Tree is not exactly release v$_ver — building the nidara-desktop package from this tree."
 fi
 
 if [ "$NIDARA_FROM_REPO" = "no" ]; then
@@ -487,12 +487,21 @@ fi
 
 else
 # ── Dev installs copy source files straight into /usr ────────────────────────
-# If the nidara PACKAGE is installed, pacman owns those paths and the next
+# If the desktop PACKAGE is installed, pacman owns those paths and the next
 # -Syu would clobber the dev copies — remove it first (files re-copied below).
-if pacman -Qq nidara >/dev/null 2>&1; then
-    echo "  Removing the nidara package (dev installs manage /usr files directly)..."
-    sudo pacman -R --noconfirm nidara
-fi
+#
+# ⚠️ BOTH names, and this is not belt-and-braces. The package was renamed
+# `nidara` → `nidara-desktop` on 2026-08-30, and a machine that has not yet taken
+# the migrating upgrade still carries the old one. `pacman -Qq nidara` on such a
+# machine does not error in a way anybody notices — it just says "not installed",
+# so the removal would be SKIPPED and the next -Syu would quietly overwrite the
+# dev copies with packaged files. Query by name; `provides` does not help here.
+for _pkg in nidara-desktop nidara; do
+    if pacman -Qq "$_pkg" >/dev/null 2>&1; then
+        echo "  Removing the $_pkg package (dev installs manage /usr files directly)..."
+        sudo pacman -R --noconfirm "$_pkg"
+    fi
+done
 
 # Version file
 sudo mkdir -p /usr/share/nidara
@@ -754,7 +763,7 @@ fi
 # Everything else a first login needs — per-user config seeding, uwsm env +
 # NVIDIA autodetect, greetd/DM setup, service enablement — lives in
 # bin/nidara-setup: ONE idempotent implementation, shared with the package
-# path (`pacman -S nidara && nidara-setup`) and with nidara-update. §6 just
+# path (`pacman -S nidara-desktop && nidara-setup`) and with nidara-update. §6 just
 # refreshed /usr/bin/nidara-setup and its /usr/share/nidara payloads, so run
 # the installed copy. (The old --dev-repo flag is gone: hypridle.conf is user
 # state written by Settings → Power, never a symlink into the repo.)
