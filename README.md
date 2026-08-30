@@ -1,9 +1,19 @@
-# Nidara
+# Nidara Desktop
 
-Nidara is a full **Wayland desktop environment** built on **Hyprland**, **GTK4** and **GJS**, designed to be fast, visually premium, and tightly optimized for **Arch Linux**.
+Nidara Desktop is a full **Wayland desktop environment** built on **Hyprland**, **GTK4** and
+**GJS**, designed to be fast, visually premium, and tightly optimized for **Arch Linux**.
 
-It is also **AI-native** — not as a bolt-on, but in how it is built and maintained. Nidara is
-developed with AI coding agents, ships a first-class interface for an agent to *see and operate*
+> **Nidara Desktop** is the desktop environment — this repository, and what you install on an
+> Arch system you already have. **Nidara** is the operating system built around it: a live image
+> that installs a complete system, put together in
+> [nidara-iso](https://github.com/nidara-project/nidara-iso).
+>
+> The two are versioned separately and neither number derives from the other. You do not need
+> Nidara to run Nidara Desktop — installing it here leaves the rest of your machine alone: it does
+> not rename your operating system, touch your bootloader, or choose your applications.
+
+It is also **AI-native** — not as a bolt-on, but in how it is built and maintained. Nidara Desktop
+is developed with AI coding agents, ships a first-class interface for an agent to *see and operate*
 the running desktop, and is designed to keep improving through AI-authored contributions: point a
 coding agent at your own install, have it fix or extend something, and send that improvement back
 upstream as a pull request. The agent knowledge and the contribution rules live **inside the repo**,
@@ -88,12 +98,21 @@ Hardware-compatibility fixes are explicitly a "global" contribution — see
 
 ## Installation
 
-Nidara targets **Arch Linux** (see [Hardware & platform support](#hardware--platform-support)
+> This installs **the desktop environment** onto an Arch system you already have. If what you
+> want is the whole operating system on a blank disk, that is **Nidara**, and it comes as a live
+> image from [nidara-iso](https://github.com/nidara-project/nidara-iso) — you do not need this
+> page for it.
+
+Nidara Desktop targets **Arch Linux** (see [Hardware & platform support](#hardware--platform-support)
 for what's tested, including which Arch derivatives qualify). The intended
 path is the simplest one: install a **minimal Arch base with no desktop environment**, log in at
 the TTY, and run the installer — it pulls everything else in. It also works on top of an existing
-Arch desktop: if a display manager is already enabled it's left untouched and Nidara is just
-added as another session to pick at login.
+Arch desktop: if a display manager is already enabled it's left untouched and Nidara Desktop is
+just added as another session to pick at login.
+
+**It treats the machine as yours.** It does not rename your operating system — on a system
+converted this way, Settings → About correctly reads *Arch Linux* for the OS and *Nidara Desktop*
+for the environment. It does not touch your bootloader, and it does not choose your applications.
 
 **Prerequisites:** a normal user account with `sudo`, an internet connection, and `git`:
 
@@ -116,7 +135,7 @@ everyone else; developers opt out with `--dev` or by checking out another branch
 The installer needs no AUR helper — everything lands as **real pacman packages, prebuilt from
 the project's signed repo** ([nidara-repo](https://github.com/nidara-project/nidara-repo)): every
 package and the repo database are GPG-signed by CI, and the installer imports the signing key and
-requires valid signatures. That includes **Nidara itself**: the desktop ships as a `nidara`
+requires valid signatures. That includes **the desktop itself**: it ships as a `nidara`
 package, so pacman owns every installed file — clean upgrades with the rest of the system, clean
 removal with `pacman -R nidara`, no untracked drift. If the repo is ever unreachable, or it
 doesn't serve your exact release yet, the installer builds the same pinned sources locally with
@@ -136,8 +155,8 @@ the very recipe the repo uses. It:
 
 **To start:** reboot and select _Nidara_ from the login screen.
 
-With the `[nidara]` repo configured (the installer sets it up), Nidara is just a package from
-then on: `sudo pacman -S nidara && nidara-setup` is a complete install.
+With the `[nidara]` repo configured (the installer sets it up), the desktop is just a package
+from then on: `sudo pacman -S nidara && nidara-setup` is a complete install.
 
 ### Updating
 
@@ -159,9 +178,12 @@ source copy is kept on disk, so the folder you originally cloned stays disposabl
 in `~/.config/nidara/` is never touched. **Settings → About** also tells you when a new release
 is available.
 
-> **Status:** Nidara installs onto an existing Arch system today. A fully automated path —
-> a minimal Arch install bundled with Nidara via a Calamares installer — is planned but not
-> here yet.
+> **Status:** this page is the *existing Arch* path, and it is stable. The other path — a live
+> image that installs a complete system on a blank disk — now exists as **Nidara**, with its own
+> GTK4 installer built from this repository's toolkit; it is early, and it lives in
+> [nidara-iso](https://github.com/nidara-project/nidara-iso). (An earlier note here promised a
+> Calamares installer. That was reconsidered and dropped — the reasoning is in that repo's
+> `INSTALLER.md`.)
 
 ---
 
@@ -393,16 +415,18 @@ All participation is governed by our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Credits
 
-Nidara stands on the work of some excellent open-source projects:
+Nidara Desktop stands on the work of some excellent open-source projects:
 
 - **[Aylur](https://github.com/Aylur)** — [AGS](https://github.com/Aylur/ags) and the
-  [Astal](https://github.com/Aylur/astal) libraries: the framework Nidara was built on, and the
-  reason it got off the ground. Nidara has since grown its own application host, bundler and
-  services; `libastal-auth` (PAM) is the last piece still in use.
+  [Astal](https://github.com/Aylur/astal) libraries: the framework Nidara Desktop was built on,
+  and the reason it got off the ground. None of it is loaded any more — the application host, the
+  bundler, every service and the PAM authentication are the project's own since 0.8.0 — and the
+  credit stands anyway: it is what the first two years were built on.
 - **[Hyprland](https://hyprland.org)** — the Wayland compositor at Nidara's core, along with
   hypridle, hyprsunset, and xdg-desktop-portal-hyprland from the same ecosystem.
 - **[GNOME](https://www.gnome.org)** — GTK4 and GJS, the toolkit and runtime under every Nidara surface.
-- **[Arch Linux](https://archlinux.org)** — the distribution Nidara is built for.
+- **[Arch Linux](https://archlinux.org)** — the distribution Nidara Desktop is built for, and
+  the base the Nidara operating system is built on.
 - **[Lucide](https://lucide.dev)** — the icon set used throughout the shell
   (ISC license; see [`NOTICE`](NOTICE)).
 
@@ -425,8 +449,9 @@ redistribute it — derivative works must remain open under the same terms.
 
 ## Trademarks
 
-The GPL covers Nidara's **source code**. It does **not** grant rights to the
-**"Nidara" name or logo**, which are trademarks of the Nidara project.
+The GPL covers this project's **source code**. It does **not** grant rights to the
+**"Nidara" and "Nidara Desktop" names or the logo**, which are trademarks of the Nidara
+project.
 
 You are welcome to fork and redistribute the code under the GPL — but a fork or
 redistribution that is not the official project **must use a different name and
