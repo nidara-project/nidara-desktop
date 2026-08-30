@@ -203,6 +203,18 @@ check a style change; look at it on the next login, in the VM, or offscreen with
 Note the asymmetry this creates in a review: the greeter and the lockscreen **share one
 stylesheet**, so every greeter-visible change ships whether or not anyone looked at it.
 
+### ⛔ The `assets` branch is a published URL, not stale work — never merge or delete it
+
+`assets` is an ORPHAN branch (no merge base with `main`) holding the README's eight screenshots and
+nothing else. It exists so binaries stay out of `main`'s history, and **its branch name is part of a
+live URL**: `README.md` on `main` links every screenshot as
+`raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/*.webp`.
+
+⚠️ So it is exactly the shape that a branch sweep destroys — no PR, no shared history, one commit
+from July, a name that reads like a scratch branch. Deleting it, renaming it or merging it into
+`main` breaks all six images on the project's front page, and the break is invisible from a local
+checkout. Leave it alone; to change a screenshot, commit onto `assets` and push it.
+
 ### The fourth bundle: the installer builds everywhere and ships only on the ISO
 
 `ui/installer/` (2026-08-25) is a normal bundle — `npm run build` in it produces
