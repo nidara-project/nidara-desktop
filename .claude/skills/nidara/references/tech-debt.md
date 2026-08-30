@@ -3335,6 +3335,35 @@ Also unresolved and smaller: `.nidara-selection-check` is applied by the kit and
 That is correct today (Cairo paints it, the class is for perception) but it looks like a missing
 rule to the next reader, and `token-contract-check` will not tell them either way.
 
+### 98. ⚠️ OPEN — About borrows Settings' identity, and the dock cannot tell them apart (2026-08-30)
+
+Reported from the desktop: opening **About** from the system menu makes it take over the pinned
+**Settings** icon in the dock, and when Settings is open too the dock shows them GROUPED under that
+one icon — two windows, one identity, neither of them named About.
+
+The cause is one line, not a dock bug: `ui/shell/surfaces/about/AboutWindow.tsx:248` sets
+`appId: "nidara-settings"`. Measured on a running session — the window arrives at the compositor as
+`class=nidara-settings title=About Nidara`, so anything that groups by app id (the dock, the task
+switcher, a taskbar someone else writes) is correct to put them together. About and Settings ARE
+related — #94 settled that they are a summary and its detail — but relation is not identity, and the
+dock is where the difference shows.
+
+⚠️ Not a rename-and-done: the app id is also what the dock's pin matches, so changing it without
+looking at the pinned entry moves the problem rather than fixing it (a pinned `nidara-settings`
+would stop matching a window that now says `nidara-about`). Whatever lands has to answer what the
+dock shows for each of the two, and what the pin follows.
+
+**Second half, reported with it and worth its own look:** selecting one of the grouped windows from
+the dock icon's menu **focuses it but does not raise it** — it stays under whatever was on top,
+which is exactly the confusing case when two windows share an icon. Clicking a floating window
+directly does both. The asymmetry is ours: `HyprlandState.focusWindow()`
+(`ui/shell/core/HyprlandState.ts:772`) dispatches `hl.dsp.focus({ window = … })` and nothing else,
+while raising is a separate dispatcher in Hyprland — `alterzorder` (`bringactivetotop` is
+deprecated in favour of it, and the docs note it cannot put a floating window behind a tiled one,
+which is not a case we need). So every caller that reaches a window through the shell — dock menu,
+switcher, notifications — focuses without raising, and the dock menu is simply where somebody
+noticed.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
