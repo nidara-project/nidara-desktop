@@ -85,12 +85,21 @@ export function configureInstalledBootloader(
   // output, named after this machine's kernels, and nothing owns them. The loader
   // timeout below is the same — it depends on what else is on THIS disk.
   //
-  // ⚠️ `splash` is still here and must be: the initramfs half arrives with the package,
-  // but a splash needs both, and the cmdline half has no owner but us. `nowatchdog` and
-  // the `modprobe.blacklist=` list are duplicated by the package's drop-ins on purpose —
-  // the cmdline reaches the kernel before any file in /etc is read, which is the point of
-  // putting them there as well.
-  const silentParams = "quiet splash loglevel=3 systemd.show_status=false vt.global_cursor_default=0 fbcon=nodefer nowatchdog modprobe.blacklist=iTCO_wdt,sp5100_tco,i6300esb,wdat_wdt"
+  // ⚠️ `splash` is here and must be: the initramfs half arrives with the `nidara-system`
+  // package, a splash needs both halves, and the cmdline half has no owner but us.
+  //
+  // ⚠️ `nowatchdog` and `modprobe.blacklist=iTCO_wdt,…` were here too until 2026-08-30, to
+  // silence `watchdog: watchdog0: watchdog did not stop!` over the splash. They are gone,
+  // and the package's `RebootWatchdogSec=off` is expected to do the whole job on its own:
+  // that message appears because systemd ARMS the watchdog for the second phase of a
+  // reboot and the driver then cannot stop it, so not arming it leaves nothing to
+  // silence. Blacklisting the modules removes the watchdog device from every machine
+  // permanently — the big hammer for what the small one covers.
+  //
+  // If a VM pass shows the message surviving, the honest fix is to put the blacklist back
+  // HERE rather than in the package: a kernel parameter is per-machine and reversible by
+  // editing one loader entry, while a modprobe drop-in is a decision taken for everybody.
+  const silentParams = "quiet splash loglevel=3 systemd.show_status=false vt.global_cursor_default=0 fbcon=nodefer"
   try {
     runCmd([
       "bash",
