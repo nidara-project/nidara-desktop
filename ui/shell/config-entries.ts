@@ -216,11 +216,11 @@ export function registerConfigEntries() {
         set: v => {
             const entry = KEYBOARD_LAYOUTS.find(([id]) => id === v)
             if (entry) {
-                inputConfig.setKbLayout(entry[2], entry[3])
+                return inputConfig.setKbLayout(entry[2], entry[3])
             } else {
                 const raw = String(v)
                 const parts = raw.split("-")
-                inputConfig.setKbLayout(parts[0], parts.slice(1).join("-"))
+                return inputConfig.setKbLayout(parts[0], parts.slice(1).join("-"))
             }
         },
         subscribe: onInputCfg(() => currentKbLayoutId()),

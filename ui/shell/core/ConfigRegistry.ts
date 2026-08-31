@@ -35,7 +35,7 @@ export interface ConfigEntry {
     /** false → setConfig refuses even when writes are allowed (e.g. the ai.* gate itself) */
     writable?: boolean
     get(): ConfigValue
-    set?(v: ConfigValue): void
+    set?(v: ConfigValue): void | Promise<void>
     /** Suscripción del servicio dueño: aplica el valor y devuelve el desuscriptor.
      *  Es lo que hoy escribe cada página a mano como `onCfg(...)`. */
     subscribe?: (apply: (v: ConfigValue) => void) => (() => void)
@@ -126,7 +126,7 @@ function parseValue(e: ConfigEntry, raw: string): ConfigResult {
  * NOTE: the allow-writes gate (AgentConfig) is enforced by the IPC layer in
  * app.ts — this function is the trusted path Settings/internal code may use.
  */
-export function setConfigValue(key: string, raw: string): string {
+export async function setConfigValue(key: string, raw: string): Promise<string> {
     const e = entries[key]
     if (!e) return `unknown key: ${key} — try \`describeConfig\``
     if (e.writable === false || !e.set)
@@ -134,7 +134,7 @@ export function setConfigValue(key: string, raw: string): string {
     const parsed = parseValue(e, raw)
     if (!parsed.ok) return `invalid value for ${key}: ${parsed.error}`
     try {
-        e.set(parsed.value as ConfigValue)
+        await e.set(parsed.value as ConfigValue)
         return JSON.stringify({ key, value: e.get() })
     } catch (err) {
         console.error(`[ConfigRegistry] set ${key} failed:`, err)

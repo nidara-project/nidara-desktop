@@ -135,57 +135,57 @@ hl.config({
     }
 
     setPointerSpeed(val: number) {
-        this.applyAndSave("input:sensitivity", val, () => {
+        return this.applyAndSave("input:sensitivity", val, () => {
             this._pointerSpeed = val
         })
     }
 
     setAccelProfile(val: string) {
-        this.applyAndSave("input:accel_profile", val, () => {
+        return this.applyAndSave("input:accel_profile", val, () => {
             this._accelProfile = val
         })
     }
 
     setMouseNaturalScroll(val: boolean) {
-        this.applyAndSave("input:natural_scroll", val ? 1 : 0, () => {
+        return this.applyAndSave("input:natural_scroll", val ? 1 : 0, () => {
             this._mouseNaturalScroll = val
         })
     }
 
     setTouchpadNaturalScroll(val: boolean) {
-        this.applyAndSave("input:touchpad:natural_scroll", val ? 1 : 0, () => {
+        return this.applyAndSave("input:touchpad:natural_scroll", val ? 1 : 0, () => {
             this._touchpadNaturalScroll = val
         })
     }
 
     setTouchpadTap(val: boolean) {
-        this.applyAndSave("input:touchpad:tap_to_click", val ? 1 : 0, () => {
+        return this.applyAndSave("input:touchpad:tap_to_click", val ? 1 : 0, () => {
             this._touchpadTap = val
         })
     }
 
     setNumlockOnBoot(val: boolean) {
-        this.applyAndSave("input:numlock_by_default", val ? 1 : 0, () => {
+        return this.applyAndSave("input:numlock_by_default", val ? 1 : 0, () => {
             this._numlockOnBoot = val
         })
     }
 
     setKbRepeatDelay(val: number) {
         const delay = Math.round(val)
-        this.applyAndSave("input:repeat_delay", delay, () => {
+        return this.applyAndSave("input:repeat_delay", delay, () => {
             this._kbRepeatDelay = delay
         })
     }
 
     setKbRepeatRate(val: number) {
         const rate = Math.round(val)
-        this.applyAndSave("input:repeat_rate", rate, () => {
+        return this.applyAndSave("input:repeat_rate", rate, () => {
             this._kbRepeatRate = rate
         })
     }
 
     setKbLayout(layout: string, variant = "") {
-        this.applyAndSave("input:kb_layout", layout, () => {
+        return this.applyAndSave("input:kb_layout", layout, () => {
             this._kbLayout = layout
             this._kbVariant = variant
             hs.evalLua(`hl.config({ input = { kb_layout = "${layout}", kb_variant = "${variant}" } })`)
