@@ -1086,9 +1086,43 @@ That also settles what the workaround would have to be if upstream declines: not
 pre-rasterising every icon, but keeping text-carrying SVGs off `icon_name` — a narrower and
 cheaper trade than the one this entry was contemplating. Do not build it yet.
 
-⚠️ Still OPEN, and still upstream. What changed is that it is now FILABLE: a 100-line reproducer,
-a rate, a controlled cause and two cores. `scripts/dev/icon-text-race.js` defaults to `MODE=name`
-and keeps `MODE=file` as the documented negative control, so nobody rediscovers the blind arm.
+🔗 **It is already reported upstream, and the report is STUCK: `gitlab.gnome.org/GNOME/gtk` issue
+8295**, opened 2026-07-05, labelled *1. Crash* + **2. Needs Information**, two comments. Same
+versions as ours (gtk 4.22.4, cairo 1.18.4), same shape: Nautilus's "Open With…" crashes ~7 of 10
+because `gtk_symbolic_paintable_snapshot_symbolic` runs in a GTask pool worker and corrupts the
+shared `PangoFcFontMap` cache, dying in a `strdup` inside Cairo. So this entry does not need a new
+issue — it needs to answer the one that is waiting, and it can:
+
+- a standalone 100-line reproducer with a rate (5 of 6), which is exactly what "Needs Information"
+  is asking for;
+- the cause isolated by control rather than asserted — text-carrying SVG 5/6 vs text-free 4/4
+  survived, down the same threaded path;
+- **the entry point is wider than that report says.** 8295 describes SYMBOLIC icon rendering; ours
+  is a plain full-colour SVG that merely contains `<text>`, reached through the icon-theme PRELOAD
+  thread that `gtk_icon_helper_invalidate_for_change()` starts for any `Gtk.Image` with an
+  `icon_name`. Symbolic is one road to the worker, not the road.
+
+⚠️ **And its stated workaround does not hold here, which is the single most useful thing we can
+tell them.** 8295 says `GSK_RENDERER=cairo` avoids the crash. Measured 2026-08-31 against this
+reproducer: **3 of 4 runs still crashed under `GSK_RENDERER=cairo`**, against 2 of 3 for the
+default-renderer control, and the core has the same signature (`pool-6`, SEGV_MAPERR, inside
+libpangocairo via `pango_glyph_string_extents_range`). The GSK renderer is not the variable — the
+icon rasterisation happens on the worker either way. Anyone reaching for that flag as a mitigation
+HERE is buying nothing and paying for a software renderer.
+
+⚠️ Still OPEN and still unfixed. What changed is that it is now answerable: a reproducer, a rate,
+a controlled cause, three cores and a refuted workaround. `scripts/dev/icon-text-race.js` defaults
+to `MODE=name` and keeps `MODE=file` as the documented negative control, so nobody rediscovers the
+blind arm.
+
+**If the wait becomes unacceptable, the local fix is known and narrow** — and it is a decision, not
+a task to pick up quietly. Since the door is `icon_name` on a `Gtk.Image`, resolving the icon
+ourselves (`lookup_icon(..., flags 0)`, which stays on the main thread — the `MODE=file` arm proved
+that path does 376k glyph draws on one thread) and assigning the resulting paintable closes it
+without pre-rasterising anything. The costs to weigh first: a paintable is frozen, so it has to be
+re-resolved when `ThemeManager` changes the icon theme, and dropping PRELOAD moves dozens of icon
+loads back onto the main thread at grid-open — which is the very hitch that flag exists to hide,
+and which nobody has measured here.
 
 Recurrence, from `coredumpctl`: gjs SIGSEGVs on 08-05, 08-17 (x3), 08-22 and 08-24. The 08-22 one
 crashed in `gsk_render_replay_filter_node`, a different frame — so this is a class of rare native
