@@ -94,7 +94,7 @@ export function NidaraDropDownRow(
     subtitle: string,
     init: string,
     opts: string[],
-    cb: (v: string) => void,
+    cb: (v: string, index?: number) => void,
     onExt?: (apply: (v: string) => void) => (() => void),
     mkRow: NidaraRowBuilder = plainRow,
 ): Gtk.ListBoxRow {
@@ -125,7 +125,7 @@ export function NidaraDropDownRow(
     drp.connect("notify::selected", () => {
         if (syncing) return
         const idx = drp.selected
-        if (idx < known.length) cb(known[idx])
+        if (idx < known.length) cb(known[idx], idx)
     })
     if (onExt) {
         bindWhileRealized(drp, () => onExt((v: string) => {

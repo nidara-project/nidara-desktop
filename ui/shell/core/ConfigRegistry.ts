@@ -9,7 +9,20 @@
 // reading source. Setters delegate to the owning service, which validates,
 // persists and notifies its consumers exactly as if Settings had been used.
 
+import type { NidaraSliderRowOpts } from "../../lib/nidara-kit"
+
 export type ConfigValue = boolean | number | string
+
+export interface ConfigEntryUi {
+    /** Clave de i18n de la etiqueta; el subtítulo es esta misma + ".desc". */
+    i18n: string
+    /** Por defecto se deduce del `type`: boolean→toggle, enum→dropdown, number→slider. */
+    control?: "toggle" | "dropdown" | "slider"
+    /** enum: valor → clave de i18n de su etiqueta. Por defecto `<i18n sin "settings.">.opt.<valor>`. */
+    optI18n?: (value: string) => string
+    /** slider: lo que hoy va en el último argumento de `sliderRow` (iconos, `pct`, unidad). */
+    slider?: NidaraSliderRowOpts
+}
 
 export interface ConfigEntry {
     desc: string
@@ -23,12 +36,21 @@ export interface ConfigEntry {
     writable?: boolean
     get(): ConfigValue
     set?(v: ConfigValue): void
+    /** Suscripción del servicio dueño: aplica el valor y devuelve el desuscriptor.
+     *  Es lo que hoy escribe cada página a mano como `onCfg(...)`. */
+    subscribe?: (apply: (v: ConfigValue) => void) => (() => void)
+    /** Cómo se dibuja en Settings. Ausente = la clave no tiene fila (p. ej. las de sólo lectura). */
+    ui?: ConfigEntryUi
 }
 
 const entries: Record<string, ConfigEntry> = {}
 
 export function registerConfig(key: string, entry: ConfigEntry) {
     entries[key] = entry
+}
+
+export function getConfigEntry(key: string): ConfigEntry | undefined {
+    return entries[key]
 }
 
 export function configKeys(): string[] {
