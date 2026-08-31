@@ -695,6 +695,7 @@ export default {
     "settings.gaming.wallpaper-mode.desc":               "Wat weer te geven wanneer een game wordt gestart",
     "settings.gaming.custom-wallpaper":            "Afbeelding",
     "settings.gaming.custom-wallpaper.desc":             "Achtergrond weergegeven voor alle games",
+    "settings.gaming.transition":                        "Overgang",
     "settings.gaming.transition.desc":                   "Overgang bij het wisselen naar de game-achtergrond",
     "settings.gaming.performance-profile":         "Profiel voor hoge prestaties",
     "settings.gaming.performance-profile.desc":          "Activeer automatisch het prestatieprofiel wanneer een game wordt gestart",

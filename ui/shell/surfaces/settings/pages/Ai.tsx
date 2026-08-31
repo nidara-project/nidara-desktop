@@ -1,10 +1,10 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Secret from "gi://Secret"
-import { listGroup, pageBox, toggleRow, createRow, createStackedRow, dropdownRow, staticLabel, actionRow, fieldWithActions, bindWhileRealized, onPageShown } from "../SettingsHelpers"
+import { listGroup, pageBox, createRow, createStackedRow, staticLabel, actionRow, fieldWithActions, bindWhileRealized, onPageShown, settingRow } from "../SettingsHelpers"
 import { NidaraButton, NidaraDropDown } from "../../../../lib/nidara-kit"
 import agentConfig from "../../../core/AgentConfig"
-import { AGENT_PROVIDERS, providerById } from "../../../core/AgentProviders"
+import { providerById } from "../../../core/AgentProviders"
 import { fetchModels, catalogNeedsKey } from "../../../core/AgentCatalog"
 import { configKeys } from "../../../core/ConfigRegistry"
 import { t } from "../../../core/i18n"
@@ -19,15 +19,6 @@ import { t } from "../../../core/i18n"
 // fail-soft: a Nidara session may have no Secret Service running yet (gnome-keyring
 // is unlocked at login via PAM — see install.sh), and the page must never crash the
 // shell when the keyring is unavailable.
-// Brand names — deliberately NOT translated (proper nouns). Only "Off", "Custom"
-// and the "(local)" qualifier on Ollama go through i18n.
-const PROVIDER_NAMES: Record<string, string> = {
-    anthropic: "Anthropic",
-    openai: "OpenAI",
-    google: "Google (Gemini)",
-    spacexai: "SpaceXAI (Grok)",
-}
-
 const KEY_SCHEMA = Secret.Schema.new(
     "org.nidara.Assistant",
     Secret.SchemaFlags.NONE,
@@ -158,23 +149,6 @@ export default function AiPage() {
 
     // ── Assistant — the built-in conversational agent's brain (BYOK) ─────────
     const brainGroup = listGroup(t("settings.ai.brain.group"), t("settings.ai.brain.group.scope"))
-
-    // Provider picker — by NAME, not by wire protocol. The protocol (anthropic vs
-    // openai-compatible) stays internal: AgentConfig.setBrainProvider derives it,
-    // plus the endpoint and the remembered model. Provider names are proper nouns,
-    // so only "Off" and "Custom" are translated.
-    const PROVIDERS: Array<{ id: string; label: string }> = [
-        { id: "", label: t("settings.ai.brain.provider.off") },
-        ...AGENT_PROVIDERS.map(p => ({
-            id: p.id,
-            label: p.id === "custom"    ? t("settings.ai.brain.provider.custom")
-                : p.id === "localhost" ? t("settings.ai.brain.provider.localhost")
-                : p.id === "ollama"    ? t("settings.ai.brain.provider.ollama")
-                : PROVIDER_NAMES[p.id] ?? p.id,
-        })),
-    ]
-    const labelFor = (id: string) => PROVIDERS.find(b => b.id === id)?.label ?? PROVIDERS[0].label
-    const idFor = (label: string) => PROVIDERS.find(b => b.label === label)?.id ?? ""
 
     // ── Model row: free text + an optional catalog fetched from the provider ────
     // The ENTRY stays the source of truth. The dropdown is an aid: it appears only
@@ -417,27 +391,15 @@ export default function AiPage() {
         refreshKeyUI()
     }
 
-    brainGroup.listBox.append(dropdownRow(
-        t("settings.ai.brain.provider"),
-        t("settings.ai.brain.provider.desc"),
-        labelFor(agentConfig.brainProvider),
-        PROVIDERS.map(b => b.label),
-        (v) => { agentConfig.setBrainProvider(idFor(v)); refreshSensitivity() },
-        (apply) => agentConfig.onChange(() => apply(labelFor(agentConfig.brainProvider))),
-    ))
+    brainGroup.listBox.append(settingRow("ai.brainProvider"))
     brainGroup.listBox.append(model.row)
     brainGroup.listBox.append(endpoint.row)
     brainGroup.listBox.append(keyRow)
     refreshSensitivity()
 
-    // ⚠️ The provider dropdown's own `onExt` above moves the DROPDOWN and nothing else,
-    // and everything else in this group belongs to the provider. There is one Settings
-    // window per monitor, so switching provider on one screen used to leave the other
-    // showing the previous provider's model, its endpoint row, and a key field that
-    // still described it — while "Save key" (which reads the LIVE provider) would have
-    // filed the secret under the new one. Re-derive the whole context when the provider
-    // moves; when it hasn't, keep the two free-text fields honest without stealing what
-    // someone is in the middle of typing.
+    // ⚠️ Re-derive the whole context when the provider moves; when it hasn't,
+    // keep the two free-text fields honest without stealing what someone is
+    // in the middle of typing.
     bindWhileRealized(page, () => {
         const sync = () => {
             if (agentConfig.brainProvider !== shownProvider) { refreshSensitivity(); return }
@@ -468,44 +430,16 @@ export default function AiPage() {
     // Hyprland's decoration:glow), which is why it can be turned off.
     const signalGroup = listGroup(t("settings.ai.group.signal"), t("settings.ai.group.signal.scope"))
 
-    signalGroup.listBox.append(toggleRow(
-        t("settings.ai.assistant-glow"),
-        t("settings.ai.assistant-glow.desc"),
-        agentConfig.assistantGlow,
-        (v) => agentConfig.setAssistantGlow(v),
-        (apply) => agentConfig.onChange(() => apply(agentConfig.assistantGlow)),
-    ))
+    signalGroup.listBox.append(settingRow("ai.assistantGlow"))
 
     page.append(signalGroup.box)
 
     // ── Desktop access — what agents may do to the shell itself ─────────────
     const accessGroup = listGroup(t("settings.ai.group.access"), t("settings.ai.group.access.scope"))
 
-    accessGroup.listBox.append(toggleRow(
-        t("settings.ai.allow-config-write"),
-        t("settings.ai.allow-config-write.desc"),
-        agentConfig.allowConfigWrite,
-        (v) => agentConfig.setAllowConfigWrite(v),
-        (apply) => agentConfig.onChange(() => apply(agentConfig.allowConfigWrite)),
-    ))
-
-    accessGroup.listBox.append(toggleRow(
-        t("settings.ai.allow-screenshot"),
-        t("settings.ai.allow-screenshot.desc"),
-        agentConfig.allowScreenshot,
-        (v) => agentConfig.setAllowScreenshot(v),
-        (apply) => agentConfig.onChange(() => apply(agentConfig.allowScreenshot)),
-    ))
-
-    // The one gated window operation — the rest of the cluster (focus, move,
-    // float, layout) is reversible and stays ungated.
-    accessGroup.listBox.append(toggleRow(
-        t("settings.ai.allow-window-close"),
-        t("settings.ai.allow-window-close.desc"),
-        agentConfig.allowWindowClose,
-        (v) => agentConfig.setAllowWindowClose(v),
-        (apply) => agentConfig.onChange(() => apply(agentConfig.allowWindowClose)),
-    ))
+    accessGroup.listBox.append(settingRow("ai.allowConfigWrite"))
+    accessGroup.listBox.append(settingRow("ai.allowScreenshot"))
+    accessGroup.listBox.append(settingRow("ai.allowWindowClose"))
 
     page.append(accessGroup.box)
 
@@ -516,55 +450,23 @@ export default function AiPage() {
     // files exist to hold commands.
     const filesGroup = listGroup(t("settings.ai.group.files"), t("settings.ai.group.files.scope"))
 
-    filesGroup.listBox.append(toggleRow(
-        t("settings.ai.allow-file-read"),
-        t("settings.ai.allow-file-read.desc"),
-        agentConfig.allowFileRead,
-        (v) => agentConfig.setAllowFileRead(v),
-        (apply) => agentConfig.onChange(() => apply(agentConfig.allowFileRead)),
-    ))
-
-    filesGroup.listBox.append(toggleRow(
-        t("settings.ai.allow-file-write"),
-        t("settings.ai.allow-file-write.desc"),
-        agentConfig.allowFileWrite,
-        (v) => agentConfig.setAllowFileWrite(v),
-        (apply) => agentConfig.onChange(() => apply(agentConfig.allowFileWrite)),
-    ))
+    filesGroup.listBox.append(settingRow("ai.allowFileRead"))
+    filesGroup.listBox.append(settingRow("ai.allowFileWrite"))
 
     page.append(filesGroup.box)
 
     // ── Other apps — the computer-use layer (reaches OUTSIDE the shell) ──────
     const otherAppsGroup = listGroup(t("settings.ai.group.other-apps"), t("settings.ai.group.other-apps.scope"))
 
-    otherAppsGroup.listBox.append(toggleRow(
-        t("settings.ai.allow-computer-use"),
-        t("settings.ai.allow-computer-use.desc"),
-        agentConfig.allowComputerUse,
-        (v) => agentConfig.setAllowComputerUse(v),
-        (apply) => agentConfig.onChange(() => apply(agentConfig.allowComputerUse)),
-    ))
-
-    otherAppsGroup.listBox.append(toggleRow(
-        t("settings.ai.allow-computer-control"),
-        t("settings.ai.allow-computer-control.desc"),
-        agentConfig.allowComputerControl,
-        (v) => agentConfig.setAllowComputerControl(v),
-        (apply) => agentConfig.onChange(() => apply(agentConfig.allowComputerControl)),
-    ))
+    otherAppsGroup.listBox.append(settingRow("ai.allowComputerUse"))
+    otherAppsGroup.listBox.append(settingRow("ai.allowComputerControl"))
 
     page.append(otherAppsGroup.box)
 
     // ── MCP server — the channel external clients connect through ────────────
     const mcpGroup = listGroup(t("settings.ai.group.mcp"), t("settings.ai.group.mcp.scope"))
 
-    mcpGroup.listBox.append(toggleRow(
-        t("settings.ai.allow-mcp"),
-        t("settings.ai.allow-mcp.desc"),
-        agentConfig.allowMcp,
-        (v) => agentConfig.setAllowMcp(v),
-        (apply) => agentConfig.onChange(() => apply(agentConfig.allowMcp)),
-    ))
+    mcpGroup.listBox.append(settingRow("ai.allowMcp"))
 
     mcpGroup.listBox.append(createRow(
         t("settings.ai.connect-agent"),

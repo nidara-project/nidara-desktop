@@ -1,6 +1,6 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import { listGroup, pageBox, toggleRow, imagePickerRow } from "../SettingsHelpers"
+import { listGroup, pageBox, imagePickerRow, settingRow } from "../SettingsHelpers"
 import { barSettings, updateBarSettings } from "../../bar/barState"
 import { LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "../../bar/Bar"
 import { t } from "../../../core/i18n"
@@ -21,12 +21,7 @@ export default function BarPage() {
     // was ever a preference rather than a footgun: the system-menu capsule and
     // the Activity Island are both permanent now, each because hiding it removed
     // the sole route to a capability. Reasoning lives in `bar/barState.ts`.
-    layoutGroup.listBox.append(toggleRow(
-        t("settings.bar.app-title"),
-        t("settings.bar.app-title.desc"),
-        barSettings.showAppTitle,
-        (v) => updateBarSettings({ showAppTitle: v }),
-    ))
+    layoutGroup.listBox.append(settingRow("bar.appTitle"))
 
     page.append(layoutGroup.box)
 

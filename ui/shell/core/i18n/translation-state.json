@@ -695,6 +695,7 @@
     "settings.gaming.wallpaper-mode.desc": "7e4c7deb",
     "settings.gaming.custom-wallpaper": "50e19fda",
     "settings.gaming.custom-wallpaper.desc": "1eba006a",
+    "settings.gaming.transition": "4ead496f",
     "settings.gaming.transition.desc": "60cc1e34",
     "settings.gaming.performance-profile": "66733164",
     "settings.gaming.performance-profile.desc": "d6ed983d",
@@ -702,68 +703,68 @@
   },
   "locales": {
     "de": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "es": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "it": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "ja": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "nl": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "pl": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "pt-BR": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "pt-PT": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "ru": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "zh-CN": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     }

@@ -702,6 +702,7 @@ export default {
     "settings.gaming.wallpaper-mode.desc":               "Что показывать при запуске игры",
     "settings.gaming.custom-wallpaper":            "Изображение",
     "settings.gaming.custom-wallpaper.desc":             "Обои, показываемые для всех игр",
+    "settings.gaming.transition":                        "Переход",
     "settings.gaming.transition.desc":                   "Переход при смене на обои игры",
     "settings.gaming.performance-profile":         "Профиль высокой производительности",
     "settings.gaming.performance-profile.desc":          "Автоматически активировать профиль производительности при запуске игры",
