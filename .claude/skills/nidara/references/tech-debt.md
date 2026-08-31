@@ -1024,16 +1024,71 @@ trigger is `rofi`: it has no icon in Papirus-Dark or Papirus, so it falls throug
 confirmed by resolving it through the live theme. It is the only installed app icon like that
 (`org.gnome.Screenshot` is the other text-carrying SVG, but Papirus has its own copy, which wins).
 
-⚠️ **NOT REPRODUCED, and the negative means nothing yet.** A probe that mimics the grid (90 tiles
-cycling fresh `GFileIcon`s while the main thread rewrites every label) survived 600 rounds with the
-real rofi icon, with a synthetic 200-`<text>` SVG, and with a no-text control. Then the instrument
-was checked: 40 `eu-stack` samples of the running probe never caught a worker thread inside gsk or
-pango at all. **The probe never exercised the mechanism, so its three green runs are not evidence
-of anything** — they are an instrument that cannot fail. Whoever picks this up starts by proving
-the icon really loads off the main thread (a `GTK_DEBUG` channel, `perf record -g`, or an
-`LD_PRELOAD` shim on `pango_renderer_activate` that records `gettid`), and only then runs the
-experiment. The probe is `scripts/dev/icon-text-race.js`, and its header says the same thing —
-a probe whose green is meaningless has to announce that in the artefact, not only in the ticket.
+✅ **REPRODUCED 2026-08-31, and the thing that had been missing was one flag.** The old probe
+(90 tiles cycling fresh `GFileIcon`s while the main thread rewrites every label) survived 600
+rounds against the real rofi icon, against a synthetic 200-`<text>` SVG and against a no-text
+control — three identical greens, which was the smell. It could not have failed: **GTK reaches its
+icon-load thread from exactly one place**, `gtk_icon_theme_lookup_icon()` with
+`GTK_ICON_LOOKUP_PRELOAD` (→ `load_icon_thread`, gtkicontheme.c), and a `Gio.FileIcon` never gets
+there — `gtk_icon_theme_lookup_by_gicon()` answers a GFileIcon with
+`gtk_icon_paintable_new_for_file()` and the load stays on the main thread. The probe was asking for
+the one icon shape that cannot take the threaded path.
+
+**The instrument came first, as the entry said it had to.** `scripts/dev/pangotrace.c` is an
+`LD_PRELOAD` shim that counts Pango entries per thread and reports overlap — two DIFFERENT threads
+inside Pango at once, which is the bug condition rather than a suspicion of it. `nm -D
+--undefined-only` decided what it could wrap before a line of it was written: `pango_renderer_activate`
+is called by libpango on itself and is NOT interposable, while `pango_renderer_draw_layout` and
+`pango_cairo_show_glyph_string` — both frames of the 08-24 core — are called by libgtk-4 and are.
+It was then proved able to fail against two threads deliberately in Pango (2000 off-main calls,
+1759 overlaps).
+
+What it measured, both arms 600 rounds × 90 tiles:
+
+    MODE=file (GFileIcon)   1,184,130 draw_layout + 376,814 show_glyph_string
+                            ONE thread ever entered Pango, 0 overlaps, survived
+    MODE=name (PRELOAD)     first off-main call, then first overlap, then SIGSEGV
+
+So the text really is rasterised — 376k glyph-string draws — and in the file arm it is rasterised
+entirely on the main thread. **The negative was about the probe, not about the bug.**
+
+🔑 **The trigger is the `<text>`, and that is a control, not an inference.** Down the same threaded
+path: `rofi` (whose hicolor SVG carries three `<text>` elements, because Papirus has no copy of it)
+crashed **5 of 6 runs**; `firefox` (Papirus, no `<text>`) survived **4 of 4**. The crash also
+happens with the shim NOT loaded — 2 of 3 — so it is not an artefact of the instrument.
+
+**The new core is sharper than the 08-24 one** and was taken on `gtk4 1:4.22.4-1`, `pango
+1:1.58.2-1`, `cairo 1.18.4-1`, `gjs 2:1.88.1-1`. The dying thread is a GTask worker (`pool-8`),
+SEGV_MAPERR, and the top of its stack names the shared structure being torn:
+
+    #0 libc                       #1 __strdup
+    #2 libcairo                   #3 cairo_scaled_font_create
+    #4 libpangocairo              #5 libpangocairo
+
+That is Cairo's scaled-font cache being entered from two threads, which is the same sentence the
+08-24 entry wrote from the symbol bracketing — now with a function name on it. A second run put the
+worker in `pango_glyph_string_extents_range` instead, so the exact victim varies; the shared cache
+does not.
+
+🔑 **And the shell reaches that path without ever naming the flag — which is why the old entry's
+"no call site passes `GTK_ICON_LOOKUP_PRELOAD` — checked" was true and pointed the wrong way.**
+GTK adds it on its own: `gtk_icon_helper_invalidate_for_change()` calls
+`gtk_icon_helper_ensure_paintable(self, TRUE)` — "the css size is valid now, preload" — and that
+`TRUE` becomes `flags |= GTK_ICON_LOOKUP_PRELOAD` inside `gtk_icon_helper_load_paintable()`
+(gtkiconhelper.c, 4.22.4). So **any `Gtk.Image` given an `icon_name` takes the threaded load the
+first time its CSS settles**, and the app grid does exactly that:
+`surfaces/app-grid/AppGrid.tsx:371` and `:527` set `icon.icon_name = resolved` for every app whose
+`.desktop` names a theme icon rather than a path. Dozens of them, at map time, while the main
+thread lays out dozens of labels. The snapshot path passes `FALSE` and stays on the main thread,
+which is why the same widget is harmless once it is up.
+
+That also settles what the workaround would have to be if upstream declines: not
+pre-rasterising every icon, but keeping text-carrying SVGs off `icon_name` — a narrower and
+cheaper trade than the one this entry was contemplating. Do not build it yet.
+
+⚠️ Still OPEN, and still upstream. What changed is that it is now FILABLE: a 100-line reproducer,
+a rate, a controlled cause and two cores. `scripts/dev/icon-text-race.js` defaults to `MODE=name`
+and keeps `MODE=file` as the documented negative control, so nobody rediscovers the blind arm.
 
 Recurrence, from `coredumpctl`: gjs SIGSEGVs on 08-05, 08-17 (x3), 08-22 and 08-24. The 08-22 one
 crashed in `gsk_render_replay_filter_node`, a different frame — so this is a class of rare native
