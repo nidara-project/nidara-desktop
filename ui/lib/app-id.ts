@@ -29,30 +29,40 @@
 //     moment later. Measured at three hooks (`map`, after-`map`,
 //     after-`present`): all three land, so this uses the earliest.
 //
-// 🔴 IT IS NOT EARLY ENOUGH FOR WINDOW RULES. This paragraph used to claim the
-// opposite — that `set_app_id` goes out in the same main-loop iteration, with no
+// 🔴 IT IS NOT EARLY ENOUGH FOR A STATIC WINDOW RULE. This paragraph used to claim
+// the opposite — that `set_app_id` goes out in the same main-loop iteration, with no
 // buffer yet, so the compositor has not matched rules — and it is FALSE, measured
 // 2026-08-30 with a minimal GTK4 window whose only variable was when the app-id
-// arrives. Hyprland matches its rules against the PROCESS app-id GTK put on the
-// toplevel at creation; a window whose rule names only the stamped class spends
-// its first frames TILED, and GTK, told it is maximized, ADOPTS the tile as its
-// size. On an empty workspace that is the whole work area — which is what "the
-// installer opens at monitor size" was.
+// arrives.
+//
+// Hyprland's STATIC effects (`float`, `center`, `size`, `move`, `workspace`,
+// `monitor`, …) are evaluated once when the window opens and matched against
+// `initialClass`/`initialTitle` — the values the toplevel was BORN with. The class
+// this function stamps does not exist yet at that moment, so a static rule naming it
+// does not fire late: it never fires. The window is simply left tiled, and GTK, told
+// it is maximized, adopts the tile as its size — on an empty workspace, the whole
+// work area, which is what "the installer opens at monitor size" was.
 //
 //     app-id from birth ................... 960x760 (its own default)
-//     app-id stamped here, rule on it .... 2544x1284 (the work area)
+//     app-id stamped here, rule on it .... 2544x1284 (the work area, i.e. the tile)
 //     app-id stamped here, rule on the
 //       birth class or an early title .... 960x760
 //
 // ⚠️ So this function is right, and stamping is right — the dock, the desktop
 // registry and `resolveWindowApp` all read the final class and are correct. What
-// cannot be trusted is a WINDOW RULE keyed on it alone. Any rule matching one of
-// these classes must also name the birth class:
+// cannot be keyed on it alone is a STATIC rule; it must also name the birth class:
 //
 //     match = { class = "^(org\\.nidara\\.installer|nidara-installer)$" }
 //
-// See `.claude/skills/nidara/references/dev-workflow.md` → "A window rule matches
-// an IDENTIFIER, never interface text — and our identifiers arrive LATE".
+// And the mirror holds: a DYNAMIC effect (`rounding`, `no_blur`, `opacity`, …) is
+// re-evaluated against the CURRENT class, so a dynamic rule keyed on the birth class
+// stops applying the moment this function runs. Naming both is never wrong.
+//
+// `scripts/ci/hypr-rule-check.mjs` gates both directions, and derives the class lists
+// from this repo rather than from prose — the prose had the shell's birth class wrong
+// (`org.nidara.shell`; it is `org.nidara.desktop`). See
+// `.claude/skills/nidara/references/dev-workflow.md` → "A window rule matches an
+// IDENTIFIER, and a static rule only ever sees the one the window was BORN with".
 
 import Gtk from "gi://Gtk?version=4.0"
 // Side-effect import: see (1) above. Ships with gtk4 itself.

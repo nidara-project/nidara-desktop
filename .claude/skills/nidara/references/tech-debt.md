@@ -3385,45 +3385,29 @@ Also unresolved and smaller: `.nidara-selection-check` is applied by the kit and
 That is correct today (Cairo paints it, the class is for perception) but it looks like a missing
 rule to the next reader, and `token-contract-check` will not tell them either way.
 
-### 98. ⚠️ OPEN — About borrows Settings' identity, and the dock cannot tell them apart (2026-08-30)
+### 102. ⚠️ OPEN — everything that reaches a window through the shell focuses it without raising it (2026-08-31)
 
-> **Queue entry: #304.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
+> **Queue entry: #326.** Reorder it, schedule it and close it there; what stays here is the rule
+> and the measurements.
 
-Reported from the desktop: opening **About** from the system menu makes it take over the pinned
-**Settings** icon in the dock, and when Settings is open too the dock shows them GROUPED under that
-one icon — two windows, one identity, neither of them named About.
+Split out of #98, which is resolved. Reported with it and never the same defect: selecting one of
+two grouped windows from the dock icon's menu **focuses it but does not raise it** — it stays under
+whatever was on top. Clicking a floating window directly does both.
 
-The cause is one line, not a dock bug: `ui/shell/surfaces/about/AboutWindow.tsx:248` sets
-`appId: "nidara-settings"`. Measured on a running session — the window arrives at the compositor as
-`class=nidara-settings title=About Nidara`, so anything that groups by app id (the dock, the task
-switcher, a taskbar someone else writes) is correct to put them together. About and Settings ARE
-related — #94 settled that they are a summary and its detail — but relation is not identity, and the
-dock is where the difference shows.
-
-⚠️ **And not a move-the-rule-to-the-class either — measured after this item was written.** About
-floats through a `hl.window_rule` matched on `^About Nidara$`, and the reason that has always worked
-is not only the shared app-id: a title is on the toplevel from creation, while `setWindowAppId`
-stamps the class at MAP, *after* Hyprland has matched its rules once. A rule naming only the new
-class would be matched too late and About would come up the size of its tile — the whole work area
-on an empty workspace. So whatever lands has to put the BIRTH class (`org.nidara.shell`) into the
-match alongside the new one, exactly like `float-installer` now does. See `dev-workflow.md` → "A
-window rule matches an IDENTIFIER, never interface text — and our identifiers arrive LATE".
-
-⚠️ Not a rename-and-done either: the app id is also what the dock's pin matches, so changing it without
-looking at the pinned entry moves the problem rather than fixing it (a pinned `nidara-settings`
-would stop matching a window that now says `nidara-about`). Whatever lands has to answer what the
-dock shows for each of the two, and what the pin follows.
-
-**Second half, reported with it and worth its own look:** selecting one of the grouped windows from
-the dock icon's menu **focuses it but does not raise it** — it stays under whatever was on top,
-which is exactly the confusing case when two windows share an icon. Clicking a floating window
-directly does both. The asymmetry is ours: `HyprlandState.focusWindow()`
+The asymmetry is ours, not Hyprland's. `HyprlandState.focusWindow()`
 (`ui/shell/core/HyprlandState.ts:772`) dispatches `hl.dsp.focus({ window = … })` and nothing else,
-while raising is a separate dispatcher in Hyprland — `alterzorder` (`bringactivetotop` is
-deprecated in favour of it, and the docs note it cannot put a floating window behind a tiled one,
-which is not a case we need). So every caller that reaches a window through the shell — dock menu,
-switcher, notifications — focuses without raising, and the dock menu is simply where somebody
-noticed.
+while raising is a **separate** dispatcher — `alterzorder` (`bringactivetotop` is deprecated in its
+favour, and the docs note it cannot put a floating window behind a tiled one, which is not a case
+we need).
+
+🔑 **The dock menu is only where somebody noticed.** Every caller that reaches a window through the
+shell goes through that one method — dock menu, window switcher, notification actions,
+`nidara-ipc focusWindow`, the MCP `focus_window` verb, the Assistant. So this is one fix in one
+place, and testing it via the dock alone would leave five other routes unverified.
+
+⚠️ #98 made this visible rather than causing it: with About and Settings finally under separate
+dock icons, the "two windows share an icon" case that made the missing raise so confusing is rarer.
+The defect is unchanged.
 
 ### 99. ⚠️ OPEN — the installer cannot fit on a screen shorter than its own floor (2026-08-30)
 
@@ -3442,7 +3426,7 @@ Not measured on such a screen — derived from the numbers, and worth a VM at 13
 deciding anything. The fix is not the rule: it is either a smaller floor (does the wizard's content
 survive a 1366x768 work area?) or a live-medium layout that gives the installer the screen. The
 window rule is not where this lives — see `dev-workflow.md` → "A window rule matches an IDENTIFIER,
-never interface text — and our identifiers arrive LATE".
+and a static rule only ever sees the one the window was BORN with".
 
 ### 100. ⚠️ OPEN — the shell grew 460 MB over 21 hours, and it is NOT the JS side (2026-08-30)
 
@@ -3516,6 +3500,7 @@ Kept here so that a cross-reference by number still resolves from this file, and
 number is never accidentally reused. 45 items, split out 2026-08-23.
 
 - **#7** — `pageHeader()` removed — RESOLVED → `tech-debt-resolved.md`
+- **#98** — ✅ RESOLVED 2026-08-31 — About declares `nidara-about`, and the window-rule seam became a CI gate → `tech-debt-resolved.md`
 - **#9** — The per-boot Adwaita-WARNING — ✅ RESOLVED 2026-08-18 (the host went) → `tech-debt-resolved.md`
 - **#11** — Idle GPU spin on bar/dock — RESOLVED (two distinct causes) → `tech-debt-resolved.md`
 - **#12** — Sporadic double-disconnect CRITICALs — RESOLVED (helper + sweep 2026-06-23; lifecycle half in 12b, 2026-08-02) → `tech-debt-resolved.md`

@@ -1354,10 +1354,13 @@ migrated every remaining `keyword` caller — they were all silently broken on t
   the state. macOS and GNOME both put the layout under Keyboard/Devices, not under
   Language; keep it there.
 - `AboutWindow` float/center → a static `hl.window_rule` in `hyprland.lua` (matched by the
-  "About Nidara" title; the `windowrulev2` keyword calls were removed). ⚠️ **That title match is
-  the exception, not the pattern** — rules here match app-ids, never interface text. It is on the
-  title only because About borrows Settings' app-id (debt #98); see `dev-workflow.md` → "A window
-  rule matches an IDENTIFIER, never interface text".
+  "About Nidara" title; the `windowrulev2` keyword calls were removed). ⚠️ **The title match is
+  not a leftover from About borrowing Settings' app-id** — About has its own (`nidara-about`,
+  2026-08-31) and the rule still cannot use it. `float`/`center` are STATIC effects, matched once
+  at open against `initialClass`, and every window this process opens is born `org.nidara.desktop`;
+  the birth title is the only thing that tells About from Settings at that instant. Enforced by
+  `scripts/ci/hypr-rule-check.mjs`; see `dev-workflow.md` → "A window rule matches an IDENTIFIER,
+  and a static rule only ever sees the one the window was BORN with".
 - greeter `LocaleBar` kb_layout → eval (the greeter runs its OWN Lua config,
   `config/greetd/hyprland-greeter.lua`, so it's the same parser).
 - `app.ts` bar-blur layerrules → **deleted** (dead duplicates of the `hl.layer_rule`

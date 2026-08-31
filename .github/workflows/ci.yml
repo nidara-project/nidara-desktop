@@ -293,6 +293,19 @@ jobs:
       # so it needs neither Hyprland nor Steam.
       - name: Game-mode session handlers (must succeed)
         run: lua5.4 scripts/dev/hypr-game-mode-test.lua
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      # A rule matches a string a GTK window announces, and nothing in the repo
+      # connects the two: rename one and the rule stops matching, with no error
+      # anywhere. Worse, the direction of the trap depends on the EFFECT — a static
+      # one (float, size, workspace) only ever sees the class the window was BORN
+      # with, so a rule on the app-id we stamp at MAP never fires at all; a dynamic
+      # one (rounding, no_blur) only sees the current class, so a rule on the birth
+      # class stops applying the moment the window is up. Both had been written down
+      # and the prose still had the shell's birth class wrong.
+      - name: Window rules match identifiers the source declares (must succeed)
+        run: node scripts/ci/hypr-rule-check.mjs
 
   skill-docs:
     name: Docs + prose shape

@@ -568,12 +568,36 @@ hl.window_rule({
     rounding = 0,
 })
 
--- The Nidara "About" window (a small fixed-size GTK toplevel) floats and
--- centers. Matched by TITLE, and it has to stay that way: About deliberately
--- shares the Settings window's class (`nidara-settings`, which both windows
--- declare for themselves — see ui/lib/app-id.ts) so that both carry Settings'
--- registry icon in the dock and the overview. Matching on class here would float
--- and centre the Settings window too.
+-- The Nidara "About" window (a small fixed-size GTK toplevel) floats and centers.
+--
+-- ⚠️ MATCHED BY TITLE ON PURPOSE, AND THE REASON IS NOT THE ONE THAT USED TO BE
+-- WRITTEN HERE. The old note said About had to share Settings' class, so a class
+-- match would have floated Settings too. About has its own class now
+-- (`nidara-about`, ui/shell/surfaces/about/AboutWindow.tsx) and this rule still
+-- cannot use it — for a reason that would outlive any renaming:
+--
+--   `float` and `center` are STATIC effects. Hyprland evaluates a static effect
+--   ONCE, when the window opens, and matches it against `initialClass` /
+--   `initialTitle` — the values the toplevel was BORN with, whatever `class` and
+--   `title` say later. Our stamped app-ids do not exist yet at that moment (they
+--   land at MAP, see ui/lib/app-id.ts), so a static rule naming one does not fire
+--   late: it NEVER FIRES.
+--
+--   The birth class is no help either, because it is the PROCESS app-id and the
+--   shell is one process opening several windows: Settings, About and Settings'
+--   modal dialogs are all born `org.nidara.desktop`. Floating "the shell's
+--   windows" would float Settings, permanently — a static effect is never
+--   re-evaluated, so it cannot be taken back.
+--
+--   Which leaves the initial title as the ONLY thing that tells these two windows
+--   apart at the instant the rule runs. That is not interface text drifting under
+--   a rule; it is a code literal on the toplevel from creation.
+--
+-- 🔑 What made this fragile was that nothing checked it. `scripts/ci/hypr-rule-check.mjs`
+-- now does: the string below must match a `title:` literal that ui/ actually sets,
+-- and that literal must not be translated. The day About's title goes through
+-- `t()` — the obvious, well-meant i18n change — CI says so instead of the window
+-- silently opening tiled in every locale but English.
 hl.window_rule({
     name   = "float-about",
     match  = { title = "^About Nidara$" },
@@ -589,35 +613,30 @@ hl.window_rule({
 -- first seen: a full-height pane sharing the screen with whatever else was open,
 -- when what it needs is to be the thing in front of you.
 --
--- 🔑 THE TWO CLASSES ARE ONE WINDOW, AND THE FIRST ONE IS LOAD-BEARING.
+-- 🔑 THE TWO CLASSES ARE ONE WINDOW, AND ONLY THE FIRST ONE DOES ANYTHING HERE.
 -- `org.nidara.installer` is the PROCESS app-id, the one GTK puts on the toplevel at
 -- creation (`ui/installer/app.ts`). `nidara-installer` is the per-toplevel override
--- `ui/lib/app-id.ts` stamps at MAP — which is after Hyprland has already matched its
--- rules once. A rule that names only the second one is matched TOO LATE: the window
--- spends its first frames TILED, GTK is told it is maximized and takes the tile as
--- its size, and when the class finally arrives the rules are re-evaluated and it
--- floats at the size it just adopted. That is the whole bug, and it is why it looked
--- like "the installer opens at monitor size when it is the only window": the tile it
--- adopts is the whole work area on an empty workspace, and half of it next to one
--- other window.
+-- `ui/lib/app-id.ts` stamps at MAP. `float` and `center` are STATIC effects, and a
+-- static effect is matched ONCE at open against `initialClass` — so the second name
+-- is INERT in this rule. It is kept because it is the same window's real identity
+-- and because a DYNAMIC effect added here later would need it; it is not what makes
+-- the window float.
 --
--- Measured with a minimal GTK4 window (one variable per arm, all on the same empty
--- 2560x1440 screen, default size 960x760):
+-- Without the first name the window is TILED like any other application, which is
+-- how it was first seen: a full-height pane sharing the screen with whatever else
+-- was open, when what it needs is to be the thing in front of you. On an empty
+-- workspace the tile is the whole work area, which is what "the installer opens at
+-- monitor size" was.
 --
---     app-id from birth                                    960x760    ✔
---     + set_size_request(960,760)                          960x760    ✔
---     app-id stamped at map, rule on the LATE class       2544x1284   ✘  the work area
---     same, but on a workspace with one window            1272x1284   ✘  half the tile
---     app-id stamped at map, rule on an EARLY TITLE        960x760    ✔
---     app-id stamped at map, rule on the BIRTH class       960x760    ✔
+-- Measured 2026-08-30 with a minimal GTK4 window, one variable per arm. The table
+-- lives in `.claude/skills/nidara/references/dev-workflow.md` → "A window rule
+-- matches an IDENTIFIER" and is deliberately NOT copied here: it was copied here
+-- once, the copy and the original disagreed about the shell's birth class, and the
+-- wrong one is the one somebody would have pasted into a new rule.
 --
--- The last two are why About has never had this: its rule is on `^About Nidara$`, and
--- a title is on the toplevel from creation. ⚠️ So when debt #98 gives About an app-id
--- of its own, moving its rule to that class walks straight into this — it needs the
--- birth class in the alternation too, exactly like this one.
---
--- Rules still match IDENTIFIERS, never interface text. `org.nidara.installer` is an
--- identifier as much as `nidara-installer` is; it is just the earlier one.
+-- The rule below is what `scripts/ci/hypr-rule-check.mjs` enforces for every static
+-- rule naming one of our windows: name the birth class, because it is the only name
+-- that exists when the rule runs.
 hl.window_rule({
     name   = "float-installer",
     match  = { class = "^(org\\.nidara\\.installer|nidara-installer)$" },

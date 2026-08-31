@@ -1,0 +1,19 @@
+[Desktop Entry]
+Name=About Nidara
+Comment=Version, hardware and session details for this Nidara install
+# Not a launcher, and NoDisplay says so: About is opened from the system menu and
+# from Settings, never from the app grid. This entry exists for one reason — it is
+# what AppService.resolveWindowApp() resolves the window's `nidara-about` class
+# through, so the dock and the workspace overview have a name and an icon for it.
+# Without it the window shows the generic glyph, which is the objection that kept
+# About borrowing Settings' app-id until 2026-08-31.
+#
+# Exec is required by the spec and is never run. Written WITHOUT single quotes on
+# purpose: `desktop-file-validate` rejects them outside a quoted argument, and
+# nidara-settings.desktop fails that check today for exactly that reason.
+Exec=notify-send Nidara "Open About from the system menu."
+Icon=help-about
+Type=Application
+NoDisplay=true
+Categories=Settings;
+StartupNotify=false
