@@ -1899,3 +1899,58 @@ the window was BORN with".
 
 **Not resolved with it:** the second half reported alongside — focusing a window through the shell
 does not raise it — was never the same defect and is now item **#102**.
+
+### 102. ✅ RESOLVED — the shell's one door now raises as well as focuses (2026-08-31, same day)
+
+`HyprlandState.focusWindow()` dispatched `hl.dsp.focus({ window = … })` and stopped there, so
+selecting the second of two grouped windows from a dock icon focused it **under** whatever was on
+top. Clicking the window itself did both, and that asymmetry was ours: Hyprland's `Actions::focus`
+(`src/config/shared/actions/ConfigActions.cpp`) ends at `fullWindowFocus()` and never touches the
+stack — raising is a separate dispatcher. The method now sends `focus` and then
+`hl.dsp.window.alter_zorder({ mode = 'top', window = … })`.
+
+**One method, six routes.** Dock menu, window switcher, tray, notification actions,
+`nidara-ipc focusWindow`, the MCP `focus_window` verb and the Assistant all arrive at this method,
+which is why the fix is two lines and why verifying it through the dock alone would have proved
+one route out of six. The IPC description had said "Focus/raise a window" since it was written;
+it is true now.
+
+**Deliberately NOT changed: `focusDirection`.** It reaches a window through the shell too, and
+`alter_zorder` with no selector would raise whatever the move landed on — but the same verb is
+bound to `Super + <arrow>` in `hyprland.lua`, where nothing raises either. Making the IPC form
+raise would give one behaviour to the keybind and another to the identical verb next to it. If
+that is ever revisited, revisit both.
+
+**The schema, from the binary rather than from memory** — `strings /usr/bin/Hyprland` carries it:
+`hl.window.alter_zorder: expected a table { mode, window? }`. `mode` is `'top'` or `'bottom'` and
+an unrecognised value is an ERROR, not a silent no-op. ⚠️ The window field is only *nominally*
+optional: `alterZOrder` resolves it through `xtract`, which falls back to the **focused** window
+when it is absent — and a mistyped key is dropped in silence, which is the standing trap from
+`architecture.md`. Both calls go through `_winSel()`.
+
+🔑 **How it was measured, and the two instruments that had to be fixed first.** Driving the
+owner's own session was not an option, so the experiment ran in a **nested Hyprland** — same
+0.56.2, its own config, two identical `kitty` windows in flat red and flat blue, both centred and
+both covering the output, so the frame's dominant colour names the window in front and nothing
+else. The recipe and its two traps are in `dev-workflow.md` → "A nested Hyprland is the bench for
+anything about windows". Result, from a clean state each time:
+
+    bug state (blue on top, red focused)      focus only  → blue still on top   the defect
+    same state, focus + alter_zorder(red)                 → red on top, red focused
+    same state, focus + alter_zorder(blue)                → blue on top, blue focused
+
+**The order of the two dispatchers was measured, not reasoned, and the first attempt to measure it
+was worthless.** `alterZOrder` ends with `simulateMouseMovement()`, which looks like it must hand
+focus back to whatever is under the pointer when `input:follow_mouse` is `1` — an argument for
+raising first. Parking the pointer with `hl.dsp.cursor.move` and comparing both orders gave two
+green branches; then the precondition was checked and **a warped cursor does not refocus at all**,
+so the comparison had never exercised the mechanism. Re-run with real motion injected by
+`nidara-input move` (positive control first: crossing the border between the two windows under
+`follow_mouse = 1` *does* move focus), both orders kept the target focused, 3/3 each, under
+`follow_mouse` 1 and 2. So the order is free. Focus goes first because its degraded form is the
+harmless one: if a selector ever stopped resolving, the raise lands on the window just focused
+instead of on a stranger.
+
+`hyprctl --batch "dispatch … ; dispatch …"` was also tried and works in one process, and was NOT
+used: the batch separator is `;`, so an argument that ever contained one would split into two
+commands, and a batch merges the two error lines `_dispatch` would otherwise log separately.

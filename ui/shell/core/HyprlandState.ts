@@ -769,8 +769,45 @@ class HyprlandStateClass extends GObject.Object {
         return this._dispatch(`hl.dsp.focus({ direction = '${dir}' })`)
     }
 
-    focusWindow(address: string) {
-        return this._dispatch(`hl.dsp.focus({ ${this._winSel(address)} })`)
+    /** Focus a window AND bring it to the front. Two dispatchers because Hyprland
+     *  has two: `focus` moves the keyboard and nothing else (`Actions::focus` in
+     *  `src/config/shared/actions/ConfigActions.cpp` ends at `fullWindowFocus()`),
+     *  while the z-order lives behind `alter_zorder` — so for a year everything that
+     *  reached a window through the shell left it exactly where it was in the stack.
+     *  Selecting the second of two grouped windows from a dock icon focused it
+     *  UNDER whatever was on top; clicking the window itself did both, and that
+     *  asymmetry was ours, not the compositor's.
+     *
+     *  🔑 This is the one door. Dock menu, window switcher, tray, notification
+     *  actions, `nidara-ipc focusWindow`, the MCP `focus_window` verb and the
+     *  Assistant all arrive here, which is why the fix is one method and why
+     *  checking it through the dock alone would have left five routes unverified.
+     *
+     *  `mode = 'top'` and `window = …` are the whole schema (the binary states it:
+     *  `hl.window.alter_zorder: expected a table { mode, window? }`); the only other
+     *  mode is `'bottom'`, and an unrecognised one is an error rather than a no-op.
+     *  ⚠️ The selector is NOT optional in spirit: `alter_zorder` resolves its window
+     *  through `xtract`, which falls back to the FOCUSED window when the field is
+     *  missing — and a mistyped key is dropped in silence. Hence `_winSel` on both
+     *  calls, never a retyped `address =`.
+     *
+     *  ⚠️ Order is deliberate but NOT load-bearing, and the difference was measured
+     *  rather than reasoned: `alterZOrder` ends with `simulateMouseMovement()`, which
+     *  looks like it should hand focus back to whatever sits under the pointer when
+     *  `input:follow_mouse` is `1`. It does not — 3/3 trials per order under both
+     *  `follow_mouse` 1 and 2, with the pointer parked on the OTHER window, all ended
+     *  focused on the target. Focus goes first anyway because its degraded form is
+     *  the harmless one: if a selector ever stopped resolving, this raises the window
+     *  it just focused instead of raising a stranger.
+     *
+     *  Two spawns rather than one `hyprctl --batch` (which was tried and works): the
+     *  batch separator is `;`, so a single argument that ever contained one would
+     *  split into two commands, and each call keeps its own error line from
+     *  `_dispatch`. */
+    async focusWindow(address: string) {
+        const sel = this._winSel(address)
+        await this._dispatch(`hl.dsp.focus({ ${sel} })`)
+        return this._dispatch(`hl.dsp.window.alter_zorder({ mode = 'top', ${sel} })`)
     }
 
     closeWindow(address: string) {
