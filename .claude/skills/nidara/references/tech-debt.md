@@ -1086,9 +1086,80 @@ That also settles what the workaround would have to be if upstream declines: not
 pre-rasterising every icon, but keeping text-carrying SVGs off `icon_name` — a narrower and
 cheaper trade than the one this entry was contemplating. Do not build it yet.
 
-⚠️ Still OPEN, and still upstream. What changed is that it is now FILABLE: a 100-line reproducer,
-a rate, a controlled cause and two cores. `scripts/dev/icon-text-race.js` defaults to `MODE=name`
-and keeps `MODE=file` as the documented negative control, so nobody rediscovers the blind arm.
+🔴 **The reproducer is not "the same family" as the owner's crash — it is the SAME STACK, and the
+frequency estimate this entry was built on is wrong (2026-08-31).** The owner reported a second
+occurrence: the shell died **101 seconds after boot** on 2026-08-29 (boot 22:17:46, core 22:19:27,
+`nidara.service`, PID 1424, thread `pool-39`). Its twelve top frames and the reproducer's are
+identical *offset for offset* in the same library builds:
+
+    #0/#1  libpangocairo +0x767c, +0x9d90
+    #2     pango_glyph_string_extents_range
+    #3/#4/#5  libgtk-4 +0x5bfad9, +0x217d8d, +0x9a097
+    #6     pango_renderer_draw_glyph_item
+    #7     pango_renderer_draw_layout_line
+    #8     pango_renderer_draw_layout
+    #9/#10/#11  libgtk-4 +0x98e66, +0x2726cb, +0x27259a
+
+⚠️ **So the standing decision below rests on a premise that no longer holds.** It was taken on
+2026-08-24 with "it has only happened once" in front of it; there are now two cores carrying this
+exact signature (08-24 and 08-29) plus four earlier `gjs` SIGSEGVs in `coredumpctl`. It is a
+recurring crash of the WHOLE shell on the launcher surface. The 101-seconds-after-boot timing fits
+the mechanism — cold caches mean the preload thread really does parse and rasterise, instead of
+answering from a warm one — but that is one instance and not yet a pattern: the 08-24 core landed
+two days into its boot.
+
+🔗 **It is already reported upstream, and the report is STUCK: `gitlab.gnome.org/GNOME/gtk` issue
+8295**, opened 2026-07-05, labelled *1. Crash* + **2. Needs Information**, two comments. Same
+versions as ours (gtk 4.22.4, cairo 1.18.4), same shape: Nautilus's "Open With…" crashes ~7 of 10
+because `gtk_symbolic_paintable_snapshot_symbolic` runs in a GTask pool worker and corrupts the
+shared `PangoFcFontMap` cache, dying in a `strdup` inside Cairo. So this entry does not need a new
+issue — it needs to answer the one that is waiting, and it can:
+
+- a standalone 100-line reproducer with a rate (5 of 6), which is exactly what "Needs Information"
+  is asking for;
+- the cause isolated by control rather than asserted — text-carrying SVG 5/6 vs text-free 4/4
+  survived, down the same threaded path;
+- **the entry point is wider than that report says.** 8295 describes SYMBOLIC icon rendering; ours
+  is a plain full-colour SVG that merely contains `<text>`, reached through the icon-theme PRELOAD
+  thread that `gtk_icon_helper_invalidate_for_change()` starts for any `Gtk.Image` with an
+  `icon_name`. Symbolic is one road to the worker, not the road.
+
+⚠️ **And its stated workaround does not hold here, which is the single most useful thing we can
+tell them.** 8295 says `GSK_RENDERER=cairo` avoids the crash. Measured 2026-08-31 against this
+reproducer: **3 of 4 runs still crashed under `GSK_RENDERER=cairo`**, against 2 of 3 for the
+default-renderer control, and the core has the same signature (`pool-6`, SEGV_MAPERR, inside
+libpangocairo via `pango_glyph_string_extents_range`). The GSK renderer is not the variable — the
+icon rasterisation happens on the worker either way. Anyone reaching for that flag as a mitigation
+HERE is buying nothing and paying for a software renderer.
+
+⚠️ Still OPEN and still unfixed. What changed is that it is now answerable: a reproducer, a rate,
+a controlled cause, three cores and a refuted workaround. `scripts/dev/icon-text-race.js` defaults
+to `MODE=name` and keeps `MODE=file` as the documented negative control, so nobody rediscovers the
+blind arm.
+
+✅ **MITIGATED LOCALLY 2026-08-31 (owner's call, premise having changed): `AppService.svgCarriesText()`.**
+The door is a themed NAME, so the two exits that hand one back — `getCanonicalName()`'s themed-icon
+exit and `resolveIconChain()`'s pass 1 — now return the FILE PATH instead when the file behind the
+name is an SVG containing `<text>`. Callers already turn a path into a `Gio.FileIcon` (the
+`/usr/share/pixmaps` exit next to it has done exactly that for months), and a GFileIcon cannot
+reach the worker. **The proof that the mitigation works is the probe's own negative control**:
+`MODE=file` drives 376k glyph draws down this path on ONE thread and survives, `MODE=name` crashes
+5 of 6.
+
+🔑 **It is narrow by measurement, not by hope.** Of the **96,723** SVGs in every installed icon
+theme, **2** contain `<text>` — both in hicolor — and the active theme (Papirus-Dark) has none. Ran
+against real GTK: `rofi` resolves to the hicolor file and diverts; `org.gnome.Screenshot` resolves
+to Papirus's own copy, which has no text, and does NOT divert; five ordinary icons do not divert.
+So exactly ONE icon on this machine changes route, every other icon keeps its name and keeps its
+preload, and the grid-open hitch that PRELOAD exists to hide is not traded away.
+
+⚠️ The check that would have made this silently dead was `get_file()` returning null for icons
+served out of a theme cache. It does not — verified for hicolor and Papirus paths alike before the
+guard was trusted. The cache is keyed by PATH, not by icon name, so switching icon themes cannot
+leave it stale.
+
+⛔ This does NOT close the upstream bug and must not be read as closing it. GTK still starts a
+thread it is not safe to start, for any application, and 8295 is still the place that gets fixed.
 
 Recurrence, from `coredumpctl`: gjs SIGSEGVs on 08-05, 08-17 (x3), 08-22 and 08-24. The 08-22 one
 crashed in `gsk_render_replay_filter_node`, a different frame — so this is a class of rare native
