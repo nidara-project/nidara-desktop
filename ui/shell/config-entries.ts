@@ -24,6 +24,56 @@ import agentConfig from "./core/AgentConfig"
 import { dockSettings, updateDockSettings, type DockPosition } from "./surfaces/dock/state"
 import { barSettings, updateBarSettings } from "./surfaces/bar/barState"
 import inputConfig from "./core/InputConfig"
+import Icons from "./core/Icons"
+import { safeDisconnect } from "./core/signals"
+
+const KEYBOARD_LAYOUTS: [string, string, string, string][] = [
+    ["us",           "English (US)",              "us",    ""],
+    ["gb",           "English (UK)",              "gb",    ""],
+    ["es",           "Español (ES)",              "es",    ""],
+    ["latam",        "Español (Latinoamérica)",   "latam", ""],
+    ["fr",           "Français",                  "fr",    ""],
+    ["de",           "Deutsch",                   "de",    ""],
+    ["it",           "Italiano",                  "it",    ""],
+    ["br",           "Português (Brasil)",        "br",    ""],
+    ["pt",           "Português (Portugal)",      "pt",    ""],
+    ["nl",           "Nederlands",                "nl",    ""],
+    ["pl",           "Polski",                    "pl",    ""],
+    ["ru",           "Русский",                   "ru",    ""],
+    ["ua",           "Українська",                "ua",    ""],
+    ["jp",           "日本語 (Romaji)",            "jp",    ""],
+    ["cn",           "中文 (Pinyin)",              "cn",    ""],
+    ["kr",           "한국어",                     "kr",    ""],
+    ["ara",          "العربية",                    "ara",   ""],
+    ["se",           "Svenska",                   "se",    ""],
+    ["no",           "Norsk",                     "no",    ""],
+    ["dk",           "Dansk",                     "dk",    ""],
+    ["fi",           "Suomi",                     "fi",    ""],
+    ["cz",           "Čeština",                   "cz",    ""],
+    ["sk",           "Slovenčina",                "sk",    ""],
+    ["hu",           "Magyar",                    "hu",    ""],
+    ["ro",           "Română",                    "ro",    ""],
+    ["tr",           "Türkçe",                    "tr",    ""],
+    ["us-dvorak",    "English (Dvorak)",          "us",    "dvorak"],
+    ["us-colemak",   "English (Colemak)",         "us",    "colemak"],
+]
+
+const currentKbLayoutId = (): string => {
+    const cur = KEYBOARD_LAYOUTS.find(([, , l, v]) => l === inputConfig.kbLayout && v === inputConfig.kbVariant)
+    if (cur) return cur[0]
+    return inputConfig.kbVariant ? `${inputConfig.kbLayout} (${inputConfig.kbVariant})` : inputConfig.kbLayout
+}
+
+const kbLayoutLabel = (id: string): string => {
+    const entry = KEYBOARD_LAYOUTS.find(([k]) => k === id)
+    return entry ? entry[1] : id
+}
+
+const onInputCfg = (read: () => any) => (apply: (v: any) => void) => {
+    apply(read())
+    const id = inputConfig.connect("changed", () => apply(read()))
+    return () => safeDisconnect(inputConfig, id)
+}
 
 export function registerConfigEntries() {
     // ── Appearance ────────────────────────────────────────────────────────
@@ -100,29 +150,120 @@ export function registerConfigEntries() {
     })
 
     // ── Input ─────────────────────────────────────────────────────────────
+    registerConfig("input.mouse.speed", {
+        desc: "Pointer sensitivity (-1.0 to 1.0).",
+        type: "number",
+        min: -1.0,
+        max: 1.0,
+        get: () => inputConfig.pointerSpeed,
+        set: v => inputConfig.setPointerSpeed(v as number),
+        subscribe: onInputCfg(() => inputConfig.pointerSpeed),
+        ui: {
+            i18n: "settings.input.mouse.speed",
+            slider: {
+                icons: [Icons.mousePointer, Icons.mousePointer],
+                pct: true,
+            },
+        },
+    })
+    registerConfig("input.mouse.accel", {
+        desc: "Pointer acceleration profile: 'adaptive' or 'flat'.",
+        type: "enum",
+        enum: ["adaptive", "flat"],
+        get: () => inputConfig.accelProfile,
+        set: v => inputConfig.setAccelProfile(v as string),
+        subscribe: onInputCfg(() => inputConfig.accelProfile),
+        ui: {
+            i18n: "settings.input.mouse.accel",
+            optI18n: (v) => v,
+        },
+    })
     registerConfig("input.mouse.natural", {
         desc: "Invert mouse scroll direction (natural scrolling).",
         type: "boolean",
         get: () => inputConfig.mouseNaturalScroll,
         set: v => inputConfig.setMouseNaturalScroll(v as boolean),
+        subscribe: onInputCfg(() => inputConfig.mouseNaturalScroll),
+        ui: {
+            i18n: "settings.input.mouse.natural",
+        },
     })
     registerConfig("input.touchpad.natural", {
         desc: "Invert touchpad scroll direction (natural scrolling).",
         type: "boolean",
         get: () => inputConfig.touchpadNaturalScroll,
         set: v => inputConfig.setTouchpadNaturalScroll(v as boolean),
+        subscribe: onInputCfg(() => inputConfig.touchpadNaturalScroll),
+        ui: {
+            i18n: "settings.input.touchpad.natural",
+        },
     })
     registerConfig("input.touchpad.tap", {
         desc: "Tap touchpad to click.",
         type: "boolean",
         get: () => inputConfig.touchpadTap,
         set: v => inputConfig.setTouchpadTap(v as boolean),
+        subscribe: onInputCfg(() => inputConfig.touchpadTap),
+        ui: {
+            i18n: "settings.input.touchpad.tap",
+        },
+    })
+    registerConfig("input.keyboard.layout", {
+        desc: "Keyboard layout code (e.g. 'us', 'es', 'us-dvorak').",
+        type: "enum",
+        enum: KEYBOARD_LAYOUTS.map(([id]) => id),
+        get: () => currentKbLayoutId(),
+        set: v => {
+            const entry = KEYBOARD_LAYOUTS.find(([id]) => id === v)
+            if (entry) {
+                return inputConfig.setKbLayout(entry[2], entry[3])
+            } else {
+                const raw = String(v)
+                const parts = raw.split("-")
+                return inputConfig.setKbLayout(parts[0], parts.slice(1).join("-"))
+            }
+        },
+        subscribe: onInputCfg(() => currentKbLayoutId()),
+        ui: {
+            i18n: "settings.input.keyboard.layout",
+            optI18n: kbLayoutLabel,
+        },
     })
     registerConfig("input.keyboard.numlock", {
         desc: "Enable NumLock on boot.",
         type: "boolean",
         get: () => inputConfig.numlockOnBoot,
         set: v => inputConfig.setNumlockOnBoot(v as boolean),
+        subscribe: onInputCfg(() => inputConfig.numlockOnBoot),
+        ui: {
+            i18n: "settings.input.keyboard.numlock",
+        },
+    })
+    registerConfig("input.keyboard.repeatDelay", {
+        desc: "Keyboard repeat delay in milliseconds before repeating keys.",
+        type: "number",
+        min: 100,
+        max: 2000,
+        get: () => inputConfig.kbRepeatDelay,
+        set: v => inputConfig.setKbRepeatDelay(v as number),
+        subscribe: onInputCfg(() => inputConfig.kbRepeatDelay),
+        ui: {
+            i18n: "settings.input.keyboard.repeat-delay",
+            slider: { unit: "ms" },
+        },
+    })
+    registerConfig("input.keyboard.repeatRate", {
+        desc: "Keyboard repeat rate in characters per second.",
+        type: "number",
+        min: 1,
+        max: 100,
+        get: () => inputConfig.kbRepeatRate,
+        set: v => inputConfig.setKbRepeatRate(v as number),
+        subscribe: onInputCfg(() => inputConfig.kbRepeatRate),
+        ui: {
+            i18n: "settings.input.keyboard.repeat-rate",
+            slider: { unit: "/s" },
+        },
     })
 
     // ── Night light ───────────────────────────────────────────────────────

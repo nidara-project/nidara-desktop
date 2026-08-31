@@ -69,13 +69,18 @@ export function NidaraToggleRow(
     const sw = new Gtk.Switch({ active: init, valign: Gtk.Align.CENTER })
     let syncing = false
     sw.connect("state-set", (_: any, state: boolean) => {
-        if (!syncing) cb(state)
+        if (!syncing) {
+            syncing = true
+            try { cb(state) } finally { syncing = false }
+        }
         return false
     })
     if (onExt) {
         bindWhileRealized(sw, () => onExt((v: boolean) => {
-            if (sw.active === v) return
-            syncing = true; sw.active = v; syncing = false
+            if (syncing || sw.active === v) return
+            syncing = true
+            sw.set_active(v)
+            syncing = false
         }))
     }
     return mkRow(label, subtitle, sw)
@@ -94,7 +99,7 @@ export function NidaraDropDownRow(
     subtitle: string,
     init: string,
     opts: string[],
-    cb: (v: string) => void,
+    cb: (v: string, index?: number) => void,
     onExt?: (apply: (v: string) => void) => (() => void),
     mkRow: NidaraRowBuilder = plainRow,
 ): Gtk.ListBoxRow {
@@ -125,12 +130,15 @@ export function NidaraDropDownRow(
     drp.connect("notify::selected", () => {
         if (syncing) return
         const idx = drp.selected
-        if (idx < known.length) cb(known[idx])
+        if (idx < known.length) {
+            syncing = true
+            try { cb(known[idx], idx) } finally { syncing = false }
+        }
     })
     if (onExt) {
         bindWhileRealized(drp, () => onExt((v: string) => {
             const idx = indexFor(v)
-            if (idx < 0 || idx === drp.selected) return
+            if (syncing || idx < 0 || idx === drp.selected) return
             syncing = true; drp.selected = idx; syncing = false
         }))
     }

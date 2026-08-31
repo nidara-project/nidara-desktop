@@ -4,6 +4,7 @@ import { NidaraRow, NidaraStackedRow, NidaraList, NidaraButton,
          NidaraToggleRow, NidaraDropDownRow, NidaraSliderRow, type NidaraSliderRowOpts } from "../../../lib/nidara-kit"
 import { attachTooltip } from "../../common/Tooltip"
 import { t } from "../../core/i18n"
+import { getConfigEntry } from "../../core/ConfigRegistry"
 
 /**
  * Shared UI helpers for Settings pages.
@@ -149,7 +150,7 @@ export const dropdownRow = (
     subtitle: string,
     init: string,
     opts: string[],
-    cb: (v: string) => void,
+    cb: (v: string, index?: number) => void,
     onExt?: (apply: (v: string) => void) => (() => void),
 ) => NidaraDropDownRow(label, subtitle, init, opts, cb, onExt, createRow)
 
@@ -162,6 +163,100 @@ export const sliderRow = (
     cb: (v: number) => void,
     opts: NidaraSliderRowOpts = {},
 ) => NidaraSliderRow(label, subtitle, init, min, max, cb, opts, createRow)
+
+/**
+ * Declarative setting row: builds the row directly from the registered ConfigEntry.
+ * Replaces hand-rolled toggleRow/dropdownRow/sliderRow calls.
+ */
+export const settingRow = (key: string): Gtk.ListBoxRow => {
+    const entry = getConfigEntry(key)
+    if (!entry) {
+        throw new Error(`[settingRow] Unknown config key: "${key}" — must be registered in config-entries.ts`)
+    }
+    if (!entry.ui) {
+        throw new Error(`[settingRow] Config key "${key}" has no UI declaration (entry.ui is undefined)`)
+    }
+
+    const { ui } = entry
+    const label = t(ui.i18n as any)
+    const subtitle = t((ui.i18n + ".desc") as any)
+    const control = ui.control ?? (entry.type === "boolean" ? "toggle" : entry.type === "enum" ? "dropdown" : entry.type === "number" ? "slider" : undefined)
+
+    if (!control) {
+        throw new Error(`[settingRow] Cannot infer control type for config key "${key}" with type "${entry.type}"`)
+    }
+
+    switch (control) {
+        case "toggle": {
+            const init = Boolean(entry.get())
+            const cb = (v: boolean) => { entry.set?.(v) }
+            const onExt = entry.subscribe
+                ? (apply: (v: boolean) => void) => {
+                    return entry.subscribe!((v) => apply(Boolean(v)))
+                }
+                : undefined
+            return toggleRow(label, subtitle, init, cb, onExt)
+        }
+        case "dropdown": {
+            const values = entry.enum ? [...entry.enum] : []
+            const getOptLabel = (val: string): string => {
+                if (ui.optI18n) return ui.optI18n(val)
+                const optKey = `${ui.i18n}.opt.${val}`
+                const translated = t(optKey as any)
+                if (translated === optKey) {
+                    throw new Error(`[settingRow] Missing translation for option "${val}" with derived key "${optKey}" on config entry "${key}"`)
+                }
+                return translated
+            }
+            const labels = values.map(getOptLabel)
+            const currentVal = String(entry.get())
+            const currentIdx = values.indexOf(currentVal)
+            const initLabel = currentIdx >= 0 ? labels[currentIdx] : (ui.optI18n ? ui.optI18n(currentVal) : currentVal)
+
+            const cb = (_selectedLabel: string, index?: number) => {
+                let idx = index
+                if (idx === undefined || idx < 0 || idx >= values.length) {
+                    idx = labels.indexOf(_selectedLabel)
+                }
+                if (idx >= 0 && idx < values.length) {
+                    entry.set?.(values[idx])
+                }
+            }
+
+            const onExt = entry.subscribe
+                ? (apply: (label: string) => void) => {
+                    return entry.subscribe!((v) => {
+                        const valStr = String(v)
+                        const idx = values.indexOf(valStr)
+                        if (idx >= 0 && idx < labels.length) {
+                            apply(labels[idx])
+                        } else {
+                            apply(ui.optI18n ? ui.optI18n(valStr) : valStr)
+                        }
+                    })
+                }
+                : undefined
+
+            return dropdownRow(label, subtitle, initLabel, labels, cb, onExt)
+        }
+        case "slider": {
+            if (entry.min === undefined || entry.max === undefined) {
+                throw new Error(`[settingRow] Slider setting "${key}" requires both min and max bounds in ConfigEntry`)
+            }
+            const min = entry.min
+            const max = entry.max
+            const init = Number(entry.get())
+            const cb = (v: number) => { entry.set?.(v) }
+            const opts: NidaraSliderRowOpts = { ...ui.slider }
+            if (!opts.onExtChange && entry.subscribe) {
+                opts.onExtChange = (apply: (v: number) => void) => {
+                    return entry.subscribe!((v) => apply(Number(v)))
+                }
+            }
+            return sliderRow(label, subtitle, init, min, max, cb, opts)
+        }
+    }
+}
 
 // ── Segmented control ─────────────────────────────────────────────────────────
 /**

@@ -1,0 +1,62 @@
+# Settings rows allowlist for settings-config-contract.mjs
+# Format: <Page.tsx>:<i18n-key-or-line> # comment
+#
+# This list tracks declarative rows (toggleRow, dropdownRow, sliderRow) that have
+# not yet been migrated to settingRow(). Every subsequent PR in the declarative
+# settings migration (S3a, S3b) shrinks this list.
+
+# Accessibility.tsx (S3b)
+Accessibility.tsx:settings.accessibility.text-scale # S3b pending migration
+Accessibility.tsx:settings.accessibility.cursor-size # S3b pending migration
+Accessibility.tsx:settings.accessibility.reduce-motion # S3b pending migration
+
+# Ai.tsx (S3b)
+Ai.tsx:settings.ai.brain.provider # S3b pending migration
+Ai.tsx:settings.ai.assistant-glow # S3b pending migration
+Ai.tsx:settings.ai.allow-config-write # S3b pending migration
+Ai.tsx:settings.ai.allow-screenshot # S3b pending migration
+Ai.tsx:settings.ai.allow-window-close # S3b pending migration
+Ai.tsx:settings.ai.allow-file-read # S3b pending migration
+Ai.tsx:settings.ai.allow-file-write # S3b pending migration
+Ai.tsx:settings.ai.allow-computer-use # S3b pending migration
+Ai.tsx:settings.ai.allow-computer-control # S3b pending migration
+Ai.tsx:settings.ai.allow-mcp # S3b pending migration
+
+# Appearance.tsx (S3a)
+Appearance.tsx:settings.appearance.shell-appearance # S3a pending migration
+Appearance.tsx:settings.appearance.transition # S3a pending migration
+Appearance.tsx:settings.appearance.bar-opacity # S3a pending migration
+Appearance.tsx:settings.appearance.overlay-opacity # S3a pending migration
+Appearance.tsx:settings.appearance.dock-opacity # S3a pending migration
+Appearance.tsx:settings.appearance.window-glass # S3a pending migration
+Appearance.tsx:settings.appearance.night-light-temp # S3a pending migration
+Appearance.tsx:settings.appearance.gtk-theme # S3a pending migration
+Appearance.tsx:settings.appearance.icons # S3a pending migration
+Appearance.tsx:settings.appearance.cursor # S3a pending migration
+
+# Bar.tsx (S3b)
+Bar.tsx:settings.bar.app-title # S3b pending migration
+
+# Dock.tsx (S3a)
+Dock.tsx:settings.dock.position # S3a pending migration
+Dock.tsx:settings.dock.bottom-margin # S3a pending migration
+Dock.tsx:settings.dock.magnification # S3a pending migration
+Dock.tsx:settings.dock.max-size # S3a pending migration
+Dock.tsx:settings.dock.indicators # S3a pending migration
+Dock.tsx:settings.dock.hide-delay # S3a pending migration
+
+# Gaming.tsx (S3b)
+Gaming.tsx:settings.appearance.transition # S3b pending migration
+Gaming.tsx:settings.gaming.performance-profile # S3b pending migration
+
+# Notifications.tsx (S3b)
+Notifications.tsx:settings.notif.dnd # S3b pending migration
+Notifications.tsx:settings.notif.timeout # S3b pending migration
+
+# Power.tsx (S3b)
+Power.tsx:settings.power.screen-off # S3b pending migration
+Power.tsx:settings.power.lock # S3b pending migration
+Power.tsx:settings.power.suspend # S3b pending migration
+
+# Region.tsx (S3b)
+Region.tsx:settings.region.time.seconds # S3b pending migration
