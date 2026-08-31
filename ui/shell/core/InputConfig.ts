@@ -34,17 +34,18 @@ class InputConfig extends GObject.Object {
     private _kbVariant = ""
     private _kbRepeatDelay = 600
     private _kbRepeatRate = 25
-
-    private initialized = false
+    private _initPromise: Promise<void> | null = null
 
     constructor() {
         super()
-        this.syncFromHyprland()
+        this._initPromise = this.syncFromHyprland()
         // Re-read the effective input options whenever Hyprland reloads its config
         // (e.g. the user edits hyprland-user.lua and runs `hyprctl reload`). Without
         // this, the next setX() would rewrite nidara-settings.lua from our stale
         // in-memory state and clobber the user's external change.
-        hs.connect("config-reloaded", () => this.syncFromHyprland())
+        hs.connect("config-reloaded", () => {
+            this._initPromise = this.syncFromHyprland()
+        })
     }
 
     get pointerSpeed() { return this._pointerSpeed }
@@ -58,7 +59,6 @@ class InputConfig extends GObject.Object {
     get kbRepeatDelay() { return this._kbRepeatDelay }
     get kbRepeatRate() { return this._kbRepeatRate }
 
-    // Parse options directly from Hyprland live state (via HyprlandState — the
     // single door to hyprctl).
     //
     // Every read passes the CURRENT field as its fallback, so an option that cannot
@@ -70,7 +70,7 @@ class InputConfig extends GObject.Object {
     // ⚠️ The typed readers are not a style preference. Reading a bool option off the
     // raw JSON as `.int === 1` is `undefined === 1` — false for every boolean, with
     // nothing reporting it (#338). `getOptionBoolAsync` cannot make that mistake.
-    private async syncFromHyprland() {
+    private async syncFromHyprland(): Promise<void> {
         this._pointerSpeed = await hs.getOptionFloatAsync("input:sensitivity", this._pointerSpeed)
         this._accelProfile = await hs.getOptionStrAsync("input:accel_profile", this._accelProfile)
 
@@ -84,12 +84,14 @@ class InputConfig extends GObject.Object {
         this._kbRepeatDelay = await hs.getOptionIntAsync("input:repeat_delay", this._kbRepeatDelay)
         this._kbRepeatRate = await hs.getOptionIntAsync("input:repeat_rate", this._kbRepeatRate)
 
-        this.initialized = true
         this.emit("changed")
     }
 
-    private applyAndSave(option: string, value: string | number) {
-        this.initialized = true
+    private async applyAndSave(option: string, value: string | number, applyChange?: () => void) {
+        if (this._initPromise) {
+            await this._initPromise
+        }
+        if (applyChange) applyChange()
 
         // 1. Live apply. The config uses Hyprland's Lua parser, which REJECTS
         // `hyprctl keyword` ("Use eval.") — so live changes go through eval.
@@ -133,50 +135,61 @@ hl.config({
     }
 
     setPointerSpeed(val: number) {
-        this._pointerSpeed = val
-        this.applyAndSave("input:sensitivity", val)
+        this.applyAndSave("input:sensitivity", val, () => {
+            this._pointerSpeed = val
+        })
     }
 
     setAccelProfile(val: string) {
-        this._accelProfile = val
-        this.applyAndSave("input:accel_profile", val)
+        this.applyAndSave("input:accel_profile", val, () => {
+            this._accelProfile = val
+        })
     }
 
     setMouseNaturalScroll(val: boolean) {
-        this._mouseNaturalScroll = val
-        this.applyAndSave("input:natural_scroll", val ? 1 : 0)
+        this.applyAndSave("input:natural_scroll", val ? 1 : 0, () => {
+            this._mouseNaturalScroll = val
+        })
     }
 
     setTouchpadNaturalScroll(val: boolean) {
-        this._touchpadNaturalScroll = val
-        this.applyAndSave("input:touchpad:natural_scroll", val ? 1 : 0)
+        this.applyAndSave("input:touchpad:natural_scroll", val ? 1 : 0, () => {
+            this._touchpadNaturalScroll = val
+        })
     }
 
     setTouchpadTap(val: boolean) {
-        this._touchpadTap = val
-        this.applyAndSave("input:touchpad:tap_to_click", val ? 1 : 0)
+        this.applyAndSave("input:touchpad:tap_to_click", val ? 1 : 0, () => {
+            this._touchpadTap = val
+        })
     }
 
     setNumlockOnBoot(val: boolean) {
-        this._numlockOnBoot = val
-        this.applyAndSave("input:numlock_by_default", val ? 1 : 0)
+        this.applyAndSave("input:numlock_by_default", val ? 1 : 0, () => {
+            this._numlockOnBoot = val
+        })
     }
 
     setKbRepeatDelay(val: number) {
-        this._kbRepeatDelay = Math.round(val)
-        this.applyAndSave("input:repeat_delay", this._kbRepeatDelay)
+        const delay = Math.round(val)
+        this.applyAndSave("input:repeat_delay", delay, () => {
+            this._kbRepeatDelay = delay
+        })
     }
 
     setKbRepeatRate(val: number) {
-        this._kbRepeatRate = Math.round(val)
-        this.applyAndSave("input:repeat_rate", this._kbRepeatRate)
+        const rate = Math.round(val)
+        this.applyAndSave("input:repeat_rate", rate, () => {
+            this._kbRepeatRate = rate
+        })
     }
 
     setKbLayout(layout: string, variant = "") {
-        this._kbLayout = layout
-        this._kbVariant = variant
-        hs.evalLua(`hl.config({ input = { kb_layout = "${layout}", kb_variant = "${variant}" } })`)
-        this.applyAndSave("input:kb_layout", layout)
+        this.applyAndSave("input:kb_layout", layout, () => {
+            this._kbLayout = layout
+            this._kbVariant = variant
+            hs.evalLua(`hl.config({ input = { kb_layout = "${layout}", kb_variant = "${variant}" } })`)
+        })
     }
 }
 
