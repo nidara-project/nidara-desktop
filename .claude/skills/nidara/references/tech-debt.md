@@ -1108,6 +1108,28 @@ the mechanism — cold caches mean the preload thread really does parse and rast
 answering from a warm one — but that is one instance and not yet a pattern: the 08-24 core landed
 two days into its boot.
 
+✅ **The door is MEASURED now, not inferred — and it took a second reproducer to do it
+(2026-08-31).** Everything above was produced with `GTK_ICON_LOOKUP_PRELOAD` passed by hand, so
+"the shell reaches this through `icon_name`" was still a reading of gtkiconhelper.c plus a matching
+stack. `scripts/dev/gtk-icon-text-thread-crash.c` closes that gap: ~150 lines of C, no gjs, no
+flag, no icon-theme call — plain `gtk_image_new_from_icon_name()` against icons it plants itself —
+and it dies **5 of 6** (3 SIGSEGV, 2 SIGABRT, one of them `double free or corruption`), while
+`--no-text` survives 4 of 4. Its worker dies inside `libpangoft2` doing a hash lookup, which is the
+`PangoFcFontMap` that gtk#8295 names.
+
+🔑 **The refinement that made it fire, and it is the one that explains the symptom: the widgets have
+to be NEW.** The icon helper preloads when a widget's css size FIRST settles, so tiles that merely
+change their icon pay for it once at startup and never race — that version survived 5 of 5 with the
+icons genuinely loading (2135 glyph draws, all main-thread, per the shim). Rebuilding the tiles
+every round crashes it. That is why this hits when the grid OPENS rather than while it is up, and
+it is what makes `AppService`'s divert the correctly aimed fix rather than a lucky one.
+
+⚠️ The first C attempt survived 5 of 5 for a stupider reason: `gtk_icon_theme_add_search_path()`
+looks for `<path>/<theme name>/…`, so a theme of our own naming was never consulted and nothing
+loaded at all. The program now plants its icons in `hicolor` and **aborts with exit 2** if
+`has_icon()` is false, because a void run that exits 0 is indistinguishable from a survival — the
+harness said "this run measures nothing" on stdout and the runner had sent stdout to /dev/null.
+
 🔗 **It is already reported upstream, and the report is STUCK: `gitlab.gnome.org/GNOME/gtk` issue
 8295**, opened 2026-07-05, labelled *1. Crash* + **2. Needs Information**, two comments. Same
 versions as ours (gtk 4.22.4, cairo 1.18.4), same shape: Nautilus's "Open With…" crashes ~7 of 10
