@@ -1086,6 +1086,28 @@ That also settles what the workaround would have to be if upstream declines: not
 pre-rasterising every icon, but keeping text-carrying SVGs off `icon_name` — a narrower and
 cheaper trade than the one this entry was contemplating. Do not build it yet.
 
+🔴 **The reproducer is not "the same family" as the owner's crash — it is the SAME STACK, and the
+frequency estimate this entry was built on is wrong (2026-08-31).** The owner reported a second
+occurrence: the shell died **101 seconds after boot** on 2026-08-29 (boot 22:17:46, core 22:19:27,
+`nidara.service`, PID 1424, thread `pool-39`). Its twelve top frames and the reproducer's are
+identical *offset for offset* in the same library builds:
+
+    #0/#1  libpangocairo +0x767c, +0x9d90
+    #2     pango_glyph_string_extents_range
+    #3/#4/#5  libgtk-4 +0x5bfad9, +0x217d8d, +0x9a097
+    #6     pango_renderer_draw_glyph_item
+    #7     pango_renderer_draw_layout_line
+    #8     pango_renderer_draw_layout
+    #9/#10/#11  libgtk-4 +0x98e66, +0x2726cb, +0x27259a
+
+⚠️ **So the standing decision below rests on a premise that no longer holds.** It was taken on
+2026-08-24 with "it has only happened once" in front of it; there are now two cores carrying this
+exact signature (08-24 and 08-29) plus four earlier `gjs` SIGSEGVs in `coredumpctl`. It is a
+recurring crash of the WHOLE shell on the launcher surface. The 101-seconds-after-boot timing fits
+the mechanism — cold caches mean the preload thread really does parse and rasterise, instead of
+answering from a warm one — but that is one instance and not yet a pattern: the 08-24 core landed
+two days into its boot.
+
 🔗 **It is already reported upstream, and the report is STUCK: `gitlab.gnome.org/GNOME/gtk` issue
 8295**, opened 2026-07-05, labelled *1. Crash* + **2. Needs Information**, two comments. Same
 versions as ours (gtk 4.22.4, cairo 1.18.4), same shape: Nautilus's "Open With…" crashes ~7 of 10
