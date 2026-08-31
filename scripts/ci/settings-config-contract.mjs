@@ -83,7 +83,8 @@ while ((entryMatch = entryRegex.exec(configContent)) !== null) {
 
 // 3. Parse allowlist
 const allowlistContent = read(ALLOWLIST_PATH)
-const allowlist = new Map() // "file:keyOrLine" -> comment
+const allowlist = new Map() // "file:keyOrLine" -> { comment, used: false }
+const gtkSwitchAllowlist = new Map() // file -> { expectedCount: number, actualCount: 0, comment, entry }
 
 if (allowlistContent) {
     for (const rawLine of allowlistContent.split("\n")) {
@@ -93,7 +94,13 @@ if (allowlistContent) {
         const entry = entryPart.trim()
         const comment = commentParts.join("#").trim()
         if (entry) {
-            allowlist.set(entry, { comment, used: false })
+            const switchMatch = entry.match(/^([^:]+\.tsx):gtk-switch:(\d+)$/)
+            if (switchMatch) {
+                const [, file, countStr] = switchMatch
+                gtkSwitchAllowlist.set(file, { expectedCount: parseInt(countStr, 10), actualCount: 0, comment, entry })
+            } else {
+                allowlist.set(entry, { comment, used: false })
+            }
         }
     }
 }
@@ -113,6 +120,7 @@ for (const file of pageFiles) {
     const filePath = join(PAGES_DIR, file)
     const content = read(filePath)
     const lines = content.split("\n")
+    let fileSwitchCount = 0
 
     for (let i = 0; i < lines.length; i++) {
         const lineNum = i + 1
@@ -130,25 +138,9 @@ for (const file of pageFiles) {
             }
         }
 
-        // Check manual Gtk.Switch constructions in settings pages
+        // Count manual Gtk.Switch constructions in settings pages
         if (line.includes("new Gtk.Switch")) {
-            const candidateKeys = [
-                `${file}:gtk-switch`,
-                `${file}:${lineNum}`,
-            ]
-            let matched = false
-            for (const ck of candidateKeys) {
-                if (allowlist.has(ck)) {
-                    allowlist.get(ck).used = true
-                    matched = true
-                    break
-                }
-            }
-            if (!matched) {
-                errors.push(
-                    `  FAIL  ${file}:${lineNum}: manual 'new Gtk.Switch()' is not permitted in Settings pages. Use settingRow() or add per-object exception to ${ALLOWLIST_PATH} (see #341).`
-                )
-            }
+            fileSwitchCount++
         }
 
         // Check unmigrated toggleRow, dropdownRow, sliderRow calls
@@ -189,6 +181,28 @@ for (const file of pageFiles) {
             }
         }
     }
+
+    // Verify manual switch counts against allowlist
+    if (fileSwitchCount > 0) {
+        const declared = gtkSwitchAllowlist.get(file)
+        if (!declared) {
+            errors.push(
+                `  FAIL  ${file}: contains ${fileSwitchCount} manual 'new Gtk.Switch()' call(s) not permitted in Settings pages. Use settingRow() or declare '${file}:gtk-switch:${fileSwitchCount}' in ${ALLOWLIST_PATH} (see #341).`
+            )
+        } else {
+            declared.actualCount = fileSwitchCount
+            if (declared.actualCount !== declared.expectedCount) {
+                errors.push(
+                    `  FAIL  ${file}: contains ${declared.actualCount} manual 'new Gtk.Switch()' call(s), but ${ALLOWLIST_PATH} declared ${declared.expectedCount}. Update ${ALLOWLIST_PATH}.`
+                )
+            }
+        }
+    } else if (gtkSwitchAllowlist.has(file)) {
+        const declared = gtkSwitchAllowlist.get(file)
+        errors.push(
+            `  FAIL  ${ALLOWLIST_PATH}: entry "${declared.entry}" is obsolete (${file} contains 0 manual switches). Please remove it from the allowlist.`
+        )
+    }
 }
 
 // 5. Check for unused allowlist entries
@@ -208,6 +222,7 @@ if (errors.length > 0) {
     process.exit(1)
 }
 
+const totalAllowlisted = allowlistedRowCount + gtkSwitchAllowlist.size
 console.log(
-    `settings-config-contract: all settings rows conform to config contract (${settingRowCount} settingRow, ${allowlistedRowCount} allowlisted, all i18n keys verified).`
+    `settings-config-contract: all settings rows conform to config contract (${settingRowCount} settingRow, ${totalAllowlisted} allowlisted exceptions, all i18n keys verified).`
 )

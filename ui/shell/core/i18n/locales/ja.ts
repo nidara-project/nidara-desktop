@@ -695,6 +695,7 @@ export default {
     "settings.gaming.wallpaper-mode.desc":               "ゲーム起動時に表示する内容",
     "settings.gaming.custom-wallpaper":            "画像",
     "settings.gaming.custom-wallpaper.desc":             "すべてのゲームで共通の壁紙",
+    "settings.gaming.transition":                        "切り替え効果",
     "settings.gaming.transition.desc":                   "ゲームの壁紙に切り替わるときの効果",
     "settings.gaming.performance-profile":         "高パフォーマンスプロファイル",
     "settings.gaming.performance-profile.desc":          "ゲーム起動時に高パフォーマンス電源プロファイルを自動的に有効にします",

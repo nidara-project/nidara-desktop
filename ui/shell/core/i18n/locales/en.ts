@@ -795,6 +795,7 @@ export default {
     "settings.gaming.wallpaper-mode.desc":               "What to display when a game launches",
     "settings.gaming.custom-wallpaper":            "Image",
     "settings.gaming.custom-wallpaper.desc":             "Wallpaper shown for all games",
+    "settings.gaming.transition":                        "Transition",
     "settings.gaming.transition.desc":                   "Transition when switching to game wallpaper",
     "settings.gaming.performance-profile":         "High-performance profile",
     "settings.gaming.performance-profile.desc":          "Activate performance power profile automatically when a game launches",

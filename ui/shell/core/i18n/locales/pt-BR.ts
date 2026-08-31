@@ -695,6 +695,7 @@ export default {
     "settings.gaming.wallpaper-mode.desc": "O que exibir quando um jogo é iniciado",
     "settings.gaming.custom-wallpaper": "Imagem",
     "settings.gaming.custom-wallpaper.desc": "Papel de parede exibido para todos os jogos",
+    "settings.gaming.transition": "Transição",
     "settings.gaming.transition.desc": "Transição ao mudar para o papel de parede do jogo",
     "settings.gaming.performance-profile": "Perfil de alto desempenho",
     "settings.gaming.performance-profile.desc": "Ativa automaticamente o perfil de desempenho ao iniciar um jogo",

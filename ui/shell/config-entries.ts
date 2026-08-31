@@ -8,22 +8,25 @@
 // real — they are the documentation agents read. First wave is a representative
 // subset; grow it opportunistically as services gain setters.
 
+import Gtk from "gi://Gtk?version=4.0"
 import { registerConfig } from "./core/ConfigRegistry"
 import { AGENT_PROVIDERS } from "./core/AgentProviders"
-import Theme from "./core/ThemeManager"
+import Theme, { TEXT_SCALE_MIN, TEXT_SCALE_MAX } from "./core/ThemeManager"
 import { ACCENT_PALETTE, GLASS_RANGE, type AccentKey, type ShellAppearance } from "./core/NidaraTheme"
 import NightLight from "./core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "./core/WallpaperManager"
 import notifConfig from "./core/NotifConfig"
-import { dontDisturb, setDontDisturb } from "./core/NotifService"
-import { reduceMotion, setReduceMotion } from "./core/ReduceMotion"
+import { dontDisturb, setDontDisturb, watchDnd } from "./core/NotifService"
+import { reduceMotion, setReduceMotion, onReduceMotionChange } from "./core/ReduceMotion"
 import recordingConfig, {
     FORMATS, QUALITIES, type RecordFormat, type RecordQuality,
 } from "./core/RecordingConfig"
 import Gaming, { type WallpaperMode } from "./core/GamingManager"
 import agentConfig from "./core/AgentConfig"
 import { dockSettings, updateDockSettings, onDockSettingsChanged, type DockPosition } from "./surfaces/dock/state"
-import { barSettings, updateBarSettings } from "./surfaces/bar/barState"
+import { barSettings, updateBarSettings, onBarSettingsChanged } from "./surfaces/bar/barState"
+import regionConfig from "./core/RegionConfig"
+import { getIdleConfig, updateIdleConfig, onHypridleChanged } from "./core/PowerConfig"
 import inputConfig from "./core/InputConfig"
 import Icons from "./core/Icons"
 import { safeDisconnect } from "./core/signals"
@@ -71,6 +74,47 @@ const kbLayoutLabel = (id: string): string => {
     return entry ? entry[1] : id
 }
 
+const PROVIDER_NAMES: Record<string, string> = {
+    anthropic: "Anthropic",
+    openai: "OpenAI",
+    google: "Google (Gemini)",
+    spacexai: "SpaceXAI (Grok)",
+}
+
+function brainProviderLabel(id: string): string {
+    if (!id) return t("settings.ai.brain.provider.off")
+    if (id === "custom") return t("settings.ai.brain.provider.custom")
+    if (id === "localhost") return t("settings.ai.brain.provider.localhost")
+    if (id === "ollama") return t("settings.ai.brain.provider.ollama")
+    return PROVIDER_NAMES[id] ?? id
+}
+
+const powerScreenOffLabel = (s: string): string => {
+    if (s === "0") return t("settings.power.opt.never")
+    const mins = Math.round(Number(s) / 60)
+    return `${mins} ${t("settings.power.time.min")}`
+}
+
+const powerLockLabel = (s: string): string => {
+    if (s === "0") return t("settings.power.opt.never")
+    const secs = Number(s)
+    if (secs < 3600) {
+        return `${Math.round(secs / 60)} ${t("settings.power.time.min")}`
+    }
+    const hours = Math.round(secs / 3600)
+    return `${hours} ${hours === 1 ? t("settings.power.time.hour") : t("settings.power.time.hours")}`
+}
+
+const powerSuspendLabel = (s: string): string => {
+    if (s === "0") return t("settings.power.opt.never")
+    const secs = Number(s)
+    if (secs < 3600) {
+        return `${Math.round(secs / 60)} ${t("settings.power.time.min")}`
+    }
+    const hours = Math.round(secs / 3600)
+    return `${hours} ${hours === 1 ? t("settings.power.time.hour") : t("settings.power.time.hours")}`
+}
+
 const onInputCfg = (read: () => any) => (apply: (v: any) => void) => {
     apply(read())
     const id = inputConfig.connect("changed", () => apply(read()))
@@ -80,6 +124,11 @@ const onInputCfg = (read: () => any) => (apply: (v: any) => void) => {
 const onDockCfg = (read: () => any) => (apply: (v: any) => void) => {
     apply(read())
     return onDockSettingsChanged(() => apply(read()))
+}
+
+const onBarCfg = (read: () => any) => (apply: (v: any) => void) => {
+    apply(read())
+    return onBarSettingsChanged(() => apply(read()))
 }
 
 const onThemeCfg = (read: () => any) => (apply: (v: any) => void) => {
@@ -98,6 +147,22 @@ const onNightLightCfg = (read: () => any) => (apply: (v: any) => void) => {
     apply(read())
     const id = NightLight.connect("changed", () => apply(read()))
     return () => safeDisconnect(NightLight, id)
+}
+
+const onGamingCfg = (read: () => any) => (apply: (v: any) => void) => {
+    apply(read())
+    const id = Gaming.connect("changed", () => apply(read()))
+    return () => safeDisconnect(Gaming, id)
+}
+
+const onAiCfg = (read: () => any) => (apply: (v: any) => void) => {
+    apply(read())
+    return agentConfig.onChange(() => apply(read()))
+}
+
+const onPowerCfg = (read: () => any) => (apply: (v: any) => void) => {
+    apply(read())
+    return onHypridleChanged(() => apply(read()))
 }
 
 export function registerConfigEntries() {
@@ -141,11 +206,11 @@ export function registerConfigEntries() {
         subscribe: onThemeCfg(() => Theme.barOpacity),
         ui: {
             i18n: "settings.appearance.bar-opacity",
-            slider: { pct: true, icons: [Icons.minus, Icons.plus] },
+            slider: { pct: true },
         },
     })
     registerConfig("appearance.overlayOpacity", {
-        desc: "Control Center / Notification Center overlay glass opacity (0.24 to 0.80).",
+        desc: "Glass opacity for menus, the dock, popups, and the alert dialog (0.24 to 0.80).",
         type: "number",
         min: GLASS_RANGE.min,
         max: GLASS_RANGE.max,
@@ -154,7 +219,7 @@ export function registerConfigEntries() {
         subscribe: onThemeCfg(() => Theme.overlayOpacity),
         ui: {
             i18n: "settings.appearance.overlay-opacity",
-            slider: { pct: true, icons: [Icons.minus, Icons.plus] },
+            slider: { pct: true },
         },
     })
     registerConfig("appearance.dockOpacity", {
@@ -167,7 +232,7 @@ export function registerConfigEntries() {
         subscribe: onThemeCfg(() => Theme.dockOpacity),
         ui: {
             i18n: "settings.appearance.dock-opacity",
-            slider: { pct: true, icons: [Icons.minus, Icons.plus] },
+            slider: { pct: true },
         },
     })
     registerConfig("appearance.windowOpacity", {
@@ -184,15 +249,15 @@ export function registerConfigEntries() {
         },
     })
     registerConfig("appearance.gtkTheme", {
-        desc: "GTK application theme family.",
+        desc: "System GTK theme.",
         type: "enum",
         enum: Theme.getAvailableGtkThemes(),
         get: () => Theme.themeFamily,
-        set: v => void Theme.setGtkTheme(String(v)),
+        set: v => Theme.setGtkTheme(v as string),
         subscribe: onThemeCfg(() => Theme.themeFamily),
         ui: {
             i18n: "settings.appearance.gtk-theme",
-            optI18n: (v) => v,
+            optI18n: v => v,
         },
     })
     registerConfig("appearance.iconTheme", {
@@ -200,11 +265,11 @@ export function registerConfigEntries() {
         type: "enum",
         enum: Theme.getAvailableIconThemes(),
         get: () => Theme.iconTheme,
-        set: v => void Theme.setIconTheme(String(v)),
+        set: v => Theme.setIconTheme(v as string),
         subscribe: onThemeCfg(() => Theme.iconTheme),
         ui: {
             i18n: "settings.appearance.icons",
-            optI18n: (v) => v,
+            optI18n: v => v,
         },
     })
     registerConfig("appearance.cursorTheme", {
@@ -212,21 +277,19 @@ export function registerConfigEntries() {
         type: "enum",
         enum: Theme.getAvailableCursorThemes(),
         get: () => Theme.cursorTheme,
-        set: v => void Theme.setCursorTheme(String(v)),
+        set: v => Theme.setCursorTheme(v as string),
         subscribe: onThemeCfg(() => Theme.cursorTheme),
         ui: {
             i18n: "settings.appearance.cursor",
-            optI18n: (v) => v,
+            optI18n: v => v,
         },
     })
-
-    // ── Wallpaper ─────────────────────────────────────────────────────────
     registerConfig("wallpaper.transition", {
-        desc: "Transition effect when changing wallpapers.",
+        desc: "Wallpaper transition animation style.",
         type: "enum",
-        enum: Object.keys(TRANSITION_LABELS),
+        enum: Object.keys(TRANSITION_LABELS) as TransitionType[],
         get: () => Wallpaper.transition,
-        set: v => void Wallpaper.previewTransition(v as TransitionType),
+        set: v => Wallpaper.setTransition(v as TransitionType),
         subscribe: onWallpaperCfg(() => Wallpaper.transition),
         ui: {
             i18n: "settings.appearance.transition",
@@ -234,17 +297,9 @@ export function registerConfigEntries() {
         },
     })
 
-    // ── Bar ───────────────────────────────────────────────────────────────
-    registerConfig("bar.appTitle", {
-        desc: "Show the active window title in the top bar.",
-        type: "boolean",
-        get: () => barSettings.showAppTitle,
-        set: v => updateBarSettings({ showAppTitle: v as boolean }),
-    })
-
     // ── Dock ──────────────────────────────────────────────────────────────
     registerConfig("dock.position", {
-        desc: "Screen edge the dock anchors to.",
+        desc: "Dock screen position.",
         type: "enum",
         enum: ["bottom", "left", "right"],
         get: () => dockSettings.position,
@@ -256,12 +311,12 @@ export function registerConfigEntries() {
         },
     })
     registerConfig("dock.iconSize", {
-        desc: "Base dock icon size in pixels.",
+        desc: "Dock icon size in pixels (32, 48, 64, 80, 96).",
         type: "number",
         min: 32,
         max: 96,
         get: () => dockSettings.iconSize,
-        set: v => updateDockSettings({ iconSize: Math.round(v as number) }),
+        set: v => updateDockSettings({ iconSize: v as number }),
         subscribe: onDockCfg(() => dockSettings.iconSize),
         ui: {
             i18n: "settings.dock.icon-size",
@@ -269,12 +324,12 @@ export function registerConfigEntries() {
         },
     })
     registerConfig("dock.screenGap", {
-        desc: "Distance in pixels between the dock and the screen edge.",
+        desc: "Dock margin from screen edge in pixels.",
         type: "number",
         min: 4,
         max: 32,
         get: () => dockSettings.screenGap,
-        set: v => updateDockSettings({ screenGap: Math.round(v as number) }),
+        set: v => updateDockSettings({ screenGap: v as number }),
         subscribe: onDockCfg(() => dockSettings.screenGap),
         ui: {
             i18n: "settings.dock.bottom-margin",
@@ -282,7 +337,7 @@ export function registerConfigEntries() {
         },
     })
     registerConfig("dock.magnification", {
-        desc: "Icon magnification on hover.",
+        desc: "Magnify dock icons on hover.",
         type: "boolean",
         get: () => dockSettings.magnification,
         set: v => updateDockSettings({ magnification: v as boolean }),
@@ -292,12 +347,12 @@ export function registerConfigEntries() {
         },
     })
     registerConfig("dock.maxIconSize", {
-        desc: "Peak icon size in pixels at full magnification.",
+        desc: "Maximum icon size on hover when magnification is enabled.",
         type: "number",
         min: 64,
         max: 128,
         get: () => dockSettings.maxIconSize,
-        set: v => updateDockSettings({ maxIconSize: Math.round(v as number) }),
+        set: v => updateDockSettings({ maxIconSize: v as number }),
         subscribe: onDockCfg(() => dockSettings.maxIconSize),
         ui: {
             i18n: "settings.dock.max-size",
@@ -305,7 +360,7 @@ export function registerConfigEntries() {
         },
     })
     registerConfig("dock.autoHide", {
-        desc: "Hide the dock until the pointer reaches its screen edge.",
+        desc: "Automatically hide the dock when windows overlap it.",
         type: "boolean",
         get: () => dockSettings.autoHide,
         set: v => updateDockSettings({ autoHide: v as boolean }),
@@ -315,7 +370,7 @@ export function registerConfigEntries() {
         },
     })
     registerConfig("dock.indicators", {
-        desc: "Show running-app indicator dots under dock icons.",
+        desc: "Show running-application indicator dots under dock icons.",
         type: "boolean",
         get: () => dockSettings.showIndicators,
         set: v => updateDockSettings({ showIndicators: v as boolean }),
@@ -325,12 +380,12 @@ export function registerConfigEntries() {
         },
     })
     registerConfig("dock.hideDelay", {
-        desc: "Delay in milliseconds before auto-hiding the dock.",
+        desc: "Delay in milliseconds before hiding the dock.",
         type: "number",
         min: 0,
         max: 2000,
         get: () => dockSettings.hideDelay,
-        set: v => updateDockSettings({ hideDelay: Math.round(v as number) }),
+        set: v => updateDockSettings({ hideDelay: Math.round(Number(v)) }),
         subscribe: onDockCfg(() => dockSettings.hideDelay),
         ui: {
             i18n: "settings.dock.hide-delay",
@@ -338,7 +393,19 @@ export function registerConfigEntries() {
         },
     })
 
-    // ── Input ─────────────────────────────────────────────────────────────
+    // ── Bar ───────────────────────────────────────────────────────────────
+    registerConfig("bar.appTitle", {
+        desc: "Show the active window title in the top bar.",
+        type: "boolean",
+        get: () => barSettings.showAppTitle,
+        set: v => updateBarSettings({ showAppTitle: v as boolean }),
+        subscribe: onBarCfg(() => barSettings.showAppTitle),
+        ui: {
+            i18n: "settings.bar.app-title",
+        },
+    })
+
+    // ── Input: Mouse ──────────────────────────────────────────────────────
     registerConfig("input.mouse.speed", {
         desc: "Pointer sensitivity (-1.0 to 1.0).",
         type: "number",
@@ -377,6 +444,8 @@ export function registerConfigEntries() {
             i18n: "settings.input.mouse.natural",
         },
     })
+
+    // ── Input: Touchpad ───────────────────────────────────────────────────
     registerConfig("input.touchpad.natural", {
         desc: "Invert touchpad scroll direction (natural scrolling).",
         type: "boolean",
@@ -397,6 +466,8 @@ export function registerConfigEntries() {
             i18n: "settings.input.touchpad.tap",
         },
     })
+
+    // ── Input: Keyboard ───────────────────────────────────────────────────
     registerConfig("input.keyboard.layout", {
         desc: "Keyboard layout code (e.g. 'us', 'es', 'us-dvorak').",
         type: "enum",
@@ -498,28 +569,134 @@ export function registerConfigEntries() {
         max: 15,
         get: () => notifConfig.popupTimeout,
         set: v => notifConfig.setPopupTimeout(v as number),
+        subscribe: (apply) => {
+            apply(notifConfig.popupTimeout)
+            return notifConfig.onChange(() => apply(notifConfig.popupTimeout))
+        },
+        ui: {
+            i18n: "settings.notif.timeout",
+            slider: { unit: "s" },
+        },
     })
-    // The LIVE flag, not a preference about it: this is the same bit the Control
-    // Center's focus tile and Settings → Notifications flip, and it persists in
-    // `notif-config.json`, so setting it here survives across sessions. It replaced
-    // `notifications.dndDefault` (2026-08-16), which only seeded the flag TRUE at
-    // startup and could never clear it.
     registerConfig("notifications.doNotDisturb", {
         desc: "Do Not Disturb: suppress notification popups (critical ones still show). Persists across sessions until turned off.",
         type: "boolean",
         get: dontDisturb,
         set: v => setDontDisturb(v as boolean),
+        subscribe: (apply) => {
+            apply(dontDisturb())
+            return watchDnd(() => apply(dontDisturb()))
+        },
+        ui: {
+            i18n: "settings.notif.dnd",
+        },
     })
 
     // ── Accessibility ─────────────────────────────────────────────────────
-    // Backed by the GNOME gsetting `enable-animations` (inverted), NOT by a
-    // nidara-*.json — see core/ReduceMotion.ts for why a shadow copy would be
-    // wrong. Writing it here reaches the shell's own motion AND Hyprland's.
+    registerConfig("accessibility.textScale", {
+        desc: "Text scale factor (0.75 to 1.50).",
+        type: "number",
+        min: TEXT_SCALE_MIN,
+        max: TEXT_SCALE_MAX,
+        get: () => Theme.textScaling,
+        set: v => void Theme.setTextScaling(Number(v)),
+        subscribe: onThemeCfg(() => Theme.textScaling),
+        ui: {
+            i18n: "settings.accessibility.text-scale",
+            slider: {
+                decimals: 2,
+                step: 0.05,
+                commitOnRelease: false,
+                endpoints: [
+                    new Gtk.Label({ label: "A", css_classes: ["slider-text-endpoint", "is-sm"], valign: Gtk.Align.CENTER }),
+                    new Gtk.Label({ label: "A", css_classes: ["slider-text-endpoint", "is-lg"], valign: Gtk.Align.CENTER }),
+                ],
+            },
+        },
+    })
+    registerConfig("accessibility.cursorSize", {
+        desc: "Cursor size in pixels (16 to 96).",
+        type: "number",
+        min: 16,
+        max: 96,
+        get: () => Theme.cursorSize,
+        set: v => Theme.setCursorSize(Math.round(Number(v))),
+        subscribe: onThemeCfg(() => Theme.cursorSize),
+        ui: {
+            i18n: "settings.accessibility.cursor-size",
+            slider: {
+                unit: "px",
+                icons: [Icons.mousePointer, Icons.mousePointer],
+                commitOnRelease: true,
+            },
+        },
+    })
     registerConfig("accessibility.reduceMotion", {
-        desc: "Reduce motion: overlays appear without their pop, dock icons snap instead of springing, and Hyprland's window/workspace animations are switched off. Movement that follows the pointer (swipes, sliders) and the Assistant's pointer animation are deliberately unaffected.",
+        desc: "Reduce motion: overlays appear without their pop, dock icons snap instead of springing, and Hyprland's window/workspace animations are switched off.",
         type: "boolean",
         get: () => reduceMotion(),
         set: v => setReduceMotion(v as boolean),
+        subscribe: (apply) => {
+            apply(reduceMotion())
+            return onReduceMotionChange(apply)
+        },
+        ui: {
+            i18n: "settings.accessibility.reduce-motion",
+        },
+    })
+
+    // ── Power / Idle ──────────────────────────────────────────────────────
+    registerConfig("power.screenOff", {
+        desc: "Screen off timeout in seconds (0 = never).",
+        type: "enum",
+        enum: ["0", "120", "300", "600", "1200", "1800"],
+        get: () => String(getIdleConfig().screenOff),
+        set: v => updateIdleConfig({ screenOff: Number(v) }),
+        subscribe: onPowerCfg(() => String(getIdleConfig().screenOff)),
+        ui: {
+            i18n: "settings.power.screen-off",
+            optI18n: powerScreenOffLabel,
+        },
+    })
+    registerConfig("power.lock", {
+        desc: "Lock session timeout in seconds (0 = never).",
+        type: "enum",
+        enum: ["0", "300", "600", "1800", "3600", "7200"],
+        get: () => String(getIdleConfig().lock),
+        set: v => updateIdleConfig({ lock: Number(v) }),
+        subscribe: onPowerCfg(() => String(getIdleConfig().lock)),
+        ui: {
+            i18n: "settings.power.lock",
+            optI18n: powerLockLabel,
+        },
+    })
+    registerConfig("power.suspend", {
+        desc: "Suspend system timeout in seconds (0 = never).",
+        type: "enum",
+        enum: ["0", "900", "1800", "3600", "7200", "10800"],
+        get: () => String(getIdleConfig().suspend),
+        set: v => updateIdleConfig({ suspend: Number(v) }),
+        subscribe: onPowerCfg(() => String(getIdleConfig().suspend)),
+        ui: {
+            i18n: "settings.power.suspend",
+            optI18n: powerSuspendLabel,
+        },
+    })
+
+    // ── Region ────────────────────────────────────────────────────────────
+    registerConfig("region.showSeconds", {
+        desc: "Show seconds in the clock display.",
+        type: "boolean",
+        get: () => regionConfig.showSeconds,
+        set: v => regionConfig.setShowSeconds(v as boolean),
+        subscribe: (apply) => {
+            apply(regionConfig.showSeconds)
+            const id = regionConfig.connect("changed", () => apply(regionConfig.showSeconds))
+            return () => safeDisconnect(regionConfig, id)
+        },
+        ui: {
+            i18n: "settings.region.time.seconds",
+        },
     })
 
     // ── Screen recording ──────────────────────────────────────────────────
@@ -565,11 +742,27 @@ export function registerConfigEntries() {
     })
 
     // ── Gaming ────────────────────────────────────────────────────────────
+    registerConfig("gaming.transition", {
+        desc: "Wallpaper transition animation style when launching a game.",
+        type: "enum",
+        enum: Object.keys(TRANSITION_LABELS) as TransitionType[],
+        get: () => Gaming.transition,
+        set: v => Gaming.setTransition(v as TransitionType),
+        subscribe: onGamingCfg(() => Gaming.transition),
+        ui: {
+            i18n: "settings.gaming.transition",
+            optI18n: k => TRANSITION_LABELS[k as TransitionType] ?? k,
+        },
+    })
     registerConfig("gaming.performanceProfile", {
         desc: "Switch the power profile to performance while a game runs.",
         type: "boolean",
         get: () => Gaming.performanceProfile,
         set: v => Gaming.setPerformanceProfile(v as boolean),
+        subscribe: onGamingCfg(() => Gaming.performanceProfile),
+        ui: {
+            i18n: "settings.gaming.performance-profile",
+        },
     })
     registerConfig("gaming.wallpaperMode", {
         desc: "Wallpaper while gaming: Steam hero artwork, a custom image, or unchanged.",
@@ -587,82 +780,112 @@ export function registerConfigEntries() {
         type: "boolean",
         writable: false,
         get: () => agentConfig.allowConfigWrite,
+        set: v => agentConfig.setAllowConfigWrite(v as boolean),
+        subscribe: onAiCfg(() => agentConfig.allowConfigWrite),
+        ui: {
+            i18n: "settings.ai.allow-config-write",
+        },
     })
     registerConfig("ai.allowScreenshot", {
         desc: "Whether agents may capture the screen via the screenshot IPC. Toggle it in Settings → AI.",
         type: "boolean",
         writable: false,
         get: () => agentConfig.allowScreenshot,
+        set: v => agentConfig.setAllowScreenshot(v as boolean),
+        subscribe: onAiCfg(() => agentConfig.allowScreenshot),
+        ui: {
+            i18n: "settings.ai.allow-screenshot",
+        },
     })
     registerConfig("ai.allowWindowClose", {
         desc: "Whether agents may close windows via the closeWindow IPC. Toggle it in Settings → AI.",
         type: "boolean",
         writable: false,
         get: () => agentConfig.allowWindowClose,
+        set: v => agentConfig.setAllowWindowClose(v as boolean),
+        subscribe: onAiCfg(() => agentConfig.allowWindowClose),
+        ui: {
+            i18n: "settings.ai.allow-window-close",
+        },
     })
     registerConfig("ai.allowMcp", {
         desc: "Whether nidara-mcp serves tools to MCP clients. Toggle it in Settings → AI.",
         type: "boolean",
         writable: false,
         get: () => agentConfig.allowMcp,
+        set: v => agentConfig.setAllowMcp(v as boolean),
+        subscribe: onAiCfg(() => agentConfig.allowMcp),
+        ui: {
+            i18n: "settings.ai.allow-mcp",
+        },
     })
-    // The computer-use and file gates were added later (2026-07-27) and were the
-    // only ones missing here, which made `describeConfig` a HALF-TRUTH: asked what
-    // permissions were on, the Assistant answered with the four above and no way to
-    // know it was answering four of eight. Same read-only rule as the rest — these
-    // are the most sensitive gates in the product, so `setConfig` must keep
-    // refusing them; the Settings → AI page is the only door that flips them.
-    // A `desc` does NOT restate the default: `value` is in the same JSON object, so
-    // a default is a second answer to the question the reader came with. (The first
-    // draft said "Off by default"; removing it did NOT fix the misread it was
-    // suspected of — that turned out to be the UI tree carrying no switch state,
-    // see UITree.activeOf — but a desc that answers a question the value already
-    // answers is worth avoiding on its own.) What belongs here is what the value
-    // cannot say: what the gate opens, which gate it implies, where it is flipped.
     registerConfig("ai.allowComputerUse", {
         desc: "Whether agents may PERCEIVE other apps via the accessibility tree (nidara-a11y, query_app). Toggle it in Settings → AI.",
         type: "boolean",
         writable: false,
         get: () => agentConfig.allowComputerUse,
+        set: v => agentConfig.setAllowComputerUse(v as boolean),
+        subscribe: onAiCfg(() => agentConfig.allowComputerUse),
+        ui: {
+            i18n: "settings.ai.allow-computer-use",
+        },
     })
     registerConfig("ai.allowComputerControl", {
         desc: "Whether agents may ACT in other apps — accessibility actions, synthetic keyboard and pointer (nidara-act/type/click). Implies allowComputerUse. Toggle it in Settings → AI, or revoke it instantly with the kill switch (disableComputerControl).",
         type: "boolean",
         writable: false,
         get: () => agentConfig.allowComputerControl,
+        set: v => agentConfig.setAllowComputerControl(v as boolean),
+        subscribe: onAiCfg(() => agentConfig.allowComputerControl),
+        ui: {
+            i18n: "settings.ai.allow-computer-control",
+        },
     })
     registerConfig("ai.allowFileRead", {
         desc: "Whether the built-in Assistant may READ Nidara's own config, the shipped assets and the shell log (read_file/list_dir/search_files, prefix-limited). Toggle it in Settings → AI.",
         type: "boolean",
         writable: false,
         get: () => agentConfig.allowFileRead,
+        set: v => agentConfig.setAllowFileRead(v as boolean),
+        subscribe: onAiCfg(() => agentConfig.allowFileRead),
+        ui: {
+            i18n: "settings.ai.allow-file-read",
+        },
     })
     registerConfig("ai.allowFileWrite", {
         desc: "Whether the built-in Assistant may WRITE the three user-owned config files it is allowed to edit (edit_file/write_file, exact allowlist, every write committed to git). Implies allowFileRead. Toggle it in Settings → AI.",
         type: "boolean",
         writable: false,
         get: () => agentConfig.allowFileWrite,
+        set: v => agentConfig.setAllowFileWrite(v as boolean),
+        subscribe: onAiCfg(() => agentConfig.allowFileWrite),
+        ui: {
+            i18n: "settings.ai.allow-file-write",
+        },
     })
-    // The one ai.* entry that IS writable, because it is the one that is not a
-    // gate: it turns a visual signal on and off and grants nothing. Writable also
-    // makes it answerable — "stop glowing my windows" is a reasonable thing to ask
-    // the Assistant, and it can do it about itself.
     registerConfig("ai.assistantGlow", {
         desc: "Glow the border of the window the built-in Assistant is working in, for as long as a turn runs. Requires Hyprland 0.56+; makes Nidara the owner of decoration:glow.",
         type: "boolean",
         writable: true,
         get: () => agentConfig.assistantGlow,
         set: v => agentConfig.setAssistantGlow(v as boolean),
+        subscribe: onAiCfg(() => agentConfig.assistantGlow),
+        ui: {
+            i18n: "settings.ai.assistant-glow",
+        },
     })
-    // The built-in Assistant's brain (BYOK). Visible so agents can see how the
-    // native assistant is configured; set it in Settings → AI (the API key lives
-    // in the keyring and is deliberately NOT exposed here).
     registerConfig("ai.brainProvider", {
         desc: "Which provider the built-in Assistant talks to: '' (off) or a provider id (anthropic, openai, google, mistral, groq, openrouter, ollama, custom). Set it in Settings → AI.",
         type: "enum",
         enum: ["", ...AGENT_PROVIDERS.map(p => p.id)],
         writable: false,
         get: () => agentConfig.brainProvider,
+        set: v => agentConfig.setBrainProvider(v as string),
+        subscribe: onAiCfg(() => agentConfig.brainProvider),
+        ui: {
+            i18n: "settings.ai.brain.provider",
+            optI18n: brainProviderLabel,
+        },
     })
     registerConfig("ai.brainBackend", {
         desc: "Wire protocol derived from the provider: '' (off), 'anthropic' (Messages API), or 'openai' (OpenAI-compatible). Read-only — pick a provider instead.",

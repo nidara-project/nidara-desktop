@@ -695,6 +695,7 @@ export default {
     "settings.gaming.wallpaper-mode.desc": "Was beim Start eines Spiels angezeigt wird",
     "settings.gaming.custom-wallpaper": "Bild",
     "settings.gaming.custom-wallpaper.desc": "Für alle Spiele angezeigtes Hintergrundbild",
+    "settings.gaming.transition": "Übergang",
     "settings.gaming.transition.desc": "Übergang beim Wechsel zum Spiel-Hintergrundbild",
     "settings.gaming.performance-profile": "Hochleistungsprofil",
     "settings.gaming.performance-profile.desc": "Leistungs-Energieprofil beim Start eines Spiels automatisch aktivieren",

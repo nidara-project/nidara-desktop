@@ -4,9 +4,8 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import Gaming, { type WallpaperMode } from "../../../core/GamingManager"
-import { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
 import { t } from "../../../core/i18n"
-import { listGroup, createRow, toggleRow, dropdownRow, pageBox, segmentedGroup } from "../SettingsHelpers"
+import { listGroup, createRow, pageBox, segmentedGroup, settingRow } from "../SettingsHelpers"
 import { NidaraButton } from "../../../../lib/nidara-kit"
 
 export default function GamingPage() {
@@ -111,32 +110,17 @@ export default function GamingPage() {
     updateCustomVisible()
 
     // Transition selector (reuse same labels as WallpaperManager)
-    const transitions = Object.keys(TRANSITION_LABELS) as TransitionType[]
-    const transLabels = transitions.map(k => TRANSITION_LABELS[k])
-    wallGroup.listBox.append(dropdownRow(
-        t("settings.appearance.transition"),
-        t("settings.gaming.transition.desc"),
-        TRANSITION_LABELS[Gaming.transition],
-        transLabels,
-        (label) => {
-            const key = transitions.find(k => TRANSITION_LABELS[k] === label)
-            if (key) Gaming.setTransition(key)
-        },
-    ))
+    wallGroup.listBox.append(settingRow("gaming.transition"))
 
     page.append(wallGroup.box)
 
     // ── Performance ───────────────────────────────────────────────────────────
     const perfGroup = listGroup(t("settings.gaming.group.performance"))
 
-    perfGroup.listBox.append(toggleRow(
-        t("settings.gaming.performance-profile"),
-        t("settings.gaming.performance-profile.desc"),
-        Gaming.performanceProfile,
-        (v) => Gaming.setPerformanceProfile(v),
-    ))
+    perfGroup.listBox.append(settingRow("gaming.performanceProfile"))
 
     page.append(perfGroup.box)
 
     return page
 }
+

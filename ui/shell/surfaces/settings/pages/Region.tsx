@@ -2,7 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import { execAsync } from "../../../../lib/process"
-import { listGroup, createRow, toggleRow, pageBox, staticLabel, bindWhileRealized } from "../SettingsHelpers"
+import { listGroup, createRow, pageBox, staticLabel, bindWhileRealized, settingRow } from "../SettingsHelpers"
 import regionConfig, { TimeFormat, DateFormat } from "../../../core/RegionConfig"
 import { t } from "../../../core/i18n"
 import { safeDisconnect } from "../../../core/signals"
@@ -76,12 +76,7 @@ export default function RegionPage() {
     })
     timeList.append(createRow(t("settings.region.time.format"), t("settings.region.time.format.desc"), timeDrp))
 
-    timeList.append(toggleRow(
-        t("settings.region.time.seconds"),
-        t("settings.region.time.seconds.desc"),
-        regionConfig.showSeconds,
-        (v) => regionConfig.setShowSeconds(v),
-    ))
+    timeList.append(settingRow("region.showSeconds"))
 
     page.append(timeBox)
 
