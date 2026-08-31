@@ -1830,6 +1830,55 @@ That case is why `fullscreen` is in the state signature.
 `[HyprIPC] event socket connect failed` rather than quietly showing an empty desktop. Silence
 there is the tech-debt #71 failure mode wearing compositor clothes.
 
+### A nested Hyprland is the bench for anything about WINDOWS (a technique, not a script)
+
+Questions about z-order, focus and window rules need real windows, and the only Hyprland on this
+machine is the one the owner is working in. Driving it means moving their windows around; a VM
+means minutes per iteration. A **nested Hyprland** is neither: it is a Wayland client of the live
+session, so it boots in about a second, has its own config, its own `hyprctl` and its own throwaway
+windows, and touching it cannot disturb the desktop it runs inside.
+
+```bash
+Hyprland -c /path/to/probe.lua &                       # env -u HYPRLAND_INSTANCE_SIGNATURE first
+ls -t "$XDG_RUNTIME_DIR"/hypr/                         # the NEW signature is the newest entry
+export HYPRLAND_INSTANCE_SIGNATURE=<new>  WAYLAND_DISPLAY=wayland-<n>
+hyprctl output create headless PROBE                   # ← see trap 1: do not skip this
+kitty --class probe-a -o background=#ff0000 -o background_opacity=1.0 --hold sh -c 'sleep 3600'
+grim -o PROBE shot.png
+```
+
+⚠️ **Trap 1 — an occluded nested compositor does not render, and the photograph does not say so.**
+Its output is a window on the host, so it only draws while the host sends frame callbacks. Cover
+that window with a terminal and `grim` inside the nested session returns a flat colour with no
+error. The fix is the line above: `hyprctl output create headless PROBE` adds an output that
+renders on its own clock, and the windows go on ITS workspace. The tell that separates the two
+cases: an empty nested output photographs as `#111111` (Hyprland's background), so a capture that
+is uniformly *anything else* is a frame nobody drew.
+
+⚠️ **Trap 2 — the terminal you reach for is translucent, so two windows photograph as one.** The
+shipped `kitty.conf` sets a background opacity, so a red window under a blue one reads
+`#440484` — which is exactly `#ff0000` under `#0000ff` at 52%, and looks like a rendering bug
+rather than a working stack. Pass `-o background_opacity=1.0` and the frame becomes a binary
+answer.
+
+🔑 **Sample the DOMINANT colour of the frame, not a pixel.** Both probe windows centred and
+covering the output makes the frame's most common colour name the one in front:
+`magick shot.png -format %c -depth 8 histogram:info:- | sort -rn | head -1`. The first version of
+this read the single pixel at the centre of the screen and twice reported white — kitty's text
+cursor happened to sit there, and neither window is white. A one-pixel instrument has no way to
+tell you it sampled the wrong thing.
+
+⚠️ **`hl.dsp.cursor.move` warps the pointer WITHOUT refocusing, so any experiment whose
+precondition is "the pointer is over that window" is blind by default.** Measured 2026-08-31 under
+`input:follow_mouse = 1`: the warp moves `hyprctl cursorpos` to the target and leaves focus exactly
+where it was. Real motion — `nidara-input move <x> <y> <w> <h>`, crossing the border between two
+windows so there is an actual motion event — does refocus. Assert that positive control before
+believing either branch of the experiment; without it both branches go green and prove nothing,
+which is the same failure as the `movecursor` incident recorded in `tech-debt.md`.
+
+Worked example, with the numbers: `tech-debt-resolved.md` → **#102** (does focusing a window raise
+it, and does the order of the two dispatchers matter).
+
 ### Testing the battery widget on a desktop (no battery)
 
 `core/BatteryService.ts` reads UPower's composite **DisplayDevice** (through

@@ -3385,30 +3385,6 @@ Also unresolved and smaller: `.nidara-selection-check` is applied by the kit and
 That is correct today (Cairo paints it, the class is for perception) but it looks like a missing
 rule to the next reader, and `token-contract-check` will not tell them either way.
 
-### 102. ⚠️ OPEN — everything that reaches a window through the shell focuses it without raising it (2026-08-31)
-
-> **Queue entry: #326.** Reorder it, schedule it and close it there; what stays here is the rule
-> and the measurements.
-
-Split out of #98, which is resolved. Reported with it and never the same defect: selecting one of
-two grouped windows from the dock icon's menu **focuses it but does not raise it** — it stays under
-whatever was on top. Clicking a floating window directly does both.
-
-The asymmetry is ours, not Hyprland's. `HyprlandState.focusWindow()`
-(`ui/shell/core/HyprlandState.ts:772`) dispatches `hl.dsp.focus({ window = … })` and nothing else,
-while raising is a **separate** dispatcher — `alterzorder` (`bringactivetotop` is deprecated in its
-favour, and the docs note it cannot put a floating window behind a tiled one, which is not a case
-we need).
-
-🔑 **The dock menu is only where somebody noticed.** Every caller that reaches a window through the
-shell goes through that one method — dock menu, window switcher, notification actions,
-`nidara-ipc focusWindow`, the MCP `focus_window` verb, the Assistant. So this is one fix in one
-place, and testing it via the dock alone would leave five other routes unverified.
-
-⚠️ #98 made this visible rather than causing it: with About and Settings finally under separate
-dock icons, the "two windows share an icon" case that made the missing raise so confusing is rarer.
-The defect is unchanged.
-
 ### 99. ⚠️ OPEN — the installer cannot fit on a screen shorter than its own floor (2026-08-30)
 
 > **Queue entry: #312.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
@@ -3497,9 +3473,10 @@ ACCOUNT card, and `nidara-setup` creates `.config/{hypr,kitty,nidara,uwsm}` as `
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
-number is never accidentally reused. 45 items, split out 2026-08-23.
+number is never accidentally reused. 50 items; the split itself was 2026-08-23.
 
 - **#7** — `pageHeader()` removed — RESOLVED → `tech-debt-resolved.md`
+- **#102** — ✅ RESOLVED 2026-08-31 — the shell's one door raises as well as focuses; the bench is a nested Hyprland → `tech-debt-resolved.md`
 - **#98** — ✅ RESOLVED 2026-08-31 — About declares `nidara-about`, and the window-rule seam became a CI gate → `tech-debt-resolved.md`
 - **#9** — The per-boot Adwaita-WARNING — ✅ RESOLVED 2026-08-18 (the host went) → `tech-debt-resolved.md`
 - **#11** — Idle GPU spin on bar/dock — RESOLVED (two distinct causes) → `tech-debt-resolved.md`
