@@ -5,30 +5,83 @@
 // WHY THIS EXISTS (2026-08-31, #332):
 // Every setting used to be described twice: once in config-entries.ts for the
 // agent, and once by hand in Settings pages. The two lists diverged silently.
-// This CI check ensures that settingRow() is used for all settings rows and
-// that every settingRow() references a valid, registered config key.
+// This CI check ensures that settingRow() is used for all settings rows,
+// that every settingRow() references a valid, registered config key, and
+// that all declared i18n keys exist in en.ts.
 
 import { readFileSync, readdirSync, existsSync } from "node:fs"
-import { join, basename } from "node:path"
+import { join } from "node:path"
 
+const EN_LOCALE_PATH = "ui/shell/core/i18n/locales/en.ts"
 const CONFIG_ENTRIES_PATH = "ui/shell/config-entries.ts"
 const PAGES_DIR = "ui/shell/surfaces/settings/pages"
 const ALLOWLIST_PATH = "scripts/ci/settings-rows-allowlist.txt"
 
 const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : "")
 
-// 1. Collect all registered config keys from config-entries.ts
+// 1. Collect all translation keys from en.ts
+const enContent = read(EN_LOCALE_PATH)
+if (!enContent) {
+    console.error(`settings-config-contract: cannot read ${EN_LOCALE_PATH}`)
+    process.exit(1)
+}
+
+const enKeys = new Set(
+    [...enContent.matchAll(/["']([a-zA-Z0-9_.-]+)["']\s*:/g)].map((m) => m[1])
+)
+
+// 2. Collect all registered config entries and check their ui/i18n declarations
 const configContent = read(CONFIG_ENTRIES_PATH)
 if (!configContent) {
     console.error(`settings-config-contract: cannot read ${CONFIG_ENTRIES_PATH}`)
     process.exit(1)
 }
 
+let errors = []
+
+// Parse registered config keys
 const registeredKeys = new Set(
     [...configContent.matchAll(/registerConfig\(\s*["']([^"']+)["']/g)].map((m) => m[1])
 )
 
-// 2. Parse allowlist
+// Check ui declarations in config-entries.ts:
+// Match blocks: registerConfig("key", { ... })
+const entryRegex = /registerConfig\(\s*["']([^"']+)["']\s*,\s*({[\s\S]*?\n\s{4}\})\)/g
+let entryMatch
+while ((entryMatch = entryRegex.exec(configContent)) !== null) {
+    const key = entryMatch[1]
+    const block = entryMatch[2]
+
+    const i18nMatch = block.match(/i18n\s*:\s*["']([^"']+)["']/)
+    if (i18nMatch) {
+        const i18nKey = i18nMatch[1]
+        if (!enKeys.has(i18nKey)) {
+            errors.push(`  FAIL  config-entries.ts: key "${key}" declares ui.i18n "${i18nKey}" which does not exist in en.ts.`)
+        }
+        const descKey = `${i18nKey}.desc`
+        if (!enKeys.has(descKey)) {
+            errors.push(`  FAIL  config-entries.ts: key "${key}" subtitle "${descKey}" does not exist in en.ts.`)
+        }
+
+        // If enum without optI18n, check derived option keys
+        const hasOptI18n = /optI18n\s*:/.test(block)
+        const typeIsEnum = /type\s*:\s*["']enum["']/.test(block)
+        if (typeIsEnum && !hasOptI18n) {
+            const enumListMatch = block.match(/enum\s*:\s*\[([\s\S]*?)\]/)
+            if (enumListMatch) {
+                const options = [...enumListMatch[1].matchAll(/["']([^"']+)["']/g)].map(m => m[1])
+                for (const opt of options) {
+                    const derivedOptKey = `${i18nKey}.opt.${opt}`
+                    if (!enKeys.has(derivedOptKey)) {
+                        errors.push(`  FAIL  config-entries.ts: key "${key}" enum option "${opt}" derived key "${derivedOptKey}" does not exist in en.ts (provide optI18n or add key to en.ts).`)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 3. Parse allowlist
 const allowlistContent = read(ALLOWLIST_PATH)
 const allowlist = new Map() // "file:keyOrLine" -> comment
 
@@ -45,7 +98,7 @@ if (allowlistContent) {
     }
 }
 
-// 3. Scan pages in ui/shell/surfaces/settings/pages
+// 4. Scan pages in ui/shell/surfaces/settings/pages
 if (!existsSync(PAGES_DIR)) {
     console.error(`settings-config-contract: pages directory not found: ${PAGES_DIR}`)
     process.exit(1)
@@ -53,7 +106,6 @@ if (!existsSync(PAGES_DIR)) {
 
 const pageFiles = readdirSync(PAGES_DIR).filter((f) => f.endsWith(".tsx")).sort()
 
-let errors = []
 let settingRowCount = 0
 let allowlistedRowCount = 0
 
@@ -118,7 +170,7 @@ for (const file of pageFiles) {
     }
 }
 
-// 4. Check for unused allowlist entries
+// 5. Check for unused allowlist entries
 for (const [entry, meta] of allowlist.entries()) {
     if (!meta.used) {
         errors.push(
@@ -136,5 +188,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-    `settings-config-contract: all settings rows conform to config contract (${settingRowCount} settingRow, ${allowlistedRowCount} allowlisted).`
+    `settings-config-contract: all settings rows conform to config contract (${settingRowCount} settingRow, ${allowlistedRowCount} allowlisted, all i18n keys verified).`
 )

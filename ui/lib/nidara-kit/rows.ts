@@ -75,7 +75,9 @@ export function NidaraToggleRow(
     if (onExt) {
         bindWhileRealized(sw, () => onExt((v: boolean) => {
             if (sw.active === v) return
-            syncing = true; sw.active = v; syncing = false
+            syncing = true
+            sw.set_active(v)
+            syncing = false
         }))
     }
     return mkRow(label, subtitle, sw)

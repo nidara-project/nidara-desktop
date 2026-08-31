@@ -191,22 +191,27 @@ export const settingRow = (key: string): Gtk.ListBoxRow => {
             const init = Boolean(entry.get())
             const cb = (v: boolean) => { entry.set?.(v) }
             const onExt = entry.subscribe
-                ? (apply: (v: boolean) => void) => entry.subscribe!((v) => apply(Boolean(v)))
+                ? (apply: (v: boolean) => void) => {
+                    return entry.subscribe!((v) => apply(Boolean(v)))
+                }
                 : undefined
             return toggleRow(label, subtitle, init, cb, onExt)
         }
         case "dropdown": {
             const values = entry.enum ? [...entry.enum] : []
             const getOptLabel = (val: string): string => {
-                if (ui.optI18n) return t(ui.optI18n(val) as any)
-                const optKey = ui.i18n.replace(/^settings\./, "") + ".opt." + val
+                if (ui.optI18n) return ui.optI18n(val)
+                const optKey = `${ui.i18n}.opt.${val}`
                 const translated = t(optKey as any)
-                return translated === optKey ? val : translated
+                if (translated === optKey) {
+                    throw new Error(`[settingRow] Missing translation for option "${val}" with derived key "${optKey}" on config entry "${key}"`)
+                }
+                return translated
             }
             const labels = values.map(getOptLabel)
             const currentVal = String(entry.get())
             const currentIdx = values.indexOf(currentVal)
-            const initLabel = currentIdx >= 0 ? labels[currentIdx] : currentVal
+            const initLabel = currentIdx >= 0 ? labels[currentIdx] : (ui.optI18n ? ui.optI18n(currentVal) : currentVal)
 
             const cb = (_selectedLabel: string, index?: number) => {
                 let idx = index
@@ -226,7 +231,7 @@ export const settingRow = (key: string): Gtk.ListBoxRow => {
                         if (idx >= 0 && idx < labels.length) {
                             apply(labels[idx])
                         } else {
-                            apply(valStr)
+                            apply(ui.optI18n ? ui.optI18n(valStr) : valStr)
                         }
                     })
                 }

@@ -27,40 +27,46 @@ import inputConfig from "./core/InputConfig"
 import Icons from "./core/Icons"
 import { safeDisconnect } from "./core/signals"
 
-const KEYBOARD_LAYOUTS: [string, string, string][] = [
-    ["English (US)",              "us",  ""],
-    ["English (UK)",              "gb",  ""],
-    ["Español (ES)",              "es",  ""],
-    ["Español (Latinoamérica)",   "latam", ""],
-    ["Français",                  "fr",  ""],
-    ["Deutsch",                   "de",  ""],
-    ["Italiano",                  "it",  ""],
-    ["Português (Brasil)",        "br",  ""],
-    ["Português (Portugal)",      "pt",  ""],
-    ["Nederlands",                "nl",  ""],
-    ["Polski",                    "pl",  ""],
-    ["Русский",                   "ru",  ""],
-    ["Українська",                "ua",  ""],
-    ["日本語 (Romaji)",            "jp",  ""],
-    ["中文 (Pinyin)",              "cn",  ""],
-    ["한국어",                     "kr",  ""],
-    ["العربية",                    "ara", ""],
-    ["Svenska",                   "se",  ""],
-    ["Norsk",                     "no",  ""],
-    ["Dansk",                     "dk",  ""],
-    ["Suomi",                     "fi",  ""],
-    ["Čeština",                   "cz",  ""],
-    ["Slovenčina",                "sk",  ""],
-    ["Magyar",                    "hu",  ""],
-    ["Română",                    "ro",  ""],
-    ["Türkçe",                    "tr",  ""],
-    ["English (Dvorak)",          "us",  "dvorak"],
-    ["English (Colemak)",         "us",  "colemak"],
+const KEYBOARD_LAYOUTS: [string, string, string, string][] = [
+    ["us",           "English (US)",              "us",    ""],
+    ["gb",           "English (UK)",              "gb",    ""],
+    ["es",           "Español (ES)",              "es",    ""],
+    ["latam",        "Español (Latinoamérica)",   "latam", ""],
+    ["fr",           "Français",                  "fr",    ""],
+    ["de",           "Deutsch",                   "de",    ""],
+    ["it",           "Italiano",                  "it",    ""],
+    ["br",           "Português (Brasil)",        "br",    ""],
+    ["pt",           "Português (Portugal)",      "pt",    ""],
+    ["nl",           "Nederlands",                "nl",    ""],
+    ["pl",           "Polski",                    "pl",    ""],
+    ["ru",           "Русский",                   "ru",    ""],
+    ["ua",           "Українська",                "ua",    ""],
+    ["jp",           "日本語 (Romaji)",            "jp",    ""],
+    ["cn",           "中文 (Pinyin)",              "cn",    ""],
+    ["kr",           "한국어",                     "kr",    ""],
+    ["ara",          "العربية",                    "ara",   ""],
+    ["se",           "Svenska",                   "se",    ""],
+    ["no",           "Norsk",                     "no",    ""],
+    ["dk",           "Dansk",                     "dk",    ""],
+    ["fi",           "Suomi",                     "fi",    ""],
+    ["cz",           "Čeština",                   "cz",    ""],
+    ["sk",           "Slovenčina",                "sk",    ""],
+    ["hu",           "Magyar",                    "hu",    ""],
+    ["ro",           "Română",                    "ro",    ""],
+    ["tr",           "Türkçe",                    "tr",    ""],
+    ["us-dvorak",    "English (Dvorak)",          "us",    "dvorak"],
+    ["us-colemak",   "English (Colemak)",         "us",    "colemak"],
 ]
 
-const currentKbLayoutLabel = (): string => {
-    const cur = KEYBOARD_LAYOUTS.find(([, l, v]) => l === inputConfig.kbLayout && v === inputConfig.kbVariant)
-    return cur?.[0] ?? (inputConfig.kbVariant ? `${inputConfig.kbLayout} (${inputConfig.kbVariant})` : inputConfig.kbLayout)
+const currentKbLayoutId = (): string => {
+    const cur = KEYBOARD_LAYOUTS.find(([, , l, v]) => l === inputConfig.kbLayout && v === inputConfig.kbVariant)
+    if (cur) return cur[0]
+    return inputConfig.kbVariant ? `${inputConfig.kbLayout} (${inputConfig.kbVariant})` : inputConfig.kbLayout
+}
+
+const kbLayoutLabel = (id: string): string => {
+    const entry = KEYBOARD_LAYOUTS.find(([k]) => k === id)
+    return entry ? entry[1] : id
 }
 
 const onInputCfg = (read: () => any) => (apply: (v: any) => void) => {
@@ -169,6 +175,7 @@ export function registerConfigEntries() {
         subscribe: onInputCfg(() => inputConfig.accelProfile),
         ui: {
             i18n: "settings.input.mouse.accel",
+            optI18n: (v) => v,
         },
     })
     registerConfig("input.mouse.natural", {
@@ -202,19 +209,24 @@ export function registerConfigEntries() {
         },
     })
     registerConfig("input.keyboard.layout", {
-        desc: "Keyboard layout name or XKB layout code.",
+        desc: "Keyboard layout code (e.g. 'us', 'es', 'us-dvorak').",
         type: "enum",
-        enum: KEYBOARD_LAYOUTS.map(([label]) => label),
-        get: () => currentKbLayoutLabel(),
+        enum: KEYBOARD_LAYOUTS.map(([id]) => id),
+        get: () => currentKbLayoutId(),
         set: v => {
-            const entry = KEYBOARD_LAYOUTS.find(([l]) => l === v)
-            if (entry) inputConfig.setKbLayout(entry[1], entry[2])
-            else inputConfig.setKbLayout(String(v))
+            const entry = KEYBOARD_LAYOUTS.find(([id]) => id === v)
+            if (entry) {
+                inputConfig.setKbLayout(entry[2], entry[3])
+            } else {
+                const raw = String(v)
+                const parts = raw.split("-")
+                inputConfig.setKbLayout(parts[0], parts.slice(1).join("-"))
+            }
         },
-        subscribe: onInputCfg(() => currentKbLayoutLabel()),
+        subscribe: onInputCfg(() => currentKbLayoutId()),
         ui: {
             i18n: "settings.input.keyboard.layout",
-            optI18n: (v) => v,
+            optI18n: kbLayoutLabel,
         },
     })
     registerConfig("input.keyboard.numlock", {

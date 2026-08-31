@@ -89,7 +89,7 @@ class InputConfig extends GObject.Object {
     }
 
     private applyAndSave(option: string, value: string | number) {
-        if (!this.initialized) return
+        this.initialized = true
 
         // 1. Live apply. The config uses Hyprland's Lua parser, which REJECTS
         // `hyprctl keyword` ("Use eval.") — so live changes go through eval.
