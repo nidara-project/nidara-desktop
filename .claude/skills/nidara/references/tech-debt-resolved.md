@@ -1853,3 +1853,49 @@ md5) before and after the line.
 Verified on screen, in Spanish, on the real shell: both surfaces agreeing on 32 GB, Hyprland
 appearing once, "Tiempo activo · 3 días y 8 horas", and the card holding a constant width with the
 GPU value ellipsized in the summary and complete in the page.
+
+### 98. ✅ RESOLVED — About declares its own app-id, and the rule that floats it became a CI gate (2026-08-30 → 2026-08-31)
+
+Reported from the desktop: opening **About** from the system menu made it take over the pinned
+**Settings** icon in the dock, and with Settings open too the dock showed them GROUPED under that
+one icon — two windows, one identity, neither of them named About.
+
+One line, not a dock bug: `AboutWindow.tsx` set `appId: "nidara-settings"`. Measured on a running
+session, the window arrived as `class=nidara-settings title=About Nidara`, so anything grouping by
+app id (the dock, the task switcher, a taskbar somebody else writes) was correct to put them
+together. About and Settings ARE related — #94 settled that they are a summary and its detail — but
+relation is not identity.
+
+**What landed:** `appId: "nidara-about"`, plus `config/applications/nidara-about.desktop` with
+`NoDisplay=true`. The entry is the whole answer to the objection the original comment recorded
+("giving it a name of its own would cost it its icon everywhere"): `AppService` builds its registry
+from `Gio.AppInfo.get_all()`, which KEEPS hidden entries and only marks them `visible: false`, so
+About has a name and an icon in the dock and the overview while never appearing in the app grid as
+a launcher. The pinned entry still says `nidara-settings` and still follows Settings — the pin was
+never About's.
+
+🔑 **THE RULE THAT BINDS, AND IT IS THE OPPOSITE OF WHAT #98 PREDICTED.** This item said the fix
+"has to put the BIRTH class (`org.nidara.shell`) into the match alongside the new one". Both halves
+of that were wrong, and both were caught only because the fix came with a checker:
+
+1. **`org.nidara.shell` does not exist.** The shell is `org.nidara.desktop` (`ui/shell/app.ts`).
+   A rule naming the other one matches nothing, silently.
+2. **About's rule must NOT move to its new class, and must not name the birth class either.**
+   `float`/`center` are STATIC effects: evaluated once at open, matched against `initialClass`.
+   `nidara-about` does not exist yet then (it is stamped at MAP), and `org.nidara.desktop` is what
+   *every* window of the shell process is born with — so floating on it would float **Settings**
+   too, permanently, since a static effect is never re-evaluated and cannot be taken back. The
+   initial title is the only thing that tells the two apart at that instant, and `^About Nidara$`
+   stays.
+
+⚠️ So "never match a title" is retired as an absolute: for two windows of one process there is
+nothing else at creation. What replaced it is checkable — a matched title must be a literal some
+window in `ui/` actually sets, which makes the real hazard (wrapping that title in `t()` for i18n,
+breaking the rule in every locale including English) a CI failure instead of a silent one.
+
+The gate is `scripts/ci/hypr-rule-check.mjs`, wired into the `hypr-config` job; the mechanism is in
+`dev-workflow.md` → "A window rule matches an IDENTIFIER, and a static rule only ever sees the one
+the window was BORN with".
+
+**Not resolved with it:** the second half reported alongside — focusing a window through the shell
+does not raise it — was never the same defect and is now item **#102**.

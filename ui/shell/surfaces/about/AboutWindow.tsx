@@ -232,20 +232,35 @@ export default function AboutWindow(): Gtk.Window | null {
     // close button lives INSIDE the card, on the corner diagonal — and no
     // `sidebar`, which is the only thing that would make it the two-pane layout.
     //
-    // Float + center come from a static window rule in hyprland.lua (matched by the
-    // "About Nidara" title). The old `hyprctl keyword windowrulev2` calls here
-    // were rejected by the Lua parser ("Use eval.") and have been removed.
+    // Float + center come from a static window rule in hyprland.lua, matched on the
+    // "About Nidara" title below — read the note on that rule before changing this
+    // string or wrapping it in `t()`: a static effect is matched against the title
+    // the toplevel was BORN with, and it is the only thing that tells this window
+    // apart from Settings at that instant. CI checks the two still agree.
+    // The old `hyprctl keyword windowrulev2` calls here were rejected by the Lua
+    // parser ("Use eval.") and have been removed.
     let sigId = 0
     let shell: NidaraWindowResult
     shell = NidaraWindow({
         app,
         title: "About Nidara",
         name: "nidara-about",
-        // Deliberately the SAME app-id as the Settings window: About is opened from
-        // Settings, has no desktop entry of its own, and under AGS both windows
-        // already resolved to `nidara-settings` through AppService's remap. Giving
-        // it a name of its own here would only cost it its icon everywhere.
-        appId: "nidara-settings",
+        // Its own identity, since 2026-08-31. It used to declare `nidara-settings`
+        // — Settings' app-id — on the reasoning that About had no desktop entry of
+        // its own and would lose its icon everywhere. What that actually bought was
+        // a dock that could not tell the two apart: opening About took over the
+        // pinned Settings icon, and with both open the dock GROUPED them under it,
+        // two windows under one identity, neither of them named About. Related is
+        // not identical (#94 settled that they are a summary and its detail), and
+        // the dock is where the difference shows.
+        //
+        // The icon objection was real and is answered rather than accepted:
+        // `config/applications/nidara-about.desktop` is the registry entry
+        // `resolveWindowApp` resolves this class through. `NoDisplay=true`, so it
+        // names the window without becoming a launcher in the app grid.
+        //
+        // ⚠️ This does NOT move the window rule. See hyprland.lua → float-about.
+        appId: "nidara-about",
         cssClasses: ["about-floating-window"],
         glassClasses: ["about-window-card"],
         // min = max = CARD_WIDTH: the clamp is the ceiling the card's own

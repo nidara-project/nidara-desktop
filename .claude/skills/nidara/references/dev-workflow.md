@@ -298,25 +298,42 @@ left a later "clean" kitty coming up 2544x1284 and looking like a regression the
 when the hook was off. Pass `-o remember_window_size=no -o initial_window_width=… -o
 initial_window_height=…` for every arm.
 
-#### A window rule matches an IDENTIFIER, never interface text — and our identifiers arrive LATE
+#### A window rule matches an IDENTIFIER, and a static rule only ever sees the one the window was BORN with
 
-Two rules, and the second one is the one nobody sees coming.
+⚠️ **This section said something subtly different until 2026-08-31, and the difference is the
+whole mechanism.** It said our identifiers "arrive LATE" and that a rule keyed on them is
+"matched too late". They do arrive late; the rule is not matched late. It is **never matched at
+all**. The corrected version is below, and `scripts/ci/hypr-rule-check.mjs` now enforces it, so
+this paragraph is no longer the only thing standing between a rule and the window it means.
 
-**1. Never match a title.** A title is interface text: it gets translated (none of ours are yet —
-the day one is, that would be one rule per locale) and an application's title follows its content
-besides. A class is an identifier. Rules here match identifiers, always.
+**Hyprland splits a rule's effects in two, and they behave nothing alike** (Configuring →
+Window-Rules, quoted):
 
-**2. ⚠️ Our windows do not have their app-id when Hyprland first matches rules.** The shell, the
-greeter, the lockscreen and the installer all give a window its identity through
-`setWindowAppId` (`ui/lib/app-id.ts`), and that lands at **MAP** — after the compositor has
-already matched its rules once against the PROCESS app-id (`org.nidara.installer`,
-`org.nidara.shell`, …) that GTK put on the toplevel at creation.
+| | evaluated | matched against |
+|---|---|---|
+| **static** — `float`, `center`, `size`, `move`, `workspace`, `monitor`, `pseudo`, `suppress_event`, `fullscreen`, `pin`, `group`, `content`… | "once when the window is opened and never again" | "it is always the `initialTitle` and `initialClass`", whatever `class` and `title` say later |
+| **dynamic** — `opacity`, `rounding`, `no_blur`, `no_anim`, `opaque`, `border_size`, `idle_inhibit`, `immediate`, `decorate`… | "re-evaluated every time a property changes" | the CURRENT class and title |
 
-So a rule naming only the final class is matched **too late**. The window spends its first frames
-TILED, GTK is told it is maximized and takes the tile as its size, and when the class finally
-arrives the rules are re-evaluated and the window floats **at the size it just adopted**. That is
-why the installer "opened at monitor size when it was the only window": the tile it adopts is the
-whole work area on an empty workspace, and half of it next to one other window.
+**And our windows change class after they open.** The shell, the greeter, the lockscreen and the
+installer all give a window its real identity through `setWindowAppId` (`ui/lib/app-id.ts`), which
+lands at **MAP** — after the toplevel already exists carrying the PROCESS app-id GTK put on it at
+creation (`org.nidara.desktop` for the shell, `org.nidara.greeter`, `org.nidara.lock`,
+`org.nidara.installer`).
+
+⚠️ **`org.nidara.desktop`, not `org.nidara.shell`.** Two places in this skill said the latter for a
+day. Nothing declares it; a rule naming it matches nothing, silently. The check derives the list
+from each bundle's `app.ts` for exactly that reason, and prints it in every failure message.
+
+So the two kinds of effect have **opposite** traps:
+
+- a **static** rule naming a stamped class (`nidara-installer`) never fires — the window is simply
+  left tiled, which on an empty workspace is the whole work area. ⇒ **name the birth class.**
+- a **dynamic** rule naming a birth class stops applying the moment the window stamps its own id.
+  ⇒ **name the stamped class.**
+
+Naming both always satisfies both, which is what `float-installer` does:
+
+    match = { class = "^(org\\.nidara\\.installer|nidara-installer)$" }
 
 Measured with a minimal GTK4 window — one variable per arm, same empty 2560x1440 screen, default
 size 960x760, rule `float + center`:
@@ -330,24 +347,42 @@ size 960x760, rule `float + center`:
 | app-id stamped at map, rule on an EARLY TITLE | 960x760 ✔ |
 | app-id stamped at map, rule on the BIRTH class | 960x760 ✔ |
 
-**The fix is the alternation**, verified to work in Hyprland's matcher:
+⚠️ **What those two failing arms were never asked** is whether the window was *floating*. The
+numbers are consistent with both readings — "floated late at the size it had adopted" (what this
+section used to claim) and "never floated, still tiled" (what the documented mechanism says must
+happen). The docs settle it; the measurement does not, because `floating` was not recorded. If
+anyone re-runs those arms, record `hyprctl clients -j | jq .[].floating`; the outcome does not
+change any rule here, but it closes the last gap between what we measured and what we assert.
 
-    match = { class = "^(org\\.nidara\\.installer|nidara-installer)$" }
+**When two of our windows share a process, they share a birth class — and then the birth title is
+all that is left.** Settings, About and Settings' modal dialogs are all born `org.nidara.desktop`.
+A static rule that floats "the shell's windows" floats Settings too, permanently, because a static
+effect is never re-evaluated and so can never be taken back. That is why `float-about` matches
+`^About Nidara$` and why moving it to `nidara-about` in 2026-08-31 was explicitly NOT done when
+About finally got an app-id of its own. A birth title is a code literal on the toplevel from
+creation — an identifier in every sense that matters here, not live interface text.
 
-⚠️ Things this explains, and one it warns about:
+⚠️ **The hazard that remains is i18n, and it is now a CI failure rather than a comment.** Wrap that
+title in `t()` and the literal leaves the source, the rule matches nothing, and it does so in every
+locale including English. `hypr-rule-check.mjs` requires every title a rule matches to be a literal
+some window in `ui/` actually sets — so a window a rule keys on has to keep an untranslated birth
+title, and the day someone translates it, CI says which rule they broke.
 
-- **About has never had this** because its rule is `^About Nidara$` and a title is on the toplevel
-  from creation. So the title match is not just a workaround for the shared app-id — it is also
-  what has been hiding this. When debt #98 gives About an app-id of its own, moving its rule to
-  that class walks straight into the trap; it needs the birth class in the alternation too.
+⚠️ Two things this explains and one it retires:
+
 - `resizable` is NOT the difference, and neither is `set_size_request` — both were arms above, both
   fine. Neither is the `maximized` flag on its own: every arm reported `maximized=true`, including
   the ones that came up correctly. (Related and already known: **Hyprland never clears the `tiled`
   toplevel state** — see the note in `ui/lib/tokens.ts` — so `maximized`/`tiled` are useless as a
   signal for "someone else is sizing me".)
 - A `size` in the rule also fixes it, by overriding the adopted size after the fact. It works
-  (verified), but it duplicates a number that already lives in the window's own source, so prefer
-  the alternation.
+  (verified), but it duplicates a number that already lives in the window's own source — and for a
+  window whose height is content-driven (About wraps its values, so its height moves with the
+  locale) there is no correct number to duplicate. Prefer naming the birth class.
+- The old advice "never match a title, full stop" is retired as unimplementable: for two windows of
+  one process there is nothing else at creation. The rule is now the checkable one — a matched
+  title must be a birth title our source sets, and `^$` (this toplevel has no title) is a
+  structural fact rather than text.
 
 ⚠️ **kitty remembers its window size**, so it is a contaminated instrument here: a probe run left a
 later "clean" kitty coming up 2544x1284 and looking like a regression, with the clamp switched off.

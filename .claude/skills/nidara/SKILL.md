@@ -153,7 +153,7 @@ one with a `timeout-minutes`):
 | `i18n` | translation parity + the ledger (`scripts/ci/i18n-check.mjs --check`) — see `dev-workflow.md` |
 | `skill-docs` | three prose/consistency checks: no repeated headings anywhere under `.claude/skills` (a duplicated section is how a reference comes to contradict itself), `wrapping-prose-check` (a wrapping `GtkLabel` must FILL its column — documented, then violated six times, because the failure only appears in someone else's locale), `same-app-check` (the four `bin/nidara-{a11y,act,click,type}` copies of `sameApp`/`nameTokens` must not drift from `core/app-search.ts`, or perception and action disagree about what an app is called) |
 | `pkgbuild` | `bash -n` on the PKGBUILD + `depends=()` still sources as an array of ≥40 (v0.6.0 shipped with an unquoted `hyprland>=0.56` that bash read as a redirection and silently truncated the array) |
-| `hypr-config` | `luac -p config/hypr/hyprland.lua` (one syntax error = the session boots with NO Nidara config at all) + the game-mode handlers driven against a stubbed `hl` |
+| `hypr-config` | `luac -p config/hypr/hyprland.lua` (one syntax error = the session boots with NO Nidara config at all) + the game-mode handlers driven against a stubbed `hl` + **every window rule names something the source declares** (`hypr-rule-check.mjs`: a rule is a string matched against a string a GTK window announces, and our windows change class at MAP — a STATIC effect sees only the birth class, a DYNAMIC one only the current one, and both traps are silent) |
 | `agent-loop` | drives `bin/nidara-agent` against a mock provider (`scripts/ci/agent-loop-test.py`) |
 
 ⚠️ A REQUIRED check skipped by a path filter never reports, and that **stalls the merge queue** —
