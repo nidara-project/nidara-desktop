@@ -59,42 +59,30 @@ class InputConfig extends GObject.Object {
     get kbRepeatRate() { return this._kbRepeatRate }
 
     // Parse options directly from Hyprland live state (via HyprlandState — the
-    // single door to hyprctl)
+    // single door to hyprctl).
+    //
+    // Every read passes the CURRENT field as its fallback, so an option that cannot
+    // be read leaves this object as it found it. That matters more here than in a
+    // one-off read: `applyAndSave` rewrites the whole of nidara-settings.lua from
+    // these fields, so anything this method gets wrong is not just displayed wrong,
+    // it is persisted and applied on the next change to any input setting.
+    //
+    // ⚠️ The typed readers are not a style preference. Reading a bool option off the
+    // raw JSON as `.int === 1` is `undefined === 1` — false for every boolean, with
+    // nothing reporting it (#338). `getOptionBoolAsync` cannot make that mistake.
     private async syncFromHyprland() {
-        const opt = (name: string) => hs.getOptionJson(`input:${name}`)
+        this._pointerSpeed = await hs.getOptionFloatAsync("input:sensitivity", this._pointerSpeed)
+        this._accelProfile = await hs.getOptionStrAsync("input:accel_profile", this._accelProfile)
 
-        const sens = await opt("sensitivity")
-        if (sens) this._pointerSpeed = sens.float || 0.0
+        this._mouseNaturalScroll = await hs.getOptionBoolAsync("input:natural_scroll", this._mouseNaturalScroll)
+        this._touchpadNaturalScroll = await hs.getOptionBoolAsync("input:touchpad:natural_scroll", this._touchpadNaturalScroll)
+        this._touchpadTap = await hs.getOptionBoolAsync("input:touchpad:tap_to_click", this._touchpadTap)
+        this._numlockOnBoot = await hs.getOptionBoolAsync("input:numlock_by_default", this._numlockOnBoot)
 
-        const accel = await opt("accel_profile")
-        if (accel) {
-            const raw = accel.str || ""
-            this._accelProfile = (raw === "" || raw === "[[EMPTY]]") ? "adaptive" : raw
-        }
-
-        const mNat = await opt("natural_scroll")
-        if (mNat) this._mouseNaturalScroll = mNat.int === 1
-
-        const tNat = await opt("touchpad:natural_scroll")
-        if (tNat) this._touchpadNaturalScroll = tNat.int === 1
-
-        const tap = await opt("touchpad:tap_to_click")
-        if (tap) this._touchpadTap = tap.int === 1
-
-        const num = await opt("numlock_by_default")
-        if (num) this._numlockOnBoot = num.int === 1
-
-        const layout = await opt("kb_layout")
-        if (layout) this._kbLayout = layout.str || "us"
-
-        const variant = await opt("kb_variant")
-        if (variant) this._kbVariant = variant.str || ""
-
-        const delay = await opt("repeat_delay")
-        if (delay) this._kbRepeatDelay = delay.int || 600
-
-        const rate = await opt("repeat_rate")
-        if (rate) this._kbRepeatRate = rate.int || 25
+        this._kbLayout = await hs.getOptionStrAsync("input:kb_layout", this._kbLayout)
+        this._kbVariant = await hs.getOptionStrAsync("input:kb_variant", this._kbVariant)
+        this._kbRepeatDelay = await hs.getOptionIntAsync("input:repeat_delay", this._kbRepeatDelay)
+        this._kbRepeatRate = await hs.getOptionIntAsync("input:repeat_rate", this._kbRepeatRate)
 
         this.initialized = true
         this.emit("changed")

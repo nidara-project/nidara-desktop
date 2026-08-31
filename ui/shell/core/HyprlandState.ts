@@ -317,11 +317,70 @@ class HyprlandStateClass extends GObject.Object {
     }
 
     /** Async read of an effective option: resolves the parsed `getoption -j` JSON
-     *  ({int, float, str, set…}) or null on failure. Use for batch re-syncs
-     *  (InputConfig); prefer getOptionInt for one-off sync reads. */
+     *  or null on failure. The payload carries EXACTLY ONE typed field, named after
+     *  the option's type — `int`, `bool`, `float`, `str` or `css` — and nothing
+     *  alongside it.
+     *
+     *  ⚠️ Prefer the typed readers below. This one hands back the RAW shape, and the
+     *  raw shape is the trap: reading `.int === 1` off a bool option is
+     *  `undefined === 1`, i.e. `false` for every boolean forever, with no error
+     *  anywhere. That is issue #338 — `InputConfig` was this method's only batch
+     *  caller and it read all four of its booleans that way, so natural scrolling
+     *  and tap-to-click reported themselves off however they were set, and the next
+     *  write persisted that. The same mistake had already been made once on the sync
+     *  side (see the warning on `getOptionInt`), which is the argument for typing the
+     *  read rather than remembering the shape. */
     async getOptionJson(name: string): Promise<any | null> {
         try { return JSON.parse(await execAsync(["hyprctl", "getoption", "-j", name])) }
         catch (e) { console.error("[HyprlandState] getOptionJson", name, e); return null }
+    }
+
+    // ── Typed async reads ────────────────────────────────────────────────────
+    // Async twins of getOptionInt/getOptionBool, for batch re-syncs (InputConfig).
+    //
+    // 🔑 `fallback` is what the caller ALREADY BELIEVES, not a zero value. A re-sync
+    // that cannot reach the compositor must leave its state as it found it: these
+    // readers are the seam where "could not tell" would otherwise silently become
+    // "off"/"0"/"" — and since `applyAndSave` rewrites the whole config file from
+    // that state, a wrong fallback does not stay in memory, it lands on disk. Pass
+    // the current field and a failed read costs nothing:
+    //
+    //     this._touchpadTap = await hs.getOptionBoolAsync("input:touchpad:tap_to_click", this._touchpadTap)
+
+    /** Effective BOOL option. Returns `fallback` when the read fails or the option
+     *  is not a bool, so a caller never mistakes "could not tell" for `false`. */
+    async getOptionBoolAsync(name: string, fallback = false): Promise<boolean> {
+        const o = await this.getOptionJson(name)
+        return typeof o?.bool === "boolean" ? o.bool : fallback
+    }
+
+    /** Effective INT option. `css_gap`-typed options (gaps_in/gaps_out) carry no
+     *  `int` — they report `css: "4 4 4 4"` (top right bottom left); the first
+     *  number is used, matching the sync `getOptionInt`. */
+    async getOptionIntAsync(name: string, fallback = 0): Promise<number> {
+        const o = await this.getOptionJson(name)
+        if (typeof o?.int === "number") return o.int
+        if (typeof o?.css === "string") {
+            const n = parseInt(o.css, 10)
+            if (!Number.isNaN(n)) return n
+        }
+        return fallback
+    }
+
+    /** Effective FLOAT option. */
+    async getOptionFloatAsync(name: string, fallback = 0): Promise<number> {
+        const o = await this.getOptionJson(name)
+        return typeof o?.float === "number" ? o.float : fallback
+    }
+
+    /** Effective STRING option. Hyprland reports an unset string as the literal
+     *  `[[EMPTY]]`, which is not a value anybody wants to store — it is treated as
+     *  absent, so the caller gets its fallback rather than that marker leaking into
+     *  the UI and then into the config file. */
+    async getOptionStrAsync(name: string, fallback = ""): Promise<string> {
+        const o = await this.getOptionJson(name)
+        if (typeof o?.str !== "string") return fallback
+        return (o.str === "" || o.str === "[[EMPTY]]") ? fallback : o.str
     }
 
     /** Top edge (screen y) of one of OUR layer surfaces, by namespace — or null if

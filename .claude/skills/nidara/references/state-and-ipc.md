@@ -720,14 +720,28 @@ Rules:
   read the old schema to migrate**: `Gio.Settings.new()` on a schema that is no longer installed
   ABORTS the process (guard with `Gio.SettingsSchemaSource.get_default().lookup()` if you ever
   must). Users get the default once; a notification flag is not worth a crash loop.
-- **Reading an effective Hyprland option: `getOptionInt` is INT-TYPED ONLY.** A bool
-  option's `hyprctl getoption -j` carries no `int` field at all —
-  `animations:enabled` answers `{"option":…,"bool":false,"set":true}` — so
-  `getOptionInt` returns 0 for every boolean whatever its value, silently.
-  `HyprlandState.getOptionBool(name, fallback)` is the one for those, and it takes a
-  fallback so a failed read is not mistaken for `false`. (Found 2026-08-16: the
-  reduce-motion baseline read `true` as 0 and pinned Hyprland's animations off — the
-  bug survived a clean typecheck and a clean build, and only the live A/B caught it.)
+- **Reading an effective Hyprland option: READ IT THROUGH A TYPED READER, never off the raw
+  JSON.** A `getoption -j` payload carries EXACTLY ONE typed field, named after the option's
+  type — `int`, `bool`, `float`, `str` or `css` — and nothing alongside it, so naming the
+  wrong one yields `undefined` and every comparison against it is quietly false.
+  `HyprlandState` has one reader per type: `getOptionInt` / `getOptionBool` (sync) and
+  `getOptionIntAsync` / `getOptionBoolAsync` / `getOptionFloatAsync` / `getOptionStrAsync`
+  (async, for batch re-syncs). Each takes a `fallback`, so a failed read is never mistaken
+  for `false`/`0`/`""`. `getOptionJson` still exists and still hands back the raw shape;
+  reach for it only when you need a field the typed readers do not cover.
+  🔑 **This mistake has now been made twice, in both directions, and neither time did
+  anything report it.** 2026-08-16: the reduce-motion baseline read a bool with
+  `getOptionInt`, got `0` for `true`, and pinned Hyprland's animations off. 2026-08-31
+  (#338): `InputConfig` read all four of its booleans off the raw async JSON as
+  `.int === 1`, so natural scrolling, tap-to-click and numlock reported themselves OFF
+  however they were actually set — and because `applyAndSave` rewrites the whole config
+  file from those fields, the next change to any input setting **persisted the wrong
+  state to disk and applied it**. Both survived a clean typecheck and a clean build; only
+  a live A/B against `hyprctl` caught either.
+  ⚠️ In a batch re-sync, pass **the current field** as the fallback
+  (`this._tap = await hs.getOptionBoolAsync(name, this._tap)`): a re-sync that cannot
+  reach the compositor must leave the object as it found it, or "could not tell" turns
+  into a value that then gets persisted.
 - **Changing a Hyprland option live is `hs.evalLua`, and the shape comes from the SHIPPED
   STUB.** `/usr/share/hypr/stubs/hl.meta.lua` declares the whole Lua config surface
   (`HL.ConfigOpt.Animations.enabled`, etc.) — read it rather than guessing a
