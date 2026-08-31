@@ -69,12 +69,15 @@ export function NidaraToggleRow(
     const sw = new Gtk.Switch({ active: init, valign: Gtk.Align.CENTER })
     let syncing = false
     sw.connect("state-set", (_: any, state: boolean) => {
-        if (!syncing) cb(state)
+        if (!syncing) {
+            syncing = true
+            try { cb(state) } finally { syncing = false }
+        }
         return false
     })
     if (onExt) {
         bindWhileRealized(sw, () => onExt((v: boolean) => {
-            if (sw.active === v) return
+            if (syncing || sw.active === v) return
             syncing = true
             sw.set_active(v)
             syncing = false
@@ -127,12 +130,15 @@ export function NidaraDropDownRow(
     drp.connect("notify::selected", () => {
         if (syncing) return
         const idx = drp.selected
-        if (idx < known.length) cb(known[idx], idx)
+        if (idx < known.length) {
+            syncing = true
+            try { cb(known[idx], idx) } finally { syncing = false }
+        }
     })
     if (onExt) {
         bindWhileRealized(drp, () => onExt((v: string) => {
             const idx = indexFor(v)
-            if (idx < 0 || idx === drp.selected) return
+            if (syncing || idx < 0 || idx === drp.selected) return
             syncing = true; drp.selected = idx; syncing = false
         }))
     }
