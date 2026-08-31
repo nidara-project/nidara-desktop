@@ -6,31 +6,18 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import Theme from "../../../core/ThemeManager"
 import { NidaraButton, NidaraFontButton, makeHSlider } from "../../../../lib/nidara-kit"
 import NightLight from "../../../core/NightLightManager"
-import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
+import Wallpaper from "../../../core/WallpaperManager"
 import { getBundledWallpapers } from "../../../../lib/wallpaper"
-import { ACCENT_PALETTE, GLASS_RANGE, type AccentKey, type ShellAppearance } from "../../../core/NidaraTheme"
+import { ACCENT_PALETTE, GLASS_RANGE, type AccentKey } from "../../../core/NidaraTheme"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
-import { listGroup, createRow, toggleRow, dropdownRow, sliderRow, pageBox, bindWhileRealized } from "../SettingsHelpers"
+import { listGroup, createRow, settingRow, pageBox, bindWhileRealized } from "../SettingsHelpers"
 import { attachTooltip } from "../../../common/Tooltip"
 import { safeDisconnect } from "../../../core/signals"
 
 export default function AppearancePage() {
     const page = pageBox("appearance-page")
 
-    // Live external-sync for everything on this page that ThemeManager owns.
-    //
-    // 🔑 It PRIMES — `apply(read())` before connecting — and that is the whole point,
-    // not a nicety. Every consumer arms it through `bindWhileRealized`, which re-runs
-    // on each realize; a hook that only subscribes comes back listening but still
-    // showing what it was built with, and this page is built ONCE per Settings window.
-    // Measured 2026-08-16 on the version this replaces: `setConfig
-    // appearance.shellAppearance dark` moved the bar and the dock while the dropdown
-    // two inches away still read "Follow system", for the rest of the session.
-    //
-    // The writers are real and none of them are this page: `setConfig` (appearance.*
-    // is agent-writable), the Control Center's dark-mode widget, and the OTHER
-    // Settings window — there is one per monitor, all editing the same ThemeManager.
     const onTheme = <T,>(read: () => T) => (apply: (v: T) => void) => {
         apply(read())
         const id = Theme.connect("changed", () => apply(read()))
@@ -39,46 +26,8 @@ export default function AppearancePage() {
 
     // 1. General style
     const styleGroup = listGroup(t("settings.appearance.group.base-style"))
-    const darkSwitch = new Gtk.Switch({ active: Theme.isDark, valign: Gtk.Align.CENTER })
-    let syncingDark = false
-    darkSwitch.connect("state-set", (_: any, state: boolean) => {
-        if (!syncingDark) {
-            syncingDark = true
-            Theme.setDarkMode(state).finally(() => {
-                syncingDark = false
-            })
-        }
-        return false
-    })
-    onTheme(() => Theme.isDark)((dark) => {
-        if (darkSwitch.get_active() !== dark) {
-            syncingDark = true
-            darkSwitch.set_active(dark)
-            syncingDark = false
-        }
-    })
-    styleGroup.listBox.append(createRow(
-        t("settings.appearance.dark-mode"),
-        t("settings.appearance.dark-mode.desc"),
-        darkSwitch,
-    ))
-
-    // Bar + dock appearance, independent of the system mode — pin to dark/light so
-    // chrome text stays legible over any wallpaper (light text reads on most; dark
-    // text needs a brighter glass, hence the floor + this escape hatch).
-    const SHELL_APPEARANCES: ShellAppearance[] = ["system", "dark", "light"]
-    const apprLabel = (k: ShellAppearance) => t(`settings.appearance.shell-appearance.${k}`)
-    styleGroup.listBox.append(dropdownRow(
-        t("settings.appearance.shell-appearance"),
-        t("settings.appearance.shell-appearance.desc"),
-        apprLabel(Theme.shellAppearance),
-        SHELL_APPEARANCES.map(apprLabel),
-        (label) => {
-            const key = SHELL_APPEARANCES.find(k => apprLabel(k) === label)
-            if (key) Theme.setShellAppearance(key)
-        },
-        onTheme(() => apprLabel(Theme.shellAppearance)),
-    ))
+    styleGroup.listBox.append(settingRow("appearance.darkMode"))
+    styleGroup.listBox.append(settingRow("appearance.shellAppearance"))
     page.append(styleGroup.box)
 
     // 2. Wallpaper
@@ -190,19 +139,7 @@ export default function AppearancePage() {
     }
 
     // Transition selector
-    const transitions = Object.keys(TRANSITION_LABELS) as TransitionType[]
-    const transLabels = transitions.map(k => TRANSITION_LABELS[k])
-    const transRow = dropdownRow(
-        t("settings.appearance.transition"),
-        t("settings.appearance.transition.desc"),
-        TRANSITION_LABELS[Wallpaper.transition],
-        transLabels,
-        (label) => {
-            const key = transitions.find(k => TRANSITION_LABELS[k] === label)
-            if (key) Wallpaper.previewTransition(key)
-        },
-    )
-    wallGroup.listBox.append(transRow)
+    wallGroup.listBox.append(settingRow("wallpaper.transition"))
 
     // File picker row
     const changeBtn = NidaraButton({
@@ -279,29 +216,6 @@ export default function AppearancePage() {
     // opacities (higher = more opaque) over ONE `GLASS_RANGE`, imported rather than
     // retyped — the bounds used to be five literals here plus a sixth in
     // `clampOpacity`, which is five chances to offer a value the clamp refuses.
-    //
-    // ⚠️ This range used to be [0.05, 0.80] and was documented as "WYSIWYG — no
-    // floor". The floor is now 0.24 and that is not a reversal of the WYSIWYG idea:
-    // 5% glass was never 5% of anything (the compositor was adding 20% of body
-    // under it), so the old bottom of the range was the honest 24% all along. The
-    // reasoning, the numbers and what a floor does NOT buy you are on GLASS_RANGE.
-    const OPACITY_OPTS = { pct: true, icons: [Icons.minus, Icons.plus] as [Gio.FileIcon, Gio.FileIcon] }
-    // Live external-sync so the master and the advanced sliders stay consistent when
-    // either changes the underlying value (guarded against the cb→set→changed→cb loop
-    // by makeSlider, which ignores onExtChange while dragging). safeDisconnect: see #12.
-    //
-    // ⚠️ The four advanced sliders live inside a Revealer that starts CLOSED, so they
-    // are unmapped — and therefore unrealized — until it is opened. Their subscription
-    // is armed on realize, i.e. on the way in: with a hook that did not prime, dragging
-    // the master while "Advanced" was collapsed and then opening it showed four sliders
-    // still at the value they were built with, contradicting the master right above
-    // them. `onTheme` primes, so opening the disclosure re-reads.
-    // The master governs the SAME four surfaces it writes (setGlassOpacity), so it must
-    // read all four — proxying one axis let *only* the overlay slider move it, and a mean
-    // is a number nobody set that also implies the surfaces are uniform when they aren't.
-    // Instead it's an INDETERMINATE control (Figma "Mixed" / macOS dash): when the four
-    // agree it shows that %, when they diverge it reads "—" and mutes, and dragging it
-    // re-unifies them. Built inline (not sliderRow) for that custom, mixed-aware label.
     const glassSurfaces = () => [Theme.barOpacity, Theme.overlayOpacity, Theme.dockOpacity, Theme.windowOpacity]
     const glassUniform = () => { const s = glassSurfaces(); return s.every(v => Math.abs(v - s[0]) < 0.005) }
     const glassRepr = () => Math.max(...glassSurfaces())   // thumb at the peak while mixed
@@ -336,51 +250,16 @@ export default function AppearancePage() {
     masterBox.append(masterValue)
     fcGroup.listBox.append(createRow(t("settings.appearance.glass"), t("settings.appearance.glass.desc"), masterBox))
 
-    // Advanced — per-surface glass. It belongs INSIDE the same "Theme" card, not as a
-    // detached block below it: the toggle is a plain nidara-row (with a disclosure
-    // chevron) and the four sliders reveal as further rows of the very card whose master
-    // they refine. The revealer rides in a passive wrapper row so the slide-down happens
-    // within the card; row-activated on the shared ListBox drives the toggle.
-    //
-    // ⚠️ OPEN BY DEFAULT since 2026-08-24, and that is not a cosmetic preference — it is
-    // what makes the master's "—" READABLE. The shipped defaults stopped being uniform
-    // that day (dock at the floor, everything else at GLASS_DEFAULT), so a fresh install
-    // meets a muted master showing a dash. With the four sliders collapsed underneath,
-    // that dash is a mystery; with them visible it is self-evidently "these four differ,
-    // here they are". Do not close it again without also making the surfaces uniform.
-    //
-    // 📌 INTERIM. The owner's design (2026-08-24) retires the disclosure entirely: the
-    // per-surface sliders become the DEFAULT view, and a checkbox switches to a single
-    // general slider INSTEAD of them — one mode or the other, never both on screen at
-    // once, which is what makes today's master indeterminate in the first place. That
-    // needs a persisted preference (it cannot be derived from whether the values happen
-    // to agree, or dragging one slider into agreement would silently change modes) plus
-    // a new i18n key in all twelve locales, so it is its own change. tech-debt #88.
+    // Advanced — per-surface glass.
     const advChevron = new Gtk.Image({ gicon: Icons.chevronDown, pixel_size: 16, css_classes: ["nd-icon"] })
     const advToggleRow = createRow(t("settings.appearance.advanced"), "", advChevron)
     fcGroup.listBox.append(advToggleRow)
 
     const advInner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
-    advInner.append(sliderRow(
-        t("settings.appearance.bar-opacity"), t("settings.appearance.bar-opacity.desc"),
-        Theme.barOpacity, GLASS_RANGE.min, GLASS_RANGE.max, (v) => Theme.setBarOpacity(v),
-        { ...OPACITY_OPTS, onExtChange: onTheme(() => Theme.barOpacity) },
-    ))
-    advInner.append(sliderRow(
-        t("settings.appearance.overlay-opacity"), t("settings.appearance.overlay-opacity.desc"),
-        Theme.overlayOpacity, GLASS_RANGE.min, GLASS_RANGE.max, (v) => Theme.setOverlayOpacity(v),
-        { ...OPACITY_OPTS, onExtChange: onTheme(() => Theme.overlayOpacity) },
-    ))
-    advInner.append(sliderRow(
-        t("settings.appearance.dock-opacity"), t("settings.appearance.dock-opacity.desc"),
-        Theme.dockOpacity, GLASS_RANGE.min, GLASS_RANGE.max, (v) => Theme.setDockOpacity(v),
-        { ...OPACITY_OPTS, onExtChange: onTheme(() => Theme.dockOpacity) },
-    ))
-    advInner.append(sliderRow(
-        t("settings.appearance.window-glass"), t("settings.appearance.window-glass.desc"),
-        Theme.windowOpacity, GLASS_RANGE.min, GLASS_RANGE.max, (v) => Theme.setWindowOpacity(v),
-        { ...OPACITY_OPTS, onExtChange: onTheme(() => Theme.windowOpacity) },
-    ))
+    advInner.append(settingRow("appearance.barOpacity"))
+    advInner.append(settingRow("appearance.overlayOpacity"))
+    advInner.append(settingRow("appearance.dockOpacity"))
+    advInner.append(settingRow("appearance.windowOpacity"))
     const advRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN, reveal_child: true })
     advRevealer.set_child(advInner)
     const advRevealerRow = new Gtk.ListBoxRow({ activatable: false, selectable: false, css_classes: ["settings-adv-revealer-row"] })
@@ -396,52 +275,13 @@ export default function AppearancePage() {
     page.append(fcGroup.box)
 
     // 4. Night Light
-    //
-    // ⚠️ Every control here has a TWIN in the Control Center: the night-light widget's
-    // detail panel (`widgets/night-light.ts`) is the same switch, the same temperature
-    // slider and the same schedule over the same NightLightManager. The twin re-read
-    // and this page did not — measured 2026-08-16: with Settings open on this page,
-    // `setConfig nightlight.temperature 3200` left the slider reading 4910 K, while the
-    // switch one row above followed `nightlight.enabled` in the same tick. Whoever
-    // touched the slider next would then have written the stale number back.
     const nlGroup = listGroup(t("settings.appearance.group.night-light"))
 
-    const onNightLight = <T,>(read: () => T) => (apply: (v: T) => void) => {
-        apply(read())
-        const id = NightLight.connect("changed", () => apply(read()))
-        return () => safeDisconnect(NightLight, id)
-    }
-
-    // Manual toggle — insensitive when schedule controls it
-    const nlSwitch = new Gtk.Switch({ active: NightLight.enabled, valign: Gtk.Align.CENTER, sensitive: !NightLight.scheduleEnabled })
-    nlSwitch.connect("state-set", (_: any, v: boolean) => { NightLight.setEnabled(v); return false })
-    nlGroup.listBox.append(createRow(
-        t("settings.appearance.night-light"),
-        t("settings.appearance.night-light.desc"),
-        nlSwitch,
-    ))
-
-    nlGroup.listBox.append(sliderRow(
-        t("settings.appearance.night-light-temp"),
-        t("settings.appearance.night-light-temp.desc"),
-        NightLight.temperature, 2700, 6500,
-        (v) => NightLight.setTemperature(v),
-        { unit: "K", icons: [Icons.minus, Icons.plus], onExtChange: onNightLight(() => NightLight.temperature) },
-    ))
-
-    // Schedule toggle
-    const schedSwitch = new Gtk.Switch({ active: NightLight.scheduleEnabled, valign: Gtk.Align.CENTER })
-    schedSwitch.connect("state-set", (_: any, v: boolean) => {
-        NightLight.setScheduleEnabled(v)
-        nlSwitch.sensitive = !v
-        schedTimeRow.visible = v
-        return false
-    })
-    nlGroup.listBox.append(createRow(
-        t("settings.appearance.night-light-schedule"),
-        t("settings.appearance.night-light-schedule.desc"),
-        schedSwitch,
-    ))
+    const nlRow = settingRow("nightlight.enabled")
+    nlGroup.listBox.append(nlRow)
+    nlGroup.listBox.append(settingRow("nightlight.temperature"))
+    const schedRow = settingRow("nightlight.scheduleEnabled")
+    nlGroup.listBox.append(schedRow)
 
     // Time pickers helper
     const timePicker = (initial: string, onChange: (t: string) => void) => {
@@ -466,11 +306,6 @@ export default function AppearancePage() {
         const hSpin = makeSpin(0, 23, safeH)
         const mSpin = makeSpin(0, 59, safeM)
 
-        // `syncing` is not belt-and-braces: writing a spin to DISPLAY a value fires
-        // `value-changed`, which would commit it straight back — the same "showing a
-        // value is the same thing as setting it" that had opening Settings rewrite the
-        // file the login reads (#154). Here it would re-save the schedule on every
-        // refresh of a page that refreshes itself.
         let syncing = false
         const emit = () => {
             if (syncing) return
@@ -516,12 +351,8 @@ export default function AppearancePage() {
     schedTimeRow.visible = NightLight.scheduleEnabled
     nlGroup.listBox.append(schedTimeRow)
 
-    // Keep manual toggle in sync when schedule fires — and when the schedule fired
-    // while the user was on another page (this one is cached, so it must re-read).
     const syncNightLight = () => {
-        nlSwitch.active    = NightLight.enabled
-        nlSwitch.sensitive = !NightLight.scheduleEnabled
-        schedSwitch.active = NightLight.scheduleEnabled
+        nlRow.sensitive = !NightLight.scheduleEnabled
         schedTimeRow.visible = NightLight.scheduleEnabled
         from.sync(NightLight.scheduleFrom)
         to.sync(NightLight.scheduleTo)
@@ -536,25 +367,9 @@ export default function AppearancePage() {
 
     // 5. System Assets
     const assetsGroup = listGroup(t("settings.appearance.group.resources"))
-    assetsGroup.listBox.append(dropdownRow(
-        t("settings.appearance.gtk-theme"), t("settings.appearance.gtk-theme.desc"),
-        Theme.themeFamily, Theme.getAvailableGtkThemes(), (v) => Theme.setGtkTheme(v),
-        onTheme(() => Theme.themeFamily),
-    ))
-    assetsGroup.listBox.append(dropdownRow(
-        t("settings.appearance.icons"), t("settings.appearance.icons.desc"),
-        Theme.iconTheme, Theme.getAvailableIconThemes(), (v) => Theme.setIconTheme(v),
-        onTheme(() => Theme.iconTheme),
-    ))
-    // Cursor THEME only. Its SIZE used to sit right here as a second dropdown and
-    // moved to Accessibility on 2026-08-16 — one setting, one control, and pointer
-    // size is an accessibility affordance in GNOME and macOS alike. What a cursor
-    // looks like is appearance; how big it needs to be to be findable is not.
-    assetsGroup.listBox.append(dropdownRow(
-        t("settings.appearance.cursor"), t("settings.appearance.cursor.desc"),
-        Theme.cursorTheme, Theme.getAvailableCursorThemes(), (v) => Theme.setCursorTheme(v),
-        onTheme(() => Theme.cursorTheme),
-    ))
+    assetsGroup.listBox.append(settingRow("appearance.gtkTheme"))
+    assetsGroup.listBox.append(settingRow("appearance.iconTheme"))
+    assetsGroup.listBox.append(settingRow("appearance.cursorTheme"))
     page.append(assetsGroup.box)
 
     // 6. Fonts
@@ -583,18 +398,11 @@ export default function AppearancePage() {
         t("settings.appearance.mono-font.desc"),
         monoFontBtn,
     ))
-    // Text scaling lives in Accessibility → Vision (single source); not duplicated here.
 
     page.append(fontsGroup.box)
 
-    // State sync for the two controls that are not rows with their own hook: the
-    // dark-mode switch and the accent swatches. Through `bindWhileRealized` like
-    // everything else on the page, so it re-reads on the way back in rather than
-    // relying on having been listening at the moment something changed.
+    // State sync for accent swatches
     const updateThemeState = () => {
-        syncingDark = true
-        darkSwitch.active = Theme.isDark
-        syncingDark = false
         const currentAccent = Theme.accentColor
         Object.keys(accentButtons).forEach(key => {
             accentButtons[key].remove_css_class("selected")

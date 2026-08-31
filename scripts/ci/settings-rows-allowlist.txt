@@ -22,28 +22,15 @@ Ai.tsx:settings.ai.allow-computer-use # S3b pending migration
 Ai.tsx:settings.ai.allow-computer-control # S3b pending migration
 Ai.tsx:settings.ai.allow-mcp # S3b pending migration
 
-# Appearance.tsx (S3a)
-Appearance.tsx:settings.appearance.shell-appearance # S3a pending migration
-Appearance.tsx:settings.appearance.transition # S3a pending migration
-Appearance.tsx:settings.appearance.bar-opacity # S3a pending migration
-Appearance.tsx:settings.appearance.overlay-opacity # S3a pending migration
-Appearance.tsx:settings.appearance.dock-opacity # S3a pending migration
-Appearance.tsx:settings.appearance.window-glass # S3a pending migration
-Appearance.tsx:settings.appearance.night-light-temp # S3a pending migration
-Appearance.tsx:settings.appearance.gtk-theme # S3a pending migration
-Appearance.tsx:settings.appearance.icons # S3a pending migration
-Appearance.tsx:settings.appearance.cursor # S3a pending migration
-
 # Bar.tsx (S3b)
 Bar.tsx:settings.bar.app-title # S3b pending migration
 
-# Dock.tsx (S3a)
-Dock.tsx:settings.dock.position # S3a pending migration
-Dock.tsx:settings.dock.bottom-margin # S3a pending migration
-Dock.tsx:settings.dock.magnification # S3a pending migration
-Dock.tsx:settings.dock.max-size # S3a pending migration
-Dock.tsx:settings.dock.indicators # S3a pending migration
-Dock.tsx:settings.dock.hide-delay # S3a pending migration
+# Legitimate per-object switches (not scalar settings - see #341)
+Autostart.tsx:gtk-switch # per-app autostart toggle
+Bluetooth.tsx:gtk-switch # adapter power toggle
+Network.tsx:gtk-switch # wifi adapter toggle
+Users.tsx:gtk-switch # user admin toggle
+Widgets.tsx:gtk-switch # per-widget placement toggle
 
 # Gaming.tsx (S3b)
 Gaming.tsx:settings.appearance.transition # S3b pending migration

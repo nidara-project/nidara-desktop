@@ -11,8 +11,9 @@
 import { registerConfig } from "./core/ConfigRegistry"
 import { AGENT_PROVIDERS } from "./core/AgentProviders"
 import Theme from "./core/ThemeManager"
-import { ACCENT_PALETTE, type AccentKey, type ShellAppearance } from "./core/NidaraTheme"
+import { ACCENT_PALETTE, GLASS_RANGE, type AccentKey, type ShellAppearance } from "./core/NidaraTheme"
 import NightLight from "./core/NightLightManager"
+import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "./core/WallpaperManager"
 import notifConfig from "./core/NotifConfig"
 import { dontDisturb, setDontDisturb } from "./core/NotifService"
 import { reduceMotion, setReduceMotion } from "./core/ReduceMotion"
@@ -21,11 +22,12 @@ import recordingConfig, {
 } from "./core/RecordingConfig"
 import Gaming, { type WallpaperMode } from "./core/GamingManager"
 import agentConfig from "./core/AgentConfig"
-import { dockSettings, updateDockSettings, type DockPosition } from "./surfaces/dock/state"
+import { dockSettings, updateDockSettings, onDockSettingsChanged, type DockPosition } from "./surfaces/dock/state"
 import { barSettings, updateBarSettings } from "./surfaces/bar/barState"
 import inputConfig from "./core/InputConfig"
 import Icons from "./core/Icons"
 import { safeDisconnect } from "./core/signals"
+import { t } from "./core/i18n"
 
 const KEYBOARD_LAYOUTS: [string, string, string, string][] = [
     ["us",           "English (US)",              "us",    ""],
@@ -75,13 +77,40 @@ const onInputCfg = (read: () => any) => (apply: (v: any) => void) => {
     return () => safeDisconnect(inputConfig, id)
 }
 
+const onDockCfg = (read: () => any) => (apply: (v: any) => void) => {
+    apply(read())
+    return onDockSettingsChanged(() => apply(read()))
+}
+
+const onThemeCfg = (read: () => any) => (apply: (v: any) => void) => {
+    apply(read())
+    const id = Theme.connect("changed", () => apply(read()))
+    return () => safeDisconnect(Theme, id)
+}
+
+const onWallpaperCfg = (read: () => any) => (apply: (v: any) => void) => {
+    apply(read())
+    const id = Wallpaper.connect("changed", () => apply(read()))
+    return () => safeDisconnect(Wallpaper, id)
+}
+
+const onNightLightCfg = (read: () => any) => (apply: (v: any) => void) => {
+    apply(read())
+    const id = NightLight.connect("changed", () => apply(read()))
+    return () => safeDisconnect(NightLight, id)
+}
+
 export function registerConfigEntries() {
     // ── Appearance ────────────────────────────────────────────────────────
     registerConfig("appearance.darkMode", {
         desc: "Dark mode (false = light). Propagates to GTK apps and the portal.",
         type: "boolean",
         get: () => Theme.isDark,
-        set: v => void Theme.setDarkMode(v as boolean),
+        set: v => Theme.setDarkMode(v as boolean),
+        subscribe: onThemeCfg(() => Theme.isDark),
+        ui: {
+            i18n: "settings.appearance.dark-mode",
+        },
     })
     registerConfig("appearance.accent", {
         desc: "Accent color used for active/selected state across the shell and libadwaita apps.",
@@ -96,6 +125,113 @@ export function registerConfigEntries() {
         enum: ["system", "dark", "light"],
         get: () => Theme.shellAppearance,
         set: v => void Theme.setShellAppearance(v as ShellAppearance),
+        subscribe: onThemeCfg(() => Theme.shellAppearance),
+        ui: {
+            i18n: "settings.appearance.shell-appearance",
+            optI18n: k => t(`settings.appearance.shell-appearance.${k}` as any),
+        },
+    })
+    registerConfig("appearance.barOpacity", {
+        desc: "Bar glass opacity (0.24 to 0.80).",
+        type: "number",
+        min: GLASS_RANGE.min,
+        max: GLASS_RANGE.max,
+        get: () => Theme.barOpacity,
+        set: v => void Theme.setBarOpacity(Number(v)),
+        subscribe: onThemeCfg(() => Theme.barOpacity),
+        ui: {
+            i18n: "settings.appearance.bar-opacity",
+            slider: { pct: true, icons: [Icons.minus, Icons.plus] },
+        },
+    })
+    registerConfig("appearance.overlayOpacity", {
+        desc: "Control Center / Notification Center overlay glass opacity (0.24 to 0.80).",
+        type: "number",
+        min: GLASS_RANGE.min,
+        max: GLASS_RANGE.max,
+        get: () => Theme.overlayOpacity,
+        set: v => void Theme.setOverlayOpacity(Number(v)),
+        subscribe: onThemeCfg(() => Theme.overlayOpacity),
+        ui: {
+            i18n: "settings.appearance.overlay-opacity",
+            slider: { pct: true, icons: [Icons.minus, Icons.plus] },
+        },
+    })
+    registerConfig("appearance.dockOpacity", {
+        desc: "Dock glass opacity (0.24 to 0.80).",
+        type: "number",
+        min: GLASS_RANGE.min,
+        max: GLASS_RANGE.max,
+        get: () => Theme.dockOpacity,
+        set: v => void Theme.setDockOpacity(Number(v)),
+        subscribe: onThemeCfg(() => Theme.dockOpacity),
+        ui: {
+            i18n: "settings.appearance.dock-opacity",
+            slider: { pct: true, icons: [Icons.minus, Icons.plus] },
+        },
+    })
+    registerConfig("appearance.windowOpacity", {
+        desc: "Window glass opacity (0.24 to 0.80).",
+        type: "number",
+        min: GLASS_RANGE.min,
+        max: GLASS_RANGE.max,
+        get: () => Theme.windowOpacity,
+        set: v => void Theme.setWindowOpacity(Number(v)),
+        subscribe: onThemeCfg(() => Theme.windowOpacity),
+        ui: {
+            i18n: "settings.appearance.window-glass",
+            slider: { pct: true, icons: [Icons.minus, Icons.plus] },
+        },
+    })
+    registerConfig("appearance.gtkTheme", {
+        desc: "GTK application theme family.",
+        type: "enum",
+        enum: Theme.getAvailableGtkThemes(),
+        get: () => Theme.themeFamily,
+        set: v => void Theme.setGtkTheme(String(v)),
+        subscribe: onThemeCfg(() => Theme.themeFamily),
+        ui: {
+            i18n: "settings.appearance.gtk-theme",
+            optI18n: (v) => v,
+        },
+    })
+    registerConfig("appearance.iconTheme", {
+        desc: "System icon theme.",
+        type: "enum",
+        enum: Theme.getAvailableIconThemes(),
+        get: () => Theme.iconTheme,
+        set: v => void Theme.setIconTheme(String(v)),
+        subscribe: onThemeCfg(() => Theme.iconTheme),
+        ui: {
+            i18n: "settings.appearance.icons",
+            optI18n: (v) => v,
+        },
+    })
+    registerConfig("appearance.cursorTheme", {
+        desc: "System cursor theme.",
+        type: "enum",
+        enum: Theme.getAvailableCursorThemes(),
+        get: () => Theme.cursorTheme,
+        set: v => void Theme.setCursorTheme(String(v)),
+        subscribe: onThemeCfg(() => Theme.cursorTheme),
+        ui: {
+            i18n: "settings.appearance.cursor",
+            optI18n: (v) => v,
+        },
+    })
+
+    // ── Wallpaper ─────────────────────────────────────────────────────────
+    registerConfig("wallpaper.transition", {
+        desc: "Transition effect when changing wallpapers.",
+        type: "enum",
+        enum: Object.keys(TRANSITION_LABELS),
+        get: () => Wallpaper.transition,
+        set: v => void Wallpaper.previewTransition(v as TransitionType),
+        subscribe: onWallpaperCfg(() => Wallpaper.transition),
+        ui: {
+            i18n: "settings.appearance.transition",
+            optI18n: k => TRANSITION_LABELS[k as TransitionType] ?? k,
+        },
     })
 
     // ── Bar ───────────────────────────────────────────────────────────────
@@ -113,6 +249,11 @@ export function registerConfigEntries() {
         enum: ["bottom", "left", "right"],
         get: () => dockSettings.position,
         set: v => updateDockSettings({ position: v as DockPosition }),
+        subscribe: onDockCfg(() => dockSettings.position),
+        ui: {
+            i18n: "settings.dock.position",
+            optI18n: v => t(`settings.dock.opt.${v}` as any),
+        },
     })
     registerConfig("dock.iconSize", {
         desc: "Base dock icon size in pixels.",
@@ -121,12 +262,34 @@ export function registerConfigEntries() {
         max: 96,
         get: () => dockSettings.iconSize,
         set: v => updateDockSettings({ iconSize: Math.round(v as number) }),
+        subscribe: onDockCfg(() => dockSettings.iconSize),
+        ui: {
+            i18n: "settings.dock.icon-size",
+            slider: { unit: "px" },
+        },
+    })
+    registerConfig("dock.screenGap", {
+        desc: "Distance in pixels between the dock and the screen edge.",
+        type: "number",
+        min: 4,
+        max: 32,
+        get: () => dockSettings.screenGap,
+        set: v => updateDockSettings({ screenGap: Math.round(v as number) }),
+        subscribe: onDockCfg(() => dockSettings.screenGap),
+        ui: {
+            i18n: "settings.dock.bottom-margin",
+            slider: { unit: "px" },
+        },
     })
     registerConfig("dock.magnification", {
         desc: "Icon magnification on hover.",
         type: "boolean",
         get: () => dockSettings.magnification,
         set: v => updateDockSettings({ magnification: v as boolean }),
+        subscribe: onDockCfg(() => dockSettings.magnification),
+        ui: {
+            i18n: "settings.dock.magnification",
+        },
     })
     registerConfig("dock.maxIconSize", {
         desc: "Peak icon size in pixels at full magnification.",
@@ -135,18 +298,44 @@ export function registerConfigEntries() {
         max: 128,
         get: () => dockSettings.maxIconSize,
         set: v => updateDockSettings({ maxIconSize: Math.round(v as number) }),
+        subscribe: onDockCfg(() => dockSettings.maxIconSize),
+        ui: {
+            i18n: "settings.dock.max-size",
+            slider: { unit: "px" },
+        },
     })
     registerConfig("dock.autoHide", {
         desc: "Hide the dock until the pointer reaches its screen edge.",
         type: "boolean",
         get: () => dockSettings.autoHide,
         set: v => updateDockSettings({ autoHide: v as boolean }),
+        subscribe: onDockCfg(() => dockSettings.autoHide),
+        ui: {
+            i18n: "settings.dock.autohide",
+        },
     })
     registerConfig("dock.indicators", {
         desc: "Show running-app indicator dots under dock icons.",
         type: "boolean",
         get: () => dockSettings.showIndicators,
         set: v => updateDockSettings({ showIndicators: v as boolean }),
+        subscribe: onDockCfg(() => dockSettings.showIndicators),
+        ui: {
+            i18n: "settings.dock.indicators",
+        },
+    })
+    registerConfig("dock.hideDelay", {
+        desc: "Delay in milliseconds before auto-hiding the dock.",
+        type: "number",
+        min: 0,
+        max: 2000,
+        get: () => dockSettings.hideDelay,
+        set: v => updateDockSettings({ hideDelay: Math.round(v as number) }),
+        subscribe: onDockCfg(() => dockSettings.hideDelay),
+        ui: {
+            i18n: "settings.dock.hide-delay",
+            slider: { unit: "ms" },
+        },
     })
 
     // ── Input ─────────────────────────────────────────────────────────────
@@ -272,6 +461,10 @@ export function registerConfigEntries() {
         type: "boolean",
         get: () => NightLight.enabled,
         set: v => NightLight.setEnabled(v as boolean),
+        subscribe: onNightLightCfg(() => NightLight.enabled),
+        ui: {
+            i18n: "settings.appearance.night-light",
+        },
     })
     registerConfig("nightlight.temperature", {
         desc: "Night light color temperature in Kelvin (lower = warmer).",
@@ -280,6 +473,21 @@ export function registerConfigEntries() {
         max: 6500,
         get: () => NightLight.temperature,
         set: v => NightLight.setTemperature(v as number),
+        subscribe: onNightLightCfg(() => NightLight.temperature),
+        ui: {
+            i18n: "settings.appearance.night-light-temp",
+            slider: { unit: "K", icons: [Icons.minus, Icons.plus] },
+        },
+    })
+    registerConfig("nightlight.scheduleEnabled", {
+        desc: "Enable automatic night light schedule by time.",
+        type: "boolean",
+        get: () => NightLight.scheduleEnabled,
+        set: v => NightLight.setScheduleEnabled(v as boolean),
+        subscribe: onNightLightCfg(() => NightLight.scheduleEnabled),
+        ui: {
+            i18n: "settings.appearance.night-light-schedule",
+        },
     })
 
     // ── Notifications ─────────────────────────────────────────────────────
