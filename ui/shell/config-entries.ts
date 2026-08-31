@@ -22,6 +22,8 @@ import recordingConfig, {
 import Gaming, { type WallpaperMode } from "./core/GamingManager"
 import agentConfig from "./core/AgentConfig"
 import { dockSettings, updateDockSettings, type DockPosition } from "./surfaces/dock/state"
+import { barSettings, updateBarSettings } from "./surfaces/bar/barState"
+import inputConfig from "./core/InputConfig"
 
 export function registerConfigEntries() {
     // ── Appearance ────────────────────────────────────────────────────────
@@ -44,6 +46,14 @@ export function registerConfigEntries() {
         enum: ["system", "dark", "light"],
         get: () => Theme.shellAppearance,
         set: v => void Theme.setShellAppearance(v as ShellAppearance),
+    })
+
+    // ── Bar ───────────────────────────────────────────────────────────────
+    registerConfig("bar.appTitle", {
+        desc: "Show the active window title in the top bar.",
+        type: "boolean",
+        get: () => barSettings.showAppTitle,
+        set: v => updateBarSettings({ showAppTitle: v as boolean }),
     })
 
     // ── Dock ──────────────────────────────────────────────────────────────
@@ -81,6 +91,38 @@ export function registerConfigEntries() {
         type: "boolean",
         get: () => dockSettings.autoHide,
         set: v => updateDockSettings({ autoHide: v as boolean }),
+    })
+    registerConfig("dock.indicators", {
+        desc: "Show running-app indicator dots under dock icons.",
+        type: "boolean",
+        get: () => dockSettings.showIndicators,
+        set: v => updateDockSettings({ showIndicators: v as boolean }),
+    })
+
+    // ── Input ─────────────────────────────────────────────────────────────
+    registerConfig("input.mouse.natural", {
+        desc: "Invert mouse scroll direction (natural scrolling).",
+        type: "boolean",
+        get: () => inputConfig.mouseNaturalScroll,
+        set: v => inputConfig.setMouseNaturalScroll(v as boolean),
+    })
+    registerConfig("input.touchpad.natural", {
+        desc: "Invert touchpad scroll direction (natural scrolling).",
+        type: "boolean",
+        get: () => inputConfig.touchpadNaturalScroll,
+        set: v => inputConfig.setTouchpadNaturalScroll(v as boolean),
+    })
+    registerConfig("input.touchpad.tap", {
+        desc: "Tap touchpad to click.",
+        type: "boolean",
+        get: () => inputConfig.touchpadTap,
+        set: v => inputConfig.setTouchpadTap(v as boolean),
+    })
+    registerConfig("input.keyboard.numlock", {
+        desc: "Enable NumLock on boot.",
+        type: "boolean",
+        get: () => inputConfig.numlockOnBoot,
+        set: v => inputConfig.setNumlockOnBoot(v as boolean),
     })
 
     // ── Night light ───────────────────────────────────────────────────────
