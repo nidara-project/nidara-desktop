@@ -130,6 +130,27 @@ for (const file of pageFiles) {
             }
         }
 
+        // Check manual Gtk.Switch constructions in settings pages
+        if (line.includes("new Gtk.Switch")) {
+            const candidateKeys = [
+                `${file}:gtk-switch`,
+                `${file}:${lineNum}`,
+            ]
+            let matched = false
+            for (const ck of candidateKeys) {
+                if (allowlist.has(ck)) {
+                    allowlist.get(ck).used = true
+                    matched = true
+                    break
+                }
+            }
+            if (!matched) {
+                errors.push(
+                    `  FAIL  ${file}:${lineNum}: manual 'new Gtk.Switch()' is not permitted in Settings pages. Use settingRow() or add per-object exception to ${ALLOWLIST_PATH} (see #341).`
+                )
+            }
+        }
+
         // Check unmigrated toggleRow, dropdownRow, sliderRow calls
         const rowMatch = line.match(/\b(toggleRow|dropdownRow|sliderRow)\s*\(/)
         if (rowMatch) {

@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { dockSettings, updateDockSettings, onDockSettingsChanged, type DockPosition } from "../../dock/state"
-import { listGroup, createRow, toggleRow, sliderRow, presetRow, dropdownRow, pageBox, bindWhileRealized } from "../SettingsHelpers"
+import { dockSettings, updateDockSettings, onDockSettingsChanged } from "../../dock/state"
+import { listGroup, presetRow, pageBox, bindWhileRealized, settingRow } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 
 export default function DockPage() {
@@ -8,21 +8,7 @@ export default function DockPage() {
 
     // 0. Position
     const posGroup = listGroup(t("settings.dock.group.position"), t("settings.dock.side-autohide-note"))
-    const posOptions: { label: string; value: DockPosition }[] = [
-        { label: t("settings.dock.opt.bottom"),  value: 'bottom' },
-        { label: t("settings.dock.opt.left"), value: 'left'   },
-        { label: t("settings.dock.opt.right"),   value: 'right'  },
-    ]
-    posGroup.listBox.append(dropdownRow(
-        t("settings.dock.position"), t("settings.dock.position.desc"),
-        posOptions.find(o => o.value === dockSettings.position)?.label ?? t("settings.dock.opt.bottom"),
-        posOptions.map(o => o.label),
-        (label) => {
-            const opt = posOptions.find(o => o.label === label)
-            if (!opt) return
-            updateDockSettings({ position: opt.value })
-        },
-    ))
+    posGroup.listBox.append(settingRow("dock.position"))
 
     // The kit's group footer, not a hand-rolled label — it only has to be TOLD
     // when to show, because this note is true of the side positions only.
@@ -36,69 +22,29 @@ export default function DockPage() {
         [32, 48, 64, 80, 96], dockSettings.iconSize, "px",
         (v) => updateDockSettings({ iconSize: v }),
     ))
-    geoGroup.listBox.append(sliderRow(
-        t("settings.dock.bottom-margin"), t("settings.dock.bottom-margin.desc"),
-        dockSettings.screenGap, 4, 32,
-        (v) => updateDockSettings({ screenGap: v }),
-        { unit: "px" },
-    ))
+    geoGroup.listBox.append(settingRow("dock.screenGap"))
     page.append(geoGroup.box)
 
     // 2. Effects
     const effectsGroup = listGroup(t("settings.dock.group.effects"))
-    effectsGroup.listBox.append(toggleRow(
-        t("settings.dock.magnification"), t("settings.dock.magnification.desc"),
-        dockSettings.magnification,
-        (v) => updateDockSettings({ magnification: v }),
-    ))
-    effectsGroup.listBox.append(sliderRow(
-        t("settings.dock.max-size"), t("settings.dock.max-size.desc"),
-        dockSettings.maxIconSize, 64, 128,
-        (v) => updateDockSettings({ maxIconSize: v }),
-        { unit: "px" },
-    ))
+    effectsGroup.listBox.append(settingRow("dock.magnification"))
+    effectsGroup.listBox.append(settingRow("dock.maxIconSize"))
     page.append(effectsGroup.box)
 
     // 3. Behavior
     const behGroup = listGroup(t("settings.dock.group.behavior"))
-    behGroup.listBox.append(toggleRow(
-        t("settings.dock.indicators"), t("settings.dock.indicators.desc"),
-        dockSettings.showIndicators,
-        (v) => updateDockSettings({ showIndicators: v }),
-    ))
+    behGroup.listBox.append(settingRow("dock.indicators"))
+    behGroup.listBox.append(settingRow("dock.autoHide"))
+    behGroup.listBox.append(settingRow("dock.hideDelay"))
 
-    // Auto-hide — built manually so we can update it reactively when position changes
-    const autoHideSwitch = new Gtk.Switch({ active: dockSettings.autoHide, valign: Gtk.Align.CENTER })
-    const autoHideSubtitle = new Gtk.Label({
-        label: t("settings.dock.autohide.desc"),
-        css_classes: ["nidara-row-subtitle"],
-        halign: Gtk.Align.START,
-        ellipsize: 3,
-    })
-    autoHideSwitch.connect("state-set", (_: any, state: boolean) => {
-        updateDockSettings({ autoHide: state })
-        return false
-    })
-    const autoHideRow = createRow(t("settings.dock.autohide"), t("settings.dock.autohide.desc"), autoHideSwitch)
-    behGroup.listBox.append(autoHideRow)
-
-    const syncAutoHide = () => {
+    const syncVerticalNote = () => {
         const vertical = dockSettings.position === 'left' || dockSettings.position === 'right'
-        autoHideSwitch.active = dockSettings.autoHide
         verticalNote.visible = vertical
     }
     bindWhileRealized(page, () => {
-        syncAutoHide()
-        return onDockSettingsChanged(syncAutoHide)
+        syncVerticalNote()
+        return onDockSettingsChanged(syncVerticalNote)
     })
-
-    const delaySlider = sliderRow(
-        t("settings.dock.hide-delay"), t("settings.dock.hide-delay.desc"),
-        dockSettings.hideDelay, 0, 2000,
-        (v) => updateDockSettings({ hideDelay: Math.round(v) }),
-        { unit: "ms" },
-    )
-    behGroup.listBox.append(delaySlider)
 
     page.append(behGroup.box)
 
