@@ -228,7 +228,12 @@ class AppService {
             if (n.startsWith("/")) continue
             const overlay = this.getIconOverridePath(this.iconOverlayKey(n))
             if (overlay) return overlay
-            if (theme.has_icon(n)) return n
+            if (theme.has_icon(n)) {
+                // The other exit that hands back a themed NAME, so it needs the same
+                // guard as getCanonicalName's — see svgCarriesText.
+                const p = theme.lookup_icon(n, null, 48, 1, Gtk.TextDirection.LTR, 0)?.get_file()?.get_path()
+                return this.svgCarriesText(p) ? p! : n
+            }
         }
         // Pass 2: full per-name fallback chain (hicolor, pixmaps), and
         // absolute-path entries as shipped-asset fallbacks.
@@ -244,6 +249,47 @@ class AppService {
     private iconOverlayKey(n: string): string {
         if (!n.startsWith("/")) return n
         return n.split("/").pop()!.replace(/\.(svg|png|xpm|jpg)$/i, "")
+    }
+
+    /** tech-debt #90: handing GTK a themed icon NAME is what crashes the shell.
+     *
+     *  `Gtk.Image` + `icon_name` goes through GtkIconHelper, whose
+     *  `invalidate_for_change()` preloads once the CSS size settles — and preload
+     *  means `GTK_ICON_LOOKUP_PRELOAD`, which is the ONE flag that sends the load to
+     *  a GTask worker. If the file behind the name is an SVG containing `<text>`,
+     *  GTK 4.22's own SVG renderer rasterises that text through Pango on that
+     *  worker while the main thread is also in Pango, and Pango's font map and
+     *  Cairo's scaled-font cache are not thread-safe. It killed the whole shell
+     *  twice (cores 2026-08-24 and 2026-08-29, the second one 101 s after boot).
+     *
+     *  A PATH does not have that problem: callers turn a path into a `Gio.FileIcon`,
+     *  and `gtk_icon_theme_lookup_by_gicon()` answers a GFileIcon with
+     *  `gtk_icon_paintable_new_for_file()`, which never reaches the worker. That is
+     *  measured, not assumed — `scripts/dev/icon-text-race.js` in `MODE=file` drives
+     *  376k glyph draws through this exact path on ONE thread and survives, while
+     *  `MODE=name` crashes 5 runs out of 6.
+     *
+     *  ⚠️ So this diverts ONLY the icons that carry text, and every other icon keeps
+     *  its name and keeps the preload. Dropping the name path wholesale would move
+     *  dozens of icon loads back onto the main thread at grid-open, which is the
+     *  hitch that flag exists to hide.
+     *
+     *  Keyed by PATH rather than by icon name on purpose: a path means the same file
+     *  whatever the active icon theme is, so this cache cannot go stale when
+     *  `ThemeManager` switches themes — the name → path step is redone by the lookup
+     *  that was happening anyway. */
+    private svgTextCache = new Map<string, boolean>()
+    private svgCarriesText(path: string | null | undefined): boolean {
+        if (!path || !path.endsWith(".svg")) return false
+        const cached = this.svgTextCache.get(path)
+        if (cached !== undefined) return cached
+        let hit = false
+        try {
+            const [ok, bytes] = GLib.file_get_contents(path)
+            hit = ok && new TextDecoder().decode(bytes).includes("<text")
+        } catch (e) { /* unreadable icon: treat as safe and let GTK deal with it */ }
+        this.svgTextCache.set(path, hit)
+        return hit
     }
 
     private getCanonicalName(n: string): string | null {
@@ -276,6 +322,8 @@ class AppService {
             const path = paintable?.get_file()?.get_path()
             // Pixmap icons: return the file path directly so callers can render them at any size
             if (path?.includes("/usr/share/pixmaps")) return path
+            // An SVG carrying <text> must not travel as a NAME — see svgCarriesText.
+            if (this.svgCarriesText(path)) return path!
             // Themed icon: return the name and let GTK resolve at whatever size is needed
             return n
         }

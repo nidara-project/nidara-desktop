@@ -1137,14 +1137,29 @@ a controlled cause, three cores and a refuted workaround. `scripts/dev/icon-text
 to `MODE=name` and keeps `MODE=file` as the documented negative control, so nobody rediscovers the
 blind arm.
 
-**If the wait becomes unacceptable, the local fix is known and narrow** — and it is a decision, not
-a task to pick up quietly. Since the door is `icon_name` on a `Gtk.Image`, resolving the icon
-ourselves (`lookup_icon(..., flags 0)`, which stays on the main thread — the `MODE=file` arm proved
-that path does 376k glyph draws on one thread) and assigning the resulting paintable closes it
-without pre-rasterising anything. The costs to weigh first: a paintable is frozen, so it has to be
-re-resolved when `ThemeManager` changes the icon theme, and dropping PRELOAD moves dozens of icon
-loads back onto the main thread at grid-open — which is the very hitch that flag exists to hide,
-and which nobody has measured here.
+✅ **MITIGATED LOCALLY 2026-08-31 (owner's call, premise having changed): `AppService.svgCarriesText()`.**
+The door is a themed NAME, so the two exits that hand one back — `getCanonicalName()`'s themed-icon
+exit and `resolveIconChain()`'s pass 1 — now return the FILE PATH instead when the file behind the
+name is an SVG containing `<text>`. Callers already turn a path into a `Gio.FileIcon` (the
+`/usr/share/pixmaps` exit next to it has done exactly that for months), and a GFileIcon cannot
+reach the worker. **The proof that the mitigation works is the probe's own negative control**:
+`MODE=file` drives 376k glyph draws down this path on ONE thread and survives, `MODE=name` crashes
+5 of 6.
+
+🔑 **It is narrow by measurement, not by hope.** Of the **96,723** SVGs in every installed icon
+theme, **2** contain `<text>` — both in hicolor — and the active theme (Papirus-Dark) has none. Ran
+against real GTK: `rofi` resolves to the hicolor file and diverts; `org.gnome.Screenshot` resolves
+to Papirus's own copy, which has no text, and does NOT divert; five ordinary icons do not divert.
+So exactly ONE icon on this machine changes route, every other icon keeps its name and keeps its
+preload, and the grid-open hitch that PRELOAD exists to hide is not traded away.
+
+⚠️ The check that would have made this silently dead was `get_file()` returning null for icons
+served out of a theme cache. It does not — verified for hicolor and Papirus paths alike before the
+guard was trusted. The cache is keyed by PATH, not by icon name, so switching icon themes cannot
+leave it stale.
+
+⛔ This does NOT close the upstream bug and must not be read as closing it. GTK still starts a
+thread it is not safe to start, for any application, and 8295 is still the place that gets fixed.
 
 Recurrence, from `coredumpctl`: gjs SIGSEGVs on 08-05, 08-17 (x3), 08-22 and 08-24. The 08-22 one
 crashed in `gsk_render_replay_filter_node`, a different frame — so this is a class of rare native
