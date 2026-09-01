@@ -49,6 +49,7 @@
 import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
+import { proxy, call, onProps, onProxySignal } from "./dbus"
 
 const BUS_NAMESPACE = "org.mpris.MediaPlayer2"
 const OBJECT_PATH = "/org/mpris/MediaPlayer2"
@@ -155,6 +156,7 @@ export class MprisPlayer extends GObject.Object {
     private _lastSyncUs = 0
     private _syncing = false
     private _closed = false
+    private _disposers: Array<() => void> = []
 
     constructor(conn: any, busName: string) {
         super()
@@ -167,33 +169,30 @@ export class MprisPlayer extends GObject.Object {
         const flags = Gio.DBusProxyFlags.DO_NOT_AUTO_START
             | Gio.DBusProxyFlags.GET_INVALIDATED_PROPERTIES
 
-        const mk = (iface: string) => new Promise<any>((resolve, reject) => {
-            Gio.DBusProxy.new(this._conn, flags, null, this.bus_name, OBJECT_PATH, iface, null,
-                (_src: any, res: any) => {
-                    try { resolve(Gio.DBusProxy.new_finish(res)) } catch (e) { reject(e) }
-                })
-        })
-
-        const [player, root] = await Promise.all([mk(IFACE_PLAYER), mk(IFACE_ROOT)])
+        const [player, root] = await Promise.all([
+            proxy(this._conn, flags, this.bus_name, OBJECT_PATH, IFACE_PLAYER),
+            proxy(this._conn, flags, this.bus_name, OBJECT_PATH, IFACE_ROOT),
+        ])
         if (this._closed) return
         this._proxy = player
         this._rootProxy = root
 
-        this._proxy.connect("g-properties-changed", (_p: any, changed: any) => {
-            // Re-read the whole cache rather than the delta: a partial update is
-            // one cached-property read per field, and players differ wildly in
-            // what they bundle into a single PropertiesChanged.
-            const trackChanged = !!changed?.lookup_value?.("Metadata", null)
-            const statusChanged = !!changed?.lookup_value?.("PlaybackStatus", null)
-            this._syncPlayer()
-            if (trackChanged || statusChanged) this._resync()
-        })
-        this._rootProxy.connect("g-properties-changed", () => this._syncRoot())
-
-        this._proxy.connect("g-signal", (_p: any, _sender: string, signal: string, params: any) => {
-            if (signal !== "Seeked") return
-            try { this._anchor(vNum(params.get_child_value(0))) } catch {}
-        })
+        this._disposers.push(
+            onProps(this._proxy, (changed: any) => {
+                // Re-read the whole cache rather than the delta: a partial update is
+                // one cached-property read per field, and players differ wildly in
+                // what they bundle into a single PropertiesChanged.
+                const trackChanged = !!changed?.lookup_value?.("Metadata", null)
+                const statusChanged = !!changed?.lookup_value?.("PlaybackStatus", null)
+                this._syncPlayer()
+                if (trackChanged || statusChanged) this._resync()
+            }),
+            onProps(this._rootProxy, () => this._syncRoot()),
+            onProxySignal(this._proxy, (_p: any, _sender: string, signal: string, params: any) => {
+                if (signal !== "Seeked") return
+                try { this._anchor(vNum(params.get_child_value(0))) } catch {}
+            }),
+        )
 
         this._syncRoot()
         this._syncPlayer()
@@ -203,6 +202,10 @@ export class MprisPlayer extends GObject.Object {
     /** The name left the bus: stop everything and let the object go. */
     close() {
         this._closed = true
+        for (const dispose of this._disposers) {
+            try { dispose() } catch {}
+        }
+        this._disposers = []
         this._proxy = null
         this._rootProxy = null
     }
@@ -286,10 +289,9 @@ export class MprisPlayer extends GObject.Object {
 
     private _call(method: string, args: any = null) {
         if (!this._proxy) return
-        this._proxy.call(method, args, Gio.DBusCallFlags.NO_AUTO_START, -1, null,
-            (_s: any, res: any) => {
-                try { this._proxy?.call_finish(res) }
-                catch (e) { console.error(`[Mpris] ${this.bus_name}.${method}:`, e) }
+        call(this._proxy, method, args)
+            .catch((e: any) => {
+                console.error(`[Mpris] ${this.bus_name}.${method}:`, e)
             })
     }
 

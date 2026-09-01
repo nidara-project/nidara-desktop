@@ -30,6 +30,11 @@ declare global {
     export type ListStore = GioMod.Gio.ListStore;
     export type ThemedIcon = GioMod.Gio.ThemedIcon;
     export type DBusConnection = GioMod.Gio.DBusConnection;
+    export type DBusProxy = GioMod.Gio.DBusProxy;
+    export type DBusProxyFlags = GioMod.Gio.DBusProxyFlags;
+    export type DBusCallFlags = GioMod.Gio.DBusCallFlags;
+    export type DBusSignalFlags = GioMod.Gio.DBusSignalFlags;
+    export type Cancellable = GioMod.Gio.Cancellable;
   }
 
   namespace GLib {
