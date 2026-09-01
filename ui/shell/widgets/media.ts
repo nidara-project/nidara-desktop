@@ -1,10 +1,8 @@
 import Gtk from "gi://Gtk?version=4.0"
-import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
-import GdkPixbuf from "gi://GdkPixbuf"
 import Pango from "gi://Pango"
+import { makeCoverArt, PANEL_ART, PANEL_ART_RADIUS } from "../common/CoverArt"
 import { MediaIslandContent } from "../surfaces/control-center/MediaIsland"
-import { createSquirclePath } from "../common/DrawingUtils"
 import { makeHSlider } from "../../lib/nidara-kit"
 import { AtomicWidget, WidgetSize } from "../common/widget-kit"
 import { t } from "../core/i18n"
@@ -42,31 +40,11 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
     let player: any = null
     let playerSigId: number | null = null
     let progressTimer: number | null = null
-    let artPixbuf: any = null
     let progressUpdateCb: ((pct: number) => void) | null = null
 
-    const ART_SIZE = 96
-
-    const artDa = new Gtk.DrawingArea({
-        width_request: ART_SIZE, height_request: ART_SIZE,
-        halign: Gtk.Align.START, valign: Gtk.Align.CENTER,
-        hexpand: false, vexpand: false,
-    })
-    artDa.set_draw_func((_, cr, w, h) => {
-        if (w <= 0 || h <= 0) return
-        if (artPixbuf) {
-            cr.save()
-            createSquirclePath(cr, 0, 0, w, h, 14, 3.2)
-            cr.clip()
-            Gdk.cairo_set_source_pixbuf(cr, artPixbuf, 0, 0)
-            cr.paint()
-            cr.restore()
-        } else {
-            cr.setSourceRGBA(1, 1, 1, 0.08)
-            createSquirclePath(cr, 0, 0, w, h, 14, 3.2)
-            cr.fill()
-        }
-    })
+    const artDa = makeCoverArt({ size: PANEL_ART, shape: PANEL_ART_RADIUS })
+    artDa.halign = Gtk.Align.START
+    artDa.valign = Gtk.Align.CENTER
 
     // Wrap to up to 2 lines (uses the width to the right of the artwork) and only
     // ellipsize if the title still overflows two lines.
@@ -221,22 +199,6 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
         totalLabel.label = len > 0 ? fmt(len) : "--:--"
     }
 
-    // Decode + redraw only when the art PATH changes — "notify" fires for every
-    // property the player touches, and an unguarded decode here used to re-read
-    // the PNG every second for the whole session, back when AstalMpris polled
-    // position at 1 Hz (tech-debt #11C; core/mpris.ts no longer polls).
-    let loadedArt: string | null = null
-    const loadArt = () => {
-        const path = media.resolveCoverArt(player)
-        if (path === loadedArt) return
-        loadedArt = path
-        if (path) {
-            try { artPixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, ART_SIZE, ART_SIZE, false) }
-            catch { artPixbuf = null }
-        } else { artPixbuf = null }
-        artDa.queue_draw()
-    }
-
     // The app icon only changes with the PLAYER, not per notify — resolving a
     // fresh GIcon each tick would defeat the identity guard (tech-debt #11C).
     let srcIconBus: string | null = null
@@ -261,7 +223,6 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
             if (appIcon) srcAppImg.remove_css_class("nd-icon")
             else srcAppImg.add_css_class("nd-icon")
         }
-        loadArt()
         syncProgress()
     }
 
