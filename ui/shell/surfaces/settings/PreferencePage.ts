@@ -1,12 +1,15 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { manifest, type PageDecl, type WhenDecl } from "./manifest"
-import { listGroup, settingRow, pageBox, bindWhileRealized } from "./SettingsHelpers"
+import { manifest, type PageDecl, type WhenDecl, type ItemDecl } from "./manifest"
+import { listGroup, createRow, settingRow, pageBox, bindWhileRealized } from "./SettingsHelpers"
 import { getConfigEntry } from "../../core/ConfigRegistry"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 import { build as buildBar } from "./custom/bar"
 import { build as buildGaming } from "./custom/gaming"
 import { build as buildPower } from "./custom/power"
 import { build as buildRegion } from "./custom/region"
+import { build as buildAppearance } from "./custom/appearance"
+import { build as buildAi } from "./custom/ai"
 
 export interface PageCtx {
     page: Gtk.Widget
@@ -32,6 +35,8 @@ const PAGE_BUILDERS = {
     gaming: buildGaming,
     power: buildPower,
     region: buildRegion,
+    appearance: buildAppearance,
+    ai: buildAi,
 } as const
 
 // ── Compile-time type verification ──────────────────────────────────────────
@@ -39,13 +44,17 @@ const PAGE_BUILDERS = {
 // and that builders do not define unreferenced items.
 type Manifest = typeof manifest
 
+type ExtractItemCustoms<I> =
+    (I extends { custom: infer IC extends string } ? IC : never) |
+    (I extends { decoration: infer DC extends string } ? DC : never) |
+    (I extends { items: readonly (infer SubI)[] } ? ExtractItemCustoms<SubI> : never)
+
 type ExtractCustoms<P> =
     (P extends { header?: { custom: infer C extends string } } ? C : never) |
     (P extends { groups: readonly (infer G)[] }
         ? (G extends { custom?: infer GC extends string } ? GC : never) |
           (G extends { items?: readonly (infer I)[] }
-              ? (I extends { custom: infer IC extends string } ? IC : never) |
-                (I extends { decoration: infer DC extends string } ? DC : never)
+              ? ExtractItemCustoms<I>
               : never)
         : never)
 
@@ -79,6 +88,12 @@ const _checkPowerExtra = (null as unknown as ValidateBuilder<"power">) satisfies
 const _checkRegion = (null as unknown as ValidatePage<"region">) satisfies true
 const _checkRegionExtra = (null as unknown as ValidateBuilder<"region">) satisfies true
 
+const _checkAppearance = (null as unknown as ValidatePage<"appearance">) satisfies true
+const _checkAppearanceExtra = (null as unknown as ValidateBuilder<"appearance">) satisfies true
+
+const _checkAi = (null as unknown as ValidatePage<"ai">) satisfies true
+const _checkAiExtra = (null as unknown as ValidateBuilder<"ai">) satisfies true
+
 function bindVisibility(widget: Gtk.Widget, page: Gtk.Widget, when: WhenDecl) {
     const entry = getConfigEntry(when.key)
     if (!entry) {
@@ -87,6 +102,25 @@ function bindVisibility(widget: Gtk.Widget, page: Gtk.Widget, when: WhenDecl) {
     const sync = () => {
         const val = String(entry.get())
         widget.visible = when.in.includes(val)
+    }
+    sync()
+    bindWhileRealized(page, () => {
+        sync()
+        if (entry.subscribe) {
+            return entry.subscribe(() => sync())
+        }
+        return () => {}
+    })
+}
+
+function bindSensitivity(widget: Gtk.Widget, page: Gtk.Widget, when: WhenDecl) {
+    const entry = getConfigEntry(when.key)
+    if (!entry) {
+        throw new Error(`[buildPreferencePage] sensitiveWhen references unknown config key "${when.key}"`)
+    }
+    const sync = () => {
+        const val = String(entry.get())
+        widget.sensitive = when.in.includes(val)
     }
     sync()
     bindWhileRealized(page, () => {
@@ -132,10 +166,10 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
         const footer = group.footer ? t(group.footer as any) : ""
         const groupWidget = listGroup(title, footer)
 
-        for (const item of (group.items ?? [])) {
+        const appendItem = (item: ItemDecl, container: { append(w: Gtk.Widget): void }) => {
             if (typeof item === "string") {
                 const row = settingRow(item)
-                groupWidget.listBox.append(row)
+                container.append(row)
             } else if ("custom" in item) {
                 const ib = builders[item.custom]
                 if (!ib) {
@@ -145,7 +179,10 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
                 if (item.visibleWhen) {
                     bindVisibility(row, page, item.visibleWhen)
                 }
-                groupWidget.listBox.append(row)
+                if (item.sensitiveWhen) {
+                    bindSensitivity(row, page, item.sensitiveWhen)
+                }
+                container.append(row)
             } else if ("decoration" in item) {
                 const db = builders[item.decoration]
                 if (!db) {
@@ -155,10 +192,47 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
                 if (item.visibleWhen) {
                     bindVisibility(row, page, item.visibleWhen)
                 }
-                groupWidget.listBox.append(row)
+                if (item.sensitiveWhen) {
+                    bindSensitivity(row, page, item.sensitiveWhen)
+                }
+                container.append(row)
+            } else if ("disclosure" in item) {
+                const advChevron = new Gtk.Image({ gicon: Icons.chevronDown, pixel_size: 16, css_classes: ["nd-icon"] })
+                const advToggleRow = createRow(t(item.disclosure as any), "", advChevron)
+                container.append(advToggleRow)
+
+                const advInner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+                for (const subItem of item.items) {
+                    appendItem(subItem, advInner)
+                }
+                const advRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN, reveal_child: true })
+                advRevealer.set_child(advInner)
+                const advRevealerRow = new Gtk.ListBoxRow({ activatable: false, selectable: false, css_classes: ["settings-adv-revealer-row"] })
+                advRevealerRow.set_child(advRevealer)
+                container.append(advRevealerRow)
+
+                groupWidget.listBox.connect("row-activated", (_: Gtk.ListBox, row: Gtk.ListBoxRow) => {
+                    if (row !== advToggleRow) return
+                    const open = !advRevealer.reveal_child
+                    advRevealer.reveal_child = open
+                    advChevron.gicon = open ? Icons.chevronDown : Icons.chevronRight
+                })
+            } else if ("key" in item) {
+                const row = settingRow(item.key)
+                if (item.visibleWhen) {
+                    bindVisibility(row, page, item.visibleWhen)
+                }
+                if (item.sensitiveWhen) {
+                    bindSensitivity(row, page, item.sensitiveWhen)
+                }
+                container.append(row)
             } else {
                 throw new Error(`[buildPreferencePage] Unsupported item in page "${pageId}": ${JSON.stringify(item)}`)
             }
+        }
+
+        for (const item of (group.items ?? [])) {
+            appendItem(item, groupWidget.listBox)
         }
 
         if (group.footerWhen) {

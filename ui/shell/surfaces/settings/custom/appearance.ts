@@ -1,38 +1,27 @@
 import Gtk from "gi://Gtk?version=4.0"
-import Gdk from "gi://Gdk?version=4.0"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import Theme from "../../../core/ThemeManager"
-import { NidaraButton, NidaraFontButton, makeHSlider } from "../../../../lib/nidara-kit"
+import { NidaraButton, NidaraFontButton, makeHSlider, NidaraRow } from "../../../../lib/nidara-kit"
 import NightLight from "../../../core/NightLightManager"
 import Wallpaper from "../../../core/WallpaperManager"
 import { getBundledWallpapers } from "../../../../lib/wallpaper"
 import { ACCENT_PALETTE, GLASS_RANGE, type AccentKey } from "../../../core/NidaraTheme"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
-import { listGroup, createRow, settingRow, pageBox, bindWhileRealized } from "../SettingsHelpers"
+import { createRow, bindWhileRealized } from "../SettingsHelpers"
 import { attachTooltip } from "../../../common/Tooltip"
 import { safeDisconnect } from "../../../core/signals"
+import type { PageCtx, ItemBuilder } from "../PreferencePage"
 
-export default function AppearancePage() {
-    const page = pageBox("appearance-page")
-
+export const build = (ctx: PageCtx) => {
     const onTheme = <T,>(read: () => T) => (apply: (v: T) => void) => {
         apply(read())
         const id = Theme.connect("changed", () => apply(read()))
         return () => safeDisconnect(Theme, id)
     }
 
-    // 1. General style
-    const styleGroup = listGroup(t("settings.appearance.group.base-style"))
-    styleGroup.listBox.append(settingRow("appearance.darkMode"))
-    styleGroup.listBox.append(settingRow("appearance.shellAppearance"))
-    page.append(styleGroup.box)
-
-    // 2. Wallpaper
-    const wallGroup = listGroup(t("settings.appearance.group.wallpaper"))
-
-    // Preview
+    // ── Wallpaper Preview ───────────────────────────────────────────────────
     const preview = new Gtk.Picture({
         width_request: 320,
         height_request: 180,
@@ -59,11 +48,11 @@ export default function AppearancePage() {
         selectable: false,
     })
     previewRow.set_child(previewCenter)
-    wallGroup.listBox.append(previewRow)
 
-    // Bundled wallpapers gallery
+    // ── Bundled Wallpapers Gallery ──────────────────────────────────────────
     const bundled = getBundledWallpapers().filter(p => !p.includes("wallpaper-greeter"))
     let refreshThumbActive: ((currentPath: string) => void) | null = null
+    let galleryRow: Gtk.ListBoxRow
 
     if (bundled.length > 0) {
         const thumbBox = new Gtk.Box({
@@ -120,19 +109,22 @@ export default function AppearancePage() {
             center_widget: thumbBox,
             hexpand: true,
         })
-        const galleryRow = new Gtk.ListBoxRow({
+        galleryRow = new Gtk.ListBoxRow({
             css_classes: ["nidara-row", "wallpaper-gallery-row"],
             activatable: false,
             selectable: false,
         })
         galleryRow.set_child(centerBox)
-        wallGroup.listBox.append(galleryRow)
+    } else {
+        galleryRow = new Gtk.ListBoxRow({
+            css_classes: ["nidara-row", "wallpaper-gallery-row"],
+            activatable: false,
+            selectable: false,
+            visible: false,
+        })
     }
 
-    // Transition selector
-    wallGroup.listBox.append(settingRow("wallpaper.transition"))
-
-    // File picker row
+    // ── Wallpaper File Picker ───────────────────────────────────────────────
     const changeBtn = NidaraButton({
         label: t("settings.appearance.browse"),
         variant: "secondary",
@@ -170,15 +162,10 @@ export default function AppearancePage() {
             } catch (_) { /* user cancelled */ }
         })
     })
-    wallGroup.listBox.append(createRow(
-        t("settings.appearance.image"),
-        t("settings.appearance.image.desc"),
-        changeBtn,
-    ))
 
     // Unconditionally follow wallpaper changes from external tools/gaming mode.
     // Use bindWhileRealized because Settings hides rather than destroys its window.
-    bindWhileRealized(page, () => {
+    bindWhileRealized(ctx.page, () => {
         updatePreview(Wallpaper.current)
         if (refreshThumbActive) refreshThumbActive(Wallpaper.current)
         const wallId = Wallpaper.connect("changed", () => {
@@ -188,12 +175,7 @@ export default function AppearancePage() {
         return () => safeDisconnect(Wallpaper, wallId)
     })
 
-    page.append(wallGroup.box)
-
-    // 3. Theme — accent + glass opacity
-    const fcGroup = listGroup(t("settings.appearance.group.theme"))
-
-    // Accent Color Picker
+    // ── Accent Color Picker ─────────────────────────────────────────────────
     const accentPicker = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
     const accentButtons: Record<string, Gtk.Button> = {}
 
@@ -211,8 +193,21 @@ export default function AppearancePage() {
         accentButtons[key] = btn
     })
 
-    fcGroup.listBox.append(createRow(t("settings.appearance.accent"), t("settings.appearance.accent.desc"), accentPicker))
+    // State sync for accent swatches
+    const updateThemeState = () => {
+        const currentAccent = Theme.accentColor
+        Object.keys(accentButtons).forEach(key => {
+            accentButtons[key].remove_css_class("selected")
+            if (key === currentAccent) accentButtons[key].add_css_class("selected")
+        })
+    }
+    bindWhileRealized(ctx.page, () => {
+        updateThemeState()
+        const id = Theme.connect("changed", updateThemeState)
+        return () => safeDisconnect(Theme, id)
+    })
 
+    // ── Master Glass Opacity Slider ─────────────────────────────────────────
     // Opacity model: ONE master "Glass" slider governs bar + overlays + dock + window
     // together; an "Advanced" disclosure (below) breaks them apart. All are plain
     // opacities (higher = more opaque) over ONE `GLASS_RANGE`, imported rather than
@@ -250,42 +245,8 @@ export default function AppearancePage() {
     masterBox.append(masterSlider)
     masterBox.append(mkGlassEnd(Icons.plus))
     masterBox.append(masterValue)
-    fcGroup.listBox.append(createRow(t("settings.appearance.glass"), t("settings.appearance.glass.desc"), masterBox))
 
-    // Advanced — per-surface glass.
-    const advChevron = new Gtk.Image({ gicon: Icons.chevronDown, pixel_size: 16, css_classes: ["nd-icon"] })
-    const advToggleRow = createRow(t("settings.appearance.advanced"), "", advChevron)
-    fcGroup.listBox.append(advToggleRow)
-
-    const advInner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
-    advInner.append(settingRow("appearance.barOpacity"))
-    advInner.append(settingRow("appearance.overlayOpacity"))
-    advInner.append(settingRow("appearance.dockOpacity"))
-    advInner.append(settingRow("appearance.windowOpacity"))
-    const advRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN, reveal_child: true })
-    advRevealer.set_child(advInner)
-    const advRevealerRow = new Gtk.ListBoxRow({ activatable: false, selectable: false, css_classes: ["settings-adv-revealer-row"] })
-    advRevealerRow.set_child(advRevealer)
-    fcGroup.listBox.append(advRevealerRow)
-
-    fcGroup.listBox.connect("row-activated", (_: Gtk.ListBox, row: Gtk.ListBoxRow) => {
-        if (row !== advToggleRow) return
-        const open = !advRevealer.reveal_child
-        advRevealer.reveal_child = open
-        advChevron.gicon = open ? Icons.chevronDown : Icons.chevronRight
-    })
-    page.append(fcGroup.box)
-
-    // 4. Night Light
-    const nlGroup = listGroup(t("settings.appearance.group.night-light"))
-
-    const nlRow = settingRow("nightlight.enabled")
-    nlGroup.listBox.append(nlRow)
-    nlGroup.listBox.append(settingRow("nightlight.temperature"))
-    const schedRow = settingRow("nightlight.scheduleEnabled")
-    nlGroup.listBox.append(schedRow)
-
-    // Time pickers helper
+    // ── Night Light Schedule Times ──────────────────────────────────────────
     const timePicker = (initial: string, onChange: (t: string) => void) => {
         const [ih, im] = initial.split(":").map(Number)
         const safeH = isNaN(ih) ? 20 : Math.max(0, Math.min(23, ih))
@@ -349,73 +310,43 @@ export default function AppearancePage() {
     schedTimeBox.append(fromBox)
     schedTimeBox.append(toBox)
 
-    const schedTimeRow = createRow("", "", schedTimeBox)
-    schedTimeRow.visible = NightLight.scheduleEnabled
-    nlGroup.listBox.append(schedTimeRow)
+    const schedTimeRow = NidaraRow("", "", schedTimeBox)
 
-    const syncNightLight = () => {
-        nlRow.sensitive = !NightLight.scheduleEnabled
-        schedTimeRow.visible = NightLight.scheduleEnabled
+    const syncNightLightTimes = () => {
         from.sync(NightLight.scheduleFrom)
         to.sync(NightLight.scheduleTo)
     }
-    bindWhileRealized(page, () => {
-        syncNightLight()
-        const nlChangedId = NightLight.connect("changed", syncNightLight)
+    bindWhileRealized(ctx.page, () => {
+        syncNightLightTimes()
+        const nlChangedId = NightLight.connect("changed", syncNightLightTimes)
         return () => safeDisconnect(NightLight, nlChangedId)
     })
 
-    page.append(nlGroup.box)
-
-    // 5. System Assets
-    const assetsGroup = listGroup(t("settings.appearance.group.resources"))
-    assetsGroup.listBox.append(settingRow("appearance.gtkTheme"))
-    assetsGroup.listBox.append(settingRow("appearance.iconTheme"))
-    assetsGroup.listBox.append(settingRow("appearance.cursorTheme"))
-    page.append(assetsGroup.box)
-
-    // 6. Fonts
-    const fontsGroup = listGroup(t("settings.appearance.group.fonts"))
-
-    const interfaceFontBtn = NidaraFontButton({
+    // ── Fonts ───────────────────────────────────────────────────────────────
+    // Inside NidaraFontButton, title is used in the font picker modal dialog.
+    // The row label and subtitle are rendered via createRow from slot.title/slot.subtitle.
+    const makeInterfaceFontBtn = (title: string) => NidaraFontButton({
         font: Theme.interfaceFont,
-        title: t("settings.appearance.interface-font"),
+        title,
         onFontSet: (f) => Theme.setFont(f),
         onExtChange: onTheme(() => Theme.interfaceFont),
     })
-    fontsGroup.listBox.append(createRow(
-        t("settings.appearance.interface-font"),
-        t("settings.appearance.interface-font.desc"),
-        interfaceFontBtn,
-    ))
 
-    const monoFontBtn = NidaraFontButton({
+    const makeMonoFontBtn = (title: string) => NidaraFontButton({
         font: Theme.monoFont,
-        title: t("settings.appearance.mono-font"),
+        title,
         onFontSet: (f) => Theme.setMonoFont(f),
         onExtChange: onTheme(() => Theme.monoFont),
     })
-    fontsGroup.listBox.append(createRow(
-        t("settings.appearance.mono-font"),
-        t("settings.appearance.mono-font.desc"),
-        monoFontBtn,
-    ))
 
-    page.append(fontsGroup.box)
-
-    // State sync for accent swatches
-    const updateThemeState = () => {
-        const currentAccent = Theme.accentColor
-        Object.keys(accentButtons).forEach(key => {
-            accentButtons[key].remove_css_class("selected")
-            if (key === currentAccent) accentButtons[key].add_css_class("selected")
-        })
-    }
-    bindWhileRealized(page, () => {
-        updateThemeState()
-        const id = Theme.connect("changed", updateThemeState)
-        return () => safeDisconnect(Theme, id)
-    })
-
-    return page
+    return {
+        wallpaperPreview: () => previewRow,
+        wallpaperGallery: () => galleryRow,
+        wallpaperPicker: (slot) => createRow(slot.title, slot.subtitle, changeBtn),
+        accentPicker: (slot) => createRow(slot.title, slot.subtitle, accentPicker),
+        glassMaster: (slot) => createRow(slot.title, slot.subtitle, masterBox),
+        nightScheduleTimes: () => schedTimeRow,
+        interfaceFont: (slot) => createRow(slot.title, slot.subtitle, makeInterfaceFontBtn(slot.title)),
+        monoFont: (slot) => createRow(slot.title, slot.subtitle, makeMonoFontBtn(slot.title)),
+    } satisfies Record<string, ItemBuilder>
 }
