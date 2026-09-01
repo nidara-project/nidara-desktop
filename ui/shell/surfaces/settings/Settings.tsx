@@ -14,19 +14,15 @@ import DisplayPage from "./pages/Display"
 import AudioPage from "./pages/Audio"
 import NetworkPage from "./pages/Network"
 import PowerPage from "./pages/Power"
-import DockPage from "./pages/Dock"
-import BarPage from "./pages/Bar"
-import NotificationsPage from "./pages/Notifications"
 import RegionPage from "./pages/Region"
 import WidgetsPage from "./pages/Widgets"
 import AboutPage from "./pages/About"
-import InputPage from "./pages/Input"
 import AppsPage from "./pages/Apps"
 import BluetoothPage from "./pages/Bluetooth"
-import AccessibilityPage from "./pages/Accessibility"
 import UsersPage from "./pages/Users"
 import GamingPage from "./pages/Gaming"
 import AiPage from "./pages/Ai"
+import { buildPreferencePage } from "./PreferencePage"
 import { beginPage, endPage, clearSearchIndex, getSearchIndex, runPageRefreshers, type SettingsNav } from "./SettingsHelpers"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -90,15 +86,15 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "appearance",   label: t("settings.appearance.title"),  icon: Icons.palette,       component: AppearancePage,   groupStart: true },
         { id: "display",      label: t("settings.display.title"),     icon: Icons.monitor,       component: DisplayPage      },
         { id: "audio",        label: t("settings.audio.title"),       icon: Icons.speaker,       component: AudioPage        },
-        { id: "bar",          label: t("settings.bar.title"),         icon: Icons.panelTop,      component: BarPage          },
-        { id: "dock",         label: t("settings.dock.title"),        icon: Icons.dock,          component: DockPage         },
+        { id: "bar",          label: t("settings.bar.title"),         icon: Icons.panelTop,      component: () => buildPreferencePage("bar") },
+        { id: "dock",         label: t("settings.dock.title"),        icon: Icons.dock,          component: () => buildPreferencePage("dock") },
         { id: "widgets",      label: t("settings.widgets.title"),     icon: Icons.settings2,     component: WidgetsPage      },
         { id: "gaming",       label: t("settings.gaming.title"),      icon: Icons.gamepad,       component: GamingPage       },
-        { id: "notifications",label: t("settings.notif.title"),       icon: Icons.bell,          component: NotificationsPage },
-        { id: "accessibility",label: t("settings.accessibility.title"),icon: Icons.accessibility,component: AccessibilityPage },
+        { id: "notifications",label: t("settings.notif.title"),       icon: Icons.bell,          component: () => buildPreferencePage("notifications") },
+        { id: "accessibility",label: t("settings.accessibility.title"),icon: Icons.accessibility,component: () => buildPreferencePage("accessibility") },
         { id: "apps",         label: t("settings.apps.section"),      icon: Icons.grid,          component: AppsPage         },
         // ── System & devices ────────────────────────────────────────────────────
-        { id: "input",        label: t("settings.input.title"),       icon: Icons.keyboard,      component: InputPage,        groupStart: true },
+        { id: "input",        label: t("settings.input.title"),       icon: Icons.keyboard,      component: () => buildPreferencePage("input"), groupStart: true },
         { id: "power",        label: t("settings.power.title"),       icon: Icons.battery,       component: PowerPage        },
         { id: "region",       label: t("settings.region.title"),      icon: Icons.clock,         component: RegionPage       },
         { id: "users",        label: t("settings.users.title"),       icon: Icons.userRound,     component: UsersPage        },

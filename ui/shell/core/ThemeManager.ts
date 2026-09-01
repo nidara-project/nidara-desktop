@@ -51,10 +51,10 @@ async function probeAdwStyleManager(): Promise<any | null> {
 
 /**
  * The range the Accessibility text slider offers, and the range the reflowing
- * windows are known to survive. ⚠️ MEASURED, not chosen — see the comment on the
- * slider in `pages/Accessibility.tsx` and tech-debt #62. It lives here because
- * `applyAll` has to clamp a value stored by an older build (the slider used to go
- * to 2.0) — a factor above the maximum is a state the UI cannot represent.
+ * windows are known to survive. ⚠️ MEASURED, not chosen — see the bounds on
+ * `accessibility.textScale` in `config-entries.ts` and tech-debt #62. It lives here
+ * because `applyAll` has to clamp a value stored by an older build (the slider used
+ * to go to 2.0) — a factor above the maximum is a state the UI cannot represent.
  */
 export const TEXT_SCALE_MIN = 0.75
 export const TEXT_SCALE_MAX = 1.5

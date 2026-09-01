@@ -38,7 +38,8 @@ export interface SettingsNav {
  * Settings pages keep their import path; the explanation — why a cached page needs
  * re-subscription rather than a one-shot cleanup — went with the implementation.
  */
-export { bindWhileRealized } from "../../../lib/nidara-kit"
+import { bindWhileRealized } from "../../../lib/nidara-kit"
+export { bindWhileRealized }
 
 // ── Search index ──────────────────────────────────────────────────────────────
 export interface SearchItem {
@@ -255,6 +256,21 @@ export const settingRow = (key: string): Gtk.ListBoxRow => {
             }
             return sliderRow(label, subtitle, init, min, max, cb, opts)
         }
+        case "preset": {
+            const presets = ui.presets ?? (entry.enum ? entry.enum.map(Number) : [])
+            if (!presets.length) {
+                throw new Error(`[settingRow] Preset setting "${key}" requires ui.presets in ConfigEntry`)
+            }
+            const unit = ui.presetUnit ?? ui.slider?.unit ?? ""
+            const init = Number(entry.get())
+            const cb = (v: number) => { entry.set?.(v) }
+            const onExt = entry.subscribe
+                ? (apply: (v: number) => void) => {
+                    return entry.subscribe!((v) => apply(Number(v)))
+                }
+                : undefined
+            return presetRow(label, subtitle, presets, init, unit, cb, onExt)
+        }
     }
 }
 
@@ -278,6 +294,7 @@ export const segmentedGroup = <T,>(
     options: Array<{ label: string; value: T }>,
     init: T,
     cb: (v: T) => void,
+    onExt?: (apply: (v: T) => void) => (() => void),
 ): Gtk.Box => {
     const box = new Gtk.Box({
         spacing: 0,
@@ -306,6 +323,13 @@ export const segmentedGroup = <T,>(
     })
     paint()
 
+    if (onExt) {
+        bindWhileRealized(box, () => onExt((newVal: T) => {
+            current = newVal
+            paint()
+        }))
+    }
+
     return box
 }
 
@@ -318,9 +342,10 @@ export const presetRow = (
     init: number,
     unit: string,
     cb: (v: number) => void,
+    onExt?: (apply: (v: number) => void) => (() => void),
 ) => createRow(
     label, subtitle,
-    segmentedGroup(presets.map(v => ({ label: `${v}${unit}`, value: v })), init, cb),
+    segmentedGroup(presets.map(v => ({ label: `${v}${unit}`, value: v })), init, cb, onExt),
 )
 
 // ── Stacked-row field layout ──────────────────────────────────────────────────

@@ -17,11 +17,14 @@ export interface ConfigEntryUi {
     /** Clave de i18n de la etiqueta; el subtítulo es esta misma + ".desc". */
     i18n: string
     /** Por defecto se deduce del `type`: boolean→toggle, enum→dropdown, number→slider. */
-    control?: "toggle" | "dropdown" | "slider"
+    control?: "toggle" | "dropdown" | "slider" | "preset"
     /** enum: valor → clave de i18n de su etiqueta. Por defecto `<i18n sin "settings.">.opt.<valor>`. */
     optI18n?: (value: string) => string
     /** slider: lo que hoy va en el último argumento de `sliderRow` (iconos, `pct`, unidad). */
     slider?: NidaraSliderRowOpts
+    /** preset: valores numéricos discretos y unidad (p. ej. presets: [32, 48, 64, 80, 96], unit: "px"). */
+    presets?: number[]
+    presetUnit?: string
 }
 
 export interface ConfigEntry {
