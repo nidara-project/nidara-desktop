@@ -28,9 +28,15 @@ import { attachTooltip } from "../../common/Tooltip"
 // ── Non-declarative page components registry (P3 #341) ───────────────────────
 // Builders for browser and info pages. Compile-time verified via `satisfies`:
 // every builder declared in manifest must exist here, and no unused builders.
+// ⚠️ TOP-LEVEL pages only. A subpage declares a `builder` too, but its builder
+// lives in `subpages.ts` — the two registries are disjoint sets, and saying so in
+// the type is what keeps each `satisfies` honest: without the `parent` exclusion,
+// adding a subpage to the manifest demands its builder HERE, where nothing can
+// push it.
 type Manifest = typeof manifest
 type ExtractBuilders<P> = P extends { builder: infer B extends string } ? B : never
-type ManifestBuilder = ExtractBuilders<Manifest[number]>
+type TopLevelPage = Extract<Manifest[number], { icon: string }>
+type ManifestBuilder = ExtractBuilders<TopLevelPage>
 
 type PageComponent = ((nav: SettingsNav) => Gtk.Widget) | (() => Gtk.Widget)
 
