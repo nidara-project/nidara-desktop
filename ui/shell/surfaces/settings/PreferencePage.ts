@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { manifest, type PageDecl, type WhenDecl, type ItemDecl } from "./manifest"
-import { listGroup, createRow, settingRow, pageBox, bindWhileRealized } from "./SettingsHelpers"
+import { listGroup, createRow, settingRow, pageBox, bindWhileRealized, setPageRefresherScope, clearPageRefresherScope } from "./SettingsHelpers"
 import { getConfigEntry } from "../../core/ConfigRegistry"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -138,112 +138,118 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
         throw new Error(`[buildPreferencePage] Unknown preference page id: "${pageId}" in manifest`)
     }
 
-    const page = pageBox(`${pageId}-page`)
-    const ctx: PageCtx = { page, pageId }
+    setPageRefresherScope(pageId)
+    try {
+        const page = pageBox(`${pageId}-page`)
+        const ctx: PageCtx = { page, pageId }
 
-    const builderFactory = PAGE_BUILDERS[pageId as keyof typeof PAGE_BUILDERS]
-    const builders: Record<string, ItemBuilder> = builderFactory ? builderFactory(ctx) : {}
+        const builderFactory = PAGE_BUILDERS[pageId as keyof typeof PAGE_BUILDERS]
+        const builders: Record<string, ItemBuilder> = builderFactory ? builderFactory(ctx) : {}
 
-    if (pageDecl.header) {
-        const headerBuilder = builders[pageDecl.header.custom]
-        if (!headerBuilder) {
-            throw new Error(`[buildPreferencePage] Missing header builder "${pageDecl.header.custom}" on page "${pageId}"`)
+        if (pageDecl.header) {
+            const headerBuilder = builders[pageDecl.header.custom]
+            if (!headerBuilder) {
+                throw new Error(`[buildPreferencePage] Missing header builder "${pageDecl.header.custom}" on page "${pageId}"`)
+            }
+            page.append(headerBuilder(NO_LABEL))
         }
-        page.append(headerBuilder(NO_LABEL))
+
+        for (const group of (pageDecl.groups ?? [])) {
+            if (group.custom) {
+                const groupBuilder = builders[group.custom]
+                if (!groupBuilder) {
+                    throw new Error(`[buildPreferencePage] Missing custom group builder "${group.custom}" on page "${pageId}"`)
+                }
+                page.append(groupBuilder({ title: group.i18n ? t(group.i18n as any) : "", subtitle: "" }))
+                continue
+            }
+
+            const title = group.i18n ? t(group.i18n as any) : ""
+            const footer = group.footer ? t(group.footer as any) : ""
+            const groupWidget = listGroup(title, footer)
+
+            const appendItem = (item: ItemDecl, container: { append(w: Gtk.Widget): void }) => {
+                if (typeof item === "string") {
+                    const row = settingRow(item)
+                    container.append(row)
+                } else if ("custom" in item) {
+                    const ib = builders[item.custom]
+                    if (!ib) {
+                        throw new Error(`[buildPreferencePage] Missing custom item builder "${item.custom}" on page "${pageId}"`)
+                    }
+                    const row = ib({ title: t(item.i18n as any), subtitle: t(`${item.i18n}.desc` as any) })
+                    if (item.visibleWhen) {
+                        bindVisibility(row, page, item.visibleWhen)
+                    }
+                    if (item.sensitiveWhen) {
+                        bindSensitivity(row, page, item.sensitiveWhen)
+                    }
+                    container.append(row)
+                } else if ("decoration" in item) {
+                    const db = builders[item.decoration]
+                    if (!db) {
+                        throw new Error(`[buildPreferencePage] Missing decoration builder "${item.decoration}" on page "${pageId}"`)
+                    }
+                    const row = db(NO_LABEL)
+                    if (item.visibleWhen) {
+                        bindVisibility(row, page, item.visibleWhen)
+                    }
+                    if (item.sensitiveWhen) {
+                        bindSensitivity(row, page, item.sensitiveWhen)
+                    }
+                    container.append(row)
+                } else if ("disclosure" in item) {
+                    const advChevron = new Gtk.Image({ gicon: Icons.chevronDown, pixel_size: 16, css_classes: ["nd-icon"] })
+                    const advToggleRow = createRow(t(item.disclosure as any), "", advChevron)
+                    container.append(advToggleRow)
+
+                    const advInner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+                    for (const subItem of item.items) {
+                        appendItem(subItem, advInner)
+                    }
+                    const advRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN, reveal_child: true })
+                    advRevealer.set_child(advInner)
+                    const advRevealerRow = new Gtk.ListBoxRow({ activatable: false, selectable: false, css_classes: ["settings-adv-revealer-row"] })
+                    advRevealerRow.set_child(advRevealer)
+                    container.append(advRevealerRow)
+
+                    groupWidget.listBox.connect("row-activated", (_: Gtk.ListBox, row: Gtk.ListBoxRow) => {
+                        if (row !== advToggleRow) return
+                        const open = !advRevealer.reveal_child
+                        advRevealer.reveal_child = open
+                        advChevron.gicon = open ? Icons.chevronDown : Icons.chevronRight
+                    })
+                } else if ("key" in item) {
+                    const row = settingRow(item.key)
+                    if (item.visibleWhen) {
+                        bindVisibility(row, page, item.visibleWhen)
+                    }
+                    if (item.sensitiveWhen) {
+                        bindSensitivity(row, page, item.sensitiveWhen)
+                    }
+                    container.append(row)
+                } else {
+                    throw new Error(`[buildPreferencePage] Unsupported item in page "${pageId}": ${JSON.stringify(item)}`)
+                }
+            }
+
+            for (const item of (group.items ?? [])) {
+                appendItem(item, groupWidget.listBox)
+            }
+
+            if (group.footerWhen) {
+                const footerLabel = groupWidget.footerLabel
+                if (footerLabel) {
+                    bindVisibility(footerLabel, page, group.footerWhen)
+                }
+            }
+
+            page.append(groupWidget.box)
+        }
+
+        return page
+    } finally {
+        clearPageRefresherScope()
     }
-
-    for (const group of pageDecl.groups) {
-        if (group.custom) {
-            const groupBuilder = builders[group.custom]
-            if (!groupBuilder) {
-                throw new Error(`[buildPreferencePage] Missing custom group builder "${group.custom}" on page "${pageId}"`)
-            }
-            page.append(groupBuilder({ title: group.i18n ? t(group.i18n as any) : "", subtitle: "" }))
-            continue
-        }
-
-        const title = group.i18n ? t(group.i18n as any) : ""
-        const footer = group.footer ? t(group.footer as any) : ""
-        const groupWidget = listGroup(title, footer)
-
-        const appendItem = (item: ItemDecl, container: { append(w: Gtk.Widget): void }) => {
-            if (typeof item === "string") {
-                const row = settingRow(item)
-                container.append(row)
-            } else if ("custom" in item) {
-                const ib = builders[item.custom]
-                if (!ib) {
-                    throw new Error(`[buildPreferencePage] Missing custom item builder "${item.custom}" on page "${pageId}"`)
-                }
-                const row = ib({ title: t(item.i18n as any), subtitle: t(`${item.i18n}.desc` as any) })
-                if (item.visibleWhen) {
-                    bindVisibility(row, page, item.visibleWhen)
-                }
-                if (item.sensitiveWhen) {
-                    bindSensitivity(row, page, item.sensitiveWhen)
-                }
-                container.append(row)
-            } else if ("decoration" in item) {
-                const db = builders[item.decoration]
-                if (!db) {
-                    throw new Error(`[buildPreferencePage] Missing decoration builder "${item.decoration}" on page "${pageId}"`)
-                }
-                const row = db(NO_LABEL)
-                if (item.visibleWhen) {
-                    bindVisibility(row, page, item.visibleWhen)
-                }
-                if (item.sensitiveWhen) {
-                    bindSensitivity(row, page, item.sensitiveWhen)
-                }
-                container.append(row)
-            } else if ("disclosure" in item) {
-                const advChevron = new Gtk.Image({ gicon: Icons.chevronDown, pixel_size: 16, css_classes: ["nd-icon"] })
-                const advToggleRow = createRow(t(item.disclosure as any), "", advChevron)
-                container.append(advToggleRow)
-
-                const advInner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
-                for (const subItem of item.items) {
-                    appendItem(subItem, advInner)
-                }
-                const advRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN, reveal_child: true })
-                advRevealer.set_child(advInner)
-                const advRevealerRow = new Gtk.ListBoxRow({ activatable: false, selectable: false, css_classes: ["settings-adv-revealer-row"] })
-                advRevealerRow.set_child(advRevealer)
-                container.append(advRevealerRow)
-
-                groupWidget.listBox.connect("row-activated", (_: Gtk.ListBox, row: Gtk.ListBoxRow) => {
-                    if (row !== advToggleRow) return
-                    const open = !advRevealer.reveal_child
-                    advRevealer.reveal_child = open
-                    advChevron.gicon = open ? Icons.chevronDown : Icons.chevronRight
-                })
-            } else if ("key" in item) {
-                const row = settingRow(item.key)
-                if (item.visibleWhen) {
-                    bindVisibility(row, page, item.visibleWhen)
-                }
-                if (item.sensitiveWhen) {
-                    bindSensitivity(row, page, item.sensitiveWhen)
-                }
-                container.append(row)
-            } else {
-                throw new Error(`[buildPreferencePage] Unsupported item in page "${pageId}": ${JSON.stringify(item)}`)
-            }
-        }
-
-        for (const item of (group.items ?? [])) {
-            appendItem(item, groupWidget.listBox)
-        }
-
-        if (group.footerWhen) {
-            const footerLabel = groupWidget.footerLabel
-            if (footerLabel) {
-                bindVisibility(footerLabel, page, group.footerWhen)
-            }
-        }
-
-        page.append(groupWidget.box)
-    }
-
-    return page
 }
+

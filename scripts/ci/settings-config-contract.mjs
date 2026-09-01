@@ -7,20 +7,19 @@
 // Settings used to be described twice: once in config-entries.ts for the agent,
 // and once by hand in Settings pages. The two lists diverged silently.
 //
-// WHAT THIS COVERS:
+// WHAT THIS COVERS (P3 #341):
 // 1. manifest.ts is pure data (no gi:// imports) and importable via TypeScript strip-types;
 // 2. all keys in manifest.ts are registered in config-entries.ts and declare ui:;
 // 3. every registered key with ui: appears in manifest.ts exactly once (universal denominator);
-// 4. all declared i18n keys exist in en.ts;
-// 5. settingRow() in unmigrated pages references valid config keys;
-// 6. unmigrated manual switches conform to allowlist.
-//
-// WHAT THIS DOES NOT COVER:
-// The check's denominator is registered config keys. A row drawn from page-local
-// state (e.g. `barSettings.launcherIcon` which is not a `registerConfig` key) is
-// invisible to it in both directions — it cannot detect if such a row was added
-// or removed. Until the { custom } vocabulary lands (P2), a page may only be
-// migrated after auditing the component file end to end.
+// 4. every page declares valid kind and label (exists in en.ts);
+// 5. top-level pages declare icon; subpages do not;
+// 6. browser/info pages declare builder and non-empty reason;
+// 7. exempt pages count can only shrink (guarded by allowlist);
+// 8. preference pages declare groups; browser/info do not;
+// 9. Settings.tsx does not contain page literals (label: t("settings.);
+// 10. all declared i18n keys exist in en.ts;
+// 11. settingRow() in unmigrated pages references valid config keys;
+// 12. unmigrated manual switches conform to allowlist.
 
 import { readFileSync, readdirSync, existsSync } from "node:fs"
 import { join } from "node:path"
@@ -29,6 +28,7 @@ import { manifest } from "../../ui/shell/surfaces/settings/manifest.ts"
 const EN_LOCALE_PATH = "ui/shell/core/i18n/locales/en.ts"
 const CONFIG_ENTRIES_PATH = "ui/shell/config-entries.ts"
 const MANIFEST_PATH = "ui/shell/surfaces/settings/manifest.ts"
+const SETTINGS_PATH = "ui/shell/surfaces/settings/Settings.tsx"
 const PAGES_DIR = "ui/shell/surfaces/settings/pages"
 const ALLOWLIST_PATH = "scripts/ci/settings-rows-allowlist.txt"
 
@@ -228,12 +228,54 @@ function validateItem(item, pageId) {
 }
 
 for (const page of manifest) {
+    // Check 1: kind and label declared, and label exists in en.ts
+    if (!page.kind || !["preference", "browser", "info"].includes(page.kind)) {
+        errors.push(`  FAIL  manifest.ts: page "${page.id}" must declare a valid kind ("preference", "browser", or "info").`)
+    }
+    if (!page.label || typeof page.label !== "string") {
+        errors.push(`  FAIL  manifest.ts: page "${page.id}" must declare a string label i18n key.`)
+    } else if (!enKeys.has(page.label)) {
+        errors.push(`  FAIL  manifest.ts: page "${page.id}" label "${page.label}" does not exist in en.ts.`)
+    }
+
+    // Check 2: top-level pages (without parent) must declare icon; subpages must not declare icon
+    if (!page.parent) {
+        if (!page.icon || typeof page.icon !== "string") {
+            errors.push(`  FAIL  manifest.ts: page "${page.id}" has no parent and must declare an icon.`)
+        }
+    } else {
+        if (page.icon) {
+            errors.push(`  FAIL  manifest.ts: subpage "${page.id}" (parent "${page.parent}") must not declare an icon.`)
+        }
+    }
+
+    // Check 3: browser/info must declare builder and non-empty reason
+    if (page.kind === "browser" || page.kind === "info") {
+        if (!page.builder || typeof page.builder !== "string" || !page.builder.trim()) {
+            errors.push(`  FAIL  manifest.ts: ${page.kind} page "${page.id}" must declare a builder.`)
+        }
+        if (!page.reason || typeof page.reason !== "string" || !page.reason.trim()) {
+            errors.push(`  FAIL  manifest.ts: ${page.kind} page "${page.id}" must declare a non-empty reason.`)
+        }
+    }
+
+    // Check 5: preference must declare groups; browser/info must not
+    if (page.kind === "preference") {
+        if (!Array.isArray(page.groups) || page.groups.length === 0) {
+            errors.push(`  FAIL  manifest.ts: preference page "${page.id}" must declare a non-empty groups array.`)
+        }
+    } else if (page.kind === "browser" || page.kind === "info") {
+        if (page.groups !== undefined) {
+            errors.push(`  FAIL  manifest.ts: ${page.kind} page "${page.id}" must not declare groups.`)
+        }
+    }
+
     if (page.header) {
         if (!page.header.custom || typeof page.header.custom !== "string") {
             errors.push(`  FAIL  manifest.ts: page "${page.id}" header must declare a string custom identifier.`)
         }
     }
-    for (const group of page.groups) {
+    for (const group of (page.groups ?? [])) {
         if (group.i18n && group.i18n !== "" && !enKeys.has(group.i18n)) {
             errors.push(`  FAIL  manifest.ts: page "${page.id}" group declares i18n "${group.i18n}" which does not exist in en.ts.`)
         }
@@ -279,10 +321,25 @@ for (const [key] of keysWithUi.entries()) {
     }
 }
 
+// Check 6: Verify Settings.tsx does not contain page literals (P3 #341)
+// Settings.tsx has legitimate widget labels (settings.page.load-error, settings.search.no-results).
+// Page identity literals declare id + label: t("settings. or reference page titles (*.title / *.section).
+const settingsRaw = read(SETTINGS_PATH)
+if (
+    /\{\s*id:\s*["'][^"']+["']\s*,\s*label:\s*t\(\s*["']settings\./.test(settingsRaw) ||
+    /label:\s*t\(\s*["']settings\.[a-z0-9_.-]+\.(title|section)["']\)/.test(settingsRaw)
+) {
+    errors.push(
+        `  FAIL  Settings.tsx: contains page literal 'label: t("settings.'. Page identities must be derived from manifest.ts, not declared inline in Settings.tsx.`
+    )
+}
+
+
 // 5. Parse allowlist
 const allowlistContent = read(ALLOWLIST_PATH)
 const allowlist = new Map() // "file:keyOrLine" -> { comment, used: false }
 const gtkSwitchAllowlist = new Map() // file -> { expectedCount: number, actualCount: 0, comment, entry }
+let maxExemptPages = null
 
 if (allowlistContent) {
     for (const rawLine of allowlistContent.split("\n")) {
@@ -292,6 +349,11 @@ if (allowlistContent) {
         const entry = entryPart.trim()
         const comment = commentParts.join("#").trim()
         if (entry) {
+            const exemptMatch = entry.match(/^exempt-pages:(\d+)$/)
+            if (exemptMatch) {
+                maxExemptPages = parseInt(exemptMatch[1], 10)
+                continue
+            }
             const switchMatch = entry.match(/^([^:]+\.tsx):gtk-switch:(\d+)$/)
             if (switchMatch) {
                 const [, file, countStr] = switchMatch
@@ -301,6 +363,20 @@ if (allowlistContent) {
             }
         }
     }
+}
+
+// Check 4: Verify exempt pages count against allowlist (can only shrink)
+const exemptPages = manifest.filter((p) => p.kind === "browser" || p.kind === "info")
+if (maxExemptPages === null) {
+    errors.push(`  FAIL  ${ALLOWLIST_PATH}: missing 'exempt-pages:<count>' entry.`)
+} else if (exemptPages.length > maxExemptPages) {
+    errors.push(
+        `  FAIL  manifest.ts: contains ${exemptPages.length} exempt non-declarative pages (${exemptPages.map(p => p.id).join(", ")}), which exceeds the allowed maximum of ${maxExemptPages} in ${ALLOWLIST_PATH}. The exempt list can only shrink, never grow.`
+    )
+} else if (exemptPages.length < maxExemptPages) {
+    errors.push(
+        `  FAIL  ${ALLOWLIST_PATH}: declared ${maxExemptPages} exempt pages, but manifest only has ${exemptPages.length}. Please update ${ALLOWLIST_PATH} to ${exemptPages.length}.`
+    )
 }
 
 // 6. Scan remaining pages in ui/shell/surfaces/settings/pages
@@ -421,6 +497,7 @@ if (errors.length > 0) {
 }
 
 const totalAllowlisted = allowlistedRowCount + gtkSwitchAllowlist.size
+const preferencePages = manifest.filter((p) => p.kind === "preference")
 console.log(
-    `settings-config-contract: ${manifest.length} manifest pages (${totalManifestItems} items), ${settingRowCount} settingRow in unmigrated pages, ${totalAllowlisted} allowlisted exceptions, all contracts verified.`
+    `settings-config-contract: ${manifest.length} manifest pages (${preferencePages.length} preference with ${totalManifestItems} items, ${exemptPages.length} exempt), ${settingRowCount} settingRow in unmigrated pages, ${totalAllowlisted} allowlisted exceptions, all contracts verified.`
 )
