@@ -40,12 +40,22 @@ export function writeFile(file: string | Gio.File, content: string): Gio.File {
     Gio.File.new_for_path(dir).make_directory_with_parents(null)
   }
 
-  gfile.replace_contents(
-    new TextEncoder().encode(content),
-    null,
-    false,
-    Gio.FileCreateFlags.REPLACE_DESTINATION,
-    null,
+  // DURABLE, not merely atomic. Both of GLib's write paths already rename a
+  // temporary into place, so a reader never sees half a file and a crash of the
+  // shell mid-save cannot truncate one — measured 2026-09-01 by inode: an
+  // in-place write keeps the inode, `replace_contents` and `file_set_contents`
+  // both produce a new one. What neither does by default is fsync, so a POWER
+  // CUT can leave the directory entry pointing at contents that never reached the
+  // disk. That is the failure this flag closes, and it is one call, not thirteen.
+  //
+  // ⚠️ It costs an fsync per write, which is why the write policy above it matters:
+  // a slider that commits thirty times a second would now fsync thirty times a
+  // second. Expensive sinks declare `commitOnRelease` (see config-entries.ts).
+  GLib.file_set_contents_full(
+    path,
+    content,
+    GLib.FileSetContentsFlags.CONSISTENT | GLib.FileSetContentsFlags.DURABLE,
+    0o600,
   )
   return gfile
 }
