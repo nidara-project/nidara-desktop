@@ -1,22 +1,18 @@
 import Gtk from "gi://Gtk?version=4.0"
-import Gdk from "gi://Gdk?version=4.0"
-import GdkPixbuf from "gi://GdkPixbuf"
 import Pango from "gi://Pango"
-import { createSquirclePath } from "../../common/DrawingUtils"
+import { makeCoverArt } from "../../common/CoverArt"
 import { CCWidgetSpec, WidgetSize } from "../../common/widget-kit"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import { safeDisconnect } from "../../core/signals"
 import * as media from "../../core/MediaService"
 
+// Player + text state only. The ARTWORK is not here: every tile's art is a
+// `makeCoverArt` from common/, which owns its own decode, its own path guard and
+// its own redraw — which is what the `artVersion` counter this state used to carry
+// was for (tiles compared it to skip a queue_draw for a "notify" that was about a
+// title or a can-go-next).
 interface MediaState {
-    artPixbuf: any
-    // Bumped only when the artwork actually changes — tiles compare it to skip a
-    // queue_draw for a "notify" that was about something else (a title, a
-    // can-go-next). Until 2026-08-17 that meant the 1 Hz notify::position poll
-    // AstalMpris emitted while playing; core/mpris.ts extrapolates position
-    // instead of polling it, so that particular flood is gone at the source.
-    artVersion: number
     currentPlayer: any
     listeners: Array<() => void>
     notify: () => void
@@ -24,8 +20,6 @@ interface MediaState {
 
 function makeMediaState(): MediaState {
     const state: MediaState = {
-        artPixbuf: null,
-        artVersion: 0,
         currentPlayer: null,
         listeners: [],
         notify: () => state.listeners.forEach(fn => fn()),
@@ -39,28 +33,9 @@ function makeMediaState(): MediaState {
             playerSignalId = null
         }
         state.currentPlayer = media.selectedPlayer()
-        if (state.currentPlayer) {
-            playerSignalId = state.currentPlayer.connect("notify", () => {
-                loadArt()
-                state.notify()
-            })
-        }
-        loadArt()
+        if (state.currentPlayer)
+            playerSignalId = state.currentPlayer.connect("notify", () => state.notify())
         state.notify()
-    }
-
-    // Decode only when the art PATH changes — "notify" fires for every property
-    // the player touches, and re-decoding the PNG for a title change is churn.
-    let loadedArt: string | null = null
-    const loadArt = () => {
-        const path = media.resolveCoverArt(state.currentPlayer)
-        if (path === loadedArt) return
-        loadedArt = path
-        if (path) {
-            try { state.artPixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, 64, 64, false) }
-            catch { state.artPixbuf = null }
-        } else { state.artPixbuf = null }
-        state.artVersion++
     }
 
     // MediaService fires on selection changes AND async art arrivals (module
@@ -73,10 +48,9 @@ function makeMediaState(): MediaState {
 
 // SQUARE (2×2): artwork + title/artist + prev/play/next
 function buildSquareContent(state: MediaState): Gtk.Widget {
-    const artDa = new Gtk.DrawingArea({
-        width_request: 62, height_request: 62,
+    const artDa = makeCoverArt({ size: 62, shape: 15 })
+    Object.assign(artDa, {
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        hexpand: false, vexpand: false,
         margin_bottom: 2, // breathing room between artwork and title
     })
 
@@ -120,21 +94,9 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
     box.append(controls)
     box.append(new Gtk.Box({ vexpand: true }))
 
-    artDa.set_draw_func((_, cr, w, h) => {
-        if (w <= 0 || h <= 0) return
-        if (state.artPixbuf) {
-            const small = state.artPixbuf.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
-            cr.save(); createSquirclePath(cr, 0, 0, w, h, 15, 3.2); cr.clip()
-            Gdk.cairo_set_source_pixbuf(cr, small, 0, 0); cr.paint(); cr.restore()
-        } else {
-            cr.setSourceRGBA(1, 1, 1, 0.1); createSquirclePath(cr, 0, 0, w, h, 15, 3.2); cr.fill()
-        }
-    })
-
     // Labels/sensitive are equality-guarded by GTK; gicon is NOT (reassigning the
     // same icon forces a redraw — tech-debt #11C), and queue_draw is gated on the
     // art version so the 1 Hz position notify does zero work.
-    let drawnArt = -1
     const update = () => {
         const p = state.currentPlayer
         title.label  = p?.title || t("cc.media.no-media")
@@ -143,7 +105,6 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
         if (playImg.gicon !== wantPlay) playImg.gicon = wantPlay
         prev.sensitive = p?.can_go_previous !== false
         next.sensitive = p?.can_go_next !== false
-        if (drawnArt !== state.artVersion) { drawnArt = state.artVersion; artDa.queue_draw() }
     }
 
     prev.connect("clicked", () => { try { state.currentPlayer?.previous()   } catch {} })
@@ -161,21 +122,9 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
 
 // WIDE (2×1): small artwork + title/artist + play only
 function buildWideContent(state: MediaState): Gtk.Widget {
-    const artDa = new Gtk.DrawingArea({
-        width_request: 44, height_request: 44,
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        hexpand: false, vexpand: false,
-    })
-    artDa.set_draw_func((_, cr, w, h) => {
-        if (w <= 0 || h <= 0) return
-        if (state.artPixbuf) {
-            const small = state.artPixbuf.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
-            cr.save(); createSquirclePath(cr, 0, 0, w, h, 10, 3.2); cr.clip()
-            Gdk.cairo_set_source_pixbuf(cr, small, 0, 0); cr.paint(); cr.restore()
-        } else {
-            cr.setSourceRGBA(1, 1, 1, 0.1); createSquirclePath(cr, 0, 0, w, h, 10, 3.2); cr.fill()
-        }
-    })
+    const artDa = makeCoverArt({ size: 44, shape: 10 })
+    artDa.halign = Gtk.Align.CENTER
+    artDa.valign = Gtk.Align.CENTER
 
     const title  = new Gtk.Label({ label: t("cc.media.no-media"), css_classes: ["nidara-media-title"],  halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
     const artist = new Gtk.Label({ label: "",         css_classes: ["nidara-media-artist"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
@@ -194,14 +143,12 @@ function buildWideContent(state: MediaState): Gtk.Widget {
     })
     row.append(artDa); row.append(textBox); row.append(play)
 
-    let drawnArt = -1
     const update = () => {
         const p = state.currentPlayer
         title.label  = p?.title || t("cc.media.no-media")
         artist.label = p?.artist || ""
         const wantPlay = p?.playback_status === media.PlaybackStatus.PLAYING ? Icons.pause : Icons.play
         if (widePlayImg.gicon !== wantPlay) widePlayImg.gicon = wantPlay
-        if (drawnArt !== state.artVersion) { drawnArt = state.artVersion; artDa.queue_draw() }
     }
 
     play.connect("clicked", () => { try { state.currentPlayer?.play_pause() } catch {} })
@@ -218,47 +165,21 @@ function buildWideContent(state: MediaState): Gtk.Widget {
 // SINGLE (1×1): just the cover art, clipped to a circle to sit inside the round
 // island (with a play-glyph fallback when nothing is playing). Tap opens the detail
 // panel, like the other 1×1 status tiles.
-function buildSingleContent(state: MediaState): Gtk.Widget {
-    const artDa = new Gtk.DrawingArea({ hexpand: true, vexpand: true, halign: Gtk.Align.FILL, valign: Gtk.Align.FILL })
-    artDa.set_draw_func((_, cr, w, h) => {
-        if (w <= 0 || h <= 0) return
-        const d = Math.min(w, h)
-        const x = (w - d) / 2, y = (h - d) / 2
-        cr.save()
-        cr.arc(x + d / 2, y + d / 2, d / 2, 0, 2 * Math.PI)
-        cr.clip()
-        if (state.artPixbuf) {
-            const small = state.artPixbuf.scale_simple(d, d, GdkPixbuf.InterpType.BILINEAR)
-            Gdk.cairo_set_source_pixbuf(cr, small, x, y)
-            cr.paint()
-        } else {
-            cr.setSourceRGBA(1, 1, 1, 0.1)
-            cr.paint()
-        }
-        cr.restore()
-    })
-
+function buildSingleContent(): Gtk.Widget {
     const fallback = new Gtk.Image({
         gicon: Icons.play, pixel_size: 22, css_classes: ["nd-icon"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
     })
 
+    // The play glyph shows THROUGH the empty circle, so it is the ARTWORK that
+    // decides its visibility — the painter says whether there is any (a path that
+    // fails to decode counts as none). Nothing else on this tile has state, which is
+    // why it is the one size that needs no listener on the shared player state.
+    const artDa = makeCoverArt({ shape: "circle", onArt: (has) => { fallback.visible = !has } })
+
     const overlay = new Gtk.Overlay({ hexpand: true, vexpand: true })
     overlay.set_child(artDa)
     overlay.add_overlay(fallback)
-
-    let drawnArt = -1
-    const update = () => {
-        fallback.visible = !state.artPixbuf
-        if (drawnArt !== state.artVersion) { drawnArt = state.artVersion; artDa.queue_draw() }
-    }
-
-    state.listeners.push(update)
-    overlay.connect("unrealize", () => {
-        const i = state.listeners.indexOf(update)
-        if (i >= 0) state.listeners.splice(i, 1)
-    })
-    update()
     return overlay
 }
 
@@ -278,7 +199,7 @@ export function MediaIslandContent(): CCWidgetSpec {
         supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
         buildContent: (size) =>
             size === WidgetSize.WIDE   ? buildWideContent(state)   :
-            size === WidgetSize.SINGLE ? buildSingleContent(state) :
+            size === WidgetSize.SINGLE ? buildSingleContent() :
                                          buildSquareContent(state),
     }
 }
