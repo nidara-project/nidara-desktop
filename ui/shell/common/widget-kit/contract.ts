@@ -113,10 +113,15 @@ export interface AtomicWidget {
     activeAlpha?: number | (() => number)
 }
 
-// The content-building subset of a widget, produced by the kit's spec factories
-// (tile.ts's roundToggleSpec) and by the one CC factory still to move
-// (MediaIsland). The registry widgets (widgets/*.ts) own the metadata
-// (category, sizes, placement) and delegate only buildContent to these factories, so
-// a spec carries no category — keeping `category` mandatory on real widgets without
-// forcing the factories to fake one.
+// The content-building subset of a widget, produced by the kit's spec factories —
+// `tile.ts`'s `roundToggleSpec` is the only one left. A widget file owns its registry
+// metadata (category, sizes, placement) and delegates only buildContent, so a spec
+// carries no category: that keeps `category` mandatory on real widgets without forcing
+// a factory to fake one.
+//
+// ⚠️ A spec's OWN `defaultSize`/`supportedSizes` are advisory and mostly unread — the
+// widget's registration is what the registry sees. The CC factories that used to live
+// in the surface all declared both, so every one of them carried a second, silent copy
+// of its widget's metadata; the last of those went with MediaIsland on 2026-09-01.
+// Do not reintroduce a factory that restates what its widget already declares.
 export type CCWidgetSpec = Omit<AtomicWidget, "category">

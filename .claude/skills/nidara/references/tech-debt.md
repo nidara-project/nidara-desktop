@@ -1322,7 +1322,7 @@ These were paid down; the *rule* remains:
   at AstalMpris's own `cover_art` cache; that step went with the lib on 2026-08-17 and nothing
   was lost, because the two kinds it did NOT cover (`data:`, and `https:` without GVfs) are the
   common ones — it only ever logged 2× `player.vala … Failed to cache cover art` per track for
-  them. `MediaIslandContent` shares ONE `MediaState`
+  them. `widgets/media.ts` shares ONE `MediaState`
   singleton across tile rebuilds (a per-build state leaked its player subscription). Test with
   `scripts/dev/fake-mpris.js` (see `dev-workflow.md`) — heuristic + both art paths were
   verified live with it (2026-07-05).
@@ -1531,9 +1531,9 @@ These were paid down; the *rule* remains:
   `control-center/Toggles.tsx` and `control-center/Sliders.tsx` over the same two days,
   precisely so the sentence can be true, and the panel rows (`panelRow`,
   `panelInfoRow`, `panelSeparator`) joined the `PANEL_W` tiers right after. What is left of
-  #306: the media tile is still `control-center/MediaIsland.tsx`, and nothing yet ENFORCES
-  the boundary — a CI check that `widgets/` never imports `surfaces/`, plus the one page an
-  outsider writes a widget from, is what closes it.
+  #306: nothing yet ENFORCES the boundary — a CI check that `widgets/` never imports
+  `surfaces/`, plus the one page an outsider writes a widget from, is what closes it. The
+  media tile came home on 2026-09-01 and `surfaces/control-center/` now holds only surface.
 - **Notification swipe-to-dismiss** — one implementation in `common/ScaleRevealer.ts`:
   `attachHorizontalSwipe` (gesture detector — claims only on horizontal intent so the NC
   scroller keeps its vertical drag; cancels the row's release-phase tap) + `setSwipe`/`swipeOut`/
