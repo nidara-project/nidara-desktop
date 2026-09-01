@@ -2398,8 +2398,8 @@ another page, check it against the rule rather than assuming the older page earn
 
 ## CC capsule tiles: stateful vs action (no fake status line)
 
-The 2×1 (WIDE) CC tile built by `buildCapsuleInner(getIcon, getTitle, getSubTitle)` (in
-`surfaces/control-center/Toggles.tsx`) adapts to whether the widget has a **status**:
+The 2×1 (WIDE) CC tile built by `makeCapsuleInner(getIcon, getTitle, getSubTitle)` (in
+`common/widget-kit/tile.ts`) adapts to whether the widget has a **status**:
 - **Stateful** (wifi, bluetooth, focus, ethernet, vpn, battery): `getSubTitle()` returns the
   live state ("Connected", "Off", an SSID, "Do not disturb"…) → single-line title + dim
   subtitle.
@@ -2412,23 +2412,26 @@ The 2×1 (WIDE) CC tile built by `buildCapsuleInner(getIcon, getTitle, getSubTit
   return `""` — never invent a description-as-subtitle. (`applySub()` runs at build time too, so
   plain detail-opening tiles that never call `update()` still hide the empty line.)
 
-**Wrap the capsule box with `wrapCapsuleTile(inner.box)` (or use the button path
-`buildCapsuleContent`) — never a bespoke wrapper.** A WIDE tile is left-anchored by BaseIsland
+**Reach for `makeCapsuleTile` first — it is `makeCapsuleInner` + the subscription + the
+wrapper, which is the shape nine widgets were writing out by hand.** Drop to
+`makeCapsuleInner` + `wrapCapsuleTile(inner.box)` only when a tile needs the refs, and never
+write a bespoke wrapper. A WIDE tile is left-anchored by BaseIsland
 (`child.halign = START, hexpand = false`), and `wrapCapsuleTile` adds the exact nesting level
 that survives `SquircleContainer`'s padding so the icon/text land on the same grid as every
 other tile. A tile that built its own wrapper — screen recording once put an idle/recording
 `Gtk.Stack` inside a hand-rolled `outer` box — insets the content a few px off from the column
 (visible once you line the tiles up). If a tile has multiple visual states (e.g. record ⇄
-stop), drive ONE `buildCapsuleInner` via getters + `inner.update()` on a `notify::` (and toggle
+stop), drive ONE `makeCapsuleInner` via getters + `inner.update()` on a `notify::` (and toggle
 state classes on `inner.iconBox`/`inner.icon`/`inner.label`/`inner.subLabel`) — the same
 dynamic-capsule pattern as wifi/focus — instead of swapping whole subtrees in a stack.
 
 **A widget that needs BOTH a one-tap toggle AND a `buildCCDetail` subpage uses
-`buildSplitCapsuleContent`, not `buildCapsuleContent`.** `buildCapsuleContent` wraps the *entire*
-capsule in one `Gtk.Button` — fine for toggle-only widgets (dark_mode, night_light, focus), but it
-swallows the tile-level click IslandGrid wires up for `buildCCDetail` widgets, so a toggle widget
-that grows a subpage (bluetooth → device list) has no way to open it. `buildSplitCapsuleContent`
-makes *only the icon badge* a button (the toggle); the title/subtitle stay plain so the unclaimed
+`makeSplitCapsuleTile`.** The whole-capsule button form wraps the *entire* capsule in one
+`Gtk.Button` — fine for toggle-only widgets (dark_mode, night_light, focus), but it swallows the
+tile-level click IslandGrid wires up for `buildCCDetail` widgets, so a toggle widget that grows a
+subpage (bluetooth → device list) has no way to open it. That is why it is PRIVATE to `tile.ts`
+and only reachable through `roundToggleSpec`, whose widgets have no detail panel by definition.
+`makeSplitCapsuleTile` makes *only the icon badge* a button (the toggle); the title/subtitle stay plain so the unclaimed
 click area falls through to IslandGrid's detail handler — the same mechanism the plain
 detail-opening tiles (wifi, ethernet) already rely on, just carved out of a smaller region instead
 of the whole tile. CSS gotcha: the icon button's own class (`.cc-split-icon-btn`) must outrank the
@@ -2448,7 +2451,7 @@ never a fallback on tap.
 
 **A "stateful" tile's on-state fills the WHOLE capsule with the live accent colour** (standard
 quick-settings convention), not just the icon. Wired via `AtomicWidget.getActive`/
-`watchActive` (`Types.ts`) → `BaseIsland` → `SquircleContainer`'s `getActive`/`activeAlpha`/
+`watchActive` (`common/widget-kit/contract.ts`) → `BaseIsland` → `SquircleContainer`'s `getActive`/`activeAlpha`/
 `watchActive` props: `getActive()` is read live *inside the Cairo draw call*, so it paints through
 the exact same `resolveDrawParams`/`drawSquircle` path a real tile already uses — no separate CSS
 shape to keep in sync, no mismatched corners. `watchActive(cb)` only exists because the container
@@ -2456,7 +2459,7 @@ can't know the state changed on its own (it's driven by the widget's own domain 
 power, the Do Not Disturb flag, `Theme` changed, an nmcli poll); it just calls `cb` to trigger
 `da.queue_draw()`. Live on **dark_mode, night_light, focus, bt, vpn** — action/stateless widgets
 (screenshot, clipboard) have nothing to fill and omit both props. `wifi`/`ethernet` don't have this
-either: their WIDE tile has no toggle button at all (see `buildSplitCapsuleContent` above), so
+either: their WIDE tile has no toggle button at all (see `makeSplitCapsuleTile` above), so
 there's no "this tile is a toggle" moment to fill — only their `buildCCDetail` switch reflects
 state today. VPN is the template for a **polled** (non-signal) state: one shared module-level
 poller + listener `Set` in `vpn.ts` (`watchVpnActive`), lazily started on first subscriber, instead

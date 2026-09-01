@@ -114,6 +114,9 @@ costs nothing; a noisy or taste-specific PR costs the maintainer review time and
   `references/dev-workflow.md`.
 - **MAKE-IT-A-SETTING** → add the knob (follow the widget-registry / Settings conventions),
   set the user's value through it, and treat the *new knob* as a GLOBAL change.
+  If what you are adding is a **bar pill or a Control-Centre tile**, that is one file and
+  `references/writing-a-widget.md` is the whole of it — vocabulary, template, and the
+  boundary CI enforces.
 - **GLOBAL** → if you already know this is headed upstream, do the **Step 2½** existing-PR
   check *first* (it may already be done). Then make the change in repo code following all
   conventions (the ten commandments, scoped CSS, `Status.ts`/`ShellActions`, no hardcoded
