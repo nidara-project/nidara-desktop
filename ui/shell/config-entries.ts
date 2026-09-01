@@ -766,12 +766,23 @@ export function registerConfigEntries() {
             i18n: "settings.gaming.performance-profile",
         },
     })
+    // Mode selector — the shared segmented control. It used to be a hand-rolled
+    // group of Gtk.ToggleButtons, and a ToggleButton that is already active turns
+    // OFF when clicked: the handler bailed on `!btn.active`, so clicking the
+    // selected mode left the control showing NOTHING selected while that mode was
+    // still in force. `segmentedGroup` has no empty state to fall into.
     registerConfig("gaming.wallpaperMode", {
         desc: "Wallpaper while gaming: Steam hero artwork, a custom image, or unchanged.",
         type: "enum",
         enum: ["artwork", "custom", "none"],
         get: () => Gaming.wallpaperMode,
         set: v => Gaming.setWallpaperMode(v as WallpaperMode),
+        subscribe: onGamingCfg(() => Gaming.wallpaperMode),
+        ui: {
+            i18n: "settings.gaming.wallpaper-mode",
+            control: "segmented",
+            optI18n: (v: string) => t(`settings.gaming.mode.${v}` as any),
+        },
     })
 
     // ── AI governance ─────────────────────────────────────────────────────

@@ -271,6 +271,28 @@ export const settingRow = (key: string): Gtk.ListBoxRow => {
                 : undefined
             return presetRow(label, subtitle, presets, init, unit, cb, onExt)
         }
+        case "segmented": {
+            const values = entry.enum ? [...entry.enum] : []
+            const getOptLabel = (val: string): string => {
+                if (ui.optI18n) return ui.optI18n(val)
+                const optKey = `${ui.i18n}.opt.${val}`
+                const translated = t(optKey as any)
+                if (translated === optKey) {
+                    throw new Error(`[settingRow] Missing translation for option "${val}" with derived key "${optKey}" on config entry "${key}"`)
+                }
+                return translated
+            }
+            const options = values.map(val => ({ label: getOptLabel(val), value: val }))
+            const currentVal = String(entry.get())
+            const cb = (v: string) => { entry.set?.(v) }
+            const onExt = entry.subscribe
+                ? (apply: (v: string) => void) => {
+                    return entry.subscribe!((v) => apply(String(v)))
+                }
+                : undefined
+            const seg = segmentedGroup(options, currentVal, cb, onExt)
+            return createRow(label, subtitle, seg)
+        }
     }
 }
 

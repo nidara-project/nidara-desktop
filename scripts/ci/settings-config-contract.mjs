@@ -116,6 +116,11 @@ const manifestItemCounts = new Map()
 let totalManifestItems = 0
 
 for (const page of manifest) {
+    if (page.header) {
+        if (!page.header.custom || typeof page.header.custom !== "string") {
+            errors.push(`  FAIL  manifest.ts: page "${page.id}" header must declare a string custom identifier.`)
+        }
+    }
     for (const group of page.groups) {
         if (group.i18n && group.i18n !== "" && !enKeys.has(group.i18n)) {
             errors.push(`  FAIL  manifest.ts: page "${page.id}" group declares i18n "${group.i18n}" which does not exist in en.ts.`)
@@ -131,19 +136,69 @@ for (const page of manifest) {
                 errors.push(`  FAIL  manifest.ts: page "${page.id}" footerWhen.in must be a non-empty array.`)
             }
         }
-        for (const item of group.items) {
-            totalManifestItems++
-            if (typeof item !== "string") {
-                errors.push(`  FAIL  manifest.ts: page "${page.id}" contains non-string item: ${JSON.stringify(item)} (only string config keys in P1).`)
-                continue
+        if (group.custom) {
+            if (typeof group.custom !== "string") {
+                errors.push(`  FAIL  manifest.ts: page "${page.id}" group custom must be a string.`)
             }
-            if (!registeredKeys.has(item)) {
-                errors.push(`  FAIL  manifest.ts: page "${page.id}" references unregistered config key "${item}".`)
+            if (group.items && group.items.length > 0) {
+                errors.push(`  FAIL  manifest.ts: page "${page.id}" group declares both custom and items (they are mutually exclusive).`)
             }
-            if (!keysWithUi.has(item)) {
-                errors.push(`  FAIL  manifest.ts: page "${page.id}" item "${item}" has no ui: declaration in config-entries.ts.`)
+        }
+        if (group.items) {
+            for (const item of group.items) {
+                if (typeof item === "string") {
+                    totalManifestItems++
+                    if (!registeredKeys.has(item)) {
+                        errors.push(`  FAIL  manifest.ts: page "${page.id}" references unregistered config key "${item}".`)
+                    }
+                    if (!keysWithUi.has(item)) {
+                        errors.push(`  FAIL  manifest.ts: page "${page.id}" item "${item}" has no ui: declaration in config-entries.ts.`)
+                    }
+                    manifestItemCounts.set(item, (manifestItemCounts.get(item) || 0) + 1)
+                } else if (typeof item === "object" && item !== null) {
+                    if ("custom" in item) {
+                        if (!item.custom || typeof item.custom !== "string") {
+                            errors.push(`  FAIL  manifest.ts: page "${page.id}" custom item must declare a string custom identifier.`)
+                        }
+                        if (!item.i18n || !enKeys.has(item.i18n)) {
+                            errors.push(`  FAIL  manifest.ts: page "${page.id}" custom item "${item.custom}" declares i18n "${item.i18n}" which does not exist in en.ts.`)
+                        }
+                        const descKey = `${item.i18n}.desc`
+                        if (!enKeys.has(descKey)) {
+                            errors.push(`  FAIL  manifest.ts: page "${page.id}" custom item "${item.custom}" requires description i18n "${descKey}" which does not exist in en.ts.`)
+                        }
+                        if (item.key) {
+                            if (!registeredKeys.has(item.key)) {
+                                errors.push(`  FAIL  manifest.ts: page "${page.id}" custom item "${item.custom}" references unregistered config key "${item.key}".`)
+                            }
+                        }
+                        if (item.visibleWhen) {
+                            if (!registeredKeys.has(item.visibleWhen.key)) {
+                                errors.push(`  FAIL  manifest.ts: page "${page.id}" custom item "${item.custom}" visibleWhen references unregistered config key "${item.visibleWhen.key}".`)
+                            }
+                            if (!Array.isArray(item.visibleWhen.in) || item.visibleWhen.in.length === 0) {
+                                errors.push(`  FAIL  manifest.ts: page "${page.id}" custom item "${item.custom}" visibleWhen.in must be a non-empty array.`)
+                            }
+                        }
+                    } else if ("decoration" in item) {
+                        if (!item.decoration || typeof item.decoration !== "string") {
+                            errors.push(`  FAIL  manifest.ts: page "${page.id}" decoration item must declare a string decoration identifier.`)
+                        }
+                        if (item.visibleWhen) {
+                            if (!registeredKeys.has(item.visibleWhen.key)) {
+                                errors.push(`  FAIL  manifest.ts: page "${page.id}" decoration item "${item.decoration}" visibleWhen references unregistered config key "${item.visibleWhen.key}".`)
+                            }
+                            if (!Array.isArray(item.visibleWhen.in) || item.visibleWhen.in.length === 0) {
+                                errors.push(`  FAIL  manifest.ts: page "${page.id}" decoration item "${item.decoration}" visibleWhen.in must be a non-empty array.`)
+                            }
+                        }
+                    } else {
+                        errors.push(`  FAIL  manifest.ts: page "${page.id}" contains invalid item: ${JSON.stringify(item)}.`)
+                    }
+                } else {
+                    errors.push(`  FAIL  manifest.ts: page "${page.id}" contains invalid item: ${JSON.stringify(item)}.`)
+                }
             }
-            manifestItemCounts.set(item, (manifestItemCounts.get(item) || 0) + 1)
         }
     }
 }
@@ -156,10 +211,11 @@ for (const [item, count] of manifestItemCounts.entries()) {
 }
 
 // Check that EVERY registered key with ui: belonging to a migrated page is in manifest.ts.
-// NOTE: Prefix matching (key.split(".")[0]) works for these pure pages because their key
-// prefixes match page IDs (accessibility, dock, input, notifications). In Phase P2, when
-// mixed pages like Appearance migrate (containing cross-cutting keys like nightlight.*),
-// the manifest itself becomes the universal denominator, checked against a per-key exemption list.
+// NOTE: Prefix matching (key.split(".")[0]) works for these eight pages because their key
+// prefixes match page IDs (accessibility, dock, input, notifications, bar, gaming, power, region).
+// In Phase P2b, when mixed pages like Appearance migrate (containing cross-cutting keys like
+// nightlight.* and wallpaper.transition — exactly 4 keys), the manifest itself becomes the
+// universal denominator with zero exemptions.
 for (const [key] of keysWithUi.entries()) {
     const pageId = key.split(".")[0]
     if (migratedPageIds.has(pageId)) {
