@@ -8,8 +8,7 @@ import { menuRow, menuSeparator } from "../common/MenuRow"
 import IconButton from "../common/IconButton"
 import { NidaraScrolled } from "../../lib/nidara-kit"
 import { RADIUS, rowInsetFor } from "../../lib/tokens"
-import { PANEL_W, AtomicWidget, WidgetSize } from "../common/widget-kit"
-import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
+import { PANEL_W, AtomicWidget, WidgetSize, makeCapsuleTile } from "../common/widget-kit"
 
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -414,7 +413,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
     }
 
     // Action tile (no on/off state) → no status subtitle; just the name.
-    return wrapCapsuleTile(buildCapsuleInner(() => Icons.clipboard, () => t("widget.clipboard.name"), () => "").box)
+    return makeCapsuleTile(() => Icons.clipboard, () => t("widget.clipboard.name"), () => "")
 }
 
 // ── Widget registration ────────────────────────────────────────────────────────

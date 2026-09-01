@@ -1,6 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { AtomicWidget, WidgetSize } from "../common/widget-kit"
-import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
+import { AtomicWidget, WidgetSize, makeIconTile, makeCapsuleTile } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as Net from "../core/NetworkService"
@@ -29,22 +28,10 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         return isConnected() ? t("cc.ethernet.sub.connected") : t("cc.ethernet.sub.disconnected")
     }
 
-    if (size === WidgetSize.SINGLE) {
-        const box = new Gtk.Box({ hexpand: true, vexpand: true })
-        box.append(new Gtk.Image({
-            gicon: Icons.ethernet, pixel_size: 28,
-            halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-            hexpand: true, vexpand: true,
-            css_classes: ["nd-icon"],
-        }))
-        return box
-    }
+    if (size === WidgetSize.SINGLE)
+        return makeIconTile(() => Icons.ethernet)
 
-    const inner = buildCapsuleInner(() => Icons.ethernet, () => t("cc.ethernet.name"), getSub)
-
-    const dispose = Net.watchWired(inner.update)
-    inner.box.connect("unrealize", dispose)
-    return wrapCapsuleTile(inner.box)
+    return makeCapsuleTile(() => Icons.ethernet, () => t("cc.ethernet.name"), getSub, Net.watchWired)
 }
 
 function buildInfoPanel(): Gtk.Widget {

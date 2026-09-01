@@ -1,9 +1,8 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { PANEL_W, AtomicWidget, WidgetSize } from "../common/widget-kit"
+import { PANEL_W, AtomicWidget, WidgetSize, makeCapsuleTile } from "../common/widget-kit"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 import GLib from "gi://GLib"
 import { execAsync } from "../../lib/process"
-import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
 
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -130,7 +129,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
     }
 
     // Action tile (no on/off state) → no status subtitle; just the name.
-    return wrapCapsuleTile(buildCapsuleInner(() => Icons.camera, () => t("widget.screenshot.name"), () => "").box)
+    return makeCapsuleTile(() => Icons.camera, () => t("widget.screenshot.name"), () => "")
 }
 
 // ── Widget registration ───────────────────────────────────────────────────────

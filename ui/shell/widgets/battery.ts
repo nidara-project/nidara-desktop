@@ -1,6 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { PANEL_W, AtomicWidget, WidgetSize } from "../common/widget-kit"
-import { wrapCapsuleTile } from "../surfaces/control-center/Toggles"
+import { PANEL_W, AtomicWidget, WidgetSize, wrapCapsuleTile } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as Battery from "../core/BatteryService"

@@ -1,8 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import nightLight from "../core/NightLightManager"
 import { makeHSlider } from "../../lib/nidara-kit"
-import { buildRoundContent, buildSplitCapsuleContent } from "../surfaces/control-center/Toggles"
-import { AtomicWidget, WidgetSize } from "../common/widget-kit"
+import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile } from "../common/widget-kit"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -36,8 +35,8 @@ const getSub = () => nightLight.enabled
 function buildContent(size: WidgetSize): Gtk.Widget {
     const toggle = () => nightLight.setEnabled(!nightLight.enabled)
     if (size === WidgetSize.SINGLE)
-        return buildRoundContent(getIcon, () => nightLight.enabled, toggle, subscribe)
-    return buildSplitCapsuleContent(getIcon, () => t("widget.night-light.name"), getSub, toggle, subscribe)
+        return makeRoundTile(getIcon, () => nightLight.enabled, toggle, subscribe)
+    return makeSplitCapsuleTile(getIcon, () => t("widget.night-light.name"), getSub, toggle, subscribe)
 }
 
 // ── CC detail panel: on/off switch + temperature slider + schedule ────────────

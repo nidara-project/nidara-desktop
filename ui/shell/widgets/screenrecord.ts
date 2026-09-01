@@ -1,12 +1,11 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
-import { PANEL_W, AtomicWidget, WidgetSize } from "../common/widget-kit"
+import { PANEL_W, AtomicWidget, WidgetSize, makeIconTile, makeCapsuleInner, wrapCapsuleTile } from "../common/widget-kit"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 import { NidaraDropDown } from "../../lib/nidara-kit/scrolled"
 import { NidaraList, NidaraRow, NidaraToggleRow, NidaraDropDownRow } from "../../lib/nidara-kit"
 import GLib from "gi://GLib"
 import { execAsync } from "../../lib/process"
-import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
 
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -155,21 +154,19 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
 // ── CC widget content ─────────────────────────────────────────────────────────
 
 function buildContent(size: WidgetSize): Gtk.Widget {
-    if (size === WidgetSize.SINGLE) {
-        const box = new Gtk.Box({ hexpand: true, vexpand: true })
-        const icon = new Gtk.Image({ gicon: status.recording ? Icons.recordStop : Icons.record, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] })
-        box.append(icon)
-        const syncSingle = () => { icon.gicon = status.recording ? Icons.recordStop : Icons.record }
-        const sigId = status.connect("notify::recording", syncSingle)
-        box.connect("unrealize", () => { safeDisconnect(status, sigId) })
-        return box
-    }
+    if (size === WidgetSize.SINGLE)
+        return makeIconTile(
+            () => status.recording ? Icons.recordStop : Icons.record,
+            (sync) => {
+                const sigId = status.connect("notify::recording", sync)
+                return () => safeDisconnect(status, sigId)
+            })
 
     // WIDE: a single capsule whose state (idle ⇄ recording) is driven by
     // status.recording — the SAME dynamic-capsule path as every other tile
-    // (buildCapsuleInner + update via getters). The old idle/recording Gtk.Stack
+    // (makeCapsuleInner + update via getters). The old idle/recording Gtk.Stack
     // inset this tile's content a few px off from the rest of the column; routing it
-    // through buildCapsuleInner + wrapCapsuleTile (like screenshot/clipboard) lands
+    // through makeCapsuleInner + wrapCapsuleTile (like screenshot/clipboard) lands
     // the icon/text on the exact same grid. Idle = action tile (name, no sub);
     // recording = "Recording…" + a live elapsed timer in the subtitle slot. The
     // accent fill itself is BaseIsland's getActive (see the widget registration
@@ -182,7 +179,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
     const getTitle = () => status.recording ? t("widget.screenrecord.recording") : t("widget.screenrecord.name")
     const getSub   = () => status.recording ? recordingElapsed() : ""
 
-    const inner = buildCapsuleInner(getIcon, getTitle, getSub)
+    const inner = makeCapsuleInner(getIcon, getTitle, getSub)
 
     // One driver for both jobs: a `full` pass re-reads icon/title/sub (the state
     // flipped), a tick only moves the subtitle's digits.

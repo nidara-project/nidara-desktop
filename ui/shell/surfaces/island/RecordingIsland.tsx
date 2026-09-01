@@ -8,9 +8,9 @@ import { safeDisconnect } from "../../core/signals"
 import GLib from "gi://GLib"
 import status, { recordingElapsed } from "../../core/Status"
 // A surface importing a widget is unusual — verified cycle-free: screenrecord's
-// own imports are core/ + widget-kit + control-center/Toggles, and none of those
-// reaches surfaces/island (the boot-crashing cycle to avoid is the one through
-// CCLayoutManager → widgets/index, see architecture.md).
+// own imports are core/ + widget-kit, and neither reaches surfaces/island (the
+// boot-crashing cycle to avoid is the one through CCLayoutManager → widgets/index,
+// see architecture.md).
 import { stopRecording } from "../../widgets/screenrecord"
 
 // The live-capture expanded surface: the elapsed clock, big, and Stop.
