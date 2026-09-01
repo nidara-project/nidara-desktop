@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import nightLight from "../core/NightLightManager"
 import { makeHSlider } from "../../lib/nidara-kit"
-import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile } from "../common/widget-kit"
+import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator } from "../common/widget-kit"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -48,11 +48,10 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
 
     const sw = new Gtk.Switch({ active: nightLight.enabled, valign: Gtk.Align.CENTER, sensitive: !nightLight.scheduleEnabled })
     sw.connect("state-set", (_s: Gtk.Switch, state: boolean) => { nightLight.setEnabled(state); return false })
-    const switchRow = new Gtk.Box({ spacing: 8, margin_bottom: 4 })
-    switchRow.append(new Gtk.Label({ label: t("widget.night-light.name"), css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true }))
-    switchRow.append(sw)
+    const switchRow = panelRow(t("widget.night-light.name"), sw)
+    switchRow.margin_bottom = 4      // air before the separator
     outer.append(switchRow)
-    outer.append(new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL, margin_top: 2, margin_bottom: 2 }))
+    outer.append(panelSeparator())
 
     const tempValueLabel = new Gtk.Label({ label: `${nightLight.temperature}K`, css_classes: ["slider-value-label"], width_chars: 5, xalign: 1.0 })
     const tempSlider = makeHSlider({
@@ -71,12 +70,11 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
     tempRow.append(new Gtk.Image({ gicon: Icons.plus, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     tempRow.append(tempValueLabel)
     outer.append(tempRow)
-    outer.append(new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL, margin_top: 2, margin_bottom: 2 }))
+    outer.append(panelSeparator())
 
     const schedSwitch = new Gtk.Switch({ active: nightLight.scheduleEnabled, valign: Gtk.Align.CENTER })
-    const schedRow = new Gtk.Box({ spacing: 8, margin_top: 4 })
-    schedRow.append(new Gtk.Label({ label: t("settings.appearance.night-light-schedule"), css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true }))
-    schedRow.append(schedSwitch)
+    const schedRow = panelRow(t("settings.appearance.night-light-schedule"), schedSwitch)
+    schedRow.margin_top = 4          // air after the separator
     outer.append(schedRow)
 
     const makeSpin = (lo: number, hi: number, val: number) => {

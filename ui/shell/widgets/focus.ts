@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile } from "../common/widget-kit"
+import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow } from "../common/widget-kit"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -39,9 +39,7 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
     const sw = new Gtk.Switch({ active: dontDisturb(), valign: Gtk.Align.CENTER })
     sw.connect("state-set", (_s: Gtk.Switch, state: boolean) => { setDontDisturb(state); return false })
 
-    const switchRow = new Gtk.Box({ spacing: 8 })
-    switchRow.append(new Gtk.Label({ label: t("widget.focus.name"), css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true }))
-    switchRow.append(sw)
+    const switchRow = panelRow(t("widget.focus.name"), sw)
 
     const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
     outer.append(switchRow)

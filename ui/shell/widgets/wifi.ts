@@ -1,17 +1,8 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { AtomicWidget, WidgetSize, makeIconTile, makeCapsuleTile } from "../common/widget-kit"
+import { AtomicWidget, WidgetSize, makeIconTile, makeCapsuleTile, panelRow, panelInfoRow, panelSeparator } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as Net from "../core/NetworkService"
-
-function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; update: () => void } {
-    const key = new Gtk.Label({ label, css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true })
-    const val = new Gtk.Label({ label: getValue(), css_classes: ["bar-popover-val"], halign: Gtk.Align.END })
-    const row = new Gtk.Box({ spacing: 16 })
-    row.append(key)
-    row.append(val)
-    return { row, update: () => { val.label = getValue() } }
-}
 
 // The adapter is read through Net.wifi() on every call rather than captured, so a
 // dongle plugged in mid-session reaches these; the watchers re-arm themselves on
@@ -48,15 +39,15 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 }
 
 function buildInfoPanel(): Gtk.Widget {
-    const ssid  = infoRow(t("widget.wifi.row.network"), () => Net.wifi()?.ssid || "—")
-    const state = infoRow(t("widget.wifi.row.status"), () => {
+    const ssid  = panelInfoRow(t("widget.wifi.row.network"), () => Net.wifi()?.ssid || "—")
+    const state = panelInfoRow(t("widget.wifi.row.status"), () => {
         // "Disabled" means the radio is OFF, which is only sayable when there IS a
         // radio — with no adapter this stays "Disconnected", as it always did.
         const w = Net.wifi()
         if (w && !w.enabled) return t("widget.wifi.row.disabled")
         return w?.ssid ? t("cc.wifi.sub.connected") : t("cc.wifi.sub.disconnected")
     })
-    const ip = infoRow("IP", () => Net.getIp(Net.wifi()))
+    const ip = panelInfoRow("IP", () => Net.getIp(Net.wifi()))
 
     const updateAll = () => { ssid.update(); state.update(); ip.update() }
     updateAll()
@@ -83,16 +74,12 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
     const dispose = Net.watchWifiEnabled(() => { sw.active = Net.wifiEnabled() })
     sw.connect("unrealize", dispose)
 
-    const switchLabel = new Gtk.Label({ label: t("cc.wifi.name"), css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true })
-    const switchRow = new Gtk.Box({ spacing: 8, margin_bottom: 4 })
-    switchRow.append(switchLabel)
-    switchRow.append(sw)
-
-    const sep = new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL, margin_top: 2, margin_bottom: 2 })
+    const switchRow = panelRow(t("cc.wifi.name"), sw)
+    switchRow.margin_bottom = 4      // air before the separator
 
     const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })
     outer.append(switchRow)
-    outer.append(sep)
+    outer.append(panelSeparator())
     outer.append(buildInfoPanel())
     return outer
 }

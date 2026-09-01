@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { NidaraButton } from "../../lib/nidara-kit/button"
-import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile } from "../common/widget-kit"
+import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator } from "../common/widget-kit"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -95,17 +95,13 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
     const sw = new Gtk.Switch({ active: BT.isPowered(), valign: Gtk.Align.CENTER })
     sw.connect("state-set", (_sw: Gtk.Switch, state: boolean) => { BT.setPowered(state); return false })
 
-    const switchLabel = new Gtk.Label({ label: t("widget.bluetooth.name"), css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true })
-    const switchRow = new Gtk.Box({ spacing: 8, margin_bottom: 4 })
-    switchRow.append(switchLabel)
-    switchRow.append(sw)
-
-    const sep = new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL, margin_top: 2, margin_bottom: 2 })
+    const switchRow = panelRow(t("widget.bluetooth.name"), sw)
+    switchRow.margin_bottom = 4      // air before the separator
     const { box: listBox, refresh } = buildDeviceList()
 
     const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })
     outer.append(switchRow)
-    outer.append(sep)
+    outer.append(panelSeparator())
     outer.append(listBox)
 
     const applyPowered = () => {

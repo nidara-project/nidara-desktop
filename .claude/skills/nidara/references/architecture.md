@@ -1115,7 +1115,21 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     `CCLayoutManager` now and are unreachable from `widgets/`; a widget's own
     intrinsic sizes (icon circles, buttons, its caption height) are fine. Panel
     widths (bar expansions / CC details) come from the **`PANEL_W` tier
-    vocabulary** (sm 200 / md 220 / lg 240 / xl 280 / full 356), never hardcoded px.
+    vocabulary** (sm 200 / md 220 / lg 240 / xl 280 / full 356), never hardcoded px,
+    and the rows inside them from the three words beside it in `widget-kit/panel.ts`:
+    **`panelRow`** (label + a control — a switch, a button; was written out five times
+    across bluetooth, wifi, focus and night light twice), **`panelInfoRow`** (label +
+    a live value + an `update()`; was `infoRow`, duplicated BYTE FOR BYTE in `wifi.ts`
+    and `ethernet.ts`) and **`panelSeparator`**. What is deliberately NOT a word is
+    the panel COLUMN: a bar expansion sizes itself (`spacing: 12` + a PANEL_W tier)
+    and a CC detail fills what it is given (`spacing: 0`, hexpand), and one word for
+    both would be a word that lies. Nor are a row's outer margins — a `margin_bottom:
+    4` in these panels means "a separator follows" and a `margin_top: 4` means one
+    precedes, context the row cannot know, so the caller sets them on what it gets
+    back. Same reason `panelSeparator` carries 2px of its own air and the bare
+    `new Gtk.Separator()` inside screenshot's and screen recording's `spacing: 12`
+    columns is CORRECT there: that column already provides the room. Those two are not
+    drift; do not "fix" them into the word.
     GOTCHA: every module in widget-kit/ MUST stay a leaf — importing
     `CCLayoutManager` from one closes the cycle CCLayoutManager → widgets/index →
     widget → widget-kit → CCLayoutManager and **crashes the shell at boot**

@@ -1,17 +1,8 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { AtomicWidget, WidgetSize, makeIconTile, makeCapsuleTile } from "../common/widget-kit"
+import { AtomicWidget, WidgetSize, makeIconTile, makeCapsuleTile, panelInfoRow } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as Net from "../core/NetworkService"
-
-function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; update: () => void } {
-    const key = new Gtk.Label({ label, css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true })
-    const val = new Gtk.Label({ label: getValue(), css_classes: ["bar-popover-val"], halign: Gtk.Align.END })
-    const row = new Gtk.Box({ spacing: 16 })
-    row.append(key)
-    row.append(val)
-    return { row, update: () => { val.label = getValue() } }
-}
 
 function buildBarContent(): Gtk.Widget {
     return new Gtk.Image({ gicon: Icons.ethernet, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
@@ -35,10 +26,10 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 }
 
 function buildInfoPanel(): Gtk.Widget {
-    const iface = infoRow(t("widget.ethernet.row.interface"), () => Net.wired()?.device.get_iface() || "—")
-    const state = infoRow(t("widget.ethernet.row.status"),    () => Net.wiredConnected() ? t("cc.ethernet.sub.connected") : t("cc.ethernet.sub.disconnected"))
-    const ip    = infoRow("IP",                               () => Net.getIp(Net.wired()))
-    const speed = infoRow(t("widget.ethernet.row.speed"),     () => { const s = Net.wired()?.speed; return s ? `${s} Mb/s` : "—" })
+    const iface = panelInfoRow(t("widget.ethernet.row.interface"), () => Net.wired()?.device.get_iface() || "—")
+    const state = panelInfoRow(t("widget.ethernet.row.status"),    () => Net.wiredConnected() ? t("cc.ethernet.sub.connected") : t("cc.ethernet.sub.disconnected"))
+    const ip    = panelInfoRow("IP",                               () => Net.getIp(Net.wired()))
+    const speed = panelInfoRow(t("widget.ethernet.row.speed"),     () => { const s = Net.wired()?.speed; return s ? `${s} Mb/s` : "—" })
 
     const updateAll = () => { iface.update(); state.update(); ip.update(); speed.update() }
     updateAll()
