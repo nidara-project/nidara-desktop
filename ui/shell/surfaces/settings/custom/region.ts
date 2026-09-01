@@ -308,7 +308,8 @@ export const build = (ctx: PageCtx) => {
         dateDrp.selected = Math.max(0, dateFmts.indexOf(regionConfig.dateFormat))
     }
 
-    // Armed on ctx.page as documented in Region.tsx:60
+    // Armed on ctx.page so it re-runs on every visit — created in the builder
+    // closure without bindWhileRealized it would survive exactly one visit.
     bindWhileRealized(ctx.page, () => {
         syncFromConfig()   // the formats may have changed while the page was away
         const clockTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
@@ -327,11 +328,11 @@ export const build = (ctx: PageCtx) => {
 
     return {
         clockPreview: () => previewBox,
-        timeFormat: () => createRow(t("settings.region.time.format"), t("settings.region.time.format.desc"), timeDrp),
-        dateFormat: () => createRow(t("settings.region.date.format"), t("settings.region.date.format.desc"), dateDrp),
-        timezoneActive: () => createRow(t("settings.region.tz.active"), t("settings.region.tz.active.desc"), tzCurrentLabel),
-        timezoneChange: () => createRow(t("settings.region.tz.change"), t("settings.region.tz.change.desc"), tzEntryRow),
-        systemLanguage: () => createRow(t("settings.region.locale.lang"), t("settings.region.locale.lang.desc"), langRow),
-        regionalFormat: () => createRow(t("settings.region.locale.regional"), t("settings.region.locale.regional.desc"), regionalDrp),
+        timeFormat: (decl: { i18n: string }) => createRow(t(decl.i18n as any), t(`${decl.i18n}.desc` as any), timeDrp),
+        dateFormat: (decl: { i18n: string }) => createRow(t(decl.i18n as any), t(`${decl.i18n}.desc` as any), dateDrp),
+        timezoneActive: (decl: { i18n: string }) => createRow(t(decl.i18n as any), t(`${decl.i18n}.desc` as any), tzCurrentLabel),
+        timezoneChange: (decl: { i18n: string }) => createRow(t(decl.i18n as any), t(`${decl.i18n}.desc` as any), tzEntryRow),
+        systemLanguage: (decl: { i18n: string }) => createRow(t(decl.i18n as any), t(`${decl.i18n}.desc` as any), langRow),
+        regionalFormat: (decl: { i18n: string }) => createRow(t(decl.i18n as any), t(`${decl.i18n}.desc` as any), regionalDrp),
     } satisfies Record<string, ItemBuilder>
 }

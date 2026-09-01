@@ -13,7 +13,7 @@ export interface PageCtx {
     pageId: string
 }
 
-export type ItemBuilder = () => Gtk.Widget
+export type ItemBuilder = (decl?: any) => Gtk.Widget
 
 const PAGE_BUILDERS = {
     bar: buildBar,
@@ -112,7 +112,8 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
             if (!groupBuilder) {
                 throw new Error(`[buildPreferencePage] Missing custom group builder "${group.custom}" on page "${pageId}"`)
             }
-            page.append(groupBuilder())
+            const title = group.i18n ? t(group.i18n as any) : ""
+            page.append(groupBuilder(title))
             continue
         }
 
@@ -129,7 +130,7 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
                 if (!ib) {
                     throw new Error(`[buildPreferencePage] Missing custom item builder "${item.custom}" on page "${pageId}"`)
                 }
-                const row = ib()
+                const row = ib(item)
                 if (item.visibleWhen) {
                     bindVisibility(row, page, item.visibleWhen)
                 }
@@ -139,7 +140,7 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
                 if (!db) {
                     throw new Error(`[buildPreferencePage] Missing decoration builder "${item.decoration}" on page "${pageId}"`)
                 }
-                const row = db()
+                const row = db(item)
                 if (item.visibleWhen) {
                     bindVisibility(row, page, item.visibleWhen)
                 }

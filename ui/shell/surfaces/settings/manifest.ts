@@ -54,7 +54,7 @@ export const manifest = [
         groups: [
             {
                 i18n: "",
-                note: "First group has an empty title on purpose — single prominent toggle at top.",
+                note: "Headerless group, first on the page: this is the same bit the Control Center's focus tile flips. Popup behaviour follows below.",
                 items: [
                     "notifications.doNotDisturb",
                 ],
@@ -140,7 +140,7 @@ export const manifest = [
                 // was ever a preference rather than a footgun: the system-menu capsule and
                 // the Activity Island are both permanent now, each because hiding it removed
                 // the sole route to a capability. Reasoning lives in `bar/barState.ts`.
-                note: "The only layout toggle left: system-menu and Activity Island are permanent.",
+                note: "The only layout toggle left, and the only one of the original three that was ever a preference rather than a footgun: the system-menu capsule and the Activity Island are both permanent now, each because hiding it removed the sole route to a capability. Reasoning lives in bar/barState.ts.",
                 items: [
                     "bar.appTitle",
                 ],
@@ -155,7 +155,7 @@ export const manifest = [
                         // still exists. A preset key ('nidara') — or a stale value from before the
                         // rebrand ('arch') — is treated as the default: the bar falls back to the
                         // built-in mark, so the page must show the same, not the raw string.
-                        note: "A launcherIcon is custom only when pointing to an existing file; presets or stale 'arch' fall back to default.",
+                        note: "A launcherIcon is 'custom' only when it points at an image file that still exists. A preset key ('nidara') — or a stale value from before the rebrand ('arch') — is treated as the default: the bar falls back to the built-in mark, so the page must show the same, not the raw string.",
                     },
                 ],
             },
@@ -196,7 +196,7 @@ export const manifest = [
                 // The profile group is an entire custom group: selection_mode = SINGLE,
                 // rows use NidaraRow directly and are NOT indexed in search, and updates
                 // follow onPageShown with a syncing flag to avoid spurious daemon writes.
-                note: "Custom group for performance profiles: single selection mode, unindexed values, onPageShown re-read without writing.",
+                note: "The profile group is an entire custom group: selection_mode = SINGLE, rows use NidaraRow directly and are NOT indexed in search, and updates follow onPageShown with a syncing flag to avoid spurious daemon writes.",
                 custom: "performanceProfiles",
             },
             {
@@ -214,7 +214,7 @@ export const manifest = [
         id: "region",
         header: {
             custom: "clockPreview",
-            note: "Live clock preview before the first group. 1s tick armed in bindWhileRealized on the page.",
+            note: "Live clock preview before the first group. 1s tick armed in bindWhileRealized on pageBox.",
         },
         groups: [
             {
@@ -249,7 +249,7 @@ export const manifest = [
                 // 🔑 "System-wide" deliberately does NOT promise the login screen. The greeter
                 // has its OWN language picker (ui/greeter/widget/LocaleBar.ts -> greeter-prefs.json),
                 // and detectLocale() in ui/greeter/lib/i18n.ts reads that FIRST.
-                note: "Two different scopes: Language writes /etc/locale.conf (system-wide); Regional format writes ~/.config/environment.d/nidara-locale.conf (user only).",
+                note: "This group holds TWO DIFFERENT SCOPES: Language writes /etc/locale.conf (system-wide), Regional format writes ~/.config/environment.d/nidara-locale.conf (user only). Greeter has its own picker; /etc/locale.conf is only its fallback.",
                 items: [
                     { custom: "systemLanguage", i18n: "settings.region.locale.lang" },
                     { custom: "regionalFormat", i18n: "settings.region.locale.regional" },

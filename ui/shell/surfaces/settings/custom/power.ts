@@ -52,8 +52,8 @@ function buildSelectionCheck(size = 16): Gtk.Widget {
 
 export const build = (_ctx: PageCtx) => {
     return {
-        performanceProfiles: () => {
-            const profileGroup = listGroup(t("settings.power.group.profile"))
+        performanceProfiles: (title: string) => {
+            const profileGroup = listGroup(title)
             profileGroup.listBox.selection_mode = Gtk.SelectionMode.SINGLE
 
             const profiles = [

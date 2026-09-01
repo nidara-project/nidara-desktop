@@ -163,6 +163,10 @@ for (const page of manifest) {
                         if (!item.i18n || !enKeys.has(item.i18n)) {
                             errors.push(`  FAIL  manifest.ts: page "${page.id}" custom item "${item.custom}" declares i18n "${item.i18n}" which does not exist in en.ts.`)
                         }
+                        const descKey = `${item.i18n}.desc`
+                        if (!enKeys.has(descKey)) {
+                            errors.push(`  FAIL  manifest.ts: page "${page.id}" custom item "${item.custom}" requires description i18n "${descKey}" which does not exist in en.ts.`)
+                        }
                         if (item.key) {
                             if (!registeredKeys.has(item.key)) {
                                 errors.push(`  FAIL  manifest.ts: page "${page.id}" custom item "${item.custom}" references unregistered config key "${item.key}".`)

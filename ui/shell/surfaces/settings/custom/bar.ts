@@ -23,9 +23,9 @@ export const build = (_ctx: PageCtx) => {
         && GLib.file_test(barSettings.launcherIcon, GLib.FileTest.EXISTS)
 
     return {
-        launcherIcon: () => imagePickerRow(
-            t("settings.bar.icon-custom"),
-            t("settings.bar.icon-custom.desc"),
+        launcherIcon: (decl: { i18n: string }) => imagePickerRow(
+            t(decl.i18n as any),
+            t(`${decl.i18n}.desc` as any),
             {
                 // Preview whatever the bar is ACTUALLY showing, falling back exactly
                 // as SystemMenuIcon does — not the raw stored string.
