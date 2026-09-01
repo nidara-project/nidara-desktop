@@ -12,8 +12,14 @@
 //         makeRoundTile       a round toggle button
 //   2×1   makeCapsuleTile     icon circle + title/subtitle; the tile opens the detail
 //         makeSplitCapsuleTile  …but the icon badge toggles, the rest opens the detail
+//   4×1   makeHSliderTile     a slider between two end icons, with a live %
 //   any   makeCapsuleInner    the building block, for content that must reach the refs
 //         wrapCapsuleTile     …and its outer box, for a tile that builds its own
+//
+// The 1×2 slider has no word here on purpose: it is `makeVerticalFillTile`, already
+// in ui/lib/nidara-kit because the fill IS the tile. `Sliders.tsx` wrapped it in five
+// lines that added nothing, which is why volume and brightness looked like they had
+// two different vertical sliders.
 //
 // plus `roundToggleSpec`, a whole CCWidgetSpec for a widget that is nothing BUT a
 // round toggle (dark mode, calculator).
@@ -22,6 +28,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
+import { makeHSlider } from "../../../lib/nidara-kit"
 import { CCWidgetSpec, WidgetSize } from "./contract"
 
 /** Arm a live-state subscription and hand back its disposer. Every tile takes one
@@ -292,4 +299,75 @@ export function roundToggleSpec(
         supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
         buildContent,
     }
+}
+
+// ── 4×1 ───────────────────────────────────────────────────────────────────────
+
+/** One end of a horizontal slider tile. `size`/`opacity` default to the 16px at 0.6
+ *  every end icon uses; override them only for a glyph whose ink fills its box
+ *  differently — and say why, because that is how brightness came to carry a 14px at
+ *  0.5 that nobody decided (see makeHSliderTile). */
+export interface SliderEndIcon {
+    icon: Gio.FileIcon
+    size?: number
+    opacity?: number
+}
+
+/** The FULL_WIDTH (4×1) slider tile: low icon, slider, high icon, right-aligned
+ *  percentage. Everything here speaks 0..100 — a service that stores 0..1 (volume)
+ *  converts at ITS edge, so the tile never has to know which.
+ *
+ *  It was `buildHorizontalSlider` inside surfaces/control-center/Sliders.tsx, which
+ *  brightness could not reach from a widget file, so it grew a second copy: same box,
+ *  same spacing, same margins, same value label, and a different pair of end-icon
+ *  metrics. */
+export function makeHSliderTile(opts: {
+    low: SliderEndIcon
+    high: SliderEndIcon
+    /** 0..100 */
+    getValue: () => number
+    /** 0..100 */
+    onChange: (pct: number) => void
+    /** Arm the outside-the-widget sync and hand back its disposer. It must PRIME —
+     *  push the current value on the way in, not only future changes: the kit's
+     *  slider re-subscribes on every realize, so a hook that only forwards future
+     *  changes leaves the slider showing whatever it was built with. That is how the
+     *  Control Centre displayed 0% from login with the sink at 40% (0.7.1 VM sweep). */
+    onExtChange: (cb: (pct: number) => void) => (() => void)
+}): Gtk.Widget {
+    const endIcon = (e: SliderEndIcon) => new Gtk.Image({
+        gicon: e.icon,
+        pixel_size: e.size ?? 16,
+        opacity: e.opacity ?? 0.6,
+        valign: Gtk.Align.CENTER,
+        css_classes: ["nd-icon"],
+    })
+
+    const box = new Gtk.Box({
+        orientation: Gtk.Orientation.HORIZONTAL,
+        spacing: 12,
+        css_classes: ["nidara-atomic-slider-box-horizontal"],
+        halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER,
+        hexpand: true, vexpand: false,
+        margin_start: 4, margin_end: 4,
+    })
+
+    const valueLabel = new Gtk.Label({
+        label: `${Math.round(opts.getValue())}%`,
+        css_classes: ["slider-value-label"],
+        width_chars: 5, xalign: 1.0, valign: Gtk.Align.CENTER,
+    })
+
+    const slider = makeHSlider({
+        value: opts.getValue(),
+        onChange: opts.onChange,
+        onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%` },
+        onExtChange: opts.onExtChange,
+    })
+
+    box.append(endIcon(opts.low))
+    box.append(slider)
+    box.append(endIcon(opts.high))
+    box.append(valueLabel)
+    return box
 }

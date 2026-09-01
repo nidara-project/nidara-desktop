@@ -1528,10 +1528,11 @@ These were paid down; the *rule* remains:
   the zero-layout contract: a widget declares what it is and what it does, not where it is
   drawn. The contract types and the `PANEL_W` tiers moved out of
   `surfaces/control-center/Types.ts` on 2026-09-01, and the tile vocabulary out of
-  `control-center/Toggles.tsx` the same day, precisely so the sentence can be true. What is
-  left of #306: the slider tiles are still `control-center/Sliders.tsx` (and `brightness.ts`
-  re-implements the horizontal one by hand), the media tile is still
-  `control-center/MediaIsland.tsx`, the panel half has no vocabulary at all, and nothing yet
+  `control-center/Toggles.tsx` and `control-center/Sliders.tsx` over the same two days,
+  precisely so the sentence can be true. What is left of #306: the media tile is still
+  `control-center/MediaIsland.tsx`, the panel half has no vocabulary at all (every
+  `buildCCDetail` hand-rolls its own column, its `bar-popover-key` rows and its separators,
+  and `infoRow` is duplicated verbatim in `wifi.ts` and `ethernet.ts`), and nothing yet
   ENFORCES the boundary.
 - **Notification swipe-to-dismiss** — one implementation in `common/ScaleRevealer.ts`:
   `attachHorizontalSwipe` (gesture detector — claims only on horizontal intent so the NC

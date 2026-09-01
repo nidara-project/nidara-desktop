@@ -5,7 +5,7 @@
 // is already a reactive singleton, so this just owns the volume→icon mapping, the
 // per-app stream icon resolution, the set-default command, endpoint/stream list
 // accessors, and notify-subscription helpers. The Settings → Audio page, the CC
-// volume tile/detail (Sliders.tsx + volume.ts) and the bar volume widget consume
+// volume tile/detail and the bar volume widget (all of them widgets/volume.ts) consume
 // these instead of re-deriving the same volume-icon ladder (it lived in FOUR
 // near-identical copies) and re-wiring the same WirePlumber signals.
 //
