@@ -2,9 +2,13 @@
 # Format:
 #   <Page.tsx>:<i18n-key-or-line> # unmigrated setting row
 #   <Page.tsx>:gtk-switch:<count> # legitimate per-object toggles (#341)
+#   exempt-pages:<count>          # non-declarative pages in manifest (#341 P3)
 #
 # Every declarative setting row in Settings pages has now been migrated to settingRow() (S3b).
-# Only legitimate per-object switches (not scalar settings) remain below.
+# Only legitimate per-object switches and non-declarative exempt pages remain below.
+
+# Non-declarative exempt pages (#341 P3) — can only shrink, never grow.
+exempt-pages:8 # network, bluetooth, display, audio, widgets, apps, users, about
 
 # Legitimate per-object switches (not scalar settings - see #341)
 Autostart.tsx:gtk-switch:1 # per-app autostart toggle
@@ -12,3 +16,4 @@ Bluetooth.tsx:gtk-switch:1 # adapter power toggle
 Network.tsx:gtk-switch:1 # wifi adapter toggle
 Users.tsx:gtk-switch:2 # user admin toggles (create dialog + user edit row)
 Widgets.tsx:gtk-switch:1 # per-widget placement toggle
+

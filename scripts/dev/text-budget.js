@@ -123,11 +123,22 @@ const CSS_CHROME = 8 + 2 + 12 + 0
 
 const BUDGET = sidebarWidth - (CSS_CHROME + itemMargins + itemSpacing + iconSize)
 
-/** The sidebar's strings ARE the `categories` labels in Settings.tsx, in order. */
-const settingsSrc = read(`${REPO}/ui/shell/surfaces/settings/Settings.tsx`)
-const SIDEBAR_KEYS = [...settingsSrc.matchAll(/\{\s*id:\s*"[^"]+",\s*label:\s*t\("([^"]+)"\)/g)].map(m => m[1])
-if (SIDEBAR_KEYS.length < 10) {
-    printerr(`parsed only ${SIDEBAR_KEYS.length} sidebar labels from Settings.tsx — the categories array moved, fix the parse`)
+/**
+ * The sidebar's strings are the top-level pages of `manifest.ts`, in order — the
+ * same list `Settings.tsx` derives its categories from since P3 (#341). It used to
+ * parse the `categories` array in `Settings.tsx`; when that array moved, this parse
+ * returned zero and the script exited 2 rather than measuring nothing and passing.
+ * That refusal is the point: keep the assertion below whatever the source becomes.
+ * A page with a `parent` is a subpage and never reaches the sidebar.
+ */
+const manifestSrc = read(`${REPO}/ui/shell/surfaces/settings/manifest.ts`)
+const SIDEBAR_KEYS = manifestSrc
+    .split(/\n    \{\n/)
+    .filter(block => /^\s*id:\s*"/.test(block) && !/^\s*parent:\s*"/m.test(block))
+    .map(block => block.match(/^\s*label:\s*"([^"]+)"/m)?.[1])
+    .filter(Boolean)
+if (SIDEBAR_KEYS.length < 15) {
+    printerr(`parsed only ${SIDEBAR_KEYS.length} sidebar labels from manifest.ts — the page list moved, fix the parse`)
     system.exit(2)
 }
 

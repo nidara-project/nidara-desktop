@@ -100,4 +100,6 @@ const Icons = {
 } as const
 
 export type IconGIcon = Gio.FileIcon
+export type IconName = keyof typeof Icons
 export default Icons
+

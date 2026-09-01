@@ -5,6 +5,7 @@ import { NidaraRow, NidaraStackedRow, NidaraList, NidaraButton,
 import { attachTooltip } from "../../common/Tooltip"
 import { t } from "../../core/i18n"
 import { getConfigEntry } from "../../core/ConfigRegistry"
+import type { PageDecl, ItemDecl } from "./manifest"
 
 /**
  * Shared UI helpers for Settings pages.
@@ -51,17 +52,74 @@ export interface SearchItem {
 
 let _searchIndex: SearchItem[] = []
 let _pageCtx = { id: "", label: "" }
+let _activePageRefresherId = ""
 /** pageId → live re-reads; see `onPageShown` below. */
 const _refreshers = new Map<string, Array<() => void>>()
 
 export const beginPage = (id: string, label: string) => { _pageCtx = { id, label } }
 export const endPage = () => { _pageCtx = { id: "", label: "" } }
+export const setPageRefresherScope = (id: string) => { _activePageRefresherId = id }
+export const clearPageRefresherScope = () => { _activePageRefresherId = "" }
+
 export const clearSearchIndex = () => {
     _searchIndex = []
     _pageCtx = { id: "", label: "" }
+    _activePageRefresherId = ""
     _refreshers.clear()
 }
 export const getSearchIndex = (): SearchItem[] => [..._searchIndex]
+
+/** Derive and register search index entries directly from a declarative preference page manifest. */
+export const indexPreferencePage = (page: PageDecl, pageLabel: string) => {
+    const indexItem = (item: ItemDecl) => {
+        if (typeof item === "string") {
+            const entry = getConfigEntry(item)
+            if (entry?.ui) {
+                _searchIndex.push({
+                    pageId: page.id,
+                    pageLabel,
+                    label: t(entry.ui.i18n as any),
+                    subtitle: t(`${entry.ui.i18n}.desc` as any),
+                })
+            }
+        } else if ("custom" in item) {
+            _searchIndex.push({
+                pageId: page.id,
+                pageLabel,
+                label: t(item.i18n as any),
+                subtitle: t(`${item.i18n}.desc` as any),
+            })
+        } else if ("decoration" in item) {
+            // Visual decoration only — not indexed
+        } else if ("disclosure" in item) {
+            _searchIndex.push({
+                pageId: page.id,
+                pageLabel,
+                label: t(item.disclosure as any),
+                subtitle: "",
+            })
+            for (const subItem of item.items) {
+                indexItem(subItem)
+            }
+        } else if ("key" in item) {
+            const entry = getConfigEntry(item.key)
+            if (entry?.ui) {
+                _searchIndex.push({
+                    pageId: page.id,
+                    pageLabel,
+                    label: t(entry.ui.i18n as any),
+                    subtitle: t(`${entry.ui.i18n}.desc` as any),
+                })
+            }
+        }
+    }
+
+    for (const group of (page.groups ?? [])) {
+        for (const item of (group.items ?? [])) {
+            indexItem(item)
+        }
+    }
+}
 
 // ── Live re-reads ─────────────────────────────────────────────────────────────
 // Top-level pages are built ONCE (Settings.tsx caches them) and the window HIDES
@@ -71,9 +129,10 @@ export const getSearchIndex = (): SearchItem[] => [..._searchIndex]
 // stale in silence, because a frozen value looks exactly like a correct one.
 //
 // This registers such a read against the page being built (the same `_pageCtx`
-// seam `createRow` indexes through), runs it immediately, and re-runs it whenever
-// the page becomes visible. Subpages need none of it: they are rebuilt on every
-// push, so `_pageCtx` being empty is the correct no-op.
+// seam `createRow` indexes through, or `_activePageRefresherId` during preference
+// page construction), runs it immediately, and re-runs it whenever the page
+// becomes visible. Subpages need none of it: they are rebuilt on every push,
+// so neither scope being set is the correct no-op.
 //
 // ⚠️ NOT the same job as `bindWhileRealized`, and it is not covered by it. That
 // one re-arms on REALIZE, which fires when you navigate between pages — but
@@ -86,13 +145,15 @@ export const getSearchIndex = (): SearchItem[] => [..._searchIndex]
 // (it has something to dispose); use this for a QUESTION that has to be re-asked
 // (it has nothing to dispose).
 export const onPageShown = (read: () => void) => {
-    if (_pageCtx.id) {
-        const list = _refreshers.get(_pageCtx.id) ?? []
+    const id = _pageCtx.id || _activePageRefresherId
+    if (id) {
+        const list = _refreshers.get(id) ?? []
         list.push(read)
-        _refreshers.set(_pageCtx.id, list)
+        _refreshers.set(id, list)
     }
     read()
 }
+
 
 export const runPageRefreshers = (pageId: string) => {
     for (const read of _refreshers.get(pageId) ?? []) {

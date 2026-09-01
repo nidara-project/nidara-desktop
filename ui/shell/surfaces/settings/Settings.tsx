@@ -17,17 +17,42 @@ import AboutPage from "./pages/About"
 import AppsPage from "./pages/Apps"
 import BluetoothPage from "./pages/Bluetooth"
 import UsersPage from "./pages/Users"
+import { manifest, type PageDecl } from "./manifest"
 import { buildPreferencePage } from "./PreferencePage"
-import { beginPage, endPage, clearSearchIndex, getSearchIndex, runPageRefreshers, type SettingsNav } from "./SettingsHelpers"
+import { beginPage, endPage, clearSearchIndex, getSearchIndex, indexPreferencePage, runPageRefreshers, type SettingsNav } from "./SettingsHelpers"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import IconButton from "../../common/IconButton"
 import { attachTooltip } from "../../common/Tooltip"
 
+// ── Non-declarative page components registry (P3 #341) ───────────────────────
+// Builders for browser and info pages. Compile-time verified via `satisfies`:
+// every builder declared in manifest must exist here, and no unused builders.
+type Manifest = typeof manifest
+type ExtractBuilders<P> = P extends { builder: infer B extends string } ? B : never
+type ManifestBuilder = ExtractBuilders<Manifest[number]>
+
+type PageComponent = ((nav: SettingsNav) => Gtk.Widget) | (() => Gtk.Widget)
+
+const PAGE_COMPONENTS = {
+    network: NetworkPage,
+    bluetooth: BluetoothPage,
+    display: DisplayPage,
+    audio: AudioPage,
+    widgets: WidgetsPage,
+    apps: AppsPage,
+    users: UsersPage,
+    about: AboutPage,
+} satisfies Record<ManifestBuilder, PageComponent>
+
+type ExtraBuilders = Exclude<keyof typeof PAGE_COMPONENTS, ManifestBuilder>
+const _checkNoExtraBuilders: [ExtraBuilders] extends [never] ? true : { error: "Extra builder in PAGE_COMPONENTS"; extra: ExtraBuilders } = true
+
 /**
  * Settings - System Configuration Panel
  * Pure GTK4 — no Adwaita dependency.
  */
+
 export default function Settings(monitor: Gdk.Monitor) {
     clearSearchIndex()
 
@@ -73,29 +98,17 @@ export default function Settings(monitor: Gdk.Monitor) {
     // created after the pages are built (below) so its onSelect can call navigateTo.
     // Order = thematic clusters with title-less dividers (groupStart):
     // 1) connectivity · 2) the bulk (look/shell/behaviour/apps) · 3) system & devices.
-    const categories = [
-        // ── Connectivity ────────────────────────────────────────────────────────
-        { id: "network",      label: t("settings.network.title"),     icon: Icons.globe,         component: NetworkPage      },
-        { id: "bluetooth",    label: t("settings.bluetooth.title"),   icon: Icons.bluetooth,     component: BluetoothPage    },
-        // ── Look, shell & behaviour ─────────────────────────────────────────────
-        { id: "appearance",   label: t("settings.appearance.title"),  icon: Icons.palette,       component: () => buildPreferencePage("appearance"),   groupStart: true },
-        { id: "display",      label: t("settings.display.title"),     icon: Icons.monitor,       component: DisplayPage      },
-        { id: "audio",        label: t("settings.audio.title"),       icon: Icons.speaker,       component: AudioPage        },
-        { id: "bar",          label: t("settings.bar.title"),         icon: Icons.panelTop,      component: () => buildPreferencePage("bar") },
-        { id: "dock",         label: t("settings.dock.title"),        icon: Icons.dock,          component: () => buildPreferencePage("dock") },
-        { id: "widgets",      label: t("settings.widgets.title"),     icon: Icons.settings2,     component: WidgetsPage      },
-        { id: "gaming",       label: t("settings.gaming.title"),      icon: Icons.gamepad,       component: () => buildPreferencePage("gaming") },
-        { id: "notifications",label: t("settings.notif.title"),       icon: Icons.bell,          component: () => buildPreferencePage("notifications") },
-        { id: "accessibility",label: t("settings.accessibility.title"),icon: Icons.accessibility,component: () => buildPreferencePage("accessibility") },
-        { id: "apps",         label: t("settings.apps.section"),      icon: Icons.grid,          component: AppsPage         },
-        // ── System & devices ────────────────────────────────────────────────────
-        { id: "input",        label: t("settings.input.title"),       icon: Icons.keyboard,      component: () => buildPreferencePage("input"), groupStart: true },
-        { id: "power",        label: t("settings.power.title"),       icon: Icons.battery,       component: () => buildPreferencePage("power") },
-        { id: "region",       label: t("settings.region.title"),      icon: Icons.clock,         component: () => buildPreferencePage("region") },
-        { id: "users",        label: t("settings.users.title"),       icon: Icons.userRound,     component: UsersPage        },
-        { id: "ai",           label: t("settings.ai.title"),          icon: Icons.sparkles,      component: () => buildPreferencePage("ai") },
-        { id: "about",        label: t("settings.about.title"),       icon: Icons.info,          component: AboutPage        },
-    ]
+    // Derived from manifest.ts (P3 #341) — all top-level pages, in order.
+    const categories = (manifest as readonly PageDecl[])
+        .filter(p => !p.parent)
+        .map(p => ({
+            id: p.id,
+            label: t(p.label as any),
+            icon: p.icon ? Icons[p.icon] : undefined,
+            groupStart: p.groupStart,
+            pageDecl: p,
+        }))
+
 
     // ── Page container — single-child swap model ──────────────────────────────
     // We intentionally avoid Gtk.Stack here. With hhomogeneous/vhomogeneous:false,
@@ -218,9 +231,15 @@ export default function Settings(monitor: Gdk.Monitor) {
         // Build page widget
         let pageWidget: Gtk.Widget
         try {
-            beginPage(cat.id, cat.label)
-            pageWidget = (cat.component as (n: SettingsNav) => Gtk.Widget)(nav)
-            endPage()
+            if (cat.pageDecl.kind === "preference") {
+                indexPreferencePage(cat.pageDecl, cat.label)
+                pageWidget = buildPreferencePage(cat.id)
+            } else {
+                beginPage(cat.id, cat.label)
+                const component = PAGE_COMPONENTS[cat.pageDecl.builder as keyof typeof PAGE_COMPONENTS]
+                pageWidget = (component as (n: SettingsNav) => Gtk.Widget)(nav)
+                endPage()
+            }
         } catch (e) {
             endPage()
             console.error(`[Settings] Failed to load page ${cat.id}:`, e)
@@ -229,6 +248,7 @@ export default function Settings(monitor: Gdk.Monitor) {
 
         pageCache.set(cat.id, wrapPage(pageWidget))
     })
+
 
     // navigateTo is defined further down; the onSelect closure only runs on a
     // user click, by which point it's assigned.
