@@ -63,6 +63,8 @@ export default function AppearancePage() {
 
     // Bundled wallpapers gallery
     const bundled = getBundledWallpapers().filter(p => !p.includes("wallpaper-greeter"))
+    let refreshThumbActive: ((currentPath: string) => void) | null = null
+
     if (bundled.length > 0) {
         const thumbBox = new Gtk.Box({
             orientation: Gtk.Orientation.HORIZONTAL,
@@ -75,7 +77,7 @@ export default function AppearancePage() {
 
         const thumbButtons: { path: string; btn: Gtk.Button }[] = []
 
-        const refreshThumbActive = (currentPath: string) => {
+        refreshThumbActive = (currentPath: string) => {
             const curBase = currentPath ? currentPath.split("/").pop() : ""
             for (const item of thumbButtons) {
                 const itemBase = item.path.split("/").pop()
@@ -105,7 +107,7 @@ export default function AppearancePage() {
             btn.connect("clicked", () => {
                 Wallpaper.setWallpaper(wallPath)
                 updatePreview(wallPath)
-                refreshThumbActive(wallPath)
+                if (refreshThumbActive) refreshThumbActive(wallPath)
             })
 
             thumbBox.append(btn)
@@ -113,11 +115,6 @@ export default function AppearancePage() {
         }
 
         refreshThumbActive(Wallpaper.current)
-        const wallId = Wallpaper.connect("changed", () => {
-            updatePreview(Wallpaper.current)
-            refreshThumbActive(Wallpaper.current)
-        })
-        page.connect("destroy", () => safeDisconnect(Wallpaper, wallId))
 
         const centerBox = new Gtk.CenterBox({
             center_widget: thumbBox,
@@ -178,6 +175,18 @@ export default function AppearancePage() {
         t("settings.appearance.image.desc"),
         changeBtn,
     ))
+
+    // Unconditionally follow wallpaper changes from external tools/gaming mode.
+    // Use bindWhileRealized because Settings hides rather than destroys its window.
+    bindWhileRealized(page, () => {
+        updatePreview(Wallpaper.current)
+        if (refreshThumbActive) refreshThumbActive(Wallpaper.current)
+        const wallId = Wallpaper.connect("changed", () => {
+            updatePreview(Wallpaper.current)
+            if (refreshThumbActive) refreshThumbActive(Wallpaper.current)
+        })
+        return () => safeDisconnect(Wallpaper, wallId)
+    })
 
     page.append(wallGroup.box)
 

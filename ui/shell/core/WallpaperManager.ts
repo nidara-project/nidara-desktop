@@ -11,6 +11,7 @@ import { t } from "./i18n"
 const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/wallpaper`
 const THUMB_CACHE_DIR = `${GLib.get_user_cache_dir()}/nidara/wallpaper-thumbs`
 const MAX_THUMB_CACHE_ENTRIES = 120
+const MAX_MEM_CACHE_ENTRIES = 24
 
 /**
  * Generate a cache key and file path based on file path, mtime, size and target dimensions.
@@ -96,6 +97,30 @@ class WallpaperManager extends GObject.Object {
 
     get current() { return this._current }
     get transition() { return this._transition }
+
+    private _getMemCache(key: string): Gdk.Texture | null {
+        const tex = this._memThumbCache.get(key)
+        if (tex) {
+            // Refresh LRU order: re-insert at end
+            this._memThumbCache.delete(key)
+            this._memThumbCache.set(key, tex)
+            return tex
+        }
+        return null
+    }
+
+    private _setMemCache(key: string, tex: Gdk.Texture) {
+        if (this._memThumbCache.has(key)) {
+            this._memThumbCache.delete(key)
+        } else if (this._memThumbCache.size >= MAX_MEM_CACHE_ENTRIES) {
+            // Evict oldest entry (first key in map iteration order)
+            const oldestKey = this._memThumbCache.keys().next().value
+            if (oldestKey !== undefined) {
+                this._memThumbCache.delete(oldestKey)
+            }
+        }
+        this._memThumbCache.set(key, tex)
+    }
 
     private _initGsettingsSync() {
         try {
@@ -269,8 +294,17 @@ class WallpaperManager extends GObject.Object {
      * Return a size-bounded, decoded Gdk.Texture for any image on disk,
      * decoding asynchronously in a worker thread and caching to disk.
      *
-     * 1. Check in-memory cache (instant).
-     * 2. Check on-disk cache (~0.5 ms PNG read, bypasses full 4K decode).
+     * ── Why decode sizes are bounded to 2× the box (640×360 / 160×90) ──
+     * A full 4K wallpaper (3840×2160) is ~17–33 MB uncompressed in memory.
+     * The Settings window hides rather than destroys on close, so any texture
+     * decoded into memory stays resident for the entire lifetime of the shell.
+     * Decoding to 2× the display box (640×360 for 320×180 preview; 160×90 for
+     * 80×45 thumbnails) provides crisp rendering on HiDPI displays while
+     * keeping memory bounded to ~0.9 MB / ~50 KB per texture instead of ~33 MB.
+     * DO NOT raise these bounds to full resolution.
+     *
+     * 1. Check in-memory LRU cache (instant, capped at MAX_MEM_CACHE_ENTRIES).
+     * 2. Check on-disk cache (~0.25 ms PNG read, bypasses full 4K decode).
      * 3. Cache miss: decode via gdk-pixbuf async stream loader in worker thread,
      *    write scaled PNG to disk cache, and cache in memory.
      */
@@ -280,8 +314,8 @@ class WallpaperManager extends GObject.Object {
 
         const { key, cachePath } = cacheInfo
 
-        // 1. Memory cache hit
-        const memHit = this._memThumbCache.get(key)
+        // 1. Memory cache hit (LRU order refreshed)
+        const memHit = this._getMemCache(key)
         if (memHit) return memHit
 
         // 2. In-flight load deduplication
@@ -294,7 +328,14 @@ class WallpaperManager extends GObject.Object {
                 try {
                     const file = Gio.File.new_for_path(cachePath)
                     const texture = Gdk.Texture.new_from_file(file)
-                    this._memThumbCache.set(key, texture)
+                    this._setMemCache(key, texture)
+
+                    // Touch cache file mtime so disk pruning preserves recently used items (LRU)
+                    try {
+                        const nowSec = Math.floor(GLib.get_real_time() / 1000000)
+                        file.set_attribute_uint64("time::modified", nowSec, Gio.FileQueryInfoFlags.NONE, null)
+                    } catch (_) {}
+
                     return texture
                 } catch (e) {
                     console.warn(`[WallpaperManager] reading cached thumb failed: ${e}`)
@@ -319,7 +360,7 @@ class WallpaperManager extends GObject.Object {
                                 const pixbuf = GdkPixbuf.Pixbuf.new_from_stream_finish(res2)
                                 if (!pixbuf) { resolve(null); return }
                                 const texture = Gdk.Texture.new_for_pixbuf(pixbuf)
-                                this._memThumbCache.set(key, texture)
+                                this._setMemCache(key, texture)
 
                                 // Asynchronously persist scaled thumbnail to disk cache
                                 try {
@@ -335,8 +376,16 @@ class WallpaperManager extends GObject.Object {
                                             false,
                                             Gio.FileCreateFlags.REPLACE_DESTINATION,
                                             null,
-                                            () => {}
+                                            (_f: any, res3: any) => {
+                                                try {
+                                                    cacheFile.replace_contents_finish(res3)
+                                                } catch (err) {
+                                                    console.warn(`[WallpaperManager] saving thumb to disk cache failed: ${err}`)
+                                                }
+                                                resolve(texture)
+                                            }
                                         )
+                                        return
                                     }
                                 } catch (err) {
                                     console.warn(`[WallpaperManager] saving thumb to disk cache failed: ${err}`)
@@ -361,7 +410,9 @@ class WallpaperManager extends GObject.Object {
 
     /**
      * Evict thumbnail cache entries if the total count exceeds MAX_THUMB_CACHE_ENTRIES,
-     * removing the oldest entries by modification time.
+     * removing the oldest entries by modification/last-accessed time.
+     * Note: Pruning runs in an idle callback during startup to avoid adding work
+     * to the initial load, so new entries exceeding the cap are pruned on subsequent sessions.
      */
     pruneThumbnailCache() {
         if (!GLib.file_test(THUMB_CACHE_DIR, GLib.FileTest.IS_DIR)) return
@@ -379,6 +430,7 @@ class WallpaperManager extends GObject.Object {
                     })
                 }
                 if (files.length > MAX_THUMB_CACHE_ENTRIES) {
+                    // Sort oldest first
                     files.sort((a, b) => a.mtime - b.mtime)
                     const toDelete = files.slice(0, files.length - MAX_THUMB_CACHE_ENTRIES)
                     for (const item of toDelete) {
