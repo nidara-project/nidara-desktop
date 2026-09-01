@@ -1,7 +1,4 @@
-import GLib from "gi://GLib"
-import { readFile, writeFile } from "../../../lib/file"
-
-const SETTINGS_FILE = `${GLib.get_home_dir()}/.config/nidara/bar-settings.json`
+import { defineConfig } from "../../core/configFile"
 
 export interface BarSettings {
     showAppTitle: boolean
@@ -31,32 +28,15 @@ const DEFAULTS: BarSettings = {
 //
 // Filtering here rather than spreading `raw` means those dead keys are dropped
 // from the file on the next write instead of being re-persisted forever.
-let _settings: BarSettings = { ...DEFAULTS }
-try {
-    const raw = JSON.parse(readFile(SETTINGS_FILE)) as Partial<BarSettings>
-    for (const k of Object.keys(DEFAULTS) as (keyof BarSettings)[])
-        if (raw[k] !== undefined && typeof raw[k] === typeof DEFAULTS[k])
-            (_settings as any)[k] = raw[k]
-} catch {}
+export const barConfig = defineConfig("bar-settings.json", DEFAULTS)
 
-export const barSettings: BarSettings = _settings
+export const barSettings: BarSettings = barConfig.all as BarSettings
 
-const _listeners = new Set<(s: BarSettings) => void>()
-
-export function onBarSettingsChanged(fn: (s: BarSettings) => void) {
-    _listeners.add(fn)
-    return () => _listeners.delete(fn)
+export function onBarSettingsChanged(fn: (s: BarSettings) => void): () => void {
+    return barConfig.subscribeAll(() => fn(barSettings))
 }
 
 export function updateBarSettings(partial: Partial<BarSettings>) {
-    Object.assign(barSettings, partial)
-    try {
-        const dir = `${GLib.get_home_dir()}/.config/nidara`
-        if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
-            GLib.mkdir_with_parents(dir, 0o755)
-        writeFile(SETTINGS_FILE, JSON.stringify(barSettings, null, 2))
-    } catch (e) {
-        console.error("[BarSettings] Failed to persist:", e)
-    }
-    _listeners.forEach(fn => fn(barSettings))
+    barConfig.update(partial)
 }
+

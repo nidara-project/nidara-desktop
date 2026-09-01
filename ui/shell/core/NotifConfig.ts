@@ -1,8 +1,4 @@
-import GLib from "gi://GLib"
-import { readFile, writeFile } from "../../lib/file"
-import { loadKnown } from "./configFile"
-
-const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/notif-config.json`
+import { defineConfig } from "./configFile"
 
 // 🔑 `doNotDisturb` is the LIVE flag, not a preference about it — the CC focus
 // tile, Settings → Notifications and the agent key `notifications.doNotDisturb`
@@ -28,62 +24,34 @@ const DEFAULTS: NotifSettings = {
     doNotDisturb: false,
 }
 
-let _settings: NotifSettings = { ...DEFAULTS }
-try {
-    if (GLib.file_test(CONFIG_PATH, GLib.FileTest.EXISTS)) {
-        // `loadKnown`, not a spread: an existing install's file still has the
-        // retired `dndDefault`, and a spread would carry it into `_settings` and
-        // write it back out on every save, forever. See core/configFile.ts.
-        _settings = loadKnown(DEFAULTS, JSON.parse(readFile(CONFIG_PATH)))
-    }
-} catch {}
-
-function save() {
-    try {
-        const dir = `${GLib.get_user_config_dir()}/nidara`
-        if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
-            GLib.mkdir_with_parents(dir, 0o755)
-        writeFile(CONFIG_PATH, JSON.stringify(_settings, null, 2))
-    } catch (e) {
-        console.error("[NotifConfig] Save failed:", e)
-    }
-}
-
 type NotifKey = keyof NotifSettings
 
-// Listeners are told WHICH key moved. Do Not Disturb has four faces watching it
-// and the timeout slider has one; without the key, every one of them would
-// repaint whenever the other changed.
-const _listeners = new Set<(key: NotifKey) => void>()
-
-function emit(key: NotifKey) {
-    save()
-    _listeners.forEach(fn => { try { fn(key) } catch (e) { console.error("[NotifConfig] listener:", e) } })
-}
+const config = defineConfig("notif-config.json", DEFAULTS)
 
 export const notifConfig = {
-    get popupTimeout() { return _settings.popupTimeout },
-    get popupTimeoutMs() { return _settings.popupTimeout * 1000 },
-    get doNotDisturb() { return _settings.doNotDisturb },
+    get popupTimeout() { return config.get("popupTimeout") },
+    get popupTimeoutMs() { return config.get("popupTimeout") * 1000 },
+    get doNotDisturb() { return config.get("doNotDisturb") },
 
     setPopupTimeout(seconds: number) {
-        _settings.popupTimeout = Math.round(seconds)
-        emit("popupTimeout")
+        config.set("popupTimeout", Math.round(seconds))
     },
 
     /** Guarded on equality: the Settings switch and the CC tile both write on
      *  every user interaction, and an unguarded setter would re-notify the other
      *  face of the same value. */
     setDoNotDisturb(on: boolean) {
-        if (_settings.doNotDisturb === on) return
-        _settings.doNotDisturb = on
-        emit("doNotDisturb")
+        config.set("doNotDisturb", on)
     },
 
-    onChange(fn: (key: NotifKey) => void) {
-        _listeners.add(fn)
-        return () => _listeners.delete(fn)
+    onChange(fn: (key: NotifKey) => void): () => void {
+        return config.subscribeAll(fn)
+    },
+
+    subscribe<K extends NotifKey>(key: K, cb: (v: NotifSettings[K]) => void): () => void {
+        return config.subscribe(key, cb)
     },
 }
 
 export default notifConfig
+
