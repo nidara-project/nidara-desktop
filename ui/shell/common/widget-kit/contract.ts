@@ -1,3 +1,11 @@
+// The widget contract — what a widget IS, never where it is drawn.
+//
+// This lived in surfaces/control-center/Types.ts, which made the Control Centre the
+// owner of a vocabulary the bar speaks too: every widget had to import a surface to
+// declare itself. It is the kit's now. Nothing here may reference a surface, and the
+// whole of common/widget-kit/ MUST stay leaf modules (see panel.ts for the cycle that
+// crashes the shell at boot if it doesn't).
+
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 
@@ -17,20 +25,23 @@ export enum WidgetSize {
     FULL_WIDTH = "4x1"
 }
 
-// CC grid geometry — one grid cell is UNIT px, cells separated by GAP px. Defined
-// here (a leaf module) rather than in CCLayoutManager so widgets can read them
-// without importing the layout manager, which pulls in the widget registry and
-// would form an import cycle. CCLayoutManager re-exports these for its consumers.
-export const UNIT = 80
-export const GAP = 12
-
-// Inner space the host guarantees to a tile's content at a given size — the
-// cell span minus the island's own padding. Computed by the host (IslandGrid)
-// from its layout constants; widgets size their content from THIS, never from
-// UNIT/GAP/padding math (host constants can change under you).
+// What the host guarantees a tile's content at a given size. This is the WHOLE of
+// what a widget is allowed to know about the surface drawing it: it receives its
+// room, it never derives it. The host's own constants (the CC's UNIT/GAP, the
+// island's padding) live with the host — see CCLayoutManager — and can move without
+// a widget noticing, which is the point of handing these over instead.
 export interface ContentBudget {
+    /** inner width in px — the tile's span minus the island's padding */
     width: number
+    /** inner height in px — same, vertically */
     height: number
+    /** Distance in px between two of the host's repeating slots (the CC's cell
+     *  pitch). For a widget that draws SEVERAL things of its own and wants them to
+     *  land on the host's rhythm rather than bunched in the middle — cpu-memory
+     *  spaces its CPU and RAM rings one pitch apart so each sits where a 1×1
+     *  widget's icon would. Space repeated content by `pitch - <content width>`;
+     *  do NOT reconstruct it from cell arithmetic. */
+    pitch: number
 }
 
 export interface AtomicWidget {

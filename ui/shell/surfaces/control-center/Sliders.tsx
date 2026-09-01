@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import { makeHSlider, makeVerticalFillTile, bindWhileRealized } from "../../../lib/nidara-kit"
-import { CCWidgetSpec, WidgetSize } from "./Types"
+import { CCWidgetSpec, WidgetSize } from "../../common/widget-kit"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import * as AudioSvc from "../../core/AudioService"

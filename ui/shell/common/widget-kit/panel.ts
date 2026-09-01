@@ -3,10 +3,11 @@
 // belongs to the shell — it can be re-tuned globally without touching widgets,
 // and a contributed widget can't invent its own panel geometry.
 //
-// MUST stay a leaf module (no shell imports): widgets import it, and
-// CCLayoutManager imports widgets/index — importing CCLayoutManager from here
-// closes a module cycle that crashes the shell at boot (CC_DEFAULT_ORDER
-// undefined while CCLayoutManager's singleton evaluates mid-cycle).
+// EVERY module in common/widget-kit/ MUST stay a leaf (no shell imports): widgets
+// import the kit, and CCLayoutManager imports widgets/index — importing
+// CCLayoutManager from here closes a module cycle that crashes the shell at boot
+// (CC_DEFAULT_ORDER undefined while CCLayoutManager's singleton evaluates
+// mid-cycle). Typecheck does not catch it; only a boot does.
 export const PANEL_W = {
     /** single-control panels — volume/brightness slider, screenrecord options */
     sm: 200,

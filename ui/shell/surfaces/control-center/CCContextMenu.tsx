@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import ccLayout, { GRID_WIDTH, SIZE_TIER, SizeTier } from "./CCLayoutManager"
-import { WidgetSize } from "./Types"
+import { WidgetSize } from "../../common/widget-kit"
 import widgetConfig from "../../core/WidgetConfig"
 import registry from "../../widgets/index"
 import Icons from "../../core/Icons"

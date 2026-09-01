@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 import { buildRoundContent, buildSplitCapsuleContent } from "../surfaces/control-center/Toggles"
-import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
+import { AtomicWidget, WidgetSize } from "../common/widget-kit"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"

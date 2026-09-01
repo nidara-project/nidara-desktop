@@ -1,9 +1,8 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { PANEL_W } from "../common/widget-kit"
+import { PANEL_W, AtomicWidget, WidgetSize } from "../common/widget-kit"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 import GLib from "gi://GLib"
 import { execAsync } from "../../lib/process"
-import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
 
 import { t } from "../core/i18n"

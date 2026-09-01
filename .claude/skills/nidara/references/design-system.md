@@ -2544,10 +2544,12 @@ spans two grid cells; its content (e.g. cpu_memory's two metric rings) should si
 **pitch** (`UNIT + GAP`) apart, centred — so each item lands on its cell centre, exactly where a
 1×1 widget's icon centres and where a 2×1 tile's leading icon sits (the icon inset ≈ `UNIT/2`).
 Spacing the items by their natural gap instead bunches them toward the middle, a few px inside
-the icon columns. `cpu_memory` does this with `spacing: (UNIT + GAP) − ring` in a `CenterBox`.
-`UNIT`/`GAP` are defined in `control-center/Types.ts` (a leaf) and re-exported by
-`CCLayoutManager` — read them from `Types` in a widget; importing `CCLayoutManager` from a widget
-pulls in the widget registry and forms a boot-crashing import cycle.
+the icon columns. `cpu_memory` does this with `spacing: budget.pitch − ring` in a `CenterBox`.
+**The pitch is HANDED to the widget** — `ContentBudget.pitch`, filled in by `IslandGrid` — because
+a widget never does host-geometry math (the zero-layout contract). `UNIT`/`GAP` belong to
+`CCLayoutManager`, the surface that draws the grid, and are unreachable from `widgets/`: importing
+`CCLayoutManager` from a widget pulls in the widget registry and forms a boot-crashing import cycle,
+which is why they used to be parked in the shared leaf in the first place.
 
 **The CC edit-mode drag ghost previews the dragged tile's real silhouette, not a generic rounded
 box.** `BaseIsland.tsx` exports `resolveIslandShape(size, width, height)` — the per-`WidgetSize`

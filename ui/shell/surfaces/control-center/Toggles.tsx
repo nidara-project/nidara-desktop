@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { CCWidgetSpec, WidgetSize } from "./Types"
+import { CCWidgetSpec, WidgetSize } from "../../common/widget-kit"
 import { t } from "../../core/i18n"
 import Gio from "gi://Gio"
 import Icons from "../../core/Icons"

@@ -1,10 +1,18 @@
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import { readFile, writeFile } from "../../../lib/file"
-import { WidgetSize, UNIT, GAP } from "./Types"
+import { WidgetSize } from "../../common/widget-kit"
 import { WIDGET_META, CC_DEFAULT_ORDER } from "../../widgets/index"
 
-export { UNIT, GAP }   // re-exported (defined in the leaf Types) so existing importers are unchanged
+// CC grid geometry — one cell is UNIT px, cells separated by GAP px. It lives HERE,
+// with the surface that draws the grid, and no widget may read it: a widget receives
+// its room as a ContentBudget (see common/widget-kit/contract.ts) so these numbers can
+// move without a widget noticing. They used to sit in the shared Types module purely
+// so widgets could reach them without closing an import cycle — which is exactly how
+// cpu-memory came to compute the host's cell pitch by hand.
+export const UNIT = 80
+export const GAP = 12
+
 export const GRID_COLS = 4
 export const GRID_ROWS = 8
 export const GRID_WIDTH  = GRID_COLS * UNIT + (GRID_COLS - 1) * GAP // 356
