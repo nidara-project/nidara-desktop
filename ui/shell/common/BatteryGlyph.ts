@@ -30,6 +30,7 @@ import Theme from "../core/ThemeManager"
 import * as Battery from "../core/BatteryService"
 import { hexToFloatRgb } from "./DrawingUtils"
 import { DANGER_HEX, SUCCESS_HEX } from "../../lib/status-colors"
+import { INK } from "../../lib/tokens"
 
 /** A real battery device is present (false on desktops, where the display
  *  device exists but reports is_present = false). */
@@ -81,24 +82,20 @@ export function makeBatteryGlyph(box: number, fill = false): Gtk.DrawingArea {
         const x0 = (w - box) / 2
         const y0 = (h - box) / 2
 
-        // Chrome at 0.9, not the 0.5 this carried while the glyph was oversized:
-        // the Lucide icons beside it stroke at full opacity (`.bar-left image`
-        // has no attenuation), so at true icon scale a half-alpha 1.33px stroke
-        // reads as a washed-out hairline — the battery looks SMALLER than
-        // neighbours whose ink box is actually the same 22 units wide.
-        const CHROME_A = 0.9
+        // `INK.solid`, not the 0.5 this carried while the glyph was oversized —
+        // the reasoning behind that number now lives with the token (lib/tokens.ts).
 
         // Body outline — rect 1,6 18.5×12 r2, stroke 2 straddling the path
         // (ink 0 → 20.5).
         roundRect(cr, x0 + u(1), y0 + u(6), u(18.5), u(12), u(2))
         cr.setLineWidth(u(2))
-        cr.setSourceRGBA(c, c, c, CHROME_A)
+        cr.setSourceRGBA(c, c, c, INK.solid)
         cr.stroke()
 
         // Terminal nub — the SVG's round-capped segment x=23, y 10→14, which is
         // exactly a filled 2×6 pill at 22,9 (no line-cap juggling needed).
         roundRect(cr, x0 + u(22), y0 + u(9), u(2), u(6), u(1))
-        cr.setSourceRGBA(c, c, c, CHROME_A)
+        cr.setSourceRGBA(c, c, c, INK.solid)
         cr.fill()
 
         // Proportional fill inside the body cavity (2,7 → 18.5,17), with a hair

@@ -145,6 +145,56 @@ export const GLASS_TINT = {
 export const GLASS_SPECULAR = { r: 1, g: 1, b: 1 } as const
 
 /**
+ * CHROME INK — the alpha of a neutral mark painted ON the glass, as opposed to the
+ * alpha OF the glass.
+ *
+ * ⚠️ This is NOT `appearance.barOpacity` / `overlayOpacity` / `dockOpacity`. Those
+ * are the Appearance sliders, and they are the pane: `SquircleContainer` fills a CC
+ * island at `Theme.overlayOpacity`, `GlassBubble` at `max(overlayOpacity, 0.38)`,
+ * the notification cards at `overlayOpacity * depth`. What follows is drawn on top of
+ * that pane, and it deliberately does NOT scale with it — they would compound, and
+ * the emptier the user made a surface the harder its contents would be to read. The
+ * slider says how much wallpaper comes through; the ink has to stay legible at every
+ * setting of it. Same reasoning that keeps `GLASS_SPECULAR` off `GLASS_TINT`: two
+ * quantities that merely live near each other.
+ *
+ * Every one of these is painted as `Theme.chromeIsDark ? 1 : 0` at the alpha below —
+ * white ink on dark chrome, black on light — so a painter that hardcodes a colour
+ * here is a painter that vanishes in one of the two appearances.
+ *
+ * These exist because there was nowhere for them to live. Each Cairo painter kept its
+ * own literal, so nothing could compare them, and `widgets/cpu-memory.ts` ended up
+ * drawing THE SAME resource ring at 0.12/0.8 in the bar and 0.14/0.88 in the Control
+ * Centre — one file, one element, two sets of numbers, from a redesign (24258bd5)
+ * that wrote a second drawer and never looked at the first.
+ *
+ * NOT here, on purpose: `PulseDots`'s idle dot (0.22) is a one-of-a-kind mark with no
+ * twin anywhere, and a single-use number in a shared file advertises a sharing that
+ * does not exist. Neither is `WorkspaceSchematic`'s `WP_SCRIM`/`NO_WP_FILL`: a scrim
+ * over a wallpaper IMAGE is not ink on glass, and both are already named where they
+ * are used.
+ */
+export const INK = {
+    /** The mark itself — the battery's outline, the dock's running dot, a resource
+     *  ring's filled arc, the island player's EQ bars. Reads as content, not as
+     *  decoration.
+     *
+     *  0.9 and not less, and the battery is where that was settled: the Lucide icons
+     *  beside it in the bar stroke at FULL opacity (`.bar-left image` attenuates
+     *  nothing), so at true icon scale a half-alpha 1.33px stroke reads as a
+     *  washed-out hairline and the glyph looks SMALLER than neighbours whose ink box
+     *  is the same width. Chrome ink sits just under the icon set, not half of it. */
+    solid: 0.9,
+    /** The track a solid mark runs on: a ring's unfilled remainder. A thin stroke,
+     *  so it takes a much lower alpha than a filled area does to read the same. */
+    track: 0.12,
+    /** A filled AREA standing in for content that is absent — the cover art's empty
+     *  slot. Lower than `track` despite reading stronger, because area beats stroke:
+     *  the same alpha over 62×62 px is far more present than over a 2px arc. */
+    wash: 0.1,
+} as const
+
+/**
  * The lockscreen / greeter GLASS, as premultiplied 0..1 components.
  *
  * ⚠️ MIRROR of `--nidara-glass`, `--nidara-glass-border` and

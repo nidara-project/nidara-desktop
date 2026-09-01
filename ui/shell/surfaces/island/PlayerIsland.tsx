@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
-import { RADIUS } from "../../../lib/tokens"
+import { RADIUS, INK } from "../../../lib/tokens"
 import { PANEL_W } from "../../common/widget-kit"
 import { makeCoverArt, PANEL_ART, PANEL_ART_RADIUS } from "../../common/CoverArt"
 import { buildMediaDetailPanel } from "../../widgets/media"
@@ -125,7 +125,10 @@ export function PlayerCompact(opts: {
         const c = Theme.chromeIsDark ? 1 : 0
         const bw = 3
         const gap = (w - EQ_BARS * bw) / (EQ_BARS - 1)
-        cr.setSourceRGBA(c, c, c, 0.75)
+        // The EQ bars ARE the mark, the same kind of thing as a resource ring's filled
+        // arc — which the line below already said of their round caps while the tone
+        // went its own way at 0.75. One tone for both now (decided 2026-09-01).
+        cr.setSourceRGBA(c, c, c, INK.solid)
         cr.setLineWidth(bw)
         cr.setLineCap(1)   // round caps, same as the resource rings
         for (let i = 0; i < EQ_BARS; i++) {

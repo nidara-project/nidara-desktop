@@ -25,6 +25,7 @@ import { bindWhileRealized } from "../../lib/nidara-kit"
 import Theme from "../core/ThemeManager"
 import { safeDisconnect } from "../core/signals"
 import * as media from "../core/MediaService"
+import { INK } from "../../lib/tokens"
 
 /** The media detail panel's artwork box, and the radius that goes with it. The
  *  island's compact art derives its own radius from this pair so the morph's two
@@ -32,11 +33,6 @@ import * as media from "../core/MediaService"
  *  "MUST match buildMediaDetailPanel's ART_SIZE" used to ask a human to maintain. */
 export const PANEL_ART = 96
 export const PANEL_ART_RADIUS = 14
-
-// One alpha for the empty slot. Four of the six copies already used this; the panel's
-// 0.08 and the compact's 0.12 were taste, not a decision, and a knob here would only
-// invite the drift back.
-const PLACEHOLDER_ALPHA = 0.1
 
 export interface CoverArtOpts {
     /** Fixed px box — sets the widget's size request AND the decode size, so the
@@ -115,7 +111,7 @@ export function makeCoverArt(opts: CoverArtOpts): Gtk.DrawingArea {
             // the system mode — the same rule every other Cairo painter in common/
             // obeys (BatteryGlyph, PulseDots, SquircleContainer).
             const c = Theme.chromeIsDark ? 1 : 0
-            cr.setSourceRGBA(c, c, c, PLACEHOLDER_ALPHA)
+            cr.setSourceRGBA(c, c, c, INK.wash)
             cr.fill()
         }
         cr.restore()

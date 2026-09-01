@@ -5,6 +5,7 @@ import { AtomicWidget, WidgetSize, ContentBudget } from "../common/widget-kit"
 import { pollWhileMapped } from "../common/poll"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
+import { INK } from "../../lib/tokens"
 
 function readFile(path: string): string {
     try {
@@ -51,12 +52,12 @@ function makeArc(
         const r = Math.min(w, h) / 2 - 2
         const xc = w / 2, yc = h / 2
         const c = Theme.chromeIsDark ? 1 : 0   // bar chrome — follows the pinned appearance
-        cr.setSourceRGBA(c, c, c, 0.12)
+        cr.setSourceRGBA(c, c, c, INK.track)
         cr.setLineWidth(size > 28 ? 3 : 2)
         cr.arc(xc, yc, r, 0, 2 * Math.PI)
         cr.stroke()
         if (pct > 0) {
-            cr.setSourceRGBA(c, c, c, 0.8)
+            cr.setSourceRGBA(c, c, c, INK.solid)
             cr.setLineWidth(size > 28 ? 3 : 2)
             cr.setLineCap(1)
             cr.arc(xc, yc, r, -Math.PI / 2, (pct / 100) * 2 * Math.PI - Math.PI / 2)
@@ -133,12 +134,12 @@ function makeCCMetric(
         const xc = w / 2, yc = h / 2
         const c = Theme.chromeIsDark ? 1 : 0   // shell skin (bar + CC) — follows appearance pin
         cr.setLineCap(1)
-        cr.setSourceRGBA(c, c, c, 0.14)
+        cr.setSourceRGBA(c, c, c, INK.track)
         cr.setLineWidth(lineW)
         cr.arc(xc, yc, r, 0, 2 * Math.PI)
         cr.stroke()
         if (pct > 0) {
-            cr.setSourceRGBA(c, c, c, 0.88)
+            cr.setSourceRGBA(c, c, c, INK.solid)
             cr.setLineWidth(lineW)
             cr.arc(xc, yc, r, -Math.PI / 2, (pct / 100) * 2 * Math.PI - Math.PI / 2)
             cr.stroke()

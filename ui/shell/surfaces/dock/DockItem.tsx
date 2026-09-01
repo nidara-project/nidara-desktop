@@ -21,6 +21,7 @@ import { safeDisconnect } from "../../core/signals"
 import { attachTooltip } from "../../common/Tooltip"
 import { renderMenuModel } from "../../common/NidaraMenu"
 import GlassBubbleMenu from "../../common/GlassBubbleMenu"
+import { INK } from "../../../lib/tokens"
 
 // hypr kept as alias for hs to minimise diff surface in this file
 const hypr = hs
@@ -428,7 +429,7 @@ export function DockItem(
         const r = Math.min(w, h) / 2
         cr.arc(w / 2, h / 2, r, 0, 2 * Math.PI)
         const c = Theme.chromeIsDark ? 1 : 0   // dock running-dot — follows the pinned chrome appearance
-        cr.setSourceRGBA(c, c, c, 0.9)
+        cr.setSourceRGBA(c, c, c, INK.solid)
         cr.fill()
     })
 
