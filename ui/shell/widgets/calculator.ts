@@ -1,13 +1,12 @@
 import { execAsync } from "../../lib/process"
-import { AtomicWidget, WidgetSize, roundToggleSpec } from "../common/widget-kit"
-import { makeIconAction } from "./bar-helpers"
+import { AtomicWidget, WidgetSize, roundToggleSpec, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 
 const launch = () => execAsync("gnome-calculator").catch(() => {})
 
 function buildBarContent() {
-    return makeIconAction({
+    return makeBarIcon({
         getIcon: () => Icons.calculator,
         onAction: launch,
     })

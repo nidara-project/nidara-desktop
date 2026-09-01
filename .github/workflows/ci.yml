@@ -278,6 +278,11 @@ jobs:
             echo "Fix: run 'node scripts/gen-widget-index.mjs' and commit the updated widgets.gen.ts alongside your widget change."
             exit 1
           fi
+      # The zero-layout contract. Neither rule is a compile error: 28 widget→surface
+      # imports type-checked happily, and a kit module that imports CCLayoutManager
+      # crashes the shell at BOOT, which tsc cannot see.
+      - name: Widget boundary (no surface imports, kit stays a leaf)
+        run: node scripts/ci/widget-boundary-check.mjs
 
   hypr-config:
     name: Hyprland config (parses + game mode)

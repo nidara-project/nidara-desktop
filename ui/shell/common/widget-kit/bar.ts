@@ -1,3 +1,13 @@
+// The BAR half of the widget vocabulary — what a widget's pill looks like in the
+// bar, as opposed to its tile in the Control Centre (tile.ts) or the room a panel
+// opens for it (panel.ts).
+//
+// It lived in `widgets/bar-helpers.ts`, the ONE non-widget file the registry codegen
+// had to grandfather past its own "widgets/ is a widgets-only directory" rule. With
+// the kit in place there is nowhere else it should be, and the codegen has no
+// exceptions left.
+//
+// Leaf module — no shell imports. See panel.ts for the cycle that crashes the boot.
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
@@ -14,7 +24,7 @@ const AUTO_HIDE_MS = 3000
  * Uses the same structure as fixed bar pills: Gtk.Image + margin_start/end: 16.
  * The Revealer slides in the label to the right of the icon.
  */
-export function makeExpandable(opts: {
+export function makeBarExpandable(opts: {
     getIcon: () => Gio.FileIcon | string
     getText: () => string
     onAction?: () => void
@@ -87,7 +97,7 @@ export function makeExpandable(opts: {
  * Pure icon action button — identical structure to fixed bar pills.
  * Returns a Gtk.Image with a GestureClick attached.
  */
-export function makeIconAction(opts: {
+export function makeBarIcon(opts: {
     getIcon: () => Gio.FileIcon | string
     onAction: () => void
     activeClass?: string

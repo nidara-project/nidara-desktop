@@ -1522,18 +1522,17 @@ These were paid down; the *rule* remains:
   (rejected by the Lua parser). See `architecture.md`.
 - **Widget registration is generated** — never hand-edit `widgets/widgets.gen.ts` or re-add
   manual imports to `widgets/index.ts`; the registry comes from `scripts/gen-widget-index.mjs`
-  (phase 1 of the widget plugin system). `bar-helpers.ts` is the only grandfathered
-  non-widget in `widgets/` (EXCLUDE list).
-- **A widget imports `common/widget-kit/`, never `surfaces/`.** That is the whole of phase 2,
-  the zero-layout contract: a widget declares what it is and what it does, not where it is
-  drawn. The contract types and the `PANEL_W` tiers moved out of
-  `surfaces/control-center/Types.ts` on 2026-09-01, and the tile vocabulary out of
-  `control-center/Toggles.tsx` and `control-center/Sliders.tsx` over the same two days,
-  precisely so the sentence can be true, and the panel rows (`panelRow`,
-  `panelInfoRow`, `panelSeparator`) joined the `PANEL_W` tiers right after. What is left of
-  #306: nothing yet ENFORCES the boundary — a CI check that `widgets/` never imports
-  `surfaces/`, plus the one page an outsider writes a widget from, is what closes it. The
-  media tile came home on 2026-09-01 and `surfaces/control-center/` now holds only surface.
+  (phase 1 of the widget plugin system). EXCLUDE holds only the registry's own two files:
+  `bar-helpers.ts` was the last grandfathered non-widget and joined the kit on 2026-09-01.
+- **A widget imports `common/widget-kit/`, never `surfaces/` — and CI enforces it.**
+  `scripts/ci/widget-boundary-check.mjs` (in the *Widget registry freshness* job) fails on any
+  import from `widgets/` into `surfaces/`, and on any import from `common/widget-kit/` into
+  either — the second one because a kit module that reaches for `CCLayoutManager` closes a
+  cycle that crashes the shell AT BOOT, which `tsc` cannot see. Neither rule is a compile
+  error: there were 28 widget→surface imports on the morning of 2026-09-01 and all of them
+  type-checked. **#306 is closed**; the page an outsider writes a widget from is
+  `references/writing-a-widget.md`, and it is the thing to keep current when the vocabulary
+  grows.
 - **Notification swipe-to-dismiss** — one implementation in `common/ScaleRevealer.ts`:
   `attachHorizontalSwipe` (gesture detector — claims only on horizontal intent so the NC
   scroller keeps its vertical drag; cancels the row's release-phase tap) + `setSwipe`/`swipeOut`/

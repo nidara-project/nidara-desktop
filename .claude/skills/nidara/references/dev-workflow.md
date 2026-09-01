@@ -643,8 +643,9 @@ shim needs that refresh or typecheck fails on CI while passing locally.
 ### Adding a widget (auto-registration)
 
 Create ONE file in `ui/shell/widgets/` that default-exports a
-`const w: AtomicWidget = {...}` (contract in `common/widget-kit/`, the only module a
-widget imports besides `core/`; copy `calculator.ts` as a minimal template). Then:
+`const w: AtomicWidget = {...}`. **`references/writing-a-widget.md` is the full page** —
+the vocabulary, the optional fields, and the boundary CI enforces; copy `calculator.ts`
+as a minimal template. Then:
 
 ```bash
 node scripts/gen-widget-index.mjs        # regenerates widgets/widgets.gen.ts

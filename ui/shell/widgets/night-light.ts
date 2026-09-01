@@ -1,8 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import nightLight from "../core/NightLightManager"
 import { makeHSlider } from "../../lib/nidara-kit"
-import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator } from "../common/widget-kit"
-import { makeIconAction } from "./bar-helpers"
+import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import { safeDisconnect } from "../core/signals"
@@ -13,7 +12,7 @@ const subscribe = (sync: () => void) => {
 }
 
 function buildBarContent() {
-    return makeIconAction({
+    return makeBarIcon({
         // Dedicated icon (warm sunset) — distinct from dark-mode's moon/sun. On/off
         // is conveyed by the toggle's active state, not an icon swap.
         getIcon: () => Icons.sunset,

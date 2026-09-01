@@ -1,13 +1,12 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { NidaraButton } from "../../lib/nidara-kit/button"
-import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator } from "../common/widget-kit"
-import { makeIconAction } from "./bar-helpers"
+import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as BT from "../core/BluetoothService"
 
 function buildBarContent() {
-    return makeIconAction({
+    return makeBarIcon({
         getIcon: () => Icons.bluetooth,
         onAction: () => BT.togglePower(),
         activeClass: "bar-widget-active",
