@@ -14,6 +14,13 @@
     "lib": ["ES2020", "ES2021.Intl", "DOM"],
     "module": "ES2022",
     "moduleResolution": "node",
+    // Lets a module spell a sibling with its real ".ts" extension. Needed by
+    // `surfaces/settings/configLocations.ts`, which the CI contract check IMPORTS
+    // with `node --experimental-strip-types` — Node does not resolve extensionless
+    // specifiers, and importing the real derivation is what keeps that check from
+    // growing a second copy of the walk it is meant to verify. Safe here because
+    // `noEmit` is on: nothing is written that could keep the extension.
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "skipLibCheck": true,
     "strict": false,
