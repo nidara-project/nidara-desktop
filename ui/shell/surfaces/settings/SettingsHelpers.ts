@@ -48,6 +48,13 @@ export interface SearchItem {
     pageLabel: string
     label: string
     subtitle: string
+    /** "page" = the page itself as a destination; "row" = something on it.
+     *  Fifteen of the eighteen pages could not be found by typing their own name,
+     *  because the index only ever held rows — worst on Settings → Audio, whose
+     *  rows are sound cards and playing apps and are deliberately NOT indexed
+     *  (see `pages/Audio.tsx`: hardware state is not a setting). Indexing the page
+     *  as well is what macOS and GNOME do: you get the panel AND the preferences. */
+    kind?: "page" | "row"
 }
 
 let _searchIndex: SearchItem[] = []
@@ -68,6 +75,13 @@ export const clearSearchIndex = () => {
     _refreshers.clear()
 }
 export const getSearchIndex = (): SearchItem[] => [..._searchIndex]
+
+/** Register a page as a search destination in its own right. Called once per
+ *  top-level page from `Settings.tsx`, from the label the manifest declares — so a
+ *  page cannot be missing from search without also being missing from the sidebar. */
+export const indexPage = (id: string, label: string) => {
+    _searchIndex.push({ pageId: id, pageLabel: label, label, subtitle: "", kind: "page" })
+}
 
 /** Derive and register search index entries directly from a declarative preference page manifest. */
 export const indexPreferencePage = (page: PageDecl, pageLabel: string) => {

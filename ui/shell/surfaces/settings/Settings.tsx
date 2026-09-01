@@ -19,7 +19,7 @@ import BluetoothPage from "./pages/Bluetooth"
 import UsersPage from "./pages/Users"
 import { manifest, type PageDecl } from "./manifest"
 import { buildPreferencePage } from "./PreferencePage"
-import { beginPage, endPage, clearSearchIndex, getSearchIndex, indexPreferencePage, runPageRefreshers, type SettingsNav } from "./SettingsHelpers"
+import { beginPage, endPage, clearSearchIndex, getSearchIndex, indexPage, indexPreferencePage, runPageRefreshers, type SettingsNav } from "./SettingsHelpers"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import IconButton from "../../common/IconButton"
@@ -227,6 +227,13 @@ export default function Settings(monitor: Gdk.Monitor) {
         goBack: () => { if (historyIdx > 0) navigateTo(history[--historyIdx], false) },
     }
 
+    // Every page is a search destination in its own right, registered from the same
+    // label the sidebar shows. Without this the index held only ROWS, and a page
+    // whose rows are objects rather than settings — Audio's sound cards, Network's
+    // interfaces — could not be found by typing its own name. Measured before the
+    // change: 15 of 18 pages were unreachable that way.
+    categories.forEach(cat => indexPage(cat.id, cat.label))
+
     categories.forEach(cat => {
         // Build page widget
         let pageWidget: Gtk.Widget
@@ -305,12 +312,17 @@ export default function Settings(monitor: Gdk.Monitor) {
             item.label.toLowerCase().includes(q) ||
             item.subtitle.toLowerCase().includes(q)
         )
+        // Pages first: typing a page's name is a coarser, more certain intent than
+        // matching a row that happens to contain the same word.
+        matches.sort((a, b) => (a.kind === "page" ? 0 : 1) - (b.kind === "page" ? 0 : 1))
 
         matches.forEach(item => {
             const cat = categories.find(c => c.id === item.pageId)
+            const isPage = item.kind === "page"
 
             const trailing = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
-            trailing.append(new Gtk.Label({ label: item.pageLabel, css_classes: ["search-result-chip"] }))
+            // No chip on a page result: it would repeat the label verbatim.
+            if (!isPage) trailing.append(new Gtk.Label({ label: item.pageLabel, css_classes: ["search-result-chip"] }))
             trailing.append(new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 14, opacity: 0.4, css_classes: ["nd-icon"] }))
 
             // A result row shows a row that exists elsewhere, so it is built by the
@@ -318,12 +330,18 @@ export default function Settings(monitor: Gdk.Monitor) {
             // hand-rolled copy ellipsised at `max_width_chars: 50`, the same character
             // stub that was removed from Settings → Audio for cutting strings the row
             // had room for: a description was clipped at 50 chars inside an 800px pane.
-            const lbr = NidaraRow(item.label, item.subtitle, trailing, ["search-result-row"], undefined,
+            const lbr = NidaraRow(item.label, item.subtitle, trailing,
+                // `.search-result-page` carries no style: what distinguishes a page
+                // result is the absent chip and the full-opacity icon. It is here so
+                // `queryUI` can tell the two kinds apart — the same role the class on
+                // Power's Cairo checkmark plays, and what makes "did the page result
+                // come first" answerable without a screenshot.
+                isPage ? ["search-result-row", "search-result-page"] : ["search-result-row"], undefined,
                 new Gtk.Image({
                     gicon: cat?.icon ?? Icons.settings,
                     pixel_size: 18,
                     css_classes: ["search-result-page-icon", "nd-icon"],
-                    opacity: 0.6,
+                    opacity: isPage ? 1 : 0.6,
                 }))
             ;(lbr as any)._targetPageId = item.pageId
             searchResultsList.append(lbr)
