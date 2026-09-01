@@ -399,7 +399,7 @@ window.nidara-settings-window {
                 padding: 2px;
                 border-radius: $nidara-radius-sm;
                 border: 2px solid transparent;
-                background: transparent;
+                background-color: var(--nidara-surface);
                 transition: border-color 0.15s ease, transform 0.15s ease;
 
                 picture {

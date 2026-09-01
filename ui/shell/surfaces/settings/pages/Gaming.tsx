@@ -1,9 +1,8 @@
 import Gtk from "gi://Gtk?version=4.0"
-import Gdk from "gi://Gdk?version=4.0"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import GdkPixbuf from "gi://GdkPixbuf"
 import Gaming, { type WallpaperMode } from "../../../core/GamingManager"
+import Wallpaper from "../../../core/WallpaperManager"
 import { t } from "../../../core/i18n"
 import { listGroup, createRow, pageBox, segmentedGroup, settingRow } from "../SettingsHelpers"
 import { NidaraButton } from "../../../../lib/nidara-kit"
@@ -48,12 +47,10 @@ export default function GamingPage() {
     })
 
     const updatePreview = (path: string) => {
-        if (!path || !GLib.file_test(path, GLib.FileTest.EXISTS)) return
-        try {
-            // 2× the preview box, not full size — see Appearance.tsx updatePreview
-            const pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, 640, 360, true)
-            if (pixbuf) preview.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
-        } catch (_) { preview.set_filename(path) }
+        if (!path) return
+        Wallpaper.getThumbnailTexture(path, 640, 360).then(tex => {
+            if (tex) preview.set_paintable(tex)
+        })
     }
     updatePreview(Gaming.customWallpaper)
 

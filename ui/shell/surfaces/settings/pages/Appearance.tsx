@@ -2,7 +2,6 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import GdkPixbuf from "gi://GdkPixbuf"
 import Theme from "../../../core/ThemeManager"
 import { NidaraButton, NidaraFontButton, makeHSlider } from "../../../../lib/nidara-kit"
 import NightLight from "../../../core/NightLightManager"
@@ -42,16 +41,10 @@ export default function AppearancePage() {
         halign: Gtk.Align.CENTER,
     })
     const updatePreview = (path: string) => {
-        if (!path || !GLib.file_test(path, GLib.FileTest.EXISTS)) return
-        try {
-            // GdkPixbuf handles GIFs (first frame) and all common formats uniformly.
-            // Decode at 2× the preview box, NOT full size — a full wallpaper is ~17 MB
-            // decoded and Settings hides (never destroys), so it would stay resident.
-            const pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, 640, 360, true)
-            if (pixbuf) preview.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
-        } catch (_) {
-            preview.set_filename(path) // fallback
-        }
+        if (!path) return
+        Wallpaper.getThumbnailTexture(path, 640, 360).then(tex => {
+            if (tex) preview.set_paintable(tex)
+        })
     }
     updatePreview(Wallpaper.current)
     Wallpaper.refreshFromDaemon()
@@ -70,6 +63,8 @@ export default function AppearancePage() {
 
     // Bundled wallpapers gallery
     const bundled = getBundledWallpapers().filter(p => !p.includes("wallpaper-greeter"))
+    let refreshThumbActive: ((currentPath: string) => void) | null = null
+
     if (bundled.length > 0) {
         const thumbBox = new Gtk.Box({
             orientation: Gtk.Orientation.HORIZONTAL,
@@ -82,7 +77,7 @@ export default function AppearancePage() {
 
         const thumbButtons: { path: string; btn: Gtk.Button }[] = []
 
-        const refreshThumbActive = (currentPath: string) => {
+        refreshThumbActive = (currentPath: string) => {
             const curBase = currentPath ? currentPath.split("/").pop() : ""
             for (const item of thumbButtons) {
                 const itemBase = item.path.split("/").pop()
@@ -100,12 +95,9 @@ export default function AppearancePage() {
                 height_request: 45,
                 content_fit: Gtk.ContentFit.COVER,
             })
-            try {
-                const pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(wallPath, 160, 90, true)
-                if (pixbuf) thumbPic.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
-            } catch (_) {
-                thumbPic.set_filename(wallPath)
-            }
+            Wallpaper.getThumbnailTexture(wallPath, 160, 90).then(tex => {
+                if (tex) thumbPic.set_paintable(tex)
+            })
 
             const btn = new Gtk.Button({
                 css_classes: ["wallpaper-thumb-btn"],
@@ -115,7 +107,7 @@ export default function AppearancePage() {
             btn.connect("clicked", () => {
                 Wallpaper.setWallpaper(wallPath)
                 updatePreview(wallPath)
-                refreshThumbActive(wallPath)
+                if (refreshThumbActive) refreshThumbActive(wallPath)
             })
 
             thumbBox.append(btn)
@@ -123,7 +115,6 @@ export default function AppearancePage() {
         }
 
         refreshThumbActive(Wallpaper.current)
-        Wallpaper.connect("changed", () => refreshThumbActive(Wallpaper.current))
 
         const centerBox = new Gtk.CenterBox({
             center_widget: thumbBox,
@@ -185,7 +176,18 @@ export default function AppearancePage() {
         changeBtn,
     ))
 
-    Wallpaper.connect("changed", () => updatePreview(Wallpaper.current))
+    // Unconditionally follow wallpaper changes from external tools/gaming mode.
+    // Use bindWhileRealized because Settings hides rather than destroys its window.
+    bindWhileRealized(page, () => {
+        updatePreview(Wallpaper.current)
+        if (refreshThumbActive) refreshThumbActive(Wallpaper.current)
+        const wallId = Wallpaper.connect("changed", () => {
+            updatePreview(Wallpaper.current)
+            if (refreshThumbActive) refreshThumbActive(Wallpaper.current)
+        })
+        return () => safeDisconnect(Wallpaper, wallId)
+    })
+
     page.append(wallGroup.box)
 
     // 3. Theme — accent + glass opacity
