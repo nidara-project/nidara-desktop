@@ -2,9 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import { listGroup, createRow, pageBox, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
-import DefaultAppsPage from "./DefaultApps"
-import AppIconsPage from "./AppIcons"
-import AutostartPage from "./Autostart"
+import { SUBPAGE_BUILDERS, subpagesOf } from "../subpages"
 
 // Apps landing — a parent page that drills into the three app-related screens
 // (Default Apps, App Icons, Autostart) via subpages, so they share one sidebar
@@ -36,24 +34,20 @@ export default function AppsPage(nav: SettingsNav) {
     const page = pageBox("apps-page")
     const { box, listBox } = listGroup("")
 
-    listBox.append(navRow(
-        nav,
-        t("settings.defaultapps.title"),
-        t("settings.defaultapps.subtitle"),
-        { id: "apps/default", build: () => DefaultAppsPage() },
-    ))
-    listBox.append(navRow(
-        nav,
-        t("settings.apps.title"),
-        t("settings.apps.subtitle"),
-        { id: "apps/icons", build: () => AppIconsPage(nav) },
-    ))
-    listBox.append(navRow(
-        nav,
-        t("settings.autostart.title"),
-        t("settings.autostart.subtitle"),
-        { id: "apps/autostart", build: () => AutostartPage(nav) },
-    ))
+    // The three rows come from the manifest, in its order: id, title and subtitle
+    // are declared once and read here, rather than being written out again beside
+    // the builder. A subpage that is added to the manifest appears here; one whose
+    // `builder` has no entry in SUBPAGE_BUILDERS does not compile.
+    for (const sub of subpagesOf("apps")) {
+        const build = SUBPAGE_BUILDERS[sub.builder as keyof typeof SUBPAGE_BUILDERS]
+        if (!build) continue
+        listBox.append(navRow(
+            nav,
+            t(sub.label as any),
+            t((sub.subtitle ?? "") as any),
+            { id: sub.id, build: () => build(nav) },
+        ))
+    }
 
     page.append(box)
     return page

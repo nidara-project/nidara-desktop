@@ -36,6 +36,7 @@ export interface PageDecl {
     icon?: IconName               // nombre, no el icono: el manifiesto sigue sin `gi://`
     groupStart?: boolean          // divisor de la barra lateral
     parent?: string               // subpágina: no va en la barra lateral
+    subtitle?: string             // subpágina: la segunda línea de la fila con que su padre la lista
     builder?: string              // browser/info: nombre del constructor
     reason?: string               // browser/info: POR QUÉ no es declarable. Obligatorio.
     note?: string
@@ -526,6 +527,39 @@ export const manifest = [
         icon: "info",
         builder: "about",
         reason: "System diagnostics and hardware information display with live updates trigger.",
+    },
+    // ── Subpáginas de Aplicaciones ───────────────────────────────────────────
+    // No están en la barra lateral: `Apps.tsx` las empuja con `nav.pushSubpage`, y
+    // ahora las LISTA desde aquí — id, título y subtítulo salen de esta declaración,
+    // así que dejan de estar escritos dos veces. Su contenido sigue SIN indexarse en
+    // la búsqueda a propósito (se reconstruyen en cada visita); lo que se indexa son
+    // las tres filas del hub, que es donde una búsqueda de «autostart» aterriza.
+    {
+        id: "apps/default",
+        kind: "browser",
+        parent: "apps",
+        label: "settings.defaultapps.title",
+        subtitle: "settings.defaultapps.subtitle",
+        builder: "defaultApps",
+        reason: "Object browser for the installed applications that can claim each default handler.",
+    },
+    {
+        id: "apps/icons",
+        kind: "browser",
+        parent: "apps",
+        label: "settings.apps.title",
+        subtitle: "settings.apps.subtitle",
+        builder: "appIcons",
+        reason: "Object browser for every installed application, each drilling into its own icon override.",
+    },
+    {
+        id: "apps/autostart",
+        kind: "browser",
+        parent: "apps",
+        label: "settings.autostart.title",
+        subtitle: "settings.autostart.subtitle",
+        builder: "autostart",
+        reason: "Object browser for the user's autostart entries, which are files on disk rather than settings.",
     },
 ] as const satisfies readonly PageDecl[]
 

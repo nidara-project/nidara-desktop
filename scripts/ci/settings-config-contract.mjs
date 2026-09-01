@@ -276,6 +276,18 @@ for (const page of manifest) {
             errors.push(`  FAIL  manifest.ts: page "${page.id}" header must declare a string custom identifier.`)
         }
     }
+    // A subpage declares its second line: it is what the hub listing it paints.
+    if (page.parent) {
+        if (!page.subtitle) {
+            errors.push(`  FAIL  manifest.ts: subpage "${page.id}" must declare a subtitle — it is the second line of the row its parent lists it with.`)
+        } else if (!enKeys.has(page.subtitle)) {
+            errors.push(`  FAIL  manifest.ts: subpage "${page.id}" declares subtitle "${page.subtitle}" which does not exist in en.ts.`)
+        }
+        if (!manifest.some((p) => p.id === page.parent)) {
+            errors.push(`  FAIL  manifest.ts: subpage "${page.id}" names parent "${page.parent}", which is not a page in the manifest.`)
+        }
+    }
+
     for (const group of (page.groups ?? [])) {
         if (group.i18n && group.i18n !== "" && !enKeys.has(group.i18n)) {
             errors.push(`  FAIL  manifest.ts: page "${page.id}" group declares i18n "${group.i18n}" which does not exist in en.ts.`)
@@ -389,7 +401,11 @@ if (allowlistContent) {
 }
 
 // Check 4: Verify exempt pages count against allowlist (can only shrink)
-const exemptPages = manifest.filter((p) => p.kind === "browser" || p.kind === "info")
+// Top-level only: a subpage is exempt by construction (its parent pushes it, and it
+// is an object browser), and it was exempt long before it was ever DECLARED. Counting
+// declarations instead of pages would make writing down what already existed look like
+// the exempt list growing — the one thing this ratchet exists to catch.
+const exemptPages = manifest.filter((p) => !p.parent && (p.kind === "browser" || p.kind === "info"))
 if (maxExemptPages === null) {
     errors.push(`  FAIL  ${ALLOWLIST_PATH}: missing 'exempt-pages:<count>' entry.`)
 } else if (exemptPages.length > maxExemptPages) {
