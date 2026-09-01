@@ -2,11 +2,12 @@ import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import { execAsync } from "../../../../lib/process"
-import { listGroup, createRow, pageBox, staticLabel, bindWhileRealized, settingRow } from "../SettingsHelpers"
+import { createRow, staticLabel, bindWhileRealized } from "../SettingsHelpers"
 import regionConfig, { TimeFormat, DateFormat } from "../../../core/RegionConfig"
 import { t } from "../../../core/i18n"
 import { safeDisconnect } from "../../../core/signals"
 import { NidaraButton, NidaraDropDown } from "../../../../lib/nidara-kit"
+import type { PageCtx, ItemBuilder } from "../PreferencePage"
 
 const TIME_FORMAT_LABELS = (): Record<TimeFormat, string> => ({
     "24h": t("settings.region.time.24h"),
@@ -22,7 +23,7 @@ const DATE_FORMAT_LABELS = (): Record<DateFormat, string> => ({
     "iso":        t("settings.region.date.iso"),
 })
 
-function clockPreview(): string {
+function clockPreviewText(): string {
     try {
         return regionConfig.formatClock()
     } catch {
@@ -30,12 +31,10 @@ function clockPreview(): string {
     }
 }
 
-export default function RegionPage() {
-    const page = pageBox("region-page")
-
+export const build = (ctx: PageCtx) => {
     // ── Live Clock Preview ─────────────────────────────────────────────────────
     const clockLabel = new Gtk.Label({
-        label: clockPreview(),
+        label: clockPreviewText(),
         css_classes: ["region-clock-preview"],
         halign: Gtk.Align.CENTER,
     })
@@ -55,15 +54,12 @@ export default function RegionPage() {
     })
     previewBox.append(clockLabel)
     previewBox.append(clockSubLabel)
-    page.append(previewBox)
 
     // The 1s tick is armed in bindWhileRealized at the bottom of the page, so it
     // really does run only "while the page is visible" — and, crucially, is armed
     // AGAIN when the user comes back. Created here it survived exactly one visit.
 
-    // ── Hora ──────────────────────────────────────────────────────────────────
-    const { box: timeBox, listBox: timeList } = listGroup(t("settings.region.time.group"))
-
+    // ── Time format dropdown ──────────────────────────────────────────────────
     const tFmtsDict = TIME_FORMAT_LABELS()
     const timeFmts = Object.keys(tFmtsDict) as TimeFormat[]
     const timeLabels = timeFmts.map(k => tFmtsDict[k])
@@ -74,15 +70,8 @@ export default function RegionPage() {
         const v = timeFmts[timeDrp.selected]
         if (v) regionConfig.setTimeFormat(v)
     })
-    timeList.append(createRow(t("settings.region.time.format"), t("settings.region.time.format.desc"), timeDrp))
 
-    timeList.append(settingRow("region.showSeconds"))
-
-    page.append(timeBox)
-
-    // ── Fecha ─────────────────────────────────────────────────────────────────
-    const { box: dateBox, listBox: dateList } = listGroup(t("settings.region.date.group"))
-
+    // ── Date format dropdown ──────────────────────────────────────────────────
     const dFmtsDict = DATE_FORMAT_LABELS()
     const dateFmts = Object.keys(dFmtsDict) as DateFormat[]
     const dateLabels = dateFmts.map(k => dFmtsDict[k])
@@ -93,18 +82,11 @@ export default function RegionPage() {
         const v = dateFmts[dateDrp.selected]
         if (v) regionConfig.setDateFormat(v)
     })
-    dateList.append(createRow(t("settings.region.date.format"), t("settings.region.date.format.desc"), dateDrp))
 
-    page.append(dateBox)
-
-    // ── Zona Horaria ──────────────────────────────────────────────────────────
-    const { box: tzBox, listBox: tzList } = listGroup(t("settings.region.tz.group"))
-
+    // ── Timezone active & change ──────────────────────────────────────────────
     const tzDetected = regionConfig.timezone || regionConfig.detectTimezone() || "UTC"
     const tzCurrentLabel = staticLabel(tzDetected)
-    tzList.append(createRow(t("settings.region.tz.active"), t("settings.region.tz.active.desc"), tzCurrentLabel))
 
-    // Text entry with EntryCompletion backed by timedatectl list-timezones
     const tzEntry = new Gtk.Entry({
         text: tzDetected,
         placeholder_text: t("settings.region.tz.placeholder"),
@@ -171,17 +153,8 @@ export default function RegionPage() {
     const tzEntryRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
     tzEntryRow.append(tzEntry)
     tzEntryRow.append(tzApplyBtn)
-    tzList.append(createRow(
-        t("settings.region.tz.change"),
-        t("settings.region.tz.change.desc"),
-        tzEntryRow,
-    ))
 
-    page.append(tzBox)
-
-    // ── Idioma y formatos ─────────────────────────────────────────────────────
-    const { box: localeBox, listBox: localeList } = listGroup(t("settings.region.locale.group"))
-
+    // ── Language & Regional Formats ───────────────────────────────────────────
     // --- 1. Locale (LANG) ---
     // A dropdown, not a text entry: `localectl list-locales` is the closed set of
     // locales this system can actually switch to (the GENERATED ones — 13 on a stock
@@ -201,8 +174,6 @@ export default function RegionPage() {
     const langRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
     langRow.append(langDrp)
     langRow.append(applyLangBtn)
-
-    localeList.append(createRow(t("settings.region.locale.lang"), t("settings.region.locale.lang.desc"), langRow))
 
     // The keyboard layout used to have a second control right here — an entry whose
     // Apply called `inputConfig.setKbLayout(kb)` with ONE argument, so `variant`
@@ -280,12 +251,6 @@ export default function RegionPage() {
             regionConfig.setRegionalLocale(regionalValues[idx])
     })
 
-    localeList.append(createRow(
-        t("settings.region.locale.regional"),
-        t("settings.region.locale.regional.desc"),
-        regionalDrp,
-    ))
-
     // Initialization: fill the locale list, THEN select the live LANG in it.
     // Nested on purpose — the selection is only meaningful once the model has rows,
     // and `localectl status` is what knows which row is the current one.
@@ -334,10 +299,8 @@ export default function RegionPage() {
 
     applyLangBtn.connect("clicked", applyLang)
 
-    page.append(localeBox)
-
     const syncFromConfig = () => {
-        clockLabel.label = clockPreview()
+        clockLabel.label = clockPreviewText()
         // `selected`, not `active` — `active` is Gtk.ComboBox's property and setting it
         // on a Gtk.DropDown did nothing at all, so an external change to the time or
         // date format never moved these two. Found by the typechecker on the way past.
@@ -345,10 +308,11 @@ export default function RegionPage() {
         dateDrp.selected = Math.max(0, dateFmts.indexOf(regionConfig.dateFormat))
     }
 
-    bindWhileRealized(page, () => {
+    // Armed on ctx.page as documented in Region.tsx:60
+    bindWhileRealized(ctx.page, () => {
         syncFromConfig()   // the formats may have changed while the page was away
         const clockTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
-            clockLabel.label = clockPreview()
+            clockLabel.label = clockPreviewText()
             return GLib.SOURCE_CONTINUE
         })
         const regionSigId = regionConfig.connect("changed", syncFromConfig)
@@ -361,5 +325,13 @@ export default function RegionPage() {
         }
     })
 
-    return page
+    return {
+        clockPreview: () => previewBox,
+        timeFormat: () => createRow(t("settings.region.time.format"), t("settings.region.time.format.desc"), timeDrp),
+        dateFormat: () => createRow(t("settings.region.date.format"), t("settings.region.date.format.desc"), dateDrp),
+        timezoneActive: () => createRow(t("settings.region.tz.active"), t("settings.region.tz.active.desc"), tzCurrentLabel),
+        timezoneChange: () => createRow(t("settings.region.tz.change"), t("settings.region.tz.change.desc"), tzEntryRow),
+        systemLanguage: () => createRow(t("settings.region.locale.lang"), t("settings.region.locale.lang.desc"), langRow),
+        regionalFormat: () => createRow(t("settings.region.locale.regional"), t("settings.region.locale.regional.desc"), regionalDrp),
+    } satisfies Record<string, ItemBuilder>
 }
