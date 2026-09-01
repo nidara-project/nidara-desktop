@@ -9,7 +9,6 @@ import {
 import { WINDOW_LAYOUT } from "../../../lib/tokens"
 
 // Page Imports
-import AppearancePage from "./pages/Appearance"
 import DisplayPage from "./pages/Display"
 import AudioPage from "./pages/Audio"
 import NetworkPage from "./pages/Network"
@@ -18,7 +17,6 @@ import AboutPage from "./pages/About"
 import AppsPage from "./pages/Apps"
 import BluetoothPage from "./pages/Bluetooth"
 import UsersPage from "./pages/Users"
-import AiPage from "./pages/Ai"
 import { buildPreferencePage } from "./PreferencePage"
 import { beginPage, endPage, clearSearchIndex, getSearchIndex, runPageRefreshers, type SettingsNav } from "./SettingsHelpers"
 import { t } from "../../core/i18n"
@@ -80,7 +78,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "network",      label: t("settings.network.title"),     icon: Icons.globe,         component: NetworkPage      },
         { id: "bluetooth",    label: t("settings.bluetooth.title"),   icon: Icons.bluetooth,     component: BluetoothPage    },
         // ── Look, shell & behaviour ─────────────────────────────────────────────
-        { id: "appearance",   label: t("settings.appearance.title"),  icon: Icons.palette,       component: AppearancePage,   groupStart: true },
+        { id: "appearance",   label: t("settings.appearance.title"),  icon: Icons.palette,       component: () => buildPreferencePage("appearance"),   groupStart: true },
         { id: "display",      label: t("settings.display.title"),     icon: Icons.monitor,       component: DisplayPage      },
         { id: "audio",        label: t("settings.audio.title"),       icon: Icons.speaker,       component: AudioPage        },
         { id: "bar",          label: t("settings.bar.title"),         icon: Icons.panelTop,      component: () => buildPreferencePage("bar") },
@@ -95,7 +93,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "power",        label: t("settings.power.title"),       icon: Icons.battery,       component: () => buildPreferencePage("power") },
         { id: "region",       label: t("settings.region.title"),      icon: Icons.clock,         component: () => buildPreferencePage("region") },
         { id: "users",        label: t("settings.users.title"),       icon: Icons.userRound,     component: UsersPage        },
-        { id: "ai",           label: t("settings.ai.title"),          icon: Icons.sparkles,      component: AiPage           },
+        { id: "ai",           label: t("settings.ai.title"),          icon: Icons.sparkles,      component: () => buildPreferencePage("ai") },
         { id: "about",        label: t("settings.about.title"),       icon: Icons.info,          component: AboutPage        },
     ]
 

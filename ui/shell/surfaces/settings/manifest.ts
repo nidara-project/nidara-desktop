@@ -4,8 +4,10 @@
 
 export type ItemDecl =
     | string                                   // clave registrada → settingRow(clave)
-    | { custom: string; i18n: string; key?: string; note?: string; visibleWhen?: WhenDecl }
-    | { decoration: string; note?: string; visibleWhen?: WhenDecl }
+    | { key: string; note?: string; visibleWhen?: WhenDecl; sensitiveWhen?: WhenDecl }
+    | { custom: string; i18n: string; key?: string; note?: string; visibleWhen?: WhenDecl; sensitiveWhen?: WhenDecl }
+    | { decoration: string; note?: string; visibleWhen?: WhenDecl; sensitiveWhen?: WhenDecl }
+    | { disclosure: string; note?: string; items: readonly ItemDecl[] }
 
 export interface WhenDecl {
     key: string
@@ -253,6 +255,164 @@ export const manifest = [
                 items: [
                     { custom: "systemLanguage", i18n: "settings.region.locale.lang" },
                     { custom: "regionalFormat", i18n: "settings.region.locale.regional" },
+                ],
+            },
+        ],
+    },
+    {
+        id: "appearance",
+        groups: [
+            {
+                i18n: "settings.appearance.group.base-style",
+                items: [
+                    "appearance.darkMode",
+                    "appearance.shellAppearance",
+                ],
+            },
+            {
+                i18n: "settings.appearance.group.wallpaper",
+                items: [
+                    { decoration: "wallpaperPreview" },
+                    {
+                        decoration: "wallpaperGallery",
+                        note: "Bundled wallpapers gallery. Only rendered if getBundledWallpapers() returns items; when empty, row is hidden (visible = false). Wallpaper.connect('changed') subscription is unconditional outside this check.",
+                    },
+                    "wallpaper.transition",
+                    { custom: "wallpaperPicker", i18n: "settings.appearance.image" },
+                ],
+            },
+            {
+                i18n: "settings.appearance.group.theme",
+                items: [
+                    { custom: "accentPicker", i18n: "settings.appearance.accent", key: "appearance.accent" },
+                    {
+                        custom: "glassMaster",
+                        i18n: "settings.appearance.glass",
+                        note: "Opacity model: ONE master 'Glass' slider governs bar + overlays + dock + window together; an 'Advanced' disclosure breaks them apart. All are plain opacities over ONE GLASS_RANGE, imported rather than retyped — the bounds used to be five literals here plus a sixth in clampOpacity, which is five chances to offer a value the clamp refuses.",
+                    },
+                    {
+                        disclosure: "settings.appearance.advanced",
+                        note: "Advanced — per-surface glass opacities. Header row toggles a Gtk.Revealer with the 4 surface opacity sliders.",
+                        items: [
+                            "appearance.barOpacity",
+                            "appearance.overlayOpacity",
+                            "appearance.dockOpacity",
+                            "appearance.windowOpacity",
+                        ],
+                    },
+                ],
+            },
+            {
+                i18n: "settings.appearance.group.night-light",
+                items: [
+                    {
+                        key: "nightlight.enabled",
+                        sensitiveWhen: { key: "nightlight.scheduleEnabled", in: ["false"] },
+                    },
+                    "nightlight.temperature",
+                    "nightlight.scheduleEnabled",
+                    {
+                        decoration: "nightScheduleTimes",
+                        visibleWhen: { key: "nightlight.scheduleEnabled", in: ["true"] },
+                    },
+                ],
+            },
+            {
+                i18n: "settings.appearance.group.resources",
+                items: [
+                    "appearance.gtkTheme",
+                    "appearance.iconTheme",
+                    "appearance.cursorTheme",
+                ],
+            },
+            {
+                i18n: "settings.appearance.group.fonts",
+                items: [
+                    { custom: "interfaceFont", i18n: "settings.appearance.interface-font" },
+                    { custom: "monoFont", i18n: "settings.appearance.mono-font" },
+                ],
+            },
+        ],
+    },
+    {
+        id: "ai",
+        groups: [
+            {
+                i18n: "settings.ai.brain.group",
+                footer: "settings.ai.brain.group.scope",
+                note: "Assistant — the built-in conversational agent's brain (BYOK). Order of groups follows risk escalation (desktop, files, other apps). Footers name the audience/scope.",
+                items: [
+                    "ai.brainProvider",
+                    {
+                        custom: "brainModel",
+                        i18n: "settings.ai.brain.model",
+                        key: "ai.brainModel",
+                        note: "Model row: free text + an optional catalog fetched from the provider. The entry stays the source of truth; dropdown fills it. Index 0 is a placeholder that rests on choose-model.",
+                    },
+                    {
+                        custom: "brainEndpoint",
+                        i18n: "settings.ai.brain.endpoint",
+                        note: "Custom endpoint entry for providers with editableEndpoint. Visibility is controlled dynamically in builder by provider capabilities.",
+                    },
+                    {
+                        custom: "apiKey",
+                        i18n: "settings.ai.brain.key",
+                        note: "API key stored in DE keyring (libsecret) keyed by provider. Writes are async so password dialog doesn't freeze the GTK main loop. Status reported in UI.",
+                    },
+                ],
+            },
+            {
+                i18n: "settings.ai.group.signal",
+                footer: "settings.ai.group.signal.scope",
+                note: "While it works — the signal, not a permission. Reaches outside the shell (Hyprland decoration:glow).",
+                items: [
+                    "ai.assistantGlow",
+                ],
+            },
+            {
+                i18n: "settings.ai.group.access",
+                footer: "settings.ai.group.access.scope",
+                items: [
+                    "ai.allowConfigWrite",
+                    "ai.allowScreenshot",
+                    "ai.allowWindowClose",
+                ],
+            },
+            {
+                i18n: "settings.ai.group.files",
+                footer: "settings.ai.group.files.scope",
+                note: "Daemon-local (bin/nidara-agent), not an IPC action: external MCP clients bring their own file tools.",
+                items: [
+                    "ai.allowFileRead",
+                    "ai.allowFileWrite",
+                ],
+            },
+            {
+                i18n: "settings.ai.group.other-apps",
+                footer: "settings.ai.group.other-apps.scope",
+                note: "Other apps — the computer-use layer (reaches OUTSIDE the shell).",
+                items: [
+                    "ai.allowComputerUse",
+                    "ai.allowComputerControl",
+                ],
+            },
+            {
+                i18n: "settings.ai.group.mcp",
+                footer: "settings.ai.group.mcp.scope",
+                items: [
+                    "ai.allowMcp",
+                    { custom: "mcpConnectPath", i18n: "settings.ai.connect-agent" },
+                ],
+            },
+            {
+                i18n: "settings.ai.group.surface",
+                items: [
+                    { custom: "exposedSettings", i18n: "settings.ai.exposed-settings" },
+                    {
+                        custom: "stateRead",
+                        i18n: "settings.ai.state-read",
+                        note: "The value is 'always', and it has to be said. Read-only fact about the agent surface.",
+                    },
                 ],
             },
         ],

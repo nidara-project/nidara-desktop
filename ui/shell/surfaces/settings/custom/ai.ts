@@ -1,13 +1,14 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Secret from "gi://Secret"
-import { listGroup, pageBox, createRow, createStackedRow, staticLabel, actionRow, fieldWithActions, bindWhileRealized, onPageShown, settingRow } from "../SettingsHelpers"
+import { createRow, createStackedRow, staticLabel, actionRow, fieldWithActions, bindWhileRealized, onPageShown } from "../SettingsHelpers"
 import { NidaraButton, NidaraDropDown } from "../../../../lib/nidara-kit"
 import agentConfig from "../../../core/AgentConfig"
 import { providerById } from "../../../core/AgentProviders"
 import { fetchModels, catalogNeedsKey } from "../../../core/AgentCatalog"
 import { configKeys } from "../../../core/ConfigRegistry"
 import { t } from "../../../core/i18n"
+import type { PageCtx, ItemBuilder } from "../PreferencePage"
 
 // The built-in Assistant's API key lives in the DE keyring (libsecret), never in
 // ai.json. One entry per PROVIDER (attribute `provider`), not per wire protocol:
@@ -129,27 +130,7 @@ function clearKey(provider: string, done: () => void): void {
     }
 }
 
-// Settings → AI: governance of the agent-facing surface, plus the built-in
-// Assistant's brain. Groups are ordered by WHAT a permission reaches — this
-// desktop, then your files, then other apps — because that is the risk escalation
-// a user is deciding about.
-//
-// But the axis the page kept silent about is WHO each group governs, and the two
-// do not line up: the brain and the file layer are the built-in Assistant ALONE
-// (the file tools are daemon-local — an MCP client brings its own), while config
-// write / screenshot / window close / computer-use apply to EVERY agent, connected
-// clients included. A user reading "Files" had no way to tell that it does not
-// govern Claude Code. So every group carries a FOOTER naming its audience
-// (`…group.*.scope`), which is the macOS/iOS idiom for scope a title can't hold.
-// Keep footers about AUDIENCE; per-row explanation belongs in the row subtitle.
-//
-// Every row must gate, drive, or report something REAL — no placeholder toggles.
-export default function AiPage() {
-    const page = pageBox("ai-page")
-
-    // ── Assistant — the built-in conversational agent's brain (BYOK) ─────────
-    const brainGroup = listGroup(t("settings.ai.brain.group"), t("settings.ai.brain.group.scope"))
-
+export const build = (ctx: PageCtx) => {
     // ── Model row: free text + an optional catalog fetched from the provider ────
     // The ENTRY stays the source of truth. The dropdown is an aid: it appears only
     // after a successful fetch and just fills the entry. That ordering matters —
@@ -265,10 +246,7 @@ export default function AiPage() {
     modelBox.append(modelDrop)
     modelBox.append(actionRow(fetchBtn))
     modelBox.append(modelStatus)
-    const model = {
-        row: createStackedRow(t("settings.ai.brain.model"), t("settings.ai.brain.model.desc"), modelBox),
-        entry: modelEntry,
-    }
+
     // Stacked too: a URL in the trailing slot is a narrow stub with the description
     // wrapping to two lines beside it — the same squeeze as the key field.
     const endpointEntry = new Gtk.Entry({ text: agentConfig.brainEndpoint, hexpand: true })
@@ -281,10 +259,6 @@ export default function AiPage() {
     const endpointFocus = new Gtk.EventControllerFocus()
     endpointFocus.connect("leave", commitEndpoint)
     endpointEntry.add_controller(endpointFocus)
-    const endpoint = {
-        row: createStackedRow(t("settings.ai.brain.endpoint"), t("settings.ai.brain.endpoint.desc"), endpointEntry),
-        entry: endpointEntry,
-    }
 
     // API key row: a password entry + save/clear, status carried in the placeholder
     // (the stored key is never re-shown).
@@ -311,7 +285,6 @@ export default function AiPage() {
     // sits left of Save: right-aligned actions put the primary last.
     const keyBox = fieldWithActions(keyEntry, clearBtn, saveBtn)
     keyBox.append(keyStatus)
-    const keyRow = createStackedRow(t("settings.ai.brain.key"), t("settings.ai.brain.key.desc"), keyBox)
 
     function refreshKeyUI() {
         const id = agentConfig.brainProvider
@@ -369,15 +342,21 @@ export default function AiPage() {
     // last built around, so a change made anywhere else can be recognised as a change
     // of context rather than of value.
     let shownProvider = agentConfig.brainProvider
+    let modelRow: Gtk.ListBoxRow | null = null
+    let endpointRow: Gtk.ListBoxRow | null = null
+    let keyRow: Gtk.ListBoxRow | null = null
+
     function refreshSensitivity() {
         shownProvider = agentConfig.brainProvider
         const p = providerById(agentConfig.brainProvider)
-        model.row.sensitive = !!p
-        endpoint.row.visible = !!p?.editableEndpoint
-        keyRow.visible = !p || !p.local
-        keyRow.sensitive = !!p && !p.local
-        model.entry.set_text(agentConfig.brainModel)
-        endpoint.entry.set_text(agentConfig.brainEndpoint)
+        if (modelRow) modelRow.sensitive = !!p
+        if (endpointRow) endpointRow.visible = !!p?.editableEndpoint
+        if (keyRow) {
+            keyRow.visible = !p || !p.local
+            keyRow.sensitive = !!p && !p.local
+        }
+        modelEntry.set_text(agentConfig.brainModel)
+        endpointEntry.set_text(agentConfig.brainEndpoint)
         // A catalog belongs to the provider that answered it — drop it on every
         // switch, or Anthropic's list would sit there offering models to Ollama.
         modelDrop.visible = false
@@ -391,16 +370,10 @@ export default function AiPage() {
         refreshKeyUI()
     }
 
-    brainGroup.listBox.append(settingRow("ai.brainProvider"))
-    brainGroup.listBox.append(model.row)
-    brainGroup.listBox.append(endpoint.row)
-    brainGroup.listBox.append(keyRow)
-    refreshSensitivity()
-
     // ⚠️ Re-derive the whole context when the provider moves; when it hasn't,
     // keep the two free-text fields honest without stealing what someone is
     // in the middle of typing.
-    bindWhileRealized(page, () => {
+    bindWhileRealized(ctx.page, () => {
         const sync = () => {
             if (agentConfig.brainProvider !== shownProvider) { refreshSensitivity(); return }
             if (!modelEntry.has_focus && modelEntry.get_text() !== agentConfig.brainModel)
@@ -421,81 +394,38 @@ export default function AiPage() {
     // pages realized and reopening is how you come back to one.
     onPageShown(refreshKeyUI)
 
-    page.append(brainGroup.box)
-
-    // ── While it works — the signal, not a permission ────────────────────────
-    // Its own group rather than a row among the gates: everything below grants
-    // something, this only shows something. It is also the only setting on this
-    // page that reaches outside the shell (it makes Nidara the owner of
-    // Hyprland's decoration:glow), which is why it can be turned off.
-    const signalGroup = listGroup(t("settings.ai.group.signal"), t("settings.ai.group.signal.scope"))
-
-    signalGroup.listBox.append(settingRow("ai.assistantGlow"))
-
-    page.append(signalGroup.box)
-
-    // ── Desktop access — what agents may do to the shell itself ─────────────
-    const accessGroup = listGroup(t("settings.ai.group.access"), t("settings.ai.group.access.scope"))
-
-    accessGroup.listBox.append(settingRow("ai.allowConfigWrite"))
-    accessGroup.listBox.append(settingRow("ai.allowScreenshot"))
-    accessGroup.listBox.append(settingRow("ai.allowWindowClose"))
-
-    page.append(accessGroup.box)
-
-    // ── Files — the built-in Assistant's own config-layer access ─────────────
-    // Daemon-local (bin/nidara-agent), not an IPC action: external MCP clients
-    // bring their own file tools. Reading is same-domain (Nidara's own config,
-    // shipped defaults, the shell log); writing is opt-in because the writable
-    // files exist to hold commands.
-    const filesGroup = listGroup(t("settings.ai.group.files"), t("settings.ai.group.files.scope"))
-
-    filesGroup.listBox.append(settingRow("ai.allowFileRead"))
-    filesGroup.listBox.append(settingRow("ai.allowFileWrite"))
-
-    page.append(filesGroup.box)
-
-    // ── Other apps — the computer-use layer (reaches OUTSIDE the shell) ──────
-    const otherAppsGroup = listGroup(t("settings.ai.group.other-apps"), t("settings.ai.group.other-apps.scope"))
-
-    otherAppsGroup.listBox.append(settingRow("ai.allowComputerUse"))
-    otherAppsGroup.listBox.append(settingRow("ai.allowComputerControl"))
-
-    page.append(otherAppsGroup.box)
-
-    // ── MCP server — the channel external clients connect through ────────────
-    const mcpGroup = listGroup(t("settings.ai.group.mcp"), t("settings.ai.group.mcp.scope"))
-
-    mcpGroup.listBox.append(settingRow("ai.allowMcp"))
-
-    mcpGroup.listBox.append(createRow(
-        t("settings.ai.connect-agent"),
-        t("settings.ai.connect-agent.desc"),
-        staticLabel("~/.config/nidara/.mcp.json"),
-    ))
-
-    page.append(mcpGroup.box)
-
-    // ── Agent interface — read-only facts about the surface ──────────────────
-    const surfaceGroup = listGroup(t("settings.ai.group.surface"))
-
-    surfaceGroup.listBox.append(createRow(
-        t("settings.ai.exposed-settings"),
-        t("settings.ai.exposed-settings.desc"),
-        staticLabel(String(configKeys().length)),
-    ))
-
-    // The value is "always", and it has to be SAID. This row's group answers questions
-    // about the surface with a fact in the trailing slot (the row above it prints a
-    // count); this one printed an empty label, so the one row on the page whose whole
-    // point is that no toggle can take it away was the row that answered nothing.
-    surfaceGroup.listBox.append(createRow(
-        t("settings.ai.state-read"),
-        t("settings.ai.state-read.desc"),
-        staticLabel(t("settings.ai.state-read.value")),
-    ))
-
-    page.append(surfaceGroup.box)
-
-    return page
+    return {
+        brainModel: (slot) => {
+            modelRow = createStackedRow(slot.title, slot.subtitle, modelBox)
+            return modelRow
+        },
+        brainEndpoint: (slot) => {
+            endpointRow = createStackedRow(slot.title, slot.subtitle, endpointEntry)
+            return endpointRow
+        },
+        apiKey: (slot) => {
+            keyRow = createStackedRow(slot.title, slot.subtitle, keyBox)
+            refreshSensitivity()
+            return keyRow
+        },
+        mcpConnectPath: (slot) => createRow(
+            slot.title,
+            slot.subtitle,
+            staticLabel("~/.config/nidara/.mcp.json"),
+        ),
+        exposedSettings: (slot) => createRow(
+            slot.title,
+            slot.subtitle,
+            staticLabel(String(configKeys().length)),
+        ),
+        // The value is "always", and it has to be SAID. This row's group answers questions
+        // about the surface with a fact in the trailing slot (the row above it prints a
+        // count); this one printed an empty label, so the one row on the page whose whole
+        // point is that no toggle can take it away was the row that answered nothing.
+        stateRead: (slot) => createRow(
+            slot.title,
+            slot.subtitle,
+            staticLabel(t("settings.ai.state-read.value")),
+        ),
+    } satisfies Record<string, ItemBuilder>
 }
