@@ -1072,11 +1072,15 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     `"utilities"` | `"system"`) + optional `barOrder`; `BAR_ORDER` is **derived**
     from those in `widgets/index.ts` (category order `[media, utilities, system]` =
     left→right, system nearest the tray — no hand-maintained list).
-    `CC_DEFAULT_ORDER` stays editorial. The CC factories in `Toggles`/`Sliders`/
-    `MediaIsland` return `CCWidgetSpec` (= `Omit<AtomicWidget,"category">`): they
-    build content, not registry metadata, so they carry no category.
-    **The vocabulary is `common/widget-kit/`, and a widget imports nothing from
-    `surfaces/`.** The contract (`AtomicWidget`, `WidgetSize`, `ContentBudget`,
+    `CC_DEFAULT_ORDER` stays editorial. `CCWidgetSpec` (= `Omit<AtomicWidget,
+    "category">`) is what a spec factory returns — it builds content, not registry
+    metadata, so it carries no category; `tile.ts`'s `roundToggleSpec` is the only
+    one left. ⚠️ A spec's own `defaultSize`/`supportedSizes` are advisory and mostly
+    unread, which is how each of the surface-resident factories came to carry a
+    second, silent copy of its widget's metadata; do not write a new one that
+    restates what its widget already declares.
+    **The vocabulary is `common/widget-kit/`, and `widgets/` imports NOTHING from
+    `surfaces/` — 28 such imports on 2026-09-01, zero the same day.** The contract (`AtomicWidget`, `WidgetSize`, `ContentBudget`,
     `CCWidgetSpec`) is `widget-kit/contract.ts`; the tile shapes are
     `widget-kit/tile.ts`; the panel width tiers are `widget-kit/panel.ts`;
     `widget-kit/index.ts` is the single import a widget file needs besides `core/`.
