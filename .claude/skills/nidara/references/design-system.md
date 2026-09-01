@@ -884,6 +884,31 @@ shell text follows the pin automatically.
 
 ### Opacity — one master + Advanced, four surfaces, WYSIWYG
 
+⚠️ **The glass sliders are the PANE. A neutral mark painted ON the glass takes its alpha from
+`INK` in `ui/lib/tokens.ts`, never from a slider and never from a literal.** Two different
+quantities that both get called "opacity": `SquircleContainer` fills a CC island at
+`Theme.overlayOpacity`, `GlassBubble` at `max(overlayOpacity, 0.38)`, the notification cards at
+`overlayOpacity * depth` — that is the material. The battery outline, the dock's running dot, a
+resource ring, the cover art's empty slot are drawn on top of it, and they must NOT scale with it:
+the two would compound, so the more transparent a user made a surface the harder its own contents
+would be to read. Three tones, all painted as `Theme.chromeIsDark ? 1 : 0` (a painter that hardcodes
+a colour is a painter that vanishes in one appearance):
+
+| token | for |
+|---|---|
+| `INK.solid` 0.9 | the mark itself — battery outline, dock running dot, a ring's filled arc. Just under the icon set, never half of it: the Lucide icons beside it stroke at FULL opacity, so a half-alpha stroke at true icon scale reads as a washed-out hairline. |
+| `INK.track` 0.12 | the track a solid mark runs on — a ring's unfilled remainder. A thin stroke takes a much lower alpha than a filled area to read the same. |
+| `INK.wash` 0.1 | a filled AREA standing in for absent content — the cover art's empty slot. Lower than `track` although it reads stronger, because area beats stroke. |
+
+🔑 They are tokens because there was nowhere for them to live and nothing could compare them:
+`widgets/cpu-memory.ts` drew **the same resource ring** at 0.12/0.8 in the bar and 0.14/0.88 in the
+Control Centre — one file, one element, two sets of numbers, from a redesign that wrote a second
+drawer and never looked at the first. Deliberately NOT tokens: `PulseDots`'s idle dot (0.22) and the
+island player's EQ bars (0.75) have no twin anywhere, and a single-use number in a shared file
+advertises a sharing that does not exist; `WorkspaceSchematic`'s `WP_SCRIM`/`NO_WP_FILL` are a scrim
+over a wallpaper IMAGE, not ink on glass.
+
+
 Glass opacity is **WYSIWYG with the slider** — what you set is what is painted, and no code pins it
 higher (an old light-mode 0.40 floor was removed for exactly that reason). But the RANGE itself now
 has a floor, and the range lives in ONE place: **`GLASS_RANGE` in `core/NidaraTheme.ts`**, imported
