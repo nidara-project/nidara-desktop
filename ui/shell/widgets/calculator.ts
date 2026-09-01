@@ -1,6 +1,5 @@
 import { execAsync } from "../../lib/process"
-import { RoundToggle } from "../surfaces/control-center/Toggles"
-import { AtomicWidget, WidgetSize } from "../common/widget-kit"
+import { AtomicWidget, WidgetSize, roundToggleSpec } from "../common/widget-kit"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -23,7 +22,7 @@ const calculatorWidget: AtomicWidget = {
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
-    buildContent: (size, budget) => RoundToggle(
+    buildContent: (size, budget) => roundToggleSpec(
         "calculator", t("widget.calculator.name"),
         Icons.calculator,
         false,

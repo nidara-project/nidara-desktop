@@ -1,6 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { AtomicWidget, WidgetSize } from "../common/widget-kit"
-import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
+import { AtomicWidget, WidgetSize, makeIconTile, makeCapsuleTile } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as Net from "../core/NetworkService"
@@ -38,27 +37,14 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         return w.ssid || t("cc.wifi.sub.disconnected")
     }
 
-    if (size === WidgetSize.SINGLE) {
-        const box = new Gtk.Box({ hexpand: true, vexpand: true })
-        const icon = new Gtk.Image({
-            gicon: getIcon(), pixel_size: 28,
-            halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-            hexpand: true, vexpand: true,
-            css_classes: ["nd-icon"],
-        })
-        const dispose = Net.watchWifiEnabled(() => { const ic = getIcon(); if (icon.gicon !== ic) icon.gicon = ic })
-        box.connect("unrealize", dispose)
-        box.append(icon)
-        return box
-    }
-
-    const inner = buildCapsuleInner(getIcon, () => t("cc.wifi.name"), getSub)
+    // The radio flag ONLY at 1×1 — the icon depends solely on `enabled`, and the
+    // tile guards its own gicon assignment (see makeIconTile).
+    if (size === WidgetSize.SINGLE)
+        return makeIconTile(getIcon, Net.watchWifiEnabled)
 
     // Radio flag + which network we are on: exactly what the icon and the subtitle
     // read. watchWifi would add bitrate/ip4-config churn this tile never shows.
-    const dispose = Net.watchWifiNetwork(inner.update)
-    inner.box.connect("unrealize", dispose)
-    return wrapCapsuleTile(inner.box)
+    return makeCapsuleTile(getIcon, () => t("cc.wifi.name"), getSub, Net.watchWifiNetwork)
 }
 
 function buildInfoPanel(): Gtk.Widget {

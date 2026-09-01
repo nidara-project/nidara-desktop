@@ -1,7 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { NidaraButton } from "../../lib/nidara-kit/button"
-import { buildRoundContent, buildSplitCapsuleContent } from "../surfaces/control-center/Toggles"
-import { AtomicWidget, WidgetSize } from "../common/widget-kit"
+import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile } from "../common/widget-kit"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -26,9 +25,9 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         // affordance (a chevron, a wider row), never a fallback on the same tap
         // target. There's no room for a second hit-region at 1×1, so the detail
         // panel simply isn't reachable from here — only from WIDE/SQUARE below.
-        return buildRoundContent(getIcon, () => BT.isPowered(), BT.togglePower, BT.watchPower)
+        return makeRoundTile(getIcon, () => BT.isPowered(), BT.togglePower, BT.watchPower)
 
-    return buildSplitCapsuleContent(getIcon, () => t("widget.bluetooth.name"), getSub, BT.togglePower, BT.watchPower)
+    return makeSplitCapsuleTile(getIcon, () => t("widget.bluetooth.name"), getSub, BT.togglePower, BT.watchPower)
 }
 
 // ── CC detail panel: power switch + paired device list (connect/disconnect).

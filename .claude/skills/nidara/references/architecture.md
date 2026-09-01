@@ -1077,13 +1077,29 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     build content, not registry metadata, so they carry no category.
     **The vocabulary is `common/widget-kit/`, and a widget imports nothing from
     `surfaces/`.** The contract (`AtomicWidget`, `WidgetSize`, `ContentBudget`,
-    `CCWidgetSpec`) is `widget-kit/contract.ts`; the panel width tiers are
-    `widget-kit/panel.ts`; `widget-kit/index.ts` is the single import a widget
-    file needs besides `core/`. Until 2026-09-01 the contract was
-    `surfaces/control-center/Types.ts`, so declaring a widget meant importing the
-    Control Centre — a vocabulary the bar speaks too, owned by one of its two
-    hosts. Moving it is what makes the boundary statable, and the boundary is the
-    contract: **a widget declares what it is, never where it is drawn.**
+    `CCWidgetSpec`) is `widget-kit/contract.ts`; the tile shapes are
+    `widget-kit/tile.ts`; the panel width tiers are `widget-kit/panel.ts`;
+    `widget-kit/index.ts` is the single import a widget file needs besides `core/`.
+    Until 2026-09-01 both the contract and the tile shapes were
+    `surfaces/control-center/{Types,Toggles}.tsx`, so declaring a widget meant
+    importing the Control Centre — a vocabulary the bar speaks too, owned by one of
+    its two hosts. Moving them is what makes the boundary statable, and the boundary
+    is the contract: **a widget declares what it is, never where it is drawn.**
+    **The tile vocabulary is six words**, and picking one is the whole of laying a
+    tile out: at 1×1 `makeIconTile` (a status icon, no click target — the tile-level
+    tap opens the detail, and a toggle here would be a second invisible hit-region on
+    top of it) or `makeRoundTile` (a round toggle button); at 2×1 `makeCapsuleTile`
+    (icon circle + title/subtitle, nothing clickable — the overwhelmingly common
+    case) or `makeSplitCapsuleTile` (the icon badge toggles, the rest opens the
+    detail); and `makeCapsuleInner` + `wrapCapsuleTile` underneath, for a tile that
+    needs the refs (screenrecord ticks its subtitle's digits without re-reading the
+    icon) or builds its own box (battery's glyph row). A whole-capsule button exists
+    but is PRIVATE: it swallows the tile-level tap, so it is only correct for a widget
+    with no detail panel — and that widget is a **`roundToggleSpec`**, the
+    `CCWidgetSpec` factory for a widget that is nothing but an on/off toggle (dark
+    mode, calculator). Every maker takes an optional `SubscribeFn` — hand it the
+    service's own watcher and the tile re-reads its getters and disposes on
+    `unrealize`; do not wire that by hand.
     **Zero-layout contract (2026-06-11)**: a widget never does host-geometry math.
     `buildContent(size, budget)` receives a `ContentBudget` — inner px the host
     guarantees (tile span − island padding, computed in `IslandGrid` from

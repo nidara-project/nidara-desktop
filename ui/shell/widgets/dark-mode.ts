@@ -1,6 +1,5 @@
 import Theme from "../core/ThemeManager"
-import { RoundToggle } from "../surfaces/control-center/Toggles"
-import { AtomicWidget, WidgetSize } from "../common/widget-kit"
+import { AtomicWidget, WidgetSize, roundToggleSpec } from "../common/widget-kit"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -28,7 +27,7 @@ const darkModeWidget: AtomicWidget = {
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
-    buildContent: (size, budget) => RoundToggle(
+    buildContent: (size, budget) => roundToggleSpec(
         "dark-mode", t("widget.dark-mode.name"),
         () => Theme.isDark ? Icons.moon : Icons.sun,
         () => Theme.isDark,

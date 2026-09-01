@@ -1,6 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { buildRoundContent, buildSplitCapsuleContent } from "../surfaces/control-center/Toggles"
-import { AtomicWidget, WidgetSize } from "../common/widget-kit"
+import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile } from "../common/widget-kit"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -26,8 +25,8 @@ const getSub = () => dontDisturb() ? t("cc.focus.sub.on") : ""
 // detail panel — see [[project_cc_capsule_alignment]].
 function buildContent(size: WidgetSize): Gtk.Widget {
     if (size === WidgetSize.SINGLE)
-        return buildRoundContent(getIcon, dontDisturb, toggleDontDisturb, watchDnd)
-    return buildSplitCapsuleContent(getIcon, getTitle, getSub, toggleDontDisturb, watchDnd)
+        return makeRoundTile(getIcon, dontDisturb, toggleDontDisturb, watchDnd)
+    return makeSplitCapsuleTile(getIcon, getTitle, getSub, toggleDontDisturb, watchDnd)
 }
 
 // ── CC detail panel: just the switch. Matches GNOME's Do Not Disturb quick

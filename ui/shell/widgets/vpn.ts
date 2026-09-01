@@ -1,9 +1,8 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { PANEL_W, AtomicWidget, WidgetSize } from "../common/widget-kit"
+import { PANEL_W, AtomicWidget, WidgetSize, makeIconTile, makeCapsuleTile } from "../common/widget-kit"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 import GLib from "gi://GLib"
 import { execAsync } from "../../lib/process"
-import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
 
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -128,38 +127,17 @@ function buildVpnContent(onClose: () => void): Gtk.Widget {
 
 // ── CC content ────────────────────────────────────────────────────────────────
 
+const getIcon = () => vpnActiveName ? Icons.shield : Icons.shieldOff
+const getSub  = () => vpnActiveName ?? t("widget.vpn.sub.disconnected")
+
 function buildContent(size: WidgetSize): Gtk.Widget {
-    if (size === WidgetSize.SINGLE) {
-        const box = new Gtk.Box({ hexpand: true, vexpand: true })
-        const icon = new Gtk.Image({ gicon: Icons.shieldOff, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] })
-        box.append(icon)
-        const sync = () => { icon.gicon = vpnActiveName ? Icons.shield : Icons.shieldOff }
-        const cleanup = watchVpnActive(sync)
-        sync()
-        box.connect("unrealize", cleanup)
-        return box
-    }
+    if (size === WidgetSize.SINGLE)
+        return makeIconTile(getIcon, watchVpnActive)
 
     // Icon/subtitle only — the whole capsule fill for the "connected" state comes
     // from BaseIsland's getActive/watchActive (see vpnWidget below), same as
     // dark_mode/night_light/focus/bt. No per-widget badge tint here anymore.
-    const inner = buildCapsuleInner(() => Icons.shieldOff, () => t("widget.vpn.name"), () => t("widget.vpn.sub.disconnected"))
-
-    const syncState = () => {
-        if (vpnActiveName) {
-            inner.icon.gicon = Icons.shield
-            inner.subLabel.label = vpnActiveName
-        } else {
-            inner.icon.gicon = Icons.shieldOff
-            inner.subLabel.label = t("widget.vpn.sub.disconnected")
-        }
-    }
-
-    const cleanup = watchVpnActive(syncState)
-    syncState()
-    inner.box.connect("unrealize", cleanup)
-
-    return wrapCapsuleTile(inner.box)
+    return makeCapsuleTile(getIcon, () => t("widget.vpn.name"), getSub, watchVpnActive)
 }
 
 // ── Bar icon ──────────────────────────────────────────────────────────────────
