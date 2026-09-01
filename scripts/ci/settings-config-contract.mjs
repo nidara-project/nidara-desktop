@@ -6,13 +6,21 @@
 // WHY THIS EXISTS (2026-08-31 #332, 2026-09-01 #341):
 // Settings used to be described twice: once in config-entries.ts for the agent,
 // and once by hand in Settings pages. The two lists diverged silently.
-// This CI check ensures that:
+//
+// WHAT THIS COVERS:
 // 1. manifest.ts is pure data (no gi:// imports) and importable via TypeScript strip-types;
 // 2. all keys in manifest.ts are registered in config-entries.ts and declare ui:;
 // 3. every registered key with ui: for a migrated page appears in manifest.ts exactly once;
 // 4. all declared i18n keys exist in en.ts;
 // 5. settingRow() in unmigrated pages references valid config keys;
 // 6. unmigrated manual switches conform to allowlist.
+//
+// WHAT THIS DOES NOT COVER:
+// The check's denominator is registered config keys. A row drawn from page-local
+// state (e.g. `barSettings.launcherIcon` which is not a `registerConfig` key) is
+// invisible to it in both directions — it cannot detect if such a row was added
+// or removed. Until the { custom } vocabulary lands (P2), a page may only be
+// migrated after auditing the component file end to end.
 
 import { readFileSync, readdirSync, existsSync } from "node:fs"
 import { join } from "node:path"
@@ -147,7 +155,11 @@ for (const [item, count] of manifestItemCounts.entries()) {
     }
 }
 
-// Check that EVERY registered key with ui: belonging to a migrated page is in manifest.ts
+// Check that EVERY registered key with ui: belonging to a migrated page is in manifest.ts.
+// NOTE: Prefix matching (key.split(".")[0]) works for these pure pages because their key
+// prefixes match page IDs (accessibility, dock, input, notifications). In Phase P2, when
+// mixed pages like Appearance migrate (containing cross-cutting keys like nightlight.*),
+// the manifest itself becomes the universal denominator, checked against a per-key exemption list.
 for (const [key] of keysWithUi.entries()) {
     const pageId = key.split(".")[0]
     if (migratedPageIds.has(pageId)) {

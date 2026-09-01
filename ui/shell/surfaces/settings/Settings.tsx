@@ -14,6 +14,7 @@ import DisplayPage from "./pages/Display"
 import AudioPage from "./pages/Audio"
 import NetworkPage from "./pages/Network"
 import PowerPage from "./pages/Power"
+import BarPage from "./pages/Bar"
 import RegionPage from "./pages/Region"
 import WidgetsPage from "./pages/Widgets"
 import AboutPage from "./pages/About"
@@ -86,7 +87,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "appearance",   label: t("settings.appearance.title"),  icon: Icons.palette,       component: AppearancePage,   groupStart: true },
         { id: "display",      label: t("settings.display.title"),     icon: Icons.monitor,       component: DisplayPage      },
         { id: "audio",        label: t("settings.audio.title"),       icon: Icons.speaker,       component: AudioPage        },
-        { id: "bar",          label: t("settings.bar.title"),         icon: Icons.panelTop,      component: () => buildPreferencePage("bar") },
+        { id: "bar",          label: t("settings.bar.title"),         icon: Icons.panelTop,      component: BarPage          },
         { id: "dock",         label: t("settings.dock.title"),        icon: Icons.dock,          component: () => buildPreferencePage("dock") },
         { id: "widgets",      label: t("settings.widgets.title"),     icon: Icons.settings2,     component: WidgetsPage      },
         { id: "gaming",       label: t("settings.gaming.title"),      icon: Icons.gamepad,       component: GamingPage       },

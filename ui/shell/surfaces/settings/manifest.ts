@@ -41,17 +41,6 @@ export const manifest: PageDecl[] = [
         ],
     },
     {
-        id: "bar",
-        groups: [
-            {
-                i18n: "settings.bar.group.layout",
-                items: [
-                    "bar.appTitle",
-                ],
-            },
-        ],
-    },
-    {
         id: "notifications",
         groups: [
             {
