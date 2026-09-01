@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
+import { AtomicWidget, WidgetSize } from "../common/widget-kit"
 import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"

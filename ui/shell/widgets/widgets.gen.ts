@@ -5,7 +5,7 @@
 // (also runs on npm run build/dev and before `scripts/run.sh` in the dev launcher;
 // the CI job "widgets-gen" fails if this committed file is stale.)
 // ─────────────────────────────────────────────────────────────────────────────
-import { AtomicWidget } from "../surfaces/control-center/Types"
+import { AtomicWidget } from "../common/widget-kit"
 import battery from "./battery"
 import bluetooth from "./bluetooth"
 import brightness from "./brightness"

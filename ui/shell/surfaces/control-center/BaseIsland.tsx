@@ -3,7 +3,7 @@ import Gdk from "gi://Gdk?version=4.0"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import SquircleContainer, { Shape, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/tokens"
-import { WidgetSize } from "./Types"
+import { WidgetSize } from "../../common/widget-kit"
 
 /**
  *  BaseIsland: Geometric Identity

@@ -1044,7 +1044,7 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     precedent). Driven only via the `agentPointer` IPC command (land→confirm
     protocol — see `state-and-ipc.md`); no ShellActions entry (no widget consumes it).
 - **`common/`** — shared UI pieces used across surfaces and widgets
-  (`Slider`, `SquircleContainer`, `ScaleRevealer`, `MenuRow`, `widget-kit`, `DrawingUtils`…).
+  (`Slider`, `SquircleContainer`, `ScaleRevealer`, `MenuRow`, `widget-kit/`, `DrawingUtils`…).
   - `CursorRefresh.ts` — **a new cursor theme or size never reaches the cursor already
     on screen.** `hyprctl setcursor` → `changeTheme()` reloads the theme and schedules
     frames but never re-issues the shape, so those frames repaint the OLD picture. 🔑 The
@@ -1075,20 +1075,32 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     `CC_DEFAULT_ORDER` stays editorial. The CC factories in `Toggles`/`Sliders`/
     `MediaIsland` return `CCWidgetSpec` (= `Omit<AtomicWidget,"category">`): they
     build content, not registry metadata, so they carry no category.
+    **The vocabulary is `common/widget-kit/`, and a widget imports nothing from
+    `surfaces/`.** The contract (`AtomicWidget`, `WidgetSize`, `ContentBudget`,
+    `CCWidgetSpec`) is `widget-kit/contract.ts`; the panel width tiers are
+    `widget-kit/panel.ts`; `widget-kit/index.ts` is the single import a widget
+    file needs besides `core/`. Until 2026-09-01 the contract was
+    `surfaces/control-center/Types.ts`, so declaring a widget meant importing the
+    Control Centre — a vocabulary the bar speaks too, owned by one of its two
+    hosts. Moving it is what makes the boundary statable, and the boundary is the
+    contract: **a widget declares what it is, never where it is drawn.**
     **Zero-layout contract (2026-06-11)**: a widget never does host-geometry math.
-    `buildContent(size, budget)` receives a `ContentBudget` (inner px the host
-    guarantees: tile span − island padding, computed in `IslandGrid` from
-    `islandPadding()` exported by `BaseIsland`) — size content from it, never
-    from `UNIT`/`GAP`/padding knowledge (cpu-memory's ring derives from it; a
-    widget's own intrinsic sizes — icon circles, buttons, its caption height —
-    are fine). Panel widths (bar expansions / CC details) come from the
-    **`PANEL_W` tier vocabulary** in `common/widget-kit.ts`
-    (sm 200 / md 220 / lg 240 / xl 280 / full 356), never hardcoded px.
-    GOTCHA: widget-kit MUST stay a leaf module — importing `CCLayoutManager`
-    from it closes the cycle CCLayoutManager → widgets/index → widget →
-    widget-kit → CCLayoutManager and **crashes the shell at boot**
+    `buildContent(size, budget)` receives a `ContentBudget` — inner px the host
+    guarantees (tile span − island padding, computed in `IslandGrid` from
+    `islandPadding()` exported by `BaseIsland`) plus `pitch`, the host's cell
+    pitch, for content that must land on the host's rhythm (cpu-memory spaces its
+    two rings `pitch − ring` apart so each sits on a cell centre). Size content
+    from the budget, never from `UNIT`/`GAP`/padding knowledge — those live with
+    `CCLayoutManager` now and are unreachable from `widgets/`; a widget's own
+    intrinsic sizes (icon circles, buttons, its caption height) are fine. Panel
+    widths (bar expansions / CC details) come from the **`PANEL_W` tier
+    vocabulary** (sm 200 / md 220 / lg 240 / xl 280 / full 356), never hardcoded px.
+    GOTCHA: every module in widget-kit/ MUST stay a leaf — importing
+    `CCLayoutManager` from one closes the cycle CCLayoutManager → widgets/index →
+    widget → widget-kit → CCLayoutManager and **crashes the shell at boot**
     (CC_DEFAULT_ORDER undefined mid-cycle; typecheck does NOT catch module
-    cycles — only a runtime boot does).
+    cycles — only a runtime boot does). That cycle is also why UNIT/GAP were
+    parked in the shared leaf: the fix was to stop widgets needing them at all.
     **Bar-pill click**: the pill opens `buildBarExpanded` (or, with none, the CC
     detail). A widget can intercept that click with **`barClick(): boolean`** —
     return true and no panel opens. It is asked on EVERY click, not cached at

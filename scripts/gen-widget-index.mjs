@@ -87,7 +87,7 @@ const header = `// ────────────────────�
 `
 
 const out = header
-    + `import { AtomicWidget } from "../surfaces/control-center/Types"\n`
+    + `import { AtomicWidget } from "../common/widget-kit"\n`
     + widgets.map(w => `import ${w.ident} from "${w.importPath}"`).join("\n")
     + `\n\nexport const ALL_WIDGETS: AtomicWidget[] = [\n`
     + widgets.map(w => `    ${w.ident},`).join("\n")

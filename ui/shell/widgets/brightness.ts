@@ -1,10 +1,9 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { PANEL_W } from "../common/widget-kit"
+import { PANEL_W, AtomicWidget, WidgetSize } from "../common/widget-kit"
 import GLib from "gi://GLib"
 import { execAsync } from "../../lib/process"
 import { makeHSlider, makeVerticalFillTile } from "../../lib/nidara-kit"
 import { pollWhileMapped } from "../common/poll"
-import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 

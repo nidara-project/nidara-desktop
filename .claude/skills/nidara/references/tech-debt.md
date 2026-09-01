@@ -1522,8 +1522,14 @@ These were paid down; the *rule* remains:
   (rejected by the Lua parser). See `architecture.md`.
 - **Widget registration is generated** — never hand-edit `widgets/widgets.gen.ts` or re-add
   manual imports to `widgets/index.ts`; the registry comes from `scripts/gen-widget-index.mjs`
-  (phase 1 of the widget plugin system; phase 2 — zero-layout contract — still deferred).
-  `bar-helpers.ts` is the only grandfathered non-widget in `widgets/` (EXCLUDE list).
+  (phase 1 of the widget plugin system). `bar-helpers.ts` is the only grandfathered
+  non-widget in `widgets/` (EXCLUDE list).
+- **A widget imports `common/widget-kit/`, never `surfaces/`.** That is the whole of phase 2,
+  the zero-layout contract: a widget declares what it is and what it does, not where it is
+  drawn. The contract types and the `PANEL_W` tiers moved out of
+  `surfaces/control-center/Types.ts` on 2026-09-01 precisely so the sentence can be true; the
+  tile vocabulary still sits in `control-center/Toggles.tsx` and the panel half has no
+  vocabulary at all, which is the rest of #306.
 - **Notification swipe-to-dismiss** — one implementation in `common/ScaleRevealer.ts`:
   `attachHorizontalSwipe` (gesture detector — claims only on horizontal intent so the NC
   scroller keeps its vertical drag; cancels the row's release-phase tap) + `setSwipe`/`swipeOut`/

@@ -1,5 +1,5 @@
 import Gio from "gi://Gio"
-import { AtomicWidget, WidgetSize, WidgetCategory } from "../surfaces/control-center/Types"
+import { AtomicWidget, WidgetSize, WidgetCategory } from "../common/widget-kit"
 // Auto-registration: ALL_WIDGETS comes from the generated widgets.gen.ts —
 // dropping a file in widgets/ that default-exports an AtomicWidget is ALL it
 // takes to register a widget (see scripts/gen-widget-index.mjs).

@@ -1,6 +1,6 @@
 import { execAsync } from "../../lib/process"
 import { RoundToggle } from "../surfaces/control-center/Toggles"
-import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
+import { AtomicWidget, WidgetSize } from "../common/widget-kit"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
