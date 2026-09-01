@@ -320,7 +320,9 @@ export function registerConfigEntries() {
         subscribe: onDockCfg(() => dockSettings.iconSize),
         ui: {
             i18n: "settings.dock.icon-size",
-            slider: { unit: "px" },
+            control: "preset",
+            presets: [32, 48, 64, 80, 96],
+            presetUnit: "px",
         },
     })
     registerConfig("dock.screenGap", {

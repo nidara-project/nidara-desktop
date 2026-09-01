@@ -134,10 +134,10 @@ jobs:
       - name: Every bundle defines the tokens it paints with
         run: node scripts/ci/token-contract-check.mjs
 
-      # Settings rows contract (#332): every declarative setting row must use
-      # settingRow() backed by config-entries.ts or be listed in the allowlist.
+      # Settings rows contract (#332, #341): every declarative setting row must use
+      # settingRow() backed by config-entries.ts or manifest.ts or be in allowlist.
       - name: Settings rows contract (declarative rows match config registry)
-        run: node scripts/ci/settings-config-contract.mjs
+        run: node --experimental-strip-types scripts/ci/settings-config-contract.mjs
 
   pkgbuild:
     name: PKGBUILD parses
