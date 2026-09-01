@@ -19,8 +19,9 @@ import agentConfig from "./core/AgentConfig"
 import agentService from "./core/AgentService"
 import { initAgentGlow } from "./core/AgentGlow"
 import appService, { type AppData } from "./core/AppService"
-import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue } from "./core/ConfigRegistry"
+import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue, setConfigLocations } from "./core/ConfigRegistry"
 import { registerConfigEntries } from "./config-entries"
+import { configLocations } from "./surfaces/settings/configLocations"
 import { initReduceMotion } from "./core/ReduceMotion"
 import { bindCursorThemeRefresh } from "./common/CursorRefresh"
 import hyprlandState from "./core/HyprlandState"
@@ -590,7 +591,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
   hideForLock: { desc: "Hide bar+dock while the lockscreen is up", run: () => ipc.lockScreen?.() },
   showAfterLock: { desc: "Restore bar+dock after unlock", run: () => ipc.unlockScreen?.() },
   describeConfig: {
-    desc: "Describe every agent-facing setting as JSON: type, constraints, current value, writability",
+    desc: "Describe every agent-facing setting as JSON: type, constraints, current value, writability, and the Settings page it lives on",
     run: () => JSON.stringify(describeConfig(), null, 2),
   },
   getConfig: {
@@ -1007,6 +1008,10 @@ app.start({
 
     // Agent-facing config surface (describeConfig/getConfig/setConfig)
     registerConfigEntries()
+    // …and WHERE each of those settings is seen, derived from the Settings page
+    // manifest. Injected here rather than imported by core/, which must not
+    // import surfaces/ (the same reason `registerConfigEntries` lives outside it).
+    setConfigLocations(configLocations())
 
     // Both IPC doors. Registered here rather than at module scope so the
     // commands they dispatch are wired first.

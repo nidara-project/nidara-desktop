@@ -668,7 +668,16 @@ Settings are exposed to agents through a typed registry (`core/ConfigRegistry.ts
 registered in `config-entries.ts`):
 
 - `nidara-ipc describeConfig` → JSON schema of every exposed setting: description, type,
-  enum values / min/max, writability, current value. **Read this first** — never guess keys.
+  enum values / min/max, writability, current value, and **`page` / `group`** — the Settings
+  page id the user sees it on (feed it straight to the `settingsPage` action) and, when the
+  group has a header, its i18n key. **Read this first** — never guess keys.
+  - `page` is **derived from the page manifest** (`surfaces/settings/configLocations.ts`,
+    injected in `app.ts` — `core/` must not import `surfaces/`), so it cannot drift from what
+    Settings draws. ⚠️ It is NOT the key's prefix: `nightlight.*` and `wallpaper.transition`
+    live on **appearance**, and guessing from the prefix is exactly the plausible lie this
+    field replaces.
+  - A key with **no** `page` is one no page draws (`recording.*`, `ai.brainBackend`). The field
+    is absent rather than invented — 55 of the 62 keys carry one.
 - `nidara-ipc getConfig dock.iconSize` (one key) / `nidara-ipc getConfig` (all values).
 - `nidara-ipc setConfig appearance.accent blue` → validates against the declared
   type/constraints, applies through the owning service (persists + notifies the UI exactly

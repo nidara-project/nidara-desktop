@@ -588,7 +588,7 @@ const TOOLS = [
     {
         name: "describe_config",
         description:
-            "Schema of every agent-exposed shell setting: description, type, enum/min/max, writability and current value. Call this before get_config/set_config — never guess keys.",
+            "Schema of every agent-exposed shell setting: description, type, enum/min/max, writability, current value, and `page`/`group` — where the user sees it in Settings, so you can point them at it (open it with the settingsPage action). Call this before get_config/set_config — never guess keys.",
         inputSchema: { type: "object", properties: {}, additionalProperties: false },
         handler: () => okResult(agsRequest(["describeConfig"])),
     },

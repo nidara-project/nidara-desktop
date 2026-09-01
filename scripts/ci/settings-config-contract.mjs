@@ -24,6 +24,7 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs"
 import { join } from "node:path"
 import { manifest } from "../../ui/shell/surfaces/settings/manifest.ts"
+import { configLocations } from "../../ui/shell/surfaces/settings/configLocations.ts"
 
 const EN_LOCALE_PATH = "ui/shell/core/i18n/locales/en.ts"
 const CONFIG_ENTRIES_PATH = "ui/shell/config-entries.ts"
@@ -310,6 +311,28 @@ for (const page of manifest) {
 for (const [item, count] of manifestItemCounts.entries()) {
     if (count > 1) {
         errors.push(`  FAIL  manifest.ts: key "${item}" appears ${count} times in the manifest (must appear exactly once).`)
+    }
+}
+
+// Every key with ui: must also be LOCATABLE — describeConfig serves `page` from
+// this map, and the map is produced by a walk over the manifest. The denominator
+// check below proves the key is declared somewhere; this one proves the walk found
+// it. They fail apart: a new item shape (the `disclosure` of P2b was one) is in the
+// manifest and invisible to a walk that does not recurse into it, and the symptom
+// would be a setting that silently loses its `page` — the blank this field exists
+// to remove.
+{
+    const located = configLocations()
+    const pageIds = new Set(manifest.map((p) => p.id))
+    for (const [key] of keysWithUi.entries()) {
+        if (!located[key]) {
+            errors.push(`  FAIL  configLocations.ts: key "${key}" declares ui: and is in the manifest, but the location walk did not find it (a new item shape it does not recurse into?).`)
+        }
+    }
+    for (const [key, loc] of Object.entries(located)) {
+        if (!pageIds.has(loc.page)) {
+            errors.push(`  FAIL  configLocations.ts: key "${key}" is located on page "${loc.page}", which is not in manifest.ts.`)
+        }
     }
 }
 

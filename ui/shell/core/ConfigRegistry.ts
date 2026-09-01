@@ -46,10 +46,33 @@ export interface ConfigEntry {
     ui?: ConfigEntryUi
 }
 
+/** Dónde ve el usuario este ajuste: id de página de Ajustes y, si el grupo tiene
+ *  cabecera, su clave i18n. Lo deriva `surfaces/settings/configLocations.ts` del
+ *  manifiesto y lo inyecta `app.ts` — core/ no importa surfaces/. */
+export interface ConfigLocation {
+    page: string
+    group?: string
+}
+
 const entries: Record<string, ConfigEntry> = {}
+const locations: Record<string, ConfigLocation> = {}
 
 export function registerConfig(key: string, entry: ConfigEntry) {
     entries[key] = entry
+}
+
+/**
+ * Inyecta el mapa clave → página. Se llama una vez en main(), después de
+ * `registerConfigEntries()`.
+ *
+ * 🔑 Una clave sin entrada aquí sale de `describeConfig` SIN `page`, y eso es la
+ * respuesta correcta: `recording.*` y `ai.brainBackend` existen y no los dibuja
+ * ninguna página. Inventarles una sería la mentira plausible que este campo viene
+ * a matar — la que producía adivinar la página por el prefijo de la clave, con la
+ * que `nightlight.*` "vivía" en una página que no existe en vez de en Apariencia.
+ */
+export function setConfigLocations(map: Record<string, ConfigLocation>) {
+    for (const [key, loc] of Object.entries(map)) locations[key] = loc
 }
 
 export function getConfigEntry(key: string): ConfigEntry | undefined {
@@ -73,6 +96,7 @@ export function describeConfig() {
             ...(e.max !== undefined ? { max: e.max } : {}),
             writable: e.writable !== false && !!e.set,
             value: e.get(),
+            ...(locations[key] ? locations[key] : {}),
         }
     }
     return out
