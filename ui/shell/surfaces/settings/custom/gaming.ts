@@ -32,7 +32,7 @@ export const build = (_ctx: PageCtx) => {
             previewRow.set_child(preview)
             return previewRow
         },
-        customWallpaperPicker: (decl: { i18n: string }) => {
+        customWallpaperPicker: (slot) => {
             const pickBtn = NidaraButton({
                 label: t("settings.appearance.browse"),
                 variant: "secondary",
@@ -67,11 +67,7 @@ export const build = (_ctx: PageCtx) => {
                 })
             })
 
-            return createRow(
-                t(decl.i18n as any),
-                t(`${decl.i18n}.desc` as any),
-                pickBtn,
-            )
+            return createRow(slot.title, slot.subtitle, pickBtn)
         },
     } satisfies Record<string, ItemBuilder>
 }

@@ -52,8 +52,8 @@ function buildSelectionCheck(size = 16): Gtk.Widget {
 
 export const build = (_ctx: PageCtx) => {
     return {
-        performanceProfiles: (title: string) => {
-            const profileGroup = listGroup(title)
+        performanceProfiles: (slot) => {
+            const profileGroup = listGroup(slot.title)
             profileGroup.listBox.selection_mode = Gtk.SelectionMode.SINGLE
 
             const profiles = [

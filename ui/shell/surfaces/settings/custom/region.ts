@@ -328,11 +328,11 @@ export const build = (ctx: PageCtx) => {
 
     return {
         clockPreview: () => previewBox,
-        timeFormat: (decl: { i18n: string }) => createRow(t(decl.i18n as any), t(`${decl.i18n}.desc` as any), timeDrp),
-        dateFormat: (decl: { i18n: string }) => createRow(t(decl.i18n as any), t(`${decl.i18n}.desc` as any), dateDrp),
-        timezoneActive: (decl: { i18n: string }) => createRow(t(decl.i18n as any), t(`${decl.i18n}.desc` as any), tzCurrentLabel),
-        timezoneChange: (decl: { i18n: string }) => createRow(t(decl.i18n as any), t(`${decl.i18n}.desc` as any), tzEntryRow),
-        systemLanguage: (decl: { i18n: string }) => createRow(t(decl.i18n as any), t(`${decl.i18n}.desc` as any), langRow),
-        regionalFormat: (decl: { i18n: string }) => createRow(t(decl.i18n as any), t(`${decl.i18n}.desc` as any), regionalDrp),
+        timeFormat: (slot) => createRow(slot.title, slot.subtitle, timeDrp),
+        dateFormat: (slot) => createRow(slot.title, slot.subtitle, dateDrp),
+        timezoneActive: (slot) => createRow(slot.title, slot.subtitle, tzCurrentLabel),
+        timezoneChange: (slot) => createRow(slot.title, slot.subtitle, tzEntryRow),
+        systemLanguage: (slot) => createRow(slot.title, slot.subtitle, langRow),
+        regionalFormat: (slot) => createRow(slot.title, slot.subtitle, regionalDrp),
     } satisfies Record<string, ItemBuilder>
 }

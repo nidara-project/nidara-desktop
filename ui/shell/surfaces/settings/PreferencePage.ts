@@ -13,7 +13,19 @@ export interface PageCtx {
     pageId: string
 }
 
-export type ItemBuilder = (decl?: any) => Gtk.Widget
+/** What a builder is told about the slot it fills. `title` and `subtitle` arrive
+ *  ALREADY TRANSLATED: the manifest's i18n key is resolved here, once, so a builder
+ *  cannot render a label the manifest did not declare — which is the whole point of
+ *  declaring one. A decoration and a page header get empty strings: they have no
+ *  identity to render. A custom GROUP gets its declared title and no subtitle. */
+export interface SlotDecl {
+    title: string
+    subtitle: string
+}
+
+export type ItemBuilder = (slot: SlotDecl) => Gtk.Widget
+
+const NO_LABEL: SlotDecl = { title: "", subtitle: "" }
 
 const PAGE_BUILDERS = {
     bar: buildBar,
@@ -103,7 +115,7 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
         if (!headerBuilder) {
             throw new Error(`[buildPreferencePage] Missing header builder "${pageDecl.header.custom}" on page "${pageId}"`)
         }
-        page.append(headerBuilder())
+        page.append(headerBuilder(NO_LABEL))
     }
 
     for (const group of pageDecl.groups) {
@@ -112,8 +124,7 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
             if (!groupBuilder) {
                 throw new Error(`[buildPreferencePage] Missing custom group builder "${group.custom}" on page "${pageId}"`)
             }
-            const title = group.i18n ? t(group.i18n as any) : ""
-            page.append(groupBuilder(title))
+            page.append(groupBuilder({ title: group.i18n ? t(group.i18n as any) : "", subtitle: "" }))
             continue
         }
 
@@ -130,7 +141,7 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
                 if (!ib) {
                     throw new Error(`[buildPreferencePage] Missing custom item builder "${item.custom}" on page "${pageId}"`)
                 }
-                const row = ib(item)
+                const row = ib({ title: t(item.i18n as any), subtitle: t(`${item.i18n}.desc` as any) })
                 if (item.visibleWhen) {
                     bindVisibility(row, page, item.visibleWhen)
                 }
@@ -140,7 +151,7 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
                 if (!db) {
                     throw new Error(`[buildPreferencePage] Missing decoration builder "${item.decoration}" on page "${pageId}"`)
                 }
-                const row = db(item)
+                const row = db(NO_LABEL)
                 if (item.visibleWhen) {
                     bindVisibility(row, page, item.visibleWhen)
                 }
