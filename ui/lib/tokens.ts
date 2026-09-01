@@ -168,15 +168,16 @@ export const GLASS_SPECULAR = { r: 1, g: 1, b: 1 } as const
  * Centre — one file, one element, two sets of numbers, from a redesign (24258bd5)
  * that wrote a second drawer and never looked at the first.
  *
- * NOT here, on purpose: `PulseDots`'s idle dot (0.22) and the island player's EQ bars
- * (0.75) are one-of-a-kind marks with no twin anywhere, and a single-use number in a
- * shared file advertises a sharing that does not exist. Neither is
- * `WorkspaceSchematic`'s `WP_SCRIM`/`NO_WP_FILL`: a scrim over a wallpaper IMAGE is
- * not ink on glass, and both are already named where they are used.
+ * NOT here, on purpose: `PulseDots`'s idle dot (0.22) is a one-of-a-kind mark with no
+ * twin anywhere, and a single-use number in a shared file advertises a sharing that
+ * does not exist. Neither is `WorkspaceSchematic`'s `WP_SCRIM`/`NO_WP_FILL`: a scrim
+ * over a wallpaper IMAGE is not ink on glass, and both are already named where they
+ * are used.
  */
 export const INK = {
     /** The mark itself — the battery's outline, the dock's running dot, a resource
-     *  ring's filled arc. Reads as content, not as decoration.
+     *  ring's filled arc, the island player's EQ bars. Reads as content, not as
+     *  decoration.
      *
      *  0.9 and not less, and the battery is where that was settled: the Lucide icons
      *  beside it in the bar stroke at FULL opacity (`.bar-left image` attenuates

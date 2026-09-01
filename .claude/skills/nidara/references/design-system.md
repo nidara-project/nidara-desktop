@@ -896,17 +896,17 @@ a colour is a painter that vanishes in one appearance):
 
 | token | for |
 |---|---|
-| `INK.solid` 0.9 | the mark itself — battery outline, dock running dot, a ring's filled arc. Just under the icon set, never half of it: the Lucide icons beside it stroke at FULL opacity, so a half-alpha stroke at true icon scale reads as a washed-out hairline. |
+| `INK.solid` 0.9 | the mark itself — battery outline, dock running dot, a ring's filled arc, the island player's EQ bars. Just under the icon set, never half of it: the Lucide icons beside it stroke at FULL opacity, so a half-alpha stroke at true icon scale reads as a washed-out hairline. |
 | `INK.track` 0.12 | the track a solid mark runs on — a ring's unfilled remainder. A thin stroke takes a much lower alpha than a filled area to read the same. |
 | `INK.wash` 0.1 | a filled AREA standing in for absent content — the cover art's empty slot. Lower than `track` although it reads stronger, because area beats stroke. |
 
 🔑 They are tokens because there was nowhere for them to live and nothing could compare them:
 `widgets/cpu-memory.ts` drew **the same resource ring** at 0.12/0.8 in the bar and 0.14/0.88 in the
 Control Centre — one file, one element, two sets of numbers, from a redesign that wrote a second
-drawer and never looked at the first. Deliberately NOT tokens: `PulseDots`'s idle dot (0.22) and the
-island player's EQ bars (0.75) have no twin anywhere, and a single-use number in a shared file
-advertises a sharing that does not exist; `WorkspaceSchematic`'s `WP_SCRIM`/`NO_WP_FILL` are a scrim
-over a wallpaper IMAGE, not ink on glass.
+drawer and never looked at the first. Deliberately NOT a token: `PulseDots`'s idle dot (0.22) has no twin
+anywhere, and a single-use number in a shared file advertises a sharing that does not exist. Nor is
+`WorkspaceSchematic`'s `WP_SCRIM`/`NO_WP_FILL`: a scrim over a wallpaper IMAGE is not ink on glass,
+and both are already named where they are used.
 
 
 Glass opacity is **WYSIWYG with the slider** — what you set is what is painted, and no code pins it
