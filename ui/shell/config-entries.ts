@@ -419,6 +419,13 @@ export function registerConfigEntries() {
         ui: {
             i18n: "settings.input.mouse.speed",
             slider: {
+                // Sink caro: `inputConfig` ejecuta Lua en el compositor Y reescribe
+                // `nidara-settings.lua` entero en cada confirmación. Con los 32 ms
+                // de debounce del kit, arrastrar el pulgar son ~30 de esas por
+                // segundo. `commitOnRelease` confirma UNA vez, al soltar; el valor
+                // se sigue viendo moverse porque la etiqueta la pinta
+                // `onValueChanged`, que no es la que escribe.
+                commitOnRelease: true,
                 icons: [Icons.mousePointer, Icons.mousePointer],
                 pct: true,
             },
@@ -511,7 +518,13 @@ export function registerConfigEntries() {
         subscribe: onInputCfg(() => inputConfig.kbRepeatDelay),
         ui: {
             i18n: "settings.input.keyboard.repeat-delay",
-            slider: { unit: "ms" },
+            // Sink caro: `inputConfig` ejecuta Lua en el compositor Y reescribe
+            // `nidara-settings.lua` entero en cada confirmación. Con los 32 ms de
+            // debounce del kit, arrastrar el pulgar son ~30 de esas por segundo.
+            // `commitOnRelease` confirma UNA vez, al soltar; el valor sigue
+            // viéndose moverse porque la etiqueta la pinta `onValueChanged`, que
+            // no es la que escribe.
+            slider: { unit: "ms", commitOnRelease: true },
         },
     })
     registerConfig("input.keyboard.repeatRate", {
@@ -524,7 +537,13 @@ export function registerConfigEntries() {
         subscribe: onInputCfg(() => inputConfig.kbRepeatRate),
         ui: {
             i18n: "settings.input.keyboard.repeat-rate",
-            slider: { unit: "/s" },
+            // Sink caro: `inputConfig` ejecuta Lua en el compositor Y reescribe
+            // `nidara-settings.lua` entero en cada confirmación. Con los 32 ms de
+            // debounce del kit, arrastrar el pulgar son ~30 de esas por segundo.
+            // `commitOnRelease` confirma UNA vez, al soltar; el valor sigue
+            // viéndose moverse porque la etiqueta la pinta `onValueChanged`, que
+            // no es la que escribe.
+            slider: { unit: "/s", commitOnRelease: true },
         },
     })
 
