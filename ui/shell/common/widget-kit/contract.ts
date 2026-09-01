@@ -114,8 +114,8 @@ export interface AtomicWidget {
 }
 
 // The content-building subset of a widget, produced by the kit's spec factories
-// (tile.ts's roundToggleSpec) and by the two CC factories still to move
-// (Sliders/MediaIsland). The registry widgets (widgets/*.ts) own the metadata
+// (tile.ts's roundToggleSpec) and by the one CC factory still to move
+// (MediaIsland). The registry widgets (widgets/*.ts) own the metadata
 // (category, sizes, placement) and delegate only buildContent to these factories, so
 // a spec carries no category — keeping `category` mandatory on real widgets without
 // forcing the factories to fake one.

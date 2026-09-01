@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { PANEL_W, AtomicWidget, WidgetSize } from "../common/widget-kit"
+import { PANEL_W, AtomicWidget, WidgetSize, makeHSliderTile } from "../common/widget-kit"
 import GLib from "gi://GLib"
 import { execAsync } from "../../lib/process"
 import { makeHSlider, makeVerticalFillTile } from "../../lib/nidara-kit"
@@ -73,40 +73,25 @@ function buildVertical(): Gtk.Widget {
     return tile
 }
 
-// Large (4×1): horizontal slider.
+// Large (4×1): horizontal slider — the kit's tile, the same one volume uses.
 function buildHorizontal(): Gtk.Widget {
-    const box = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 12,
-        css_classes: ["nidara-atomic-slider-box-horizontal"],
-        halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER,
-        hexpand: true,
-        margin_start: 4, margin_end: 4,
-    })
-
-    const valueLabel = new Gtk.Label({
-        label: `${_cachedPct}%`,
-        css_classes: ["slider-value-label"],
-        width_chars: 5, xalign: 1.0, valign: Gtk.Align.CENTER,
-    })
-
     let ignoreUntil = 0
     let sliderSync: ((v: number) => void) | undefined
 
-    const slider = makeHSlider({
-        value: _cachedPct,
+    const box = makeHSliderTile({
+        // ⚠️ 14px at 0.5 where every other end icon is 16 at 0.6. Kept because it is
+        // what this tile has always drawn and no machine here has a backlight to
+        // check it on (`hasBacklight` is false without /sys/class/backlight, so the
+        // widget does not exist to be looked at) — not because anyone decided it.
+        low:  { icon: Icons.moon, size: 14, opacity: 0.5 },
+        high: { icon: Icons.sun },
+        getValue: () => _cachedPct,
         onChange: (v) => {
             ignoreUntil = GLib.get_monotonic_time() + 500_000
             setBrightness(v)
         },
-        onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%` },
         onExtChange: (cb) => { sliderSync = cb; return () => { sliderSync = undefined } },
     })
-
-    box.append(new Gtk.Image({ gicon: Icons.moon, pixel_size: 14, opacity: 0.5, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] }))
-    box.append(slider)
-    box.append(new Gtk.Image({ gicon: Icons.sun,  pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] }))
-    box.append(valueLabel)
 
     // Poll only while visible (see buildVertical); the map-tick doubles as the initial fetch.
     pollWhileMapped(box, 2000, () => {

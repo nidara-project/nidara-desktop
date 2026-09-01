@@ -1085,15 +1085,20 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     importing the Control Centre — a vocabulary the bar speaks too, owned by one of
     its two hosts. Moving them is what makes the boundary statable, and the boundary
     is the contract: **a widget declares what it is, never where it is drawn.**
-    **The tile vocabulary is six words**, and picking one is the whole of laying a
+    **The tile vocabulary is seven words**, and picking one is the whole of laying a
     tile out: at 1×1 `makeIconTile` (a status icon, no click target — the tile-level
     tap opens the detail, and a toggle here would be a second invisible hit-region on
     top of it) or `makeRoundTile` (a round toggle button); at 2×1 `makeCapsuleTile`
     (icon circle + title/subtitle, nothing clickable — the overwhelmingly common
     case) or `makeSplitCapsuleTile` (the icon badge toggles, the rest opens the
-    detail); and `makeCapsuleInner` + `wrapCapsuleTile` underneath, for a tile that
+    detail); at 4×1 `makeHSliderTile` (low icon, slider, high icon, live %, and
+    everything in it speaks 0..100 — a service storing 0..1 converts at ITS edge);
+    and `makeCapsuleInner` + `wrapCapsuleTile` underneath, for a tile that
     needs the refs (screenrecord ticks its subtitle's digits without re-reading the
-    icon) or builds its own box (battery's glyph row). A whole-capsule button exists
+    icon) or builds its own box (battery's glyph row). The 1×2 slider deliberately
+    has NO word here: it is `makeVerticalFillTile` in `ui/lib/nidara-kit`, because
+    there the fill IS the tile — `Sliders.tsx` wrapped it in five lines that added
+    nothing, which is why volume and brightness looked like two vertical sliders. A whole-capsule button exists
     but is PRIVATE: it swallows the tile-level tap, so it is only correct for a widget
     with no detail panel — and that widget is a **`roundToggleSpec`**, the
     `CCWidgetSpec` factory for a widget that is nothing but an on/off toggle (dark

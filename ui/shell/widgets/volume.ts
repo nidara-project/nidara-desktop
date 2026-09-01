@@ -1,21 +1,96 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { PANEL_W, AtomicWidget, WidgetSize } from "../common/widget-kit"
-import { makeVolumeSlider, bindWhileRealized } from "../../lib/nidara-kit"
-import { VolumeWidget } from "../surfaces/control-center/Sliders"
+import { PANEL_W, AtomicWidget, WidgetSize, makeHSliderTile } from "../common/widget-kit"
+import { makeVolumeSlider, makeVerticalFillTile, bindWhileRealized } from "../../lib/nidara-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as AudioSvc from "../core/AudioService"
 import { safeDisconnect } from "../core/signals"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 
+// ── CC tile content ───────────────────────────────────────────────────────────
+
+// Small (1×1) variant: round mute-toggle icon, mirroring the bar icon.
+// Takes a GETTER, not the endpoint: see the note on buildCCContent for why nothing
+// here may capture the default speaker.
+function buildVolumeIcon(speaker: () => any): Gtk.Widget {
+    const getIcon = () => { const s = speaker(); return s ? AudioSvc.targetVolumeIcon(s) : Icons.volumeMuted }
+    const icon = new Gtk.Image({ gicon: getIcon(), pixel_size: 28, css_classes: ["nd-icon"] })
+    const btn = new Gtk.Button({
+        css_classes: ["nidara-atomic-round-btn"],
+        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
+        hexpand: true, vexpand: true,
+        width_request: 48, height_request: 48,
+        child: icon,
+    })
+    btn.connect("clicked", () => { AudioSvc.toggleMute(speaker()); icon.gicon = getIcon() })
+    // Re-subscribed AND re-read on every realize: subscribing once and disconnecting
+    // on "unrealize" is a subscription that survives exactly one hide (same trap the
+    // kit's slider documents), and it also has to re-target when the default endpoint
+    // changes.
+    bindWhileRealized(btn, () => AudioSvc.watchDefaultSpeaker(() => { icon.gicon = getIcon() }))
+    return btn
+}
+
+// 🔑 Resolved on every use, NEVER captured. This runs at shell start, and two things
+// are false at that moment: the audio graph has not populated the endpoint's
+// properties yet (`volume` reads 0 even when the sink is at 40%), and on a machine
+// where pipewire settles after the shell there may be no default speaker at all —
+// captured, that null is permanent and the tile is dead for the session. It also
+// changes when the user switches output.
+const speaker = () => AudioSvc.defaultSpeaker()
+
+const getVolumePct = () => { const s = speaker(); return s ? Math.round(s.volume * 100) : 50 }
+const setVolumePct = (pct: number) => { const s = speaker(); if (s) s.volume = pct / 100 }
+
+// PRIMES before connecting, then re-targets when the default endpoint changes. The
+// kit's slider re-subscribes on every realize (`bindWhileRealized`), so a hook that
+// only pushes FUTURE changes leaves the slider showing whatever it was built with —
+// which is how the Control Center displayed 0% from login until something changed the
+// volume from outside (found on the 0.7.1 VM sweep, with the sink at 40% and
+// unmuted). Same defect the accessibility text slider had in #165: the hook was armed
+// and nobody read on the way in.
+function onVolumeExtChange(cb: (pct: number) => void): () => void {
+    let stopVolume: (() => void) | null = null
+    const sync = () => { const s = speaker(); if (s) cb(Math.round(s.volume * 100)) }
+    const rewire = () => {
+        stopVolume?.()
+        stopVolume = AudioSvc.watchVolume(speaker(), sync)
+        sync()
+    }
+    rewire()
+    const stopDevices = AudioSvc.watchDevices(rewire)
+    return () => { stopVolume?.(); stopDevices() }
+}
+
+// Slider tier mapping: Small=icon, Medium=1×2 vertical fill, Large=4×1 wide row.
+function buildCCContent(size: WidgetSize): Gtk.Widget {
+    if (size === WidgetSize.SINGLE) return buildVolumeIcon(speaker)
+
+    if (size === WidgetSize.TALL) {
+        // Capsule-filling vertical slider: fill rises edge-to-edge, % overlaid on
+        // top, icon at the bottom — the same kit component brightness uses.
+        return makeVerticalFillTile(
+            () => { const s = speaker(); return s ? AudioSvc.targetVolumeIcon(s) : Icons.volumeMuted },
+            { value: getVolumePct(), onChange: setVolumePct, onExtChange: onVolumeExtChange },
+            // Follows the default endpoint; never captures it.
+            (sync) => AudioSvc.watchDefaultSpeaker(sync),
+        )
+    }
+
+    return makeHSliderTile({
+        low:  { icon: Icons.volumeLow },
+        high: { icon: Icons.volumeHigh },
+        getValue: getVolumePct,
+        onChange: setVolumePct,
+        onExtChange: onVolumeExtChange,
+    })
+}
+
 // ── Bar icon (dynamic, reflects mute/volume level) ────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    // Resolved on every use, never captured: this runs at shell start, where the
-    // default endpoint may not exist yet — captured, that null is permanent and the
-    // bar icon is stuck on "muted" for the session. Same reason as the CC tile
-    // (surfaces/control-center/Sliders.tsx).
-    const speaker = () => AudioSvc.defaultSpeaker()
+    // `speaker` is the module-level getter, resolved on every use and never captured
+    // — see the note on it above; the bar icon has the same stake as the CC tile.
     const getIcon = () => { const s = speaker(); return s ? AudioSvc.targetVolumeIcon(s) : Icons.volumeMuted }
 
     const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
@@ -235,7 +310,7 @@ const volumeWidget: AtomicWidget = {
     defaultInBar: true,
     defaultSize: WidgetSize.FULL_WIDTH,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.TALL, WidgetSize.FULL_WIDTH],
-    buildContent: (size, budget) => VolumeWidget().buildContent(size, budget),
+    buildContent: (size, _budget) => buildCCContent(size),
     buildBarContent,
     buildBarExpanded,
     buildCCDetail,
