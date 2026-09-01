@@ -1065,10 +1065,12 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     `scripts/gen-widget-index.mjs` scans the dir and regenerates the committed
     `widgets.gen.ts` (imports + `ALL_WIDGETS`; runs on npm build/dev hooks, on
     the dev launcher before `scripts/run.sh`, and CI job `widgets-gen` fails if stale).
-    Rules: widgets-only directory (anything else is a codegen hard-error; new
-    helpers go in `common/` — `bar-helpers.ts` is grandfathered in EXCLUDE);
-    unique `id`; no module-scope dependency on another widget (import order is
-    alphabetical). Each widget declares a required `category` (`"media"` |
+    Rules: widgets-only directory with NO exceptions left (anything else is a
+    codegen hard-error; helpers go in `common/widget-kit/` — `bar-helpers.ts` was
+    the last grandfathered file and joined the kit as `bar.ts` on 2026-09-01, so
+    EXCLUDE now holds only the registry's own two files); unique `id`; no
+    module-scope dependency on another widget (import order is alphabetical).
+    **The whole of writing one is `references/writing-a-widget.md`.** Each widget declares a required `category` (`"media"` |
     `"utilities"` | `"system"`) + optional `barOrder`; `BAR_ORDER` is **derived**
     from those in `widgets/index.ts` (category order `[media, utilities, system]` =
     left→right, system nearest the tray — no hand-maintained list).

@@ -6,10 +6,10 @@
  * widget = dropping ONE file in that directory — no manual registry edit.
  *
  * A file there must either be an AtomicWidget module
- * (`const w: AtomicWidget = {...}` + `export default w`) or be listed in
- * EXCLUDE — anything else is a hard error, so helpers can't sneak in and
- * malformed widgets can't be skipped silently. New helpers belong in
- * ui/shell/common/, not in widgets/.
+ * (`const w: AtomicWidget = {...}` + `export default w`) or be the registry itself
+ * — anything else is a hard error, so helpers can't sneak in and malformed widgets
+ * can't be skipped silently. New helpers belong in ui/shell/common/widget-kit/,
+ * which is also the only thing a widget may import besides core/.
  *
  * Usage:  node scripts/gen-widget-index.mjs
  * Runs automatically via npm pre-hooks (build/dev/run) and, fail-soft, in
@@ -24,9 +24,10 @@ const ROOT = new URL("..", import.meta.url).pathname
 const WIDGETS_DIR = join(ROOT, "ui/shell/widgets")
 const OUT_FILE = join(WIDGETS_DIR, "widgets.gen.ts")
 
-// Non-widget files allowed to live in widgets/. bar-helpers.ts is
-// grandfathered; do NOT add new helpers here — put them in common/.
-const EXCLUDE = new Set(["index.ts", "widgets.gen.ts", "bar-helpers.ts"])
+// The only non-widget files allowed in widgets/, and both are the registry itself.
+// There are no other exceptions: `bar-helpers.ts` was the last one and it joined
+// common/widget-kit/ on 2026-09-01. A helper goes in the kit, not here.
+const EXCLUDE = new Set(["index.ts", "widgets.gen.ts"])
 
 const files = readdirSync(WIDGETS_DIR)
     .filter(f => /\.(ts|tsx)$/.test(f) && !EXCLUDE.has(f))

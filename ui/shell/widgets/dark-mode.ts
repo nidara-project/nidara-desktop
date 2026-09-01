@@ -1,6 +1,5 @@
 import Theme from "../core/ThemeManager"
-import { AtomicWidget, WidgetSize, roundToggleSpec } from "../common/widget-kit"
-import { makeIconAction } from "./bar-helpers"
+import { AtomicWidget, WidgetSize, roundToggleSpec, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import { safeDisconnect } from "../core/signals"
@@ -11,7 +10,7 @@ const themeSubscribe = (sync: () => void) => {
 }
 
 function buildBarContent() {
-    return makeIconAction({
+    return makeBarIcon({
         getIcon: () => Theme.isDark ? Icons.moon : Icons.sun,
         onAction: () => Theme.setDarkMode(!Theme.isDark),
         subscribe: themeSubscribe,

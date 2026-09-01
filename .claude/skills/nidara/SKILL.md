@@ -100,6 +100,8 @@ These are non-negotiable. Violating them produces bugs that are hard to debug be
 
 Before doing anything that touches code:
 
+- **Writing or changing a WIDGET** (a bar pill / CC tile) → `references/writing-a-widget.md` is the
+  whole thing on one page: the file, the vocabulary, and the boundary CI enforces.
 - **Editing TSX widgets, adding overlays, changing dock/bar/CC behaviour** → read `references/architecture.md` first, then `references/state-and-ipc.md`.
 - **Editing SCSS, restyling anything, working on the design tokens** → read `references/design-system.md`.
 - **Adding a new core service or modifying state** → read `references/architecture.md` (core/ section) and `references/state-and-ipc.md` (Status.ts).
