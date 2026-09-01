@@ -49,7 +49,7 @@
 import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import { proxy, call, onProps, onSignal } from "./dbus"
+import { proxy, call, onProps, onProxySignal } from "./dbus"
 
 const BUS_NAMESPACE = "org.mpris.MediaPlayer2"
 const OBJECT_PATH = "/org/mpris/MediaPlayer2"
@@ -188,7 +188,7 @@ export class MprisPlayer extends GObject.Object {
                 if (trackChanged || statusChanged) this._resync()
             }),
             onProps(this._rootProxy, () => this._syncRoot()),
-            onSignal(this._proxy, (_p: any, _sender: string, signal: string, params: any) => {
+            onProxySignal(this._proxy, (_p: any, _sender: string, signal: string, params: any) => {
                 if (signal !== "Seeked") return
                 try { this._anchor(vNum(params.get_child_value(0))) } catch {}
             }),

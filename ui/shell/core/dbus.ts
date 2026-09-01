@@ -85,7 +85,9 @@ export function call(
     p: Gio.DBusProxy,
     method: string,
     params: GLib.Variant | null = null,
-    replyType: GLib.VariantType | null = null,
+    // Sin `replyType`: `Gio.DBusProxy.call` no lo acepta — el proxy ya conoce su
+    // interfaz. Estaba en la firma sin usarse, que es un parámetro que miente.
+    // Para respuestas tipadas está `callConn`, que sí lo pasa.
     flags: Gio.DBusCallFlags = Gio.DBusCallFlags.NO_AUTO_START,
     timeoutMsec: number = -1,
     cancellable: Gio.Cancellable | null = null,
@@ -172,85 +174,57 @@ export function onProps(
 }
 
 /**
- * Subscribe to D-Bus signals on a Gio.DBusProxy ("g-signal") or a Gio.DBusConnection
- * (signal_subscribe).
+ * Subscribe to a proxy's `g-signal`. Returns an idempotent disposer.
  *
- * Returns an idempotent disposer function.
+ * ⚠️ Deliberadamente NO hay una función que acepte «conexión o proxy» y decida en
+ * ejecución cuál es: son dos suscripciones distintas (`connect` frente a
+ * `signal_subscribe`) con dos formas de soltarlas, y un despacho por duck-typing
+ * las hace parecer una sola hasta el día que se equivoca. Dos nombres, dos cosas.
  */
-export function onSignal(
-    proxy: Gio.DBusProxy,
-    cb: (proxy: Gio.DBusProxy, sender: string, signal: string, params: GLib.Variant) => void,
-): () => void
-export function onSignal(
-    conn: Gio.DBusConnection,
-    opts: SignalOptions,
-    cb: (conn: Gio.DBusConnection, sender: string, path: string, iface: string, signal: string, params: GLib.Variant) => void,
-): () => void
-export function onSignal(
-    target: any,
-    optsOrCb: any,
-    maybeCb?: any,
-): () => void {
-    if (!target) return () => {}
-    let disposed = false
-
-    if (typeof target.signal_subscribe === "function") {
-        const conn = target as Gio.DBusConnection
-        const opts = (optsOrCb || {}) as SignalOptions
-        const cb = maybeCb
-        const id = conn.signal_subscribe(
-            opts.sender ?? null,
-            opts.iface ?? null,
-            opts.member ?? null,
-            opts.path ?? null,
-            opts.arg0 ?? null,
-            opts.flags ?? Gio.DBusSignalFlags.NONE,
-            (_c: any, sender: string, path: string, iface: string, signal: string, params: any) => {
-                cb?.(conn, sender, path, iface, signal, params)
-            },
-        )
-        return () => {
-            if (disposed) return
-            disposed = true
-            try {
-                conn.signal_unsubscribe(id)
-            } catch {}
-        }
-    }
-
-    if (typeof target.connect === "function") {
-        const p = target as Gio.DBusProxy
-        const cb = optsOrCb
-        const id = p.connect("g-signal", (_proxy: any, sender: string, signal: string, params: any) => {
-            cb?.(p, sender, signal, params)
-        })
-        return () => {
-            if (disposed) return
-            disposed = true
-            safeDisconnect(p, id)
-        }
-    }
-
-    return () => {}
-}
-
 /**
  * Explicit helper for proxy `g-signal` subscriptions.
  */
 export function onProxySignal(
-    proxy: Gio.DBusProxy,
+    p: Gio.DBusProxy,
     cb: (proxy: Gio.DBusProxy, sender: string, signal: string, params: GLib.Variant) => void,
 ): () => void {
-    return onSignal(proxy, cb)
+    if (!p) return () => {}
+    let disposed = false
+    const id = p.connect("g-signal", (_proxy: any, sender: string, signal: string, params: any) => {
+        cb(p, sender, signal, params)
+    })
+    return () => {
+        if (disposed) return
+        disposed = true
+        safeDisconnect(p, id)
+    }
 }
 
 /**
- * Explicit helper for connection `signal_subscribe` subscriptions.
+ * Subscribe to signals on a connection (`signal_subscribe`). Returns an idempotent
+ * disposer that calls `signal_unsubscribe`.
  */
 export function onConnSignal(
     conn: Gio.DBusConnection,
     opts: SignalOptions,
     cb: (conn: Gio.DBusConnection, sender: string, path: string, iface: string, signal: string, params: GLib.Variant) => void,
 ): () => void {
-    return onSignal(conn, opts, cb)
+    if (!conn) return () => {}
+    let disposed = false
+    const id = conn.signal_subscribe(
+        opts.sender ?? null,
+        opts.iface ?? null,
+        opts.member ?? null,
+        opts.path ?? null,
+        opts.arg0 ?? null,
+        opts.flags ?? Gio.DBusSignalFlags.NONE,
+        (_c: any, sender: string, path: string, iface: string, signal: string, params: any) => {
+            cb(conn, sender, path, iface, signal, params)
+        },
+    )
+    return () => {
+        if (disposed) return
+        disposed = true
+        try { conn.signal_unsubscribe(id) } catch {}
+    }
 }
