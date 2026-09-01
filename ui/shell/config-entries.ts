@@ -16,7 +16,7 @@ import { ACCENT_PALETTE, GLASS_RANGE, type AccentKey, type ShellAppearance } fro
 import NightLight from "./core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "./core/WallpaperManager"
 import notifConfig from "./core/NotifConfig"
-import { dontDisturb, setDontDisturb, watchDnd } from "./core/NotifService"
+import { dontDisturb, setDontDisturb } from "./core/NotifService"
 import { reduceMotion, setReduceMotion, onReduceMotionChange } from "./core/ReduceMotion"
 import recordingConfig, {
     FORMATS, QUALITIES, type RecordFormat, type RecordQuality,
@@ -24,7 +24,7 @@ import recordingConfig, {
 import Gaming, { type WallpaperMode } from "./core/GamingManager"
 import agentConfig from "./core/AgentConfig"
 import { dockSettings, updateDockSettings, onDockSettingsChanged, type DockPosition } from "./surfaces/dock/state"
-import { barSettings, updateBarSettings, onBarSettingsChanged } from "./surfaces/bar/barState"
+import { barConfig } from "./surfaces/bar/barState"
 import regionConfig from "./core/RegionConfig"
 import { getIdleConfig, updateIdleConfig, onHypridleChanged } from "./core/PowerConfig"
 import inputConfig from "./core/InputConfig"
@@ -124,11 +124,6 @@ const onInputCfg = (read: () => any) => (apply: (v: any) => void) => {
 const onDockCfg = (read: () => any) => (apply: (v: any) => void) => {
     apply(read())
     return onDockSettingsChanged(() => apply(read()))
-}
-
-const onBarCfg = (read: () => any) => (apply: (v: any) => void) => {
-    apply(read())
-    return onBarSettingsChanged(() => apply(read()))
 }
 
 const onThemeCfg = (read: () => any) => (apply: (v: any) => void) => {
@@ -399,9 +394,12 @@ export function registerConfigEntries() {
     registerConfig("bar.appTitle", {
         desc: "Show the active window title in the top bar.",
         type: "boolean",
-        get: () => barSettings.showAppTitle,
-        set: v => updateBarSettings({ showAppTitle: v as boolean }),
-        subscribe: onBarCfg(() => barSettings.showAppTitle),
+        get: () => barConfig.get("showAppTitle"),
+        set: v => barConfig.set("showAppTitle", v as boolean),
+        subscribe: (apply) => {
+            apply(barConfig.get("showAppTitle"))
+            return barConfig.subscribe("showAppTitle", apply)
+        },
         ui: {
             i18n: "settings.bar.app-title",
         },
@@ -592,7 +590,7 @@ export function registerConfigEntries() {
         set: v => notifConfig.setPopupTimeout(v as number),
         subscribe: (apply) => {
             apply(notifConfig.popupTimeout)
-            return notifConfig.onChange(() => apply(notifConfig.popupTimeout))
+            return notifConfig.subscribe("popupTimeout", apply)
         },
         ui: {
             i18n: "settings.notif.timeout",
@@ -606,7 +604,7 @@ export function registerConfigEntries() {
         set: v => setDontDisturb(v as boolean),
         subscribe: (apply) => {
             apply(dontDisturb())
-            return watchDnd(() => apply(dontDisturb()))
+            return notifConfig.subscribe("doNotDisturb", apply)
         },
         ui: {
             i18n: "settings.notif.dnd",

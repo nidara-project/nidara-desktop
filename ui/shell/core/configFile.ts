@@ -1,3 +1,6 @@
+import GLib from "gi://GLib"
+import { readFile, writeFile } from "../../lib/file"
+
 /**
  * Loading a settings JSON without letting it accumulate.
  *
@@ -41,3 +44,132 @@ export function loadKnown<T extends object>(defaults: T, data: unknown): T {
     }
     return out
 }
+
+function isEqual<V>(a: V, b: V): boolean {
+    if (Object.is(a, b)) return true
+    if (typeof a === "object" && a !== null && typeof b === "object" && b !== null) {
+        return JSON.stringify(a) === JSON.stringify(b)
+    }
+    return false
+}
+
+export interface ConfigFileStore<T extends object> {
+    get<K extends keyof T>(key: K): T[K]
+    set<K extends keyof T>(key: K, value: T[K]): void      // persiste + notifica
+    update(patch: Partial<T>): void                        // varias claves, UNA escritura
+    subscribe<K extends keyof T>(key: K, cb: (v: T[K]) => void): () => void
+    subscribeAll(cb: (key: keyof T) => void): () => void
+    readonly all: Readonly<T>
+}
+
+/**
+ * Single lifecycle owner for a JSON settings file under `~/.config/nidara/`.
+ *
+ * Provides:
+ *  - durable, atomic persistence via `writeFile` (CONSISTENT | DURABLE)
+ *  - key-filtered deserialization via `loadKnown` (retired keys drop)
+ *  - equality guard: identical values do not touch the filesystem or notify
+ *  - per-key subscription and grouped updates with a single write
+ *  - explicit disposer on every subscription
+ */
+export function defineConfig<T extends object>(fileName: string, defaults: T): ConfigFileStore<T> {
+    const filePath = `${GLib.get_user_config_dir()}/nidara/${fileName}`
+    const state: T = { ...defaults }
+
+    try {
+        if (GLib.file_test(filePath, GLib.FileTest.EXISTS)) {
+            const raw = JSON.parse(readFile(filePath))
+            Object.assign(state, loadKnown(defaults, raw))
+        }
+    } catch (e) {
+        console.error(`[defineConfig:${fileName}] Failed to load:`, e)
+    }
+
+    function persist() {
+        try {
+            writeFile(filePath, JSON.stringify(state, null, 2))
+        } catch (e) {
+            console.error(`[defineConfig:${fileName}] Failed to persist:`, e)
+        }
+    }
+
+    const keyListeners = new Map<keyof T, Set<(v: any) => void>>()
+    const allListeners = new Set<(key: keyof T) => void>()
+
+    function notifyKey<K extends keyof T>(key: K, value: T[K]) {
+        const listeners = keyListeners.get(key)
+        if (listeners) {
+            for (const cb of [...listeners]) {
+                try {
+                    cb(value)
+                } catch (e) {
+                    console.error(`[defineConfig:${fileName}] Listener error on ${String(key)}:`, e)
+                }
+            }
+        }
+        for (const cb of [...allListeners]) {
+            try {
+                cb(key)
+            } catch (e) {
+                console.error(`[defineConfig:${fileName}] All-listener error on ${String(key)}:`, e)
+            }
+        }
+    }
+
+    return {
+        get<K extends keyof T>(key: K): T[K] {
+            return state[key]
+        },
+
+        set<K extends keyof T>(key: K, value: T[K]): void {
+            if (isEqual(state[key], value)) return
+            state[key] = value
+            persist()
+            notifyKey(key, value)
+        },
+
+        update(patch: Partial<T>): void {
+            const changed: { key: keyof T; value: any }[] = []
+            for (const key of Object.keys(patch) as (keyof T)[]) {
+                if (!(key in defaults)) continue
+                const val = patch[key]
+                if (val !== undefined && !isEqual(state[key], val)) {
+                    state[key] = val as T[keyof T]
+                    changed.push({ key, value: val })
+                }
+            }
+            if (changed.length === 0) return
+            persist()
+            for (const { key, value } of changed) {
+                notifyKey(key, value)
+            }
+        },
+
+        subscribe<K extends keyof T>(key: K, cb: (v: T[K]) => void): () => void {
+            let set = keyListeners.get(key)
+            if (!set) {
+                set = new Set()
+                keyListeners.set(key, set)
+            }
+            set.add(cb)
+            return () => {
+                set!.delete(cb)
+                if (set!.size === 0) {
+                    keyListeners.delete(key)
+                }
+            }
+        },
+
+        subscribeAll(cb: (key: keyof T) => void): () => void {
+            allListeners.add(cb)
+            return () => {
+                allListeners.delete(cb)
+            }
+        },
+
+        get all(): Readonly<T> {
+            return state
+        },
+    }
+}
+
