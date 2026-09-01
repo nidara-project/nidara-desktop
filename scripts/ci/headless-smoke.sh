@@ -329,6 +329,26 @@ phase_run() {
         exit 1
     fi
 
+    # ── 6b. The config store's invariants, exercised ─────────────────────────
+    # `scripts/dev/define-config-probe.ts` asserts what `defineConfig` promises and
+    # what a reader cannot see by looking: that a subscriber to one key is NOT woken
+    # by another, that writing an identical value neither notifies nor touches the
+    # file (checked by mtime), and that the two migrated modules kept their public
+    # API. It runs HERE for the same reason the text budget does — this is the job
+    # that has a gjs with a display.
+    #
+    # ⚠️ It is wired in rather than left as a file someone might remember to run: a
+    # committed instrument nothing executes is one that rots, and this whole issue
+    # is about invariants that hold silently until they do not.
+    if /repo/scripts/bundle.sh --js /repo/scripts/dev/define-config-probe.ts /tmp/smoke/dcp.js >/dev/null 2>&1 \
+       && gjs -m /tmp/smoke/dcp.js > /tmp/smoke/define-config.txt 2>&1; then
+        log "config store OK — $(grep -c '^  PASS' /tmp/smoke/define-config.txt) assertions"
+    else
+        log "FAIL: config store probe"
+        tail -25 /tmp/smoke/define-config.txt
+        exit 1
+    fi
+
     # ── 7. JS errors are a hard failure (boot must be clean) ──────────────────
     if grep -nE "JS ERROR|Unhandled promise rejection" "$shell_log" > /tmp/smoke/js-errors.txt; then
         log "FAIL: JS errors during boot:"
