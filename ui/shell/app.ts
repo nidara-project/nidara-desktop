@@ -23,6 +23,7 @@ import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue, set
 import { registerConfigEntries } from "./config-entries"
 import { configLocations } from "./surfaces/settings/configLocations"
 import { initReduceMotion } from "./core/ReduceMotion"
+import { fireSessionStartedOnce, initBatteryLowHook } from "./core/Hooks"
 import { bindCursorThemeRefresh } from "./common/CursorRefresh"
 import hyprlandState from "./core/HyprlandState"
 import queryUI from "./core/UITree"
@@ -1322,6 +1323,14 @@ app.start({
     shellActions.toggleBarOverlay = toggleBarOverlay
     shellActions.lockScreen = lockScreen
     shellActions.unlockScreen = unlockScreen
+
+    // User hooks (~/.config/nidara/hooks/<event>.d/) — see bin/nidara-hook.
+    // Last in main() on purpose: `session-started` should mean the desktop is
+    // there, not that we are halfway through building it. It fires once per
+    // LOGIN, not once per process — a UI reload re-enters main() and the stamp
+    // in the runtime dir is what tells the two apart.
+    initBatteryLowHook()
+    fireSessionStartedOnce()
 
   },
 })

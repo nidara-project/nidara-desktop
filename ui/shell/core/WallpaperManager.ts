@@ -7,6 +7,7 @@ import { execAsync } from "../../lib/process"
 import { writeFile } from "../../lib/file"
 import { readWallpaperConfig, resolveWallpaper } from "../../lib/wallpaper"
 import { t } from "./i18n"
+import { fireHook } from "./Hooks"
 
 const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/wallpaper`
 const THUMB_CACHE_DIR = `${GLib.get_user_cache_dir()}/nidara/wallpaper-thumbs`
@@ -200,6 +201,7 @@ class WallpaperManager extends GObject.Object {
         try {
             await execAsync(["awww", "img", path, "--transition-type", t])
             this.emit("changed")
+            fireHook("wallpaper-changed", path)
             // The surfaces that paint the wallpaper are closed right now — reheat
             // here rather than making each of them re-check on open.
             this.warmPreview()

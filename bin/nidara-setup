@@ -369,6 +369,54 @@ LUA
     echo "  [Init] $CONFIG_DIR/hyprland-user.lua"
 fi
 
+# User hooks — one directory per shell event, plus a README. Idempotent: existing
+# directories and hook scripts are never touched, and a new event added upstream
+# gets its directory on the next setup run.
+#
+# The event list is NOT written out here. It is asked of `nidara-hook --list`, so
+# this file cannot drift from the runner that actually dispatches them — the only
+# place the events are declared.
+HOOKS_DIR="$CONFIG_DIR/hooks"
+if command -v nidara-hook >/dev/null 2>&1; then
+    mkdir -p "$HOOKS_DIR"
+    chown "$REAL_USER" "$HOOKS_DIR"
+    # Non-indented lines of --list are "<event> <args…>"; the indented ones are prose.
+    nidara-hook --list | grep -E '^[a-z]' | cut -d' ' -f1 | while read -r _ev; do
+        [ -n "$_ev" ] || continue
+        if [ ! -d "$HOOKS_DIR/$_ev.d" ]; then
+            mkdir -p "$HOOKS_DIR/$_ev.d"
+            chown "$REAL_USER" "$HOOKS_DIR/$_ev.d"
+            echo "  [Init] $HOOKS_DIR/$_ev.d/"
+        fi
+    done
+    # Rewritten every run on purpose (unlike hyprland-user.lua): it holds no user
+    # content, and it is the pointer that stays correct when the events change.
+    cat > "$HOOKS_DIR/README" <<'HOOKS'
+Drop an executable file in one of the directories beside this file and Nidara
+runs it when that event happens. That is the whole contract.
+
+    ~/.config/nidara/hooks/accent-changed.d/50-my-script     ← chmod +x it
+
+  · Files run in name order, so 10- comes before 50-. Not executable = not run,
+    which is how you disable one without moving it.
+  · The event's arguments arrive as $1, $2, … and the event's own name is in
+    $NIDARA_EVENT.
+  · Anything your script prints goes to the shell's log.
+
+The events, what each one passes, and when it fires:
+
+    nidara-hook --list
+
+To try a hook without waiting for the real thing, fire the event by hand:
+
+    nidara-hook accent-changed purple
+
+A hook that starts something long-lived should hand it to `systemd-run --user`:
+hooks fired by the shell die with the shell, and a UI reload restarts it.
+HOOKS
+    chown "$REAL_USER" "$HOOKS_DIR/README"
+fi
+
 # Nidara generated config (Hyprland settings from UI)
 # Seeded with the detected system keyboard layout on first install.
 if [ ! -f "$CONFIG_DIR/nidara-settings.lua" ]; then
