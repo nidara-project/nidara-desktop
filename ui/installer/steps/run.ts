@@ -12,6 +12,7 @@ import { configureInstalledBootloader } from "../lib/bootloader"
 import { applyRealName } from "../lib/real-name"
 import { stripAnsi } from "../lib/ansi"
 import { connectivity, isUsable } from "../lib/network"
+import { isPreview, previewSkip } from "../lib/preview"
 import { heading, prose } from "./common"
 
 export function RunStep(): Step {
@@ -285,6 +286,26 @@ export function RunStep(): Step {
         } catch (e: any) {
           appendLog(`[ERROR] Failed to assemble installation plan: ${e.message || e}`)
           finishRun(false)
+          return
+        }
+
+        // ⚠️ Preview stops HERE, before the credentials file exists.
+        //
+        // Not for the sake of archinstall — it would get `--dry-run` anyway — but
+        // for the two lines below it: the plan and the CREDENTIALS are written to
+        // /tmp, and the creds file holds the account password hash. It is mode
+        // 0600 and it is deleted afterwards, which is right on a medium that is
+        // about to be powered off and wrong on a shared machine that will not be.
+        // The password is also the one thing somebody walking the installer for
+        // the tenth time is most likely to have typed carelessly.
+        if (isPreview()) {
+          appendLog(previewSkip("writing the plan and credentials to /tmp"))
+          appendLog(previewSkip("sudo archinstall --config … --creds … --silent --dry-run"))
+          appendLog(previewSkip("applyRealName + configureInstalledBootloader (already gated on arm)"))
+          appendLog("")
+          appendLog("[PREVIEW] The plan that WOULD be handed to archinstall:")
+          for (const line of JSON.stringify(plan.config, null, 2).split("\n")) appendLog(line)
+          finishRun(true)
           return
         }
 
