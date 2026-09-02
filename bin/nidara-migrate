@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# nidara-migrate — run the pending config migrations for THIS user, once each.
+#
+# WHY THIS EXISTS. Renaming a config key used to have exactly one possible
+# shape: a permanent compatibility read, in whatever file owned the key, added
+# by whoever moved it. Nothing recorded that a given machine had already been
+# converted, so no release could ever drop one — and a legacy name that is still
+# read is a name that can still WIN, quietly overruling a value the user can see
+# in Settings with one they cannot. This is the missing half: a per-machine
+# record of what has already been taken, so the old name can be DELETED from the
+# reader in the next release instead of carried forever.
+#
+# WHERE IT RUNS, and why not only where you would expect. The obvious home is
+# `nidara-setup`, and it is called from there — but that is not enough on its
+# own: `nidara.install` only PRINTS on post_install/post_upgrade, so a plain
+# `sudo pacman -Syu` (the upgrade path the README documents) never runs setup at
+# all. So the load-bearing trigger is `ExecStartPre=` on `nidara.service`: it
+# runs as the session user, at every session start, and — the part that matters
+# most — BEFORE the shell has read any config, which is the only ordering in
+# which a migration cannot race the process it is migrating for.
+#
+# ⚠️ THIS SCRIPT ALWAYS EXITS 0. It is a startup gate for the desktop, and a
+# broken migration must cost the user a warning in the log, never their session.
+# A failing unit here would leave them at a bare compositor with no shell.
+#
+# Marker: ${XDG_STATE_HOME:-~/.local/state}/nidara/migrations/<name>. Delete one
+# to make that migration run again — which is also how you test one.
+# ─────────────────────────────────────────────────────────────────────────────
+set -uo pipefail        # deliberately NOT -e; see the exit-0 note above
+
+MIGRATIONS_DIR="${NIDARA_MIGRATIONS_DIR:-/usr/share/nidara/migrations}"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/nidara/migrations"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/nidara"
+
+log()  { printf 'nidara-migrate: %s\n' "$*"; }
+warn() { printf 'nidara-migrate: %s\n' "$*" >&2; }
+
+# ── Helpers available to every migration ─────────────────────────────────────
+# Migrations are SOURCED in a subshell, so they inherit these and cannot leak
+# variables back into the runner.
+
+# json_edit <file> <jq-program>
+#
+# Apply a jq program to a JSON config file, atomically, and only when it
+# actually changes something. Absent file = nothing to migrate, which is the
+# normal case on a fresh install and must not be an error.
+#
+# ⚠️ temp + rename, in the SAME directory: a half-written config file is worse
+# than an unmigrated one, and a rename across filesystems is not atomic.
+json_edit() {
+    local file="$1" program="$2" tmp before after
+    [ -f "$file" ] || return 0
+
+    before="$(cat "$file")" || { warn "could not read $file"; return 1; }
+    after="$(printf '%s' "$before" | jq "$program")" || {
+        warn "jq failed on $file — leaving it untouched"
+        return 1
+    }
+    [ "$after" = "$before" ] && return 0
+
+    tmp="$(mktemp "$(dirname "$file")/.nidara-migrate.XXXXXX")" || return 1
+    printf '%s\n' "$after" > "$tmp" && chmod --reference="$file" "$tmp" 2>/dev/null
+    mv -f "$tmp" "$file" || { rm -f "$tmp"; warn "could not replace $file"; return 1; }
+    log "  edited $(basename "$file")"
+}
+
+# ── The run ──────────────────────────────────────────────────────────────────
+[ -d "$MIGRATIONS_DIR" ] || exit 0
+mkdir -p "$STATE_DIR" 2>/dev/null || { warn "no state dir ($STATE_DIR) — skipping"; exit 0; }
+
+command -v jq >/dev/null 2>&1 || { warn "jq is missing — skipping migrations"; exit 0; }
+
+ran=0
+# Sorted by filename, and filenames are dated, so the order is the order they
+# were written. A migration may depend on its predecessor having run.
+for unit in "$MIGRATIONS_DIR"/*.sh; do
+    [ -e "$unit" ] || break
+    name="$(basename "$unit" .sh)"
+    [ -e "$STATE_DIR/$name" ] && continue
+
+    log "running $name"
+    if ( . "$unit" ); then
+        : > "$STATE_DIR/$name" || warn "  ran but could NOT mark $name — it will run again"
+        ran=$((ran + 1))
+    else
+        # Stop the chain rather than run the next one against a state its
+        # predecessor failed to produce. No marker, so it retries next session.
+        warn "  $name FAILED — stopping here; the rest will run once it succeeds"
+        break
+    fi
+done
+
+[ "$ran" -gt 0 ] && log "$ran migration(s) applied"
+exit 0

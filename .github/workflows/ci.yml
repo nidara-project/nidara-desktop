@@ -170,6 +170,18 @@ jobs:
           echo "depends: ${#depends[@]}  makedepends: ${#makedepends[@]}"
           [ "${#depends[@]}" -ge 40 ] || { echo "::error::depends=() collapsed to ${#depends[@]}"; exit 1; }
           [ "${#makedepends[@]}" -ge 5 ] || { echo "::error::makedepends=() collapsed to ${#makedepends[@]}"; exit 1; }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      # Config migrations mutate a user's files once, on a machine nobody can
+      # inspect afterwards — there is no undo. This asserts the properties that
+      # make one survivable (valid bash, a no-op on a fresh install, idempotent
+      # with the marker cleared) instead of leaving them to be remembered, and it
+      # carries its own positive control. A step in THIS job rather than a job of
+      # its own: it is shell-side correctness like the rest of it, and a required
+      # check that a path filter can skip is one that stalls the merge queue.
+      - name: Config migrations are valid and idempotent (must succeed)
+        run: node scripts/ci/migrations-check.mjs
 
   typecheck:
     name: Typecheck (tsc)

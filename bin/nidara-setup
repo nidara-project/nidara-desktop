@@ -720,6 +720,19 @@ echo "  Refreshing nidara.service (started by the Nidara session, not enabled)..
 user_systemctl daemon-reload 2>/dev/null || true
 user_systemctl disable nidara.service 2>/dev/null || true
 
+# ── Config migrations ─────────────────────────────────────────────────────────
+# Per-user, once each, marker-guarded. Also wired as ExecStartPre= on
+# nidara.service — that is the load-bearing trigger, because `nidara.install`
+# only PRINTS on post_upgrade and a plain `pacman -Syu` never reaches here.
+# Running it in both places is free: the marker makes the second call a no-op.
+#
+# ⚠️ As the REAL user, never as root: the files are under their ~/.config, and a
+# root run would create root-owned state under their home.
+if command -v nidara-migrate >/dev/null 2>&1; then
+    echo "  Applying pending config migrations..."
+    run_user nidara-migrate || true
+fi
+
 # ── Audio services ────────────────────────────────────────────────────────────
 echo "  Enabling audio services..."
 user_systemctl enable --now wireplumber pipewire pipewire-pulse 2>/dev/null || true

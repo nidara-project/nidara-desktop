@@ -812,9 +812,13 @@ class ThemeManager extends GObject.Object {
                 barOpacity:     glass(data.barOpacity     ?? data.shellOpacity, DEFAULT_CONFIG.barOpacity),
                 overlayOpacity: glass(data.overlayOpacity ?? data.shellOpacity, DEFAULT_CONFIG.overlayOpacity),
                 dockOpacity:    glass(data.dockOpacity,                         DEFAULT_CONFIG.dockOpacity),
-                // Migrate the old `transparency` (transparency sense) → window OPACITY (1 − t).
-                windowOpacity:  glass(data.windowOpacity ?? (typeof data.transparency === "number" ? 1 - (data.transparency as number) : undefined),
-                                      DEFAULT_CONFIG.windowOpacity),
+                // The old `transparency` key (transparency sense, `1 - t`) used to be
+                // read here on EVERY load, forever, because nothing recorded which
+                // machines had already been converted. It is a dated migration now —
+                // `migrations/2026-09-02-window-opacity-from-transparency.sh`, run once
+                // per machine by `nidara-migrate` before this process starts — so the
+                // legacy name is gone from the reader rather than carried for good.
+                windowOpacity:  glass(data.windowOpacity, DEFAULT_CONFIG.windowOpacity),
                 shellAppearance: (data.shellAppearance as ShellAppearance) ?? DEFAULT_CONFIG.shellAppearance,
             }
             // Stamp the new model NOW, not through the 500 ms persistence debounce.
