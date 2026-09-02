@@ -1,14 +1,12 @@
 import GLib from "gi://GLib"
-import { readFile, writeFile } from "../../lib/file"
 import { providerById } from "./AgentProviders"
-import { loadKnown } from "./configFile"
+import { defineConfig } from "./configFile"
 
 // Governance for the agent-facing surface (Settings → AI). This gates the
 // OFFICIAL door (`nidara-ipc setConfig`, future MCP server) — it is a consent
 // layer, not a security boundary: any local process can still edit config
 // files directly, same as the user. Reading state (dumpState/getConfig) is
 // always allowed; it powers nidara-doctor and diagnostics.
-const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/ai.json`
 
 interface AgentSettings {
     allowConfigWrite: boolean  // agents may change settings via setConfig, default true
@@ -99,44 +97,64 @@ const DEFAULTS: AgentSettings = {
     assistantGlow: true,
 }
 
-let _settings: AgentSettings = { ...DEFAULTS }
-try {
-    if (GLib.file_test(CONFIG_PATH, GLib.FileTest.EXISTS)) {
-        _settings = loadKnown(DEFAULTS, JSON.parse(readFile(CONFIG_PATH)))
-        // RE-DERIVE the wire protocol from the provider table on every load.
-        // brainBackend/brainEndpoint are documented as derived from brainProvider,
-        // but they are also persisted — and only recomputed inside
-        // setBrainProvider(). So a provider that changes protocol upstream (Google
-        // moved compat → native on 2026-07-22) would keep hitting the OLD path out
-        // of a stale file until the user happened to re-pick it in Settings, with
-        // no symptom to explain why. The table is the source of truth; a derived
-        // field must never outlive it.
-        const p = providerById(_settings.brainProvider)
-        if (p) {
-            _settings.brainBackend = p.backend
-            // An editable endpoint is the USER's value — never clobber it.
-            if (!p.editableEndpoint) _settings.brainEndpoint = p.endpoint
-        }
-    }
-} catch {}
+const BACKENDS: readonly AgentSettings["brainBackend"][] = ["", "anthropic", "gemini", "openai"]
 
-function save() {
-    try {
-        const dir = `${GLib.get_user_config_dir()}/nidara`
-        if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
-            GLib.mkdir_with_parents(dir, 0o755)
-        writeFile(CONFIG_PATH, JSON.stringify(_settings, null, 2))
-    } catch (e) {
-        console.error("[AgentConfig] Save failed:", e)
+const config = defineConfig<AgentSettings>("ai.json", DEFAULTS, {
+    // The one string in this file the daemon BRANCHES on: bin/nidara-agent picks
+    // its wire protocol from it. Every other string here is free-form (a model
+    // id, a URL), and `loadKnown`'s typeof check is the right guard for those.
+    brainBackend: v => BACKENDS.includes(v),
+})
+
+const _settings: Readonly<AgentSettings> = config.all
+
+// RE-DERIVE the wire protocol from the provider table on every load.
+// brainBackend/brainEndpoint are documented as derived from brainProvider, but
+// they are also persisted — and only recomputed inside setBrainProvider(). So a
+// provider that changes protocol upstream (Google moved compat → native on
+// 2026-07-22) would keep hitting the OLD path out of a stale file until the user
+// happened to re-pick it in Settings, with no symptom to explain why. The table
+// is the source of truth; a derived field must never outlive it.
+//
+// This now PERSISTS the correction rather than only fixing it in memory, and the
+// store's equality guard is what makes that free: it writes on the boot where the
+// value actually moved, and never again.
+{
+    const p = providerById(_settings.brainProvider)
+    if (p) {
+        config.update({
+            brainBackend: p.backend,
+            // An editable endpoint is the USER's value — never clobber it.
+            ...(p.editableEndpoint ? {} : { brainEndpoint: p.endpoint }),
+        })
     }
 }
 
+// Notification fan-in. This module has ONE event its file cannot carry — the
+// transient computer-use pulse below — so `onChange` is the union of "a setting
+// changed" and "an action just landed", which is what every subscriber already
+// assumed. The store feeds the same set rather than being a second channel.
 const _listeners = new Set<() => void>()
+const _notify = () => _listeners.forEach(fn => fn())
+config.subscribeAll(_notify)
 
 // Transient computer-use ACTIVITY — distinct from allowComputerControl (the
 // persistent PERMISSION). Lit by pulseComputerAction() when a real action lands
 // (the standalone tools ping `nidara-ipc notifyComputerAction`), then decays.
 // The bar indicator reads both: "armed" = permitted-but-idle, "active" = acting.
+/** Perception is useless while the a11y stack is globally off, and GTK4 apps
+ *  only fully populate their AT-SPI tree when it is on. Best-effort; never
+ *  flipped back off on disable (other assistive tech may want it). */
+function enableToolkitAccessibility() {
+    try {
+        GLib.spawn_command_line_async(
+            "gsettings set org.gnome.desktop.interface toolkit-accessibility true",
+        )
+    } catch (e) {
+        console.error("[AgentConfig] enabling toolkit-accessibility failed:", e)
+    }
+}
+
 let _acting = false
 let _actingTimer = 0
 const ACTING_DECAY_MS = 4000
@@ -169,44 +187,34 @@ export const agentConfig = {
         _actingTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ACTING_DECAY_MS, () => {
             _acting = false
             _actingTimer = 0
-            _listeners.forEach(fn => fn())
+            _notify()
             return GLib.SOURCE_REMOVE
         })
-        _listeners.forEach(fn => fn())
+        _notify()
     },
 
     // core/AgentGlow.ts listens on onChange, so turning this off mid-turn takes
     // the glow away immediately rather than at the end of the turn.
     setAssistantGlow(val: boolean) {
-        _settings.assistantGlow = val
-        save()
-        _listeners.forEach(fn => fn())
+        config.set("assistantGlow", val)
     },
 
     setAllowConfigWrite(val: boolean) {
-        _settings.allowConfigWrite = val
-        save()
-        _listeners.forEach(fn => fn())
+        config.set("allowConfigWrite", val)
     },
 
     setAllowScreenshot(val: boolean) {
-        _settings.allowScreenshot = val
-        save()
-        _listeners.forEach(fn => fn())
+        config.set("allowScreenshot", val)
     },
 
     setAllowWindowClose(val: boolean) {
-        _settings.allowWindowClose = val
-        save()
-        _listeners.forEach(fn => fn())
+        config.set("allowWindowClose", val)
     },
 
     // Read live by the standalone nidara-mcp process (it re-reads
     // ai.json on every tool call), so flipping this needs no restarts.
     setAllowMcp(val: boolean) {
-        _settings.allowMcp = val
-        save()
-        _listeners.forEach(fn => fn())
+        config.set("allowMcp", val)
     },
 
     // Read live by the standalone nidara-a11y helper (re-reads ai.json per
@@ -215,18 +223,8 @@ export const agentConfig = {
     // populate their AT-SPI tree when it's on. Best-effort; never flipped back
     // off on disable (it may be wanted by other assistive tech).
     setAllowComputerUse(val: boolean) {
-        _settings.allowComputerUse = val
-        save()
-        if (val) {
-            try {
-                GLib.spawn_command_line_async(
-                    "gsettings set org.gnome.desktop.interface toolkit-accessibility true",
-                )
-            } catch (e) {
-                console.error("[AgentConfig] enabling toolkit-accessibility failed:", e)
-            }
-        }
-        _listeners.forEach(fn => fn())
+        config.set("allowComputerUse", val)
+        if (val) enableToolkitAccessibility()
     },
 
     // Read live by the standalone nidara-act helper + the do_app_action MCP
@@ -235,41 +233,33 @@ export const agentConfig = {
     // you can't drive what you can't see. The shell renders a bar indicator +
     // kill switch while this is on.
     setAllowComputerControl(val: boolean) {
-        _settings.allowComputerControl = val
-        if (val && !_settings.allowComputerUse) {
-            _settings.allowComputerUse = true
-            try {
-                GLib.spawn_command_line_async(
-                    "gsettings set org.gnome.desktop.interface toolkit-accessibility true",
-                )
-            } catch (e) {
-                console.error("[AgentConfig] enabling toolkit-accessibility failed:", e)
-            }
-        }
-        save()
-        _listeners.forEach(fn => fn())
+        const implyUse = val && !_settings.allowComputerUse
+        // One write for both gates: a crash between them used to be able to leave
+        // control granted without the perception it requires.
+        config.update(implyUse
+            ? { allowComputerControl: val, allowComputerUse: true }
+            : { allowComputerControl: val })
+        if (implyUse) enableToolkitAccessibility()
     },
 
     // Read live by bin/nidara-agent (re-reads ai.json per turn), so flipping
     // these takes effect on the next message with no restart.
     setAllowFileRead(val: boolean) {
-        _settings.allowFileRead = val
         // Writing without reading is how you clobber a file someone else lives
         // in: every write path in the daemon re-reads first (the skill makes it a
         // rule). Revoking read therefore revokes write too, rather than leaving a
-        // combination that can only corrupt.
-        if (!val) _settings.allowFileWrite = false
-        save()
-        _listeners.forEach(fn => fn())
+        // combination that can only corrupt — and both land in ONE write.
+        config.update(val
+            ? { allowFileRead: true }
+            : { allowFileRead: false, allowFileWrite: false })
     },
 
     // Write REQUIRES read, mirroring allowComputerControl → allowComputerUse:
     // you can't safely edit what you can't see.
     setAllowFileWrite(val: boolean) {
-        _settings.allowFileWrite = val
-        if (val) _settings.allowFileRead = true
-        save()
-        _listeners.forEach(fn => fn())
+        config.update(val
+            ? { allowFileWrite: true, allowFileRead: true }
+            : { allowFileWrite: false })
     },
 
     // ── Assistant brain setters ─────────────────────────────────────────────
@@ -280,20 +270,25 @@ export const agentConfig = {
      *  derived fields the daemon reads are always consistent with the pick. */
     setBrainProvider(id: string) {
         const p = providerById(id)
-        _settings.brainProvider = p ? p.id : ""
-        _settings.brainBackend = p ? p.backend : ""
-        if (p) {
+        if (!p) {
+            config.update({ brainProvider: "", brainBackend: "" })
+            return
+        }
+        // All four derived fields in ONE write, because a half-applied provider is
+        // exactly the state bin/nidara-agent cannot make sense of: it re-reads this
+        // file per turn and would find a backend that disagrees with its endpoint.
+        config.update({
+            brainProvider: p.id,
+            brainBackend: p.backend,
             // No fallback default: an unset model is an honest empty state the user
             // fills from the catalog, not a stale guess pretending to be configured.
-            _settings.brainModel = _settings.brainModels[p.id] || ""
+            brainModel: _settings.brainModels[p.id] || "",
             // Editable-endpoint providers (Ollama, Custom) restore the URL the user
             // last set for THEM; hosted providers are always pinned to their own.
-            _settings.brainEndpoint = p.editableEndpoint
+            brainEndpoint: p.editableEndpoint
                 ? (_settings.brainEndpoints[p.id] || p.endpoint)
-                : p.endpoint
-        }
-        save()
-        _listeners.forEach(fn => fn())
+                : p.endpoint,
+        })
     },
 
     /** Empty is a valid value: clearing the field must actually clear it, and must
@@ -301,20 +296,32 @@ export const agentConfig = {
      *  time you come back to this provider (user-caught 2026-07-21: "mock" kept
      *  coming back). */
     setBrainModel(val: string) {
-        _settings.brainModel = val
-        if (_settings.brainProvider) {
-            if (val) _settings.brainModels[_settings.brainProvider] = val
-            else delete _settings.brainModels[_settings.brainProvider]
+        const provider = _settings.brainProvider
+        if (!provider) {
+            config.set("brainModel", val)
+            return
         }
-        save()
-        _listeners.forEach(fn => fn())
+        // A NEW object, never the stored one mutated in place: the store compares
+        // objects by value to decide whether anything moved, so handing it back
+        // the same reference it already holds would read as "unchanged" and
+        // persist nothing.
+        const brainModels = { ..._settings.brainModels }
+        if (val) brainModels[provider] = val
+        else delete brainModels[provider]
+        config.update({ brainModel: val, brainModels })
     },
 
     setBrainEndpoint(val: string) {
-        _settings.brainEndpoint = val
-        if (_settings.brainProvider) _settings.brainEndpoints[_settings.brainProvider] = val
-        save()
-        _listeners.forEach(fn => fn())
+        const provider = _settings.brainProvider
+        if (!provider) {
+            config.set("brainEndpoint", val)
+            return
+        }
+        // Copied, not mutated — see setBrainModel.
+        config.update({
+            brainEndpoint: val,
+            brainEndpoints: { ..._settings.brainEndpoints, [provider]: val },
+        })
     },
 
     onChange(fn: () => void) {

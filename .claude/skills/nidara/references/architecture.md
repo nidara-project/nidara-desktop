@@ -1352,16 +1352,24 @@ semantics reads a value the user never chose in the new sense, out of a file it 
 for months. **The file is user state; the SHAPE of it belongs to the code.**
 
 So loading goes through **`loadKnown(DEFAULTS, JSON.parse(...))`** (`core/configFile.ts`), which keeps
-only keys the current shape declares and only where the type still matches. `RegionConfig` and
-`AgentConfig` still call it directly; `ThemeManager` predates it and does the same thing by hand
-(field-by-field load, explicit save object) — either is fine, a spread is not.
+only keys the current shape declares and only where the type still matches. `RegionConfig` is the
+last module calling it directly, and the dock's legacy-file migration uses it on its own (below);
+`ThemeManager` predates it and does the same thing by hand (field-by-field load, explicit save
+object) — either is fine, a spread is not.
 
 **The preferred form is now `defineConfig(file, DEFAULTS, validators?)`**, which owns the whole
 lifecycle and not just the load step: the path, the durable write, `loadKnown`, an equality guard so
 an unchanged value touches neither the disk nor a listener, and **per-key subscription with a
 disposer**. A module on it declares its shape and its behaviour and nothing else — `GamingManager`
 went from 66 lines of code to 32 that way. On it today: `NotifConfig`, `barState`, `GamingManager`,
-`NightLightManager`, `RecordingConfig`.
+`NightLightManager`, `RecordingConfig`, `AgentConfig` and the dock's `state.ts` — every plain
+preference file the shell owns. What is left off it is off it on purpose (see the exceptions below).
+
+`update(patch)` is the form for a setting with an INVARIANT: `allowComputerControl` implies
+`allowComputerUse`, `allowFileWrite` implies `allowFileRead`, and picking a brain provider derives
+three more fields. Each lands as one write and one notification pass, so no reader — including
+`bin/nidara-agent`, which re-reads `ai.json` every turn from another process — can catch the file
+with half the invariant applied.
 
 🔑 **A migrated module still owns its notification contract.** `NightLightManager` keeps its
 `changed` GObject signal because a consumer re-reads two fields at once, but it now emits it from
@@ -1376,6 +1384,19 @@ half — right type, wrong shape — which is the case every module used to hand
 typeof check and then indexes `CODECS` to `undefined`). The file is user state we do not control, so
 an unusable value falls back to its default and the desktop starts. A bad value passed to `set`
 comes from OUR code, and swallowing it there would hide the bug instead of the call site fixing it.
+
+⚠️ **An object-valued key must be REPLACED, never mutated in place.** The store decides whether
+anything moved before it writes, and for objects it compares by value (`JSON.stringify`). Handing
+`set`/`update` back the same reference it already holds therefore reads as "unchanged" and persists
+NOTHING. `AgentConfig`'s per-provider maps (`brainModels`, `brainEndpoints`) are the case in the
+tree: they build `{ ...current, [provider]: value }` rather than assigning into the stored object.
+
+⚠️ **A file migration writes the DECLARED SHAPE, not a byte copy.** The dock's settings file moved
+out of the bare `~/.config/` root, and copying it across carries retired keys to the new path, where
+they sit until the user happens to change a dock setting — the one-way ratchet again, just relocated.
+The migration runs before the store exists and passes the old content through `loadKnown` with the
+same validators the store gets, so what lands at the new path is exactly what the code can use. Both
+share one `DOCK_VALIDATORS` const; two copies of a validator list is how they come to disagree.
 
 ⚠️ **`gaming.json` has a SECOND reader with a different parser.** `readGamingCfg()` in
 `config/hypr/hyprland.lua` reads the raw text with `raw:match('"wallpaperMode"%s*:%s*"([^"]+)"')` and
