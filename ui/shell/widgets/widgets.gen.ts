@@ -9,7 +9,6 @@ import { AtomicWidget } from "../common/widget-kit"
 import battery from "./battery"
 import bluetooth from "./bluetooth"
 import brightness from "./brightness"
-import calculator from "./calculator"
 import clipboard from "./clipboard"
 import cpuMemory from "./cpu-memory"
 import darkMode from "./dark-mode"
@@ -27,7 +26,6 @@ export const ALL_WIDGETS: AtomicWidget[] = [
     battery,
     bluetooth,
     brightness,
-    calculator,
     clipboard,
     cpuMemory,
     darkMode,

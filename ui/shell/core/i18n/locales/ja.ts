@@ -595,7 +595,6 @@ export default {
     "widget.dark-mode.sub.dark": "ダーク",
     "widget.dark-mode.sub.light": "ライト",
     "widget.focus.name": "サイレント",
-    "widget.calculator.name": "計算機",
     "widget.cpu-memory.name": "CPU とメモリ",
     "widget.cpu-memory.cpu": "CPU",
     "widget.cpu-memory.ram": "メモリ",

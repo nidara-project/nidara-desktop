@@ -97,5 +97,4 @@ export const CC_DEFAULT_ORDER: string[] = [
     "focus",
     "volume",
     "cpu_memory",
-    "calculator",
 ]

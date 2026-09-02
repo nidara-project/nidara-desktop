@@ -31,7 +31,6 @@ const Icons = {
     moon:         f("moon"),
     sun:          f("sun"),
     sunset:       f("sunset"),
-    calculator:   f("calculator"),
     info:         f("info"),
     key:          f("key"),
     filePen:      f("file-pen"),
