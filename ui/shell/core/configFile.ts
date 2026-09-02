@@ -2,6 +2,25 @@ import GLib from "gi://GLib"
 import { readFile, writeFile } from "../../lib/file"
 
 /**
+ * Per-key shape guard for the values read back off disk.
+ *
+ * `loadKnown` already refuses a saved value whose `typeof` disagrees with the
+ * default, which catches a string where the code will do arithmetic. It cannot
+ * catch the other half: a value of the RIGHT type and the wrong shape. Every
+ * module that had a setting like that wrote the check by hand — night-light's
+ * `/^\d{2}:\d{2}$/` on the two schedule times, and recording's enums, where a
+ * bogus `format` survives the typeof check and then indexes `CODECS` to
+ * `undefined`. This is that check, declared beside the shape it belongs to.
+ *
+ * ⚠️ It runs on LOAD ONLY, and that line is deliberate. The file is user state
+ * we do not control, so a value we cannot use falls back to the default and the
+ * desktop starts. A bad value passed to `set` comes from OUR code, and a store
+ * that silently swallowed it would hide the bug instead of the call site fixing
+ * it — setters that need clamping still clamp at the setter.
+ */
+export type ConfigValidators<T> = { [K in keyof T]?: (value: T[K]) => boolean }
+
+/**
  * Loading a settings JSON without letting it accumulate.
  *
  * Every config module here is the same shape: a `DEFAULTS` object describing the
@@ -27,7 +46,11 @@ import { readFile, writeFile } from "../../lib/file"
  * widget id, so every key is unknown by construction and a spread is right there.
  * The test is whether `DEFAULTS` enumerates the valid keys or merely seeds them.
  */
-export function loadKnown<T extends object>(defaults: T, data: unknown): T {
+export function loadKnown<T extends object>(
+    defaults: T,
+    data: unknown,
+    validate?: ConfigValidators<T>,
+): T {
     const out = { ...defaults }
     if (!data || typeof data !== "object" || Array.isArray(data)) return out
 
@@ -40,6 +63,8 @@ export function loadKnown<T extends object>(defaults: T, data: unknown): T {
         // wholesale — they are the per-key maps (brainModels, brainEndpoints),
         // whose inner keys are data, not shape.
         if (typeof saved !== typeof defaults[key]) continue
+        const check = validate?.[key]
+        if (check && !check(saved as T[keyof T])) continue
         out[key] = saved as T[keyof T]
     }
     return out
@@ -67,19 +92,24 @@ export interface ConfigFileStore<T extends object> {
  *
  * Provides:
  *  - durable, atomic persistence via `writeFile` (CONSISTENT | DURABLE)
- *  - key-filtered deserialization via `loadKnown` (retired keys drop)
+ *  - key-filtered deserialization via `loadKnown` (retired keys drop), with an
+ *    optional per-key `validate` for values whose type is right and shape wrong
  *  - equality guard: identical values do not touch the filesystem or notify
  *  - per-key subscription and grouped updates with a single write
  *  - explicit disposer on every subscription
  */
-export function defineConfig<T extends object>(fileName: string, defaults: T): ConfigFileStore<T> {
+export function defineConfig<T extends object>(
+    fileName: string,
+    defaults: T,
+    validate?: ConfigValidators<T>,
+): ConfigFileStore<T> {
     const filePath = `${GLib.get_user_config_dir()}/nidara/${fileName}`
     const state: T = { ...defaults }
 
     try {
         if (GLib.file_test(filePath, GLib.FileTest.EXISTS)) {
             const raw = JSON.parse(readFile(filePath))
-            Object.assign(state, loadKnown(defaults, raw))
+            Object.assign(state, loadKnown(defaults, raw, validate))
         }
     } catch (e) {
         console.error(`[defineConfig:${fileName}] Failed to load:`, e)

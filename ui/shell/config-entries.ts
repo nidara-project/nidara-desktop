@@ -14,14 +14,14 @@ import { AGENT_PROVIDERS } from "./core/AgentProviders"
 import Theme, { TEXT_SCALE_MIN, TEXT_SCALE_MAX } from "./core/ThemeManager"
 import { ACCENT_PALETTE, GLASS_RANGE, type AccentKey, type ShellAppearance } from "./core/NidaraTheme"
 import NightLight from "./core/NightLightManager"
-import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "./core/WallpaperManager"
+import Wallpaper, { TRANSITION_LABELS, TRANSITIONS, type TransitionType } from "./core/WallpaperManager"
 import notifConfig from "./core/NotifConfig"
 import { dontDisturb, setDontDisturb } from "./core/NotifService"
 import { reduceMotion, setReduceMotion, onReduceMotionChange } from "./core/ReduceMotion"
 import recordingConfig, {
     FORMATS, QUALITIES, type RecordFormat, type RecordQuality,
 } from "./core/RecordingConfig"
-import Gaming, { type WallpaperMode } from "./core/GamingManager"
+import Gaming, { WALLPAPER_MODES, type WallpaperMode } from "./core/GamingManager"
 import agentConfig from "./core/AgentConfig"
 import { dockSettings, updateDockSettings, onDockSettingsChanged, type DockPosition } from "./surfaces/dock/state"
 import { barConfig } from "./surfaces/bar/barState"
@@ -136,18 +136,6 @@ const onWallpaperCfg = (read: () => any) => (apply: (v: any) => void) => {
     apply(read())
     const id = Wallpaper.connect("changed", () => apply(read()))
     return () => safeDisconnect(Wallpaper, id)
-}
-
-const onNightLightCfg = (read: () => any) => (apply: (v: any) => void) => {
-    apply(read())
-    const id = NightLight.connect("changed", () => apply(read()))
-    return () => safeDisconnect(NightLight, id)
-}
-
-const onGamingCfg = (read: () => any) => (apply: (v: any) => void) => {
-    apply(read())
-    const id = Gaming.connect("changed", () => apply(read()))
-    return () => safeDisconnect(Gaming, id)
 }
 
 const onAiCfg = (read: () => any) => (apply: (v: any) => void) => {
@@ -282,7 +270,7 @@ export function registerConfigEntries() {
     registerConfig("wallpaper.transition", {
         desc: "Wallpaper transition animation style.",
         type: "enum",
-        enum: Object.keys(TRANSITION_LABELS) as TransitionType[],
+        enum: TRANSITIONS,
         get: () => Wallpaper.transition,
         set: v => Wallpaper.setTransition(v as TransitionType),
         subscribe: onWallpaperCfg(() => Wallpaper.transition),
@@ -551,7 +539,10 @@ export function registerConfigEntries() {
         type: "boolean",
         get: () => NightLight.enabled,
         set: v => NightLight.setEnabled(v as boolean),
-        subscribe: onNightLightCfg(() => NightLight.enabled),
+        subscribe: (apply) => {
+            apply(NightLight.enabled)
+            return NightLight.subscribe("enabled", apply)
+        },
         ui: {
             i18n: "settings.appearance.night-light",
         },
@@ -563,7 +554,10 @@ export function registerConfigEntries() {
         max: 6500,
         get: () => NightLight.temperature,
         set: v => NightLight.setTemperature(v as number),
-        subscribe: onNightLightCfg(() => NightLight.temperature),
+        subscribe: (apply) => {
+            apply(NightLight.temperature)
+            return NightLight.subscribe("temperature", apply)
+        },
         ui: {
             i18n: "settings.appearance.night-light-temp",
             slider: { unit: "K", icons: [Icons.minus, Icons.plus] },
@@ -574,7 +568,10 @@ export function registerConfigEntries() {
         type: "boolean",
         get: () => NightLight.scheduleEnabled,
         set: v => NightLight.setScheduleEnabled(v as boolean),
-        subscribe: onNightLightCfg(() => NightLight.scheduleEnabled),
+        subscribe: (apply) => {
+            apply(NightLight.scheduleEnabled)
+            return NightLight.subscribe("scheduleEnabled", apply)
+        },
         ui: {
             i18n: "settings.appearance.night-light-schedule",
         },
@@ -764,10 +761,13 @@ export function registerConfigEntries() {
     registerConfig("gaming.transition", {
         desc: "Wallpaper transition animation style when launching a game.",
         type: "enum",
-        enum: Object.keys(TRANSITION_LABELS) as TransitionType[],
+        enum: TRANSITIONS,
         get: () => Gaming.transition,
         set: v => Gaming.setTransition(v as TransitionType),
-        subscribe: onGamingCfg(() => Gaming.transition),
+        subscribe: (apply) => {
+            apply(Gaming.transition)
+            return Gaming.subscribe("transition", apply)
+        },
         ui: {
             i18n: "settings.gaming.transition",
             optI18n: k => TRANSITION_LABELS[k as TransitionType] ?? k,
@@ -778,7 +778,10 @@ export function registerConfigEntries() {
         type: "boolean",
         get: () => Gaming.performanceProfile,
         set: v => Gaming.setPerformanceProfile(v as boolean),
-        subscribe: onGamingCfg(() => Gaming.performanceProfile),
+        subscribe: (apply) => {
+            apply(Gaming.performanceProfile)
+            return Gaming.subscribe("performanceProfile", apply)
+        },
         ui: {
             i18n: "settings.gaming.performance-profile",
         },
@@ -791,10 +794,13 @@ export function registerConfigEntries() {
     registerConfig("gaming.wallpaperMode", {
         desc: "Wallpaper while gaming: Steam hero artwork, a custom image, or unchanged.",
         type: "enum",
-        enum: ["artwork", "custom", "none"],
+        enum: WALLPAPER_MODES,
         get: () => Gaming.wallpaperMode,
         set: v => Gaming.setWallpaperMode(v as WallpaperMode),
-        subscribe: onGamingCfg(() => Gaming.wallpaperMode),
+        subscribe: (apply) => {
+            apply(Gaming.wallpaperMode)
+            return Gaming.subscribe("wallpaperMode", apply)
+        },
         ui: {
             i18n: "settings.gaming.wallpaper-mode",
             control: "segmented",

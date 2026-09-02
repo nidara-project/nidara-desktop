@@ -1303,7 +1303,7 @@ These are GObject singletons. Widgets subscribe to them via `notify::prop`. **No
 | `ThemeManager.ts` | 534 | GTK/icon/cursor theme, dark mode, CSS providers (main/font/tokens/tint), hot-reload of `style.css` in dev. Also pushes the accent into Hyprland's **groupbar** active-tab color (`syncHyprlandGroupAccent`, at boot + on accent change, via `hs.evalLua`) — the one place accent enters compositor chrome; the rest of the group styling is static in `hyprland.lua`'s `group` block (glass borders like windows). Gotcha: a groupbar **bakes its colors at group creation** — config changes only affect groups made afterwards. **Font gotcha:** the interface font is the one appearance prop NOT in `appearance.json` — it's delegated to the GNOME `font-name` gsetting (`syncFont`/`setFont`/`settings.ini` all read it). ⚠️ **That value is a PANGO font string and must be parsed with `Pango.FontDescription.from_string`, never a regex** — only its simplest form is `Family <int>`; a style word (`Inter Variable Medium 11`), a fractional size or a variation axis (`… @wght=500`) are all legal and all come out of the Settings font button. A `/^(.*?) (\d+)$/` here silently resolved to `sans-serif`, so picking such a font dropped the whole desktop onto fontconfig's default with no error anywhere but the `Font Sync:` log line (found 2026-08-11; a dev machine had been rendering Noto Sans for months). `applyAll` **seeds it to `Inter 15px` on first boot**, but only when `get_user_value("font-name") === null` (factory default, not an explicit pick) — otherwise a fresh Arch + GTK ≥4.22 leaves it at `Adwaita Sans 11`. `monospace-font-name` is seeded the same way to `JetBrains Mono 11` (the schema default names Adwaita Mono, a font Nidara doesn't install; JetBrains Mono ships with every install — as the plain typeface plus `ttf-nerd-fonts-symbols-mono`, never the 232 MiB patched `ttf-jetbrains-mono-nerd`). ⚠️ **Sizes are stored in absolute PIXELS** (`snapFontToWholePixels`, one door on the way in), which has a consequence worth knowing before touching anything font-related: an absolute size is immune to dpi, and `text-scaling-factor` works by multiplying dpi — so the accessibility slider only moves text because `syncFontsToScale` applies the factor in TypeScript, from an unscaled `state.fontBase` kept in `appearance.json`. The getters split accordingly: `interfaceFont`/`monoFont` return the BASE (what the picker edits), `effectiveFont` returns base × factor (what `settings.ini` must carry, since a GTK3 app won't apply the factor to an absolute size itself). |
 | `NidaraTheme.ts` | 436 | Token engine: `generateTokensCss()` emits `@define-color` + `--nidara-*` for accent, transparency, materials, shadows, tint. Holds the canonical `ACCENT_PALETTE`. Syncs Kvantum/qt. |
 | `RegionConfig.ts` | 218 | Time/date format, timezone (`region.json`). |
-| `configFile.ts` | 44 | `loadKnown(DEFAULTS, parsedJson)` — the one way a settings JSON is loaded. See the rule below. |
+| `configFile.ts` | 205 | `defineConfig(file, DEFAULTS, validators?)` — the whole lifecycle of a settings JSON: load, per-key validation, durable write, equality guard, per-key subscription. `loadKnown` is the load step alone, for modules not yet on it. See the rule below. |
 | `InputConfig.ts` | 194 | Keyboard/mouse/touchpad → writes `nidara-settings.lua`. |
 | `HyprlandState.ts` | ~290 | Reactive wrapper over AstalHyprland (clients/workspaces/monitors + dispatch helpers) **and the ONLY door to hyprctl**. `focusedClient` is a **reconciled** accessor, not a proxy — it enforces one invariant, *the focused window is always on the focused workspace*. It was built against two opposite EXCLUSIVE-era lies (the null Hyprland announced when a layer surface released an EXCLUSIVE grab, and the stale non-null it kept returning while one was HELD, which left the app grid's workspace strip naming the workspace you had just left) — **both causes are gone with the focus-grab migration, and the accessor stays anyway, because it is now the INPUT to the root fix rather than a patch over it**: the remembered window is who `restoreFocusAfterGrab` hands the keyboard back TO, and validating the live answer is that repair's correctness guard (focusing a window on another workspace DRAGS THAT WORKSPACE over the user). Audited 2026-08-07; don't simplify it back. Fallback chain and the scratchpad exception in `state-and-ipc.md`; read it, never `hl.focused_client` — services/widgets never shell out to hyprctl directly; they call (or add) a method here. Vocabulary: dispatch helpers (`focusWindow`/`closeWindow`/`floatWindow`/`togglePseudo`/`togglePin`/`toggleFullscreen`/`centerWindow`/`sendToWorkspace`/`toggleGroup`/…, all `hl.dsp.*` Lua via a private `_dispatch` that logs the offending call), `getClientJson(addr)` (one-shot raw `clients -j` read for fields AstalHyprland.Client lacks: `pinned`, `grouped` — on demand only, never in `_refresh`), `evalLua(call)` (live config changes — the Lua parser rejects `keyword`), `getOptionInt(name)` / `getOptionBool(name, fallback)` (sync) and `getOptionIntAsync` / `getOptionBoolAsync` / `getOptionFloatAsync` / `getOptionStrAsync` (async batch re-syncs) — one reader per option TYPE, because a `getoption -j` payload carries only its own type's field and naming the wrong one is a silent `undefined` (#338); raw `getOptionJson(name)` stays for anything they don't cover, `setCursor(theme, size)`, `setRealCursorVisible(visible)` (`cursor:invisible`; rendering only, input unaffected — sole caller is the agent-pointer overlay, which hides the real pointer for the length of an AI action because the hardware cursor plane paints above every layer surface; **whoever hides it owns restoring it on every exit path**), `setGlow(enabled)` + `supportsGlow()` (`decoration:glow`, driven only by `AgentGlow.ts`), `version()`. **`focusWorkspaceFromShell(id)` is the single door for a workspace switch driven by one of OUR surfaces** (the app grid's strip, the island's overview) — it forwards to `focusWorkspace` today, and exists so those two cannot drift apart; its predecessor `focusWorkspaceOnGrabRelease` is DELETED, along with the EXCLUSIVE-era grab-lending it did (`tech-debt.md` §53). `restoreFocusAfterGrab()` is the one that still does real work: after our machinery lets go of a focus grab, the compositor refocuses by POINTER, so a dismissal with the cursor over the wallpaper leaves the session with no active window — it hands the keyboard back, guarded to fire only when nothing is focused and only on the workspace being looked at. Caches **effective** config AstalHyprland doesn't expose (`availableModesByName` — `Monitor.available_modes` is always null) and emits `config-reloaded` on Hyprland's `configreloaded` IPC event (effective-config consumers re-sync on it). Exempt from the single-door rule: config text *written for other daemons* (the hypridle config generated by Power.tsx — those lines execute outside the shell; the before/after-sleep hooks themselves are static scripts in `bin/`). |
 | `NightLightManager.ts` | 174 | Blue-light filter via hyprsunset (`night-light.json`). |
@@ -1352,14 +1352,45 @@ semantics reads a value the user never chose in the new sense, out of a file it 
 for months. **The file is user state; the SHAPE of it belongs to the code.**
 
 So loading goes through **`loadKnown(DEFAULTS, JSON.parse(...))`** (`core/configFile.ts`), which keeps
-only keys the current shape declares and only where the type still matches. `RegionConfig`,
-`NotifConfig`, `AgentConfig` and `RecordingConfig` all use it; `ThemeManager` predates it and does the
-same thing by hand (field-by-field load, explicit save object) — either is fine, a spread is not.
+only keys the current shape declares and only where the type still matches. `RegionConfig` and
+`AgentConfig` still call it directly; `ThemeManager` predates it and does the same thing by hand
+(field-by-field load, explicit save object) — either is fine, a spread is not.
+
+**The preferred form is now `defineConfig(file, DEFAULTS, validators?)`**, which owns the whole
+lifecycle and not just the load step: the path, the durable write, `loadKnown`, an equality guard so
+an unchanged value touches neither the disk nor a listener, and **per-key subscription with a
+disposer**. A module on it declares its shape and its behaviour and nothing else — `GamingManager`
+went from 66 lines of code to 32 that way. On it today: `NotifConfig`, `barState`, `GamingManager`,
+`NightLightManager`, `RecordingConfig`.
+
+🔑 **A migrated module still owns its notification contract.** `NightLightManager` keeps its
+`changed` GObject signal because a consumer re-reads two fields at once, but it now emits it from
+ONE `subscribeAll` on the store instead of from each setter — so the signal fires per real change
+rather than per call. `GamingManager` dropped its signal entirely: after the migration its only
+subscriber was `config-entries.ts` re-reading all four fields whenever any one moved.
+
+⚠️ **The third argument, `validators`, runs on LOAD ONLY, and that line is deliberate.** `loadKnown`
+already refuses a value whose `typeof` disagrees with the default; the validator catches the other
+half — right type, wrong shape — which is the case every module used to hand-code (night-light's
+`/^\d{2}:\d{2}$/` on its schedule times; recording's `format`, a plain string that survives the
+typeof check and then indexes `CODECS` to `undefined`). The file is user state we do not control, so
+an unusable value falls back to its default and the desktop starts. A bad value passed to `set`
+comes from OUR code, and swallowing it there would hide the bug instead of the call site fixing it.
+
+⚠️ **`gaming.json` has a SECOND reader with a different parser.** `readGamingCfg()` in
+`config/hypr/hyprland.lua` reads the raw text with `raw:match('"wallpaperMode"%s*:%s*"([^"]+)"')` and
+three siblings — Lua has no JSON parser and the compositor config must not gain a dependency for four
+fields. So the key names and the string-valued shape of that file are a contract: renaming a key on
+the TypeScript side compiles, passes every check, and silently drops game mode to its defaults.
 
 ⚠️ **`WidgetConfig` is the exception and its spread must stay**: its keys ARE the data (widget ids),
 so `DEFAULTS` seeds them rather than enumerating the valid ones, and `loadKnown` there would drop
 every widget the shipped defaults don't happen to name — third-party ones included. **The test is
-whether `DEFAULTS` enumerates the valid keys or merely seeds them.**
+whether `DEFAULTS` enumerates the valid keys or merely seeds them.** `cc_layout.json`
+(`CCLayoutManager`) fails the same test twice over: its keys are widget ids AND its loader still
+accepts three historical formats, so it stays off the store too. `app-frequency.json` is a third
+kind — a hot cache rather than a preference, written on every app launch, which wants a different
+write policy from a setting a human changes twice a year.
 
 🔑 The cheap instrument that finds these: for every key in each `~/.config/nidara/*.json`, count
 references in the codebase. Zero = orphan. But an orphan on disk is not the same as a resurrected one

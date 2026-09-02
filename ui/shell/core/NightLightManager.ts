@@ -1,10 +1,42 @@
 import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import { readFile, writeFile } from "../../lib/file"
+import { defineConfig } from "./configFile"
 
-const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/night-light.json`
 const DEFAULT_TEMP = 4000
+const TEMP_MIN = 2700
+const TEMP_MAX = 6500
+
+/** `HH:MM`, the only shape `_isInSchedule` can do arithmetic on. A hand-edited
+ *  "8pm" is a string like any other, so `loadKnown`'s typeof check waves it
+ *  through and `"8pm".split(":")` then yields NaN minutes — a schedule that
+ *  never fires and never explains itself. */
+const isTime = (v: string) => /^\d{2}:\d{2}$/.test(v)
+
+interface NightLightSettings {
+    enabled: boolean
+    temperature: number
+    scheduleEnabled: boolean
+    scheduleFrom: string
+    scheduleTo: string
+}
+
+const DEFAULTS: NightLightSettings = {
+    enabled: false,
+    temperature: DEFAULT_TEMP,
+    scheduleEnabled: false,
+    scheduleFrom: "20:00",
+    scheduleTo: "07:00",
+}
+
+const config = defineConfig<NightLightSettings>("night-light.json", DEFAULTS, {
+    scheduleFrom: isTime,
+    scheduleTo: isTime,
+    // The value is passed to `hyprsunset -t`. Out of range it is not a crash,
+    // it is a screen the user cannot read and a setting whose slider cannot
+    // reach the value that put it there.
+    temperature: v => Number.isFinite(v) && v >= TEMP_MIN && v <= TEMP_MAX,
+})
 
 class NightLightManager extends GObject.Object {
     static {
@@ -14,45 +46,42 @@ class NightLightManager extends GObject.Object {
         }, this)
     }
 
-    private _enabled = false
-    private _temperature = DEFAULT_TEMP
-    private _scheduleEnabled = false
-    private _scheduleFrom = "20:00"
-    private _scheduleTo   = "07:00"
     private _proc: Gio.Subprocess | null = null
     private _applyDebounce = 0
     private _scheduleTimer = 0
 
     constructor() {
         super()
-        this._load()
-        if (this._scheduleEnabled) {
-            // Always recompute from current time — don't trust the saved _enabled value
-            this._enabled = this._isInSchedule()
+        // One notification path, not two. Every setter below writes through the
+        // store, and the store is what decides a value actually moved — so the
+        // signal fires once per real change instead of once per call.
+        config.subscribeAll(() => this.emit("changed"))
+
+        if (config.get("scheduleEnabled")) {
+            // Always recompute from current time — don't trust the saved
+            // `enabled` value, which describes whichever half of the schedule we
+            // were in when the shell last ran.
+            config.set("enabled", this._isInSchedule())
             this._startScheduleTimer()
         }
-        if (this._enabled) this._spawn()
+        if (config.get("enabled")) this._spawn()
     }
 
-    get enabled()         { return this._enabled }
-    get temperature()     { return this._temperature }
-    get scheduleEnabled() { return this._scheduleEnabled }
-    get scheduleFrom()    { return this._scheduleFrom }
-    get scheduleTo()      { return this._scheduleTo }
+    get enabled()         { return config.get("enabled") }
+    get temperature()     { return config.get("temperature") }
+    get scheduleEnabled() { return config.get("scheduleEnabled") }
+    get scheduleFrom()    { return config.get("scheduleFrom") }
+    get scheduleTo()      { return config.get("scheduleTo") }
 
     setEnabled(val: boolean) {
-        this._enabled = val
+        config.set("enabled", val)
         if (val) this._spawn()
         else this._kill()
-        this._save()
-        this.emit("changed")
     }
 
     setTemperature(k: number) {
-        this._temperature = Math.round(k)
-        this._save()
-        this.emit("changed")
-        if (!this._enabled) return
+        config.set("temperature", Math.round(k))
+        if (!this.enabled) return
         if (this._applyDebounce > 0) GLib.source_remove(this._applyDebounce)
         this._applyDebounce = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
             this._kill()
@@ -63,36 +92,30 @@ class NightLightManager extends GObject.Object {
     }
 
     setScheduleEnabled(val: boolean) {
-        this._scheduleEnabled = val
+        config.set("scheduleEnabled", val)
         if (val) {
             this._checkSchedule()
             this._startScheduleTimer()
         } else {
             this._stopScheduleTimer()
         }
-        this._save()
-        this.emit("changed")
     }
 
     setScheduleFrom(time: string) {
-        this._scheduleFrom = time
-        if (this._scheduleEnabled) this._checkSchedule()
-        this._save()
-        this.emit("changed")
+        config.set("scheduleFrom", time)
+        if (this.scheduleEnabled) this._checkSchedule()
     }
 
     setScheduleTo(time: string) {
-        this._scheduleTo = time
-        if (this._scheduleEnabled) this._checkSchedule()
-        this._save()
-        this.emit("changed")
+        config.set("scheduleTo", time)
+        if (this.scheduleEnabled) this._checkSchedule()
     }
 
     private _isInSchedule(): boolean {
         const now = new Date()
         const nowMins = now.getHours() * 60 + now.getMinutes()
-        const [fh, fm] = this._scheduleFrom.split(":").map(Number)
-        const [th, tm] = this._scheduleTo.split(":").map(Number)
+        const [fh, fm] = this.scheduleFrom.split(":").map(Number)
+        const [th, tm] = this.scheduleTo.split(":").map(Number)
         const fromMins = fh * 60 + fm
         const toMins   = th * 60 + tm
         // overnight schedule (e.g. 20:00 → 07:00) wraps past midnight
@@ -102,10 +125,9 @@ class NightLightManager extends GObject.Object {
 
     private _checkSchedule() {
         const inWindow = this._isInSchedule()
-        if (inWindow === this._enabled) return
-        this._enabled = inWindow
+        if (inWindow === this.enabled) return
+        config.set("enabled", inWindow)
         if (inWindow) this._spawn(); else this._kill()
-        this.emit("changed")
     }
 
     private _startScheduleTimer() {
@@ -127,7 +149,7 @@ class NightLightManager extends GObject.Object {
         this._kill()
         try {
             this._proc = Gio.Subprocess.new(
-                ["hyprsunset", "-t", String(this._temperature)],
+                ["hyprsunset", "-t", String(this.temperature)],
                 Gio.SubprocessFlags.NONE,
             )
         } catch (e) {
@@ -143,32 +165,9 @@ class NightLightManager extends GObject.Object {
         }
     }
 
-    private _save() {
-        const dir = `${GLib.get_user_config_dir()}/nidara`
-        if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
-            GLib.mkdir_with_parents(dir, 0o755)
-        writeFile(CONFIG_PATH, JSON.stringify({
-            enabled:         this._enabled,
-            temperature:     this._temperature,
-            scheduleEnabled: this._scheduleEnabled,
-            scheduleFrom:    this._scheduleFrom,
-            scheduleTo:      this._scheduleTo,
-        }, null, 2))
-    }
-
-    private _load() {
-        try {
-            if (GLib.file_test(CONFIG_PATH, GLib.FileTest.EXISTS)) {
-                const d = JSON.parse(readFile(CONFIG_PATH))
-                const validTime = (t: unknown) => typeof t === "string" && /^\d{2}:\d{2}$/.test(t)
-                this._enabled         = d.enabled         ?? false
-                this._temperature     = d.temperature     ?? DEFAULT_TEMP
-                this._scheduleEnabled = d.scheduleEnabled ?? false
-                this._scheduleFrom    = validTime(d.scheduleFrom) ? d.scheduleFrom : "20:00"
-                this._scheduleTo      = validTime(d.scheduleTo)   ? d.scheduleTo   : "07:00"
-            }
-        } catch (_) {}
-    }
+    /** Per-key change notification, for consumers that care about ONE field.
+     *  The `changed` signal stays for the ones that re-read several. */
+    subscribe = config.subscribe
 }
 
 export default new NightLightManager()
