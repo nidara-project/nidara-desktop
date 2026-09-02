@@ -16,6 +16,23 @@
 // picks its language by reading LANG (core/i18n/index.ts), so choosing the system
 // locale already decides what the installed desktop speaks; asking twice would let
 // the two disagree. The installer switches its own text the same way, below.
+//
+// ⚠️ Nor is there a separate "regional format" question, and that is NOT the
+// installer disagreeing with Settings, which does keep the two apart:
+//
+//   Language        → /etc/locale.conf, LANG            — system-wide
+//   Regional format → ~/.config/environment.d/…, LC_*   — this user only
+//
+// The installer writes only LANG (through archinstall's `locale_config.sys_lang`),
+// so the seven LC_* variables in core/RegionConfig.ts fall back to it — which is
+// exactly `regionalLocale: ""`, the value Settings shows as **"Same as language"**
+// and ships as its DEFAULT. A machine installed here lands in Settings' own
+// default state, and splitting them is one control away for the person who wants
+// German dates under a Spanish desktop.
+//
+// So the row is labelled "Language", not "Language and formats". Asking twice
+// would put a second question on a page we just folded down from three, to offer
+// a default that is already the default.
 
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
