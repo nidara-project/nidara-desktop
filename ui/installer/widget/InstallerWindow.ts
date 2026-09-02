@@ -11,9 +11,7 @@ import {
 import { ndIcon } from "../../lib/icons"
 import { Flow, type Step } from "../lib/flow"
 import { WelcomeStep } from "../steps/welcome"
-import { LanguageStep } from "../steps/language"
-import { KeyboardStep } from "../steps/keyboard"
-import { TimezoneStep } from "../steps/timezone"
+import { RegionStep } from "../steps/region"
 import { DiskStep } from "../steps/disk"
 import { AccountStep } from "../steps/account"
 import { SummaryStep } from "../steps/summary"
@@ -56,9 +54,7 @@ function header(onClose: () => void): {
 export function InstallerWindow(): Gtk.Window {
   const steps: Step[] = [
     WelcomeStep(),
-    LanguageStep(),
-    KeyboardStep(),
-    TimezoneStep(),
+    RegionStep(),
     DiskStep(),
     AccountStep(),
     SummaryStep(),
@@ -73,9 +69,7 @@ export function InstallerWindow(): Gtk.Window {
 
   const sidebarDefs = [
     { id: "welcome", titleKey: "welcomeTitle", iconName: "hand" },
-    { id: "language", titleKey: "languageTitle", iconName: "globe" },
-    { id: "keyboard", titleKey: "keyboardTitle", iconName: "keyboard" },
-    { id: "timezone", titleKey: "timezoneTitle", iconName: "clock" },
+    { id: "region", titleKey: "regionTitle", iconName: "globe" },
     { id: "disk", titleKey: "diskTitle", iconName: "hard-drive" },
     { id: "account", titleKey: "accountTitle", iconName: "user-round" },
     { id: "summary", titleKey: "summaryTitle", iconName: "clipboard-list" },

@@ -45,6 +45,12 @@ export interface AccountAnswer {
   hostname: string
 }
 
+export interface CountryAnswer {
+  /** ISO 3166-1 alpha-2 — the key lib/region.ts joins every other table on. */
+  code: string
+  name: string
+}
+
 export interface LanguageAnswer {
   locale: string
   sysLang: string
@@ -66,6 +72,8 @@ export interface TimezoneAnswer {
 }
 
 export interface Answers {
+  /** Asked first; it narrows the three below without answering them. */
+  country: CountryAnswer | null
   language: LanguageAnswer | null
   keyboard: KeyboardAnswer | null
   timezone: TimezoneAnswer | null
@@ -74,6 +82,7 @@ export interface Answers {
 }
 
 const _answers: Answers = {
+  country: null,
   language: null,
   keyboard: null,
   timezone: null,
@@ -83,6 +92,10 @@ const _answers: Answers = {
 
 export function getAnswers(): Readonly<Answers> {
   return _answers
+}
+
+export function setCountryAnswer(country: CountryAnswer | null): void {
+  _answers.country = country
 }
 
 export function setLanguageAnswer(language: LanguageAnswer | null): void {
