@@ -38,7 +38,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { execAsync } from "../../lib/process"
 import { NidaraList, NidaraRow, NidaraDropDownRow, NidaraSelectionCheck, NidaraScrolled } from "../../lib/nidara-kit"
-import { t, setLocale, type Locale } from "../lib/i18n"
+import { t, setLocale, getLocale, type Locale } from "../lib/i18n"
 import {
   getAnswers, setCountryAnswer, setLanguageAnswer, setKeyboardAnswer, setTimezoneAnswer,
 } from "../lib/answers"
@@ -48,31 +48,15 @@ import {
   type Country, type KeyboardLayout,
 } from "../lib/region"
 import { heading, prose } from "./common"
+import { countryName, countryHaystack, languageName, timezoneName } from "../../lib/locale-names"
 import { isPreview } from "../lib/preview"
 
 /**
- * A locale in its own language — "español de España", "português (Brasil)",
- * "日本語 (日本)" — which is the convention every installer follows and none of
- * them hand-writes. ICU is in GJS, so this is derived rather than transcribed.
- *
- * Falls back to the bare locale for the few glibc has and ICU does not
- * (`hrx_BR`, Hunsrik): showing the code is honest, inventing a name is not.
+ * Kept as a named re-export because the probe and the page both import it, and
+ * the naming itself now lives in ui/lib/locale-names.ts where the greeter and
+ * Settings can reach it too.
  */
-export function localeLabel(locale: string): string {
-  const tag = locale.split(".")[0].replace("_", "-")
-  try {
-    const name = new Intl.DisplayNames([tag], { type: "language" }).of(tag)
-    if (name && name !== tag) return name
-  } catch {}
-  return locale
-}
-
-/** `Europe/Madrid` → `Madrid`, `Europe`. Underscores are tzdata's, not words. */
-function tzParts(tz: string): [string, string] {
-  const i = tz.lastIndexOf("/")
-  if (i === -1) return [tz, ""]
-  return [tz.slice(i + 1).replace(/_/g, " "), tz.slice(0, i).replace(/_/g, " ")]
-}
+export const localeLabel = languageName
 
 /**
  * Which of the twelve translations the installer should wear, given the system
@@ -151,23 +135,37 @@ export function RegionStep(): Step {
         }
       }
 
-      for (const c of countries()) {
+      // Named in the READER's language, and sorted in it — tzdata's own order is
+      // alphabetical by its English spelling, which is not an ordering of the list
+      // anybody is looking at. `build()` re-runs on every language change
+      // (Flow.invalidate), so both follow the UI.
+      const ui = getLocale()
+      const named = countries()
+        .map(c => ({ c, label: countryName(c.code, ui, c.name) }))
+        .sort((a, b) => a.label.localeCompare(b.label, ui))
+
+      for (const { c, label } of named) {
         const chk = NidaraSelectionCheck(16)
         chk.visible = c.code === selectedCode
         checkFor.set(c.code, chk)
-        const row = NidaraRow(c.name, c.code, chk)
+        const row = NidaraRow(label, c.code, chk)
         rowFor.set(row, c)
         countryList.append(row)
       }
 
       // A filter over rows that already exist, rather than rebuilding 249 of them
       // on every keystroke: the list keeps its selection and its scroll position.
+      //
+      // ⚠️ It matches the reader's name, tzdata's English one AND the code — not
+      // just what is on screen. Matching only the display name is how the English
+      // list came to be unfindable by typing "España"; matching only English is
+      // the same bug facing the other way.
       countryList.set_filter_func((row) => {
         const c = rowFor.get(row as Gtk.ListBoxRow)
         if (!c) return true
         const q = (search.get_text?.() ?? "").trim().toLowerCase()
         if (!q) return true
-        return c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q)
+        return countryHaystack(c.code, ui, c.name).some(h => h.includes(q))
       })
       search.connect("changed", () => countryList.invalidate_filter())
 
@@ -214,7 +212,9 @@ export function RegionStep(): Step {
 
         // Timezone ────────────────────────────────────────────────────────────
         const tzs = scoped(timezonesFor(code), allTimezones(), x => x)
-        const tzLabels = tzs.map(tz => { const [city, region] = tzParts(tz); return region ? `${city} — ${region}` : city })
+        // The IANA name, unchanged — the same thing Settings lists. This used to
+        // render "Madrid — Europe", a format only this screen spoke.
+        const tzLabels = tzs.map(timezoneName)
         const tzCurrent = a.timezone?.timezone ?? null
         listBox.append(NidaraDropDownRow(
           t("regionTimezone"),
@@ -335,8 +335,8 @@ export function RegionStep(): Step {
       // not move). The adjustment says when there is content, and the rows are
       // uniform, so the fraction is exact and needs no allocation at all.
       if (selectedCode) {
-        const all = countries()
-        const idx = all.findIndex(c => c.code === selectedCode)
+        const all = named
+        const idx = all.findIndex(x => x.c.code === selectedCode)
         const adj = countryScrolled.vadjustment
         const scrollToSelected = (): boolean => {
           if (idx < 0 || !adj || adj.upper <= adj.page_size) return false

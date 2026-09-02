@@ -30,6 +30,7 @@
 // used to offer. See references/dev-workflow.md.
 
 import GLib from "gi://GLib"
+import { keyboardName } from "../../lib/locale-names"
 
 function readLines(path: string): string[] {
   try {
@@ -54,6 +55,14 @@ function dataLines(path: string): string[] {
 export interface Country {
   /** ISO 3166-1 alpha-2, uppercase — the key every other table joins on. */
   code: string
+  /**
+   * tzdata's own spelling, which is ENGLISH ONLY.
+   *
+   * ⚠️ Not for display. A Spanish list showing "Spain" cannot be found by typing
+   * "España", which is exactly what shipped. `countryName()` in ui/lib/locale-names
+   * is what a surface shows; this is the fallback it falls back TO, and one of the
+   * strings a search box has to keep matching so "Spain" still works in any UI.
+   */
   name: string
 }
 
@@ -200,7 +209,15 @@ export interface KeyboardLayout {
   variant: string
   /** BCP-47 tags this keyboard serves, e.g. ["es-419","es-MX",…]. May be empty. */
   langs: string[]
-  /** Human label, from xkb's own description of the layout. */
+  /**
+   * Human label: the ENDONYM of the language the layout serves — "español de
+   * España", "British English" — falling back to xkb's English description for
+   * the layouts kbd-model-map leaves without a language tag.
+   *
+   * ⚠️ It used to be xkb's description unconditionally, which showed "Spanish" to
+   * somebody running the installer in Spanish. See ui/lib/locale-names.ts for why
+   * the fix is an endonym and not a translation.
+   */
   label: string
 }
 
@@ -252,11 +269,19 @@ export function allKeyboards(): KeyboardLayout[] {
     // keymap is the plain name, which is what the file lists first.
     if (seen.has(key)) continue
     seen.add(key)
-    const base = desc.get(layout) ?? layout
-    out.push({
-      keymap, layout, variant, langs,
-      label: variant ? `${base} — ${variant}` : base,
-    })
+    // ⚠️ The layout CODE is part of the label, not decoration. Naming a keyboard
+    // by the language it serves makes it read the same as the locale row right
+    // above it — "español de España" twice, for two different questions — which
+    // was only visible with the page open. The code is also the thing that
+    // actually gets written, so it earns its place.
+    //
+    // Separated by a middot rather than wrapped in brackets, because half the
+    // endonyms already carry their own: "日本語 (日本) (jp)" and
+    // "português (Brasil) (br)" were the first attempt. `·` is what the disk step
+    // already uses between facts about one thing.
+    const base = keyboardName(langs, desc.get(layout) ?? layout)
+    const id = variant ? `${layout}, ${variant}` : layout
+    out.push({ keymap, layout, variant, langs, label: `${base} · ${id}` })
   }
   _keyboards = out.sort((a, b) => a.label.localeCompare(b.label))
   return _keyboards
