@@ -156,7 +156,7 @@ export function assemblePlan(
   config.locale_config = {
     // The CONSOLE keymap, not the xkb layout. archinstall's `kb_layout` ends up in
     // /etc/vconsole.conf, and the two namespaces disagree for four of our rows —
-    // see the `keymap` field in steps/keyboard.ts for what that costs.
+    // see the `keymap` field on KeyboardLayout in lib/region.ts for what that costs.
     kb_layout: answers.keyboard?.keymap || live.localeConfig.kb_layout,
     sys_enc: answers.language?.sysEnc || live.localeConfig.sys_enc,
     sys_lang: answers.language?.sysLang || live.localeConfig.sys_lang,
