@@ -249,7 +249,7 @@ package_nidara-desktop() {
   for b in nidara nidara-ui nidara-greeter nidara-greeter-session nidara-lock nidara-before-sleep \
            nidara-after-sleep nidara-game-mode nidara-doctor nidara-portal \
            nidara-mcp nidara-agent nidara-a11y nidara-act nidara-type nidara-click \
-           nidara-hook nidara-update nidara-setup; do
+           nidara-hook nidara-update nidara-setup nidara-migrate; do
     install -Dm755 "bin/$b" "$pkgdir/usr/bin/$b"
   done
   install -Dm755 build/nidara-input "$pkgdir/usr/bin/nidara-input"
@@ -279,6 +279,10 @@ package_nidara-desktop() {
     "$pkgdir/usr/share/gir-1.0/NidaraAuth-1.0.gir"
 
   # /usr/share/nidara — bundles, styles, assets, shared config
+  # The migration units. Sourced by nidara-migrate, never executed on their own,
+  # hence 644: an execute bit here would suggest a contract this does not have.
+  mkdir -p "$pkgdir/usr/share/nidara/migrations"
+  install -m644 migrations/*.sh "$pkgdir/usr/share/nidara/migrations/"
   install -Dm644 VERSION "$pkgdir/usr/share/nidara/VERSION"
   install -Dm644 defaults/wallpaper/wallpaper.jpg "$pkgdir/usr/share/nidara/wallpaper.jpg"
   if [ -f defaults/wallpaper/wallpaper-greeter.jpg ]; then

@@ -1385,6 +1385,37 @@ typeof check and then indexes `CODECS` to `undefined`). The file is user state w
 an unusable value falls back to its default and the desktop starts. A bad value passed to `set`
 comes from OUR code, and swallowing it there would hide the bug instead of the call site fixing it.
 
+🔑 **Renaming or retiring a key means writing a MIGRATION, not a compatibility read.**
+`migrations/<YYYY-MM-DD>-<slug>.sh` — a bash fragment sourced by `bin/nidara-migrate`, which runs
+each unit once per machine and records it under
+`${XDG_STATE_HOME:-~/.local/state}/nidara/migrations/<name>`. Units get a `json_edit <file> <jq>`
+helper that writes atomically and only when something actually changed. Because the machine now
+carries a record of what it has taken, **the old name is DELETED from the reader in the same
+commit** instead of being read forever — which is what the `transparency` → `windowOpacity`
+conversion in `ThemeManager` used to be. A legacy name that is still read is a name that can still
+WIN, quietly overruling a value the user can see in Settings with one they cannot.
+
+⚠️ **`nidara-setup` is NOT the load-bearing trigger, despite being the obvious one.**
+`nidara.install` only PRINTS on `post_install`/`post_upgrade`, so a plain `sudo pacman -Syu` — the
+upgrade path the README documents — never runs setup at all. The trigger that always fires is
+`ExecStartPre=/usr/bin/nidara-migrate` on `nidara.service`: the session user, every session start,
+and **before the shell has read any config**, which is the only ordering in which a migration
+cannot race the process it is migrating for. `nidara-setup` calls it too; the marker makes the
+second call free. The runner ALWAYS exits 0 — a broken migration must cost a log line, never the
+user's session — and a failure stops the CHAIN so a later unit never runs against a state its
+predecessor failed to produce.
+
+🔑 **Leave a stamp alone unless you mean to skip what it gates.** The `transparency` unit writes
+the raw `1 - t` and deliberately does not touch `glassModel`, because a file predating the glass
+rescale still has to be rescaled by the reader — stamping the model in the migration would silently
+skip a conversion the old code performed. The bench caught exactly that, and only on a mid-range
+value: `clampGlass` hides the error at both ends of the slider.
+
+`scripts/ci/migrations-check.mjs` (a step in the `pkgbuild` job) holds the properties that make a
+unit survivable: valid bash, a no-op on a fresh install, and idempotent **with the marker deleted
+between runs** — the marker is what makes it run once in production, the unit being idempotent
+underneath is what makes a lost marker survivable, and only one of those is a property of the code.
+
 ⚠️ **An object-valued key must be REPLACED, never mutated in place.** The store decides whether
 anything moved before it writes, and for objects it compares by value (`JSON.stringify`). Handing
 `set`/`update` back the same reference it already holds therefore reads as "unchanged" and persists

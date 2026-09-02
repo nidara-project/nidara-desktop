@@ -12,6 +12,12 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
+# Pending config migrations, once each, as this user. HERE rather than only in
+# nidara-setup because `nidara.install` merely PRINTS on post_upgrade — a plain
+# `pacman -Syu` never runs setup — and because this is the one moment the shell
+# is provably not yet reading the files being migrated. It always exits 0: a
+# broken migration must cost a log line, never the session.
+ExecStartPre=/usr/bin/nidara-migrate
 ExecStart=/usr/bin/nidara-ui
 # Respawn on crash (segfault / non-zero exit / signal). A clean exit is NOT
 # restarted, so quitting on purpose stays quit.
