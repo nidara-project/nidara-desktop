@@ -23,7 +23,7 @@ import recordingConfig, {
 } from "./core/RecordingConfig"
 import Gaming, { WALLPAPER_MODES, type WallpaperMode } from "./core/GamingManager"
 import agentConfig from "./core/AgentConfig"
-import { dockSettings, updateDockSettings, onDockSettingsChanged, type DockPosition } from "./surfaces/dock/state"
+import { dockSettings, updateDockSettings, onDockSettingChanged, type DockPosition } from "./surfaces/dock/state"
 import { barConfig } from "./surfaces/bar/barState"
 import regionConfig from "./core/RegionConfig"
 import { getIdleConfig, updateIdleConfig, onHypridleChanged } from "./core/PowerConfig"
@@ -119,11 +119,6 @@ const onInputCfg = (read: () => any) => (apply: (v: any) => void) => {
     apply(read())
     const id = inputConfig.connect("changed", () => apply(read()))
     return () => safeDisconnect(inputConfig, id)
-}
-
-const onDockCfg = (read: () => any) => (apply: (v: any) => void) => {
-    apply(read())
-    return onDockSettingsChanged(() => apply(read()))
 }
 
 const onThemeCfg = (read: () => any) => (apply: (v: any) => void) => {
@@ -287,7 +282,10 @@ export function registerConfigEntries() {
         enum: ["bottom", "left", "right"],
         get: () => dockSettings.position,
         set: v => updateDockSettings({ position: v as DockPosition }),
-        subscribe: onDockCfg(() => dockSettings.position),
+        subscribe: (apply) => {
+            apply(dockSettings.position)
+            return onDockSettingChanged("position", apply)
+        },
         ui: {
             i18n: "settings.dock.position",
             optI18n: v => t(`settings.dock.opt.${v}` as any),
@@ -300,7 +298,10 @@ export function registerConfigEntries() {
         max: 96,
         get: () => dockSettings.iconSize,
         set: v => updateDockSettings({ iconSize: v as number }),
-        subscribe: onDockCfg(() => dockSettings.iconSize),
+        subscribe: (apply) => {
+            apply(dockSettings.iconSize)
+            return onDockSettingChanged("iconSize", apply)
+        },
         ui: {
             i18n: "settings.dock.icon-size",
             control: "preset",
@@ -315,7 +316,10 @@ export function registerConfigEntries() {
         max: 32,
         get: () => dockSettings.screenGap,
         set: v => updateDockSettings({ screenGap: v as number }),
-        subscribe: onDockCfg(() => dockSettings.screenGap),
+        subscribe: (apply) => {
+            apply(dockSettings.screenGap)
+            return onDockSettingChanged("screenGap", apply)
+        },
         ui: {
             i18n: "settings.dock.bottom-margin",
             slider: { unit: "px" },
@@ -326,7 +330,10 @@ export function registerConfigEntries() {
         type: "boolean",
         get: () => dockSettings.magnification,
         set: v => updateDockSettings({ magnification: v as boolean }),
-        subscribe: onDockCfg(() => dockSettings.magnification),
+        subscribe: (apply) => {
+            apply(dockSettings.magnification)
+            return onDockSettingChanged("magnification", apply)
+        },
         ui: {
             i18n: "settings.dock.magnification",
         },
@@ -338,7 +345,10 @@ export function registerConfigEntries() {
         max: 128,
         get: () => dockSettings.maxIconSize,
         set: v => updateDockSettings({ maxIconSize: v as number }),
-        subscribe: onDockCfg(() => dockSettings.maxIconSize),
+        subscribe: (apply) => {
+            apply(dockSettings.maxIconSize)
+            return onDockSettingChanged("maxIconSize", apply)
+        },
         ui: {
             i18n: "settings.dock.max-size",
             slider: { unit: "px" },
@@ -349,7 +359,10 @@ export function registerConfigEntries() {
         type: "boolean",
         get: () => dockSettings.autoHide,
         set: v => updateDockSettings({ autoHide: v as boolean }),
-        subscribe: onDockCfg(() => dockSettings.autoHide),
+        subscribe: (apply) => {
+            apply(dockSettings.autoHide)
+            return onDockSettingChanged("autoHide", apply)
+        },
         ui: {
             i18n: "settings.dock.autohide",
         },
@@ -359,7 +372,10 @@ export function registerConfigEntries() {
         type: "boolean",
         get: () => dockSettings.showIndicators,
         set: v => updateDockSettings({ showIndicators: v as boolean }),
-        subscribe: onDockCfg(() => dockSettings.showIndicators),
+        subscribe: (apply) => {
+            apply(dockSettings.showIndicators)
+            return onDockSettingChanged("showIndicators", apply)
+        },
         ui: {
             i18n: "settings.dock.indicators",
         },
@@ -371,7 +387,10 @@ export function registerConfigEntries() {
         max: 2000,
         get: () => dockSettings.hideDelay,
         set: v => updateDockSettings({ hideDelay: Math.round(Number(v)) }),
-        subscribe: onDockCfg(() => dockSettings.hideDelay),
+        subscribe: (apply) => {
+            apply(dockSettings.hideDelay)
+            return onDockSettingChanged("hideDelay", apply)
+        },
         ui: {
             i18n: "settings.dock.hide-delay",
             slider: { unit: "ms" },

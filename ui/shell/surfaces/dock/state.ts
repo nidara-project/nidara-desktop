@@ -6,6 +6,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { writeFile, readFile } from "../../../lib/file"
 import GLib from "gi://GLib"
+import { defineConfig, loadKnown, type ConfigValidators } from "../../core/configFile"
 // --- PERSISTENCE ---
 // All Nidara config lives under ~/.config/nidara/ (matches ThemeManager,
 // WidgetConfig, RegionConfig, CCLayoutManager, …). These two dock files used to
@@ -26,15 +27,19 @@ const ensureConfigDir = () => {
 
 export type DockPosition = 'bottom' | 'left' | 'right'
 
+// Bounds are the ones the Settings sliders and `describeConfig` advertise
+// (config-entries.ts). They were written here as prose and had drifted: the
+// comment said iconSize defaulted to 48 when it defaults to 64, and capped
+// screenGap at 16 when the slider goes to 32.
 export interface DockSettings {
-    iconSize: number        // 32–96, default 48
-    magnification: boolean  // default true
-    maxIconSize: number     // 64–128, default 128 (full magnification)
-    showIndicators: boolean // default true
-    screenGap: number       // 4–16, default 8
-    autoHide: boolean       // hide dock when mouse leaves, default false
-    hideDelay: number       // ms before hiding after mouse leaves, default 500
-    position: DockPosition  // dock anchor position, default 'bottom'
+    iconSize: number        // 32–96
+    magnification: boolean
+    maxIconSize: number     // 64–128 (128 = full magnification)
+    showIndicators: boolean
+    screenGap: number       // 4–32
+    autoHide: boolean       // hide dock when mouse leaves
+    hideDelay: number       // 0–2000 ms before hiding after mouse leaves
+    position: DockPosition  // dock anchor position
 }
 
 const DOCK_DEFAULTS: DockSettings = {
@@ -48,45 +53,64 @@ const DOCK_DEFAULTS: DockSettings = {
     position: 'bottom',
 }
 
-// Load persisted settings; if absent, migrate the legacy ~/.config/dock_settings.json,
-// else fall back to defaults (persisted on first change).
-let _dockSettings: DockSettings = { ...DOCK_DEFAULTS }
-try {
-    const raw = JSON.parse(readFile(SETTINGS_FILE)) as Partial<DockSettings>
-    _dockSettings = { ...DOCK_DEFAULTS, ...raw }
-} catch {
+const DOCK_POSITIONS: readonly DockPosition[] = ['bottom', 'left', 'right']
+const inRange = (lo: number, hi: number) => (v: number) =>
+    Number.isFinite(v) && v >= lo && v <= hi
+
+const DOCK_VALIDATORS: ConfigValidators<DockSettings> = {
+    position: v => DOCK_POSITIONS.includes(v),
+    iconSize: inRange(32, 96),
+    maxIconSize: inRange(64, 128),
+    screenGap: inRange(4, 32),
+    hideDelay: inRange(0, 2000),
+}
+
+/**
+ * The one-time move of the settings file out of the bare `~/.config/` root.
+ *
+ * It runs BEFORE the store is built, because a migration is a fact about this
+ * machine's history rather than part of a settings lifecycle — folding it in
+ * would make every module carry a hook for a path only the dock ever used.
+ *
+ * ⚠️ It writes the file through `loadKnown` rather than copying it byte for
+ * byte. A straight copy is what the old code effectively did, and it carries
+ * retired keys across to the new path, where they sit until the user happens to
+ * change a dock setting: the exact one-way ratchet `loadKnown` exists to stop.
+ * We are already writing the file here, so writing the DECLARED SHAPE is free.
+ */
+function migrateLegacySettingsFile() {
+    if (GLib.file_test(SETTINGS_FILE, GLib.FileTest.EXISTS)) return
+    if (!GLib.file_test(LEGACY_SETTINGS_FILE, GLib.FileTest.EXISTS)) return
     try {
-        const legacy = JSON.parse(readFile(LEGACY_SETTINGS_FILE)) as Partial<DockSettings>
-        _dockSettings = { ...DOCK_DEFAULTS, ...legacy }
+        const known = loadKnown(DOCK_DEFAULTS, JSON.parse(readFile(LEGACY_SETTINGS_FILE)), DOCK_VALIDATORS)
         ensureConfigDir()
-        writeFile(SETTINGS_FILE, JSON.stringify(_dockSettings, null, 2))
-        try { GLib.unlink(LEGACY_SETTINGS_FILE) } catch {}
-    } catch {
-        // First run — will persist on first change
+        writeFile(SETTINGS_FILE, JSON.stringify(known, null, 2))
+        GLib.unlink(LEGACY_SETTINGS_FILE)
+    } catch (e) {
+        console.error("[DockSettings] Legacy migration failed:", e)
     }
 }
+migrateLegacySettingsFile()
 
-export const dockSettings: DockSettings = _dockSettings
+const config = defineConfig<DockSettings>("dock_settings.json", DOCK_DEFAULTS, DOCK_VALIDATORS)
 
-// Change listeners
-const _settingsListeners = new Set<(s: DockSettings) => void>()
+/** The live settings object — same identity for the life of the process, which
+ *  is what the ~40 read sites throughout the dock and the bar rely on. */
+export const dockSettings: Readonly<DockSettings> = config.all
 
+/** Whole-object notification, for the three consumers that re-read several
+ *  settings at once (app.ts, Bar.tsx, DockCore.tsx). */
 export function onDockSettingsChanged(fn: (s: DockSettings) => void) {
-    _settingsListeners.add(fn)
-    return () => _settingsListeners.delete(fn)
+    return config.subscribeAll(() => fn(dockSettings))
 }
+
+/** Per-key notification, for a consumer that cares about ONE setting — which is
+ *  every Settings row. They used to share a whole-object listener, so changing
+ *  the icon size re-applied all eight rows. */
+export const onDockSettingChanged = config.subscribe
 
 export function updateDockSettings(partial: Partial<DockSettings>) {
-    Object.assign(dockSettings, partial)
-    // Persist
-    try {
-        ensureConfigDir()
-        writeFile(SETTINGS_FILE, JSON.stringify(dockSettings, null, 2))
-    } catch (e) {
-        console.error("[DockSettings] Failed to persist:", e)
-    }
-    // Notify
-    _settingsListeners.forEach(fn => fn(dockSettings))
+    config.update(partial)
 }
 
 // --- PINNED LIST MANAGEMENT ---
