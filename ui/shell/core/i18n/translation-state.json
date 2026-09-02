@@ -579,7 +579,6 @@
     "widget.dark-mode.sub.dark": "ae1ef014",
     "widget.dark-mode.sub.light": "a36ef8ab",
     "widget.focus.name": "622f0eaa",
-    "widget.calculator.name": "16b6e0c6",
     "widget.cpu-memory.name": "9e99fd33",
     "widget.cpu-memory.cpu": "ff221d47",
     "widget.cpu-memory.ram": "ac698b84",
@@ -703,68 +702,68 @@
   },
   "locales": {
     "de": {
-      "translated": 699,
-      "of": 699,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "es": {
-      "translated": 699,
-      "of": 699,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 699,
-      "of": 699,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "it": {
-      "translated": 699,
-      "of": 699,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "ja": {
-      "translated": 699,
-      "of": 699,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "nl": {
-      "translated": 699,
-      "of": 699,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "pl": {
-      "translated": 699,
-      "of": 699,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "pt-BR": {
-      "translated": 699,
-      "of": 699,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "pt-PT": {
-      "translated": 699,
-      "of": 699,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "ru": {
-      "translated": 699,
-      "of": 699,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     },
     "zh-CN": {
-      "translated": 699,
-      "of": 699,
+      "translated": 698,
+      "of": 698,
       "untranslated": [],
       "stale": []
     }

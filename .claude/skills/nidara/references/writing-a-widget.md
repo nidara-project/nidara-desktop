@@ -62,33 +62,53 @@ one precedes, and the row cannot know that. Set them on what you get back.
 
 ## The shortest widget that exists
 
-`widgets/calculator.ts`, in full — copy it:
+`widgets/dark-mode.ts`, in full — copy it:
 
 ```ts
-import { execAsync } from "../../lib/process"
+import Theme from "../core/ThemeManager"
 import { AtomicWidget, WidgetSize, roundToggleSpec, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
+import { safeDisconnect } from "../core/signals"
 
-const launch = () => execAsync("gnome-calculator").catch(() => {})
+// One subscribe, reused by every surface below — the tile, the bar pill and the
+// island's active state all re-read their getters when the theme changes.
+const themeSubscribe = (sync: () => void) => {
+    const id = Theme.connect("changed", sync)
+    return () => safeDisconnect(Theme, id)
+}
 
-const calculatorWidget: AtomicWidget = {
-    id: "calculator",
-    category: "utilities",          // media | utilities | system — drives bar order + Settings grouping
-    barOrder: 30,                   // optional fine-tune inside the category; lower = further left
-    name: t("widget.calculator.name"),
-    icon: Icons.calculator,         // for the Settings picker
+const darkModeWidget: AtomicWidget = {
+    id: "dark_mode",
+    category: "system",             // media | utilities | system — drives bar order + Settings grouping
+    barOrder: 10,                   // optional fine-tune inside the category; lower = further left
+    name: t("widget.dark-mode.name"),
+    icon: Icons.moon,               // for the Settings picker
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
-    buildContent: (size, budget) =>
-        roundToggleSpec("calculator", t("widget.calculator.name"), Icons.calculator, false, launch)
-            .buildContent(size, budget),
-    buildBarContent: () => makeBarIcon({ getIcon: () => Icons.calculator, onAction: launch }),
+    buildContent: (size, budget) => roundToggleSpec(
+        "dark-mode", t("widget.dark-mode.name"),
+        () => Theme.isDark ? Icons.moon : Icons.sun,
+        () => Theme.isDark,
+        () => Theme.setDarkMode(!Theme.isDark),
+        () => Theme.isDark ? t("widget.dark-mode.sub.dark") : t("widget.dark-mode.sub.light"),
+        themeSubscribe,
+    ).buildContent(size, budget),
+    buildBarContent: () => makeBarIcon({
+        getIcon: () => Theme.isDark ? Icons.moon : Icons.sun,
+        onAction: () => Theme.setDarkMode(!Theme.isDark),
+        subscribe: themeSubscribe,
+    }),
+    getActive: () => Theme.isDark,
+    watchActive: themeSubscribe,
 }
 
-export default calculatorWidget
+export default darkModeWidget
 ```
+
+Everything in it is a getter plus a `subscribe`, and nothing in it is a value read once. That is
+the shape: the widget never pushes, the host pulls when the subscribe fires.
 
 Everything else on `AtomicWidget` is optional and documented at its field in
 `common/widget-kit/contract.ts`: `buildBarExpanded`, `buildCCDetail`, `buildSettings` (a

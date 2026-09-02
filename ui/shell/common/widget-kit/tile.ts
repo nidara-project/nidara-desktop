@@ -22,7 +22,7 @@
 // two different vertical sliders.
 //
 // plus `roundToggleSpec`, a whole CCWidgetSpec for a widget that is nothing BUT a
-// round toggle (dark mode, calculator).
+// round toggle (dark mode).
 //
 // Leaf module — no shell imports. See panel.ts for the cycle that crashes the boot.
 // ─────────────────────────────────────────────────────────────────────────────

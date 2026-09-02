@@ -294,7 +294,7 @@ PACMAN_DEPS="base-devel glib2-devel cmake meson ninja gobject-introspection vala
     at-spi2-core wtype wlr-protocols wayland wayland-protocols hyprland-protocols
     accountsservice greetd pavucontrol rust cargo
     hyprland hypridle hyprsunset uwsm power-profiles-daemon python-gobject
-    kitty nautilus gnome-calculator
+    kitty nautilus
     polkit-gnome gnome-keyring libsecret
     xdg-desktop-portal-gtk xdg-desktop-portal-hyprland
     ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono inter-font noto-fonts-emoji noto-fonts-cjk

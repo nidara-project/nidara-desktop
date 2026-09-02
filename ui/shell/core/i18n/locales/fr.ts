@@ -595,7 +595,6 @@ export default {
     "widget.dark-mode.sub.dark": "Sombre",
     "widget.dark-mode.sub.light": "Clair",
     "widget.focus.name": "Ne pas déranger",
-    "widget.calculator.name": "Calculatrice",
     "widget.cpu-memory.name": "Processeur et mémoire",
     "widget.cpu-memory.cpu": "CPU",
     "widget.cpu-memory.ram": "RAM",

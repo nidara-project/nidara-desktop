@@ -595,7 +595,6 @@ export default {
     "widget.dark-mode.sub.dark": "深色",
     "widget.dark-mode.sub.light": "浅色",
     "widget.focus.name": "请勿打扰",
-    "widget.calculator.name": "计算器",
     "widget.cpu-memory.name": "处理器与内存",
     "widget.cpu-memory.cpu": "处理器",
     "widget.cpu-memory.ram": "内存",

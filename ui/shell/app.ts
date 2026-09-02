@@ -636,10 +636,10 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       ),
   },
   launchApp: {
-    desc: "Launch an installed app by NAME or id (`launchApp calculator`, `launchApp org.gnome.Nautilus`) — origin-aware (flatpak run / gtk-launch), exactly the dock-click path (uwsm-scoped, CWD=$HOME). A name that matches several apps comes back with the candidates, so listApps is only for browsing. Waits for the window and focuses it, then says so: the next perception or pointer call can go straight at it.",
+    desc: "Launch an installed app by NAME or id (`launchApp kitty`, `launchApp org.gnome.Nautilus`) — origin-aware (flatpak run / gtk-launch), exactly the dock-click path (uwsm-scoped, CWD=$HOME). A name that matches several apps comes back with the candidates, so listApps is only for browsing. Waits for the window and focuses it, then says so: the next perception or pointer call can go straight at it.",
     run: async args => {
       const q = (args[0] ?? "").trim()
-      if (!q) return "usage: launchApp <name-or-id> (e.g. `launchApp calculator`; see listApps)"
+      if (!q) return "usage: launchApp <name-or-id> (e.g. `launchApp kitty`; see listApps)"
       const { app: target, error } = resolveApp(q)
       if (!target) return error!
       appService.recordLaunch(target.id)

@@ -88,8 +88,8 @@ depends=(
   # python-gobject one: present on every dev box, absent from nobody's until it
   # is. Declared because we call it by path.
   dconf
-  # default apps wired into the UI (Super+T, Files item, calculator widget…)
-  kitty nautilus gnome-calculator pavucontrol
+  # default apps wired into the UI (Super+T, Files item…)
+  kitty nautilus pavucontrol
   # fonts + icon fallbacks the design system assumes; CJK because the shell,
   # greeter and lockscreen ship zh-CN/ja catalogs AND every user sees the
   # 简体中文/日本語 endonyms in the language pickers — without it they render
