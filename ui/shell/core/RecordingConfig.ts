@@ -23,9 +23,8 @@
 //     containers only (see CODECS), never for WebM.
 
 import GLib from "gi://GLib"
-import { readFile, writeFile } from "../../lib/file"
 import { execAsync } from "../../lib/process"
-import { loadKnown } from "./configFile"
+import { defineConfig } from "./configFile"
 
 export type RecordQuality = "low" | "balanced" | "high"
 export type RecordFormat = "mp4" | "mkv" | "webm"
@@ -62,37 +61,32 @@ export const defaultSaveDir = (): string =>
 export const hardwareAvailable = (): boolean =>
     GLib.file_test(RENDER_NODE, GLib.FileTest.EXISTS)
 
-const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/recording.json`
-
-const DEFAULTS = (): RecordingSettings => ({
+// Both defaults are computed, not literal — `hardware` follows the machine and
+// `saveDir` follows XDG — so this runs once, here, rather than being a constant.
+const DEFAULTS: RecordingSettings = {
     audioSource: AUDIO_SYSTEM,
     quality: "balanced",
     framerate: 0,
     hardware: hardwareAvailable(),
     format: "mp4",
     saveDir: defaultSaveDir(),
-})
-
-let _settings: RecordingSettings = DEFAULTS()
-try {
-    if (GLib.file_test(CONFIG_PATH, GLib.FileTest.EXISTS)) {
-        _settings = loadKnown(DEFAULTS(), JSON.parse(readFile(CONFIG_PATH)))
-    }
-} catch {}
-
-function save() {
-    try {
-        const dir = `${GLib.get_user_config_dir()}/nidara`
-        if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
-            GLib.mkdir_with_parents(dir, 0o755)
-        writeFile(CONFIG_PATH, JSON.stringify(_settings, null, 2))
-    } catch (e) {
-        console.error("[RecordingConfig] Save failed:", e)
-    }
 }
 
-const _listeners = new Set<() => void>()
-const notify = () => _listeners.forEach(fn => fn())
+const config = defineConfig<RecordingSettings>("recording.json", DEFAULTS, {
+    // `format` indexes CODECS and `quality` indexes the per-encoder preset maps.
+    // Both are plain strings to `loadKnown`, so a hand-edited file reaches
+    // `CODECS[undefined].sw` — a capture that fails with a TypeError rather than
+    // one that falls back to mp4.
+    quality: v => QUALITIES.includes(v),
+    format: v => FORMATS.includes(v),
+    framerate: v => Number.isFinite(v) && v >= 0,
+    saveDir: v => v.length > 0,
+})
+
+/** The live settings object. Reads stay as cheap as the module-level `_settings`
+ *  they replaced; every write goes through `config.set`, which is the only thing
+ *  that touches the file. */
+const _settings: Readonly<RecordingSettings> = config.all
 
 // ── Audio devices ─────────────────────────────────────────────────────────────
 
@@ -250,17 +244,17 @@ export const recordingConfig = {
     get format() { return _settings.format },
     get saveDir() { return _settings.saveDir },
 
-    setAudioSource(v: string) { _settings.audioSource = v; save(); notify() },
-    setQuality(v: RecordQuality) { _settings.quality = v; save(); notify() },
-    setFramerate(v: number) { _settings.framerate = Math.max(0, Math.round(v)); save(); notify() },
-    setHardware(v: boolean) { _settings.hardware = v; save(); notify() },
-    setFormat(v: RecordFormat) { _settings.format = v; save(); notify() },
-    setSaveDir(v: string) { _settings.saveDir = v; save(); notify() },
+    setAudioSource(v: string) { config.set("audioSource", v) },
+    setQuality(v: RecordQuality) { config.set("quality", v) },
+    setFramerate(v: number) { config.set("framerate", Math.max(0, Math.round(v))) },
+    setHardware(v: boolean) { config.set("hardware", v) },
+    setFormat(v: RecordFormat) { config.set("format", v) },
+    setSaveDir(v: string) { config.set("saveDir", v) },
 
-    onChange(fn: () => void) {
-        _listeners.add(fn)
-        return () => _listeners.delete(fn)
-    },
+    /** Per-key change notification, with a disposer. The `onChange` this
+     *  replaces was born with the module (#81) and never gained a subscriber —
+     *  a listener `Set` maintained for nobody. */
+    subscribe: config.subscribe,
 }
 
 export default recordingConfig

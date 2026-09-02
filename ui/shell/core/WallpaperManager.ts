@@ -68,6 +68,12 @@ export const TRANSITION_LABELS: Record<TransitionType, string> = {
     bottom: t("wallpaper.transition.bottom"),
 }
 
+/** The valid values, derived from the labels rather than written out a second
+ *  time. `GamingManager` validates against it and `config-entries.ts` serves it
+ *  as the agent-facing enum; both used to reach for `Object.keys(...)` or a
+ *  hand-copied array. */
+export const TRANSITIONS = Object.keys(TRANSITION_LABELS) as readonly TransitionType[]
+
 class WallpaperManager extends GObject.Object {
     static {
         GObject.registerClass({
