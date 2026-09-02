@@ -325,6 +325,14 @@ jobs:
       # and the prose still had the shell's birth class wrong.
       - name: Window rules match identifiers the source declares (must succeed)
         run: node scripts/ci/hypr-rule-check.mjs
+      # The shell GENERATES Lua too — nidara-settings.lua and nidara-monitor.lua,
+      # both required by hyprland.lua at every login. `tsc` sees the generator's
+      # strings and luac never sees what they produced, so this renders the real
+      # thing and parses it. A step in THIS job rather than a job of its own:
+      # lua and node are already here, and a required check that can be skipped
+      # is a required check that stalls the queue.
+      - name: The Lua the shell generates parses (must succeed)
+        run: node scripts/ci/hypr-lua-check.mjs
 
   skill-docs:
     name: Docs + prose shape
