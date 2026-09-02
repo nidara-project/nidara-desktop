@@ -394,13 +394,46 @@ fi
 if [ "$SYNC_PACMAN" = "no" ]; then
     echo "[1/5] System dependencies — skipped (package list unchanged)."
 else
-    echo "[1/5] Installing system dependencies..."
-    # -Syu, never bare -Sy: syncing the DBs without a full upgrade leaves a partial-upgrade
-    # state, and the next --needed install pulls a new lib (e.g. aquamarine) whose soname no
-    # longer matches already-installed packages (e.g. hyprtoolkit) → transaction fails.
-    # The list itself lives in PACMAN_DEPS (top of the script) so its fingerprint
-    # can be compared on updates. Unquoted on purpose: word-splitting wanted.
-    sudo pacman -Syu --needed --noconfirm $PACMAN_DEPS
+    echo "[1/5] System dependencies"
+    # ── The upgrade is the USER'S, and it is shown ───────────────────────────
+    # This runs on a machine we do not own — PRODUCT.md, "What does NOT change" —
+    # and until 2026-09-02 it simply took it over: `-Syu --needed --noconfirm` is a
+    # full, UNATTENDED system upgrade nobody asked for. Measured on one machine
+    # that day: 44 packages, both kernels 7.1.11 → 7.2.2, which left the running
+    # kernel with no modules directory on disk until a reboot (#378).
+    #
+    # The project already held the opposite position one file away, and said why:
+    # bin/nidara-update's PACKAGE path drops --noconfirm on purpose because "this
+    # is a FULL system upgrade, the user should see what it pulls in".
+    #
+    # ⚠️ Dropping the `-Syu` would be the WRONG fix and was considered first. Arch
+    # does not support partial upgrades: installing against a freshly synced DB
+    # without upgrading is exactly how a new library lands beside its old
+    # dependants (aquamarine's soname against an installed hyprtoolkit did this).
+    # So the upgrade stays and only its manner changes — it is now SHOWN, it can
+    # be DECLINED, and declining STOPS the install instead of walking into the
+    # very state the -Syu exists to avoid.
+    #
+    # Safe to make interactive: nothing calls this script unattended. Its only
+    # non-human callers are nidara-update's dev and stable paths, both of which
+    # run with the user at a terminal, and CI's headless smoke does its own
+    # -Syu without going through here.
+    echo "  Arch does not support partial upgrades, so Nidara's dependencies cannot"
+    echo "  be installed without bringing the system up to date first. pacman will"
+    echo "  show you the transaction; declining it stops the install."
+    echo ""
+    if ! sudo pacman -Syu; then
+        echo "" >&2
+        echo "install.sh: the system upgrade did not complete, so nothing was installed." >&2
+        echo "            Nidara's dependencies would have landed against out-of-date" >&2
+        echo "            libraries. Re-run this script once 'sudo pacman -Syu' succeeds." >&2
+        exit 1
+    fi
+    echo ""
+    echo "  Installing Nidara's dependencies..."
+    # Unquoted on purpose: word-splitting wanted. The list is derived from the
+    # package's own arrays — see the top of this script.
+    sudo pacman -S --needed $PACMAN_DEPS
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
