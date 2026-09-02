@@ -91,9 +91,29 @@ load-bearing in a way that would not be obvious from reading them:
 the dev loop). That is where the preload comes from — not `bin/nidara-ui`. A bundler that only emits
 JS produces a shell with no bar and no dock, and nothing in the log about why.
 
-The system `esbuild` package (Arch `extra`) is now a build dependency: `PACMAN_DEPS` in
-`install.sh`, `makedepends` in `packaging/nidara/PKGBUILD`, and the smoke's pacman list. `go` left
-`PACMAN_DEPS` at the same time — building AGS's Go CLI was the only thing that needed it.
+The system `esbuild` package (Arch `extra`) is now a build dependency: `makedepends` in
+`packaging/nidara/PKGBUILD`, and the smoke's pacman list. `go` left at the same time — building
+AGS's Go CLI was the only thing that needed it.
+
+⚠️ **There is no second dependency list to add it to, since 2026-09-02.** `install.sh` used to
+carry its own hand-kept `PACMAN_DEPS` of 80 names beside the PKGBUILD's arrays, and the two had
+drifted in both directions at once (#379): three real dependencies the script never installed —
+the desktop worked because they arrived transitively — and eight names it did install that had no
+use anywhere in the tree, left from the Astal build toolchain. `PACMAN_DEPS` is now DERIVED by
+sourcing `depends=()` + `makedepends=()`, so a dependency is declared in the PKGBUILD and nowhere
+else. Two consequences worth knowing before touching either file:
+
+- **Both arrays must close with `)` in column 1.** The extraction ends its range on `/^)/`, and
+  `depends=()` contains a comment line that ends in `)` — a looser pattern ends the range there and
+  silently yields an EMPTY array. `install.sh` refuses to continue below 40 names for that reason,
+  and the `pkgbuild` CI job checks both arrays source as real arrays.
+- **Version constraints are stripped** on the way through: `hyprland>=0.56` is valid dependency
+  syntax and is not a valid `pacman -S` target. The floor stays enforced by the package.
+
+The only names NOT derived are `base-devel` and `glib2-devel`, and they are build tools rather than
+dependencies — the package's `build()` runs under makepkg, which supplies the first; this script
+compiles the same C without it. Adding a third is a claim that the dev path needs something the
+package does not.
 
 ### Identity: one window, one app-id (the seventh commandment, retired)
 
