@@ -767,6 +767,27 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
                     })
                 } else {
                     const info = appService.getAppInfo(lid)
+                    // Nothing resolved this id and nothing is running under it, so the
+                    // app is not on this machine — draw nothing. Without this the dock
+                    // fell back to the RAW ID for both name and icon, which the theme
+                    // cannot resolve either, so the slot came out as a generic gear that
+                    // launches nothing: seen on every fresh install, because
+                    // `DEFAULT_PINNED` seeds `nidara-installer` for the live medium and
+                    // an installed system has no such app. `state.ts` has always
+                    // DOCUMENTED this skip ("the dock skips any id that doesn't resolve
+                    // to an installed app") — it just was not here.
+                    //
+                    // Skipping at DRAW time, not pruning the list: `pruneOrphanedPins`
+                    // deletes and persists, and the boot scan is explicitly incomplete
+                    // (AppService schedules a second "boot resilience" reload at 5s), so
+                    // pruning early would throw away a real pin for good. A pin that is
+                    // merely invisible costs nothing and comes back by itself on the
+                    // next `update()` once the app is seen.
+                    //
+                    // `nidara-settings` is exempt: it is reached through IPC (`ghostLaunch`
+                    // below) and must stay whether or not its .desktop resolves, which is
+                    // the same reason it is in DOCK_PERMANENT_IDS.
+                    if (!info && lid !== "nidara-settings") return
                     const displayName = info?.get_name() || lid
                     let icon = info?.get_id() || originalId
                     if (lid.startsWith("chrome-") && lid.endsWith("-default") && typeof icon === "string") {
