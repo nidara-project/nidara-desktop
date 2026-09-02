@@ -1,6 +1,20 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
-import hs from "./HyprlandState"
+import { writeFile } from "../../lib/file"
+import hs, { compositorOption } from "./HyprlandState"
+import { luaConfigExpr } from "./hyprland-lua"
+
+/**
+ * The one global option this module owns, named ONCE.
+ *
+ * ⚠️ Read SYNCHRONOUSLY here, unlike `InputConfig`, and that is deliberate:
+ * `init()` is called with the monitor list and callers read `.vrr` immediately
+ * after, so an async read would report "off" for a frame and the Settings row
+ * would render the wrong state. The pairing still owns the NAME and the live
+ * apply — the half that could drift — and the sync read borrows the name from
+ * it rather than spelling `misc:vrr` a third time.
+ */
+const VRR = compositorOption("misc:vrr", "int")
 
 interface MonitorState {
     scale: number
@@ -22,7 +36,7 @@ class MonitorConfig extends GObject.Object {
         // Re-read the effective vrr if Hyprland reloads its config (e.g. the user
         // edits hyprland-user.lua). Otherwise the next _save() would persist our
         // stale _vrr back into nidara-monitor.lua, clobbering the external change.
-        hs.connect("config-reloaded", () => { this._vrr = hs.getOptionInt("misc:vrr") })
+        hs.connect("config-reloaded", () => { this._vrr = hs.getOptionInt(VRR.name, this._vrr) })
     }
 
     /** Call once with the monitor list from AstalHyprland.get_monitors() */
@@ -37,7 +51,7 @@ class MonitorConfig extends GObject.Object {
         // misc:vrr is a GLOBAL int (0=off, 1=always, 2=fullscreen-only). AstalHyprland's
         // Monitor.vrr is just a per-monitor bool and doesn't reflect it, so read the real
         // effective value via HyprlandState (otherwise it resets to off on UI reload).
-        this._vrr = hs.getOptionInt("misc:vrr")
+        this._vrr = hs.getOptionInt(VRR.name, this._vrr)
     }
 
     getScale(name: string) { return this.state.get(name)?.scale ?? 1.0 }
@@ -91,7 +105,7 @@ class MonitorConfig extends GObject.Object {
 
     setVrr(val: number) {
         this._vrr = val
-        hs.evalLua(`hl.config({ misc = { vrr = ${val} } })`)
+        VRR.apply(val)
         this._save()
     }
 
@@ -113,18 +127,21 @@ class MonitorConfig extends GObject.Object {
 
         if (this._vrr !== 0) {
             lines.push("")
-            lines.push(`hl.config({ misc = { vrr = ${this._vrr} } })`)
+            // The SAME expression `VRR.apply` sends live, from the same builder —
+            // apply and persist are two halves of one change and must not be two
+            // spellings of it.
+            lines.push(luaConfigExpr(VRR.name, this._vrr))
         }
 
         const configPath = GLib.build_filenamev([
             GLib.get_home_dir(), ".config", "nidara", "nidara-monitor.lua"
         ])
         try {
-            const dir = GLib.path_get_dirname(configPath)
-            if (!GLib.file_test(dir, GLib.FileTest.EXISTS)) {
-                GLib.mkdir_with_parents(dir, 0o755)
-            }
-            GLib.file_set_contents(configPath, lines.join("\n") + "\n")
+            // `writeFile` rather than `GLib.file_set_contents`: both rename a
+            // temporary into place, so neither can be caught half-written, but only
+            // this one fsyncs — and it creates the directory. `hyprland.lua`
+            // requires this file at every login.
+            writeFile(configPath, lines.join("\n") + "\n")
         } catch (e) {
             console.error("[MonitorConfig] Failed to write config:", e)
         }

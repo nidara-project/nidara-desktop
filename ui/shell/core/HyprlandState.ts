@@ -1,5 +1,6 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
+import { luaConfigExpr, type LuaValue } from "./hyprland-lua"
 import { execAsync, exec } from "../../lib/process"
 import { safeDisconnect } from "./signals"
 import * as Hypr from "./hypr-ipc"
@@ -291,8 +292,14 @@ class HyprlandStateClass extends GObject.Object {
      *  field at all — `animations:enabled` answers `{"option":…,"bool":false,"set":true}`
      *  — so this returns 0 for every boolean, whatever its value, and says nothing
      *  about it. Use `getOptionBool` for those. (Found 2026-08-16, by a reduce-motion
-     *  restore that read `true` as 0 and pinned Hyprland's animations off.) */
-    getOptionInt(name: string): number {
+     *  restore that read `true` as 0 and pinned Hyprland's animations off.)
+     *
+     *  🔑 `fallback` is what you already believe, exactly as on the async twins,
+     *  and it defaults to 0 only because the diagnostic callers in `dumpState`
+     *  want that. A caller that PERSISTS what it reads must pass its current
+     *  value: `misc:vrr` reads 0 both for "off" and for "could not tell", and
+     *  `MonitorConfig` writes whatever it got back into nidara-monitor.lua. */
+    getOptionInt(name: string, fallback = 0): number {
         try {
             const opt = JSON.parse(exec(["hyprctl", "getoption", name, "-j"]))
             if (typeof opt.int === "number") return opt.int
@@ -301,7 +308,7 @@ class HyprlandStateClass extends GObject.Object {
             if (typeof opt.css === "string") return parseInt(opt.css, 10) || 0
             return 0
         }
-        catch (e) { console.error("[HyprlandState] getOptionInt", name, e); return 0 }
+        catch (e) { console.error("[HyprlandState] getOptionInt", name, e); return fallback }
     }
 
     /** Read an effective BOOL option (`hyprctl getoption -j` reports those under
@@ -1005,3 +1012,56 @@ class HyprlandStateClass extends GObject.Object {
 
 const hs = new HyprlandStateClass()
 export default hs
+
+// ── Compositor-backed options ────────────────────────────────────────────────
+
+export type OptionKind = "bool" | "int" | "float" | "str"
+
+/**
+ * One Hyprland option, named ONCE, with both halves of what it takes to own it.
+ *
+ * A setting the compositor owns is not read and written the way a JSON setting
+ * is. The effective value is our file + `hyprland-user.lua` + defaults merged,
+ * and only Hyprland computes that sum — so reading asks the compositor. Writing
+ * is TWO steps and both are required: `apply` changes the running session and
+ * does not survive a restart, while the owner's `.lua` file survives a restart
+ * and does not apply. In-memory state is a CACHE of the compositor, not the
+ * source.
+ *
+ * 🔑 What this pairing exists to prevent is the two halves drifting. They used
+ * to be written separately — the reader naming `input:touchpad:tap_to_click`
+ * and typing it, the writer naming the same option again as a bare string and
+ * spelling its boolean `1` — and nothing anywhere checked that the two agreed
+ * about where the option lives or what its values look like. Now the name and
+ * the type are given once and both halves come out of them.
+ */
+export interface CompositorOption<T extends LuaValue> {
+    readonly name: string
+    /** Effective value from the compositor. `fallback` is what you ALREADY
+     *  BELIEVE — see the note on the typed readers: a re-sync that cannot reach
+     *  the compositor must leave your state as it found it, because the owner
+     *  rewrites its whole file from that state. */
+    read(fallback: T): Promise<T>
+    /** Apply to the RUNNING session. Does not persist — that is the owner's file. */
+    apply(value: T): void
+}
+
+export function compositorOption(name: string, kind: "bool"): CompositorOption<boolean>
+export function compositorOption(name: string, kind: "int" | "float"): CompositorOption<number>
+export function compositorOption(name: string, kind: "str"): CompositorOption<string>
+export function compositorOption(name: string, kind: OptionKind): CompositorOption<any> {
+    return {
+        name,
+        read(fallback: any): Promise<any> {
+            switch (kind) {
+                case "bool":  return hs.getOptionBoolAsync(name, fallback)
+                case "int":   return hs.getOptionIntAsync(name, fallback)
+                case "float": return hs.getOptionFloatAsync(name, fallback)
+                case "str":   return hs.getOptionStrAsync(name, fallback)
+            }
+        },
+        apply(value: any) {
+            hs.evalLua(luaConfigExpr(name, value))
+        },
+    }
+}

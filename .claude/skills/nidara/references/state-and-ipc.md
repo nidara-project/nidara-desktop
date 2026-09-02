@@ -757,6 +757,28 @@ Rules:
   translation of the `hyprland.conf` key. `hyprctl keyword` is not an option: the Lua
   parser answers "Use eval.", which costs nothing and changes nothing, so a `keyword`
   call looks like it worked.
+- **A compositor-backed setting names its option ONCE — `compositorOption(name, kind)`.**
+  Reading and writing such a setting are not symmetric with a JSON one: the effective value
+  is our file + `hyprland-user.lua` + defaults merged and only Hyprland computes that sum, so
+  the READ asks the compositor; the WRITE is two steps and both are required, because
+  `evalLua` changes the running session and does not survive a restart while the generated
+  `.lua` survives a restart and does not apply. In-memory state is a CACHE of the compositor,
+  not the source. `compositorOption` (in `HyprlandState.ts`) hands back `read(fallback)` — the
+  right typed reader, picked by `kind` — and `apply(value)`, so the two halves cannot come to
+  disagree about where the option lives or what its values look like. They HAD: `InputConfig`
+  typed its reads after #338 while its writer still named each option again as a bare string
+  and spelled booleans `1`, and `kb_variant` had a place in the reader and in the file but no
+  option path in the writer, so setting a layout smuggled it through a hook and evalled twice.
+  🔑 **The persisted file is rendered from the same table**, so a new input option is one row
+  rather than an edit in three places that nothing checks. Miss the file and the setting
+  applies live and is gone at the next login; miss the re-sync and the next change to ANY
+  option in that file rewrites the whole thing from stale state.
+  ⚠️ The expression builders live in `core/hyprland-lua.ts`, a PURE module with no `gi` import,
+  and that is not tidiness: `HyprlandState` opens the compositor's event socket at import time,
+  so the half that can silently emit a wrong path or an unparseable file would otherwise be
+  untestable without a live desktop. `scripts/ci/hypr-lua-check.mjs` renders the real thing and
+  runs `luac -p` over it — with its own positive control first, because a `luac` that is absent
+  or misnamed would call every render fine, forever.
 - **A setting that overrides the user's Hyprland config must capture a BASELINE.** Reduce
   motion pushes `animations.enabled = false`, and turning it back off restores what
   `getOptionBool` reported before the shell ever pushed — not a hardcoded `true`, which
