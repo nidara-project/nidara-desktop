@@ -348,6 +348,12 @@ jobs:
       # user who pinned AGAINST their system mode ever sees it.
       - name: Shell surfaces stay inside the appearance pin (must succeed)
         run: node scripts/ci/chrome-scope-check.mjs
+      # The user-hook event table is a promise to people outside this repo. Both
+      # ways of breaking it are silent: an event fired but not declared is refused
+      # by the runner and never reaches a hook, and one declared but never fired
+      # gives the user a documented directory that can only stay empty.
+      - name: User-hook events declared == events fired (must succeed)
+        run: node scripts/ci/hook-events-check.mjs
 
   i18n:
     name: Translations (parity + ledger)

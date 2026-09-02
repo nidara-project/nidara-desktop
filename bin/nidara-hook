@@ -1,0 +1,140 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# nidara-hook — run the user's own scripts for a named desktop event.
+#
+#     nidara-hook <event> [args…]      run ~/.config/nidara/hooks/<event>.d/*
+#     nidara-hook --list               the events, their arguments, what they mean
+#
+# ── Why this exists ──────────────────────────────────────────────────────────
+#
+# `hyprland-user.lua` lets a user change the COMPOSITOR without rebuilding
+# anything. Everything the shell owns — theme, accent, wallpaper, updates — was
+# on the other side of a TypeScript build, which for most users means it does
+# not exist. This is the other half, and the cheap half: no third-party code
+# inside the shell's process, no transpiler on the user's machine, and no public
+# API to freeze. The contract is only "we execute your file and pass it these
+# arguments", which survives any internal refactor.
+#
+# ── The contract ─────────────────────────────────────────────────────────────
+#
+#   · A hook is any executable file in `~/.config/nidara/hooks/<event>.d/`.
+#     Not executable = not run. That is the documented way to disable one
+#     (`chmod -x`) without moving it.
+#   · They run SEQUENTIALLY, in C-collation order, so `10-foo` precedes `20-bar`.
+#   · Each gets the event's arguments as $1…$n and `NIDARA_EVENT` in its
+#     environment, so one script symlinked into several `.d` directories can
+#     tell which event it is answering.
+#   · A hook that fails, or that hangs past $NIDARA_HOOK_TIMEOUT seconds, is
+#     logged and the remaining hooks still run. This command's own exit status
+#     is 0 whenever the event name is valid — the shell fires it and never waits
+#     for it, so a non-zero status here would be reported to nobody.
+#
+# ⚠️ Hooks fired BY THE SHELL inherit the shell's systemd cgroup
+# (`nidara.service`). A hook that starts something long-lived is therefore killed
+# when the shell restarts — a UI reload included. Such a hook should hand the
+# work to `systemd-run --user` or `uwsm app -s`, exactly like a launcher does.
+#
+# THE EVENT TABLE BELOW IS THE ONLY LIST. The shell, the skill and the seeded
+# README all point back here rather than copying it, and `scripts/ci/hook-events-check.mjs`
+# fails the build if a `fireHook(…)` call site names an event this table does not
+# declare, or if a declared event is fired from nowhere.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# name :: arguments :: what it means
+EVENTS=$(cat <<'TABLE'
+session-started :: (none) :: The desktop finished starting. Fires ONCE per login session — a UI reload (Super+Shift+R) restarts the shell but does NOT re-fire this.
+dark-mode-changed :: dark|light :: The user switched appearance. $1 is the mode now in effect.
+accent-changed :: <accent> :: The accent colour changed. $1 is its key — one of blue, teal, green, yellow, orange, red, pink, purple, slate. The same value `nidara-ipc getConfig appearance.accent` returns; `nidara-ipc describeConfig` is the authority if this list ever ages.
+wallpaper-changed :: <path> :: A new desktop wallpaper was applied. $1 is its absolute path.
+update-completed :: <old> <new> :: `nidara-update` finished and the version actually moved. $1 is the version before, $2 after. Not fired when the update was a no-op.
+battery-low :: <percent> :: The battery crossed below 20% while discharging. $1 is the whole-number percentage read at the crossing. Re-arms above 25% or on AC — it cannot fire twice for one discharge.
+TABLE
+)
+
+HOOKS_ROOT="${NIDARA_HOOKS_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/nidara/hooks}"
+TIMEOUT="${NIDARA_HOOK_TIMEOUT:-30}"
+
+usage() {
+    cat >&2 <<USAGE
+usage: nidara-hook <event> [args…]
+       nidara-hook --list
+
+Runs the executables in $HOOKS_ROOT/<event>.d/, in order.
+USAGE
+}
+
+list_events() {
+    local name args desc
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        name="${line%% :: *}"
+        line="${line#* :: }"
+        args="${line%% :: *}"
+        desc="${line#* :: }"
+        printf '%s %s\n' "$name" "$args"
+        printf '    %s\n' "$desc"
+        printf '    → %s/%s.d/\n\n' "$HOOKS_ROOT" "$name"
+    done <<< "$EVENTS"
+}
+
+known_event() {
+    grep -q "^$1 :: " <<< "$EVENTS"
+}
+
+case "${1:-}" in
+    ""|-h|--help) usage; exit 1 ;;
+    -l|--list)    list_events; exit 0 ;;
+esac
+
+event="$1"; shift
+
+if ! known_event "$event"; then
+    echo "nidara-hook: unknown event '$event'. Run 'nidara-hook --list' for the ones that exist." >&2
+    exit 2
+fi
+
+dir="$HOOKS_ROOT/$event.d"
+[ -d "$dir" ] || exit 0
+
+export NIDARA_EVENT="$event"
+
+# C-collation order, so the order a user reads in `ls` is the order they get on
+# every machine: a locale-aware collation sorts `10-` and `_10-` differently.
+# Sorted through `sort -z` rather than by exporting LC_ALL — the hooks inherit
+# this environment, and a script printing a date should still see the user's locale.
+shopt -s nullglob
+hooks=("$dir"/*)
+shopt -u nullglob
+[ ${#hooks[@]} -gt 0 ] || exit 0
+mapfile -d '' -t hooks < <(printf '%s\0' "${hooks[@]}" | LC_ALL=C sort -z)
+
+for hook in "${hooks[@]}"; do
+    case "$hook" in
+        *~|*.bak|*.disabled|*.pacnew|*.pacsave|*.rpmnew|*.dpkg-*) continue ;;
+    esac
+    [ -f "$hook" ] || continue
+    [ -x "$hook" ] || continue
+
+    # -k: a hook that ignores TERM still dies, so one bad script cannot hold the
+    # queue open forever.
+    # -k: a hook that ignores TERM still dies, so one bad script cannot hold the
+    # queue open forever.
+    #
+    # The `3>&2 2>/dev/null` dance is not decoration. `timeout` propagates the
+    # kill by killing ITSELF with the same signal, and bash announces any
+    # foreground job that dies by a signal on its own stderr ("Terminated
+    # (killed)") — in a script, non-interactively, and there is no option to turn
+    # that off. So the hook's real stderr is routed out through fd 3 (the true
+    # stderr) and the inner shell's own stderr is discarded. Every escape tried
+    # first — a subshell, `setsid -w`, background + `wait` — still reported,
+    # because whichever shell owns the dying job is the one that talks.
+    bash -c 'timeout -k 5 "$1" "$2" "${@:3}" 2>&3' _ "$TIMEOUT" "$hook" "$@" 3>&2 2>/dev/null
+    status=$?
+    if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+        echo "nidara-hook[$event]: $hook timed out after ${TIMEOUT}s — killed." >&2
+    elif [ "$status" -ne 0 ]; then
+        echo "nidara-hook[$event]: $hook exited $status." >&2
+    fi
+done
+
+exit 0

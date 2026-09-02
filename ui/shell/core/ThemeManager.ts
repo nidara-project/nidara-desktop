@@ -21,6 +21,7 @@ import {
     CHROME_SCOPE_WINDOWS,
 } from "./NidaraTheme"
 import { SHELL_ROOT } from "./Paths"
+import { fireHook } from "./Hooks"
 import hs from "./HyprlandState"
 
 // ── CONSTANTS ────────────────────────────────────────────────────────
@@ -506,6 +507,7 @@ class ThemeManager extends GObject.Object {
         // previous mode. Restart it so the next portal-driven picker matches the new mode.
         execAsync(["systemctl", "--user", "restart", "xdg-desktop-portal-gtk.service"]).catch(() => {})
         this.emit("changed")
+        fireHook("dark-mode-changed", dark ? "dark" : "light")
     }
 
     private persistenceDebounceId = 0
@@ -526,6 +528,9 @@ class ThemeManager extends GObject.Object {
         execAsync(["gsettings", "set", "org.gnome.desktop.interface", "accent-color", accent]).catch(() => {})
         this.schedulePersistence()
         this.emit("changed")
+        // Not on the generic "changed" signal: every opacity slider emits it too,
+        // so a hook wired there would fire dozens of times per drag.
+        fireHook("accent-changed", accent)
     }
 
     /** Push the accent into Hyprland's groupbar (active tab = persistent

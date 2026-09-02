@@ -33,6 +33,11 @@ Examples (real):
 - Wallpaper; keyboard layout (`nidara-settings.lua`); monitor mode/scale
   (`nidara-monitor.lua`) — these are per-machine by definition.
 - A widget or script only meaningful to one person's setup.
+- **"When X happens, do Y"** — recolour my terminal when dark mode flips, back something up when an
+  update lands, mute the speakers when the battery goes low. That is a **user hook**: an executable
+  in `~/.config/nidara/hooks/<event>.d/`, no rebuild, nothing to PR. Run `nidara-hook --list` for the
+  events and see `references/user-hooks.md`. Reach for it before patching shell code for one person —
+  a hook survives every update, and a patch has to be rebased onto each one.
 
 ### 🟩 MAKE-IT-A-SETTING — the capability is global, the value is personal
 The user wants *a specific value*, but **other users would want a different value of the

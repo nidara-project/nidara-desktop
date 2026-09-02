@@ -99,6 +99,11 @@ if _pkg="$(_installed_desktop_pkg)"; then
         if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
             hyprctl reload >/dev/null 2>&1 || true
         fi
+        # The user's own scripts for this event, if any (see bin/nidara-hook).
+        # LAST, and only when the version actually moved: hooks are synchronous
+        # and each may take its full timeout, so firing them earlier would hold
+        # the shell reload behind somebody's script.
+        nidara-hook update-completed "$old_v" "$new_v" || true
     fi
     exit 0
 fi
@@ -110,6 +115,11 @@ command -v git >/dev/null || { echo "nidara-update: git is required." >&2; exit 
 # the stable channel: it keeps no persistent source.
 rm -rf "$HOME/.local/share/nidara/src" 2>/dev/null || true
 rm -f "$CONFIG_DIR/.source" 2>/dev/null || true
+
+# The version on disk before we touch anything — the `update-completed` hook's
+# first argument. Empty on a machine that has never had a versioned install;
+# the hook is then simply not fired (there is no "from" to report).
+old_v="$(cat /usr/share/nidara/VERSION 2>/dev/null || true)"
 
 # Newest release tag (the stable channel), resolved without cloning. Empty before
 # the first release exists → fall back to the default-branch tip.
@@ -135,3 +145,8 @@ fi
 # NO source marker; install.sh elevates with sudo internally. No exec — let the
 # EXIT trap clean up the temp dir afterwards.
 bash "$work/install.sh" --update-apply
+
+new_v="$(cat /usr/share/nidara/VERSION 2>/dev/null || true)"
+if [ -n "$old_v" ] && [ -n "$new_v" ] && [ "$old_v" != "$new_v" ]; then
+    nidara-hook update-completed "$old_v" "$new_v" || true
+fi
