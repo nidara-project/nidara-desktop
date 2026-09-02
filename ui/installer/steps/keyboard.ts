@@ -13,48 +13,78 @@ import { heading, prose } from "./common"
 
 interface KeyboardLayoutItem {
   label: string
+  /** X11/xkb layout name — what Hyprland speaks, and what we apply live. */
   layout: string
   variant: string
+  /**
+   * Console (vconsole) keymap name — what `/etc/vconsole.conf` speaks.
+   *
+   * ⚠️ These are TWO DIFFERENT NAMESPACES, and four of the rows below disagree
+   * between them: `gb`, `latam`, `pt` and `br` are all valid xkb layouts and none
+   * of them exists as a console keymap. We were sending the xkb name straight into
+   * archinstall's `locale_config.kb_layout`, which is the CONSOLE one — so for
+   * those four the graphical session got the right layout and the TTY silently
+   * stayed on US. (`jp` and `cn` had the same fault and are gone for a different
+   * reason — see the note on the language list.)
+   *
+   * Today that is a nuisance. It stops being one the day disk encryption lands
+   * (#310): mkinitcpio's shipped HOOKS carry `sd-vconsole`, so the LUKS passphrase
+   * prompt uses THIS name. A passphrase typed on a Brazilian keyboard and then
+   * asked for on a US one is a machine its owner cannot unlock.
+   *
+   * Verified against `localectl list-keymaps` (console) and
+   * `/usr/share/X11/xkb/rules/base.lst` (xkb), 2026-09-02.
+   */
+  keymap: string
 }
 
 const KEYBOARD_LAYOUTS: KeyboardLayoutItem[] = [
-  { label: "Español",                         layout: "es",    variant: "" },
-  { label: "English (US)",                    layout: "us",    variant: "" },
-  { label: "English (UK)",                    layout: "gb",    variant: "" },
-  { label: "Español (Latinoamérica)",         layout: "latam", variant: "" },
-  { label: "Français",                        layout: "fr",    variant: "" },
-  { label: "Deutsch",                         layout: "de",    variant: "" },
-  { label: "Italiano",                        layout: "it",    variant: "" },
-  { label: "Português",                       layout: "pt",    variant: "" },
-  { label: "Português (Brasil)",              layout: "br",    variant: "" },
-  { label: "Polski",                          layout: "pl",    variant: "" },
-  { label: "Nederlands",                      layout: "nl",    variant: "" },
-  { label: "Русский",                         layout: "ru",    variant: "" },
-  { label: "日本語 (Romaji)",                 layout: "jp",    variant: "" },
-  { label: "中文 (Pinyin)",                   layout: "cn",    variant: "" },
-  { label: "English (Dvorak)",                layout: "us",    variant: "dvorak" },
-  { label: "English (Colemak)",               layout: "us",    variant: "colemak" },
+  { label: "Español",                 layout: "es",    variant: "",        keymap: "es" },
+  { label: "English (US)",            layout: "us",    variant: "",        keymap: "us" },
+  { label: "English (UK)",            layout: "gb",    variant: "",        keymap: "uk" },
+  { label: "Español (Latinoamérica)", layout: "latam", variant: "",        keymap: "la-latin1" },
+  { label: "Français",                layout: "fr",    variant: "",        keymap: "fr" },
+  { label: "Deutsch",                 layout: "de",    variant: "",        keymap: "de" },
+  { label: "Italiano",                layout: "it",    variant: "",        keymap: "it" },
+  { label: "Português",               layout: "pt",    variant: "",        keymap: "pt-latin1" },
+  { label: "Português (Brasil)",      layout: "br",    variant: "",        keymap: "br-abnt2" },
+  { label: "Polski",                  layout: "pl",    variant: "",        keymap: "pl" },
+  { label: "Nederlands",              layout: "nl",    variant: "",        keymap: "nl" },
+  { label: "Русский",                 layout: "ru",    variant: "",        keymap: "ru" },
+  { label: "English (Dvorak)",        layout: "us",    variant: "dvorak",  keymap: "dvorak" },
+  { label: "English (Colemak)",       layout: "us",    variant: "colemak", keymap: "colemak" },
 ]
 
 export function KeyboardStep(): Step {
-  // Default to Spanish or US layout based on language
-  if (!getAnswers().keyboard) {
-    const lang = getAnswers().language?.locale ?? "en_US.UTF-8"
-    const defaultLayout = lang.startsWith("es")
-      ? KEYBOARD_LAYOUTS[0]
-      : (KEYBOARD_LAYOUTS.find(k => lang.toLowerCase().startsWith(k.layout)) ?? KEYBOARD_LAYOUTS[1])
-    setKeyboardAnswer({
-      layout: defaultLayout.layout,
-      variant: defaultLayout.variant,
-      label: defaultLayout.label,
-    })
-  }
+  // Set the moment somebody activates a row, and never again suggested over.
+  // Without it, walking back to change the language would either be ignored
+  // (an answer already exists) or would silently discard a layout the user
+  // chose on purpose.
+  let userPicked = false
 
   return {
     id: "keyboard",
     title: () => t("keyboardTitle"),
     nextLabel: () => t("continue"),
     ready: () => getAnswers().keyboard !== null,
+
+    // ⚠️ This ran in the factory until 2026-09-02, and the factory runs inside the
+    // array literal in InstallerWindow — before the window exists, and therefore
+    // before anybody has chosen a language. It read `getAnswers().language` and
+    // always got the initial value, so picking Spanish left English (US) ticked.
+    onEnter() {
+      if (userPicked) return
+      const lang = getAnswers().language?.locale ?? "en_US.UTF-8"
+      const suggestion = lang.startsWith("es")
+        ? KEYBOARD_LAYOUTS[0]
+        : (KEYBOARD_LAYOUTS.find(k => lang.toLowerCase().startsWith(k.layout)) ?? KEYBOARD_LAYOUTS[1])
+      setKeyboardAnswer({
+        layout: suggestion.layout,
+        variant: suggestion.variant,
+        keymap: suggestion.keymap,
+        label: suggestion.label,
+      })
+    },
 
     build(notifyReady) {
       const box = new Gtk.Box({
@@ -87,9 +117,11 @@ export function KeyboardStep(): Step {
       }
 
       const applyLayout = (item: KeyboardLayoutItem) => {
+        userPicked = true
         setKeyboardAnswer({
           layout: item.layout,
           variant: item.variant,
+          keymap: item.keymap,
           label: item.label,
         })
         updateRowSelection(item)

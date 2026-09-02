@@ -41,16 +41,19 @@ const COMMON_TIMEZONES = [
 ]
 
 export function TimezoneStep(): Step {
-  if (!getAnswers().timezone) {
-    const live = getLiveDefaults()
-    setTimezoneAnswer({ timezone: live.timezone || "UTC" })
-  }
-
   return {
     id: "timezone",
     title: () => t("timezoneTitle"),
     nextLabel: () => t("continue"),
     ready: () => getAnswers().timezone !== null,
+
+    // Out of the factory for the reason in Step.onEnter, plus one of its own:
+    // getLiveDefaults() shells out three times, and in the factory that happened
+    // while the window was still being constructed.
+    onEnter() {
+      if (getAnswers().timezone) return
+      setTimezoneAnswer({ timezone: getLiveDefaults().timezone || "UTC" })
+    },
 
     build(notifyReady) {
       const box = new Gtk.Box({

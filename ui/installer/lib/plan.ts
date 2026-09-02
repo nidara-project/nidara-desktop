@@ -55,8 +55,17 @@ export function hashPassword(password: string): string {
 
 /**
  * Reads live session defaults (timezone, locale, keymap, hostname).
+ *
+ * Cached: three synchronous subprocesses, and on the only medium where the
+ * installer is armed they can only ever return the same three values — the ISO
+ * generates `en_US.UTF-8` and nothing else, symlinks /etc/localtime to UTC, and
+ * Hyprland's kb_layout defaults to `us`. It was being called once per step
+ * factory and again on every map and every language change of the summary.
  */
+let _liveDefaults: LiveDefaults | null = null
+
 export function getLiveDefaults(): LiveDefaults {
+  if (_liveDefaults) return _liveDefaults
   let timezone = "UTC"
   try {
     const tz = exec(["timedatectl", "show", "-p", "Timezone", "--value"]).trim()
@@ -108,7 +117,7 @@ export function getLiveDefaults(): LiveDefaults {
     }
   } catch {}
 
-  return {
+  _liveDefaults = {
     hostname,
     timezone,
     localeConfig: {
@@ -117,6 +126,7 @@ export function getLiveDefaults(): LiveDefaults {
       sys_lang: sysLang,
     },
   }
+  return _liveDefaults
 }
 
 /**
@@ -144,7 +154,10 @@ export function assemblePlan(
   config.hostname = account.hostname?.trim() || live.hostname || "nidara"
   config.timezone = answers.timezone?.timezone || live.timezone
   config.locale_config = {
-    kb_layout: answers.keyboard?.layout || live.localeConfig.kb_layout,
+    // The CONSOLE keymap, not the xkb layout. archinstall's `kb_layout` ends up in
+    // /etc/vconsole.conf, and the two namespaces disagree for four of our rows —
+    // see the `keymap` field in steps/keyboard.ts for what that costs.
+    kb_layout: answers.keyboard?.keymap || live.localeConfig.kb_layout,
     sys_enc: answers.language?.sysEnc || live.localeConfig.sys_enc,
     sys_lang: answers.language?.sysLang || live.localeConfig.sys_lang,
   }

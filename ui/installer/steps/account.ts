@@ -23,6 +23,22 @@ const SYSTEM_USERS = new Set([
   "systemd-timesync", "avahi", "polkitd", "rtkit", "live",
 ])
 
+/**
+ * What is in the five fields right now, valid or not.
+ *
+ * `answers.account` only holds a COMPLETE account — an incomplete form stores
+ * null there, by design, so nothing downstream can read half an answer. That was
+ * fine while the page was built once and kept. Now a language change rebuilds
+ * every page, and without this the user would walk back to change the language
+ * and return to an emptied form — including a password they had typed twice.
+ */
+let draft = {
+  fullName: "Nidara User",
+  username: "nidara",
+  hostname: "nidara",
+  password: "",
+}
+
 export function AccountStep(): Step {
   return {
     id: "account",
@@ -101,6 +117,8 @@ export function AccountStep(): Step {
         const pw = pwEntry.get_text?.() ?? pwEntry.text ?? ""
         const pw2 = pw2Entry.get_text?.() ?? pw2Entry.text ?? ""
 
+        draft = { fullName: fname, username: uname, hostname: hname, password: pw }
+
         let error = ""
 
         if (uname.length > 0) {
@@ -165,12 +183,7 @@ export function AccountStep(): Step {
       // chose and nothing disclosed. A suggested NAME is a convenience; a suggested
       // CREDENTIAL is a credential, and the interface cannot tell the person which
       // of the two it just handed them.
-      const existing = getAnswers().account ?? {
-        fullName: "Nidara User",
-        username: "nidara",
-        hostname: "nidara",
-        password: "",
-      }
+      const existing = getAnswers().account ?? draft
       if (typeof fullNameEntry.set_text === "function") fullNameEntry.set_text(existing.fullName)
       else fullNameEntry.text = existing.fullName
       if (typeof usernameEntry.set_text === "function") usernameEntry.set_text(existing.username)

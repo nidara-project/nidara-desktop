@@ -11,6 +11,7 @@ import { assemblePlan, type AssembledPlan } from "../lib/plan"
 import { configureInstalledBootloader } from "../lib/bootloader"
 import { applyRealName } from "../lib/real-name"
 import { stripAnsi } from "../lib/ansi"
+import { connectivity, isUsable } from "../lib/network"
 import { heading, prose } from "./common"
 
 export function RunStep(): Step {
@@ -240,6 +241,26 @@ export function RunStep(): Step {
       GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         _busy = true
         const answers = getAnswers()
+
+        // ⚠️ Checked HERE, before prepareDiskAndMounts, and not one line later.
+        // Everything below this point needs the network — pacstrap, the curl that
+        // fetches the repo signing key, the `pacman -Sy` of the three Nidara
+        // packages — and the first thing below it erases a partition table. Failing
+        // after that leaves a machine with no operating system at all, which is
+        // strictly worse than the one it had five minutes ago.
+        connectivity().then(c => {
+          if (!isUsable(c)) {
+            appendLog(`[ERROR] ${t("runErrNoNetwork")}`)
+            finishRun(false)
+            return
+          }
+          startInstall(answers)
+        })
+
+        return GLib.SOURCE_REMOVE
+      })
+
+      function startInstall(answers: ReturnType<typeof getAnswers>) {
         // Two modes, and WHERE it runs picks one: the live medium installs for real, anything
         // else is a dry run. There is deliberately no variable that arms it elsewhere — the
         // dangerous direction is unreachable, not merely discouraged. `NIDARA_INSTALLER_DRY_RUN`
@@ -254,7 +275,7 @@ export function RunStep(): Step {
           } catch (e: any) {
             appendLog(`[ERROR] Failed to prepare disk partitions/mounts: ${e.message || e}`)
             finishRun(false)
-            return GLib.SOURCE_REMOVE
+            return
           }
         }
 
@@ -264,7 +285,7 @@ export function RunStep(): Step {
         } catch (e: any) {
           appendLog(`[ERROR] Failed to assemble installation plan: ${e.message || e}`)
           finishRun(false)
-          return GLib.SOURCE_REMOVE
+          return
         }
 
         const configPath = `/tmp/nidara-plan-${GLib.random_int()}.json`
@@ -281,7 +302,7 @@ export function RunStep(): Step {
         } catch (e: any) {
           appendLog(`[ERROR] Failed to write temporary config files: ${e.message || e}`)
           finishRun(false)
-          return GLib.SOURCE_REMOVE
+          return
         }
 
         const cleanup = () => {
@@ -352,8 +373,7 @@ export function RunStep(): Step {
           finishRun(false)
         }
 
-        return GLib.SOURCE_REMOVE
-      })
+      }
 
       return box
     },

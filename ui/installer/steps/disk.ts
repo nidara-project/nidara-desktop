@@ -128,6 +128,16 @@ export function DiskStep(): Step {
     title: () => t("diskTitle"),
     nextLabel: () => t("continue"),
     ready: () => {
+      // ⚠️ The whole install is UEFI-only and nothing used to say so. Entire-disk
+      // mode lays down a GPT with an `ef00` partition unconditionally and
+      // base.json asks for Systemd-boot, which does not exist outside UEFI — so on
+      // a legacy-BIOS machine the install ran to completion, reported success, and
+      // produced a disk that does not boot. `isUefi()` was already here and was
+      // only ever consulted by the MANUAL branch below.
+      //
+      // Refusing is the honest answer while that is true: there is no BIOS path to
+      // fall back to. If one is ever written, this is the guard that lifts.
+      if (!isUefi()) return false
       const a = getAnswers().disk
       if (!a) return false
       if (a.mode === "entire_disk") return a.disk !== null
@@ -151,6 +161,12 @@ export function DiskStep(): Step {
       })
 
       rootBox.append(heading(t("diskHeading")))
+
+      // Said at the top of the page, before any choice is offered: a refusal the
+      // user cannot see the reason for is just a Continue button that does nothing.
+      if (!isUefi()) {
+        rootBox.append(prose(t("diskErrNoUefi"), "installer-prose--warning"))
+      }
 
       let currentMode: "entire_disk" | "manual" = "entire_disk"
       let selectedDisk: BlockDevice | null = null
@@ -356,16 +372,23 @@ export function DiskStep(): Step {
         halign: Gtk.Align.START,
       })
 
+      // ⚠️ Shown only if the program is actually here, which on the shipped medium
+      // it is NOT: `gparted` is in none of the 174 lines of nidara-iso's
+      // packages.x86_64. The button was offered on every install and did nothing —
+      // and could not even say so, because the `try/catch` around it wraps a
+      // PROMISE, so the spawn failure rejected into nowhere. Not a log line, not a
+      // dialog, not a flicker.
+      //
+      // Hidden rather than deleted: manual mode has no partition editor of its own,
+      // so if a partition editor is ever added to the medium this is where it goes.
       const gpartedBtn = NidaraButton({
         label: t("diskLaunchGparted"),
         variant: "secondary",
       })
+      gpartedBtn.visible = GLib.find_program_in_path("gparted") !== null
       gpartedBtn.connect("clicked", () => {
-        try {
-          execAsync(["gparted"])
-        } catch (e) {
-          console.error("[Installer] Failed to launch GParted:", e)
-        }
+        execAsync(["gparted"]).catch(e =>
+          console.error("[Installer] Failed to launch GParted:", e))
       })
 
       const refreshBtn = NidaraButton({
