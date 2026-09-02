@@ -1,10 +1,17 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Nidara — Installer
+# Nidara — Developer installer
 # Usage:
-#   ./install.sh            # System install (recommended for end users)
-#   ./install.sh --dev      # Developer install (run UI from source)
-#   ./install.sh --update   # Update an existing install (or use nidara-update)
+#   ./install.sh --dev      # Developer install (run the UI from this source tree)
+#   ./install.sh --update   # Update a dev install (or use nidara-update)
+#
+# ⚠️ THIS IS NOT HOW THE DESKTOP IS INSTALLED. Since 2026-09-02 it does one job:
+# put a working copy on a development machine. Installing Nidara Desktop on an
+# Arch system is `pacman -S nidara-desktop` from the [nidara] repo — three
+# commands, in the README, and pacman owns every file. The rule this follows is
+# nidara-iso's PRODUCT.md, "What does NOT change": this script runs on a machine
+# the project does not own, and the fewer ways it has to act like the owner, the
+# less there is to get wrong. Running it with no arguments prints those commands.
 #
 # Update model: STABLE updates are STATELESS — `nidara-update` (bin/) shallow-clones
 # the newest release tag from the remote into a throwaway temp dir, builds/installs
@@ -79,9 +86,6 @@ CONFIG_DIR="${REAL_HOME}/.config/nidara"
 PKG_CACHE="${REAL_HOME}/.cache/nidara/pkgbuild"
 
 # Update plumbing (see header). SOURCE_FILE records a DEV install's source clone.
-# SRC_CANON is the LEGACY per-user source copy: no longer created (stable updates
-# are stateless) — kept here only so a system install can migrate it away.
-SRC_CANON="${REAL_HOME}/.local/share/nidara/src"
 SOURCE_FILE="$CONFIG_DIR/.source"
 REPO_URL="https://github.com/nidara-project/nidara-desktop.git"
 
@@ -89,15 +93,44 @@ REPO_URL="https://github.com/nidara-project/nidara-desktop.git"
 # update       = pull the registered source, then re-exec the NEW installer
 # update-apply = internal: like system, but skips unchanged deps and never
 #                touches the user's dev/source markers
-MODE="system"
+MODE=""
 for arg in "$@"; do
     case "$arg" in
         --dev)          MODE="dev" ;;
         --update)       MODE="update" ;;
         --update-apply) MODE="update-apply" ;;
-        --help) echo "Usage: $0 [--system|--dev|--update]"; exit 0 ;;
+        --help) echo "Usage: $0 [--dev|--update]"; exit 0 ;;
     esac
 done
+
+# No mode, or the retired --system: say how the desktop is actually installed and
+# stop. A message rather than a default, because the default USED to install the
+# desktop — anyone re-running an old command, or following an old page, must be
+# told what replaced it instead of quietly getting a developer install.
+if [ -z "$MODE" ]; then
+    cat >&2 <<'USAGE'
+install.sh installs a DEVELOPMENT copy of Nidara Desktop. To install the desktop
+itself, use the package — pacman then owns every file, and upgrades and removal
+are ordinary pacman:
+
+    curl -O https://nidara-project.github.io/nidara-repo/nidara.gpg
+    sudo pacman-key --add nidara.gpg
+    sudo pacman-key --lsign-key 80B0AC8C36A43611A8619959B06B716279F755A9
+
+    # then add to /etc/pacman.conf:
+    #   [nidara]
+    #   SigLevel = Required DatabaseOptional
+    #   Server = https://nidara-project.github.io/nidara-repo/$arch
+
+    sudo pacman -Syu nidara-desktop && nidara-setup
+
+The full instructions, including what each step does, are in the README under
+"Installation". To work ON the desktop instead, re-run this as:
+
+    ./install.sh --dev
+USAGE
+    exit 1
+fi
 
 # ── User execution helper ────────────────────────────────────────────────────
 # Run a command as the unprivileged user. makepkg refuses to run as root, so when
@@ -253,27 +286,6 @@ if [ "$MODE" = "update" ]; then
     exec bash "$SRC/install.sh" --update-apply
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Release channel for fresh system installs: a normal `git clone` lands on main's
-# tip, which may be ahead of the latest release — installing it would hand the
-# user an unlabelled dev snapshot AND make their first nidara-update a
-# silent downgrade to the newest tag. So: on a CLEAN main checkout with release
-# tags available, jump to the newest tag and re-exec the installer from there
-# (its pins may differ). Loop-safe: after checkout HEAD is detached, so this
-# block no-ops on the second pass. Deliberate opt-outs keep working: --dev
-# installs, dirty trees, and checkouts on any other branch/commit are untouched.
-# ─────────────────────────────────────────────────────────────────────────────
-if [ "$MODE" = "system" ] && [ -d "$REPO_DIR/.git" ] \
-   && [ "$(run_user git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)" = "main" ] \
-   && [ -z "$(run_user git -C "$REPO_DIR" status --porcelain 2>/dev/null)" ]; then
-    release_tag="$(run_user git -C "$REPO_DIR" tag -l 'v*' --sort=-v:refname | head -1)"
-    if [ -n "$release_tag" ] \
-       && [ "$(run_user git -C "$REPO_DIR" rev-parse "$release_tag^{commit}")" != "$(run_user git -C "$REPO_DIR" rev-parse HEAD)" ]; then
-        echo "  Installing release $release_tag (main may be ahead of the release channel)"
-        run_user git -C "$REPO_DIR" checkout -q "$release_tag"
-        exec bash "$REPO_DIR/install.sh"
-    fi
-fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Phase 1 (pacman) carries its own fingerprint: an update skips the sync when the
@@ -338,11 +350,17 @@ if [ "$(printf '%s' "$PACMAN_DEPS" | wc -w)" -lt 40 ]; then
 fi
 DEPS_LIST_SHA="$(printf '%s' "$PACMAN_DEPS" | sha256sum | awk '{print $1}')"
 OLD_VERSION="$(cat /usr/share/nidara/VERSION 2>/dev/null || echo "?")"
-# An update of a dev-mode install must keep dev semantics (config symlinks into
-# the source tree) — otherwise the update would silently downgrade them to copies.
-DEV_LIKE="no"
-[ "$MODE" = "dev" ] && DEV_LIKE="yes"
-[ "$MODE" = "update-apply" ] && [ -f "$CONFIG_DIR/.dev" ] && DEV_LIKE="yes"
+# `--update-apply` is the second half of `--update`, and both only ever run against
+# a dev install now — the stable channel that used to reach this script is gone
+# with the system path (2026-09-02). Refuse rather than half-install: an
+# --update-apply on a machine with no .dev used to mean "apply a system install",
+# and that no longer exists.
+if [ "$MODE" = "update-apply" ] && [ ! -f "$CONFIG_DIR/.dev" ]; then
+    echo "install.sh --update-apply: this machine has no dev install to update" >&2
+    echo "            ($CONFIG_DIR/.dev is missing). A packaged install updates with" >&2
+    echo "            'nidara-update', and a fresh one is 'pacman -Syu nidara-desktop'." >&2
+    exit 1
+fi
 if [ "$MODE" = "update-apply" ] || [ "$MODE" = "dev" ]; then
     if [ -f "$PACMAN_SHA_FILE" ] && [ "$DEPS_LIST_SHA" = "$(cat "$PACMAN_SHA_FILE")" ]; then
         SYNC_PACMAN="no"
@@ -355,38 +373,6 @@ fi
 # in bin/nidara-setup now, next to its only consumers: the per-user config
 # seeds and the greetd template.)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# nidara-repo trust & registration
-# The binary pacman repo (GitHub Pages) ships the `nidara` package itself
-# prebuilt — since 0.8.0 that is the only package this project consumes from it.
-# Its CI GPG-signs every package and the repo db (since 2026-07-05);
-# the public key travels with this repo (packaging/nidara-repo.gpg) so a fresh
-# install needs no extra network fetch to establish trust.
-#
-# This block runs UNCONDITIONALLY (deliberately outside §1's pin-skip):
-# installs registered in the unsigned era carry `SigLevel = Optional TrustAll`
-# in pacman.conf and must be tightened even when phase 1 is skipped. Every step
-# is an idempotent no-op after the first run.
-# ─────────────────────────────────────────────────────────────────────────────
-NIDARA_REPO_KEY="80B0AC8C36A43611A8619959B06B716279F755A9"
-if ! pacman-key --list-keys "$NIDARA_REPO_KEY" &>/dev/null; then
-    echo "  Importing the nidara-repo signing key into pacman's keyring..."
-    sudo pacman-key --add "$REPO_DIR/packaging/nidara-repo.gpg"
-    # lsign = local trust; without it pacman ignores signatures from this key.
-    sudo pacman-key --lsign-key "$NIDARA_REPO_KEY"
-fi
-if ! grep -q '^\[nidara\]' /etc/pacman.conf 2>/dev/null; then
-    echo "  Registering nidara-repo in /etc/pacman.conf..."
-    # `$arch` stays literal — pacman expands it (single-quoted printf format
-    # keeps the shell from touching it).
-    printf '\n[nidara]\nSigLevel = Required DatabaseOptional\nServer = https://nidara-project.github.io/nidara-repo/$arch\n' \
-        | sudo tee -a /etc/pacman.conf > /dev/null
-elif grep -A2 '^\[nidara\]' /etc/pacman.conf | grep -q '^SigLevel = Optional TrustAll$'; then
-    # Unsigned-era registration: flip it to signature verification. The sed
-    # range keeps the substitution inside the [nidara] section only.
-    echo "  Migrating nidara-repo to GPG signature verification..."
-    sudo sed -i '/^\[nidara\]/,/^\[/ s/^SigLevel = Optional TrustAll$/SigLevel = Required DatabaseOptional/' /etc/pacman.conf
-fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. System dependencies
@@ -447,10 +433,6 @@ sudo ldconfig
 # 3. Build the Nidara UI bundle
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[3/5] Building Nidara UI..."
-if [ "$DEV_LIKE" = "no" ]; then
-echo "  Skipped — system installs get Nidara as a pacman package (prebuilt from"
-echo "  nidara-repo, or built from this tree by makepkg in step 6)."
-else
 cd "$REPO_DIR/ui/shell"
 npm install
 npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
@@ -484,77 +466,12 @@ cd "$REPO_DIR/ui/lockscreen"
 mkdir -p build
 "$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-lock
 echo "  [OK] Lockscreen bundle: $REPO_DIR/ui/lockscreen/build/nidara-lock"
-fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. Install system files
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[4/5] Installing system files..."
 
-if [ "$DEV_LIKE" = "no" ]; then
-# ── System installs consume the nidara PACKAGE ───────────────────────────────
-# Prebuilt from nidara-repo when it serves this release, else built locally
-# from packaging/nidara/PKGBUILD. Either way pacman owns every installed file:
-# clean upgrades (pacman -Syu), clean removal, no untracked drift. --overwrite
-# hands over files that script-era installs wrote untracked into /usr (same
-# transition build_install_pkg documents for the Astal libs).
-_ver="$(cat "$REPO_DIR/VERSION")"
-NIDARA_FROM_REPO="no"
-
-# The PREBUILT package is only a faithful install of this tree when the tree IS
-# the release it was built from: a git-less release tarball, or a clean checkout
-# of the v$_ver tag (nidara-update temp clones; release-channel installs). Any
-# other tree (branches, local commits, dirty escape-hatch runs) builds locally —
-# installing the repo's binaries would silently ignore the user's changes.
-_tree_is_release="no"
-if [ ! -d "$REPO_DIR/.git" ]; then
-    _tree_is_release="yes"
-elif [ -z "$(run_user git -C "$REPO_DIR" status --porcelain 2>/dev/null)" ] \
-  && [ "$(run_user git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null)" = "$(run_user git -C "$REPO_DIR" rev-parse "v$_ver^{commit}" 2>/dev/null)" ]; then
-    _tree_is_release="yes"
-fi
-
-if [ "$_tree_is_release" = "yes" ]; then
-    echo "  Installing nidara-desktop from nidara-repo (prebuilt)..."
-    if sudo pacman -S --needed --noconfirm --overwrite '*' nidara-desktop; then
-        # Lockstep guard, same rationale as the Astal stack in §1: a repo that
-        # lags the release "succeeds" with the PREVIOUS version — build locally
-        # instead of silently keeping stale binaries.
-        _nidara_v="$(pacman -Q nidara-desktop 2>/dev/null | awk '{print $2}')"
-        if [ "${_nidara_v%%-*}" = "$_ver" ]; then
-            NIDARA_FROM_REPO="yes"
-            echo "  [OK] nidara-desktop $_nidara_v installed from nidara-repo."
-        else
-            echo "  [WARN] nidara-repo serves $_nidara_v but this release is $_ver — the repo"
-            echo "         likely wasn't rebuilt for this release yet. Building locally."
-        fi
-    else
-        echo "  [WARN] nidara-desktop unavailable from nidara-repo — building the package locally."
-    fi
-else
-    echo "  Tree is not exactly release v$_ver — building the nidara-desktop package from this tree."
-fi
-
-if [ "$NIDARA_FROM_REPO" = "no" ]; then
-    build_local_nidara_pkg
-fi
-
-# Orphans that script-era installs left as untracked files (the package
-# handover only covers paths the package OWNS; these old paths aren't in it):
-sudo rm -rf /usr/share/nidara/ui/ags-v3 /usr/share/themes/crystal-shell
-sudo rm -f /usr/share/nidara/wallpaper.png /usr/share/xdg-desktop-portal/portals/nidara.conf
-
-# Installing the package replaced /usr/share/nidara/config/hypr/hyprland.lua.
-# If a Nidara session is live right now (update-apply, script→package handoff,
-# escape-hatch rerun from a terminal), Hyprland's config watch fired mid-extract,
-# errored "cannot open … hyprland.lua", and the banner sticks — the watch died
-# with the old inode. Reload now that the new file is in place; no-op outside a
-# session (clean installs from TTY/SSH, or when sudo stripped the session env).
-if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
-    run_user hyprctl reload >/dev/null 2>&1 || true
-fi
-
-else
 # ── Dev installs copy source files straight into /usr ────────────────────────
 # If the desktop PACKAGE is installed, pacman owns those paths and the next
 # -Syu would clobber the dev copies — remove it first (files re-copied below).
@@ -786,7 +703,6 @@ systemctl --user restart xdg-desktop-portal 2>/dev/null || true
 sudo mkdir -p /usr/share/fontconfig/conf.avail /etc/fonts/conf.d
 sudo cp "$REPO_DIR/config/fontconfig/65-0-nidara-noto-cjk.conf" /usr/share/fontconfig/conf.avail/65-0-nidara-noto-cjk.conf
 sudo ln -sf /usr/share/fontconfig/conf.avail/65-0-nidara-noto-cjk.conf /etc/fonts/conf.d/65-0-nidara-noto-cjk.conf
-fi
 
 # The pacman list fingerprint — --update compares it to decide whether
 # phase 1 (package sync) can be skipped.
@@ -808,26 +724,16 @@ if [ "$MODE" = "dev" ]; then
     echo "$REPO_DIR" > "$CONFIG_DIR/.dev"
     chown "$REAL_USER:" "$CONFIG_DIR/.dev"
     echo "  [Dev] nidara-ui will run from: $REPO_DIR"
-elif [ "$MODE" = "system" ]; then
-    rm -f "$CONFIG_DIR/.dev"
 fi
 
-# ── Source registration / migration ──────────────────────────────────
-# Stable updates are STATELESS (nidara-update re-clones the remote to a temp dir),
-# so a system install keeps NO persistent source copy and writes no .source — it
-# just migrates away the legacy per-user canonical clone. Dev installs DO register
-# their own clone (that's what `nidara-update`'s dev path follows). update-apply
-# never registers or migrates (the stable wrapper already migrated).
+# ── Source registration ──────────────────────────────────────────────
+# A dev install registers its own clone: that is the path `nidara-update` follows
+# to update it. update-apply never re-registers — it runs FROM the clone it is
+# updating, and rewriting the marker mid-update could only ever change it to the
+# value it already has, or to a wrong one.
 if [ "$MODE" = "dev" ]; then
     echo "$REPO_DIR" > "$SOURCE_FILE"
     chown "$REAL_USER:" "$SOURCE_FILE"
-elif [ "$MODE" = "system" ]; then
-    if [ -e "$SRC_CANON" ]; then
-        rm -rf "$SRC_CANON"
-        echo "  [Source] Removed legacy per-user source copy: $SRC_CANON"
-    fi
-    rm -f "$SOURCE_FILE"
-    echo "  [Source] Stateless updates — nidara-update re-clones the remote each time."
 fi
 
 # Everything else a first login needs — per-user config seeding, uwsm env +
@@ -854,12 +760,14 @@ if [ "$MODE" = "update-apply" ]; then
         echo "  Shell reloaded."
     fi
 else
-    echo "  ✓ Installation complete ($MODE mode)"
-    if [ "$MODE" = "dev" ]; then
-        echo "  Dev: nidara-ui will run from source at $REPO_DIR"
-        echo "  To exit dev mode: rm $CONFIG_DIR/.dev && install.sh"
-    fi
-    echo "  Select 'Nidara' at the login screen."
-    echo "  Update later with: nidara-update"
+    echo "  ✓ Dev install complete"
+    echo "  nidara-ui will run from source at $REPO_DIR"
+    echo "  Select 'Nidara' at the login screen; update later with: nidara-update"
+    echo ""
+    # Leaving dev mode is no longer "run this script the other way" — this script
+    # has no other way since 2026-09-02. It is: drop the marker, then install the
+    # package, which then owns the files this dev install copied into /usr.
+    echo "  To go back to a packaged install: rm $CONFIG_DIR/.dev, then"
+    echo "  'sudo pacman -Syu nidara-desktop && nidara-setup' (see the README)."
 fi
 echo ""

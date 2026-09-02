@@ -110,8 +110,9 @@ pulls everything else in. It also works on top of an existing Arch desktop: if a
 is already enabled it is left untouched and Nidara Desktop is just added as another session to
 pick at login.
 
-**There are two ways in, and the package is the one to use.** The script below exists for the
-cases the package cannot cover — building from source, and developing on the desktop itself.
+**There is one way in: the package.** The script further down is not a second one — it installs a
+development copy for working on the desktop itself, and run without arguments it now just points
+back here.
 
 **It treats the machine as yours.** It does not rename your operating system — on a system
 converted this way, Settings → About correctly reads *Arch Linux* for the OS and *Nidara Desktop*
@@ -166,32 +167,28 @@ running it again repairs rather than duplicates.
 
 **To start:** reboot and select _Nidara_ from the login screen.
 
-### The script
+### The script is for working ON the desktop
 
 ```bash
 sudo pacman -S --needed git
-git clone https://github.com/nidara-project/nidara-desktop.git ~/nidara-install
-cd ~/nidara-install
-./install.sh
+git clone https://github.com/nidara-project/nidara-desktop.git ~/Dev/nidara
+cd ~/Dev/nidara
+./install.sh --dev
 ```
 
-`install.sh` does the three steps above for you, and two things they cannot:
+`install.sh` installs a **development copy**: the shell runs from your working tree instead of
+from an installed bundle, so editing a `.tsx` and pressing `Super+Shift+R` shows the change. That
+is the path for contributing, and the [Developer Guide](#developer-guide) picks up from here.
 
-- **it falls back to building.** If the repo is unreachable, or does not serve your exact release
-  yet, it builds the same pinned sources locally with the very recipe the repo uses — the same
-  `packaging/nidara/PKGBUILD`, so what lands is still a package.
-- **`--dev`**, which runs the desktop from your working copy instead of from an installed bundle.
-  That is the path for contributing, and it is documented in the
-  [Developer Guide](#developer-guide).
+⚠️ **It is not another way to install the desktop.** It used to be — a bare `./install.sh` did a
+system install — and it no longer is: run without arguments it prints the package commands above
+and stops. One way in, and pacman owns the files.
 
-It installs the **latest release**, not your checkout: if your `main` is ahead of the tag, it
-jumps back to the release first, so you get the version everyone else is testing. Developers opt
-out with `--dev` or by checking out another branch.
-
-⚠️ **It will run `sudo pacman -Syu` and show you the transaction.** Nothing is installed until you
-accept it, and declining stops the install rather than continuing against out-of-date libraries.
-It used to pass `--noconfirm`, which meant it upgraded machines unattended; that was wrong on a
-machine the project does not own, and it is fixed.
+⚠️ **It will run `sudo pacman -Syu` and show you the transaction.** Arch does not support partial
+upgrades, so the dependencies cannot go on until the system is current. Nothing is installed until
+you accept, and declining stops the install rather than continuing against out-of-date libraries.
+It used to pass `--noconfirm` and upgrade machines unattended; that was wrong on a machine the
+project does not own.
 
 ### What is guaranteed, and where
 
@@ -220,12 +217,11 @@ changed. A plain `pacman -Syu` delivers the same release (it's just a package); 
 is the wrapper that also handles setup and the live reload. Updates take a minute, not an hour:
 prebuilt packages, no local builds.
 
-Installs that predate the package model migrate by themselves: their first `nidara-update`
-fetches the latest release into a throwaway directory and installs it as the `nidara-desktop` package —
-pacman takes ownership of the files, and every later update takes the package path above. No
-source copy is kept on disk, so the folder you originally cloned stays disposable. Your config
-in `~/.config/nidara/` is never touched. **Settings → About** also tells you when a new release
-is available.
+An install that predates the package model has no package for `nidara-update` to upgrade, so it
+prints the three commands above and stops. Installing the package once is the migration: pacman
+takes ownership of the files the old install wrote, and every later update takes the package path.
+The folder you originally cloned stays disposable, and your configuration in `~/.config/nidara/`
+is never touched either way. **Settings → About** also tells you when a new release is available.
 
 > **Status:** this page is the *existing Arch* path, and it is stable. The other path — a live
 > image that installs a complete system on a blank disk — now exists as **Nidara**, with its own

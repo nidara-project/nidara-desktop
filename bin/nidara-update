@@ -2,27 +2,27 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # nidara-update — update an installed Nidara. Installed to /usr/bin/nidara-update.
 #
-# Three paths:
+# Two paths, and a message for the case that is neither:
 #   DEV     — if a dev install registered its own clone (~/.config/nidara/.dev,
 #             written by `install.sh --dev`), update from THERE, following the dev
 #             branch. Hands over to that clone's install.sh so the updater itself
 #             updates with the repo.
 #   PACKAGE — the desktop is installed as the pacman package `nidara-desktop`
-#             (`nidara` before the 2026-08-30 rename; both are handled)
-#             the packaging switch): new releases arrive through the [nidara]
-#             repo on a plain full upgrade, pacman owns files and deps, no git
-#             involved. nidara-setup then re-applies the idempotent system/user
-#             setup (new config seeds, greetd refresh, new services).
-#   STABLE (script-era) — STATELESS: there is NO persistent source copy on disk.
-#             Resolve the newest release tag on the remote, shallow-clone just
-#             that tag into a throwaway temp dir, install from there, delete it.
-#             Running this once on a pre-package install MIGRATES it to the
-#             package: the clone's install.sh installs nidara as a package (§6),
-#             so the next update takes the PACKAGE path above.
+#             (`nidara` before the 2026-08-30 rename; both are handled): new
+#             releases arrive through the [nidara] repo on a plain full upgrade,
+#             pacman owns files and deps, no git involved. nidara-setup then
+#             re-applies the idempotent system/user setup (new config seeds,
+#             greetd refresh, new services).
+#
+# ⚠️ There used to be a THIRD, "STABLE (script-era)": clone the newest release tag
+# into a temp dir and install from there, migrating a pre-package install to the
+# package on the way. It is gone with install.sh's system path (2026-09-02,
+# nidara-iso PRODUCT.md → step 3). Migrating IS installing the package now, so
+# that branch prints the three commands instead of being a second implementation
+# of them. Nothing else in this file used the clone, which is why REPO_URL left
+# with it.
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
-
-REPO_URL="https://github.com/nidara-project/nidara-desktop.git"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/nidara"
 
 # ── DEV path: update from the developer's own registered clone ─────────────────
@@ -108,45 +108,34 @@ if _pkg="$(_installed_desktop_pkg)"; then
     exit 0
 fi
 
-# ── STABLE path: stateless update from the remote ─────────────────────────────
-command -v git >/dev/null || { echo "nidara-update: git is required." >&2; exit 1; }
-
-# Migrate away from the legacy per-user source copy this model replaces. Safe on
-# the stable channel: it keeps no persistent source.
-rm -rf "$HOME/.local/share/nidara/src" 2>/dev/null || true
-rm -f "$CONFIG_DIR/.source" 2>/dev/null || true
-
-# The version on disk before we touch anything — the `update-completed` hook's
-# first argument. Empty on a machine that has never had a versioned install;
-# the hook is then simply not fired (there is no "from" to report).
-old_v="$(cat /usr/share/nidara/VERSION 2>/dev/null || true)"
-
-# Newest release tag (the stable channel), resolved without cloning. Empty before
-# the first release exists → fall back to the default-branch tip.
-latest_tag="$(git ls-remote --tags --refs "$REPO_URL" 'v*' 2>/dev/null \
-    | sed 's#.*/##' | sort -V | tail -1)"
-
-# Throwaway checkout on disk (NOT /tmp: a shallow clone + npm build on tmpfs would
-# hammer RAM). Removed on exit, success or failure.
-mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}/nidara"
-work="$(mktemp -d "${XDG_CACHE_HOME:-$HOME/.cache}/nidara/update.XXXXXX")"
-trap 'rm -rf "$work"' EXIT
-
-if [ -n "$latest_tag" ]; then
-    echo "nidara-update: fetching release $latest_tag …"
-    git clone --quiet --depth 1 --branch "$latest_tag" "$REPO_URL" "$work"
-else
-    echo "nidara-update: no release tags yet — fetching the latest commit …"
-    git clone --quiet --depth 1 "$REPO_URL" "$work"
-fi
-
-# Build + install from the throwaway clone. --update-apply behaves like a system
-# install but skips the Astal/AGS rebuild when the pins are unchanged and writes
-# NO source marker; install.sh elevates with sudo internally. No exec — let the
-# EXIT trap clean up the temp dir afterwards.
-bash "$work/install.sh" --update-apply
-
-new_v="$(cat /usr/share/nidara/VERSION 2>/dev/null || true)"
-if [ -n "$old_v" ] && [ -n "$new_v" ] && [ "$old_v" != "$new_v" ]; then
-    nidara-hook update-completed "$old_v" "$new_v" || true
-fi
+# ── No package, no dev clone: an install from before the package model ───────
+# There is nothing left here to drive such an update. `install.sh` lost its system
+# path on 2026-09-02 (nidara-iso PRODUCT.md, "What does NOT change" → step 3), so
+# the stateless clone-and-install this branch used to do has no implementation and
+# no reason to have one: migrating to the package IS the three commands below, and
+# they are the same ones a first-time install runs.
+#
+# Judged safe to drop rather than reimplement: the package model landed in August
+# 2026 and pre-package installs are not believed to exist in the wild. If one
+# does, it is not broken by this — it is told exactly what to run, which is more
+# than the old path explained while it was doing it.
+echo "nidara-update: this install predates the package model — there is no package" >&2
+echo "               and no registered dev clone to update from." >&2
+echo "" >&2
+echo "Install the package once; every later update is then 'nidara-update' or a" >&2
+echo "plain 'pacman -Syu', and pacman owns the files:" >&2
+echo "" >&2
+echo "    curl -O https://nidara-project.github.io/nidara-repo/nidara.gpg" >&2
+echo "    sudo pacman-key --add nidara.gpg" >&2
+echo "    sudo pacman-key --lsign-key 80B0AC8C36A43611A8619959B06B716279F755A9" >&2
+echo "" >&2
+echo "    # then add to /etc/pacman.conf:" >&2
+echo "    #   [nidara]" >&2
+echo "    #   SigLevel = Required DatabaseOptional" >&2
+echo "    #   Server = https://nidara-project.github.io/nidara-repo/\$arch" >&2
+echo "" >&2
+echo "    sudo pacman -Syu nidara-desktop && nidara-setup" >&2
+echo "" >&2
+echo "The files this install wrote into /usr are handed over by that upgrade." >&2
+echo "Your configuration in ~/.config/nidara/ is not touched." >&2
+exit 1
