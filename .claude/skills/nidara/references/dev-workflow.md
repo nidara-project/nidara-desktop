@@ -495,6 +495,45 @@ destructive path has to be genuinely reachable for the control to be worth anyth
 reproduce it is therefore a safety decision, not a convenience one. That one goes in the VM before
 it goes anywhere.
 
+### Language, keyboard and timezone are ONE step, and the data comes off the system
+
+`steps/region.ts` replaced `language.ts`, `keyboard.ts` and `timezone.ts`, which were the same widget
+three times over hand-written slices — 12 locales, 16 layouts, 26 zones, no way out of the slice.
+
+⚠️ **The fold is not because the live session knows the answers.** It cannot: the ISO's `locale.gen`
+carries one line (`en_US.UTF-8`), `/etc/localtime` is a symlink to UTC and `hyprland.lua` defaults
+`kb_layout` to `us`. Settings → Language even shows a single row on the live medium, because
+`localectl list-locales` lists only GENERATED locales. So `getLiveDefaults()` spends three
+subprocesses discovering three constants, and the page has to ask.
+
+`lib/region.ts` reads four files that are on every Arch system and maintained by somebody else:
+`zoneinfo/iso3166.tab` (249 countries), `zoneinfo/zone1970.tab` (312 zones, each tied to countries),
+`i18n/SUPPORTED` (328 UTF-8 locales) and `systemd/kbd-model-map` (62 keyboards, and the keymap↔xkb
+bridge above).
+
+🔑 **A country NARROWS the three questions; it does not answer them.** `defaultsFor` fills a field in
+only when the data is unambiguous and returns **null** otherwise, and null is the useful answer —
+a page that shows Brazil's sixteen zones and waits has asked a small question, while one that
+silently picked has answered a different question than the user did. Two traps that were shipped
+once and are the reason `scripts/dev/region-probe.ts` exists:
+
+- **Sorting a country's locales by CODE is not a ranking.** It made Spain default to Aragonese,
+  Brazil to Hunsrik, the United States to Cherokee, the United Kingdom to Welsh — every one a real
+  locale of that country and none of them the answer. `primaryLocaleFor` uses kbd-model-map's BCP-47
+  column instead, which covers 54 of the 249; the rest get null.
+- **`zone1970.tab`'s order is not by population.** Brazil begins at an island of three thousand
+  people and the United States at New York out of twenty-nine.
+
+⚠️ **There is no separate "regional format" question, and that does NOT contradict Settings.** The
+installer writes only LANG, so the seven `LC_*` in `core/RegionConfig.ts` fall back to it — which is
+`regionalLocale: ""`, the value Settings shows as *"Same as language"* and ships as its DEFAULT. An
+installed machine lands in Settings' own default state. Likewise there is no "interface language"
+question: the shell reads LANG to pick its own.
+
+⚠️ Locale rows are labelled by **endonym** through `Intl.DisplayNames` — ICU is in GJS, so
+"español de España" is derived, not transcribed. And use `Gtk.Entry`, not `Gtk.SearchEntry`: the
+installer's sheet styles `entry`, a SearchEntry draws on `entry.search` and arrives unstyled.
+
 ### The step FACTORIES all run at once — a default that reads an earlier answer belongs in `onEnter`
 
 `InstallerWindow.ts` builds its eight steps in one array literal, so **every `XxxStep()` runs before
@@ -537,7 +576,9 @@ which is the **console** one — and four of them do not exist there at all:
 | `br` | `br-abnt2` |
 
 Verify with `localectl list-keymaps` (console) against `/usr/share/X11/xkb/rules/base.lst` (xkb).
-`KeyboardLayoutItem` carries both now: `layout` for the live session, `keymap` for the plan.
+`KeyboardLayout` in `ui/installer/lib/region.ts` carries both — `layout` for the live session,
+`keymap` for the plan — and it is no longer transcribed: the mapping IS `kbd-model-map`, read at
+runtime, so the four rows above are a description of that file rather than a copy of it.
 
 ⚠️ **This is a lockout waiting for #310.** mkinitcpio's shipped `HOOKS` carry `sd-vconsole`, so the
 LUKS passphrase prompt uses the **console** keymap. A passphrase typed on a Brazilian keyboard and
