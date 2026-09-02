@@ -53,8 +53,11 @@ export interface LanguageAnswer {
 }
 
 export interface KeyboardAnswer {
+  /** xkb layout — the live session and Hyprland. */
   layout: string
   variant: string
+  /** vconsole keymap — /etc/vconsole.conf, the TTY, and the LUKS prompt. */
+  keymap: string
   label: string
 }
 

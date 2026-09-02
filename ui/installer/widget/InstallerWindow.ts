@@ -1,9 +1,11 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
+import GLib from "gi://GLib"
 import app from "../../lib/host"
 import {
   NidaraButton, NidaraCircleButton, NidaraClamp, NidaraWindow,
   NidaraScrolled, NidaraSidebar, NIDARA_WINDOW_RADIUS,
+  showNidaraAlert,
   type NidaraWindowResult,
 } from "../../lib/nidara-kit"
 import { ndIcon } from "../../lib/icons"
@@ -65,6 +67,9 @@ export function InstallerWindow(): Gtk.Window {
   const flow = Flow(steps)
 
   const canExit = () => flow.current().busy?.() !== true
+  // Set by the confirmation dialog so the close it then asks for is not questioned
+  // a second time by the very hook that raised it.
+  let confirmedQuit = false
 
   const sidebarDefs = [
     { id: "welcome", titleKey: "welcomeTitle", iconName: "hand" },
@@ -191,11 +196,45 @@ export function InstallerWindow(): Gtk.Window {
     footer,
     header: { start: head.start, end: head.end },
     closeOnEscape: true,
-    onClose: () => !canExit(),
-    defaultWidth: 960,
-    defaultHeight: 760,
-    minWidth: 960,
-    minHeight: 760,
+    // Refused while the install is running (that has always been true), and now
+    // also questioned once anything has been answered.
+    //
+    // Nidara had never implemented an "are you sure" on any window, and both
+    // halves of one were already sitting here: NidaraWindow's `onClose` hook
+    // refuses a close by returning true, and the kit ships `showNidaraAlert`.
+    // Nothing had wired them together, so the X and Escape threw away a filled-in
+    // form — a chosen disk, a typed password — on one stray click, with no undo
+    // and nothing on screen to suggest one was possible.
+    //
+    // Past the welcome page is the test, which is where Calamares draws the same
+    // line: before that there is nothing to lose and a confirmation is just a
+    // second click.
+    onClose: () => {
+        if (!canExit()) return true
+        if (confirmedQuit || flow.currentIndex() === 0) return false
+        showNidaraAlert({
+            parent: win,
+            heading: t("quitHeading"),
+            body: t("quitBody"),
+            responses: [
+                { id: "stay", label: t("quitStay"), suggested: true },
+                { id: "quit", label: t("quitConfirm"), destructive: true },
+            ],
+            onResponse: (id) => {
+                if (id !== "quit") return
+                confirmedQuit = true
+                shell.close()
+            },
+        })
+        return true
+    },
+    // No geometry of our own. NidaraWindow already derives both numbers from
+    // WINDOW_LAYOUT — an opening width that keeps the sidebar docked at the pane's
+    // full width, and a minimum at the distress floor. This asked for 960×760 by
+    // hand, which is 108px wider than its own layout needs (250 sidebar + 600 pane
+    // + 2 rim = 852) and 280px taller than the minimum two cards and a header
+    // require. A 1366×768 laptop could not fit the window it was being handed.
+    // Closes #312.
     resizable: true,
   })
 
@@ -258,7 +297,23 @@ export function InstallerWindow(): Gtk.Window {
     head.setCanClose(canExit())
   }
   flow.onChange(sync)
-  onLocaleChange(sync)
+  // A language change invalidates every page, because a page translates itself
+  // once, inside build(). The frame and the summary were the only two things
+  // subscribed here; the other six steps held 72 strings frozen at whatever the
+  // language happened to be when each was first reached.
+  //
+  // ⚠️ Deferred to an idle, and it has to be: the only thing that changes the
+  // language is activating a row on the language page, so this fires from inside
+  // that row's own "row-activated" handler — and the rebuild destroys the list
+  // that handler is still running on. Let the emission finish first.
+  onLocaleChange(() => {
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      flow.invalidate()
+      sync()
+      return GLib.SOURCE_REMOVE
+    })
+    sync()
+  })
   sync()
 
   return win

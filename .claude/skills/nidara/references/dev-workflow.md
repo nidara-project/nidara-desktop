@@ -495,6 +495,60 @@ destructive path has to be genuinely reachable for the control to be worth anyth
 reproduce it is therefore a safety decision, not a convenience one. That one goes in the VM before
 it goes anywhere.
 
+### The step FACTORIES all run at once — a default that reads an earlier answer belongs in `onEnter`
+
+`InstallerWindow.ts` builds its eight steps in one array literal, so **every `XxxStep()` runs before
+the window exists**. `build()` is lazy (first arrival), the factory never was, and the factory is
+where each step used to seed its default. That produced two bugs that look unrelated:
+
+- **The keyboard ignored the language** (#390). `KeyboardStep()` read `getAnswers().language` in its
+  constructor and therefore always read the initial value. Choosing Spanish left English (US) ticked.
+- **Half the installer stayed in the previous language** (#389). A page translates itself inside
+  `build()`, which runs once, so 72 strings froze — and because pages are built on arrival, the
+  result was not "it stays in English" but "it is in whichever language you spoke when you happened
+  to walk past each page". Only the frame and the summary were subscribed to `onLocaleChange`.
+
+`lib/flow.ts` grew two things for this. **`Step.onEnter?()`** runs on every entry, *before* `build()`
+on a first visit — put anything that depends on an earlier answer there, never in the factory. And
+**`FlowResult.invalidate()`** throws away every built page (current one rebuilt at once, the rest on
+next entry); the window calls it on a language change.
+
+⚠️ `invalidate()` is only safe because **no step keeps state in its widgets** — every one reads
+`lib/answers.ts` on build and restores what was chosen. That is a contract: a step that starts
+holding state in a widget must put it in `answers.ts` too. The account step is the exception that
+proves it — `answers.account` is null until the form is *complete*, so it keeps its own `draft`.
+
+⚠️ And the rebuild has to be **deferred to an idle**: the only thing that changes the language is
+activating a row on the language page, so the callback fires inside that row's own `row-activated`
+handler and the rebuild would destroy the list still emitting it.
+
+### A keyboard layout has TWO names, and archinstall wants the other one
+
+`xkb` layouts (what Hyprland speaks, what `hyprctl keyword input:kb_layout` takes) and **vconsole
+keymaps** (what `/etc/vconsole.conf` takes) are different namespaces with overlapping names. The
+installer offered xkb names and sent them straight into archinstall's `locale_config.kb_layout`,
+which is the **console** one — and four of them do not exist there at all:
+
+| xkb | console keymap |
+|---|---|
+| `gb` | `uk` |
+| `latam` | `la-latin1` |
+| `pt` | `pt-latin1` |
+| `br` | `br-abnt2` |
+
+Verify with `localectl list-keymaps` (console) against `/usr/share/X11/xkb/rules/base.lst` (xkb).
+`KeyboardLayoutItem` carries both now: `layout` for the live session, `keymap` for the plan.
+
+⚠️ **This is a lockout waiting for #310.** mkinitcpio's shipped `HOOKS` carry `sd-vconsole`, so the
+LUKS passphrase prompt uses the **console** keymap. A passphrase typed on a Brazilian keyboard and
+then asked for on a US one is a disk its owner cannot open. Disk encryption does not ship until the
+initramfs keymap is verified on a non-US layout.
+
+⚠️ **Related, and the reason Japanese and Simplified Chinese are not offered as languages**: Nidara
+ships no input method (no `fcitx5`, no `ibus`, in neither `packages.x86_64` nor the desktop's
+depends). Those languages need one to be typed at all, so offering them installs a system its owner
+cannot write in. The translations stay in `lib/i18n.ts`; the *offer* comes back when an IME ships.
+
 ### The installer's log is not a terminal, and the children writing to it assume one
 
 Everything `steps/run.ts` spawns — archinstall, and pacman under it — writes for a TTY. Captured
