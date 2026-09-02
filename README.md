@@ -104,59 +104,108 @@ Hardware-compatibility fixes are explicitly a "global" contribution — see
 > page for it.
 
 Nidara Desktop targets **Arch Linux** (see [Hardware & platform support](#hardware--platform-support)
-for what's tested, including which Arch derivatives qualify). The intended
-path is the simplest one: install a **minimal Arch base with no desktop environment**, log in at
-the TTY, and run the installer — it pulls everything else in. It also works on top of an existing
-Arch desktop: if a display manager is already enabled it's left untouched and Nidara Desktop is
-just added as another session to pick at login.
+for what's tested, including which Arch derivatives qualify). The intended starting point is a
+**minimal Arch base with no desktop environment** — log in at the TTY and install the package; it
+pulls everything else in. It also works on top of an existing Arch desktop: if a display manager
+is already enabled it is left untouched and Nidara Desktop is just added as another session to
+pick at login.
+
+**There are two ways in, and the package is the one to use.** The script below exists for the
+cases the package cannot cover — building from source, and developing on the desktop itself.
 
 **It treats the machine as yours.** It does not rename your operating system — on a system
 converted this way, Settings → About correctly reads *Arch Linux* for the OS and *Nidara Desktop*
 for the environment. It does not touch your bootloader, and it does not choose your applications.
 
-**Prerequisites:** a normal user account with `sudo`, an internet connection, and `git`:
+### The package
+
+Nidara Desktop ships as a **signed pacman package** in the project's own repository. Adding that
+repository and installing from it is the whole install: no clone, no script, and pacman owns every
+file from the first second — clean upgrades with the rest of your system, clean removal with
+`pacman -R nidara-desktop`, no untracked drift. There is no AUR helper anywhere in this.
+
+**1. Trust the signing key.**
+
+```bash
+curl -O https://nidara-project.github.io/nidara-repo/nidara.gpg
+sudo pacman-key --add nidara.gpg
+sudo pacman-key --lsign-key 80B0AC8C36A43611A8619959B06B716279F755A9
+```
+
+Every package and the repository database are GPG-signed by CI with that key. `--lsign-key` is not
+optional — without local trust, pacman ignores signatures from it entirely.
+
+**2. Add the repository** — append this to `/etc/pacman.conf`:
+
+```ini
+[nidara]
+SigLevel = Required DatabaseOptional
+Server = https://nidara-project.github.io/nidara-repo/$arch
+```
+
+Leave `$arch` exactly as written; pacman expands it.
+
+**3. Install it, and run the one-time setup.**
+
+```bash
+sudo pacman -Syu nidara-desktop
+nidara-setup
+```
+
+Syncing, upgrading and installing in **one** transaction is deliberate: Arch does not support
+partial upgrades, so a package installed against a freshly synced database on a system that has
+not been upgraded is how a new library ends up beside its old dependants. It is also your
+decision to read and approve, which is the other reason it is written this way here.
+
+`nidara-setup` is the part packaging cannot do: it creates `~/.config/nidara/` with default
+configs (never overwritten afterwards), seeds your keyboard layout and timezone from the Arch
+setup you already have, generates the system locales for every language the UI ships, and enables
+`pipewire`, `wireplumber`, `power-profiles-daemon`, `bluetooth` and — only if no display manager
+is already enabled — `greetd` with the Nidara greeter. It never prompts, and it is idempotent:
+running it again repairs rather than duplicates.
+
+**To start:** reboot and select _Nidara_ from the login screen.
+
+### The script
 
 ```bash
 sudo pacman -S --needed git
-```
-
-Then clone and run:
-
-```bash
 git clone https://github.com/nidara-project/nidara-desktop.git ~/nidara-install
 cd ~/nidara-install
 ./install.sh
 ```
 
-The installer installs the **latest release** (if your clone's `main` is ahead of it, the
-installer jumps back to the release tag first — you always get the same tested version as
-everyone else; developers opt out with `--dev` or by checking out another branch).
+`install.sh` does the three steps above for you, and two things they cannot:
 
-The installer needs no AUR helper — everything lands as **real pacman packages, prebuilt from
-the project's signed repo** ([nidara-repo](https://github.com/nidara-project/nidara-repo)): every
-package and the repo database are GPG-signed by CI, and the installer imports the signing key and
-requires valid signatures. That includes **the desktop itself**: it ships as a `nidara-desktop`
-package, so pacman owns every installed file — clean upgrades with the rest of the system, clean
-removal with `pacman -R nidara-desktop`, no untracked drift. If the repo is ever unreachable, or it
-doesn't serve your exact release yet, the installer builds the same pinned sources locally with
-the very recipe the repo uses. It:
+- **it falls back to building.** If the repo is unreachable, or does not serve your exact release
+  yet, it builds the same pinned sources locally with the very recipe the repo uses — the same
+  `packaging/nidara/PKGBUILD`, so what lands is still a package.
+- **`--dev`**, which runs the desktop from your working copy instead of from an installed bundle.
+  That is the path for contributing, and it is documented in the
+  [Developer Guide](#developer-guide).
 
-1. Installs system dependencies (Hyprland, GTK4, GJS, esbuild, audio/network/bluetooth stacks, fonts).
-2. Installs the `nidara-desktop` package — the session entry point (`/usr/bin/nidara`), helper binaries,
-   the shell/greeter/lock-screen bundles and shared configs under `/usr/share/nidara/`, and the
-   `/usr/share/wayland-sessions/nidara.desktop` session entry. Prebuilt when the repo serves this
-   release, otherwise built on the spot from the same `packaging/nidara/PKGBUILD`.
-3. Runs `nidara-setup` — the idempotent first-time setup: creates `~/.config/nidara/` with default
-   configs (never overwritten on updates), seeding keyboard layout and timezone from your existing
-   Arch setup and generating the system locales for every language the UI ships — it never
-   prompts — and enables `pipewire`, `wireplumber`,
-   `power-profiles-daemon`, `bluetooth`, and (only if no display manager is already enabled)
-   `greetd` with the Nidara greeter.
+It installs the **latest release**, not your checkout: if your `main` is ahead of the tag, it
+jumps back to the release first, so you get the version everyone else is testing. Developers opt
+out with `--dev` or by checking out another branch.
 
-**To start:** reboot and select _Nidara_ from the login screen.
+⚠️ **It will run `sudo pacman -Syu` and show you the transaction.** Nothing is installed until you
+accept it, and declining stops the install rather than continuing against out-of-date libraries.
+It used to pass `--noconfirm`, which meant it upgraded machines unattended; that was wrong on a
+machine the project does not own, and it is fixed.
 
-With the `[nidara]` repo configured (the installer sets it up), the desktop is just a package
-from then on: `sudo pacman -S nidara-desktop && nidara-setup` is a complete install.
+### What is guaranteed, and where
+
+These are two different promises, and it is worth knowing which one you are taking.
+
+**On the live image**, the whole system is ours: the package set, the kernel, the boot path and
+the hardware handling are chosen together, tested together and shipped as one artifact. That is
+where a problem is ours to fix.
+
+**On your own Arch**, we support the package. We do not promise anything about your kernel, your
+graphics stack, your bootloader or the rest of your system, because we did not choose them — and
+because treating your machine as ours is exactly what the rule above forbids. In practice this
+path is stable and it is what most contributors run; the difference is what happens when it is
+not, and who is expected to sort it out.
 
 ### Updating
 
