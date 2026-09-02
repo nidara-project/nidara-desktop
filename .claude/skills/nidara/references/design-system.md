@@ -108,6 +108,21 @@ to be a control). A page-level "there is no hardware at all" statement is the di
 `.settings-placeholder`, outside the card. See tech-debt #65 for both, and for why that class
 silently styled nothing for five months.
 
+⚠️ **`focusable` and `can-focus` are two different properties, and putting the second on a row
+makes every entry inside it untypeable.** GTK4's `focusable` is "this widget itself accepts the
+focus"; `can-focus` is "this widget **or any of its descendants** may". A row is a container with
+no behaviour, so `focusable: false` is right and `can_focus: false` is never what is meant — but
+the second reads like a stronger spelling of the first, which is how it got onto
+`NidaraStackedRow` (#281, collateral in a chrome-metrics change) and stayed for a release. That
+row exists to hold a `Gtk.Entry`, so the effect was that **the installer's account step could not
+be typed into at all** — no password, no way to finish an installation — and that Settings → AI's
+model, endpoint and API-key fields were dead, which is every route a user has to configuring the
+Assistant. The failure has no error and no log line: the row still hovers, still takes clicks, and
+just shows no caret. What makes it expensive to find is that the window keeps working — a
+window-level `Gtk.EventControllerKey` (Escape-to-close) still fires, because keys reach the
+toplevel and only then look for a focus widget that is not there. **If typing does nothing but
+Escape still closes the window, look for `can-focus` on an ancestor, not at the entry.**
+
 ## The Settings window has ONE geometry law — `WINDOW_LAYOUT` in `ui/lib/tokens.ts`
 
 **The content pane is a CONSTANT 800 px.** Not a maximum, not a band: the same width on all 18

@@ -176,11 +176,22 @@ export function NidaraStackedRow(
         control.hexpand = true
         box.append(control)
     }
+    // ⚠️ `focusable` and `can-focus` are NOT the same property, and the difference
+    // is the whole reason this row exists. `focusable: false` says the ROW itself
+    // never takes the focus — which is what we want, it is a container with no
+    // behaviour of its own. `can_focus: false` says the row AND EVERY DESCENDANT
+    // are unfocusable, which in a row whose entire point is to hold a text entry
+    // means the entry can never be typed into: it hovers, it takes clicks, it
+    // shows no caret and swallows every keystroke. Adding it here (#281, as
+    // collateral in a chrome-metrics change) broke the installer's account step —
+    // no password, so the installer could not be completed at all — and Settings →
+    // AI's model, endpoint and API-key fields, which is every way a user has of
+    // configuring the Assistant. `NidaraRow` never carried it; this row now
+    // matches. Do not "restore symmetry" by adding it back.
     const row = new Gtk.ListBoxRow({
         activatable: false,
         selectable: false,
         focusable: false,
-        can_focus: false,
         css_classes: ["nidara-row", "nidara-row--stacked", ...extraClasses],
     })
     row.set_child(box)
