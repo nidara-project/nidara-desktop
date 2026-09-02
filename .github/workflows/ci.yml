@@ -154,13 +154,22 @@ jobs:
       # minutes of every release.
       - name: bash -n packaging/nidara/PKGBUILD (must parse)
         run: bash -n packaging/nidara/PKGBUILD
-      # depends=() must survive sourcing as a real array — a syntax error can
-      # truncate it silently rather than fail loudly.
-      - name: depends=() sources as a non-empty array
+      # Both arrays must survive sourcing as real arrays — a syntax error can
+      # truncate one silently rather than fail loudly. This stopped being only a
+      # packaging concern on 2026-09-02: install.sh DERIVES its install list from
+      # these two (#379), so a collapsed array is now also every user's install
+      # asking pacman for two packages instead of seventy-six.
+      #
+      # The `/^)/` end anchor is load-bearing and both arrays are written to close
+      # that way: `depends=()` holds a comment line ending in `)`, and a looser
+      # pattern ends the range there and sources an unterminated array.
+      - name: depends=() and makedepends=() source as non-empty arrays
         run: |
           source <(sed -n '/^depends=(/,/^)/p' packaging/nidara/PKGBUILD)
-          echo "depends: ${#depends[@]}"
+          source <(sed -n '/^makedepends=(/,/^)/p' packaging/nidara/PKGBUILD)
+          echo "depends: ${#depends[@]}  makedepends: ${#makedepends[@]}"
           [ "${#depends[@]}" -ge 40 ] || { echo "::error::depends=() collapsed to ${#depends[@]}"; exit 1; }
+          [ "${#makedepends[@]}" -ge 5 ] || { echo "::error::makedepends=() collapsed to ${#makedepends[@]}"; exit 1; }
 
   typecheck:
     name: Typecheck (tsc)

@@ -76,7 +76,11 @@ depends=(
   # load-bearing the same way: it owns UPowerGlib-1.0.typelib, which
   # core/BatteryService.ts imports.
   networkmanager bluez bluez-libs bluez-utils upower accountsservice
-  pipewire pipewire-audio pipewire-alsa pipewire-pulse wireplumber libpulse
+  # `libwireplumber` is the same shape as `upower` above: it owns
+  # Wp-0.5.typelib, which core/wireplumber.ts imports. It arrives as a
+  # dependency of `wireplumber`, and that is exactly the accident this array
+  # exists to stop relying on (#379).
+  pipewire pipewire-audio pipewire-alsa pipewire-pulse wireplumber libwireplumber libpulse
   xdg-desktop-portal-gtk xdg-desktop-portal-hyprland
   # tools the shell/keybinds shell out to
   brightnessctl pamixer playerctl jq curl slurp grim wf-recorder
@@ -88,6 +92,12 @@ depends=(
   # python-gobject one: present on every dev box, absent from nobody's until it
   # is. Declared because we call it by path.
   dconf
+  # `git` — called by name, twice, and by neither the shell nor a keybind:
+  # `nidara-update` clones a release into a temp dir on the stable path, and
+  # `nidara-agent`'s file layer commits every write it makes to a repository it
+  # creates in ~/.config/nidara. A machine without it loses the agent's undo
+  # history silently, on the first write (#379).
+  git
   # default apps wired into the UI (Super+T, Files item…)
   kitty nautilus pavucontrol
   # fonts + icon fallbacks the design system assumes; CJK because the shell,
@@ -133,8 +143,13 @@ depends=(
 # `esbuild` is in exactly the position this comment warns about: scripts/bundle.sh
 # is the bundler now, and it is the ONE thing build() reaches for that no runtime
 # dep would drag in.
-makedepends=(nodejs npm esbuild wlr-protocols wayland-protocols hyprland-protocols
-             wayland gtk4 gobject-introspection pkgconf)
+# Closes on its own line, like depends=() above: install.sh derives both arrays
+# with `sed -n '/^NAME=(/,/^)/p'` (the idiom the pkgbuild CI job already uses),
+# and a `)` anywhere but column 1 makes that range end in the wrong place.
+makedepends=(
+  nodejs npm esbuild wlr-protocols wayland-protocols hyprland-protocols
+  wayland gtk4 gobject-introspection pkgconf
+)
 # etc/pam.d/nidara-lock is tracked so a local customization survives an upgrade —
 # this is where someone adds fprintd or a hardware key to the unlock stack.
 options=(!debug)

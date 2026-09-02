@@ -287,22 +287,55 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 PACMAN_SHA_FILE="/usr/share/nidara/pins-pacman"
 SYNC_PACMAN="yes"
-PACMAN_DEPS="base-devel glib2-devel cmake meson ninja gobject-introspection vala
-    gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2
-    libpulse networkmanager bluez bluez-libs bluez-utils upower libnotify
-    intltool scdoc brightnessctl pamixer playerctl
-    jq curl slurp grim wf-recorder wl-clipboard cliphist mesa pam
-    pipewire pipewire-audio pipewire-alsa pipewire-pulse wireplumber libwireplumber
-    git nodejs npm gjs esbuild
-    at-spi2-core wtype wlr-protocols wayland wayland-protocols hyprland-protocols
-    accountsservice greetd pavucontrol rust cargo
-    hyprland hypridle hyprsunset uwsm power-profiles-daemon python-gobject
-    kitty nautilus
-    polkit-gnome gnome-keyring libsecret
-    xdg-desktop-portal-gtk xdg-desktop-portal-hyprland
-    ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono inter-font noto-fonts-emoji noto-fonts-cjk
-    papirus-icon-theme adwaita-icon-theme adwaita-cursors xdg-utils gsettings-desktop-schemas
-    awww lz4"
+# ── The dependency list is DERIVED from the package, never kept beside it ────
+# A second, hand-maintained list of 80 names used to live here. By 2026-09-02 it
+# had drifted from `depends=()` in BOTH directions at once (#379): `dconf`, `git`
+# and `libwireplumber` were real dependencies it never installed — the desktop
+# worked because they happened to arrive transitively — while eight names it DID
+# install had no use anywhere in the tree, left over from the Astal build
+# toolchain whose packages were purged on 2026-08-24. Two hand-kept lists for one
+# product is a promise to keep them in step, kept by nobody.
+#
+# So the PKGBUILD's arrays ARE the dependency statement, and this reads them.
+# Only the two arrays are sourced — the same idiom the `pkgbuild` CI job uses —
+# never the whole file, so none of its functions or top-level statements run.
+#
+# ⚠️ Version constraints are stripped. `hyprland>=0.56` is valid *dependency*
+# syntax and is NOT a valid pacman target: passed through, it makes the install
+# fail to parse its own arguments. The floor stays enforced where it belongs, by
+# the package.
+# ⚠️ The range MUST end on `/^)/` — a closing paren in column 1 — and both arrays
+# are written to close that way for this reason. `depends=()` contains a comment
+# line ending in `)` ("…native C/TS)"), so a looser end pattern stops the range
+# there, sources an unterminated `depends=(` and yields an EMPTY array. Caught
+# only because of the sanity check below; nothing else would have said a word.
+_pkgbuild_array() {
+    local name="$1" pkgbuild="$REPO_DIR/packaging/nidara/PKGBUILD"
+    source <(sed -n "/^$name=(/,/^)/p" "$pkgbuild") 2>/dev/null || return 1
+    local -n _arr="$name" 2>/dev/null || return 1
+    printf '%s\n' "${_arr[@]}"
+}
+PACMAN_DEPS="$(
+    { _pkgbuild_array depends; _pkgbuild_array makedepends; } \
+        | sed 's/[<>=].*//' | grep -v '^$' | tr '\n' ' '
+)"
+# The ONLY names not derived, and both are build tools rather than dependencies:
+# the package's build() runs under makepkg, which supplies `base-devel` on its
+# own, and this script compiles the same C without makepkg — so it has to ask.
+# `glib2-devel` carries the .pc files `pkg-config --cflags glib-2.0` needs; Arch
+# split them out of `glib2`. Anything added here is a claim that the DEV path
+# needs it and the package does not — if that is not true, it belongs in the
+# PKGBUILD instead.
+PACMAN_DEPS="$PACMAN_DEPS base-devel glib2-devel"
+
+# Fail loudly rather than install a truncated list: a `depends=()` that stops
+# sourcing (an unquoted `>` did exactly that in v0.6.0) would otherwise silently
+# reduce this to the two build tools above.
+if [ "$(printf '%s' "$PACMAN_DEPS" | wc -w)" -lt 40 ]; then
+    echo "install.sh: could not read the dependency arrays from packaging/nidara/PKGBUILD" >&2
+    echo "            (got: $PACMAN_DEPS)" >&2
+    exit 1
+fi
 DEPS_LIST_SHA="$(printf '%s' "$PACMAN_DEPS" | sha256sum | awk '{print $1}')"
 OLD_VERSION="$(cat /usr/share/nidara/VERSION 2>/dev/null || echo "?")"
 # An update of a dev-mode install must keep dev semantics (config symlinks into
