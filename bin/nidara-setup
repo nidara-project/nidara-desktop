@@ -187,7 +187,14 @@ mkdir -p "$CONFIG_DIR"
 # vanish → libadwaita apps stay light), and xdg-user-dirs-update can't write
 # ~/.config/user-dirs.dirs (nautilus "No Home Directory") — clean-install bugs 1/2/4,
 # VM 06-22. Own the parent too, not just our dir.
-chown "$REAL_USER" "${REAL_HOME}/.config" "$CONFIG_DIR"
+#
+# ⚠️ The trailing colon in every `chown "$REAL_USER:"` below is load-bearing, not a
+# typo: `chown user file` sets the OWNER and leaves the group alone, so a file this
+# script creates under sudo stayed group-`root` while everything the user's own
+# session writes is group-`<their login group>`. `user:` sets the group to that
+# login group, which is what makes the two match. Harmless while the owner has
+# write access — and invisible until something ever reads the group.
+chown "$REAL_USER:" "${REAL_HOME}/.config" "$CONFIG_DIR"
 
 # ~/.cache has the SAME hazard, and it bit us the same way (VM sweep 08-10): the
 # installer's package build cache lives at ~/.cache/nidara/pkgbuild, and every
@@ -203,8 +210,8 @@ chown "$REAL_USER" "${REAL_HOME}/.config" "$CONFIG_DIR"
 # install already poisoned before this existed. Non-recursive on ~/.cache (other
 # apps' caches are none of our business, and the dir is what matters), recursive
 # on ~/.cache/nidara, which is ours whole.
-[ -d "${REAL_HOME}/.cache" ] && chown "$REAL_USER" "${REAL_HOME}/.cache"
-[ -d "${REAL_HOME}/.cache/nidara" ] && chown -R "$REAL_USER" "${REAL_HOME}/.cache/nidara"
+[ -d "${REAL_HOME}/.cache" ] && chown "$REAL_USER:" "${REAL_HOME}/.cache"
+[ -d "${REAL_HOME}/.cache/nidara" ] && chown -R "$REAL_USER:" "${REAL_HOME}/.cache/nidara"
 
 # Default JSON configs (never overwrite user's existing files).
 # Bar/CC widget placement + CC tile layout are NOT seeded here: they come from the
@@ -214,7 +221,7 @@ chown "$REAL_USER" "${REAL_HOME}/.config" "$CONFIG_DIR"
 for f in appearance.json; do
     if [ -f "$SHARE/defaults/$f" ] && [ ! -f "$CONFIG_DIR/$f" ]; then
         cp "$SHARE/defaults/$f" "$CONFIG_DIR/$f"
-        chown "$REAL_USER" "$CONFIG_DIR/$f"
+        chown "$REAL_USER:" "$CONFIG_DIR/$f"
         echo "  [Init] $CONFIG_DIR/$f"
     fi
 done
@@ -314,7 +321,7 @@ KITTY_DIR="${REAL_HOME}/.config/kitty"
 if [ ! -f "$KITTY_DIR/kitty.conf" ] && [ -d "$SHARE/defaults/kitty" ]; then
     mkdir -p "$KITTY_DIR"
     cp "$SHARE/defaults/kitty/"*.conf "$KITTY_DIR/"
-    chown -R "$REAL_USER" "$KITTY_DIR"
+    chown -R "$REAL_USER:" "$KITTY_DIR"
     echo "  [Init] $KITTY_DIR (padding, JetBrains Mono + Nerd symbols, glass, dark palette)"
 fi
 
@@ -332,7 +339,7 @@ cat > "$CONFIG_DIR/.mcp.json" <<'JSON'
   }
 }
 JSON
-chown "$REAL_USER" "$CONFIG_DIR/.mcp.json"
+chown "$REAL_USER:" "$CONFIG_DIR/.mcp.json"
 echo "  [Init] $CONFIG_DIR/.mcp.json (agent interface manifest)"
 
 # region.json — generated with detected timezone (not copied from defaults)
@@ -345,7 +352,7 @@ if [ ! -f "$CONFIG_DIR/region.json" ]; then
   "showSeconds": false
 }
 JSON
-    chown "$REAL_USER" "$CONFIG_DIR/region.json"
+    chown "$REAL_USER:" "$CONFIG_DIR/region.json"
     echo "  [Init] $CONFIG_DIR/region.json (timezone=$SYS_TIMEZONE)"
 fi
 
@@ -365,7 +372,7 @@ hl.on("hyprland.start", function()
 end)
 -- @autostart end
 LUA
-    chown "$REAL_USER" "$CONFIG_DIR/hyprland-user.lua"
+    chown "$REAL_USER:" "$CONFIG_DIR/hyprland-user.lua"
     echo "  [Init] $CONFIG_DIR/hyprland-user.lua"
 fi
 
@@ -379,15 +386,18 @@ fi
 HOOKS_DIR="$CONFIG_DIR/hooks"
 if command -v nidara-hook >/dev/null 2>&1; then
     mkdir -p "$HOOKS_DIR"
-    chown "$REAL_USER" "$HOOKS_DIR"
+    chown "$REAL_USER:" "$HOOKS_DIR"
     # Non-indented lines of --list are "<event> <args…>"; the indented ones are prose.
     nidara-hook --list | grep -E '^[a-z]' | cut -d' ' -f1 | while read -r _ev; do
         [ -n "$_ev" ] || continue
         if [ ! -d "$HOOKS_DIR/$_ev.d" ]; then
             mkdir -p "$HOOKS_DIR/$_ev.d"
-            chown "$REAL_USER" "$HOOKS_DIR/$_ev.d"
             echo "  [Init] $HOOKS_DIR/$_ev.d/"
         fi
+        # Outside the branch above on purpose: it makes this run a repair pass for
+        # a directory an earlier version created with the wrong group. A chown that
+        # only ever runs at creation cannot fix anything already on disk.
+        chown "$REAL_USER:" "$HOOKS_DIR/$_ev.d"
     done
     # Rewritten every run on purpose (unlike hyprland-user.lua): it holds no user
     # content, and it is the pointer that stays correct when the events change.
@@ -414,7 +424,7 @@ To try a hook without waiting for the real thing, fire the event by hand:
 A hook that starts something long-lived should hand it to `systemd-run --user`:
 hooks fired by the shell die with the shell, and a UI reload restarts it.
 HOOKS
-    chown "$REAL_USER" "$HOOKS_DIR/README"
+    chown "$REAL_USER:" "$HOOKS_DIR/README"
 fi
 
 # Nidara generated config (Hyprland settings from UI)
@@ -440,14 +450,14 @@ hl.config({
     },
 })
 LUA
-    chown "$REAL_USER" "$CONFIG_DIR/nidara-settings.lua"
+    chown "$REAL_USER:" "$CONFIG_DIR/nidara-settings.lua"
     echo "  [Init] $CONFIG_DIR/nidara-settings.lua (kb_layout=$SYS_KB_LAYOUT)"
 fi
 
 # Monitor config — generated by Display settings page
 if [ ! -f "$CONFIG_DIR/nidara-monitor.lua" ]; then
     touch "$CONFIG_DIR/nidara-monitor.lua"
-    chown "$REAL_USER" "$CONFIG_DIR/nidara-monitor.lua"
+    chown "$REAL_USER:" "$CONFIG_DIR/nidara-monitor.lua"
     echo "  [Init] $CONFIG_DIR/nidara-monitor.lua"
 fi
 
@@ -466,7 +476,7 @@ done
 # from ~/.config/hypr. This is USER STATE (Settings → Power writes it), never a
 # dev-repo symlink — that old mode routed UI writes into the repo working tree.
 mkdir -p "${REAL_HOME}/.config/hypr"
-chown "$REAL_USER" "${REAL_HOME}/.config/hypr"   # created under sudo; keep it user-owned
+chown "$REAL_USER:" "${REAL_HOME}/.config/hypr"   # created under sudo; keep it user-owned
 
 for daemon in hypridle; do
     LINK="${REAL_HOME}/.config/hypr/${daemon}.conf"
@@ -497,9 +507,13 @@ CONF
             fi
             echo "  [Init] $TARGET"
         fi
-        chown "$REAL_USER" "$TARGET"
+        chown "$REAL_USER:" "$TARGET"
     fi
     ln -sf "$TARGET" "$LINK"
+    # -h, and on the LINK: a plain chown follows the symlink and re-owns the target
+    # instead, leaving the link itself root:root — which is what `ln -sf` under sudo
+    # makes it. Unconditional, so it repairs links an earlier run left that way.
+    chown -h "$REAL_USER:" "$LINK"
     echo "  [Symlink] $LINK -> $TARGET"
 done
 
@@ -508,16 +522,17 @@ done
 USERCONF_LINK="${REAL_HOME}/.config/hypr/hyprland-user.lua"
 USERCONF_TARGET="$CONFIG_DIR/hyprland-user.lua"
 ln -sf "$USERCONF_TARGET" "$USERCONF_LINK"
+chown -h "$REAL_USER:" "$USERCONF_LINK"   # the LINK, not its target — see the note above
 echo "  [Symlink] $USERCONF_LINK -> $USERCONF_TARGET"
 
 # uwsm environment files (created once, never overwritten)
 UWSM_DIR="${REAL_HOME}/.config/uwsm"
 mkdir -p "$UWSM_DIR"
-chown "$REAL_USER" "$UWSM_DIR"
+chown "$REAL_USER:" "$UWSM_DIR"
 for f in env env-hyprland; do
     if [ ! -f "$UWSM_DIR/$f" ]; then
         cp "$SHARE/defaults/uwsm/$f" "$UWSM_DIR/$f"
-        chown "$REAL_USER" "$UWSM_DIR/$f"
+        chown "$REAL_USER:" "$UWSM_DIR/$f"
         echo "  [Init] $UWSM_DIR/$f"
     fi
 done
@@ -537,7 +552,7 @@ sed -i \
     -e 's|^export QT_QPA_PLATFORM=wayland;xcb$|export QT_QPA_PLATFORM="wayland;xcb"|' \
     -e 's|^export QT_QPA_PLATFORMTHEME=qt6ct$|export QT_QPA_PLATFORMTHEME=xdgdesktopportal|' \
     "$ENVFILE"
-chown "$REAL_USER" "$ENVFILE"
+chown "$REAL_USER:" "$ENVFILE"
 
 # ── NVIDIA GPU autodetection ──────────────────────────────────────────────────
 # A fresh NVIDIA user otherwise gets a black screen / glitches until they manually
@@ -567,7 +582,7 @@ if command -v lspci >/dev/null 2>&1 \
         else
             echo "  [GPU] (optional) install libva-nvidia-driver for hardware video acceleration."
         fi
-        chown "$REAL_USER" "$ENVFILE"
+        chown "$REAL_USER:" "$ENVFILE"
 
         # DRM modeset must be ON for Wayland. Arch enables it by default; only warn.
         # Never edit /etc/modprobe.d or rebuild initramfs silently — that touches boot.

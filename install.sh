@@ -113,10 +113,13 @@ run_user() {
 # session writes there fails silently (Astal's frequents cache, the album-art
 # cache, and `nidara-update`'s work dir — the list and the repair for installs
 # already poisoned are in bin/nidara-setup, beside the same fix for ~/.config).
+# The trailing colon in `chown "$REAL_USER:"` here and below sets the group to the
+# user's login group; without it chown leaves the group as root. See the longer note
+# in bin/nidara-setup.
 ensure_pkg_cache() {
     mkdir -p "$PKG_CACHE/src"
-    chown "$REAL_USER" "${REAL_HOME}/.cache" "${REAL_HOME}/.cache/nidara" 2>/dev/null || true
-    chown -R "$REAL_USER" "$PKG_CACHE" 2>/dev/null || true
+    chown "$REAL_USER:" "${REAL_HOME}/.cache" "${REAL_HOME}/.cache/nidara" 2>/dev/null || true
+    chown -R "$REAL_USER:" "$PKG_CACHE" 2>/dev/null || true
 }
 
 # makepkg the PKGBUILD in dir $1, then hand the result to pacman. We --overwrite
@@ -136,7 +139,7 @@ build_install_pkg() {
     local dir="$1"
     local want="${2:-}"
     ensure_pkg_cache
-    chown -R "$REAL_USER" "$dir" 2>/dev/null || true
+    chown -R "$REAL_USER:" "$dir" 2>/dev/null || true
     # -f rebuild, --nodeps (install order is managed below), --skipinteg (git sources)
     local pkgarg=""
     [ -n "$want" ] && pkgarg="--pkg '$want'"
@@ -731,13 +734,13 @@ echo "[5/5] Initializing user configuration..."
 mkdir -p "$CONFIG_DIR"
 # Own the parent too: under sudo, `mkdir -p` can create ~/.config itself as
 # root, which silently breaks the whole session (rationale in bin/nidara-setup).
-chown "$REAL_USER" "${REAL_HOME}/.config" "$CONFIG_DIR"
+chown "$REAL_USER:" "${REAL_HOME}/.config" "$CONFIG_DIR"
 
 # Dev mode marker. An update never changes the install's mode: --update-apply
 # leaves the marker exactly as it found it.
 if [ "$MODE" = "dev" ]; then
     echo "$REPO_DIR" > "$CONFIG_DIR/.dev"
-    chown "$REAL_USER" "$CONFIG_DIR/.dev"
+    chown "$REAL_USER:" "$CONFIG_DIR/.dev"
     echo "  [Dev] nidara-ui will run from: $REPO_DIR"
 elif [ "$MODE" = "system" ]; then
     rm -f "$CONFIG_DIR/.dev"
@@ -751,7 +754,7 @@ fi
 # never registers or migrates (the stable wrapper already migrated).
 if [ "$MODE" = "dev" ]; then
     echo "$REPO_DIR" > "$SOURCE_FILE"
-    chown "$REAL_USER" "$SOURCE_FILE"
+    chown "$REAL_USER:" "$SOURCE_FILE"
 elif [ "$MODE" = "system" ]; then
     if [ -e "$SRC_CANON" ]; then
         rm -rf "$SRC_CANON"
