@@ -5,6 +5,99 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] — 2026-09-02
+
+**On somebody else's Arch, Nidara Desktop is a package now — and that is the only way in.**
+`install.sh` was the documented route, and it behaved like the owner of the machine: its first
+step ran `pacman -Syu --needed --noconfirm` over eighty package names. Measured on a maintainer's
+own desktop the day it was found, that is 44 packages upgraded and both kernels going
+7.1.11 → 7.2.2, which leaves the running kernel with no modules directory on disk until a reboot.
+Nobody had asked for a system upgrade.
+
+Add the repository, then `sudo pacman -Syu nidara-desktop`. Dependencies resolve as dependencies,
+`nidara-setup` runs from the package, and upgrading or removing it is pacman's job. The README
+leads with those commands — signing key, fingerprint and repository stanza included — instead of
+ending with them as an aside, and it says plainly what is guaranteed where: on an image we
+produce the whole system is ours; on your own Arch we support the package and promise nothing
+about your kernel, your graphics stack or your bootloader, because we did not choose them.
+
+`install.sh` keeps `--dev` and nothing else. It is the contribution path, where taking a machine
+over is legitimate because the machine is a development box.
+
+Two more things arrive with it, both about the desktop being yours: somewhere to hang your own
+scripts on the events the shell owns, and a settings store that can refuse a bad value and carry
+a renamed one forward.
+
+### Added
+
+- **Your own scripts, on the shell's events: `~/.config/nidara/hooks/<event>.d/`.**
+  `hyprland-user.lua` is the one place an install can be extended by hand, and it reaches the
+  compositor only. Everything the shell owns — the accent, dark and light, the wallpaper, an
+  update landing, the session starting, a battery going flat — was on the other side of a
+  TypeScript rebuild, which for anyone who is not going to run one meant it did not exist. Drop
+  an executable into the directory for an event and it runs, in order, with a timeout, each
+  failure isolated from the next. `nidara-hook --list` prints the six events and what each one
+  passes; `nidara-hook <event>` fires one by hand so you can test your script without waiting
+  for the real thing to happen.
+
+- **A renamed setting can stop being read forever.** `nidara-migrate` runs dated units once per
+  machine and records that it did. The first one converts the old `transparency` value into
+  `windowOpacity`, and the reader that had been quietly honouring both is gone — which is the
+  point: until now a key could only be renamed by leaving the old name in the code for ever.
+
+- **Settings search finds pages, not only the settings on them.** Typing a page's own name found
+  nothing on fifteen of the eighteen pages: "Audio" did not find Audio. Some pages contribute no
+  rows on purpose — a sound card and a playing app are hardware, not settings — so the index
+  itself had to learn about pages.
+
+- **Wallpaper thumbnails decode off the main thread and are cached on disk**, so opening
+  Appearance with a full wallpaper folder no longer stalls the shell while it draws.
+
+### Changed
+
+- **One dependency list, derived**, instead of two kept in step by hand.
+
+- **The calculator widget is gone, and `gnome-calculator` with it.** It was a launcher wearing a
+  widget's contract: one process spawn behind an icon, no state to read, nothing that changes
+  while you look at it — and for that it held a slot in the bar, a seed position in the Control
+  Centre and a translated name in twelve locales. It also meant every installed machine carried
+  a calculator because the shell wanted an icon to launch. A calculator belongs in the
+  application layer, and that is where it will come back.
+
+- **The settings files have an owner.** Writes are durable and atomic, the expensive sliders
+  commit once per drag instead of once per pixel, and a value that makes no sense is refused at
+  the door rather than written and read back.
+
+### Fixed
+
+- **Reaching a window through the shell now brings it to the front.** Selecting the second of two
+  grouped windows from a dock icon focused it *under* whatever was on top: in Hyprland, raising
+  is a separate dispatcher from focusing, and we were sending only one of them. Six routes arrive
+  at that one method — the dock menu, the window switcher, the tray, notification actions,
+  `nidara-ipc focusWindow` and the Assistant — and all six were affected.
+
+- **Nothing floating hangs off the top of the screen any more**, and floating windows open at a
+  size that fits the monitor they open on.
+
+- **A boolean compositor option no longer reads as off** when Settings asks Hyprland for its
+  current value.
+
+- **Six settings were not registered at all** — mouse, touchpad, keyboard, dock and bar entries
+  that search and the agent surface could not see, because nothing had ever declared them.
+
+- **The installer** stops filling in a password nobody chose, and the full name you type reaches
+  the account it creates.
+
+- **Files seeded under `sudo` were left group-`root`.** `chown user file` sets the owner and
+  leaves the group alone, so everything `nidara-setup` and `install.sh` created belonged to a
+  group nothing else in the directory used. Nothing was broken by it, which is why it lasted
+  months — and the keyring warning that fired on exactly the machines it was meant to clear was
+  the first thing to read that group.
+
+- **The app grid's crash**: icons whose SVG carries text no longer travel as file names into a
+  worker thread. The upstream GTK bug (gtk#8295) now has a reproducer it can actually run, and a
+  measured rate rather than an assertion.
+
 ## [0.10.1] — 2026-08-30
 
 **The icons are Papirus from the first frame.** On the first login of a machine installed

@@ -40,7 +40,7 @@
 # still doing its job: a package named `nidara` and a package replacing `nidara`
 # in the same repository is a resolution somebody's `-Syu` has to guess at.
 pkgname=(nidara-desktop nidara-installer)
-pkgver=0.10.1
+pkgver=0.11.0
 pkgrel=1
 pkgdesc="Nidara — a fluid, glassmorphic desktop environment (Hyprland + GTK4/GJS)"
 arch=(x86_64)
