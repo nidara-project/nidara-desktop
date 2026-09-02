@@ -14,6 +14,7 @@
 // The last block is a control: the four xkb/console mismatches that were fixed by
 // hand before this file existed. If the parsing breaks, they stop matching.
 import { countries, allTimezones, allLocales, allKeyboards, timezonesFor, localesFor, keyboardsFor, defaultsFor } from "../../ui/installer/lib/region"
+import { countryName } from "../../ui/lib/locale-names"
 
 print(`countries      ${countries().length}`)
 print(`timezones      ${allTimezones().length}`)
@@ -27,6 +28,19 @@ for (const code of ["ES", "BR", "GB", "IN", "JP", "US", "AR", "CH", "AQ"]) {
   print(`   zonas    ${timezonesFor(code).length}  → ${d.timezone}`)
   print(`   locales  ${localesFor(code).length}  → ${d.locale}`)
   print(`   teclado  ${keyboardsFor(code).length}  → ${d.keyboard ? `${d.keyboard.layout}/${d.keyboard.keymap} (${d.keyboard.label})` : "ninguno"}`)
+}
+print("")
+print("— nombres: el país en el idioma del lector, el teclado por endónimo —")
+for (const ui of ["es", "en", "de"]) {
+  const names = ["ES", "DE", "GB", "BR"].map(c => {
+    const f = countries().find(x => x.code === c)!
+    return countryName(c, ui, f.name)
+  })
+  print(`   UI=${ui.padEnd(3)} ${names.join(" · ")}`)
+}
+for (const l of ["es", "gb", "latam", "br", "jp"]) {
+  const k = allKeyboards().find(x => x.layout === l && !x.variant)
+  print(`   teclado ${l.padEnd(6)} → ${k ? k.label : "?"}`)
 }
 print("")
 print("— control: los 4 desajustes xkb/consola que arreglamos a mano —")

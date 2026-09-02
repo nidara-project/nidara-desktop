@@ -3474,3 +3474,44 @@ threshold. A crisp horizontal stroke is ONE full-intensity row; a smeared one is
 rows. That is also how the same investigation ruled out the font family, the VM, transparent
 backgrounds and `queue_draw`.
 
+### Naming a place, a language, a keyboard or a timezone — `ui/lib/locale-names.ts`
+
+Three surfaces were answering the same question three ways, and each was locally reasonable:
+the greeter had 12 endonyms by hand and keyboards as CODES (`US`, `ES`, `LATAM`), Settings showed
+`localectl list-locales` raw (`es_ES.UTF-8`), the installer showed 328 endonyms via ICU and
+keyboards as xkb's ENGLISH description. The installer's region page is what made it visible: it
+said "Spanish" to somebody using it in Spanish, and its country list could not find "España".
+
+The vocabulary now lives in `ui/lib/locale-names.ts`. It decides HOW a thing is named; it never
+decides WHICH things exist — that stays each surface's own data.
+
+| | rule |
+|---|---|
+| country | the READER's language (`Intl.DisplayNames`, type `region`) — "España" in a Spanish UI |
+| language / locale | its OWN language, always — the endonym, never translated |
+| keyboard | the endonym of the language it serves, plus the layout code after a `·` |
+| timezone | the IANA name unchanged, `Europe/Madrid` — the same thing Settings lists |
+
+🔑 **Nothing here is a hand-written table.** ICU ships in GJS, so every name is derived — a table
+of country names in twelve languages is a table that goes stale in twelve languages.
+
+⚠️ `countryName()` takes the display locale as an ARGUMENT rather than reading the environment:
+the installer changes its own language at runtime without touching `LANG`, so a function that
+consulted the process locale would keep saying "Spain" after the user switched to Spanish.
+
+⚠️ **A search box must match more than what it displays.** A Spanish list that shows "España" and
+matches only "Spain" is as broken as the English one that could not be found by typing "España" —
+`countryHaystack()` returns the reader's name, the English one and the code.
+
+⚠️ **Do NOT translate xkb's descriptions with gettext, even though it works.**
+`GLib.dgettext("xkeyboard-config", "Spanish")` really does return "Español". But **measured
+2026-09-03: gettext caches the catalogue at first use and ignores a later change to `LANGUAGE`**,
+so a process that starts in `en_US` — which is every process on the live medium, since the ISO
+generates no other locale — keeps answering in English however the UI language changes. The
+endonym needs no catalogue, no process locale and no cache.
+
+⚠️ Two rows that name the same thing two ways read as a bug. Naming a keyboard purely by its
+language made the keyboard row identical to the locale row above it ("español de España" twice,
+for two different questions) — visible only with the page open. The layout code after a `·`
+is what separates them, and it is also the value that actually gets written.
+
