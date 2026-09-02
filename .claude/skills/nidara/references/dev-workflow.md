@@ -465,6 +465,43 @@ branch ever produced.
 `configureInstalledBootloader()` takes `arm` and early-returns; that one was right from the
 start.
 
+### Preview mode — the installer CAN be opened on a desktop now, with `NIDARA_INSTALLER_PREVIEW=1`
+
+```bash
+cp ~/…/nidara-iso/profile/airootfs/usr/share/nidara-installer/base.json ui/installer/
+cd ui/installer && NIDARA_INSTALLER_PREVIEW=1 ./build/nidara-installer
+```
+
+⚠️ Read the section below this one first: **the VM rule still stands for anything armed**, and
+preview does not weaken it. Preview can only ever make things safer — `isArm` does not read the
+variable, so a typo leaves you with an installer that refuses to touch your session, never with one
+that touches your disk.
+
+Why a flag at all, when not arming is already correct? Because the existing safety is **the absence
+of a file** (`/run/archiso`), which is the right shape for arming and the wrong shape for a licence
+to run this on a machine somebody is using. Three things sit outside the `arm` gate, because they are
+not installation steps — they are the installer talking to the session it is running in, which is
+right on the medium and unacceptable on a desktop:
+
+| where | what it does to YOUR machine |
+|---|---|
+| `steps/region.ts` | `hyprctl keyword input:kb_layout` — changes the real keyboard, on one click in a list |
+| `widget/InstallerWindow.ts` | "Restart now" → `systemctl reboot` |
+| `steps/run.ts` | writes the plan **and the credentials** to /tmp, then spawns `sudo -n archinstall` |
+
+Preview neutralises exactly those three and stops the run step *before* the credentials file exists —
+not for archinstall's sake (it would get `--dry-run` anyway) but because that file holds the account
+password hash, and 0600-then-deleted is right on a medium about to be powered off and wrong on a
+machine that will not be. What it would have run is printed into the log instead, including the full
+plan, which makes the log the thing worth reading.
+
+⚠️ **It wears a banner, and that is load-bearing**, not decoration: an installer that looks exactly
+like the real one and quietly does nothing is the instrument pretending to be the patient. A
+screenshot of a preview must never be mistakable for a screenshot of an install.
+
+⚠️ `ui/installer/base.json` is git-ignored on purpose. Copy the REAL one from nidara-iso rather than
+inventing a stub — a stub would be a fourth thing that looks like the product and is not.
+
 ### The installer runs in a VM, or it does not run
 
 🔴 **`nidara-installer` is never launched on the development machine. Not armed, not unarmed, not

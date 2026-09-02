@@ -18,6 +18,7 @@ import { SummaryStep } from "../steps/summary"
 import { RunStep } from "../steps/run"
 import { WINDOW_LAYOUT } from "../../lib/tokens"
 import { t, onLocaleChange } from "../lib/i18n"
+import { isPreview } from "../lib/preview"
 
 function header(onClose: () => void): {
   start: Gtk.Widget
@@ -123,6 +124,12 @@ export function InstallerWindow(): Gtk.Window {
   })
   closeActionBtn.connect("clicked", () => shell.close())
   restartActionBtn.connect("clicked", () => {
+    // Reachable in preview, because preview walks the flow to its end — and there
+    // the last button on the last page reboots the machine you are working on.
+    if (isPreview()) {
+      console.log("[PREVIEW] not executed: systemctl reboot")
+      return
+    }
     try {
       Gio.Subprocess.new(["systemctl", "reboot"], Gio.SubprocessFlags.NONE)
     } catch {}
@@ -173,6 +180,24 @@ export function InstallerWindow(): Gtk.Window {
   const head = header(() => shell.close())
   const sidebarIcon = ndIcon("sidebar") ?? Gio.ThemedIcon.new("sidebar-symbolic")
 
+  // The banner is the whole reason preview is allowed to look like the installer:
+  // a screenshot of a preview must never be mistakable for a screenshot of an
+  // install. It sits above the content rather than in the header so it survives
+  // the sidebar being collapsed, and it is the first thing in the reading order.
+  const rootContent = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, vexpand: true })
+  if (isPreview()) {
+    const banner = new Gtk.Label({
+      label: t("previewBanner"),
+      css_classes: ["installer-preview-banner"],
+      halign: Gtk.Align.FILL,
+      xalign: 0,
+      wrap: true,
+      can_target: false,
+    })
+    rootContent.append(banner)
+  }
+  rootContent.append(scrolledContent)
+
   shell = NidaraWindow({
     app,
     title: "Nidara Installer",
@@ -180,7 +205,7 @@ export function InstallerWindow(): Gtk.Window {
     appId: "nidara-installer",
     cssClasses: ["nidara-installer-window"],
     glassClasses: ["installer-root"],
-    content: scrolledContent,
+    content: rootContent,
     sidebar: {
       widget: sidebar.widget,
       toggleIcon: sidebarIcon as any,

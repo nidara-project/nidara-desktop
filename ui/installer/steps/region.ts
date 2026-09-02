@@ -48,6 +48,7 @@ import {
   type Country, type KeyboardLayout,
 } from "../lib/region"
 import { heading, prose } from "./common"
+import { isPreview } from "../lib/preview"
 
 /**
  * A locale in its own language — "español de España", "português (Brasil)",
@@ -191,7 +192,13 @@ export function RegionStep(): Step {
       const derived = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, hexpand: true })
       box.append(derived)
 
+      // ⚠️ This is the installer reaching into the session it is RUNNING IN, not
+      // into the system it is installing — which is exactly right on the live
+      // medium (you should be able to test the layout you just picked) and
+      // unacceptable on somebody's desktop, where clicking a row in a list would
+      // change the keyboard they are typing on.
       const applyKeyboardLive = (k: KeyboardLayout) => {
+        if (isPreview()) return
         execAsync(["hyprctl", "keyword", "input:kb_layout", k.layout]).catch(() => {})
         execAsync(["hyprctl", "keyword", "input:kb_variant", k.variant]).catch(() => {})
       }

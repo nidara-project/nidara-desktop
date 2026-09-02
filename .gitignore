@@ -170,3 +170,10 @@ docs/
 # wallpaper directory is tracked (default asset shipped with the project)
 !defaults/wallpaper/
 !defaults/wallpaper/*.jpg
+
+# The installer's dev fallback for the product config. The REAL one is airootfs
+# content in nidara-iso and only the medium ships it; `lib/base-config.ts` falls
+# back to ./base.json so preview mode can be walked here. Copying it in is a
+# local act — committing it would put a second copy of a product decision in the
+# repo that owns none of it, and the two would drift.
+ui/installer/base.json
