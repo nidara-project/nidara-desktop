@@ -18,9 +18,11 @@
 // is each surface's own data (see ui/installer/lib/region.ts for the four system
 // tables the installer enumerates).
 //
-// ⚠️ NOTHING HERE IS A HAND-WRITTEN TABLE, on purpose. ICU ships in GJS, so every
-// name below is derived. A table of country names in twelve languages is a table
-// that goes stale in twelve languages.
+// ⚠️ NO NAME HERE IS HAND-WRITTEN, on purpose. ICU ships in GJS, so every name is
+// derived — a table of country names in twelve languages is a table that goes
+// stale in twelve languages. The one table below (MODIFIER_SCRIPT) is not a list
+// of names but a mapping between two STANDARDS, glibc's locale modifiers and
+// BCP-47's subtags, and it is ten entries that have not moved in years.
 
 /**
  * A country in the reader's language — "España" in a Spanish UI, "Spain" in an
@@ -57,12 +59,54 @@ export function countryName(code: string, display: string, fallback: string): st
  * a name is not.
  */
 export function languageName(localeOrTag: string): string {
-    const tag = localeOrTag.split(".")[0].replace(/_/g, "-")
+    const { tag, leftover } = toBcp47(localeOrTag)
+    let name = localeOrTag
     try {
-        const name = new Intl.DisplayNames([tag], { type: "language" }).of(tag)
-        if (name && name !== tag) return name
+        const n = new Intl.DisplayNames([tag], { type: "language" }).of(tag)
+        if (n && n !== tag) name = n
     } catch {}
-    return localeOrTag
+    return leftover ? `${name} (${leftover})` : name
+}
+
+/**
+ * glibc's modifiers, translated into the BCP-47 subtags ICU wants.
+ *
+ * ⚠️ This is the one hand-written mapping in the file, and it is a mapping
+ * between two STANDARDS rather than a list of names — ten UTF-8 locales carry a
+ * modifier and the set has not moved in years. Getting it wrong is not cosmetic:
+ * `ca_ES@valencia` and `ca_ES` both resolve to "català (Espanya)" without it, so
+ * Catalonia's two rows read identically and one of Spain's co-official languages
+ * looks like a duplicate.
+ *
+ * ⚠️ **Position matters.** A script subtag goes BEFORE the region (`be-Latn-BY`)
+ * and a variant AFTER it (`ca-ES-valencia`); ICU throws `invalid language tag` on
+ * `be-BY-Latn`, so the two cannot share a branch. Verified 2026-09-03.
+ *
+ * A modifier in neither table (`@abegede`, `@iqtelif` — collation and orthography
+ * variants with no subtag) is handed back as `leftover` and shown in brackets,
+ * because a row that cannot be named apart from its neighbour is worse than one
+ * named a little awkwardly.
+ */
+const MODIFIER_SCRIPT: Record<string, string> = {
+    latin: "Latn", cyrillic: "Cyrl", devanagari: "Deva",
+}
+const MODIFIER_VARIANT = new Set(["valencia"])
+
+function toBcp47(localeOrTag: string): { tag: string; leftover: string } {
+    let rest = localeOrTag
+    let modifier = ""
+    const at = rest.indexOf("@")
+    if (at !== -1) { modifier = rest.slice(at + 1); rest = rest.slice(0, at) }
+    const base = rest.split(".")[0].replace(/_/g, "-")
+    if (!modifier) return { tag: base, leftover: "" }
+
+    const script = MODIFIER_SCRIPT[modifier]
+    if (script) {
+        const [lang, region] = base.split("-")
+        return { tag: region ? `${lang}-${script}-${region}` : `${lang}-${script}`, leftover: "" }
+    }
+    if (MODIFIER_VARIANT.has(modifier)) return { tag: `${base}-${modifier}`, leftover: "" }
+    return { tag: base, leftover: modifier }
 }
 
 /**

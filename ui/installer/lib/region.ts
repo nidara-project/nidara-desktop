@@ -145,7 +145,16 @@ export function allLocales(): string[] {
     if (parts.length < 2) continue
     const [name, charset] = parts
     if (charset.toUpperCase() !== "UTF-8") continue
-    out.add(name.includes(".") ? name : `${name}.UTF-8`)
+    if (name.includes(".")) { out.add(name); continue }
+    // ⚠️ The MODIFIER stays last. glibc writes `ca_ES.UTF-8@valencia`, never
+    // `ca_ES@valencia.UTF-8` — and appending the charset blindly produced the
+    // second, which is not a locale glibc can resolve. It would have been written
+    // into /etc/locale.conf as LANG and silently fallen back to C. Ten UTF-8
+    // locales carry a modifier: be_BY@latin, ca_ES@valencia, sr_RS@latin,
+    // uz_UZ@cyrillic and six more. Catalan is why this was noticed — Valencian is
+    // one of Spain's co-official languages and it sat in the list unnamed.
+    const at = name.indexOf("@")
+    out.add(at === -1 ? `${name}.UTF-8` : `${name.slice(0, at)}.UTF-8${name.slice(at)}`)
   }
   _locales = [...out].sort()
   return _locales
