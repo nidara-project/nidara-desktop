@@ -769,8 +769,30 @@ user_systemctl stop gnome-keyring-daemon.socket gnome-keyring-daemon.service 2>/
 # Still alive => D-Bus activation re-spawned it (something asked for a secret in between).
 # With lingering that one survives into the next session and wins the race again, so this
 # case needs a reboot, not a logout — say so instead of reporting success.
-if pgrep -u "$REAL_USER" -f gnome-keyring-daemon >/dev/null 2>&1; then
-    echo "  [WARN] A gnome-keyring-daemon from before this change is still running."
+#
+# ⚠️ "Still alive" cannot be `pgrep -f gnome-keyring-daemon`. That was wrong twice, and the
+# first way made this warning fire on every healthy install from 2026-08-23 until it was
+# finally read:
+#
+#   - PAM's own daemon is `gnome-keyring-daemon --daemonize --login`, started at THIS
+#     session's login, long before this script runs. It is the daemon the whole change
+#     exists to hand ownership to — so matching it means announcing failure at the exact
+#     moment we succeeded, and telling the user to reboot, forever.
+#   - `-f` matches the entire command line, so any unrelated process that merely MENTIONS
+#     the string matched too: a shell running this check, a grep, an editor with the file open.
+#
+# `--login` is the discriminator and it is exhaustive — PAM is the only starter that passes
+# it. D-Bus activation runs `--start --foreground --components=secrets`
+# (/usr/share/dbus-1/services/org.freedesktop.secrets.service) and the systemd unit runs
+# `--foreground --components=… --control-directory=…`; neither carries it. Anchoring the
+# pattern fixes the second bug. `pgrep -x` is NOT the alternative: comm is truncated to
+# `gnome-keyring-d` at 15 characters and pgrep refuses to match a longer name at all.
+_stale_keyring=""
+for _p in $(pgrep -u "$REAL_USER" -f '^(/usr/bin/)?gnome-keyring-daemon' 2>/dev/null); do
+    tr '\0' ' ' < "/proc/$_p/cmdline" 2>/dev/null | grep -q -- "--login" || _stale_keyring="$_stale_keyring $_p"
+done
+if [ -n "$_stale_keyring" ]; then
+    echo "  [WARN] A gnome-keyring-daemon from before this change is still running (PID$_stale_keyring)."
     echo "         Reboot (not just log out) before trusting the login keyring: it can"
     echo "         outlive the session, and PAM's daemon defers to whatever it finds."
 fi
