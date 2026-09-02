@@ -510,6 +510,10 @@ CONF
         chown "$REAL_USER:" "$TARGET"
     fi
     ln -sf "$TARGET" "$LINK"
+    # -h, and on the LINK: a plain chown follows the symlink and re-owns the target
+    # instead, leaving the link itself root:root — which is what `ln -sf` under sudo
+    # makes it. Unconditional, so it repairs links an earlier run left that way.
+    chown -h "$REAL_USER:" "$LINK"
     echo "  [Symlink] $LINK -> $TARGET"
 done
 
@@ -518,6 +522,7 @@ done
 USERCONF_LINK="${REAL_HOME}/.config/hypr/hyprland-user.lua"
 USERCONF_TARGET="$CONFIG_DIR/hyprland-user.lua"
 ln -sf "$USERCONF_TARGET" "$USERCONF_LINK"
+chown -h "$REAL_USER:" "$USERCONF_LINK"   # the LINK, not its target — see the note above
 echo "  [Symlink] $USERCONF_LINK -> $USERCONF_TARGET"
 
 # uwsm environment files (created once, never overwritten)
