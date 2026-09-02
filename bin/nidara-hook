@@ -42,7 +42,7 @@
 
 # name :: arguments :: what it means
 EVENTS=$(cat <<'TABLE'
-session-started :: (none) :: The desktop finished starting. Fires ONCE per login session — a UI reload (Super+Shift+R) restarts the shell but does NOT re-fire this.
+session-started :: (none) :: The desktop finished starting. Fires ONCE per login session — a UI reload (Super+Shift+R) restarts the shell but does NOT re-fire this. To test a hook for it, delete the stamp and then reload: rm "$XDG_RUNTIME_DIR/nidara-session-started".
 dark-mode-changed :: dark|light :: The user switched appearance. $1 is the mode now in effect.
 accent-changed :: <accent> :: The accent colour changed. $1 is its key — one of blue, teal, green, yellow, orange, red, pink, purple, slate. The same value `nidara-ipc getConfig appearance.accent` returns; `nidara-ipc describeConfig` is the authority if this list ever ages.
 wallpaper-changed :: <path> :: A new desktop wallpaper was applied. $1 is its absolute path.

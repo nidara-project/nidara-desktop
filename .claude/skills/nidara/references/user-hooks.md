@@ -54,7 +54,9 @@ an event:
   a bare call there would fire on reloads too — the same trap that got the DnD seeding block deleted
   from `app.ts` in 2026-08-16. A stamp in `$XDG_RUNTIME_DIR` is what makes the name true: that
   directory is born with the user's first session and destroyed with their last, so it cannot
-  outlive the session that wrote it and needs no cleanup of ours.
+  outlive the session that wrote it and needs no cleanup of ours. It is also the reason this one
+  event cannot be tested by reloading alone — `nidara-hook --list` carries the command that clears
+  the stamp, so nobody has to know the path.
 - **`battery-low` has no natural firing site**, because nothing in the shell *decides* a battery is
   low. `initBatteryLowHook()` watches UPower and fires on a downward crossing only, armed from the
   level it finds at startup — a shell reloaded on an already-flat laptop must not announce a
