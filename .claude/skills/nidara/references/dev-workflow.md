@@ -532,6 +532,58 @@ destructive path has to be genuinely reachable for the control to be worth anyth
 reproduce it is therefore a safety decision, not a convenience one. That one goes in the VM before
 it goes anywhere.
 
+### The LANGUAGE is asked first, and the country is never the first screen
+
+Researched 2026-09-03 against Calamares, Anaconda, subiquity, GNOME Initial Setup and archinstall
+(`~/Dev/nidara-handoff/INFORME-LOCALE.md`, 67 citations, four of them re-verified by hand). Four
+things in that ecosystem are unanimous, and Nidara now matches all four:
+
+| convention | where it is verifiable |
+|---|---|
+| the **language is the first question**; the country is never the first screen | `calamares/settings.conf:115` — `sequence: welcome → locale → keyboard → …`, where `welcome` IS the language chooser; `anaconda …/welcome.py:124` — `_langView` with `_localeView` (the territory) as a secondary column |
+| write **only `LANG`** to /etc/locale.conf; `LC_*` inherit | Anaconda, subiquity, GNOME and archinstall all do; only Calamares writes them all |
+| label by **endonym** | all of them |
+| the console keymap hook goes **before** `encrypt` in the initramfs | all of them that support LUKS |
+
+🔑 **The argument for language-first is not taste**: *in what language do you print the country
+names before the reader has told you their language?* Our region page asked the country first and
+named the countries in the UI locale, which on the live medium is always `en_US`.
+
+So `steps/welcome.ts` is the language question — logo, one heading, one dim line, the list — and
+`steps/region.ts` keeps the country, which still narrows timezone and keyboard. The chosen locale's
+TERRITORY seeds the country as a suggestion (`es_AR` → Argentina), never when it is the medium's own
+`en_US`, which would suggest the United States to everybody who has not answered yet.
+
+⚠️ **Where there is NO convention, and we checked before changing anything:** the hostname.
+Calamares puts it on the account page in exactly our position (`users/page_usersetup.ui`:
+FullName, LoginName, **Hostname**, Password) and subiquity does too; Anaconda puts it under
+"Network & Host Name"; archinstall gives it a top-level entry. Two with the account, one with the
+system, one loose — so it stays where it is, and what was missing was the line saying what it is
+FOR, which subiquity bothers to write and we did not.
+
+⚠️ Also no convention: how curated the language list is (archinstall exposes all 328 of glibc's,
+Calamares and Anaconda only what they translate), keyboard abstraction, and GeoIP.
+
+### A long pick-one list puts the current choice at the TOP, and never scrolls to it
+
+`searchableList()` in `ui/installer/steps/common.ts` — second use in the bundle, and a candidate for
+the kit when a third appears.
+
+⚠️ **It deliberately has no `scrollTo`, and it had one through three failed attempts**: a fraction
+of `adj.upper` (which is still growing while GTK allocates, so the first `changed` lands near the
+top and disconnects, pleased with itself), then a guard requiring `upper ≥ rows × 24`, then a `map`
+handler an idle later. Instrumented, the numbers were right — `upper=24316`, `page=320`, value set
+to 385 — and the list still opened at the top.
+
+The answer is the one Anaconda and GNOME Initial Setup already use: a **suggested block first**. The
+caller orders the items with the current choice at the front, and the question "where is my language
+among 328?" stops needing an answer.
+
+⚠️ And a layout law worth keeping: **a `vexpand` widget inside a page that scrolls gets its MINIMUM,
+not the leftover** — the page can always grow instead. The language list rendered three rows tall
+while asking for 220 until the page above it was cut down to a heading and one line. `height` on
+`searchableList` is explicit for that reason.
+
 ### Language, keyboard and timezone are ONE step, and the data comes off the system
 
 `steps/region.ts` replaced `language.ts`, `keyboard.ts` and `timezone.ts`, which were the same widget

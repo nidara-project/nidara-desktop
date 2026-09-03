@@ -27,7 +27,7 @@ import {
   getAnswers, setCountryAnswer, setTimezoneAnswer, setLanguageAnswer, setKeyboardAnswer,
 } from "../../ui/installer/lib/answers"
 import { countries, defaultsFor } from "../../ui/installer/lib/region"
-import { localeLabel } from "../../ui/installer/steps/region"
+import { languageName } from "../../ui/lib/locale-names"
 
 GLib.setenv("GTK_THEME", "nidara", true)
 
@@ -57,9 +57,12 @@ app.start({
         setCountryAnswer({ code: c.code, name: c.name })
         const d = defaultsFor(c.code)
         if (d.timezone) setTimezoneAnswer({ timezone: d.timezone })
+        // The LANGUAGE is no longer the region page's question — it moved to the
+        // welcome page, which is where every installer in the ecosystem asks it.
+        // Seeded here anyway so the step's `ready()` can be exercised alone.
         if (d.locale) {
           const [sysLang, sysEnc] = d.locale.split(".")
-          setLanguageAnswer({ locale: d.locale, sysLang, sysEnc: sysEnc || "UTF-8", label: localeLabel(d.locale) })
+          setLanguageAnswer({ locale: d.locale, sysLang, sysEnc: sysEnc || "UTF-8", label: languageName(d.locale) })
         }
         if (d.keyboard) setKeyboardAnswer({
           layout: d.keyboard.layout, variant: d.keyboard.variant,

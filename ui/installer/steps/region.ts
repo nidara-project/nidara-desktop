@@ -37,26 +37,19 @@
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { execAsync } from "../../lib/process"
-import { NidaraList, NidaraRow, NidaraDropDownRow, NidaraSelectionCheck, NidaraScrolled } from "../../lib/nidara-kit"
+import { NidaraRow, NidaraDropDownRow } from "../../lib/nidara-kit"
 import { t, setLocale, getLocale, type Locale } from "../lib/i18n"
 import {
-  getAnswers, setCountryAnswer, setLanguageAnswer, setKeyboardAnswer, setTimezoneAnswer,
+  getAnswers, setCountryAnswer, setKeyboardAnswer, setTimezoneAnswer,
 } from "../lib/answers"
 import {
-  countries, timezonesFor, allTimezones, localesFor, allLocales,
+  countries, timezonesFor, allTimezones,
   keyboardsFor, allKeyboards, defaultsFor,
   type Country, type KeyboardLayout,
 } from "../lib/region"
-import { heading, prose } from "./common"
-import { countryName, countryHaystack, languageName, timezoneName } from "../../lib/locale-names"
+import { heading, prose, searchableList } from "./common"
+import { countryName, countryHaystack, timezoneName } from "../../lib/locale-names"
 import { isPreview } from "../lib/preview"
-
-/**
- * Kept as a named re-export because the probe and the page both import it, and
- * the naming itself now lives in ui/lib/locale-names.ts where the greeter and
- * Settings can reach it too.
- */
-export const localeLabel = languageName
 
 /**
  * Which of the twelve translations the installer should wear, given the system
@@ -97,6 +90,23 @@ export function RegionStep(): Step {
       return a.country !== null && a.language !== null && a.keyboard !== null && a.timezone !== null
     },
 
+    // The language chosen on the welcome page carries a TERRITORY, and it is a
+    // better first guess at the country than nothing: es_AR means Argentina.
+    // Only a suggestion, and only when nothing has been chosen — walking back to
+    // change the language must not silently move a country somebody picked.
+    //
+    // ⚠️ Deliberately NOT seeded from the medium's own en_US, which would suggest
+    // the United States to every person on earth who has not answered yet. The
+    // welcome page sets that locale as its default; a default is not an answer.
+    onEnter() {
+      const a = getAnswers()
+      if (a.country || !a.language || a.language.locale === "en_US.UTF-8") return
+      const territory = /^[a-z]+_([A-Z]+)/.exec(a.language.locale)?.[1]
+      if (!territory) return
+      const c = countries().find(x => x.code === territory)
+      if (c) setCountryAnswer({ code: c.code, name: c.name })
+    },
+
     build(notifyReady) {
       const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
@@ -108,81 +118,35 @@ export function RegionStep(): Step {
       box.append(prose(t("regionProse")))
 
       // ── The country ────────────────────────────────────────────────────────
-      // A plain Gtk.Entry, not a Gtk.SearchEntry. The installer's sheet styles
-      // `entry`, which is the node every other field in this bundle draws on; a
-      // SearchEntry draws on `entry.search` with its own icon and clear button,
-      // and none of that is styled here — on glass it came out as an unstyled
-      // native control with the magnifier jammed against the text.
-      const search = new Gtk.Entry({
-        placeholder_text: t("regionCountryPlaceholder"),
-        hexpand: true,
-      })
-      box.append(search)
-
-      const { box: countryCard, listBox: countryList } = NidaraList()
-      countryList.selection_mode = Gtk.SelectionMode.NONE
-
-      const rowFor = new Map<Gtk.ListBoxRow, Country>()
-      const checkFor = new Map<string, Gtk.Widget>()
-      let selectedCode = getAnswers().country?.code ?? null
-
-      const paintCountry = () => {
-        for (const [row, c] of rowFor) {
-          const on = c.code === selectedCode
-          row[on ? "add_css_class" : "remove_css_class"]("is-selected")
-          const chk = checkFor.get(c.code)
-          if (chk) chk.visible = on
-        }
-      }
-
-      // Named in the READER's language, and sorted in it — tzdata's own order is
-      // alphabetical by its English spelling, which is not an ordering of the list
+      // Named in the READER's language and sorted in it — tzdata's own order is
+      // alphabetical by its ENGLISH spelling, which is not an ordering of the list
       // anybody is looking at. `build()` re-runs on every language change
       // (Flow.invalidate), so both follow the UI.
       const ui = getLocale()
-      const named = countries()
+      let selectedCode = getAnswers().country?.code ?? null
+
+      // Chosen country first, for the same reason the language list does it: a
+      // list of 249 should not have to be scrolled to show what is already picked.
+      const all = countries()
         .map(c => ({ c, label: countryName(c.code, ui, c.name) }))
         .sort((a, b) => a.label.localeCompare(b.label, ui))
+      const picked = all.filter(x => x.c.code === selectedCode)
+      const named = [...picked, ...all.filter(x => x.c.code !== selectedCode)]
 
-      for (const { c, label } of named) {
-        const chk = NidaraSelectionCheck(16)
-        chk.visible = c.code === selectedCode
-        checkFor.set(c.code, chk)
-        const row = NidaraRow(label, c.code, chk)
-        rowFor.set(row, c)
-        countryList.append(row)
-      }
-
-      // A filter over rows that already exist, rather than rebuilding 249 of them
-      // on every keystroke: the list keeps its selection and its scroll position.
-      //
-      // ⚠️ It matches the reader's name, tzdata's English one AND the code — not
-      // just what is on screen. Matching only the display name is how the English
-      // list came to be unfindable by typing "España"; matching only English is
-      // the same bug facing the other way.
-      countryList.set_filter_func((row) => {
-        const c = rowFor.get(row as Gtk.ListBoxRow)
-        if (!c) return true
-        const q = (search.get_text?.() ?? "").trim().toLowerCase()
-        if (!q) return true
-        return countryHaystack(c.code, ui, c.name).some(h => h.includes(q))
+      const list = searchableList({
+        placeholder: t("regionCountryPlaceholder"),
+        items: named,
+        height: 300,
+        row: ({ c, label }, check) => NidaraRow(label, c.code, check),
+        // The reader's name, tzdata's English one AND the code — not just what is
+        // on screen. Matching only the display name is how the English list came
+        // to be unfindable by typing "España"; matching only English is the same
+        // bug facing the other way.
+        haystack: ({ c }) => countryHaystack(c.code, ui, c.name),
+        isSelected: ({ c }) => c.code === selectedCode,
+        onActivate: ({ c }) => selectCountry(c),
       })
-      search.connect("changed", () => countryList.invalidate_filter())
-
-      // The list TAKES the height that is left, rather than sitting at a fixed
-      // 240 with dead space under it: before a country is chosen the page is one
-      // question and the list should fill it, and after one is chosen the derived
-      // card appears below and the list gives the room back.
-      const { widget: countryScroller, scrolled: countryScrolled } = NidaraScrolled({
-        child: countryCard,
-        minContentHeight: 180,
-        propagateNaturalHeight: false,
-        reserveLane: false,
-      })
-      countryScrolled.vexpand = true
-      countryScroller.vexpand = true
-      box.vexpand = true
-      box.append(countryScroller)
+      box.append(list.widget)
 
       // ── What the country narrows ───────────────────────────────────────────
       // Rebuilt whole on every country change: NidaraDropDownRow takes its model at
@@ -230,29 +194,6 @@ export function RegionStep(): Step {
           },
         ))
 
-        // System locale ───────────────────────────────────────────────────────
-        const locs = scoped(localesFor(code), allLocales(), x => x)
-        const locLabels = locs.map(localeLabel)
-        const locCurrent = a.language?.locale ?? null
-        listBox.append(NidaraDropDownRow(
-          t("regionFormat"),
-          t("regionFormatDesc"),
-          locCurrent ? locLabels[locs.indexOf(locCurrent)] ?? locCurrent : t("regionAsk"),
-          locCurrent ? locLabels : [t("regionAsk"), ...locLabels],
-          (_v, i) => {
-            const idx = locCurrent ? i! : i! - 1
-            const loc = locs[idx]
-            if (!loc) return
-            const [sysLang, sysEnc] = loc.split(".")
-            setLanguageAnswer({ locale: loc, sysLang, sysEnc: sysEnc || "UTF-8", label: localeLabel(loc) })
-            // The installer follows the system locale it was just handed. This is
-            // the call that re-translates every page (Flow.invalidate), so it also
-            // rebuilds THIS one — which is why nothing below it may touch a widget.
-            setLocale(uiLocaleFor(loc))
-            notifyReady?.()
-          },
-        ))
-
         // Keyboard ────────────────────────────────────────────────────────────
         const kbs = scoped(keyboardsFor(code), allKeyboards(), k => `${k.layout}:${k.variant}`)
         const kbLabels = kbs.map(k => k.label)
@@ -291,19 +232,19 @@ export function RegionStep(): Step {
         derived.append(testCard)
       }
 
-      const selectCountry = (c: Country) => {
+      function selectCountry(c: Country) {
         selectedCode = c.code
         setCountryAnswer({ code: c.code, name: c.name })
-        paintCountry()
+        list.repaint()
 
         // Only what the data says unambiguously; the rest stays open and the
         // dropdown says "Choose…". See lib/region.ts — null is the useful answer.
+        //
+        // ⚠️ The LANGUAGE is not among them any more. It was asked on the welcome
+        // page, before this one, and a country arriving later must not overwrite
+        // it — somebody living in Germany with a Spanish desktop is not a bug.
         const d = defaultsFor(c.code)
         if (d.timezone) setTimezoneAnswer({ timezone: d.timezone })
-        if (d.locale) {
-          const [sysLang, sysEnc] = d.locale.split(".")
-          setLanguageAnswer({ locale: d.locale, sysLang, sysEnc: sysEnc || "UTF-8", label: localeLabel(d.locale) })
-        }
         if (d.keyboard) {
           const k = d.keyboard
           setKeyboardAnswer({ layout: k.layout, variant: k.variant, keymap: k.keymap, label: k.label })
@@ -312,43 +253,6 @@ export function RegionStep(): Step {
 
         rebuildDerived()
         notifyReady?.()
-      }
-
-      countryList.connect("row-activated", (_l, row) => {
-        const c = rowFor.get(row)
-        if (c) selectCountry(c)
-      })
-
-      paintCountry()
-      rebuildDerived()
-
-      // Put the chosen country back under the eye when the page is rebuilt.
-      //
-      // It matters because rebuilding is now routine: changing the language throws
-      // every page away (Flow.invalidate), and coming back to this one showed a
-      // list scrolled to Afghanistan with the answer 27 screens down — the page
-      // looked unanswered while Continue was lit.
-      //
-      // ⚠️ Driven off the ADJUSTMENT, not off the row. `translate_coordinates` on
-      // an idle returns nothing useful: the row has no allocation until the
-      // scroller has laid out, and one idle is too early (measured — the list did
-      // not move). The adjustment says when there is content, and the rows are
-      // uniform, so the fraction is exact and needs no allocation at all.
-      if (selectedCode) {
-        const all = named
-        const idx = all.findIndex(x => x.c.code === selectedCode)
-        const adj = countryScrolled.vadjustment
-        const scrollToSelected = (): boolean => {
-          if (idx < 0 || !adj || adj.upper <= adj.page_size) return false
-          const y = (idx / all.length) * adj.upper - 60
-          adj.value = Math.max(0, Math.min(y, adj.upper - adj.page_size))
-          return true
-        }
-        if (adj && !scrollToSelected()) {
-          const id = adj.connect("changed", () => {
-            if (scrollToSelected()) adj.disconnect(id)
-          })
-        }
       }
 
       return box

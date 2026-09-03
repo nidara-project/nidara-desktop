@@ -100,7 +100,21 @@ export function AccountStep(): Step {
       const { box: listCard, listBox } = NidaraList()
       listBox.append(NidaraStackedRow(t("accountFullName"), "", fullNameEntry))
       listBox.append(NidaraStackedRow(t("accountUsername"), "", usernameEntry))
-      listBox.append(NidaraStackedRow(t("accountHostname"), "", hostnameEntry))
+      // ⚠️ The one field on this card that is NOT about the person, and the only one
+      // that gets a line explaining itself.
+      //
+      // Researched 2026-09-03: there is NO convention about where a hostname
+      // lives. Calamares puts it here, in exactly this position — its
+      // `users/page_usersetup.ui` orders FullName, LoginName, **Hostname**,
+      // Password — and subiquity puts it on its identity view too. Anaconda puts
+      // it under "Network & Host Name", and archinstall gives it a top-level entry
+      // of its own. Two with the account, one with the system, one loose.
+      //
+      // So it stays, and what was actually missing is what subiquity bothers to
+      // say and we did not: what the thing is FOR. A field labelled only "Host
+      // name" among four fields about a person reads as a fifth fact about the
+      // person.
+      listBox.append(NidaraStackedRow(t("accountHostname"), t("accountHostnameDesc"), hostnameEntry))
       listBox.append(NidaraStackedRow(t("accountPassword"), "", pwEntry))
       listBox.append(NidaraStackedRow(t("accountConfirmPassword"), "", pw2Entry))
 
