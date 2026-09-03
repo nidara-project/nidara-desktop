@@ -3502,6 +3502,27 @@ decides WHICH things exist — that stays each surface's own data.
 🔑 **Nothing here is a hand-written table.** ICU ships in GJS, so every name is derived — a table
 of country names in twelve languages is a table that goes stale in twelve languages.
 
+⚠️ **A "pick your language" list names the LANGUAGE, not the locale — `languageMenuLabels()`.**
+`Intl.DisplayNames` defaults to its *dialect* naming, which produced three shapes among twelve rows
+("American English", "español de España", "português europeu" against "français (France)"), and
+every one of those shapes names a TERRITORY that the installer has not asked about yet: the country
+comes on the NEXT page, and `localeFor()` then turns `es_ES` into `es_AR`. So the label is the bare
+endonym, with an initial capital, and the territory appears only where two rows would otherwise read
+the same — Portuguese, and that is computed from the list, not from a table. The capital is against
+the orthography of half of them ("español" is lowercase in running text) and it is deliberate: they
+are entries in an index, GNOME's chooser capitalises them, and **the greeter's list draws from the
+same function**, so the two screens of one product cannot drift apart again. Sorted by that label in
+the READER's collation — alphabetical, like GNOME Initial Setup and Calamares, with no curated
+ranking to defend. `languageHaystack()` is the search twin: endonym + the reader's name + the
+English one, so "aleman" and "german" both find Deutsch.
+
+⚠️ **Whatever answer a page pre-seeds must come from the SAME source as the UI's own language.**
+The installer's welcome page seeds a language on entry so Continue is live from the first frame, and
+it used to seed the literal `en_US.UTF-8` ("what the medium generated") while the UI language came
+from `LANG`/`/etc/locale.conf`. On the ISO the two agree by accident, because the ISO generates no
+other locale; in preview on a Spanish desktop the window came up in Spanish with the tick on American
+English. One question, two sources — the same defect the naming rewrite removed.
+
 ⚠️ `countryName()` takes the display locale as an ARGUMENT rather than reading the environment:
 the installer changes its own language at runtime without touching `LANG`, so a function that
 consulted the process locale would keep saying "Spain" after the user switched to Spanish.

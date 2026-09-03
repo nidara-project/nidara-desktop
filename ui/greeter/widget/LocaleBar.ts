@@ -3,6 +3,7 @@ import { NidaraDropDown } from "../../lib/nidara-kit/scrolled"
 import { ndImageProps } from "../../lib/icons"
 import { withGlassCapsule } from "../../lib/glass-capsule"
 import { execAsync } from "../../lib/process"
+import { languageMenuLabels } from "../../lib/locale-names"
 import { getLocale, setLocale, type Locale } from "../lib/i18n"
 import { greeterPrefs, savePrefs } from "../lib/greeter-prefs"
 
@@ -32,27 +33,30 @@ function detectCurrentLayout(): string {
 
 // ── Languages ─────────────────────────────────────────────────────────────────
 
-interface Language {
-  id: Locale
-  label: string
-}
-
 // Endonyms, deliberately untranslated — everyone must be able to find their
 // own language regardless of what the greeter currently speaks.
-const LANGUAGES: Language[] = [
-  { id: "en",    label: "English" },
-  { id: "es",    label: "Español" },
-  { id: "fr",    label: "Français" },
-  { id: "de",    label: "Deutsch" },
-  { id: "it",    label: "Italiano" },
-  { id: "pt-BR", label: "Português (Brasil)" },
-  { id: "pt-PT", label: "Português (Portugal)" },
-  { id: "pl",    label: "Polski" },
-  { id: "nl",    label: "Nederlands" },
-  { id: "ru",    label: "Русский" },
-  { id: "zh-CN", label: "简体中文" },
-  { id: "ja",    label: "日本語" },
+//
+// ⚠️ The twelve labels are DERIVED, and they used to be twelve string literals
+// here. The installer asks the same question two screens earlier and was
+// answering it in another shape entirely ("español de España" against this
+// file's "Español"), which is the drift `ui/lib/locale-names.ts` exists to end.
+// `languageMenuLabels` decides the shape for both; the only visible change on
+// this screen is 简体中文 → 中文, ICU's own name for the language while there is
+// one Chinese in the list.
+//
+// ⚠️ Sorted by the label, in the collation of the language the greeter starts
+// in — the same rule as the installer's list. Once, at load: the bar is built a
+// single time (Greeter.ts) and re-strings itself in place afterwards, and a list
+// that reshuffled itself under the pointer every time somebody browsed the
+// dropdown would be worse than one whose order is a few percent off in another
+// language's collation.
+const LANGUAGE_IDS: Locale[] = [
+  "en", "es", "fr", "de", "it", "pt-BR", "pt-PT", "pl", "nl", "ru", "zh-CN", "ja",
 ]
+
+const LANGUAGES = languageMenuLabels(LANGUAGE_IDS)
+  .map((label, i) => ({ id: LANGUAGE_IDS[i], label }))
+  .sort((a, b) => a.label.localeCompare(b.label, getLocale()))
 
 // ── Widget ────────────────────────────────────────────────────────────────────
 
