@@ -90,6 +90,8 @@ app.start({
     //
     //   DISK_PROBE_SEED=ok    a layout that installs — / and an ESP
     //   DISK_PROBE_SEED=dupe  two partitions given the same mount point (D-17)
+    //   DISK_PROBE_SEED=efi   an ESP about to be formatted as btrfs (#414) — the
+    //                         layout that used to install cleanly and not boot
     const seed = GLib.getenv("DISK_PROBE_SEED")
     if (seed) {
       const parts = listProbePartitions()
@@ -104,6 +106,8 @@ app.start({
         mode: "manual",
         mounts: seed === "dupe"
           ? [mount(root, "/", "btrfs", true), mount(other, "/", "ext4", true)]
+          : seed === "efi"
+          ? [mount(esp, "/boot/efi", "btrfs", true), mount(root, "/", "btrfs", true)]
           : [mount(esp, "/boot/efi", "vfat", false), mount(root, "/", "btrfs", true)],
       })
     }

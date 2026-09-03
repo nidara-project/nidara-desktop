@@ -172,6 +172,28 @@ function manualProblems(mounts: ManualPartitionMount[]): string[] {
   if (!mounts.some(m => m.mountpoint === "/")) problems.push(t("diskErrNoRoot"))
   if (isUefi() && !mounts.some(m => ESP_MOUNTS.has(m.mountpoint))) problems.push(t("diskErrNoBoot"))
 
+  // ⚠️ The EFI system partition has to be FAT32, and nothing said so: the
+  // filesystem dropdown defaults to btrfs and applies to whatever the row was
+  // given, so assigning a partition to /boot/efi and leaving Format ticked —
+  // which the smart default does FOR you on anything that is not already vfat —
+  // formatted the ESP as btrfs. The install then ran to completion, reported
+  // success, and produced a machine whose firmware cannot read its own boot
+  // partition: the same shape as the legacy-BIOS case `ready()` refuses
+  // outright, an install that finishes and then does not boot.
+  //
+  // Which mount IS the ESP depends on the layout, and getting that wrong would
+  // refuse a valid one: with /boot/efi or /efi assigned, THAT is the ESP and
+  // /boot is an ordinary boot partition which may legitimately be ext4. Only
+  // when /boot is the sole EFI-ish mount is /boot itself the ESP.
+  const esp = mounts.find(m => m.mountpoint === "/boot/efi" || m.mountpoint === "/efi")
+    ?? mounts.find(m => m.mountpoint === "/boot")
+  // Formatting it settles the question; keeping it means what lsblk already
+  // reports has to be FAT — including the case where it reports nothing at all,
+  // which is not a filesystem the firmware can read either.
+  if (esp && (esp.format ? esp.filesystem !== "vfat" : esp.fsType !== "vfat")) {
+    problems.push(t("diskErrEfiNotFat"))
+  }
+
   const seen = new Set<string>()
   const dupes = new Set<string>()
   for (const m of mounts) {
@@ -580,6 +602,14 @@ export function DiskStep(): Step {
             // Smart format default: If EFI partition and already vfat, default to keep data (no format)
             if (ESP_MOUNTS.has(chosenMount)) {
               formatCheck.active = p.fstype !== "vfat"
+              // …and if it IS going to be formatted, with the only filesystem a
+              // firmware can read. The default was btrfs, which is how a valid
+              // layout produced a machine that does not boot. Still a default and
+              // not a lock: the row can be changed, and `manualProblems` is what
+              // refuses the change rather than a control that pretends it cannot
+              // be made.
+              const vfatIdx = FS_OPTIONS.indexOf("vfat")
+              if (formatCheck.active && vfatIdx >= 0) fsDropDown.set_selected(vfatIdx)
             } else if (chosenMount === "/") {
               formatCheck.active = true
             }
