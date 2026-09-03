@@ -1,7 +1,8 @@
 // Common helpers for installer step pages.
 import Gtk from "gi://Gtk?version=4.0"
+import GLib from "gi://GLib"
 import Pango from "gi://Pango"
-import { NidaraList, NidaraScrolled, NidaraSelectionCheck, NidaraEmptyRow } from "../../lib/nidara-kit"
+import { NidaraPickList, NidaraScrolled, NidaraSelectionCheck, NidaraEmptyRow } from "../../lib/nidara-kit"
 import { searchFold } from "../../lib/locale-names"
 import { ROW_HEIGHT, WIZARD_LAYOUT } from "../../lib/tokens"
 import { t } from "../lib/i18n"
@@ -109,14 +110,25 @@ export function searchableList<T>(opts: {
   minRows?: number
 }): { widget: Gtk.Widget; repaint: () => void } {
   const search = new Gtk.Entry({ placeholder_text: opts.placeholder, hexpand: true })
-  // ⚠️ `NidaraList()` returns a listbox that is ALREADY parented to the box it
-  // also returns, and that box is not what we want around a scrolling list — so
-  // the child has to be taken out before it can be given a new parent. Without
-  // the unparent, GTK refuses the reparent with
-  // `gtk_scrolled_window_set_child: assertion … failed` and draws nothing.
-  const { box: unusedCard, listBox } = NidaraList()
-  unusedCard.remove(listBox)
-  listBox.selection_mode = Gtk.SelectionMode.NONE
+  // A placeholder is not a name: it disappears the moment somebody types, and it
+  // was never in the accessibility tree at all, so a screen reader met an unnamed
+  // text field on three of the six steps (#403, D-30). The account step has done
+  // this correctly for all five of its entries since it was written; this is the
+  // same call.
+  search.update_property([Gtk.AccessibleProperty.LABEL], [opts.placeholder])
+
+  // ⚠️ Built directly rather than through `NidaraList()`, for two reasons that
+  // both matter: this list is a PICK LIST — one tab stop, arrows inside (see
+  // NidaraPickList; before it, walking the 249-row country list to the footer was
+  // 249 presses) — and `NidaraList` returns a listbox already parented to a box
+  // this caller throws away, which then has to be unparented before a
+  // ScrolledWindow will take it (`gtk_scrolled_window_set_child: assertion …
+  // failed`, and nothing drawn). The card's own material comes from the frame
+  // below, so the class list here is all `NidaraList` was contributing.
+  const listBox = new NidaraPickList({
+    css_classes: ["nidara-list"],
+    selection_mode: Gtk.SelectionMode.NONE,
+  })
 
   const rowOf = new Map<T, Gtk.ListBoxRow>()
   const checkOf = new Map<T, Gtk.Widget>()
@@ -239,6 +251,24 @@ export function searchableList<T>(opts: {
   const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, hexpand: true, vexpand: true })
   box.append(search)
   box.append(card)
+
+  // The page arrives with the caret already in the search box (#403). Without it
+  // a step reached by keyboard opened with the focus NOWHERE — measured: arriving
+  // at Region by pressing Return on Continue left `get_focus()` null, so the first
+  // thing typed went into the void and the first arrow key did nothing. It is
+  // also simply what a search-driven list wants: type to filter, Down to enter the
+  // list, Return to choose.
+  //
+  // ⚠️ Deferred, like the account step's own grab: on `map` the widget exists but
+  // GTK has not settled focus yet, and a grab there is overwritten a frame later.
+  // ⚠️ One searchable list per page. Two would fight over this, and the last one
+  // mapped would win.
+  box.connect("map", () => {
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+      search.grab_focus()
+      return GLib.SOURCE_REMOVE
+    })
+  })
 
   return { widget: box, repaint }
 }

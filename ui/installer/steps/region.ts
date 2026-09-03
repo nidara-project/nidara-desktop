@@ -264,11 +264,18 @@ export function RegionStep(): Step {
           orientation: Gtk.Orientation.VERTICAL,
           css_classes: ["nidara-list-card"],
         })
-        testCard.append(new Gtk.Entry({
+        const testEntry = new Gtk.Entry({
           placeholder_text: t("keyboardTestPlaceholder"),
           css_classes: ["installer-keyboard-test"],
           hexpand: true,
-        }))
+        })
+        // Named, like every other entry in this bundle (#403, D-30): a
+        // placeholder is not a name — it is gone the moment somebody types, and
+        // it was never in the accessibility tree at all. This one is a tab stop
+        // on the way to Continue, so a screen reader met it whether or not it was
+        // wanted.
+        testEntry.update_property([Gtk.AccessibleProperty.LABEL], [t("keyboardTestPlaceholder")])
+        testCard.append(testEntry)
         derived.append(testCard)
       }
 

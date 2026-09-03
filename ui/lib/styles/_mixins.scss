@@ -82,6 +82,15 @@
     &:hover                 { background-color: var(--nidara-surface-hover); }
     &:active                { background-color: var(--nidara-surface-active); }
     &:selected, &.is-selected { background-color: var(--nidara-state-selected); }
+    // Keyboard focus, and it belongs HERE rather than on each row class: a row is
+    // the one shape this DE reuses everywhere, and until 2026-09-03 not one of
+    // them showed where the focus was (#403, D-03) — Tab moved something
+    // invisible through the installer's lists, and through Settings' too.
+    // `:focus-visible`, never `:focus`: the ring is for people navigating by key,
+    // and a mouse click that leaves an accent outline behind reads as a bug.
+    // Inset by 2px so it hugs the row instead of overhanging the card the row
+    // sits 4px inside of.
+    &:focus-visible         { @include nidara-focus-ring(-2px); }
 }
 
 // ── Interaction states for floating ICON TILES over the wallpaper ──────────────

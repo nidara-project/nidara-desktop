@@ -269,7 +269,10 @@ export function DiskStep(): Step {
       }
 
       // ── Mode Switcher ──────────────────────────────────────────────────
-      const { box: modeListBoxContainer, listBox: modeListBox } = NidaraList()
+      // Choices, so one tab stop with arrows inside — the same keyboard model as
+      // the country and language lists (NidaraPickList). The partition TABLE below
+      // is the other case: its rows hold controls, so each control is its own stop.
+      const { box: modeListBoxContainer, listBox: modeListBox } = NidaraList("", [], "", { pick: true })
       modeListBoxContainer.set_margin_bottom(4)
 
       const checkEntire = NidaraSelectionCheck(16)
@@ -318,7 +321,7 @@ export function DiskStep(): Step {
       entireBox.append(prose(t("diskWarning"), "installer-prose--warning"))
 
       const disks = listDisks()
-      const { box: diskListBoxContainer, listBox: diskListBox } = NidaraList()
+      const { box: diskListBoxContainer, listBox: diskListBox } = NidaraList("", [], "", { pick: true })
       const diskRowMap = new Map<BlockDevice, Gtk.ListBoxRow>()
       const diskCheckMap = new Map<BlockDevice, Gtk.Widget>()
 
@@ -374,7 +377,7 @@ export function DiskStep(): Step {
       entireBox.append(diskListBoxContainer)
 
       // Filesystem Choice for Entire Disk
-      const { box: fsListBoxContainer, listBox: fsListBox } = NidaraList()
+      const { box: fsListBoxContainer, listBox: fsListBox } = NidaraList("", [], "", { pick: true })
       const checkBtrfs = NidaraSelectionCheck(16)
       const checkExt4 = NidaraSelectionCheck(16)
       checkBtrfs.visible = selectedFs === "btrfs"
@@ -665,6 +668,23 @@ export function DiskStep(): Step {
 
       stack.set_visible_child_name(currentMode)
       rootBox.append(stack)
+
+      // The page takes the caret when it opens, on the choice it opens with
+      // (#403). The two searchable steps do the same in their own list, and the
+      // account step has always done it — without it a step reached by pressing
+      // Return on Continue leaves the focus ON Continue, so the first thing a
+      // keyboard user has to do is walk backwards into the page they just opened.
+      //
+      // ⚠️ Deferred by a beat for the same reason the account step defers: on
+      // `map` the widgets exist but GTK settles focus a frame later and overwrites
+      // a grab made here.
+      rootBox.connect("map", () => {
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+          const row = currentMode === "entire_disk" ? rowEntire : rowManual
+          row.grab_focus()
+          return GLib.SOURCE_REMOVE
+        })
+      })
 
       // Initial sync
       syncAnswer()
