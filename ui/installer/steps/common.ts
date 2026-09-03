@@ -1,7 +1,9 @@
 // Common helpers for installer step pages.
 import Gtk from "gi://Gtk?version=4.0"
 import Pango from "gi://Pango"
-import { NidaraList, NidaraScrolled, NidaraSelectionCheck } from "../../lib/nidara-kit"
+import { NidaraList, NidaraScrolled, NidaraSelectionCheck, NidaraEmptyRow } from "../../lib/nidara-kit"
+import { searchFold } from "../../lib/locale-names"
+import { t } from "../lib/i18n"
 
 export function heading(text: string): Gtk.Label {
   return new Gtk.Label({
@@ -51,6 +53,17 @@ export function prose(text: string, extraClass?: string): Gtk.Label {
  * `haystack` returns everything a row should match — which is more than what it
  * DISPLAYS: a Spanish list showing "España" that matched only "Spain" is the bug
  * this signature exists to prevent.
+ *
+ * ⚠️ Both sides of the match are folded through `searchFold` (accents off, case
+ * off), so "espana" finds España. The caller does not have to fold anything: what
+ * it hands over is folded here, once, at construction — which is also why
+ * `haystack` is called once per item rather than once per item per keystroke. It
+ * used to run 249 ICU lookups on every letter typed.
+ *
+ * ⚠️ And the matches are RANKED, because a two-letter query is usually a code:
+ * an exact hit first, then what starts with the query, then what merely contains
+ * it — ties keep the caller's order, so an empty search box shows exactly the list
+ * that was passed in, suggested rows and all.
  */
 export function searchableList<T>(opts: {
   placeholder: string
@@ -75,15 +88,25 @@ export function searchableList<T>(opts: {
   const rowOf = new Map<T, Gtk.ListBoxRow>()
   const checkOf = new Map<T, Gtk.Widget>()
   const itemOf = new Map<Gtk.ListBoxRow, T>()
+  const orderOf = new Map<T, number>()
+  const foldedOf = new Map<T, string[]>()
 
-  for (const item of opts.items) {
+  for (const [i, item] of opts.items.entries()) {
     const check = NidaraSelectionCheck(16)
     check.visible = opts.isSelected(item)
     const row = opts.row(item, check)
     if (check.visible) row.add_css_class("is-selected")
     rowOf.set(item, row); checkOf.set(item, check); itemOf.set(row, item)
+    orderOf.set(item, i)
+    foldedOf.set(item, opts.haystack(item).map(searchFold))
     listBox.append(row)
   }
+
+  // A list that filters down to nothing has to SAY so — an empty card reads as a
+  // list that failed to load. GTK shows the placeholder exactly when the box has
+  // no visible child, and a filtered-out row is not a visible child, so this
+  // covers the empty search without any counting of our own.
+  listBox.set_placeholder(NidaraEmptyRow(t("searchNoMatches")))
 
   const repaint = () => {
     for (const [item, row] of rowOf) {
@@ -94,13 +117,43 @@ export function searchableList<T>(opts: {
     }
   }
 
+  // How well an item answers the current query: 0 exact, 1 prefix, 2 anywhere,
+  // NO_MATCH filtered out. Computed once per keystroke for the whole list rather
+  // than inside the sort comparator, which GTK calls O(n log n) times.
+  const NO_MATCH = 3
+  const rankOf = new Map<T, number>()
+  const rerank = () => {
+    const q = searchFold((search.get_text?.() ?? "").trim())
+    for (const item of opts.items) {
+      let rank = NO_MATCH
+      for (const h of foldedOf.get(item) ?? []) {
+        if (h === q) { rank = 0; break }
+        if (h.startsWith(q)) rank = Math.min(rank, 1)
+        else if (h.includes(q)) rank = Math.min(rank, 2)
+      }
+      rankOf.set(item, rank)
+    }
+  }
+  rerank()
+
   listBox.set_filter_func((row) => {
     const item = itemOf.get(row as Gtk.ListBoxRow)
     if (!item) return true
-    const q = (search.get_text?.() ?? "").trim().toLowerCase()
-    return !q || opts.haystack(item).some(h => h.includes(q))
+    return (rankOf.get(item) ?? NO_MATCH) < NO_MATCH
   })
-  search.connect("changed", () => listBox.invalidate_filter())
+  // With an empty box every row ranks 1 (everything starts with ""), so the tie
+  // break is what shows: the caller's own order, untouched.
+  listBox.set_sort_func((a, b) => {
+    const ia = itemOf.get(a as Gtk.ListBoxRow), ib = itemOf.get(b as Gtk.ListBoxRow)
+    if (!ia || !ib) return 0
+    return ((rankOf.get(ia) ?? NO_MATCH) - (rankOf.get(ib) ?? NO_MATCH))
+        || ((orderOf.get(ia) ?? 0) - (orderOf.get(ib) ?? 0))
+  })
+  search.connect("changed", () => {
+    rerank()
+    listBox.invalidate_filter()
+    listBox.invalidate_sort()
+  })
   listBox.connect("row-activated", (_l, row) => {
     const item = itemOf.get(row)
     if (item) { opts.onActivate(item); repaint() }
