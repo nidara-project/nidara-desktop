@@ -50,6 +50,11 @@ export { NidaraRow, NidaraStackedRow, NidaraEmptyRow, ROW_H_SINGLE, ROW_H_DOUBLE
 export type { NidaraRowResult } from "./row"
 export { NidaraList } from "./list"
 export type { NidaraListResult } from "./list"
+
+// NidaraTable — the same card and the same rows, in aligned columns under
+// headings. The one thing a row cannot say: several values per line, each named.
+export { NidaraTable } from "./table"
+export type { NidaraTableColumn, NidaraTableResult } from "./table"
 export { NidaraSelectionCheck } from "./check"
 
 // NidaraSidebar — universal navigation list (icon+label rows, single-select)

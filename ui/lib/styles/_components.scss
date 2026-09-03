@@ -272,6 +272,38 @@ checkbutton:disabled {
     color: var(--nidara-text-dim);
 }
 
+/* ── Table: the same card and rows, in aligned columns under headings ───────
+   Geometry only, as everywhere else here: the row chrome is `.nidara-row` above
+   and the interaction model is _base.scss. Built by `nidara-kit/table.ts`, which
+   owns the column widths (one Gtk.SizeGroup per column) — CSS cannot align
+   columns across sibling rows, so do not try to help it here. */
+
+/* A column heading. Caption size and dimmed like .nidara-list-title, and
+   deliberately NOT its uppercase micro-caps: those are a GROUP header, said once
+   over a card, where the extra weight is structure. Six of them across one line
+   are a second row of text competing with the data under them — and they are not
+   free, because uppercase plus letter-spacing is ~25% wider in every locale, on
+   the one page whose width is derived from what its columns measure. Measured
+   2026-09-03, es: the Filesystem column asked for 165px of heading over a 60px
+   value; sentence case brings the table from 758 to 700.
+   The margin-bottom is the ONLY gap between the headings and the card, for the
+   reason spelled out on .nidara-list-title. */
+.nidara-table-heading {
+    font-size: $fse-caption;
+    font-weight: $fw-medium;
+    color: var(--nidara-text-dim);
+    margin-bottom: 8px;
+}
+
+/* A text cell. Matches .nidara-row-title, because that is what it is — the row's
+   text, split across columns. */
+.nidara-table-cell {
+    font-size: $fse-small;
+    color: var(--nidara-text);
+}
+/* Secondary column (a size, a current filesystem): present, not competing. */
+.nidara-table-cell--dim { color: var(--nidara-text-dim); }
+
 /* Boxed list container — dense frosted card holding .nidara-row children. */
 .nidara-list {
     @include material-card;

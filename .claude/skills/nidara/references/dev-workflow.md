@@ -728,6 +728,49 @@ PNGs when they differ — a dev box without `ttf-jetbrains-mono` renders a subst
 are honest about layout and nothing else. Same 0-sized-children timing trap as the other probes: it
 waits 1500 ms, and at 600 ms the window is already `mapped` while every child still measures 0×0.
 
+### Measuring a page instead of looking at it: `disk-page-probe.ts` (2026-09-03)
+
+`region-page-probe` opens one step to be looked at; `scripts/dev/disk-page-probe.ts` opens one to
+be MEASURED. It mounts `DiskStep` alone (never `InstallerWindow` — the rule that the installer
+only runs in a VM is about the process existing on a machine somebody is using, not about the
+disk code being reached), prints what the partition table asks for, and then stays open.
+
+```bash
+cd ui/installer && npx --yes sass@1.97.3 --no-charset style.scss style.css && cd ../..
+./scripts/bundle.sh scripts/dev/disk-page-probe.ts /tmp/disk-probe
+DISK_PROBE_SEED=ok /tmp/disk-probe                 # opens with / and an ESP already assigned
+DISK_PROBE_SEED=dupe /tmp/disk-probe               # two partitions on one mount point
+for l in en_US es_ES fr_FR de_DE it_IT pt_BR pt_PT pl_PL nl_NL ru_RU zh_CN ja_JP; do
+  LANG=$l.UTF-8 DISK_PROBE_ONCE=1 /tmp/disk-probe 2>&1 | grep 'pane required'
+done
+```
+
+Four things it exists to teach, each of which cost time before it did:
+
+- **The pane follows the table, not the other way round.** `WINDOW_LAYOUT.wizardContent` is set
+  from the widest locale's measurement (#399). The sweep above is how that number is re-derived
+  when a string changes; Russian has been the widest, and it is the column HEADINGS that make it
+  so, not the data.
+- **Natural, not minimum.** Every cell ellipsises, so the table's *minimum* is a few dozen pixels
+  and GTK will happily allocate it. And the PAGE's natural width is useless — the heading and the
+  warning above the table are wrapping labels, whose natural width is the whole paragraph on one
+  line. Measure the table; add the page's own padding, measured with a ruler box wearing
+  `.installer-body` rather than copied out of the stylesheet.
+- **Measure the worst case.** A `Gtk.DropDown` is as wide as its SELECTED item: the same table
+  measured 543 with every row unanswered and 645 once one was answered.
+- ⚠️ **A probe that pokes the page must put it back — and had better not poke at all when
+  somebody is looking.** Selecting the longest option to measure the worst case fires the row's
+  own handlers (the smart format default ticks a checkbox), and restoring the selection does not
+  restore that. Half an hour went into a "bug" where the first row came up mounted at `/boot/efi`
+  and the page correctly complained about a duplicate nobody had asked for. The worst-case pass
+  now runs only under `DISK_PROBE_ONCE=1`, which measures and quits.
+
+⚠️ **Synthetic wheel scroll does not reach GTK4 in these windows.** `nidara-click scroll-at`
+reports `ok` and nothing moves — measured 2026-09-03 against the installer's page scroller and
+the region page's 249-row country list, which users demonstrably scroll by hand. The page's own
+scroller is fine: tabbing to a control below the fold scrolls it into view. So do not conclude
+"the page does not scroll" from a synthetic scroll that did nothing — check with the keyboard.
+
 ### The queue is GitHub issues; the skill keeps the rules (2026-08-31)
 
 Two places, split by kind, and the split is the point:

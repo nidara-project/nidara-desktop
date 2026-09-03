@@ -394,8 +394,41 @@ export const WINDOW_LAYOUT = {
     sidebar: 250,
     /** The content pane for standard system applications (Settings). A CONSTANT — see above. */
     content: 800,
-    /** Focused single-column content pane for step-by-step wizards and installers. */
-    wizardContent: 600,
+    /**
+     * The content pane for step-by-step wizards and installers.
+     *
+     * ## It is derived now, and it was not
+     *
+     * This was 600 with a comment reading "focused single-column content pane for
+     * step-by-step wizards" and nothing else — the one number in this file that
+     * was chosen rather than argued. It held while every wizard page WAS a single
+     * column of cards. Manual partitioning (#399) is the first page that is not,
+     * and a table cannot be squeezed the way a column of cards can: its columns
+     * are as wide as their widest cell, and below that they compress one by one
+     * until a dropdown is a control nobody can read.
+     *
+     * So it is measured, the same way `content`'s 800 was. The instrument is
+     * `scripts/dev/disk-page-probe.ts`, which mounts the page alone and reports
+     * what the table asks for; run 2026-09-03 over all twelve shipped locales:
+     *
+     *     ru 693 · pt 640 · es 629 · ja 627 · fr 618 · it 607 · nl 603
+     *     pl 591 · de 583 · en 543 · zh 519
+     *
+     * Russian is the widest and it is the column HEADINGS that make it so
+     * ("Точка монтирования" 131px, "Форматировать" 100px), not the data. Add the
+     * page's own horizontal padding (`.installer-body`, 48px measured, not copied
+     * from the stylesheet) and ~20px for a device path longer than this machine's
+     * (`/dev/nvme0n1p10` against the `/dev/nvme0n1p1` the probe saw) and the pane
+     * is 761. This is the rung under it.
+     *
+     * ⚠️ Measure the WORST CASE, not the opening state. A `Gtk.DropDown` is as
+     * wide as its SELECTED item: with the mount labels this table first shipped
+     * with, the same table measured 543 unanswered and 645 once somebody chose
+     * "EFI System (/boot/efi)" — a page that grows past its pane the moment it is
+     * used. The labels are the bare mount paths now (see `MOUNT_OPTIONS` in
+     * `steps/disk.ts`) and the column is a constant.
+     */
+    wizardContent: 760,
     /** The distress width — only a compositor can push the pane here. */
     contentFloor: 560,
     /**
