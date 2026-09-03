@@ -9,6 +9,29 @@ Read this when editing any SCSS, adding a new visual component, changing tokens,
 - **Accent color is for active/selected state only.** Never for normal borders or normal buttons.
 - **Accent is NEVER a text colour** — not even for the active/selected state. It doesn't contrast reliably on every background. Active/selected text reads in the mode-aware token (`--nidara-text`/`-secondary`/`-dim`, `#fff` dark / `#000` light); the accent conveys the state via **background fill, tinted background (`--nidara-accent-10`), or border** instead (e.g. active workspace number, calendar "today", selected segment, chips/badges, suggested alert button = bold not accent). The one exception is white text *on* an accent fill (`--nidara-accent-fg`). Symbolic **icons** may still tint to accent (not text).
 
+## A form's faults belong to its fields, and it reports all of them
+
+A validated form (today only the installer's account step) puts each fault **inside the row it
+belongs to**, under that field's own entry, and shows **every** fault at once. Both halves were
+learned the hard way (#400): one label under the card sat below five stacked rows — below the
+fold on the window of the day — so Continue went dead with the reason off screen; and a
+`validate()` that filled a single string stopped at the first fault, so fixing what you were
+told left the button dead for a reason nobody had mentioned yet.
+
+Two rules that keep such a form from shouting at somebody who has done nothing wrong:
+
+- **One `formTouched` flag, not one per field.** Quiet on arrival; from the first keystroke
+  ANYWHERE, every empty required field says so. Per-field "touched" leaves the silent refusal
+  in place for a field the person never visited, and no flag at all greets an untouched form
+  with red under every entry.
+- **Connect the `changed` handlers AFTER the initial fill.** `set_text` emits `changed` exactly
+  like a keystroke, so a page that restores a draft would arrive already "touched" and open
+  with the errors of a form nobody has returned to yet.
+
+The message is not red — this DE spends red on recording and on failure only. What makes it
+read as a correction is that it is the one full-strength line on a card of dim subtitles, and
+that it is attached to the control it is about.
+
 ## A table is the same rows, in columns
 
 `NidaraTable` (`lib/nidara-kit/table.ts`) is the list card with column headings over it: a
