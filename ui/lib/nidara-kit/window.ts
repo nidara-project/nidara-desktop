@@ -108,6 +108,21 @@ export interface NidaraWindowResult {
     splitView?: NidaraSplitViewResult
     /** Only when a `sidebar` was given. */
     sidebarToggle?: Gtk.Button
+    /**
+     * The header + content column, exposed for ONE purpose: measuring it.
+     *
+     * ⚠️ A window that wants to open at the height its content asks for cannot get
+     * that from the window. `NidaraSplitView` hangs this column off a zero-minimum
+     * Overlay so that the pane's minimum WIDTH never reaches the window (see
+     * `clamp.ts`), and GTK4's Overlay measures only its base child — so the column
+     * is invisible to `win.measure()` in BOTH directions, height included. Ask the
+     * column, add `glass.measure()` for the footer and the card's own padding, and
+     * that sum is the window's honest natural height. The installer does exactly
+     * that; see WIZARD_LAYOUT.
+     *
+     * Only when a `sidebar` was given.
+     */
+    contentColumn?: Gtk.Widget
 }
 
 /**
@@ -321,5 +336,6 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         close: base.close,
         splitView,
         sidebarToggle,
+        contentColumn,
     }
 }

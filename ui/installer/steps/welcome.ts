@@ -191,7 +191,6 @@ export function WelcomeStep(): Step {
       const list = searchableList({
         placeholder: t("welcomeLanguagePlaceholder"),
         items,
-        height: 320,
         row: ({ l, label }, check) => NidaraRow(label, l.key, check),
         haystack: ({ l, label }) => [label, ...languageHaystack(l.key, getLocale())],
         isSelected: ({ l }) => l.key === currentKey(),

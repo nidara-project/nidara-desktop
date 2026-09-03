@@ -3,6 +3,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Pango from "gi://Pango"
 import { NidaraList, NidaraScrolled, NidaraSelectionCheck, NidaraEmptyRow } from "../../lib/nidara-kit"
 import { searchFold } from "../../lib/locale-names"
+import { ROW_HEIGHT, WIZARD_LAYOUT } from "../../lib/tokens"
 import { t } from "../lib/i18n"
 
 export function heading(text: string): Gtk.Label {
@@ -73,7 +74,8 @@ export function searchableList<T>(opts: {
   haystack: (item: T) => string[]
   isSelected: (item: T) => boolean
   onActivate: (item: T) => void
-  height: number
+  /** Whole rows the list may be squeezed to. Defaults to the wizard's law. */
+  minRows?: number
 }): { widget: Gtk.Widget; repaint: () => void } {
   const search = new Gtk.Entry({ placeholder_text: opts.placeholder, hexpand: true })
   // ⚠️ `NidaraList()` returns a listbox that is ALREADY parented to the box it
@@ -159,11 +161,23 @@ export function searchableList<T>(opts: {
     if (item) { opts.onActivate(item); repaint() }
   })
 
-  // ⚠️ An explicit height, NOT `vexpand`. This list sits inside a page that is
-  // itself inside a scroller, and a vexpanding widget in a scrolling page gets
-  // its MINIMUM rather than the leftover — the page can always grow instead.
-  // Measured: the language list rendered three rows tall on a 760px window while
-  // asking for 220.
+  // ⚠️ The list asks for a FLOOR in whole rows and then vexpands. It used to ask
+  // for a pixel height picked to fit a window that was itself a flat 760 — layout
+  // adapted to a size instead of the size following the layout — which left
+  // 300 ÷ 72 = 4.2 rows and a row cut in half at the bottom of every list.
+  //
+  // Two statements, and GTK does the arithmetic:
+  //   minContentHeight  how far it may be squeezed before the page scrolls
+  //   vexpand           the page's leftover is the LIST's, so a taller window
+  //                     means more rows and never dead space — and a page that
+  //                     puts more under the list (the region page's card) takes
+  //                     that room from the list rather than from the window
+  //
+  // What the list opens with is not decided here: the window adds the rows on top
+  // of this floor when it measures itself, so that the budget is stated once, in
+  // WIZARD_LAYOUT, for every page at once. `propagateNaturalHeight: false` is what
+  // keeps this scroller's natural height AT the floor — the child's own natural is
+  // every row in the list, 249 countries and 18 000px of them.
   //
   // ⚠️ And the CARD is outside the scroller, with the rows scrolling inside it.
   // `NidaraList` puts the card's material on the LISTBOX itself (`.nidara-list`
@@ -171,18 +185,19 @@ export function searchableList<T>(opts: {
   // rounded top and bottom out of view — the card appeared to be sliced off at
   // both ends, which is what it was. The frame has to stay still while the
   // content moves; that is the whole idea of a frame.
-  const { widget: scroller, scrolled } = NidaraScrolled({
+  const { widget: scroller } = NidaraScrolled({
     child: listBox,
-    minContentHeight: opts.height,
+    minContentHeight: (opts.minRows ?? WIZARD_LAYOUT.minListRows) * ROW_HEIGHT.double,
     propagateNaturalHeight: false,
     reserveLane: false,
   })
-  scrolled.set_size_request(-1, opts.height)
+  scroller.vexpand = true
 
   const card = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
     css_classes: ["installer-list-frame"],
     hexpand: true,
+    vexpand: true,
   })
   // ⚠️ In code, not in CSS. GTK4's CSS has no `overflow` property — the sheet
   // says so at the top of style.scss and it still cost a `CSS Error … No property

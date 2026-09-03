@@ -166,6 +166,49 @@ small for the design, where the question is merely which way to fail.
 (min === max), `NidaraSplitView({ collapseAt: S + C })`, and `win.set_size_request(C + rims, …)`
 in `NidaraWindow`. The window derives the last two from `contentWidth`, so a caller only states C.
 
+### The installer has the HEIGHT half of it — `WIZARD_LAYOUT`, same file
+
+The law above is about width; the height was a literal `760` that `NidaraWindow` hands every
+two-pane window. Because the window was 760, the country list was written `height: 300` and the
+language list `height: 320` — hand-picked to fit inside it. **Layout was being adapted to a size
+instead of the size following the layout**, and it cost three things: dragging the window taller
+left dead space (the list still measured 300), `300 ÷ 72 = 4.2` so a row was always cut in half at
+the bottom, and on the region page the card the country fills in began after a 300px block whatever
+the window's size, reading as though it belonged to a different question.
+
+The rule now: **the list states a budget in ROWS and is the only thing on the page that vexpands;
+everything else is measured.**
+
+```
+open height = glass.measure()          footer + the card's own padding
+            + contentColumn.measure()  header + the page, list at its FLOOR
+            + (listRows − minListRows) × ROW_HEIGHT.double
+            , capped at maxMonitorFraction of the SMALLEST monitor
+```
+
+Only `listRows` is a number somebody chose (6). The rest is GTK adding up a heading, a paragraph
+wrapped in whatever language this is, a search box and whatever sits under the list — none of which
+can be written down honestly, because a paragraph's height is a property of the language. Measured
+2026-09-03: 852 × 875, six whole rows, against the 760 it opened at with 4.2 rows.
+
+⚠️ **The list is measured at its FLOOR and the rows are added back at the window**, not asked for
+in the list. That is what lets a page carrying more than a list — the region page has a card and a
+keyboard-test box under it — fit the SAME window: its extra content eats into the list's share
+instead of pushing the page into a scroll. Verified on screen: welcome opens with 6 whole rows,
+region shows ~4½ and its card, neither page scrolls.
+
+⚠️ **A window cannot measure its own content.** `NidaraSplitView` hangs the content column off a
+zero-minimum `Gtk.Overlay` so the pane's minimum width never reaches the window, and GTK4's Overlay
+measures only its BASE child — so the column is invisible to `win.measure()` in BOTH directions,
+height included. `win.measure(VERTICAL, …)` answers with the window's own `size_request` floor and
+looks perfectly plausible while telling you nothing. That is why `NidaraWindowResult` exposes
+`contentColumn`, and why the sum above has two terms instead of one.
+
+⚠️ **`ROW_HEIGHT` in tokens.ts mirrors `.nidara-row--single/--double` in `_components.scss`**, with
+`scripts/ci/row-height-check.mjs` holding the two together — the rows get their height from CSS and
+the code that reasons about them (a list asking for six WHOLE rows) cannot ask CSS anything. Same
+shape and same silence as the blur thresholds.
+
 **What it replaced, and why none of it was noticeable one page at a time** (all measured live
 2026-08-11, `nidara-ipc queryUI` × 18 pages × window widths):
 

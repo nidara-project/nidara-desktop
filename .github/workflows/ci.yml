@@ -134,6 +134,12 @@ jobs:
       - name: Every bundle defines the tokens it paints with
         run: node scripts/ci/token-contract-check.mjs
 
+      # A row's height lives in CSS, and the code that reasons about rows — a list
+      # asking for six WHOLE rows, a window whose natural height follows from that —
+      # cannot read CSS. Same mirror, same silence as the blur thresholds.
+      - name: Row heights agree between tokens and the stylesheet
+        run: node scripts/ci/row-height-check.mjs
+
       # Settings rows contract (#332, #341): every declarative setting row must use
       # settingRow() backed by config-entries.ts or manifest.ts or be in allowlist.
       - name: Settings rows contract (declarative rows match config registry)
