@@ -204,6 +204,20 @@ height included. `win.measure(VERTICAL, …)` answers with the window's own `siz
 looks perfectly plausible while telling you nothing. That is why `NidaraWindowResult` exposes
 `contentColumn`, and why the sum above has two terms instead of one.
 
+⚠️ **A window OPENS at the breakpoint plus `WINDOW_LAYOUT.openGutter` (48), and that gutter is not
+optional.** The law says the pane is "centred in W − S"; at exactly `W = S + C` centring something in
+its own width leaves it flush against the sidebar on one side and the glass rim on the other. Half
+the gutter on each side is the air. `NidaraWindow` has always added it — and the installer's own
+height work re-derived the opening width without it, opening 852 instead of 898 and looking cramped
+the moment it was on screen (2026-09-03). **Read the width back off the window (`win.default_width`);
+never compute it a second time.**
+
+⚠️ **And the gutter alone is not the page's margin.** The installer's page filled its pane edge to
+edge, so 23px of gutter was ALL the air a card had; Settings never looked like that because
+`.settings-page` carries `$space-10` inside its 800px pane, putting its cards 64px off the window
+edge. `.installer-body` now carries `$space-6` inside its 600px pane for the same reason — measured
+after: 47px from the card to the sidebar and to the rim, against 23 before.
+
 ⚠️ **`ROW_HEIGHT` in tokens.ts mirrors `.nidara-row--single/--double` in `_components.scss`**, with
 `scripts/ci/row-height-check.mjs` holding the two together — the rows get their height from CSS and
 the code that reasons about them (a list asking for six WHOLE rows) cannot ask CSS anything. Same
