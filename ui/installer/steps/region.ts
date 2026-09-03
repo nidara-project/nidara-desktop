@@ -37,7 +37,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { execAsync } from "../../lib/process"
-import { NidaraRow, NidaraDropDownRow } from "../../lib/nidara-kit"
+import { NidaraList, NidaraRow, NidaraDropDownRow } from "../../lib/nidara-kit"
 import { t, setLocale, getLocale } from "../lib/i18n"
 import {
   getAnswers, setCountryAnswer, setKeyboardAnswer, setTimezoneAnswer,
