@@ -1,4 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
+import { NidaraPickList } from "./list"
 import Gio from "gi://Gio"
 import Pango from "gi://Pango"
 
@@ -45,7 +46,10 @@ export function NidaraSidebar(
     onSelect: (id: string) => void,
     opts: { extraClasses?: string[] } = {},
 ): NidaraSidebarResult {
-    const list = new Gtk.ListBox({
+    // A navigation sidebar is a pick list: one tab stop, arrows inside. Six items
+    // was six tab stops between the window's chrome and its content, and every
+    // one of them invisible until the focus ring landed in `nidara-row-states`.
+    const list = new NidaraPickList({
         css_classes: ["nidara-sidebar", ...(opts.extraClasses ?? [])],
         selection_mode: Gtk.SelectionMode.SINGLE,
         activate_on_single_click: true,

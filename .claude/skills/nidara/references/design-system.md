@@ -9,6 +9,36 @@ Read this when editing any SCSS, adding a new visual component, changing tokens,
 - **Accent color is for active/selected state only.** Never for normal borders or normal buttons.
 - **Accent is NEVER a text colour** — not even for the active/selected state. It doesn't contrast reliably on every background. Active/selected text reads in the mode-aware token (`--nidara-text`/`-secondary`/`-dim`, `#fff` dark / `#000` light); the accent conveys the state via **background fill, tinted background (`--nidara-accent-10`), or border** instead (e.g. active workspace number, calendar "today", selected segment, chips/badges, suggested alert button = bold not accent). The one exception is white text *on* an accent fill (`--nidara-accent-fg`). Symbolic **icons** may still tint to accent (not text).
 
+## A list of CHOICES is one tab stop; a list of CONTROLS is one per row
+
+GTK4 makes every `GtkListBoxRow` focusable, so Tab walks them one by one. That is right for a
+Settings group — each row holds a switch or an entry somebody has to reach — and wrong for a list
+of data: the installer's country list is 249 rows, and reaching the footer from it took 249
+presses (#403, D-04).
+
+**`NidaraPickList`** (`nidara-kit/list.ts`) is the second case: a `Gtk.ListBox` whose `focus`
+vfunc returns false for `TAB_FORWARD`/`TAB_BACKWARD` **when the focus is already inside it**, so
+Tab moves past the whole list, while Up/Down/Enter stay GtkListBox's own. It is what
+`GtkListView` and `GtkColumnView` do in their own `focus` vfunc; this is that behaviour for the
+list widget we actually use. `NidaraList(title, classes, footer, { pick: true })` builds one, and
+`NidaraSidebar` is one.
+
+The test for which kind you have is not the length: **does a row hold a control, or is the row
+itself the answer?** The partition table's rows hold dropdowns and are `focusable: false`, so its
+tab ring is control-to-control — a third shape, and the right one there.
+
+⚠️ **The focus ring is `:focus-visible`, and GTK4 turns that off the moment the POINTER moves** —
+motion alone, no click needed. The ring is real (2px accent, inset 2px, from
+`nidara-row-states`), and a screenshot taken after a synthetic `hover-at` or `click-at` shows
+nothing at all. Verified both ways on 2026-09-03 with a loud temporary colour; it cost twenty
+minutes of hunting a CSS bug that was not there. Screenshot the ring straight after the keys that
+moved it, and never after touching the pointer.
+
+Every wizard step also **takes the caret when it opens** — the searchable steps into their search
+box, the disk step onto its mode row, the account step onto its first field. Without it, a step
+reached by pressing Return on Continue leaves the focus ON Continue (or, before this, nowhere at
+all), so the first thing a keyboard user does is walk backwards into the page they just opened.
+
 ## A form's faults belong to its fields, and it reports all of them
 
 A validated form (today only the installer's account step) puts each fault **inside the row it
