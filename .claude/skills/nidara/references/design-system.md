@@ -9,6 +9,39 @@ Read this when editing any SCSS, adding a new visual component, changing tokens,
 - **Accent color is for active/selected state only.** Never for normal borders or normal buttons.
 - **Accent is NEVER a text colour** — not even for the active/selected state. It doesn't contrast reliably on every background. Active/selected text reads in the mode-aware token (`--nidara-text`/`-secondary`/`-dim`, `#fff` dark / `#000` light); the accent conveys the state via **background fill, tinted background (`--nidara-accent-10`), or border** instead (e.g. active workspace number, calendar "today", selected segment, chips/badges, suggested alert button = bold not accent). The one exception is white text *on* an accent fill (`--nidara-accent-fg`). Symbolic **icons** may still tint to accent (not text).
 
+## A table is the same rows, in columns
+
+`NidaraTable` (`lib/nidara-kit/table.ts`) is the list card with column headings over it: a
+`.nidara-list` holding `.nidara-row` children, each row a line of cells instead of
+title+control. Reach for it when a line carries several values that each need naming — the
+installer's manual partitioning (partition, size, contents, mount point, format, filesystem)
+is the first, and it is what the component was built for (#399).
+
+Three things about it that are not obvious:
+
+- **The rows are rows.** It is not a `Gtk.Grid` and must not become one: `.nidara-row`'s hover
+  fill, its `min-height` token and its radius belong to ONE widget spanning the line, and in a
+  grid a line is n unrelated children. Columns are aligned instead by **one `Gtk.SizeGroup`
+  per column**, joining that column's heading to every cell under it.
+- **A size group beats `halign`.** Every member requests the column's width, so a control that
+  wanted to sit in the middle of its column is instead stretched across it (measured: a
+  checkbox 62px wide with its indicator against the left edge). Control cells are therefore
+  WRAPPED — the wrapper takes the column, the control aligns inside it — and the column's
+  `align` is what says where. Text cells ellipsise and never wrap, for the same reason a row
+  title does not.
+- **A table cannot be squeezed, so its pane is MEASURED from it.** The table is as wide as the
+  sum of its widest cells; below that the columns compress one at a time. Any surface adopting
+  one measures the table and sizes its pane from that number — `WINDOW_LAYOUT.wizardContent`
+  is derived that way, and the derivation is written out in `ui/lib/tokens.ts`. ⚠️ Measure the
+  WORST CASE: a `Gtk.DropDown`'s button is as wide as its SELECTED item, so a column of
+  unanswered dropdowns measures ~100px narrower than the same column once somebody uses it.
+
+The headings are **sentence case, not the uppercase micro-caps of `.nidara-list-title`**. That
+label is a GROUP header, said once over a card, where the extra weight is structure; six of
+them across one line compete with the data underneath — and uppercase plus letter-spacing is
+~25% wider in every locale, on the one page whose width is derived from what its columns
+measure (es: 758 → 700 for the same table).
+
 ## Section headers bind DOWN, not symmetric
 
 A settings group is a `NidaraList(title)` (`lib/nidara-kit/list.ts`): an uppercase
@@ -2114,6 +2147,7 @@ This is the table that decides almost every "which widget should I use?" questio
 | Sliders (any) | **`makeSlider`** from `nidara-kit/slider.ts` (NOT `Gtk.Scale`) | See "Sliders" below — one Cairo component for the whole shell. |
 | A preference row (label + subtitle + its control) | **`NidaraToggleRow` / `NidaraDropDownRow` / `NidaraSliderRow`** from `nidara-kit/rows.ts` | Inside Settings, reach them through `SettingsHelpers`' `toggleRow`/`dropdownRow`/`sliderRow`, which hand in `createRow` so the row also lands in the search index. Anywhere else, call the kit directly. |
 | Settings window | **`ui/lib/nidara-kit`** (`NidaraSplitView`, `NidaraClamp`, `NidaraButton`, `NidaraDropDown`) | Custom split view. **Do NOT use `Adw.OverlaySplitView`** — it breaks capsule margins. |
+| A table (several values per line, each named) | **`NidaraTable`** from `nidara-kit/table.ts` | The list card with column headings; columns aligned by one `Gtk.SizeGroup` each. See "A table is the same rows, in columns". |
 | Modal dialogs | **`showNidaraAlert`** from `nidara-kit` | Clean, themeable. |
 
 **Rule of thumb:** everything is **pure GTK4** — libadwaita has been fully removed. Dark/light is set via `Gtk.Settings.gtk_application_prefer_dark_theme` (no `Adw.init()`); the About window is a plain `Gtk.Window` (no `Adw.AboutWindow`). Don't reintroduce any `Adw.*`.

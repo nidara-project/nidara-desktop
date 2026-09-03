@@ -17,6 +17,7 @@ import {
   NidaraDropDown,
   NidaraButton,
   NidaraSelectionCheck,
+  NidaraTable,
 } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import {
@@ -27,7 +28,7 @@ import {
   type FilesystemType,
   type ManualPartitionMount,
 } from "../lib/answers"
-import { heading, prose } from "./common"
+import { heading, prose, formatSize } from "./common"
 
 interface RawBlockDevice {
   name: string
@@ -110,17 +111,78 @@ function listPartitions(): DetectedPartition[] {
   }
 }
 
+/**
+ * What a partition can be mounted as. The label IS the mount point, except for
+ * the empty one — which is the only entry that is not a place and so is the only
+ * one with a translated name.
+ *
+ * ⚠️ They used to read "Root (/)", "EFI System (/boot/efi)", "Home (/home)", and
+ * that is a decision this table reversed on two counts:
+ *
+ *   · It is what the column heading already says. Under a heading reading "Mount
+ *     point", "EFI System (/boot)" spends a line saying the kind of thing a mount
+ *     point is; the answer is the path. Calamares' mount-point combo shows the
+ *     bare paths for the same reason, and it is the closest prior art there is.
+ *   · It cost the layout its stability. A `Gtk.DropDown`'s button is as wide as
+ *     the SELECTED item, so a column measured with every row unanswered grew by
+ *     ~100px the moment somebody chose one — measured 2026-09-03, en 543 → 645 —
+ *     and a table that grows inside a fixed pane is a table that gets clipped.
+ *     Six labels of nearly equal width make the column a constant.
+ *
+ * The three EFI spellings stay three entries rather than one: which of them is
+ * right depends on the layout the user already has, and guessing is how an
+ * installer mounts the ESP where the bootloader will not look for it.
+ */
 const MOUNT_OPTIONS = [
-  { id: "", labelKey: "diskMountNone", mountpoint: "" },
-  { id: "/", labelKey: "diskMountRoot", mountpoint: "/" },
-  { id: "/boot", labelKey: "diskMountBoot", mountpoint: "/boot" },
-  { id: "/boot/efi", labelKey: "diskMountBootEfi", mountpoint: "/boot/efi" },
-  { id: "/efi", labelKey: "diskMountEfi", mountpoint: "/efi" },
-  { id: "/home", labelKey: "diskMountHome", mountpoint: "/home" },
-  { id: "swap", labelKey: "diskMountSwap", mountpoint: "swap" },
+  { id: "", labelKey: "diskMountNone", label: "", mountpoint: "" },
+  { id: "/", labelKey: null, label: "/", mountpoint: "/" },
+  { id: "/boot", labelKey: null, label: "/boot", mountpoint: "/boot" },
+  { id: "/boot/efi", labelKey: null, label: "/boot/efi", mountpoint: "/boot/efi" },
+  { id: "/efi", labelKey: null, label: "/efi", mountpoint: "/efi" },
+  { id: "/home", labelKey: null, label: "/home", mountpoint: "/home" },
+  { id: "swap", labelKey: null, label: "swap", mountpoint: "swap" },
 ] as const
 
+/** The strings the mount dropdown shows, in this locale. */
+const mountLabels = () =>
+  MOUNT_OPTIONS.map(opt => (opt.labelKey ? t(opt.labelKey) : opt.label))
+
 const FS_OPTIONS: FilesystemType[] = ["btrfs", "ext4", "xfs", "f2fs", "vfat"]
+
+/** The three mount points that can hold the EFI system partition on this install. */
+const ESP_MOUNTS = new Set(["/boot", "/boot/efi", "/efi"])
+
+/**
+ * Everything wrong with a manual layout right now, in the user's language.
+ * Empty means installable — which is exactly what `ready()` asks.
+ *
+ * It exists as one function because the page and the Continue button have to
+ * agree, and before this they did not agree about anything a user could see:
+ * `ready()` knew the two requirements and said nothing (the button simply stayed
+ * dead, D-16), and NOTHING knew about the third — two partitions could both be
+ * given `/home`, or `/`, and the installer accepted it and then mounted one over
+ * the other (D-17).
+ *
+ * ⚠️ `swap` is deliberately not a duplicate. Several swap partitions on one
+ * machine are a normal layout, and unlike a mount point swap is not a place —
+ * `swapon` takes as many as it is given.
+ */
+function manualProblems(mounts: ManualPartitionMount[]): string[] {
+  const problems: string[] = []
+  if (!mounts.some(m => m.mountpoint === "/")) problems.push(t("diskErrNoRoot"))
+  if (isUefi() && !mounts.some(m => ESP_MOUNTS.has(m.mountpoint))) problems.push(t("diskErrNoBoot"))
+
+  const seen = new Set<string>()
+  const dupes = new Set<string>()
+  for (const m of mounts) {
+    if (m.mountpoint === "" || m.mountpoint === "swap") continue
+    if (seen.has(m.mountpoint)) dupes.add(m.mountpoint)
+    seen.add(m.mountpoint)
+  }
+  if (dupes.size > 0) problems.push(t("diskErrDuplicateMount") + [...dupes].join(", "))
+
+  return problems
+}
 
 export function DiskStep(): Step {
   return {
@@ -141,15 +203,8 @@ export function DiskStep(): Step {
       const a = getAnswers().disk
       if (!a) return false
       if (a.mode === "entire_disk") return a.disk !== null
-      if (a.mode === "manual") {
-        const hasRoot = a.mounts.some(m => m.mountpoint === "/")
-        if (!hasRoot) return false
-        if (isUefi()) {
-          const hasBoot = a.mounts.some(m => m.mountpoint === "/boot" || m.mountpoint === "/boot/efi" || m.mountpoint === "/efi")
-          if (!hasBoot) return false
-        }
-        return true
-      }
+      // The same list the page prints under the table — see manualProblems.
+      if (a.mode === "manual") return manualProblems(a.mounts).length === 0
       return false
     },
 
@@ -186,6 +241,11 @@ export function DiskStep(): Step {
         }
       }
 
+      // Assigned by the manual page below, which is built after this. The answer
+      // and the sentence explaining why it is not accepted have to move together:
+      // every path that changes a mount point goes through syncAnswer.
+      let refreshProblems: () => void = () => {}
+
       const syncAnswer = () => {
         if (currentMode === "entire_disk") {
           if (selectedDisk) {
@@ -204,6 +264,7 @@ export function DiskStep(): Step {
             mounts,
           })
         }
+        refreshProblems()
         notifyReady?.()
       }
 
@@ -291,9 +352,8 @@ export function DiskStep(): Step {
           check.visible = isCurrent
           diskCheckMap.set(disk, check)
 
-          const gib = (disk.size / (1024 ** 3)).toFixed(1)
           const title = disk.model || disk.name
-          const subtitle = `${gib} GiB · ${disk.path}${disk.rm ? ` · ${t("diskRemovable")}` : ""}`
+          const subtitle = `${formatSize(disk.size)} · ${disk.path}${disk.rm ? ` · ${t("diskRemovable")}` : ""}`
 
           const row = NidaraRow(title, subtitle, check)
           diskRowMap.set(disk, row)
@@ -365,13 +425,189 @@ export function DiskStep(): Step {
         hexpand: true,
       })
 
-      // Top action bar: Launch GParted + Refresh
-      const manualActions = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 8,
-        halign: Gtk.Align.START,
-      })
+      // What the layout still needs, said BEFORE Continue is pressed rather than
+      // by a Continue that does nothing (D-16), and updated on every change. It
+      // sits above the table because it is the instruction, not the verdict: on
+      // arrival nothing is assigned yet, so this is the first thing read on the
+      // page and it is the whole minimum in one place.
+      const problemLabel = prose("", "installer-prose--warning")
+      manualBox.append(problemLabel)
 
+      refreshProblems = () => {
+        const problems = manualProblems(
+          Array.from(manualMounts.values()).filter(m => m.mountpoint !== ""),
+        )
+        problemLabel.label = problems.join("\n")
+        problemLabel.visible = problems.length > 0
+      }
+
+      // ⚠️ The columns are the deliverable of #399, not decoration. A row used to
+      // be a path, a dropdown, a checkbox and another dropdown with nothing saying
+      // what any of them was (D-13) — the format checkbox carried its own label
+      // because it was the only one that could, which made it the only control on
+      // the row that read as a question.
+      //
+      // The mount point is the widest column and it is the one the page is FOR, so
+      // it is not squeezed: `WINDOW_LAYOUT.wizardContent` is derived from what this
+      // table measures (see the note there). Only the partition path expands.
+      const table = NidaraTable([
+        { title: t("diskColPartition"), expand: true },
+        { title: t("diskColSize"), align: Gtk.Align.END, dim: true },
+        { title: t("diskColContents"), dim: true },
+        { title: t("diskMountpoint") },
+        // Centred: the cell is a checkbox, which is a mark rather than a value,
+        // and a mark hard against the left edge of a wide column stops reading as
+        // that column's answer.
+        { title: t("diskFormat"), align: Gtk.Align.CENTER },
+        { title: t("diskFs") },
+      ])
+      manualBox.append(table.box)
+
+      const buildPartitionsList = () => {
+        table.clear()
+
+        const partitions = listPartitions()
+
+        // Assignments to partitions that are no longer there go with them. Refresh
+        // exists because the disk can change under the page (a USB pulled, a table
+        // rewritten elsewhere), and a mount point pointing at a path that has gone
+        // is one the user can neither see nor take back — it would simply arrive at
+        // the run step as a mount of nothing.
+        const present = new Set(partitions.map(p => p.path))
+        for (const path of Array.from(manualMounts.keys())) {
+          if (!present.has(path)) manualMounts.delete(path)
+        }
+
+        if (partitions.length === 0) {
+          table.appendMessage(t("diskNoPartitions"))
+          return
+        }
+
+        for (const p of partitions) {
+          const currentEntry = manualMounts.get(p.path)
+
+          // What is on the partition NOW, which is what tells a user whether they
+          // are about to overwrite something. It used to fall back to the literal
+          // word "Partitions" on a row that is a partition (D-15); an em dash is
+          // the honest answer — lsblk knows of no filesystem here.
+          const contents = [p.fstype, p.label].filter(Boolean).join(" · ") || "—"
+
+          const mountStringList = Gtk.StringList.new(mountLabels())
+          const mountDropDown = NidaraDropDown({
+            model: mountStringList,
+            valign: Gtk.Align.CENTER,
+          })
+          // Every control in a table cell is a control with no visible label of
+          // its own — the column heading is the label, and a heading is not in the
+          // row's accessibility tree. Named here so a reader (or `nidara-a11y`)
+          // does not meet a column of identical unnamed controls.
+          //
+          // ⚠️ It only sticks on the CHECK BOX. Measured 2026-09-03: a
+          // `Gtk.DropDown` reports its SELECTED ITEM as its accessible name and
+          // overrides this — the a11y tree shows `Ninguno` / `btrfs`, which at
+          // least says what the control holds, and never which partition. Left in
+          // place because it is the correct call and costs nothing; do not read it
+          // as a claim that the dropdowns are named.
+          mountDropDown.update_property(
+            [Gtk.AccessibleProperty.LABEL], [`${t("diskMountpoint")} — ${p.path}`])
+
+          let initialMountIdx = 0
+          if (currentEntry) {
+            const idx = MOUNT_OPTIONS.findIndex(opt => opt.mountpoint === currentEntry.mountpoint)
+            if (idx !== -1) initialMountIdx = idx
+          }
+          mountDropDown.set_selected(initialMountIdx)
+
+          const formatCheck = new Gtk.CheckButton({
+            valign: Gtk.Align.CENTER,
+            active: currentEntry ? currentEntry.format : false,
+          })
+          formatCheck.update_property(
+            [Gtk.AccessibleProperty.LABEL], [`${t("diskFormat")} — ${p.path}`])
+
+          const fsStringList = Gtk.StringList.new(FS_OPTIONS)
+          const fsDropDown = NidaraDropDown({
+            model: fsStringList,
+            valign: Gtk.Align.CENTER,
+          })
+          fsDropDown.update_property(
+            [Gtk.AccessibleProperty.LABEL], [`${t("diskFs")} — ${p.path}`])
+          const curFsIdx = currentEntry ? FS_OPTIONS.indexOf(currentEntry.filesystem) : 0
+          fsDropDown.set_selected(curFsIdx >= 0 ? curFsIdx : 0)
+
+          // The same rule `updatePartitionState` keeps, applied to the state the
+          // row is BORN in — a page rebuilt from existing answers (walking back to
+          // this step, or changing the language) has rows that are already
+          // answered, and had they only been sensitive after a change, half the
+          // table would have opened greyed out.
+          const initialMount = MOUNT_OPTIONS[initialMountIdx]?.mountpoint ?? ""
+          formatCheck.set_sensitive(initialMount !== "")
+          fsDropDown.set_sensitive(initialMount !== "" && formatCheck.active)
+
+          const updatePartitionState = () => {
+            const selIdx = mountDropDown.get_selected()
+            const chosenMount = MOUNT_OPTIONS[selIdx]?.mountpoint ?? ""
+            const shouldFormat = formatCheck.active
+            const chosenFs = FS_OPTIONS[fsDropDown.get_selected()] || "btrfs"
+
+            // The rest of the row answers a question the mount point asks. With no
+            // mount point there is no question: the partition is not part of this
+            // install, and a live "Format" tick on it is a control that does
+            // nothing — which on THIS page reads as a promise to erase something.
+            formatCheck.set_sensitive(chosenMount !== "")
+            fsDropDown.set_sensitive(chosenMount !== "" && shouldFormat)
+
+            if (!chosenMount) {
+              manualMounts.delete(p.path)
+            } else {
+              manualMounts.set(p.path, {
+                name: p.name,
+                path: p.path,
+                size: p.size,
+                fsType: p.fstype,
+                label: p.label,
+                mountpoint: chosenMount,
+                filesystem: chosenFs,
+                format: shouldFormat,
+              })
+            }
+            syncAnswer()
+          }
+
+          mountDropDown.connect("notify::selected", () => {
+            const selIdx = mountDropDown.get_selected()
+            const chosenMount = MOUNT_OPTIONS[selIdx]?.mountpoint ?? ""
+            // Smart format default: If EFI partition and already vfat, default to keep data (no format)
+            if (ESP_MOUNTS.has(chosenMount)) {
+              formatCheck.active = p.fstype !== "vfat"
+            } else if (chosenMount === "/") {
+              formatCheck.active = true
+            }
+            updatePartitionState()
+          })
+
+          formatCheck.connect("toggled", updatePartitionState)
+          fsDropDown.connect("notify::selected", updatePartitionState)
+
+          table.appendRow([
+            p.path,
+            formatSize(p.size),
+            contents,
+            mountDropDown,
+            formatCheck,
+            fsDropDown,
+          ])
+        }
+      }
+
+      buildPartitionsList()
+
+      // ⚠️ UNDER the table, aligned to its right edge — the toolbar position every
+      // table with actions uses, and the fix for D-18. These two used to lead the
+      // page from its top-left corner, which was already odd when there were two of
+      // them and became an orphan when #394 hid GParted on a medium that does not
+      // ship it: a lone "Refresh" floating above a table, attached to nothing.
+      //
       // ⚠️ Shown only if the program is actually here, which on the shipped medium
       // it is NOT: `gparted` is in none of the 174 lines of nidara-iso's
       // packages.x86_64. The button was offered on every install and did nothing —
@@ -381,6 +617,12 @@ export function DiskStep(): Step {
       //
       // Hidden rather than deleted: manual mode has no partition editor of its own,
       // so if a partition editor is ever added to the medium this is where it goes.
+      const manualActions = new Gtk.Box({
+        orientation: Gtk.Orientation.HORIZONTAL,
+        spacing: 8,
+        halign: Gtk.Align.END,
+      })
+
       const gpartedBtn = NidaraButton({
         label: t("diskLaunchGparted"),
         variant: "secondary",
@@ -395,133 +637,15 @@ export function DiskStep(): Step {
         label: t("diskRefresh"),
         variant: "secondary",
       })
-
-      manualActions.append(gpartedBtn)
-      manualActions.append(refreshBtn)
-      manualBox.append(manualActions)
-
-      const partListHolder = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 8,
-        hexpand: true,
-      })
-
-      const buildPartitionsList = () => {
-        while (partListHolder.get_first_child()) {
-          partListHolder.remove(partListHolder.get_first_child()!)
-        }
-
-        const partitions = listPartitions()
-        const { box: partListBoxContainer, listBox: partListBox } = NidaraList()
-
-        if (partitions.length === 0) {
-          partListBox.append(NidaraEmptyRow(t("diskNoDisks")))
-        } else {
-          for (const p of partitions) {
-            const gib = (p.size / (1024 ** 3)).toFixed(1)
-            const currentEntry = manualMounts.get(p.path)
-
-            const title = `${p.path}  (${gib} GiB)`
-            const sub = [p.fstype, p.label].filter(Boolean).join(" · ") || t("diskPartitions")
-
-            // Right control box
-            const ctrlBox = new Gtk.Box({
-              orientation: Gtk.Orientation.HORIZONTAL,
-              spacing: 8,
-              valign: Gtk.Align.CENTER,
-            })
-
-            // Mountpoint dropdown
-            const mountStrings = MOUNT_OPTIONS.map(opt => t(opt.labelKey))
-            const mountStringList = Gtk.StringList.new(mountStrings)
-            const mountDropDown = NidaraDropDown({
-              model: mountStringList,
-              valign: Gtk.Align.CENTER,
-            })
-
-            let initialMountIdx = 0
-            if (currentEntry) {
-              const idx = MOUNT_OPTIONS.findIndex(opt => opt.mountpoint === currentEntry.mountpoint)
-              if (idx !== -1) initialMountIdx = idx
-            }
-            mountDropDown.set_selected(initialMountIdx)
-
-            // Format checkbox
-            const formatCheck = new Gtk.CheckButton({
-              label: t("diskFormat"),
-              valign: Gtk.Align.CENTER,
-              active: currentEntry ? currentEntry.format : false,
-            })
-
-            // Filesystem dropdown
-            const fsStringList = Gtk.StringList.new(FS_OPTIONS)
-            const fsDropDown = NidaraDropDown({
-              model: fsStringList,
-              valign: Gtk.Align.CENTER,
-            })
-            const curFsIdx = currentEntry ? FS_OPTIONS.indexOf(currentEntry.filesystem) : 0
-            fsDropDown.set_selected(curFsIdx >= 0 ? curFsIdx : 0)
-            fsDropDown.set_sensitive(formatCheck.active)
-
-            const updatePartitionState = () => {
-              const selIdx = mountDropDown.get_selected()
-              const chosenMount = MOUNT_OPTIONS[selIdx]?.mountpoint ?? ""
-              const shouldFormat = formatCheck.active
-              const chosenFs = FS_OPTIONS[fsDropDown.get_selected()] || "btrfs"
-
-              fsDropDown.set_sensitive(shouldFormat)
-
-              if (!chosenMount) {
-                manualMounts.delete(p.path)
-              } else {
-                manualMounts.set(p.path, {
-                  name: p.name,
-                  path: p.path,
-                  size: p.size,
-                  fsType: p.fstype,
-                  label: p.label,
-                  mountpoint: chosenMount,
-                  filesystem: chosenFs,
-                  format: shouldFormat,
-                })
-              }
-              syncAnswer()
-            }
-
-            mountDropDown.connect("notify::selected", () => {
-              const selIdx = mountDropDown.get_selected()
-              const chosenMount = MOUNT_OPTIONS[selIdx]?.mountpoint ?? ""
-              // Smart format default: If EFI partition and already vfat, default to keep data (no format)
-              if (chosenMount === "/boot" || chosenMount === "/boot/efi" || chosenMount === "/efi") {
-                formatCheck.active = p.fstype !== "vfat"
-              } else if (chosenMount === "/") {
-                formatCheck.active = true
-              }
-              updatePartitionState()
-            })
-
-            formatCheck.connect("toggled", updatePartitionState)
-            fsDropDown.connect("notify::selected", updatePartitionState)
-
-            ctrlBox.append(mountDropDown)
-            ctrlBox.append(formatCheck)
-            ctrlBox.append(fsDropDown)
-
-            const row = NidaraRow(title, sub, ctrlBox)
-            partListBox.append(row)
-          }
-        }
-
-        partListHolder.append(partListBoxContainer)
-      }
-
-      buildPartitionsList()
       refreshBtn.connect("clicked", () => {
         buildPartitionsList()
         syncAnswer()
       })
 
-      manualBox.append(partListHolder)
+      manualActions.append(gpartedBtn)
+      manualActions.append(refreshBtn)
+      manualBox.append(manualActions)
+
       stack.add_named(manualBox, "manual")
 
       // Switch mode logic
