@@ -125,9 +125,21 @@ window.nidara-installer-window {
   // without spending the red this DE reserves for recording and for failure.
   .installer-prose--warning { color: var(--nidara-text); font-weight: 500; }
 
+  // The one sentence on the summary that says what cannot be undone (#401, D-25).
+  // One step UP the ramp from page prose and heavier, because the page it leads
+  // is two cards of fifteen rows and "this disk will be erased" must not read as
+  // the sixteenth. Still no red: same full-strength ink as every other warning in
+  // this bundle, and the loudest thing in the window stays the preview banner —
+  // the only element that says the installer is not real.
+  .installer-erase {
+    font-size: $fs-subtitle;
+    font-weight: 600;
+  }
+
   // A fault reported ON its own field, inside the row, under the entry it is
-  // about (#400). One step down the ramp from page prose: it annotates a control,
-  // it does not address the page — and the row's own subtitle above it is
+  // about (#400). One step DOWN the ramp from page prose — the other direction
+  // from `.installer-erase` above, and for the mirror reason: it annotates a
+  // control, it does not address the page. The row's own subtitle beside it is
   // $fs-small too, so the card keeps one text size for everything that is not a
   // title.
   .installer-field-error { font-size: $fs-small; }

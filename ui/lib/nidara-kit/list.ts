@@ -5,6 +5,12 @@ export interface NidaraListResult {
     box: Gtk.Box
     /** The Gtk.ListBox card. Append NidaraRow children here. */
     listBox: Gtk.ListBox
+    /** The title label, when a `title` was given. Exposed for the same reason
+     *  `footerLabel` is: a surface that re-translates itself in place (the
+     *  installer's summary rebuilds its rows on every language change) cannot
+     *  reach the header any other way, and digging it out of `box`'s children is
+     *  how a caller ends up depending on the order they are appended in. */
+    titleLabel?: Gtk.Label
     /** The footer label, when a `footer` was given. Exposed so a caller can show or
      *  hide prose that only applies to some states — Settings → Dock's side-position
      *  note. Callers that always show their footer never touch it. */
@@ -43,12 +49,14 @@ export function NidaraList(
         css_classes: ["nidara-list-group"],
     })
 
+    let titleLabel: Gtk.Label | undefined
     if (title) {
-        box.append(new Gtk.Label({
+        titleLabel = new Gtk.Label({
             label: title.toUpperCase(),
             css_classes: ["nidara-list-title"],
             halign: Gtk.Align.START, margin_start: 16,
-        }))
+        })
+        box.append(titleLabel)
     }
 
     const listBox = new Gtk.ListBox({
@@ -75,5 +83,5 @@ export function NidaraList(
         box.append(footerLabel)
     }
 
-    return { box, listBox, footerLabel }
+    return { box, listBox, titleLabel, footerLabel }
 }
