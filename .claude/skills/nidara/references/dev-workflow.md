@@ -728,6 +728,25 @@ PNGs when they differ — a dev box without `ttf-jetbrains-mono` renders a subst
 are honest about layout and nothing else. Same 0-sized-children timing trap as the other probes: it
 waits 1500 ms, and at 600 ms the window is already `mapped` while every child still measures 0×0.
 
+### `base.json` is now READ BACK to the person (2026-09-03)
+
+The summary step reads the product config and prints what it decided — kernels, `gfx_driver`,
+`bootloader_config`, `swap`, `mirror_config.mirror_regions`, and `basePackages()` for the package
+list (which had been written, exported and never called). So a product decision taken in
+nidara-iso reaches the last screen before the point of no return **without anybody remembering to
+come back here** — which is the same reason `base.json` is a file on the medium rather than
+constants in this repo.
+
+Two consequences when you change that file:
+
+- a key you rename or move disappears from the page silently. Every read goes through a
+  `pick(config, [...])` that returns `undefined` rather than throwing, and a row whose value is
+  missing is simply not appended — deliberately (a summary that crashes the last page is worse
+  than one that says less), so **look at the page after touching the schema**.
+- the one line NOT from `base.json` is the locked root account. archinstall only touches root when
+  the plan carries `root_enc_password`, and `assemblePlan` omits it on purpose; the summary states
+  that as a decision because it is one, and nothing in the config records it.
+
 ### Measuring a page instead of looking at it: `disk-page-probe.ts` (2026-09-03)
 
 `region-page-probe` opens one step to be looked at; `scripts/dev/disk-page-probe.ts` opens one to

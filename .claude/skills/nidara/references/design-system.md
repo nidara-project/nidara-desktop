@@ -92,6 +92,11 @@ Settings → AI states WHICH agents each permission group governs there, because
 agent and some only to the built-in Assistant. Per-row explanation still belongs in the row's own
 subtitle.
 
+`NidaraList` returns **both** chrome labels — `titleLabel` and `footerLabel` — for surfaces that
+re-translate themselves in place: the installer's summary rebuilds its rows on every language
+change and cannot reach its own group headers any other way, and digging them out of `box`'s
+children is how a caller starts depending on the order things were appended in.
+
 `NidaraList` also **returns** that label as `footerLabel`, for prose that is true of only some
 states — Settings → Dock's side-position note is shown and hidden through it. That was the one
 reason a page had to hand-roll a footnote; there is none now, and the last four hand-rolled ones
