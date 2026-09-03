@@ -56,6 +56,36 @@ function defaultLanguage(): Language {
   return LANGUAGES.find(l => l.key === getLocale()) ?? LANGUAGES[0]
 }
 
+/**
+ * The twelve rows, in the order they are shown: the current choice first, then
+ * the rest alphabetically by endonym in the reader's collation.
+ *
+ * ⚠️ Computed ONCE, and that is the point of the memo. "Chosen first" is the
+ * answer this bundle already gives to "where is my language?" — the country list
+ * does it, and `searchableList`'s own header says why it beats scrolling to the
+ * selected row. But this page rebuilds itself the moment somebody picks
+ * (`setLocale` → `Flow.invalidate`), so recomputing the order would yank the row
+ * that was just clicked out from under the pointer and up to the top. Deciding
+ * the order the first time the page is built gives both: your language is on top
+ * when you arrive, and the list holds still while you use it.
+ *
+ * The labels themselves are endonyms and do not change with the UI language, so
+ * there is nothing stale about keeping them; only the collation is the reader's,
+ * and it is the one in force when the question was first asked.
+ */
+let languageOrder: Array<{ l: Language, label: string }> | null = null
+function languageRows(): Array<{ l: Language, label: string }> {
+  if (languageOrder) return languageOrder
+  const labels = languageMenuLabels(LANGUAGES.map(l => l.key))
+  const current = defaultLanguage().key
+  const rows = LANGUAGES
+    .map((l, i) => ({ l, label: labels[i] }))
+    .sort((a, b) => a.label.localeCompare(b.label, getLocale()))
+  const picked = rows.filter(r => r.l.key === current)
+  languageOrder = [...picked, ...rows.filter(r => r.l.key !== current)]
+  return languageOrder
+}
+
 export function WelcomeStep(): Step {
   const base = readBaseConfig()
 
@@ -144,19 +174,16 @@ export function WelcomeStep(): Step {
       // `languageMenuLabels` is where the shape of these twelve strings is
       // decided, and the greeter draws the same twelve from it.
       //
-      // ⚠️ Sorted by that label, in the READER's collation — and it really is
-      // sorted, which the comment that used to sit here claimed while the code
-      // shipped `LANGUAGES` in declaration order. There is no curated ranking to
-      // defend and no "important languages first" to explain: alphabetical is
-      // what GNOME Initial Setup and Calamares both do, and with twelve rows on
-      // screen at once the eye can walk them.
+      // ⚠️ Current choice first, then sorted by that label in the READER's
+      // collation — and it really is sorted, which the comment that used to sit
+      // here claimed while the code shipped `LANGUAGES` in declaration order.
+      // Alphabetical is what GNOME Initial Setup and Calamares both do; the row
+      // on top is the rule the country list already follows. See
+      // `languageRows()` for why the order is decided once and then held.
       //
       // ⚠️ The subtitle is the language TAG, not the locale. It used to be
       // `es_ES.UTF-8`, which named a territory this page does not decide.
-      const labels = languageMenuLabels(LANGUAGES.map(l => l.key))
-      const items = LANGUAGES
-        .map((l, i) => ({ l, label: labels[i] }))
-        .sort((a, b) => a.label.localeCompare(b.label, getLocale()))
+      const items = languageRows()
       const currentKey = () => languageFor(
         getAnswers().language?.locale ?? defaultLanguage().defaultLocale,
       ).key
