@@ -118,6 +118,23 @@ window.nidara-installer-window {
   // without spending the red this DE reserves for recording and for failure.
   .installer-prose--warning { color: var(--nidara-text); font-weight: 500; }
 
+  // ── A list that scrolls inside its own card ───────────────────────────────
+  // `NidaraList` paints the card on the LISTBOX, which is right for a list that
+  // is as tall as its rows. For one that scrolls, the material has to move OUT to
+  // a frame that stays still — otherwise the rounded top and bottom scroll away
+  // with the rows and the card reads as sliced off at both ends.
+  .installer-list-frame {
+    @include material-card;
+    padding: 3px;   // the same 3 .nidara-list uses; radius-sm is derived from it
+    box-shadow: none;
+
+    .nidara-list {
+      background: none;
+      border: none;
+      padding: 0;
+    }
+  }
+
   // ── Preview banner ────────────────────────────────────────────────────────
   // Deliberately the loudest thing in the window, and deliberately NOT the red
   // this DE reserves for recording and for failure: a preview is not an error.

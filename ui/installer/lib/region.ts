@@ -330,3 +330,16 @@ export function defaultsFor(code: string): RegionDefaults {
     keyboard: keyboards.length === 1 ? keyboards[0] : null,
   }
 }
+
+/**
+ * The locale that a LANGUAGE and a COUNTRY together mean — `es` + `AR` → `es_AR`.
+ *
+ * A language is not a locale: "Spanish" is es_ES, es_AR, es_MX and a dozen more,
+ * and the territory is the country's to say. Returns null when glibc has no
+ * locale for that pair (Spanish in Japan), which is the caller's cue to keep the
+ * language's own default rather than invent one.
+ */
+export function localeFor(lang: string, country: string): string | null {
+  const want = `${lang}_${country.toUpperCase()}.UTF-8`
+  return allLocales().includes(want) ? want : null
+}
