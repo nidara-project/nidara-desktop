@@ -231,10 +231,16 @@ export function InstallerWindow(): Gtk.Window {
     onClose: () => {
         if (!canExit()) return true
         if (confirmedQuit || flow.currentIndex() === 0) return false
+        // ⚠️ The body depends on WHERE the flow is. "Nothing has been written to
+        // the disk" is true on every page before the install and flatly wrong
+        // after one — and it is the sentence somebody reads while deciding
+        // whether it is safe to close (D-28). Reaching the run step at all means
+        // the install was started; not being busy there means it has finished.
+        const installed = flow.current().id === "run"
         showNidaraAlert({
             parent: win,
             heading: t("quitHeading"),
-            body: t("quitBody"),
+            body: installed ? t("quitBodyAfter") : t("quitBody"),
             responses: [
                 { id: "stay", label: t("quitStay"), suggested: true },
                 { id: "quit", label: t("quitConfirm"), destructive: true },

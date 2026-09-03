@@ -2,6 +2,7 @@
 
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
+import Pango from "gi://Pango"
 import Gio from "gi://Gio"
 import type { Step } from "../lib/flow"
 import { NidaraButton, NidaraScrolled } from "../../lib/nidara-kit"
@@ -18,6 +19,20 @@ import { heading, prose } from "./common"
 export function RunStep(): Step {
   let _busy = false
   let _proc: Gio.Subprocess | null = null
+  /**
+   * Handed in at build time, and the reason the footer is honest.
+   *
+   * ⚠️ `Step.busy` documents that a step reporting busy MUST call this when the
+   * answer changes — and this step never took the callback at all. `sync()` runs
+   * on entering the step, when `_busy` is still false, so it showed Close and a
+   * primary, highlighted "Restart now"; `_busy` flipping to true a moment later
+   * notified nobody. Both stayed lit for the whole install, over a partition
+   * table that had already been written (measured on the 09-02 ISO, #391), and
+   * they happened to be correct again at the end, which is what hid it.
+   */
+  let _notify: (() => void) | undefined
+
+  const setBusy = (v: boolean) => { _busy = v; _notify?.() }
 
   return {
     id: "run",
@@ -26,7 +41,8 @@ export function RunStep(): Step {
     busy: () => _busy,
     ready: () => false,
 
-    build() {
+    build(notifyReady) {
+      _notify = notifyReady
       const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 16,
@@ -39,17 +55,59 @@ export function RunStep(): Step {
       box.append(head)
       box.append(desc)
 
-      const progressBar = new Gtk.ProgressBar({
-        hexpand: true,
-        valign: Gtk.Align.CENTER,
-      })
+      // ── Named phases, and the last line the work actually printed ──────────
+      //
+      // ⚠️ What was here was `GLib.timeout_add(80ms, () => progressBar.pulse())`:
+      // a bar that swept back and forth for twenty minutes and told nobody
+      // anything, with the real log folded shut behind a collapsed expander
+      // (#307). A pulse says "something is happening"; over a disk being erased
+      // that is not the question anyone has.
+      //
+      // The four phases are the ones this file actually has boundaries for. Inside
+      // archinstall there is no progress to read — so what is shown there is its
+      // LAST LINE, which is the honest answer to "what is it doing now".
+      const PHASES = ["runPhaseNetwork", "runPhaseDisk", "runPhaseBase", "runPhaseConfig"] as const
+      let phase = -1
+
+      const progressBar = new Gtk.ProgressBar({ hexpand: true, valign: Gtk.Align.CENTER })
       box.append(progressBar)
 
-      const pulseId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => {
-        if (!_busy) return GLib.SOURCE_REMOVE
-        progressBar.pulse()
-        return GLib.SOURCE_CONTINUE
+      const phaseRows: { row: Gtk.Box; marker: Gtk.Label; title: Gtk.Label }[] = []
+      const phaseBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, hexpand: true })
+      for (const key of PHASES) {
+        const marker = new Gtk.Label({ label: "○", css_classes: ["installer-phase-marker"] })
+        const title = new Gtk.Label({
+          label: t(key), css_classes: ["installer-phase-title"],
+          halign: Gtk.Align.FILL, hexpand: true, xalign: 0,
+        })
+        const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 10, hexpand: true })
+        row.append(marker); row.append(title)
+        phaseBox.append(row)
+        phaseRows.push({ row, marker, title })
+      }
+      box.append(phaseBox)
+
+      // The child's last line, under the phases. Ellipsised rather than wrapped:
+      // this is a single moving line, and a wrapping one would move the buttons.
+      const detail = new Gtk.Label({
+        label: "", css_classes: ["installer-phase-detail"],
+        halign: Gtk.Align.FILL, hexpand: true, xalign: 0,
+        ellipsize: Pango.EllipsizeMode.END, single_line_mode: true,
       })
+      box.append(detail)
+
+      const paintPhases = () => {
+        phaseRows.forEach((r, i) => {
+          const done = i < phase
+          r.marker.label = done ? "✓" : i === phase ? "●" : "○"
+          r.row[i === phase ? "add_css_class" : "remove_css_class"]("is-active")
+          r.row[done ? "add_css_class" : "remove_css_class"]("is-done")
+        })
+        progressBar.fraction = Math.max(0, phase) / PHASES.length
+      }
+
+      const enterPhase = (i: number) => { phase = i; detail.label = ""; paintPhases() }
+      paintPhases()
 
       const textBuffer = new Gtk.TextBuffer()
       const textView = new Gtk.TextView({
@@ -92,6 +150,11 @@ export function RunStep(): Step {
         hexpand: true,
       })
       box.append(expander)
+      // "Show log" while it is shut, "Hide log" while it is open. It used to say
+      // Show in both states (D-27).
+      expander.connect("notify::expanded", () => {
+        expander.label = expander.expanded ? t("runHideLog") : t("runShowLog")
+      })
 
       // One funnel for every line, ours and the child's alike. The child's arrive
       // TTY-shaped and have to be undressed (lib/ansi.ts); ours never carry an
@@ -104,16 +167,18 @@ export function RunStep(): Step {
         if (line === "" && raw !== "") return
         const endIter = textBuffer.get_end_iter()
         textBuffer.insert(endIter, line + "\n", -1)
+        // The same line the log gets, under the phase — so the page says what it
+        // is doing without anybody having to open the expander to find out.
+        if (line.trim()) detail.label = line.trim()
         const adj = scrolled.vadjustment
         if (adj) adj.value = adj.upper - adj.page_size
       }
 
       const finishRun = (success: boolean) => {
-        _busy = false
+        setBusy(false)
+        if (success) { phase = PHASES.length; paintPhases() }
         progressBar.visible = false
-        if (progressBar.get_parent()) {
-          box.remove(progressBar)
-        }
+        detail.visible = false
 
         if (success) {
           head.label = t("runSuccessHeading")
@@ -240,7 +305,8 @@ export function RunStep(): Step {
 
       // Execute archinstall
       GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-        _busy = true
+        setBusy(true)
+        enterPhase(0)
         const answers = getAnswers()
 
         // ⚠️ Checked HERE, before prepareDiskAndMounts, and not one line later.
@@ -271,6 +337,7 @@ export function RunStep(): Step {
         const isArm = isLiveMedium && !isForcedDryRun
 
         if (answers.disk) {
+          enterPhase(1)
           try {
             prepareDiskAndMounts(answers.disk, isArm)
           } catch (e: any) {
@@ -305,6 +372,7 @@ export function RunStep(): Step {
           appendLog("")
           appendLog("[PREVIEW] The plan that WOULD be handed to archinstall:")
           for (const line of JSON.stringify(plan.config, null, 2).split("\n")) appendLog(line)
+          enterPhase(3)
           finishRun(true)
           return
         }
@@ -347,6 +415,7 @@ export function RunStep(): Step {
           appendLog("[INFO] Running in live installation mode.")
         }
 
+        enterPhase(2)
         appendLog(`[EXEC] ${cmd.join(" ")}`)
 
         try {
@@ -378,6 +447,7 @@ export function RunStep(): Step {
               _proc?.wait_finish(res)
               success = _proc?.get_successful() ?? false
               if (success) {
+                enterPhase(3)
                 applyRealName(isArm, answers, appendLog)
                 configureInstalledBootloader(isArm, answers, appendLog)
               }

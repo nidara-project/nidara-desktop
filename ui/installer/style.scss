@@ -118,6 +118,38 @@ window.nidara-installer-window {
   // without spending the red this DE reserves for recording and for failure.
   .installer-prose--warning { color: var(--nidara-text); font-weight: 500; }
 
+  // ── Install phases ────────────────────────────────────────────────────────
+  // A row per phase, and the marker carries the state. Deliberately NOT colour:
+  // the accent means active/selected everywhere in this desktop, and red is spent
+  // on recording and on failure. Weight and opacity carry it instead.
+  .installer-phase-marker {
+    // Named, never the `monospace` alias — that alias is what resolved to a CJK
+    // face on a machine with JetBrains Mono installed (#302). Same rule as the
+    // log view below.
+    font-family: "JetBrains Mono", monospace;
+    font-size: $fs-small;
+    color: var(--nidara-text-dim);
+    min-width: 14px;
+  }
+  .installer-phase-title {
+    font-size: $fs-body;
+    color: var(--nidara-text-dim);
+  }
+  .is-active {
+    .installer-phase-marker,
+    .installer-phase-title { color: var(--nidara-text); font-weight: 500; }
+  }
+  .is-done .installer-phase-title { color: var(--nidara-text-secondary); }
+
+  // The child's last line. Dim and small: it is evidence that work is happening,
+  // not something anybody has to read word by word.
+  .installer-phase-detail {
+    font-family: "JetBrains Mono", monospace;
+    font-size: $fs-small;
+    color: var(--nidara-text-dim);
+    margin-left: 24px;
+  }
+
   // ── A list that scrolls inside its own card ───────────────────────────────
   // `NidaraList` paints the card on the LISTBOX, which is right for a list that
   // is as tall as its rows. For one that scrolls, the material has to move OUT to
