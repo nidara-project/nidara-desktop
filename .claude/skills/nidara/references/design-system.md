@@ -60,6 +60,13 @@ width (712px): the same note comes out 472px wide under `halign: START` and 692p
 line count for today's strings, a visibly narrower column for any string that does wrap. Escape hatch
 is `// wrapping-prose-ok:` plus a reason; nothing uses it yet.
 
+⚠️ **The gate has a blind spot: it skips any label that sets `xalign`**, on the assumption that a
+label spelling out its text alignment already fills. `NidaraEmptyRow` was `halign: START, xalign: 0`
+and passed for weeks — until the installer's "no matches" message had to wrap and came out **21px
+wide inside a 592px row**, one syllable per line (measured 2026-09-03). `xalign` says where the text
+sits INSIDE the allocation; it has nothing to say about how wide the allocation is. Write all four
+properties, and do not read a pass from this gate as proof.
+
 A `halign: START` label is allocated its NATURAL width, and a wrapping `GtkLabel`'s natural width
 is **GTK's own line-balancing heuristic**, not the space available. So every description picks its
 own break column and the page reads as random — one row on a single line, the next broken at some
@@ -3502,6 +3509,24 @@ consulted the process locale would keep saying "Spain" after the user switched t
 ⚠️ **A search box must match more than what it displays.** A Spanish list that shows "España" and
 matches only "Spain" is as broken as the English one that could not be found by typing "España" —
 `countryHaystack()` returns the reader's name, the English one and the code.
+
+⚠️ **And it must match what people TYPE, which has no accents.** `searchFold()` is the one
+normalisation both sides go through: NFD, drop the combining marks, lowercase, then a nine-letter
+`FUSED` map for the letters whose diacritic is welded into the glyph and therefore survives NFD —
+`æ œ ø ł đ ð þ ß ı`. Measured over the twelve languages' country names (2026-09-03), only `æ`, `ø`
+("Isole Fær Øer") and `ł` ("Bułgaria") actually occur; the rest are the same class and cost
+nothing. Nothing outside Latin is touched — there is no unaccented way to type Greek or kana. It
+is the one hand-written table in a file whose whole point is not having tables, and it is a fact
+about writing rather than a list of names, so it cannot go stale in any language.
+
+🔑 **A long pick-one list needs three things, and `searchableList()` in
+`ui/installer/steps/common.ts` now has all three:** the fold above on both sides; a RANK (exact
+hit, then prefix, then anywhere, ties keeping the caller's order) so that a two-letter query, which
+is nearly always an ISO code, does not land unsorted among the countries whose names happen to
+contain those letters; and `set_placeholder(NidaraEmptyRow(…))`, because a filter that matches
+nothing otherwise shows an empty card that reads as a list which failed to load. The haystack is
+folded ONCE per item at construction, not per keystroke — it used to run 249 ICU lookups per letter
+typed.
 
 ⚠️ **Do NOT translate xkb's descriptions with gettext, even though it works.**
 `GLib.dgettext("xkeyboard-config", "Spanish")` really does return "Español". But **measured

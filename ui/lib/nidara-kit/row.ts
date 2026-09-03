@@ -138,7 +138,12 @@ export function NidaraEmptyRow(text: string): Gtk.ListBoxRow {
     const label = new Gtk.Label({
         label: text,
         css_classes: ["nidara-row-subtitle"],
-        halign: Gtk.Align.START, xalign: 0,
+        // ⚠️ FILL, not START — the rule in design-system.md, and this row broke it
+        // silently for as long as its message fit on one line. A `halign: START`
+        // wrapping label is allocated its NATURAL width, and Pango's line balancing
+        // is free to make that tiny: the installer's "no matches" message came out
+        // 21px wide inside a 592px row, one syllable per line (measured 2026-09-03).
+        halign: Gtk.Align.FILL, hexpand: true, xalign: 0,
         wrap: true, wrap_mode: Pango.WrapMode.WORD_CHAR,
         // The row's own content metrics, same as NidaraRow's outermost box, so the
         // message lines up with the titles of the rows it stands in for.

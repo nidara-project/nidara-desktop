@@ -138,7 +138,7 @@ export function WelcomeStep(): Step {
         items,
         height: 320,
         row: ({ l, label }, check) => NidaraRow(label, l.defaultLocale, check),
-        haystack: ({ l, label }) => [label.toLowerCase(), l.key.toLowerCase(), l.lang],
+        haystack: ({ l, label }) => [label, l.key, l.lang],
         isSelected: ({ l }) => l.key === currentKey(),
         onActivate: ({ l, label }) => {
           const [sysLang, sysEnc] = l.defaultLocale.split(".")

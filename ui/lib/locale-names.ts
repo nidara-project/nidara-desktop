@@ -18,9 +18,11 @@
 // is each surface's own data (see ui/installer/lib/region.ts for the four system
 // tables the installer enumerates).
 //
-// ⚠️ NOTHING HERE IS A HAND-WRITTEN TABLE, on purpose. ICU ships in GJS, so every
-// name below is derived. A table of country names in twelve languages is a table
-// that goes stale in twelve languages.
+// ⚠️ NO NAME HERE COMES FROM A HAND-WRITTEN TABLE, on purpose. ICU ships in GJS,
+// so every name below is derived. A table of country names in twelve languages is
+// a table that goes stale in twelve languages. (The one table in the file is
+// `FUSED`, nine letters of the Latin alphabet — a fact about writing, not a list
+// of names, and it cannot go stale in any language.)
 
 /**
  * A country in the reader's language — "España" in a Spanish UI, "Spain" in an
@@ -110,8 +112,44 @@ export function timezoneName(tz: string): string {
 }
 
 /**
+ * ⚠️ Letters whose diacritic is FUSED into the glyph, which is why NFD cannot take
+ * it off: there is no combining mark to remove. Everything else — á à â ä ã å ç é
+ * ï ñ ö ő ř ş ü ž — decomposes, so it needs no entry here.
+ *
+ * Measured over the country names of the twelve languages the installer speaks
+ * (2026-09-03): after NFD the only Latin letters left standing are `æ` and `ø`
+ * ("Isole Fær Øer" in Italian) and `ł` ("Bułgaria", "Białoruś" in Polish). The
+ * rest of the map is the same class of letter in the same alphabets — a Danish or
+ * an Icelandic name would need them and they cost nothing.
+ */
+const FUSED: Record<string, string> = {
+    æ: "ae", œ: "oe", ø: "o", ł: "l", đ: "d", ð: "d", þ: "th", ß: "ss", ı: "i",
+}
+
+/**
+ * A string reduced to what somebody actually TYPES: lowercase, no accents.
+ *
+ * "espana" has to find España, because typing without accents is what people do —
+ * on a keyboard they have not chosen yet, in an installer where picking the
+ * country is how the right keyboard gets set. The same folding has to run on both
+ * sides of the comparison, so the query and the haystack meet in one alphabet.
+ *
+ * NFD splits a letter into its base plus a combining mark and the mark is dropped;
+ * `FUSED` covers the letters that carry no separable mark. Nothing outside Latin
+ * is touched — Greek, Cyrillic, Han and kana come through unchanged, which is
+ * right: there is no unaccented way to type them.
+ */
+export function searchFold(text: string): string {
+    return text
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLowerCase()
+        .replace(/[æœøłđðþßı]/g, ch => FUSED[ch])
+}
+
+/**
  * The strings a search box should match a country against: the reader's name,
- * the English one, and the code. Lowercased, deduplicated.
+ * the English one, and the code. Folded for search, deduplicated.
  *
  * Matching only what is DISPLAYED is the bug this exists to prevent — a Spanish
  * list that shows "España" and matches "Spain" is as broken as the English list
@@ -119,8 +157,8 @@ export function timezoneName(tz: string): string {
  */
 export function countryHaystack(code: string, display: string, fallback: string): string[] {
     const out = new Set<string>()
-    out.add(countryName(code, display, fallback).toLowerCase())
-    out.add(fallback.toLowerCase())
-    out.add(code.toLowerCase())
+    out.add(searchFold(countryName(code, display, fallback)))
+    out.add(searchFold(fallback))
+    out.add(searchFold(code))
     return [...out]
 }
