@@ -325,6 +325,70 @@ export const rowInsetFor = (surfaceRadius: number, n: number = 3.2, rowRadius: n
  * covers the tiles that actually happen (four columns on a 2560 screen is 640,
  * three is 853); under it the page scrolls horizontally instead.
  */
+/**
+ * Row heights, as NUMBERS. `.nidara-row--single` / `--double` in
+ * `ui/lib/styles/_components.scss` are where they are PAINTED; these are for the
+ * code that has to reason about them — a list that wants to show six whole rows
+ * cannot ask CSS how tall a row is.
+ *
+ * ⚠️ MIRRORED. `scripts/ci/row-height-check.mjs` reads both files and fails if
+ * they drift, for the same reason `blur-threshold-check` exists: two numbers that
+ * must agree, in two languages, neither of which can read the other.
+ */
+export const ROW_HEIGHT = {
+    /** `.nidara-row--single` — a title, or a title and a control. */
+    single: 48,
+    /** `.nidara-row--double` — a title with a subtitle under it. */
+    double: 72,
+} as const
+
+/**
+ * WIZARD_LAYOUT — the installer's height law, the sibling of WINDOW_LAYOUT's
+ * width law.
+ *
+ * ## Why there has to be one
+ *
+ * The width of a NidaraWindow is derived: 250 sidebar + 600 pane + 2 rim, every
+ * number argued. The HEIGHT was the literal 760 that `NidaraWindow` defaults to
+ * for two-pane windows — and because the window was 760, the country list was
+ * given `height: 300` and the language list `height: 320`, hand-picked so that
+ * the page fitted inside it. That is backwards, and it costs three things:
+ * dragging the window taller leaves dead space (the list still measures 300),
+ * 300 ÷ 72 is 4.2 so a row is always cut in half at the bottom, and on the region
+ * page the card the country fills in starts after a 300px block whatever the
+ * window's size, which reads as belonging to another question.
+ *
+ * ## The law
+ *
+ * **The list states a budget in ROWS; everything else is measured.** The window
+ * opens at its natural height, which is the page's own — heading, prose, search
+ * box, `listRows` whole rows, whatever the page puts under them, chrome — added
+ * up by GTK rather than by us. There is exactly one invented number here and it
+ * is `listRows`; the rest cannot be written down honestly, because how tall a
+ * paragraph is depends on the language it is written in.
+ *
+ * Above the natural height the list TAKES the extra (it is the only vexpanding
+ * thing on the page). Below it, the list gives back down to `minListRows` and
+ * then the page scrolls.
+ *
+ * Measured on 2026-09-03 with the Spanish welcome page: 852 × 889 at
+ * `listRows: 6`, against the 760 it used to open at with 4.2 rows visible.
+ */
+export const WIZARD_LAYOUT = {
+    /** Whole rows the list opens with — the page's natural height follows from it. */
+    listRows: 6,
+    /** Whole rows it may be squeezed to before the page starts scrolling. */
+    minListRows: 3,
+    /**
+     * Safety cap on the opening height, as a fraction of the monitor's height.
+     * Not layout — a guard: Hyprland CENTRES a window taller than the screen
+     * rather than clipping it, so the header would sit above the top edge with no
+     * way to reach it. GTK4 removed `gdk_monitor_get_workarea`, so this is the
+     * whole monitor and the fraction is what stands in for the bar and the gaps.
+     */
+    maxMonitorFraction: 0.9,
+} as const
+
 export const WINDOW_LAYOUT = {
     /** Docked sidebar column, including its 8px capsule margin. */
     sidebar: 250,

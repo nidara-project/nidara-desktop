@@ -16,7 +16,7 @@ import { DiskStep } from "../steps/disk"
 import { AccountStep } from "../steps/account"
 import { SummaryStep } from "../steps/summary"
 import { RunStep } from "../steps/run"
-import { WINDOW_LAYOUT } from "../../lib/tokens"
+import { WINDOW_LAYOUT, WIZARD_LAYOUT, ROW_HEIGHT, collapseAtFor } from "../../lib/tokens"
 import { t, onLocaleChange } from "../lib/i18n"
 import { isPreview } from "../lib/preview"
 
@@ -164,10 +164,19 @@ export function InstallerWindow(): Gtk.Window {
   footer.append(navBox)
 
   flow.widget.add_css_class("installer-body")
+  // ⚠️ `propagateNaturalHeight` is what makes the window's size follow the LAYOUT
+  // instead of the other way round. Without it this scroller reports no natural
+  // height of its own, the window falls back to the two-pane default of 760, and
+  // every list inside it has to be given a pixel height that fits — which is
+  // exactly the tail wagging the dog that WIZARD_LAYOUT exists to end. With it,
+  // the page's own natural height (heading, prose, six whole rows, whatever sits
+  // under them) is what the window asks for, and the scroller goes back to being
+  // what a scroller is for: the case where the window is smaller than that.
   const { widget: scrolledContent, scrolled } = NidaraScrolled({
     child: NidaraClamp(flow.widget, WINDOW_LAYOUT.wizardContent, true, WINDOW_LAYOUT.wizardContent),
     reserveLane: false,
     hscrollPolicy: Gtk.PolicyType.EXTERNAL,
+    propagateNaturalHeight: true,
     cornerRadius: NIDARA_WINDOW_RADIUS,
     cssClasses: ["installer-page-scroll"],
   })
@@ -253,17 +262,66 @@ export function InstallerWindow(): Gtk.Window {
         })
         return true
     },
-    // No geometry of our own. NidaraWindow already derives both numbers from
-    // WINDOW_LAYOUT — an opening width that keeps the sidebar docked at the pane's
-    // full width, and a minimum at the distress floor. This asked for 960×760 by
-    // hand, which is 108px wider than its own layout needs (250 sidebar + 600 pane
-    // + 2 rim = 852) and 280px taller than the minimum two cards and a header
-    // require. A 1366×768 laptop could not fit the window it was being handed.
-    // Closes #312.
+    // No WIDTH of our own. NidaraWindow derives it from WINDOW_LAYOUT — an opening
+    // width that keeps the sidebar docked at the pane's full width, and a minimum
+    // at the distress floor. This asked for 960×760 by hand, which is 108px wider
+    // than its own layout needs (250 sidebar + 600 pane + 2 rim = 852) and 280px
+    // taller than the minimum two cards and a header require. A 1366×768 laptop
+    // could not fit the window it was being handed. Closes #312.
+    //
+    // And no HEIGHT of our own either, now: -1 turns off the two-pane default of
+    // 760 so that the measurement below is what decides. See WIZARD_LAYOUT.
+    defaultHeight: -1,
     resizable: true,
   })
 
   const win = shell.window
+
+  // ── The opening height is MEASURED, not chosen ───────────────────────────────
+  // The width comes from a law (sidebar + pane + rim); the height used to come
+  // from a literal 760 that the lists were then cut to fit. It comes from the same
+  // place now: ask the layout, open at what it says.
+  //
+  //   glass          the footer and the card's own padding
+  // + contentColumn  the header, and the page under it with its list at the FLOOR
+  // + the rows       the difference between that floor and WIZARD_LAYOUT.listRows
+  //
+  // Only the last term is a number somebody chose. The other two are GTK adding up
+  // a heading, a paragraph wrapped in whatever language this is, a search box and
+  // whatever the page puts below the list — none of which can be written down
+  // honestly, because a paragraph's height is a property of the language.
+  //
+  // ⚠️ The list is measured at its FLOOR on purpose, and the rows are added back
+  // here rather than asked for down there. That way a page carrying more than a
+  // list — the region page has a card and a keyboard test box under it — still
+  // fits inside this height: its extra content eats into the list's share instead
+  // of pushing the page into a scroll. The list is the only thing on the page that
+  // vexpands, so it is the only thing that gives.
+  //
+  // ⚠️ Measured before `present()`: the widgets exist, so GTK can add them up, and
+  // the window has not been sized yet. And measured through `contentColumn`, not
+  // through the window — see NidaraWindowResult for why the window cannot see its
+  // own content.
+  //
+  // ⚠️ The cap uses the SMALLEST monitor. A window has no monitor before it is
+  // mapped and the compositor decides where it lands, so a height computed for a
+  // 1440p screen would open a window that does not fit the 1366×768 laptop beside
+  // it — and Hyprland CENTRES what does not fit rather than clipping it, which
+  // puts the header above the top edge with no way to reach it.
+  const openWidth = collapseAtFor(WINDOW_LAYOUT.sidebar, WINDOW_LAYOUT.wizardContent)
+      + WINDOW_LAYOUT.glassRim * 2
+  const monitorHeights = app.get_monitors().map(m => m.get_geometry().height).filter(h => h > 0)
+  const cap = Math.round(
+      Math.min(...(monitorHeights.length ? monitorHeights : [WINDOW_LAYOUT.minHeight]))
+      * WIZARD_LAYOUT.maxMonitorFraction,
+  )
+  const [, chromeHeight] = shell.glass.measure(Gtk.Orientation.VERTICAL, openWidth)
+  const [, columnHeight] = shell.contentColumn!.measure(Gtk.Orientation.VERTICAL, WINDOW_LAYOUT.wizardContent)
+  const listBudget = (WIZARD_LAYOUT.listRows - WIZARD_LAYOUT.minListRows) * ROW_HEIGHT.double
+  win.set_default_size(openWidth, Math.max(
+      WINDOW_LAYOUT.minHeight,
+      Math.min(chromeHeight + columnHeight + listBudget, cap),
+  ))
   win.connect("destroy", () => app.quit())
 
   function sync() {

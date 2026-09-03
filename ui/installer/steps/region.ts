@@ -161,6 +161,9 @@ export function RegionStep(): Step {
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 16,
         hexpand: true,
+        // The page FILLS the pane, so that the one vexpanding thing on it — the
+        // country list — is the one that receives whatever the window has spare.
+        vexpand: true,
       })
 
       box.append(heading(t("regionHeading")))
@@ -185,7 +188,6 @@ export function RegionStep(): Step {
       const list = searchableList({
         placeholder: t("regionCountryPlaceholder"),
         items: named,
-        height: 300,
         row: ({ c, label }, check) => NidaraRow(label, c.code, check),
         // The reader's name, tzdata's English one AND the code — not just what is
         // on screen. Matching only the display name is how the English list came
