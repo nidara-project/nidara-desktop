@@ -162,3 +162,75 @@ export function countryHaystack(code: string, display: string, fallback: string)
     out.add(searchFold(code))
     return [...out]
 }
+
+/**
+ * The rows of a "pick your language" list, named the way such a list has to name
+ * them: the endonym of the LANGUAGE, with an initial capital, and the territory
+ * only where two rows would otherwise read the same.
+ *
+ * Three decisions live here, and the first is the one that matters:
+ *
+ * ⚠️ **A language is not a locale, and this list is asked BEFORE the country.**
+ * `Intl.DisplayNames` defaults to its "dialect" naming, which gave "American
+ * English", "español de España" and "português europeu" — three shapes among
+ * twelve rows — and every shape named a TERRITORY that the next page is still
+ * free to change: pick "español (España)" and then Argentina, and the locale
+ * written is `es_AR`. So the label says the language and nothing else, and the
+ * territory appears only for the pair that genuinely needs it, Portuguese.
+ * Which pair that is comes from the list itself, not from a table: two tags
+ * whose bare names collide both get their region back.
+ *
+ * ⚠️ **The initial is capitalised, against the orthography of half of them.**
+ * "español" and "français" are lowercase in running text and CLDR returns them
+ * that way; in a list of names they are entries in an index, and every other
+ * chooser the user has met — GNOME's, ours in the greeter — capitalises them.
+ * The two surfaces of one product disagreeing about it is worse than either
+ * choice.
+ *
+ * ⚠️ The result is positional: `labels[i]` names `tags[i]`. Sorting is the
+ * caller's, because the collation to sort in is the READER's, and only the
+ * caller knows which language the screen currently speaks.
+ */
+export function languageMenuLabels(tags: string[]): string[] {
+    const subtag = (tag: string) => tag.split(/[-_]/)[0]
+    const bare = tags.map(tag => {
+        const name = languageName(subtag(tag))
+        return name.charAt(0).toLocaleUpperCase(tag) + name.slice(1)
+    })
+    const seen = new Map<string, number>()
+    for (const name of bare) seen.set(name, (seen.get(name) ?? 0) + 1)
+
+    return tags.map((tag, i) => {
+        if ((seen.get(bare[i]) ?? 0) < 2) return bare[i]
+        const region = tag.split(/[-_]/)[1]
+        if (!region) return bare[i]
+        return `${bare[i]} (${countryName(region, tag, region)})`
+    })
+}
+
+/**
+ * The strings a search box should match a language against: its endonym, its
+ * name in the reader's language, its English name, and the tag.
+ *
+ * The twin of {@link countryHaystack}, and it exists for the same reason. The
+ * rows say "Deutsch" because everybody has to find their own language whatever
+ * the screen currently speaks — but somebody reading a Spanish installer looking
+ * for German types "aleman", and somebody who has always installed things in
+ * English types "german". A list that answers neither is a list that can only be
+ * used by scrolling.
+ */
+export function languageHaystack(tag: string, display: string): string[] {
+    const subtag = tag.split(/[-_]/)[0]
+    const out = new Set<string>()
+    out.add(searchFold(languageName(subtag)))
+    out.add(searchFold(languageName(tag)))
+    for (const inLocale of [display, "en"]) {
+        try {
+            const name = new Intl.DisplayNames([inLocale], { type: "language" }).of(subtag)
+            if (name) out.add(searchFold(name))
+        } catch {}
+    }
+    out.add(searchFold(tag))
+    out.add(searchFold(subtag))
+    return [...out]
+}

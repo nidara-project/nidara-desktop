@@ -31,17 +31,30 @@
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { readBaseConfig } from "../lib/base-config"
-import { t, setLocale } from "../lib/i18n"
+import { t, setLocale, getLocale } from "../lib/i18n"
 import { nidaraLogoIcon } from "../../lib/icons"
 import { NidaraRow } from "../../lib/nidara-kit"
 import { heading, prose, searchableList } from "./common"
 import { connectivity, isUsable } from "../lib/network"
-import { LANGUAGES, languageFor } from "../lib/languages"
-import { languageName } from "../../lib/locale-names"
+import { LANGUAGES, languageFor, type Language } from "../lib/languages"
+import { languageMenuLabels, languageHaystack } from "../../lib/locale-names"
 import { getAnswers, setLanguageAnswer } from "../lib/answers"
 
-/** What the medium generated, and the only locale it actually has. */
-const MEDIUM_LOCALE = "en_US.UTF-8"
+/**
+ * The language the installer opens on, as an ANSWER rather than a constant.
+ *
+ * There has to be one: Continue is live from the first frame so that somebody
+ * who does not care can click past, and what they get then is whatever this
+ * returns. It used to be the literal `en_US.UTF-8` — "what the medium
+ * generated", which is true of the medium and says nothing about the person. On
+ * the ISO that agrees with `getLocale()` by accident, because the ISO generates
+ * no other locale; anywhere else — a preview run on somebody's own desktop — the
+ * window came up in Spanish with the tick on American English. One question, two
+ * sources, which is the defect #397 went and removed from the naming side.
+ */
+function defaultLanguage(): Language {
+  return LANGUAGES.find(l => l.key === getLocale()) ?? LANGUAGES[0]
+}
 
 export function WelcomeStep(): Step {
   const base = readBaseConfig()
@@ -74,10 +87,11 @@ export function WelcomeStep(): Step {
     onEnter() {
       refreshNetwork()
       if (getAnswers().language) return
-      const [sysLang, sysEnc] = MEDIUM_LOCALE.split(".")
+      const seed = defaultLanguage()
+      const [sysLang, sysEnc] = seed.defaultLocale.split(".")
       setLanguageAnswer({
-        locale: MEDIUM_LOCALE, sysLang, sysEnc,
-        label: languageName(MEDIUM_LOCALE),
+        locale: seed.defaultLocale, sysLang, sysEnc,
+        label: languageMenuLabels([seed.key])[0],
       })
     },
 
@@ -119,9 +133,6 @@ export function WelcomeStep(): Step {
 
       box.append(prose(t("welcomeLanguageDesc"), "installer-prose--dim"))
 
-      // Sorted by ENDONYM, in the reader's collation. Not by locale code: sorted
-      // that way Spain's list opens on Aragonese and the United States' on
-      // Cherokee, which is what shipped once (see lib/region.ts).
       // Twelve rows, not 328 — the languages Nidara actually speaks. See
       // lib/languages.ts: offering a language the installer and the installed
       // desktop will not speak is a promise nobody can keep, and it is what
@@ -129,16 +140,33 @@ export function WelcomeStep(): Step {
       //
       // Endonyms, and NOT translated into the current UI: everyone has to be able
       // to find their own language regardless of what the screen currently says.
-      // That is the greeter's rule, written in LocaleBar.ts, and now shared.
-      const items = LANGUAGES.map(l => ({ l, label: languageName(l.defaultLocale) }))
-      const currentKey = () => languageFor(getAnswers().language?.locale ?? MEDIUM_LOCALE).key
+      // That is the greeter's rule, written in LocaleBar.ts, and now shared —
+      // `languageMenuLabels` is where the shape of these twelve strings is
+      // decided, and the greeter draws the same twelve from it.
+      //
+      // ⚠️ Sorted by that label, in the READER's collation — and it really is
+      // sorted, which the comment that used to sit here claimed while the code
+      // shipped `LANGUAGES` in declaration order. There is no curated ranking to
+      // defend and no "important languages first" to explain: alphabetical is
+      // what GNOME Initial Setup and Calamares both do, and with twelve rows on
+      // screen at once the eye can walk them.
+      //
+      // ⚠️ The subtitle is the language TAG, not the locale. It used to be
+      // `es_ES.UTF-8`, which named a territory this page does not decide.
+      const labels = languageMenuLabels(LANGUAGES.map(l => l.key))
+      const items = LANGUAGES
+        .map((l, i) => ({ l, label: labels[i] }))
+        .sort((a, b) => a.label.localeCompare(b.label, getLocale()))
+      const currentKey = () => languageFor(
+        getAnswers().language?.locale ?? defaultLanguage().defaultLocale,
+      ).key
 
       const list = searchableList({
         placeholder: t("welcomeLanguagePlaceholder"),
         items,
         height: 320,
-        row: ({ l, label }, check) => NidaraRow(label, l.defaultLocale, check),
-        haystack: ({ l, label }) => [label, l.key, l.lang],
+        row: ({ l, label }, check) => NidaraRow(label, l.key, check),
+        haystack: ({ l, label }) => [label, ...languageHaystack(l.key, getLocale())],
         isSelected: ({ l }) => l.key === currentKey(),
         onActivate: ({ l, label }) => {
           const [sysLang, sysEnc] = l.defaultLocale.split(".")
