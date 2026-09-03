@@ -406,6 +406,19 @@ export const WINDOW_LAYOUT = {
     /** Window minimum height. Two cards and a header have to fit, or the scroll
      *  view is taller than its own first row. */
     minHeight: 480,
+    /**
+     * How much wider than the breakpoint a window OPENS — half of it on each side
+     * of the content pane.
+     *
+     * ⚠️ Not decoration, and not optional. At exactly `S + C` the law says the pane
+     * is "centred in W − S", and centring something in its own width puts it flush
+     * against the sidebar on one side and against the glass rim on the other: the
+     * page has no air at all. This is the air. It is stated here because it is a
+     * number a caller can otherwise re-derive and get wrong — which is exactly what
+     * happened to the installer on 2026-09-03, opening 852 instead of 898 and
+     * looking cramped the moment it was on screen.
+     */
+    openGutter: 48,
 } as const
 
 /** Window width at or above which the sidebar is DOCKED rather than floating. */

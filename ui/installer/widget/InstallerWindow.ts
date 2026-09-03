@@ -16,7 +16,7 @@ import { DiskStep } from "../steps/disk"
 import { AccountStep } from "../steps/account"
 import { SummaryStep } from "../steps/summary"
 import { RunStep } from "../steps/run"
-import { WINDOW_LAYOUT, WIZARD_LAYOUT, ROW_HEIGHT, collapseAtFor } from "../../lib/tokens"
+import { WINDOW_LAYOUT, WIZARD_LAYOUT, ROW_HEIGHT } from "../../lib/tokens"
 import { t, onLocaleChange } from "../lib/i18n"
 import { isPreview } from "../lib/preview"
 
@@ -308,8 +308,14 @@ export function InstallerWindow(): Gtk.Window {
   // 1440p screen would open a window that does not fit the 1366×768 laptop beside
   // it — and Hyprland CENTRES what does not fit rather than clipping it, which
   // puts the header above the top edge with no way to reach it.
-  const openWidth = collapseAtFor(WINDOW_LAYOUT.sidebar, WINDOW_LAYOUT.wizardContent)
-      + WINDOW_LAYOUT.glassRim * 2
+  //
+  // ⚠️ The WIDTH is read back from the window, never recomputed. NidaraWindow has
+  // already derived it — the breakpoint plus WINDOW_LAYOUT.openGutter, which is
+  // the air on either side of the pane — and a second copy of that derivation is
+  // a copy that can disagree with the first. Mine did, on the day it was written:
+  // it left the gutter out and the window opened 852 instead of 898, with the page
+  // flush against the sidebar on one side and the glass rim on the other.
+  const openWidth = win.default_width
   const monitorHeights = app.get_monitors().map(m => m.get_geometry().height).filter(h => h > 0)
   const cap = Math.round(
       Math.min(...(monitorHeights.length ? monitorHeights : [WINDOW_LAYOUT.minHeight]))
@@ -318,10 +324,12 @@ export function InstallerWindow(): Gtk.Window {
   const [, chromeHeight] = shell.glass.measure(Gtk.Orientation.VERTICAL, openWidth)
   const [, columnHeight] = shell.contentColumn!.measure(Gtk.Orientation.VERTICAL, WINDOW_LAYOUT.wizardContent)
   const listBudget = (WIZARD_LAYOUT.listRows - WIZARD_LAYOUT.minListRows) * ROW_HEIGHT.double
-  win.set_default_size(openWidth, Math.max(
+  // The HEIGHT only. `set_default_size` would take the width with it, and the
+  // width is not ours to state.
+  win.default_height = Math.max(
       WINDOW_LAYOUT.minHeight,
       Math.min(chromeHeight + columnHeight + listBudget, cap),
-  ))
+  )
   win.connect("destroy", () => app.quit())
 
   function sync() {

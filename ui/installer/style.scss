@@ -89,8 +89,15 @@ window.nidara-installer-window {
   }
 
   // ── Step content ───────────────────────────────────────────────────────────
+  // ⚠️ The horizontal padding is not decoration. The pane is 600 wide and the
+  // page used to fill it edge to edge, so the only air around a card was the
+  // window's opening gutter — 23px, measured — and the cards ended up pressed
+  // against the sidebar on one side and the glass rim on the other. Settings
+  // solves the same problem the same way: its page carries `$space-10` inside a
+  // 800px pane, which is why its cards sit 64px off the window edge. This is that
+  // rule at this pane's scale.
   .installer-body {
-    padding: 16px 0 16px 0;
+    padding: 16px $space-6;
   }
 
   .installer-logo {

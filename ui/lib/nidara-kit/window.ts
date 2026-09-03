@@ -195,7 +195,7 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     // full width. A default below the breakpoint would greet every user with the
     // narrow (floating-sidebar) layout, which is the fallback, not the design.
     const minFloorWidth = minWindowWidthFor(WINDOW_LAYOUT.contentFloor)
-    const openWidth = Math.max(defaultWidth ?? 0, collapseAtFor(sidebarWidth, contentWidth) + 48)
+    const openWidth = Math.max(defaultWidth ?? 0, collapseAtFor(sidebarWidth, contentWidth) + WINDOW_LAYOUT.openGutter)
 
     // ── The floor is the DISTRESS width, not the pane ─────────────────────────
     //
