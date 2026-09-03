@@ -38,36 +38,20 @@ import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { execAsync } from "../../lib/process"
 import { NidaraRow, NidaraDropDownRow } from "../../lib/nidara-kit"
-import { t, setLocale, getLocale, type Locale } from "../lib/i18n"
+import { t, setLocale, getLocale } from "../lib/i18n"
 import {
   getAnswers, setCountryAnswer, setKeyboardAnswer, setTimezoneAnswer,
 } from "../lib/answers"
 import {
-  countries, timezonesFor, allTimezones,
+  countries, timezonesFor, allTimezones, localeFor,
   keyboardsFor, allKeyboards, defaultsFor,
   type Country, type KeyboardLayout,
 } from "../lib/region"
 import { heading, prose, searchableList } from "./common"
+import { languageFor } from "../lib/languages"
+import { setLanguageAnswer } from "../lib/answers"
 import { countryName, countryHaystack, timezoneName } from "../../lib/locale-names"
 import { isPreview } from "../lib/preview"
-
-/**
- * Which of the twelve translations the installer should wear, given the system
- * locale the user just chose. Anything we do not speak falls to English — the same
- * chain as the shell's `detectLanguage` and the greeter's `detectLocale`, and it
- * has to stay the same chain or the installer and the desktop it installs would
- * disagree about what "pt" means.
- */
-export function uiLocaleFor(sysLocale: string): Locale {
-  const l = sysLocale.toLowerCase()
-  if (l.startsWith("pt_br")) return "pt-BR"
-  if (l.startsWith("pt")) return "pt-PT"
-  if (l.startsWith("zh")) return "zh-CN"
-  for (const k of ["es", "fr", "de", "it", "pl", "nl", "ru", "ja", "en"] as const) {
-    if (l.startsWith(k)) return k
-  }
-  return "en"
-}
 
 /** The country's own options first, then everything else — never a truncated list. */
 function scoped<T>(own: T[], all: T[], key: (x: T) => string): T[] {
@@ -243,6 +227,20 @@ export function RegionStep(): Step {
         // ⚠️ The LANGUAGE is not among them any more. It was asked on the welcome
         // page, before this one, and a country arriving later must not overwrite
         // it — somebody living in Germany with a Spanish desktop is not a bug.
+        // The language was chosen on the welcome page; the country supplies the
+        // TERRITORY it was missing. `es` + AR → es_AR. When glibc has no locale
+        // for the pair (Spanish in Japan) the language keeps its own default,
+        // which is the honest outcome rather than an invented one.
+        const a = getAnswers()
+        if (a.language) {
+          const lang = languageFor(a.language.locale)
+          const refined = localeFor(lang.lang, c.code)
+          if (refined) {
+            const [sysLang, sysEnc] = refined.split(".")
+            setLanguageAnswer({ locale: refined, sysLang, sysEnc, label: a.language.label })
+          }
+        }
+
         const d = defaultsFor(c.code)
         if (d.timezone) setTimezoneAnswer({ timezone: d.timezone })
         if (d.keyboard) {

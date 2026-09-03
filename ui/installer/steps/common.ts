@@ -63,7 +63,13 @@ export function searchableList<T>(opts: {
   height: number
 }): { widget: Gtk.Widget; repaint: () => void } {
   const search = new Gtk.Entry({ placeholder_text: opts.placeholder, hexpand: true })
-  const { box: card, listBox } = NidaraList()
+  // ⚠️ `NidaraList()` returns a listbox that is ALREADY parented to the box it
+  // also returns, and that box is not what we want around a scrolling list — so
+  // the child has to be taken out before it can be given a new parent. Without
+  // the unparent, GTK refuses the reparent with
+  // `gtk_scrolled_window_set_child: assertion … failed` and draws nothing.
+  const { box: unusedCard, listBox } = NidaraList()
+  unusedCard.remove(listBox)
   listBox.selection_mode = Gtk.SelectionMode.NONE
 
   const rowOf = new Map<T, Gtk.ListBoxRow>()
@@ -104,19 +110,36 @@ export function searchableList<T>(opts: {
   // itself inside a scroller, and a vexpanding widget in a scrolling page gets
   // its MINIMUM rather than the leftover — the page can always grow instead.
   // Measured: the language list rendered three rows tall on a 760px window while
-  // asking for 220, which read as a broken scroll (the selected row was five
-  // rows down, just under the fold).
+  // asking for 220.
+  //
+  // ⚠️ And the CARD is outside the scroller, with the rows scrolling inside it.
+  // `NidaraList` puts the card's material on the LISTBOX itself (`.nidara-list`
+  // in ui/lib/styles/_components.scss), so scrolling the listbox scrolls its own
+  // rounded top and bottom out of view — the card appeared to be sliced off at
+  // both ends, which is what it was. The frame has to stay still while the
+  // content moves; that is the whole idea of a frame.
   const { widget: scroller, scrolled } = NidaraScrolled({
-    child: card,
+    child: listBox,
     minContentHeight: opts.height,
     propagateNaturalHeight: false,
     reserveLane: false,
   })
   scrolled.set_size_request(-1, opts.height)
 
+  const card = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    css_classes: ["installer-list-frame"],
+    hexpand: true,
+  })
+  // ⚠️ In code, not in CSS. GTK4's CSS has no `overflow` property — the sheet
+  // says so at the top of style.scss and it still cost a `CSS Error … No property
+  // named "overflow"`. Clipping to the rounded corners is a WIDGET setting.
+  card.overflow = Gtk.Overflow.HIDDEN
+  card.append(scroller)
+
   const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, hexpand: true, vexpand: true })
   box.append(search)
-  box.append(scroller)
+  box.append(card)
 
   return { widget: box, repaint }
 }

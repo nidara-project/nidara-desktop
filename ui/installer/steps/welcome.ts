@@ -31,15 +31,14 @@
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { readBaseConfig } from "../lib/base-config"
-import { t, setLocale, getLocale } from "../lib/i18n"
+import { t, setLocale } from "../lib/i18n"
 import { nidaraLogoIcon } from "../../lib/icons"
 import { NidaraRow } from "../../lib/nidara-kit"
 import { heading, prose, searchableList } from "./common"
 import { connectivity, isUsable } from "../lib/network"
-import { allLocales } from "../lib/region"
+import { LANGUAGES, languageFor } from "../lib/languages"
 import { languageName } from "../../lib/locale-names"
 import { getAnswers, setLanguageAnswer } from "../lib/answers"
-import { uiLocaleFor } from "./region"
 
 /** What the medium generated, and the only locale it actually has. */
 const MEDIUM_LOCALE = "en_US.UTF-8"
@@ -123,44 +122,31 @@ export function WelcomeStep(): Step {
       // Sorted by ENDONYM, in the reader's collation. Not by locale code: sorted
       // that way Spain's list opens on Aragonese and the United States' on
       // Cherokee, which is what shipped once (see lib/region.ts).
-      const ui = getLocale()
-      const current = () => getAnswers().language?.locale ?? MEDIUM_LOCALE
-
-      // ⚠️ SUGGESTED FIRST, then everything else. This is what Anaconda and GNOME
-      // Initial Setup do — a small block above a divider — and it is the answer to
-      // "where is my language in a list of 328?" that does not involve scrolling
-      // the list on the reader's behalf.
+      // Twelve rows, not 328 — the languages Nidara actually speaks. See
+      // lib/languages.ts: offering a language the installer and the installed
+      // desktop will not speak is a promise nobody can keep, and it is what
+      // Calamares and Anaconda both refuse to do.
       //
-      // The suggested block is what is chosen now plus the medium's own English:
-      // English is the safety net for somebody who has scrolled into a script they
-      // cannot read and wants back out.
-      const suggested = [...new Set([current(), MEDIUM_LOCALE])]
-      const rest = allLocales()
-        .filter(l => !suggested.includes(l))
-        .map(locale => ({ locale, label: languageName(locale) }))
-        .sort((a, b) => a.label.localeCompare(b.label, ui))
-      const items = [
-        ...suggested.map(locale => ({ locale, label: languageName(locale) })),
-        ...rest,
-      ]
+      // Endonyms, and NOT translated into the current UI: everyone has to be able
+      // to find their own language regardless of what the screen currently says.
+      // That is the greeter's rule, written in LocaleBar.ts, and now shared.
+      const items = LANGUAGES.map(l => ({ l, label: languageName(l.defaultLocale) }))
+      const currentKey = () => languageFor(getAnswers().language?.locale ?? MEDIUM_LOCALE).key
+
       const list = searchableList({
         placeholder: t("welcomeLanguagePlaceholder"),
         items,
         height: 320,
-        row: (item, check) => NidaraRow(item.label, item.locale, check),
-        // The endonym AND the raw locale: somebody who knows they want `en_GB`
-        // should not have to know that ICU calls it "British English".
-        haystack: item => [item.label.toLowerCase(), item.locale.toLowerCase()],
-        isSelected: item => item.locale === current(),
-        onActivate: (item) => {
-          const [sysLang, sysEnc] = item.locale.split(".")
-          setLanguageAnswer({
-            locale: item.locale, sysLang, sysEnc: sysEnc || "UTF-8", label: item.label,
-          })
+        row: ({ l, label }, check) => NidaraRow(label, l.defaultLocale, check),
+        haystack: ({ l, label }) => [label.toLowerCase(), l.key.toLowerCase(), l.lang],
+        isSelected: ({ l }) => l.key === currentKey(),
+        onActivate: ({ l, label }) => {
+          const [sysLang, sysEnc] = l.defaultLocale.split(".")
+          setLanguageAnswer({ locale: l.defaultLocale, sysLang, sysEnc, label })
           // Switches the installer's own text, which rebuilds every page
           // (Flow.invalidate) — including this one. Nothing may touch a widget
           // after this call.
-          setLocale(uiLocaleFor(item.locale))
+          setLocale(l.key)
           notifyReady?.()
         },
       })
