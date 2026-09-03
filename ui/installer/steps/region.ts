@@ -53,6 +53,69 @@ import { setLanguageAnswer } from "../lib/answers"
 import { countryName, countryHaystack, timezoneName } from "../../lib/locale-names"
 import { isPreview } from "../lib/preview"
 
+/**
+ * ⚠️ This is the installer reaching into the session it is RUNNING IN, not into
+ * the system it is installing — which is exactly right on the live medium (you
+ * should be able to test the layout you just picked) and unacceptable on
+ * somebody's desktop, where it would change the keyboard they are typing on.
+ */
+function applyKeyboardLive(k: KeyboardLayout) {
+  if (isPreview()) return
+  execAsync(["hyprctl", "keyword", "input:kb_layout", k.layout]).catch(() => {})
+  execAsync(["hyprctl", "keyword", "input:kb_variant", k.variant]).catch(() => {})
+}
+
+/**
+ * Everything a country ANSWERS — the country itself, the territory it lends the
+ * language, and the timezone and keyboard it settles.
+ *
+ * ⚠️ It lives out here, away from the widgets, because there were two ways to
+ * choose a country and only one of them was complete. `onEnter` used to seed the
+ * country alone from the language's territory, and the page then showed España
+ * ticked, an empty card where the timezone and keyboard rows belong, and Continue
+ * greyed out — `ready()` wants all four answers — until you clicked the country
+ * that was already ticked. A default that cannot be accepted is worse than no
+ * default: it looks like the page is broken, and it looks that way to everybody
+ * whose language carries a territory, which after the welcome page's seed is
+ * nearly everybody.
+ *
+ * What it deliberately does NOT settle is a country with more than one timezone:
+ * `defaultsFor` returns null there, the row says "Choose…" and Continue waits.
+ * That is the one question this page is entitled to hold the flow for.
+ *
+ * Returns the keyboard it settled, if any, so the caller can decide whether to
+ * apply it to the running session.
+ */
+function answerCountry(c: Country): KeyboardLayout | null {
+  setCountryAnswer({ code: c.code, name: c.name })
+
+  // Only what the data says unambiguously; the rest stays open and the dropdown
+  // says "Choose…". See lib/region.ts — null is the useful answer.
+  //
+  // ⚠️ The LANGUAGE is not overwritten. It was asked on the welcome page, before
+  // this one, and a country arriving later must not undo it — somebody living in
+  // Germany with a Spanish desktop is not a bug. The country supplies the
+  // TERRITORY the language was missing: `es` + AR → es_AR. When glibc has no
+  // locale for the pair (Spanish in Japan) the language keeps its own default,
+  // which is the honest outcome rather than an invented one.
+  const a = getAnswers()
+  if (a.language) {
+    const lang = languageFor(a.language.locale)
+    const refined = localeFor(lang.lang, c.code)
+    if (refined) {
+      const [sysLang, sysEnc] = refined.split(".")
+      setLanguageAnswer({ locale: refined, sysLang, sysEnc, label: a.language.label })
+    }
+  }
+
+  const d = defaultsFor(c.code)
+  if (d.timezone) setTimezoneAnswer({ timezone: d.timezone })
+  if (!d.keyboard) return null
+  const k = d.keyboard
+  setKeyboardAnswer({ layout: k.layout, variant: k.variant, keymap: k.keymap, label: k.label })
+  return k
+}
+
 /** The country's own options first, then everything else — never a truncated list. */
 function scoped<T>(own: T[], all: T[], key: (x: T) => string): T[] {
   const seen = new Set(own.map(key))
@@ -88,7 +151,9 @@ export function RegionStep(): Step {
       const territory = /^[a-z]+_([A-Z]+)/.exec(a.language.locale)?.[1]
       if (!territory) return
       const c = countries().find(x => x.code === territory)
-      if (c) setCountryAnswer({ code: c.code, name: c.name })
+      if (!c) return
+      const k = answerCountry(c)
+      if (k) applyKeyboardLive(k)
     },
 
     build(notifyReady) {
@@ -137,17 +202,6 @@ export function RegionStep(): Step {
       // construction, and three rows is cheaper to rebuild than to keep in sync.
       const derived = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, hexpand: true })
       box.append(derived)
-
-      // ⚠️ This is the installer reaching into the session it is RUNNING IN, not
-      // into the system it is installing — which is exactly right on the live
-      // medium (you should be able to test the layout you just picked) and
-      // unacceptable on somebody's desktop, where clicking a row in a list would
-      // change the keyboard they are typing on.
-      const applyKeyboardLive = (k: KeyboardLayout) => {
-        if (isPreview()) return
-        execAsync(["hyprctl", "keyword", "input:kb_layout", k.layout]).catch(() => {})
-        execAsync(["hyprctl", "keyword", "input:kb_variant", k.variant]).catch(() => {})
-      }
 
       const rebuildDerived = () => {
         let child = derived.get_first_child()
@@ -218,40 +272,18 @@ export function RegionStep(): Step {
 
       function selectCountry(c: Country) {
         selectedCode = c.code
-        setCountryAnswer({ code: c.code, name: c.name })
+        const k = answerCountry(c)
+        if (k) applyKeyboardLive(k)
         list.repaint()
-
-        // Only what the data says unambiguously; the rest stays open and the
-        // dropdown says "Choose…". See lib/region.ts — null is the useful answer.
-        //
-        // ⚠️ The LANGUAGE is not among them any more. It was asked on the welcome
-        // page, before this one, and a country arriving later must not overwrite
-        // it — somebody living in Germany with a Spanish desktop is not a bug.
-        // The language was chosen on the welcome page; the country supplies the
-        // TERRITORY it was missing. `es` + AR → es_AR. When glibc has no locale
-        // for the pair (Spanish in Japan) the language keeps its own default,
-        // which is the honest outcome rather than an invented one.
-        const a = getAnswers()
-        if (a.language) {
-          const lang = languageFor(a.language.locale)
-          const refined = localeFor(lang.lang, c.code)
-          if (refined) {
-            const [sysLang, sysEnc] = refined.split(".")
-            setLanguageAnswer({ locale: refined, sysLang, sysEnc, label: a.language.label })
-          }
-        }
-
-        const d = defaultsFor(c.code)
-        if (d.timezone) setTimezoneAnswer({ timezone: d.timezone })
-        if (d.keyboard) {
-          const k = d.keyboard
-          setKeyboardAnswer({ layout: k.layout, variant: k.variant, keymap: k.keymap, label: k.label })
-          applyKeyboardLive(k)
-        }
-
         rebuildDerived()
         notifyReady?.()
       }
+
+      // The card the country narrows is built HERE too, not only on a click: a
+      // country can already be answered when the page opens (seeded from the
+      // language's territory, or walked back to), and a page that draws the tick
+      // but not what the tick decided is a page that looks half-loaded.
+      rebuildDerived()
 
       return box
     },

@@ -1338,6 +1338,18 @@ here and it is one wrapper mode + one tool in each consumer. Phase 1 — percept
   screenshot gate). Enabling it (via `AgentConfig.setAllowComputerUse`) also turns on
   `toolkit-accessibility`, since the capability is useless while a11y is globally off. Re-read
   live by both `nidara-a11y` and the `query_app` MCP tool.
+- ⚠️ **The 500-node cap is a TRAP when you are using the tree as an instrument.** `MAX_NODES` is
+  the whole dump, not per window, and a `GtkListBox` allocates every row whether or not it is
+  scrolled into view: the installer's 249-country list alone is ~500 nodes, so everything built
+  after it — the card below the list, the footer's buttons — simply is not in the output. Measured
+  2026-09-03, and it cost a wrong conclusion: "no combo boxes and no Continue button" read as a
+  half-built page, while the screenshot showed both. **Absent from the dump is not absent from the
+  screen.** Cross-check with `nidara-ipc screenshot` before believing a negative.
+- ⚠️ **When a click at those bounds does nothing, drive the control with the keyboard instead.**
+  Same session: the footer button and its label were both reported at the same origin, and clicks
+  landed a few pixels outside it while the tall list rows in the same window took clicks perfectly.
+  `nidara-type key <app> Tab` in a loop, reading `focused` from the tree after each press, then
+  `Return` — it reaches the control by the same route a person without a mouse would.
 - **Coverage caveat**: GTK4 exposes its tree on Wayland regardless; Qt needs `QT_ACCESSIBILITY=1`
   (which `allowComputerUse` triggers via `toolkit-accessibility`, so Qt shows a "screen-reader
   mode" banner); Chromium/Electron need `--force-renderer-accessibility`; the rest fall back to
