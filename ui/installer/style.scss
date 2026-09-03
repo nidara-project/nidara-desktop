@@ -125,6 +125,13 @@ window.nidara-installer-window {
   // without spending the red this DE reserves for recording and for failure.
   .installer-prose--warning { color: var(--nidara-text); font-weight: 500; }
 
+  // A fault reported ON its own field, inside the row, under the entry it is
+  // about (#400). One step down the ramp from page prose: it annotates a control,
+  // it does not address the page — and the row's own subtitle above it is
+  // $fs-small too, so the card keeps one text size for everything that is not a
+  // title.
+  .installer-field-error { font-size: $fs-small; }
+
   // ── Install phases ────────────────────────────────────────────────────────
   // A row per phase, and the marker carries the state. Deliberately NOT colour:
   // the accent means active/selected everywhere in this desktop, and red is spent
