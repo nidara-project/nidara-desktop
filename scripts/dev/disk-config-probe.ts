@@ -51,6 +51,7 @@
 
 import { entireDiskConfig, manualDiskConfig, espMount } from "../../ui/installer/lib/disk-config"
 import { loaderRoot } from "../../ui/installer/lib/bootloader"
+import { swapFstabEntry } from "../../ui/installer/lib/swap"
 import type {
   EntireDiskAnswer,
   FilesystemType,
@@ -412,6 +413,38 @@ for (const c of LOADER_CASES) {
   const got = loaderRoot({ disk: c.answer } as any)
   print(`   ${got.padEnd(16)} ${c.name}`)
   if (got !== c.want) fail(c.name, `loaderRoot returned ${got}, expected ${c.want}`)
+}
+
+
+// ─── THE SWAP LINE THE INSTALLED SYSTEM GETS ─────────────────────────────────
+//
+// `genfstab -pU -f /mnt` skips swap PARTITIONS — its prefix filter is written for
+// swap files, and `/dev/vda3` never starts with /mnt — so the entry is ours to
+// write (lib/swap.ts). It is checked here because the field ORDER is the whole
+// risk: fstab is positional, and `none swap` the wrong way round is a line the
+// machine reads at every boot and cannot make sense of. The padding is genfstab's
+// so that the file stays one file rather than two styles.
+
+const FSTAB_CASES = [
+  { dev: "/dev/vda3", uuid: "b1c5e0a6-9f3d-4c2e-9a77-2f0e1d3b4c5d" },
+  { dev: "/dev/nvme0n1p3", uuid: "0e5f2a11-77bd-4b0e-9c8a-1122334455ff" },
+]
+
+print("")
+for (const c of FSTAB_CASES) {
+  const entry = swapFstabEntry(c.dev, c.uuid)
+  const lines = entry.split("\n")
+  print(`   ${JSON.stringify(entry)}`)
+
+  if (lines[0] !== `# ${c.dev}`) fail(c.dev, `comment line is ${JSON.stringify(lines[0])}`)
+  const fields = lines[1].trim().split(/\s+/)
+  const want = [`UUID=${c.uuid}`, "none", "swap", "defaults", "0", "0"]
+  if (fields.length !== want.length || fields.some((f, i) => f !== want[i])) {
+    fail(c.dev, `fields are ${JSON.stringify(fields)}, expected ${JSON.stringify(want)}`)
+  }
+  // A blank line after the entry, like every block genfstab writes — so the next
+  // one appended does not land on the same line as this one.
+  if (!entry.endsWith("\n\n")) fail(c.dev, "entry does not end with a blank line")
 }
 
 print(failures === 0 ? "\nALL INVARIANTS HOLD" : `\n${failures} FAILURE(S)`)

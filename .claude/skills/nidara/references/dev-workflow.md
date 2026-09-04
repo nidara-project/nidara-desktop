@@ -449,8 +449,17 @@ far along it.
 
 ⚠️ **Swap is not a mount point**, and saying it was is the bug this deleted (#423): the row goes out
 with `mountpoint: null` and `fs_type: "linux-swap"`, which is how `_mount_partition` reaches its
-`swapon` branch and `device_handler.format` reaches `mkswap`. genfstab writes the entry from
-`/proc/swaps`.
+`swapon` branch and `device_handler.format` reaches `mkswap`.
+
+⚠️ **genfstab does NOT write the entry, and the installed machine has swap anyway** — two facts that
+look contradictory and are both true (measured, VM 2026-09-04). archinstall runs
+`genfstab -pU -f /mnt /mnt`, and genfstab's prefix filter (`[[ $device = "$prefixfilter"* ]] ||
+continue`) is written for swap FILES: a `/mnt/swapfile` starts with the prefix, `/dev/vda3` never
+does, so every archinstall install with a swap PARTITION is missing that line. What turns it on at
+boot is `systemd-gpt-auto-generator`, off the GPT partition TYPE — the discoverable swap GUID
+survives archinstall's delete-and-recreate. `lib/swap.ts` writes the entry ourselves, in genfstab's
+own column shape and keyed by UUID, so the machine declares what it has instead of relying on a
+mechanism nobody chose; the UUID check means an upstream fix would not produce a duplicate.
 
 ⚠️ **Which partition is the ESP is `espMount()`, exported from `lib/disk-config.ts`, and there is
 one of it.** Four places need that answer — the page that refuses a non-FAT ESP, the summary that
