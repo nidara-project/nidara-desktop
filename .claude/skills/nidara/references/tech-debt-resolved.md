@@ -18,6 +18,33 @@ one of these describes, read it first.
 
 ---
 
+### 102 (the second one — the number was reused by a slip; cite it by title). In MANUAL mode the bootloader patching was a silent no-op whenever the ESP was not at /boot — FIXED with the migration that removed the question (2026-09-04)
+
+`lib/bootloader.ts` patches the loader entries the install produced — the titles, the kernel
+cmdline (`quiet splash …`) and `loader.conf`'s timeout. Every one of those paths was written
+`/mnt/boot/loader/…`, hardcoded.
+
+That is correct in entire-disk mode, where the ESP is ours to place and we place it at `/boot`.
+The disk page's manual mode offers **three** EFI mount points — `/boot`, `/boot/efi` and `/efi` —
+and on the other two `/mnt/boot/loader/entries/*.conf` does not exist. The `sed` glob then matched
+nothing, `cat > /mnt/boot/loader/loader.conf` wrote a file no bootloader reads, and the machine
+booted with the stock Arch title, no splash and no timeout policy.
+
+🔑 **What made it silent rather than loud**: each of the three blocks is wrapped in a `try` whose
+`catch` appends `[BOOTLOADER] Note: … skipped`, and the first one additionally ends in
+`2>/dev/null || true`. A user reading the log saw three "Note:" lines that look like the normal
+absence of something optional. Nothing distinguished "there was nothing to rename" from "we were
+writing into the wrong directory the whole time".
+
+**Fixed as the entry said it should be**, with the manual-mode migration rather than by globbing
+all three paths: `espMount()` in `lib/disk-config.ts` is now the single answer to "which partition
+is the ESP", and `loaderRoot()` derives `/mnt<mountpoint>` from it. The rule that still binds: the
+page that validates the ESP, the layout that flags it for archinstall, the summary that names it
+and the bootloader that patches it must all ask the same function. Four spellings of one rule is
+what produced this.
+
+---
+
 ### 93. About's key column was a fixed width — FIXED the same day it was found (2026-08-25)
 
 `AboutWindow`'s spec rows are `[key | value]`, and the key label sat on a hardcoded 80px width

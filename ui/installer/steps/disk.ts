@@ -28,6 +28,7 @@ import {
   type FilesystemType,
   type ManualPartitionMount,
 } from "../lib/answers"
+import { espMount } from "../lib/disk-config"
 import { heading, prose, formatSize } from "./common"
 
 interface RawBlockDevice {
@@ -41,6 +42,7 @@ interface RawBlockDevice {
   type: string
   rm?: boolean | string | number
   pkname?: string | null
+  start?: number | string | null
   "log-sec"?: number | string
   children?: RawBlockDevice[]
 }
@@ -77,19 +79,40 @@ function listDisks(): BlockDevice[] {
 interface DetectedPartition {
   name: string
   path: string
+  /** The disk it is on, taken from the parent node of the tree — see ManualPartitionMount. */
+  device: string
+  /** Start offset in BYTES. lsblk reports it in 512-byte units; converted here, once. */
+  start: number
   size: number
+  logicalSectorSize: number
   fstype: string | null
   label: string | null
   pkname: string | null
 }
 
+/**
+ * ⚠️ `START` is in 512-byte sectors ALWAYS — it is `/sys/class/block/<part>/start`,
+ * which the kernel publishes in fixed 512-byte units whatever the drive's own
+ * logical sector size. Multiplying by `LOG-SEC` would put every partition of a
+ * 4Kn drive eight times too far along the disk, and manual mode now sends these
+ * numbers to archinstall, which re-creates the partition at them when the row is
+ * formatted.
+ */
+const LSBLK_SECTOR = 512
+
 function listPartitions(): DetectedPartition[] {
   try {
-    const raw = exec(["lsblk", "-J", "-b", "-o", "NAME,PATH,SIZE,FSTYPE,LABEL,MOUNTPOINT,TYPE,PKNAME"])
+    const raw = exec([
+      "lsblk", "-J", "-b", "-o",
+      "NAME,PATH,SIZE,FSTYPE,LABEL,MOUNTPOINT,TYPE,PKNAME,START,LOG-SEC",
+    ])
     const parsed = JSON.parse(raw)
     const results: DetectedPartition[] = []
 
-    const walk = (items: RawBlockDevice[]) => {
+    // The parent is carried down rather than derived from the name: `nvme0n1p2`
+    // does not become `nvme0n1` by dropping digits, and a partition's device is
+    // the node it hangs from in this very tree.
+    const walk = (items: RawBlockDevice[], parent: RawBlockDevice | null) => {
       for (const item of items) {
         if (item.type === "part") {
           // Exclude live session mounts
@@ -98,18 +121,21 @@ function listPartitions(): DetectedPartition[] {
             results.push({
               name: item.name,
               path: item.path,
+              device: parent?.path || (item.pkname ? `/dev/${item.pkname}` : ""),
+              start: (Number(item.start) || 0) * LSBLK_SECTOR,
               size: typeof item.size === "number" ? item.size : Number(item.size) || 0,
+              logicalSectorSize: Number(item["log-sec"] ?? parent?.["log-sec"]) || 512,
               fstype: item.fstype || null,
               label: item.label || null,
               pkname: item.pkname || null,
             })
           }
         }
-        if (item.children) walk(item.children)
+        if (item.children) walk(item.children, item)
       }
     }
 
-    walk(parsed.blockdevices ?? [])
+    walk(parsed.blockdevices ?? [], null)
     return results
   } catch (e) {
     console.error("[Installer] Failed to list partitions:", e)
@@ -188,16 +214,25 @@ function manualProblems(mounts: ManualPartitionMount[]): string[] {
   // outright, an install that finishes and then does not boot.
   //
   // Which mount IS the ESP depends on the layout, and getting that wrong would
-  // refuse a valid one: with /boot/efi or /efi assigned, THAT is the ESP and
-  // /boot is an ordinary boot partition which may legitimately be ext4. Only
-  // when /boot is the sole EFI-ish mount is /boot itself the ESP.
-  const esp = mounts.find(m => m.mountpoint === "/boot/efi" || m.mountpoint === "/efi")
-    ?? mounts.find(m => m.mountpoint === "/boot")
+  // refuse a valid one — the rule is `espMount`, shared with the layout that has
+  // to flag that partition for archinstall, the summary that names it, and the
+  // bootloader patching that has to write into it. Four answers that must agree,
+  // so there is one.
+  const esp = espMount(mounts)
   // Formatting it settles the question; keeping it means what lsblk already
   // reports has to be FAT — including the case where it reports nothing at all,
   // which is not a filesystem the firmware can read either.
   if (esp && (esp.format ? esp.filesystem !== "vfat" : esp.fsType !== "vfat")) {
     problems.push(t("diskErrEfiNotFat"))
+  }
+
+  // ⚠️ Swap is the one row whose filesystem is not a choice, so an untick means
+  // "it is already swap" — and if it is not, archinstall has nothing to activate:
+  // a partition with no mount point and a type that is not `linux-swap` is
+  // silently skipped, and the machine boots with no swap at all. That is the same
+  // shape as the ESP check above: an answer accepted and then quietly dropped.
+  if (mounts.some(m => m.mountpoint === "swap" && !m.format && m.fsType !== "swap")) {
+    problems.push(t("diskErrSwapNotSwap"))
   }
 
   const seen = new Set<string>()
@@ -566,27 +601,57 @@ export function DiskStep(): Step {
           const curFsIdx = currentEntry ? FS_OPTIONS.indexOf(currentEntry.filesystem) : 0
           fsDropDown.set_selected(curFsIdx >= 0 ? curFsIdx : 0)
 
+          // ── The swap row has no filesystem question ────────────────────────
+          //
+          // On every other row the dropdown is the answer to "formatted as what";
+          // on a swap row the answer is fixed — `mkswap`, which is not in the list
+          // and never was. The column used to sit there offering btrfs over a
+          // partition that would be formatted as swap: a control showing a value
+          // that was not going to be used, which is the same lie as a greyed
+          // control still displaying one (#423).
+          //
+          // So the model itself changes, and the last real choice is kept to be
+          // restored if the row stops being swap. `swapping` is not decoration:
+          // `set_model` moves the selection and re-enters the handler below.
+          const swapStringList = Gtk.StringList.new(["swap"])
+          let showingSwapFs = false
+          let swapping = false
+          let lastFsIdx = fsDropDown.get_selected()
+          const setFsModel = (isSwap: boolean) => {
+            if (isSwap === showingSwapFs) return
+            swapping = true
+            showingSwapFs = isSwap
+            fsDropDown.set_model(isSwap ? swapStringList : fsStringList)
+            fsDropDown.set_selected(isSwap ? 0 : lastFsIdx)
+            swapping = false
+          }
+
           // The same rule `updatePartitionState` keeps, applied to the state the
           // row is BORN in — a page rebuilt from existing answers (walking back to
           // this step, or changing the language) has rows that are already
           // answered, and had they only been sensitive after a change, half the
           // table would have opened greyed out.
           const initialMount = MOUNT_OPTIONS[initialMountIdx]?.mountpoint ?? ""
+          setFsModel(initialMount === "swap")
           formatCheck.set_sensitive(initialMount !== "")
-          fsDropDown.set_sensitive(initialMount !== "" && formatCheck.active)
+          fsDropDown.set_sensitive(
+            initialMount !== "" && initialMount !== "swap" && formatCheck.active)
 
           const updatePartitionState = () => {
             const selIdx = mountDropDown.get_selected()
             const chosenMount = MOUNT_OPTIONS[selIdx]?.mountpoint ?? ""
             const shouldFormat = formatCheck.active
-            const chosenFs = FS_OPTIONS[fsDropDown.get_selected()] || "btrfs"
+            const isSwap = chosenMount === "swap"
+            if (!isSwap && !showingSwapFs) lastFsIdx = fsDropDown.get_selected()
+            setFsModel(isSwap)
+            const chosenFs = (!isSwap && FS_OPTIONS[fsDropDown.get_selected()]) || "btrfs"
 
             // The rest of the row answers a question the mount point asks. With no
             // mount point there is no question: the partition is not part of this
             // install, and a live "Format" tick on it is a control that does
             // nothing — which on THIS page reads as a promise to erase something.
             formatCheck.set_sensitive(chosenMount !== "")
-            fsDropDown.set_sensitive(chosenMount !== "" && shouldFormat)
+            fsDropDown.set_sensitive(chosenMount !== "" && !isSwap && shouldFormat)
 
             if (!chosenMount) {
               manualMounts.delete(p.path)
@@ -594,7 +659,10 @@ export function DiskStep(): Step {
               manualMounts.set(p.path, {
                 name: p.name,
                 path: p.path,
+                device: p.device,
+                start: p.start,
                 size: p.size,
+                logicalSectorSize: p.logicalSectorSize,
                 fsType: p.fstype,
                 label: p.label,
                 mountpoint: chosenMount,
@@ -621,12 +689,20 @@ export function DiskStep(): Step {
               if (formatCheck.active && vfatIdx >= 0) fsDropDown.set_selected(vfatIdx)
             } else if (chosenMount === "/") {
               formatCheck.active = true
+            } else if (chosenMount === "swap") {
+              // Same shape as the ESP default above: a partition that is already
+              // swap is left alone, one that is not has to be made into swap
+              // before anything can be activated on it.
+              formatCheck.active = p.fstype !== "swap"
             }
             updatePartitionState()
           })
 
           formatCheck.connect("toggled", updatePartitionState)
-          fsDropDown.connect("notify::selected", updatePartitionState)
+          fsDropDown.connect("notify::selected", () => {
+            if (swapping) return
+            updatePartitionState()
+          })
 
           table.appendRow([
             p.path,
@@ -640,6 +716,13 @@ export function DiskStep(): Step {
       }
 
       buildPartitionsList()
+      // ⚠️ And SAY what is still missing, on arrival. Every other path into this
+      // label goes through `syncAnswer`, which only runs when a control changes —
+      // so a page rebuilt from answers that are already there (walking back from
+      // the account step, or changing the language) came up with an empty warning
+      // area and a dead Continue button. That is D-16 again through a side door:
+      // the refusal was visible only to whoever had just caused it.
+      refreshProblems()
 
       // ⚠️ UNDER the table, aligned to its right edge — the toolbar position every
       // table with actions uses, and the fix for D-18. These two used to lead the

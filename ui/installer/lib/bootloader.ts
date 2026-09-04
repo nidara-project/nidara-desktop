@@ -1,6 +1,30 @@
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+import { espMount } from "./disk-config"
 import type { Answers } from "./answers"
+
+/**
+ * Where, under /mnt, the loader configuration this function edits actually lives.
+ *
+ * ⚠️ Every path here used to be spelled `/mnt/boot`, and manual mode offers three
+ * places to put the EFI system partition (`/boot`, `/boot/efi`, `/efi`). Choose
+ * either of the other two — `/boot/efi` is the Debian/Ubuntu/Fedora spelling, so
+ * it is what somebody reusing an existing layout is most likely to pick — and
+ * archinstall installs the bootloader onto that partition while all three edits
+ * below land in an ordinary `/boot` directory on the root filesystem: renamed
+ * entries nobody reads, a silent boot nobody gets, and a `loader.conf` the
+ * firmware never sees. Nothing fails; the machine simply boots as stock Arch,
+ * fifteen seconds of menu included. (Installer study, H-03.)
+ *
+ * The two paths archinstall itself derives are `$ESP/loader/loader.conf` and
+ * `$BOOT/loader/entries` (`installer._add_systemd_bootloader`,
+ * `_create_bls_entries`), and $BOOT is the partition carrying the `boot` flag —
+ * which, in the layout we emit, is the ESP itself. So one answer serves both.
+ */
+function loaderRoot(answers: Answers): string {
+  if (answers.disk?.mode !== "manual") return "/mnt/boot"
+  return `/mnt${espMount(answers.disk.mounts)?.mountpoint ?? "/boot"}`
+}
 
 function runCmd(cmd: string[]): string {
   const isRoot = GLib.get_user_name() === "root"
@@ -17,10 +41,10 @@ function runCmd(cmd: string[]): string {
  * Detects whether another operating system is installed on the machine
  * (e.g. Windows EFI binaries or other OS partitions).
  */
-export function detectOtherOperatingSystems(): boolean {
+export function detectOtherOperatingSystems(loaderDir: string = "/mnt/boot"): boolean {
   // 1. Check if Windows Boot Manager exists in the EFI partition
   try {
-    if (GLib.file_test("/mnt/boot/EFI/Microsoft", GLib.FileTest.IS_DIR)) {
+    if (GLib.file_test(`${loaderDir}/EFI/Microsoft`, GLib.FileTest.IS_DIR)) {
       return true
     }
   } catch {}
@@ -57,14 +81,15 @@ export function configureInstalledBootloader(
 ) {
   if (!arm) return
 
-  appendLog("[BOOTLOADER] Configuring systemd-boot for Nidara...")
+  const loaderDir = loaderRoot(answers)
+  appendLog(`[BOOTLOADER] Configuring systemd-boot for Nidara (${loaderDir})...`)
 
   // 1. Rename 'Arch Linux' -> 'Nidara' in loader entries
   try {
     runCmd([
       "bash",
       "-c",
-      "sed -i 's/^title\\s\\+Arch Linux/title\\tNidara/' /mnt/boot/loader/entries/*.conf 2>/dev/null || true",
+      `sed -i 's/^title\\s\\+Arch Linux/title\\tNidara/' ${loaderDir}/loader/entries/*.conf 2>/dev/null || true`,
     ])
     appendLog("[BOOTLOADER] Updated bootloader entries title to Nidara.")
   } catch (e: any) {
@@ -104,7 +129,7 @@ export function configureInstalledBootloader(
     runCmd([
       "bash",
       "-c",
-      `for f in /mnt/boot/loader/entries/*.conf; do
+      `for f in ${loaderDir}/loader/entries/*.conf; do
         if [ -f "$f" ] && ! grep -q "quiet" "$f"; then
           sed -i '/^options/ s/$/ ${silentParams}/' "$f"
         fi
@@ -117,13 +142,13 @@ export function configureInstalledBootloader(
 
   // 3. Configure loader.conf with smart timeout
   try {
-    const hasOtherOS = detectOtherOperatingSystems() || answers.disk?.mode === "manual"
+    const hasOtherOS = detectOtherOperatingSystems(loaderDir) || answers.disk?.mode === "manual"
     const timeout = hasOtherOS ? 3 : 0
 
     runCmd([
       "bash",
       "-c",
-      `cat > /mnt/boot/loader/loader.conf << 'EOF'
+      `cat > ${loaderDir}/loader/loader.conf << 'EOF'
 default @saved
 timeout ${timeout}
 console-mode keep

@@ -14,8 +14,9 @@ and leave its line in the index at the bottom of this file. It must match realit
   #42, #46 ("a DEAD END"), #52 (an idea, not a plan). **These exist to stop work, not to
   start it.** Do not "fix" one without reopening the decision with the owner.
 
-⚠️ **Two pairs of items share a number** (#37 and #38 each appear twice, from a numbering slip
-that predates the split). Cite them by title, not by number alone.
+⚠️ **Three numbers are shared** (#37 and #38 each appear twice, from a numbering slip that
+predates the split; #102 was reused on 2026-09-04, both now resolved). Cite them by title, not by
+number alone.
 
 ## Where this file stops and the issue tracker starts (2026-08-31)
 
@@ -3627,37 +3628,14 @@ Sitting alongside it, from the same review and still open: the progress bar is a
 ACCOUNT card, and `nidara-setup` creates `.config/{hypr,kitty,nidara,uwsm}` as `1000:0` (an
 `install -d` with no `-g`) while its siblings come out `1000:1000`.
 
-### 102. ⚠️ OPEN — in MANUAL mode the bootloader patching is a silent no-op whenever the ESP is not at /boot (2026-09-04)
-
-> **Queue entry: #310.** It stops existing when manual mode joins entire-disk on archinstall's side of the seam; until then it is a live defect.
-
-`lib/bootloader.ts` patches the loader entries the install produced — the titles, the kernel
-cmdline (`quiet splash …`) and `loader.conf`'s timeout. Every one of those paths is written
-`/mnt/boot/loader/…`, hardcoded.
-
-That is correct in entire-disk mode, where the ESP is ours to place and we place it at `/boot`.
-The disk page's manual mode offers **three** EFI mount points — `/boot`, `/boot/efi` and `/efi` —
-and on the other two `/mnt/boot/loader/entries/*.conf` does not exist. The `sed` glob then matches
-nothing, `cat > /mnt/boot/loader/loader.conf` writes a file no bootloader reads, and the machine
-boots with the stock Arch title, no splash and no timeout policy.
-
-🔑 **What makes it silent rather than loud**: each of the three blocks is wrapped in a `try` whose
-`catch` appends `[BOOTLOADER] Note: … skipped`, and the first one additionally ends in
-`2>/dev/null || true`. A user reading the log sees three "Note:" lines that look like the normal
-absence of something optional. Nothing distinguishes "there was nothing to rename" from "we were
-writing into the wrong directory the whole time".
-
-Do NOT fix it by globbing all three paths: the honest fix is to ask archinstall where it put the
-ESP — under `manual_partitioning` the answer is in the config we wrote — and that is the same move
-that removes the question. The fix and the migration are one change.
-
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
-number is never accidentally reused. 50 items; the split itself was 2026-08-23.
+number is never accidentally reused. 51 items; the split itself was 2026-08-23.
 
 - **#7** — `pageHeader()` removed — RESOLVED → `tech-debt-resolved.md`
 - **#102** — ✅ RESOLVED 2026-08-31 — the shell's one door raises as well as focuses; the bench is a nested Hyprland → `tech-debt-resolved.md`
+- **#102** (the second one — ⚠️ the number was reused by a slip on 2026-09-04) — ✅ RESOLVED 2026-09-04 — manual mode's bootloader patching wrote to a hardcoded /mnt/boot → `tech-debt-resolved.md`
 - **#98** — ✅ RESOLVED 2026-08-31 — About declares `nidara-about`, and the window-rule seam became a CI gate → `tech-debt-resolved.md`
 - **#9** — The per-boot Adwaita-WARNING — ✅ RESOLVED 2026-08-18 (the host went) → `tech-debt-resolved.md`
 - **#11** — Idle GPU spin on bar/dock — RESOLVED (two distinct causes) → `tech-debt-resolved.md`

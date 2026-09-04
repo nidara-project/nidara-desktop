@@ -8,7 +8,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { exec } from "../../lib/process"
 import { readBaseConfig, type BaseConfigResult, type BaseConfig } from "./base-config"
-import { entireDiskConfig } from "./disk-config"
+import { entireDiskConfig, manualDiskConfig } from "./disk-config"
 import type { Answers } from "./answers"
 
 export interface LocaleConfig {
@@ -172,24 +172,18 @@ export function assemblePlan(
     return cmd.replace(/\bSUDO_USER=[a-zA-Z0-9_-]+/, `SUDO_USER=${username}`)
   })
 
-  // ── Who owns the disk, and it is no longer both of us ─────────────────────
+  // ── Who owns the disk, and it is no longer us ─────────────────────────────
   //
-  // `entire_disk` hands archinstall the layout and lets it partition, format,
-  // create the subvolumes and mount — the same numbers we used to run by hand,
-  // written in its schema (see lib/disk-config.ts). `steps/run.ts` no longer
-  // touches the disk in that mode, and the two must stay in step: a plan that
-  // says `manual_partitioning` while `prepareDiskAndMounts` still ran would
-  // partition the disk twice, ours first and archinstall's over the top.
-  //
-  // Manual mode is still ours, and still `pre_mounted_config`: it is the next
-  // step of #310, not this one.
+  // Both modes now hand archinstall the layout and let it partition, format and
+  // mount: the same numbers we used to run by hand, written in its schema (see
+  // lib/disk-config.ts). `pre_mounted_config` is gone, and with it the last
+  // reason for `steps/run.ts` to touch a disk — a plan that describes a layout
+  // while our own partitioner also ran would write the disk twice, ours first
+  // and archinstall's over the top (#310).
   if (answers.disk?.mode === "entire_disk") {
     config.disk_config = entireDiskConfig(answers.disk)
   } else if (answers.disk) {
-    config.disk_config = {
-      config_type: "pre_mounted_config",
-      mountpoint: "/mnt",
-    }
+    config.disk_config = manualDiskConfig(answers.disk)
   }
 
   // ── Root is left as Arch leaves it, and that is a decision ────────────────

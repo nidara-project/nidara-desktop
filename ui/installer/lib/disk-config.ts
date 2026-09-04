@@ -45,7 +45,12 @@
 // read past.
 
 import GLib from "gi://GLib"
-import type { EntireDiskAnswer, FilesystemType } from "./answers"
+import type {
+  EntireDiskAnswer,
+  FilesystemType,
+  ManualDiskAnswer,
+  ManualPartitionMount,
+} from "./answers"
 
 const MIB = 1024 * 1024
 
@@ -55,10 +60,18 @@ interface SectorSize {
   unit: "B"
 }
 
-/** `{value, unit, sector_size}` — archinstall's `Size`. */
+/**
+ * `{value, unit, sector_size}` — archinstall's `Size`.
+ *
+ * Two units are in play and both are its own (`Unit`): entire-disk mode writes
+ * MiB because that is what `suggest_single_disk_layout` computes in and what its
+ * alignment check is about, and manual mode writes bytes because that is what
+ * `lsblk` reports about partitions that already exist and rounding them would
+ * move them.
+ */
 interface ArchSize {
   value: number
-  unit: "MiB"
+  unit: "MiB" | "B"
   sector_size: SectorSize
 }
 
@@ -69,14 +82,20 @@ interface Subvolume {
 
 interface Partition {
   obj_id: string
-  status: "create"
+  /**
+   * `create` writes a partition that is not there yet; `existing` and `modify`
+   * both name one that is, and the difference between them is the Format tick —
+   * see `manualDiskConfig`.
+   */
+  status: "create" | "existing" | "modify"
   type: "primary"
   start: ArchSize
   size: ArchSize
   fs_type: string | null
   mountpoint: string | null
   mount_options: string[]
-  dev_path: null
+  /** Null for a partition being created; the device for one that already exists. */
+  dev_path: string | null
   flags: string[]
   btrfs: Subvolume[]
 }
@@ -195,5 +214,144 @@ export function entireDiskConfig(answer: EntireDiskAnswer): DiskConfig {
         partitions: [esp, root],
       },
     ],
+  }
+}
+
+// ─── MANUAL MODE ─────────────────────────────────────────────────────────────
+//
+// The other half of #310, and the one that deletes code rather than adding it:
+// until now `steps/run.ts` ran `mkfs.*` and `mount` for every row of the manual
+// table and archinstall was handed a finished `/mnt` (`pre_mounted_config`).
+// Three of the four level-1 findings of the installer study lived in those forty
+// lines, and none of them survives the move:
+//
+//   · H-02 — `swap` was a mount POINT like any other, so we ran `mkfs.ext4` over
+//     the partition and then `mount /dev/… /mnt/swap`. archinstall knows swap is
+//     not a place: `mkswap` on format, `swapon` on mount, and genfstab writes the
+//     entry (`installer._mount_partition`, `device_handler.format`).
+//   · H-04's sibling, the ESP path: what patches the bootloader afterwards now
+//     reads the ESP's mount point from the same answer this file does, instead of
+//     assuming /boot (lib/bootloader.ts).
+//   · And the arm/dry-run split, which had three commands escaping it, stops
+//     existing along with the commands.
+//
+// ⚠️ **`modify` is a DELETE and a re-create, not an in-place mkfs.** It is what
+// upstream's own partitioning menu sets when you tick format on an existing
+// partition (`partitioning_menu._prompt_formatting`), and `_setup_partition`
+// then deletes the partition and adds it back at the start and length from this
+// JSON before formatting it. Two consequences, both deliberate:
+//
+//   · The numbers must be EXACT, which is why `start` and `size` are carried in
+//     bytes from `lsblk` and not recomputed from anything.
+//   · parted re-adds it under `optimalAlignedConstraint`, so a legacy partition
+//     that does not sit on a MiB boundary is REFUSED — before `disk.commit()`,
+//     so nothing has been written — where we used to reformat it quietly. That is
+//     upstream's behaviour for every archinstall user who ticks format, and this
+//     is what adopting it means.
+//
+// A row without the tick is `existing`: archinstall skips it in both
+// `partition()` and `_format_partitions()` and only mounts it.
+
+/**
+ * Which of the assigned mounts holds the EFI system partition, if any.
+ *
+ * The rule is one rule and it lives here because three places need the same
+ * answer and disagreeing would be silent: the page that refuses a non-FAT ESP,
+ * the layout below that has to flag it `boot`/`esp` for archinstall to find it,
+ * and the bootloader patching that has to write into the partition archinstall
+ * actually installed onto.
+ *
+ * With `/boot/efi` or `/efi` assigned, THAT is the ESP and `/boot` is an ordinary
+ * boot partition which may legitimately not be FAT. Only when `/boot` is the sole
+ * EFI-ish mount is `/boot` itself the ESP.
+ */
+export function espMount(mounts: readonly ManualPartitionMount[]): ManualPartitionMount | undefined {
+  return mounts.find(m => m.mountpoint === "/boot/efi" || m.mountpoint === "/efi")
+    ?? mounts.find(m => m.mountpoint === "/boot")
+}
+
+/**
+ * What `lsblk` says is on a partition, in archinstall's vocabulary — for the rows
+ * that are NOT being formatted, where the filesystem is a fact rather than a
+ * choice.
+ *
+ * ⚠️ An unknown value is `null`, never a guess. `FilesystemType(<value>)` raises
+ * on anything outside its own enum, and that exception lands as a configuration
+ * archinstall refuses *after* every question has been answered. `null` is
+ * allowed for an existing partition (only `modify` demands a type), it is what
+ * upstream itself stores for a filesystem it does not model, and `mount` detects
+ * the type by itself anyway.
+ */
+function existingFsType(fsType: string | null): string | null {
+  switch (fsType) {
+    case "btrfs": case "ext2": case "ext3": case "ext4":
+    case "f2fs": case "ntfs": case "xfs":
+      return fsType
+    // lsblk cannot tell FAT12/16/32 apart under `FSTYPE`; the distinction is only
+    // ever asked as `is_fat()`, which all three answer the same way.
+    case "vfat":
+      return "fat32"
+    case "swap":
+      return "linux-swap"
+    default:
+      return null
+  }
+}
+
+/**
+ * Build the `disk_config` for manual mode: the rows of the table, in archinstall's
+ * schema, grouped by the disk each partition is on.
+ */
+export function manualDiskConfig(answer: ManualDiskAnswer): DiskConfig {
+  const assigned = answer.mounts.filter(m => m.mountpoint !== "")
+  const esp = espMount(assigned)
+
+  const byDevice = new Map<string, Partition[]>()
+
+  for (const m of assigned) {
+    const sector_size: SectorSize = { value: m.logicalSectorSize, unit: "B" }
+    const bytes = (value: number): ArchSize => ({ value, unit: "B", sector_size })
+
+    // Swap is not a place, so it has no mount point — `_mount_partition` reaches
+    // its `swapon` branch precisely by finding none and a `linux-swap` type.
+    const isSwap = m.mountpoint === "swap"
+
+    const partition: Partition = {
+      obj_id: GLib.uuid_string_random(),
+      status: m.format ? "modify" : "existing",
+      type: "primary",
+      start: bytes(m.start),
+      size: bytes(m.size),
+      fs_type: m.format
+        ? (isSwap ? "linux-swap" : fsType(m.filesystem))
+        : existingFsType(m.fsType),
+      mountpoint: isSwap ? null : m.mountpoint,
+      // Deliberately none, which is what the hand-rolled `mount` passed. The
+      // subvolumes and `compress=zstd` of entire-disk mode are not here: a manual
+      // root is the layout the person brought, and giving it ours would be a
+      // product decision taken in a translation function.
+      mount_options: [],
+      dev_path: m.path,
+      // What makes archinstall find the ESP at all (`get_efi_partition` filters on
+      // this flag); on a real EFI partition it is also what the GPT already says.
+      flags: esp && m.path === esp.path ? ["boot", "esp"] : [],
+      btrfs: [],
+    }
+
+    const partitions = byDevice.get(m.device)
+    if (partitions) partitions.push(partition)
+    else byDevice.set(m.device, [partition])
+  }
+
+  return {
+    config_type: "manual_partitioning",
+    device_modifications: [...byDevice].map(([device, partitions]) => ({
+      device,
+      // ⚠️ Never. This is the mode whose whole promise is that everything not
+      // named in the table is left alone, and `wipe` writes a fresh GPT over the
+      // entire disk.
+      wipe: false,
+      partitions,
+    })),
   }
 }

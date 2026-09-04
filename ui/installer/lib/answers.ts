@@ -34,7 +34,30 @@ export interface EntireDiskAnswer {
 export interface ManualPartitionMount {
   name: string
   path: string
+  /**
+   * The disk this partition lives on — `/dev/sda` for `/dev/sda2`.
+   *
+   * archinstall's schema is a list of DEVICE modifications, each carrying its own
+   * partitions, so a manual layout spread over two disks is two entries and not
+   * one flat list. Taken from the parent node of the same `lsblk` tree the row
+   * came from rather than rebuilt from the partition's name, because "strip the
+   * digits" is wrong for `nvme0n1p2` and for every mapper name.
+   */
+  device: string
+  /**
+   * Where the partition starts on that disk, in BYTES.
+   *
+   * Not cosmetic: ticking Format sends the partition to archinstall as `modify`,
+   * and a modify is a DELETE followed by a create at exactly these numbers
+   * (`device_handler._setup_partition`). A start that is off by a sector is a
+   * partition recreated in the wrong place. `lsblk` reports it in 512-byte units
+   * whatever the drive's own sector size, so the conversion happens where it is
+   * read — see steps/disk.ts.
+   */
+  start: number
   size: number
+  /** Logical sector size of the disk, for archinstall's `Size` objects. */
+  logicalSectorSize: number
   fsType: string | null
   label: string | null
   mountpoint: string // "/", "/boot", "/boot/efi", "/efi", "/home", "swap"

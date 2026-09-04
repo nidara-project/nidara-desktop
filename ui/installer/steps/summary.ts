@@ -16,10 +16,23 @@ import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { NidaraList, NidaraRow } from "../../lib/nidara-kit"
 import { t, onLocaleChange } from "../lib/i18n"
-import { getAnswers } from "../lib/answers"
+import { getAnswers, type ManualPartitionMount } from "../lib/answers"
 import { getLiveDefaults } from "../lib/plan"
+import { espMount } from "../lib/disk-config"
 import { readBaseConfig, basePackages, type BaseConfig } from "../lib/base-config"
 import { heading, prose, formatSize } from "./common"
+
+/**
+ * What a row will actually be formatted as.
+ *
+ * ⚠️ Not `m.filesystem` on a swap row. The filesystem dropdown does not offer
+ * swap — it cannot, the answer is `mkswap` — so a swap row carries whatever the
+ * dropdown happened to hold, and this page would announce that a partition is
+ * about to be erased as "btrfs" while archinstall makes it swap.
+ */
+function targetFs(m: ManualPartitionMount): string {
+  return m.mountpoint === "swap" ? "swap" : m.filesystem
+}
 
 /** `config.a.b` without throwing on a config that does not have an `a`. */
 function pick(config: BaseConfig, path: string[]): unknown {
@@ -105,7 +118,7 @@ export function SummaryStep(): Step {
           if (formatted.length > 0) {
             erase = t("summaryErasePartsPrefix") + "\n"
               + formatted
-                .map(m => `${m.path}  ·  ${formatSize(m.size)}  ·  ${m.mountpoint}  ·  ${m.filesystem}`)
+                .map(m => `${m.path}  ·  ${formatSize(m.size)}  ·  ${m.mountpoint}  ·  ${targetFs(m)}`)
                 .join("\n")
           }
         }
@@ -135,7 +148,7 @@ export function SummaryStep(): Step {
             // No `toLowerCase()` anywhere near a translated string: German
             // capitalises its nouns, so "Formatieren" lowercased is a misspelling.
             const breakdown = disk.mounts
-              .map(m => `${m.mountpoint}  ·  ${m.path}  ·  ${formatSize(m.size)}  ·  ${m.format ? `${m.filesystem} · ${t("diskFormat")}` : t("diskKeep")}`)
+              .map(m => `${m.mountpoint}  ·  ${m.path}  ·  ${formatSize(m.size)}  ·  ${m.format ? `${targetFs(m)} · ${t("diskFormat")}` : t("diskKeep")}`)
               .join("\n")
             chosen.listBox.append(NidaraRow(t("summaryPartitionLayout"), breakdown))
           }
@@ -216,8 +229,11 @@ export function SummaryStep(): Step {
             if (disk?.mode === "entire_disk") {
               where = t("summaryEfiNew")
             } else if (disk?.mode === "manual") {
-              const esp = disk.mounts.find(m =>
-                m.mountpoint === "/boot" || m.mountpoint === "/boot/efi" || m.mountpoint === "/efi")
+              // The same `espMount` the disk page validates with and the layout
+              // flags with — a fourth spelling of "which one is the ESP" is a
+              // fourth chance for this page to name a different partition than the
+              // one the bootloader lands on.
+              const esp = espMount(disk.mounts)
               if (esp) where = `${esp.mountpoint} · ${esp.path}`
             }
             decided.listBox.append(NidaraRow(
