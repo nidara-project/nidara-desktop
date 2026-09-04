@@ -414,29 +414,60 @@ title, and the day someone translates it, CI says which rule they broke.
 later "clean" kitty coming up 2544x1284 and looking like a regression, with the clamp switched off.
 Every arm needs `-o remember_window_size=no -o initial_window_width=… -o initial_window_height=…`.
 
-### Who owns the disk — and it is being handed BACK, one mode at a time
+### Who owns the disk — archinstall, in both modes
 
 Between 2026-08-28 and 2026-09-04 this bundle partitioned with its own hands: `steps/run.ts` ran
 `sgdisk --zap-all`, `mkfs.*`, `mount` and the Btrfs subvolume layout, and archinstall was handed a
 `/mnt` already made (`pre_mounted_config`). That was never a decision anybody wrote down — it
 arrived inside PR #281, whose message is about sidebar metrics — and three of the four level-1
-findings of the installer review lived in it. **#310 reverses it**, and the reversal is in steps:
+findings of the installer review lived in it. **#310 reversed it**, one mode at a time:
 
-| mode | who writes the disk | since |
+| mode | what `lib/disk-config.ts` emits | since |
 |---|---|---|
-| entire disk | **archinstall**, from a `manual_partitioning` layout we emit (`lib/disk-config.ts`) | 2026-09-04 |
-| manual | still `steps/run.ts` + `pre_mounted_config` | — |
+| entire disk | `manual_partitioning`, two partitions with status `create`, `wipe: true` | 2026-09-04 |
+| manual | `manual_partitioning`, the assigned rows as `existing`/`modify`, `wipe: false` | 2026-09-04 |
 
-⚠️ **The two halves of that table are ONE decision in TWO files.** `assemblePlan` picks the
-`disk_config`, and `startInstall` decides whether `prepareDiskAndMounts` runs. Changing one without
-the other partitions the disk twice — ours first, archinstall's over the top.
+**`steps/run.ts` no longer touches a disk in either mode**, and `pre_mounted_config` is gone from
+the bundle. What it spawns is one process.
+
+⚠️ **In manual mode the Format tick is the whole difference between two archinstall words**, and
+the one it maps to is not an in-place `mkfs`:
+
+- unticked → `status: "existing"`. Skipped by both `device_handler.partition()` and
+  `_format_partitions()`; only mounted.
+- ticked → `status: "modify"`, which **deletes the partition and re-creates it** at the start and
+  length from our JSON before formatting it (`_setup_partition`, `requires_delete = not wipe`).
+  It is what upstream's own menu sets when you tick format (`partitioning_menu._prompt_formatting`),
+  and it has two consequences: the geometry must be EXACT — `start` and `size` are transcribed from
+  `lsblk` in bytes, never recomputed — and parted re-adds it under `optimalAlignedConstraint`, so a
+  legacy partition that does not sit on a MiB boundary is refused before `disk.commit()` rather than
+  quietly reformatted.
+
+⚠️ `lsblk`'s `START` is in **512-byte sectors always** (it is `/sys/.../start`), whatever `LOG-SEC`
+says. Multiplying by the drive's own sector size puts every partition of a 4Kn disk eight times too
+far along it.
+
+⚠️ **Swap is not a mount point**, and saying it was is the bug this deleted (#423): the row goes out
+with `mountpoint: null` and `fs_type: "linux-swap"`, which is how `_mount_partition` reaches its
+`swapon` branch and `device_handler.format` reaches `mkswap`. genfstab writes the entry from
+`/proc/swaps`.
+
+⚠️ **Which partition is the ESP is `espMount()`, exported from `lib/disk-config.ts`, and there is
+one of it.** Four places need that answer — the page that refuses a non-FAT ESP, the summary that
+names it, the layout that flags it `boot`/`esp` (without the flag `get_efi_partition()` returns
+None and the install stops *after* pacstrap), and the bootloader patching that has to write into
+the partition archinstall installed onto. They disagreed silently before.
 
 ⚠️ `manual_partitioning` has no "the rest of the disk": every partition is an absolute start and an
 absolute length, and `parse_arg` refuses four kinds of wrong (first partition below 1 MiB,
 overlaps, a start or length that is not MiB-aligned, a last partition reaching into the backup GPT
-header) — at the worst moment, after every question has been answered. So the sums are copied from
-upstream's own `suggest_single_disk_layout`, the disk's `LOG-SEC` is collected for them, and
-`scripts/dev/disk-config-probe.ts` checks them against real capacities without going near a disk.
+header) — at the worst moment, after every question has been answered. Those four apply **only to
+partitions with status `create`**, so they are entire-disk mode's problem: the sums are copied from
+upstream's own `suggest_single_disk_layout` and the disk's `LOG-SEC` is collected for them.
+`scripts/dev/disk-config-probe.ts` checks both modes against real capacities and real tables without
+going near a disk. ⚠️ Its manual half was blind until a case with a **misaligned** partition was
+added — every layout in it started on a MiB boundary, so a translation that rounded the geometry
+produced identical output and the probe still said ALL INVARIANTS HOLD.
 ⚠️ With subvolumes the root partition takes `mountpoint: null` — the mountpoints belong to the
 subvolumes, and giving it one as well mounts the root twice.
 
@@ -446,8 +477,12 @@ Our layout is unchanged by the move, which is the whole reason it was affordable
 with, and it is a property of that layout, not of archinstall.
 
 `lib/bootloader.ts` still writes the loader entries' titles, the kernel cmdline and the timeout
-afterwards, in both modes: `Installer.__exit__` does not unmount, so `/mnt/boot` is still there
-when archinstall exits. (It also wrote `plymouthd.conf`, the mkinitcpio hook and the watchdog
+afterwards, in both modes: `Installer.__exit__` does not unmount, so the ESP is still mounted when
+archinstall exits. ⚠️ Its paths were hardcoded to `/mnt/boot` until 2026-09-04, and manual mode
+offers three places to put the ESP: pick `/boot/efi` (the Debian/Ubuntu/Fedora spelling) and all
+three edits landed in a plain `/boot` directory on the root filesystem while the bootloader went to
+the ESP — no error, no missing file, just a machine that boots as stock Arch with a 15-second menu
+(installer study, H-03). `loaderRoot()` derives it from the same `espMount()` as everything else. (It also wrote `plymouthd.conf`, the mkinitcpio hook and the watchdog
 drop-ins until 2026-08-30, when those moved to the `nidara-system` package — see below.)
 
 The `arm` question is load-bearing either way — archinstall gets `--dry-run` when we are not
@@ -476,18 +511,16 @@ affordance: the real path is exercised by booting the ISO in a VM, which has `/r
 therefore needs no flag. Two switches where one direction is safe and the other is not is a design
 that asks to be typed wrong once.
 
-⚠️ **A dry run must touch nothing, and the gate that guarantees that lives in `runCmd`, not in
-the callers.** It was written the other way first, and the lesson is worth more than the fix:
-gating the *destructive* commands (`sgdisk`, `mkfs`) reads as sufficient and is not. It left
-three things running under the "dry run" label — the `umount -R /mnt` at the top of
-`prepareDiskAndMounts`, an explicit else-branch that mounted the chosen disk's real partitions
-"for schema validation", and the entire manual-mode mount loop, which was never inside a guard
-at all. Nothing there destroys data; all of it mutates the machine of whoever is developing the
-installer, and two of the three were wrapped in a bare `catch {}`, so it did it in silence. With
-the gate one level down, in the command runner, a branch added later cannot escape it by
-forgetting to ask — and the dry run walks the same code path, logging
-`[PREP] (dry-run, not executed) …`, which is a better description of the plan than the old
-branch ever produced.
+⚠️ **A dry run must touch nothing, and a gate over the *destructive* commands is not that.** The
+partitioner this lesson comes from is gone — `arm` now reaches only `archinstall --dry-run` and
+`configureInstalledBootloader` — but keep the lesson, because it is about where a guard goes rather
+than about `sgdisk`. Gating `sgdisk`/`mkfs` and nothing else left three commands running under the
+"dry run" label: a `umount -R /mnt`, an else-branch that mounted the chosen disk's real partitions
+"for schema validation", and the entire manual-mode mount loop, which was never inside a guard at
+all. None of it destroys data; all of it mutates the machine of whoever is developing the
+installer, and two of the three sat in a bare `catch {}`, so it did so in silence. The fix was to
+move the gate one level down, into the command runner, where a branch added later cannot escape it
+by forgetting to ask.
 
 `configureInstalledBootloader()` takes `arm` and early-returns; that one was right from the
 start.

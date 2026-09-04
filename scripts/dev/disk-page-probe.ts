@@ -46,18 +46,26 @@ const css = [`${here}/ui/installer/style.css`, "./ui/installer/style.css", "./st
  * module under test would be measuring its own fixture.
  */
 function listProbePartitions() {
-  const raw = exec(["lsblk", "-J", "-b", "-o", "NAME,PATH,SIZE,FSTYPE,LABEL,TYPE"])
-  const out: Array<{ name: string; path: string; size: number; fstype: string | null; label: string | null }> = []
-  const walk = (items: any[]) => {
+  const raw = exec(["lsblk", "-J", "-b", "-o", "NAME,PATH,SIZE,FSTYPE,LABEL,TYPE,START,LOG-SEC"])
+  const out: Array<{
+    name: string; path: string; device: string; start: number; size: number
+    logicalSectorSize: number; fstype: string | null; label: string | null
+  }> = []
+  const walk = (items: any[], parent: any) => {
     for (const item of items ?? []) {
       if (item.type === "part") out.push({
-        name: item.name, path: item.path, size: Number(item.size) || 0,
+        name: item.name, path: item.path,
+        device: parent?.path ?? "",
+        // 512-byte units, always — see the note on LSBLK_SECTOR in steps/disk.ts.
+        start: (Number(item.start) || 0) * 512,
+        size: Number(item.size) || 0,
+        logicalSectorSize: Number(item["log-sec"] ?? parent?.["log-sec"]) || 512,
         fstype: item.fstype || null, label: item.label || null,
       })
-      if (item.children) walk(item.children)
+      if (item.children) walk(item.children, item)
     }
   }
-  walk(JSON.parse(raw).blockdevices ?? [])
+  walk(JSON.parse(raw).blockdevices ?? [], null)
   return out
 }
 
@@ -92,6 +100,8 @@ app.start({
     //   DISK_PROBE_SEED=dupe  two partitions given the same mount point (D-17)
     //   DISK_PROBE_SEED=efi   an ESP about to be formatted as btrfs (#414) — the
     //                         layout that used to install cleanly and not boot
+    //   DISK_PROBE_SEED=swap  a swap row: the filesystem cell has no question to
+    //                         ask, so it says `swap` and is not a choice (#423)
     const seed = GLib.getenv("DISK_PROBE_SEED")
     if (seed) {
       const parts = listProbePartitions()
@@ -99,7 +109,8 @@ app.start({
       const root = parts.filter(p => p !== esp).sort((a, b) => b.size - a.size)[0] ?? parts[0]
       const other = parts.filter(p => p !== esp && p !== root)[0] ?? root
       const mount = (p: typeof parts[0], mountpoint: string, filesystem: any, format: boolean) => ({
-        name: p.name, path: p.path, size: p.size, fsType: p.fstype, label: p.label,
+        name: p.name, path: p.path, device: p.device, start: p.start, size: p.size,
+        logicalSectorSize: p.logicalSectorSize, fsType: p.fstype, label: p.label,
         mountpoint, filesystem, format,
       })
       setDiskAnswer({
@@ -108,6 +119,9 @@ app.start({
           ? [mount(root, "/", "btrfs", true), mount(other, "/", "ext4", true)]
           : seed === "efi"
           ? [mount(esp, "/boot/efi", "btrfs", true), mount(root, "/", "btrfs", true)]
+          : seed === "swap"
+          ? [mount(esp, "/boot/efi", "vfat", false), mount(root, "/", "btrfs", true),
+             mount(other, "swap", "btrfs", true)]
           : [mount(esp, "/boot/efi", "vfat", false), mount(root, "/", "btrfs", true)],
       })
     }

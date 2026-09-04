@@ -7,7 +7,7 @@ import Gio from "gi://Gio"
 import type { Step } from "../lib/flow"
 import { NidaraButton, NidaraScrolled } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
-import { getAnswers, type ManualDiskAnswer } from "../lib/answers"
+import { getAnswers } from "../lib/answers"
 import { assemblePlan, type AssembledPlan } from "../lib/plan"
 import { configureInstalledBootloader } from "../lib/bootloader"
 import { applyRealName } from "../lib/real-name"
@@ -194,89 +194,18 @@ export function RunStep(): Step {
         }
       }
 
-      // Format and mount the partitions the user assigned, in MANUAL mode.
-      //
-      // ⚠️ This used to partition entire disks too — `sgdisk --zap-all`, the two
-      // `sgdisk -n`, `mkfs.*`, the five `btrfs subvolume create` and eight mounts.
-      // That half is gone: entire-disk mode hands the layout to archinstall in the
-      // plan (lib/disk-config.ts), which does all of it and does not need a /mnt
-      // prepared for it. Manual mode is still ours until the next step of #310.
-      //
-      // ⚠️ The `arm` gate lives in `runCmd`, deliberately, and NOT in the branches that
-      // call it. It used to guard only the destructive half (sgdisk/mkfs), which left three
-      // things running during what the UI was calling a dry run: the `umount -R /mnt` at the
-      // top, an explicit else-branch that mounted the chosen disk's real partitions "for
-      // schema validation", and the whole manual-mode mount loop, which was never inside a
-      // guard at all. None of that destroys data, and all of it mutates the machine of
-      // whoever is developing the installer — silently, because two of the three were wrapped
-      // in a bare `catch {}`. A dry run describes what it would do; it touches nothing. With
-      // the gate here, a branch added later cannot escape it by forgetting to ask.
-      function prepareDiskAndMounts(disk: ManualDiskAnswer, arm: boolean) {
-        const isRoot = GLib.get_user_name() === "root"
-        const sudoPrefix = isRoot ? [] : ["sudo", "-n"]
-        // `optional` = a command whose failure is a normal outcome, not an error (nothing was
-        // mounted under /mnt). It still gets logged, so the log shows the real sequence.
-        const runCmd = (args: string[], opts: { optional?: boolean } = {}) => {
-          if (!arm) {
-            appendLog(`[PREP] (dry-run, not executed) ${args.join(" ")}`)
-            return
-          }
-          appendLog(`[PREP] ${args.join(" ")}`)
-          const fullCmd = [...sudoPrefix, ...args]
-          const proc = Gio.Subprocess.new(fullCmd, Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_MERGE)
-          proc.wait(null)
-          if (!proc.get_successful() && !opts.optional) {
-            throw new Error(`Command failed: ${fullCmd.join(" ")}`)
-          }
-        }
-
-        // Unmount anything currently under /mnt
-        try {
-          runCmd(["umount", "-R", "/mnt"], { optional: true })
-        } catch {}
-
-        const sorted = [...disk.mounts].sort((a, b) => {
-          if (a.mountpoint === "/") return -1
-          if (b.mountpoint === "/") return 1
-          return a.mountpoint.localeCompare(b.mountpoint)
-        })
-
-        for (const m of sorted) {
-          if (m.format) {
-            appendLog(`[PREP] Formatting ${m.path} as ${m.filesystem}...`)
-            if (m.filesystem === "btrfs") {
-              runCmd(["mkfs.btrfs", "-f", m.path])
-            } else if (m.filesystem === "vfat") {
-              runCmd(["mkfs.vfat", "-F32", m.path])
-            } else if (m.filesystem === "xfs") {
-              runCmd(["mkfs.xfs", "-f", m.path])
-            } else if (m.filesystem === "f2fs") {
-              runCmd(["mkfs.f2fs", "-f", m.path])
-            } else {
-              runCmd(["mkfs.ext4", "-F", m.path])
-            }
-          }
-        }
-
-        for (const m of sorted) {
-          const target = m.mountpoint === "/" ? "/mnt" : `/mnt${m.mountpoint.startsWith("/") ? m.mountpoint : `/${m.mountpoint}`}`
-          runCmd(["mkdir", "-p", target])
-          runCmd(["mount", m.path, target])
-        }
-      }
-
       // Execute archinstall
       GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         setBusy(true)
         enterPhase(0)
         const answers = getAnswers()
 
-        // ⚠️ Checked HERE, before prepareDiskAndMounts, and not one line later.
+        // ⚠️ Checked HERE, before archinstall is spawned, and not one line later.
         // Everything below this point needs the network — pacstrap, the curl that
         // fetches the repo signing key, the `pacman -Sy` of the three Nidara
-        // packages — and the first thing below it erases a partition table. Failing
-        // after that leaves a machine with no operating system at all, which is
-        // strictly worse than the one it had five minutes ago.
+        // packages — and the first thing archinstall does is erase a partition
+        // table. Failing after that leaves a machine with no operating system at
+        // all, which is strictly worse than the one it had five minutes ago.
         connectivity().then(c => {
           if (!isUsable(c)) {
             appendLog(`[ERROR] ${t("runErrNoNetwork")}`)
@@ -298,22 +227,14 @@ export function RunStep(): Step {
         const isForcedDryRun = GLib.getenv("NIDARA_INSTALLER_DRY_RUN") === "1"
         const isArm = isLiveMedium && !isForcedDryRun
 
-        // ⚠️ ONLY manual mode still comes through here. Entire-disk hands the
+        // ⚠️ Nothing here touches a disk any more, in EITHER mode. Both hand the
         // layout to archinstall in the plan (lib/disk-config.ts), which
         // partitions, formats, makes the subvolumes and mounts them itself — so
-        // running our own partitioner as well would write the disk twice, ours
-        // first and archinstall's over the top. The two are one decision in two
-        // files; changing `assemblePlan` without changing this is the failure.
-        if (answers.disk?.mode === "manual") {
-          enterPhase(1)
-          try {
-            prepareDiskAndMounts(answers.disk, isArm)
-          } catch (e: any) {
-            appendLog(`[ERROR] Failed to prepare disk partitions/mounts: ${e.message || e}`)
-            finishRun(false)
-            return
-          }
-        } else if (answers.disk) {
+        // running a partitioner of our own as well would write the disk twice,
+        // ours first and archinstall's over the top (#310). What used to live
+        // here was `sgdisk`, `mkfs.*`, `btrfs subvolume create` and eight mounts,
+        // guarded by an arm gate that three of its own commands escaped.
+        if (answers.disk) {
           appendLog("[PREP] The disk layout is archinstall's to write — see the plan below.")
         }
 
@@ -385,24 +306,21 @@ export function RunStep(): Step {
           appendLog("[INFO] Running in live installation mode.")
         }
 
-        // ── Which phase the spawn starts in, and why it is not always 2 ────────
+        // ── The spawn starts in phase 1, and the child says when it is past it ─
         //
         // The four phases used to line up with this file's own boundaries: phase 1
-        // finished when OUR partitioner finished. In entire-disk mode that work is
-        // now inside the process we are about to spawn, so ticking "Disk ✓" here
-        // would report a disk that has not been touched — and if archinstall then
-        // failed while partitioning, the screen would say the disk step had
-        // succeeded. So the spawn starts in phase 1 and the child says when it is
-        // past it.
+        // finished when OUR partitioner finished. That work is now inside the
+        // process about to be spawned, so ticking "Disk ✓" here would report a
+        // disk that has not been touched — and if archinstall then failed while
+        // partitioning, the screen would say the disk step had succeeded.
         //
         // ⚠️ The marker is `info(f'Installing packages: {packages}')`
         // (archinstall's `lib/pacman/pacman.py`), the line immediately before
         // pacstrap — an `info`, so it reaches stdout, unlike the `debug` lines
         // around the mounting. If it ever stops matching the cost is a phase row
         // that stays lit until the install finishes, not a wrong claim.
-        const archinstallOwnsDisk = answers.disk?.mode === "entire_disk"
-        let awaitingBasePhase = archinstallOwnsDisk
-        enterPhase(archinstallOwnsDisk ? 1 : 2)
+        let awaitingBasePhase = true
+        enterPhase(1)
         appendLog(`[EXEC] ${cmd.join(" ")}`)
 
         try {
