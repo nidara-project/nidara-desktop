@@ -11,6 +11,7 @@ import { getAnswers } from "../lib/answers"
 import { assemblePlan, type AssembledPlan } from "../lib/plan"
 import { configureInstalledBootloader } from "../lib/bootloader"
 import { applyRealName } from "../lib/real-name"
+import { writeSwapFstabEntries } from "../lib/swap"
 import { stripAnsi } from "../lib/ansi"
 import { connectivity, isUsable } from "../lib/network"
 import { isPreview, previewSkip } from "../lib/preview"
@@ -358,6 +359,7 @@ export function RunStep(): Step {
               if (success) {
                 enterPhase(3)
                 applyRealName(isArm, answers, appendLog)
+                writeSwapFstabEntries(isArm, answers, appendLog)
                 configureInstalledBootloader(isArm, answers, appendLog)
               }
             } catch (e: any) {
