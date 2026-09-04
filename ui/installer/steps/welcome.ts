@@ -31,6 +31,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { readBaseConfig } from "../lib/base-config"
+import { checkArchinstall, archinstallVerdict, blocksInstall } from "../lib/archinstall-check"
 import { t, setLocale, getLocale } from "../lib/i18n"
 import { nidaraLogoIcon } from "../../lib/icons"
 import { NidaraRow } from "../../lib/nidara-kit"
@@ -103,6 +104,52 @@ export function WelcomeStep(): Step {
     })
   }
 
+  // ── and the other half of "can this medium install anything" ────────────────
+  //
+  // The network question above is advisory; this one is not, and the difference
+  // is what happens if it is ignored. `steps/run.ts` partitions and mounts before
+  // archinstall is handed the plan, so a configuration archinstall refuses costs
+  // the disk first and fails second. See lib/archinstall-check.ts.
+  //
+  // It is asked here, on the first page, for the same reason the network is: a
+  // person can do something about it — pick a different medium — and the answer
+  // is worth more three pages before the disk step than one line after it.
+  let archWarn: Gtk.Label | null = null
+  let notify: (() => void) | null = null
+
+  const refreshArchinstall = () => {
+    checkArchinstall().then(() => {
+      if (archWarn) applyVerdict(archWarn)
+      // The verdict can turn Continue off, and it lands after the page is drawn.
+      notify?.()
+    })
+  }
+
+  /** The one label, carrying whichever of the three states is in force. */
+  const applyVerdict = (label: Gtk.Label) => {
+    const v = archinstallVerdict()
+    switch (v?.kind) {
+      case "missing":
+        label.label = t("welcomeArchinstallMissing")
+        label.visible = true
+        break
+      case "rejected":
+        label.label = t("welcomeArchinstallRejected")
+        label.visible = true
+        break
+      case "mismatch":
+        // The two numbers are the whole content of this warning and there is no
+        // interpolation in `t()`, so they are appended rather than embedded —
+        // which also keeps them out of eleven translations that would each have
+        // to be trusted to keep the order.
+        label.label = `${t("welcomeArchinstallMismatch")} (${v.found} ≠ ${v.declared})`
+        label.visible = true
+        break
+      default:
+        label.visible = false
+    }
+  }
+
   return {
     id: "welcome",
     title: () => t("welcomeTitle"),
@@ -112,10 +159,15 @@ export function WelcomeStep(): Step {
     // person who does not care clicks past, and the medium's own locale is what
     // they get. Only `base` can hold the flow here, and that is not a question —
     // it means this is not a Nidara medium and there is nothing to install from.
-    ready: () => base !== null && getAnswers().language !== null,
+    // ⚠️ A verdict that has not arrived yet does NOT hold the button: see
+    // `archinstallVerdict()` for why an unknown answer is allowed through.
+    ready: () => base !== null
+      && getAnswers().language !== null
+      && !blocksInstall(archinstallVerdict()),
 
     onEnter() {
       refreshNetwork()
+      refreshArchinstall()
       if (getAnswers().language) return
       const seed = defaultLanguage()
       const [sysLang, sysEnc] = seed.defaultLocale.split(".")
@@ -160,6 +212,12 @@ export function WelcomeStep(): Step {
       netWarn.visible = !netOk
       box.append(netWarn)
       refreshNetwork()
+
+      notify = () => notifyReady?.()
+      archWarn = prose("", "installer-prose--warning")
+      applyVerdict(archWarn)
+      box.append(archWarn)
+      refreshArchinstall()
 
       box.append(prose(t("welcomeLanguageDesc"), "installer-prose--dim"))
 
