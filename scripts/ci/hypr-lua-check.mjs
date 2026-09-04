@@ -135,6 +135,80 @@ else ok("a quote is escaped rather than closing the string")
 if (!/injected\s*=/.test(withoutStrings(raw))) fail("control: the UNescaped value should have injected a key", raw)
 else ok("the unescaped same value would have injected a key (control)")
 
+// ── The greeter's keyboard layout, RESOLVED rather than parsed ───────────────
+//
+// `config/greetd/hyprland-greeter.lua` decides which layout the login screen
+// types in, and until #434 it answered "us" on every fresh machine: it read only
+// the greeter's saved preference, which does not exist yet on a machine nobody
+// has logged into. The language on that same screen already falls back to
+// /etc/locale.conf; the keyboard fell back to nothing.
+//
+// ⚠️ Parsing is not the check here. The file parsed perfectly while it was
+// wrong, and so did the `sed` in `nidara-setup` that was supposed to patch it —
+// it looked for a literal that had left the file seven days after the sed was
+// written, and a sed that matches nothing succeeds. So this RUNS the config, with
+// `hl` stubbed and `io.open` serving fixture files, and reads the value it
+// actually hands to `input.kb_layout`.
+const GREETER_LUA = join(ROOT, "config/greetd/hyprland-greeter.lua")
+const PREFS = "/var/lib/greeter/.config/nidara/greeter-prefs.json"
+const VCONSOLE = "/etc/vconsole.conf"
+
+const LAYOUT_CASES = [
+    { name: "a machine installed with a Spanish keyboard", want: "es",
+      files: { [VCONSOLE]: "# written by systemd-localed\nKEYMAP=es\nXKBLAYOUT=es\n" } },
+    { name: "the greeter's own pick wins over the system", want: "fr",
+      files: { [PREFS]: '{"locale":"","kbLayout":"fr","lastUser":"a"}',
+               [VCONSOLE]: "KEYMAP=es\nXKBLAYOUT=es\n" } },
+    { name: "an empty saved pick falls through to the system", want: "es",
+      files: { [PREFS]: '{"locale":"","kbLayout":"","lastUser":"a"}',
+               [VCONSOLE]: "KEYMAP=es\nXKBLAYOUT=es\n" } },
+    { name: "no XKBLAYOUT: the console keymap, translated", want: "gb",
+      files: { [VCONSOLE]: "KEYMAP=uk\n" } },
+    { name: "a quoted value", want: "es", files: { [VCONSOLE]: 'KEYMAP="es"\n' } },
+    { name: "XKBLAYOUT on the very first line", want: "de",
+      files: { [VCONSOLE]: "XKBLAYOUT=de\nKEYMAP=de-latin1\n" } },
+    { name: "a machine that says nothing at all", want: "us", files: {} },
+]
+
+// ⚠️ A JS object is not a Lua table: `{"a": "b"}` is a syntax error over there.
+const luaTable = (files) => "{ "
+    + Object.entries(files).map(([k, v]) => `[${JSON.stringify(k)}] = ${JSON.stringify(v)}`).join(", ")
+    + " }"
+
+const HARNESS = (files) => `
+local FILES = ${luaTable(files)}
+local realOpen = io.open
+io.open = function(path, mode)
+    local content = FILES[path]
+    if content == nil then return nil end
+    return { read = function() return content end, close = function() end }
+end
+local captured = nil
+hl = setmetatable({}, { __index = function(_, key)
+    if key == "config" then
+        return function(t) if t.input and t.input.kb_layout then captured = t.input.kb_layout end end
+    end
+    return function() end
+end })
+dofile(${JSON.stringify(GREETER_LUA)})
+io.open = realOpen
+print(captured)
+`
+
+const LUA = ["lua5.4", "lua"].find(which)
+if (!LUA) fail("a lua interpreter to resolve the greeter's layout", "need lua5.4 or lua on PATH")
+else {
+    for (const c of LAYOUT_CASES) {
+        const script = join(tmp, "greeter-kb.lua")
+        writeFileSync(script, HARNESS(c.files))
+        const r = spawnSync(LUA, [script], { encoding: "utf8" })
+        const got = (r.stdout || "").trim()
+        if (r.status !== 0) fail(`greeter layout — ${c.name}`, (r.stderr || "").trim())
+        else if (got !== c.want) fail(`greeter layout — ${c.name}`, `resolved ${got || "(nothing)"}, expected ${c.want}`)
+        else ok(`greeter layout — ${c.name}`)
+    }
+}
+
 rmSync(tmp, { recursive: true, force: true })
 
 if (failures > 0) {

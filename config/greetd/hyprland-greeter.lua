@@ -18,14 +18,55 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("nidara-greeter; hyprctl dispatch 'hl.dsp.exit()'")
 end)
 
--- ── Keyboard layout: read saved greeter pref, fall back to "us" ──────────────
-local function readKbLayout()
-    local f = io.open("/var/lib/greeter/.config/nidara/greeter-prefs.json", "r")
-    if not f then return "us" end
+-- ── Keyboard layout ──────────────────────────────────────────────────────────
+--
+-- Saved greeter preference, then THE MACHINE'S OWN LAYOUT, then "us".
+--
+-- ⚠️ The middle step is the fix for #434, and its absence is why a machine
+-- installed asking for a Spanish keyboard greeted in `us`: the language on this
+-- same screen already falls back to the system (`ui/greeter/lib/i18n.ts`
+-- reads /etc/locale.conf when the greeter has no preference), and the keyboard
+-- did not fall back to anything. What made it invisible is that `us` and `es`
+-- agree on every letter and digit, so a password without symbols logs in fine.
+--
+-- ⚠️ It used to be patched in by `nidara-setup`, with
+-- `sed 's/kb_layout = "us"/…/'` over this file. That literal left on 2026-05-19
+-- when the greeter got its own picker, seven days after the sed was written, and
+-- a sed that matches nothing succeeds. Reading the system here rather than
+-- writing a value in at install time also covers the machines that are already
+-- installed, and the `install.sh`-onto-somebody's-Arch path, which no installer
+-- runs on.
+--
+-- XKBLAYOUT first because that is already the xkb vocabulary this option speaks;
+-- KEYMAP is the console one and the two disagree for a handful of layouts (uk vs
+-- gb, br-abnt2 vs br), so it is only consulted when the file carries no
+-- XKBLAYOUT — a machine set up by hand rather than by systemd-localed.
+local function firstMatch(path, ...)
+    local f = io.open(path, "r")
+    if not f then return nil end
     local content = f:read("*a")
     f:close()
-    local layout = content:match('"kbLayout"%s*:%s*"([^"]+)"')
-    return layout and #layout > 0 and layout or "us"
+    for _, pattern in ipairs({ ... }) do
+        local value = content:match(pattern)
+        if value and #value > 0 then return value end
+    end
+    return nil
+end
+
+local VCONSOLE_TO_XKB = { uk = "gb", ["us-acentos"] = "us", ["br-abnt2"] = "br" }
+
+local function readKbLayout()
+    local saved = firstMatch("/var/lib/greeter/.config/nidara/greeter-prefs.json",
+                             '"kbLayout"%s*:%s*"([^"]+)"')
+    if saved then return saved end
+
+    local xkb = firstMatch("/etc/vconsole.conf", '\nXKBLAYOUT="?([^"\n]+)', '^XKBLAYOUT="?([^"\n]+)')
+    if xkb then return xkb end
+
+    local keymap = firstMatch("/etc/vconsole.conf", '\nKEYMAP="?([^"\n]+)', '^KEYMAP="?([^"\n]+)')
+    if keymap then return VCONSOLE_TO_XKB[keymap] or keymap end
+
+    return "us"
 end
 
 -- ── Look & feel ───────────────────────────────────────────────────────────────

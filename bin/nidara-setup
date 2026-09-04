@@ -636,12 +636,20 @@ if [ "$ACTIVE_DM" = "none" ] || { [ "$ACTIVE_DM" = "greetd" ] && _greetd_is_ours
         echo "  greetd (Nidara) detected — refreshing /etc/greetd..."
     fi
 
-    # Install greetd config files (inject detected keyboard layout)
+    # Install greetd config files.
+    #
+    # ⚠️ This used to pipe the greeter's config through
+    # `sed 's/kb_layout = "us"/…/'` to inject $SYS_KB_LAYOUT. The literal it
+    # looked for left that file on 2026-05-19, when the greeter got its own
+    # keyboard picker — seven days after the sed was written — and a sed that
+    # matches nothing succeeds, so for four months every installed machine
+    # greeted in `us` whatever the person had chosen (#434). The file now reads
+    # /etc/vconsole.conf itself, which also covers the machines that are already
+    # installed and the `install.sh`-onto-somebody's-Arch path, where nothing
+    # ever ran an installer to inject anything.
     sudo mkdir -p /etc/greetd
     sudo cp "$SHARE/config/greetd/config.toml" /etc/greetd/config.toml
-    sudo sed 's/kb_layout = "us"/kb_layout = "'"$SYS_KB_LAYOUT"'"/' \
-        "$SHARE/config/greetd/hyprland-greeter.lua" \
-        | sudo tee /etc/greetd/hyprland-greeter.lua > /dev/null
+    sudo cp "$SHARE/config/greetd/hyprland-greeter.lua" /etc/greetd/hyprland-greeter.lua
     sudo chmod 644 /etc/greetd/config.toml /etc/greetd/hyprland-greeter.lua
 
     # The greeter session runs with HOME/XDG_CONFIG_HOME overridden to
