@@ -12,6 +12,17 @@ export interface BlockDevice {
   size: number
   model: string | null
   rm: boolean
+  /**
+   * Logical sector size, in bytes — 512 on almost everything, 4096 on 4Kn drives.
+   *
+   * Here because archinstall's schema is not written in "the rest of the disk":
+   * every partition is an absolute start and an absolute length, and it VALIDATES
+   * them — MiB alignment, no overlap, and the last partition not reaching into the
+   * backup GPT header. That arithmetic needs the sector size, so it is a property
+   * of the disk the user picked rather than a constant somebody assumed. See
+   * lib/disk-config.ts.
+   */
+  logicalSectorSize: number
 }
 
 export interface EntireDiskAnswer {

@@ -206,8 +206,9 @@ export function SummaryStep(): Step {
 
           const bootloader = pick(config, ["bootloader_config", "bootloader"])
           if (typeof bootloader === "string" && bootloader.length > 0) {
-            // …and WHERE it goes (D-24). Entire-disk mode creates the ESP itself
-            // (`sgdisk -n 1:1M:+512M -t 1:ef00` in steps/run.ts); manual mode
+            // …and WHERE it goes (D-24). Entire-disk mode creates the ESP — the
+            // 512 MiB partition that lib/disk-config.ts asks archinstall for, and
+            // that steps/run.ts used to cut with `sgdisk`; manual mode
             // uses whichever of the three EFI mount points was assigned, and
             // naming the partition is the only way the person can check that the
             // installer picked the one they meant.

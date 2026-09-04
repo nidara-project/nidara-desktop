@@ -414,17 +414,44 @@ title, and the day someone translates it, CI says which rule they broke.
 later "clean" kitty coming up 2544x1284 and looking like a regression, with the clamp switched off.
 Every arm needs `-o remember_window_size=no -o initial_window_width=… -o initial_window_height=…`.
 
-### The installer partitions with its own hands now — and `arm` is the only thing between it and your disk
+### Who owns the disk — and it is being handed BACK, one mode at a time
 
-Until 2026-08-28 this bundle collected answers, wrote JSON and ran one process; the dangerous
-half was `archinstall`'s. **That is no longer true, and several sentences written when it was
-are still lying around** (`nidara-iso/INSTALLER.md` is one). Today `steps/run.ts` runs
-`sgdisk --zap-all`, `mkfs.*`, `mount` and the Btrfs subvolume layout itself, and
-`lib/bootloader.ts` writes the loader entries and the kernel cmdline. `archinstall` was left
-owning the pacstrap and the fstab. (It also wrote `plymouthd.conf`, the mkinitcpio hook and the
-watchdog drop-ins until 2026-08-30, when those moved to the `nidara-system` package — see below.)
+Between 2026-08-28 and 2026-09-04 this bundle partitioned with its own hands: `steps/run.ts` ran
+`sgdisk --zap-all`, `mkfs.*`, `mount` and the Btrfs subvolume layout, and archinstall was handed a
+`/mnt` already made (`pre_mounted_config`). That was never a decision anybody wrote down — it
+arrived inside PR #281, whose message is about sidebar metrics — and three of the four level-1
+findings of the installer review lived in it. **#310 reverses it**, and the reversal is in steps:
 
-So the question "is this armed?" is now load-bearing in a way it never was. There are two modes,
+| mode | who writes the disk | since |
+|---|---|---|
+| entire disk | **archinstall**, from a `manual_partitioning` layout we emit (`lib/disk-config.ts`) | 2026-09-04 |
+| manual | still `steps/run.ts` + `pre_mounted_config` | — |
+
+⚠️ **The two halves of that table are ONE decision in TWO files.** `assemblePlan` picks the
+`disk_config`, and `startInstall` decides whether `prepareDiskAndMounts` runs. Changing one without
+the other partitions the disk twice — ours first, archinstall's over the top.
+
+⚠️ `manual_partitioning` has no "the rest of the disk": every partition is an absolute start and an
+absolute length, and `parse_arg` refuses four kinds of wrong (first partition below 1 MiB,
+overlaps, a start or length that is not MiB-aligned, a last partition reaching into the backup GPT
+header) — at the worst moment, after every question has been answered. So the sums are copied from
+upstream's own `suggest_single_disk_layout`, the disk's `LOG-SEC` is collected for them, and
+`scripts/dev/disk-config-probe.ts` checks them against real capacities without going near a disk.
+⚠️ With subvolumes the root partition takes `mountpoint: null` — the mountpoints belong to the
+subvolumes, and giving it one as well mounts the root twice.
+
+Our layout is unchanged by the move, which is the whole reason it was affordable: 512 MiB ESP at
+1 MiB, the same five subvolumes including `@snapshots`, `compress=zstd`. Upstream's
+`default_layout` would have cost a 1 GiB ESP and four subvolumes — that is what Omarchy is stuck
+with, and it is a property of that layout, not of archinstall.
+
+`lib/bootloader.ts` still writes the loader entries' titles, the kernel cmdline and the timeout
+afterwards, in both modes: `Installer.__exit__` does not unmount, so `/mnt/boot` is still there
+when archinstall exits. (It also wrote `plymouthd.conf`, the mkinitcpio hook and the watchdog
+drop-ins until 2026-08-30, when those moved to the `nidara-system` package — see below.)
+
+The `arm` question is load-bearing either way — archinstall gets `--dry-run` when we are not
+armed, so the mode that owns the disk does not change what protects it. There are two RUN modes,
 and **where it runs picks one** — one expression in `steps/run.ts` decides:
 
 ```ts

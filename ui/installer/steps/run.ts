@@ -7,7 +7,7 @@ import Gio from "gi://Gio"
 import type { Step } from "../lib/flow"
 import { NidaraButton, NidaraScrolled } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
-import { getAnswers } from "../lib/answers"
+import { getAnswers, type ManualDiskAnswer } from "../lib/answers"
 import { assemblePlan, type AssembledPlan } from "../lib/plan"
 import { configureInstalledBootloader } from "../lib/bootloader"
 import { applyRealName } from "../lib/real-name"
@@ -194,7 +194,13 @@ export function RunStep(): Step {
         }
       }
 
-      // Prepare disks, subvolumes, and /mnt mount hierarchy.
+      // Format and mount the partitions the user assigned, in MANUAL mode.
+      //
+      // ⚠️ This used to partition entire disks too — `sgdisk --zap-all`, the two
+      // `sgdisk -n`, `mkfs.*`, the five `btrfs subvolume create` and eight mounts.
+      // That half is gone: entire-disk mode hands the layout to archinstall in the
+      // plan (lib/disk-config.ts), which does all of it and does not need a /mnt
+      // prepared for it. Manual mode is still ours until the next step of #310.
       //
       // ⚠️ The `arm` gate lives in `runCmd`, deliberately, and NOT in the branches that
       // call it. It used to guard only the destructive half (sgdisk/mkfs), which left three
@@ -205,7 +211,7 @@ export function RunStep(): Step {
       // whoever is developing the installer — silently, because two of the three were wrapped
       // in a bare `catch {}`. A dry run describes what it would do; it touches nothing. With
       // the gate here, a branch added later cannot escape it by forgetting to ask.
-      function prepareDiskAndMounts(disk: any, arm: boolean) {
+      function prepareDiskAndMounts(disk: ManualDiskAnswer, arm: boolean) {
         const isRoot = GLib.get_user_name() === "root"
         const sudoPrefix = isRoot ? [] : ["sudo", "-n"]
         // `optional` = a command whose failure is a normal outcome, not an error (nothing was
@@ -229,77 +235,33 @@ export function RunStep(): Step {
           runCmd(["umount", "-R", "/mnt"], { optional: true })
         } catch {}
 
-        if (disk.mode === "entire_disk") {
-          const dPath = disk.disk.path
-          const isNvme = dPath.includes("nvme") || dPath.includes("mmcblk")
-          const p1 = isNvme ? `${dPath}p1` : `${dPath}1`
-          const p2 = isNvme ? `${dPath}p2` : `${dPath}2`
+        const sorted = [...disk.mounts].sort((a, b) => {
+          if (a.mountpoint === "/") return -1
+          if (b.mountpoint === "/") return 1
+          return a.mountpoint.localeCompare(b.mountpoint)
+        })
 
-          appendLog(`[PREP] Partitioning entire disk ${dPath}...`)
-          runCmd(["sgdisk", "--zap-all", dPath])
-          runCmd(["sgdisk", "-n", "1:1M:+512M", "-t", "1:ef00", dPath])
-          runCmd(["sgdisk", "-n", "2:0:0", "-t", "2:8300", dPath])
-          runCmd(["partprobe", dPath])
-
-          appendLog(`[PREP] Formatting EFI partition ${p1}...`)
-          runCmd(["mkfs.vfat", "-F32", p1])
-
-          if (disk.filesystem === "btrfs") {
-            appendLog(`[PREP] Formatting Btrfs root on ${p2}...`)
-            runCmd(["mkfs.btrfs", "-f", p2])
-            runCmd(["mkdir", "-p", "/mnt"])
-            runCmd(["mount", p2, "/mnt"])
-            runCmd(["btrfs", "subvolume", "create", "/mnt/@"])
-            runCmd(["btrfs", "subvolume", "create", "/mnt/@home"])
-            runCmd(["btrfs", "subvolume", "create", "/mnt/@log"])
-            runCmd(["btrfs", "subvolume", "create", "/mnt/@pkg"])
-            runCmd(["btrfs", "subvolume", "create", "/mnt/@snapshots"])
-            runCmd(["umount", "/mnt"])
-
-            runCmd(["mount", "-o", "compress=zstd,subvol=@", p2, "/mnt"])
-            runCmd(["mkdir", "-p", "/mnt/home", "/mnt/var/log", "/mnt/var/cache/pacman/pkg", "/mnt/.snapshots", "/mnt/boot"])
-            runCmd(["mount", "-o", "compress=zstd,subvol=@home", p2, "/mnt/home"])
-            runCmd(["mount", "-o", "compress=zstd,subvol=@log", p2, "/mnt/var/log"])
-            runCmd(["mount", "-o", "compress=zstd,subvol=@pkg", p2, "/mnt/var/cache/pacman/pkg"])
-            runCmd(["mount", "-o", "compress=zstd,subvol=@snapshots", p2, "/mnt/.snapshots"])
-            runCmd(["mount", p1, "/mnt/boot"])
-          } else {
-            appendLog(`[PREP] Formatting Ext4 root on ${p2}...`)
-            runCmd(["mkfs.ext4", "-F", p2])
-            runCmd(["mkdir", "-p", "/mnt"])
-            runCmd(["mount", p2, "/mnt"])
-            runCmd(["mkdir", "-p", "/mnt/boot"])
-            runCmd(["mount", p1, "/mnt/boot"])
-          }
-        } else if (disk.mode === "manual") {
-          const sorted = [...disk.mounts].sort((a, b) => {
-            if (a.mountpoint === "/") return -1
-            if (b.mountpoint === "/") return 1
-            return a.mountpoint.localeCompare(b.mountpoint)
-          })
-
-          for (const m of sorted) {
-            if (m.format) {
-              appendLog(`[PREP] Formatting ${m.path} as ${m.filesystem}...`)
-              if (m.filesystem === "btrfs") {
-                runCmd(["mkfs.btrfs", "-f", m.path])
-              } else if (m.filesystem === "vfat") {
-                runCmd(["mkfs.vfat", "-F32", m.path])
-              } else if (m.filesystem === "xfs") {
-                runCmd(["mkfs.xfs", "-f", m.path])
-              } else if (m.filesystem === "f2fs") {
-                runCmd(["mkfs.f2fs", "-f", m.path])
-              } else {
-                runCmd(["mkfs.ext4", "-F", m.path])
-              }
+        for (const m of sorted) {
+          if (m.format) {
+            appendLog(`[PREP] Formatting ${m.path} as ${m.filesystem}...`)
+            if (m.filesystem === "btrfs") {
+              runCmd(["mkfs.btrfs", "-f", m.path])
+            } else if (m.filesystem === "vfat") {
+              runCmd(["mkfs.vfat", "-F32", m.path])
+            } else if (m.filesystem === "xfs") {
+              runCmd(["mkfs.xfs", "-f", m.path])
+            } else if (m.filesystem === "f2fs") {
+              runCmd(["mkfs.f2fs", "-f", m.path])
+            } else {
+              runCmd(["mkfs.ext4", "-F", m.path])
             }
           }
+        }
 
-          for (const m of sorted) {
-            const target = m.mountpoint === "/" ? "/mnt" : `/mnt${m.mountpoint.startsWith("/") ? m.mountpoint : `/${m.mountpoint}`}`
-            runCmd(["mkdir", "-p", target])
-            runCmd(["mount", m.path, target])
-          }
+        for (const m of sorted) {
+          const target = m.mountpoint === "/" ? "/mnt" : `/mnt${m.mountpoint.startsWith("/") ? m.mountpoint : `/${m.mountpoint}`}`
+          runCmd(["mkdir", "-p", target])
+          runCmd(["mount", m.path, target])
         }
       }
 
@@ -336,7 +298,13 @@ export function RunStep(): Step {
         const isForcedDryRun = GLib.getenv("NIDARA_INSTALLER_DRY_RUN") === "1"
         const isArm = isLiveMedium && !isForcedDryRun
 
-        if (answers.disk) {
+        // ⚠️ ONLY manual mode still comes through here. Entire-disk hands the
+        // layout to archinstall in the plan (lib/disk-config.ts), which
+        // partitions, formats, makes the subvolumes and mounts them itself — so
+        // running our own partitioner as well would write the disk twice, ours
+        // first and archinstall's over the top. The two are one decision in two
+        // files; changing `assemblePlan` without changing this is the failure.
+        if (answers.disk?.mode === "manual") {
           enterPhase(1)
           try {
             prepareDiskAndMounts(answers.disk, isArm)
@@ -345,6 +313,8 @@ export function RunStep(): Step {
             finishRun(false)
             return
           }
+        } else if (answers.disk) {
+          appendLog("[PREP] The disk layout is archinstall's to write — see the plan below.")
         }
 
         let plan: AssembledPlan
@@ -415,7 +385,24 @@ export function RunStep(): Step {
           appendLog("[INFO] Running in live installation mode.")
         }
 
-        enterPhase(2)
+        // ── Which phase the spawn starts in, and why it is not always 2 ────────
+        //
+        // The four phases used to line up with this file's own boundaries: phase 1
+        // finished when OUR partitioner finished. In entire-disk mode that work is
+        // now inside the process we are about to spawn, so ticking "Disk ✓" here
+        // would report a disk that has not been touched — and if archinstall then
+        // failed while partitioning, the screen would say the disk step had
+        // succeeded. So the spawn starts in phase 1 and the child says when it is
+        // past it.
+        //
+        // ⚠️ The marker is `info(f'Installing packages: {packages}')`
+        // (archinstall's `lib/pacman/pacman.py`), the line immediately before
+        // pacstrap — an `info`, so it reaches stdout, unlike the `debug` lines
+        // around the mounting. If it ever stops matching the cost is a phase row
+        // that stays lit until the install finishes, not a wrong claim.
+        const archinstallOwnsDisk = answers.disk?.mode === "entire_disk"
+        let awaitingBasePhase = archinstallOwnsDisk
+        enterPhase(archinstallOwnsDisk ? 1 : 2)
         appendLog(`[EXEC] ${cmd.join(" ")}`)
 
         try {
@@ -432,6 +419,10 @@ export function RunStep(): Step {
                 try {
                   const [line] = dataStream.read_line_finish_utf8(res)
                   if (line !== null) {
+                    if (awaitingBasePhase && line.includes("Installing packages:")) {
+                      awaitingBasePhase = false
+                      enterPhase(2)
+                    }
                     appendLog(line)
                     readLineAsync()
                   }
