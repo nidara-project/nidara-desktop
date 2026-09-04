@@ -21,7 +21,7 @@ import type { Answers } from "./answers"
  * `_create_bls_entries`), and $BOOT is the partition carrying the `boot` flag —
  * which, in the layout we emit, is the ESP itself. So one answer serves both.
  */
-function loaderRoot(answers: Answers): string {
+export function loaderRoot(answers: Answers): string {
   if (answers.disk?.mode !== "manual") return "/mnt/boot"
   return `/mnt${espMount(answers.disk.mounts)?.mountpoint ?? "/boot"}`
 }

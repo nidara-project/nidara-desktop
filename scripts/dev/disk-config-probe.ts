@@ -50,6 +50,7 @@
 // fixtures are all well-behaved is the same thing wearing a check.
 
 import { entireDiskConfig, manualDiskConfig, espMount } from "../../ui/installer/lib/disk-config"
+import { loaderRoot } from "../../ui/installer/lib/bootloader"
 import type {
   EntireDiskAnswer,
   FilesystemType,
@@ -353,6 +354,64 @@ ${c.name}`)
     if (p.dev_path !== c.esp && p.flags.length > 0) fail(c.name, `${p.dev_path} carries flags [${p.flags}]`)
     if (p.btrfs.length > 0) fail(c.name, `${p.dev_path}: manual mode does not create subvolumes`)
   }
+}
+
+
+// ─── WHERE THE BOOTLOADER PATCHING WRITES ────────────────────────────────────
+//
+// `lib/bootloader.ts` edits the entry titles, the kernel cmdline and the loader
+// timeout AFTER archinstall exits, and until 2026-09-04 every one of its paths
+// was the literal `/mnt/boot`. Manual mode offers three places for the ESP, so on
+// two of them those edits landed in a plain directory on the root filesystem
+// while the bootloader went to the ESP — no error, no missing file (installer
+// study H-03, tech-debt #102).
+//
+// ⚠️ It is checked HERE because the VM cannot cover it: a run with the ESP at
+// /boot exercises the fix only where the old and new answers coincide, and the
+// layouts where they differ are the ones #430 is about — they install and then do
+// not boot, for an unrelated reason, so an end-to-end pass over them proves
+// nothing about this.
+
+const LOADER_CASES: Array<{ name: string, answer: any, want: string }> = [
+  {
+    name: "entire disk — the ESP is ours and we put it at /boot",
+    want: "/mnt/boot",
+    answer: {
+      mode: "entire_disk", filesystem: "btrfs",
+      disk: { name: "d", path: "/dev/vda", size: 25 * 1024 * MIB, model: null, rm: false, logicalSectorSize: 512 },
+    },
+  },
+  {
+    name: "manual, ESP at /boot — old and new answers coincide",
+    want: "/mnt/boot",
+    answer: { mode: "manual", mounts: [row({ path: "/dev/vda1", mountpoint: "/boot", format: false, fsType: "vfat" }),
+                                       row({ path: "/dev/vda2", mountpoint: "/", format: true })] },
+  },
+  {
+    name: "manual, ESP at /boot/efi — the Debian spelling, and the one that bit",
+    want: "/mnt/boot/efi",
+    answer: { mode: "manual", mounts: [row({ path: "/dev/vda1", mountpoint: "/boot/efi", format: false, fsType: "vfat" }),
+                                       row({ path: "/dev/vda2", mountpoint: "/boot", format: true, filesystem: "ext4" }),
+                                       row({ path: "/dev/vda3", mountpoint: "/", format: true })] },
+  },
+  {
+    name: "manual, ESP at /efi",
+    want: "/mnt/efi",
+    answer: { mode: "manual", mounts: [row({ path: "/dev/vda1", mountpoint: "/efi", format: false, fsType: "vfat" }),
+                                       row({ path: "/dev/vda2", mountpoint: "/", format: true })] },
+  },
+  {
+    name: "manual with no EFI mount at all — falls back, never to undefined",
+    want: "/mnt/boot",
+    answer: { mode: "manual", mounts: [row({ path: "/dev/vda2", mountpoint: "/", format: true })] },
+  },
+]
+
+print("")
+for (const c of LOADER_CASES) {
+  const got = loaderRoot({ disk: c.answer } as any)
+  print(`   ${got.padEnd(16)} ${c.name}`)
+  if (got !== c.want) fail(c.name, `loaderRoot returned ${got}, expected ${c.want}`)
 }
 
 print(failures === 0 ? "\nALL INVARIANTS HOLD" : `\n${failures} FAILURE(S)`)
