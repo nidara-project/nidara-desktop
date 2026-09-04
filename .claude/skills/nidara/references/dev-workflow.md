@@ -465,6 +465,45 @@ branch ever produced.
 `configureInstalledBootloader()` takes `arm` and early-returns; that one was right from the
 start.
 
+### `archinstall` is UNPINNED, and a `--dry-run` that passes does not mean it read you
+
+nidara-iso's `profile/packages.x86_64` names `archinstall` with no version, and the live session
+cannot change it afterwards (squashfs, no `-Syu`). So a medium carries **one fixed pair** — the
+archinstall that was current the day the image was built, and the `base.json` built beside it — and
+the only question worth asking is whether the two halves agree. The exposure grows as the disk layer
+moves back to archinstall (#310): today we hand it five keys, then the whole `disk_config`.
+
+⚠️ **The trap is what a passing `--dry-run` does NOT prove.** archinstall reads its configuration
+with `args_config.get('<key>', default)`, one key at a time (`lib/args.py`, `ArchConfig.from_config`).
+A key it no longer knows is not an error — it is **skipped, in silence, exit 0**. A release that
+renamed `custom_commands` would sail through the dry run and produce a finished machine with no
+Nidara on it: the five commands that write the repository address, trust its key, install the
+desktop and run `nidara-setup` would simply never run.
+
+What catches that is reading back what archinstall itself wrote. `--dry-run` saves the configuration
+as it understood it to `/var/log/archinstall/user_configuration.json`; a key we sent that is missing
+from that file is a key this archinstall does not read. Two places ask, and they are deliberately
+not the same question:
+
+| where | asks | when it fires |
+|---|---|---|
+| `nidara-iso/check-base-config.sh` (run by `build.sh`) | dry-run **and** the read-back, inside the built airootfs | the build fails and the image is moved to `out/rejected/` |
+| `ui/installer/lib/archinstall-check.ts` (welcome page) | version + dry-run acceptance | a warning on page 1; `missing`/`rejected` hold Continue shut |
+
+The strict half is at build time because that is where a bad pair can still be stopped from
+shipping — and because the saved file is root-owned 0640, which the installer's own user is not.
+The runtime half is the last line: it covers an image built before the gate existed, and it matters
+because **`steps/run.ts` partitions before archinstall is handed the plan** — a configuration
+archinstall refuses is not a failed install, it is a wiped disk followed by a refusal.
+
+⚠️ `--offline` is mandatory in both. Without it archinstall probes connectivity, fetches the package
+database and checks for a newer release of itself *before* it looks at the file, so a captive-portal
+network reports a perfectly good configuration as broken.
+
+`NIDARA_INSTALLER_FAKE_ARCHINSTALL=missing|rejected|mismatch` forces one of the three warning states
+so they can be looked at in preview. Like `NIDARA_INSTALLER_DRY_RUN`, it only ever points the safe
+way: it cannot produce `ok`, cannot clear a real verdict and cannot arm anything.
+
 ### Preview mode — the installer CAN be opened on a desktop now, with `NIDARA_INSTALLER_PREVIEW=1`
 
 ```bash
