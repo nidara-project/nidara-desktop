@@ -177,3 +177,9 @@ docs/
 # local act — committing it would put a second copy of a product decision in the
 # repo that owns none of it, and the two would drift.
 ui/installer/base.json
+
+# Where scripts/dev/build-installer-pkg.sh leaves the package it builds from this
+# tree, for nidara-iso's `build.sh -L`. A built artifact, and one that carries the
+# RELEASED version number while containing unreleased code — the last thing that
+# should ever be committed.
+out-pkg/
