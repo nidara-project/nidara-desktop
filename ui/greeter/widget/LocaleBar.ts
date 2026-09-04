@@ -1,4 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
+import GLib from "gi://GLib"
 import { NidaraDropDown } from "../../lib/nidara-kit/scrolled"
 import { ndImageProps } from "../../lib/icons"
 import { withGlassCapsule } from "../../lib/glass-capsule"
@@ -27,8 +28,47 @@ const KB_LAYOUTS: KbLayout[] = [
   { id: "ru",    label: "RU" },
 ]
 
+/**
+ * vconsole keymaps and xkb layouts mostly share a vocabulary; these three are
+ * where they disagree. Same table as `bin/nidara-setup`'s `_vconsole_to_xkb` and
+ * as `config/greetd/hyprland-greeter.lua` — three copies because they are three
+ * languages, and the Lua one is the one that decides what the keyboard TYPES.
+ */
+const VCONSOLE_TO_XKB: Record<string, string> = {
+  uk: "gb",
+  "us-acentos": "us",
+  "br-abnt2": "br",
+}
+
+/**
+ * What this machine's keyboard is, when the greeter has no preference of its own.
+ *
+ * ⚠️ Must resolve the same way as `readKbLayout()` in
+ * `config/greetd/hyprland-greeter.lua`, which is what actually sets the layout
+ * the login field types in. If the two disagree, the bar becomes a label that
+ * names a layout nobody is using — worse than the "us" it replaced, because that
+ * one at least was honestly wrong on both sides. The Lua half is checked by
+ * `scripts/ci/hypr-lua-check.mjs`, which resolves it against fixture files.
+ *
+ * XKBLAYOUT first: it is already xkb's vocabulary. KEYMAP is the console's, and
+ * it is only read when systemd-localed has not written the other one.
+ */
+function systemKbLayout(): string {
+  try {
+    const [ok, data] = GLib.file_get_contents("/etc/vconsole.conf")
+    if (ok) {
+      const text = new TextDecoder().decode(data as Uint8Array)
+      const xkb = /^XKBLAYOUT="?([^"\n]+)/m.exec(text)
+      if (xkb?.[1]) return xkb[1]
+      const keymap = /^KEYMAP="?([^"\n]+)/m.exec(text)
+      if (keymap?.[1]) return VCONSOLE_TO_XKB[keymap[1]] ?? keymap[1]
+    }
+  } catch {}
+  return "us"
+}
+
 function detectCurrentLayout(): string {
-  return greeterPrefs.kbLayout || "us"
+  return greeterPrefs.kbLayout || systemKbLayout()
 }
 
 // ── Languages ─────────────────────────────────────────────────────────────────
@@ -71,6 +111,17 @@ export default function LocaleBar(): Gtk.Widget {
   const currentLayout = detectCurrentLayout()
   const kbIds    = KB_LAYOUTS.map(l => l.id)
   const kbLabels = KB_LAYOUTS.map(l => l.label)
+
+  // ⚠️ A layout that is not in the list is ADDED to it, never rounded down to
+  // item 0 — the kit's rule (`NidaraDropDownRow` in lib/nidara-kit/rows.ts) and
+  // it starts mattering here now that this bar reads the MACHINE. The nine
+  // entries below are the common ones; `/etc/vconsole.conf` can legitimately say
+  // `gb`, `dvorak` or `cz-qwertz`, and a bar that answered "US" to those would be
+  // a label naming a layout nobody is typing in.
+  if (currentLayout && !kbIds.includes(currentLayout)) {
+    kbIds.push(currentLayout)
+    kbLabels.push(currentLayout.toUpperCase())
+  }
 
   const kbModel = new Gtk.StringList({ strings: kbLabels })
   const kbDrp = NidaraDropDown({
