@@ -68,19 +68,36 @@ if [ "$PKGVER" != "$VERSION" ]; then
     echo "  [WARN] PKGBUILD pkgver=$PKGVER ≠ VERSION=$VERSION — packaging this tree as $PKGVER." >&2
 fi
 
-# ⚠️ The version is the RELEASED one, because this tree has not been released.
-# So the package about to be built and the package the [nidara] repo serves have
-# the SAME name and the SAME version, and only repository order decides which one
-# an image ends up with. nidara-iso's `-L` puts this one first AND then proves it
-# won by comparing bytes — see build.sh. Do not rely on the version to tell them
-# apart; it cannot.
-echo "==> Building nidara-installer $PKGVER from $REPO_DIR"
-echo "    ⚠️  same version as the published package — the ISO side proves which one lands"
+# ── the pkgrel is stamped, and that is not cosmetic ──────────────────────────
+#
+# `pkgver` is the RELEASED one, because this tree has not been released. Built
+# with the PKGBUILD's own `pkgrel=1`, the package would land on disk as
+# `nidara-installer-0.11.0-1-x86_64.pkg.tar.zst` — byte for byte a DIFFERENT file
+# with byte for byte the SAME name as the one the [nidara] repo serves. Two things
+# go wrong at once, and the first one is not obvious:
+#
+#   1. `pacstrap` shares /var/cache/pacman/pkg with the build host. A published
+#      copy sitting there from an earlier build is found by that name, checked
+#      against the local repo's checksum, and reported as
+#      `is corrupted (invalid or corrupted package (checksum))` — which is a lie
+#      about the cache and aborts the whole transaction. Measured 2026-09-04; it
+#      is the same shape as nidara-iso's known trap about republished packages.
+#   2. With equal versions, only repository ORDER decides which one an image gets,
+#      and order is a request rather than a receipt.
+#
+# A stamped pkgrel removes both: the filename cannot collide with anything, and
+# the package wins on VERSION rather than on where it sits in a list. It also
+# makes the resulting image self-describing — `pacman -Q nidara-installer` on the
+# medium says `0.11.0-1.<stamp>`, which no release will ever produce.
+PKGREL="1.$(date +%s)"
+echo "==> Building nidara-installer $PKGVER-$PKGREL from $REPO_DIR"
+echo "    (pkgrel stamped so it cannot collide with the published package)"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 cp "$REPO_DIR/packaging/nidara/PKGBUILD" "$REPO_DIR/packaging/nidara/nidara.install" "$WORK/"
+sed -i "s/^pkgrel=.*/pkgrel=$PKGREL/" "$WORK/PKGBUILD"
 tar -C "$REPO_DIR" -czf "$WORK/nidara-desktop-$PKGVER.tar.gz" \
     --exclude='./.git' \
     --exclude='./ui/shell/node_modules' --exclude='./ui/shell/@girs' \
@@ -107,12 +124,18 @@ tar -C "$REPO_DIR" -czf "$WORK/nidara-desktop-$PKGVER.tar.gz" \
 ( cd "$WORK" && makepkg -f --noconfirm --nodeps --skipinteg --noprogressbar )
 
 mkdir -p "$OUT"
+# Every run stamps a new pkgrel, so without this the directory accumulates one
+# package per build and the ISO's repo would carry all of them. Only the newest
+# would ever be chosen, which is right — and a directory of near-identical
+# packages is how somebody eventually tests the wrong one by hand.
+rm -f "$OUT"/nidara-installer-*.pkg.tar.*
 # Anchored to the name: `nidara-*` would also match `nidara-desktop-*`, which is
 # the package that must never travel to an ISO by accident.
-pkgfile="$(ls -t "$WORK"/nidara-installer-[0-9]*.pkg.tar.* 2>/dev/null | head -1)"
+pkgfile="$(ls -t "$WORK"/nidara-installer-"$PKGVER"-"$PKGREL"-*.pkg.tar.* 2>/dev/null | head -1)"
 [ -n "$pkgfile" ] || { echo "  [ERR] makepkg produced no nidara-installer package" >&2; exit 1; }
 cp "$pkgfile" "$OUT/"
 
 echo
 echo "==> $OUT/$(basename "$pkgfile")"
 echo "    sudo ./build.sh -L $OUT      # from nidara-iso"
+echo "    on the medium it identifies itself: pacman -Q nidara-installer -> $PKGVER-$PKGREL"
