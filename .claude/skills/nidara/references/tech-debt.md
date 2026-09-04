@@ -3627,6 +3627,30 @@ Sitting alongside it, from the same review and still open: the progress bar is a
 ACCOUNT card, and `nidara-setup` creates `.config/{hypr,kitty,nidara,uwsm}` as `1000:0` (an
 `install -d` with no `-g`) while its siblings come out `1000:1000`.
 
+### 102. ⚠️ OPEN — in MANUAL mode the bootloader patching is a silent no-op whenever the ESP is not at /boot (2026-09-04)
+
+> **Queue entry: #310.** It stops existing when manual mode joins entire-disk on archinstall's side of the seam; until then it is a live defect.
+
+`lib/bootloader.ts` patches the loader entries the install produced — the titles, the kernel
+cmdline (`quiet splash …`) and `loader.conf`'s timeout. Every one of those paths is written
+`/mnt/boot/loader/…`, hardcoded.
+
+That is correct in entire-disk mode, where the ESP is ours to place and we place it at `/boot`.
+The disk page's manual mode offers **three** EFI mount points — `/boot`, `/boot/efi` and `/efi` —
+and on the other two `/mnt/boot/loader/entries/*.conf` does not exist. The `sed` glob then matches
+nothing, `cat > /mnt/boot/loader/loader.conf` writes a file no bootloader reads, and the machine
+boots with the stock Arch title, no splash and no timeout policy.
+
+🔑 **What makes it silent rather than loud**: each of the three blocks is wrapped in a `try` whose
+`catch` appends `[BOOTLOADER] Note: … skipped`, and the first one additionally ends in
+`2>/dev/null || true`. A user reading the log sees three "Note:" lines that look like the normal
+absence of something optional. Nothing distinguishes "there was nothing to rename" from "we were
+writing into the wrong directory the whole time".
+
+Do NOT fix it by globbing all three paths: the honest fix is to ask archinstall where it put the
+ESP — under `manual_partitioning` the answer is in the config we wrote — and that is the same move
+that removes the question. The fix and the migration are one change.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a

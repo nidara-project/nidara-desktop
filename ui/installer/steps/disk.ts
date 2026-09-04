@@ -41,6 +41,7 @@ interface RawBlockDevice {
   type: string
   rm?: boolean | string | number
   pkname?: string | null
+  "log-sec"?: number | string
   children?: RawBlockDevice[]
 }
 
@@ -50,7 +51,7 @@ function isUefi(): boolean {
 
 function listDisks(): BlockDevice[] {
   try {
-    const raw = exec(["lsblk", "-J", "-b", "-d", "-o", "NAME,PATH,SIZE,MODEL,TYPE,RM"])
+    const raw = exec(["lsblk", "-J", "-b", "-d", "-o", "NAME,PATH,SIZE,MODEL,TYPE,RM,LOG-SEC"])
     const parsed = JSON.parse(raw)
     const devices: RawBlockDevice[] = parsed.blockdevices ?? []
     return devices
@@ -61,6 +62,11 @@ function listDisks(): BlockDevice[] {
         size: typeof d.size === "number" ? d.size : Number(d.size) || 0,
         model: d.model ? String(d.model).trim() : null,
         rm: d.rm === true || d.rm === "1" || d.rm === 1 || d.rm === "true",
+        // ⚠️ Defaulted rather than assumed away. 512 is what almost every drive
+        // reports, but a 4Kn disk that silently got 512 would have its partition
+        // arithmetic done in the wrong unit — so the default sits here, once, next
+        // to the thing that can be missing, instead of in the caller.
+        logicalSectorSize: Number(d["log-sec"]) || 512,
       }))
   } catch (e) {
     console.error("[Installer] Failed to list disks with lsblk:", e)
