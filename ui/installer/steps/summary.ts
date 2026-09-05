@@ -15,7 +15,8 @@
 import Gtk from "gi://Gtk?version=4.0"
 import type { Step } from "../lib/flow"
 import { NidaraList, NidaraRow } from "../../lib/nidara-kit"
-import { t, onLocaleChange } from "../lib/i18n"
+import { t, onLocaleChange, getLocale } from "../lib/i18n"
+import { countryName } from "../../lib/locale-names"
 import { getAnswers, type ManualPartitionMount } from "../lib/answers"
 import { getLiveDefaults } from "../lib/plan"
 import { espMount } from "../lib/disk-config"
@@ -194,9 +195,20 @@ export function SummaryStep(): Step {
         // repeat back (D-23). The three things derived from it are the rows
         // under it, so it belongs above them.
         if (answers.country) {
+          // ⚠️ NOT `answers.country.name`. That field is the raw string from
+          // tzdata's `iso3166.tab`, which the region page never shows: the list
+          // renders `countryName(code, ui, …)`, so somebody who picked "España"
+          // was being read back "Spain" — the English table name — on the last
+          // screen before an irreversible action, one row under "Idioma: Español".
+          //
+          // Named HERE rather than stored resolved in the answer, because the UI
+          // language can still change after the country is chosen (Back reaches
+          // the welcome page, and `onLocaleChange` rebuilds this page): a name
+          // rendered at answer time would freeze in the language of that moment,
+          // which is the shape of #389.
           chosen.listBox.append(NidaraRow(
             t("summaryCountry"),
-            `${answers.country.name} · ${answers.country.code}`,
+            `${countryName(answers.country.code, getLocale(), answers.country.name)} · ${answers.country.code}`,
           ))
         }
 
