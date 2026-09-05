@@ -43,6 +43,30 @@ export interface Step {
    */
   ready?(): boolean
   /**
+   * Does leaving this step forward do something irreversible?
+   *
+   * A step that returns words gets them shown in a modal, with the confirming
+   * button styled destructive, and the flow moves on only if that button is the
+   * one pressed. A step with nothing irreversible to say returns nothing and its
+   * footer button behaves as every other one does.
+   *
+   * ⚠️ The frame shows the dialog rather than the step, for the same reason it
+   * shows the quit one: there is a window to be transient for, and a confirmation
+   * that can be summoned from two places is a confirmation that will eventually
+   * say two different things. What belongs to the step is the WORDS — only the
+   * step knows what it is about to destroy.
+   */
+  confirmNext?(): {
+    heading: string
+    /** What is about to happen, named. Not a category — the disk, by its name. */
+    body: string
+    /** The button that does NOT proceed. Shown first, and suggested. */
+    cancelLabel: string
+    /** The button that proceeds. Shown destructive. */
+    confirmLabel: string
+  } | null
+
+  /**
    * Is this step in the middle of something the user must not interrupt?
    *
    * The frame asks before it lets anyone out of the window — the close button and

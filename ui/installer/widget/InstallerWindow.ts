@@ -120,7 +120,25 @@ export function InstallerWindow(): Gtk.Window {
   next.connect("clicked", () => {
     const step = flow.current()
     if (step.ready && !step.ready()) return
-    flow.next()
+    // The last click before the install is a different kind of click, and it used
+    // to be the same one — same button, same corner, same word as the six pages
+    // before it (#436). A step that has something irreversible to say says it
+    // here; everything else advances untouched.
+    const confirm = step.confirmNext?.()
+    if (!confirm) {
+      flow.next()
+      return
+    }
+    showNidaraAlert({
+      parent: win,
+      heading: confirm.heading,
+      body: confirm.body,
+      responses: [
+        { id: "cancel", label: confirm.cancelLabel, suggested: true },
+        { id: "proceed", label: confirm.confirmLabel, destructive: true },
+      ],
+      onResponse: (id) => { if (id === "proceed") flow.next() },
+    })
   })
   closeActionBtn.connect("clicked", () => shell.close())
   restartActionBtn.connect("clicked", () => {
