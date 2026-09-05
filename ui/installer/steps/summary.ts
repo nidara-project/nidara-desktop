@@ -173,7 +173,6 @@ export function SummaryStep(): Step {
               t("summaryDisk"),
               `${d.model || d.name} · ${formatSize(d.size)} · ${d.path}${d.rm ? ` · ${t("diskRemovable")}` : ""}`,
             ))
-            chosen.listBox.append(NidaraRow(t("summaryFilesystem"), disk.filesystem))
           } else {
             // ⚠️ ONE LINE PER MOUNT, not a comma-joined sentence (D-26). This is
             // the last screen before a disk is written, and what a reader has to
@@ -221,6 +220,17 @@ export function SummaryStep(): Step {
         chosen.listBox.append(NidaraRow(t("summaryTimezone"), chosenTz))
 
         // ── What Nidara decided ──────────────────────────────────────────────
+        // The filesystem is the first of these and NOT from base.json: entire-disk
+        // mode installs btrfs and does not ask, because the subvolume layout is
+        // what the product is. It used to sit in the group above, which was right
+        // while it was a question and became a lie the moment it stopped being one.
+        // Manual mode is the opposite — there the filesystems ARE chosen, per
+        // partition, and the layout row above already spells each one out.
+        if (disk?.mode === "entire_disk") {
+          decided.listBox.append(NidaraRow(t("summaryFilesystem"), disk.filesystem))
+        }
+
+
         // Read from `base.json` rather than restated here, so that a product
         // decision taken in nidara-iso shows up on this page without anybody
         // remembering to come back — which is the same reason base.json is a file
