@@ -498,7 +498,12 @@ ESP must be FAT (#414/#421), a kept swap row must already be swap (#423), and no
 one mount point. ⚠️ Several swap rows are NOT a duplicate — `swapon` takes as many as it is given.
 
 `scripts/dev/disk-config-probe.ts` now has a second half that runs layouts through it and asserts
-the message keys. ⚠️ **Valid layouts are cases in that table too, and they must be**: a
+the message keys, and since 2026-09-05 it is the `installer-logic` CI job rather than something a
+human remembers to run. ⚠️ **Wiring it up needed a one-line fix first**: it printed `N FAILURE(S)`
+and exited 0. Fine for a tool a person runs and reads; as a CI step it is a gate that can only
+pass. The job's first step therefore deletes a refusal rule with `sed`, requires the patch to have
+matched something (a reworded rule would silently patch nothing), requires the probe to come back
+non-zero, and restores the file — the run that follows means nothing without it. ⚠️ **Valid layouts are cases in that table too, and they must be**: a
 `manualProblems` that returned every message for every layout would pass a table made only of
 expected failures. Shown to fail in both directions — deleting the root rule fails exactly the two
 root cases by name, and widening it from `/` to any assigned row fails all five layouts that are

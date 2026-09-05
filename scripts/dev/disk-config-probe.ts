@@ -587,3 +587,11 @@ for (const c of REFUSAL_CASES) {
 }
 
 print(failures === 0 ? "\nALL INVARIANTS HOLD" : `\n${failures} FAILURE(S)`)
+
+// ⚠️ It has to EXIT non-zero, and until 2026-09-05 it did not — it printed the
+// count and returned 0. That was survivable while a person ran it and read the
+// output; wired into CI as it stood, the job would have gone green over
+// "12 FAILURE(S)" and been a gate that can only pass. The check that catches a
+// vacuous probe is the one that runs the probe against a deliberate defect and
+// insists on a non-zero status, which is what the workflow step does.
+imports.system.exit(failures === 0 ? 0 : 1)
