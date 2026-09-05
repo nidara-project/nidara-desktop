@@ -64,7 +64,11 @@
 #     medium). The refusal half is the one that had no instrument at all: each rule
 #     in `manualProblems` was added after an install had already finished and
 #     produced a machine that does not boot or does not install. It ran only when a
-#     human remembered until 2026-09-05. Logic in scripts/dev/disk-config-probe.ts.
+#     human remembered until 2026-09-05. Logic in scripts/dev/disk-config-probe.ts
+#     and scripts/dev/account-rules-probe.ts — the second covers the account form,
+#     whose rules decide whether a name reaches `useradd` INSIDE THE CHROOT, which
+#     is the worst place to be told no. Each probe gets a positive control ahead of
+#     it: a probe that has only ever printed "ok" has been run, not tested.
 
 name: CI
 
@@ -433,7 +437,7 @@ jobs:
         run: python3 scripts/ci/agent-loop-test.py
 
   installer-logic:
-    name: Installer disk logic (no disk)
+    name: Installer logic (no disk)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -484,3 +488,31 @@ jobs:
         run: |
           ./scripts/bundle.sh --js scripts/dev/disk-config-probe.ts /tmp/probe.js
           gjs -m /tmp/probe.js
+
+      # Same shape, same reason: `accountProblems` is the only thing standing
+      # between a capitalised username and a `useradd` failure inside the chroot,
+      # after pacstrap, with the log folded shut.
+      - name: The account probe can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/account-problems.ts /tmp/account-problems.bak
+          sed -i 's|^    && f.password === f.confirm$|    \&\& true // deliberately removed|' \
+            ui/installer/lib/account-problems.ts
+          if ! git diff --quiet ui/installer/lib/account-problems.ts; then
+            echo "control: valid no longer checks that the passwords match"
+          else
+            echo "::error::the control patched nothing — the term it deletes has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/account-rules-probe.ts /tmp/account-defect.js
+          if gjs -m /tmp/account-defect.js; then
+            echo "::error::the probe passed with a completeness term deleted — it is not checking what it prints"
+            cp /tmp/account-problems.bak ui/installer/lib/account-problems.ts
+            exit 1
+          fi
+          cp /tmp/account-problems.bak ui/installer/lib/account-problems.ts
+          git diff --quiet ui/installer/lib/account-problems.ts
+
+      - name: What the account form accepts and refuses (must succeed)
+        run: |
+          ./scripts/bundle.sh --js scripts/dev/account-rules-probe.ts /tmp/account-probe.js
+          gjs -m /tmp/account-probe.js
