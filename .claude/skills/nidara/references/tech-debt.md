@@ -2573,9 +2573,17 @@ shape for any future extraction; a rule-set diff alone would have missed a real 
    `.nidara-atomic-scale-native` was DELETED rather than promoted: it suppressed the background
    of "the native Gtk.Scale trough", and there has been no `Gtk.Scale` since `d9dca37f` — the
    class rode along in `cssClasses` and spent months being applied to a `Gtk.DrawingArea`.
-5. **`_alert.scss` stayed in the shell** even though `alert-dialog.ts` is in `ui/lib/` — it is a
-   window-SCOPED block (`window.nidara-alert-dialog`), a different animal from the kit's global
-   layer, and no other bundle shows a dialog yet. Revisit when one does.
+5. **`_alert.scss` stayed in the shell** even though `alert-dialog.ts` is in `ui/lib/` — the
+   reasoning was that it is a window-SCOPED block (`window.nidara-alert-dialog`), a different
+   animal from the kit's global layer, and that no other bundle showed a dialog yet.
+   ✅ **Resolved 2026-09-05 (#440), and the second half of that sentence had already stopped being
+   true when it was written**: the installer's quit dialog (#405) is a second consumer, and #436
+   made it a third. Both rendered as raw GTK — the two response buttons plain text, 19px, side by
+   side, with nothing telling the destructive one from the safe one. 🔑 The window-scoped/global
+   distinction was never the deciding question: the file's own mechanical test is *does `ui/lib/`
+   build the widget*, and a scoped selector inside the shared sheet is still one copy reaching
+   every bundle. ⚠️ `token-contract-check` went 22 → 23 and passed everywhere; the greeter had
+   already re-declared `--nidara-danger` for this exact component.
 
 🔑 **The rule that governs all five: a component enters the kit when its SECOND real consumer
 appears, and it enters migrating in the SAME change.** Never declared ahead. The proof is
