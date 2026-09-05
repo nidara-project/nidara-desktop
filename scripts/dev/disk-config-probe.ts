@@ -29,6 +29,14 @@
 //   · that a btrfs root has subvolumes and NO mountpoint of its own. Both is
 //     accepted and mounts the root twice; upstream writes this as
 //     `mountpoint=Path('/') if not using_subvolumes else None`.
+//   · that no subvolume lands on a path a PARTITION of the same layout claims.
+//     archinstall validates geometry and nothing about mount points being
+//     unique, so `@home` at /home beside a partition at /home is accepted, and
+//     what follows is silent: the root sorts first, `@home` is mounted, the
+//     partition is mounted on top of it, the install writes into the upper
+//     layer, and the machine boots with the empty subvolume mounted and the
+//     person's files under a shadowed mount. Nothing downstream catches it —
+//     the install succeeds and the failure appears at the first login.
 //
 // ⚠️ **It has been shown to fail, in both halves.** Five deliberate defects in
 // the entire-disk sums were introduced one at a time and each was caught by name:
@@ -41,6 +49,12 @@
 // filesystem passed straight through, a `modify` taking its type from lsblk
 // instead of the choice, partitions grouped by path instead of by disk, and
 // unassigned rows sent along anyway.
+//
+// Three more went in with the subvolume checks, each caught by name: the full
+// five emitted without filtering out a claimed path, a subvolumed root keeping
+// its own `/` mountpoint, and `compress=zstd` dropped. The first of those was
+// caught in a fixture that predates it — "two disks: system on the NVMe, /home
+// on the spinning one" is a collision that was already in this table.
 //
 // ⚠️ **One of those twelve was not caught the first time**, and it is the reason
 // the misaligned case below exists: rounding the start down to a MiB changed
@@ -185,6 +199,17 @@ const row = (m: ManualCase["mounts"][number]): ManualPartitionMount => ({
   format: m.format,
 })
 
+// The layout a btrfs root is supposed to get, written out HERE rather than
+// imported from `disk-config.ts`: a table that recomputes the answer from the
+// thing it is checking agrees with itself no matter what it says.
+const SUBVOL_MOUNTS: Array<[string, string]> = [
+  ["@", "/"],
+  ["@home", "/home"],
+  ["@log", "/var/log"],
+  ["@pkg", "/var/cache/pacman/pkg"],
+  ["@snapshots", "/.snapshots"],
+]
+
 const MANUAL_CASES: ManualCase[] = [
   {
     name: "reuse a Linux layout: ESP kept, root reformatted",
@@ -193,6 +218,36 @@ const MANUAL_CASES: ManualCase[] = [
     mounts: [
       { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat", start: 1 * MIB, size: 512 * MIB },
       { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs", start: 513 * MIB, size: 200 * 1024 * MIB },
+    ],
+  },
+  {
+    name: "a btrfs root brought by hand gets the layout, and /home is inside it",
+    esp: "/dev/sda1",
+    devices: 1,
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat", start: 1 * MIB, size: 1024 * MIB },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs", start: 1025 * MIB, size: 200 * 1024 * MIB },
+    ],
+  },
+  {
+    // The collision. A separate /home and `@home` both want the same path, and
+    // archinstall would mount one over the other without a word.
+    name: "a separate /home takes the path, so @home is not emitted",
+    esp: "/dev/sda1",
+    devices: 1,
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat", start: 1 * MIB, size: 1024 * MIB },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs", start: 1025 * MIB, size: 100 * 1024 * MIB },
+      { path: "/dev/sda3", mountpoint: "/home", format: true, filesystem: "ext4", start: 102401 * MIB, size: 100 * 1024 * MIB },
+    ],
+  },
+  {
+    name: "an ext4 root gets no subvolumes and mounts at / itself",
+    esp: "/dev/sda1",
+    devices: 1,
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat", start: 1 * MIB, size: 1024 * MIB },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "ext4", start: 1025 * MIB, size: 200 * 1024 * MIB },
     ],
   },
   {
@@ -339,6 +394,10 @@ ${c.name}`)
       if (source.mountpoint === "swap") {
         if (p.mountpoint !== null) fail(c.name, `${p.dev_path}: swap carries mountpoint ${p.mountpoint}`)
         if (source.format && p.fs_type !== "linux-swap") fail(c.name, `${p.dev_path}: swap formatted as ${p.fs_type}`)
+      } else if (isSubvolRoot(source)) {
+        if (p.mountpoint !== null) {
+          fail(c.name, `${p.dev_path}: a subvolumed root carries mountpoint ${p.mountpoint}`)
+        }
       } else if (p.mountpoint !== source.mountpoint) {
         fail(c.name, `${p.dev_path}: mountpoint ${p.mountpoint} ≠ ${source.mountpoint}`)
       }
@@ -353,10 +412,44 @@ ${c.name}`)
     if (espMount(assigned)?.path !== c.esp) fail(c.name, "espMount picks a different partition than the layout flags")
     if (!flagged[0].flags.includes("boot")) fail(c.name, "the ESP is not flagged bootable")
   }
+  const claimed = new Set(assigned.map(m => m.mountpoint))
   for (const p of all) {
     if (p.dev_path !== c.esp && p.flags.length > 0) fail(c.name, `${p.dev_path} carries flags [${p.flags}]`)
-    if (p.btrfs.length > 0) fail(c.name, `${p.dev_path}: manual mode does not create subvolumes`)
+
+    const source = assigned.find(m => m.path === p.dev_path)
+    if (!source) continue
+
+    if (!isSubvolRoot(source)) {
+      if (p.btrfs.length > 0) fail(c.name, `${p.dev_path}: subvolumes on something that is not a formatted btrfs root`)
+      if (p.mount_options.length > 0) fail(c.name, `${p.dev_path}: mount_options [${p.mount_options}] on a plain partition`)
+      continue
+    }
+
+    // The layout, minus every mount point a row of the table already claims.
+    // `@` survives that filter by name: `/` is this row.
+    const want = SUBVOL_MOUNTS
+      .filter(([name, mp]) => name === "@" || !claimed.has(mp))
+      .map(([name]) => name)
+    const got = p.btrfs.map(sv => sv.name)
+    if (got.join(",") !== want.join(",")) {
+      fail(c.name, `${p.dev_path}: subvolumes [${got}], expected [${want}]`)
+    }
+    for (const sv of p.btrfs) {
+      const mp = SUBVOL_MOUNTS.find(([name]) => name === sv.name)?.[1]
+      if (sv.mountpoint !== mp) fail(c.name, `${p.dev_path}: ${sv.name} mounts at ${sv.mountpoint}, expected ${mp}`)
+      if (sv.name !== "@" && claimed.has(sv.mountpoint)) {
+        fail(c.name, `${p.dev_path}: ${sv.name} would be mounted over by a partition at ${sv.mountpoint}`)
+      }
+    }
+    if (!p.mount_options.includes("compress=zstd")) {
+      fail(c.name, `${p.dev_path}: a btrfs root without compress=zstd`)
+    }
   }
+}
+
+/** A row that produces subvolumes: the root, formatted, as btrfs. */
+function isSubvolRoot(m: ManualPartitionMount): boolean {
+  return m.mountpoint === "/" && m.format && m.filesystem === "btrfs"
 }
 
 

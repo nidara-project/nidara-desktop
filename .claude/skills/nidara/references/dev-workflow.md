@@ -480,6 +480,20 @@ produced identical output and the probe still said ALL INVARIANTS HOLD.
 ⚠️ With subvolumes the root partition takes `mountpoint: null` — the mountpoints belong to the
 subvolumes, and giving it one as well mounts the root twice.
 
+⚠️ **A subvolume and a partition can claim the same path, and nothing stops them.** Both modes emit
+our five subvolumes for a btrfs root, so manual mode has to drop the ones a row of the table already
+takes — today that can only be `/home`, because the mount dropdown offers `/`, `/boot`, `/boot/efi`,
+`/efi`, `/home` and swap and nothing else, which is also why `@snapshots` is always emitted and
+"every install has `/.snapshots`" can be assumed. `@` is never dropped: `/` is the root row itself.
+Emitting `@home` beside a partition at `/home` is **accepted** by archinstall — `parse_arg` validates
+geometry and says nothing about mount points being unique — and the failure is silent all the way
+through: the root sorts first (`installer.py` orders by `x.mountpoint or Path('/')`, and a subvolumed
+root carries none), `@home` is mounted, then the partition is mounted ON TOP of it (`mount()` skips
+only when the SAME device is already there), the install writes into the upper layer, `genfstab`
+emits two lines for `/home`, `systemd-fstab-generator` refuses the second, and the machine boots with
+the empty subvolume mounted and the person's files under a shadowed mount. The install SUCCEEDS; it
+fails at the first login. `disk-config-probe.ts` is the only thing that catches it.
+
 ### What the disk page REFUSES lives in `lib/manual-problems.ts`, not in the page
 
 `manualProblems(mounts, uefi)` is both the list printed under the partition table and the whole of

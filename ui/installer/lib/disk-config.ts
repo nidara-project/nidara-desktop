@@ -126,6 +126,25 @@ const SUBVOLUMES: Subvolume[] = [
   { name: "@snapshots", mountpoint: "/.snapshots" },
 ]
 
+/**
+ * The subvolumes to emit for a root, minus the ones a partition already claims.
+ *
+ * `@` is never dropped: `/` is the root row itself, and the layout has no meaning
+ * without it. The rest are, and the reason is that archinstall does not check —
+ * `DiskLayoutConfiguration.parse_arg` validates geometry and nothing about mount
+ * points being unique, so declaring `@home` at `/home` alongside a partition at
+ * `/home` is accepted. What follows is silent: the root sorts first
+ * (`installer.py` orders by `x.mountpoint or Path('/')`, and a subvolumed root
+ * carries none), `@home` is mounted, and then the partition is mounted ON TOP of
+ * it — `mount()` only skips when the SAME device is already there. The install
+ * writes into the upper layer, `genfstab` emits two lines for `/home`,
+ * `systemd-fstab-generator` refuses the second, and the machine boots with the
+ * empty subvolume mounted and the person's files under a shadowed mount.
+ */
+function subvolumesFor(claimed: ReadonlySet<string>): Subvolume[] {
+  return SUBVOLUMES.filter(s => s.mountpoint === "/" || !claimed.has(s.mountpoint))
+}
+
 /** Our filesystem names are already archinstall's, except that ext4 is spelled the same. */
 function fsType(fs: FilesystemType): string {
   return fs === "vfat" ? "fat32" : fs
@@ -305,6 +324,7 @@ function existingFsType(fsType: string | null): string | null {
 export function manualDiskConfig(answer: ManualDiskAnswer): DiskConfig {
   const assigned = answer.mounts.filter(m => m.mountpoint !== "")
   const esp = espMount(assigned)
+  const claimed = new Set(assigned.map(m => m.mountpoint))
 
   const byDevice = new Map<string, Partition[]>()
 
@@ -316,6 +336,14 @@ export function manualDiskConfig(answer: ManualDiskAnswer): DiskConfig {
     // its `swapon` branch precisely by finding none and a `linux-swap` type.
     const isSwap = m.mountpoint === "swap"
 
+    // A btrfs root gets the same layout it gets in entire-disk mode. It used to
+    // get nothing, on the reasoning that a manual root is the layout the person
+    // brought — but the layout they brought is the GEOMETRY, and the subvolumes
+    // are what the system is. Without them the two modes install different
+    // products, and `/.snapshots` — which every snapshot surface has to be able
+    // to assume — existed in one of them.
+    const useSubvolumes = m.mountpoint === "/" && m.format && m.filesystem === "btrfs"
+
     const partition: Partition = {
       obj_id: GLib.uuid_string_random(),
       status: m.format ? "modify" : "existing",
@@ -325,17 +353,15 @@ export function manualDiskConfig(answer: ManualDiskAnswer): DiskConfig {
       fs_type: m.format
         ? (isSwap ? "linux-swap" : fsType(m.filesystem))
         : existingFsType(m.fsType),
-      mountpoint: isSwap ? null : m.mountpoint,
-      // Deliberately none, which is what the hand-rolled `mount` passed. The
-      // subvolumes and `compress=zstd` of entire-disk mode are not here: a manual
-      // root is the layout the person brought, and giving it ours would be a
-      // product decision taken in a translation function.
-      mount_options: [],
+      // ⚠️ null for a subvolumed root, or archinstall mounts the root twice.
+      mountpoint: isSwap || useSubvolumes ? null : m.mountpoint,
+      // Applied to every subvolume mount, as in entire-disk mode.
+      mount_options: useSubvolumes ? ["compress=zstd"] : [],
       dev_path: m.path,
       // What makes archinstall find the ESP at all (`get_efi_partition` filters on
       // this flag); on a real EFI partition it is also what the GPT already says.
       flags: esp && m.path === esp.path ? ["boot", "esp"] : [],
-      btrfs: [],
+      btrfs: useSubvolumes ? subvolumesFor(claimed) : [],
     }
 
     const partitions = byDevice.get(m.device)
