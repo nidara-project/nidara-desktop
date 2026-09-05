@@ -12,16 +12,7 @@ import { NidaraList, NidaraStackedRow } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import { getAnswers, setAccountAnswer } from "../lib/answers"
 import { heading, prose } from "./common"
-
-const USERNAME_REGEX = /^[a-z_][a-z0-9_-]{0,31}$/
-const HOSTNAME_REGEX = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/
-
-const SYSTEM_USERS = new Set([
-  "root", "daemon", "bin", "sys", "sync", "games", "man", "lp", "mail",
-  "news", "uucp", "proxy", "www-data", "backup", "list", "irc", "gnats",
-  "nobody", "systemd-network", "systemd-resolve", "messagebus",
-  "systemd-timesync", "avahi", "polkitd", "rtkit", "live",
-])
+import { accountProblems, cleanFullName } from "../lib/account-problems"
 
 /**
  * What is in the five fields right now, valid or not.
@@ -194,10 +185,7 @@ export function AccountStep(): Step {
       let formTouched = false
 
       const validate = () => {
-        // ':' and newlines would corrupt the passwd GECOS entry this name ends up
-        // in, and `usermod` rejects them with a generic error — stripped up front,
-        // the same way Settings → Users does when it creates an account.
-        const fname = (fullNameEntry.get_text?.() ?? fullNameEntry.text ?? "").trim().replace(/[:\n\r]/g, "")
+        const fname = cleanFullName(fullNameEntry.get_text?.() ?? fullNameEntry.text ?? "")
         const uname = (usernameEntry.get_text?.() ?? usernameEntry.text ?? "").trim()
         const hname = (hostnameEntry.get_text?.() ?? hostnameEntry.text ?? "").trim()
         const pw = pwEntry.get_text?.() ?? pwEntry.text ?? ""
@@ -205,51 +193,21 @@ export function AccountStep(): Step {
 
         draft = { fullName: fname, username: uname, hostname: hname, password: pw }
 
-        // ⚠️ EVERY fault, not the first one (D-20). `validate()` used to fill a
-        // single string and stop at the first `if`, so a form with a bad username
-        // and mismatched passwords reported one fault, and the next one only after
-        // the first was fixed — the person fixes what they were told, presses
-        // Continue, and it is dead again for a different reason nobody mentioned.
-        let usernameError = ""
-        if (uname.length === 0) {
-          if (formTouched) usernameError = t("accountErrUsernameRequired")
-        } else if (!USERNAME_REGEX.test(uname)) {
-          usernameError = t("accountErrUsernameFormat")
-        } else if (SYSTEM_USERS.has(uname)) {
-          usernameError = t("accountErrUsernameReserved")
-        }
+        // The rules — every one of them, and the completeness verdict — come from
+        // `lib/account-problems.ts`. They used to live here twice: four `if`
+        // chains filling four messages, and a separate seven-term `isValid`
+        // repeating every condition, with nothing making the two agree.
+        const problems = accountProblems(
+          { fullName: fname, username: uname, hostname: hname, password: pw, confirm: pw2 },
+          formTouched,
+        )
 
-        let hostnameError = ""
-        if (hname.length === 0) {
-          if (formTouched) hostnameError = t("accountErrHostnameRequired")
-        } else if (!HOSTNAME_REGEX.test(hname)) {
-          hostnameError = t("accountErrHostnameFormat")
-        }
+        usernameField.setError(problems.username)
+        hostnameField.setError(problems.hostname)
+        passwordField.setError(problems.password)
+        confirmField.setError(problems.confirm)
 
-        const passwordError = pw.length === 0 && formTouched ? t("accountErrPasswordRequired") : ""
-
-        // The mismatch belongs to the SECOND field, and only once there is
-        // something in it to compare: a message that appears on the first
-        // keystroke of a confirmation is a message that is wrong for as long as it
-        // takes to type the rest of it.
-        let confirmError = ""
-        if (pw2.length > 0 && pw !== pw2) confirmError = t("accountErrPasswordMismatch")
-        else if (pw2.length === 0 && pw.length > 0 && formTouched) confirmError = t("accountErrPasswordConfirm")
-
-        usernameField.setError(usernameError)
-        hostnameField.setError(hostnameError)
-        passwordField.setError(passwordError)
-        confirmField.setError(confirmError)
-
-        const isValid = uname.length > 0
-          && USERNAME_REGEX.test(uname)
-          && !SYSTEM_USERS.has(uname)
-          && hname.length > 0
-          && HOSTNAME_REGEX.test(hname)
-          && pw.length > 0
-          && pw === pw2
-
-        if (isValid) {
+        if (problems.valid) {
           setAccountAnswer({
             fullName: fname || uname,
             username: uname,

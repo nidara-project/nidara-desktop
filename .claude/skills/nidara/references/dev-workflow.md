@@ -509,6 +509,23 @@ expected failures. Shown to fail in both directions — deleting the root rule f
 root cases by name, and widening it from `/` to any assigned row fails all five layouts that are
 supposed to be installable.
 
+### The account form's rules are one function too, for the same reason
+
+`accountProblems(fields, touched)` in `lib/account-problems.ts` returns the four per-field messages
+AND a `valid` verdict. ⚠️ **It is one function because `steps/account.ts` had two**: four `if`
+chains filling four error strings, and a separate seven-term `isValid` boolean repeating every one
+of those conditions, with nothing making them agree — the same shape `manualProblems` exists to
+prevent on the disk page.
+
+⚠️ `valid` is **not** "no messages", and the asymmetry is the thing to keep. An untouched empty
+field is deliberately silent (the form opens PRE-FILLED, so a first paint must not greet anybody
+with four complaints) and still not installable. What must never happen is the reverse — `valid`
+true while any message shows, which is a Continue button lighting up over a visible complaint. The
+probe asserts that direction on every case rather than declaring it once.
+
+⚠️ `touched` is a parameter, not a module flag, for the same reason `uefi` is on `manualProblems`:
+both readings of every empty field have to be reachable from a probe.
+
 ### The point of no return is a `confirmNext()` on the step, and the frame shows it
 
 `Step.confirmNext?()` (`lib/flow.ts`) returns the words for a modal — heading, a body that NAMES
