@@ -455,7 +455,6 @@ export function DiskStep(): Step {
       const table = NidaraTable([
         { title: t("diskColPartition"), expand: true },
         { title: t("diskColSize"), align: Gtk.Align.END, dim: true },
-        { title: t("diskColContents"), dim: true },
         { title: t("diskMountpoint") },
         // Centred: the cell is a checkbox, which is a mark rather than a value,
         // and a mark hard against the left edge of a wide column stops reading as
@@ -488,11 +487,33 @@ export function DiskStep(): Step {
         for (const p of partitions) {
           const currentEntry = manualMounts.get(p.path)
 
-          // What is on the partition NOW, which is what tells a user whether they
-          // are about to overwrite something. It used to fall back to the literal
-          // word "Partitions" on a row that is a partition (D-15); an em dash is
-          // the honest answer — lsblk knows of no filesystem here.
-          const contents = [p.fstype, p.label].filter(Boolean).join(" · ") || "—"
+          // ── ONE filesystem column, and it always reads FORWARDS ────────────
+          //
+          // There used to be two: `Contents` (what is on the partition now) and
+          // `Filesystem` (a live dropdown of what to create). Two same-looking
+          // strings side by side, and on a row being KEPT the second one announced
+          // a `btrfs` that was never going to happen — next to a `/home` somebody
+          // was checking they would not lose. "Format to what, or format right
+          // now?" was the question, and no wording answers it while both are there.
+          //
+          // Prior art says the same thing twice. Calamares disables its filesystem
+          // combo when `Keep` is chosen and fills it with the EXISTING filesystem
+          // (`EditExistingPartitionDialog.cpp`, `setEnabled(doFormat)` then
+          // `setCurrentText(userVisibleFS(...))`); Anaconda does exactly that with
+          // `fancy_set_sensitive(self._fsCombo, self._permissions.format_type)`.
+          // Neither carries a second column — Calamares has an open TODO admitting
+          // its table cannot show formatting at all.
+          //
+          // So the column means one thing on every row: **what this partition will
+          // hold when the install finishes.** It is editable only where that is a
+          // choice. The question above cannot be asked of it.
+          //
+          // The label is not lost, it moves: `oldroot` says WHICH partition this
+          // is, which is the identity column's job, not the filesystem's.
+          const rowName = [p.path, p.label].filter(Boolean).join("  ·  ")
+          // An em dash where lsblk knows of no filesystem — the honest answer, and
+          // the same one the old `Contents` cell gave (D-15).
+          const keptFsLabel = p.fstype || "—"
 
           const mountStringList = Gtk.StringList.new(mountLabels())
           const mountDropDown = NidaraDropDown({
@@ -537,28 +558,41 @@ export function DiskStep(): Step {
           const curFsIdx = currentEntry ? FS_OPTIONS.indexOf(currentEntry.filesystem) : 0
           fsDropDown.set_selected(curFsIdx >= 0 ? curFsIdx : 0)
 
-          // ── The swap row has no filesystem question ────────────────────────
+          // ── Three states, one meaning ──────────────────────────────────────
           //
-          // On every other row the dropdown is the answer to "formatted as what";
-          // on a swap row the answer is fixed — `mkswap`, which is not in the list
-          // and never was. The column used to sit there offering btrfs over a
-          // partition that would be formatted as swap: a control showing a value
-          // that was not going to be used, which is the same lie as a greyed
-          // control still displaying one (#423).
+          // The row swaps the dropdown's MODEL rather than greying a list that
+          // still shows something else. That was already true for swap rows — a
+          // partition about to be `mkswap`ed must not sit there offering btrfs,
+          // "a control showing a value that was not going to be used, which is
+          // the same lie as a greyed control still displaying one" (#423) — and
+          // merging the two columns makes the rule general:
           //
-          // So the model itself changes, and the last real choice is kept to be
-          // restored if the row stops being swap. `swapping` is not decoration:
-          // `set_model` moves the selection and re-enters the handler below.
+          //   keep    format off, or no mount point   → the filesystem it ALREADY
+          //                                             has (or an em dash), fixed
+          //   swap    mount point is swap             → `swap`, fixed
+          //   choose  format on, anything else        → the real list, editable
+          //
+          // In every one of them the cell reads as the answer to the same
+          // question, which is the whole point of there being one column.
+          //
+          // `lastFsIdx` remembers the real choice across the other two states, so
+          // ticking Format back on does not silently reset a row to btrfs.
+          // `swapping` is not decoration: `set_model` moves the selection and
+          // re-enters the handler below.
           const swapStringList = Gtk.StringList.new(["swap"])
-          let showingSwapFs = false
+          const keptStringList = Gtk.StringList.new([keptFsLabel])
+          type FsMode = "keep" | "swap" | "choose"
+          let fsMode: FsMode = "choose"
           let swapping = false
           let lastFsIdx = fsDropDown.get_selected()
-          const setFsModel = (isSwap: boolean) => {
-            if (isSwap === showingSwapFs) return
+          const setFsMode = (mode: FsMode) => {
+            if (mode === fsMode) return
+            if (fsMode === "choose") lastFsIdx = fsDropDown.get_selected()
             swapping = true
-            showingSwapFs = isSwap
-            fsDropDown.set_model(isSwap ? swapStringList : fsStringList)
-            fsDropDown.set_selected(isSwap ? 0 : lastFsIdx)
+            fsMode = mode
+            fsDropDown.set_model(
+              mode === "swap" ? swapStringList : mode === "keep" ? keptStringList : fsStringList)
+            fsDropDown.set_selected(mode === "choose" ? lastFsIdx : 0)
             swapping = false
           }
 
@@ -568,26 +602,34 @@ export function DiskStep(): Step {
           // answered, and had they only been sensitive after a change, half the
           // table would have opened greyed out.
           const initialMount = MOUNT_OPTIONS[initialMountIdx]?.mountpoint ?? ""
-          setFsModel(initialMount === "swap")
+          const modeFor = (mount: string, doFormat: boolean): FsMode =>
+            mount === "swap" ? "swap" : (mount !== "" && doFormat) ? "choose" : "keep"
+          setFsMode(modeFor(initialMount, formatCheck.active))
           formatCheck.set_sensitive(initialMount !== "")
-          fsDropDown.set_sensitive(
-            initialMount !== "" && initialMount !== "swap" && formatCheck.active)
+          // Editable exactly where the value is a choice; everywhere else the cell
+          // still SAYS something true, which is why it is not simply blanked.
+          fsDropDown.set_sensitive(modeFor(initialMount, formatCheck.active) === "choose")
 
           const updatePartitionState = () => {
             const selIdx = mountDropDown.get_selected()
             const chosenMount = MOUNT_OPTIONS[selIdx]?.mountpoint ?? ""
             const shouldFormat = formatCheck.active
             const isSwap = chosenMount === "swap"
-            if (!isSwap && !showingSwapFs) lastFsIdx = fsDropDown.get_selected()
-            setFsModel(isSwap)
-            const chosenFs = (!isSwap && FS_OPTIONS[fsDropDown.get_selected()]) || "btrfs"
+            const mode = modeFor(chosenMount, shouldFormat)
+            if (fsMode === "choose") lastFsIdx = fsDropDown.get_selected()
+            setFsMode(mode)
+            // Read from `lastFsIdx`, not from the widget: in `keep` and `swap` the
+            // model is a one-item list and the selection is 0, which would answer
+            // btrfs for every row. What the plan does with it is unchanged —
+            // `manualDiskConfig` ignores `filesystem` entirely unless `format`.
+            const chosenFs = (!isSwap && FS_OPTIONS[mode === "choose" ? fsDropDown.get_selected() : lastFsIdx]) || "btrfs"
 
             // The rest of the row answers a question the mount point asks. With no
             // mount point there is no question: the partition is not part of this
             // install, and a live "Format" tick on it is a control that does
             // nothing — which on THIS page reads as a promise to erase something.
             formatCheck.set_sensitive(chosenMount !== "")
-            fsDropDown.set_sensitive(chosenMount !== "" && !isSwap && shouldFormat)
+            fsDropDown.set_sensitive(mode === "choose")
 
             if (!chosenMount) {
               manualMounts.delete(p.path)
@@ -641,9 +683,8 @@ export function DiskStep(): Step {
           })
 
           table.appendRow([
-            p.path,
+            rowName,
             formatSize(p.size),
-            contents,
             mountDropDown,
             formatCheck,
             fsDropDown,
