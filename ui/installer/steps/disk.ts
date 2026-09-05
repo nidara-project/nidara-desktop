@@ -223,7 +223,13 @@ export function DiskStep(): Step {
 
       let currentMode: "entire_disk" | "manual" = "entire_disk"
       let selectedDisk: BlockDevice | null = null
-      let selectedFs: FilesystemType = "btrfs"
+      // ⚠️ NOT a variable, and not a question. Entire-disk mode installs btrfs,
+      // full stop — the subvolume layout (and with it `/.snapshots`, which every
+      // snapshot surface is allowed to assume exists) is what the product IS, and
+      // an ext4 root quietly produced a machine with no rollback point at all.
+      // Manual mode still offers the whole `FS_OPTIONS` list per partition: there
+      // the person is assembling a layout we did not design.
+      const ENTIRE_DISK_FS: FilesystemType = "btrfs"
       const manualMounts = new Map<string, ManualPartitionMount>()
 
       const existingAnswer = getAnswers().disk
@@ -231,7 +237,6 @@ export function DiskStep(): Step {
         currentMode = existingAnswer.mode
         if (existingAnswer.mode === "entire_disk") {
           selectedDisk = existingAnswer.disk
-          selectedFs = existingAnswer.filesystem
         } else {
           for (const m of existingAnswer.mounts) {
             manualMounts.set(m.path, m)
@@ -250,7 +255,7 @@ export function DiskStep(): Step {
             setDiskAnswer({
               mode: "entire_disk",
               disk: selectedDisk,
-              filesystem: selectedFs,
+              filesystem: ENTIRE_DISK_FS,
             })
           } else {
             setDiskAnswer(null)
@@ -317,6 +322,10 @@ export function DiskStep(): Step {
       })
 
       entireBox.append(prose(t("diskWarning"), "installer-prose--warning"))
+      // Said here rather than only on the summary: it is the one thing this page
+      // decides on the person's behalf, and the page that decides it is where a
+      // decision should be disclosed.
+      entireBox.append(prose(t("diskEntireFsNote")))
 
       const disks = listDisks()
       const { box: diskListBoxContainer, listBox: diskListBox } = NidaraList("", [], "", { pick: true })
@@ -374,49 +383,6 @@ export function DiskStep(): Step {
 
       entireBox.append(diskListBoxContainer)
 
-      // Filesystem Choice for Entire Disk
-      const { box: fsListBoxContainer, listBox: fsListBox } = NidaraList("", [], "", { pick: true })
-      const checkBtrfs = NidaraSelectionCheck(16)
-      const checkExt4 = NidaraSelectionCheck(16)
-      checkBtrfs.visible = selectedFs === "btrfs"
-      checkExt4.visible = selectedFs === "ext4"
-
-      const rowBtrfs = NidaraRow(t("diskFsBtrfs"), null, checkBtrfs)
-      const rowExt4 = NidaraRow(t("diskFsExt4"), null, checkExt4)
-
-      if (selectedFs === "btrfs") rowBtrfs.add_css_class("is-selected")
-      else rowExt4.add_css_class("is-selected")
-
-      const updateFsSelection = (fs: FilesystemType) => {
-        if (fs === "btrfs") {
-          rowBtrfs.add_css_class("is-selected")
-          rowExt4.remove_css_class("is-selected")
-          checkBtrfs.visible = true
-          checkExt4.visible = false
-        } else {
-          rowExt4.add_css_class("is-selected")
-          rowBtrfs.remove_css_class("is-selected")
-          checkExt4.visible = true
-          checkBtrfs.visible = false
-        }
-      }
-
-      fsListBox.connect("row-activated", (_, row) => {
-        if (row === rowBtrfs) {
-          selectedFs = "btrfs"
-          updateFsSelection("btrfs")
-          syncAnswer()
-        } else if (row === rowExt4) {
-          selectedFs = "ext4"
-          updateFsSelection("ext4")
-          syncAnswer()
-        }
-      })
-
-      fsListBox.append(rowBtrfs)
-      fsListBox.append(rowExt4)
-
-      entireBox.append(fsListBoxContainer)
       stack.add_named(entireBox, "entire_disk")
 
       // ──── Page 2: Manual Partitioning ──────────────────────────────────
