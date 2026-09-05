@@ -29,6 +29,7 @@ import {
   type ManualPartitionMount,
 } from "../lib/answers"
 import { espMount } from "../lib/disk-config"
+import { ESP_MOUNTS, manualProblems } from "../lib/manual-problems"
 import { heading, prose, formatSize } from "./common"
 
 interface RawBlockDevice {
@@ -181,72 +182,6 @@ const mountLabels = () =>
 
 const FS_OPTIONS: FilesystemType[] = ["btrfs", "ext4", "xfs", "f2fs", "vfat"]
 
-/** The three mount points that can hold the EFI system partition on this install. */
-const ESP_MOUNTS = new Set(["/boot", "/boot/efi", "/efi"])
-
-/**
- * Everything wrong with a manual layout right now, in the user's language.
- * Empty means installable — which is exactly what `ready()` asks.
- *
- * It exists as one function because the page and the Continue button have to
- * agree, and before this they did not agree about anything a user could see:
- * `ready()` knew the two requirements and said nothing (the button simply stayed
- * dead, D-16), and NOTHING knew about the third — two partitions could both be
- * given `/home`, or `/`, and the installer accepted it and then mounted one over
- * the other (D-17).
- *
- * ⚠️ `swap` is deliberately not a duplicate. Several swap partitions on one
- * machine are a normal layout, and unlike a mount point swap is not a place —
- * `swapon` takes as many as it is given.
- */
-function manualProblems(mounts: ManualPartitionMount[]): string[] {
-  const problems: string[] = []
-  if (!mounts.some(m => m.mountpoint === "/")) problems.push(t("diskErrNoRoot"))
-  if (isUefi() && !mounts.some(m => ESP_MOUNTS.has(m.mountpoint))) problems.push(t("diskErrNoBoot"))
-
-  // ⚠️ The EFI system partition has to be FAT32, and nothing said so: the
-  // filesystem dropdown defaults to btrfs and applies to whatever the row was
-  // given, so assigning a partition to /boot/efi and leaving Format ticked —
-  // which the smart default does FOR you on anything that is not already vfat —
-  // formatted the ESP as btrfs. The install then ran to completion, reported
-  // success, and produced a machine whose firmware cannot read its own boot
-  // partition: the same shape as the legacy-BIOS case `ready()` refuses
-  // outright, an install that finishes and then does not boot.
-  //
-  // Which mount IS the ESP depends on the layout, and getting that wrong would
-  // refuse a valid one — the rule is `espMount`, shared with the layout that has
-  // to flag that partition for archinstall, the summary that names it, and the
-  // bootloader patching that has to write into it. Four answers that must agree,
-  // so there is one.
-  const esp = espMount(mounts)
-  // Formatting it settles the question; keeping it means what lsblk already
-  // reports has to be FAT — including the case where it reports nothing at all,
-  // which is not a filesystem the firmware can read either.
-  if (esp && (esp.format ? esp.filesystem !== "vfat" : esp.fsType !== "vfat")) {
-    problems.push(t("diskErrEfiNotFat"))
-  }
-
-  // ⚠️ Swap is the one row whose filesystem is not a choice, so an untick means
-  // "it is already swap" — and if it is not, archinstall has nothing to activate:
-  // a partition with no mount point and a type that is not `linux-swap` is
-  // silently skipped, and the machine boots with no swap at all. That is the same
-  // shape as the ESP check above: an answer accepted and then quietly dropped.
-  if (mounts.some(m => m.mountpoint === "swap" && !m.format && m.fsType !== "swap")) {
-    problems.push(t("diskErrSwapNotSwap"))
-  }
-
-  const seen = new Set<string>()
-  const dupes = new Set<string>()
-  for (const m of mounts) {
-    if (m.mountpoint === "" || m.mountpoint === "swap") continue
-    if (seen.has(m.mountpoint)) dupes.add(m.mountpoint)
-    seen.add(m.mountpoint)
-  }
-  if (dupes.size > 0) problems.push(t("diskErrDuplicateMount") + [...dupes].join(", "))
-
-  return problems
-}
-
 export function DiskStep(): Step {
   return {
     id: "disk",
@@ -267,7 +202,7 @@ export function DiskStep(): Step {
       if (!a) return false
       if (a.mode === "entire_disk") return a.disk !== null
       // The same list the page prints under the table — see manualProblems.
-      if (a.mode === "manual") return manualProblems(a.mounts).length === 0
+      if (a.mode === "manual") return manualProblems(a.mounts, isUefi()).length === 0
       return false
     },
 
@@ -502,6 +437,7 @@ export function DiskStep(): Step {
       refreshProblems = () => {
         const problems = manualProblems(
           Array.from(manualMounts.values()).filter(m => m.mountpoint !== ""),
+          isUefi(),
         )
         problemLabel.label = problems.join("\n")
         problemLabel.visible = problems.length > 0

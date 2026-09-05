@@ -480,6 +480,42 @@ produced identical output and the probe still said ALL INVARIANTS HOLD.
 ⚠️ With subvolumes the root partition takes `mountpoint: null` — the mountpoints belong to the
 subvolumes, and giving it one as well mounts the root twice.
 
+### What the disk page REFUSES lives in `lib/manual-problems.ts`, not in the page
+
+`manualProblems(mounts, uefi)` is both the list printed under the partition table and the whole of
+manual mode's `ready()`, so a rule missing from it is a Continue button that lights up on a layout
+that cannot work. It moved out of `steps/disk.ts` on 2026-09-05 for one reason: the page imports
+Gtk, and a rule that can only be evaluated with a display is a rule that can only be checked by
+clicking. `uefi` is a parameter rather than a `/sys/firmware/efi` read for the same reason — the
+BIOS branch is otherwise unreachable on a UEFI runner.
+
+The rules today, each one added after an install had already finished and produced a machine that
+does not boot or does not install: a root must exist and **must be formatted** (#437 — `existing` is
+skipped by both `device_handler.partition()` and `_format_partitions()`, so pacstrap lands on
+another distribution's `/usr` and pacman aborts on the first collision; the same clause covers a
+partition with no filesystem at all, which has nothing to mount), a UEFI machine needs an ESP, that
+ESP must be FAT (#414/#421), a kept swap row must already be swap (#423), and no two rows may claim
+one mount point. ⚠️ Several swap rows are NOT a duplicate — `swapon` takes as many as it is given.
+
+`scripts/dev/disk-config-probe.ts` now has a second half that runs layouts through it and asserts
+the message keys. ⚠️ **Valid layouts are cases in that table too, and they must be**: a
+`manualProblems` that returned every message for every layout would pass a table made only of
+expected failures. Shown to fail in both directions — deleting the root rule fails exactly the two
+root cases by name, and widening it from `/` to any assigned row fails all five layouts that are
+supposed to be installable.
+
+### The point of no return is a `confirmNext()` on the step, and the frame shows it
+
+`Step.confirmNext?()` (`lib/flow.ts`) returns the words for a modal — heading, a body that NAMES
+what is about to be destroyed, and the two button labels — or nothing, in which case the footer
+button advances as every other one does. `SummaryStep` is the only step that returns any (#436).
+
+⚠️ The frame shows the dialog, not the step, and the split is deliberate: the frame already owns the
+quit alert and has the window to be transient for, while only the step knows what it is about to
+destroy. The body comes from `eraseSentence()`, exported from `steps/summary.ts` and also printed at
+the top of the page — one function, because a modal that names something other than the page behind
+it leaves the reader deciding which of the two descriptions of an irreversible act to believe.
+
 Our layout is unchanged by the move, which is the whole reason it was affordable: 512 MiB ESP at
 1 MiB, the same five subvolumes including `@snapshots`, `compress=zstd`. Upstream's
 `default_layout` would have cost a 1 GiB ESP and four subvolumes — that is what Omarchy is stuck

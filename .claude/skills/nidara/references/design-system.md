@@ -3262,6 +3262,15 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
    collapsed to ~28) and the heading at weight 400 instead of 600. Fixed 2026-08-10 by giving it
    `_alert.scss` with its own root, exactly like `.about-*` got `_about.scss` in the same sweep.
 
+   ⚠️ **And then the same rules failed a second time, for the other reason, until 2026-09-05
+   (#440): the sheet was the SHELL's, and the installer calls `showNidaraAlert` too.** Its quit
+   dialog (#405) and its install confirmation (#436) both rendered as raw GTK — the response
+   buttons plain text at 19px instead of 48px rows, and the destructive one not red. The block now
+   lives in `ui/lib/styles/_components.scss` under that file's mechanical test (a rule belongs
+   there iff `ui/lib/` builds the widget). 🔑 Two failures, two different questions, and the pair
+   is the lesson: **which window the widget IS decides the SELECTOR; which bundles build it decide
+   the SHEET.** Getting the first right in 2026-08 left the second one wrong for a month.
+
    🔑 **The trap was that it looked legitimate.** `.about-*` was in `_bar.scss` "only by position"
    and read as obviously misfiled; the alert dialog is *called only from Settings*, so filing it
    with Settings looked right. Ask which window the widget IS, never which window opens it.

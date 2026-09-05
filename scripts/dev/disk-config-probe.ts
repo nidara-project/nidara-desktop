@@ -52,6 +52,8 @@
 import { entireDiskConfig, manualDiskConfig, espMount } from "../../ui/installer/lib/disk-config"
 import { loaderRoot } from "../../ui/installer/lib/bootloader"
 import { swapFstabEntry } from "../../ui/installer/lib/swap"
+import { manualProblems } from "../../ui/installer/lib/manual-problems"
+import { t } from "../../ui/installer/lib/i18n"
 import type {
   EntireDiskAnswer,
   FilesystemType,
@@ -445,6 +447,143 @@ for (const c of FSTAB_CASES) {
   // A blank line after the entry, like every block genfstab writes — so the next
   // one appended does not land on the same line as this one.
   if (!entry.endsWith("\n\n")) fail(c.dev, "entry does not end with a blank line")
+}
+
+
+// ─── WHAT THE PAGE MUST REFUSE ───────────────────────────────────────────────
+//
+// Everything above checks the JSON we emit. This checks the layouts we must
+// never emit at all — `manualProblems()`, which is both the list printed under
+// the table and the whole of `ready()` for manual mode, so a rule missing here is
+// a Continue button that lights up on a layout that cannot work.
+//
+// ⚠️ It is the half that had no instrument. Each of these rules was added after
+// an install had already finished and produced a machine that does not boot
+// (#414/#421, #423) or does not install (#437) — found by installing, one at a
+// time, which is the most expensive way there is to discover a missing `if`.
+//
+// ⚠️ A refusal probe needs BOTH columns or it is worthless: a `manualProblems`
+// that returned every message for every layout would pass a table of expected
+// failures. So VALID layouts are cases here too, and they assert an EMPTY list.
+
+interface RefusalCase {
+  name: string
+  uefi: boolean
+  mounts: ManualCase["mounts"]
+  /** i18n keys, as a set — order is the page's business, not the rule's. */
+  want: string[]
+}
+
+const REFUSAL_CASES: RefusalCase[] = [
+  {
+    name: "a layout that is fine — the control that stops this table passing vacuously",
+    uefi: true, want: [],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat" },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+    ],
+  },
+  {
+    name: "the root is kept — pacstrap onto another distribution's /usr (#437)",
+    uefi: true, want: ["diskErrRootNotFormatted"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat" },
+      { path: "/dev/sda2", mountpoint: "/", format: false, fsType: "ext4" },
+    ],
+  },
+  {
+    name: "the root is kept and has no filesystem at all — one refusal covers both",
+    uefi: true, want: ["diskErrRootNotFormatted"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat" },
+      { path: "/dev/sda2", mountpoint: "/", format: false, fsType: null },
+    ],
+  },
+  {
+    name: "no root at all",
+    uefi: true, want: ["diskErrNoRoot", "diskErrNoBoot"],
+    mounts: [
+      { path: "/dev/sda2", mountpoint: "/home", format: true, filesystem: "ext4" },
+    ],
+  },
+  {
+    name: "no EFI partition, on a UEFI machine",
+    uefi: true, want: ["diskErrNoBoot"],
+    mounts: [
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+    ],
+  },
+  {
+    name: "the same rows on a BIOS machine — the ESP rule does not apply",
+    uefi: false, want: [],
+    mounts: [
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+    ],
+  },
+  {
+    name: "the ESP is kept and is not FAT (#414)",
+    uefi: true, want: ["diskErrEfiNotFat"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "ext4" },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+    ],
+  },
+  {
+    name: "the ESP is about to be formatted as btrfs (#421)",
+    uefi: true, want: ["diskErrEfiNotFat"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: true, filesystem: "btrfs" },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+    ],
+  },
+  {
+    name: "a swap row kept that is not swap yet (#423)",
+    uefi: true, want: ["diskErrSwapNotSwap"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat" },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+      { path: "/dev/sda3", mountpoint: "swap", format: false, fsType: "ext4" },
+    ],
+  },
+  {
+    name: "two partitions claiming /home — one would mount over the other",
+    uefi: true, want: ["diskErrDuplicateMount"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat" },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+      { path: "/dev/sda3", mountpoint: "/home", format: true, filesystem: "ext4" },
+      { path: "/dev/sda4", mountpoint: "/home", format: true, filesystem: "ext4" },
+    ],
+  },
+  {
+    name: "two swap partitions — a normal layout, and swapon takes as many as it is given",
+    uefi: true, want: [],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat" },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+      { path: "/dev/sda3", mountpoint: "swap", format: false, fsType: "swap" },
+      { path: "/dev/sda4", mountpoint: "swap", format: true },
+    ],
+  },
+]
+
+print("")
+for (const c of REFUSAL_CASES) {
+  const got = manualProblems(c.mounts.map(row), c.uefi)
+  // `diskErrDuplicateMount` ends in the offending mount points, so the expected
+  // message is a prefix rather than the whole string.
+  const want = c.want.map(k => t(k as any))
+  const matched = want.filter(w => got.some(g => g.startsWith(w)))
+  const unexpected = got.filter(g => !want.some(w => g.startsWith(w)))
+
+  print(`   ${got.length === 0 ? "installable" : `${got.length} refusal(s)`.padEnd(11)}  ${c.name}`)
+
+  if (matched.length !== want.length) {
+    fail(c.name, `expected ${JSON.stringify(c.want)}, got ${JSON.stringify(got)}`)
+  }
+  if (unexpected.length > 0) {
+    fail(c.name, `refused for reasons this case did not expect: ${JSON.stringify(unexpected)}`)
+  }
 }
 
 print(failures === 0 ? "\nALL INVARIANTS HOLD" : `\n${failures} FAILURE(S)`)

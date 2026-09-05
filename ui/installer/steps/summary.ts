@@ -34,6 +34,38 @@ function targetFs(m: ManualPartitionMount): string {
   return m.mountpoint === "swap" ? "swap" : m.filesystem
 }
 
+/**
+ * What this install is about to destroy, named, in the words the disk page used.
+ *
+ * ⚠️ One function, two readers: the loudest line on this page (#401, D-25) and
+ * the body of the confirmation in front of the install (#436). A modal that
+ * names something other than the page behind it is worse than no modal — it is a
+ * second description of an irreversible act, and the person is left deciding
+ * which of the two to believe.
+ *
+ * Only when something really is destroyed: a manual layout that formats nothing
+ * destroys nothing, and claiming otherwise is how a warning becomes the kind
+ * people learn to click through.
+ */
+export function eraseSentence(): string {
+  const disk = getAnswers().disk
+  if (disk?.mode === "entire_disk") {
+    const d = disk.disk
+    return t("summaryEraseDiskPrefix")
+      + `${d.model || d.name} · ${formatSize(d.size)} · ${d.path}`
+  }
+  if (disk?.mode === "manual") {
+    const formatted = disk.mounts.filter(m => m.format)
+    if (formatted.length > 0) {
+      return t("summaryErasePartsPrefix") + "\n"
+        + formatted
+          .map(m => `${m.path}  ·  ${formatSize(m.size)}  ·  ${m.mountpoint}  ·  ${targetFs(m)}`)
+          .join("\n")
+    }
+  }
+  return t("summaryWarning")
+}
+
 /** `config.a.b` without throwing on a config that does not have an `a`. */
 function pick(config: BaseConfig, path: string[]): unknown {
   let node: any = config
@@ -57,6 +89,28 @@ export function SummaryStep(): Step {
       const answers = getAnswers()
       return answers.disk !== null && answers.account !== null
     },
+
+    /**
+     * The point of no return, and the only place in the flow that has one.
+     *
+     * ⚠️ Before this, the footer button on the last reversible screen was the
+     * seventh Continue in the same position as the six before it, and it started
+     * `archinstall` (#436). Closing the window asked — #405 wired `onClose` to
+     * `showNidaraAlert` so a stray click could not throw away a typed password —
+     * and erasing the disk did not. Every reference draws the line here:
+     * subiquity's "Confirm destructive action", Calamares' blocking QMessageBox,
+     * Anaconda's Summary of Changes.
+     *
+     * The frame shows it, because the frame already owns the other alert. What
+     * this step supplies is the words — the same sentence the page prints at the
+     * top, from the same function.
+     */
+    confirmNext: () => ({
+      heading: t("confirmInstallHeading"),
+      body: `${eraseSentence()}\n\n${t("confirmInstallBody")}`,
+      cancelLabel: t("confirmInstallCancel"),
+      confirmLabel: t("installNow"),
+    }),
 
     build() {
       const box = new Gtk.Box({
@@ -104,25 +158,7 @@ export function SummaryStep(): Step {
         const live = getLiveDefaults()
 
         // ── What is about to be destroyed ────────────────────────────────────
-        // Named, in the same words the disk page used, and only when something
-        // really is: a manual layout that formats nothing destroys nothing, and
-        // claiming otherwise on this page would be the kind of warning people
-        // learn to click through.
-        let erase = t("summaryWarning")
-        if (disk?.mode === "entire_disk") {
-          const d = disk.disk
-          erase = t("summaryEraseDiskPrefix")
-            + `${d.model || d.name} · ${formatSize(d.size)} · ${d.path}`
-        } else if (disk?.mode === "manual") {
-          const formatted = disk.mounts.filter(m => m.format)
-          if (formatted.length > 0) {
-            erase = t("summaryErasePartsPrefix") + "\n"
-              + formatted
-                .map(m => `${m.path}  ·  ${formatSize(m.size)}  ·  ${m.mountpoint}  ·  ${targetFs(m)}`)
-                .join("\n")
-          }
-        }
-        eraseLabel.label = erase
+        eraseLabel.label = eraseSentence()
 
         // ── What the person answered ─────────────────────────────────────────
         if (disk) {
