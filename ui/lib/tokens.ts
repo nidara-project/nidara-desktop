@@ -421,6 +421,22 @@ export const WINDOW_LAYOUT = {
      * (`/dev/nvme0n1p10` against the `/dev/nvme0n1p1` the probe saw) and the pane
      * is 761. This is the rung under it.
      *
+     * ⚠️ RE-MEASURED 2026-09-06, after `Contents` and `Filesystem` merged into one
+     * column. Russian still wins and the pane it needs dropped from 741 to **703**
+     * (padding included) — the run was:
+     *
+     *     ru 703 · pt 654 · es 643 · ja 641 · fr 632 · it 621 · nl 617
+     *     pl 605 · de 597 · en 557 · zh 533
+     *
+     * The number stays 760, and that is a decision rather than inertia. What the
+     * merge changed is what the slack is FOR: the identity column now carries
+     * `path · label`, and a filesystem label is not bounded by anything this probe
+     * can see — it reads this machine's real partitions, so it measures the labels
+     * this machine happens to have, not the 16 characters ext4 allows or the 255
+     * btrfs does. The 57px between 703 and 760 is that allowance. Chasing the
+     * measurement down would buy a window 37px narrower and spend it the first
+     * time somebody's partition is called something long.
+     *
      * ⚠️ Measure the WORST CASE, not the opening state. A `Gtk.DropDown` is as
      * wide as its SELECTED item: with the mount labels this table first shipped
      * with, the same table measured 543 unanswered and 645 once somebody chose
