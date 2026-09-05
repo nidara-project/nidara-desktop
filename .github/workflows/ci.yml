@@ -56,6 +56,15 @@
 #     policy (a 503 is retried past, a 4xx surfaces without retry). Hermetic: no
 #     network, key, or running shell — only gjs. Logic in
 #     scripts/ci/agent-loop-test.py.
+#   - installer-logic: the layout the installer hands archinstall, and the layouts
+#     it must REFUSE, checked as pure functions — no disk, no window, no GTK.
+#     `manual_partitioning` has no "the rest of the disk": every partition is an
+#     absolute start and length, and archinstall rejects four kinds of arithmetic
+#     wrong at the worst possible moment (after every question is answered, on the
+#     medium). The refusal half is the one that had no instrument at all: each rule
+#     in `manualProblems` was added after an install had already finished and
+#     produced a machine that does not boot or does not install. It ran only when a
+#     human remembered until 2026-09-05. Logic in scripts/dev/disk-config-probe.ts.
 
 name: CI
 
@@ -422,3 +431,56 @@ jobs:
           sudo apt-get install -y -qq gjs gir1.2-secret-1
       - name: Drive nidara-agent against a mock provider (must succeed)
         run: python3 scripts/ci/agent-loop-test.py
+
+  installer-logic:
+    name: Installer disk logic (no disk)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      # The probe is TypeScript that imports `gi://GLib`, so it is bundled with
+      # our own esbuild wrapper and run by gjs — the same two tools the bundle
+      # itself is built with, rather than a Node reimplementation of them. gjs
+      # pulls the GLib typelib it needs; nothing else is required, because the
+      # probe touches no disk, opens no window and reads nothing about the
+      # machine it runs on.
+      - name: Install gjs + esbuild
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gjs
+          npm install -g esbuild@0.28.2
+
+      # ⚠️ THE POSITIVE CONTROL COMES FIRST, and it is not ceremony. Until
+      # 2026-09-05 the probe printed "N FAILURE(S)" and exited 0 — as a tool a
+      # person runs and reads, that was survivable; as a CI step it would have
+      # been a gate that can only pass. So this step breaks a rule on purpose and
+      # requires the probe to NOTICE: if a deliberately deleted refusal still
+      # comes back green, the run below proves nothing and this job says so
+      # instead of reporting a pass.
+      - name: The probe can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/manual-problems.ts /tmp/manual-problems.bak
+          sed -i 's|^  if (root && !root.format) problems.push(t("diskErrRootNotFormatted"))|  // deliberately removed|' \
+            ui/installer/lib/manual-problems.ts
+          if ! git diff --quiet ui/installer/lib/manual-problems.ts; then
+            echo "control: the root-format rule was removed"
+          else
+            echo "::error::the control patched nothing — the rule it deletes has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/disk-config-probe.ts /tmp/probe-defect.js
+          if gjs -m /tmp/probe-defect.js; then
+            echo "::error::the probe passed with a refusal rule deleted — it is not checking what it prints"
+            cp /tmp/manual-problems.bak ui/installer/lib/manual-problems.ts
+            exit 1
+          fi
+          cp /tmp/manual-problems.bak ui/installer/lib/manual-problems.ts
+          git diff --quiet ui/installer/lib/manual-problems.ts
+
+      - name: The layouts we emit and the ones we refuse (must succeed)
+        run: |
+          ./scripts/bundle.sh --js scripts/dev/disk-config-probe.ts /tmp/probe.js
+          gjs -m /tmp/probe.js

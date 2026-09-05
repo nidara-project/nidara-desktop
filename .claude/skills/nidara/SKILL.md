@@ -145,7 +145,7 @@ nidara-agent                      # the built-in Assistant's BRAIN: a BYOK LLM t
 nidara-mcp                        # all of the above as MCP tools over stdio (incl. list_windows/list_workspaces (reads), focus_window (ungated WM op), query_app → nidara-a11y, do_app_action → nidara-act, type_text/press_key → nidara-type, click_app/click_at (left + button:"right") / hover_app/hover_at / scroll_app/scroll_at / drag_app/drag_at → nidara-click; WM action verbs via run_action; .mcp.json: repo root for dev; installer-managed copy in ~/.config/nidara/ for users)
 ```
 
-There is no test runner; **nine CI jobs** stand in for one (`.github/workflows/ci.yml`, every
+There is no test runner; **ten CI jobs** stand in for one (`.github/workflows/ci.yml`, every
 one with a `timeout-minutes`):
 
 | job | gates |
@@ -159,6 +159,7 @@ one with a `timeout-minutes`):
 | `pkgbuild` | `bash -n` on the PKGBUILD + `depends=()` still sources as an array of ≥40 (v0.6.0 shipped with an unquoted `hyprland>=0.56` that bash read as a redirection and silently truncated the array) + **config migrations are valid bash, no-op on a fresh install and idempotent with the marker cleared** (`migrations-check.mjs`; a migration mutates a user's config once, on a machine nobody can inspect afterwards) |
 | `hypr-config` | `luac -p config/hypr/hyprland.lua` (one syntax error = the session boots with NO Nidara config at all) + the game-mode handlers driven against a stubbed `hl` + **every window rule names something the source declares** (`hypr-rule-check.mjs`: a rule is a string matched against a string a GTK window announces, and our windows change class at MAP — a STATIC effect sees only the birth class, a DYNAMIC one only the current one, and both traps are silent) + **the Lua the shell GENERATES parses** (`hypr-lua-check.mjs`: `nidara-settings.lua` and `nidara-monitor.lua` are built from TypeScript strings, so `tsc` sees a string and `luac` never sees what it produced — and `hyprland.lua` requires both at every login) |
 | `agent-loop` | drives `bin/nidara-agent` against a mock provider (`scripts/ci/agent-loop-test.py`) |
+| `installer-logic` | the `disk_config` the installer emits AND the layouts `manualProblems` must REFUSE, as pure functions — no disk, no window, no GTK (`scripts/dev/disk-config-probe.ts`, bundled + run by gjs). ⚠️ Its FIRST step deletes a refusal rule on purpose and requires the probe to catch it: the probe printed `N FAILURE(S)` and exited 0 until 2026-09-05, which as a CI step is a gate that can only pass |
 
 ⚠️ A REQUIRED check skipped by a path filter never reports, and that **stalls the merge queue** —
 skip the *work* inside a job, never the job. Details in `references/dev-workflow.md`.
