@@ -9,7 +9,7 @@ import { NidaraButton, NidaraScrolled } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import { getAnswers } from "../lib/answers"
 import { assemblePlan, type AssembledPlan } from "../lib/plan"
-import { configureInstalledBootloader } from "../lib/bootloader"
+import { archinstallStamp, configureInstalledBootloader } from "../lib/bootloader"
 import { applyRealName } from "../lib/real-name"
 import { writeSwapFstabEntries } from "../lib/swap"
 import { stripAnsi } from "../lib/ansi"
@@ -322,6 +322,16 @@ export function RunStep(): Step {
         // that stays lit until the install finishes, not a wrong claim.
         let awaitingBasePhase = true
         enterPhase(1)
+
+        // ⚠️ Taken HERE, one line before the spawn, and it is not a log line.
+        // `configureInstalledBootloader` uses it to tell the loader entries THIS
+        // run produced from the ones that were already on the EFI partition — an
+        // ESP can be shared with a system that was installed first, and every
+        // edit it makes is scoped by this stamp (#443). archinstall fixes its own
+        // `init_time` when its Installer is constructed, which is after this, so
+        // ours can only be the earlier of the two.
+        const startedAt = archinstallStamp()
+
         appendLog(`[EXEC] ${cmd.join(" ")}`)
 
         try {
@@ -360,7 +370,7 @@ export function RunStep(): Step {
                 enterPhase(3)
                 applyRealName(isArm, answers, appendLog)
                 writeSwapFstabEntries(isArm, answers, appendLog)
-                configureInstalledBootloader(isArm, answers, appendLog)
+                configureInstalledBootloader(isArm, answers, appendLog, startedAt)
               }
             } catch (e: any) {
               appendLog(`[ERROR] Process exited with error: ${e.message || e}`)

@@ -516,3 +516,37 @@ jobs:
         run: |
           ./scripts/bundle.sh --js scripts/dev/account-rules-probe.ts /tmp/account-probe.js
           gjs -m /tmp/account-probe.js
+
+      # Third of the same shape, and the one whose damage lands OUTSIDE the
+      # machine we installed: an EFI system partition can be shared, and every
+      # edit `lib/bootloader.ts` makes to it used to run over `*.conf` and over
+      # `loader.conf` flat — retitling a neighbouring Arch's entry, appending our
+      # kernel command line to somebody else's, and overwriting the `loader.conf`
+      # that belonged to whoever installed first (#443, #444, #445). None of that
+      # is reachable from this repo: it needs a machine with another system
+      # already on it, and the person who finds out is the one whose Windows or
+      # Ubuntu has gone from the menu.
+      - name: The bootloader probe can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/bootloader.ts /tmp/bootloader.bak
+          sed -i 's|^  return stamp >= startedAt$|  return true // deliberately removed|' \
+            ui/installer/lib/bootloader.ts
+          if ! git diff --quiet ui/installer/lib/bootloader.ts; then
+            echo "control: an entry is no longer dated against the run that wrote it"
+          else
+            echo "::error::the control patched nothing — the rule it deletes has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/bootloader-rules-probe.ts /tmp/bootloader-defect.js
+          if gjs -m /tmp/bootloader-defect.js; then
+            echo "::error::the probe passed while every foreign entry counted as ours — it is not checking what it prints"
+            cp /tmp/bootloader.bak ui/installer/lib/bootloader.ts
+            exit 1
+          fi
+          cp /tmp/bootloader.bak ui/installer/lib/bootloader.ts
+          git diff --quiet ui/installer/lib/bootloader.ts
+
+      - name: What we may touch on somebody else's ESP (must succeed)
+        run: |
+          ./scripts/bundle.sh --js scripts/dev/bootloader-rules-probe.ts /tmp/bootloader-probe.js
+          gjs -m /tmp/bootloader-probe.js
