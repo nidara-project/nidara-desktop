@@ -44,6 +44,16 @@ export interface NidaraTableResult {
     appendRow(cells: Array<Gtk.Widget | string>, extraClasses?: string[]): Gtk.ListBoxRow
     /** The "there is nothing here" row — spans the table instead of the columns. */
     appendMessage(text: string): Gtk.ListBoxRow
+    /**
+     * A full-width heading INSIDE the list, naming the group of rows under it —
+     * a disk, in the installer's case.
+     *
+     * It is a row rather than a second table because the alternative is one table
+     * per group, and then the columns of each stop lining up: the size groups are
+     * per-table, so two disks would measure two different `Mount point` columns
+     * and the page would read as two unrelated things.
+     */
+    appendSection(text: string): Gtk.ListBoxRow
     /** Empty the card. The headings stay: a table with no rows is still a table. */
     clear(): void
 }
@@ -196,6 +206,30 @@ export function NidaraTable(
         return row
     }
 
+    const appendSection = (text: string) => {
+        // ⚠️ The child is the LABEL, not a Box, and that is load-bearing: `clear`
+        // walks a row's Box children to take them OFF the size groups, and a
+        // section's single cell was never IN one. Handing it a non-Box child
+        // makes it skip by construction rather than by a special case that a
+        // later edit can forget.
+        const row = new Gtk.ListBoxRow({
+            child: new Gtk.Label({
+                label: text, halign: Gtk.Align.START, xalign: 0,
+                css_classes: ["nidara-table-section"],
+                // Ellipsised, and that is what keeps a long group name from
+                // widening the pane: an ellipsising label still reports the full
+                // text as its NATURAL width, so without the clamp the caller puts
+                // around this table a 60-character disk model would push every
+                // column. With it, the name truncates and the columns do not move.
+                wrap: false, ellipsize: Pango.EllipsizeMode.END,
+            }),
+            css_classes: ["nidara-row", "nidara-table-section-row"],
+            activatable: false, selectable: false, focusable: false,
+        })
+        listBox.append(row)
+        return row
+    }
+
     const appendMessage = (text: string) => {
         const row = NidaraEmptyRow(text)
         listBox.append(row)
@@ -223,5 +257,5 @@ export function NidaraTable(
         }
     }
 
-    return { box, listBox, appendRow, appendMessage, clear }
+    return { box, listBox, appendRow, appendMessage, appendSection, clear }
 }

@@ -295,6 +295,23 @@ checkbutton:disabled {
     margin-bottom: 8px;
 }
 
+/* A group heading INSIDE the list — the disk a run of rows belongs to.
+   Reads as a heading and not as data: same dim colour and weight as the column
+   headings above, so the eye files it with them rather than with the rows it
+   sits among. It carries no hover and no min-height, which is what stops it
+   looking like a row somebody could act on. */
+.nidara-table-section-row {
+    min-height: 0;
+    background: none;
+}
+
+.nidara-table-section {
+    font-size: $fse-caption;
+    font-weight: $fw-medium;
+    color: var(--nidara-text-dim);
+    margin: 10px 0 4px;
+}
+
 /* A text cell. Matches .nidara-row-title, because that is what it is — the row's
    text, split across columns. */
 .nidara-table-cell {
