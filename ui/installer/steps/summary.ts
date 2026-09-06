@@ -300,11 +300,32 @@ export function SummaryStep(): Step {
             ))
           }
 
+          // ⚠️ Swap is ONE question with two possible answers at once, and this
+          // row used to give only ours. `base.json` turns zram on, which is a
+          // product decision nobody was asked about and belongs in this group —
+          // but a swap PARTITION is the person's own assignment, made two pages
+          // earlier, and the row headed "Swap" said `zram · zstd` while 2 GiB of
+          // their disk was about to be formatted as swap.
+          //
+          // The erase warning at the top of the page did list that partition, so
+          // the summary was stating two different things about swap in two
+          // places, and the row somebody would actually read to answer "what is
+          // my swap going to be" was the incomplete one (#456).
+          //
+          // So it reports what the machine ENDS UP WITH. A created row (a claimed
+          // gap, #447) has no device node yet, hence the fallback to its size.
           const swapOn = pick(config, ["swap", "enabled"]) === true
           const swapAlgo = pick(config, ["swap", "algorithm"])
+          const swapParts = disk?.mode === "manual"
+            ? disk.mounts.filter(m => m.mountpoint === "swap")
+            : []
+          const swapLines = [
+            ...swapParts.map(m => `${m.path || t("diskFreeSpace")}  ·  ${formatSize(m.size)}`),
+            ...(swapOn ? [`zram · ${typeof swapAlgo === "string" ? swapAlgo : "zstd"}`] : []),
+          ]
           decided.listBox.append(NidaraRow(
             t("summarySwap"),
-            swapOn ? `zram · ${typeof swapAlgo === "string" ? swapAlgo : "zstd"}` : t("diskMountNone"),
+            swapLines.length > 0 ? swapLines.join("\n") : t("diskMountNone"),
           ))
 
           // Not from base.json: archinstall only touches root when the plan
