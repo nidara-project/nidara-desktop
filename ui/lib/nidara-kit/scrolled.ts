@@ -450,9 +450,53 @@ function dropDownScroller(drop: Gtk.Widget): Gtk.ScrolledWindow | null {
  * dropdown blur tradeoff). That left GTK's scrollbar inside it: visibly a different
  * component from every other list in the DE, and carrying the same defect — it grows
  * toward the pointer, so a click near an option's trailing edge lands on the bar.
+ *
+ * Takes `Gtk.DropDown`'s own properties, plus one of ours:
+ *
+ * @param props.accessibleDescription  What this control is FOR, for a dropdown
+ *   whose label is a column heading rather than a widget beside it. Read the
+ *   block below before reaching for `update_property([LABEL], …)` instead — that
+ *   call is swallowed here, measured, and the note says how.
  */
 export function NidaraDropDown(props: any = {}): Gtk.DropDown {
-    const drop = new Gtk.DropDown(props)
+    // ⚠️ Taken OUT of the props before construction: `new Gtk.DropDown({…})` sets
+    // GObject properties, and a key that is not one is an error, not an option.
+    const { accessibleDescription, ...gtkProps } = props
+    const drop = new Gtk.DropDown(gtkProps)
+
+    // ── Naming a dropdown that has no visible label ──────────────────────────
+    //
+    // A dropdown in a table cell has no label of its own: the column heading is
+    // the label, and a heading is not in the row's accessibility tree. The
+    // obvious call — `update_property([LABEL], …)` — DOES NOTHING here, and that
+    // is a GTK4 behaviour rather than a mistake at the call site: a `GtkDropDown`
+    // publishes its SELECTED ITEM as its accessible name.
+    //
+    // Measured 2026-09-06 over AT-SPI, one dropdown per strategy
+    // (`scripts/dev/dropdown-a11y-probe.ts`), against a `GtkCheckButton` carrying
+    // the same call as the control:
+    //
+    //     what was set                 name          description
+    //     nothing                      "None"        ""
+    //     LABEL                        "None"        ""          ← swallowed whole
+    //     DESCRIPTION                  "None"        "Mount point — /dev/sda2"
+    //     LABEL + DESCRIPTION          "None"        "Mount point — /dev/sda3"
+    //     LABEL, on a CheckButton      "Format — /dev/sda1"  ""  ← the control
+    //
+    // So DESCRIPTION is the one that survives, and it is what this option sets.
+    // The name stays the selected value, which is the right thing for it to be —
+    // what was missing was WHICH control it belongs to, and that is a description.
+    //
+    // ⚠️ `LABELLED_BY` would be the honest relation — pointing at the heading
+    // widget rather than copying its text into every row — and it is NOT
+    // reachable from GJS: `update_relation` wants a GList of `GtkAccessible`,
+    // the nested form throws "Could not guess unspecified GValue type" and the
+    // flat form is accepted and silently sets nothing (`g_value_get_pointer`
+    // assertion). A string on the control is not a fallback we preferred, it is
+    // the only thing this binding can express.
+    if (accessibleDescription) {
+        drop.update_property([Gtk.AccessibleProperty.DESCRIPTION], [accessibleDescription])
+    }
 
     // Our own LIST factory (the button keeps GTK's default one, via `list-factory` rather
     // than `factory`), and the row we hand it CARRIES THE FILL — `.nidara-dropdown-item`,

@@ -221,6 +221,14 @@ function valueOf(acc) {
 function nodeOf(acc, windowLabel, path) {
     const roleName = safe(() => acc.get_role_name(), "?")
     const name = safe(() => acc.get_name(), "") || null
+    // ⚠️ The DESCRIPTION is read, and it is not decoration: a `GtkDropDown`
+    // publishes its SELECTED ITEM as its accessible name and swallows any label
+    // set on it (measured 2026-09-06, `scripts/dev/dropdown-a11y-probe.ts`), so
+    // for that control — the one this tree shows most often in a form — the only
+    // place "which setting is this?" can live is here. Without it, a page of
+    // dropdowns reads as a column of values whose questions are missing, and
+    // whoever is driving cannot tell them apart.
+    const description = safe(() => acc.get_description(), "") || null
     const actions = actionsOf(acc)
     const shortcuts = shortcutsOf(acc)
     const value = valueOf(acc)
@@ -229,6 +237,9 @@ function nodeOf(acc, windowLabel, path) {
         type: roleName,            // AT-SPI role name — analogous to UITree's GType
         id: name,                  // accessible name — analogous to UITree's get_name()
         role: roleName,
+        // Only when present, like `shortcuts` and `value` below: most nodes carry
+        // none, and a null on every line is noise in a tree that is already long.
+        ...(description ? { description } : {}),
         text: textOf(acc, roleName),
         states: statesOf(acc),
         actions,
@@ -242,7 +253,7 @@ function nodeOf(acc, windowLabel, path) {
 }
 
 function isInteresting(n) {
-    return !!(n.id || n.text || n.actions.length || n.value || INTERACTIVE_ROLES.has(n.type))
+    return !!(n.id || n.text || n.description || n.actions.length || n.value || INTERACTIVE_ROLES.has(n.type))
 }
 
 // ── a control adopts the value it displays ─────────────────────────────────────
