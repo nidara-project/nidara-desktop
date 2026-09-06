@@ -541,6 +541,7 @@ export default {
     "settings.nav.forward":        "Dalej",
     "settings.nav.menu":           "Menu",
     "settings.window.close":       "Zamknij",
+    "settings.window.sidebar-toggle": "Pokaż lub ukryj panel boczny",
     "settings.search.no-results":  "Brak wyników",
     "settings.page.load-error":    "Nie udało się wczytać strony",
 

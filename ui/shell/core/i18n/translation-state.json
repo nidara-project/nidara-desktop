@@ -535,6 +535,7 @@
     "settings.nav.forward": "ba4e7226",
     "settings.nav.menu": "57f5f5ef",
     "settings.window.close": "bbfa773e",
+    "settings.window.sidebar-toggle": "0e517bf0",
     "settings.search.no-results": "b993b0c5",
     "settings.page.load-error": "50c34442",
     "app-grid.search.placeholder": "5d1c8a02",
@@ -702,68 +703,68 @@
   },
   "locales": {
     "de": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "es": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "it": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "ja": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "nl": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "pl": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "pt-BR": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "pt-PT": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "ru": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     },
     "zh-CN": {
-      "translated": 698,
-      "of": 698,
+      "translated": 699,
+      "of": 699,
       "untranslated": [],
       "stale": []
     }

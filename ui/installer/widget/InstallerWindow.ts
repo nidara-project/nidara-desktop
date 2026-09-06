@@ -37,6 +37,7 @@ function header(onClose: () => void): {
   const closeBtn = NidaraCircleButton({
     icon: ndIcon("x"),
     iconName: "window-close-symbolic",
+    accessibleLabel: t("a11yClose"),
     variant: "danger",
     valign: Gtk.Align.CENTER,
     halign: Gtk.Align.END,
@@ -236,6 +237,7 @@ export function InstallerWindow(): Gtk.Window {
     sidebar: {
       widget: sidebar.widget,
       toggleIcon: sidebarIcon as any,
+      toggleLabel: t("a11ySidebarToggle"),
       width: WINDOW_LAYOUT.sidebar,
       contentWidth: WINDOW_LAYOUT.wizardContent,
     },
