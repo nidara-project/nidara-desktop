@@ -460,7 +460,8 @@ export function DiskStep(): Step {
         // partitions it lies between — a free-space row in lsblk's order would be
         // a size with no place. For partitions alone this changes nothing: lsblk
         // already returns them that way.
-        const freeRows: RowSource[] = listDisks().flatMap(d =>
+        const allDisks = listDisks()
+        const freeRows: RowSource[] = allDisks.flatMap(d =>
           freeSpaceGaps(d, partitions).map(g => ({
             name: "", path: "", device: g.device, start: g.start, size: g.size,
             logicalSectorSize: g.logicalSectorSize, fstype: null, label: null, pkname: null,
@@ -486,7 +487,37 @@ export function DiskStep(): Step {
           return
         }
 
+        // ── One heading per disk (#447's neighbour, from the T2 matrix) ────
+        //
+        // The table listed every partition of every drive in one flat run, and
+        // the only thing separating `/dev/sda2` from `/dev/nvme0n1p2` was the
+        // path in the first cell. Every installer in the field either filters to
+        // one disk (Calamares, a combo box above the table) or groups by it
+        // (Ubiquity's flat list with per-disk headings; YaST and subiquity, a
+        // tree). We were alone in doing neither.
+        //
+        // A heading rather than a filter, for the reason a filter exists at all:
+        // dual-boot layouts routinely span drives — the ESP on the disk that
+        // boots, `/home` on the spinning one — and a page that shows one disk at
+        // a time hides the half of the answer somebody is trying to check. It
+        // matters more since gaps became rows: "19.5 GiB free" means nothing
+        // until you know which drive it is on.
+        const diskLabel = (path: string) => {
+          const d = allDisks.find(x => x.path === path)
+          if (!d) return path
+          const name = d.model || d.name
+          return `${name}  ·  ${formatSize(d.size)}  ·  ${d.path}${d.rm ? `  ·  ${t("diskRemovable")}` : ""}`
+        }
+
+        let sectionFor = ""
         for (const p of rows) {
+          // `rows` is sorted by (disk, offset), so a change of device is the
+          // boundary — no grouping pass, and the heading cannot end up somewhere
+          // the order does not actually break.
+          if (p.device !== sectionFor) {
+            sectionFor = p.device
+            table.appendSection(diskLabel(p.device))
+          }
           const currentEntry = manualMounts.get(p.key)
 
           // ── ONE filesystem column, and it always reads FORWARDS ────────────
