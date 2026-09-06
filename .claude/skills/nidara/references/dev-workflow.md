@@ -1050,6 +1050,24 @@ The rules are pure functions with a probe and a CI gate (`bootloader-rules-probe
 of this is reachable from this repo: it needs a machine with another system already installed, and
 the person who finds out otherwise is the one whose Windows has gone from the menu.
 
+### And it has to be big enough to hold a kernel
+
+`ESP_MIN_BYTES` in `lib/manual-problems.ts` is **300 MiB**, and it is a capacity rather than a
+taste: with `uki: false` the ESP is mounted at `/boot`, so pacstrap puts the kernel and BOTH
+initramfs images inside it. Measured 2026-09-06 on a running machine — a 512 MiB ESP carrying two
+kernels plus the loader is **250 MB used, 49%** — so one kernel set is ~125 MB, half again as much
+as package sizes suggest, because the fallback initramfs carries every module. 300 MiB is that,
+plus the boot files already on a shared ESP (a factory Windows one runs 30-50 MB), plus the
+headroom an upgrade needs while the new kernel is written beside the old.
+
+It sits between the two numbers we know: archinstall refuses below **200 MiB**
+(`installer.py:249`) — and refuses INSIDE the install, after our summary said everything was fine,
+so our floor may never be lower than theirs — and **512 MiB** is what entire-disk mode creates.
+
+⚠️ The refusal STATES the number, in twelve languages, which makes each of those sentences a second
+copy of the constant. `disk-config-probe` asserts the message and `ESP_MIN_BYTES` agree: raise the
+constant alone and the person resizes to the size the message asked for and is refused again.
+
 ### What `lib/bootloader.ts` is allowed to keep
 
 It writes the **kernel command line and the loader timeout, and nothing else**. Those are

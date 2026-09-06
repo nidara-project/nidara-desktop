@@ -9,10 +9,40 @@
 
 import { t } from "./i18n"
 import { espMount } from "./disk-config"
+import { formatSize } from "./format-size"
 import type { ManualPartitionMount } from "./answers"
 
 /** The three mount points that can hold the EFI system partition on this install. */
 export const ESP_MOUNTS = new Set(["/boot", "/boot/efi", "/efi"])
+
+/**
+ * The smallest EFI system partition this install can be put on.
+ *
+ * ⚠️ It is not a style rule, it is a capacity: we install systemd-boot with
+ * `uki: false`, so the ESP is mounted at `/boot` and pacstrap puts the kernel and
+ * BOTH initramfs images inside it. Measured on a running machine (2026-09-06):
+ * a 512 MiB ESP carrying two kernels — `linux` and `linux-zen` — plus the loader
+ * is **250 MB used, 49%**. One kernel and its two initramfs images is therefore
+ * ~125 MB, half again as much as the ~95 MB the issue estimated from package
+ * sizes, because a fallback initramfs carries every module.
+ *
+ * 300 MiB is that ~125 MB, plus the boot files of whatever system was already on
+ * a shared ESP (a factory Windows one runs 30-50 MB), plus the headroom an
+ * upgrade needs while the new kernel is written beside the old one.
+ *
+ * Where the number sits between the two we know:
+ *
+ *   200 MiB  archinstall refuses below this (`installer.py:249`) — and it refuses
+ *            INSIDE the install, after our summary said everything was fine, so
+ *            our floor may never be lower than theirs
+ *   512 MiB  what entire-disk mode creates, and what the measurement above says
+ *            is comfortable rather than merely possible
+ *
+ * The failure this refuses is the reason it is a refusal and not a warning: a
+ * 100 MiB factory Windows ESP takes the layout, takes the repartitioning, and
+ * then dies partway through pacstrap with the disk already rewritten.
+ */
+export const ESP_MIN_BYTES = 300 * 1024 * 1024
 
 /**
  * Everything wrong with a manual layout right now, in the user's language.
@@ -60,6 +90,15 @@ export function manualProblems(mounts: ManualPartitionMount[], uefi: boolean): s
   // which is not a filesystem the firmware can read either.
   if (esp && (esp.format ? esp.filesystem !== "vfat" : esp.fsType !== "vfat")) {
     problems.push(t("diskErrEfiNotFat"))
+  }
+
+  // ⚠️ And it has to be big enough to hold a kernel, which nothing checked (#446).
+  // The size is stated in the message — both the one it needs and the one it
+  // found — because "too small" without a number leaves the person guessing at
+  // the one thing they have to go and change, in a partition editor, on another
+  // screen.
+  if (esp && esp.size < ESP_MIN_BYTES) {
+    problems.push(t("diskErrEfiTooSmall") + formatSize(esp.size) + ".")
   }
 
   // ⚠️ Swap is the one row whose filesystem is not a choice, so an untick means
