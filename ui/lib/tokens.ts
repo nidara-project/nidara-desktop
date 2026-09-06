@@ -442,7 +442,20 @@ export const WINDOW_LAYOUT = {
      * with, the same table measured 543 unanswered and 645 once somebody chose
      * "EFI System (/boot/efi)" — a page that grows past its pane the moment it is
      * used. The labels are the bare mount paths now (see `MOUNT_OPTIONS` in
-     * `steps/disk.ts`) and the column is a constant.
+     * `steps/disk.ts`), which is what took that +102 out.
+     *
+     * ⚠️ "And the column is a constant" is what this note used to say next, and it
+     * was not measured — the probe's worst-case pass had been finding NO dropdowns
+     * since the kit began wrapping control cells in a holder Box, so it reported the
+     * opening state twice and that read as "nothing moves" (#464). With the walk
+     * fixed, the sweep above is the OPENING state and only English differs:
+     *
+     *     worst case:  en 577 · es 643 · fr 632 · ja 641 · ru 703
+     *
+     * English is the one locale whose headings are narrower than its own options
+     * (`Mount point` 82px against `/boot/efi`), so it is the only column the answer
+     * can widen — by 20px, into a pane with 57 to spare. Russian still decides the
+     * number, and the number is still 760.
      */
     wizardContent: 760,
     /** The distress width — only a compositor can push the pane here. */
