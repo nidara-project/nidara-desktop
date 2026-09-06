@@ -1020,6 +1020,36 @@ The three-day round trip is worth keeping, because each step looked right at the
 want it, it does not go in `nidara`.** Boot experience, system defaults, anything that repaints
 somebody's machine — the product's, not the desktop's.
 
+### The ESP may not be ours, and every edit is scoped by that
+
+⚠️ **The partition `lib/bootloader.ts` writes into can belong to somebody else.** Reusing an
+existing ESP is exactly what a person does when they want Nidara and their Windows or Ubuntu in one
+firmware menu, and until 2026-09-06 all three of its edits ran flat over `*.conf` and `loader.conf`:
+a neighbouring Arch got its entry retitled `Nidara`, any foreign entry without `quiet` got OUR
+kernel command line appended, and a `loader.conf` belonging to whoever installed first was
+destroyed — the one place in the chain where both `bootctl install`
+(`src/bootctl/bootctl-install.c:913`) and archinstall (`installer.py:1310-1326`) are careful and we
+were not (#443, #444).
+
+**The line between ours and theirs is archinstall's own stamp.** Every entry it writes carries
+`# Created by: archinstall` and `# Created on: <init_time>`, one value per run
+(`installer.py:1224-1232`), so `steps/run.ts` records the same instant (`archinstallStamp()`) one
+line before the spawn and `entryIsOurs()` keeps only entries dated at or after it. It reads another
+program's output format on purpose and **fails safe**: an unrecognised header matches nothing, we
+edit nothing, and the cost is an entry still titled `Arch Linux`. Matching too much edits a system
+that is not ours — which way a wrong guess falls is the whole reason it is written this way round.
+
+On a shared ESP we change **one key, `timeout`, and only upwards** (`patchLoaderConf`): a longer
+foreign menu is a preference, a `timeout 0` or a commented-out one is raised because otherwise our
+new entry cannot be reached at all, and `default`, `console-mode` and keys we have never heard of
+survive. And "is another system here?" now counts foreign loader entries and foreign `EFI/<vendor>`
+directories, not just Windows — a Linux neighbour used to answer `false` and get `timeout 0`, i.e.
+a menu that never appears (#445).
+
+The rules are pure functions with a probe and a CI gate (`bootloader-rules-probe.ts`), because none
+of this is reachable from this repo: it needs a machine with another system already installed, and
+the person who finds out otherwise is the one whose Windows has gone from the menu.
+
 ### What `lib/bootloader.ts` is allowed to keep
 
 It writes the **kernel command line and the loader timeout, and nothing else**. Those are
