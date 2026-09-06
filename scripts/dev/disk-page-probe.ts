@@ -222,33 +222,60 @@ app.start({
         ? findByClass(table, "nidara-table-row") : null
       const restore: Array<[Gtk.DropDown, number]> = []
       let widened = ""
+      let worstNat = 0
       if (firstRow) {
-        let c = (firstRow as Gtk.ListBoxRow).get_child()!.get_first_child()
-        while (c) {
-          if (c instanceof Gtk.DropDown) {
-            const model = c.model as Gtk.StringList
-            let longest = 0
-            for (let i = 0; i < model.get_n_items(); i++)
-              if ((model.get_string(i) ?? "").length > (model.get_string(longest) ?? "").length) longest = i
-            // ⚠️ Put it back. A probe that leaves the page in the state it needed
-            // for one measurement is a probe that lies about every other thing it
-            // shows: this cost half an hour of hunting a "bug" where the first
-            // row came up mounted at /boot/efi and the page correctly complained
-            // about a duplicate the seed had never asked for.
-            restore.push([c, c.get_selected()])
-            c.set_selected(longest)
+        // ⚠️ DESCEND. The dropdowns are NOT the row's direct children: the kit
+        // wraps every control cell in a holder Box so the size group can own the
+        // column's width and the control can align inside it (`table.ts`,
+        // `cellWidget`). A loop over `get_next_sibling()` therefore walks boxes,
+        // finds no `Gtk.DropDown` at all, and reports `worst-case-nat === nat` —
+        // which reads exactly like "this table has no worst case". It said that
+        // from the day the wrapper landed until 2026-09-06.
+        const drops: Gtk.DropDown[] = []
+        const collect = (from: Gtk.Widget | null) => {
+          let c = from
+          while (c) {
+            if (c instanceof Gtk.DropDown) drops.push(c)
+            else collect(c.get_first_child())
+            c = c.get_next_sibling()
           }
-          c = c.get_next_sibling()
+        }
+        collect((firstRow as Gtk.ListBoxRow).get_child()!.get_first_child())
+
+        for (const drop of drops) {
+          const model = drop.model as Gtk.StringList
+          let longest = 0
+          for (let i = 0; i < model.get_n_items(); i++)
+            if ((model.get_string(i) ?? "").length > (model.get_string(longest) ?? "").length) longest = i
+          // ⚠️ Put it back. A probe that leaves the page in the state it needed
+          // for one measurement is a probe that lies about every other thing it
+          // shows: this cost half an hour of hunting a "bug" where the first
+          // row came up mounted at /boot/efi and the page correctly complained
+          // about a duplicate the seed had never asked for.
+          restore.push([drop, drop.get_selected()])
+          drop.set_selected(longest)
         }
         const [, wideNat] = table.measure(Gtk.Orientation.HORIZONTAL, -1)
-        widened = ` worst-case-nat=${wideNat}`
+        worstNat = wideNat
+        // The COUNT is printed, not just the width. A worst case measured over
+        // zero controls is the number the opening state already gave, and the two
+        // are indistinguishable in the output — that is the whole of how this went
+        // unnoticed. If this says 0, the line below is not a worst case.
+        widened = ` worst-case-nat=${wideNat} (over ${drops.length} dropdown${drops.length === 1 ? "" : "s"})`
         for (const [drop, sel] of restore) drop.set_selected(sel)
       }
 
       console.log(`[disk-probe] columns: ${cols.join("  ")}`)
       console.log(`[disk-probe] table:   min=${tableMin} nat=${tableNat}${widened}`)
       console.log(`[disk-probe] .installer-body horizontal padding: ${bodyPadding}`)
-      console.log(`[disk-probe] pane required = ${tableNat} + ${bodyPadding} = ${tableNat + bodyPadding}`)
+      // The pane has to hold the WORST case, so that is what this line reports when
+      // it exists; the opening state stays in the parentheses because it is what
+      // the locale sweep below has always printed and what `WINDOW_LAYOUT`'s note
+      // records. Without `DISK_PROBE_ONCE` there is no worst case to report.
+      console.log(worstNat > 0
+        ? `[disk-probe] pane required = ${worstNat} + ${bodyPadding} = ${worstNat + bodyPadding}`
+          + ` (worst case; opening state ${tableNat} + ${bodyPadding} = ${tableNat + bodyPadding})`
+        : `[disk-probe] pane required = ${tableNat} + ${bodyPadding} = ${tableNat + bodyPadding}`)
       console.log(`[disk-probe] wizardContent is ${WINDOW_LAYOUT.wizardContent}`)
 
       // The pane is ONE constant for every locale (the law in WINDOW_LAYOUT), so
