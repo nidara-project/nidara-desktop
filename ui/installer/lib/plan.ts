@@ -156,8 +156,15 @@ export function assemblePlan(
   config.timezone = answers.timezone?.timezone || live.timezone
   config.locale_config = {
     // The CONSOLE keymap, not the xkb layout. archinstall's `kb_layout` ends up in
-    // /etc/vconsole.conf, and the two namespaces disagree for four of our rows —
+    // /etc/vconsole.conf, and the two namespaces disagree for several of our rows —
     // see the `keymap` field on KeyboardLayout in lib/region.ts for what that costs.
+    //
+    // ⚠️ The `||` now carries a SECOND case, and it is the answered one: a keyboard
+    // with no console keymap on this system resolves to `""` and falls back to the
+    // medium's own (`us`). That is what the region page told the user would happen,
+    // and it is the only honest value — archinstall accepts an unknown name, logs,
+    // and leaves the console unset anyway, so guessing here would buy nothing and
+    // hide it. See resolveKeymap() in lib/region.ts.
     kb_layout: answers.keyboard?.keymap || live.localeConfig.kb_layout,
     sys_enc: answers.language?.sysEnc || live.localeConfig.sys_enc,
     sys_lang: answers.language?.sysLang || live.localeConfig.sys_lang,

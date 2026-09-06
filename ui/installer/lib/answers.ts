@@ -105,7 +105,13 @@ export interface KeyboardAnswer {
   /** xkb layout — the live session and Hyprland. */
   layout: string
   variant: string
-  /** vconsole keymap — /etc/vconsole.conf, the TTY, and the LUKS prompt. */
+  /**
+   * vconsole keymap — /etc/vconsole.conf, the TTY, and the LUKS prompt.
+   *
+   * ⚠️ `""` means this keyboard has none on this system, and the plan then keeps
+   * the medium's own (`us`), which is what the region page said would happen.
+   * See `resolveKeymap()` in lib/region.ts.
+   */
   keymap: string
   label: string
 }

@@ -1,6 +1,6 @@
 import GLib from "gi://GLib"
 
-// Mini-catalog: 129 keys × 12 languages. Deliberately duplicated per bundle
+// Mini-catalog: 130 keys × 12 languages. Deliberately duplicated per bundle
 // (greeter, lockscreen, and installer each ship their own i18n.ts — see the skill's
 // tech-debt notes).
 const strings = {
@@ -41,6 +41,7 @@ const strings = {
     welcomeLanguageDesc:           "The language of the installed desktop. Dates, numbers and currency follow it — Settings → Region can separate them later.",
     welcomeLanguagePlaceholder: "Search for a language",
     regionKeyboard:             "Keyboard",
+    regionKeyboardNoConsole:    "This keyboard has no layout for the text console, so the console keeps US. The desktop itself gets the keyboard you chose.",
     regionAsk:                  "Choose…",
     searchNoMatches:            "Nothing matches that search.",
     previewBanner:              "PREVIEW — nothing will be written to any disk, and this session will not be touched.",
@@ -174,6 +175,7 @@ const strings = {
     welcomeLanguageDesc:           "El idioma del escritorio instalado. Las fechas, los números y la moneda lo siguen — puedes separarlos después en Ajustes → Región.",
     welcomeLanguagePlaceholder: "Buscar un idioma",
     regionKeyboard:             "Teclado",
+    regionKeyboardNoConsole:    "Este teclado no tiene distribución para la consola de texto, así que la consola se queda en US. El escritorio sí recibe el teclado que has elegido.",
     regionAsk:                  "Elegir…",
     searchNoMatches:            "Nada coincide con esa búsqueda.",
     previewBanner:              "PREVISUALIZACIÓN — no se escribirá nada en ningún disco, y esta sesión no se tocará.",
@@ -307,6 +309,7 @@ const strings = {
     welcomeLanguageDesc:           "La langue du bureau installé. Les dates, les nombres et la monnaie la suivent — Réglages → Région peut les séparer ensuite.",
     welcomeLanguagePlaceholder: "Rechercher une langue",
     regionKeyboard:             "Clavier",
+    regionKeyboardNoConsole:    "Ce clavier n'a pas de disposition pour la console texte : la console restera en US. Le bureau, lui, reçoit bien le clavier que vous avez choisi.",
     regionAsk:                  "Choisir…",
     searchNoMatches:            "Aucun résultat pour cette recherche.",
     previewBanner:              "APERÇU — rien ne sera écrit sur aucun disque et cette session ne sera pas modifiée.",
@@ -440,6 +443,7 @@ const strings = {
     welcomeLanguageDesc:           "Die Sprache des installierten Desktops. Datum, Zahlen und Währung folgen ihr — in Einstellungen → Region lassen sie sich später trennen.",
     welcomeLanguagePlaceholder: "Sprache suchen",
     regionKeyboard:             "Tastatur",
+    regionKeyboardNoConsole:    "Für dieses Tastaturlayout gibt es keine Belegung für die Textkonsole; die Konsole bleibt deshalb bei US. Der Desktop selbst bekommt die gewählte Tastatur.",
     regionAsk:                  "Auswählen…",
     searchNoMatches:            "Keine Treffer für diese Suche.",
     previewBanner:              "VORSCHAU — es wird nichts auf eine Festplatte geschrieben und diese Sitzung bleibt unberührt.",
@@ -573,6 +577,7 @@ const strings = {
     welcomeLanguageDesc:           "La lingua del desktop installato. Date, numeri e valuta la seguono — Impostazioni → Regione può separarli in seguito.",
     welcomeLanguagePlaceholder: "Cerca una lingua",
     regionKeyboard:             "Tastiera",
+    regionKeyboardNoConsole:    "Questa tastiera non ha una mappa per la console di testo, quindi la console resta su US. Il desktop riceve comunque la tastiera che hai scelto.",
     regionAsk:                  "Scegli…",
     searchNoMatches:            "Nessun risultato per questa ricerca.",
     previewBanner:              "ANTEPRIMA — non verrà scritto nulla su alcun disco e questa sessione non verrà toccata.",
@@ -706,6 +711,7 @@ const strings = {
     welcomeLanguageDesc:           "O idioma da área de trabalho instalada. Datas, números e moeda o acompanham — em Configurações → Região dá para separá-los depois.",
     welcomeLanguagePlaceholder: "Procurar um idioma",
     regionKeyboard:             "Teclado",
+    regionKeyboardNoConsole:    "Este teclado não tem layout para o console de texto, então o console continuará em US. A área de trabalho recebe o teclado que você escolheu.",
     regionAsk:                  "Escolher…",
     searchNoMatches:            "Nada corresponde a essa busca.",
     previewBanner:              "PRÉVIA — nada será gravado em nenhum disco e esta sessão não será alterada.",
@@ -839,6 +845,7 @@ const strings = {
     welcomeLanguageDesc:           "O idioma do ambiente de trabalho instalado. Datas, números e moeda seguem-no — em Definições → Região pode separá-los depois.",
     welcomeLanguagePlaceholder: "Procurar um idioma",
     regionKeyboard:             "Teclado",
+    regionKeyboardNoConsole:    "Este teclado não tem esquema para a consola de texto, por isso a consola fica em US. O ambiente de trabalho recebe o teclado que escolheu.",
     regionAsk:                  "Escolher…",
     searchNoMatches:            "Nada corresponde a essa pesquisa.",
     previewBanner:              "PRÉ-VISUALIZAÇÃO — nada será escrito em nenhum disco e esta sessão não será alterada.",
@@ -972,6 +979,7 @@ const strings = {
     welcomeLanguageDesc:           "Język zainstalowanego pulpitu. Daty, liczby i waluta podążają za nim — w Ustawieniach → Region można je później rozdzielić.",
     welcomeLanguagePlaceholder: "Szukaj języka",
     regionKeyboard:             "Klawiatura",
+    regionKeyboardNoConsole:    "Ta klawiatura nie ma układu dla konsoli tekstowej, więc konsola pozostanie w układzie US. Sam pulpit otrzyma wybraną klawiaturę.",
     regionAsk:                  "Wybierz…",
     searchNoMatches:            "Brak wyników dla tego wyszukiwania.",
     previewBanner:              "PODGLĄD — nic nie zostanie zapisane na żadnym dysku, a ta sesja pozostanie nietknięta.",
@@ -1105,6 +1113,7 @@ const strings = {
     welcomeLanguageDesc:           "De taal van het geïnstalleerde bureaublad. Datums, getallen en valuta volgen deze — in Instellingen → Regio kun je ze later scheiden.",
     welcomeLanguagePlaceholder: "Zoek een taal",
     regionKeyboard:             "Toetsenbord",
+    regionKeyboardNoConsole:    "Dit toetsenbord heeft geen indeling voor de tekstconsole, dus de console blijft op US. Het bureaublad krijgt wel de toetsenbordindeling die je hebt gekozen.",
     regionAsk:                  "Kiezen…",
     searchNoMatches:            "Niets komt overeen met deze zoekopdracht.",
     previewBanner:              "VOORBEELD — er wordt niets naar een schijf geschreven en deze sessie blijft ongemoeid.",
@@ -1238,6 +1247,7 @@ const strings = {
     welcomeLanguageDesc:           "Язык установленного рабочего стола. Даты, числа и валюта следуют за ним — в Настройках → Регион их можно разделить позже.",
     welcomeLanguagePlaceholder: "Поиск языка",
     regionKeyboard:             "Клавиатура",
+    regionKeyboardNoConsole:    "Для этой раскладки нет варианта для текстовой консоли, поэтому в консоли останется US. Сам рабочий стол получит выбранную раскладку.",
     regionAsk:                  "Выбрать…",
     searchNoMatches:            "Ничего не найдено по этому запросу.",
     previewBanner:              "ПРЕДПРОСМОТР — ничего не будет записано на диск, и текущий сеанс не будет изменён.",
@@ -1371,6 +1381,7 @@ const strings = {
     welcomeLanguageDesc:           "已安装桌面的语言。日期、数字和货币会随之设定 —— 之后可在「设置 → 地区」中单独调整。",
     welcomeLanguagePlaceholder: "搜索语言",
     regionKeyboard:             "键盘",
+    regionKeyboardNoConsole:    "此键盘没有对应的文本控制台布局，因此控制台将继续使用 US。桌面本身仍会使用你选择的键盘。",
     regionAsk:                  "请选择…",
     searchNoMatches:            "没有与该搜索匹配的结果。",
     previewBanner:              "预览 —— 不会向任何磁盘写入内容，也不会改动当前会话。",
@@ -1504,6 +1515,7 @@ const strings = {
     welcomeLanguageDesc:           "インストールされるデスクトップの言語。日付・数値・通貨はこれに従います — 後から「設定 → 地域」で分けられます。",
     welcomeLanguagePlaceholder: "言語を検索",
     regionKeyboard:             "キーボード",
+    regionKeyboardNoConsole:    "このキーボードにはテキストコンソール用の配列がないため、コンソールは US のままになります。デスクトップには選んだキーボードが適用されます。",
     regionAsk:                  "選択…",
     searchNoMatches:            "この検索に一致するものはありません。",
     previewBanner:              "プレビュー — ディスクには何も書き込まれず、このセッションにも触れません。",

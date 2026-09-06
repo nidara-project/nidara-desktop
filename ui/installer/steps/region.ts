@@ -235,6 +235,17 @@ export function RegionStep(): Step {
         ))
 
         // Keyboard ────────────────────────────────────────────────────────────
+        // A keyboard whose console keymap does not exist says so, rather than the
+        // installer writing a name that cannot load (#472). Five of the 60 are in
+        // that state — Arabic, Korean, Khmer and Romanian's two cedilla variants
+        // have no file in `kbd` under any name — and the honest thing is to keep
+        // offering them: the xkb layout is real, the desktop gets it, and what
+        // degrades is only the text console. Which is worth one sentence, because
+        // the console is exactly where you have nothing else to fall back on.
+        const consoleNote = prose(t("regionKeyboardNoConsole"))
+        const syncConsoleNote = (k?: KeyboardLayout | null) => {
+          consoleNote.visible = !!k && k.keymap === ""
+        }
         const kbs = scoped(keyboardsFor(code), allKeyboards(), k => `${k.layout}:${k.variant}`)
         const kbLabels = kbs.map(k => k.label)
         const kbCurrent = a.keyboard
@@ -251,11 +262,16 @@ export function RegionStep(): Step {
             if (!k) return
             setKeyboardAnswer({ layout: k.layout, variant: k.variant, keymap: k.keymap, label: k.label })
             applyKeyboardLive(k)
+            syncConsoleNote(k)
             notifyReady?.()
           },
         ))
 
         derived.append(card)
+        // Under the card, not inside the row: it is a consequence of the answer,
+        // and a row subtitle would state it before anybody had answered.
+        syncConsoleNote(kbCurrent >= 0 ? kbs[kbCurrent] : null)
+        derived.append(consoleNote)
 
         // The test box lives with the keyboard row, and only appears once there is
         // a keyboard to test: an empty field under a question nobody answered is
