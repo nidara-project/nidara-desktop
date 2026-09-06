@@ -67,6 +67,7 @@ import { entireDiskConfig, manualDiskConfig, espMount } from "../../ui/installer
 import { loaderRoot } from "../../ui/installer/lib/bootloader"
 import { swapFstabEntry } from "../../ui/installer/lib/swap"
 import { manualProblems } from "../../ui/installer/lib/manual-problems"
+import { freeSpaceGaps } from "../../ui/installer/lib/free-space"
 import { t } from "../../ui/installer/lib/i18n"
 import type {
   EntireDiskAnswer,
@@ -176,6 +177,7 @@ for (const c of CASES) {
 interface ManualCase {
   name: string
   mounts: Array<Partial<ManualPartitionMount> & {
+    /** Empty for a row that is a GAP: no device node exists for it yet (#447). */
     path: string
     mountpoint: string
     format: boolean
@@ -197,6 +199,7 @@ const row = (m: ManualCase["mounts"][number]): ManualPartitionMount => ({
   mountpoint: m.mountpoint,
   filesystem: m.filesystem ?? "btrfs",
   format: m.format,
+  ...(m.create ? { create: true } : {}),
 })
 
 // The layout a btrfs root is supposed to get, written out HERE rather than
@@ -239,6 +242,29 @@ const MANUAL_CASES: ManualCase[] = [
       { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat", start: 1 * MIB, size: 1024 * MIB },
       { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs", start: 1025 * MIB, size: 100 * 1024 * MIB },
       { path: "/dev/sda3", mountpoint: "/home", format: true, filesystem: "ext4", start: 102401 * MIB, size: 100 * 1024 * MIB },
+    ],
+  },
+  {
+    // #447: the gap is claimed whole and archinstall is told to CREATE it. The
+    // ESP is a real kept partition, so this is the shape of "I shrank Windows".
+    name: "free space claimed as the root, beside a kept ESP",
+    esp: "/dev/sda1",
+    devices: 1,
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat", start: 1 * MIB, size: 1024 * MIB },
+      { path: "", create: true, mountpoint: "/", format: true, filesystem: "btrfs", start: 300 * 1024 * MIB, size: 200 * 1024 * MIB },
+    ],
+  },
+  {
+    // The case that made `espMount` comparison move from path to IDENTITY. Two
+    // created rows both have `path: ""`, so `m.path === esp.path` was true for
+    // BOTH and the layout went out with two partitions flagged `esp`.
+    name: "two created rows, and only the EFI one is flagged",
+    esp: "",
+    devices: 1,
+    mounts: [
+      { path: "", create: true, mountpoint: "/boot/efi", format: true, filesystem: "vfat", start: 1 * MIB, size: 1024 * MIB },
+      { path: "", create: true, mountpoint: "/", format: true, filesystem: "ext4", start: 1025 * MIB, size: 200 * 1024 * MIB },
     ],
   },
   {
@@ -366,20 +392,30 @@ ${c.name}`)
   for (const mod of config.device_modifications) {
     if (mod.wipe) fail(c.name, `${mod.device} would be wiped`)
     for (const p of mod.partitions) {
-      const source = assigned.find(m => m.path === p.dev_path)
-      if (!source) { fail(c.name, `${p.dev_path} is not one of the assigned rows`); continue }
-      if (source.device !== mod.device) fail(c.name, `${p.dev_path} filed under ${mod.device}`)
+      // A CREATED partition has no `dev_path` to match on — it does not exist
+      // yet — so it is matched on the geometry it was asked for, which is also
+      // the thing most worth checking about it.
+      const source = p.dev_path === null
+        ? assigned.find(m => m.create && m.start === p.start.value && m.size === p.size.value)
+        : assigned.find(m => m.path === p.dev_path)
+      const who = p.dev_path ?? `create@${p.start.value}`
+      if (!source) { fail(c.name, `${who} is not one of the assigned rows`); continue }
+      if (source.device !== mod.device) fail(c.name, `${who} filed under ${mod.device}`)
 
-      // The three archinstall refuses outright.
-      if (!p.dev_path) fail(c.name, "a partition with no dev_path")
+      // The three archinstall refuses outright. `dev_path` is REQUIRED to be null
+      // on a create and REQUIRED to be set otherwise: entire-disk mode has always
+      // sent null for the partitions it lays out, and a create carrying a path
+      // would be naming a node that does not exist.
+      if (!source.create && !p.dev_path) fail(c.name, "an existing partition with no dev_path")
+      if (source.create && p.dev_path !== null) fail(c.name, `${who}: a create carries dev_path ${p.dev_path}`)
       if (p.status === "modify" && !p.fs_type) fail(c.name, `${p.dev_path}: modify with no fs_type`)
       if (p.fs_type !== null && !ARCH_FS.has(p.fs_type)) {
         fail(c.name, `${p.dev_path}: fs_type '${p.fs_type}' is not one archinstall knows`)
       }
 
       // The tick, and only the tick, decides delete-and-recreate vs leave alone.
-      const wanted = source.format ? "modify" : "existing"
-      if (p.status !== wanted) fail(c.name, `${p.dev_path}: status ${p.status}, expected ${wanted}`)
+      const wanted = source.create ? "create" : source.format ? "modify" : "existing"
+      if (p.status !== wanted) fail(c.name, `${who}: status ${p.status}, expected ${wanted}`)
 
       // Geometry is transcribed, not recomputed: a modify is a delete followed by
       // a create at exactly these numbers.
@@ -405,16 +441,27 @@ ${c.name}`)
   }
 
   // Exactly one ESP, and the one the page validated and the bootloader will patch.
+  //
+  // ⚠️ Identified by its SOURCE ROW, not by `dev_path`. A created partition has
+  // none, so two claimed gaps both answered `""` to a path comparison and the
+  // layout went out with two ESPs — which is the defect this rewrite exists to
+  // be able to see (#447).
+  const sourceOf = (p: Partition) => p.dev_path === null
+    ? assigned.find(m => m.create && m.start === p.start.value && m.size === p.size.value)
+    : assigned.find(m => m.path === p.dev_path)
+  const espSource = espMount(assigned)
   const flagged = all.filter(p => p.flags.includes("esp"))
   if (flagged.length !== 1) fail(c.name, `${flagged.length} partitions flagged as the ESP`)
   else {
-    if (flagged[0].dev_path !== c.esp) fail(c.name, `ESP is ${flagged[0].dev_path}, expected ${c.esp}`)
-    if (espMount(assigned)?.path !== c.esp) fail(c.name, "espMount picks a different partition than the layout flags")
+    const got = sourceOf(flagged[0])
+    if (!got) fail(c.name, "the flagged ESP matches no assigned row")
+    else if (got.path !== c.esp) fail(c.name, `ESP is '${got.path}', expected '${c.esp}'`)
+    if (got && espSource !== got) fail(c.name, "espMount picks a different partition than the layout flags")
     if (!flagged[0].flags.includes("boot")) fail(c.name, "the ESP is not flagged bootable")
   }
   const claimed = new Set(assigned.map(m => m.mountpoint))
   for (const p of all) {
-    if (p.dev_path !== c.esp && p.flags.length > 0) fail(c.name, `${p.dev_path} carries flags [${p.flags}]`)
+    if (sourceOf(p) !== espSource && p.flags.length > 0) fail(c.name, `${p.dev_path ?? "create"} carries flags [${p.flags}]`)
 
     const source = assigned.find(m => m.path === p.dev_path)
     if (!source) continue
@@ -452,6 +499,77 @@ function isSubvolRoot(m: ManualPartitionMount): boolean {
   return m.mountpoint === "/" && m.format && m.filesystem === "btrfs"
 }
 
+
+// ─── THE GAPS BETWEEN PARTITIONS (#447) ──────────────────────────────────────
+//
+// `freeSpaceGaps` is what decides whether somebody who made room for us can see
+// it. It is pure arithmetic over numbers `lsblk` already reports, so it is
+// checked here rather than by looking at a table on a machine that happens to
+// have a gap — this developer's does not, and a feature nobody can reproduce is
+// a feature nobody maintains.
+//
+// The floor is the interesting part: it is what lets the function get away with
+// not knowing a GPT's exact usable range. Case 2 is the one that matters most in
+// practice — every real disk has 1 MiB slivers between aligned partitions, and a
+// table that grew a "Free space — 1.0 MiB" row for each of them would be noise
+// dressed as an offer.
+const GIB = 1024 * MIB
+const DISK = { path: "/dev/sda", size: 500 * GIB, logicalSectorSize: 512 }
+
+const gapCases: Array<{ name: string; parts: Array<[number, number]>; want: Array<[number, number]> }> = [
+  {
+    name: "a disk with room at the end — somebody shrank Windows",
+    parts: [[1 * MIB, 100 * GIB]],
+    want: [[100 * GIB + MIB, 500 * GIB - MIB - (100 * GIB + MIB)]],
+  },
+  {
+    name: "1 MiB alignment slivers are not offers",
+    parts: [[1 * MIB, 100 * GIB], [100 * GIB + 2 * MIB, 100 * GIB]],
+    want: [[200 * GIB + 2 * MIB, 500 * GIB - MIB - (200 * GIB + 2 * MIB)]],
+  },
+  {
+    name: "a gap in the MIDDLE, between two partitions",
+    parts: [[1 * MIB, 50 * GIB], [200 * GIB, 300 * GIB - MIB]],
+    want: [[50 * GIB + MIB, 200 * GIB - (50 * GIB + MIB)]],
+  },
+  {
+    name: "an empty disk is one gap, edges reserved",
+    parts: [],
+    want: [[MIB, 500 * GIB - 2 * MIB]],
+  },
+  {
+    name: "a full disk offers nothing",
+    parts: [[1 * MIB, 500 * GIB - 2 * MIB]],
+    want: [],
+  },
+  {
+    // A corrupt table must not make the cursor walk backwards: an invented gap
+    // ON TOP of a partition is an offer to install over somebody's data.
+    name: "overlapping partitions invent no gap",
+    parts: [[1 * MIB, 300 * GIB], [100 * GIB, 300 * GIB]],
+    want: [[400 * GIB, 500 * GIB - MIB - 400 * GIB]],
+  },
+  {
+    name: "partitions of another disk are ignored",
+    parts: [],
+    other: true,
+    want: [[MIB, 500 * GIB - 2 * MIB]],
+  } as any,
+]
+
+print("\n─── free space (#447) ───")
+for (const g of gapCases) {
+  const parts = g.parts.map(([start, size]) => ({ device: DISK.path, start, size }))
+  if ((g as any).other) parts.push({ device: "/dev/sdb", start: 1 * MIB, size: 400 * GIB })
+  const got = freeSpaceGaps(DISK, parts).map(x => [x.start, x.size] as [number, number])
+  const same = got.length === g.want.length
+    && got.every((x, i) => x[0] === g.want[i][0] && x[1] === g.want[i][1])
+  if (!same) {
+    fail(g.name, `gaps ${JSON.stringify(got)} ≠ ${JSON.stringify(g.want)}`)
+  } else {
+    print(`   ${String(got.length).padStart(2)} gap(s)  ${g.name}`)
+  }
+}
 
 // ─── WHERE THE BOOTLOADER PATCHING WRITES ────────────────────────────────────
 //

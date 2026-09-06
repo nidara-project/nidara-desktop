@@ -30,6 +30,7 @@ import {
 } from "../lib/answers"
 import { espMount } from "../lib/disk-config"
 import { ESP_MOUNTS, manualProblems } from "../lib/manual-problems"
+import { freeSpaceGaps } from "../lib/free-space"
 import { heading, prose, formatSize } from "./common"
 
 interface RawBlockDevice {
@@ -99,6 +100,14 @@ interface DetectedPartition {
  * numbers to archinstall, which re-creates the partition at them when the row is
  * formatted.
  */
+/**
+ * A line of the manual table: an existing partition, or a gap that could become
+ * one. They differ in three places only — the name, whether Format is a choice,
+ * and whether the plan is told to CREATE — so they travel as one shape rather
+ * than forking the row builder.
+ */
+type RowSource = DetectedPartition & { isFree: boolean; key: string }
+
 const LSBLK_SECTOR = 512
 
 function listPartitions(): DetectedPartition[] {
@@ -435,23 +444,50 @@ export function DiskStep(): Step {
 
         const partitions = listPartitions()
 
+        // ── Unpartitioned space is a ROW, not a silence (#447) ──────────────
+        //
+        // `lsblk` reports partitions, so a disk with room on it looked identical
+        // to a full one — and somebody who had just shrunk Windows to make space
+        // for us opened this page and found nothing to install into. Whole-disk
+        // mode erases, and archinstall has no resize of any kind, so "make room,
+        // then install into it" is the ONLY way to keep an existing system on the
+        // same drive; it was the one route the table could not show.
+        //
+        // A row is what the field does: Calamares lists unallocated space in the
+        // table and enables `Create` only there; Ubiquity and YaST the same.
+        //
+        // The list is sorted by (disk, offset) so a gap sits between the
+        // partitions it lies between — a free-space row in lsblk's order would be
+        // a size with no place. For partitions alone this changes nothing: lsblk
+        // already returns them that way.
+        const freeRows: RowSource[] = listDisks().flatMap(d =>
+          freeSpaceGaps(d, partitions).map(g => ({
+            name: "", path: "", device: g.device, start: g.start, size: g.size,
+            logicalSectorSize: g.logicalSectorSize, fstype: null, label: null, pkname: null,
+            isFree: true, key: `free:${g.device}@${g.start}`,
+          })))
+        const rows: RowSource[] = [
+          ...partitions.map(p => ({ ...p, isFree: false, key: p.path })),
+          ...freeRows,
+        ].sort((a, b) => a.device.localeCompare(b.device) || a.start - b.start)
+
         // Assignments to partitions that are no longer there go with them. Refresh
         // exists because the disk can change under the page (a USB pulled, a table
         // rewritten elsewhere), and a mount point pointing at a path that has gone
         // is one the user can neither see nor take back — it would simply arrive at
         // the run step as a mount of nothing.
-        const present = new Set(partitions.map(p => p.path))
+        const present = new Set(rows.map(r => r.key))
         for (const path of Array.from(manualMounts.keys())) {
           if (!present.has(path)) manualMounts.delete(path)
         }
 
-        if (partitions.length === 0) {
+        if (rows.length === 0) {
           table.appendMessage(t("diskNoPartitions"))
           return
         }
 
-        for (const p of partitions) {
-          const currentEntry = manualMounts.get(p.path)
+        for (const p of rows) {
+          const currentEntry = manualMounts.get(p.key)
 
           // ── ONE filesystem column, and it always reads FORWARDS ────────────
           //
@@ -476,7 +512,7 @@ export function DiskStep(): Step {
           //
           // The label is not lost, it moves: `oldroot` says WHICH partition this
           // is, which is the identity column's job, not the filesystem's.
-          const rowName = [p.path, p.label].filter(Boolean).join("  ·  ")
+          const rowName = p.isFree ? t("diskFreeSpace") : [p.path, p.label].filter(Boolean).join("  ·  ")
           // An em dash where lsblk knows of no filesystem — the honest answer, and
           // the same one the old `Contents` cell gave (D-15).
           const keptFsLabel = p.fstype || "—"
@@ -498,7 +534,7 @@ export function DiskStep(): Step {
           // place because it is the correct call and costs nothing; do not read it
           // as a claim that the dropdowns are named.
           mountDropDown.update_property(
-            [Gtk.AccessibleProperty.LABEL], [`${t("diskMountpoint")} — ${p.path}`])
+            [Gtk.AccessibleProperty.LABEL], [`${t("diskMountpoint")} — ${rowName}`])
 
           let initialMountIdx = 0
           if (currentEntry) {
@@ -509,10 +545,14 @@ export function DiskStep(): Step {
 
           const formatCheck = new Gtk.CheckButton({
             valign: Gtk.Align.CENTER,
-            active: currentEntry ? currentEntry.format : false,
+            // ⚠️ A gap is always formatted and it is never a question: there is
+            // nothing on it to keep. Ticked and left insensitive below, so the
+            // column still SAYS what will happen rather than going blank — the
+            // same rule the filesystem cell follows.
+            active: p.isFree ? true : currentEntry ? currentEntry.format : false,
           })
           formatCheck.update_property(
-            [Gtk.AccessibleProperty.LABEL], [`${t("diskFormat")} — ${p.path}`])
+            [Gtk.AccessibleProperty.LABEL], [`${t("diskFormat")} — ${rowName}`])
 
           const fsStringList = Gtk.StringList.new(FS_OPTIONS)
           const fsDropDown = NidaraDropDown({
@@ -520,7 +560,7 @@ export function DiskStep(): Step {
             valign: Gtk.Align.CENTER,
           })
           fsDropDown.update_property(
-            [Gtk.AccessibleProperty.LABEL], [`${t("diskFs")} — ${p.path}`])
+            [Gtk.AccessibleProperty.LABEL], [`${t("diskFs")} — ${rowName}`])
           const curFsIdx = currentEntry ? FS_OPTIONS.indexOf(currentEntry.filesystem) : 0
           fsDropDown.set_selected(curFsIdx >= 0 ? curFsIdx : 0)
 
@@ -569,9 +609,9 @@ export function DiskStep(): Step {
           // table would have opened greyed out.
           const initialMount = MOUNT_OPTIONS[initialMountIdx]?.mountpoint ?? ""
           const modeFor = (mount: string, doFormat: boolean): FsMode =>
-            mount === "swap" ? "swap" : (mount !== "" && doFormat) ? "choose" : "keep"
+            mount === "swap" ? "swap" : (mount !== "" && (doFormat || p.isFree)) ? "choose" : "keep"
           setFsMode(modeFor(initialMount, formatCheck.active))
-          formatCheck.set_sensitive(initialMount !== "")
+          formatCheck.set_sensitive(!p.isFree && initialMount !== "")
           // Editable exactly where the value is a choice; everywhere else the cell
           // still SAYS something true, which is why it is not simply blanked.
           fsDropDown.set_sensitive(modeFor(initialMount, formatCheck.active) === "choose")
@@ -594,13 +634,13 @@ export function DiskStep(): Step {
             // mount point there is no question: the partition is not part of this
             // install, and a live "Format" tick on it is a control that does
             // nothing — which on THIS page reads as a promise to erase something.
-            formatCheck.set_sensitive(chosenMount !== "")
+            formatCheck.set_sensitive(!p.isFree && chosenMount !== "")
             fsDropDown.set_sensitive(mode === "choose")
 
             if (!chosenMount) {
-              manualMounts.delete(p.path)
+              manualMounts.delete(p.key)
             } else {
-              manualMounts.set(p.path, {
+              manualMounts.set(p.key, {
                 name: p.name,
                 path: p.path,
                 device: p.device,
@@ -611,7 +651,11 @@ export function DiskStep(): Step {
                 label: p.label,
                 mountpoint: chosenMount,
                 filesystem: chosenFs,
-                format: shouldFormat,
+                // A created partition is formatted by construction, and saying so
+                // here is what lets every rule in `manual-problems.ts` stay as it
+                // is: all of them are written against `format`.
+                format: p.isFree ? true : shouldFormat,
+                ...(p.isFree ? { create: true as const } : {}),
               })
             }
             syncAnswer()

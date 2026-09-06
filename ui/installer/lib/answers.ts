@@ -63,6 +63,15 @@ export interface ManualPartitionMount {
   mountpoint: string // "/", "/boot", "/boot/efi", "/efi", "/home", "swap"
   filesystem: FilesystemType
   format: boolean
+  /**
+   * This row is a gap, not a partition: archinstall has to CREATE it (#447).
+   *
+   * `path` is empty for these — there is no device node yet — and the plan emits
+   * `status: "create"` with `dev_path: null`, exactly as entire-disk mode does
+   * for the two partitions it lays out. `format` is always true and not a choice:
+   * a partition that does not exist yet cannot be kept.
+   */
+  create?: boolean
 }
 
 export interface ManualDiskAnswer {

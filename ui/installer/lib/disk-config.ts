@@ -342,25 +342,38 @@ export function manualDiskConfig(answer: ManualDiskAnswer): DiskConfig {
     // are what the system is. Without them the two modes install different
     // products, and `/.snapshots` — which every snapshot surface has to be able
     // to assume — existed in one of them.
-    const useSubvolumes = m.mountpoint === "/" && m.format && m.filesystem === "btrfs"
+    const useSubvolumes = m.mountpoint === "/" && (m.format || !!m.create) && m.filesystem === "btrfs"
 
     const partition: Partition = {
       obj_id: GLib.uuid_string_random(),
-      status: m.format ? "modify" : "existing",
+      // A row that is a GAP has to be brought into existence; one that is a
+      // partition is either rewritten in place or left alone. `create` carries
+      // the same meaning it does in entire-disk mode, and reaches archinstall
+      // through the same field.
+      status: m.create ? "create" : m.format ? "modify" : "existing",
       type: "primary",
       start: bytes(m.start),
       size: bytes(m.size),
-      fs_type: m.format
+      // A created partition is always formatted — there is nothing to keep — so
+      // it never reaches `existingFsType`, which would have nothing to report.
+      fs_type: m.create || m.format
         ? (isSwap ? "linux-swap" : fsType(m.filesystem))
         : existingFsType(m.fsType),
       // ⚠️ null for a subvolumed root, or archinstall mounts the root twice.
       mountpoint: isSwap || useSubvolumes ? null : m.mountpoint,
       // Applied to every subvolume mount, as in entire-disk mode.
       mount_options: useSubvolumes ? ["compress=zstd"] : [],
-      dev_path: m.path,
+      // No device node exists yet for a gap; archinstall assigns one. This is the
+      // same `null` the two entire-disk partitions carry.
+      dev_path: m.create ? null : m.path,
       // What makes archinstall find the ESP at all (`get_efi_partition` filters on
       // this flag); on a real EFI partition it is also what the GPT already says.
-      flags: esp && m.path === esp.path ? ["boot", "esp"] : [],
+      //
+      // ⚠️ Compared by IDENTITY, not by path. `espMount` returns an element of
+      // this very array, and a created row's path is the empty string — so
+      // `m.path === esp.path` was `"" === ""` for EVERY created row, and a layout
+      // with two of them would have flagged both as the ESP.
+      flags: esp && m === esp ? ["boot", "esp"] : [],
       btrfs: useSubvolumes ? subvolumesFor(claimed) : [],
     }
 
