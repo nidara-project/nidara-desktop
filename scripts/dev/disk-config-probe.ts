@@ -66,7 +66,8 @@
 import { entireDiskConfig, manualDiskConfig, espMount } from "../../ui/installer/lib/disk-config"
 import { loaderRoot } from "../../ui/installer/lib/bootloader"
 import { swapFstabEntry } from "../../ui/installer/lib/swap"
-import { manualProblems } from "../../ui/installer/lib/manual-problems"
+import { ESP_MIN_BYTES, manualProblems } from "../../ui/installer/lib/manual-problems"
+import { formatSize } from "../../ui/installer/lib/format-size"
 import { freeSpaceGaps } from "../../ui/installer/lib/free-space"
 import { t } from "../../ui/installer/lib/i18n"
 import type {
@@ -711,6 +712,43 @@ const REFUSAL_CASES: RefusalCase[] = [
     ],
   },
   {
+    // The one #446 is about: reusing the ESP Windows made is exactly what somebody
+    // does to get both systems in one menu, and it is ~100 MiB. It used to be
+    // accepted, repartition the disk, and die partway through pacstrap.
+    name: "a factory Windows ESP, 100 MiB — the kernel does not fit",
+    uefi: true, want: ["diskErrEfiTooSmall"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat", size: 100 * MIB },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+    ],
+  },
+  {
+    name: "exactly the floor — a boundary is a rule, and it is not refused",
+    uefi: true, want: [],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat", size: ESP_MIN_BYTES },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+    ],
+  },
+  {
+    // The other side of the same boundary. Without it, `<=` and `<` are the same
+    // probe result and the rule could be off by the whole partition.
+    name: "one byte under the floor",
+    uefi: true, want: ["diskErrEfiTooSmall"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat", size: ESP_MIN_BYTES - 1 },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+    ],
+  },
+  {
+    name: "512 MiB — what every installer makes, and what we make ourselves",
+    uefi: true, want: [],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat", size: 512 * MIB },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+    ],
+  },
+  {
     name: "no root at all",
     uefi: true, want: ["diskErrNoRoot", "diskErrNoBoot"],
     mounts: [
@@ -794,6 +832,25 @@ for (const c of REFUSAL_CASES) {
   }
   if (unexpected.length > 0) {
     fail(c.name, `refused for reasons this case did not expect: ${JSON.stringify(unexpected)}`)
+  }
+}
+
+// ⚠️ The refusal SAYS the minimum — "at least 300 MiB" — so that sentence is a
+// second copy of `ESP_MIN_BYTES`, in twelve languages. Raise the constant and the
+// English goes on confidently stating the old number, which is worse than saying
+// nothing: the person resizes to the size the message asked for and is refused
+// again. What gets checked is the locale the probe RUNS in — English in CI, and
+// on a maintainer's machine whichever theirs is, which is a second pair of eyes
+// for free. All twelve translations spell the number the same way (`300 MiB`),
+// so any of them catches the drift; a translation that localised it would fail
+// here, and that is the right place to find out.
+{
+  const stated = formatSize(ESP_MIN_BYTES)
+  if (!t("diskErrEfiTooSmall").includes(stated)) {
+    fail("the refusal states the minimum it enforces",
+      `ESP_MIN_BYTES is ${stated} and the English message does not say so: "${t("diskErrEfiTooSmall")}"`)
+  } else {
+    print(`   ok           the refusal states its own minimum (${stated})`)
   }
 }
 
