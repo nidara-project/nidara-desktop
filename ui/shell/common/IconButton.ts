@@ -58,6 +58,12 @@ export default function IconButton(props: IconButtonProps): Gtk.Button {
         halign: props.halign,
         valign: props.valign,
         cssClasses: props.cssClasses,
+        // The tooltip IS the name, so it goes down as one too. Nidara's tooltips
+        // are glass bubbles we draw ourselves rather than GTK's `tooltip_text`,
+        // and a widget we draw is invisible to AT-SPI — so every icon button in
+        // the shell announced itself as "button" and nothing else, while the
+        // words that name it were being passed in on the line below (#454).
+        accessibleLabel: props.tooltip,
         // A capture-phase click claims the event before the parent sees it, which
         // "clicked" cannot do — so that variant is wired below instead.
         onClick: props.captureClick ? undefined : props.onClick,

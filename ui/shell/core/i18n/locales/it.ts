@@ -541,6 +541,7 @@ export default {
     "settings.nav.forward": "Avanti",
     "settings.nav.menu": "Menu",
     "settings.window.close": "Chiudi",
+    "settings.window.sidebar-toggle": "Mostra o nascondi la barra laterale",
     "settings.search.no-results": "Nessun risultato",
     "settings.page.load-error": "Impossibile caricare la pagina",
 

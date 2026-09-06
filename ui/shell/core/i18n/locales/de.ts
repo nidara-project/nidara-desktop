@@ -541,6 +541,7 @@ export default {
     "settings.nav.forward": "Vor",
     "settings.nav.menu": "Menü",
     "settings.window.close": "Schließen",
+    "settings.window.sidebar-toggle": "Seitenleiste ein- oder ausblenden",
     "settings.search.no-results": "Keine Ergebnisse",
     "settings.page.load-error": "Seite konnte nicht geladen werden",
 

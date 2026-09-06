@@ -390,6 +390,7 @@ export default {
     "settings.nav.forward":        "Adelante",
     "settings.nav.menu":           "Menú",
     "settings.window.close":       "Cerrar",
+    "settings.window.sidebar-toggle": "Mostrar u ocultar la barra lateral",
     "settings.search.no-results":  "Sin resultados",
     "settings.page.load-error":    "Error al cargar la página",
 

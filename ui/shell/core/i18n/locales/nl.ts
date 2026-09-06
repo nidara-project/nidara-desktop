@@ -541,6 +541,7 @@ export default {
     "settings.nav.forward":        "Vooruit",
     "settings.nav.menu":           "Menu",
     "settings.window.close":       "Sluiten",
+    "settings.window.sidebar-toggle": "Zijbalk tonen of verbergen",
     "settings.search.no-results":  "Geen resultaten",
     "settings.page.load-error":    "Laden van pagina mislukt",
 

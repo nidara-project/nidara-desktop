@@ -541,6 +541,7 @@ export default {
     "settings.nav.forward":        "前进",
     "settings.nav.menu":           "菜单",
     "settings.window.close":       "关闭",
+    "settings.window.sidebar-toggle": "显示或隐藏侧边栏",
     "settings.search.no-results":  "无结果",
     "settings.page.load-error":    "页面加载失败",
 

@@ -493,6 +493,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         sidebar: {
             widget: sidebar.widget,
             toggleIcon: Icons.sidebar,
+            toggleLabel: t("settings.window.sidebar-toggle"),
             top: searchEntry,
             width: WINDOW_LAYOUT.sidebar,
             contentWidth: PANE_W,

@@ -85,6 +85,27 @@ export interface NidaraCircleButtonOpts {
     halign?: Gtk.Align
     /** Extra classes, appended after the kit's own. */
     cssClasses?: string[]
+    /**
+     * The accessible NAME — what a screen reader, and `nidara-a11y`, announce.
+     *
+     * An icon button has no label to borrow one from, so without this it is
+     * announced as "button" and nothing else. That is not hypothetical: driving
+     * the installer by keyboard, a `Return` meant for Continue landed on an
+     * unnamed header button and quit it (#454).
+     *
+     * ⚠️ A Nidara tooltip does NOT supply this. The shell's are glass bubbles
+     * drawn by `attachTooltip`, deliberately not GTK's native `tooltip_text`, and
+     * a widget we draw ourselves is invisible to AT-SPI. `common/IconButton.ts`
+     * therefore passes its tooltip text down to here as well.
+     *
+     * Already translated when it arrives: the kit holds no strings, for the same
+     * reason it takes an icon rather than owning an icon set.
+     *
+     * ⚠️ NOT `label`, which in `NidaraButtonOpts` above is the VISIBLE text. A
+     * circle button has no visible text, so the same name would read as one and
+     * somebody would expect it to render.
+     */
+    accessibleLabel?: string
     onClick?: () => void
 }
 
@@ -120,6 +141,7 @@ export function NidaraCircleButton(opts: NidaraCircleButtonOpts): Gtk.Button {
         halign: opts.halign ?? Gtk.Align.CENTER,
         sensitive: opts.sensitive ?? true,
     })
+    if (opts.accessibleLabel) btn.update_property([Gtk.AccessibleProperty.LABEL], [opts.accessibleLabel])
     if (opts.onClick) btn.connect("clicked", opts.onClick)
     return btn
 }

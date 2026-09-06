@@ -596,6 +596,7 @@ export default {
     "settings.nav.forward":        "Forward",
     "settings.nav.menu":           "Menu",
     "settings.window.close":       "Close",
+    "settings.window.sidebar-toggle": "Show or hide the sidebar",
     "settings.search.no-results":  "No results",
     "settings.page.load-error":    "Failed to load page",
 

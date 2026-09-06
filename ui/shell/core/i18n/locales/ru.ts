@@ -548,6 +548,7 @@ export default {
     "settings.nav.forward":        "Вперёд",
     "settings.nav.menu":           "Меню",
     "settings.window.close":       "Закрыть",
+    "settings.window.sidebar-toggle": "Показать или скрыть боковую панель",
     "settings.search.no-results":  "Нет результатов",
     "settings.page.load-error":    "Не удалось загрузить страницу",
 

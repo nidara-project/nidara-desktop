@@ -26,6 +26,15 @@ export interface NidaraWindowSidebar {
     widget: Gtk.Widget
     /** Icon for the toggle button (passed in so the kit stays free of the app's icon set). */
     toggleIcon: Gio.FileIcon
+    /**
+     * The toggle's accessible NAME, already translated — REQUIRED, not optional.
+     *
+     * An icon button announces itself as "button" and nothing else without one,
+     * and this particular one hides the navigation. It is required rather than
+     * defaulted because a default would be a string the kit had to hold, in one
+     * language, for a control every window shows (#454).
+     */
+    toggleLabel: string
     /** Pinned at the top of the sidebar capsule, above the list (e.g. a search box). */
     top?: Gtk.Widget
     width?: number
@@ -262,6 +271,7 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
     })
+    sidebarToggle.update_property([Gtk.AccessibleProperty.LABEL], [sidebar.toggleLabel])
 
     // ── Header over the CONTENT (draggable) ───────────────────────────────────
     // Not across the card: the sidebar capsule is full height, so a header spanning

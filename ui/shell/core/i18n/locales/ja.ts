@@ -541,6 +541,7 @@ export default {
     "settings.nav.forward":        "進む",
     "settings.nav.menu":           "メニュー",
     "settings.window.close":       "閉じる",
+    "settings.window.sidebar-toggle": "サイドバーの表示・非表示",
     "settings.search.no-results":  "結果なし",
     "settings.page.load-error":    "ページの読み込みに失敗しました",
 
