@@ -2791,6 +2791,40 @@ path); unknown/stale keys fall back to `DEFAULT_LAUNCHER_ICON`. Arch's logo is d
 bundled** (trademark — restricted, not under the OS's free licence; we ship our own mark and let users
 point `launcherIcon` at any file).
 
+## Naming a control that has no visible label
+
+A control in a table cell has no label of its own: the **column heading is the label**, and a
+heading is not in that row's accessibility tree. So a column of dropdowns reads, to a screen reader
+or to `nidara-a11y`, as a run of identical controls.
+
+⚠️ **`update_property([LABEL], …)` does nothing on a `Gtk.DropDown`.** It publishes its SELECTED
+ITEM as its accessible name and swallows the label. Measured over AT-SPI, 2026-09-06, with a
+`GtkCheckButton` carrying the same call as the control
+(`scripts/dev/dropdown-a11y-probe.ts` — the window, then `nidara-a11y dropdown-a11y-probe`):
+
+```
+what was set                  name                  description
+nothing                       "None"                ""
+LABEL                         "None"                ""     ← swallowed whole
+DESCRIPTION                   "None"                "Mount point — /dev/sda2"
+LABEL + DESCRIPTION           "None"                "Mount point — /dev/sda3"
+LABEL, on a CheckButton       "Format — /dev/sda1"  ""     ← the control
+```
+
+So: **`NidaraDropDown({ accessibleDescription })`**, which sets `DESCRIPTION` — the name stays the
+selected value, which is the right thing for it to be, and the description says which control it
+is. `NidaraDropDownRow` passes its own row title automatically. Every other control (check boxes,
+entries, buttons) takes `LABEL` as normal.
+
+⚠️ `LABELLED_BY` would be the honest relation — point at the heading widget instead of copying its
+text into every row — and it is **not reachable from GJS**: `update_relation` wants a GList of
+`GtkAccessible`, the nested form throws *"Could not guess unspecified GValue type"* and the flat
+form is accepted and silently sets nothing (`g_value_get_pointer` assertion). A string on the
+control is the only thing this binding can express, not a shortcut somebody took.
+
+`nidara-a11y` reports `description` on a node when it has one — added with this, because a fix the
+agent surface cannot see is a fix that only half exists (#465).
+
 ## Sliders — one component
 
 All sliders are **`makeSlider`** (Cairo) in `nidara-kit/slider.ts` (`makeHSlider` is just a

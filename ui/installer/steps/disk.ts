@@ -548,24 +548,23 @@ export function DiskStep(): Step {
           // the same one the old `Contents` cell gave (D-15).
           const keptFsLabel = p.fstype || "—"
 
-          const mountStringList = Gtk.StringList.new(mountLabels())
-          const mountDropDown = NidaraDropDown({
-            model: mountStringList,
-            valign: Gtk.Align.CENTER,
-          })
           // Every control in a table cell is a control with no visible label of
           // its own — the column heading is the label, and a heading is not in the
           // row's accessibility tree. Named here so a reader (or `nidara-a11y`)
           // does not meet a column of identical unnamed controls.
           //
-          // ⚠️ It only sticks on the CHECK BOX. Measured 2026-09-03: a
-          // `Gtk.DropDown` reports its SELECTED ITEM as its accessible name and
-          // overrides this — the a11y tree shows `Ninguno` / `btrfs`, which at
-          // least says what the control holds, and never which partition. Left in
-          // place because it is the correct call and costs nothing; do not read it
-          // as a claim that the dropdowns are named.
-          mountDropDown.update_property(
-            [Gtk.AccessibleProperty.LABEL], [`${t("diskMountpoint")} — ${rowName}`])
+          // ⚠️ On a dropdown it is the DESCRIPTION and not the label, and that is
+          // not a style choice: a `Gtk.DropDown` publishes its SELECTED ITEM as
+          // its accessible name and swallows a label set on it. This file carried
+          // the measurement of that as a warning from 2026-09-03 until the kit
+          // gained somewhere to put the answer (#465); the note now lives with
+          // the mechanism, in `NidaraDropDown`.
+          const mountStringList = Gtk.StringList.new(mountLabels())
+          const mountDropDown = NidaraDropDown({
+            model: mountStringList,
+            valign: Gtk.Align.CENTER,
+            accessibleDescription: `${t("diskMountpoint")} — ${rowName}`,
+          })
 
           let initialMountIdx = 0
           if (currentEntry) {
@@ -589,9 +588,8 @@ export function DiskStep(): Step {
           const fsDropDown = NidaraDropDown({
             model: fsStringList,
             valign: Gtk.Align.CENTER,
+            accessibleDescription: `${t("diskFs")} — ${rowName}`,
           })
-          fsDropDown.update_property(
-            [Gtk.AccessibleProperty.LABEL], [`${t("diskFs")} — ${rowName}`])
           const curFsIdx = currentEntry ? FS_OPTIONS.indexOf(currentEntry.filesystem) : 0
           fsDropDown.set_selected(curFsIdx >= 0 ? curFsIdx : 0)
 

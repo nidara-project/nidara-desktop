@@ -104,7 +104,11 @@ export function NidaraDropDownRow(
     mkRow: NidaraRowBuilder = plainRow,
 ): Gtk.ListBoxRow {
     const model = new Gtk.StringList({ strings: opts })
-    const drp = NidaraDropDown({ model, valign: Gtk.Align.CENTER })
+    // The row HAS a visible title, so the control is named by it — but a
+    // `GtkDropDown` publishes its selected item as its accessible name, so
+    // without this a screen reader meets a column of values with nothing saying
+    // which setting each one answers. The row's own label is that answer.
+    const drp = NidaraDropDown({ model, valign: Gtk.Align.CENTER, accessibleDescription: label })
 
     // 🔑 **A value that is not in the list is ADDED to it, never rounded down to
     // item 0.** The list says what you may PICK; the selection says what you HAVE,
