@@ -763,6 +763,27 @@ interval is how long a dismissal can lag; it is not a polling loop for state.
 5. **`app.ts`** (`ui/shell/app.ts`): sets dark/light via `Gtk.Settings.gtk_application_prefer_dark_theme` (pure GTK4 — no `Adw.init()`); registers the `nd-*-symbolic` icon search path; `app.start({ applicationId: "org.nidara.desktop", main, requestHandler })`. In `main()`: iterates monitors → `createUI(monitor)` (Bar + Dock per monitor), wires the dock-rebuild debounce, and populates `core/ShellActions` + the IPC registry (the bar/dock blur layer rules live in `hyprland.lua` as `hl.layer_rule` — the old `hyprctl keyword layerrule` calls were dead under the Lua parser and were removed).
 6. Reload in dev: **`Super+Shift+R`** re-runs `nidara-ui` (the old `start_ui.sh`/`reload_ui.sh` no longer exist).
 
+### The greeter's exit is a teardown, not a cut
+
+The greeter is its own Hyprland instance, and `config/greetd/hyprland-greeter.lua` is the whole of
+it: line 14 starts `awww-daemon` by hand, and the last line exits the compositor when
+`nidara-greeter` returns. **Whatever that file starts, that file has to stop — before it drops the
+compositor.** Exiting first pulls the Wayland socket out from under everything still connected, and
+a client that is mid-read does not shut down, it panics: `awww-daemon` dumped core on *every* login
+until 2026-09-07 (#479), and `xdg-desktop-portal-gtk` logged `Error reading events from display:
+Broken pipe` and failed its unit in the same second.
+
+Why the desktop side never had this: there, every daemon is a systemd unit (`uwsm app -s b -- …`),
+so logout stops them in order and the compositor goes last. The greeter has no uwsm and no units, so
+the ordering is written out by hand — `awww kill`, a bounded wait, `systemctl --user stop` for the
+portal stack, and only then `hl.dsp.exit()`. Two rules for anything added there:
+
+- **bound every wait.** This is the path a login is standing on; a daemon that refuses to die must
+  never be able to strand a machine on the login screen (hence the ~2 s cap and the `timeout` on the
+  systemctl call, whose units default to a 90 s stop timeout).
+- **measured cost: ~150 ms** of the handoff, and the handoff as a whole stayed at 1 s. The seam was
+  never slow — it was a collapse. "Smoother" here means "nothing crashes", not "faster".
+
 ### Wallpaper at login: never trust awww's cache
 
 `~/.config/nidara/wallpaper` is the **single source of truth** (written by `WallpaperManager`,
