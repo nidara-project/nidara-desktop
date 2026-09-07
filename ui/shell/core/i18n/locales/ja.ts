@@ -19,7 +19,7 @@ export default {
     "settings.input.keyboard.numlock": "起動時に NumLock を有効化",
     "settings.input.keyboard.numlock.desc": "テンキーを既定で有効にします",
     "settings.input.keyboard.layout": "キーボードレイアウト",
-    "settings.input.keyboard.layout.desc": "Hyprland で使用中のキーボードレイアウト",
+    "settings.input.keyboard.layout.desc": "このデスクトップが入力に使う配列。テキストコンソールにはインストーラーが設定した配列が残ります",
     "settings.input.keyboard.repeat-delay": "リピート遅延",
     "settings.input.keyboard.repeat-delay.desc": "キーを押し続けてからリピートが始まるまでの時間",
     "settings.input.keyboard.repeat-rate": "リピート速度",

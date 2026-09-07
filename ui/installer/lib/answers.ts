@@ -110,7 +110,7 @@ export interface KeyboardAnswer {
    *
    * ⚠️ `""` means this keyboard has none on this system, and the plan then keeps
    * the medium's own (`us`), which is what the region page said would happen.
-   * See `resolveKeymap()` in lib/region.ts.
+   * See `resolveKeymap()` in ui/lib/keyboards.ts.
    */
   keymap: string
   label: string

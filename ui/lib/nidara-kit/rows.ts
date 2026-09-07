@@ -94,6 +94,9 @@ export function NidaraToggleRow(
  * show the content behind it) with our scroll bar swapped into its popup list.
  * `onExt` is the same guarded external-sync contract as `NidaraToggleRow`'s.
  */
+/** Above this many options a dropdown becomes searchable. See NidaraDropDownRow. */
+const SEARCHABLE_FROM = 24
+
 export function NidaraDropDownRow(
     label: string,
     subtitle: string,
@@ -109,6 +112,24 @@ export function NidaraDropDownRow(
     // without this a screen reader meets a column of values with nothing saying
     // which setting each one answers. The row's own label is that answer.
     const drp = NidaraDropDown({ model, valign: Gtk.Align.CENTER, accessibleDescription: label })
+
+    // 🔑 **A long list gets a search box; a short one must not.** GtkDropDown's
+    // search is off by default and needs an `expression` before `enable-search`
+    // does anything at all — set one without the other and you get a silent
+    // no-op. The threshold is not a preference: below it the popup is a glance
+    // and a search field is furniture in the way, above it scrolling is the only
+    // way in. The keyboard row is what forced it — the xkb catalogue is 598
+    // entries (#473), and no one scrolls to `us-dvorak-alt-intl`.
+    if (opts.length > SEARCHABLE_FROM) {
+        drp.expression = Gtk.PropertyExpression.new(Gtk.StringObject.$gtype, null, "string")
+        drp.enable_search = true
+        // ⚠️ And SUBSTRING, which is not the default. GtkDropDown searches by
+        // PREFIX out of the box, so a list whose entries are named "English
+        // (Colemak) · us-colemak" answered "colemak" with an empty popup — the
+        // search box was there, took the text, and found nothing. Caught by
+        // opening it and typing, not by any type or count.
+        if ("search_match_mode" in drp) drp.search_match_mode = Gtk.StringFilterMatchMode.SUBSTRING
+    }
 
     // 🔑 **A value that is not in the list is ADDED to it, never rounded down to
     // item 0.** The list says what you may PICK; the selection says what you HAVE,

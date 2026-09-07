@@ -28,51 +28,31 @@ import { barConfig } from "./surfaces/bar/barState"
 import regionConfig from "./core/RegionConfig"
 import { getIdleConfig, updateIdleConfig, onHypridleChanged } from "./core/PowerConfig"
 import inputConfig from "./core/InputConfig"
+import { allKeyboards, keyboardById, keyboardId, parseKeyboardId } from "../lib/keyboards"
 import Icons from "./core/Icons"
 import { safeDisconnect } from "./core/signals"
 import { t } from "./core/i18n"
 
-const KEYBOARD_LAYOUTS: [string, string, string, string][] = [
-    ["us",           "English (US)",              "us",    ""],
-    ["gb",           "English (UK)",              "gb",    ""],
-    ["es",           "Español (ES)",              "es",    ""],
-    ["latam",        "Español (Latinoamérica)",   "latam", ""],
-    ["fr",           "Français",                  "fr",    ""],
-    ["de",           "Deutsch",                   "de",    ""],
-    ["it",           "Italiano",                  "it",    ""],
-    ["br",           "Português (Brasil)",        "br",    ""],
-    ["pt",           "Português (Portugal)",      "pt",    ""],
-    ["nl",           "Nederlands",                "nl",    ""],
-    ["pl",           "Polski",                    "pl",    ""],
-    ["ru",           "Русский",                   "ru",    ""],
-    ["ua",           "Українська",                "ua",    ""],
-    ["jp",           "日本語 (Romaji)",            "jp",    ""],
-    ["cn",           "中文 (Pinyin)",              "cn",    ""],
-    ["kr",           "한국어",                     "kr",    ""],
-    ["ara",          "العربية",                    "ara",   ""],
-    ["se",           "Svenska",                   "se",    ""],
-    ["no",           "Norsk",                     "no",    ""],
-    ["dk",           "Dansk",                     "dk",    ""],
-    ["fi",           "Suomi",                     "fi",    ""],
-    ["cz",           "Čeština",                   "cz",    ""],
-    ["sk",           "Slovenčina",                "sk",    ""],
-    ["hu",           "Magyar",                    "hu",    ""],
-    ["ro",           "Română",                    "ro",    ""],
-    ["tr",           "Türkçe",                    "tr",    ""],
-    ["us-dvorak",    "English (Dvorak)",          "us",    "dvorak"],
-    ["us-colemak",   "English (Colemak)",         "us",    "colemak"],
-]
+// ── Keyboards ────────────────────────────────────────────────────────────────
+// The list used to live here: 28 rows typed out by hand, two of them variants.
+// The installer derived its own from the system and the two never met, so
+// installing with any of the other 36 left this row showing a raw code (#473).
+// Both surfaces now read `ui/lib/keyboards.ts`. Settings takes the WHOLE
+// catalogue — it writes Hyprland's layout and nothing else, so unlike the
+// installer it has no console keymap to be honest about and no reason to
+// withhold a keyboard.
 
-const currentKbLayoutId = (): string => {
-    const cur = KEYBOARD_LAYOUTS.find(([, , l, v]) => l === inputConfig.kbLayout && v === inputConfig.kbVariant)
-    if (cur) return cur[0]
-    return inputConfig.kbVariant ? `${inputConfig.kbLayout} (${inputConfig.kbVariant})` : inputConfig.kbLayout
-}
+/**
+ * The id of whatever Hyprland currently holds — derived, not looked up.
+ *
+ * 🔑 It does not have to be IN the catalogue. `kb_layout` accepts things no list
+ * offers ("es,us"), and the kit adds an unknown value to the dropdown rather than
+ * rounding it down to item 0 (`ui/lib/nidara-kit/rows.ts`), so the row keeps
+ * saying what is actually in force.
+ */
+const currentKbLayoutId = (): string => keyboardId(inputConfig.kbLayout, inputConfig.kbVariant)
 
-const kbLayoutLabel = (id: string): string => {
-    const entry = KEYBOARD_LAYOUTS.find(([k]) => k === id)
-    return entry ? entry[1] : id
-}
+const kbLayoutLabel = (id: string): string => keyboardById(id)?.label ?? id
 
 const PROVIDER_NAMES: Record<string, string> = {
     anthropic: "Anthropic",
@@ -483,19 +463,19 @@ export function registerConfigEntries() {
 
     // ── Input: Keyboard ───────────────────────────────────────────────────
     registerConfig("input.keyboard.layout", {
-        desc: "Keyboard layout code (e.g. 'us', 'es', 'us-dvorak').",
+        desc: "Keyboard layout: an xkb layout code, optionally '-' and a variant — 'us', "
+            + "'us-colemak', 'de-nodeadkeys'. The whole xkb catalogue is offered "
+            + "(/usr/share/X11/xkb/rules/base.lst). This is the GRAPHICAL layout only: it "
+            + "never touches the text console, which the installer sets.",
         type: "enum",
-        enum: KEYBOARD_LAYOUTS.map(([id]) => id),
+        enum: allKeyboards().map(k => k.id),
         get: () => currentKbLayoutId(),
+        // The id round-trips, so there is nothing to look up: an unknown value
+        // (a comma-separated set Hyprland accepts, say) is passed through as the
+        // layout rather than rejected, which is what the old hand-list did too.
         set: v => {
-            const entry = KEYBOARD_LAYOUTS.find(([id]) => id === v)
-            if (entry) {
-                return inputConfig.setKbLayout(entry[2], entry[3])
-            } else {
-                const raw = String(v)
-                const parts = raw.split("-")
-                return inputConfig.setKbLayout(parts[0], parts.slice(1).join("-"))
-            }
+            const { layout, variant } = parseKeyboardId(String(v))
+            return inputConfig.setKbLayout(layout, variant)
         },
         subscribe: onInputCfg(() => currentKbLayoutId()),
         ui: {

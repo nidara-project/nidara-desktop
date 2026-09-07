@@ -44,9 +44,12 @@ import {
 } from "../lib/answers"
 import {
   countries, timezonesFor, allTimezones, localeFor,
-  keyboardsFor, allKeyboards, defaultsFor,
-  type Country, type KeyboardLayout,
+  keyboardsFor, defaultsFor,
+  type Country,
 } from "../lib/region"
+// The installer's slice of the shared catalogue: what systemd can name in BOTH
+// namespaces, because this page writes the console keymap as well as the layout.
+import { bridgedKeyboards, type KeyboardLayout } from "../../lib/keyboards"
 import { heading, prose, searchableList } from "./common"
 import { languageFor } from "../lib/languages"
 import { setLanguageAnswer } from "../lib/answers"
@@ -236,17 +239,20 @@ export function RegionStep(): Step {
 
         // Keyboard ────────────────────────────────────────────────────────────
         // A keyboard whose console keymap does not exist says so, rather than the
-        // installer writing a name that cannot load (#472). Five of the 60 are in
-        // that state — Arabic, Korean, Khmer and Romanian's two cedilla variants
-        // have no file in `kbd` under any name — and the honest thing is to keep
-        // offering them: the xkb layout is real, the desktop gets it, and what
-        // degrades is only the text console. Which is worth one sentence, because
-        // the console is exactly where you have nothing else to fall back on.
+        // installer writing a name that cannot load (#472). Three of the 58 are in
+        // that state — Arabic, Korean and Khmer have no file in `kbd` under any
+        // name — and the honest thing is to keep offering them: the xkb layout is
+        // real, the desktop gets it, and what degrades is only the text console.
+        // Which is worth one sentence, because the console is exactly where you
+        // have nothing else to fall back on.
+        //
+        // (It was five until the catalogue became xkb's in #473: Romanian's two
+        // cedilla variants turned out not to exist in xkb either.)
         const consoleNote = prose(t("regionKeyboardNoConsole"))
         const syncConsoleNote = (k?: KeyboardLayout | null) => {
           consoleNote.visible = !!k && k.keymap === ""
         }
-        const kbs = scoped(keyboardsFor(code), allKeyboards(), k => `${k.layout}:${k.variant}`)
+        const kbs = scoped(keyboardsFor(code), bridgedKeyboards(), k => k.id)
         const kbLabels = kbs.map(k => k.label)
         const kbCurrent = a.keyboard
           ? kbs.findIndex(k => k.layout === a.keyboard!.layout && k.variant === a.keyboard!.variant)

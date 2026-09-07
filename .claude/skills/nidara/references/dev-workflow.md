@@ -830,6 +830,54 @@ proves it — `answers.account` is null until the form is *complete*, so it keep
 activating a row on the language page, so the callback fires inside that row's own `row-activated`
 handler and the rebuild would destroy the list still emitting it.
 
+### ONE keyboard catalogue, two scopes — `ui/lib/keyboards.ts`
+
+Both surfaces ask "which keyboard?" and both read this module (#473). Before it, Settings carried
+**28 rows written out by hand** and the installer derived its own 62; they overlapped on 26, so
+installing with any of the other 36 left the Settings row showing a raw code.
+
+🔑 **`kbd-model-map` is a BRIDGE TABLE, not a catalogue** — the measurement that decided the shape.
+Of the **598** keyboards `xkeyboard-config` describes (99 layouts + 499 variants in
+`rules/base.lst`), systemd names a console keymap for **58**. Nine per cent. Unifying on the bridge
+would have made the single list wrong in both directions:
+
+- `us(colemak)` is real in BOTH namespaces — xkb lists the variant, `kbd` ships the `colemak`
+  keymap — and systemd simply never wrote the row. Unifying on the bridge **deletes Colemak**.
+- `ro(cedilla)` and `ro(std_cedilla)` are rows systemd still carries for variants xkb no longer has
+  (`symbols/ro` renamed them `comma`/`std_comma`). The installer was offering two keyboards that
+  would not have applied to the graphical session either.
+
+So the catalogue is **xkb** — the namespace both surfaces actually set — and the console keymap is a
+PROPERTY joined onto it. `bridged` is a field, not a second list:
+
+| | takes | why |
+|---|---|---|
+| Settings | `allKeyboards()` — 597 | writes Hyprland's `input:kb_layout` only, so it can lock nobody out and withholds nothing |
+| installer | `bridgedKeyboards()` — 58 | writes `/etc/vconsole.conf` too, so it offers what systemd can name in both |
+
+⛔ **Do NOT widen the bridge by matching names across the two namespaces.** It looks like the
+obvious move and it is the same silent substitution #472 was about: measured 2026-09-07, it rescues
+64 pairs and gets them wrong — Arabic (AZERTY) lands on the French `azerty` keymap, Polish (British
+keyboard) on `pl`.
+
+⚠️ **The id is `layout` + `-` + `variant`** (`us`, `us-colemak`, `de-nodeadkeys`), split at the
+FIRST hyphen — safe because **no xkb layout code contains one** (0 of 99), so a variant may keep its
+own (`us-dvorak-alt-intl`). It is what the label shows, what the config stores and what
+`set_config` takes, and it deliberately does **not** reuse the console keymap's spelling: `cz-qwerty`
+as an id is the xkb variant, as a keymap name it is a file `kbd` does not ship.
+
+⚠️ Two consequences that are easy to miss when touching this:
+- **`describeConfig` summarises an enum over 40 values** (`ENUM_INLINE_MAX`), because that response
+  is what an agent reads before every get/set and this one key carries 597 names. Validation still
+  runs against the whole set.
+- **A dropdown over 24 options gets a search box** (`SEARCHABLE_FROM` in `nidara-kit/rows.ts`) —
+  and it must be `search_match_mode = SUBSTRING`. GtkDropDown's default is **PREFIX**, so entries
+  named "English (Colemak) · us-colemak" answered "colemak" with an empty popup: the box was there,
+  took the text and found nothing. Only opening it and typing catches that.
+- **`custom` is excluded** from the catalogue. It is xkb's escape hatch for a layout the user writes
+  into `~/.config/xkb`, it does nothing unless that file exists, and alphabetically it was the FIRST
+  entry in the list.
+
 ### A keyboard layout has TWO names, and archinstall wants the other one
 
 `xkb` layouts (what Hyprland speaks, what `hyprctl keyword input:kb_layout` takes) and **vconsole
@@ -845,9 +893,9 @@ which is the **console** one — and four of them do not exist there at all:
 | `br` | `br-abnt2` |
 
 Verify with `localectl list-keymaps` (console) against `/usr/share/X11/xkb/rules/base.lst` (xkb).
-`KeyboardLayout` in `ui/installer/lib/region.ts` carries both — `layout` for the live session,
-`keymap` for the plan — and it is no longer transcribed: the mapping IS `kbd-model-map`, read at
-runtime, so the four rows above are a description of that file rather than a copy of it.
+`KeyboardLayout` in `ui/lib/keyboards.ts` carries both — `layout` for the live session, `keymap`
+for the plan — and it is no longer transcribed: the mapping IS `kbd-model-map`, read at runtime, so
+the four rows above are a description of that file rather than a copy of it.
 
 ⚠️ **This is a lockout waiting for #310.** mkinitcpio's shipped `HOOKS` carry `sd-vconsole`, so the
 LUKS passphrase prompt uses the **console** keymap. A passphrase typed on a Brazilian keyboard and
@@ -857,14 +905,14 @@ initramfs keymap is verified on a non-US layout.
 #### 🔑 `kbd-model-map` is systemd's file, and it names keymaps `kbd` does not ship
 
 Reading the bridge at runtime removed the transcription, but not the assumption underneath it: that
-a name in column 1 is a file on disk. **Eight of the 62 were not** (#472) — `ara`, `ko`, `khmer`,
+a name in column 1 is a file on disk. **Eight of them were not** (#472) — `ara`, `ko`, `khmer`,
 `es-dvorak`, `ro-std`, `ro-cedilla`, `ro-std-cedilla`, `cz-qwerty`. And **nothing downstream
 notices**: archinstall's `set_keyboard_language()` calls `verify_keyboard_layout()`, logs `error`
 and returns **False** (`lib/installer.py:2056`) — and its only caller ignores the return value
 (`installer.py:976`). The install SUCCEEDS, the summary says Spanish (Dvorak), and the console is
 left unset, i.e. `us`.
 
-`resolveKeymap()` in `ui/installer/lib/region.ts` now resolves the name before it can be written,
+`resolveKeymap()` in `ui/lib/keyboards.ts` resolves the name before it can be written,
 by two rules that are **derived, not a table of names to keep in sync**:
 
 1. **another row for the same keyboard** — kbd-model-map lists several keymaps per layout, so a

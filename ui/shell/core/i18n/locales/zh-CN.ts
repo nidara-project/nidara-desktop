@@ -19,7 +19,7 @@ export default {
     "settings.input.keyboard.numlock": "启动时启用小键盘",
     "settings.input.keyboard.numlock.desc": "默认启用数字小键盘",
     "settings.input.keyboard.layout": "键盘布局",
-    "settings.input.keyboard.layout.desc": "Hyprland 中当前使用的键盘布局",
+    "settings.input.keyboard.layout.desc": "此桌面用什么输入。文本控制台保留安装程序设置的布局",
     "settings.input.keyboard.repeat-delay": "重复延迟",
     "settings.input.keyboard.repeat-delay.desc": "按住按键后开始重复输入前的等待时间",
     "settings.input.keyboard.repeat-rate": "重复速率",

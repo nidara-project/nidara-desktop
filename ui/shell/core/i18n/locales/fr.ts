@@ -19,7 +19,7 @@ export default {
     "settings.input.keyboard.numlock": "Verrouillage numérique au démarrage",
     "settings.input.keyboard.numlock.desc": "Activer le pavé numérique par défaut",
     "settings.input.keyboard.layout": "Disposition du clavier",
-    "settings.input.keyboard.layout.desc": "Disposition de clavier active dans Hyprland",
+    "settings.input.keyboard.layout.desc": "Ce avec quoi ce bureau écrit. La console texte garde la disposition définie par l'installateur",
     "settings.input.keyboard.repeat-delay": "Délai de répétition",
     "settings.input.keyboard.repeat-delay.desc": "Temps avant qu'une touche maintenue se répète",
     "settings.input.keyboard.repeat-rate": "Vitesse de répétition",
