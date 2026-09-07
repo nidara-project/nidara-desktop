@@ -5,6 +5,95 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] — 2026-09-07
+
+**Both ways in got fixed: the screen you log in on, and the disk the installer writes to.**
+
+The greeter had been arriving on the second attempt for as long as anyone had watched it. Its
+compositor aborted on every single boot — it asked the kernel for a real GPU before the kernel had
+one — and what put the login screen on your monitor was greetd retrying after the crash. Handing
+that session over to yours was not slow either, it was a collapse: the greeter dropped the display
+before the things it had started were finished with it. Neither is a thing you could have reported
+precisely, because both look like "logging in takes a moment".
+
+The installer stopped negotiating about the disk. Entire-disk and manual mode both hand a real
+layout to `archinstall` in its own schema, the partition table is a table you can read and claim
+space in, and an EFI partition that is not ours — the one case where a mistake lands on somebody
+else's operating system — is refused with the reason on screen.
+
+### Added
+
+- **One keyboard catalogue, two places that ask.** The installer offered 28 layouts and Settings
+  offered 62, from two lists that did not know about each other. Both now derive from
+  `xkeyboard-config` itself — **597 layouts**, with variants — and eight of the keyboards we used
+  to offer wrote a console keymap that does not exist on the installed system.
+
+- **The installer can be walked without an ISO.** A preview mode runs the whole flow on a
+  developer's desktop, which is how most of the fifty defects below were found at all.
+
+- **The disk logic is a CI job.** The `disk_config` the installer emits, the layouts it must
+  refuse, what the account form accepts, and what may be touched on a shared EFI partition are
+  now pure functions with probes over them — and each probe is preceded by a step that deletes
+  one of its own rules and requires the probe to catch it.
+
+### Changed
+
+- **The installer writes the partitions itself and hands the result to archinstall**, in both
+  modes. Swap is declared in the installed `fstab` rather than left to a generator, a hand-made
+  btrfs root gets the subvolume layout, and erasing a whole disk installs btrfs without pretending
+  to ask.
+
+- **Three pages that asked the same question became one that asks the country**, in the order the
+  rest of the ecosystem asks it — language first — with one vocabulary for places and languages
+  instead of a third private one, and a search that matches what people type rather than what they
+  can read.
+
+- **An a11y query resolves the app that matches, instead of every app on the bus.** Asking one
+  window what it contains was costing a round trip to every application running, and leaking file
+  descriptors on each one. This is what an agent driving the desktop pays on every step.
+
+### Fixed
+
+- **The greeter waits for a real GPU before starting its compositor.** Measured on the machine
+  that reported it, the GPU arrives 232 ms after the session does; before this, aquamarine threw,
+  greetd retried, and the retry is what you saw.
+
+- **The login screen stops what it started before it drops the display.** The wallpaper daemon it
+  spawns was not exiting at the handoff — it was crashing, because the display went away first.
+
+- **Every unlock logged a PAM `setuid` failure from our own lock stack.** The journal's priority is
+  what separated the two branches of `pam_unix`: one benign, one giving up.
+
+- **The keyboard you chose in the installer reaches the greeter.** A `sed` that had matched nothing
+  since May meant the login screen typed `us` whatever you picked — and the indicator said the
+  right thing while the keys did not.
+
+- **The selected row on the login screens follows your accent.** `--nidara-state-selected` was the
+  one accent token the greeter and lockscreen never emitted, so a user who picked green got green
+  everywhere except the row under the cursor in a dropdown, which stayed blue.
+
+- **A Control Center tile no longer grows out of the panel to fit its own name.** A wrapping label's
+  minimum width is its longest unbreakable word, and a minimum cannot be squeezed — so five tile
+  titles in six languages were quietly pushing their tile past the edge that clips it, and the AI
+  status banner overflowed in seven of the twelve locales. The names that did not fit are shorter
+  now, the compounds carry a soft hyphen, and the text-budget gate measures all three fixed-width
+  boxes instead of one.
+
+- **An EFI partition too small for a kernel is refused with the number**, a partition that may not
+  be ours says so on every edit, and the ESP has to be FAT32 in manual mode too.
+
+- **The installer's account form states its rules once**, answers at the field, and answers all at
+  once — instead of one complaint at a time from a dialog.
+
+- **A dropdown, an icon button and a table cell can say what they are.** `Gtk.DropDown` overwrites
+  the accessible label a caller sets, which left the installer's controls nameless to a screen
+  reader and to the agent surface both.
+
+- **A stacked row refused focus for everything inside it**, so no text entry in one could be typed
+  into.
+
+- **A dock pin for an app that is not installed drew a gear that launches nothing.**
+
 ## [0.11.0] — 2026-09-02
 
 **On somebody else's Arch, Nidara Desktop is a package now — and that is the only way in.**
