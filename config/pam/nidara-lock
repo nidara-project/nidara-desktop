@@ -10,6 +10,22 @@
 # No `session` stack: the lockscreen authenticates against a session that is
 # already open. It never calls pam_open_session()/pam_close_session(), so a
 # session stack here would be config nobody runs.
+#
+# ⚠️ Every unlock logs this, and it is NOT a failure (#478, measured 2026-09-07):
+#
+#     pam_unix(nidara-lock:account): setuid failed: Operation not permitted
+#
+# The lockscreen is an unprivileged gjs process, so pam_unix cannot read
+# /etc/shadow itself and shells out to `unix_chkpwd`. Its child tries setuid(0)
+# first, and when that fails it only gives up if geteuid() == 0 — i.e. if it
+# really was root and something is wrong. For an ordinary caller it logs at
+# LOG_DEBUG and proceeds to execve(unix_chkpwd), which is setuid root and does
+# the reading. The journal entry's PRIORITY is 7; the branch that gives up logs
+# at 3 and is followed by an exit. Priority is how you tell them apart.
+#
+# So the account checks below are real. `scripts/dev/acct-expiry-probe.sh` is
+# the proof and re-runs in a minute: healthy → 0, `chage -d 0` → 12, expired
+# account → 13. Do not "fix" the log line by dropping the account stack.
 
 auth        include     system-auth
 account     include     system-auth
