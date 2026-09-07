@@ -12,10 +12,35 @@ hl.env("XDG_CONFIG_HOME","/var/lib/greeter/.config")
 -- ── Startup ───────────────────────────────────────────────────────────────────
 hl.on("hyprland.start", function()
     hl.exec_cmd("plymouth quit --retain-splash 2>/dev/null; awww-daemon & (for i in $(seq 1 20); do awww ping 2>/dev/null && break; sleep 0.05; done; if [ -f /usr/share/nidara/wallpaper-greeter.jpg ]; then awww img /usr/share/nidara/wallpaper-greeter.jpg --transition-type fade --transition-duration 0.3; else awww img /usr/share/nidara/wallpaper.jpg --transition-type fade --transition-duration 0.3; fi)")
-    -- Launch greeter; exit Hyprland when it closes
+    -- Launch the greeter; when it closes, STOP WHAT THIS FILE STARTED, then exit
+    -- Hyprland — in that order.
+    --
+    -- ⚠️ The order is the whole point (#479). Exiting the compositor first pulls the
+    -- Wayland socket out from under every client still connected, and `awww-daemon`
+    -- does not survive that read: it panics and dumps core on EVERY login — measured
+    -- on the maintainer's machine (5 of 5 boots that reached a login) and reproduced
+    -- in the VM, same stack, before this line was written. The daemon is not the
+    -- problem — the one the SESSION starts exits cleanly every time, because systemd
+    -- stops it before the compositor goes. It is the only one here that had nobody to
+    -- stop it: line 14 spawns it detached, with no unit and no supervision.
+    --
+    -- `awww kill` is the daemon's own shutdown path (over its socket, which is named
+    -- after $WAYLAND_DISPLAY — so it can only reach the one in THIS compositor). The
+    -- wait afterwards is bounded at ~2 s and then gives up: a wallpaper daemon that
+    -- refuses to die must never be able to strand a machine on the login screen. The
+    -- daemon is not our child (Hyprland double-forks what it spawns), so it is reaped
+    -- by init and `pgrep` answers honestly the moment it is gone.
+    --
+    -- The portal stack is the same seam seen from the other side: nothing here starts
+    -- it, but our greeter is what makes GTK activate it (settings/appearance), and it
+    -- logs `Error reading events from display: Broken pipe` and a failed unit at the
+    -- same second, every time. Asking its own manager to stop it is the ordered exit;
+    -- `timeout` is there because a unit's default TimeoutStopSec is 90 s and this is
+    -- the path a login is waiting on.
+    --
     -- (Lua parser: the legacy `hyprctl dispatch exit` errors out and the
     -- greeter compositor would never exit)
-    hl.exec_cmd("nidara-greeter; hyprctl dispatch 'hl.dsp.exit()'")
+    hl.exec_cmd([==[nidara-greeter; awww kill 2>/dev/null; i=0; while [ $i -lt 40 ] && pgrep -u "$(id -u)" -x awww-daemon >/dev/null 2>&1; do i=$((i+1)); sleep 0.05; done; timeout 3 systemctl --user stop xdg-desktop-portal-gtk.service xdg-desktop-portal-hyprland.service xdg-desktop-portal.service 2>/dev/null; hyprctl dispatch "hl.dsp.exit()"]==])
 end)
 
 -- ── Keyboard layout ──────────────────────────────────────────────────────────
