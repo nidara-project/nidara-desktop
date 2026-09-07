@@ -3102,6 +3102,26 @@ against your real account** (deny=3 / unlock_time=600 on Arch) — three runs lo
 session for ten minutes; `faillock --user $USER --reset` clears it. `auth-probe.js` exists because of
 both problems: it uses a throwaway service with no faillock, and it asserts the ordering.
 
+⚠️ **A synthetic positive control cannot answer a question about the real module.**
+`pam-auth-probe-deny` denies with `pam_deny.so`, which proves the `account-denied` ordering and
+nothing about `pam_unix` — so when every unlock turned out to log
+`pam_unix(nidara-lock:account): setuid failed` (#478), no existing probe could say whether the
+verdict behind it was still real. Answered 2026-09-07 by disassembling the module and by a probe
+that expires a throwaway account for real (`scripts/dev/acct-expiry-probe.sh`, driving
+`acct-probe.c`): healthy → 0, `chage -d 0` → 12, expired → 13.
+
+- The log line is **`pam_unix` at LOG_DEBUG, carrying on**. `_unix_run_verify_binary` tries
+  `setuid(0)` and bails only when `geteuid() == 0` — root that has lost privilege it should have.
+  An ordinary caller logs and proceeds to `execve(unix_chkpwd)`, which is setuid root and reads
+  `/etc/shadow`. 🔑 **The journal's PRIORITY tells the branches apart: 7 = benign, 3 = gave up**
+  (the giving-up branch also prints `-1` and `_exit(9)`). Same words, opposite meanings.
+- 🔑 **`unix_chkpwd` answers only for its OWN caller unless it is root.** Ask about a different
+  user and you get 9 (`PAM_AUTHINFO_UNAVAIL`) whatever the account's state is — so a probe run as
+  `nobody` returns "refused" for healthy and expired accounts alike and looks like it is
+  discriminating. That blind version is kept as `--blind`: run it first, and never trust an
+  all-9 result. It is also why the first attempt at this measurement produced a confident wrong
+  answer from a sweep of every system account.
+
 ---
 
 ### 82. ⬒ HALF DONE — thin glass cannot carry white text over a bright wallpaper (2026-08-23)

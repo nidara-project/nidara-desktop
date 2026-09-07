@@ -264,7 +264,14 @@ static gpointer auth_worker_func(gpointer user_data) {
      * says whether this account may be used at all right now — expired account,
      * administratively locked (`usermod -L`), pam_time windows. Our own
      * /etc/pam.d/nidara-lock declares that stack, so not running it meant the
-     * config promised checks the code never performed. */
+     * config promised checks the code never performed.
+     *
+     * ⚠️ This call makes pam_unix log `setuid failed: Operation not permitted`
+     * on every unlock, because we are unprivileged and it has to reach
+     * /etc/shadow through `unix_chkpwd`. It is LOG_DEBUG and it carries on —
+     * the verdict below is real. Measured, with the positive control, in
+     * scripts/dev/acct-expiry-probe.sh; the reasoning is in config/pam/nidara-lock.
+     * Do not silence it by removing the call (#478). */
     if (status == PAM_SUCCESS) {
         int acct = pam_acct_mgmt(pamh, 0);
         if (acct == PAM_NEW_AUTHTOK_REQD) {
