@@ -29,6 +29,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import Atspi from "gi://Atspi"
+import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 
 const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
@@ -358,13 +359,148 @@ function children(acc) {
 }
 
 // Hyprland's focused window class (lowercased), e.g. "org.gnome.nautilus".
-function hyprActiveClass() {
+function hyprActiveWindow() {
     try {
         const [ok, out] = GLib.spawn_command_line_sync("hyprctl activewindow -j")
         if (!ok) return null
         const j = JSON.parse(new TextDecoder().decode(out))
-        const cls = (j.class || "").toLowerCase()
-        return cls || null
+        return {
+            class: (j.class || "").toLowerCase() || null,
+            pid: j.pid || 0,
+        }
+    } catch {
+        return null
+    }
+}
+
+function getHyprWindows() {
+    try {
+        const [ok, out] = GLib.spawn_command_line_sync("hyprctl clients -j")
+        if (!ok) return new Map()
+        const list = JSON.parse(new TextDecoder().decode(out))
+        const map = new Map()
+        for (const w of list) {
+            if (w.pid) {
+                if (!map.has(w.pid)) map.set(w.pid, [])
+                map.get(w.pid).push(w)
+            }
+        }
+        return map
+    } catch {
+        return new Map()
+    }
+}
+
+function appNamesForPid(pid, hyprMap) {
+    const names = new Set()
+    const wins = hyprMap.get(pid) || []
+    for (const hw of wins) {
+        if (hw.class) names.add(hw.class)
+        if (hw.initialClass) names.add(hw.initialClass)
+    }
+    try {
+        const [ok, bytes] = GLib.file_get_contents(`/proc/${pid}/cmdline`)
+        if (ok && bytes.length) {
+            const raw = new TextDecoder().decode(bytes)
+            const argv0 = raw.split("\0")[0]
+            if (argv0) {
+                const base = GLib.path_get_basename(argv0)
+                if (base) names.add(base)
+            }
+        }
+    } catch {}
+    try {
+        const [ok, bytes] = GLib.file_get_contents(`/proc/${pid}/comm`)
+        if (ok && bytes.length) {
+            const comm = new TextDecoder().decode(bytes).trim()
+            if (comm) names.add(comm)
+        }
+    } catch {}
+    return [...names]
+}
+
+function getA11yBusAddress() {
+    let addr = GLib.getenv("AT_SPI_BUS_ADDRESS")
+    if (addr) return addr
+    try {
+        const res = Gio.DBus.session.call_sync(
+            "org.a11y.Bus",
+            "/org/a11y/bus",
+            "org.a11y.Bus",
+            "GetAddress",
+            null,
+            null,
+            Gio.DBusCallFlags.NONE,
+            1000,
+            null
+        )
+        const [busAddr] = res.deepUnpack()
+        return busAddr
+    } catch {
+        return null
+    }
+}
+
+function getA11yBusCandidates() {
+    const addr = getA11yBusAddress()
+    if (!addr) return null
+    try {
+        const conn = Gio.DBusConnection.new_for_address_sync(
+            addr,
+            Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION,
+            null,
+            null
+        )
+        const res = conn.call_sync(
+            "org.a11y.atspi.Registry",
+            "/org/a11y/atspi/accessible/root",
+            "org.a11y.atspi.Accessible",
+            "GetChildren",
+            null,
+            null,
+            Gio.DBusCallFlags.NONE,
+            1000,
+            null
+        )
+        const [children] = res.deepUnpack()
+        const hyprMap = getHyprWindows()
+        const candidates = []
+        const apps = []
+
+        for (let i = 0; i < children.length; i++) {
+            const [busName, path] = children[i]
+            let pid = 0
+            try {
+                const pidRes = conn.call_sync(
+                    "org.freedesktop.DBus",
+                    "/org/freedesktop/DBus",
+                    "org.freedesktop.DBus",
+                    "GetConnectionUnixProcessID",
+                    new GLib.Variant("(s)", [busName]),
+                    null,
+                    Gio.DBusCallFlags.NONE,
+                    1000,
+                    null
+                )
+                const [p] = pidRes.deepUnpack()
+                pid = p
+            } catch {}
+
+            const names = pid ? appNamesForPid(pid, hyprMap) : []
+            const wins = hyprMap.get(pid) || []
+            const primaryName = (wins[0]?.class) || names[0] || busName
+            apps.push(primaryName)
+
+            candidates.push({
+                index: i,
+                busName,
+                path,
+                pid,
+                names,
+                primaryName,
+            })
+        }
+        return { candidates, apps }
     } catch {
         return null
     }
@@ -419,17 +555,58 @@ function sameApp(a, b) {
 }
 
 function selectTargets(filter) {
+    const activeWin = filter ? null : hyprActiveWindow()
+    const activeClass = activeWin?.class || null
+    const activePid = activeWin?.pid || 0
+
+    const busDiscovery = getA11yBusCandidates()
+    if (busDiscovery) {
+        const { candidates, apps } = busDiscovery
+        const matched = []
+        for (const tolerant of [false, true]) {
+            for (const cand of candidates) {
+                const match = filter
+                    ? cand.names.some(n => tolerant ? sameApp(n, filter) : n.toLowerCase().includes(filter))
+                    : (activePid && cand.pid === activePid) || (activeClass && cand.names.some(n => sameApp(n, activeClass)))
+                if (match && !matched.includes(cand)) {
+                    matched.push(cand)
+                }
+            }
+            if (matched.length || !filter) break
+        }
+
+        // If no application matches the filter / active window:
+        // Return immediately WITHOUT touching AT-SPI! Zero fds leaked, zero warnings.
+        if (!matched.length) {
+            return { targets: [], apps, activeClass }
+        }
+
+        // Only resolve the matching application(s) via Atspi
+        Atspi.init()
+        const desktop = safe(() => Atspi.get_desktop(0), null)
+        if (!desktop) return { targets: [], apps, activeClass }
+
+        const targets = []
+        for (const cand of matched) {
+            const app = safe(() => desktop.get_child_at_index(cand.index), null)
+            if (!app) continue
+            const appName = safe(() => app.get_name(), "") || cand.primaryName
+            for (const win of children(app)) {
+                const winName = safe(() => win.get_name(), "")
+                const label = winName ? `${appName} — ${winName}` : appName
+                targets.push({ frame: win, label })
+            }
+        }
+        return { targets, apps, activeClass }
+    }
+
+    // Fallback: traditional enumeration if D-Bus candidate discovery failed
+    Atspi.init()
     const desktop = safe(() => Atspi.get_desktop(0), null)
     if (!desktop) return { targets: [], apps: [] }
 
-    const activeClass = filter ? null : hyprActiveClass()
     const targets = []
     const apps = []
-    // An agent's vocabulary for "which app" comes from list_windows — i.e. Hyprland
-    // CLASSES — while the filter is matched against AT-SPI NAMES, and the two are
-    // not the same string ("gnome-terminal" vs "org.gnome.Terminal": no substring
-    // relation, so the plain pass returns zero). Rescue pass only, after a strict
-    // miss, so an exact substring keeps meaning exactly what it meant.
     for (const tolerant of [false, true]) {
         for (const app of children(desktop)) {
             const appName = safe(() => app.get_name(), "") || "?"
@@ -459,8 +636,6 @@ function main() {
     }
 
     const filter = (ARGV[0] ?? "").trim().toLowerCase() || null
-
-    Atspi.init() // returns 0 on first success, 1 if already initialised — both fine
 
     const { targets, apps, activeClass } = selectTargets(filter)
     if (!targets.length) {
