@@ -2608,6 +2608,20 @@ and the first measurement would be against GTK's default font.
 gates all twelve locales on this column (see dev-workflow.md), and the answer to a name that does
 not fit is a shorter name or a soft hyphen, not a smaller font.
 
+⛔ **A `set_size_request` is a FLOOR, not a ceiling — and the CC's status banner is the case that
+proves it.** The card carries `set_size_request(GRID_WIDTH)` so it shares the grid's right edge, and
+its labels wrap so their minimum collapses. Both were true and the card still came out **412px wide
+against a 356px grid** in Spanish (v0.12.0, seen on screen by the owner). Nothing above it
+constrains a width — `cc-window-root` is `hexpand: false, halign: END` — so it was allocated its
+NATURAL width, and a wrapping label only wraps when it is given less than it asked for. Wrapping
+fixes a MINIMUM; it is not a maximum.
+
+**The ceiling is `NidaraClamp`** (GTK4 CSS has no `max-width`), with `min = max` when the box must be
+CONSTANT: the banner clamps its row list to `GRID_WIDTH − 2 × BANNER_PADDING`, which makes the card
+exactly the grid's width and finally makes the labels wrap. Any surface that must match a fixed
+sibling's width needs the same, and `text-budget.js --verify` is what checks it against a real
+window — the offline sweep cannot.
+
 **Reach for `makeCapsuleTile` first — it is `makeCapsuleInner` + the subscription + the
 wrapper, which is the shape nine widgets were writing out by hand.** Drop to
 `makeCapsuleInner` + `wrapCapsuleTile(inner.box)` only when a tile needs the refs, and never

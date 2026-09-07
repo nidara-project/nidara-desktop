@@ -3,6 +3,7 @@ import agentConfig from "../../core/AgentConfig"
 import { GRID_WIDTH } from "../control-center/CCLayoutManager"
 import SquircleContainer, { Shape, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { NidaraButton } from "../../../lib/nidara-kit/button"
+import { NidaraClamp } from "../../../lib/nidara-kit/clamp"
 import { t } from "../../core/i18n"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,8 +160,30 @@ function buildBannerRow(ind: BarIndicator, s: IndicatorState): Gtk.Widget {
     return row
 }
 
+/** The painter's inset, and the number the card's width is derived from. Named
+ *  because two things now read it: SquircleContainer below, and the clamp that
+ *  gives the rows a ceiling. */
+const BANNER_PADDING = 12
+
 export function ccStatusBanner(): Gtk.Widget {
     const list = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
+
+    // ⚠️ The rows need a CEILING, and `set_size_request(GRID_WIDTH)` below is not one
+    // — it is a FLOOR. Nothing above this card constrains it (`cc-window-root` is
+    // `hexpand: false, halign: END`), so the card is allocated its NATURAL width, and
+    // a row's natural width is its longest label at full length. Wrapping the labels
+    // fixes their MINIMUM and changes nothing here: a label only wraps when it is
+    // given less than it asked for, and it was being given everything it asked for.
+    // Measured live on 2026-09-07, with the wrapped labels already in: the card came
+    // out 412px against the grid's 356 — the Spanish "Con permiso para controlar tus
+    // aplicaciones" at its full 272px, one line, sticking 56px past the edge every
+    // tile below is aligned to.
+    //
+    // NidaraClamp is the kit's max-width (GTK4 CSS has none). min = max, so the card
+    // is CONSTANT: the grid's width minus the painter's own inset, which makes the
+    // card exactly GRID_WIDTH — and now the labels are given less than they asked for,
+    // and wrap.
+    const rows = NidaraClamp(list, GRID_WIDTH - 2 * BANNER_PADDING, false, GRID_WIDTH - 2 * BANNER_PADDING)
 
     // CAPSULE, not a fixed radius: it collapses to a perfect arc on the short
     // side whatever the row count works out to (resolveDrawParams), which is the
@@ -171,13 +194,13 @@ export function ccStatusBanner(): Gtk.Widget {
     // GRID_WIDTH on the child would make the card 24px wider than the grid and
     // break the right edge every tile below is aligned to.
     const banner = SquircleContainer({
-        child: list,
+        child: rows,
         shape: Shape.CAPSULE,
         gloss: true,
         useShellOpacity: true,
         borderWidth: 1.5,
         inset: 2.0,
-        padding: 12,
+        padding: BANNER_PADDING,
         // NOT `.cc-island`, tempting as it is: that class carries
         // `.cc-island button { @include nidara-reset }` to strip Adwaita defaults
         // out of tile content, and `.cc-island button` matches `button.nidara-btn`

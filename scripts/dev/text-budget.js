@@ -155,7 +155,7 @@ const CAPSULE_CHROME = from(tileSrc, /const CAPSULE_CHROME = ([\d\s+]+)\n/, "CAP
 const TILE_COLUMN = (2 * UNIT + GAP) - 2 * ISLAND_PAD - CAPSULE_CHROME
 
 const GRID_WIDTH   = GRID_COLS * UNIT + (GRID_COLS - 1) * GAP
-const BANNER_PAD   = Number(from(statusSrc, /padding:\s*(\d+),/, "the banner painter's padding")[1])
+const BANNER_PAD   = Number(from(statusSrc, /const BANNER_PADDING = (\d+)/, "BANNER_PADDING from StatusIndicators.tsx")[1])
 const BANNER_DOT   = Number(from(statusSrc, /css_classes: s === "active".*?\n\s*width_request:\s*(\d+)/s, "the banner dot width")[1])
 const BANNER_SPACE = Number(from(statusSrc, /const row = new Gtk\.Box\(\{ spacing:\s*(\d+)/, "the banner row spacing")[1])
 /** Everything in the row that is NOT the text column and NOT the button: the
@@ -594,15 +594,28 @@ for (const slot of SLOTS) {
 setScale(1.0)
 
 // ── Optional cross-check against a running session ───────────────────────────
-// The two CSS terms in the budget are the only numbers here not read from source.
-// This proves them against the real thing rather than trusting the comment.
-if (VERIFY) {
+// The CSS terms in a budget are the only numbers here not read from source. This
+// proves them against the real thing rather than trusting the comment.
+//
+// 🔑 AND IT IS NOT OPTIONAL POLISH — it is the only half of this instrument that can
+// see the OTHER bug. Everything above asks "does this text fit a box of N pixels?"
+// and takes N from the source. It cannot ask whether the box IS N pixels. On
+// 2026-09-07 the status banner shipped with its labels correctly wrapped and its card
+// 412px wide against a 356px grid, and this script printed PASS — because a
+// `set_size_request` is a FLOOR, the card was allocated its natural width, and a
+// label only wraps when it is given less than it asked for. Run `--verify` before
+// believing a green run about a box you have not looked at.
+const queryUI = (selector) => {
     let out = ""
     try {
-        const [ok, stdout] = GLib.spawn_command_line_sync("nidara-ipc queryUI .nidara-sidebar-label")
+        const [ok, stdout] = GLib.spawn_command_line_sync(`nidara-ipc queryUI ${selector}`)
         if (ok && stdout) out = new TextDecoder().decode(stdout)
     } catch (e) { out = "" }
-    const nodes = (() => { try { return JSON.parse(out).nodes || [] } catch { return [] } })()
+    try { return JSON.parse(out).nodes || [] } catch { return [] }
+}
+
+if (VERIFY) {
+    const nodes = queryUI(".nidara-sidebar-label")
     const live = nodes.filter(n => n.window === "nidara-settings-window" && n.mapped && n.bounds?.w > 0)
     if (live.length === 0) {
         print("--verify: no live Settings window (open it with `nidara-ipc openSettings`) — budget NOT cross-checked")
@@ -615,6 +628,41 @@ if (VERIFY) {
                 slot: "budget derivation", scale: 1, locale: "-", text: "-",
                 w: allocated, budget: BUDGET,
                 note: "the computed budget no longer matches the real allocation — CSS_CHROME in this script is stale",
+            })
+        }
+    }
+
+    // The Control Centre's two boxes, which have to BE the width this script assumes.
+    // Both need the CC open (`nidara-ipc toggleCC`); the banner also needs AI control
+    // granted, since that is the only indicator there is. "Not on screen" is reported,
+    // never passed off as agreement.
+    const boxes = [
+        {
+            name: "CC tile title column", selector: ".nidara-atomic-label-bold",
+            expect: TILE_COLUMN,
+            // The label is halign START, so it is allocated its NATURAL width, not the
+            // column's. What must hold is that no title exceeds the column.
+            read: (ns) => Math.max(...ns.map(n => n.bounds.w)), cmp: "atMost",
+            hint: "open it with `nidara-ipc toggleCC`",
+        },
+        {
+            name: "CC status banner card", selector: ".cc-status-banner",
+            expect: GRID_WIDTH,
+            read: (ns) => Math.max(...ns.map(n => n.bounds.w)), cmp: "equals",
+            hint: "open the CC with AI control granted — the banner is hidden otherwise",
+        },
+    ]
+    for (const box of boxes) {
+        const ns = queryUI(box.selector).filter(n => n.mapped && n.bounds?.w > 0)
+        if (ns.length === 0) { print(`--verify: ${box.name} not on screen — NOT cross-checked (${box.hint})`); continue }
+        const w = box.read(ns)
+        const bad = box.cmp === "equals" ? Math.abs(w - box.expect) > 2 : w > box.expect + 2
+        print(`--verify: ${box.name} measures ${w}px, expected ${box.cmp === "equals" ? "" : "at most "}${box.expect}px${bad ? "  ← WRONG" : ""}`)
+        if (bad) {
+            breaches.push({
+                slot: box.name, scale: 1, locale: "-", text: "-", w, budget: box.expect,
+                verdict: "overflow",
+                note: "the BOX is not the size this script measures text against — a floor is not a ceiling",
             })
         }
     }
