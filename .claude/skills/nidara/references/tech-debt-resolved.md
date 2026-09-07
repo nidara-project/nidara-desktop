@@ -1981,3 +1981,38 @@ instead of on a stranger.
 `hyprctl --batch "dispatch … ; dispatch …"` was also tried and works in one process, and was NOT
 used: the batch separator is `;`, so an argument that ever contained one would split into two
 commands, and a batch merges the two error lines `_dispatch` would otherwise log separately.
+
+---
+
+### 92. ✅ RESOLVED (2026-09-07, PR for #323) — `--nidara-state-selected` never followed the accent on the login screens (2026-08-25)
+
+> **Queue entry: #323.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
+
+Small, and found by trying to give it a light-mode value. `ui/greeter/style.scss` declares
+`--nidara-state-selected: rgba(0, 136, 255, 0.22)` in its pre-load palette — the default blue —
+and `accentCssFor()`, which overwrites every other accent token at runtime, **does not emit this
+one**. So a user who picked green gets green everywhere on the login screen except the selected row
+of a dropdown, which stays blue forever. The shell is unaffected: `nidaraVars` emits it from the
+accent like everything else.
+
+The fix is one line in `accentCssFor()` (emit `--nidara-state-selected` with the mode's alpha), and
+it was NOT taken here on purpose: that function is shared with the shell's own token path, so it
+needs checking against both consumers rather than being tacked onto a skin change. Left with the
+alpha it has.
+
+⚠️ It is also why the light skin does not redefine it. `window.skin-light *` out-specifies
+`accentCssFor()`'s bare `*`, so a copy there would not be a lighter selection — it would PIN the
+accent to whatever was typed, for every user who chose a different one.
+
+**Fixed 2026-09-07.** `accentCssFor()` emits it now — TWICE, which is what the entry above was
+circling without naming. The light half cannot live in the stylesheet (a value typed under
+`window.skin-light *` PINS the selection for every user who chose another accent), so the emitter
+writes both selectors from the SAME accent: the bare `*` at 0.22 and `window.skin-light *` at 0.16,
+which are the shell's own two alphas from `ui/lib/theme-tokens.ts`. The sheet keeps the default blue
+as the pre-load value, for the frame before the accent CSS lands and for a config with no accent.
+
+🔑 The generalisable half: **a skin that is a CLASS out-specifies a runtime emitter's bare `*`, so
+anything the skin needs to override must be emitted by that same emitter, not typed in the sheet.**
+Verified by resolving the token through a real GTK cascade under both skins with a green accent
+(`color: var(--nidara-state-selected)` read back off a label): rgba(121,183,87,0.22) dark,
+rgba(121,183,87,0.16) light. Not yet seen on a real greeter — that needs the VM.

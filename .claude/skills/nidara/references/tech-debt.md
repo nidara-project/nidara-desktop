@@ -3518,26 +3518,6 @@ question is not "0.24 or 0.48" but "which of the shell's surfaces is the login s
 `ignore_alpha` pairing (0.23) is a FLOOR, so 0.48 clears it by more than 0.24 does. The scrim/hero
 ceiling is a separate quantity and is untouched by the body's alpha.
 
-### 92. ⚠️ OPEN — `--nidara-state-selected` never follows the accent on the login screens (2026-08-25)
-
-> **Queue entry: #323.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
-
-Small, and found by trying to give it a light-mode value. `ui/greeter/style.scss` declares
-`--nidara-state-selected: rgba(0, 136, 255, 0.22)` in its pre-load palette — the default blue —
-and `accentCssFor()`, which overwrites every other accent token at runtime, **does not emit this
-one**. So a user who picked green gets green everywhere on the login screen except the selected row
-of a dropdown, which stays blue forever. The shell is unaffected: `nidaraVars` emits it from the
-accent like everything else.
-
-The fix is one line in `accentCssFor()` (emit `--nidara-state-selected` with the mode's alpha), and
-it was NOT taken here on purpose: that function is shared with the shell's own token path, so it
-needs checking against both consumers rather than being tacked onto a skin change. Left with the
-alpha it has.
-
-⚠️ It is also why the light skin does not redefine it. `window.skin-light *` out-specifies
-`accentCssFor()`'s bare `*`, so a copy there would not be a lighter selection — it would PIN the
-accent to whatever was typed, for every user who chose a different one.
-
 ### 97. ⚠️ OPEN — the universal checkmark was born as a copy of the one it was meant to replace (2026-08-29)
 
 > **Queue entry: #324.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
@@ -3710,5 +3690,6 @@ number is never accidentally reused. 51 items; the split itself was 2026-08-23.
 - **#79** — RESOLVED — one rim ramp, and `GLASS_TINT.light` stopped disagreeing with itself (2026-08-23) → `tech-debt-resolved.md`
 - **#81** — RESOLVED — a dark step traced every curved edge, and it was `blur:brightness` (2026-08-23) → `tech-debt-resolved.md`
 - **#84** — RESOLVED — one silhouette and one rim idiom for capsule and bubble, and "weaker" was an inference the pixels do not support (2026-08-23) → `tech-debt-resolved.md`
+- **#92** — RESOLVED — the login screens' selected row follows the user's accent, in both skins (2026-08-25 → 2026-09-07) → `tech-debt-resolved.md`
 - **#93** — FIXED same day — About's key column was a constant, and a constant is a locale bug with a delay on it (2026-08-25) → `tech-debt-resolved.md`
 - **#94** — RESOLVED same day — the two About surfaces are a summary and its detail, and one reader answers both (2026-08-25) → `tech-debt-resolved.md`
