@@ -19,7 +19,7 @@ export default {
     "settings.input.keyboard.numlock": "NumLock po uruchomieniu",
     "settings.input.keyboard.numlock.desc": "Domyślnie włączaj klawiaturę numeryczną",
     "settings.input.keyboard.layout": "Układ klawiatury",
-    "settings.input.keyboard.layout.desc": "Aktywny układ klawiatury w Hyprland",
+    "settings.input.keyboard.layout.desc": "Czym pisze ten pulpit. Konsola tekstowa zachowuje układ ustawiony przez instalator",
     "settings.input.keyboard.repeat-delay": "Opóźnienie powtarzania",
     "settings.input.keyboard.repeat-delay.desc": "Czas przed rozpoczęciem powtarzania przytrzymanego klawisza",
     "settings.input.keyboard.repeat-rate": "Częstotliwość powtarzania",

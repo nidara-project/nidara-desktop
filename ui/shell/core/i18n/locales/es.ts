@@ -19,7 +19,7 @@ export default {
     "settings.input.keyboard.numlock": "Bloqueo numérico al iniciar",
     "settings.input.keyboard.numlock.desc": "Teclado numérico encendido por defecto",
     "settings.input.keyboard.layout": "Distribución del teclado",
-    "settings.input.keyboard.layout.desc": "Distribución del teclado activa en Hyprland",
+    "settings.input.keyboard.layout.desc": "Con qué escribe este escritorio. La consola de texto mantiene la distribución que puso el instalador",
     "settings.input.keyboard.repeat-delay": "Retardo de repetición",
     "settings.input.keyboard.repeat-delay.desc": "Tiempo antes de que una tecla pulsada empiece a repetirse",
     "settings.input.keyboard.repeat-rate": "Velocidad de repetición",

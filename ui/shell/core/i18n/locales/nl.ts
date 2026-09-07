@@ -19,7 +19,7 @@ export default {
     "settings.input.keyboard.numlock": "NumLock bij opstarten",
     "settings.input.keyboard.numlock.desc": "Numeriek toetsenblok standaard inschakelen",
     "settings.input.keyboard.layout": "Toetsenbordindeling",
-    "settings.input.keyboard.layout.desc": "Actieve toetsenbordindeling in Hyprland",
+    "settings.input.keyboard.layout.desc": "Waarmee dit bureaublad typt. De tekstconsole houdt de indeling die het installatieprogramma heeft ingesteld",
     "settings.input.keyboard.repeat-delay": "Herhalingsvertraging",
     "settings.input.keyboard.repeat-delay.desc": "Tijd voordat een ingedrukte toets begint te herhalen",
     "settings.input.keyboard.repeat-rate": "Herhalingssnelheid",

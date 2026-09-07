@@ -19,7 +19,7 @@ export default {
     "settings.input.keyboard.numlock": "NumLock при загрузке",
     "settings.input.keyboard.numlock.desc": "Включать цифровую клавиатуру по умолчанию",
     "settings.input.keyboard.layout": "Раскладка клавиатуры",
-    "settings.input.keyboard.layout.desc": "Активная раскладка клавиатуры в Hyprland",
+    "settings.input.keyboard.layout.desc": "Чем печатает этот рабочий стол. В текстовой консоли остаётся раскладка, заданная установщиком",
     "settings.input.keyboard.repeat-delay": "Задержка повтора",
     "settings.input.keyboard.repeat-delay.desc": "Время до начала повтора удерживаемой клавиши",
     "settings.input.keyboard.repeat-rate": "Скорость повтора",

@@ -19,7 +19,7 @@ export default {
     "settings.input.keyboard.numlock": "NumLock beim Start",
     "settings.input.keyboard.numlock.desc": "Ziffernblock standardmäßig aktivieren",
     "settings.input.keyboard.layout": "Tastaturbelegung",
-    "settings.input.keyboard.layout.desc": "Aktive Tastaturbelegung in Hyprland",
+    "settings.input.keyboard.layout.desc": "Womit dieser Desktop schreibt. Die Textkonsole behält die Belegung, die das Installationsprogramm gesetzt hat",
     "settings.input.keyboard.repeat-delay": "Wiederholungsverzögerung",
     "settings.input.keyboard.repeat-delay.desc": "Zeit, bevor eine gehaltene Taste sich wiederholt",
     "settings.input.keyboard.repeat-rate": "Wiederholungsrate",

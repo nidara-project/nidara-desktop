@@ -19,7 +19,7 @@ export default {
     "settings.input.keyboard.numlock": "NumLock on boot",
     "settings.input.keyboard.numlock.desc": "Enable numeric keypad by default",
     "settings.input.keyboard.layout": "Keyboard layout",
-    "settings.input.keyboard.layout.desc": "Active keyboard layout in Hyprland",
+    "settings.input.keyboard.layout.desc": "What this desktop types with. The text console keeps the layout the installer set",
     "settings.input.keyboard.repeat-delay": "Repeat delay",
     "settings.input.keyboard.repeat-delay.desc": "Time before a held key starts repeating",
     "settings.input.keyboard.repeat-rate": "Repeat rate",

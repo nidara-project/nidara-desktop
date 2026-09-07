@@ -164,7 +164,7 @@ export function assemblePlan(
     // medium's own (`us`). That is what the region page told the user would happen,
     // and it is the only honest value — archinstall accepts an unknown name, logs,
     // and leaves the console unset anyway, so guessing here would buy nothing and
-    // hide it. See resolveKeymap() in lib/region.ts.
+    // hide it. See resolveKeymap() in ui/lib/keyboards.ts.
     kb_layout: answers.keyboard?.keymap || live.localeConfig.kb_layout,
     sys_enc: answers.language?.sysEnc || live.localeConfig.sys_enc,
     sys_lang: answers.language?.sysLang || live.localeConfig.sys_lang,

@@ -13,13 +13,14 @@
 //
 // The last block is a control: the four xkb/console mismatches that were fixed by
 // hand before this file existed. If the parsing breaks, they stop matching.
-import { countries, allTimezones, allLocales, allKeyboards, timezonesFor, localesFor, keyboardsFor, defaultsFor } from "../../ui/installer/lib/region"
+import { countries, allTimezones, allLocales, timezonesFor, localesFor, keyboardsFor, defaultsFor } from "../../ui/installer/lib/region"
+import { allKeyboards, bridgedKeyboards } from "../../ui/lib/keyboards"
 import { countryName } from "../../ui/lib/locale-names"
 
 print(`countries      ${countries().length}`)
 print(`timezones      ${allTimezones().length}`)
 print(`locales        ${allLocales().length}`)
-print(`keyboards      ${allKeyboards().length}`)
+print(`keyboards      ${bridgedKeyboards().length} offered by the installer, ${allKeyboards().length} in the catalogue`)
 print("")
 for (const code of ["ES", "BR", "GB", "IN", "JP", "US", "AR", "CH", "AQ"]) {
   const c = countries().find(x => x.code === code)
@@ -39,12 +40,12 @@ for (const ui of ["es", "en", "de"]) {
   print(`   UI=${ui.padEnd(3)} ${names.join(" · ")}`)
 }
 for (const l of ["es", "gb", "latam", "br", "jp"]) {
-  const k = allKeyboards().find(x => x.layout === l && !x.variant)
+  const k = bridgedKeyboards().find(x => x.layout === l && !x.variant)
   print(`   teclado ${l.padEnd(6)} → ${k ? k.label : "?"}`)
 }
 print("")
 print("— control: los 4 desajustes xkb/consola que arreglamos a mano —")
 for (const l of ["gb", "latam", "pt", "br"]) {
-  const k = allKeyboards().find(x => x.layout === l && !x.variant)
+  const k = bridgedKeyboards().find(x => x.layout === l && !x.variant)
   print(`   xkb ${l.padEnd(6)} → keymap ${k ? k.keymap : "NO ENCONTRADO"}`)
 }

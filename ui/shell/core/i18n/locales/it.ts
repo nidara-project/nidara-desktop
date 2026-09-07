@@ -19,7 +19,7 @@ export default {
     "settings.input.keyboard.numlock": "NumLock all'avvio",
     "settings.input.keyboard.numlock.desc": "Attiva il tastierino numerico per impostazione predefinita",
     "settings.input.keyboard.layout": "Layout tastiera",
-    "settings.input.keyboard.layout.desc": "Layout tastiera attivo in Hyprland",
+    "settings.input.keyboard.layout.desc": "Con cosa scrive questo desktop. La console di testo mantiene il layout impostato dall'installatore",
     "settings.input.keyboard.repeat-delay": "Ritardo di ripetizione",
     "settings.input.keyboard.repeat-delay.desc": "Tempo prima che un tasto premuto inizi a ripetersi",
     "settings.input.keyboard.repeat-rate": "Velocità di ripetizione",

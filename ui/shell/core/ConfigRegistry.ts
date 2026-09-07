@@ -83,6 +83,25 @@ export function configKeys(): string[] {
     return Object.keys(entries).sort()
 }
 
+/**
+ * How many enum values `describeConfig` inlines before it summarises instead.
+ *
+ * ⚠️ `input.keyboard.layout` alone carries 598 (#473 — the catalogue is xkb's, not
+ * a hand-written slice of it), which is ~7 KB of names. This response is what an
+ * agent reads BEFORE every get/set, so dumping them would spend that on every
+ * call for a list nobody reads to the end. The sample plus `valuesTotal` says
+ * what the shape is, the entry's own `desc` says how to build one, and
+ * validation still happens against the WHOLE set — a value past the sample is
+ * accepted exactly as before.
+ */
+const ENUM_INLINE_MAX = 40
+
+const enumField = (values?: string[]) => {
+    if (!values) return {}
+    if (values.length <= ENUM_INLINE_MAX) return { values }
+    return { values: values.slice(0, ENUM_INLINE_MAX), valuesTotal: values.length }
+}
+
 /** Machine-readable schema + current values — what `describeConfig` serves. */
 export function describeConfig() {
     const out: Record<string, object> = {}
@@ -91,7 +110,7 @@ export function describeConfig() {
         out[key] = {
             desc: e.desc,
             type: e.type,
-            ...(e.enum ? { values: e.enum } : {}),
+            ...enumField(e.enum),
             ...(e.min !== undefined ? { min: e.min } : {}),
             ...(e.max !== undefined ? { max: e.max } : {}),
             writable: e.writable !== false && !!e.set,
@@ -139,8 +158,14 @@ function parseValue(e: ConfigEntry, raw: string): ConfigResult {
             return { ok: true, value: n }
         }
         case "enum": {
-            if (!e.enum?.includes(raw))
-                return { ok: false, error: `invalid value: ${raw} — valid: ${e.enum?.join(", ")}` }
+            if (!e.enum?.includes(raw)) {
+                // Same cap as describeConfig, and for the same reason: an error
+                // that prints 598 names is not more helpful than one that prints
+                // forty and says how many there are.
+                const shown = e.enum?.slice(0, ENUM_INLINE_MAX).join(", ")
+                const rest = (e.enum?.length ?? 0) > ENUM_INLINE_MAX ? ` … (${e.enum!.length} in total)` : ""
+                return { ok: false, error: `invalid value: ${raw} — valid: ${shown}${rest}` }
+            }
             return { ok: true, value: raw }
         }
         case "string":
