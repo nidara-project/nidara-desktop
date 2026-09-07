@@ -121,7 +121,7 @@ export function NidaraDropDownRow(
     // way in. The keyboard row is what forced it — the xkb catalogue is 598
     // entries (#473), and no one scrolls to `us-dvorak-alt-intl`.
     if (opts.length > SEARCHABLE_FROM) {
-        drp.expression = Gtk.PropertyExpression.new(Gtk.StringObject, null, "string")
+        drp.expression = Gtk.PropertyExpression.new(Gtk.StringObject.$gtype, null, "string")
         drp.enable_search = true
         // ⚠️ And SUBSTRING, which is not the default. GtkDropDown searches by
         // PREFIX out of the box, so a list whose entries are named "English

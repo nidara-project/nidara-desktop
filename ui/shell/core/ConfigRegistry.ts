@@ -96,7 +96,7 @@ export function configKeys(): string[] {
  */
 const ENUM_INLINE_MAX = 40
 
-const enumField = (values?: string[]) => {
+const enumField = (values?: readonly string[]) => {
     if (!values) return {}
     if (values.length <= ENUM_INLINE_MAX) return { values }
     return { values: values.slice(0, ENUM_INLINE_MAX), valuesTotal: values.length }
