@@ -386,7 +386,16 @@ function findMatches(filter, nodeName, roleFilter) {
         }
     }
 
-    // Fallback: traditional enumeration if D-Bus candidate discovery failed or index race detected
+    // Fallback: traditional enumeration if D-Bus candidate discovery failed or index race detected.
+    // ⚠️ Reset the accumulators first. The fast path may have already visited one
+    // matched app before a LATER candidate tripped the race guard, and the fallback
+    // walks every match again — without this, those nodes are counted twice and the
+    // `scanned` budget is spent before the real walk starts.
+    exact.length = 0
+    partial.length = 0
+    seen.clear()
+    scanned = 0
+
     Atspi.init()
     const desktop = safe(() => Atspi.get_desktop(0), null)
     if (!desktop) return { matches: [], apps: [], showing: [], appFound: false }
