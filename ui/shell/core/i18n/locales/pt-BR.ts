@@ -656,8 +656,8 @@ export default {
 
     // Control Center — Focus/DnD toggle
     "cc.focus.name": "Concentração",
-    "cc.focus.title.on": "Concentração",
-    "cc.focus.title.off": "Concentração",
+    "cc.focus.title.on": "Foco",
+    "cc.focus.title.off": "Foco",
     "cc.focus.sub.on": "Não perturbe",
 
     // Control Center — Island grid

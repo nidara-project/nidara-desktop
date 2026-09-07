@@ -659,7 +659,7 @@ export default {
     "widget.battery.state.charged": "Cargado",
     "widget.battery.state.charging": "Cargando",
     "widget.battery.state.discharging": "Descargando",
-    "widget.clipboard.name": "Portapapeles",
+    "widget.clipboard.name": "Porta­papeles",
     "widget.clipboard.empty": "Sin historial",
     "widget.clipboard.image": "Imagen",
     "widget.clipboard.delete": "Eliminar",
@@ -722,8 +722,8 @@ export default {
 
     // Control Center — Focus/DnD toggle
     "cc.focus.name": "Concentración",
-    "cc.focus.title.on": "Concentración",
-    "cc.focus.title.off": "Concentración",
+    "cc.focus.title.on": "Enfoque",
+    "cc.focus.title.off": "Enfoque",
     "cc.focus.sub.on": "No molestar",
 
     // Control Center — Island grid

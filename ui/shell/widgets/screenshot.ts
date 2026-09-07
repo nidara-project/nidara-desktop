@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { PANEL_W, AtomicWidget, WidgetSize, makeCapsuleTile } from "../common/widget-kit"
+import { AtomicWidget, ContentBudget, PANEL_W, WidgetSize, makeCapsuleTile } from "../common/widget-kit"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 import GLib from "gi://GLib"
 import { execAsync } from "../../lib/process"
@@ -121,7 +121,7 @@ function buildBarExpanded(onClose: () => void): Gtk.Widget {
 
 // ── CC content ────────────────────────────────────────────────────────────────
 
-function buildContent(size: WidgetSize): Gtk.Widget {
+function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
         const box = new Gtk.Box({ hexpand: true, vexpand: true })
         box.append(new Gtk.Image({ gicon: Icons.camera, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] }))
@@ -129,7 +129,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
     }
 
     // Action tile (no on/off state) → no status subtitle; just the name.
-    return makeCapsuleTile(() => Icons.camera, () => t("widget.screenshot.name"), () => "")
+    return makeCapsuleTile(() => Icons.camera, () => t("widget.screenshot.name"), () => "", undefined, budget)
 }
 
 // ── Widget registration ───────────────────────────────────────────────────────

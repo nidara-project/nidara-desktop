@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, makeBarIcon } from "../common/widget-kit"
+import { AtomicWidget, ContentBudget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import { dontDisturb, toggleDontDisturb, setDontDisturb, watchDnd } from "../core/NotifService"
@@ -22,10 +22,10 @@ const getSub = () => dontDisturb() ? t("cc.focus.sub.on") : ""
 // the same tap target, and there's no room for a second hit-region at 1×1).
 // WIDE/SQUARE split: icon badge toggles, the rest of the capsule opens the
 // detail panel — see [[project_cc_capsule_alignment]].
-function buildContent(size: WidgetSize): Gtk.Widget {
+function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     if (size === WidgetSize.SINGLE)
         return makeRoundTile(getIcon, dontDisturb, toggleDontDisturb, watchDnd)
-    return makeSplitCapsuleTile(getIcon, getTitle, getSub, toggleDontDisturb, watchDnd)
+    return makeSplitCapsuleTile(getIcon, getTitle, getSub, toggleDontDisturb, watchDnd, budget)
 }
 
 // ── CC detail panel: just the switch. Matches GNOME's Do Not Disturb quick
@@ -58,7 +58,7 @@ const focusWidget: AtomicWidget = {
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
-    buildContent: (size, _budget) => buildContent(size),
+    buildContent,
     buildBarContent,
     buildCCDetail: buildDetailPanel,
     ccDetailRows: 2,

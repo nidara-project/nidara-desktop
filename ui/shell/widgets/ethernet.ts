@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { AtomicWidget, WidgetSize, makeIconTile, makeCapsuleTile, panelInfoRow } from "../common/widget-kit"
+import { AtomicWidget, ContentBudget, WidgetSize, makeIconTile, makeCapsuleTile, panelInfoRow } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as Net from "../core/NetworkService"
@@ -8,7 +8,7 @@ function buildBarContent(): Gtk.Widget {
     return new Gtk.Image({ gicon: Icons.ethernet, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
 }
 
-function buildContent(size: WidgetSize): Gtk.Widget {
+function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     // The adapter is READ on every call, never captured: a USB-Ethernet dongle
     // plugged in after this tile was built has to reach it, and `watchWired` fires
     // on that hot-plug (NetworkService.watchDevices). Capturing it here is exactly
@@ -22,7 +22,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
     if (size === WidgetSize.SINGLE)
         return makeIconTile(() => Icons.ethernet)
 
-    return makeCapsuleTile(() => Icons.ethernet, () => t("cc.ethernet.name"), getSub, Net.watchWired)
+    return makeCapsuleTile(() => Icons.ethernet, () => t("cc.ethernet.name"), getSub, Net.watchWired, budget)
 }
 
 function buildInfoPanel(): Gtk.Widget {

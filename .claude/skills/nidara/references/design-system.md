@@ -2583,6 +2583,31 @@ The 2×1 (WIDE) CC tile built by `makeCapsuleInner(getIcon, getTitle, getSubTitl
   return `""` — never invent a description-as-subtitle. (`applySub()` runs at build time too, so
   plain detail-opening tiles that never call `update()` still hide the empty line.)
 
+⚠️ **The second line is conditional since 2026-09-07 (#428), and the reason generalises to every
+fixed box in the DE.** A wrapping `GtkLabel`'s MINIMUM width is its longest unbreakable run, and a
+minimum cannot be squeezed — GTK grows the parent instead, and the CC's visible region clips what
+sticks out. So the wrap branch is taken **only when the longest word fits the column**; a word too
+wide reads on one line and ellipsizes, the way every other desktop's quick toggle does. What the
+branch was written for ("Screen Recording" reading in full) is untouched: a name that breaks at a
+space still gets its two lines.
+
+The column is **84px** — the 2×1 span (2·UNIT + GAP = 172) minus the island's padding (2·12) minus
+the capsule's own chrome (`CAPSULE_CHROME` = margin 4 + icon circle 48 + spacing 12). Confirmed
+against a live session, not derived on paper: `queryUI` puts the island at x=2380 w=172, the icon at
+x=2396 w=48 and the label at x=2456.
+
+🔑 **A tile learns that number the only legal way — it is HANDED the `ContentBudget`.** The capsule
+makers take it as a trailing optional argument and the widget forwards what `buildContent(size,
+budget)` already gives it; the kit subtracts the chrome it owns and nothing derives the host's
+geometry (the zero-layout contract, `widget-kit/contract.ts`). A maker called without a budget keeps
+the old unconditional wrap, so nothing outside the CC changed. And because CSS — hence the real font
+— needs a root, the verdict is re-taken on `map`: at construction the tile is not in a window yet
+and the first measurement would be against GTK's default font.
+
+⚠️ At the default text size **no shipped string should ever reach the ellipsis**: `text-budget.js`
+gates all twelve locales on this column (see dev-workflow.md), and the answer to a name that does
+not fit is a shorter name or a soft hyphen, not a smaller font.
+
 **Reach for `makeCapsuleTile` first — it is `makeCapsuleInner` + the subscription + the
 wrapper, which is the shape nine widgets were writing out by hand.** Drop to
 `makeCapsuleInner` + `wrapCapsuleTile(inner.box)` only when a tile needs the refs, and never

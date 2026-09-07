@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import nightLight from "../core/NightLightManager"
 import { makeHSlider } from "../../lib/nidara-kit"
-import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator, makeBarIcon } from "../common/widget-kit"
+import { AtomicWidget, ContentBudget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import { safeDisconnect } from "../core/signals"
@@ -31,11 +31,11 @@ const getSub = () => nightLight.enabled
 // the same tap target, and there's no room for a second hit-region at 1×1).
 // WIDE/SQUARE split: icon badge toggles, the rest of the capsule opens the
 // detail panel — see [[project_cc_capsule_alignment]].
-function buildContent(size: WidgetSize): Gtk.Widget {
+function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     const toggle = () => nightLight.setEnabled(!nightLight.enabled)
     if (size === WidgetSize.SINGLE)
         return makeRoundTile(getIcon, () => nightLight.enabled, toggle, subscribe)
-    return makeSplitCapsuleTile(getIcon, () => t("widget.night-light.name"), getSub, toggle, subscribe)
+    return makeSplitCapsuleTile(getIcon, () => t("widget.night-light.name"), getSub, toggle, subscribe, budget)
 }
 
 // ── CC detail panel: on/off switch + temperature slider + schedule ────────────
@@ -156,7 +156,7 @@ const nightLightWidget: AtomicWidget = {
     defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
-    buildContent: (size, _budget) => buildContent(size),
+    buildContent,
     buildBarContent,
     buildCCDetail: buildDetailPanel,
     ccDetailRows: 4,

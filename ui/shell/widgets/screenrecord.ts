@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
-import { PANEL_W, AtomicWidget, WidgetSize, makeIconTile, makeCapsuleInner, wrapCapsuleTile } from "../common/widget-kit"
+import { AtomicWidget, ContentBudget, PANEL_W, WidgetSize, makeIconTile, makeCapsuleInner, wrapCapsuleTile } from "../common/widget-kit"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 import { NidaraDropDown } from "../../lib/nidara-kit/scrolled"
 import { NidaraList, NidaraRow, NidaraToggleRow, NidaraDropDownRow } from "../../lib/nidara-kit"
@@ -153,7 +153,7 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
 
 // ── CC widget content ─────────────────────────────────────────────────────────
 
-function buildContent(size: WidgetSize): Gtk.Widget {
+function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     if (size === WidgetSize.SINGLE)
         return makeIconTile(
             () => status.recording ? Icons.recordStop : Icons.record,
@@ -179,7 +179,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
     const getTitle = () => status.recording ? t("widget.screenrecord.recording") : t("widget.screenrecord.name")
     const getSub   = () => status.recording ? recordingElapsed() : ""
 
-    const inner = makeCapsuleInner(getIcon, getTitle, getSub)
+    const inner = makeCapsuleInner(getIcon, getTitle, getSub, budget)
 
     // One driver for both jobs: a `full` pass re-reads icon/title/sub (the state
     // flipped), a tick only moves the subtitle's digits.

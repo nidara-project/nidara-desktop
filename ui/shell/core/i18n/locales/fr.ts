@@ -630,7 +630,7 @@ export default {
     "widget.screenshot.action.copy": "Copier",
     "widget.screenshot.action.save": "Enregistrer",
     "widget.screenshot.saved": "Capture enregistrée",
-    "widget.screenrecord.name": "Enregistrement d'écran",
+    "widget.screenrecord.name": "Enregistre­ment d'écran",
     "widget.screenrecord.mode.screen": "Plein écran",
     "widget.screenrecord.mode.region": "Zone",
     "widget.screenrecord.audio": "Inclure l'audio",
@@ -656,8 +656,8 @@ export default {
 
     // Control Center — Focus/DnD toggle
     "cc.focus.name": "Concentration",
-    "cc.focus.title.on": "Concentration",
-    "cc.focus.title.off": "Concentration",
+    "cc.focus.title.on": "Focus",
+    "cc.focus.title.off": "Focus",
     "cc.focus.sub.on": "Ne pas déranger",
 
     // Control Center — Island grid

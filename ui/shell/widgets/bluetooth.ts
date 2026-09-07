@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { NidaraButton } from "../../lib/nidara-kit/button"
-import { AtomicWidget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator, makeBarIcon } from "../common/widget-kit"
+import { AtomicWidget, ContentBudget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as BT from "../core/BluetoothService"
@@ -17,7 +17,7 @@ function buildBarContent() {
 const getIcon = () => BT.isPowered() ? Icons.bluetooth : Icons.bluetoothOff
 const getSub = () => BT.isPowered() ? t("widget.bluetooth.sub.active") : t("widget.bluetooth.sub.inactive")
 
-function buildContent(size: WidgetSize): Gtk.Widget {
+function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     if (size === WidgetSize.SINGLE)
         // Every major platform keeps the toggle live even at the
         // most compact representation — "open detail" is always a SEPARATE
@@ -26,7 +26,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         // panel simply isn't reachable from here — only from WIDE/SQUARE below.
         return makeRoundTile(getIcon, () => BT.isPowered(), BT.togglePower, BT.watchPower)
 
-    return makeSplitCapsuleTile(getIcon, () => t("widget.bluetooth.name"), getSub, BT.togglePower, BT.watchPower)
+    return makeSplitCapsuleTile(getIcon, () => t("widget.bluetooth.name"), getSub, BT.togglePower, BT.watchPower, budget)
 }
 
 // ── CC detail panel: power switch + paired device list (connect/disconnect).
