@@ -563,6 +563,11 @@ function selectTargets(filter) {
     if (busDiscovery) {
         const { candidates, apps } = busDiscovery
         const matched = []
+        // An agent's vocabulary for "which app" comes from list_windows — i.e. Hyprland
+        // CLASSES — while the filter might use a different spelling ("gnome-terminal" vs
+        // "org.gnome.Terminal": no substring relation, so the plain pass returns zero).
+        // Rescue pass only, after a strict miss, so an exact substring keeps meaning
+        // exactly what it meant.
         for (const tolerant of [false, true]) {
             for (const cand of candidates) {
                 const match = filter
@@ -581,15 +586,32 @@ function selectTargets(filter) {
             return { targets: [], apps, activeClass }
         }
 
-        // Only resolve the matching application(s) via Atspi
+        // Only resolve the matching application(s) via Atspi.
+        // Index assumption: atspi_accessible_get_child_at_index() sends GetChildAtIndex
+        // to the root accessible object (/org/a11y/atspi/accessible/root) in at-spi2-registryd,
+        // which indexes the exact same registry->apps GPtrArray returned by GetChildren.
+        // Race guard: if an application registers or dies between GetChildren and
+        // get_child_at_index, indices shift and cand.index points to a neighbor.
+        // atspi_accessible_get_process_id() queries GetConnectionUnixProcessID on the
+        // bus daemon (NOT the target app), so checking app.get_process_id() costs 0 fds.
+        // If it does not match cand.pid, we abort the fast path and fall back to classic enumeration.
         Atspi.init()
         const desktop = safe(() => Atspi.get_desktop(0), null)
         if (!desktop) return { targets: [], apps, activeClass }
 
         const targets = []
+        let raceDetected = false
         for (const cand of matched) {
             const app = safe(() => desktop.get_child_at_index(cand.index), null)
-            if (!app) continue
+            if (!app) {
+                raceDetected = true
+                break
+            }
+            const resolvedPid = safe(() => app.get_process_id(), 0)
+            if (cand.pid && resolvedPid !== cand.pid) {
+                raceDetected = true
+                break
+            }
             const appName = safe(() => app.get_name(), "") || cand.primaryName
             for (const win of children(app)) {
                 const winName = safe(() => win.get_name(), "")
@@ -597,10 +619,12 @@ function selectTargets(filter) {
                 targets.push({ frame: win, label })
             }
         }
-        return { targets, apps, activeClass }
+        if (!raceDetected) {
+            return { targets, apps, activeClass }
+        }
     }
 
-    // Fallback: traditional enumeration if D-Bus candidate discovery failed
+    // Fallback: traditional enumeration if D-Bus candidate discovery failed or index race detected
     Atspi.init()
     const desktop = safe(() => Atspi.get_desktop(0), null)
     if (!desktop) return { targets: [], apps: [] }
