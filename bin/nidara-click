@@ -244,9 +244,81 @@ const MAX_SUGGESTIONS = 40
 const MAX_SUGGESTION_LEN = 48
 const isLabelish = nm => nm.length <= MAX_SUGGESTION_LEN && !nm.includes("\n")
 
-function findNodeCentres(appFilter, nodeName, roleFilter) {
-    const desktop = safe(() => Atspi.get_desktop(0), null)
-    if (!desktop) return { hits: [], seen: [] }
+function getA11yBusAddress() {
+    let addr = GLib.getenv("AT_SPI_BUS_ADDRESS")
+    if (addr) return addr
+    try {
+        const res = Gio.DBus.session.call_sync(
+            "org.a11y.Bus",
+            "/org/a11y/bus",
+            "org.a11y.Bus",
+            "GetAddress",
+            null,
+            null,
+            Gio.DBusCallFlags.NONE,
+            1000,
+            null
+        )
+        const [busAddr] = res.deepUnpack()
+        return busAddr
+    } catch {
+        return null
+    }
+}
+
+// Find the registry child index for a given process ID without walking the desktop.
+// D-Bus queries to org.a11y.atspi.Registry and org.freedesktop.DBus are handled
+// by the daemons without contacting client applications, costing ZERO fds.
+function getA11yIndexForPid(targetPid) {
+    if (!targetPid) return null
+    const addr = getA11yBusAddress()
+    if (!addr) return null
+    try {
+        const conn = Gio.DBusConnection.new_for_address_sync(
+            addr,
+            Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION,
+            null,
+            null
+        )
+        const res = conn.call_sync(
+            "org.a11y.atspi.Registry",
+            "/org/a11y/atspi/accessible/root",
+            "org.a11y.atspi.Accessible",
+            "GetChildren",
+            null,
+            null,
+            Gio.DBusCallFlags.NONE,
+            1000,
+            null
+        )
+        const [children] = res.deepUnpack()
+        for (let i = 0; i < children.length; i++) {
+            const [busName] = children[i]
+            try {
+                const pidRes = conn.call_sync(
+                    "org.freedesktop.DBus",
+                    "/org/freedesktop/DBus",
+                    "org.freedesktop.DBus",
+                    "GetConnectionUnixProcessID",
+                    new GLib.Variant("(s)", [busName]),
+                    null,
+                    Gio.DBusCallFlags.NONE,
+                    1000,
+                    null
+                )
+                const [pid] = pidRes.deepUnpack()
+                if (pid === targetPid) {
+                    return i
+                }
+            } catch {}
+        }
+        return null
+    } catch {
+        return null
+    }
+}
+
+function findNodeCentres(appFilter, nodeName, roleFilter, targetPid) {
     const want = nodeName.toLowerCase(), exact = [], partial = []
     const seen = new Set()
     let scanned = 0
@@ -264,6 +336,40 @@ function findNodeCentres(appFilter, nodeName, roleFilter) {
         }
         for (const k of children(acc)) visit(k, depth + 1)
     }
+
+    // Fast path: resolve ONLY the focused window's application via its PID.
+    // nidara-click already ran `hyprctl activewindow -j` to verify focus, so targetPid
+    // is known. We query the registry for its child index via D-Bus (zero fds) and
+    // only resolve that single child in AT-SPI.
+    //
+    // Index assumption: atspi_accessible_get_child_at_index() sends GetChildAtIndex
+    // to the root accessible object in at-spi2-registryd, which indexes the exact same
+    // array returned by GetChildren.
+    // Race guard: if an app registers or dies between GetChildren and get_child_at_index,
+    // the index shifts. atspi_accessible_get_process_id() queries GetConnectionUnixProcessID
+    // on the bus daemon (NOT the target app, costing 0 fds). If resolvedPid !== targetPid,
+    // we abort the fast path and fall back to classic enumeration.
+    if (targetPid) {
+        const idx = getA11yIndexForPid(targetPid)
+        if (idx !== null) {
+            Atspi.init()
+            const desktop = safe(() => Atspi.get_desktop(0), null)
+            if (desktop) {
+                const app = safe(() => desktop.get_child_at_index(idx), null)
+                const resolvedPid = safe(() => app?.get_process_id(), 0)
+                if (app && resolvedPid === targetPid) {
+                    for (const win of children(app)) visit(win, 0)
+                    return { hits: exact.length ? exact : partial, seen: [...seen] }
+                }
+            }
+        }
+    }
+
+    // Fallback: traditional enumeration across all desktop children
+    Atspi.init()
+    const desktop = safe(() => Atspi.get_desktop(0), null)
+    if (!desktop) return { hits: [], seen: [] }
+
     // Same two-pass app selection as nidara-act: strict substring, then the
     // tolerant rescue. Decided on names before walking, so the rescue is free.
     const named = children(desktop).map(app => [app, nameOf(app) || "?"])
@@ -319,9 +425,9 @@ function collapseContained(hits) {
 
 const bare = h => ({ x: h.x, y: h.y, role: h.role })
 
-function resolveNode(appFilter, app, label, nodeName, role, occRaw) {
+function resolveNode(appFilter, app, label, nodeName, role, occRaw, targetPid) {
     const where = label ? `${label} node ` : "node "
-    const { hits: raw, seen } = findNodeCentres(appFilter, nodeName, role)
+    const { hits: raw, seen } = findNodeCentres(appFilter, nodeName, role, targetPid)
     const hits = collapseContained(raw)
     if (!hits.length) {
         // Answer the next question in the same breath. `showing` is what is on screen
@@ -405,6 +511,7 @@ function act(mode, app, spec, islandBounds) {
         const nodeName = (ARGV[2] ?? "").trim()
         if (!nodeName) { emit({ error: `${mode} needs a node name` }); return }
         Atspi.init()
+        const targetPid = aw?.pid || 0
         if (isDrag) {
             // drag-app: <from> <to> [from-role] [from-occ] [to-role] [to-occ].
             // BOTH ends resolve before anything is injected — a half-resolved drag
@@ -412,10 +519,10 @@ function act(mode, app, spec, islandBounds) {
             const toName = (ARGV[3] ?? "").trim()
             if (!toName) { emit({ error: "drag-app needs <from-node> <to-node>" }); return }
             const from = resolveNode(app.toLowerCase(), app, "from", nodeName,
-                (ARGV[4] ?? "").trim() || null, (ARGV[5] ?? "").trim())
+                (ARGV[4] ?? "").trim() || null, (ARGV[5] ?? "").trim(), targetPid)
             if (!from) return
             const to = resolveNode(app.toLowerCase(), app, "to", toName,
-                (ARGV[6] ?? "").trim() || null, (ARGV[7] ?? "").trim())
+                (ARGV[6] ?? "").trim() || null, (ARGV[7] ?? "").trim(), targetPid)
             if (!to) return
             relX = from.x; relY = from.y
             relX2 = to.x; relY2 = to.y
@@ -434,7 +541,7 @@ function act(mode, app, spec, islandBounds) {
             // `app.toLowerCase()` is the app FILTER (findNodeCentres compares it
             // against already-lowercased AT-SPI application names), `app` is the
             // original for error messages — same split as nidara-act's findMatches.
-            const t = resolveNode(app.toLowerCase(), app, "", nodeName, role, occRaw)
+            const t = resolveNode(app.toLowerCase(), app, "", nodeName, role, occRaw, targetPid)
             if (!t) return
             relX = t.x; relY = t.y
         }

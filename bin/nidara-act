@@ -160,18 +160,158 @@ const MAX_SUGGESTIONS = 40
 const MAX_SUGGESTION_LEN = 48
 const isLabelish = nm => nm.length <= MAX_SUGGESTION_LEN && !nm.includes("\n")
 
+// ── Targeted A11Y Bus Candidate Discovery ─────────────────────────────────────
+// KEEP LOGIC IN STEP with nidara-a11y: query the a11y bus registry and compositor
+// directly via D-Bus and /proc to discover candidate applications WITHOUT
+// triggering AT-SPI peer-to-peer connection establishment (which leaks 3 pidfds
+// per connection in GTK3/ATK bridge due to upstream issue in bridge.c:684-693).
+//
+// CONSCIOUS DUPLICATION NOTE: This helper is intentionally kept inline within
+// each standalone CLI tool in bin/ rather than factored into a shared library.
+// The repository packages tools in bin/ as self-contained executables installed
+// to /usr/bin. A shared module would require packaging modifications in PKGBUILD
+// and install.sh, which is explicitly disallowed, and would break dev-worktree
+// execution isolation in GJS.
+function getHyprWindows() {
+    try {
+        const [ok, out] = GLib.spawn_command_line_sync("hyprctl clients -j")
+        if (!ok) return new Map()
+        const list = JSON.parse(new TextDecoder().decode(out))
+        const map = new Map()
+        for (const w of list) {
+            if (w.pid) {
+                if (!map.has(w.pid)) map.set(w.pid, [])
+                map.get(w.pid).push(w)
+            }
+        }
+        return map
+    } catch {
+        return new Map()
+    }
+}
+
+function appNamesForPid(pid, hyprMap) {
+    const names = new Set()
+    const wins = hyprMap.get(pid) || []
+    for (const hw of wins) {
+        if (hw.class) names.add(hw.class)
+        if (hw.initialClass) names.add(hw.initialClass)
+    }
+    try {
+        const [ok, bytes] = GLib.file_get_contents(`/proc/${pid}/cmdline`)
+        if (ok && bytes.length) {
+            const raw = new TextDecoder().decode(bytes)
+            const argv0 = raw.split("\0")[0]
+            if (argv0) {
+                const base = GLib.path_get_basename(argv0)
+                if (base) names.add(base)
+            }
+        }
+    } catch {}
+    try {
+        const [ok, bytes] = GLib.file_get_contents(`/proc/${pid}/comm`)
+        if (ok && bytes.length) {
+            const comm = new TextDecoder().decode(bytes).trim()
+            if (comm) names.add(comm)
+        }
+    } catch {}
+    return [...names]
+}
+
+function getA11yBusAddress() {
+    let addr = GLib.getenv("AT_SPI_BUS_ADDRESS")
+    if (addr) return addr
+    try {
+        const res = Gio.DBus.session.call_sync(
+            "org.a11y.Bus",
+            "/org/a11y/bus",
+            "org.a11y.Bus",
+            "GetAddress",
+            null,
+            null,
+            Gio.DBusCallFlags.NONE,
+            1000,
+            null
+        )
+        const [busAddr] = res.deepUnpack()
+        return busAddr
+    } catch {
+        return null
+    }
+}
+
+function getA11yBusCandidates() {
+    const addr = getA11yBusAddress()
+    if (!addr) return null
+    try {
+        const conn = Gio.DBusConnection.new_for_address_sync(
+            addr,
+            Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION,
+            null,
+            null
+        )
+        const res = conn.call_sync(
+            "org.a11y.atspi.Registry",
+            "/org/a11y/atspi/accessible/root",
+            "org.a11y.atspi.Accessible",
+            "GetChildren",
+            null,
+            null,
+            Gio.DBusCallFlags.NONE,
+            1000,
+            null
+        )
+        const [children] = res.deepUnpack()
+        const hyprMap = getHyprWindows()
+        const candidates = []
+        const apps = []
+
+        for (let i = 0; i < children.length; i++) {
+            const [busName, path] = children[i]
+            let pid = 0
+            try {
+                const pidRes = conn.call_sync(
+                    "org.freedesktop.DBus",
+                    "/org/freedesktop/DBus",
+                    "org.freedesktop.DBus",
+                    "GetConnectionUnixProcessID",
+                    new GLib.Variant("(s)", [busName]),
+                    null,
+                    Gio.DBusCallFlags.NONE,
+                    1000,
+                    null
+                )
+                const [p] = pidRes.deepUnpack()
+                pid = p
+            } catch {}
+
+            const names = pid ? appNamesForPid(pid, hyprMap) : []
+            const wins = hyprMap.get(pid) || []
+            const primaryName = (wins[0]?.class) || names[0] || busName
+            apps.push(primaryName)
+
+            candidates.push({
+                index: i,
+                busName,
+                path,
+                pid,
+                names,
+                primaryName,
+            })
+        }
+        return { candidates, apps }
+    } catch {
+        return null
+    }
+}
+
 // Collect every showing node in the target app(s) whose name matches `nodeName`
 // (case-insensitive exact, then substring) and, if given, whose role matches.
 function findMatches(filter, nodeName, roleFilter) {
-    const desktop = safe(() => Atspi.get_desktop(0), null)
-    if (!desktop) return { matches: [], apps: [], showing: [], appFound: false }
-
     const want = nodeName.toLowerCase()
     const exact = []
     const partial = []
-    const apps = []
     const seen = new Set()
-    let appFound = false
     let scanned = 0
 
     const visit = (acc, depth) => {
@@ -191,17 +331,83 @@ function findMatches(filter, nodeName, roleFilter) {
         for (const c of children(acc)) visit(c, depth + 1)
     }
 
-    // App selection is two-pass on NAMES ONLY — strict substring first, so an
-    // exact filter keeps meaning exactly what it meant, then the tolerant rescue
-    // for the other spellings of the same app. Deciding before walking is what
-    // keeps the rescue free: the tree is walked once, never twice.
+    const busDiscovery = getA11yBusCandidates()
+    if (busDiscovery) {
+        const { candidates, apps } = busDiscovery
+        const matched = []
+        // Two-pass app selection: strict substring first, so an exact filter keeps
+        // meaning exactly what it meant, then tolerant rescue via sameApp() for different
+        // naming conventions (Hyprland window class vs process name vs command-line).
+        for (const tolerant of [false, true]) {
+            for (const cand of candidates) {
+                const match = cand.names.some(n => tolerant ? sameApp(n, filter) : n.toLowerCase().includes(filter))
+                if (match && !matched.includes(cand)) {
+                    matched.push(cand)
+                }
+            }
+            if (matched.length) break
+        }
+
+        // Fast miss: no running application matches the filter.
+        // Return immediately WITHOUT touching AT-SPI! Zero fds leaked, zero warnings.
+        if (!matched.length) {
+            return { matches: [], apps, showing: [], appFound: false }
+        }
+
+        // Target found: resolve ONLY the matching application(s) via Atspi.
+        // Index assumption: atspi_accessible_get_child_at_index() sends GetChildAtIndex
+        // to the root accessible object (/org/a11y/atspi/accessible/root) in at-spi2-registryd,
+        // which indexes the exact same registry->apps GPtrArray returned by GetChildren.
+        // Race guard: if an application registers or dies between GetChildren and
+        // get_child_at_index, indices shift and cand.index points to a neighbor.
+        // atspi_accessible_get_process_id() queries GetConnectionUnixProcessID on the
+        // bus daemon (NOT the target app), so checking app.get_process_id() costs 0 fds.
+        // If it does not match cand.pid, we abort the fast path and fall back to classic enumeration.
+        Atspi.init()
+        const desktop = safe(() => Atspi.get_desktop(0), null)
+        if (desktop) {
+            let raceDetected = false
+            for (const cand of matched) {
+                const app = safe(() => desktop.get_child_at_index(cand.index), null)
+                if (!app) {
+                    raceDetected = true
+                    break
+                }
+                const resolvedPid = safe(() => app.get_process_id(), 0)
+                if (cand.pid && resolvedPid !== cand.pid) {
+                    raceDetected = true
+                    break
+                }
+                for (const win of children(app)) visit(win, 0)
+            }
+            if (!raceDetected) {
+                return { matches: exact.length ? exact : partial, apps, showing: [...seen], appFound: true }
+            }
+        }
+    }
+
+    // Fallback: traditional enumeration if D-Bus candidate discovery failed or index race detected.
+    // ⚠️ Reset the accumulators first. The fast path may have already visited one
+    // matched app before a LATER candidate tripped the race guard, and the fallback
+    // walks every match again — without this, those nodes are counted twice and the
+    // `scanned` budget is spent before the real walk starts.
+    exact.length = 0
+    partial.length = 0
+    seen.clear()
+    scanned = 0
+
+    Atspi.init()
+    const desktop = safe(() => Atspi.get_desktop(0), null)
+    if (!desktop) return { matches: [], apps: [], showing: [], appFound: false }
+
+    const apps = []
     const allApps = children(desktop)
     const named = allApps.map(app => [app, nameOf(app) || "?"])
     for (const [, appName] of named) apps.push(appName)
 
     let targets = named.filter(([, n]) => n.toLowerCase().includes(filter))
     if (!targets.length) targets = named.filter(([, n]) => sameApp(n, filter))
-    appFound = targets.length > 0
+    const appFound = targets.length > 0
     for (const [app] of targets)
         for (const win of children(app)) visit(win, 0)
     // Prefer exact-name matches; fall back to substring matches.
@@ -229,8 +435,6 @@ function main() {
         emit({ error: "usage: nidara-act <app> <node-name> <action|set-value=N> [role] [occurrence]" })
         return
     }
-
-    Atspi.init()
 
     const { matches, apps, showing, appFound } = findMatches(app.toLowerCase(), nodeName, roleFilter)
     if (!matches.length) {

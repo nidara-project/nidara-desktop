@@ -1338,6 +1338,31 @@ here and it is one wrapper mode + one tool in each consumer. Phase 1 — percept
   screenshot gate). Enabling it (via `AgentConfig.setAllowComputerUse`) also turns on
   `toolkit-accessibility`, since the capability is useless while a11y is globally off. Re-read
   live by both `nidara-a11y` and the `query_app` MCP tool.
+- 🔑 **Targets are resolved WITHOUT enumerating the desktop** (2026-09-07, #476 / #419 / #420).
+  Resolving *any* child of the AT-SPI desktop opens a peer-to-peer D-Bus connection to that
+  application, and the app's ATK bridge refs it into `spi_global_app_data->direct_connections`
+  and **never registers a disconnect handler** (`at-spi2-core 2.60.6`, `atk-adaptor/bridge.c:684`;
+  the list is only freed when the app exits). So each connection strands **3 pidfds in the queried
+  app, for life** — `libdbus` opens one via `SO_PEERPIDFD` and dups it twice during the SASL
+  handshake. It is **upstream and we cannot close them: we can only not open them.** The old
+  `selectTargets()` compared the filter in the innermost loop, so five queries for an app that does
+  not exist still cost +15 fds in the polkit agent and +5 `AtSpiAdaptor` warnings from Telegram.
+  The three AT-SPI binaries now discover candidates over **raw D-Bus instead**: `GetChildren` on
+  the registry root for the bus names, then `GetConnectionUnixProcessID` — **answered by the bus
+  daemon, not by the application** — and the PID is crossed with `hyprctl clients -j` (class) and
+  `/proc/<pid>/{cmdline,comm}`. Only the app that matches is ever resolved through `Atspi`. Same
+  five queries now cost **+0 fds and +0 warnings**. `nidara-click` needs no discovery at all: its
+  focus gate already ran `hyprctl activewindow -j`, so it looks up the index for that one PID.
+  `bin/nidara-type` never touches AT-SPI (its `hyprctl` code is the focus HINT, not resolution).
+- ⚠️ **Two things that follow from it, and both bite.** (1) `desktop.get_child_at_index(i)` sends
+  `GetChildAtIndex` to the same registry array `GetChildren` returned, so the index is right — but
+  an app registering or dying between the two calls shifts it, and you would walk the neighbour's
+  tree under the requested app's name. The guard is `app.get_process_id()`, which asks the **bus
+  daemon** and therefore costs 0 fds; on mismatch the fast path is abandoned and the classic
+  enumeration runs. (2) 🔑 **The filter no longer compares against AT-SPI names at all** — only
+  Hyprland classes and process names — because reading an app's AT-SPI name up front is exactly
+  the round-trip that opens the leaking connection. `sameApp()` is what bridges the spellings, and
+  `apps[]` on a miss is built from the same three passive sources.
 - ⚠️ **The 500-node cap is a TRAP when you are using the tree as an instrument.** `MAX_NODES` is
   the whole dump, not per window, and a `GtkListBox` allocates every row whether or not it is
   scrolled into view: the installer's 249-country list alone is ~500 nodes, so everything built
