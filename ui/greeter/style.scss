@@ -132,6 +132,9 @@
   // sheet compiles the kit, so it owes every token the kit's rules name, whether
   // or not this bundle builds the widget yet (`scripts/ci/token-contract-check.mjs`).
   --nidara-surface-strong: rgba(255, 255, 255, 0.30);
+  // The DEFAULT blue, for the moment before `accentCssFor()` runs and for a config
+  // with no accent in it. Any real accent overwrites this at runtime — including the
+  // light skin's lighter alpha; see the note in the skin block below.
   --nidara-state-selected: rgba(0, 136, 255, 0.22);
   --nidara-border:         rgba(127, 127, 127, 0.15);
   --nidara-edge:           1px solid rgba(255, 255, 255, 0.14);
@@ -191,9 +194,12 @@
 //   · Every ACCENT token, including `--nidara-state-selected`. `accentCssFor()`
 //     rewrites those at runtime under a bare `*`, and this block out-specifies it —
 //     so a copy here would not be a lighter shade of the accent, it would PIN the
-//     accent to whatever was typed, for every user who picked a different one. The
-//     light skin therefore keeps dark's 0.22 selection instead of the shell's 0.16,
-//     which is a smaller wrong than the alternative.
+//     accent to whatever was typed, for every user who picked a different one.
+//     ✅ Which is why the light skin's SELECTION is emitted from `accentCssFor()`
+//     too, under this same `window.skin-light *` selector, since 2026-09-07 (#323):
+//     the light half needs the shell's 0.16 AND the user's accent, and only the
+//     runtime emitter has both. Nothing about selection is typed in this file except
+//     the pre-load default below.
 //   · `.greeter-avatar-fallback`'s white disc, which looks like an omission and is
 //     not. It is a LIGHT body so that the glyph on it is legible, and under this skin
 //     the glyph stops being inverted and renders black — so the disc must stay light
