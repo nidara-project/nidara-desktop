@@ -5,6 +5,21 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] — 2026-09-07
+
+**The AI-control notice still stuck out of the panel, and 0.12.0 said it was fixed.**
+
+Its labels wrap now and the card asks for the grid's width, and with both of those true it was
+still 412px wide against a 356px grid in Spanish — a size request is a floor, nothing above the
+card capped it, so it was given its natural width, and a wrapping label only wraps when it is
+given less than it asked for. It has a ceiling now (`NidaraClamp`, since GTK4 CSS has no
+`max-width`), and the card is exactly as wide as the grid it sits on.
+
+The instrument that missed it was fixed in the same change: every text budget asks whether a
+string fits a box of N pixels, with N read from the source, and cannot ask whether the box *is*
+N pixels. `text-budget.js --verify` now measures the Control Center's two boxes against a real
+window and fails when one is not the size the sweep assumes.
+
 ## [0.12.0] — 2026-09-07
 
 **Both ways in got fixed: the screen you log in on, and the disk the installer writes to.**
