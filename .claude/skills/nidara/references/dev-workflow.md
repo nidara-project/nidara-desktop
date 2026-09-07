@@ -777,7 +777,7 @@ subprocesses discovering three constants, and the page has to ask.
 
 `lib/region.ts` reads four files that are on every Arch system and maintained by somebody else:
 `zoneinfo/iso3166.tab` (249 countries), `zoneinfo/zone1970.tab` (312 zones, each tied to countries),
-`i18n/SUPPORTED` (328 UTF-8 locales) and `systemd/kbd-model-map` (62 keyboards, and the keymap↔xkb
+`i18n/SUPPORTED` (328 UTF-8 locales) and `systemd/kbd-model-map` (60 keyboards, and the keymap↔xkb
 bridge above).
 
 🔑 **A country NARROWS the three questions; it does not answer them.** `defaultsFor` fills a field in
@@ -853,6 +853,46 @@ runtime, so the four rows above are a description of that file rather than a cop
 LUKS passphrase prompt uses the **console** keymap. A passphrase typed on a Brazilian keyboard and
 then asked for on a US one is a disk its owner cannot open. Disk encryption does not ship until the
 initramfs keymap is verified on a non-US layout.
+
+#### 🔑 `kbd-model-map` is systemd's file, and it names keymaps `kbd` does not ship
+
+Reading the bridge at runtime removed the transcription, but not the assumption underneath it: that
+a name in column 1 is a file on disk. **Eight of the 62 were not** (#472) — `ara`, `ko`, `khmer`,
+`es-dvorak`, `ro-std`, `ro-cedilla`, `ro-std-cedilla`, `cz-qwerty`. And **nothing downstream
+notices**: archinstall's `set_keyboard_language()` calls `verify_keyboard_layout()`, logs `error`
+and returns **False** (`lib/installer.py:2056`) — and its only caller ignores the return value
+(`installer.py:976`). The install SUCCEEDS, the summary says Spanish (Dvorak), and the console is
+left unset, i.e. `us`.
+
+`resolveKeymap()` in `ui/installer/lib/region.ts` now resolves the name before it can be written,
+by two rules that are **derived, not a table of names to keep in sync**:
+
+1. **another row for the same keyboard** — kbd-model-map lists several keymaps per layout, so a
+   later row may exist where the first does not (`cz-qwerty` → `cz-lat2`);
+2. **the same parts, spelled differently** — `kbd` and systemd disagree about order and separator,
+   not content (`es-dvorak` → `dvorak-es`, `ro-std` → `ro_std`). Applied **only when exactly one**
+   keymap carries those parts, so an ambiguous match can never substitute a different keyboard.
+
+⛔ **What is deliberately NOT a rule: falling back to the layout's plain keymap.** `ro` for
+`ro-cedilla` is a silent swap of one keyboard for another — the class of failure the whole thing
+exists to end.
+
+Five keyboards have no console keymap **under any name** (Arabic, Korean, Khmer, and Romanian's two
+cedilla variants). They keep being offered — the xkb layout is real and the desktop gets it — with
+`keymap: ""`, and the region page says the console stays on US (`regionKeyboardNoConsole`). Dropping
+them would delete three languages' keyboards to fix a console that never could have worked.
+
+⚠️ **Cut the VARIANT column the same way as the layout column.** Both are positional lists: two rows
+carry `,phonetic` (`bg,us`) and `qwerty,` (`cz,us`), and reading them whole produced a keyboard
+labelled *"bg, ,phonetic"* and a second, broken Czech beside the working one. That cut is what takes
+the list from **62 to 60** — the two that go are those duplicates, and each one's correct twin was
+already in the list. Nothing real is lost.
+
+🔑 **How to check it, on the machine that matters** (the answer is machine-dependent, so this is a
+runtime property and not a CI gate). `esbuild --bundle --format=esm --platform=neutral
+--external:'gi://*'` a three-line probe that calls `allKeyboards()`, run it under `gjs -m`, and diff
+every non-empty `keymap` against `localectl list-keymaps`. Run it against `main` first: an instrument
+that cannot report the eight is an instrument that proves nothing.
 
 ⚠️ **Related, and the reason Japanese and Simplified Chinese are not offered as languages**: Nidara
 ships no input method (no `fcitx5`, no `ibus`, in neither `packages.x86_64` nor the desktop's

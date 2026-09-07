@@ -28,6 +28,10 @@
 // and the LUKS prompt) and the XKB layout (Hyprland, this session) — two
 // namespaces with overlapping names that disagree for four of the layouts we
 // used to offer. See references/dev-workflow.md.
+//
+// ⚠️ It is systemd's file, though, and the keymaps are `kbd`'s: eight of the names
+// it hands us are not files on an Arch system (#472), and writing one leaves the
+// console silently unset. `resolveKeymap()` is where that stops being possible.
 
 import GLib from "gi://GLib"
 import { keyboardName } from "../../lib/locale-names"
@@ -201,7 +205,16 @@ export function primaryLocaleFor(code: string): string | null {
 // ── Keyboards ────────────────────────────────────────────────────────────────
 
 export interface KeyboardLayout {
-  /** Console keymap — /etc/vconsole.conf, the TTY, the initramfs LUKS prompt. */
+  /**
+   * Console keymap — /etc/vconsole.conf, the TTY, the initramfs LUKS prompt.
+   *
+   * ⚠️ **May be `""`**, and then this keyboard has no console keymap at all: five
+   * of the 60 (Arabic, Korean, Khmer, and Romanian's two cedilla variants) name a
+   * file `kbd` does not ship under any name. They are still offered — the xkb
+   * layout is real and the desktop gets it — but the console keeps the medium's
+   * `us`, said out loud on the region page, because writing a name that cannot
+   * load is the failure this field exists to avoid. See `resolveKeymap()`.
+   */
   keymap: string
   /** xkb layout — Hyprland, and what we apply to the live session. */
   layout: string
@@ -241,6 +254,103 @@ function xkbDescriptions(): Map<string, string> {
   return map
 }
 
+/**
+ * Where `kbd` keeps console keymaps — the same three trees systemd walks for
+ * `localectl list-keymaps`, which is why walking them here returns the identical
+ * set (252 names on this machine, diffed against `localectl`) without a
+ * subprocess. Everything else in this file is a synchronous read of a file the
+ * system already ships, and this stays one.
+ */
+const KEYMAP_DIRS = ["/usr/share/keymaps", "/usr/share/kbd/keymaps", "/usr/lib/kbd/keymaps"]
+
+let _keymaps: Set<string> | null = null
+
+/** Every console keymap this machine can actually load, named as vconsole.conf names it. */
+function availableKeymaps(): Set<string> {
+  if (_keymaps) return _keymaps
+  const out = new Set<string>()
+  // ⚠️ Symlinks are keymaps too: `sr-latin` is one, and a walk that only counted
+  // regular files came back with 251 names against localectl's 252. GLib.Dir does
+  // not distinguish them, which is exactly what we want — the depth cap is what
+  // guards against a symlinked directory loop.
+  const walk = (dir: string, depth: number) => {
+    if (depth > 8) return
+    if (!GLib.file_test(dir, GLib.FileTest.IS_DIR)) return
+    try {
+      const d = GLib.Dir.open(dir, 0)
+      let name: string | null
+      while ((name = d.read_name()) !== null) {
+        const path = `${dir}/${name}`
+        if (GLib.file_test(path, GLib.FileTest.IS_DIR)) {
+          walk(path, depth + 1)
+          continue
+        }
+        const m = /^(.+)\.map(\.gz)?$/.exec(name)
+        if (m) out.add(m[1])
+      }
+      d.close()
+    } catch {}
+  }
+  for (const root of KEYMAP_DIRS) walk(root, 0)
+  _keymaps = out
+  return out
+}
+
+/** A keymap name reduced to its parts, order and separator thrown away. */
+const keymapTokens = (name: string): string =>
+  name.replace(/_/g, "-").split("-").filter(Boolean).sort().join("\u0000")
+
+let _byTokens: Map<string, string[]> | null = null
+
+function keymapsByTokens(): Map<string, string[]> {
+  if (_byTokens) return _byTokens
+  const map = new Map<string, string[]>()
+  for (const k of availableKeymaps()) {
+    const t = keymapTokens(k)
+    const list = map.get(t)
+    if (list) list.push(k)
+    else map.set(t, [k])
+  }
+  _byTokens = map
+  return map
+}
+
+/**
+ * The console keymap for one keyboard, or `""` when this system has none.
+ *
+ * kbd-model-map is systemd's file and `kbd` is a different project, so eight of
+ * the names it hands us are not keymaps here (#472). Nothing downstream notices:
+ * archinstall validates, logs, returns False — and its only caller ignores the
+ * return value — so the install SUCCEEDS and the console is left unset, i.e. `us`.
+ * With disk encryption that console is the LUKS prompt, so the name has to be
+ * checked here, where the list is built and a wrong one can still be dropped.
+ *
+ * Two rules, both derived, neither one a table of names to keep in sync:
+ *
+ *  1. **Another row for the same keyboard.** kbd-model-map lists several console
+ *     keymaps per xkb layout; if the first one is not on disk, a later row for the
+ *     same layout+variant may be (`cz-qwerty` → `cz-lat2`).
+ *  2. **The same parts, spelled differently.** `kbd` and systemd disagree about
+ *     order and separator, not about content: `es-dvorak` → `dvorak-es`,
+ *     `ro-std` → `ro_std`. Applied ONLY when exactly one keymap carries those
+ *     parts, so an ambiguous match can never substitute a different keyboard —
+ *     which is the whole risk here, and worse than no keymap at all.
+ *
+ * What is deliberately NOT a rule: falling back to the layout's plain keymap.
+ * `ro` for `ro-cedilla` would be a silent swap of one keyboard for another, and
+ * that is the class of failure this function exists to end, not to automate.
+ */
+function resolveKeymap(candidates: string[]): string {
+  const have = availableKeymaps()
+  const exact = candidates.find(k => have.has(k))
+  if (exact) return exact
+  for (const k of candidates) {
+    const same = keymapsByTokens().get(keymapTokens(k))
+    if (same && same.length === 1) return same[0]
+  }
+  return ""
+}
+
 let _keyboards: KeyboardLayout[] | null = null
 
 /**
@@ -248,27 +358,37 @@ let _keyboards: KeyboardLayout[] | null = null
  *
  * ⚠️ Rows whose xkb column names several layouts (`mk,us`) are multi-layout
  * console setups; we take the first, because the installer sets ONE layout and a
- * comma would be written into the config verbatim.
+ * comma would be written into the config verbatim. **The variant column is the
+ * same list, positionally**, so it is cut the same way: two rows carry
+ * `,phonetic` and `qwerty,`, and reading those whole produced a keyboard called
+ * "bg, ,phonetic" and a second, broken Czech next to the working one. Cutting
+ * both columns is what takes the list from 62 entries to 60 — the two that go are
+ * those duplicates, and each one's correct twin was already in the list.
  */
 export function allKeyboards(): KeyboardLayout[] {
   if (_keyboards) return _keyboards
   const desc = xkbDescriptions()
-  const seen = new Set<string>()
-  const out: KeyboardLayout[] = []
+  // kbd-model-map has several console keymaps per xkb layout (de, de-latin1,
+  // de-latin1-nodeadkeys …). The list is of KEYBOARDS, not of keymap files, so
+  // the first row for a layout+variant names it — but every row for that keyboard
+  // is kept, because when the first one's keymap is missing a later one may exist.
+  const grouped = new Map<string, { cols: string[], keymaps: string[] }>()
   for (const line of dataLines("/usr/share/systemd/kbd-model-map")) {
     const cols = line.trim().split(/\s+/)
     if (cols.length < 4) continue
-    const keymap = cols[0]
     const layout = cols[1].split(",")[0]
-    const variant = cols[3] === "-" ? "" : cols[3]
-    const langs = (cols[5] && cols[5] !== "-") ? cols[5].split(",") : []
+    const variant = cols[3] === "-" ? "" : cols[3].split(",")[0]
     const key = `${layout}:${variant}`
-    // kbd-model-map has several console keymaps per xkb layout (de, de-latin1,
-    // de-latin1-nodeadkeys …). The list is of KEYBOARDS, not of keymap files, so
-    // the first row for a layout+variant wins — and it is the one whose console
-    // keymap is the plain name, which is what the file lists first.
-    if (seen.has(key)) continue
-    seen.add(key)
+    const g = grouped.get(key)
+    if (g) g.keymaps.push(cols[0])
+    else grouped.set(key, { cols, keymaps: [cols[0]] })
+  }
+  const out: KeyboardLayout[] = []
+  for (const { cols, keymaps } of grouped.values()) {
+    const layout = cols[1].split(",")[0]
+    const variant = cols[3] === "-" ? "" : cols[3].split(",")[0]
+    const langs = (cols[5] && cols[5] !== "-") ? cols[5].split(",") : []
+    const keymap = resolveKeymap(keymaps)
     // ⚠️ The layout CODE is part of the label, not decoration. Naming a keyboard
     // by the language it serves makes it read the same as the locale row right
     // above it — "español de España" twice, for two different questions — which
