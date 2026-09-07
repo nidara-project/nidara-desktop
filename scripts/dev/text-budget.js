@@ -123,6 +123,45 @@ const CSS_CHROME = 8 + 2 + 12 + 0
 
 const BUDGET = sidebarWidth - (CSS_CHROME + itemMargins + itemSpacing + iconSize)
 
+// ── The Control Centre's two fixed-width text boxes ───────────────────────────
+// Same discipline as above: every number below is READ from the file that owns it.
+// These two surfaces were outside this gate until 2026-09-07, and both were already
+// broken in shipped locales — the tile title in six languages, the status banner in
+// seven. The instrument existed and measured one column.
+
+const ccSrc     = read(`${REPO}/ui/shell/surfaces/control-center/CCLayoutManager.ts`)
+const islandSrc = read(`${REPO}/ui/shell/surfaces/control-center/BaseIsland.tsx`)
+const tileSrc   = read(`${REPO}/ui/shell/common/widget-kit/tile.ts`)
+const statusSrc = read(`${REPO}/ui/shell/surfaces/bar/StatusIndicators.tsx`)
+
+const from = (src, re, what) => {
+    const m = src.match(re)
+    if (!m) { printerr(`could not read ${what}`); system.exit(2) }
+    return m
+}
+
+const UNIT      = Number(from(ccSrc, /export const UNIT\s*=\s*(\d+)/, "UNIT from CCLayoutManager.ts")[1])
+const GAP       = Number(from(ccSrc, /export const GAP\s*=\s*(\d+)/, "GAP from CCLayoutManager.ts")[1])
+const GRID_COLS = Number(from(ccSrc, /export const GRID_COLS\s*=\s*(\d+)/, "GRID_COLS from CCLayoutManager.ts")[1])
+/** The island's padding for every size but TALL — the branch a capsule takes. */
+const ISLAND_PAD = Number(from(islandSrc, /return size === WidgetSize\.TALL \? \d+ : (\d+)/, "islandPadding from BaseIsland.tsx")[1])
+/** margin_start + icon circle + spacing, summed in the kit itself. */
+const CAPSULE_CHROME = from(tileSrc, /const CAPSULE_CHROME = ([\d\s+]+)\n/, "CAPSULE_CHROME from widget-kit/tile.ts")[1]
+    .split("+").map(n => Number(n.trim())).reduce((a, b) => a + b, 0)
+
+/** A 2×1 tile's title column: the tile span, minus the island's padding, minus the
+ *  capsule's own chrome. Confirmed against a live session on 2026-09-07 (queryUI:
+ *  island x=2380 w=172, icon x=2396 w=48, label x=2456 → 84px). */
+const TILE_COLUMN = (2 * UNIT + GAP) - 2 * ISLAND_PAD - CAPSULE_CHROME
+
+const GRID_WIDTH   = GRID_COLS * UNIT + (GRID_COLS - 1) * GAP
+const BANNER_PAD   = Number(from(statusSrc, /padding:\s*(\d+),/, "the banner painter's padding")[1])
+const BANNER_DOT   = Number(from(statusSrc, /css_classes: s === "active".*?\n\s*width_request:\s*(\d+)/s, "the banner dot width")[1])
+const BANNER_SPACE = Number(from(statusSrc, /const row = new Gtk\.Box\(\{ spacing:\s*(\d+)/, "the banner row spacing")[1])
+/** Everything in the row that is NOT the text column and NOT the button: the
+ *  painter's padding both sides, the dot, and the two gaps around the text. */
+const BANNER_CHROME = 2 * BANNER_PAD + BANNER_DOT + 2 * BANNER_SPACE
+
 /**
  * The sidebar's strings are the top-level pages of `manifest.ts`, in order — the
  * same list `Settings.tsx` derives its categories from since P3 (#341). It used to
@@ -139,6 +178,180 @@ const SIDEBAR_KEYS = manifestSrc
     .filter(Boolean)
 if (SIDEBAR_KEYS.length < 15) {
     printerr(`parsed only ${SIDEBAR_KEYS.length} sidebar labels from manifest.ts — the page list moved, fix the parse`)
+    system.exit(2)
+}
+
+// ── The Control Centre's tile titles, derived from the widgets themselves ────
+//
+// A tile title is not a list in a manifest: it is the second argument of whichever
+// capsule maker the widget calls. So the parse follows the call, the way the sidebar
+// parse follows `manifest.ts` — and asserts, so a refactor that moves these makes the
+// gate exit 2 instead of measuring nothing.
+//
+// What matters per title is WHICH BRANCH it can reach. `makeCapsuleInner` gives a
+// subtitle-less capsule two lines for its title, and a wrapping label's minimum is
+// its longest unbreakable word — so a one-word name too wide for the column pushes
+// the tile out of the panel. A title that always has a subtitle stays on one line and
+// can only ellipsize. Two different failures, two different verdicts below.
+const WIDGET_DIR = `${REPO}/ui/shell/widgets`
+/** maker → index of the title argument and of the subtitle argument. */
+const MAKERS = {
+    makeCapsuleTile:      { title: 1, sub: 2 },
+    makeSplitCapsuleTile: { title: 1, sub: 2 },
+    makeCapsuleInner:     { title: 1, sub: 2 },
+    roundToggleSpec:      { title: 1, sub: 5 },
+}
+
+/** The argument list of `name(` starting at `from`, split at top-level commas. */
+const callArgs = (src, from) => {
+    let i = src.indexOf("(", from)
+    if (i < 0) return null
+    let depth = 0, start = i + 1, quote = null, args = [], j = i
+    for (; j < src.length; j++) {
+        const c = src[j]
+        if (quote) { if (c === "\\") j++; else if (c === quote) quote = null; continue }
+        if (c === '"' || c === "'" || c === "`") { quote = c; continue }
+        if (c === "(" || c === "[" || c === "{") depth++
+        else if (c === ")" || c === "]" || c === "}") {
+            depth--
+            if (depth === 0) { args.push(src.slice(start, j)); return args }
+        }
+        else if (c === "," && depth === 1) { args.push(src.slice(start, j)); start = j + 1 }
+    }
+    return null
+}
+
+/** The body of `const NAME = …`, scanned rather than matched: a one-line arrow ends at
+ *  its newline, a braced one at its matching brace. A regex terminator ("up to the next
+ *  const") stops at the first nested `}` and hands back HALF a getter — and half a getter
+ *  has no `""` in it, so a title that can wrap gets filed as one that never does. */
+const constBody = (src, name) => {
+    const decl = src.match(new RegExp(`(?:^|\\n)\\s*(?:const|let)\\s+${name}\\s*=`))
+    if (!decl) return null
+    let i = decl.index + decl[0].length
+    const start = i
+    let depth = 0, quote = null
+    for (; i < src.length; i++) {
+        const c = src[i]
+        if (quote) { if (c === "\\") i++; else if (c === quote) quote = null; continue }
+        if (c === '"' || c === "'" || c === "`") { quote = c; continue }
+        if ("([{".includes(c)) depth++
+        else if (")]}".includes(c)) depth--
+        // A newline at depth 0 ends it: a one-line arrow ends at its own newline, and a
+        // braced body only reaches one after its closing brace has brought depth back.
+        // (Ending at the first closing bracket instead cuts `() => …` at its own empty
+        // parameter list, which is how this parse found two getters where there are six.)
+        else if (c === "\n" && depth === 0) return src.slice(start, i)
+    }
+    return src.slice(start)
+}
+
+/** Resolve an argument to its literal text: an identifier is replaced by its body. An
+ *  identifier that resolves to NOTHING is recorded, not silently treated as a string
+ *  with no `""` in it — that is the shape that files a wrapping title as a safe one. */
+const unresolved = []
+const resolveArg = (src, file, arg) => {
+    const a = (arg ?? "").trim()
+    if (!/^[A-Za-z_$][\w$]*$/.test(a)) return a
+    const body = constBody(src, a)
+    if (body === null) { unresolved.push(`${file}: ${a}`); return a }
+    return body
+}
+
+const keysIn = (text) => [...text.matchAll(/\bt\("([^"]+)"\)/g)].map(m => m[1])
+
+/** `cond ? A : B` split into [A, B], at the top level only; anything else is one
+ *  branch. Nothing here nests, and a fallback of "one branch" is the conservative
+ *  reading (the whole subtitle expression decides), never the blind one. */
+const branches = (expr) => {
+    let depth = 0, quote = null, q = -1
+    for (let i = 0; i < expr.length; i++) {
+        const c = expr[i]
+        if (quote) { if (c === "\\") i++; else if (c === quote) quote = null; continue }
+        if (c === '"' || c === "'" || c === "`") { quote = c; continue }
+        if ("([{".includes(c)) depth++
+        else if (")]}".includes(c)) depth--
+        else if (depth === 0 && c === "?" && expr[i + 1] !== "." && expr[i + 1] !== "?") { q = i; break }
+    }
+    if (q < 0) return [expr]
+    depth = 0; quote = null
+    for (let i = q + 1; i < expr.length; i++) {
+        const c = expr[i]
+        if (quote) { if (c === "\\") i++; else if (c === quote) quote = null; continue }
+        if (c === '"' || c === "'" || c === "`") { quote = c; continue }
+        if ("([{".includes(c)) depth++
+        else if (")]}".includes(c)) depth--
+        else if (depth === 0 && c === ":") return [expr.slice(q + 1, i), expr.slice(i + 1)]
+    }
+    return [expr]
+}
+
+/** { key, canWrap } for every capsule title in ui/shell/widgets/. */
+const TILE_TITLES = (() => {
+    const out = new Map()
+    const dir = Gio.File.new_for_path(WIDGET_DIR)
+    const en = dir.enumerate_children("standard::name", Gio.FileQueryInfoFlags.NONE, null)
+    let info
+    const files = []
+    while ((info = en.next_file(null)) !== null) {
+        const n = info.get_name()
+        if (n.endsWith(".ts") && n !== "index.ts" && n !== "widgets.gen.ts") files.push(n)
+    }
+    files.sort()
+    for (const file of files) {
+        const src = read(`${WIDGET_DIR}/${file}`)
+        for (const [maker, at] of Object.entries(MAKERS)) {
+            let from = 0
+            for (;;) {
+                const i = src.indexOf(`${maker}(`, from)
+                if (i < 0) break
+                from = i + maker.length
+                const args = callArgs(src, i + maker.length)
+                if (!args) continue
+                const title = resolveArg(src, file, args[at.title])
+                const sub   = resolveArg(src, file, args[at.sub])
+                const noSub = args.length <= at.sub
+                // The subtitle-less branch is reachable when there is no subtitle
+                // argument at all, or when the subtitle expression can return "".
+                //
+                // ⚠️ And a widget's title and subtitle are usually the SAME ternary on
+                // the same condition — `recording ? t(a) : t(b)` beside
+                // `recording ? elapsed() : ""` — so which title can wrap is decided per
+                // BRANCH, not per widget. Reading it per widget marks
+                // `screenrecord.recording` wrappable because the OTHER state has no
+                // subtitle, and then fails the build over a pairing that cannot occur.
+                const tb = branches(title), sb = branches(sub)
+                const paired = !noSub && tb.length > 1 && tb.length === sb.length
+                for (let b = 0; b < tb.length; b++) {
+                    const canWrap = noSub || /""/.test(paired ? sb[b] : sub)
+                    for (const key of keysIn(tb[b])) out.set(key, (out.get(key) ?? false) || canWrap)
+                }
+            }
+        }
+    }
+    return [...out.entries()].map(([key, canWrap]) => ({ key, canWrap }))
+})()
+
+if (unresolved.length) {
+    printerr("could not resolve these capsule arguments to a getter body — the parse is blind to them:")
+    for (const u of unresolved) printerr(`   ${u}`)
+    system.exit(2)
+}
+if (TILE_TITLES.length < 10 || TILE_TITLES.filter(t => t.canWrap).length < 4) {
+    printerr(`parsed only ${TILE_TITLES.length} tile titles (${TILE_TITLES.filter(t => t.canWrap).length} wrappable) from ${WIDGET_DIR} — the capsule makers moved, fix the parse`)
+    system.exit(2)
+}
+
+// ── The Control Centre's status banner ───────────────────────────────────────
+// One row per indicator: dot + label/detail + a Stop button. The strings come from
+// the registry in StatusIndicators.tsx, and the BUDGET is per-locale, because the
+// button's own label is translated — which is exactly why this row was never a
+// constant anyone could gate by hand.
+const BANNER_KEYS = [...statusSrc.matchAll(/\b(?:label|detail):\s*\(\)\s*=>([^\n]+)/g)]
+    .flatMap(m => keysIn(m[1]))
+const BANNER_BTN_KEY = statusSrc.match(/NidaraButton\(\{ label: t\("([^"]+)"\)/)?.[1]
+if (BANNER_KEYS.length < 3 || !BANNER_BTN_KEY) {
+    printerr(`parsed ${BANNER_KEYS.length} banner strings and ${BANNER_BTN_KEY ? "a" : "no"} button key from StatusIndicators.tsx — fix the parse`)
     system.exit(2)
 }
 
@@ -248,13 +461,34 @@ const setScale = (factor) => {
  * the widget were unstyled — with no error, just a slightly bigger number. Same
  * trap `gtk-probe.js` documents.
  */
-const measure = (text, cssClasses, scopeName = "nidara-settings-window") => {
+const measure = (text, cssClasses, scopeName = "nidara-settings-window", metric = "natural") => {
     const win = new Gtk.Window({ name: scopeName, css_classes: [scopeName] })
     const box = new Gtk.Box()
     win.set_child(box)
-    const label = new Gtk.Label({ label: text, css_classes: cssClasses })
+    // `min-wrapped` builds the label the way the two-line branch does, and reads its
+    // MINIMUM — the longest unbreakable run. That is the number that pushes a fixed
+    // tile, and no ellipsis can rescue it: GTK grows the parent instead. A soft hyphen
+    // in the string is a break opportunity, so a hyphenated compound measures small
+    // here, which is the point of putting one there.
+    const wrapped = metric === "min-wrapped"
+    const label = new Gtk.Label({
+        label: text, css_classes: cssClasses,
+        ...(wrapped ? { wrap: true, lines: 2, ellipsize: 3, halign: Gtk.Align.FILL, hexpand: true, xalign: 0 } : {}),
+    })
     box.append(label)
-    const [, nat] = label.measure(Gtk.Orientation.HORIZONTAL, -1)
+    const [min, nat] = label.measure(Gtk.Orientation.HORIZONTAL, -1)
+    return wrapped ? min : nat
+}
+
+/** The Stop button's own width, per locale — the banner's text budget is what is
+ *  left after it, and its label is translated too. */
+const buttonWidth = (text) => {
+    const win = new Gtk.Window({ name: "nidara-bar", css_classes: ["nidara-bar-window"] })
+    const row = new Gtk.Box({ css_classes: ["cc-status-row"] })
+    win.set_child(row)
+    const btn = new Gtk.Button({ label: text, css_classes: ["nidara-btn", "nidara-btn--secondary"] })
+    row.append(btn)
+    const [, nat] = btn.measure(Gtk.Orientation.HORIZONTAL, -1)
     return nat
 }
 
@@ -263,13 +497,43 @@ const measure = (text, cssClasses, scopeName = "nidara-settings-window") => {
 // and the box does not" (tech-debt #62) actually bites. A row title inside the
 // 800px pane is NOT one of these: its budget is whatever the trailing control
 // leaves, which is itself localised. See the note at the bottom of this file.
+//
+// Two VERDICTS, because two different things go wrong:
+//
+//   overflow   — the text sets a minimum wider than its box, so GTK grows the box and
+//                the surface clips it. A layout break. FAILS at or below the gate.
+//   truncation — the text ellipsises inside its box. Information is lost, the layout
+//                holds. FAILS for the sidebar, where the label is a page's only name;
+//                REPORTED for a CC tile, whose icon, subtitle, detail panel and
+//                Settings → Widgets row all still say what it is.
 const SLOTS = [
     {
         name: "Settings sidebar label",
+        scope: "nidara-settings-window",
         classes: ["nidara-sidebar-label"],
-        budget: BUDGET,
-        keys: SIDEBAR_KEYS,
+        budget: () => BUDGET,
+        items: SIDEBAR_KEYS.map(key => ({ key, metric: "natural", verdict: "truncation", fails: true })),
         why: `${sidebarWidth}px column − ${CSS_CHROME} css − ${itemMargins} margins − ${itemSpacing} spacing − ${iconSize} icon`,
+    },
+    {
+        name: "Control Center tile title",
+        scope: "nidara-bar",
+        classes: ["nidara-atomic-label-bold"],
+        budget: () => TILE_COLUMN,
+        items: TILE_TITLES.map(({ key, canWrap }) => canWrap
+            ? { key, metric: "min-wrapped", verdict: "overflow",   fails: true }
+            : { key, metric: "natural",     verdict: "truncation", fails: false }),
+        why: `2×1 tile ${2 * UNIT + GAP}px − ${2 * ISLAND_PAD} island padding − ${CAPSULE_CHROME} capsule chrome`,
+    },
+    {
+        name: "Control Center status banner",
+        scope: "nidara-bar",
+        classes: ["nidara-row-subtitle"],
+        // Per-locale: what the row has left after a Stop button whose label is
+        // translated. ru pays 106px for its button where ja pays 56.
+        budget: (locale) => GRID_WIDTH - BANNER_CHROME - buttonWidth(stringFor(locale, BANNER_BTN_KEY)),
+        items: BANNER_KEYS.map(key => ({ key, metric: "min-wrapped", verdict: "overflow", fails: true })),
+        why: `${GRID_WIDTH}px card − ${BANNER_CHROME} chrome − the Stop button (per locale)`,
     },
 ]
 
@@ -286,37 +550,42 @@ print(`locales    ${locales.join(" ")}`)
 print(`scales     ${SCALES.join(" ")}`)
 print("")
 
-print(`gate       scales ≤ ${FAIL_AT.toFixed(2)} fail; above that, truncation is reported as degradation`)
+print(`gate       overflow fails at scales ≤ ${FAIL_AT.toFixed(2)}; truncation fails only where the label is a page's`)
+print(`           only name (the sidebar), and is reported everywhere else`)
 print("")
 
 const breaches = []
 const reported = []
 
 for (const slot of SLOTS) {
-    print(`── ${slot.name} — budget ${slot.budget}px (${slot.why})`)
+    print(`── ${slot.name} — ${slot.items.length} strings — ${slot.why}`)
     for (const scale of SCALES) {
         setScale(scale)
-        // Worst string per locale at this scale.
+        // Worst string per locale at this scale, and every hit, because a slot now
+        // holds items with different metrics: one locale can overflow on one string
+        // and truncate on another, and only the first of those breaks the layout.
         const worst = []
         for (const locale of locales) {
+            const budget = slot.budget(locale)
             let top = { w: -1 }
-            for (const key of slot.keys) {
-                const text = stringFor(locale, key)
-                const w = measure(text, slot.classes)
-                if (w > top.w) top = { w, text, key }
+            for (const item of slot.items) {
+                const text = stringFor(locale, item.key)
+                const w = measure(text, slot.classes, slot.scope, item.metric)
+                if (w > top.w) top = { w, text, key: item.key }
+                if (w > budget) {
+                    const hit = { slot: slot.name, scale, locale, w, text, key: item.key, budget, verdict: item.verdict }
+                    if (item.fails && scale <= FAIL_AT) breaches.push(hit)
+                    else reported.push(hit)
+                }
             }
-            worst.push({ locale, ...top })
-            if (top.w > slot.budget) {
-                const hit = { slot: slot.name, scale, locale, ...top, budget: slot.budget }
-                ;(scale <= FAIL_AT ? breaches : reported).push(hit)
-            }
+            worst.push({ locale, budget, ...top })
         }
-        worst.sort((a, b) => b.w - a.w)
-        const over = worst.filter(w => w.w > slot.budget)
+        worst.sort((a, b) => (b.w - b.budget) - (a.w - a.budget))
+        const over = worst.filter(w => w.w > w.budget)
         const head = worst[0]
         print(
-            `   scale ${scale.toFixed(2)}  worst ${head.locale} ${String(head.w).padStart(4)}px "${head.text}"` +
-            `  —  over budget: ${over.length ? over.map(o => `${o.locale}(${o.w})`).join(" ") : "none"}`,
+            `   scale ${scale.toFixed(2)}  worst ${head.locale} ${String(head.w).padStart(4)}px of ${head.budget}px "${head.text}"` +
+            `  —  over budget: ${over.length ? over.map(o => `${o.locale}(${o.w}/${o.budget})`).join(" ") : "none"}`,
         )
     }
     print("")
@@ -353,7 +622,7 @@ if (VERIFY) {
 }
 
 const line = (b) =>
-    `${b.slot}: ${b.locale} at scale ${b.scale} needs ${b.w}px of ${b.budget}px` +
+    `${b.slot} (${b.verdict ?? "truncation"}): ${b.locale} at scale ${b.scale} needs ${b.w}px of ${b.budget}px` +
     (b.text && b.text !== "-" ? `  "${b.text}" (${b.key})` : "") +
     (b.note ? `  ${b.note}` : "")
 
@@ -370,7 +639,7 @@ if (reported.length > 0) {
 }
 
 if (breaches.length === 0) {
-    print(`PASS — no string in ${locales.length} locales is truncated at scale ≤ ${FAIL_AT.toFixed(2)}.`)
+    print(`PASS — in ${locales.length} locales, at scale ≤ ${FAIL_AT.toFixed(2)}: no text overflows its box, and no page name is truncated.`)
     system.exit(0)
 }
 for (const b of breaches) printerr(`FAIL — ${line(b)}`)

@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { AtomicWidget, WidgetSize, makeIconTile, makeCapsuleTile, panelRow, panelInfoRow, panelSeparator } from "../common/widget-kit"
+import { AtomicWidget, ContentBudget, WidgetSize, makeIconTile, makeCapsuleTile, panelRow, panelInfoRow, panelSeparator } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as Net from "../core/NetworkService"
@@ -20,7 +20,7 @@ function buildBarContent(): Gtk.Widget {
     return image
 }
 
-function buildContent(size: WidgetSize): Gtk.Widget {
+function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     const getSub = () => {
         const w = Net.wifi()
         if (!w) return t("cc.wifi.sub.off")
@@ -35,7 +35,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 
     // Radio flag + which network we are on: exactly what the icon and the subtitle
     // read. watchWifi would add bitrate/ip4-config churn this tile never shows.
-    return makeCapsuleTile(getIcon, () => t("cc.wifi.name"), getSub, Net.watchWifiNetwork)
+    return makeCapsuleTile(getIcon, () => t("cc.wifi.name"), getSub, Net.watchWifiNetwork, budget)
 }
 
 function buildInfoPanel(): Gtk.Widget {

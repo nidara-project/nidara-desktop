@@ -1386,11 +1386,31 @@ wired into the headless smoke job (the only one with a GDK display *and* `inter-
 **Why offline rather than a sweep of the real window**: the locale comes from `$LANG` at shell
 startup (`core/i18n/detectLanguage`), so a live sweep of 12 locales means 12 shell restarts.
 
-**What a breach means.** The sidebar label ellipsises, so a breach is not a broken layout — it is a
-page name the user cannot read. That makes the rule a product rule: **at scale 1.0 nothing may be
-truncated (fails); above it, truncation is graceful degradation (reported)**. `--fail-at` moves the
-line. The degradation ladder is the useful half — it is how you see that Japanese goes at 1.25 and
-English itself at 1.39, i.e. that the column is tight for the job rather than one locale being long.
+**Three slots since 2026-09-07 (#428), and two verdicts.** It measured exactly one column — the
+Settings sidebar — for a month, and the two Control-Centre surfaces it did not measure were both
+already broken in shipped locales: the 2×1 tile title in six languages, the AI status banner in
+seven. *The instrument existed, was good, and was pointed at one place.* When you add a fixed-width
+text box, add it here in the same change.
+
+| slot | box | metric | verdict |
+|---|---|---|---|
+| Settings sidebar label | 250px column → 174px | natural width | truncation FAILS |
+| Control Center tile title | 2×1 tile → **84px** | wrapped MINIMUM for a title that can lose its subtitle, natural otherwise | overflow FAILS, truncation reported |
+| Control Center status banner | 356px card − a Stop button whose label is translated | wrapped minimum | overflow FAILS |
+
+- **overflow** — the text sets a *minimum* wider than its box. A minimum cannot be squeezed: GTK
+  grows the box and the surface clips it. A layout break, and no ellipsis can save it.
+- **truncation** — the text ellipsises inside its box. Information is lost, the layout holds. It
+  fails for the sidebar, where the label is a page's only name, and is REPORTED for a CC tile, whose
+  icon, subtitle, detail panel and Settings → Widgets row all still say what it is.
+
+`--fail-at` moves the scale line. The degradation ladder is the useful half — it is how you see that
+Japanese goes at 1.25 and English itself at 1.39, i.e. that the column is tight for the job rather
+than one locale being long. (The CC's own text does not move with the slider at all: outside
+Settings the ramp is fixed `$fs-*`, so its three rows are identical at every scale, by design.)
+
+🔑 **The answer to a name that does not fit is a shorter name, or a soft hyphen — not a smaller
+font and not a cut word.** See "A translated string that does not fit" in the i18n section.
 
 Three traps, each of which produced a green run that measured nothing:
 
@@ -1402,6 +1422,15 @@ Three traps, each of which produced a green run that measured nothing:
   unavailable font does not error, it just measures a different typeface.
 - ⚠️ **The locale files are parsed, not imported** (they are TypeScript, this is gjs). The parse is
   asserted — a locale that yields under 50 keys aborts the run rather than passing vacuously.
+- ⚠️ **So are the widgets**, for the CC slot: a tile title is not a list in a manifest, it is the
+  second argument of whichever capsule maker the widget calls. Two things that parse has to get
+  right, and got wrong first: a getter body is SCANNED to its matching brace (a regex terminator cut
+  at the first nested `}` and handed back half a getter — and half a getter has no `""` in it, so a
+  title that wraps was filed as one that never does); and which title can wrap is decided per
+  TERNARY BRANCH, because a widget's title and subtitle are usually the same ternary on the same
+  condition (`recording ? t(a) : t(b)` beside `recording ? elapsed() : ""`). Reading it per widget
+  fails the build over a state that cannot occur. An identifier the parse cannot resolve **exits 2**
+  rather than being read as "no `""` here".
 
 🔑 **`--verify` is what keeps the budget honest**, and it earned that on the day it was written:
 `sidebar.ts` documented the label budget as 176px and the real allocation measured **170px**. The
@@ -1902,6 +1931,24 @@ entry in any other catalog is **not** a type error — the gate below is what ca
 compiler. That was originally described as a safety net for the bulk-translated locales, not a
 licence to skip es. (It used to derive from `es`, which broke the typecheck on every new key —
 fixed in `core/i18n/index.ts`.)
+
+#### A translated string that does not fit
+
+`text-budget.js` fails a build when a string overflows a fixed box, and the fix is a **product**
+one, never a typographic one. The order to try, established 2026-09-07 on the CC tiles (#428):
+
+1. **A shorter word.** `cc.focus.title.off` was "Concentración" (94px against 84) in Spanish,
+   "Concentration" in French, "Concentração" in pt-BR. It is now "Enfoque" / "Focus" / "Foco". The
+   owner's rule, in their words: *«buscar otra palabra… en lugar de "ensuciar" la UI con palabras
+   cortadas»*.
+2. **A SOFT HYPHEN (U+00AD)** where the word is a compound and there is no shorter one — German and
+   Dutch mostly: `Zwischen­ablage`, `Bildschirm­aufnahme`, `Scherm­afbeelding`,
+   `Registra­zione schermo`. Pango treats it as a break opportunity, so the wrapped minimum
+   collapses to the longer half, and the character is INVISIBLE unless the break is actually taken.
+   ⚠️ It is also invisible in a diff and to `grep`: search for `Zwischen` and not for the whole
+   word, and the ledger's hash sees it as an edit like any other.
+3. **Never** a smaller font (outside Settings the ramp is fixed `$fs-*` — see design-system.md) and
+   never a mid-word cut.
 
 #### The translation ledger (`scripts/ci/i18n-check.mjs`) — a CI GATE
 

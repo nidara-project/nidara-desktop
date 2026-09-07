@@ -29,7 +29,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import { makeHSlider } from "../../../lib/nidara-kit"
-import { CCWidgetSpec, WidgetSize } from "./contract"
+import { CCWidgetSpec, ContentBudget, WidgetSize } from "./contract"
 
 /** Arm a live-state subscription and hand back its disposer. Every tile takes one
  *  optional: pass the service's own watcher (`Net.watchWifiNetwork`, …) and the tile
@@ -102,6 +102,18 @@ export function makeRoundTile(
 // circle + title/subtitle stack. Every capsule form below is built on it, so every
 // 2×1 widget is spaced and aligned identically. Keep this the *only* place these
 // dimensions live.
+// The chrome this file puts between the tile's inner edge and the title: the inner
+// box's `margin_start`, the 48px icon circle and the 12px spacing between them. It
+// lives here because this file OWNS those three numbers — the host hands over the
+// room (ContentBudget.width, the tile span minus the island's padding) and never
+// knows what a capsule does with it.
+const CAPSULE_CHROME = 4 + 48 + 12
+
+/** The width the title really gets, or 0 when the caller handed over no budget. */
+function textColumnOf(budget?: ContentBudget): number {
+    return budget ? Math.max(0, budget.width - CAPSULE_CHROME) : 0
+}
+
 export interface CapsuleInner {
     box: Gtk.Box
     iconBox: Gtk.Box
@@ -119,7 +131,9 @@ export function makeCapsuleInner(
     getIcon: () => Gio.FileIcon,
     getTitle: () => string,
     getSubTitle: () => string,
+    budget?: ContentBudget,
 ): CapsuleInner {
+    const textColumn = textColumnOf(budget)
     // box fills the island (hexpand) so a non-expanding child isn't centred by the
     // SquircleContainer — that's what pushes a plain (non-button) tile to the right.
     // The expanding textStack then absorbs the trailing slack, pinning the icon hard
@@ -153,12 +167,36 @@ export function makeCapsuleInner(
     // vertically centred — so the name reads in full ("Screen Recording") instead of
     // padding it out with a fake status line. Derived from the subtitle so dynamic
     // widgets (focus off → no sub) get the right shape too.
+    // ⚠️ …and the second line is not free. A wrapping GtkLabel's MINIMUM width is its
+    // longest unbreakable run, and a minimum cannot be squeezed: GTK grows the tile
+    // instead, and the CC's visible region clips whatever sticks out. Measured over
+    // the twelve shipped locales at the default text size, against 84px of column:
+    // de "Bildschirmaufnahme" 132, nl "Schermafbeelding" 118, de "Erscheinungsbild"
+    // 111, es "Concentración" 94. Five titles in six languages, silently pushing
+    // their tile since the branch was written for "Screen Recording".
+    //
+    // So the two-line branch is taken only when the longest word actually FITS. A
+    // word too wide for the column reads on one line and ellipsizes — the shape every
+    // other desktop's quick toggle has — instead of taking the tile with it. At the
+    // default text size no shipped string should reach that fallback: `text-budget.js`
+    // gates it, and the answer to a name that does not fit is a shorter name.
+    const wrapFits = (): boolean => {
+        if (textColumn <= 0) return true          // no budget handed over: old behaviour
+        const wrapWas = label.wrap, linesWas = label.lines
+        label.wrap = true
+        label.lines = 2
+        const [min] = label.measure(Gtk.Orientation.HORIZONTAL, -1)
+        label.wrap = wrapWas
+        label.lines = linesWas
+        return min <= textColumn
+    }
+
     const applySub = (sub: string) => {
         const hasSub = sub.length > 0
         subLabel.label = sub
         subLabel.visible = hasSub
-        label.wrap = !hasSub        // lines only takes effect while wrapping
-        label.lines = hasSub ? 1 : 2
+        label.wrap = !hasSub && wrapFits()   // lines only takes effect while wrapping
+        label.lines = label.wrap ? 2 : 1
     }
 
     textStack.append(label)
@@ -166,6 +204,12 @@ export function makeCapsuleInner(
     box.append(iconBox)
     box.append(textStack)
     applySub(getSubTitle())          // also primes tiles that never call update()
+
+    // The verdict above needs the label's REAL font, and that comes from CSS, and CSS
+    // needs a root: at construction the tile is not in a window yet, so the first
+    // measurement runs against GTK's default font. Re-take it on map, which is the
+    // first moment the styled font is the one Pango will use.
+    label.connect("map", () => applySub(getSubTitle()))
 
     const update = () => {
         setIcon(icon, getIcon())
@@ -198,8 +242,9 @@ export function makeCapsuleTile(
     getTitle: () => string,
     getSubTitle: () => string,
     subscribe?: SubscribeFn,
+    budget?: ContentBudget,
 ): Gtk.Widget {
-    const inner = makeCapsuleInner(getIcon, getTitle, getSubTitle)
+    const inner = makeCapsuleInner(getIcon, getTitle, getSubTitle, budget)
     if (subscribe) {
         const dispose = subscribe(inner.update)
         inner.box.connect("unrealize", dispose)
@@ -216,8 +261,9 @@ export function makeSplitCapsuleTile(
     getSubTitle: () => string,
     onToggle: () => void,
     subscribe?: SubscribeFn,
+    budget?: ContentBudget,
 ): Gtk.Widget {
-    const inner = makeCapsuleInner(getIcon, getTitle, getSubTitle)
+    const inner = makeCapsuleInner(getIcon, getTitle, getSubTitle, budget)
 
     inner.iconBox.remove(inner.icon)
     const iconBtn = new Gtk.Button({ css_classes: ["cc-split-icon-btn"], hexpand: true, vexpand: true })
@@ -242,6 +288,7 @@ function makeButtonCapsuleTile(
     onClick: () => void,
     getActive?: () => boolean,
     subscribe?: SubscribeFn,
+    budget?: ContentBudget,
 ): Gtk.Widget {
     const btn = new Gtk.Button({
         css_classes: ["cc-capsule-btn"],
@@ -249,7 +296,7 @@ function makeButtonCapsuleTile(
         hexpand: true, vexpand: true,
     })
 
-    const inner = makeCapsuleInner(getIcon, getTitle, getSubTitle)
+    const inner = makeCapsuleInner(getIcon, getTitle, getSubTitle, budget)
     btn.set_child(inner.box)
 
     const update = () => {
@@ -287,10 +334,10 @@ export function roundToggleSpec(
     const getIcon   = typeof iconName === "function" ? iconName : () => iconName
     const getSub    = wideSubtitle ?? (() => "")
 
-    const buildContent = (size: WidgetSize): Gtk.Widget => {
+    const buildContent = (size: WidgetSize, budget: ContentBudget): Gtk.Widget => {
         if (size === WidgetSize.SINGLE)
             return makeRoundTile(getIcon, getActive, onClick, subscribe)
-        return makeButtonCapsuleTile(getIcon, () => name, getSub, onClick, getActive, subscribe)
+        return makeButtonCapsuleTile(getIcon, () => name, getSub, onClick, getActive, subscribe, budget)
     }
 
     return {

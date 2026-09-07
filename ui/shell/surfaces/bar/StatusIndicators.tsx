@@ -123,8 +123,25 @@ function buildBannerRow(ind: BarIndicator, s: IndicatorState): Gtk.Widget {
         width_request: 10, height_request: 10, valign: Gtk.Align.CENTER,
     })
     const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
-    text.append(new Gtk.Label({ label: ind.label(), halign: Gtk.Align.START, css_classes: ["nidara-row-title"] }))
-    text.append(new Gtk.Label({ label: ind.detail(), halign: Gtk.Align.START, css_classes: ["nidara-row-subtitle"] }))
+
+    // Both labels WRAP and fill the column, and that is load-bearing rather than
+    // tidy. The card is a fixed GRID_WIDTH (it shares the grid's right edge) while
+    // its height is free, so a label that neither wraps nor ellipsizes makes its
+    // whole natural width the row's MINIMUM and pushes the card past the edge it is
+    // aligned to — where the CC's visible region clips it. Measured over the twelve
+    // shipped locales at the default text size: the detail line overflows in SEVEN
+    // of them (ru +104px, pt-PT +73, pl +66, es +54, it +35, pt-BR +19, fr +1) and
+    // only English, German, Dutch, Japanese and Chinese ever fit. Wrapped, the worst
+    // minimum in any locale is 78px against 192px of column — every one fits, and the
+    // card grows by a line instead. `lines: 2` + ellipsis is the backstop for a
+    // string longer than this row is ever meant to carry.
+    const line = (label: string, cls: string) => new Gtk.Label({
+        label, css_classes: [cls],
+        halign: Gtk.Align.FILL, hexpand: true, xalign: 0,
+        wrap: true, lines: 2, ellipsize: 3,
+    })
+    text.append(line(ind.label(), "nidara-row-title"))
+    text.append(line(ind.detail(), "nidara-row-subtitle"))
 
     // NidaraButton, `secondary` — NOT Adwaita's `destructive-action`, which is
     // both off-system (raw GTK red: this row is outside the `.nidara-detail-panel`

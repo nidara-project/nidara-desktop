@@ -630,7 +630,7 @@ export default {
     "widget.screenshot.action.copy": "Copia",
     "widget.screenshot.action.save": "Salva",
     "widget.screenshot.saved": "Screenshot salvato",
-    "widget.screenrecord.name": "Registrazione schermo",
+    "widget.screenrecord.name": "Registra­zione schermo",
     "widget.screenrecord.mode.screen": "Schermo intero",
     "widget.screenrecord.mode.region": "Area",
     "widget.screenrecord.audio": "Includi audio",

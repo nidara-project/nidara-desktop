@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { PANEL_W, AtomicWidget, WidgetSize, makeIconTile, makeCapsuleTile } from "../common/widget-kit"
+import { AtomicWidget, ContentBudget, PANEL_W, WidgetSize, makeIconTile, makeCapsuleTile } from "../common/widget-kit"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 import GLib from "gi://GLib"
 import { execAsync } from "../../lib/process"
@@ -130,14 +130,14 @@ function buildVpnContent(onClose: () => void): Gtk.Widget {
 const getIcon = () => vpnActiveName ? Icons.shield : Icons.shieldOff
 const getSub  = () => vpnActiveName ?? t("widget.vpn.sub.disconnected")
 
-function buildContent(size: WidgetSize): Gtk.Widget {
+function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     if (size === WidgetSize.SINGLE)
         return makeIconTile(getIcon, watchVpnActive)
 
     // Icon/subtitle only — the whole capsule fill for the "connected" state comes
     // from BaseIsland's getActive/watchActive (see vpnWidget below), same as
     // dark_mode/night_light/focus/bt. No per-widget badge tint here anymore.
-    return makeCapsuleTile(getIcon, () => t("widget.vpn.name"), getSub, watchVpnActive)
+    return makeCapsuleTile(getIcon, () => t("widget.vpn.name"), getSub, watchVpnActive, budget)
 }
 
 // ── Bar icon ──────────────────────────────────────────────────────────────────
