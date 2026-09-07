@@ -1412,6 +1412,20 @@ Settings the ramp is fixed `$fs-*`, so its three rows are identical at every sca
 🔑 **The answer to a name that does not fit is a shorter name, or a soft hyphen — not a smaller
 font and not a cut word.** See "A translated string that does not fit" in the i18n section.
 
+⛔ **What this gate CANNOT see, and it cost a released version to learn.** Every slot asks *"does
+this text fit a box of N pixels?"* and takes N from the source. It cannot ask whether the box **is**
+N pixels. v0.12.0 shipped the status banner with its labels correctly wrapped, its card 412px wide
+against a 356px grid, and this script printing PASS — because `set_size_request` is a FLOOR, nothing
+above the card capped it, so it was allocated its NATURAL width, and *a label only wraps when it is
+given less than it asked for*. The owner saw it in one glance after the release.
+
+So: **`--verify` is not optional polish, it is the other half of the instrument.** It now measures
+the two CC boxes live (`nidara-ipc toggleCC` first; the banner also needs AI control granted) and
+fails if a box is not the size the sweep assumes. Proven able to catch it: with the clamp removed it
+prints `card measures 412px, expected 356px ← WRONG` and exits 1, while the offline sweep above
+still says PASS. Run it before believing a green run about a box you have not looked at — and look
+at the box.
+
 Three traps, each of which produced a green run that measured nothing:
 
 - ⚠️ **A `Gtk.Settings` change needs the main context PUMPED.** Without it the sweep measures every
