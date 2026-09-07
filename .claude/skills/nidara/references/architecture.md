@@ -763,6 +763,29 @@ interval is how long a dismissal can lag; it is not a polling loop for state.
 5. **`app.ts`** (`ui/shell/app.ts`): sets dark/light via `Gtk.Settings.gtk_application_prefer_dark_theme` (pure GTK4 — no `Adw.init()`); registers the `nd-*-symbolic` icon search path; `app.start({ applicationId: "org.nidara.desktop", main, requestHandler })`. In `main()`: iterates monitors → `createUI(monitor)` (Bar + Dock per monitor), wires the dock-rebuild debounce, and populates `core/ShellActions` + the IPC registry (the bar/dock blur layer rules live in `hyprland.lua` as `hl.layer_rule` — the old `hyprctl keyword layerrule` calls were dead under the Lua parser and were removed).
 6. Reload in dev: **`Super+Shift+R`** re-runs `nidara-ui` (the old `start_ui.sh`/`reload_ui.sh` no longer exist).
 
+### The greeter's entry waits for a GPU, and the wait has a ceiling
+
+`bin/nidara-greeter-session` is what greetd runs, and it does one thing before starting Hyprland:
+it waits for a DRM card that belongs to a **real** driver. greetd is ordered after
+`systemd-user-sessions` and `plymouth-quit-wait` and after nothing at all to do with the graphics
+card, so on a machine whose GPU takes a moment to probe it starts the greeter too early, Hyprland's
+aquamarine backend cannot start, and it aborts with an uncaught `std::runtime_error` — six boots
+out of six on a Navi 10 box, always by less than a second (#477). greetd's restart is what put the
+login screen up, ~2 s later, which is why the only symptom was a black screen nobody could name.
+
+⚠️ **"A DRM card exists" is the wrong condition, and it is the one you will reach for.** `simpledrm`
+has already claimed `/dev/dri/card0` from the firmware framebuffer by then, and the real driver
+evicts it when it takes over — so waiting for *a* card returns instantly and fixes nothing. The
+predicate is: a `card[0-9]*` whose `device/driver` is not one of the framebuffer shims
+(`simple-framebuffer`, `ofdrm`, `efi-framebuffer`, `vesa-framebuffer`), with at least one connector
+and a node in `/dev/dri`.
+
+The wait is capped at 5 s (100 × 50 ms) and then starts the compositor **anyway**, logging through
+`logger` because the script discards stdout/stderr to keep boot messages off the TTY. Verified in
+the VM by forcing the predicate to never succeed: the warning appears, the login screen still comes
+up one second later, nothing aborts. A login screen that never arrives would be a far worse bug
+than the one being fixed — same rule as the teardown below.
+
 ### The greeter's exit is a teardown, not a cut
 
 The greeter is its own Hyprland instance, and `config/greetd/hyprland-greeter.lua` is the whole of
