@@ -8,6 +8,60 @@
 # Suppress stdout and stderr to prevent ASCII banner / early debug logs from leaking onto TTY
 exec 1>/dev/null 2>&1
 
+# ── Wait for a real GPU before starting the compositor (#477) ────────────────
+#
+# greetd is ordered after `systemd-user-sessions` and `plymouth-quit-wait`, and
+# after NOTHING that has to do with the graphics card. On a machine whose GPU
+# takes a moment to probe, greetd therefore starts the greeter while the driver
+# is still coming up, Hyprland's backend cannot start, and it aborts:
+#
+#   CRIT : m_pAqBackend couldn't start! This usually means aquamarine could not
+#          find a GPU or encountered some issues.
+#   throw: std::runtime_error("CBackend::create() failed!")   ← uncaught, SIGABRT
+#
+# Measured on a Navi 10 box, six boots out of six, always by less than a second:
+# greetd started at 07:15:04, Hyprland aborted at 07:15:05, and the kernel logged
+# `[drm] Initialized amdgpu … on minor 1` in that same second — the device became
+# usable just after the compositor gave up. greetd's restart put the login screen
+# up two seconds later, so the only symptom was a black screen nobody could name.
+#
+# ⚠️ "A DRM card exists" is NOT the condition. `simpledrm` had already claimed
+# /dev/dri/card0 from the EFI framebuffer at that point, and amdgpu evicts it when
+# it takes over — so waiting for *a* card returns instantly and changes nothing.
+# What we wait for is a card belonging to a real driver, with connectors and a
+# device node.
+#
+# The wait is BOUNDED and then proceeds regardless: a login screen that never
+# comes is worse than one that starts on a half-ready GPU, and greetd's restart
+# is still there as the last rung. It also runs BEFORE plymouth is deactivated,
+# so the splash covers the wait instead of a bare TTY.
+_gpu_is_ready() {
+    local card drv
+    for card in /sys/class/drm/card[0-9]*; do
+        [ -e "$card/device/driver" ] || continue
+        [ -e "/dev/dri/${card##*/}" ] || continue
+        drv=$(basename "$(readlink -f "$card/device/driver")")
+        # Firmware-framebuffer shims, not GPUs: they are what is already there
+        # while the real driver is still probing.
+        case "$drv" in simple-framebuffer|ofdrm|efi-framebuffer|vesa-framebuffer) continue ;; esac
+        # A card with no connectors is a render node's sibling, not a display.
+        for conn in "$card"-*; do
+            [ -e "$conn/status" ] && return 0
+        done
+    done
+    return 1
+}
+
+_i=0
+while ! _gpu_is_ready && [ "$_i" -lt 100 ]; do   # 100 × 50 ms = 5 s ceiling
+    sleep 0.05
+    _i=$((_i + 1))
+done
+if [ "$_i" -ge 100 ]; then
+    # stdout/stderr are discarded above on purpose, so say it where it survives.
+    logger -t nidara-greeter-session "no DRM card with a real driver after 5s — starting anyway"
+fi
+
 # Freeze Plymouth splash to avoid intermediate TTY flashes before compositor paints
 if command -v plymouth >/dev/null 2>&1; then
     plymouth --ping 2>/dev/null && plymouth deactivate 2>/dev/null || true
