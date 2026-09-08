@@ -421,14 +421,18 @@ async function main(): Promise<void> {
             : "(vacuous — the second item never registered)",
     )
 
+    const t = tray as any
+    t?.destroy?.()
+    check(tray.items.length === 0, "destroy() clears all items and releases subscriptions", `${tray.items.length} items`)
+
     finish()
 }
 
-function finish(): never {
+function finish(): void {
     print("")
     if (fail === 0) print(`PROBE-RESULT ALL PASS (${pass})`)
     else print(`PROBE-RESULT ${fail} FAILED, ${pass} passed`)
-    imports.system.exit(fail === 0 ? 0 : 1)
+    loop.quit()
 }
 
 // ⚠️ Start from an idle, not inline: a failed precondition calls exit() through
@@ -437,9 +441,11 @@ function finish(): never {
 GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
     main().catch(e => {
         print(`\nPROBE CRASHED: ${e}\n${e?.stack ?? ""}`)
-        imports.system.exit(3)
+        fail++
+        loop.quit()
     })
     return GLib.SOURCE_REMOVE
 })
 
 loop.run()
+imports.system.exit(fail === 0 ? 0 : 1)

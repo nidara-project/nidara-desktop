@@ -25,6 +25,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { DbusMenu } from "./dbusmenu"
+import { callConn, onConnSignal } from "./dbus"
 
 const WATCHER_NAME = "org.kde.StatusNotifierWatcher"
 const WATCHER_PATH = "/StatusNotifierWatcher"
@@ -155,8 +156,7 @@ export class TrayItem {
     private menuPath = ""
     private menuObj: DbusMenu | null = null
 
-    private signalSub = 0
-    private propsSub = 0
+    private _disposers: Array<() => void> = []
     private destroyed = false
     private readonly changeCbs = new Set<() => void>()
     private readonly iconCbs = new Set<() => void>()
@@ -202,25 +202,28 @@ export class TrayItem {
         this.apply(props)
 
         const bus = Gio.DBus.session
-        this.signalSub = bus.signal_subscribe(
-            this.busName, ITEM_IFACE, null, this.objectPath, null, Gio.DBusSignalFlags.NONE,
-            (_c, _s, _p, _i, signal, params) => this.onSignal(signal, params),
-        )
-        // Some items (KDE-native ones) announce changes the standard way instead of
-        // with the NewXxx signals. AstalTray never saw these: its proxy swallowed
-        // PropertiesChanged and only re-read on `g-signal`.
-        this.propsSub = bus.signal_subscribe(
-            this.busName, PROPS_IFACE, "PropertiesChanged", this.objectPath, null,
-            Gio.DBusSignalFlags.NONE,
-            (_c, _s, _p, _i, _sig, params) => {
-                try {
-                    if (params.get_child_value(0).get_string()[0] !== ITEM_IFACE) return
-                    const changed: Record<string, any> = params.get_child_value(1).deep_unpack()
-                    const flat: Record<string, any> = {}
-                    for (const [k, v] of Object.entries(changed)) flat[k] = (v as any)?.deep_unpack?.() ?? v
-                    this.apply(flat)
-                } catch { /* a malformed PropertiesChanged is not worth a refetch */ }
-            },
+        this._disposers.push(
+            onConnSignal(
+                bus,
+                { sender: this.busName, iface: ITEM_IFACE, path: this.objectPath },
+                (_c, _s, _p, _i, signal, params) => this.onSignal(signal, params),
+            ),
+            // Some items (KDE-native ones) announce changes the standard way instead of
+            // with the NewXxx signals. AstalTray never saw these: its proxy swallowed
+            // PropertiesChanged and only re-read on `g-signal`.
+            onConnSignal(
+                bus,
+                { sender: this.busName, iface: PROPS_IFACE, member: "PropertiesChanged", path: this.objectPath },
+                (_c, _s, _p, _i, _sig, params) => {
+                    try {
+                        if (params.get_child_value(0).get_string()[0] !== ITEM_IFACE) return
+                        const changed: Record<string, any> = params.get_child_value(1).deep_unpack()
+                        const flat: Record<string, any> = {}
+                        for (const [k, v] of Object.entries(changed)) flat[k] = (v as any)?.deep_unpack?.() ?? v
+                        this.apply(flat)
+                    } catch { /* a malformed PropertiesChanged is not worth a refetch */ }
+                },
+            ),
         )
         return true
     }
@@ -240,33 +243,34 @@ export class TrayItem {
         this.getProps(props).then(p => { if (p && !this.destroyed) this.apply(p) })
     }
 
-    private getProps(names: string[]): Promise<Record<string, any> | null> {
-        return new Promise(resolve => {
-            // One GetAll beats N Gets, and an item that answers GetAll but chokes on
-            // an individual Get (several Electron shims do) still works.
-            try {
-                Gio.DBus.session.call(
-                    this.busName, this.objectPath, PROPS_IFACE, "GetAll",
-                    new GLib.Variant("(s)", [ITEM_IFACE]),
-                    new GLib.VariantType("(a{sv})"), Gio.DBusCallFlags.NONE, 3000, null,
-                    (_src, res) => {
-                        try {
-                            const reply = Gio.DBus.session.call_finish(res)
-                            const dict = reply.get_child_value(0)
-                            const out: Record<string, any> = {}
-                            const n = dict.n_children()
-                            for (let i = 0; i < n; i++) {
-                                const entry = dict.get_child_value(i)
-                                const key = entry.get_child_value(0).get_string()[0]
-                                if (!names.includes(key)) continue
-                                out[key] = entry.get_child_value(1).get_variant().deep_unpack()
-                            }
-                            resolve(out)
-                        } catch { resolve(null) }
-                    },
-                )
-            } catch { resolve(null) }
-        })
+    private async getProps(names: string[]): Promise<Record<string, any> | null> {
+        // One GetAll beats N Gets, and an item that answers GetAll but chokes on
+        // an individual Get (several Electron shims do) still works.
+        try {
+            const reply = await callConn(
+                Gio.DBus.session,
+                this.busName,
+                this.objectPath,
+                PROPS_IFACE,
+                "GetAll",
+                new GLib.Variant("(s)", [ITEM_IFACE]),
+                new GLib.VariantType("(a{sv})"),
+                Gio.DBusCallFlags.NONE,
+                3000,
+            )
+            const dict = reply.get_child_value(0)
+            const out: Record<string, any> = {}
+            const n = dict.n_children()
+            for (let i = 0; i < n; i++) {
+                const entry = dict.get_child_value(i)
+                const key = entry.get_child_value(0).get_string()[0]
+                if (!names.includes(key)) continue
+                out[key] = entry.get_child_value(1).get_variant().deep_unpack()
+            }
+            return out
+        } catch {
+            return null
+        }
     }
 
     private apply(props: Record<string, any>) {
@@ -359,17 +363,19 @@ export class TrayItem {
     }
 
     private callItem(method: string, params: GLib.Variant) {
-        try {
-            Gio.DBus.session.call(
-                this.busName, this.objectPath, ITEM_IFACE, method, params, null,
-                Gio.DBusCallFlags.NONE, 3000, null,
-                (_src, res) => {
-                    // UnknownMethod is normal here: SNI declares Activate/Scroll
-                    // optional and plenty of items implement only the menu.
-                    try { Gio.DBus.session.call_finish(res) } catch { }
-                },
-            )
-        } catch { }
+        // UnknownMethod is normal here: SNI declares Activate/Scroll
+        // optional and plenty of items implement only the menu.
+        callConn(
+            Gio.DBus.session,
+            this.busName,
+            this.objectPath,
+            ITEM_IFACE,
+            method,
+            params,
+            null,
+            Gio.DBusCallFlags.NONE,
+            3000,
+        ).catch(() => { })
     }
 
     activate(x = 0, y = 0) { this.callItem("Activate", new GLib.Variant("(ii)", [x, y])) }
@@ -381,11 +387,10 @@ export class TrayItem {
     destroy() {
         if (this.destroyed) return
         this.destroyed = true
-        const bus = Gio.DBus.session
-        for (const s of [this.signalSub, this.propsSub]) {
-            if (s) { try { bus.signal_unsubscribe(s) } catch { } }
+        for (const dispose of this._disposers) {
+            try { dispose() } catch { }
         }
-        this.signalSub = this.propsSub = 0
+        this._disposers = []
         this.menuObj?.destroy()
         this.menuObj = null
         this.changeCbs.clear()
@@ -402,9 +407,10 @@ class Tray {
     private readonly removedCbs = new Set<(id: string) => void>()
 
     private exported: any = null
-    private nocSub = 0
-    private isWatcher = false
+    private watcherNameId = 0
     private hostNameId = 0
+    private isWatcher = false
+    private _disposers: Array<() => void> = []
 
     get items(): TrayItem[] { return [...this.itemsById.values()] }
     getItem(id: string): TrayItem | null { return this.itemsById.get(id) ?? null }
@@ -462,7 +468,7 @@ class Tray {
             return
         }
 
-        Gio.bus_own_name(
+        this.watcherNameId = Gio.bus_own_name(
             Gio.BusType.SESSION, WATCHER_NAME, Gio.BusNameOwnerFlags.NONE,
             (conn: any) => {
                 try { this.exported.export(conn, WATCHER_PATH) }
@@ -482,36 +488,61 @@ class Tray {
                 this.followForeignWatcher()
             },
         )
+        this._disposers.push(() => {
+            if (this.watcherNameId) {
+                try { Gio.bus_unown_name(this.watcherNameId) } catch { }
+                this.watcherNameId = 0
+            }
+            if (this.exported) {
+                try { this.exported.unexport() } catch { }
+                this.exported = null
+            }
+        })
     }
 
     private followForeignWatcher() {
         const bus = Gio.DBus.session
         try {
-            bus.signal_subscribe(
-                WATCHER_NAME, WATCHER_NAME, "StatusNotifierItemRegistered", WATCHER_PATH, null,
-                Gio.DBusSignalFlags.NONE,
-                (_c, _s, _p, _i, _sig, params) => {
-                    try { this.addFromService(params.get_child_value(0).get_string()[0]) } catch { }
-                },
+            this._disposers.push(
+                onConnSignal(
+                    bus,
+                    {
+                        sender: WATCHER_NAME,
+                        iface: WATCHER_NAME,
+                        member: "StatusNotifierItemRegistered",
+                        path: WATCHER_PATH,
+                    },
+                    (_c, _s, _p, _i, _sig, params) => {
+                        try { this.addFromService(params.get_child_value(0).get_string()[0]) } catch { }
+                    },
+                ),
+                onConnSignal(
+                    bus,
+                    {
+                        sender: WATCHER_NAME,
+                        iface: WATCHER_NAME,
+                        member: "StatusNotifierItemUnregistered",
+                        path: WATCHER_PATH,
+                    },
+                    (_c, _s, _p, _i, _sig, params) => {
+                        try { this.removeItem(params.get_child_value(0).get_string()[0]) } catch { }
+                    },
+                ),
             )
-            bus.signal_subscribe(
-                WATCHER_NAME, WATCHER_NAME, "StatusNotifierItemUnregistered", WATCHER_PATH, null,
-                Gio.DBusSignalFlags.NONE,
-                (_c, _s, _p, _i, _sig, params) => {
-                    try { this.removeItem(params.get_child_value(0).get_string()[0]) } catch { }
-                },
-            )
-            bus.call(
-                WATCHER_NAME, WATCHER_PATH, PROPS_IFACE, "Get",
+            callConn(
+                bus,
+                WATCHER_NAME,
+                WATCHER_PATH,
+                PROPS_IFACE,
+                "Get",
                 new GLib.Variant("(ss)", [WATCHER_NAME, "RegisteredStatusNotifierItems"]),
-                new GLib.VariantType("(v)"), Gio.DBusCallFlags.NONE, 3000, null,
-                (_src, res) => {
-                    try {
-                        const list: string[] = bus.call_finish(res).get_child_value(0).get_variant().deep_unpack()
-                        for (const s of list) this.addFromService(s)
-                    } catch { }
-                },
-            )
+                new GLib.VariantType("(v)"),
+                Gio.DBusCallFlags.NONE,
+                3000,
+            ).then(reply => {
+                const list = reply.get_child_value(0).get_variant().deep_unpack() as string[]
+                for (const s of list) this.addFromService(s)
+            }).catch(() => { })
         } catch (e) {
             console.error("[tray] could not follow the foreign watcher:", e)
         }
@@ -527,17 +558,26 @@ class Tray {
             Gio.BusType.SESSION, hostName, Gio.BusNameOwnerFlags.NONE,
             null,
             () => {
-                try {
-                    Gio.DBus.session.call(
-                        WATCHER_NAME, WATCHER_PATH, WATCHER_NAME, "RegisterStatusNotifierHost",
-                        new GLib.Variant("(s)", [hostName]), null,
-                        Gio.DBusCallFlags.NONE, 3000, null,
-                        (_src, res) => { try { Gio.DBus.session.call_finish(res) } catch { } },
-                    )
-                } catch { }
+                callConn(
+                    Gio.DBus.session,
+                    WATCHER_NAME,
+                    WATCHER_PATH,
+                    WATCHER_NAME,
+                    "RegisterStatusNotifierHost",
+                    new GLib.Variant("(s)", [hostName]),
+                    null,
+                    Gio.DBusCallFlags.NONE,
+                    3000,
+                ).catch(() => { })
             },
             null,
         )
+        this._disposers.push(() => {
+            if (this.hostNameId) {
+                try { Gio.bus_unown_name(this.hostNameId) } catch { }
+                this.hostNameId = 0
+            }
+        })
     }
 
     // -- item bookkeeping -----------------------------------------------------
@@ -587,25 +627,47 @@ class Tray {
      *  path here, and every match goes. */
     private watchNameOwners() {
         try {
-            this.nocSub = Gio.DBus.session.signal_subscribe(
-                "org.freedesktop.DBus", "org.freedesktop.DBus", "NameOwnerChanged",
-                "/org/freedesktop/DBus", null, Gio.DBusSignalFlags.NONE,
-                (_c, _s, _p, _i, _sig, params) => {
-                    try {
-                        const [name, , newOwner] = params.deep_unpack() as [string, string, string]
-                        if (newOwner !== "") return
-                        for (const [id, item] of [...this.itemsById]) {
-                            if (item.busName === name) this.removeItem(id)
-                        }
-                        for (const id of [...this.pending]) {
-                            if (id.startsWith(name + "/")) this.pending.delete(id)
-                        }
-                    } catch { }
-                },
+            this._disposers.push(
+                onConnSignal(
+                    Gio.DBus.session,
+                    {
+                        sender: "org.freedesktop.DBus",
+                        iface: "org.freedesktop.DBus",
+                        member: "NameOwnerChanged",
+                        path: "/org/freedesktop/DBus",
+                    },
+                    (_c, _s, _p, _i, _sig, params) => {
+                        try {
+                            const [name, , newOwner] = params.deep_unpack() as [string, string, string]
+                            if (newOwner !== "") return
+                            for (const [id, item] of [...this.itemsById]) {
+                                if (item.busName === name) this.removeItem(id)
+                            }
+                            for (const id of [...this.pending]) {
+                                if (id.startsWith(name + "/")) this.pending.delete(id)
+                            }
+                        } catch { }
+                    },
+                ),
             )
         } catch (e) {
             console.error("[tray] could not watch NameOwnerChanged:", e)
         }
+    }
+
+    destroy(): void {
+        for (const item of this.itemsById.values()) {
+            item.destroy()
+        }
+        this.itemsById.clear()
+        this.pending.clear()
+        for (const dispose of this._disposers) {
+            try { dispose() } catch { }
+        }
+        this._disposers = []
+        this.addedCbs.clear()
+        this.removedCbs.clear()
+        if (instance === this) instance = null
     }
 }
 
