@@ -137,6 +137,7 @@ export function getLiveDefaults(): LiveDefaults {
 export function assemblePlan(
   answers: Answers,
   baseResult: BaseConfigResult | null = readBaseConfig(),
+  measuredMirrors: readonly string[] = [],
 ): AssembledPlan {
   if (!baseResult) {
     throw new Error("Cannot assemble plan: base.json is missing or invalid")
@@ -191,6 +192,22 @@ export function assemblePlan(
     config.disk_config = entireDiskConfig(answers.disk)
   } else if (answers.disk) {
     config.disk_config = manualDiskConfig(answers.disk)
+  }
+
+  // ── The mirrors this machine measured, on top of the ones it had ──────────
+  //
+  // `mirror_config.custom_servers` and nothing else (see lib/mirrors.ts for why
+  // the region key is the wrong one): archinstall PREPENDS these to the
+  // mirrorlist and leaves what was underneath, so the measurement wins and the
+  // medium's own list is still the floor.
+  //
+  // ⚠️ An empty measurement writes NOTHING, and that is not the same as writing
+  // an empty list. `base.json` ships `custom_servers: []`; overwriting it with
+  // another empty array would be harmless, but the branch says out loud that a
+  // failed measurement leaves the install exactly as it was before #311.
+  if (measuredMirrors.length > 0) {
+    const mirror = (config.mirror_config ?? {}) as Record<string, unknown>
+    config.mirror_config = { ...mirror, custom_servers: measuredMirrors.map(url => ({ url })) }
   }
 
   // ── Root is left as Arch leaves it, and that is a decision ────────────────

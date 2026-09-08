@@ -14,6 +14,7 @@ import { applyRealName } from "../lib/real-name"
 import { writeSwapFstabEntries } from "../lib/swap"
 import { stripAnsi } from "../lib/ansi"
 import { connectivity, isUsable } from "../lib/network"
+import { measureMirrors } from "../lib/mirrors"
 import { isPreview, previewSkip } from "../lib/preview"
 import { heading, prose } from "./common"
 
@@ -213,13 +214,38 @@ export function RunStep(): Step {
             finishRun(false)
             return
           }
-          startInstall(answers)
+          // Still phase 0, and deliberately: this IS the network phase, and it
+          // is the last moment the network is used for something other than
+          // downloading the system. It runs here rather than earlier in the
+          // wizard because here is where a slow answer costs nothing anybody
+          // notices — the install that follows takes minutes — and because a
+          // measurement taken five pages ago could be describing a Wi-Fi network
+          // the person has since left.
+          if (isPreview()) {
+            appendLog(previewSkip("reflector --sort rate (measuring mirror speed)"))
+            startInstall(answers, [])
+            return
+          }
+          appendLog(`[MIRRORS] ${t("runMirrorsMeasuring")}`)
+          measureMirrors(getAnswers().country?.code ?? null).then(servers => {
+            // Both outcomes are said out loud. A silent empty answer is
+            // indistinguishable from a measurement that was never attempted,
+            // and this is the one step of the install whose whole value is
+            // invisible afterwards.
+            if (servers.length > 0) {
+              appendLog(`[MIRRORS] ${t("runMirrorsChosen")}${servers.length}`)
+              for (const url of servers) appendLog(`[MIRRORS]   ${url}`)
+            } else {
+              appendLog(`[MIRRORS] ${t("runMirrorsNone")}`)
+            }
+            startInstall(answers, servers)
+          })
         })
 
         return GLib.SOURCE_REMOVE
       })
 
-      function startInstall(answers: ReturnType<typeof getAnswers>) {
+      function startInstall(answers: ReturnType<typeof getAnswers>, measuredMirrors: string[]) {
         // Two modes, and WHERE it runs picks one: the live medium installs for real, anything
         // else is a dry run. There is deliberately no variable that arms it elsewhere — the
         // dangerous direction is unreachable, not merely discouraged. `NIDARA_INSTALLER_DRY_RUN`
@@ -241,7 +267,7 @@ export function RunStep(): Step {
 
         let plan: AssembledPlan
         try {
-          plan = assemblePlan(answers)
+          plan = assemblePlan(answers, undefined, measuredMirrors)
         } catch (e: any) {
           appendLog(`[ERROR] Failed to assemble installation plan: ${e.message || e}`)
           finishRun(false)
