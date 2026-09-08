@@ -33,6 +33,10 @@ const KB_LAYOUTS: KbLayout[] = [
  * where they disagree. Same table as `bin/nidara-setup`'s `_vconsole_to_xkb` and
  * as `config/greetd/hyprland-greeter.lua` — three copies because they are three
  * languages, and the Lua one is the one that decides what the keyboard TYPES.
+ *
+ * ⚠️ It only ever covered three names out of 252, which is why this path is now
+ * the LAST one tried and guarded by `isXkbLayout` (#498): the other 249 console
+ * keymaps have no xkb layout of that name at all.
  */
 const VCONSOLE_TO_XKB: Record<string, string> = {
   uk: "gb",
@@ -50,20 +54,43 @@ const VCONSOLE_TO_XKB: Record<string, string> = {
  * one at least was honestly wrong on both sides. The Lua half is checked by
  * `scripts/ci/hypr-lua-check.mjs`, which resolves it against fixture files.
  *
- * XKBLAYOUT first: it is already xkb's vocabulary. KEYMAP is the console's, and
- * it is only read when systemd-localed has not written the other one.
+ * `00-keyboard.conf` first: it is the system's graphical keyboard in xkb's own
+ * vocabulary, written by systemd-localed, by Calamares and by our installer
+ * (#498). XKBLAYOUT and then KEYMAP are the older fallbacks, and KEYMAP is the
+ * console's namespace — `sv-latin1`, `jp106`, `it2` are keymap names that are not
+ * layouts, so a name with no symbols file is refused rather than shown.
  */
-function systemKbLayout(): string {
+function readText(path: string): string | null {
   try {
-    const [ok, data] = GLib.file_get_contents("/etc/vconsole.conf")
-    if (ok) {
-      const text = new TextDecoder().decode(data as Uint8Array)
-      const xkb = /^XKBLAYOUT="?([^"\n]+)/m.exec(text)
-      if (xkb?.[1]) return xkb[1]
-      const keymap = /^KEYMAP="?([^"\n]+)/m.exec(text)
-      if (keymap?.[1]) return VCONSOLE_TO_XKB[keymap[1]] ?? keymap[1]
+    const [ok, data] = GLib.file_get_contents(path)
+    return ok ? new TextDecoder().decode(data as Uint8Array) : null
+  } catch { return null }
+}
+
+/** Same question as `isXkbLayout` in `config/greetd/hyprland-greeter.lua`. */
+function isXkbLayout(name: string): boolean {
+  if (!name) return false
+  return ["/usr/share/X11/xkb/symbols/", "/usr/share/xkeyboard-config-2/symbols/"]
+    .some(dir => GLib.file_test(dir + name, GLib.FileTest.EXISTS))
+}
+
+function systemKbLayout(): string {
+  const first = (v: string | undefined) => (v ?? "").split(",")[0]
+
+  const x11 = readText("/etc/X11/xorg.conf.d/00-keyboard.conf")
+  const layout = x11 ? first(/^\s*Option\s+"XkbLayout"\s+"([^"]*)"/m.exec(x11)?.[1]) : ""
+  if (layout && isXkbLayout(layout)) return layout
+
+  const text = readText("/etc/vconsole.conf")
+  if (text) {
+    const xkb = first(/^XKBLAYOUT="?([^"\n]+)/m.exec(text)?.[1])
+    if (xkb && isXkbLayout(xkb)) return xkb
+    const keymap = /^KEYMAP="?([^"\n]+)/m.exec(text)?.[1]
+    if (keymap) {
+      const candidate = VCONSOLE_TO_XKB[keymap] ?? keymap
+      if (isXkbLayout(candidate)) return candidate
     }
-  } catch {}
+  }
   return "us"
 }
 

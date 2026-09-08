@@ -47,9 +47,15 @@ import {
   keyboardsFor, defaultsFor,
   type Country,
 } from "../lib/region"
-// The installer's slice of the shared catalogue: what systemd can name in BOTH
-// namespaces, because this page writes the console keymap as well as the layout.
-import { bridgedKeyboards, type KeyboardLayout } from "../../lib/keyboards"
+// The WHOLE shared catalogue, the same 597 Settings offers (#498). It used to be
+// the bridged slice — the 58 systemd can name in both namespaces — on the reasoning
+// that this page writes the console keymap as well as the layout. Two things were
+// wrong with that. The console keymap is a DERIVED value, not the record: every
+// installer outside Debian offers the full xkb catalogue and lets the console
+// degrade. And withholding the other 539 bought nothing, because the answer was
+// travelling to the desktop as a console keymap name anyway and arriving wrong for
+// 36 of the 55 it did offer.
+import { allKeyboards, type KeyboardLayout } from "../../lib/keyboards"
 import { heading, prose, searchableList } from "./common"
 import { languageFor } from "../lib/languages"
 import { setLanguageAnswer } from "../lib/answers"
@@ -115,7 +121,10 @@ function answerCountry(c: Country): KeyboardLayout | null {
   if (d.timezone) setTimezoneAnswer({ timezone: d.timezone })
   if (!d.keyboard) return null
   const k = d.keyboard
-  setKeyboardAnswer({ layout: k.layout, variant: k.variant, keymap: k.keymap, label: k.label })
+  setKeyboardAnswer({
+    layout: k.layout, variant: k.variant,
+    keymap: k.keymap, fallbackKeymap: k.fallbackKeymap, label: k.label,
+  })
   return k
 }
 
@@ -238,21 +247,26 @@ export function RegionStep(): Step {
         ))
 
         // Keyboard ────────────────────────────────────────────────────────────
-        // A keyboard whose console keymap does not exist says so, rather than the
-        // installer writing a name that cannot load (#472). Three of the 58 are in
-        // that state — Arabic, Korean and Khmer have no file in `kbd` under any
-        // name — and the honest thing is to keep offering them: the xkb layout is
-        // real, the desktop gets it, and what degrades is only the text console.
-        // Which is worth one sentence, because the console is exactly where you
-        // have nothing else to fall back on.
+        // The desktop always gets the exact keyboard. The text console cannot
+        // always have it — `kbd` ships 252 keymaps and has no concept of a variant,
+        // so 542 of the 597 have no console name of their own — and when it cannot,
+        // it degrades to the base layout (286 of them do), or keeps the medium's
+        // `us` when even that is missing (256).
         //
-        // (It was five until the catalogue became xkb's in #473: Romanian's two
-        // cedilla variants turned out not to exist in xkb either.)
-        const consoleNote = prose(t("regionKeyboardNoConsole"))
+        // Both of those are said out loud rather than hidden, which is the one
+        // place we differ from Calamares/Anaconda/GNOME: they degrade in silence.
+        // Worth one sentence, because the console is where the disk password gets
+        // typed and there is nothing else to fall back on.
+        const consoleNote = prose("")
         const syncConsoleNote = (k?: KeyboardLayout | null) => {
-          consoleNote.visible = !!k && k.keymap === ""
+          const degraded = !!k && k.keymap === ""
+          consoleNote.visible = degraded
+          if (!degraded) return
+          consoleNote.label = k!.fallbackKeymap
+            ? t("regionKeyboardConsoleFallback").replace("%s", k!.fallbackKeymap)
+            : t("regionKeyboardNoConsole")
         }
-        const kbs = scoped(keyboardsFor(code), bridgedKeyboards(), k => k.id)
+        const kbs = scoped(keyboardsFor(code), allKeyboards(), k => k.id)
         const kbLabels = kbs.map(k => k.label)
         const kbCurrent = a.keyboard
           ? kbs.findIndex(k => k.layout === a.keyboard!.layout && k.variant === a.keyboard!.variant)
@@ -266,7 +280,10 @@ export function RegionStep(): Step {
             const idx = kbCurrent >= 0 ? i! : i! - 1
             const k = kbs[idx]
             if (!k) return
-            setKeyboardAnswer({ layout: k.layout, variant: k.variant, keymap: k.keymap, label: k.label })
+            setKeyboardAnswer({
+              layout: k.layout, variant: k.variant,
+              keymap: k.keymap, fallbackKeymap: k.fallbackKeymap, label: k.label,
+            })
             applyKeyboardLive(k)
             syncConsoleNote(k)
             notifyReady?.()

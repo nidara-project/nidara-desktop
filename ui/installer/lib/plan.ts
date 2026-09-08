@@ -158,15 +158,24 @@ export function assemblePlan(
   config.locale_config = {
     // The CONSOLE keymap, not the xkb layout. archinstall's `kb_layout` ends up in
     // /etc/vconsole.conf, and the two namespaces disagree for several of our rows —
-    // see the `keymap` field on KeyboardLayout in lib/region.ts for what that costs.
+    // see the `keymap` field on KeyboardLayout in lib/keyboards.ts for what that
+    // costs.
     //
-    // ⚠️ The `||` now carries a SECOND case, and it is the answered one: a keyboard
-    // with no console keymap on this system resolves to `""` and falls back to the
-    // medium's own (`us`). That is what the region page told the user would happen,
-    // and it is the only honest value — archinstall accepts an unknown name, logs,
-    // and leaves the console unset anyway, so guessing here would buy nothing and
-    // hide it. See resolveKeymap() in ui/lib/keyboards.ts.
-    kb_layout: answers.keyboard?.keymap || live.localeConfig.kb_layout,
+    // ⚠️ The xkb layout the person actually chose does NOT travel through here. It
+    // goes to `/etc/X11/xorg.conf.d/00-keyboard.conf` after archinstall finishes
+    // (lib/keyboard-config.ts), because this field cannot carry it: it is one
+    // string in a namespace with no variants, and reading the layout back out of it
+    // is what sent 36 of 55 keyboards to the desktop wrong (#498).
+    //
+    // ⚠️ Three cases, in order, and the region page has already said which one this
+    // keyboard is in: its own console keymap · the base layout's, when it has none
+    // (`de-neo` → `de`, which is what every installer outside Debian does) · the
+    // medium's `us`, when even that is missing. archinstall accepts an unknown name,
+    // logs and leaves the console unset anyway, so guessing further would buy
+    // nothing and hide it. See resolveKeymap() in ui/lib/keyboards.ts.
+    kb_layout: answers.keyboard?.keymap
+      || answers.keyboard?.fallbackKeymap
+      || live.localeConfig.kb_layout,
     sys_enc: answers.language?.sysEnc || live.localeConfig.sys_enc,
     sys_lang: answers.language?.sysLang || live.localeConfig.sys_lang,
   }
