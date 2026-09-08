@@ -2,7 +2,7 @@
 //
 // Supports two modes:
 // 1. Entire Disk: Erase selected block device, choose Btrfs (recommended) or Ext4.
-// 2. Manual Partitioning: Assign mount points (/, /boot, /boot/efi, /efi, /home, swap)
+// 2. Manual Partitioning: Assign mount points (/, /boot, /home, swap)
 //    to existing partitions, with format toggles and filesystem selection, plus
 //    an action button to launch GParted.
 
@@ -169,18 +169,23 @@ function listPartitions(): DetectedPartition[] {
  *     the SELECTED item, so a column measured with every row unanswered grew by
  *     ~100px the moment somebody chose one — measured 2026-09-03, en 543 → 645 —
  *     and a table that grows inside a fixed pane is a table that gets clipped.
- *     Six labels of nearly equal width make the column a constant.
+ *     Five labels of nearly equal width make the column a constant.
  *
- * The three EFI spellings stay three entries rather than one: which of them is
- * right depends on the layout the user already has, and guessing is how an
- * installer mounts the ESP where the bootloader will not look for it.
+ * ⚠️ There used to be THREE EFI spellings here — `/boot`, `/boot/efi` and `/efi`
+ * — offered as three equally valid answers. Two of them produced a machine that
+ * installed cleanly and did not boot (#430), because systemd-boot without UKIs
+ * writes `linux /vmlinuz-linux` into an entry on the ESP and that path is
+ * relative to the partition holding the entry, while pacman puts the kernel in
+ * `/boot` on the ROOT filesystem. The two only line up when they are the same
+ * place. Decision A of #430: `/boot` is the only one, because the two that went
+ * are exactly the two that cannot work — and `/boot/efi`, the Debian/Ubuntu/
+ * Fedora spelling, is the likeliest one for somebody to copy from a layout they
+ * already have, where GRUB made it correct.
  */
 const MOUNT_OPTIONS = [
   { id: "", labelKey: "diskMountNone", label: "", mountpoint: "" },
   { id: "/", labelKey: null, label: "/", mountpoint: "/" },
   { id: "/boot", labelKey: null, label: "/boot", mountpoint: "/boot" },
-  { id: "/boot/efi", labelKey: null, label: "/boot/efi", mountpoint: "/boot/efi" },
-  { id: "/efi", labelKey: null, label: "/efi", mountpoint: "/efi" },
   { id: "/home", labelKey: null, label: "/home", mountpoint: "/home" },
   { id: "swap", labelKey: null, label: "swap", mountpoint: "swap" },
 ] as const

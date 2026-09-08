@@ -280,13 +280,16 @@ export function entireDiskConfig(answer: EntireDiskAnswer): DiskConfig {
  * and the bootloader patching that has to write into the partition archinstall
  * actually installed onto.
  *
- * With `/boot/efi` or `/efi` assigned, THAT is the ESP and `/boot` is an ordinary
- * boot partition which may legitimately not be FAT. Only when `/boot` is the sole
- * EFI-ish mount is `/boot` itself the ESP.
+ * ⚠️ It used to be a preference order — `/boot/efi` or `/efi` first, `/boot`
+ * only if neither was assigned — because the page offered all three. It offers
+ * one now (#430, decision A): the other two put the loader entry on a different
+ * partition from the kernel it names, which installs cleanly and does not boot.
+ * The function stays because the rule stays SHARED; what left is the ranking,
+ * and with it the case where `/boot` was an ordinary boot partition that could
+ * legitimately not be FAT.
  */
 export function espMount(mounts: readonly ManualPartitionMount[]): ManualPartitionMount | undefined {
-  return mounts.find(m => m.mountpoint === "/boot/efi" || m.mountpoint === "/efi")
-    ?? mounts.find(m => m.mountpoint === "/boot")
+  return mounts.find(m => m.mountpoint === "/boot")
 }
 
 /**

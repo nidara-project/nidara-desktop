@@ -43,8 +43,8 @@
 // ESP starting at 0, a root one MiB too long, a length that is not MiB-aligned, a
 // root carrying both a mountpoint and subvolumes, and `@snapshots` dropped back to
 // upstream's four. Manual mode was put through twelve: swap keeping its mount
-// point, the format tick inverted, nothing flagged as the ESP, the ESP rule
-// reversed so `/boot` beats `/boot/efi`, `wipe: true`, the start rounded down to a
+// point, the format tick inverted, nothing flagged as the ESP, `/boot/efi`
+// recognised as an ESP again (#430), `wipe: true`, the start rounded down to a
 // MiB, the size rounded up, the sector size assumed to be 512, an unknown
 // filesystem passed straight through, a `modify` taking its type from lsblk
 // instead of the choice, partitions grouped by path instead of by disk, and
@@ -264,7 +264,7 @@ const MANUAL_CASES: ManualCase[] = [
     esp: "",
     devices: 1,
     mounts: [
-      { path: "", create: true, mountpoint: "/boot/efi", format: true, filesystem: "vfat", start: 1 * MIB, size: 1024 * MIB },
+      { path: "", create: true, mountpoint: "/boot", format: true, filesystem: "vfat", start: 1 * MIB, size: 1024 * MIB },
       { path: "", create: true, mountpoint: "/", format: true, filesystem: "ext4", start: 1025 * MIB, size: 200 * 1024 * MIB },
     ],
   },
@@ -278,13 +278,19 @@ const MANUAL_CASES: ManualCase[] = [
     ],
   },
   {
-    name: "the Debian spelling: /boot/efi is the ESP, /boot is ext4",
+    // Was "the Debian spelling: /boot/efi is the ESP, /boot is ext4". It passed
+    // — the layout was built exactly as asked and the machine did not boot
+    // (#430), because the loader entry and the kernel ended up on different
+    // partitions. The spelling is gone from the page; the half of it worth
+    // keeping is the ordinary layout underneath, where `/boot` is the ESP and
+    // there is no second boot partition to disagree with it.
+    name: "an ESP at /boot beside a kept /home — the ordinary reuse",
     esp: "/dev/sda1",
     devices: 1,
     mounts: [
-      { path: "/dev/sda1", mountpoint: "/boot/efi", format: false, fsType: "vfat", start: 1 * MIB, size: 512 * MIB },
-      { path: "/dev/sda2", mountpoint: "/boot", format: true, filesystem: "ext4", start: 513 * MIB, size: 1024 * MIB },
-      { path: "/dev/sda3", mountpoint: "/", format: true, filesystem: "ext4", start: 1537 * MIB, size: 100 * 1024 * MIB },
+      { path: "/dev/sda1", mountpoint: "/boot", format: true, filesystem: "vfat", start: 1 * MIB, size: 512 * MIB },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "ext4", start: 513 * MIB, size: 100 * 1024 * MIB },
+      { path: "/dev/sda3", mountpoint: "/home", format: false, fsType: "ext4", start: 101 * 1024 * MIB, size: 300 * 1024 * MIB },
     ],
   },
   {
@@ -292,7 +298,7 @@ const MANUAL_CASES: ManualCase[] = [
     esp: "/dev/nvme0n1p1",
     devices: 1,
     mounts: [
-      { path: "/dev/nvme0n1p1", device: "/dev/nvme0n1", mountpoint: "/efi", format: true, filesystem: "vfat", start: 1 * MIB, size: 512 * MIB },
+      { path: "/dev/nvme0n1p1", device: "/dev/nvme0n1", mountpoint: "/boot", format: true, filesystem: "vfat", start: 1 * MIB, size: 512 * MIB },
       { path: "/dev/nvme0n1p2", device: "/dev/nvme0n1", mountpoint: "/", format: true, filesystem: "ext4", start: 513 * MIB, size: 60 * 1024 * MIB },
       { path: "/dev/nvme0n1p3", device: "/dev/nvme0n1", mountpoint: "swap", format: true, start: 61 * 1024 * MIB, size: 8 * 1024 * MIB },
       { path: "/dev/nvme0n1p4", device: "/dev/nvme0n1", mountpoint: "/home", format: false, fsType: "ext4", start: 69 * 1024 * MIB, size: 400 * 1024 * MIB },
@@ -597,22 +603,20 @@ const LOADER_CASES: Array<{ name: string, answer: any, want: string }> = [
     },
   },
   {
-    name: "manual, ESP at /boot — old and new answers coincide",
+    name: "manual, ESP at /boot — the only spelling there is",
     want: "/mnt/boot",
     answer: { mode: "manual", mounts: [row({ path: "/dev/vda1", mountpoint: "/boot", format: false, fsType: "vfat" }),
                                        row({ path: "/dev/vda2", mountpoint: "/", format: true })] },
   },
   {
-    name: "manual, ESP at /boot/efi — the Debian spelling, and the one that bit",
-    want: "/mnt/boot/efi",
+    // The two cases that used to live here asserted `/mnt/boot/efi` and
+    // `/mnt/efi`, and they were right about where the loader went — which is
+    // exactly why the machine did not boot (#430). Now the spellings are gone
+    // from the page, and a row still carrying one must not drag the loader
+    // edits off to a partition archinstall never installed onto.
+    name: "manual, a leftover /boot/efi row does not move the loader",
+    want: "/mnt/boot",
     answer: { mode: "manual", mounts: [row({ path: "/dev/vda1", mountpoint: "/boot/efi", format: false, fsType: "vfat" }),
-                                       row({ path: "/dev/vda2", mountpoint: "/boot", format: true, filesystem: "ext4" }),
-                                       row({ path: "/dev/vda3", mountpoint: "/", format: true })] },
-  },
-  {
-    name: "manual, ESP at /efi",
-    want: "/mnt/efi",
-    answer: { mode: "manual", mounts: [row({ path: "/dev/vda1", mountpoint: "/efi", format: false, fsType: "vfat" }),
                                        row({ path: "/dev/vda2", mountpoint: "/", format: true })] },
   },
   {
@@ -759,6 +763,21 @@ const REFUSAL_CASES: RefusalCase[] = [
     name: "no EFI partition, on a UEFI machine",
     uefi: true, want: ["diskErrNoBoot"],
     mounts: [
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+    ],
+  },
+  {
+    // #430: `/boot/efi` and `/efi` were two of the three spellings this page
+    // offered, and two thirds of the answers it accepted produced a machine
+    // that installed cleanly and stopped at `Error loading /vmlinuz-linux`.
+    // They are not refused with a message of their own because the page cannot
+    // produce them any more — what this pins is that removing them from the
+    // dropdown did not leave `ESP_MOUNTS` behind still recognising them, which
+    // would be the same bug with none of the evidence.
+    name: "a partition at /boot/efi is not an ESP — the spelling is gone (#430)",
+    uefi: true, want: ["diskErrNoBoot"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot/efi", format: true, filesystem: "vfat", size: 512 * MIB },
       { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
     ],
   },

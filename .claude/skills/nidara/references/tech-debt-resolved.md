@@ -25,8 +25,9 @@ cmdline (`quiet splash …`) and `loader.conf`'s timeout. Every one of those pat
 `/mnt/boot/loader/…`, hardcoded.
 
 That is correct in entire-disk mode, where the ESP is ours to place and we place it at `/boot`.
-The disk page's manual mode offers **three** EFI mount points — `/boot`, `/boot/efi` and `/efi` —
-and on the other two `/mnt/boot/loader/entries/*.conf` does not exist. The `sed` glob then matched
+The disk page's manual mode offered **three** EFI mount points at the time — `/boot`, `/boot/efi`
+and `/efi` (it offers one now, #430) — and on the other two `/mnt/boot/loader/entries/*.conf` does
+not exist. The `sed` glob then matched
 nothing, `cat > /mnt/boot/loader/loader.conf` wrote a file no bootloader reads, and the machine
 booted with the stock Arch title, no splash and no timeout policy.
 
