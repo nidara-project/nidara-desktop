@@ -695,7 +695,7 @@ right on the medium and unacceptable on a desktop:
 
 | where | what it does to YOUR machine |
 |---|---|
-| `steps/region.ts` | `hyprctl keyword input:kb_layout` — changes the real keyboard, on one click in a list |
+| `steps/region.ts` | `hyprctl eval hl.config({input={kb_layout=…}})` — changes the real keyboard, on one click in a list. **Not `keyword`**: the Lua parser rejects it, and the two keyword calls this shipped with in #395 were a silent no-op until the VM pass of 2026-09-08 caught the test box still typing `us` |
 | `widget/InstallerWindow.ts` | "Restart now" → `systemctl reboot` |
 | `steps/run.ts` | writes the plan **and the credentials** to /tmp, then spawns `sudo -n archinstall` |
 
@@ -919,7 +919,7 @@ as an id is the xkb variant, as a keymap name it is a file `kbd` does not ship.
 
 ### A keyboard layout has TWO names, and archinstall wants the other one
 
-`xkb` layouts (what Hyprland speaks, what `hyprctl keyword input:kb_layout` takes) and **vconsole
+`xkb` layouts (what Hyprland speaks, what `hl.config({input={kb_layout=…}})` takes) and **vconsole
 keymaps** (what `/etc/vconsole.conf` takes) are different namespaces with overlapping names. The
 installer offered xkb names and sent them straight into archinstall's `locale_config.kb_layout`,
 which is the **console** one — and four of them do not exist there at all:

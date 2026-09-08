@@ -62,6 +62,11 @@ import { setLanguageAnswer } from "../lib/answers"
 import { countryName, countryHaystack, timezoneName } from "../../lib/locale-names"
 import { isPreview } from "../lib/preview"
 
+/** Escape for a Lua double-quoted string. Nothing in the xkb catalogue carries a
+ *  quote or a backslash, and that is exactly why it is escaped here rather than
+ *  trusted: an unbalanced quote does not fail loudly, it evals to something else. */
+const luaStr = (v: string) => v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+
 /**
  * ⚠️ This is the installer reaching into the session it is RUNNING IN, not into
  * the system it is installing — which is exactly right on the live medium (you
@@ -70,8 +75,17 @@ import { isPreview } from "../lib/preview"
  */
 function applyKeyboardLive(k: KeyboardLayout) {
   if (isPreview()) return
-  execAsync(["hyprctl", "keyword", "input:kb_layout", k.layout]).catch(() => {})
-  execAsync(["hyprctl", "keyword", "input:kb_variant", k.variant]).catch(() => {})
+  // ⚠️ `hyprctl keyword` is REJECTED under Hyprland's Lua parser — it answers
+  // "can't work with non-legacy parsers. Use eval." and changes nothing. The live
+  // medium runs the same `hyprland.lua` the installed desktop does, so the two
+  // keyword calls this used to make were a no-op from the day they were written:
+  // the test box under the row went on typing the medium's `us` whatever you
+  // picked, which is the one thing that box exists to disprove. Both keys go in
+  // ONE eval — two would leave a frame configured with the new layout and the old
+  // variant. Same form as the greeter's LocaleBar.
+  const expr = `hl.config({ input = { kb_layout = "${luaStr(k.layout)}", kb_variant = "${luaStr(k.variant)}" } })`
+  execAsync(["hyprctl", "eval", expr])
+    .catch(e => console.warn("[region] live keyboard change:", e))
 }
 
 /**
