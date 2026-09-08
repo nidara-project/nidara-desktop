@@ -577,6 +577,25 @@ the deletion on purpose: hardcoding `/mnt/boot` would be correct today and silen
 second spelling comes back. (It also wrote `plymouthd.conf`, the mkinitcpio hook and the watchdog
 drop-ins until 2026-08-30, when those moved to the `nidara-system` package — see below.)
 
+🔑 **The mirrors are MEASURED, and archinstall's own "speed sort" is not a measurement.**
+`mirror_config` went out empty until #311, so every install downloaded from whatever mirrorlist the
+medium booted with. It now runs `reflector --sort rate` (`ui/installer/lib/mirrors.ts`) and sends the
+result as **`custom_servers`**, never `mirror_regions`. Two reasons, both read out of archinstall 4.4:
+`regions_config(..., speed_sort=True)` sorts on `mirror.speed`, a number that arrives inside
+`archlinux.org/mirrors/status/json/` — the speed the **Arch project's probes** measured, not this
+machine's (`mirror/mirror_handler.py:82`); and `custom_servers` are **prepended** to the mirrorlist
+with the old content left underneath (`installer.py:600-607`) while `mirror_regions` **replaces** the
+file (`:599`). So the measurement wins and the medium's list stays as the floor. It is applied to the
+live system before `minimal_installation()` pacstraps (`scripts/guided.py:100-103`), which is what
+makes it affect the download rather than only the installed machine's config file.
+
+⚠️ **The country only narrows, it does not decide** — the same rule the region page follows.
+Measured 2026-09-08: `--country ES` takes **4.5 s**, worldwide takes **27.6 s**, and a country with
+no mirrors (`--country BO`) exits **1** with an empty stdout and `error: no mirrors found` on stderr.
+Below three servers the worldwide run happens as well and its results go on the end. The whole thing
+has a 45 s budget and the subprocess is **killed** at the deadline — an abandoned reflector races
+pacstrap for the same mirrors on a machine that is about to want all the bandwidth there is.
+
 The `arm` question is load-bearing either way — archinstall gets `--dry-run` when we are not
 armed, so the mode that owns the disk does not change what protects it. There are two RUN modes,
 and **where it runs picks one** — one expression in `steps/run.ts` decides:

@@ -67,8 +67,12 @@
 #     human remembered until 2026-09-05. Logic in scripts/dev/disk-config-probe.ts
 #     and scripts/dev/account-rules-probe.ts — the second covers the account form,
 #     whose rules decide whether a name reaches `useradd` INSIDE THE CHROOT, which
-#     is the worst place to be told no. Each probe gets a positive control ahead of
-#     it: a probe that has only ever printed "ok" has been run, not tested.
+#     is the worst place to be told no. scripts/dev/bootloader-rules-probe.ts covers
+#     what we may edit on an ESP that is not ours, and scripts/dev/mirror-probe.ts
+#     the two pure halves of the mirror measurement — the reflector invocation, and
+#     the parse whose output is prepended to a pacman mirrorlist. Each probe gets a
+#     positive control ahead of it: a probe that has only ever printed "ok" has been
+#     run, not tested.
 
 name: CI
 
@@ -550,3 +554,33 @@ jobs:
         run: |
           ./scripts/bundle.sh --js scripts/dev/bootloader-rules-probe.ts /tmp/bootloader-probe.js
           gjs -m /tmp/bootloader-probe.js
+
+      # Fourth of the same shape. `lib/mirrors.ts` decides what gets prepended to
+      # `/etc/pacman.d/mirrorlist` on the machine being installed, and its parse
+      # is the half that fails silently: a regex that also matched commented
+      # lines would read a stock `pacman-mirrorlist` — every server present,
+      # every one commented out — as four hundred measured servers. That looks
+      # exactly like a successful measurement and is the opposite of one.
+      - name: The mirror probe can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/mirrors.ts /tmp/mirrors.bak
+          sed -i 's|const m = /\^\\s\*Server|const m = /^\\s*#?\\s*Server|' ui/installer/lib/mirrors.ts
+          if ! git diff --quiet ui/installer/lib/mirrors.ts; then
+            echo "control: the parse now accepts commented-out servers"
+          else
+            echo "::error::the control patched nothing — the expression it loosens has moved or been rewritten"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/mirror-probe.ts /tmp/mirror-defect.js
+          if gjs -m /tmp/mirror-defect.js; then
+            echo "::error::the probe passed while a commented mirrorlist parsed as servers — it is not checking what it prints"
+            cp /tmp/mirrors.bak ui/installer/lib/mirrors.ts
+            exit 1
+          fi
+          cp /tmp/mirrors.bak ui/installer/lib/mirrors.ts
+          git diff --quiet ui/installer/lib/mirrors.ts
+
+      - name: The reflector call, and what its answer means (must succeed)
+        run: |
+          ./scripts/bundle.sh --js scripts/dev/mirror-probe.ts /tmp/mirror-probe.js
+          gjs -m /tmp/mirror-probe.js
