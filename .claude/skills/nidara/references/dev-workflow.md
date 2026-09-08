@@ -1010,11 +1010,25 @@ onto X, and its default group is hardcoded `Default Layout=us` — `buildDefault
 (`Allow Overriding System XKB Settings=False`), seeded by `nidara-setup` only when the user has no
 `~/.config/fcitx5` at all. Without it every XWayland app would quietly undo the work in #498.
 
-▶️ **What is still missing, and why it is not guessed at**: the input-method PROFILE. Because
-`buildDefaultGroup` ignores the locale, a fresh 简体中文 install comes up with `keyboard-us` and
-nothing else — pinyin is installed and has to be added once in `fcitx5-configtool`. Seeding it means
-reproducing fcitx5's own on-disk format, and the honest way to get that is to configure it once in a
-VM and copy back what fcitx5 writes, not to transcribe it from a blog post.
+✅ **The profile does NOT need seeding, and the VM pass of 2026-09-08 is what settled it.** The
+plan here used to be "capture a configured profile from a VM and ship it", on the reading that
+`buildDefaultGroup` ignores the locale. Measured on a real 简体中文 install, that is not what
+happens: with nobody having opened `fcitx5-configtool` and **no `~/.config/fcitx5/profile` on disk
+at all**, `InputMethodGroupInfo` answers
+
+```
+('us', [('keyboard-us', ''), ('pinyin', '')])
+```
+
+and `Ctrl+Space` + `nihao` gives 你好. fcitx5 derives the group from the locale at startup and only
+writes the file once somebody changes something — so a captured profile would have frozen one
+locale's answer over a correct one. Measured for `zh_CN`; `ja_JP` takes the same path and is
+assumed, not measured. **Read a claim about `buildDefaultGroup` against a running fcitx5 before
+acting on it.**
+
+🔴 **What IS missing is #503**: the IME does not reach our **layer-shell** surfaces. Same session,
+same keys — 你好 in kitty and in our own GTK4 Settings window (xdg toplevels), raw `nihao` in the
+search overlay. No profile would have fixed that.
 
 ### The installer's log is not a terminal, and the children writing to it assume one
 

@@ -333,12 +333,23 @@ fi
 # `us` (it does not read the locale), so leaving it on would quietly undo the
 # layout the installer chose — for every XWayland app.
 #
-# ⚠️ What is NOT seeded here is the input-method PROFILE, which is what would let
-# a 简体中文 install type Chinese with zero clicks instead of two. fcitx5's default
-# group carries `keyboard-us` and nothing else, so pinyin/anthy are installed and
-# have to be added once in fcitx5-configtool. Writing that file means reproducing
-# fcitx5's own on-disk format, and the honest way to get it is to configure it
-# once and copy back what fcitx5 writes — which needs a VM, not a guess. See #500.
+# The input-method PROFILE is deliberately NOT seeded, and the VM pass of
+# 2026-09-08 is why: on a `zh_CN.UTF-8` install fcitx5 builds the right group by
+# itself. `InputMethodGroupInfo` answered `('us', [('keyboard-us', ''),
+# ('pinyin', '')])` on a machine where nobody had opened fcitx5-configtool, and
+# ~/.config/fcitx5/profile did not exist at all — it derives the group from the
+# locale at startup and only writes the file once somebody changes something.
+# Ctrl+Space then `nihao` gave 你好 in kitty and in our own Settings window.
+#
+# So the earlier plan here — copy back a profile captured from a configured VM —
+# would have frozen a guess on top of an answer fcitx5 already gets right, and
+# would have been WRONG for every locale but the one it was captured in.
+# (Measured for zh_CN. ja_JP goes through the same locale-derived path and is
+# assumed, not measured.)
+#
+# ⚠️ What does NOT work yet is typing Chinese into our LAYER-SHELL surfaces —
+# the search overlay takes the raw latin. That is #503, and no profile would
+# have fixed it.
 FCITX_DIR="${REAL_HOME}/.config/fcitx5"
 if [ ! -d "$FCITX_DIR" ] && [ -d "$SHARE/defaults/fcitx5" ]; then
     mkdir -p "$FCITX_DIR/conf"
