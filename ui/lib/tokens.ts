@@ -448,14 +448,19 @@ export const WINDOW_LAYOUT = {
      * was not measured — the probe's worst-case pass had been finding NO dropdowns
      * since the kit began wrapping control cells in a holder Box, so it reported the
      * opening state twice and that read as "nothing moves" (#464). With the walk
-     * fixed, the sweep above is the OPENING state and only English differs:
+     * fixed it was measured, and English moved by 20px on `/boot/efi`, the one
+     * option wider than its own `Mount point` heading.
      *
-     *     worst case:  en 577 · es 643 · fr 632 · ja 641 · ru 703
+     * That option is gone: #430 leaves `/boot` as the only place the EFI system
+     * partition may be mounted, because the other two spellings installed cleanly
+     * and did not boot. Re-measured over the same five locales, worst case now
+     * equals the opening state in every one of them:
      *
-     * English is the one locale whose headings are narrower than its own options
-     * (`Mount point` 82px against `/boot/efi`), so it is the only column the answer
-     * can widen — by 20px, into a pane with 57 to spare. Russian still decides the
-     * number, and the number is still 760.
+     *     en 557 · fr 632 · ja 641 · es 643 · ru 703   (pane = table + 48)
+     *
+     * So the sentence this note could not honestly write in September is true
+     * now, and measured: no answer widens the column in any locale. Russian still
+     * decides the number, the number is still 760, and the slack is back to 57.
      */
     wizardContent: 760,
     /** The distress width — only a compositor can push the pane here. */

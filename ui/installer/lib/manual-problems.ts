@@ -12,8 +12,23 @@ import { espMount } from "./disk-config"
 import { formatSize } from "./format-size"
 import type { ManualPartitionMount } from "./answers"
 
-/** The three mount points that can hold the EFI system partition on this install. */
-export const ESP_MOUNTS = new Set(["/boot", "/boot/efi", "/efi"])
+/**
+ * Where the EFI system partition goes on this install. One place, on purpose.
+ *
+ * ⚠️ This was a set of three — `/boot`, `/boot/efi`, `/efi` — and two of them
+ * produced an install that finished, reported success and then stopped at the
+ * boot menu with `Error loading /vmlinuz-linux: Not Found` (#430). We install
+ * systemd-boot with `uki: false`, so the loader entry says `linux
+ * /vmlinuz-linux`, a path relative to the partition the ENTRY is on; pacman and
+ * mkinitcpio put that file in `/boot` on the root filesystem. Mount the ESP
+ * anywhere but `/boot` and the entry is valid, the loader is installed, and the
+ * file it names is on another partition.
+ *
+ * Decision A of #430. It stays a Set because it is the shape the two callers
+ * want, and because a second legal spelling is a change of ONE line here rather
+ * than a rule to re-derive.
+ */
+export const ESP_MOUNTS = new Set(["/boot"])
 
 /**
  * The smallest EFI system partition this install can be put on.
@@ -72,7 +87,7 @@ export function manualProblems(mounts: ManualPartitionMount[], uefi: boolean): s
 
   // ⚠️ The EFI system partition has to be FAT32, and nothing said so: the
   // filesystem dropdown defaults to btrfs and applies to whatever the row was
-  // given, so assigning a partition to /boot/efi and leaving Format ticked —
+  // given, so assigning a partition to /boot and leaving Format ticked —
   // which the smart default does FOR you on anything that is not already vfat —
   // formatted the ESP as btrfs. The install then ran to completion, reported
   // success, and produced a machine whose firmware cannot read its own boot

@@ -482,8 +482,8 @@ subvolumes, and giving it one as well mounts the root twice.
 
 ⚠️ **A subvolume and a partition can claim the same path, and nothing stops them.** Both modes emit
 our five subvolumes for a btrfs root, so manual mode has to drop the ones a row of the table already
-takes — today that can only be `/home`, because the mount dropdown offers `/`, `/boot`, `/boot/efi`,
-`/efi`, `/home` and swap and nothing else, which is also why `@snapshots` is always emitted and
+takes — today that can only be `/home`, because the mount dropdown offers `/`, `/boot`, `/home` and
+swap and nothing else, which is also why `@snapshots` is always emitted and
 "every install has `/.snapshots`" can be assumed. `@` is never dropped: `/` is the root row itself.
 Emitting `@home` beside a partition at `/home` is **accepted** by archinstall — `parse_arg` validates
 geometry and says nothing about mount points being unique — and the failure is silent all the way
@@ -559,11 +559,22 @@ with, and it is a property of that layout, not of archinstall.
 
 `lib/bootloader.ts` still writes the loader entries' titles, the kernel cmdline and the timeout
 afterwards, in both modes: `Installer.__exit__` does not unmount, so the ESP is still mounted when
-archinstall exits. ⚠️ Its paths were hardcoded to `/mnt/boot` until 2026-09-04, and manual mode
-offers three places to put the ESP: pick `/boot/efi` (the Debian/Ubuntu/Fedora spelling) and all
+archinstall exits. ⚠️ Its paths were hardcoded to `/mnt/boot` until 2026-09-04, and manual mode then
+offered three places to put the ESP: pick `/boot/efi` (the Debian/Ubuntu/Fedora spelling) and all
 three edits landed in a plain `/boot` directory on the root filesystem while the bootloader went to
 the ESP — no error, no missing file, just a machine that boots as stock Arch with a 15-second menu
-(installer study, H-03). `loaderRoot()` derives it from the same `espMount()` as everything else. (It also wrote `plymouthd.conf`, the mkinitcpio hook and the watchdog
+(installer study, H-03). `loaderRoot()` derives it from the same `espMount()` as everything else.
+
+🔑 **The ESP has ONE mount point, `/boot`, since #430 (2026-09-08)** — and the reason is worth
+keeping because the fix is a deletion. We install systemd-boot with `uki: false`, so the loader
+entry says `linux /vmlinuz-linux`, a path relative to the partition holding the ENTRY, while pacman
+and mkinitcpio write that file to `/boot` on the ROOT filesystem. They only line up when they are
+the same place, so `/boot/efi` and `/efi` produced installs that completed, reported success and
+stopped at `Error loading /vmlinuz-linux: Not Found`. archinstall validates exactly this for Limine
+and Efistub (`bootloader/utils.py:validate_bootloader_layout`) and has no equivalent check for
+systemd-boot, so nothing upstream refuses it either. `loaderRoot()` and `espMount()` both survive
+the deletion on purpose: hardcoding `/mnt/boot` would be correct today and silently wrong the day a
+second spelling comes back. (It also wrote `plymouthd.conf`, the mkinitcpio hook and the watchdog
 drop-ins until 2026-08-30, when those moved to the `nidara-system` package — see below.)
 
 The `arm` question is load-bearing either way — archinstall gets `--dry-run` when we are not

@@ -60,7 +60,7 @@ export interface ManualPartitionMount {
   logicalSectorSize: number
   fsType: string | null
   label: string | null
-  mountpoint: string // "/", "/boot", "/boot/efi", "/efi", "/home", "swap"
+  mountpoint: string // "/", "/boot", "/home", "swap"
   filesystem: FilesystemType
   format: boolean
   /**

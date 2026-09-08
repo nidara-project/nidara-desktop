@@ -118,11 +118,11 @@ app.start({
         mounts: seed === "dupe"
           ? [mount(root, "/", "btrfs", true), mount(other, "/", "ext4", true)]
           : seed === "efi"
-          ? [mount(esp, "/boot/efi", "btrfs", true), mount(root, "/", "btrfs", true)]
+          ? [mount(esp, "/boot", "btrfs", true), mount(root, "/", "btrfs", true)]
           : seed === "swap"
-          ? [mount(esp, "/boot/efi", "vfat", false), mount(root, "/", "btrfs", true),
+          ? [mount(esp, "/boot", "vfat", false), mount(root, "/", "btrfs", true),
              mount(other, "swap", "btrfs", true)]
-          : [mount(esp, "/boot/efi", "vfat", false), mount(root, "/", "btrfs", true)],
+          : [mount(esp, "/boot", "vfat", false), mount(root, "/", "btrfs", true)],
       })
     }
 
@@ -250,7 +250,7 @@ app.start({
           // ⚠️ Put it back. A probe that leaves the page in the state it needed
           // for one measurement is a probe that lies about every other thing it
           // shows: this cost half an hour of hunting a "bug" where the first
-          // row came up mounted at /boot/efi and the page correctly complained
+          // row came up mounted at /boot and the page correctly complained
           // about a duplicate the seed had never asked for.
           restore.push([drop, drop.get_selected()])
           drop.set_selected(longest)

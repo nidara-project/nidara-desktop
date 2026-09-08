@@ -6,15 +6,21 @@ import type { Answers } from "./answers"
 /**
  * Where, under /mnt, the loader configuration this function edits actually lives.
  *
- * ⚠️ Every path here used to be spelled `/mnt/boot`, and manual mode offers three
- * places to put the EFI system partition (`/boot`, `/boot/efi`, `/efi`). Choose
- * either of the other two — `/boot/efi` is the Debian/Ubuntu/Fedora spelling, so
- * it is what somebody reusing an existing layout is most likely to pick — and
- * archinstall installs the bootloader onto that partition while all three edits
- * below land in an ordinary `/boot` directory on the root filesystem: renamed
- * entries nobody reads, a silent boot nobody gets, and a `loader.conf` the
- * firmware never sees. Nothing fails; the machine simply boots as stock Arch,
- * fifteen seconds of menu included. (Installer study, H-03.)
+ * ⚠️ Every path here used to be spelled `/mnt/boot` while manual mode offered
+ * three places for the EFI system partition (`/boot`, `/boot/efi`, `/efi`).
+ * Choosing either of the other two had archinstall install the bootloader onto
+ * that partition while all three edits below landed in an ordinary `/boot`
+ * directory on the root filesystem: renamed entries nobody reads, a silent boot
+ * nobody gets, and a `loader.conf` the firmware never sees. Nothing failed; the
+ * machine simply booted as stock Arch, fifteen seconds of menu included.
+ * (Installer study, H-03.)
+ *
+ * ⚠️ Since #430 the page offers only `/boot`, so this resolves to `/mnt/boot`
+ * every time — and it is kept anyway, deliberately. H-03 was the SECOND bug of
+ * this shape: the first was assuming the answer instead of asking `espMount()`.
+ * A hardcoded path here would be correct today and silently wrong the day a
+ * second spelling comes back, and the way it fails is a machine that installs
+ * and does not boot. One extra call is cheaper than that.
  *
  * The two paths archinstall itself derives are `$ESP/loader/loader.conf` and
  * `$BOOT/loader/entries` (`installer._add_systemd_bootloader`,

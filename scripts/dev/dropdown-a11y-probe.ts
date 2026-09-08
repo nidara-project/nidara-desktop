@@ -49,7 +49,7 @@ import { NidaraWindow, NidaraDropDown } from "../../ui/lib/nidara-kit"
 
 GLib.setenv("GTK_THEME", "nidara", true)
 
-const MOUNTS = ["None", "/", "/boot", "/boot/efi", "/home", "swap"]
+const MOUNTS = ["None", "/", "/boot", "/home", "swap"]
 
 app.start({
   applicationId: "org.nidara.dropdowna11yprobe",
