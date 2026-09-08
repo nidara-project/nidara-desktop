@@ -584,3 +584,14 @@ jobs:
         run: |
           ./scripts/bundle.sh --js scripts/dev/mirror-probe.ts /tmp/mirror-probe.js
           gjs -m /tmp/mirror-probe.js
+
+      # ⚠️ And the bundle itself, which nothing was building. The probes above
+      # reach `lib/`, so a syntax error THERE has always been caught on the way
+      # in — but `steps/` and `app.ts` are in no job at all, and the installer is
+      # a bundle whose `tsconfig` cannot be fully typechecked (the names-only
+      # step in the Typecheck job greps for TS2304/TS2552, and a parse error is
+      # neither). A stray quote inside a translated string would have shipped a
+      # medium whose installer does not start, with every check green. Twelve
+      # seconds, and it is the cheapest gate in this file.
+      - name: The installer bundle builds (must succeed)
+        run: ./scripts/bundle.sh ui/installer/app.ts /tmp/nidara-installer
