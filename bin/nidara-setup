@@ -325,6 +325,28 @@ if [ ! -f "$KITTY_DIR/kitty.conf" ] && [ -d "$SHARE/defaults/kitty" ]; then
     echo "  [Init] $KITTY_DIR (padding, JetBrains Mono + Nerd symbols, glass, dark palette)"
 fi
 
+# fcitx5 — the input method's own config dir. Seeded ONLY when the user has none,
+# like kitty's above; an existing fcitx5 setup is never touched.
+#
+# One file today, and it is a GUARD rather than a preference: fcitx5's X11 addon
+# can push its own keyboard layout onto X, and its default group is hardcoded to
+# `us` (it does not read the locale), so leaving it on would quietly undo the
+# layout the installer chose — for every XWayland app.
+#
+# ⚠️ What is NOT seeded here is the input-method PROFILE, which is what would let
+# a 简体中文 install type Chinese with zero clicks instead of two. fcitx5's default
+# group carries `keyboard-us` and nothing else, so pinyin/anthy are installed and
+# have to be added once in fcitx5-configtool. Writing that file means reproducing
+# fcitx5's own on-disk format, and the honest way to get it is to configure it
+# once and copy back what fcitx5 writes — which needs a VM, not a guess. See #500.
+FCITX_DIR="${REAL_HOME}/.config/fcitx5"
+if [ ! -d "$FCITX_DIR" ] && [ -d "$SHARE/defaults/fcitx5" ]; then
+    mkdir -p "$FCITX_DIR/conf"
+    cp "$SHARE/defaults/fcitx5/conf/"*.conf "$FCITX_DIR/conf/"
+    chown -R "$REAL_USER:" "$FCITX_DIR"
+    echo "  [Init] $FCITX_DIR (keyboard layout stays the compositor's)"
+fi
+
 # .mcp.json — MCP manifest for the user's AI agent (Claude Code et al). Points at
 # the installed binary via PATH. Always (re)written: it's a runtime-managed pointer,
 # not user data. Opening an agent inside ~/.config/nidara discovers it

@@ -19,6 +19,26 @@ export OZONE_PLATFORM=wayland
 export QT_QPA_PLATFORMTHEME=xdgdesktopportal
 export CLUTTER_BACKEND=wayland
 
+# ── Input method (fcitx5) ─────────────────────────────────────────────────────
+# These tell each TOOLKIT where to send keystrokes. fcitx5 itself needs none of
+# them — it finds the compositor through WAYLAND_DISPLAY.
+#
+# ⛔ `GTK_IM_MODULE` is missing ON PURPOSE, and it is the one everybody sets.
+# GTK4 speaks `zwp_text_input_v3` to the compositor natively (verified:
+# libgtk-4.so exports the protocol, and Hyprland answers both halves —
+# `zwp_text_input_manager_v3` for apps and `zwp_input_method_manager_v2` for the
+# IME). Setting the variable OVERRIDES that native path — GTK's own error string
+# is "IM Context is hardcoded by GTK_IM_MODULE" — and drops the whole desktop
+# onto the legacy module. Both the ArchWiki's Fcitx5 page and fcitx's own
+# "Using Fcitx 5 on Wayland" say to leave it unset; so does Omarchy's
+# environment.d drop-in, which sets exactly these four and not that one.
+#
+# XMODIFIERS is still needed: XWayland clients have no text-input protocol.
+export INPUT_METHOD=fcitx
+export QT_IM_MODULE=fcitx
+export XMODIFIERS=@im=fcitx
+export SDL_IM_MODULE=fcitx
+
 # GObject Introspection
 export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
 export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
