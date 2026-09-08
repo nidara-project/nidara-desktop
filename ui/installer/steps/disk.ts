@@ -414,11 +414,19 @@ export function DiskStep(): Step {
       const problemLabel = prose("", "installer-prose--warning")
       manualBox.append(problemLabel)
 
+      // A partition editor that did not start, said where the rest of the page
+      // says things. It goes through `refreshProblems` rather than into a label
+      // of its own because this page already has ONE place where it tells you
+      // what is wrong, and a second one is how a message ends up somewhere
+      // nobody is looking (D-19, and the reason the account form was rebuilt).
+      let editorError = ""
+
       refreshProblems = () => {
         const problems = manualProblems(
           Array.from(manualMounts.values()).filter(m => m.mountpoint !== ""),
           isUefi(),
         )
+        if (editorError) problems.unshift(editorError)
         problemLabel.label = problems.join("\n")
         problemLabel.visible = problems.length > 0
       }
@@ -772,8 +780,40 @@ export function DiskStep(): Step {
       })
       gpartedBtn.visible = GLib.find_program_in_path("gparted") !== null
       gpartedBtn.connect("clicked", () => {
-        execAsync(["gparted"]).catch(e =>
-          console.error("[Installer] Failed to launch GParted:", e))
+        // ⚠️ The failure used to land in `console.error`, which on the medium is
+        // a stream with no reader: the installer's window has no console and the
+        // session's journal is not something anybody is looking at while they
+        // are trying to make room on a disk. Pressing the button did nothing,
+        // said nothing, and looked exactly like a program that had opened
+        // somewhere behind the window.
+        //
+        // It matters more now than when it was written, because since
+        // nidara-project/nidara-iso#23 the program is actually ON the medium —
+        // so a silence here is no longer "we do not ship it", it is a real
+        // failure. The likeliest one is escalation: GParted needs root and asks
+        // for it through pkexec, which needs an authentication agent and the
+        // live account's password. That password is `nidara` and it is on the
+        // boot menu, but somebody who does not know that sees a prompt they
+        // cannot answer, cancels it, and lands back here — which is precisely
+        // the case that has to say something.
+        editorError = ""
+        refreshProblems?.()
+        gpartedBtn.sensitive = false
+        execAsync(["gparted"])
+          .then(() => {
+            // It exited, so the disk may be a different shape than the table is
+            // showing. Re-reading it is the whole point of having sent somebody
+            // to an editor, and leaving it to the Refresh button next door means
+            // the page can sit there describing a layout that no longer exists.
+            buildPartitionsList()
+            syncAnswer()
+          })
+          .catch(e => {
+            editorError = t("diskErrGpartedFailed")
+            refreshProblems?.()
+            console.error("[Installer] Failed to launch GParted:", e)
+          })
+          .finally(() => { gpartedBtn.sensitive = true })
       })
 
       const refreshBtn = NidaraButton({
