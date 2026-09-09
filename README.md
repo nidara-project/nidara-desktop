@@ -101,7 +101,9 @@ Hardware-compatibility fixes are explicitly a "global" contribution — see
 > This installs **the desktop environment** onto an Arch system you already have. If what you
 > want is the whole operating system on a blank disk, that is **Nidara**, and it comes as a live
 > image from [nidara-iso](https://github.com/nidara-project/nidara-iso) — you do not need this
-> page for it.
+> page for it. Read
+> [Before you install](https://github.com/nidara-project/nidara-iso#before-you-install) there
+> first: the medium is unsigned, so Secure Boot has to be off to boot it.
 
 Nidara Desktop targets **Arch Linux** (see [Hardware & platform support](#hardware--platform-support)
 for what's tested, including which Arch derivatives qualify). The intended starting point is a
