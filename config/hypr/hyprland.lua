@@ -493,6 +493,17 @@ local FLOAT_MARGIN = GAPS_OUT + BORDER_SIZE
 -- exactly the one we measured when we asked.
 local lastAsk = {}
 
+-- The fullscreen mode we last saw on each window, keyed by address. Leaving
+-- fullscreen is the one transition where the compositor restores geometry it
+-- remembered from before, and it announces it BACKWARDS: measured in the bench,
+-- `window.update_rules` arrives with `fullscreen` already 0 while the box is still
+-- the fullscreen one — 2560x1440 at [0,0] — and the `window.fullscreen` event only
+-- fires afterwards. Clamping on that call writes the window's geometry, which is
+-- exactly what the restore was about to write, so a browser leaving a video's
+-- fullscreen came back as the whole usable area instead of the 900x700 it had at
+-- [300,300]. Without the clamp Hyprland restores it perfectly, so this was ours.
+local fsState = {}
+
 -- Where a floating window is allowed to live: the monitor minus what the bar and
 -- the dock reserve, minus our own margin. Both the clamp and the cascade measure
 -- against this one rectangle, so they can never disagree about where the edge is.
@@ -511,10 +522,21 @@ end
 -- Returns the box it settled on (x, y, w, h) so the caller does not have to read
 -- the geometry back — a resize we just dispatched is not visible in `w.size` yet.
 local function clampFloating(w)
-    if not w or not w.floating then return end
+    if not w or not w.floating or not w.address then return end
+
+    local sel  = "address:" .. w.address
+    local fs   = w.fullscreen or 0
+    local was  = fsState[sel] or 0
+    fsState[sel] = fs
+
     -- Fullscreen and maximized geometry belongs to the fullscreen handler, which
     -- already respects the usable area for `maximized` (it returns the work area).
-    if (w.fullscreen or 0) ~= 0 then return end
+    if fs ~= 0 then return end
+    -- 🔑 And this one is LEAVING it: skip the pass entirely and let the compositor
+    -- put back what it remembered. Whatever it restores is a geometry that already
+    -- passed through here, and if it somehow does not fit, the next
+    -- `window.update_rules` clamps it.
+    if was ~= 0 then return end
 
     local mon = w.monitor
     local originX, originY, availW, availH = usableArea(mon)
@@ -524,7 +546,6 @@ local function clampFloating(w)
     local curX, curY = w.at.x, w.at.y
     local newW = math.min(curW, availW)
     local newH = math.min(curH, availH)
-    local sel  = "address:" .. w.address
 
     local x, y
     if newW ~= curW or newH ~= curH then
@@ -707,7 +728,12 @@ end
 
 hl.on("window.open",         function(w) placeFloatingGuarded(w, true) end)
 hl.on("window.update_rules", function(w) placeFloatingGuarded(w, false) end)
-hl.on("window.destroy",      function(w) if w and w.address then lastAsk["address:" .. w.address] = nil end end)
+hl.on("window.destroy",      function(w)
+    if not w or not w.address then return end
+    local sel = "address:" .. w.address
+    lastAsk[sel]  = nil
+    fsState[sel]  = nil
+end)
 
 
 -- ── Keybinds — Window modes ──────────────────────────────────────────────────

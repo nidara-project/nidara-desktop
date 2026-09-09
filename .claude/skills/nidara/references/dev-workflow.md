@@ -402,6 +402,41 @@ is inside and fits, so the second pass is a no-op.
 number disagreeing about what it included. Note the cascade step keeps using `GAPS_OUT` and not the
 margin: the border is not part of what the eye reads as a gap.
 
+#### Leaving fullscreen: the compositor announces it BACKWARDS, and the clamp used to eat the restore
+
+A floating window that goes fullscreen — a video in a browser — came back as the whole usable area
+instead of the size and place it had. Without our clamp Hyprland restores it perfectly, so it was
+ours. The trace, from the bench:
+
+    clamp float=true fs=2 at=0,0 size=2560x1440      in fullscreen, skipped
+    clamp float=true fs=0 at=0,0 size=2560x1440      🔴 fs is ALREADY 0, the box is still fullscreen's
+      -> resize 2542x1282 · move 9,49                 we write geometry…
+    EVENTO fullscreen fs=0 at=9,49                    …and the fullscreen event arrives after
+
+🔑 **`window.update_rules` arrives with `fullscreen` already 0 while the geometry is still the
+fullscreen box, and the `window.fullscreen` event only fires afterwards.** Writing geometry on that
+call replaces exactly what the restore was about to put back.
+
+The fix is a two-line state machine in the same callback — no new event, no ordering assumption
+between hooks: remember the fullscreen mode seen per address, and when it goes non-zero → 0, **skip
+that pass entirely**. Whatever the compositor restores is a geometry that already passed through the
+clamp, and if it somehow does not fit, the next `window.update_rules` catches it.
+
+⚠️ **Two instrument traps found while chasing this, and both make a dead probe look alive:**
+
+- **`print()` from a Lua CALLBACK reaches nothing.** A print at config-load time shows up in the
+  instance log as `[Lua] …`; the same print inside an `hl.on` handler appears neither there nor on
+  the compositor's stdout. Trace from callbacks with `io.open(path, "a")` instead. (Corollary worth
+  knowing: the `print("Nidara: …failed")` in the clamp's `pcall` guard is invisible — a clamp that
+  throws fails silently.)
+- **`string.format("%d", …)` throws in Lua 5.4 on a non-integer**, and window coordinates are
+  floats mid-animation. Inside the guard's `pcall` that error is swallowed, so the instrumented
+  clamp did nothing at all while its measurements looked plausible. Format with `tostring()`.
+
+⚠️ **And in the bench, a GTK probe must not use `Gtk.Application`**: it is single-instance, so once a
+run on the host has taken the app-id, the nested copy never maps and the bench reports "no window".
+Use a plain `Gtk.Window` plus `GLib.MainLoop`.
+
 #### Super+M maximized two different windows, because the box depends on `floating`
 
 `IFullscreenHandler::calculateFullscreenBox` maximizes into `WORKSPACE->m_space->workArea(target->floating())`
