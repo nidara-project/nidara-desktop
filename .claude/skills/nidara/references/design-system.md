@@ -60,7 +60,10 @@ Two rules that keep such a form from shouting at somebody who has done nothing w
 
 The message is not red — this DE spends red on recording and on failure only. What makes it
 read as a correction is that it is the one full-strength line on a card of dim subtitles, and
-that it is attached to the control it is about.
+that it is attached to the control it is about. In the kit, `NidaraFieldRow` (`lib/nidara-kit/row.ts`)
+packages this pattern universally: a stacked row housing the control and a `.nidara-field-error`
+caption ($fse-small, weight 500, full-strength ink) with `setError(message)` and
+`setValidationState("none" | "warning" | "error")` (#400, #466).
 
 ## A table is the same rows, in columns
 
@@ -97,6 +100,11 @@ Three things about it that are not obvious:
   is ignored so headings do not dim over visible data. In contrast, `clear()` keeps headings at
   full contrast because emptying to refill (e.g. Refresh) should read as an atomic rebuild rather
   than a vacant state.
+- **Row validation states (`setValidationState`).** Rows in `NidaraTable` can be marked with
+  `row.setValidationState("none" | "warning" | "error")` (#466). Classes `.nidara-table-row--warning`
+  and `.nidara-table-row--error` in `_components.scss` lift the row background (`--nidara-surface-hover`
+  and `--nidara-surface-raised`) and promote dimmed cells to full-contrast ink (`--nidara-text`) at
+  weight 500 (`$fw-medium`), mirroring the warning ink convention without spending red.
 
 The headings are **sentence case, not the uppercase micro-caps of `.nidara-list-title`**. That
 label is a GROUP header, said once over a card, where the extra weight is structure; six of
@@ -2213,6 +2221,7 @@ This is the table that decides almost every "which widget should I use?" questio
 | Toggles / switches / buttons inside overlays | **`Gtk.Switch`, `Gtk.Button`** (NOT `Adw.*Row`) | Base widgets style cleanly; `Adw.*Row` brings padding/focus-ring/separators that have to be killed one by one. |
 | Sliders (any) | **`makeSlider`** from `nidara-kit/slider.ts` (NOT `Gtk.Scale`) | See "Sliders" below — one Cairo component for the whole shell. |
 | A preference row (label + subtitle + its control) | **`NidaraToggleRow` / `NidaraDropDownRow` / `NidaraSliderRow`** from `nidara-kit/rows.ts` | Inside Settings, reach them through `SettingsHelpers`' `toggleRow`/`dropdownRow`/`sliderRow`, which hand in `createRow` so the row also lands in the search index. Anywhere else, call the kit directly. |
+| A validated form field (label + subtitle + control + error line) | **`NidaraFieldRow`** from `nidara-kit/row.ts` | Stacked row with inline `.nidara-field-error` caption underneath the control and `setError()` / `setValidationState()`. See "A form's faults belong to its fields". |
 | Settings window | **`ui/lib/nidara-kit`** (`NidaraSplitView`, `NidaraClamp`, `NidaraButton`, `NidaraDropDown`) | Custom split view. **Do NOT use `Adw.OverlaySplitView`** — it breaks capsule margins. |
 | A table (several values per line, each named) | **`NidaraTable`** from `nidara-kit/table.ts` | The list card with column headings; columns aligned by one `Gtk.SizeGroup` each. See "A table is the same rows, in columns". |
 | Modal dialogs | **`showNidaraAlert`** from `nidara-kit` | Clean, themeable. |

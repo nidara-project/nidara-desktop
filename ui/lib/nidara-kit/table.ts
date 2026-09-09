@@ -1,6 +1,18 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Pango from "gi://Pango"
-import { NidaraEmptyRow, ROW_H_SINGLE } from "./row"
+import { NidaraEmptyRow, ROW_H_SINGLE, type NidaraValidationState } from "./row"
+
+export type { NidaraValidationState } from "./row"
+
+export interface NidaraTableRow extends Gtk.ListBoxRow {
+    /**
+     * Mark a row's validation state (#466).
+     * Applies `.nidara-table-row--warning` or `.nidara-table-row--error` in CSS,
+     * lifting the row background and strengthening dimmed cells to full-contrast ink.
+     * "none" clears both classes.
+     */
+    setValidationState(state: NidaraValidationState): void
+}
 
 /**
  * How far apart two cells sit. The row's own text↔control gap is 16
@@ -48,7 +60,7 @@ export interface NidaraTableResult {
     /** The card itself, for a caller that needs to reach the rows. */
     listBox: Gtk.ListBox
     /** One row: a widget (or a string) per column, in column order. */
-    appendRow(cells: Array<Gtk.Widget | string>, extraClasses?: string[]): Gtk.ListBoxRow
+    appendRow(cells: Array<Gtk.Widget | string>, extraClasses?: string[]): NidaraTableRow
     /** The "there is nothing here" row — spans the table instead of the columns. */
     appendMessage(text: string): Gtk.ListBoxRow
     /**
@@ -358,7 +370,18 @@ export function NidaraTable(
             // note in `NidaraStackedRow`.
             activatable: false, selectable: false, focusable: false,
             css_classes: ["nidara-row", ROW_H_SINGLE, "nidara-table-row", ...rowClasses],
-        })
+        }) as NidaraTableRow
+
+        row.setValidationState = (state: NidaraValidationState) => {
+            row.remove_css_class("nidara-table-row--warning")
+            row.remove_css_class("nidara-table-row--error")
+            if (state === "warning") {
+                row.add_css_class("nidara-table-row--warning")
+            } else if (state === "error") {
+                row.add_css_class("nidara-table-row--error")
+            }
+        }
+
         row.set_child(line)
         listBox.append(row)
         return row

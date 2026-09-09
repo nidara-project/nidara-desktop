@@ -272,6 +272,16 @@ checkbutton:disabled {
     color: var(--nidara-text-dim);
 }
 
+/* A per-field error line underneath a control in a validated form row (#400, #466).
+   One step DOWN the type scale ($fse-small, matching .nidara-row-subtitle beside it).
+   Full-strength ink at weight 500 ($fw-medium) makes it the loudest line on the card
+   without spending the red this DE reserves for recording and for failure. */
+.nidara-field-error {
+    font-size: $fse-small;
+    font-weight: $fw-medium;
+    color: var(--nidara-text);
+}
+
 /* ── Table: the same card and rows, in aligned columns under headings ───────
    Geometry only, as everywhere else here: the row chrome is `.nidara-row` above
    and the interaction model is _base.scss. Built by `nidara-kit/table.ts`, which
@@ -328,6 +338,30 @@ checkbutton:disabled {
 }
 /* Secondary column (a size, a current filesystem): present, not competing. */
 .nidara-table-cell--dim { color: var(--nidara-text-dim); }
+
+/* Row validation states (no red: this repo reserves red for recording and failure) — #466.
+   Used by NidaraTable and validated form rows like NidaraFieldRow (#400).
+   A warning/error row lifts the background with mode-aware surface tokens and strengthens
+   dimmed cells to full-contrast ink with medium weight (500), mirroring installer-prose--warning. */
+.nidara-table-row--warning,
+.nidara-row--warning {
+    background-color: var(--nidara-surface-hover);
+    &:hover { background-color: var(--nidara-surface-active); }
+    .nidara-table-cell {
+        font-weight: $fw-medium;
+        color: var(--nidara-text);
+    }
+}
+
+.nidara-table-row--error,
+.nidara-row--error {
+    background-color: var(--nidara-surface-raised);
+    &:hover { background-color: var(--nidara-surface-strong); }
+    .nidara-table-cell {
+        font-weight: $fw-medium;
+        color: var(--nidara-text);
+    }
+}
 
 /* Boxed list container — dense frosted card holding .nidara-row children. */
 .nidara-list {

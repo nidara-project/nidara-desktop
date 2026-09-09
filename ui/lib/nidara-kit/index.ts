@@ -46,15 +46,15 @@ export { NidaraFontButton } from "./fontbutton"
 
 // NidaraRow / NidaraList — universal list row + boxed list card (the one place
 // a row/list is built; used by Settings, Control Center and any future surface)
-export { NidaraRow, NidaraStackedRow, NidaraEmptyRow, ROW_H_SINGLE, ROW_H_DOUBLE } from "./row"
-export type { NidaraRowResult } from "./row"
+export { NidaraRow, NidaraStackedRow, NidaraFieldRow, NidaraEmptyRow, ROW_H_SINGLE, ROW_H_DOUBLE } from "./row"
+export type { NidaraRowResult, NidaraFieldRowResult, NidaraValidationState } from "./row"
 export { NidaraList, NidaraPickList } from "./list"
 export type { NidaraListResult } from "./list"
 
 // NidaraTable — the same card and the same rows, in aligned columns under
 // headings. The one thing a row cannot say: several values per line, each named.
 export { NidaraTable } from "./table"
-export type { NidaraTableColumn, NidaraTableResult } from "./table"
+export type { NidaraTableColumn, NidaraTableResult, NidaraTableRow } from "./table"
 export { NidaraSelectionCheck } from "./check"
 
 // NidaraSidebar — universal navigation list (icon+label rows, single-select)

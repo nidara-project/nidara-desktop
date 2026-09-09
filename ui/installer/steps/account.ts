@@ -6,9 +6,8 @@
 
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
-import Pango from "gi://Pango"
 import type { Step } from "../lib/flow"
-import { NidaraList, NidaraStackedRow } from "../../lib/nidara-kit"
+import { NidaraList, NidaraFieldRow } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import { getAnswers, setAccountAnswer } from "../lib/answers"
 import { heading, prose } from "./common"
@@ -28,57 +27,6 @@ let draft = {
   username: "nidara",
   hostname: "nidara",
   password: "",
-}
-
-/**
- * One field of the form: the row, and the line that tells it it is wrong.
- *
- * The error line lives INSIDE the row, under its own entry (D-19/D-22). It used
- * to be one label under the card, which on the default window sits below five
- * stacked rows and therefore below the fold: Continue went dead and the reason
- * for it was off screen. Mismatched passwords — the common case — produced
- * exactly that, a dead button and nothing to read.
- *
- * It stays in this file until something else needs it: the rule this repo already
- * follows for `searchableList` in `steps/common.ts` — a third use, or the first
- * one outside the installer, is what promotes a helper to `nidara-kit`. Settings
- * has no validated form today.
- *
- * ⚠️ Not red. This bundle spends no red on anything (`.installer-prose--warning`
- * is full-strength ink at weight 500, and the disk warning says why in the
- * stylesheet): the DE reserves red for recording and for failure. What makes
- * this line read as a correction is that it is the only full-strength text on a
- * card of dim subtitles, and that it is attached to the control it is about.
- */
-function field(
-  label: string,
-  subtitle: string,
-  entry: Gtk.Widget,
-): { row: Gtk.ListBoxRow; setError: (message: string) => void } {
-  const error = new Gtk.Label({
-    label: "",
-    css_classes: ["installer-prose", "installer-prose--warning", "installer-field-error"],
-    halign: Gtk.Align.FILL,
-    hexpand: true,
-    xalign: 0,
-    wrap: true,
-    wrap_mode: Pango.WrapMode.WORD_CHAR,
-    visible: false,
-  })
-
-  // The control the row is handed is the entry AND its error line, so the row
-  // keeps its own metrics and the message moves with the field it belongs to.
-  const stack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, hexpand: true })
-  stack.append(entry)
-  stack.append(error)
-
-  return {
-    row: NidaraStackedRow(label, subtitle, stack),
-    setError: (message: string) => {
-      error.label = message
-      error.visible = message !== ""
-    },
-  }
 }
 
 export function AccountStep(): Step {
@@ -141,8 +89,8 @@ export function AccountStep(): Step {
       })
       pw2Entry.update_property([Gtk.AccessibleProperty.LABEL], [t("accountConfirmPassword")])
 
-      const fullNameField = field(t("accountFullName"), "", fullNameEntry)
-      const usernameField = field(t("accountUsername"), "", usernameEntry)
+      const fullNameField = NidaraFieldRow(t("accountFullName"), "", fullNameEntry)
+      const usernameField = NidaraFieldRow(t("accountUsername"), "", usernameEntry)
       // ⚠️ The one field on this card that is NOT about the person, and the only one
       // that gets a line explaining itself.
       //
@@ -157,9 +105,9 @@ export function AccountStep(): Step {
       // say and we did not: what the thing is FOR. A field labelled only "Host
       // name" among four fields about a person reads as a fifth fact about the
       // person.
-      const hostnameField = field(t("accountHostname"), t("accountHostnameDesc"), hostnameEntry)
-      const passwordField = field(t("accountPassword"), "", pwEntry)
-      const confirmField = field(t("accountConfirmPassword"), "", pw2Entry)
+      const hostnameField = NidaraFieldRow(t("accountHostname"), t("accountHostnameDesc"), hostnameEntry)
+      const passwordField = NidaraFieldRow(t("accountPassword"), "", pwEntry)
+      const confirmField = NidaraFieldRow(t("accountConfirmPassword"), "", pw2Entry)
 
       const { box: listCard, listBox } = NidaraList()
       listBox.append(fullNameField.row)
