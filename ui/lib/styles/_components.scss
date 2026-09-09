@@ -288,6 +288,14 @@ checkbutton:disabled {
    value; sentence case brings the table from 758 to 700.
    The margin-bottom is the ONLY gap between the headings and the card, for the
    reason spelled out on .nidara-list-title. */
+.nidara-table-header {
+    transition: opacity 0.15s ease;
+
+    &.nidara-table-header--dim {
+        opacity: 0.45;
+    }
+}
+
 .nidara-table-heading {
     font-size: $fse-caption;
     font-weight: $fw-medium;

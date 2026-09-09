@@ -33,6 +33,13 @@ export interface NidaraTableColumn {
     dim?: boolean
     /** A floor in px, for a column whose widest cell is not what should size it. */
     minWidth?: number
+    /**
+     * Reserve the column width from the control's model (e.g. a `Gtk.DropDown`'s
+     * widest option) rather than its selected item. Defaults to `true` when a
+     * cell holds a `Gtk.DropDown`, ensuring column stability. Set to `false`
+     * to opt out.
+     */
+    reserveFromModel?: boolean
 }
 
 export interface NidaraTableResult {
@@ -101,6 +108,48 @@ export interface NidaraTableResult {
  * `WINDOW_LAYOUT.wizardContent` is set from this table's own measurement for
  * exactly that reason.
  */
+function findDropDown(widget: Gtk.Widget | string): Gtk.DropDown | null {
+    if (typeof widget === "string") return null
+    if (widget instanceof Gtk.DropDown) return widget
+    if (widget instanceof Gtk.Box) {
+        let child = widget.get_first_child()
+        while (child) {
+            const found = findDropDown(child)
+            if (found) return found
+            child = child.get_next_sibling()
+        }
+    }
+    return null
+}
+
+function getLongestItemIndex(model: any): number {
+    let longest = 0
+    let maxLen = -1
+    const n = typeof model?.get_n_items === "function" ? model.get_n_items() : 0
+    for (let j = 0; j < n; j++) {
+        let text = ""
+        if (model instanceof Gtk.StringList) {
+            text = model.get_string(j) ?? ""
+        } else {
+            const item = model.get_item(j)
+            if (item instanceof Gtk.StringObject) {
+                text = item.get_string() ?? ""
+            } else if (typeof (item as any)?.get_string === "function") {
+                text = (item as any).get_string() ?? ""
+            } else if (typeof (item as any)?.name === "string") {
+                text = (item as any).name
+            } else if (item != null) {
+                text = String(item)
+            }
+        }
+        if (text.length > maxLen) {
+            maxLen = text.length
+            longest = j
+        }
+    }
+    return longest
+}
+
 export function NidaraTable(
     columns: NidaraTableColumn[],
     extraClasses: string[] = [],
@@ -136,6 +185,20 @@ export function NidaraTable(
         headerBox.append(cell)
     })
     box.append(headerBox)
+
+    // Invisible container hosting dummy reservation widgets in the widget hierarchy
+    // so they have valid root and CSS style contexts without affecting layout or
+    // polluting headerBox / row traversals.
+    const reserveBox = new Gtk.Box({ visible: false })
+    box.append(reserveBox)
+
+    interface ReserveEntry {
+        col: number
+        drop: Gtk.DropDown
+        dummy?: Gtk.DropDown
+        handlerId?: number
+    }
+    const reserveEntries: ReserveEntry[] = []
 
     const listBox = new Gtk.ListBox({
         css_classes: ["nidara-list", ...extraClasses],
@@ -176,14 +239,52 @@ export function NidaraTable(
     }
 
     const appendRow = (cells: Array<Gtk.Widget | string>, rowClasses: string[] = []) => {
+        if (headerBox.has_css_class("nidara-table-header--dim")) {
+            headerBox.remove_css_class("nidara-table-header--dim")
+            listBox.set_placeholder(null)
+        }
+
         const line = new Gtk.Box({ spacing: CELL_SPACING })
         columns.forEach((col, i) => {
-            const w = cellWidget(cells[i] ?? "", col)
+            const rawCell = cells[i] ?? ""
+            const w = cellWidget(rawCell, col)
             w.valign = Gtk.Align.CENTER
             if (col.expand) w.hexpand = true
             if (col.minWidth) w.width_request = col.minWidth
             groups[i].add_widget(w)
             line.append(w)
+
+            // #464: Size the column from the control's model rather than its current
+            // selection. An unselected/short dropdown button reports only its active
+            // item, causing the column to jump when the user picks a wider answer.
+            // When reserveFromModel is enabled (default true for DropDown), we attach
+            // a hidden dummy DropDown with the model's longest item selected to the
+            // column's size group.
+            if (col.reserveFromModel !== false) {
+                const drop = findDropDown(rawCell)
+                if (drop) {
+                    const entry: ReserveEntry = { col: i, drop }
+                    const syncDummy = () => {
+                        if (!drop.model || drop.model.get_n_items() === 0) return
+                        const longest = getLongestItemIndex(drop.model)
+                        if (!entry.dummy) {
+                            entry.dummy = new Gtk.DropDown({
+                                model: drop.model,
+                                selected: longest,
+                                visible: false,
+                            })
+                            reserveBox.append(entry.dummy)
+                            groups[i].add_widget(entry.dummy)
+                        } else {
+                            entry.dummy.model = drop.model
+                            entry.dummy.selected = longest
+                        }
+                    }
+                    syncDummy()
+                    entry.handlerId = drop.connect("notify::model", syncDummy)
+                    reserveEntries.push(entry)
+                }
+            }
         })
         line.margin_start = 16; line.margin_end = 16
         line.margin_top = 8; line.margin_bottom = 8
@@ -232,11 +333,30 @@ export function NidaraTable(
 
     const appendMessage = (text: string) => {
         const row = NidaraEmptyRow(text)
-        listBox.append(row)
+        listBox.set_placeholder(row)
+        headerBox.add_css_class("nidara-table-header--dim")
         return row
     }
 
     const clear = () => {
+        if (headerBox.has_css_class("nidara-table-header--dim")) {
+            headerBox.remove_css_class("nidara-table-header--dim")
+        }
+        listBox.set_placeholder(null)
+
+        // Clean up reservation widgets and signal handlers so size groups do not leak
+        // or stay locked to the widest widget ever seen.
+        for (const entry of reserveEntries) {
+            if (entry.handlerId) {
+                entry.drop.disconnect(entry.handlerId)
+            }
+            if (entry.dummy) {
+                groups[entry.col].remove_widget(entry.dummy)
+                reserveBox.remove(entry.dummy)
+            }
+        }
+        reserveEntries.length = 0
+
         let child = listBox.get_first_child()
         while (child) {
             const next = child.get_next_sibling()
