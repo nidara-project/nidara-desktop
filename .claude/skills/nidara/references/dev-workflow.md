@@ -345,6 +345,22 @@ remembered per address**: a client whose protocol `min_size` exceeds the usable 
 legitimately refuses to shrink, and re-asking would chase the `window.update_rules` its own resize
 fires.
 
+🔑 **And for a window that FITS, the top is the only edge we defend — the asymmetry IS the feature.**
+The first version of #511 clamped all four, which reads as correct and is not: a window you cannot
+push off to the side, or let run under the dock, is not floating, it is tiling with extra steps.
+That was the owner's call and it is the right one. The top is different in kind, not in degree:
+everything you need to get a window back — header, close button, the strip you drag — lives up
+there, so off the right it is reachable and off the top it is gone. The same asymmetry the others
+encode: mutter's `constrain_titlebar_visible` lets a window leave every edge and gives the title bar
+`top_amount = 0`; KWin's `keepInArea(partial)` keeps a strip reachable, not the whole frame inside.
+
+| a fitting 800x600 asked to go | four hard edges | only the top |
+|---|---|---|
+| up, to `[300,-200]` | `[300,48]` | `[300,48]` |
+| right, to `[2400,600]` | **`[1752,600]`** | **`[2400,600]`** |
+| left, to `[-300,600]` | **`[8,600]`** | **`[-300,600]`** |
+| down under the dock, to `[400,1300]` | **`[400,732]`** | **`[400,1300]`** |
+
 #### A new floating window does not land on top of the last one — and the rule is *cascade IF covering*
 
 Hyprland centres every floating window that asks for no position, so the same terminal opened three

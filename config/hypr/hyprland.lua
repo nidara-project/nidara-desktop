@@ -515,15 +515,22 @@ local function clampFloating(w)
             hl.dispatch(hl.dsp.window.resize({ x = newW, y = newH, window = sel }))
         end
     else
-        -- It fits. Only pull it back if it is hanging off, and pull it back the way
-        -- the whole industry does: bottom and right first, TOP and LEFT last, so the
-        -- top-left corner wins every conflict and the header is never the edge that
-        -- gets sacrificed.
+        -- It fits. Then the ONLY edge we defend is the top, and that asymmetry is
+        -- the whole point of floating: a window you can push off to the side, or
+        -- let run under the dock, is a window you are arranging — pull it back
+        -- from all four edges and floating becomes tiling with extra steps.
+        --
+        -- 🔑 The top is different in kind, not in degree. Everything you need to
+        -- get a window back is up there: the header, the close button, the strip
+        -- you grab to drag it. Off the right you can still reach it; off the top
+        -- it is gone. Which is exactly the asymmetry the rest of the desktops
+        -- encode — mutter's `constrain_titlebar_visible` allows the window off
+        -- every edge and gives the title bar `top_amount = 0`, and KWin's
+        -- `keepInArea(partial)` keeps a strip reachable rather than the whole
+        -- frame inside.
         lastAsk[sel] = nil
-        x = math.min(curX, originX + availW - newW)
-        y = math.min(curY, originY + availH - newH)
-        x = math.max(x, originX)
-        y = math.max(y, originY)
+        x = curX
+        y = math.max(curY, originY)
     end
 
     x, y = math.floor(x), math.floor(y)
