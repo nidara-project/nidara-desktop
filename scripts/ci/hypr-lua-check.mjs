@@ -152,6 +152,23 @@ else ok("the unescaped same value would have injected a key (control)")
 const GREETER_LUA = join(ROOT, "config/greetd/hyprland-greeter.lua")
 const PREFS = "/var/lib/greeter/.config/nidara/greeter-prefs.json"
 const VCONSOLE = "/etc/vconsole.conf"
+const X11KB = "/etc/X11/xorg.conf.d/00-keyboard.conf"
+
+// The config asks whether a name is a real xkb layout by opening its symbols
+// file, so the fixture root has to carry them: without these every case would
+// resolve to `us` and the suite would agree with itself while testing nothing.
+// Which is also what makes the negative cases below mean something — `sv-latin1`
+// is absent HERE for the same reason it is absent on a real machine.
+const SYMBOLS = Object.fromEntries(
+    ["us", "es", "de", "fr", "gb", "br"].map(l => [`/usr/share/X11/xkb/symbols/${l}`, "xkb_symbols {};"]),
+)
+
+const x11kb = (layout, variant = "") => 'Section "InputClass"\n'
+    + '        Identifier "system-keyboard"\n'
+    + '        MatchIsKeyboard "on"\n'
+    + `        Option "XkbLayout" "${layout}"\n`
+    + `        Option "XkbVariant" "${variant}"\n`
+    + "EndSection\n"
 
 const LAYOUT_CASES = [
     { name: "a machine installed with a Spanish keyboard", want: "es",
@@ -168,11 +185,35 @@ const LAYOUT_CASES = [
     { name: "XKBLAYOUT on the very first line", want: "de",
       files: { [VCONSOLE]: "XKBLAYOUT=de\nKEYMAP=de-latin1\n" } },
     { name: "a machine that says nothing at all", want: "us", files: {} },
+
+    // ── #498: the graphical keyboard has its own file, and it carries a VARIANT
+    { name: "00-keyboard.conf wins, variant and all", want: "es", wantVariant: "dvorak",
+      files: { [X11KB]: x11kb("es", "dvorak"), [VCONSOLE]: "KEYMAP=dvorak-es\n" } },
+    { name: "00-keyboard.conf with no variant", want: "de", wantVariant: "",
+      files: { [X11KB]: x11kb("de"), [VCONSOLE]: "KEYMAP=de-latin1\n" } },
+    { name: "a multi-layout file: the first one is the one you log in with",
+      want: "es", wantVariant: "dvorak",
+      files: { [X11KB]: x11kb("es,us", "dvorak,") } },
+    { name: "the greeter's own pick still wins over the file", want: "fr", wantVariant: "",
+      files: { [PREFS]: '{"locale":"","kbLayout":"fr","lastUser":"a"}',
+               [X11KB]: x11kb("es", "dvorak") } },
+
+    // ── #498: a console keymap name is not a layout, and must not be written as
+    // one. Before this, each of these reached Hyprland verbatim.
+    { name: "a Swedish install: sv-latin1 is not a layout", want: "us", wantVariant: "",
+      files: { [VCONSOLE]: "KEYMAP=sv-latin1\n" } },
+    { name: "a Japanese install: jp106 is not a layout", want: "us",
+      files: { [VCONSOLE]: "KEYMAP=jp106\n" } },
+    { name: "a Dvorak install: dvorak is a keymap, not a layout", want: "us",
+      files: { [VCONSOLE]: "KEYMAP=dvorak\n" } },
+    { name: "nonsense in 00-keyboard.conf is refused too", want: "us", wantVariant: "",
+      files: { [X11KB]: x11kb("it2"), [VCONSOLE]: "KEYMAP=es\n" } },
 ]
 
 // ⚠️ A JS object is not a Lua table: `{"a": "b"}` is a syntax error over there.
 const luaTable = (files) => "{ "
-    + Object.entries(files).map(([k, v]) => `[${JSON.stringify(k)}] = ${JSON.stringify(v)}`).join(", ")
+    + Object.entries({ ...SYMBOLS, ...files })
+        .map(([k, v]) => `[${JSON.stringify(k)}] = ${JSON.stringify(v)}`).join(", ")
     + " }"
 
 const HARNESS = (files) => `
@@ -183,16 +224,21 @@ io.open = function(path, mode)
     if content == nil then return nil end
     return { read = function() return content end, close = function() end }
 end
-local captured = nil
+local captured, capturedVariant = nil, nil
 hl = setmetatable({}, { __index = function(_, key)
     if key == "config" then
-        return function(t) if t.input and t.input.kb_layout then captured = t.input.kb_layout end end
+        return function(t)
+            if t.input and t.input.kb_layout then
+                captured = t.input.kb_layout
+                capturedVariant = t.input.kb_variant or ""
+            end
+        end
     end
     return function() end
 end })
 dofile(${JSON.stringify(GREETER_LUA)})
 io.open = realOpen
-print(captured)
+print((captured or "") .. "|" .. (capturedVariant or ""))
 `
 
 const LUA = ["lua5.4", "lua"].find(which)
@@ -202,10 +248,16 @@ else {
         const script = join(tmp, "greeter-kb.lua")
         writeFileSync(script, HARNESS(c.files))
         const r = spawnSync(LUA, [script], { encoding: "utf8" })
-        const got = (r.stdout || "").trim()
+        const [got, gotVariant = ""] = (r.stdout || "").trim().split("|")
+        // Only the cases that name a variant assert on it; the older ones predate
+        // the field and say nothing about it.
+        const wantVariant = c.wantVariant ?? gotVariant
         if (r.status !== 0) fail(`greeter layout — ${c.name}`, (r.stderr || "").trim())
-        else if (got !== c.want) fail(`greeter layout — ${c.name}`, `resolved ${got || "(nothing)"}, expected ${c.want}`)
-        else ok(`greeter layout — ${c.name}`)
+        else if (got !== c.want || gotVariant !== wantVariant) {
+            fail(`greeter layout — ${c.name}`,
+                 `resolved ${got || "(nothing)"}/${gotVariant || "(no variant)"},`
+                 + ` expected ${c.want}/${wantVariant || "(no variant)"}`)
+        } else ok(`greeter layout — ${c.name}`)
     }
 }
 

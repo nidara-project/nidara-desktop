@@ -217,6 +217,13 @@ export function primaryLocaleFor(code: string): string | null {
  * exactly where it matters: `gb` for GB, `latam` for a dozen countries whose code
  * appears nowhere in the layout name.
  */
+/*
+ * ⚠️ Still the BRIDGED slice, and on purpose even though the page now offers all
+ * 597 (#498): the BCP-47 column is part of `kbd-model-map` and exists nowhere
+ * else, so only bridged rows can say which country they serve. This is the
+ * SUGGESTION — `scoped()` in steps/region.ts puts the rest of the catalogue
+ * after it — not the offer.
+ */
 export function keyboardsFor(code: string): KeyboardLayout[] {
   const c = code.toUpperCase()
   return bridgedKeyboards().filter(k => k.langs.some(t => t.split("-")[1]?.toUpperCase() === c))

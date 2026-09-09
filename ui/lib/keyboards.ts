@@ -99,6 +99,20 @@ export interface KeyboardLayout {
    */
   keymap: string
   /**
+   * The console keymap this keyboard DEGRADES to when it has none of its own:
+   * the base layout's, or `""` when even that is missing.
+   *
+   * 🔑 Separate from `keymap` on purpose. `keymap` answers "can the console say
+   * exactly this keyboard?" and must stay exact — `resolveKeymap` refuses to
+   * guess for the reason written above it. This field answers the OTHER question,
+   * "and if it cannot, what does the console get instead?", which every installer
+   * outside Debian answers the same way: the base layout, silently
+   * (Calamares `SetKeyboardLayoutJob.cpp:186` `findLegacyKeymap`; Anaconda and
+   * GNOME through `systemd-localed`). We answer it the same way and say so out
+   * loud on the page, which is the only part of it we do differently.
+   */
+  fallbackKeymap: string
+  /**
    * systemd names a console keymap for this keyboard — i.e. `kbd-model-map` has
    * a row for it. It is what the installer offers, and it is NOT the same
    * question as `keymap !== ""`: three bridged rows resolve to no keymap at all.
@@ -309,6 +323,12 @@ function bridge(): Map<string, BridgeRow> {
   return map
 }
 
+/** The console keymap of a layout's plain form, or `""`. */
+function baseKeymapFor(layout: string, br: Map<string, BridgeRow>): string {
+  const row = br.get(layout)
+  return row ? resolveKeymap(row.keymaps) : ""
+}
+
 // ── The catalogue itself ─────────────────────────────────────────────────────
 
 let _all: KeyboardLayout[] | null = null
@@ -343,6 +363,10 @@ export function allKeyboards(): KeyboardLayout[] {
       layout,
       variant,
       keymap: row ? resolveKeymap(row.keymaps) : "",
+      // The base layout's row, not this one's: `de-neo` degrades to whatever the
+      // console has for `de`. For a base layout it resolves to the same string as
+      // `keymap`, which is what "degrades to itself" should mean.
+      fallbackKeymap: baseKeymapFor(layout, br),
       bridged: !!row,
       langs: row?.langs ?? [],
       label: `${base} · ${id}`,

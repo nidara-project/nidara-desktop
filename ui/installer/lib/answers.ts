@@ -108,11 +108,14 @@ export interface KeyboardAnswer {
   /**
    * vconsole keymap — /etc/vconsole.conf, the TTY, and the LUKS prompt.
    *
-   * ⚠️ `""` means this keyboard has none on this system, and the plan then keeps
-   * the medium's own (`us`), which is what the region page said would happen.
+   * ⚠️ `""` means this keyboard has none of its own on this system; the plan then
+   * falls to `fallbackKeymap`, and to the medium's `us` when that is empty too.
+   * Which of the three it landed on is what the region page tells the person.
    * See `resolveKeymap()` in ui/lib/keyboards.ts.
    */
   keymap: string
+  /** The base layout's keymap, used when `keymap` is empty. May be `""`. */
+  fallbackKeymap: string
   label: string
 }
 

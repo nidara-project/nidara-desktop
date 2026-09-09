@@ -62,10 +62,21 @@ end)
 -- installed, and the `install.sh`-onto-somebody's-Arch path, which no installer
 -- runs on.
 --
--- XKBLAYOUT first because that is already the xkb vocabulary this option speaks;
--- KEYMAP is the console one and the two disagree for a handful of layouts (uk vs
--- gb, br-abnt2 vs br), so it is only consulted when the file carries no
--- XKBLAYOUT — a machine set up by hand rather than by systemd-localed.
+-- Sources in order, and the order is the whole point (#498):
+--
+--   1. the greeter's own saved pick, when somebody has used the picker
+--   2. /etc/X11/xorg.conf.d/00-keyboard.conf — the system's GRAPHICAL keyboard,
+--      in xkb's vocabulary, WITH the variant. This is the file `systemd-localed`
+--      writes (`SetX11Keyboard`, so `localectl set-x11-keymap` lands here),
+--      the file Calamares writes, and the file the Nidara installer writes.
+--   3. XKBLAYOUT= in /etc/vconsole.conf — some setups do carry it there
+--   4. KEYMAP= — the CONSOLE keymap, a different namespace with no variants
+--
+-- ⚠️ 4 was the only source that ever fired in practice, and it is wrong for most
+-- of the catalogue: `sv-latin1`, `jp106`, `it2`, `pl2`, `cf` are console keymap
+-- names, not xkb layouts, and xkbcommon refuses every one of them. Hence the
+-- three-name table AND `isXkbLayout` below — a name with no symbols file is not a
+-- layout, and `us` is a better answer than a string the compositor cannot load.
 local function firstMatch(path, ...)
     local f = io.open(path, "r")
     if not f then return nil end
@@ -80,18 +91,48 @@ end
 
 local VCONSOLE_TO_XKB = { uk = "gb", ["us-acentos"] = "us", ["br-abnt2"] = "br" }
 
-local function readKbLayout()
+local X11_KB_CONF = "/etc/X11/xorg.conf.d/00-keyboard.conf"
+
+-- `/usr/share/X11/xkb` is a symlink to `/usr/share/xkeyboard-config-2` since
+-- xkeyboard-config 2.48, so both spellings are tried rather than assumed.
+local function isXkbLayout(name)
+    if not name or name == "" then return false end
+    for _, dir in ipairs({ "/usr/share/X11/xkb/symbols/",
+                           "/usr/share/xkeyboard-config-2/symbols/" }) do
+        local f = io.open(dir .. name, "r")
+        if f then f:close() return true end
+    end
+    return false
+end
+
+-- A comma-separated value is a multi-layout setup; the greeter types in one, and
+-- the first is the one active at login.
+local function firstOf(value)
+    return value and value:match("^[^,]*") or ""
+end
+
+local function readKeyboard()
     local saved = firstMatch("/var/lib/greeter/.config/nidara/greeter-prefs.json",
                              '"kbLayout"%s*:%s*"([^"]+)"')
-    if saved then return saved end
+    if saved then return saved, "" end
+
+    local layout = firstMatch(X11_KB_CONF, 'Option%s+"XkbLayout"%s+"([^"]*)"')
+    if layout and #layout > 0 then
+        return firstOf(layout), firstOf(firstMatch(X11_KB_CONF, 'Option%s+"XkbVariant"%s+"([^"]*)"'))
+    end
 
     local xkb = firstMatch("/etc/vconsole.conf", '\nXKBLAYOUT="?([^"\n]+)', '^XKBLAYOUT="?([^"\n]+)')
-    if xkb then return xkb end
+    if xkb then return firstOf(xkb), "" end
 
     local keymap = firstMatch("/etc/vconsole.conf", '\nKEYMAP="?([^"\n]+)', '^KEYMAP="?([^"\n]+)')
-    if keymap then return VCONSOLE_TO_XKB[keymap] or keymap end
+    if keymap then return VCONSOLE_TO_XKB[keymap] or keymap, "" end
 
-    return "us"
+    return "us", ""
+end
+
+local kbLayout, kbVariant = readKeyboard()
+if not isXkbLayout(kbLayout) then
+    kbLayout, kbVariant = "us", ""
 end
 
 -- ── Look & feel ───────────────────────────────────────────────────────────────
@@ -109,7 +150,8 @@ hl.config({
     },
 
     input = {
-        kb_layout    = readKbLayout(),
+        kb_layout    = kbLayout,
+        kb_variant   = kbVariant,
         follow_mouse = 1,
     },
 

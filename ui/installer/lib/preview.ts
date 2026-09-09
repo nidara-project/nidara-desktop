@@ -12,7 +12,7 @@
 // things sit outside the `arm` gate entirely, because they are not installation
 // steps — they are the installer talking to the session it is running in:
 //
-//   region.ts     `hyprctl keyword input:kb_layout` — changes the REAL keyboard
+//   region.ts     `hyprctl eval hl.config{input.kb_layout}` — changes the REAL keyboard
 //   InstallerWindow  "Restart now" → `systemctl reboot` — reboots the machine
 //   run.ts        spawns `sudo -n archinstall`, after writing the credentials
 //                 file to /tmp

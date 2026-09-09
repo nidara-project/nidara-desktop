@@ -695,7 +695,7 @@ right on the medium and unacceptable on a desktop:
 
 | where | what it does to YOUR machine |
 |---|---|
-| `steps/region.ts` | `hyprctl keyword input:kb_layout` — changes the real keyboard, on one click in a list |
+| `steps/region.ts` | `hyprctl eval hl.config({input={kb_layout=…}})` — changes the real keyboard, on one click in a list. **Not `keyword`**: the Lua parser rejects it, and the two keyword calls this shipped with in #395 were a silent no-op until the VM pass of 2026-09-08 caught the test box still typing `us` |
 | `widget/InstallerWindow.ts` | "Restart now" → `systemctl reboot` |
 | `steps/run.ts` | writes the plan **and the credentials** to /tmp, then spawns `sudo -n archinstall` |
 
@@ -883,7 +883,16 @@ PROPERTY joined onto it. `bridged` is a field, not a second list:
 | | takes | why |
 |---|---|---|
 | Settings | `allKeyboards()` — 597 | writes Hyprland's `input:kb_layout` only, so it can lock nobody out and withholds nothing |
-| installer | `bridgedKeyboards()` — 58 | writes `/etc/vconsole.conf` too, so it offers what systemd can name in both |
+| installer | `allKeyboards()` — 597 | since #498. It writes the graphical keyboard EXACTLY and lets the console degrade — which is what every installer outside Debian does |
+
+⚠️ **That second row said `bridgedKeyboards()` — 58 until #498, and both halves of the reasoning
+were wrong.** Withholding 91% of the catalogue bought nothing, because the answer was reaching the
+desktop as a console keymap NAME anyway and arriving wrong for 36 of the 55 it did offer — see "The
+xkb pair travels in its own file" below. `bridgedKeyboards()` still exists and still means what it
+meant; its one caller is now `keyboardsFor()` in `ui/installer/lib/region.ts`, because the BCP-47
+column that says which country a keyboard serves comes from the bridge and exists nowhere else. So
+the country still SUGGESTS its own keyboards first and `scoped()` puts the whole catalogue after
+them.
 
 ⛔ **Do NOT widen the bridge by matching names across the two namespaces.** It looks like the
 obvious move and it is the same silent substitution #472 was about: measured 2026-09-07, it rescues
@@ -910,7 +919,7 @@ as an id is the xkb variant, as a keymap name it is a file `kbd` does not ship.
 
 ### A keyboard layout has TWO names, and archinstall wants the other one
 
-`xkb` layouts (what Hyprland speaks, what `hyprctl keyword input:kb_layout` takes) and **vconsole
+`xkb` layouts (what Hyprland speaks, what `hl.config({input={kb_layout=…}})` takes) and **vconsole
 keymaps** (what `/etc/vconsole.conf` takes) are different namespaces with overlapping names. The
 installer offered xkb names and sent them straight into archinstall's `locale_config.kb_layout`,
 which is the **console** one — and four of them do not exist there at all:
@@ -932,6 +941,41 @@ LUKS passphrase prompt uses the **console** keymap. A passphrase typed on a Braz
 then asked for on a US one is a disk its owner cannot open. Disk encryption does not ship until the
 initramfs keymap is verified on a non-US layout.
 
+⛔ **And this is why `kb_layout` must not carry the answer BACK.** Measured 2026-09-08: reading the
+xkb layout out of `KEYMAP` sent **36 of the 55** keyboards the installer offered to the desktop as a
+different string, and 35 of those were not xkb layouts at all — `sv-latin1`, `jp106`, `it2`, `pl2`,
+`cf`, `de-latin1-nodeadkeys`; `xkbcli compile-keymap` refuses every one. Sweden, Japan, Italy,
+Poland and Canada installed with a keyboard the desktop could not apply. **The maintainer's machine
+is one of the 19 that worked** (`KEYMAP=es`, and `es` is also an xkb layout), which is why it stayed
+invisible.
+
+### The xkb pair travels in its own file — `/etc/X11/xorg.conf.d/00-keyboard.conf` (#498)
+
+The console keymap is a DERIVED value, not the record. The record is the xkb pair, and it goes where
+every systemd machine already keeps it:
+
+| writes it | reads it |
+|---|---|
+| `ui/installer/lib/keyboard-config.ts`, after archinstall (`steps/run.ts`, beside `applyRealName`) | `bin/nidara-setup` → seeds `kb_layout` **and** `kb_variant` into `nidara-settings.lua` |
+| `systemd-localed` on any `SetX11Keyboard` — so `localectl set-x11-keymap` on an installed machine lands in the same file | `config/greetd/hyprland-greeter.lua` → `readKeyboard()`, layout + variant |
+| Calamares, by hand, with the same two Options | `ui/greeter/widget/LocaleBar.ts` → `systemKbLayout()`, to label the picker |
+
+⚠️ **NOT written with `localectl set-x11-keymap`**, which is the obvious way and does not work:
+`localectl` talks to `systemd-localed` over D-Bus and there is no systemd running inside the target.
+**The file IS the interface**; the tool is one way of writing it.
+
+⚠️ **It is X11's file name on a session with no X11, and that is deliberate.** The name is
+historical; the CONTENT is what every reader looks for. Invent a Nidara-shaped file instead and the
+standard one is absent — then `localectl status` on the installed machine reports `us` on a machine
+that is not.
+
+🔑 **All three readers apply the same guard: a name with no `/usr/share/X11/xkb/symbols/<name>` is
+not a layout, and `us` is a better answer than a string the compositor cannot load.** (Try
+`/usr/share/xkeyboard-config-2/symbols/` too — `/usr/share/X11/xkb` is a symlink to it since
+xkeyboard-config 2.48.) The Lua half is the one that decides what the login field TYPES, and
+`scripts/ci/hypr-lua-check.mjs` RUNS it against fixture files — including symbols fixtures, without
+which every case would resolve to `us` and the suite would pass vacuously.
+
 #### 🔑 `kbd-model-map` is systemd's file, and it names keymaps `kbd` does not ship
 
 Reading the bridge at runtime removed the transcription, but not the assumption underneath it: that
@@ -951,14 +995,30 @@ by two rules that are **derived, not a table of names to keep in sync**:
    not content (`es-dvorak` → `dvorak-es`, `ro-std` → `ro_std`). Applied **only when exactly one**
    keymap carries those parts, so an ambiguous match can never substitute a different keyboard.
 
-⛔ **What is deliberately NOT a rule: falling back to the layout's plain keymap.** `ro` for
+⛔ **What is deliberately NOT a rule *here*: falling back to the layout's plain keymap.** `ro` for
 `ro-cedilla` is a silent swap of one keyboard for another — the class of failure the whole thing
-exists to end.
+exists to end. `resolveKeymap` answers "can the console say EXACTLY this keyboard?" and must keep
+answering only that.
 
-Five keyboards have no console keymap **under any name** (Arabic, Korean, Khmer, and Romanian's two
-cedilla variants). They keep being offered — the xkb layout is real and the desktop gets it — with
-`keymap: ""`, and the region page says the console stays on US (`regionKeyboardNoConsole`). Dropping
-them would delete three languages' keyboards to fix a console that never could have worked.
+🔑 **The base fallback exists, in a field of its own** (`fallbackKeymap`, #498). It answers the
+OTHER question — "and if it cannot, what does the console get instead?" — which every installer
+outside Debian answers the same way: the base layout, silently (Calamares `findLegacyKeymap`,
+`SetKeyboardLayoutJob.cpp:186`; Anaconda and GNOME through `systemd-localed`). Two separate fields
+rather than one lenient function is the whole trick: the degradation is a named step the region page
+can SAY out loud, instead of a guess buried inside a resolver. Measured over the catalogue: 55 have
+a console keymap of their own, **286 degrade to their base**, 256 have nothing and keep the medium's
+`us`.
+
+Three of the bridged rows have no console keymap **under any name** (Arabic, Korean, Khmer; it was
+five until the catalogue became xkb's and Romanian's two cedilla variants turned out not to exist
+there either). They keep being offered — the xkb layout is real and the desktop gets it — with
+`keymap: ""`. Dropping them would delete three languages' keyboards to fix a console that never
+could have worked.
+
+The region page states the consequence rather than hiding the keyboard, in two strings:
+`regionKeyboardConsoleFallback` names the base keymap the console will use, and
+`regionKeyboardNoConsole` says it stays on US when there is not even that. Saying it out loud is the
+one place we differ from Calamares/Anaconda/GNOME, which degrade in silence.
 
 ⚠️ **Cut the VARIANT column the same way as the layout column.** Both are positional lists: two rows
 carry `,phonetic` (`bg,us`) and `qwerty,` (`cz,us`), and reading them whole produced a keyboard

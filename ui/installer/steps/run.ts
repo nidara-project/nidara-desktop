@@ -10,6 +10,7 @@ import { t } from "../lib/i18n"
 import { getAnswers } from "../lib/answers"
 import { assemblePlan, type AssembledPlan } from "../lib/plan"
 import { archinstallStamp, configureInstalledBootloader } from "../lib/bootloader"
+import { writeKeyboardConfig } from "../lib/keyboard-config"
 import { applyRealName } from "../lib/real-name"
 import { writeSwapFstabEntries } from "../lib/swap"
 import { stripAnsi } from "../lib/ansi"
@@ -286,7 +287,7 @@ export function RunStep(): Step {
         if (isPreview()) {
           appendLog(previewSkip("writing the plan and credentials to /tmp"))
           appendLog(previewSkip("sudo archinstall --config … --creds … --silent --dry-run"))
-          appendLog(previewSkip("applyRealName + configureInstalledBootloader (already gated on arm)"))
+          appendLog(previewSkip("applyRealName + writeKeyboardConfig + configureInstalledBootloader (already gated on arm)"))
           appendLog("")
           appendLog("[PREVIEW] The plan that WOULD be handed to archinstall:")
           for (const line of JSON.stringify(plan.config, null, 2).split("\n")) appendLog(line)
@@ -395,6 +396,7 @@ export function RunStep(): Step {
               if (success) {
                 enterPhase(3)
                 applyRealName(isArm, answers, appendLog)
+                writeKeyboardConfig(isArm, answers, appendLog)
                 writeSwapFstabEntries(isArm, answers, appendLog)
                 configureInstalledBootloader(isArm, answers, appendLog, startedAt)
               }
