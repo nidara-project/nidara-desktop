@@ -402,6 +402,33 @@ is inside and fits, so the second pass is a no-op.
 number disagreeing about what it included. Note the cascade step keeps using `GAPS_OUT` and not the
 margin: the border is not part of what the eye reads as a gap.
 
+#### Super+M maximized two different windows, because the box depends on `floating`
+
+`IFullscreenHandler::calculateFullscreenBox` maximizes into `WORKSPACE->m_space->workArea(target->floating())`
+— **the argument is the window's own floating flag**. So the same key gave two windows: a tiled one
+landed inside `gaps_out` at `[9,49] 2542x1282`, and a floating one landed in the FLOATING work area,
+whose gap is `general:float_gaps` and defaults to **0** — `[1,41] 2558x1298`, flush against the bar
+and the dock with only the border between. It was not Hyprland misbehaving: it was honouring a
+setting we had never set.
+
+Setting `float_gaps = GAPS_OUT` collapses them. One geometry now comes out of four different routes,
+which is the invariant worth keeping:
+
+| route | result |
+|---|---|
+| tiled alone on the workspace | `[9,49] 2542x1282` |
+| that window toggled floating | `[9,49] 2542x1282` |
+| a floating window maximized (Super+M) | `[9,49] 2542x1282` |
+| a floating window asking for 2560x1440, clamped | `[9,49] 2542x1282` |
+
+⚠️ **And the guard that remembers what we asked for must remember the SIZE WE SAW too.** Keyed on the
+request alone, it also swallowed the legitimate retry after something other than the client changed
+the geometry: restoring from Super+M handed the window its box back — 2544x1284, 2px past the usable
+area — and the guard then refused to correct it for the rest of that window's life, so every later
+event re-entered the shrink branch and, if the anchor was outside, re-centred the window. That is
+what "it keeps forcing the centre after maximizing" was. "The client ignored us" is only true when
+the size is still exactly the one measured when we asked.
+
 #### A new floating window does not land on top of the last one — and the rule is *cascade IF covering*
 
 Hyprland centres every floating window that asks for no position, so the same terminal opened three

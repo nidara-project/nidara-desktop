@@ -83,6 +83,12 @@ hl.config({
     general = {
         gaps_in  = 4,
         gaps_out = GAPS_OUT,
+        -- 🔑 The gap for FLOATING windows, and it defaults to 0 — which is how the
+        -- same Super+M produced two different windows: `calculateFullscreenBox`
+        -- maximizes into `workArea(target->floating())`, so a tiled window landed
+        -- inside `gaps_out` and a floating one went flush against the bar and the
+        -- dock. Same number, one behaviour.
+        float_gaps = GAPS_OUT,
         border_size = BORDER_SIZE,
         col = {
             active_border   = { colors = {"rgba(ffffff4d)", "rgba(ffffff1a)"}, angle = 45 },
@@ -473,11 +479,18 @@ hl.bind(mainMod .. " + CTRL + SHIFT + left",  hl.dsp.window.move({ workspace = "
 -- usable area must report the same thing, not [8,48] 2544x1284.
 local FLOAT_MARGIN = GAPS_OUT + BORDER_SIZE
 
--- The last size we asked a window for, keyed by address. A client whose protocol
--- min_size is larger than the usable area (a 1366x768 screen and our installer's
--- 960x760 floor, #99) legitimately REFUSES to shrink, and without this the resize
--- and the `window.update_rules` it fires would chase each other forever. Asking
--- twice for a size the client already declined buys nothing.
+-- What we last asked a window for, AND the size it had when we asked, keyed by
+-- address. A client whose protocol min_size is larger than the usable area (a
+-- 1366x768 screen and our installer's 960x760 floor, #99) legitimately REFUSES to
+-- shrink, and without this the resize and the `window.update_rules` it fires would
+-- chase each other forever.
+--
+-- ⚠️ The size we saw is half the key on purpose. Keyed on the request alone, the
+-- guard also swallows the legitimate retry after something OTHER than the client
+-- changed the size — restoring from Super+M hands the window its box back, 2px
+-- wider than the usable area, and the guard then refuses to fix it for the rest of
+-- the window's life. "The client ignored us" is only true when the size is still
+-- exactly the one we measured when we asked.
 local lastAsk = {}
 
 -- Where a floating window is allowed to live: the monitor minus what the bar and
@@ -543,7 +556,7 @@ local function clampFloating(w)
             y = originY + (availH - newH) / 2
         end
 
-        local ask = newW .. "x" .. newH
+        local ask = newW .. "x" .. newH .. " of " .. curW .. "x" .. curH
         if lastAsk[sel] ~= ask then
             lastAsk[sel] = ask
             hl.dispatch(hl.dsp.window.resize({ x = newW, y = newH, window = sel }))
@@ -694,6 +707,7 @@ end
 
 hl.on("window.open",         function(w) placeFloatingGuarded(w, true) end)
 hl.on("window.update_rules", function(w) placeFloatingGuarded(w, false) end)
+hl.on("window.destroy",      function(w) if w and w.address then lastAsk["address:" .. w.address] = nil end end)
 
 
 -- ── Keybinds — Window modes ──────────────────────────────────────────────────
