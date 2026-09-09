@@ -79,6 +79,7 @@ if (headerBox.has_css_class("nidara-table-header--dim")) {
 
 // 5. Direct transition: appendMessage -> appendRow directly without clear()
 console.log("\n5. Direct transition: appendMessage -> appendRow:")
+table.clear()
 table.appendMessage("Nothing here")
 if (!headerBox.has_css_class("nidara-table-header--dim")) {
     console.error("FAIL: headerBox not dimmed after second appendMessage")
@@ -91,5 +92,14 @@ if (table.listBox.get_row_at_index(0) === null || headerBox.has_css_class("nidar
 }
 console.log("   listBox.get_row_at_index(0):", table.listBox.get_row_at_index(0) ? "Gtk.ListBoxRow" : "null")
 console.log("   header dimmed:", headerBox.has_css_class("nidara-table-header--dim"))
+
+// 6. Calling appendMessage while table already has rows: ignored, headings stay at full contrast
+console.log("\n6. Calling appendMessage on non-empty table:")
+table.appendMessage("Ignored message")
+if (headerBox.has_css_class("nidara-table-header--dim")) {
+    console.error("FAIL: appendMessage dimmed headers despite table having rows")
+    system.exit(1)
+}
+console.log("   header dimmed:", headerBox.has_css_class("nidara-table-header--dim"), "(false expected: ignored because rows exist)")
 
 console.log("\nALL CHECKS PASSED: NidaraTable empty state & placeholder contract verified.")
