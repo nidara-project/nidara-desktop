@@ -244,9 +244,28 @@ app.start({
 
         for (const drop of drops) {
           const model = drop.model as Gtk.StringList
+          // ⚠️ WIDEST, measured in pixels — not longest in characters. This picked
+          // by `.length` until 2026-09-09, which is the same wrong metric the kit
+          // itself used before #464's reservation was taught to measure: the
+          // instrument shared the blind spot of the bug it exists to catch, so it
+          // reported `worst-case-nat === nat` while a pixel-wider option sat in the
+          // model. Against `main`'s table.ts, switching this loop to pixels moved
+          // the worst case from 509 to 516 (en_US), 505 to 513 (zh_CN) and 569 to
+          // 576 (nl_NL) — a shortfall of 7-8px that read as "nothing to see".
+          //
+          // In a proportional font `WWWWWW` is wider than `iiiiiiiiiiii`, and one
+          // CJK ideograph is worth two Latin letters; a character count is not a
+          // width in any locale, and this page is measured in twelve.
           let longest = 0
-          for (let i = 0; i < model.get_n_items(); i++)
-            if ((model.get_string(i) ?? "").length > (model.get_string(longest) ?? "").length) longest = i
+          {
+            const layout = drop.create_pango_layout("")
+            let widest = -1
+            for (let i = 0; i < model.get_n_items(); i++) {
+              layout.set_text(model.get_string(i) ?? "", -1)
+              const [w] = layout.get_pixel_size()
+              if (w > widest) { widest = w; longest = i }
+            }
+          }
           // ⚠️ Put it back. A probe that leaves the page in the state it needed
           // for one measurement is a probe that lies about every other thing it
           // shows: this cost half an hour of hunting a "bug" where the first

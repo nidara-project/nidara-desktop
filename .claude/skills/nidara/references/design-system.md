@@ -85,9 +85,18 @@ Three things about it that are not obvious:
 - **A table cannot be squeezed, so its pane is MEASURED from it.** The table is as wide as the
   sum of its widest cells; below that the columns compress one at a time. Any surface adopting
   one measures the table and sizes its pane from that number — `WINDOW_LAYOUT.wizardContent`
-  is derived that way, and the derivation is written out in `ui/lib/tokens.ts`. ⚠️ Measure the
-  WORST CASE: a `Gtk.DropDown`'s button is as wide as its SELECTED item, so a column of
-  unanswered dropdowns measures ~100px narrower than the same column once somebody uses it.
+  is derived that way, and the derivation is written out in `ui/lib/tokens.ts`. Sizing is stable
+  by contract: `NidaraTable` reserves column widths from control models (`reserveFromModel`, default
+  true for `Gtk.DropDown`), sizing the column to the model's widest item in pixels via Pango layout
+  (`create_pango_layout` + `get_pixel_size()`) rather than jumping as options are selected (#464).
+  The reservation allocates at most one hidden dummy control per column (not per row) and updates
+  dynamically if wider models appear or through `notify::model`.
+- **Empty state vs. clearing for rebuild.** `appendMessage(text)` sets a `Gtk.ListBox` placeholder
+  and dims the headings (`.nidara-table-header--dim`) so the table's structural shape remains
+  intact without full contrast over empty space (#467). Calling `appendMessage` on a table with rows
+  is ignored so headings do not dim over visible data. In contrast, `clear()` keeps headings at
+  full contrast because emptying to refill (e.g. Refresh) should read as an atomic rebuild rather
+  than a vacant state.
 
 The headings are **sentence case, not the uppercase micro-caps of `.nidara-list-title`**. That
 label is a GROUP header, said once over a card, where the extra weight is structure; six of
