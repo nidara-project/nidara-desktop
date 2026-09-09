@@ -319,6 +319,40 @@ Both halves of the clamp are verified, and the second one matters as much: a win
 left byte for byte where the compositor put it (same window, same toggle, hook on and hook off →
 `[1566,761] [700,500]` both times).
 
+🔑 **The law it states since #511 is the industry's, and Hyprland states the opposite one.** Clamp
+the SIZE to the usable area, then apply the edges with **top and left LAST so they win**: if a
+window still cannot fit, the excess goes DOWN and RIGHT, never up, because up is where the header
+is. Hyprland's `fitBoxInWorkArea` (`0.56.2`) runs its four operations in the other order — the
+bottom-edge branch overwrites the top-edge one — and **none of the four resizes anything**; there is
+no size ceiling in the compositor at all (`CWindow::maxSize()` is empty by default). KWin
+(`geometry.size().boundedTo(area.size())` + `moveTop` last), mutter
+(`meta_rectangle_clamp_to_fit_into_region` + `constrain_titlebar_visible`) and niri (*"Clamp by top
+and left last so it takes precedence"*, with a unit test) all do it the other way round.
+
+Measured in a nested Hyprland with a layer-shell probe reserving 40 top and 100 bottom on 2560x1440,
+this branch against `main` — and note which row is the discriminator:
+
+| case | before | after |
+|---|---|---|
+| asks 2560x1440, floats | `[8,48] 2544x1284` | `[8,48] 2544x1284` |
+| fits 800x600, moved to `[300,-200]` | **`[300,-200]`** | **`[300,48]`** |
+| fits 800x600, already inside | not moved | not moved |
+| tiled | `[9,49] 2542x1282` | `[9,49] 2542x1282` |
+
+Two guards ride with it. **Fullscreen and maximized windows are skipped** — that geometry belongs to
+the fullscreen handler, and `maximized` already returns the work area. And **the size asked for is
+remembered per address**: a client whose protocol `min_size` exceeds the usable area (tech debt #99)
+legitimately refuses to shrink, and re-asking would chase the `window.update_rules` its own resize
+fires.
+
+⚠️ **Still not covered, and it is not the clamp's fault**: nothing re-runs when the RESERVED AREA
+itself changes (the algorithm has no `recalculate` and no Lua event fires — measured: 0 px of
+movement across a bar and a dock appearing and disappearing under a live floating window), and a
+bare interactive drag fires no event either. Upstream's `misc:float_force_onscreen` /
+`new_float_force_onscreen` (PR hyprwm/Hyprland#15492, in `main`, **not** in the 0.56.x branch) are
+applied from `setPositionGlobal` and will cover those routes when a release carries them — but they
+only ever MOVE, so the size clamp stays ours. #511 tracks the rest.
+
 ⚠️ **kitty remembers its window size**, so it is a contaminated instrument for this: a probe run
 left a later "clean" kitty coming up 2544x1284 and looking like a regression the clamp had caused,
 when the hook was off. Pass `-o remember_window_size=no -o initial_window_width=… -o
@@ -2687,6 +2721,12 @@ error. The fix is the line above: `hyprctl output create headless PROBE` adds an
 renders on its own clock, and the windows go on ITS workspace. The tell that separates the two
 cases: an empty nested output photographs as `#111111` (Hyprland's background), so a capture that
 is uniformly *anything else* is a frame nobody drew.
+
+⚠️ **Trap 1b — under a Lua config, `hyprctl dispatch` parses its argument AS LUA.** The classic
+form fails with a parser error that names your dispatcher (`hyprctl dispatch movewindowpixel "exact
+300 -200,address:0x…"` → ``[string "return hl.dispatch(movewindowpixel exact 300 …"]:1: ')'
+expected near 'exact'``, plus a hint). In a bench, drive the compositor the way the config does:
+`hyprctl dispatch "hl.dsp.window.move({ x = 300, y = -200, window = 'address:0x…' })"`.
 
 ⚠️ **Trap 2 — the terminal you reach for is translucent, so two windows photograph as one.** The
 shipped `kitty.conf` sets a background opacity, so a red window under a blue one reads
