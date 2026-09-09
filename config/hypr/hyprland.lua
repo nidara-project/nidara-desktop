@@ -466,15 +466,11 @@ local FLOAT_MARGIN = 8   -- gaps_out, so a clamped window lands where a tiled on
 -- twice for a size the client already declined buys nothing.
 local lastAsk = {}
 
-local function clampFloating(w)
-    if not w or not w.floating then return end
-    -- Fullscreen and maximized geometry belongs to the fullscreen handler, which
-    -- already respects the usable area for `maximized` (it returns the work area).
-    if (w.fullscreen or 0) ~= 0 then return end
-
-    local mon = w.monitor
+-- Where a floating window is allowed to live: the monitor minus what the bar and
+-- the dock reserve, minus our own margin. Both the clamp and the cascade measure
+-- against this one rectangle, so they can never disagree about where the edge is.
+local function usableArea(mon)
     if not mon then return end
-
     -- Named fields, not an order to guess: {top=, bottom=, left=, right=}.
     local res     = mon.reserved or {}
     local originX = (mon.x or 0) + (res.left or 0) + FLOAT_MARGIN
@@ -482,6 +478,20 @@ local function clampFloating(w)
     local availW  = mon.width  - (res.left or 0) - (res.right  or 0) - 2 * FLOAT_MARGIN
     local availH  = mon.height - (res.top  or 0) - (res.bottom or 0) - 2 * FLOAT_MARGIN
     if availW <= 0 or availH <= 0 then return end
+    return originX, originY, availW, availH
+end
+
+-- Returns the box it settled on (x, y, w, h) so the caller does not have to read
+-- the geometry back — a resize we just dispatched is not visible in `w.size` yet.
+local function clampFloating(w)
+    if not w or not w.floating then return end
+    -- Fullscreen and maximized geometry belongs to the fullscreen handler, which
+    -- already respects the usable area for `maximized` (it returns the work area).
+    if (w.fullscreen or 0) ~= 0 then return end
+
+    local mon = w.monitor
+    local originX, originY, availW, availH = usableArea(mon)
+    if not originX then return end
 
     local curW, curH = w.size.x, w.size.y
     local curX, curY = w.at.x, w.at.y
@@ -517,11 +527,91 @@ local function clampFloating(w)
     end
 
     x, y = math.floor(x), math.floor(y)
-    if x == curX and y == curY and newW == curW and newH == curH then return end
+    if x == curX and y == curY and newW == curW and newH == curH then return x, y, newW, newH end
 
     -- `move` is ABSOLUTE (verified: two identical calls leave the window where it
     -- is), hence the monitor's own origin for a multi-head setup.
     hl.dispatch(hl.dsp.window.move({ x = x, y = y, window = sel }))
+    return x, y, newW, newH
+end
+
+
+-- ── A new floating window does not land on top of the last one ───────────────
+--
+-- Hyprland places a floating window that asks for no position at the exact centre
+-- of the work area, so opening the same terminal three times gives you ONE window
+-- with two more hidden underneath it, pixel for pixel. Harmless while most windows
+-- tile; the norm the moment a workspace defaults to floating (#513).
+--
+-- 🔑 The rule is KWin's `Placement::cascadeIfCovering`, and the interesting half is
+-- what it does NOT do: it does not cascade everything. A window is stepped away
+-- only when it would COMPLETELY cover another one, so the first window of an empty
+-- workspace is still centred — which is what makes the desktop feel placed rather
+-- than dealt — and a small dialog over a big parent never moves, which is the
+-- modal exemption for free, without needing a `modal` flag Hyprland does not
+-- expose to Lua anyway.
+--
+-- ⚠️ One honest divergence from KWin: it walks the stacking order and skips a
+-- window that is already buried under others, because covering what is invisible
+-- costs nothing. Lua gets no z-order, so we test every mapped window on the
+-- workspace. The cost is a rare extra step; the alternative is no cascade at all.
+--
+-- Out of room, we do what KWin does: give up and keep the original placement,
+-- rather than walking a window off the usable area or wrapping it back into a
+-- corner it would cover all over again.
+local function cascadeStep(availW, availH)
+    -- KWin scales the step with the placement area (`area.width()/48`); mutter uses
+    -- a flat 50px (`CASCADE_INTERVAL`). Ours does both: it scales, and it never
+    -- drops below a number our own design system already fixes — a window corner is
+    -- `rounding` (24) and windows sit `gaps_out` (8) apart, so 32 is the smallest
+    -- step that leaves the covered window's corner reading as a corner.
+    return math.max(24 + FLOAT_MARGIN, math.floor(math.min(availW, availH) / 48))
+end
+
+local function cascadeFloating(w, x, y, boxW, boxH)
+    if not w or not w.floating or not x then return end
+    if (w.fullscreen or 0) ~= 0 then return end
+
+    local mon = w.monitor
+    local originX, originY, availW, availH = usableArea(mon)
+    if not originX then return end
+
+    local ws = w.workspace
+    if not ws then return end
+
+    local others = {}
+    for _, o in ipairs(hl.get_windows({ mapped = true }) or {}) do
+        local ows = o.workspace
+        if o.address ~= w.address and not o.hidden and ows and ows.id == ws.id
+            and (o.fullscreen or 0) == 0 and o.at and o.size then
+            others[#others + 1] = o
+        end
+    end
+    if #others == 0 then return end
+
+    local step   = cascadeStep(availW, availH)
+    local px, py = x, y
+
+    -- Bounded like KWin's loop, which ends when the next step leaves the area. The
+    -- count is a belt: each pass moves strictly down-right, so it cannot cycle.
+    for _ = 1, 8 do
+        local covered
+        for _, o in ipairs(others) do
+            if px <= o.at.x and py <= o.at.y
+                and px + boxW >= o.at.x + o.size.x and py + boxH >= o.at.y + o.size.y then
+                covered = o
+                break
+            end
+        end
+        if not covered then break end
+
+        px = covered.at.x + step
+        py = covered.at.y + step
+        if px + boxW > originX + availW or py + boxH > originY + availH then return end
+    end
+
+    if px == x and py == y then return end
+    hl.dispatch(hl.dsp.window.move({ x = math.floor(px), y = math.floor(py), window = "address:" .. w.address }))
 end
 
 -- 🔑 ONE hook, not a list of the ways in. `window.open` catches a window that MAPS
@@ -546,16 +636,22 @@ end
 -- no-op. `m_clamping` makes that explicit rather than load-bearing.
 local clamping = false
 
-local function clampFloatingGuarded(w)
+-- The cascade runs at BIRTH only. Placement is a decision taken once, when the
+-- window appears; re-running it on every rule re-evaluation would move a window
+-- the user had already put where they wanted it.
+local function placeFloatingGuarded(w, cascade)
     if clamping then return end
     clamping = true
-    local ok, err = pcall(clampFloating, w)
+    local ok, err = pcall(function()
+        local x, y, boxW, boxH = clampFloating(w)
+        if cascade then cascadeFloating(w, x, y, boxW, boxH) end
+    end)
     clamping = false
-    if not ok then print("Nidara: clampFloating failed: " .. tostring(err)) end
+    if not ok then print("Nidara: floating placement failed: " .. tostring(err)) end
 end
 
-hl.on("window.open",         function(w) clampFloatingGuarded(w) end)
-hl.on("window.update_rules", function(w) clampFloatingGuarded(w) end)
+hl.on("window.open",         function(w) placeFloatingGuarded(w, true) end)
+hl.on("window.update_rules", function(w) placeFloatingGuarded(w, false) end)
 
 
 -- ── Keybinds — Window modes ──────────────────────────────────────────────────

@@ -345,6 +345,39 @@ remembered per address**: a client whose protocol `min_size` exceeds the usable 
 legitimately refuses to shrink, and re-asking would chase the `window.update_rules` its own resize
 fires.
 
+#### A new floating window does not land on top of the last one — and the rule is *cascade IF covering*
+
+Hyprland centres every floating window that asks for no position, so the same terminal opened three
+times is ONE window with two underneath it, pixel for pixel. `config/hypr/hyprland.lua` cascades —
+but only in the case that needs it, which is the whole design.
+
+🔑 **The rule is KWin's `Placement::cascadeIfCovering` (`src/placement.cpp:529`): step a window away
+only when it would COMPLETELY cover another one.** So the first window of an empty workspace is
+still centred, and a small dialog over a big parent never moves — which is the modal exemption for
+free, and just as well, because Hyprland exposes no `modal` to Lua. Out of room, KWin gives up and
+keeps the original placement rather than walking the window off the area; we do the same.
+
+The step is `max(rounding + gaps_out, min(availW, availH) / 48)` — KWin scales its offset with the
+area (`area.width()/48`), mutter uses a flat 50 (`CASCADE_INTERVAL`), and the floor is ours: below
+`rounding` (24) plus `gaps_out` (8) the covered window's corner stops reading as a corner. On a
+2560x1440 monitor with our bar and dock that is 32.
+
+⚠️ **One divergence, deliberate**: KWin walks the stacking order and skips a window already buried
+under others. Lua gets no z-order, so every mapped window on the workspace is tested. The cost is a
+rare extra step.
+
+Measured in the bench, four identical 800x600 windows on an empty workspace, this branch against
+`main` — and note that only ONE row moves:
+
+| case | `main` | with the cascade |
+|---|---|---|
+| four 800x600, in turn | `[880,390]` **x4** | `[880,390] [912,422] [944,454] [976,486]` |
+| a 400x300 opened over them | `[1080,540]` centred | `[1080,540]` centred |
+| two 2500x1200 (no room to step) | `[30,90]` both | `[30,90]` both |
+
+The cascade runs on `window.open` ONLY. Placement is decided once, when the window appears; running
+it again on every rule re-evaluation would move a window the user had already put somewhere.
+
 ⚠️ **Still not covered, and it is not the clamp's fault**: nothing re-runs when the RESERVED AREA
 itself changes (the algorithm has no `recalculate` and no Lua event fires — measured: 0 px of
 movement across a bar and a dock appearing and disappearing under a live floating window), and a
@@ -2727,6 +2760,18 @@ form fails with a parser error that names your dispatcher (`hyprctl dispatch mov
 300 -200,address:0x…"` → ``[string "return hl.dispatch(movewindowpixel exact 300 …"]:1: ')'
 expected near 'exact'``, plus a hint). In a bench, drive the compositor the way the config does:
 `hyprctl dispatch "hl.dsp.window.move({ x = 300, y = -200, window = 'address:0x…' })"`.
+
+⚠️ **Trap 1c — the bench measures the WRONG OUTPUT if you do not assert the setup.** `hyprctl
+keyword` is rejected under the Lua parser exactly like `dispatch` is (`"can't work with non-legacy
+parsers. Use eval."`), so the two lines that create the headless output and disable the host window
+fail — and if their output went to `/dev/null`, the run continues happily on `WAYLAND-1`, whose size
+is however the nested compositor's window happened to be tiled on the host. Two arms then produce
+numbers from two different monitors and neither is wrong-looking. Use
+`hyprctl eval "hl.monitor({ output = 'PROBE', mode = '2560x1440@60', position = '0x0', scale = 1 })"`,
+the same for `{ output = 'WAYLAND-1', disabled = true }`, and then **block until
+`hyprctl -j monitors` is exactly the one monitor with exactly the reserved area you expect** before
+spawning anything. A bench that does not assert its own setup is a bench that reports confidently
+about a screen you never configured.
 
 ⚠️ **Trap 2 — the terminal you reach for is translucent, so two windows photograph as one.** The
 shipped `kitty.conf` sets a background opacity, so a red window under a blue one reads
