@@ -32,6 +32,7 @@ import { allKeyboards, keyboardById, keyboardId, parseKeyboardId } from "../lib/
 import Icons from "./core/Icons"
 import { safeDisconnect } from "./core/signals"
 import { t } from "./core/i18n"
+import workspaceModes, { WORKSPACE_MODES, type WorkspaceMode } from "./core/WorkspaceModes"
 
 // ── Keyboards ────────────────────────────────────────────────────────────────
 // The list used to live here: 28 rows typed out by hand, two of them variants.
@@ -935,4 +936,45 @@ export function registerConfigEntries() {
         writable: false,
         get: () => agentConfig.brainModel,
     })
+
+    // ── Workspace modes (#513) ───────────────────────────────────────────
+    registerConfig("workspaces.defaultMode", {
+        desc: "Default mode for workspaces: 'floating' or 'tiling'.",
+        type: "enum",
+        enum: WORKSPACE_MODES,
+        writable: true,
+        get: () => workspaceModes.defaultMode,
+        set: v => workspaceModes.setDefaultMode(v as WorkspaceMode),
+        subscribe: apply => {
+            apply(workspaceModes.defaultMode)
+            const id = workspaceModes.connect("changed", () => apply(workspaceModes.defaultMode))
+            return () => safeDisconnect(workspaceModes, id)
+        },
+        ui: {
+            i18n: "settings.workspaces.default-mode",
+            control: "segmented",
+            optI18n: (v: string) => t(`settings.workspaces.mode.${v}` as any),
+        },
+    })
+
+    for (const wsId of [1, 2, 3, 4, 5]) {
+        registerConfig(`workspaces.workspace${wsId}Mode`, {
+            desc: `Window mode for workspace ${wsId}: 'floating' or 'tiling'.`,
+            type: "enum",
+            enum: WORKSPACE_MODES,
+            writable: true,
+            get: () => workspaceModes.getEffectiveMode(wsId),
+            set: v => workspaceModes.setWorkspaceMode(wsId, v as WorkspaceMode),
+            subscribe: apply => {
+                apply(workspaceModes.getEffectiveMode(wsId))
+                const id = workspaceModes.connect("changed", () => apply(workspaceModes.getEffectiveMode(wsId)))
+                return () => safeDisconnect(workspaceModes, id)
+            },
+            ui: {
+                i18n: `settings.workspaces.workspace-${wsId}-mode`,
+                control: "segmented",
+                optI18n: (v: string) => t(`settings.workspaces.mode.${v}` as any),
+            },
+        })
+    }
 }

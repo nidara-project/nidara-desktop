@@ -13,6 +13,8 @@
  *   shellActions.openSettings?.()
  */
 
+import type { WorkspaceMode } from "./WorkspaceModes"
+
 export interface ShellActionsMap {
   toggleAppGrid?: () => void
   /** Open/raise the Settings window (a normal window — not a toggle). */
@@ -27,6 +29,9 @@ export interface ShellActionsMap {
   /** Widget-owned: AppTitle registers this to open the focused window's options
    *  menu deterministically (no synthetic click). Consumed by the IPC command. */
   openWindowMenu?: () => void
+  getWorkspaceMode?: (id: number) => WorkspaceMode
+  setWorkspaceMode?: (id: number, mode: WorkspaceMode) => Promise<void> | void
+  toggleWorkspaceMode?: (id?: number) => Promise<WorkspaceMode> | void
 }
 
 const shellActions: ShellActionsMap = {}
