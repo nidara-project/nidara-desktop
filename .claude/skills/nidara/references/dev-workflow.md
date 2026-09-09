@@ -541,6 +541,28 @@ Secure Boot enforcement is read from Linux efivarfs (`/sys/firmware/efi/efivars/
   Secure Boot enforcement **warns without blocking Continue** (#493): turning Secure Boot off in
   firmware settings is a user choice.
 
+### Windows BitLocker detection lives in lib/bitlocker.ts (#448)
+
+BitLocker volume detection (`isBitlocker`, `findBitlockerDevices`, `bitlockerWarnings`) lives in
+`ui/installer/lib/bitlocker.ts` rather than in the disk page, making it unit-testable against
+mock `lsblk` outputs without a display or block devices:
+- libblkid (and thus `lsblk`) reports BitLocker volumes as filesystem type `"BitLocker"`.
+- Volume type is matched **case-insensitively** (`fstype?.toLowerCase() === "bitlocker"`),
+  matching the precedent in `ui/installer/lib/bootloader.ts:233`.
+- In manual partitioning mode (`steps/disk.ts`), detected BitLocker partitions are announced in
+  prose above the table, identifying the partition path and instructing the user to suspend or
+  disable BitLocker from Windows.
+- ⚠️ Like Secure Boot, BitLocker detection **warns without blocking Continue** (#448): it does
+  not make installation unsafe, but explains why an existing Windows partition cannot be shrunk
+  to make room for Nidara.
+- **Why Fast Startup / NTFS hibernation is NOT probed**: block devices (`/dev/*`) on Linux are
+  permissions `0660 root:disk`. The live medium runs as the unprivileged user `live`, which belongs
+  to `wheel,video,audio,input,storage,network,rfkill,lp` and NOT `disk`. Probing NTFS hibernation
+  or dirty bit via `ntfsprogs` (`ntfsinfo`, `ntfsresize`) or `ntfs-3g.probe` directly against
+  block devices fails with `Permission denied` (exit code 19) without root. Elevating privileges via
+  `pkexec`/`sudo` on the disk page just to inspect a partition is strictly forbidden; therefore only
+  unprivileged BitLocker detection via `lsblk` is shipped.
+
 ### The account form's rules are one function too, for the same reason
 
 `accountProblems(fields, touched)` in `lib/account-problems.ts` returns the four per-field messages

@@ -32,6 +32,7 @@ import { espMount } from "../lib/disk-config"
 import { ESP_MOUNTS, manualProblems } from "../lib/manual-problems"
 import { freeSpaceGaps } from "../lib/free-space"
 import { isUefi, secureBootState } from "../lib/firmware"
+import { findBitlockerDevices, bitlockerWarnings } from "../lib/bitlocker"
 import { heading, prose, formatSize } from "./common"
 
 interface RawBlockDevice {
@@ -432,6 +433,14 @@ export function DiskStep(): Step {
         problemLabel.visible = problems.length > 0
       }
 
+      // A BitLocker volume cannot be shrunk from Linux (#448). The notice is shown
+      // in manual mode above the table, naming the partition and explaining what to
+      // do in Windows. It does NOT block Continue because it does not make the
+      // installation unsafe; it explains why a partition cannot be resized.
+      const bitlockerNotice = prose("", "installer-prose--warning")
+      bitlockerNotice.visible = false
+      manualBox.append(bitlockerNotice)
+
       // ⚠️ The columns are the deliverable of #399, not decoration. A row used to
       // be a path, a dropdown, a checkbox and another dropdown with nothing saying
       // what any of them was (D-13) — the format checkbox carried its own label
@@ -457,6 +466,15 @@ export function DiskStep(): Step {
         table.clear()
 
         const partitions = listPartitions()
+
+        const bitlockerDevs = findBitlockerDevices(partitions)
+        if (bitlockerDevs.length > 0) {
+          bitlockerNotice.label = bitlockerWarnings(bitlockerDevs).join("\n")
+          bitlockerNotice.visible = true
+        } else {
+          bitlockerNotice.label = ""
+          bitlockerNotice.visible = false
+        }
 
         // ── Unpartitioned space is a ROW, not a silence (#447) ──────────────
         //
@@ -760,15 +778,11 @@ export function DiskStep(): Step {
       // them and became an orphan when #394 hid GParted on a medium that does not
       // ship it: a lone "Refresh" floating above a table, attached to nothing.
       //
-      // ⚠️ Shown only if the program is actually here, which on the shipped medium
-      // it is NOT: `gparted` is in none of the 174 lines of nidara-iso's
-      // packages.x86_64. The button was offered on every install and did nothing —
-      // and could not even say so, because the `try/catch` around it wraps a
-      // PROMISE, so the spawn failure rejected into nowhere. Not a log line, not a
-      // dialog, not a flicker.
-      //
-      // Hidden rather than deleted: manual mode has no partition editor of its own,
-      // so if a partition editor is ever added to the medium this is where it goes.
+      // ⚠️ Shown only if the program is actually here. Since nidara-iso#24
+      // (`2e33acc`), `gparted` and `ntfsprogs` are included in the medium's
+      // `packages.x86_64`, so the button is visible on the live medium. The
+      // check remains to protect runs outside the medium where GParted is
+      // not installed.
       const manualActions = new Gtk.Box({
         orientation: Gtk.Orientation.HORIZONTAL,
         spacing: 8,
