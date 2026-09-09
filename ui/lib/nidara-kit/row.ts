@@ -203,6 +203,77 @@ export function NidaraStackedRow(
     return row
 }
 
+export type NidaraValidationState = "none" | "warning" | "error"
+
+export interface NidaraFieldRowResult {
+    row: Gtk.ListBoxRow
+    setError(message: string): void
+    setValidationState(state: NidaraValidationState): void
+}
+
+/**
+ * NidaraFieldRow — a stacked row with its own error line underneath the control.
+ *
+ * A form puts each fault inside the row it belongs to, under that field's own
+ * entry, and shows every fault at once (design-system.md:44, #400, #466).
+ *
+ * The control the row is handed is the entry AND its error line, so the row
+ * keeps its own metrics and the message moves with the field it belongs to.
+ *
+ * ⚠️ Not red. The message uses full-strength ink at weight 500 (.nidara-field-error):
+ * the DE reserves red for recording and for failure. What makes this line read
+ * as a correction is that it is the only full-strength text on a card of dim
+ * subtitles, and that it is attached to the control it is about.
+ */
+export function NidaraFieldRow(
+    label: string,
+    subtitle: string = "",
+    control?: Gtk.Widget,
+    extraClasses: string[] = [],
+): NidaraFieldRowResult {
+    const error = new Gtk.Label({
+        label: "",
+        css_classes: ["nidara-field-error"],
+        halign: Gtk.Align.FILL,
+        hexpand: true,
+        xalign: 0,
+        wrap: true,
+        wrap_mode: Pango.WrapMode.WORD_CHAR,
+        visible: false,
+    })
+
+    const stack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, hexpand: true })
+    if (control) {
+        control.hexpand = true
+        stack.append(control)
+    }
+    stack.append(error)
+
+    const row = NidaraStackedRow(label, subtitle, stack, extraClasses)
+
+    const setValidationState = (state: NidaraValidationState) => {
+        row.remove_css_class("nidara-row--warning")
+        row.remove_css_class("nidara-row--error")
+        if (state === "warning") {
+            row.add_css_class("nidara-row--warning")
+        } else if (state === "error") {
+            row.add_css_class("nidara-row--error")
+        }
+    }
+
+    const setError = (message: string) => {
+        error.label = message
+        error.visible = message !== ""
+        setValidationState(message ? "error" : "none")
+    }
+
+    const r = row as any
+    r.setError = setError
+    r.setValidationState = setValidationState
+
+    return { row, setError, setValidationState }
+}
+
 export function NidaraRow(
     label: string,
     subtitle: string = "",
