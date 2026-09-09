@@ -413,57 +413,115 @@ hl.bind(mainMod .. " + CTRL + SHIFT + left",  hl.dsp.window.move({ workspace = "
 -- ── Nothing floating hangs off the screen ────────────────────────────────────
 --
 -- A floating window keeps whatever size it asks for, and Hyprland does not shrink
--- it to fit. Measured in `DefaultFloatingAlgorithm::newTarget` (0.56.2) and on
--- screen: a window that FITS is centred in the usable area, and one that does NOT
--- has its bottom edge pinned to the work area's bottom — so the entire excess goes
--- out the TOP, under the bar and off the display. On a 1440-tall screen with our
--- 40px bar and 100px dock, a window asking for the full 2560x1440 lands at
--- y = -101: its floor sits exactly on the dock and its title bar is gone.
+-- it to fit. Measured in `DefaultFloatingAlgorithm::fitBoxInWorkArea` (0.56.2) and
+-- on screen: the four operations it performs all MOVE the window and none of them
+-- resizes it, and the bottom-edge branch runs AFTER the top-edge one and overwrites
+-- it. So a window taller than the usable area gets its floor pinned to the work
+-- area's bottom and the whole excess goes out the TOP. On a 1440-tall screen with
+-- our 40px bar and 100px dock, a window asking for the full 2560x1440 lands at
+-- y = -101: its floor sits exactly on the dock and its title bar, its close button
+-- and its header are off the display. Such a window cannot be dragged or closed.
 --
 -- 🔑 It is not our windows misbehaving and it is not one app: the size comes from
 -- the CLIENT, and any app is free to ask for the monitor. Telegram does, because
 -- it remembers the geometry it had while maximized. The compositor only invents a
--- size (640x400) when the client asks for nothing at all.
+-- size (640x400) when the client asks for nothing at all. There is no ceiling
+-- anywhere: `CWindow::maxSize()` is empty by default and no layout compares a
+-- window against the monitor or against the usable area.
 --
--- ⚠️ This cannot be a window rule, which is why it is code. `max_size` takes
--- integers only, and rule expressions expose `monitor_w`/`monitor_h` but NOTHING
--- for the usable area — so "the monitor minus the bar and the dock" is not
--- expressible, and hardcoding one machine's numbers is not something a
--- distribution can ship. Here we have `monitor.reserved`, which is exactly it.
+-- ⚠️ This cannot be a window rule, which is why it is code. `max_size` FLOATS the
+-- window unconditionally (dwindle and master both bail out with "we can't
+-- continue. make it floating."), and the rule expression evaluator exposes
+-- `window_*`, `monitor_*` and `cursor_*` and NOTHING for the usable area — so "the
+-- monitor minus the bar and the dock" is not expressible. Here we have
+-- `monitor.reserved`, which is exactly it.
 --
--- What it does NOT do: touch tiled windows, or resize anything that already fits.
--- A window that fits is left byte for byte where the compositor put it.
+-- 🔑 THE LAW, and it is the one every mature desktop implements: clamp the SIZE to
+-- the usable area, and give the TOP edge absolute precedence. If a window still
+-- does not fit, it hangs off the BOTTOM — never off the top, because that is where
+-- the header lives. Prior art, verified in the sources: KWin clamps with
+-- `geometry.size().boundedTo(area.size())` and applies `moveTop` last; mutter has
+-- `meta_rectangle_clamp_to_fit_into_region` plus `constrain_titlebar_visible`; niri
+-- writes the rule as a comment over its own implementation — "Clamp by top and
+-- left last so it takes precedence" — with a unit test under it. Hyprland is the
+-- only one of the four that does neither.
+--
+-- ⚠️ Upstream will NOT take this off our hands. `misc:float_force_onscreen` and
+-- `misc:new_float_force_onscreen` are in Hyprland `main` (PR #15492) and not in
+-- the 0.56.x branch, so a future release brings them; they are applied from
+-- `setPositionGlobal`, which covers EVERY move path — including the interactive
+-- drag we still miss. But their `fitBoxInWorkArea(box, t, fully)` still never
+-- touches `w` or `h`, so a window bigger than the usable area still ends up with
+-- its header off-screen. The size clamp stays ours. See #511.
+--
+-- What it does NOT do: touch tiled, fullscreen or maximized windows, or move a
+-- floating window that already fits INSIDE the usable area. That one is left byte
+-- for byte where the compositor — or the user's own drag — put it.
 local FLOAT_MARGIN = 8   -- gaps_out, so a clamped window lands where a tiled one would
+
+-- The last size we asked a window for, keyed by address. A client whose protocol
+-- min_size is larger than the usable area (a 1366x768 screen and our installer's
+-- 960x760 floor, #99) legitimately REFUSES to shrink, and without this the resize
+-- and the `window.update_rules` it fires would chase each other forever. Asking
+-- twice for a size the client already declined buys nothing.
+local lastAsk = {}
 
 local function clampFloating(w)
     if not w or not w.floating then return end
+    -- Fullscreen and maximized geometry belongs to the fullscreen handler, which
+    -- already respects the usable area for `maximized` (it returns the work area).
+    if (w.fullscreen or 0) ~= 0 then return end
 
     local mon = w.monitor
     if not mon then return end
 
     -- Named fields, not an order to guess: {top=, bottom=, left=, right=}.
-    local res    = mon.reserved or {}
-    local availW = mon.width  - (res.left or 0) - (res.right  or 0) - 2 * FLOAT_MARGIN
-    local availH = mon.height - (res.top  or 0) - (res.bottom or 0) - 2 * FLOAT_MARGIN
+    local res     = mon.reserved or {}
+    local originX = (mon.x or 0) + (res.left or 0) + FLOAT_MARGIN
+    local originY = (mon.y or 0) + (res.top  or 0) + FLOAT_MARGIN
+    local availW  = mon.width  - (res.left or 0) - (res.right  or 0) - 2 * FLOAT_MARGIN
+    local availH  = mon.height - (res.top  or 0) - (res.bottom or 0) - 2 * FLOAT_MARGIN
     if availW <= 0 or availH <= 0 then return end
 
     local curW, curH = w.size.x, w.size.y
-    if curW <= availW and curH <= availH then return end
-
+    local curX, curY = w.at.x, w.at.y
     local newW = math.min(curW, availW)
     local newH = math.min(curH, availH)
     local sel  = "address:" .. w.address
 
-    hl.dispatch(hl.dsp.window.resize({ x = newW, y = newH, window = sel }))
-    -- Centred in what is usable — the same placement Hyprland gives a window that
-    -- fits, so a clamped window looks placed rather than shoved. `move` is
-    -- ABSOLUTE (verified: two identical calls leave the window where it is), hence
-    -- the monitor's own origin for a multi-head setup.
-    hl.dispatch(hl.dsp.window.move({
-        x = math.floor((mon.x or 0) + (res.left or 0) + FLOAT_MARGIN + (availW - newW) / 2),
-        y = math.floor((mon.y or 0) + (res.top  or 0) + FLOAT_MARGIN + (availH - newH) / 2),
-        window = sel,
-    }))
+    local x, y
+    if newW ~= curW or newH ~= curH then
+        -- It did not fit. Re-place it: centred in what is usable, the same
+        -- placement Hyprland gives a window that fits, so a clamped window looks
+        -- placed rather than shoved. A client that declines to shrink lands at the
+        -- origin instead of centred, which is the point: the excess goes DOWN and
+        -- RIGHT, and the header stays on screen.
+        x = originX + (availW - newW) / 2
+        y = originY + (availH - newH) / 2
+
+        local ask = newW .. "x" .. newH
+        if lastAsk[sel] ~= ask then
+            lastAsk[sel] = ask
+            hl.dispatch(hl.dsp.window.resize({ x = newW, y = newH, window = sel }))
+        end
+    else
+        -- It fits. Only pull it back if it is hanging off, and pull it back the way
+        -- the whole industry does: bottom and right first, TOP and LEFT last, so the
+        -- top-left corner wins every conflict and the header is never the edge that
+        -- gets sacrificed.
+        lastAsk[sel] = nil
+        x = math.min(curX, originX + availW - newW)
+        y = math.min(curY, originY + availH - newH)
+        x = math.max(x, originX)
+        y = math.max(y, originY)
+    end
+
+    x, y = math.floor(x), math.floor(y)
+    if x == curX and y == curY and newW == curW and newH == curH then return end
+
+    -- `move` is ABSOLUTE (verified: two identical calls leave the window where it
+    -- is), hence the monitor's own origin for a multi-head setup.
+    hl.dispatch(hl.dsp.window.move({ x = x, y = y, window = sel }))
 end
 
 -- 🔑 ONE hook, not a list of the ways in. `window.open` catches a window that MAPS
