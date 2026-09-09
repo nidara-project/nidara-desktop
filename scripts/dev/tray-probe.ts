@@ -97,6 +97,18 @@ async function until<T>(fn: () => T, ms = 5000, step = 50): Promise<T> {
     return v
 }
 
+function nameHasOwner(name: string): boolean {
+    try {
+        const r = Gio.DBus.session.call_sync(
+            "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+            "NameHasOwner", new GLib.Variant("(s)", [name]),
+            new GLib.VariantType("(b)"), Gio.DBusCallFlags.NONE, 2000, null)
+        return r.deep_unpack()[0] as boolean
+    } catch {
+        return false
+    }
+}
+
 // ── the fake app, as a child process ─────────────────────────────────────────
 
 const REPO = GLib.get_current_dir()
@@ -199,6 +211,7 @@ interface ItemLike {
 interface ServiceLike {
     items: ItemLike[]
     getItem(id: string): ItemLike | null
+    destroy(): void
 }
 
 async function makeService(): Promise<ServiceLike> {
@@ -209,6 +222,7 @@ async function makeService(): Promise<ServiceLike> {
     return {
         get items() { return tray.items as ItemLike[] },
         getItem: (id: string) => (tray.items as any[]).find(i => i.item_id === id) ?? null,
+        destroy: () => { (tray as any).destroy?.() },
     }
 }
 
@@ -421,14 +435,38 @@ async function main(): Promise<void> {
             : "(vacuous — the second item never registered)",
     )
 
+    // ── teardown ─────────────────────────────────────────────────────────────
+    // A check that enters with an empty roster or an unowned watcher is vacuous:
+    // asserting 0 items or unowned watcher without them having been active first
+    // proves nothing about destroy(). Register a fresh item, verify the roster
+    // has items and the watcher is owned, then destroy() and assert both clear.
+    const teardownFake = new Fake(["--id", "teardown"])
+    const teardownId = `${teardownFake.resolveBusName()}/StatusNotifierItem`
+    await until(() => tray.getItem(teardownId), 6000)
+    const hadItems = tray.items.length > 0
+    const hadWatcher = nameHasOwner("org.kde.StatusNotifierWatcher")
+
+    tray.destroy()
+    const empty = tray.items.length === 0
+    const watcherGone = await until(() => !nameHasOwner("org.kde.StatusNotifierWatcher"), 3000)
+    teardownFake.kill()
+
+    check(
+        hadItems && hadWatcher && empty && !!watcherGone,
+        "destroy() clears all items and releases subscriptions",
+        hadItems && hadWatcher
+            ? `${tray.items.length} items, watcher ${watcherGone ? "released" : "held"}`
+            : `(vacuous — ${!hadItems ? "roster had no items" : "watcher was not owned"} before destroy)`,
+    )
+
     finish()
 }
 
-function finish(): never {
+function finish(): void {
     print("")
     if (fail === 0) print(`PROBE-RESULT ALL PASS (${pass})`)
     else print(`PROBE-RESULT ${fail} FAILED, ${pass} passed`)
-    imports.system.exit(fail === 0 ? 0 : 1)
+    loop.quit()
 }
 
 // ⚠️ Start from an idle, not inline: a failed precondition calls exit() through
@@ -437,9 +475,11 @@ function finish(): never {
 GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
     main().catch(e => {
         print(`\nPROBE CRASHED: ${e}\n${e?.stack ?? ""}`)
-        imports.system.exit(3)
+        fail++
+        loop.quit()
     })
     return GLib.SOURCE_REMOVE
 })
 
 loop.run()
+imports.system.exit(fail === 0 ? 0 : 1)
