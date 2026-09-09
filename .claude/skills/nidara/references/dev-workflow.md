@@ -374,6 +374,29 @@ saw it as "the gaps shrink a little when I float it". Toggling now moves nothing
 | before | `[9,49] 2542x1282` | `[8,48] 2544x1284` | `[9,49] …` | `[8,48] …` |
 | after | `[9,49] 2542x1282` | `[9,49] 2542x1282` | `[9,49] …` | `[9,49] …` |
 
+🔑 **When the clamp shrinks a window, WHERE it leaves it is decided by the anchor, not by the
+event.** If the window's top-left is inside the usable area, somebody put it there: shrink it where
+it stands. If it is not, the position is not a decision anyone made — it is what Hyprland invents
+for an oversized floating window, `[-1,-101]`, the whole monitor — so centre it. The owner found the
+symptom: *"¿por qué al cambiar el tamaño de una flotante, a veces se centra?"* Because it did:
+resize a floating window past the usable area and the next thing that re-evaluated its rules shrank
+it AND teleported it to the middle.
+
+⚠️ **The obvious fix is by WHEN, and it is wrong.** "Only centre at birth (`window.open`)" reads
+perfectly and breaks the tile→float toggle, which arrives as `window.update_rules`: the flag says
+"not a placement" for the one transition where Hyprland has just thrown the geometry away, and the
+window lands at `[-1,49]` instead of on the corner its tiled self occupied. Measured, three
+scenarios that a by-WHEN rule cannot satisfy at once:
+
+| | by WHEN (`placing` flag) | by WHERE (anchor inside?) |
+|---|---|---|
+| tiled → floating | `[-1,49]` ✗ | `[9,49]` ✓ (identical to tiled) |
+| resized past the area, then focused | `[300,300]` ✓ | `[300,300]` ✓ |
+| born asking 2560x1440 | `[0,49]` ✗ (samples a half-applied box) | `[9,49]` ✓ |
+
+The anchor rule also self-heals: our own resize fires another `update_rules`, and by then the window
+is inside and fits, so the second pass is a no-op.
+
 ⚠️ **Which is why `GAPS_OUT`, `BORDER_SIZE` and `ROUNDING` are declared once at the top of
 `hyprland.lua` and fed to BOTH `hl.config` and the clamp.** The bug was two copies of the same
 number disagreeing about what it included. Note the cascade step keeps using `GAPS_OUT` and not the

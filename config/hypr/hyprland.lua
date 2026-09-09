@@ -515,13 +515,33 @@ local function clampFloating(w)
 
     local x, y
     if newW ~= curW or newH ~= curH then
-        -- It did not fit. Re-place it: centred in what is usable, the same
-        -- placement Hyprland gives a window that fits, so a clamped window looks
-        -- placed rather than shoved. A client that declines to shrink lands at the
-        -- origin instead of centred, which is the point: the excess goes DOWN and
-        -- RIGHT, and the header stays on screen.
-        x = originX + (availW - newW) / 2
-        y = originY + (availH - newH) / 2
+        -- It did not fit, and now the question is where to put it — which is the
+        -- one place this got it wrong twice.
+        --
+        -- 🔑 The test is whether the corner we would anchor to is INSIDE the usable
+        -- area. If it is, the window is where somebody put it: shrink it where it
+        -- stands, because teleporting a window to the middle of the screen when the
+        -- user dragged an edge one pixel too far is how a desktop starts feeling
+        -- haunted. If it is not, the position is not a decision anyone made — it is
+        -- what Hyprland invents for an oversized floating window, [-1,-101], the
+        -- whole monitor — so there is nothing to preserve and we place it.
+        --
+        -- ⚠️ Doing this by WHEN instead ("centre only at birth") is the version that
+        -- looks right and is not: a tile toggled to floating arrives as
+        -- `window.update_rules`, so the flag says "not a placement" for the one
+        -- transition where Hyprland has just thrown the geometry away, and the
+        -- window lands a pixel off the corner instead of where its tiled self sat.
+        if curX >= originX and curY >= originY then
+            x = curX
+            y = curY
+        else
+            -- Centred in what is usable, the same placement Hyprland gives a window
+            -- that fits. A client that declines to shrink lands at the origin
+            -- instead of centred, which is the point: the excess goes DOWN and
+            -- RIGHT, and the header stays on screen.
+            x = originX + (availW - newW) / 2
+            y = originY + (availH - newH) / 2
+        end
 
         local ask = newW .. "x" .. newH
         if lastAsk[sel] ~= ask then
