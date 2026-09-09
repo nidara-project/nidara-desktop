@@ -1032,10 +1032,63 @@ runtime property and not a CI gate). `esbuild --bundle --format=esm --platform=n
 every non-empty `keymap` against `localectl list-keymaps`. Run it against `main` first: an instrument
 that cannot report the eight is an instrument that proves nothing.
 
-⚠️ **Related, and the reason Japanese and Simplified Chinese are not offered as languages**: Nidara
-ships no input method (no `fcitx5`, no `ibus`, in neither `packages.x86_64` nor the desktop's
-depends). Those languages need one to be typed at all, so offering them installs a system its owner
-cannot write in. The translations stay in `lib/i18n.ts`; the *offer* comes back when an IME ships.
+### The input method — `fcitx5`, and the one variable everybody sets wrong
+
+⚠️ **This section replaces a claim that was false for months.** It read *"the reason Japanese and
+Simplified Chinese are not offered as languages: Nidara ships no input method"*. They **were**
+offered — `LANGUAGES` in `ui/installer/lib/languages.ts` has carried `zh-CN` and `ja` since #398 and
+`steps/welcome.ts` shows all twelve with no filter — and the IME was genuinely missing. The decision
+got written down and never applied, which is the worst of the three possible states: an installer
+promising a language its owner could not write in, and a document saying it did not.
+
+**The IME ships now** (#500): `fcitx5 fcitx5-gtk fcitx5-qt fcitx5-configtool fcitx5-chinese-addons
+fcitx5-anthy`, ~23 MB, all in Arch's `extra`. Unconditional, not gated on the chosen language — the
+engines are 5 MB of the 23, and the framework earns its keep for everyone as the thing that turns
+`~/.XCompose` sequences into text for Wayland clients.
+
+⛔ **Do NOT export `GTK_IM_MODULE`.** It is the variable every guide sets and it is wrong here: GTK4
+speaks `zwp_text_input_v3` to the compositor natively, and setting the variable OVERRIDES that
+native path (GTK's own error string is *"IM Context is hardcoded by GTK_IM_MODULE"*). `bin/nidara`
+exports four and not that one — `INPUT_METHOD`, `QT_IM_MODULE`, `XMODIFIERS`, `SDL_IM_MODULE`.
+`XMODIFIERS` still matters: XWayland clients have no text-input protocol. Verified on the machine —
+`libgtk-4.so` carries the protocol names, and Hyprland answers BOTH halves
+(`zwp_text_input_manager_v3` for apps, `zwp_input_method_manager_v2` for the IME) — and it is what
+the ArchWiki, fcitx's own Wayland page and Omarchy's `environment.d` drop-in all do.
+
+🔑 **No systemd unit, deliberately.** The package's own `/etc/xdg/autostart/org.fcitx.Fcitx5.desktop`
+starts it, and that path is live here — measured with `systemctl --user list-units 'app-*'`, which
+shows XDG autostart entries running inside a uwsm Hyprland session. Omarchy ships a unit and masks
+the autostart entry; their reasons are theirs (a duplicate tray item, XCompose restarts). Ours would
+add a file, a mask, and a restart loop to fight over the same bus name. **And unlike
+`nidara.service`, an IME leaking into another Hyprland session is not a bug** — that unit's comment
+warns against `WantedBy=graphical-session.target` because the shell would paint a bar in somebody
+else's session; an input method simply being available is the opposite of a problem.
+
+⚠️ **fcitx5 will take the keyboard layout if you let it.** Its X11 addon can push its own layout
+onto X, and its default group is hardcoded `Default Layout=us` — `buildDefaultGroup` in
+`inputmethodmanager.cpp` does **not** read the locale. `defaults/fcitx5/conf/xcb.conf` turns that off
+(`Allow Overriding System XKB Settings=False`), seeded by `nidara-setup` only when the user has no
+`~/.config/fcitx5` at all. Without it every XWayland app would quietly undo the work in #498.
+
+✅ **The profile does NOT need seeding, and the VM pass of 2026-09-08 is what settled it.** The
+plan here used to be "capture a configured profile from a VM and ship it", on the reading that
+`buildDefaultGroup` ignores the locale. Measured on a real 简体中文 install, that is not what
+happens: with nobody having opened `fcitx5-configtool` and **no `~/.config/fcitx5/profile` on disk
+at all**, `InputMethodGroupInfo` answers
+
+```
+('us', [('keyboard-us', ''), ('pinyin', '')])
+```
+
+and `Ctrl+Space` + `nihao` gives 你好. fcitx5 derives the group from the locale at startup and only
+writes the file once somebody changes something — so a captured profile would have frozen one
+locale's answer over a correct one. Measured for `zh_CN`; `ja_JP` takes the same path and is
+assumed, not measured. **Read a claim about `buildDefaultGroup` against a running fcitx5 before
+acting on it.**
+
+🔴 **What IS missing is #503**: the IME does not reach our **layer-shell** surfaces. Same session,
+same keys — 你好 in kitty and in our own GTK4 Settings window (xdg toplevels), raw `nihao` in the
+search overlay. No profile would have fixed that.
 
 ### The installer's log is not a terminal, and the children writing to it assume one
 

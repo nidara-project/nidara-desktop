@@ -373,6 +373,39 @@ if [ ! -f "$KITTY_DIR/kitty.conf" ] && [ -d "$SHARE/defaults/kitty" ]; then
     echo "  [Init] $KITTY_DIR (padding, JetBrains Mono + Nerd symbols, glass, dark palette)"
 fi
 
+# fcitx5 — the input method's own config dir. Seeded ONLY when the user has none,
+# like kitty's above; an existing fcitx5 setup is never touched.
+#
+# One file today, and it is a GUARD rather than a preference: fcitx5's X11 addon
+# can push its own keyboard layout onto X, and its default group is hardcoded to
+# `us` (it does not read the locale), so leaving it on would quietly undo the
+# layout the installer chose — for every XWayland app.
+#
+# The input-method PROFILE is deliberately NOT seeded, and the VM pass of
+# 2026-09-08 is why: on a `zh_CN.UTF-8` install fcitx5 builds the right group by
+# itself. `InputMethodGroupInfo` answered `('us', [('keyboard-us', ''),
+# ('pinyin', '')])` on a machine where nobody had opened fcitx5-configtool, and
+# ~/.config/fcitx5/profile did not exist at all — it derives the group from the
+# locale at startup and only writes the file once somebody changes something.
+# Ctrl+Space then `nihao` gave 你好 in kitty and in our own Settings window.
+#
+# So the earlier plan here — copy back a profile captured from a configured VM —
+# would have frozen a guess on top of an answer fcitx5 already gets right, and
+# would have been WRONG for every locale but the one it was captured in.
+# (Measured for zh_CN. ja_JP goes through the same locale-derived path and is
+# assumed, not measured.)
+#
+# ⚠️ What does NOT work yet is typing Chinese into our LAYER-SHELL surfaces —
+# the search overlay takes the raw latin. That is #503, and no profile would
+# have fixed it.
+FCITX_DIR="${REAL_HOME}/.config/fcitx5"
+if [ ! -d "$FCITX_DIR" ] && [ -d "$SHARE/defaults/fcitx5" ]; then
+    mkdir -p "$FCITX_DIR/conf"
+    cp "$SHARE/defaults/fcitx5/conf/"*.conf "$FCITX_DIR/conf/"
+    chown -R "$REAL_USER:" "$FCITX_DIR"
+    echo "  [Init] $FCITX_DIR (keyboard layout stays the compositor's)"
+fi
+
 # .mcp.json — MCP manifest for the user's AI agent (Claude Code et al). Points at
 # the installed binary via PATH. Always (re)written: it's a runtime-managed pointer,
 # not user data. Opening an agent inside ~/.config/nidara discovers it

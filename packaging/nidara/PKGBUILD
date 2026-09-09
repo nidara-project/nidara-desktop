@@ -115,6 +115,21 @@ depends=(
   # instead of being rescaled to the typeface's cell.
   ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono
   inter-font noto-fonts-emoji noto-fonts-cjk
+  # Input method. The installer offers 简体中文 and 日本語 as system languages, and
+  # a CJK language is not typable without one: fonts render it, an IME WRITES it.
+  # Without these the offer was a promise we could not keep — the desktop came up
+  # in Chinese and its owner could not enter a single character (#500).
+  #
+  # Unconditional rather than installed only when a CJK language is chosen: the
+  # engines are 5 MB of the 23, conditional package selection at install time is a
+  # whole mechanism to save that, and the FRAMEWORK earns its keep for everyone —
+  # it is also what turns ~/.XCompose sequences into text for Wayland clients.
+  #
+  # ⚠️ `fcitx5-gtk` is for GTK3 and XWayland apps only. GTK4 speaks
+  # `zwp_text_input_v3` to the compositor natively and needs no module — which is
+  # why GTK_IM_MODULE is deliberately NOT exported; see bin/nidara.
+  fcitx5 fcitx5-gtk fcitx5-qt fcitx5-configtool
+  fcitx5-chinese-addons fcitx5-anthy
   # adwaita-cursors = the default cursorTheme in defaults/appearance.json; listed
   # explicitly instead of relying on adwaita-icon-theme happening to depend on it
   papirus-icon-theme adwaita-icon-theme adwaita-cursors
