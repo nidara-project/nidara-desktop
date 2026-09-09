@@ -34,6 +34,8 @@
 import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
+import { call, callConn, onProps, onConnSignal } from "./dbus"
+import { safeDisconnect } from "./signals"
 
 const BLUEZ = "org.bluez"
 const IF_ADAPTER = "org.bluez.Adapter1"
@@ -55,8 +57,8 @@ function proxyFor(conn: any, path: string, iface: string): any {
 /**
  * Write one D-Bus property.
  *
- * Through the CONNECTION, not `proxy.call()`: a proxy's `call` takes a METHOD
- * name and speaks the proxy's own interface, so passing it
+ * Through the CONNECTION (`callConn`), not `proxy.call()`: a proxy's `call`
+ * takes a METHOD name and speaks the proxy's own interface, so passing it
  * "org.freedesktop.DBus.Properties" lands the interface where the method belongs
  * and GJS refuses with "Expected an object of type GVariant for argument
  * 'parameters' but got type string". Properties live on another interface, so the
@@ -66,14 +68,18 @@ function setProp(proxy: any, iface: string, name: string, value: any): void {
     const conn = proxy?.get_connection?.()
     const path = proxy?.get_object_path?.()
     if (!conn || !path) return
-    conn.call(
-        BLUEZ, path, "org.freedesktop.DBus.Properties", "Set",
+    callConn(
+        conn,
+        BLUEZ,
+        path,
+        "org.freedesktop.DBus.Properties",
+        "Set",
         new GLib.Variant("(ssv)", [iface, name, value]),
-        null, Gio.DBusCallFlags.NONE, -1, null,
-        (src: any, res: any) => {
-            try { src.call_finish(res) }
-            catch (e) { console.error(`[BlueZ] set ${iface}.${name}:`, e) }
-        })
+        null,
+        Gio.DBusCallFlags.NONE,
+    ).catch((e: any) => {
+        console.error(`[BlueZ] set ${iface}.${name}:`, e)
+    })
 }
 
 /** Unwrap a cached D-Bus property, or `fallback` when the device does not have it. */
@@ -105,7 +111,7 @@ export class Device extends GObject.Object {
 
     readonly object_path: string
     private _proxy: any = null
-    private _propsId = 0
+    private _disposers: Array<() => void> = []
 
     private _name = ""
     private _address = ""
@@ -119,7 +125,7 @@ export class Device extends GObject.Object {
         this.object_path = path
         this._proxy = proxyFor(conn, path, IF_DEVICE)
         if (!this._proxy) return
-        this._propsId = this._proxy.connect("g-properties-changed", () => this._sync())
+        this._disposers.push(onProps(this._proxy, () => this._sync()))
         this._sync()
     }
 
@@ -179,16 +185,16 @@ export class Device extends GObject.Object {
 
     /** Fire and forget, but never silently: a refused pairing is a real answer. */
     private _call(method: string): void {
-        this._proxy?.call(method, null, Gio.DBusCallFlags.NONE, -1, null,
-            (src: any, res: any) => {
-                try { src.call_finish(res) }
-                catch (e) { console.error(`[BlueZ] ${method} on ${this.object_path}:`, e) }
-            })
+        if (!this._proxy) return
+        call(this._proxy, method, null, Gio.DBusCallFlags.NONE)
+            .catch((e: any) => console.error(`[BlueZ] ${method} on ${this.object_path}:`, e))
     }
 
     destroy(): void {
-        if (this._proxy && this._propsId) GObject.signal_handler_disconnect(this._proxy, this._propsId)
-        this._propsId = 0
+        for (const dispose of this._disposers) {
+            try { dispose() } catch {}
+        }
+        this._disposers = []
         this._proxy = null
     }
 }
@@ -208,7 +214,7 @@ export class Adapter extends GObject.Object {
 
     readonly object_path: string
     private _proxy: any = null
-    private _propsId = 0
+    private _disposers: Array<() => void> = []
     private _powered = false
     private _discovering = false
 
@@ -217,7 +223,7 @@ export class Adapter extends GObject.Object {
         this.object_path = path
         this._proxy = proxyFor(conn, path, IF_ADAPTER)
         if (!this._proxy) return
-        this._propsId = this._proxy.connect("g-properties-changed", () => this._sync())
+        this._disposers.push(onProps(this._proxy, () => this._sync()))
         this._sync()
     }
 
@@ -253,17 +259,17 @@ export class Adapter extends GObject.Object {
         this._call("RemoveDevice", new GLib.Variant("(o)", [path]))
     }
 
-    private _call(method: string, args: any): void {
-        this._proxy?.call(method, args, Gio.DBusCallFlags.NONE, -1, null,
-            (src: any, res: any) => {
-                try { src.call_finish(res) }
-                catch (e) { console.error(`[BlueZ] ${method}:`, e) }
-            })
+    private _call(method: string, args: any = null): void {
+        if (!this._proxy) return
+        call(this._proxy, method, args, Gio.DBusCallFlags.NONE)
+            .catch((e: any) => console.error(`[BlueZ] ${method}:`, e))
     }
 
     destroy(): void {
-        if (this._proxy && this._propsId) GObject.signal_handler_disconnect(this._proxy, this._propsId)
-        this._propsId = 0
+        for (const dispose of this._disposers) {
+            try { dispose() } catch {}
+        }
+        this._disposers = []
         this._proxy = null
     }
 }
@@ -287,7 +293,7 @@ export class Bluetooth extends GObject.Object {
     private _devices: Device[] = []
     private _isPowered = false
     private _powerIds = new Map<Adapter, number>()
-    private _subIds: number[] = []
+    private _disposers: Array<() => void> = []
 
     constructor() {
         super()
@@ -305,17 +311,22 @@ export class Bluetooth extends GObject.Object {
             ["InterfacesAdded", (params: any) => this._onAdded(params)],
             ["InterfacesRemoved", (params: any) => this._onRemoved(params)],
         ] as const) {
-            this._subIds.push(this._conn.signal_subscribe(
-                BLUEZ, IF_OM, member, "/", null, Gio.DBusSignalFlags.NONE,
-                (_c: any, _s: any, _p: any, _i: any, _m: any, params: any) => handler(params)))
+            this._disposers.push(onConnSignal(
+                this._conn,
+                { sender: BLUEZ, iface: IF_OM, member, path: "/" },
+                (_c, _s, _p, _i, _m, params) => handler(params),
+            ))
         }
 
         // bluetoothd restarting, or a dongle appearing, is a name-owner change.
         // Without this the roster would keep dead proxies for a service that left.
-        Gio.bus_watch_name_on_connection(
+        const watchId = Gio.bus_watch_name_on_connection(
             this._conn, BLUEZ, Gio.BusNameWatcherFlags.NONE,
             () => this._seed(),
             () => this._clear())
+        this._disposers.push(() => {
+            try { Gio.bus_unwatch_name(watchId) } catch {}
+        })
 
         // And seed SYNCHRONOUSLY, here. The watcher above is not enough on its own:
         // it delivers `appeared` through the main loop, so a caller reading
@@ -404,7 +415,7 @@ export class Bluetooth extends GObject.Object {
 
     private _dropAdapter(a: Adapter): void {
         const id = this._powerIds.get(a)
-        if (id) GObject.signal_handler_disconnect(a, id)
+        if (id) safeDisconnect(a, id)
         this._powerIds.delete(a)
         a.destroy()
     }
@@ -415,6 +426,15 @@ export class Bluetooth extends GObject.Object {
         this._devices = []
         this._adapters = []
         this._publish()
+    }
+
+    destroy(): void {
+        this._clear()
+        for (const dispose of this._disposers) {
+            try { dispose() } catch {}
+        }
+        this._disposers = []
+        if (instance === this) instance = null
     }
 
     /** Emit the two list notifies and re-derive power, in that order. */
