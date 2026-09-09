@@ -523,6 +523,24 @@ expected failures. Shown to fail in both directions — deleting the root rule f
 root cases by name, and widening it from `/` to any assigned row fails all five layouts that are
 supposed to be installable.
 
+### Firmware state and Secure Boot detection live in lib/firmware.ts
+
+Firmware facts (`isUefi`, `secureBootState`) live in `ui/installer/lib/firmware.ts` rather than
+in the disk page, so they can be inspected without a display or a partitioned disk, and multiple
+steps (disk step now, summary later) can read them.
+
+Secure Boot enforcement is read from Linux efivarfs (`/sys/firmware/efi/efivars/`):
+- Standard EFI Global Variable GUID `8be4df61-93ca-11d2-aa0d-00e098032b8c`
+- Variable files are 5 bytes: 4 bytes attribute flags + 5th byte value (`readEfiVarByte`)
+- Readable without privileges (`-rw-r--r--`), so the unprivileged `live` user can read it
+- "Enforcing" requires BOTH `SecureBoot == 1` AND `SetupMode == 0` (`secureBootState` = `"enforcing"`).
+  With `SetupMode == 1` the firmware is in setup mode and does not reject anything (`"disabled"`).
+- Absence (legacy BIOS mode, or firmware not exposing the variable) returns `"unknown"`.
+  Absence = do NOT warn. A false warning on the disk page is worse than none.
+- ⚠️ Unlike legacy BIOS (`!isUefi()`), which blocks Continue because there is no BIOS boot path,
+  Secure Boot enforcement **warns without blocking Continue** (#493): turning Secure Boot off in
+  firmware settings is a user choice.
+
 ### The account form's rules are one function too, for the same reason
 
 `accountProblems(fields, touched)` in `lib/account-problems.ts` returns the four per-field messages

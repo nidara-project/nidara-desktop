@@ -31,6 +31,7 @@ import {
 import { espMount } from "../lib/disk-config"
 import { ESP_MOUNTS, manualProblems } from "../lib/manual-problems"
 import { freeSpaceGaps } from "../lib/free-space"
+import { isUefi, secureBootState } from "../lib/firmware"
 import { heading, prose, formatSize } from "./common"
 
 interface RawBlockDevice {
@@ -49,9 +50,6 @@ interface RawBlockDevice {
   children?: RawBlockDevice[]
 }
 
-function isUefi(): boolean {
-  return GLib.file_test("/sys/firmware/efi", GLib.FileTest.EXISTS)
-}
 
 function listDisks(): BlockDevice[] {
   try {
@@ -233,6 +231,10 @@ export function DiskStep(): Step {
       // user cannot see the reason for is just a Continue button that does nothing.
       if (!isUefi()) {
         rootBox.append(prose(t("diskErrNoUefi"), "installer-prose--warning"))
+      }
+
+      if (secureBootState() === "enforcing") {
+        rootBox.append(prose(t("diskWarnSecureBoot"), "installer-prose--warning"))
       }
 
       let currentMode: "entire_disk" | "manual" = "entire_disk"
