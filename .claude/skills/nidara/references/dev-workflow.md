@@ -334,8 +334,8 @@ this branch against `main` — and note which row is the discriminator:
 
 | case | before | after |
 |---|---|---|
-| asks 2560x1440, floats | `[8,48] 2544x1284` | `[8,48] 2544x1284` |
-| fits 800x600, moved to `[300,-200]` | **`[300,-200]`** | **`[300,48]`** |
+| asks 2560x1440, floats | `[-1,-101] 2560x1440` unclamped | `[9,49] 2542x1282` |
+| fits 800x600, moved to `[300,-200]` | **`[300,-200]`** | **`[300,49]`** |
 | fits 800x600, already inside | not moved | not moved |
 | tiled | `[9,49] 2542x1282` | `[9,49] 2542x1282` |
 
@@ -344,6 +344,125 @@ the fullscreen handler, and `maximized` already returns the work area. And **the
 remembered per address**: a client whose protocol `min_size` exceeds the usable area (tech debt #99)
 legitimately refuses to shrink, and re-asking would chase the `window.update_rules` its own resize
 fires.
+
+🔑 **And for a window that FITS, the top is the only edge we defend — the asymmetry IS the feature.**
+The first version of #511 clamped all four, which reads as correct and is not: a window you cannot
+push off to the side, or let run under the dock, is not floating, it is tiling with extra steps.
+That was the owner's call and it is the right one. The top is different in kind, not in degree:
+everything you need to get a window back — header, close button, the strip you drag — lives up
+there, so off the right it is reachable and off the top it is gone. The same asymmetry the others
+encode: mutter's `constrain_titlebar_visible` lets a window leave every edge and gives the title bar
+`top_amount = 0`; KWin's `keepInArea(partial)` keeps a strip reachable, not the whole frame inside.
+
+| a fitting 800x600 asked to go | four hard edges | only the top |
+|---|---|---|
+| up, to `[300,-200]` | `[300,49]` | `[300,49]` |
+| right, to `[2400,600]` | **`[1752,600]`** | **`[2400,600]`** |
+| left, to `[-300,600]` | **`[8,600]`** | **`[-300,600]`** |
+| down under the dock, to `[400,1300]` | **`[400,732]`** | **`[400,1300]`** |
+
+🔑 **The margin is `gaps_out` PLUS `border_size`, and forgetting the border is worth exactly one
+pixel per side.** `at`/`size` report the CLIENT box; the border is reserved OUTSIDE it
+(`WindowTarget.cpp` applies `CHyprBorderDecoration::reservedArea()`), which is why a window tiled
+alone reports `[9,49] 2542x1282` and not the `[8,48] 2544x1284` of its layout box. A clamp that
+measured against the raw usable area put the client where the BOX belongs, so the floating window
+sat one pixel into the margin on every side and read as 2px wider than its tiled self — the owner
+saw it as "the gaps shrink a little when I float it". Toggling now moves nothing at all:
+
+| Settings alone on an empty workspace | tiled | floating | tiled | floating |
+|---|---|---|---|---|
+| before | `[9,49] 2542x1282` | `[8,48] 2544x1284` | `[9,49] …` | `[8,48] …` |
+| after | `[9,49] 2542x1282` | `[9,49] 2542x1282` | `[9,49] …` | `[9,49] …` |
+
+🔑 **When the clamp shrinks a window, WHERE it leaves it is decided by the anchor, not by the
+event.** If the window's top-left is inside the usable area, somebody put it there: shrink it where
+it stands. If it is not, the position is not a decision anyone made — it is what Hyprland invents
+for an oversized floating window, `[-1,-101]`, the whole monitor — so centre it. The owner found the
+symptom: *"¿por qué al cambiar el tamaño de una flotante, a veces se centra?"* Because it did:
+resize a floating window past the usable area and the next thing that re-evaluated its rules shrank
+it AND teleported it to the middle.
+
+⚠️ **The obvious fix is by WHEN, and it is wrong.** "Only centre at birth (`window.open`)" reads
+perfectly and breaks the tile→float toggle, which arrives as `window.update_rules`: the flag says
+"not a placement" for the one transition where Hyprland has just thrown the geometry away, and the
+window lands at `[-1,49]` instead of on the corner its tiled self occupied. Measured, three
+scenarios that a by-WHEN rule cannot satisfy at once:
+
+| | by WHEN (`placing` flag) | by WHERE (anchor inside?) |
+|---|---|---|
+| tiled → floating | `[-1,49]` ✗ | `[9,49]` ✓ (identical to tiled) |
+| resized past the area, then focused | `[300,300]` ✓ | `[300,300]` ✓ |
+| born asking 2560x1440 | `[0,49]` ✗ (samples a half-applied box) | `[9,49]` ✓ |
+
+The anchor rule also self-heals: our own resize fires another `update_rules`, and by then the window
+is inside and fits, so the second pass is a no-op.
+
+⚠️ **Which is why `GAPS_OUT`, `BORDER_SIZE` and `ROUNDING` are declared once at the top of
+`hyprland.lua` and fed to BOTH `hl.config` and the clamp.** The bug was two copies of the same
+number disagreeing about what it included. Note the cascade step keeps using `GAPS_OUT` and not the
+margin: the border is not part of what the eye reads as a gap.
+
+#### Leaving fullscreen: the compositor announces it BACKWARDS, and the clamp used to eat the restore
+
+A floating window that goes fullscreen — a video in a browser — came back as the whole usable area
+instead of the size and place it had. Without our clamp Hyprland restores it perfectly, so it was
+ours. The trace, from the bench:
+
+    clamp float=true fs=2 at=0,0 size=2560x1440      in fullscreen, skipped
+    clamp float=true fs=0 at=0,0 size=2560x1440      🔴 fs is ALREADY 0, the box is still fullscreen's
+      -> resize 2542x1282 · move 9,49                 we write geometry…
+    EVENTO fullscreen fs=0 at=9,49                    …and the fullscreen event arrives after
+
+🔑 **`window.update_rules` arrives with `fullscreen` already 0 while the geometry is still the
+fullscreen box, and the `window.fullscreen` event only fires afterwards.** Writing geometry on that
+call replaces exactly what the restore was about to put back.
+
+The fix is a two-line state machine in the same callback — no new event, no ordering assumption
+between hooks: remember the fullscreen mode seen per address, and when it goes non-zero → 0, **skip
+that pass entirely**. Whatever the compositor restores is a geometry that already passed through the
+clamp, and if it somehow does not fit, the next `window.update_rules` catches it.
+
+⚠️ **Two instrument traps found while chasing this, and both make a dead probe look alive:**
+
+- **`print()` from a Lua CALLBACK reaches nothing.** A print at config-load time shows up in the
+  instance log as `[Lua] …`; the same print inside an `hl.on` handler appears neither there nor on
+  the compositor's stdout. Trace from callbacks with `io.open(path, "a")` instead. (Corollary worth
+  knowing: the `print("Nidara: …failed")` in the clamp's `pcall` guard is invisible — a clamp that
+  throws fails silently.)
+- **`string.format("%d", …)` throws in Lua 5.4 on a non-integer**, and window coordinates are
+  floats mid-animation. Inside the guard's `pcall` that error is swallowed, so the instrumented
+  clamp did nothing at all while its measurements looked plausible. Format with `tostring()`.
+
+⚠️ **And in the bench, a GTK probe must not use `Gtk.Application`**: it is single-instance, so once a
+run on the host has taken the app-id, the nested copy never maps and the bench reports "no window".
+Use a plain `Gtk.Window` plus `GLib.MainLoop`.
+
+#### Super+M maximized two different windows, because the box depends on `floating`
+
+`IFullscreenHandler::calculateFullscreenBox` maximizes into `WORKSPACE->m_space->workArea(target->floating())`
+— **the argument is the window's own floating flag**. So the same key gave two windows: a tiled one
+landed inside `gaps_out` at `[9,49] 2542x1282`, and a floating one landed in the FLOATING work area,
+whose gap is `general:float_gaps` and defaults to **0** — `[1,41] 2558x1298`, flush against the bar
+and the dock with only the border between. It was not Hyprland misbehaving: it was honouring a
+setting we had never set.
+
+Setting `float_gaps = GAPS_OUT` collapses them. One geometry now comes out of four different routes,
+which is the invariant worth keeping:
+
+| route | result |
+|---|---|
+| tiled alone on the workspace | `[9,49] 2542x1282` |
+| that window toggled floating | `[9,49] 2542x1282` |
+| a floating window maximized (Super+M) | `[9,49] 2542x1282` |
+| a floating window asking for 2560x1440, clamped | `[9,49] 2542x1282` |
+
+⚠️ **And the guard that remembers what we asked for must remember the SIZE WE SAW too.** Keyed on the
+request alone, it also swallowed the legitimate retry after something other than the client changed
+the geometry: restoring from Super+M handed the window its box back — 2544x1284, 2px past the usable
+area — and the guard then refused to correct it for the rest of that window's life, so every later
+event re-entered the shrink branch and, if the anchor was outside, re-centred the window. That is
+what "it keeps forcing the centre after maximizing" was. "The client ignored us" is only true when
+the size is still exactly the one measured when we asked.
 
 #### A new floating window does not land on top of the last one — and the rule is *cascade IF covering*
 

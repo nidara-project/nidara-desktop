@@ -69,11 +69,27 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = "auto" 
 
 
 -- ── Look & feel ───────────────────────────────────────────────────────────────
+-- 🔑 The two numbers the tiled layout and the floating clamp MUST agree on live
+-- here, once. A floating window pulled back to the usable area has to land exactly
+-- where the same window tiles alone, and it cannot do that if the clamp carries
+-- its own copy of the gap or forgets the border: the border is reserved OUTSIDE
+-- the geometry Hyprland reports, so a clamp that ignores it sits one pixel into
+-- the margin on every side and the window reads as 2px wider than its tiled self.
+local GAPS_OUT    = 8
+local BORDER_SIZE = 1
+local ROUNDING    = 24
+
 hl.config({
     general = {
         gaps_in  = 4,
-        gaps_out = 8,
-        border_size = 1,
+        gaps_out = GAPS_OUT,
+        -- 🔑 The gap for FLOATING windows, and it defaults to 0 — which is how the
+        -- same Super+M produced two different windows: `calculateFullscreenBox`
+        -- maximizes into `workArea(target->floating())`, so a tiled window landed
+        -- inside `gaps_out` and a floating one went flush against the bar and the
+        -- dock. Same number, one behaviour.
+        float_gaps = GAPS_OUT,
+        border_size = BORDER_SIZE,
         col = {
             active_border   = { colors = {"rgba(ffffff4d)", "rgba(ffffff1a)"}, angle = 45 },
             inactive_border = "rgba(59595933)",
@@ -84,7 +100,7 @@ hl.config({
     },
 
     decoration = {
-        rounding       = 24,
+        rounding       = ROUNDING,
         rounding_power = 3.2,
         active_opacity   = 1.0,
         inactive_opacity = 1.0,
@@ -457,14 +473,36 @@ hl.bind(mainMod .. " + CTRL + SHIFT + left",  hl.dsp.window.move({ workspace = "
 -- What it does NOT do: touch tiled, fullscreen or maximized windows, or move a
 -- floating window that already fits INSIDE the usable area. That one is left byte
 -- for byte where the compositor — or the user's own drag — put it.
-local FLOAT_MARGIN = 8   -- gaps_out, so a clamped window lands where a tiled one would
+-- `gaps_out` plus the border, because `at`/`size` report the CLIENT box and the
+-- border extends outside it: a window tiled alone reports [9,49] 2542x1282 on a
+-- 2560x1440 monitor with our bar and dock, and a floating one clamped to the same
+-- usable area must report the same thing, not [8,48] 2544x1284.
+local FLOAT_MARGIN = GAPS_OUT + BORDER_SIZE
 
--- The last size we asked a window for, keyed by address. A client whose protocol
--- min_size is larger than the usable area (a 1366x768 screen and our installer's
--- 960x760 floor, #99) legitimately REFUSES to shrink, and without this the resize
--- and the `window.update_rules` it fires would chase each other forever. Asking
--- twice for a size the client already declined buys nothing.
+-- What we last asked a window for, AND the size it had when we asked, keyed by
+-- address. A client whose protocol min_size is larger than the usable area (a
+-- 1366x768 screen and our installer's 960x760 floor, #99) legitimately REFUSES to
+-- shrink, and without this the resize and the `window.update_rules` it fires would
+-- chase each other forever.
+--
+-- ⚠️ The size we saw is half the key on purpose. Keyed on the request alone, the
+-- guard also swallows the legitimate retry after something OTHER than the client
+-- changed the size — restoring from Super+M hands the window its box back, 2px
+-- wider than the usable area, and the guard then refuses to fix it for the rest of
+-- the window's life. "The client ignored us" is only true when the size is still
+-- exactly the one we measured when we asked.
 local lastAsk = {}
+
+-- The fullscreen mode we last saw on each window, keyed by address. Leaving
+-- fullscreen is the one transition where the compositor restores geometry it
+-- remembered from before, and it announces it BACKWARDS: measured in the bench,
+-- `window.update_rules` arrives with `fullscreen` already 0 while the box is still
+-- the fullscreen one — 2560x1440 at [0,0] — and the `window.fullscreen` event only
+-- fires afterwards. Clamping on that call writes the window's geometry, which is
+-- exactly what the restore was about to write, so a browser leaving a video's
+-- fullscreen came back as the whole usable area instead of the 900x700 it had at
+-- [300,300]. Without the clamp Hyprland restores it perfectly, so this was ours.
+local fsState = {}
 
 -- Where a floating window is allowed to live: the monitor minus what the bar and
 -- the dock reserve, minus our own margin. Both the clamp and the cascade measure
@@ -484,10 +522,21 @@ end
 -- Returns the box it settled on (x, y, w, h) so the caller does not have to read
 -- the geometry back — a resize we just dispatched is not visible in `w.size` yet.
 local function clampFloating(w)
-    if not w or not w.floating then return end
+    if not w or not w.floating or not w.address then return end
+
+    local sel  = "address:" .. w.address
+    local fs   = w.fullscreen or 0
+    local was  = fsState[sel] or 0
+    fsState[sel] = fs
+
     -- Fullscreen and maximized geometry belongs to the fullscreen handler, which
     -- already respects the usable area for `maximized` (it returns the work area).
-    if (w.fullscreen or 0) ~= 0 then return end
+    if fs ~= 0 then return end
+    -- 🔑 And this one is LEAVING it: skip the pass entirely and let the compositor
+    -- put back what it remembered. Whatever it restores is a geometry that already
+    -- passed through here, and if it somehow does not fit, the next
+    -- `window.update_rules` clamps it.
+    if was ~= 0 then return end
 
     local mon = w.monitor
     local originX, originY, availW, availH = usableArea(mon)
@@ -497,33 +546,59 @@ local function clampFloating(w)
     local curX, curY = w.at.x, w.at.y
     local newW = math.min(curW, availW)
     local newH = math.min(curH, availH)
-    local sel  = "address:" .. w.address
 
     local x, y
     if newW ~= curW or newH ~= curH then
-        -- It did not fit. Re-place it: centred in what is usable, the same
-        -- placement Hyprland gives a window that fits, so a clamped window looks
-        -- placed rather than shoved. A client that declines to shrink lands at the
-        -- origin instead of centred, which is the point: the excess goes DOWN and
-        -- RIGHT, and the header stays on screen.
-        x = originX + (availW - newW) / 2
-        y = originY + (availH - newH) / 2
+        -- It did not fit, and now the question is where to put it — which is the
+        -- one place this got it wrong twice.
+        --
+        -- 🔑 The test is whether the corner we would anchor to is INSIDE the usable
+        -- area. If it is, the window is where somebody put it: shrink it where it
+        -- stands, because teleporting a window to the middle of the screen when the
+        -- user dragged an edge one pixel too far is how a desktop starts feeling
+        -- haunted. If it is not, the position is not a decision anyone made — it is
+        -- what Hyprland invents for an oversized floating window, [-1,-101], the
+        -- whole monitor — so there is nothing to preserve and we place it.
+        --
+        -- ⚠️ Doing this by WHEN instead ("centre only at birth") is the version that
+        -- looks right and is not: a tile toggled to floating arrives as
+        -- `window.update_rules`, so the flag says "not a placement" for the one
+        -- transition where Hyprland has just thrown the geometry away, and the
+        -- window lands a pixel off the corner instead of where its tiled self sat.
+        if curX >= originX and curY >= originY then
+            x = curX
+            y = curY
+        else
+            -- Centred in what is usable, the same placement Hyprland gives a window
+            -- that fits. A client that declines to shrink lands at the origin
+            -- instead of centred, which is the point: the excess goes DOWN and
+            -- RIGHT, and the header stays on screen.
+            x = originX + (availW - newW) / 2
+            y = originY + (availH - newH) / 2
+        end
 
-        local ask = newW .. "x" .. newH
+        local ask = newW .. "x" .. newH .. " of " .. curW .. "x" .. curH
         if lastAsk[sel] ~= ask then
             lastAsk[sel] = ask
             hl.dispatch(hl.dsp.window.resize({ x = newW, y = newH, window = sel }))
         end
     else
-        -- It fits. Only pull it back if it is hanging off, and pull it back the way
-        -- the whole industry does: bottom and right first, TOP and LEFT last, so the
-        -- top-left corner wins every conflict and the header is never the edge that
-        -- gets sacrificed.
+        -- It fits. Then the ONLY edge we defend is the top, and that asymmetry is
+        -- the whole point of floating: a window you can push off to the side, or
+        -- let run under the dock, is a window you are arranging — pull it back
+        -- from all four edges and floating becomes tiling with extra steps.
+        --
+        -- 🔑 The top is different in kind, not in degree. Everything you need to
+        -- get a window back is up there: the header, the close button, the strip
+        -- you grab to drag it. Off the right you can still reach it; off the top
+        -- it is gone. Which is exactly the asymmetry the rest of the desktops
+        -- encode — mutter's `constrain_titlebar_visible` allows the window off
+        -- every edge and gives the title bar `top_amount = 0`, and KWin's
+        -- `keepInArea(partial)` keeps a strip reachable rather than the whole
+        -- frame inside.
         lastAsk[sel] = nil
-        x = math.min(curX, originX + availW - newW)
-        y = math.min(curY, originY + availH - newH)
-        x = math.max(x, originX)
-        y = math.max(y, originY)
+        x = curX
+        y = math.max(curY, originY)
     end
 
     x, y = math.floor(x), math.floor(y)
@@ -563,9 +638,10 @@ local function cascadeStep(availW, availH)
     -- KWin scales the step with the placement area (`area.width()/48`); mutter uses
     -- a flat 50px (`CASCADE_INTERVAL`). Ours does both: it scales, and it never
     -- drops below a number our own design system already fixes — a window corner is
-    -- `rounding` (24) and windows sit `gaps_out` (8) apart, so 32 is the smallest
-    -- step that leaves the covered window's corner reading as a corner.
-    return math.max(24 + FLOAT_MARGIN, math.floor(math.min(availW, availH) / 48))
+    -- `ROUNDING` and windows sit `GAPS_OUT` apart, so 32 is the smallest step that
+    -- leaves the covered window's corner reading as a corner. Note it is GAPS_OUT
+    -- and not FLOAT_MARGIN: the border is not part of what the eye reads as a gap.
+    return math.max(ROUNDING + GAPS_OUT, math.floor(math.min(availW, availH) / 48))
 end
 
 local function cascadeFloating(w, x, y, boxW, boxH)
@@ -652,6 +728,12 @@ end
 
 hl.on("window.open",         function(w) placeFloatingGuarded(w, true) end)
 hl.on("window.update_rules", function(w) placeFloatingGuarded(w, false) end)
+hl.on("window.destroy",      function(w)
+    if not w or not w.address then return end
+    local sel = "address:" .. w.address
+    lastAsk[sel]  = nil
+    fsState[sel]  = nil
+end)
 
 
 -- ── Keybinds — Window modes ──────────────────────────────────────────────────
