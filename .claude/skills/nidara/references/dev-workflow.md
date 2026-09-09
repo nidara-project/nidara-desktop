@@ -334,8 +334,8 @@ this branch against `main` — and note which row is the discriminator:
 
 | case | before | after |
 |---|---|---|
-| asks 2560x1440, floats | `[8,48] 2544x1284` | `[8,48] 2544x1284` |
-| fits 800x600, moved to `[300,-200]` | **`[300,-200]`** | **`[300,48]`** |
+| asks 2560x1440, floats | `[-1,-101] 2560x1440` unclamped | `[9,49] 2542x1282` |
+| fits 800x600, moved to `[300,-200]` | **`[300,-200]`** | **`[300,49]`** |
 | fits 800x600, already inside | not moved | not moved |
 | tiled | `[9,49] 2542x1282` | `[9,49] 2542x1282` |
 
@@ -356,10 +356,28 @@ encode: mutter's `constrain_titlebar_visible` lets a window leave every edge and
 
 | a fitting 800x600 asked to go | four hard edges | only the top |
 |---|---|---|
-| up, to `[300,-200]` | `[300,48]` | `[300,48]` |
+| up, to `[300,-200]` | `[300,49]` | `[300,49]` |
 | right, to `[2400,600]` | **`[1752,600]`** | **`[2400,600]`** |
 | left, to `[-300,600]` | **`[8,600]`** | **`[-300,600]`** |
 | down under the dock, to `[400,1300]` | **`[400,732]`** | **`[400,1300]`** |
+
+🔑 **The margin is `gaps_out` PLUS `border_size`, and forgetting the border is worth exactly one
+pixel per side.** `at`/`size` report the CLIENT box; the border is reserved OUTSIDE it
+(`WindowTarget.cpp` applies `CHyprBorderDecoration::reservedArea()`), which is why a window tiled
+alone reports `[9,49] 2542x1282` and not the `[8,48] 2544x1284` of its layout box. A clamp that
+measured against the raw usable area put the client where the BOX belongs, so the floating window
+sat one pixel into the margin on every side and read as 2px wider than its tiled self — the owner
+saw it as "the gaps shrink a little when I float it". Toggling now moves nothing at all:
+
+| Settings alone on an empty workspace | tiled | floating | tiled | floating |
+|---|---|---|---|---|
+| before | `[9,49] 2542x1282` | `[8,48] 2544x1284` | `[9,49] …` | `[8,48] …` |
+| after | `[9,49] 2542x1282` | `[9,49] 2542x1282` | `[9,49] …` | `[9,49] …` |
+
+⚠️ **Which is why `GAPS_OUT`, `BORDER_SIZE` and `ROUNDING` are declared once at the top of
+`hyprland.lua` and fed to BOTH `hl.config` and the clamp.** The bug was two copies of the same
+number disagreeing about what it included. Note the cascade step keeps using `GAPS_OUT` and not the
+margin: the border is not part of what the eye reads as a gap.
 
 #### A new floating window does not land on top of the last one — and the rule is *cascade IF covering*
 

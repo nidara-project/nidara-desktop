@@ -69,11 +69,21 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = "auto" 
 
 
 -- ── Look & feel ───────────────────────────────────────────────────────────────
+-- 🔑 The two numbers the tiled layout and the floating clamp MUST agree on live
+-- here, once. A floating window pulled back to the usable area has to land exactly
+-- where the same window tiles alone, and it cannot do that if the clamp carries
+-- its own copy of the gap or forgets the border: the border is reserved OUTSIDE
+-- the geometry Hyprland reports, so a clamp that ignores it sits one pixel into
+-- the margin on every side and the window reads as 2px wider than its tiled self.
+local GAPS_OUT    = 8
+local BORDER_SIZE = 1
+local ROUNDING    = 24
+
 hl.config({
     general = {
         gaps_in  = 4,
-        gaps_out = 8,
-        border_size = 1,
+        gaps_out = GAPS_OUT,
+        border_size = BORDER_SIZE,
         col = {
             active_border   = { colors = {"rgba(ffffff4d)", "rgba(ffffff1a)"}, angle = 45 },
             inactive_border = "rgba(59595933)",
@@ -84,7 +94,7 @@ hl.config({
     },
 
     decoration = {
-        rounding       = 24,
+        rounding       = ROUNDING,
         rounding_power = 3.2,
         active_opacity   = 1.0,
         inactive_opacity = 1.0,
@@ -457,7 +467,11 @@ hl.bind(mainMod .. " + CTRL + SHIFT + left",  hl.dsp.window.move({ workspace = "
 -- What it does NOT do: touch tiled, fullscreen or maximized windows, or move a
 -- floating window that already fits INSIDE the usable area. That one is left byte
 -- for byte where the compositor — or the user's own drag — put it.
-local FLOAT_MARGIN = 8   -- gaps_out, so a clamped window lands where a tiled one would
+-- `gaps_out` plus the border, because `at`/`size` report the CLIENT box and the
+-- border extends outside it: a window tiled alone reports [9,49] 2542x1282 on a
+-- 2560x1440 monitor with our bar and dock, and a floating one clamped to the same
+-- usable area must report the same thing, not [8,48] 2544x1284.
+local FLOAT_MARGIN = GAPS_OUT + BORDER_SIZE
 
 -- The last size we asked a window for, keyed by address. A client whose protocol
 -- min_size is larger than the usable area (a 1366x768 screen and our installer's
@@ -570,9 +584,10 @@ local function cascadeStep(availW, availH)
     -- KWin scales the step with the placement area (`area.width()/48`); mutter uses
     -- a flat 50px (`CASCADE_INTERVAL`). Ours does both: it scales, and it never
     -- drops below a number our own design system already fixes — a window corner is
-    -- `rounding` (24) and windows sit `gaps_out` (8) apart, so 32 is the smallest
-    -- step that leaves the covered window's corner reading as a corner.
-    return math.max(24 + FLOAT_MARGIN, math.floor(math.min(availW, availH) / 48))
+    -- `ROUNDING` and windows sit `GAPS_OUT` apart, so 32 is the smallest step that
+    -- leaves the covered window's corner reading as a corner. Note it is GAPS_OUT
+    -- and not FLOAT_MARGIN: the border is not part of what the eye reads as a gap.
+    return math.max(ROUNDING + GAPS_OUT, math.floor(math.min(availW, availH) / 48))
 end
 
 local function cascadeFloating(w, x, y, boxW, boxH)
