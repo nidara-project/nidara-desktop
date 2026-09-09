@@ -583,7 +583,7 @@ const strings = {
     diskWarning:                "L'intero disco selezionato qui sotto verrà cancellato. Tutte le partizioni e i dati esistenti saranno distrutti in modo permanente.",
     diskEntireFsNote:           "Nidara prepara questo disco con Btrfs, così il sistema può creare istantanee di sé prima di un aggiornamento e tornare indietro se qualcosa va storto.",
     diskErrNoUefi:              "Questa macchina è avviata in modalità BIOS legacy. Nidara installa solo sistemi UEFI, quindi un'installazione qui terminerebbe e poi non si avvierebbe. Riavvia e abilita UEFI nelle impostazioni del firmware.",
-    diskWarnSecureBoot:         "Secure Boot è abilitato su questa macchina. Nidara non supporta ancora Secure Boot, quindi un'installatione qui terminerebbe e poi non si avvierebbe. Riavvia e disabilita Secure Boot nelle impostazioni del firmware.",
+    diskWarnSecureBoot:         "Secure Boot è abilitato su questa macchina. Nidara non supporta ancora Secure Boot, quindi un'installazione qui terminerebbe e poi non si avvierebbe. Riavvia e disabilita Secure Boot nelle impostazioni del firmware.",
     quitHeading:                "Uscire dall'installazione?",
     quitBody:                   "Non è stato scritto nulla sul disco. Le risposte date finora andranno perse.",
     quitStay:                   "Continua",

@@ -15,7 +15,6 @@ import GLib from "gi://GLib"
 import {
   isUefi,
   secureBootState,
-  isSecureBootEnforcing,
   SECURE_BOOT_VAR,
   SETUP_MODE_VAR,
 } from "../../ui/installer/lib/firmware"
@@ -53,7 +52,7 @@ try {
   GLib.file_set_contents(`${dirEnforcing}/${SETUP_MODE_VAR}`, makeEfiVar(0))
 
   check("enforcing state", secureBootState(dirEnforcing), "enforcing")
-  check("enforcing isSecureBootEnforcing", isSecureBootEnforcing(dirEnforcing), true)
+  check("enforcing is enforcing", secureBootState(dirEnforcing) === "enforcing", true)
 
   // Case 2: Setup Mode — SecureBoot=1, SetupMode=1 (Not enforcing)
   const dirSetupMode = `${tmpDir}/setup-mode`
@@ -62,7 +61,7 @@ try {
   GLib.file_set_contents(`${dirSetupMode}/${SETUP_MODE_VAR}`, makeEfiVar(1))
 
   check("setup-mode state", secureBootState(dirSetupMode), "disabled")
-  check("setup-mode isSecureBootEnforcing", isSecureBootEnforcing(dirSetupMode), false)
+  check("setup-mode is NOT enforcing", secureBootState(dirSetupMode) === "enforcing", false)
 
   // Case 3: Disabled — SecureBoot=0, SetupMode=0
   const dirDisabled = `${tmpDir}/disabled`
@@ -71,14 +70,14 @@ try {
   GLib.file_set_contents(`${dirDisabled}/${SETUP_MODE_VAR}`, makeEfiVar(0))
 
   check("disabled state", secureBootState(dirDisabled), "disabled")
-  check("disabled isSecureBootEnforcing", isSecureBootEnforcing(dirDisabled), false)
+  check("disabled is NOT enforcing", secureBootState(dirDisabled) === "enforcing", false)
 
   // Case 4: Absent file — directory has no SecureBoot variable
   const dirAbsent = `${tmpDir}/absent`
   GLib.mkdir_with_parents(dirAbsent, 0o700)
 
   check("absent state", secureBootState(dirAbsent), "unknown")
-  check("absent isSecureBootEnforcing", isSecureBootEnforcing(dirAbsent), false)
+  check("absent is NOT enforcing", secureBootState(dirAbsent) === "enforcing", false)
 
   // Case 5: Corrupt/short file (<5 bytes)
   const dirCorrupt = `${tmpDir}/corrupt`
@@ -86,7 +85,7 @@ try {
   GLib.file_set_contents(`${dirCorrupt}/${SECURE_BOOT_VAR}`, new Uint8Array([0x06, 0x00]))
 
   check("corrupt state", secureBootState(dirCorrupt), "unknown")
-  check("corrupt isSecureBootEnforcing", isSecureBootEnforcing(dirCorrupt), false)
+  check("corrupt is NOT enforcing", secureBootState(dirCorrupt) === "enforcing", false)
 
   // Case 6: SecureBoot=1, SetupMode missing
   const dirSmMissing = `${tmpDir}/sm-missing`
@@ -94,12 +93,12 @@ try {
   GLib.file_set_contents(`${dirSmMissing}/${SECURE_BOOT_VAR}`, makeEfiVar(1))
 
   check("setupmode-missing state", secureBootState(dirSmMissing), "unknown")
-  check("setupmode-missing isSecureBootEnforcing", isSecureBootEnforcing(dirSmMissing), false)
+  check("setupmode-missing is NOT enforcing", secureBootState(dirSmMissing) === "enforcing", false)
 
   print("\n── Negative control on host machine ────────────────────────────────")
   // The host machine has SecureBoot=0; warning MUST NOT trigger here.
   const hostState = secureBootState()
-  const hostEnforcing = isSecureBootEnforcing()
+  const hostEnforcing = hostState === "enforcing"
   print(`   host efivars read: state = "${hostState}", enforcing = ${hostEnforcing}`)
   check("host is NOT enforcing", hostEnforcing, false)
   check("host state is disabled", hostState, "disabled")

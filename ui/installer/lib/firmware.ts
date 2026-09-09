@@ -87,12 +87,3 @@ export function secureBootState(efivarsDir: string = EFIVARS_DIR): SecureBootSta
   }
   return "unknown"
 }
-
-/**
- * Returns true if Secure Boot is actively enforcing signature checks.
- */
-export function isSecureBootEnforcing(stateOrDir?: SecureBootState | string): boolean {
-  if (stateOrDir === "enforcing") return true
-  if (stateOrDir === "disabled" || stateOrDir === "unknown") return false
-  return secureBootState(stateOrDir) === "enforcing"
-}

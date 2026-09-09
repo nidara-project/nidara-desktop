@@ -50,7 +50,6 @@ interface RawBlockDevice {
   children?: RawBlockDevice[]
 }
 
-
 function listDisks(): BlockDevice[] {
   try {
     const raw = exec(["lsblk", "-J", "-b", "-d", "-o", "NAME,PATH,SIZE,MODEL,TYPE,RM,LOG-SEC"])
