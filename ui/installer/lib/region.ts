@@ -127,6 +127,22 @@ export function timezonesFor(code: string): string[] {
   return zoneRows().filter(z => z.codes.includes(c)).map(z => z.tz)
 }
 
+/**
+ * Find the country code that owns or contains a timezone.
+ *
+ * tzdata's zone1970.tab maps timezones to country codes. When a zone serves
+ * multiple countries (e.g. Europe/Zurich serves CH, DE, LI), prefer the country
+ * matching `preferredCountry` if provided, otherwise the first (primary) code.
+ */
+export function countryForTimezone(tz: string, preferredCountry?: string | null): string | null {
+  const row = zoneRows().find(z => z.tz === tz)
+  if (!row || row.codes.length === 0) return null
+  if (preferredCountry && row.codes.includes(preferredCountry.toUpperCase())) {
+    return preferredCountry.toUpperCase()
+  }
+  return row.codes[0]
+}
+
 // ── Locales ──────────────────────────────────────────────────────────────────
 
 let _locales: string[] | null = null
