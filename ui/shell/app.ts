@@ -451,15 +451,15 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     },
   },
   setWorkspaceMode: {
-    desc: "Set mode of a workspace: `setWorkspaceMode <id> <floating|tiling>`. Reorganizes existing windows on that workspace.",
+    desc: "Set mode of a workspace: `setWorkspaceMode <id> <floating|tiling|default>`. Reorganizes existing windows on that workspace.",
     run: async args => {
       const a = (args[0] ?? "").trim()
       const m = (args[1] ?? "").toLowerCase().trim()
-      if (!a || !m) return "usage: setWorkspaceMode <id> <floating|tiling>"
+      if (!a || !m) return "usage: setWorkspaceMode <id> <floating|tiling|default>"
       const id = parseInt(a, 10)
       if (isNaN(id) || id < 1 || id > 5) return `invalid workspace id: "${a}" (must be 1..5)`
-      if (m !== "floating" && m !== "tiling") return `invalid mode: "${args[1]}" (must be 'floating' or 'tiling')`
-      await workspaceModes.setWorkspaceMode(id, m)
+      if (m !== "floating" && m !== "tiling" && m !== "default") return `invalid mode: "${args[1]}" (must be 'floating', 'tiling' or 'default')`
+      await workspaceModes.setWorkspaceMode(id, m as WorkspaceMode | "default")
       return `workspace ${id} mode set to ${m}`
     },
   },
@@ -1363,7 +1363,7 @@ app.start({
     shellActions.lockScreen = lockScreen
     shellActions.unlockScreen = unlockScreen
     shellActions.getWorkspaceMode = (id: number) => workspaceModes.getEffectiveMode(id)
-    shellActions.setWorkspaceMode = (id: number, mode: WorkspaceMode) => workspaceModes.setWorkspaceMode(id, mode)
+    shellActions.setWorkspaceMode = (id: number, mode: WorkspaceMode | "default") => workspaceModes.setWorkspaceMode(id, mode)
     shellActions.toggleWorkspaceMode = (id?: number) => workspaceModes.toggleWorkspaceMode(id)
 
     // User hooks (~/.config/nidara/hooks/<event>.d/) — see bin/nidara-hook.

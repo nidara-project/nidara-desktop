@@ -9,6 +9,10 @@ export type WorkspaceMode = "floating" | "tiling"
 
 export const WORKSPACE_MODES: readonly WorkspaceMode[] = ["floating", "tiling"]
 
+export type WorkspaceOverrideMode = "default" | "floating" | "tiling"
+
+export const WORKSPACE_OVERRIDE_MODES: readonly WorkspaceOverrideMode[] = ["default", "floating", "tiling"]
+
 const isMode = (v: any): v is WorkspaceMode => v === "floating" || v === "tiling"
 
 export interface WorkspacesSettings {
@@ -74,6 +78,11 @@ class WorkspaceModeManager extends GObject.Object {
         return config.get("workspaces")[String(wsId)]
     }
 
+    /** Returns the setting value for workspace wsId: explicit override if set, else "default". */
+    getWorkspaceModeSetting(wsId: number): WorkspaceOverrideMode {
+        return this.getExplicitMode(wsId) ?? "default"
+    }
+
     /** Set the global default workspace mode */
     async setDefaultMode(mode: WorkspaceMode): Promise<void> {
         if (!isMode(mode)) throw new Error(`Invalid workspace mode: ${mode}`)
@@ -82,21 +91,42 @@ class WorkspaceModeManager extends GObject.Object {
         config.set("defaultMode", mode)
         this._saveLua()
         await hs.evalLua(`if NIDARA_WS_MODES then NIDARA_WS_MODES.default = '${mode}' else NIDARA_WS_MODES = { default = '${mode}' } end`)
+
+        // Reorganize windows on workspaces inheriting defaultMode
+        for (const wsId of [1, 2, 3, 4, 5]) {
+            if (!this.getExplicitMode(wsId)) {
+                if (mode === "tiling") {
+                    await hs.tileAllInWorkspace(wsId)
+                } else {
+                    await hs.floatAllInWorkspace(wsId)
+                }
+            }
+        }
+
         this.emit("changed")
     }
 
-    /** Set mode for a specific workspace 1..5. Reorganizes existing windows! */
-    async setWorkspaceMode(wsId: number, mode: WorkspaceMode): Promise<void> {
-        if (!isMode(mode)) throw new Error(`Invalid workspace mode: ${mode}`)
+    /** Set mode for a specific workspace 1..5, or 'default' to inherit defaultMode. Reorganizes existing windows! */
+    async setWorkspaceMode(wsId: number, mode: WorkspaceMode | "default"): Promise<void> {
+        if (mode !== "default" && !isMode(mode)) throw new Error(`Invalid workspace mode: ${mode}`)
         if (wsId < 1 || wsId > 5) throw new Error(`Workspace id must be between 1 and 5 (got ${wsId})`)
 
-        const currentModes = config.get("workspaces")
-        config.set("workspaces", { ...currentModes, [String(wsId)]: mode })
-        this._saveLua()
-        await hs.evalLua(`if NIDARA_WS_MODES then NIDARA_WS_MODES[${wsId}] = '${mode}' else NIDARA_WS_MODES = { [${wsId}] = '${mode}' } end`)
+        const currentModes = { ...config.get("workspaces") }
+        if (mode === "default") {
+            delete currentModes[String(wsId)]
+            config.set("workspaces", currentModes)
+            this._saveLua()
+            await hs.evalLua(`if NIDARA_WS_MODES then NIDARA_WS_MODES[${wsId}] = nil end`)
+        } else {
+            currentModes[String(wsId)] = mode
+            config.set("workspaces", currentModes)
+            this._saveLua()
+            await hs.evalLua(`if NIDARA_WS_MODES then NIDARA_WS_MODES[${wsId}] = '${mode}' else NIDARA_WS_MODES = { [${wsId}] = '${mode}' } end`)
+        }
 
-        // Reorganize existing windows on workspace wsId
-        if (mode === "tiling") {
+        // Reorganize existing windows on workspace wsId according to effective mode
+        const effective = this.getEffectiveMode(wsId)
+        if (effective === "tiling") {
             await hs.tileAllInWorkspace(wsId)
         } else {
             await hs.floatAllInWorkspace(wsId)

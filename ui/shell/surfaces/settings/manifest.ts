@@ -230,6 +230,30 @@ export const manifest = [
         ],
     },
     {
+        id: "desktop",
+        kind: "preference",
+        label: "settings.desktop.title",
+        icon: "app",
+        groups: [
+            {
+                i18n: "settings.desktop.group.default",
+                items: [
+                    "workspaces.defaultMode",
+                ],
+            },
+            {
+                i18n: "settings.desktop.group.workspaces",
+                items: [
+                    "workspaces.workspace1Mode",
+                    "workspaces.workspace2Mode",
+                    "workspaces.workspace3Mode",
+                    "workspaces.workspace4Mode",
+                    "workspaces.workspace5Mode",
+                ],
+            },
+        ],
+    },
+    {
         id: "widgets",
         kind: "browser",
         label: "settings.widgets.title",

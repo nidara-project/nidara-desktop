@@ -306,7 +306,7 @@ therefore ours, structured in three layers:
 
 1. **Persistence & Shell service (`ui/shell/core/WorkspaceModes.ts`)**:
    - `workspaces.json` managed via `defineConfig` stores `defaultMode` ("floating") and an overrides map (`Record<string, WorkspaceMode>`). Changing the default does not rewrite per-workspace overrides.
-   - Emits GObject `changed` signal on any mutation. Registered in `ConfigRegistry` as `workspaces.defaultMode` and `workspaces.workspace1Mode`..`5Mode`.
+   - Emits GObject `changed` signal on any mutation. Registered in `ConfigRegistry` as `workspaces.defaultMode` and `workspaces.workspace1Mode`..`5Mode` with UI metadata, visible on the Settings → Desktop page (`manifest.ts`) under two groups: default mode (segmented floating/tiling) and per-workspace mode (segmented with three states: default [inherited], floating, tiling). External IPC changes (e.g. `setWorkspaceMode`) reactively synchronize the UI via ConfigEntry subscriptions.
    - Generates `~/.config/nidara/nidara-workspaces.lua` containing the Lua table `NIDARA_WS_MODES = { default = "floating", [2] = "tiling" }`.
    - Hot-pushes changes live via `hs.evalLua("NIDARA_WS_MODES[id] = '...'")` (sub-4 ms IPC), and re-pushes on boot or when Hyprland reloads its config.
 2. **Compositor lifecycle (`config/hypr/hyprland.lua`)**:
