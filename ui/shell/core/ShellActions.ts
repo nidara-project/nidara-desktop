@@ -30,7 +30,7 @@ export interface ShellActionsMap {
    *  menu deterministically (no synthetic click). Consumed by the IPC command. */
   openWindowMenu?: () => void
   getWorkspaceMode?: (id: number) => WorkspaceMode
-  setWorkspaceMode?: (id: number, mode: WorkspaceMode) => Promise<void> | void
+  setWorkspaceMode?: (id: number, mode: WorkspaceMode | "default") => Promise<void> | void
   toggleWorkspaceMode?: (id?: number) => Promise<WorkspaceMode> | void
 }
 
