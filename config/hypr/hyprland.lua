@@ -749,8 +749,11 @@ hl.on("window.open", function(w)
     if not isSpecialWorkspace(ws) then
         local wsId = ws and ws.id
         local mode = getWorkspaceMode(wsId)
-        if mode == "floating" and not w.floating then
-            hl.dispatch(hl.dsp.window.float({ action = "enable", window = "address:" .. w.address }))
+        if mode == "tiling" then
+            if w.floating then
+                hl.dispatch(hl.dsp.window.float({ action = "disable", window = "address:" .. w.address }))
+            end
+            return
         end
     end
     placeFloatingGuarded(w, true)
@@ -812,6 +815,15 @@ hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = tr
 
 
 -- ── Window rules ─────────────────────────────────────────────────────────────
+-- Per-workspace window mode (#513): all windows are born floating by default so
+-- floating workspaces preserve the window's requested geometry (e.g. 800x600).
+-- Windows falling on a tiling workspace are tiled in window.open by dwindle.
+hl.window_rule({
+    name  = "nidara-float-all",
+    match = { class = ".*" },
+    float = true,
+})
+
 hl.window_rule({
     name  = "suppress-maximize-events",
     match = { class = ".*" },

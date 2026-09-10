@@ -311,7 +311,8 @@ therefore ours, structured in three layers:
    - Hot-pushes changes live via `hs.evalLua("NIDARA_WS_MODES[id] = '...'")` (sub-4 ms IPC), and re-pushes on boot or when Hyprland reloads its config.
 2. **Compositor lifecycle (`config/hypr/hyprland.lua`)**:
    - Loads `nidara-workspaces.lua` via `safe_require("nidara-workspaces")` on startup/reload.
-   - `window.open`: inspects workspace mode; if floating and the window spawned tiled, **floats first via `action = 'enable'`**, and only then runs clamp and cascade.
+   - `nidara-float-all` window rule (`match = { class = ".*" }, float = true`): all windows spawn floating statically, preserving requested geometry (e.g. 800x600) from being tiled prematurely.
+   - `window.open`: inspects workspace mode; if tiling, tiles via `action = 'disable'`; if floating, applies `placeFloatingGuarded(w, true)` (clamp + cascade).
    - `window.move_to_workspace`: synchronizes incoming window with target mode (floating -> float, tiling -> tile).
    - **Special workspaces are exempt**: scratchpads and `gamespace` (id < 0 or `special = true`) are never converted.
    - If a window is manually floated inside a tiling workspace, it remains floating until explicitly moved across workspaces or toggled.

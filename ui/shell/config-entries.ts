@@ -950,11 +950,6 @@ export function registerConfigEntries() {
             const id = workspaceModes.connect("changed", () => apply(workspaceModes.defaultMode))
             return () => safeDisconnect(workspaceModes, id)
         },
-        ui: {
-            i18n: "settings.workspaces.default-mode",
-            control: "segmented",
-            optI18n: (v: string) => t(`settings.workspaces.mode.${v}` as any),
-        },
     })
 
     for (const wsId of [1, 2, 3, 4, 5]) {
@@ -969,11 +964,6 @@ export function registerConfigEntries() {
                 apply(workspaceModes.getEffectiveMode(wsId))
                 const id = workspaceModes.connect("changed", () => apply(workspaceModes.getEffectiveMode(wsId)))
                 return () => safeDisconnect(workspaceModes, id)
-            },
-            ui: {
-                i18n: `settings.workspaces.workspace-${wsId}-mode`,
-                control: "segmented",
-                optI18n: (v: string) => t(`settings.workspaces.mode.${v}` as any),
             },
         })
     }
