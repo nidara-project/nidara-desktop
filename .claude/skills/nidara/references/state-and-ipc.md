@@ -260,9 +260,10 @@ still has its global `allowMcp` floor; local `nidara-ipc` is always available.
 - **Actions**: `focusWorkspace <id|±1|name>` (absolute id, relative `+1`/`-1` → the cycle-incl-empty
   `e±1` the wheel binds use, or a Hyprland workspace string like `previous`/`name:foo`),
   `focusDirection <left|right|up|down>` (move focus spatially — benign), `focusWindow <window>`,
-  `closeWindow`, `moveWindowToWorkspace <window> <wsId>`, `toggleFloat`, `toggleFullscreen`,
-  `centerWindow`, `togglePin`, `togglePseudo`, `toggleGroup [window]`, `moveWindowOutOfGroup`,
-  `sendWindowToSpecial [name] [window]`, `setLayout <dwindle|master>` — one thin IPC command per
+  `closeWindow`, `moveWindowToWorkspace <window> <wsId>`, `getWorkspaceMode <id>`,
+  `setWorkspaceMode <id> <floating|tiling>`, `toggleWorkspaceMode [id]`, `toggleFloat`,
+  `toggleFullscreen`, `centerWindow`, `togglePin`, `togglePseudo`, `toggleGroup [window]`,
+  `moveWindowOutOfGroup`, `sendWindowToSpecial [name] [window]`, `setLayout <dwindle|master>` — one thin IPC command per
   **already-built, live-verified** `HyprlandState` dispatch method (the same ones the AppTitle
   window menu / dock / overview / arrow-key + wheel binds call). All of `focusWorkspace`/
   `focusDirection`/`focusWindow` ride Hyprland's **one unified `hl.dsp.focus` dispatcher**
@@ -295,6 +296,30 @@ still has its global `allowMcp` floor; local `nidara-ipc` is always available.
   Low agent value too (moveWindowToWorkspace/float/fullscreen/center already cover relocation).
   If wanted later: verify the Lua dispatcher name first (don't guess), and consider that they only
   make sense right after a deterministic `focusWindow`.
+
+### Workspace modes: per-workspace floating/tiling mechanism (#513)
+
+Nidara workspaces (1..5) are **floating by default**, and any single workspace can be set to **tiling**.
+Hyprland itself has no workspace mode primitive (`workspace = N, layout:floating` is ignored,
+`workspaceopt` is deprecated, and dynamic window rules skip static float/tile effects). The state is
+therefore ours, structured in three layers:
+
+1. **Persistence & Shell service (`ui/shell/core/WorkspaceModes.ts`)**:
+   - `workspaces.json` managed via `defineConfig` stores `defaultMode` ("floating") and an overrides map (`Record<string, WorkspaceMode>`). Changing the default does not rewrite per-workspace overrides.
+   - Emits GObject `changed` signal on any mutation. Registered in `ConfigRegistry` as `workspaces.defaultMode` and `workspaces.workspace1Mode`..`5Mode`.
+   - Generates `~/.config/nidara/nidara-workspaces.lua` containing the Lua table `NIDARA_WS_MODES = { default = "floating", [2] = "tiling" }`.
+   - Hot-pushes changes live via `hs.evalLua("NIDARA_WS_MODES[id] = '...'")` (sub-4 ms IPC), and re-pushes on boot or when Hyprland reloads its config.
+2. **Compositor lifecycle (`config/hypr/hyprland.lua`)**:
+   - Loads `nidara-workspaces.lua` via `safe_require("nidara-workspaces")` on startup/reload.
+   - `nidara-float-all` window rule (`match = { class = ".*" }, float = true`): all windows spawn floating statically, preserving requested geometry (e.g. 800x600) from being tiled prematurely.
+   - `window.open`: inspects workspace mode; if tiling, tiles via `action = 'disable'`; if floating, applies `placeFloatingGuarded(w, true)` (clamp + cascade).
+   - `window.move_to_workspace`: synchronizes incoming window with target mode (floating -> float, tiling -> tile).
+   - **Special workspaces are exempt**: scratchpads and `gamespace` (id < 0 or `special = true`) are never converted.
+   - If a window is manually floated inside a tiling workspace, it remains floating until explicitly moved across workspaces or toggled.
+3. **Switching & Reorganization**:
+   - Conmuting a workspace mode (`setWorkspaceMode <id> <mode>` or `toggleWorkspaceMode [id]`) immediately reorganizes open windows:
+     - Switching to tiling: invokes `HyprlandState.tileAllInWorkspace(id)` (`action = 'disable'`), letting dwindle cleanly tile existing windows.
+     - Switching to floating: invokes `HyprlandState.floatAllInWorkspace(id)` (`action = 'enable'`), which triggers `window.update_rules` and passes windows through `clampFloating` so they do not get stranded off-screen at `[-9,-109]`.
 
 ### `HyprClient.fullscreen` is an INT, not a boolean (maximize ≠ fullscreen)
 

@@ -55,7 +55,7 @@ try {
     process.exit(1)
 }
 
-const { luaLiteral, luaConfigExpr, luaConfigBlock } = await import(OUT)
+const { luaLiteral, luaConfigExpr, luaConfigBlock, luaWorkspaceModesBlock } = await import(OUT)
 
 /** null when luac accepts the chunk, its complaint otherwise. */
 function parses(src, name = "chunk") {
@@ -102,6 +102,26 @@ else ok("booleans are true/false, not 1/0")
 
 if (!/touchpad = \{/.test(block)) fail("a two-segment option nests", block)
 else ok("a two-segment option nests")
+
+// ── Generated workspace modes (nidara-workspaces.lua) ────────────────────────
+// #513: Workspace modes (default + per-workspace overrides) are generated as
+// Lua table NIDARA_WS_MODES so hyprland.lua can safe_require() them without
+// an ad-hoc JSON parser.
+const wsBlockDefaultOnly = luaWorkspaceModesBlock("floating", {})
+const errWsDefault = parses(wsBlockDefaultOnly, "ws-default")
+if (errWsDefault) fail("the generated workspace modes (default only) parses", `${errWsDefault}\n${wsBlockDefaultOnly}`)
+else ok("the generated workspace modes (default only) parses")
+
+const wsBlockWithOverrides = luaWorkspaceModesBlock("floating", { 1: "floating", 2: "tiling", 5: "floating" })
+const errWsOverrides = parses(wsBlockWithOverrides, "ws-overrides")
+if (errWsOverrides) fail("the generated workspace modes (with overrides) parses", `${errWsOverrides}\n${wsBlockWithOverrides}`)
+else ok("the generated workspace modes (with overrides) parses")
+
+if (!/default\s*=\s*"floating"/.test(wsBlockWithOverrides)) fail("workspace default mode is rendered", wsBlockWithOverrides)
+else ok("workspace default mode is rendered")
+
+if (!/\[2\]\s*=\s*"tiling"/.test(wsBlockWithOverrides)) fail("workspace override [2] = 'tiling' is rendered", wsBlockWithOverrides)
+else ok("workspace override [2] = 'tiling' is rendered")
 
 // ── Every single-option eval ─────────────────────────────────────────────────
 let evalBad = null

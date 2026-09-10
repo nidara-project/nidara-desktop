@@ -888,6 +888,14 @@ class HyprlandStateClass extends GObject.Object {
         return this._dispatch(`hl.dsp.window.float({ action = 'toggle', ${this._winSel(address)} })`)
     }
 
+    enableFloatWindow(address: string) {
+        return this._dispatch(`hl.dsp.window.float({ action = 'enable', ${this._winSel(address)} })`)
+    }
+
+    tileWindow(address: string) {
+        return this._dispatch(`hl.dsp.window.float({ action = 'disable', ${this._winSel(address)} })`)
+    }
+
     /** Pseudo-tile toggle. NOTE: pseudo state is NOT readable (`hyprctl clients -j`
      *  has no `pseudo` field, nor does HL.Window) — callers can't show a check. */
     togglePseudo(address: string) {
@@ -916,7 +924,14 @@ class HyprlandStateClass extends GObject.Object {
         // snapshot taken at the last event and a bulk op must not act on one.
         const arr = await this.getClientsJson()
         for (const c of arr) {
-            if (c.workspace?.id === wsId && !c.floating) await this.floatWindow(c.address)
+            if (c.workspace?.id === wsId && !c.floating) await this.enableFloatWindow(c.address)
+        }
+    }
+
+    async tileAllInWorkspace(wsId: number) {
+        const arr = await this.getClientsJson()
+        for (const c of arr) {
+            if (c.workspace?.id === wsId && c.floating) await this.tileWindow(c.address)
         }
     }
 

@@ -28,6 +28,7 @@ import { bindCursorThemeRefresh } from "./common/CursorRefresh"
 import hyprlandState from "./core/HyprlandState"
 import queryUI from "./core/UITree"
 import Wallpaper from "./core/WallpaperManager"
+import workspaceModes, { type WorkspaceMode } from "./core/WorkspaceModes"
 
 // @ts-ignore
 import type { Monitor } from "gi://Gdk?version=4.0"
@@ -437,6 +438,44 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       const arg = rel ? `e${rel[1]}${rel[2]}` : a
       hyprlandState.focusWorkspaceArg(arg)
       return `switched workspace (${arg})`
+    },
+  },
+  getWorkspaceMode: {
+    desc: "Get effective mode of a workspace: `getWorkspaceMode <id>` (returns 'floating' or 'tiling').",
+    run: args => {
+      const a = (args[0] ?? "").trim()
+      if (!a) return "usage: getWorkspaceMode <id>"
+      const id = parseInt(a, 10)
+      if (isNaN(id) || id < 1 || id > 5) return `invalid workspace id: "${a}" (must be 1..5)`
+      return workspaceModes.getEffectiveMode(id)
+    },
+  },
+  setWorkspaceMode: {
+    desc: "Set mode of a workspace: `setWorkspaceMode <id> <floating|tiling>`. Reorganizes existing windows on that workspace.",
+    run: async args => {
+      const a = (args[0] ?? "").trim()
+      const m = (args[1] ?? "").toLowerCase().trim()
+      if (!a || !m) return "usage: setWorkspaceMode <id> <floating|tiling>"
+      const id = parseInt(a, 10)
+      if (isNaN(id) || id < 1 || id > 5) return `invalid workspace id: "${a}" (must be 1..5)`
+      if (m !== "floating" && m !== "tiling") return `invalid mode: "${args[1]}" (must be 'floating' or 'tiling')`
+      await workspaceModes.setWorkspaceMode(id, m)
+      return `workspace ${id} mode set to ${m}`
+    },
+  },
+  toggleWorkspaceMode: {
+    desc: "Toggle mode of a workspace between floating and tiling: `toggleWorkspaceMode [id]` (defaults to focused workspace). Reorganizes existing windows.",
+    run: async args => {
+      let id: number
+      if (args[0]) {
+        id = parseInt(args[0].trim(), 10)
+        if (isNaN(id) || id < 1 || id > 5) return `invalid workspace id: "${args[0]}" (must be 1..5)`
+      } else {
+        id = hyprlandState.focusedWorkspaceId
+        if (id < 1 || id > 5) return `cannot toggle workspace mode on special or invalid workspace ${id}`
+      }
+      const next = await workspaceModes.toggleWorkspaceMode(id)
+      return `workspace ${id} mode toggled to ${next}`
     },
   },
   focusDirection: {
@@ -1323,6 +1362,9 @@ app.start({
     shellActions.toggleBarOverlay = toggleBarOverlay
     shellActions.lockScreen = lockScreen
     shellActions.unlockScreen = unlockScreen
+    shellActions.getWorkspaceMode = (id: number) => workspaceModes.getEffectiveMode(id)
+    shellActions.setWorkspaceMode = (id: number, mode: WorkspaceMode) => workspaceModes.setWorkspaceMode(id, mode)
+    shellActions.toggleWorkspaceMode = (id?: number) => workspaceModes.toggleWorkspaceMode(id)
 
     // User hooks (~/.config/nidara/hooks/<event>.d/) — see bin/nidara-hook.
     // Last in main() on purpose: `session-started` should mean the desktop is
