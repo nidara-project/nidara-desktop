@@ -40,6 +40,9 @@
 // each other in mDNS the moment there are two.
 
 import { accountProblems, deriveHostname, hostnameStillFollows, type AccountFields, HOSTNAME_REGEX } from "../../ui/installer/lib/account-problems"
+import { assemblePlan } from "../../ui/installer/lib/plan"
+import type { Answers } from "../../ui/installer/lib/answers"
+import type { BaseConfigResult } from "../../ui/installer/lib/base-config"
 import { t } from "../../ui/installer/lib/i18n"
 
 let failures = 0
@@ -237,6 +240,98 @@ for (const [hostname, username, want, why] of FOLLOW_CASES) {
   const got = hostnameStillFollows(hostname, username)
   print(`   ${(got ? "follows" : "theirs").padEnd(9)} ${JSON.stringify(hostname).padEnd(15)} + ${JSON.stringify(username).padEnd(8)} ${why}`)
   if (got !== want) fail(`hostnameStillFollows(${JSON.stringify(hostname)}, ${JSON.stringify(username)})`, `expected ${want}, got ${got}`)
+}
+
+// ─── SUDO_USER rewrite in assemblePlan (#523) ─────────────────────────────────
+//
+// `base.json` ends with `SUDO_USER=nidara nidara-setup`. The ISO side (nidara-iso#28)
+// asserts the token is present in the file; this asserts assemblePlan rewrites it
+// to the username the person chose, across every character class the token allows.
+
+interface SudoUserCase {
+  cmd: string
+  username: string
+  want: string
+  why: string
+}
+
+const SUDO_USER_CASES: SudoUserCase[] = [
+  {
+    cmd: "set -e; SUDO_USER=nidara nidara-setup",
+    username: "jane",
+    want: "set -e; SUDO_USER=jane nidara-setup",
+    why: "the stock placeholder from base.json",
+  },
+  {
+    cmd: "SUDO_USER=_leading_underscore nidara-setup",
+    username: "john",
+    want: "SUDO_USER=john nidara-setup",
+    why: "placeholder with a leading underscore",
+  },
+  {
+    cmd: "SUDO_USER=placeholder-with-dash nidara-setup",
+    username: "my-user",
+    want: "SUDO_USER=my-user nidara-setup",
+    why: "placeholder and username both carrying dashes",
+  },
+  {
+    cmd: "SUDO_USER=user123 nidara-setup",
+    username: "u42",
+    want: "SUDO_USER=u42 nidara-setup",
+    why: "alphanumeric token",
+  },
+  {
+    cmd: "SUDO_USER=" + "a".repeat(40) + " nidara-setup",
+    username: "ana",
+    want: "SUDO_USER=ana nidara-setup",
+    why: "long placeholder token",
+  },
+  {
+    cmd: "SUDO_USER=nidara nidara-setup",
+    username: "_admin_99",
+    want: "SUDO_USER=_admin_99 nidara-setup",
+    why: "target username with underscore and digits",
+  },
+  {
+    cmd: "echo 'no sudo user token here'",
+    username: "jane",
+    want: "echo 'no sudo user token here'",
+    why: "command with no SUDO_USER token left untouched",
+  },
+]
+
+function testPlanSudoUserRewrite(cmd: string, username: string): string {
+  const fakeBase: BaseConfigResult = {
+    path: "/dev/null",
+    config: {
+      custom_commands: [cmd],
+    },
+  }
+  const fakeAnswers: Answers = {
+    country: null,
+    language: null,
+    keyboard: null,
+    timezone: null,
+    disk: null,
+    account: {
+      fullName: "Test User",
+      username,
+      hostname: "test-host",
+      password: "secretpassword",
+    },
+  }
+  const plan = assemblePlan(fakeAnswers, fakeBase)
+  const cmds = plan.config.custom_commands as string[]
+  return cmds[0]
+}
+
+print("")
+for (const c of SUDO_USER_CASES) {
+  const got = testPlanSudoUserRewrite(c.cmd, c.username)
+  print(`   ${c.username.padEnd(12)} → ${got.padEnd(48)} ${c.why}`)
+  if (got !== c.want) {
+    fail(`assemblePlan SUDO_USER rewrite (${c.cmd} with ${c.username})`, `expected ${JSON.stringify(c.want)}, got ${JSON.stringify(got)}`)
+  }
 }
 
 print(failures === 0 ? "\nALL RULES HOLD" : `\n${failures} FAILURE(S)`)

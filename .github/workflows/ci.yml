@@ -540,6 +540,29 @@ jobs:
           cp /tmp/account-problems-host.bak ui/installer/lib/account-problems.ts
           git diff --quiet ui/installer/lib/account-problems.ts
 
+      # A third control, for the seam with nidara-iso (#523): base.json leaves a
+      # placeholder SUDO_USER token, and assemblePlan rewrites it to the chosen
+      # username. Delete the rewrite and first-boot setup runs against a user
+      # that does not exist.
+      - name: The SUDO_USER rewrite can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/plan.ts /tmp/plan.bak
+          sed -i 's|return cmd.replace(/\\bSUDO_USER=.*|return cmd // deliberately removed|' ui/installer/lib/plan.ts
+          if ! git diff --quiet ui/installer/lib/plan.ts; then
+            echo "control: the SUDO_USER rewrite was removed"
+          else
+            echo "::error::the control patched nothing — the rewrite in plan.ts has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/account-rules-probe.ts /tmp/account-sudo-defect.js
+          if gjs -m /tmp/account-sudo-defect.js; then
+            echo "::error::the probe passed with the SUDO_USER rewrite deleted"
+            cp /tmp/plan.bak ui/installer/lib/plan.ts
+            exit 1
+          fi
+          cp /tmp/plan.bak ui/installer/lib/plan.ts
+          git diff --quiet ui/installer/lib/plan.ts
+
       - name: What the account form accepts and refuses (must succeed)
         run: |
           ./scripts/bundle.sh --js scripts/dev/account-rules-probe.ts /tmp/account-probe.js
