@@ -622,6 +622,8 @@ export default {
     "prism.section.files": "Recent files",
 
     // Workspace Overview
+    "workspace.mode.floating": "Floating",
+    "workspace.mode.tiling": "Tiling",
     "overview.workspace": "Workspace",
     "overview.empty": "Empty",
     "overview.window": "window",
@@ -672,6 +674,7 @@ export default {
     "bar.window-menu.center": "Center on screen",
     "bar.window-menu.pin": "Pin to all workspaces",
     "bar.window-menu.move-to": "Move to workspace",
+    "bar.window-menu.workspace-mode": "Mode for workspace",
     "bar.window-menu.workspace": "Workspace",
     "bar.window-menu.float-all": "Float all windows",
     "bar.window-menu.no-window": "No focused window",

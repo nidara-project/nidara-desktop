@@ -4,6 +4,7 @@ import hs, { bareAddr } from "../../core/HyprlandState"
 import { t } from "../../core/i18n"
 import { getWordmark } from "../../utils"
 import { safeDisconnect } from "../../core/signals"
+import { workspaceModeRows } from "../../common/WorkspaceModeControl"
 import { menuRow, menuHeader, menuSeparator } from "../../common/MenuRow"
 
 // Window-options menu for the AppTitle capsule — the visual gateway to Hyprland's
@@ -187,12 +188,17 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
         root.append(menuSeparator())
     }
 
-    // Workspace section — always shown
-    root.append(menuHeader(`${t("bar.window-menu.workspace")} ${wsId}`))
-    root.append(menuRow({
-        label: t("bar.window-menu.float-all"),
-        onClick: () => { hs.floatAllInWorkspace(wsId); onClose() },
-    }))
+    // Workspace section — always shown. Its rows are the workspace's MODE (#513),
+    // and they replace the old "Float all windows": with modes, floating the
+    // workspace is what floating all its windows means, and two commands for one
+    // outcome is how a menu starts lying about which one is in effect.
+    // ⚠️ The header says MODE, not just the workspace number, because the menu
+    // already has a "Floating" row up top that means "float THIS WINDOW". Two rows
+    // with the same word and a check each, one section apart, read as a duplicate
+    // — seen in the bench before the wording changed. The header is what tells you
+    // which of the two you are about to move.
+    root.append(menuHeader(`${t("bar.window-menu.workspace-mode")} ${wsId}`))
+    for (const row of workspaceModeRows(wsId, onClose)) root.append(row)
 
     return root
 }

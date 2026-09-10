@@ -561,6 +561,8 @@
     "prism.placeholder": "0f2541c0",
     "prism.section.apps": "76c74bd0",
     "prism.section.files": "95c6a85a",
+    "workspace.mode.floating": "ab224b51",
+    "workspace.mode.tiling": "8ac3e000",
     "overview.workspace": "4ca0a75c",
     "overview.empty": "3159fe42",
     "overview.window": "320ad267",
@@ -601,6 +603,7 @@
     "bar.window-menu.center": "3cc2fba0",
     "bar.window-menu.pin": "d3529449",
     "bar.window-menu.move-to": "d2203c60",
+    "bar.window-menu.workspace-mode": "eb75253b",
     "bar.window-menu.workspace": "4ca0a75c",
     "bar.window-menu.float-all": "bf235a32",
     "bar.window-menu.no-window": "af93c0c5",
@@ -739,8 +742,9 @@
   "locales": {
     "de": {
       "translated": 699,
-      "of": 734,
+      "of": 737,
       "untranslated": [
+        "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
         "settings.desktop.default-mode.desc",
         "settings.desktop.default-mode.opt.floating",
@@ -775,20 +779,23 @@
         "settings.desktop.workspace-5.desc",
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
-        "settings.desktop.workspace-5.opt.tiling"
+        "settings.desktop.workspace-5.opt.tiling",
+        "workspace.mode.floating",
+        "workspace.mode.tiling"
       ],
       "stale": []
     },
     "es": {
-      "translated": 734,
-      "of": 734,
+      "translated": 737,
+      "of": 737,
       "untranslated": [],
       "stale": []
     },
     "fr": {
       "translated": 699,
-      "of": 734,
+      "of": 737,
       "untranslated": [
+        "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
         "settings.desktop.default-mode.desc",
         "settings.desktop.default-mode.opt.floating",
@@ -823,14 +830,17 @@
         "settings.desktop.workspace-5.desc",
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
-        "settings.desktop.workspace-5.opt.tiling"
+        "settings.desktop.workspace-5.opt.tiling",
+        "workspace.mode.floating",
+        "workspace.mode.tiling"
       ],
       "stale": []
     },
     "it": {
       "translated": 699,
-      "of": 734,
+      "of": 737,
       "untranslated": [
+        "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
         "settings.desktop.default-mode.desc",
         "settings.desktop.default-mode.opt.floating",
@@ -865,14 +875,17 @@
         "settings.desktop.workspace-5.desc",
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
-        "settings.desktop.workspace-5.opt.tiling"
+        "settings.desktop.workspace-5.opt.tiling",
+        "workspace.mode.floating",
+        "workspace.mode.tiling"
       ],
       "stale": []
     },
     "ja": {
       "translated": 699,
-      "of": 734,
+      "of": 737,
       "untranslated": [
+        "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
         "settings.desktop.default-mode.desc",
         "settings.desktop.default-mode.opt.floating",
@@ -907,14 +920,17 @@
         "settings.desktop.workspace-5.desc",
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
-        "settings.desktop.workspace-5.opt.tiling"
+        "settings.desktop.workspace-5.opt.tiling",
+        "workspace.mode.floating",
+        "workspace.mode.tiling"
       ],
       "stale": []
     },
     "nl": {
       "translated": 699,
-      "of": 734,
+      "of": 737,
       "untranslated": [
+        "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
         "settings.desktop.default-mode.desc",
         "settings.desktop.default-mode.opt.floating",
@@ -949,14 +965,17 @@
         "settings.desktop.workspace-5.desc",
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
-        "settings.desktop.workspace-5.opt.tiling"
+        "settings.desktop.workspace-5.opt.tiling",
+        "workspace.mode.floating",
+        "workspace.mode.tiling"
       ],
       "stale": []
     },
     "pl": {
       "translated": 699,
-      "of": 734,
+      "of": 737,
       "untranslated": [
+        "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
         "settings.desktop.default-mode.desc",
         "settings.desktop.default-mode.opt.floating",
@@ -991,14 +1010,17 @@
         "settings.desktop.workspace-5.desc",
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
-        "settings.desktop.workspace-5.opt.tiling"
+        "settings.desktop.workspace-5.opt.tiling",
+        "workspace.mode.floating",
+        "workspace.mode.tiling"
       ],
       "stale": []
     },
     "pt-BR": {
       "translated": 699,
-      "of": 734,
+      "of": 737,
       "untranslated": [
+        "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
         "settings.desktop.default-mode.desc",
         "settings.desktop.default-mode.opt.floating",
@@ -1033,14 +1055,17 @@
         "settings.desktop.workspace-5.desc",
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
-        "settings.desktop.workspace-5.opt.tiling"
+        "settings.desktop.workspace-5.opt.tiling",
+        "workspace.mode.floating",
+        "workspace.mode.tiling"
       ],
       "stale": []
     },
     "pt-PT": {
       "translated": 699,
-      "of": 734,
+      "of": 737,
       "untranslated": [
+        "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
         "settings.desktop.default-mode.desc",
         "settings.desktop.default-mode.opt.floating",
@@ -1075,14 +1100,17 @@
         "settings.desktop.workspace-5.desc",
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
-        "settings.desktop.workspace-5.opt.tiling"
+        "settings.desktop.workspace-5.opt.tiling",
+        "workspace.mode.floating",
+        "workspace.mode.tiling"
       ],
       "stale": []
     },
     "ru": {
       "translated": 699,
-      "of": 734,
+      "of": 737,
       "untranslated": [
+        "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
         "settings.desktop.default-mode.desc",
         "settings.desktop.default-mode.opt.floating",
@@ -1117,14 +1145,17 @@
         "settings.desktop.workspace-5.desc",
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
-        "settings.desktop.workspace-5.opt.tiling"
+        "settings.desktop.workspace-5.opt.tiling",
+        "workspace.mode.floating",
+        "workspace.mode.tiling"
       ],
       "stale": []
     },
     "zh-CN": {
       "translated": 699,
-      "of": 734,
+      "of": 737,
       "untranslated": [
+        "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
         "settings.desktop.default-mode.desc",
         "settings.desktop.default-mode.opt.floating",
@@ -1159,7 +1190,9 @@
         "settings.desktop.workspace-5.desc",
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
-        "settings.desktop.workspace-5.opt.tiling"
+        "settings.desktop.workspace-5.opt.tiling",
+        "workspace.mode.floating",
+        "workspace.mode.tiling"
       ],
       "stale": []
     }
