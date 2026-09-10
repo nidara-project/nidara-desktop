@@ -11,7 +11,7 @@ import { NidaraList, NidaraFieldRow } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import { getAnswers, setAccountAnswer } from "../lib/answers"
 import { heading, prose } from "./common"
-import { accountProblems, cleanFullName } from "../lib/account-problems"
+import { accountProblems, cleanFullName, deriveHostname, hostnameStillFollows } from "../lib/account-problems"
 
 /**
  * What is in the five fields right now, valid or not.
@@ -23,9 +23,9 @@ import { accountProblems, cleanFullName } from "../lib/account-problems"
  * and return to an emptied form — including a password they had typed twice.
  */
 let draft = {
-  fullName: "Nidara User",
-  username: "nidara",
-  hostname: "nidara",
+  fullName: "",
+  username: "",
+  hostname: "",
   password: "",
 }
 
@@ -170,14 +170,24 @@ export function AccountStep(): Step {
       }
 
       // Coming back to this step restores what was typed; arriving for the first
-      // time suggests the names and leaves the password ALONE.
+      // time fills NOTHING. The placeholders say what each field wants, and the
+      // machine's name follows the account's from the first keystroke.
       //
-      // ⚠️ It used to suggest the password too — "nidara", in both fields, rendered
+      // ⚠️ It used to suggest the password — "nidara", in both fields, rendered
       // as dots exactly like something a person had typed. Accepting the defaults
       // therefore produced a machine whose sudo-capable user had a password nobody
       // chose and nothing disclosed. A suggested NAME is a convenience; a suggested
       // CREDENTIAL is a credential, and the interface cannot tell the person which
       // of the two it just handed them.
+      //
+      // ⚠️ And it used to suggest all three names as well — "Nidara User",
+      // "nidara", "nidara", pre-written into the fields, so the form arrived
+      // already answered and a person who typed a password and pressed Continue
+      // installed `nidara@nidara` without ever being asked. Half of that argument
+      // is the one above: a value is not a hint, and the entry renders both the
+      // same. The other half is the hostname's alone — a CONSTANT machine name
+      // collides with itself the moment two of these exist on one network. See
+      // deriveHostname() in lib/account-problems.ts.
       //
       // ⚠️ The fill happens BEFORE the `changed` handlers are connected, and that
       // ordering is what makes `formTouched` mean what it says. `set_text` emits
@@ -185,21 +195,65 @@ export function AccountStep(): Step {
       // attached, a page that restores a draft would arrive "touched" and greet
       // the person with the errors of a form they have not returned to yet.
       const existing = getAnswers().account ?? draft
+
+      /**
+       * Is the machine's name still following the account's?
+       *
+       * It stops the moment somebody edits the hostname themselves, and it stays
+       * stopped. Restoring a draft has to work out which of the two it is
+       * looking at: a hostname that is empty, or exactly what the username would
+       * have produced, is still a suggestion — so walking back to correct the
+       * username updates it, which is the whole point of following.
+       */
+      let hostnameFollowsUsername = hostnameStillFollows(existing.hostname, existing.username)
+
+      /** Our own write, not the person's — see onHostnameEdited below. */
+      let syncingHostname = false
       if (typeof fullNameEntry.set_text === "function") fullNameEntry.set_text(existing.fullName)
       else fullNameEntry.text = existing.fullName
       if (typeof usernameEntry.set_text === "function") usernameEntry.set_text(existing.username)
       else usernameEntry.text = existing.username
-      if (typeof hostnameEntry.set_text === "function") hostnameEntry.set_text(existing.hostname || "nidara")
-      else hostnameEntry.text = existing.hostname || "nidara"
+      if (typeof hostnameEntry.set_text === "function") hostnameEntry.set_text(existing.hostname)
+      else hostnameEntry.text = existing.hostname
       if (typeof pwEntry.set_text === "function") pwEntry.set_text(existing.password)
       else pwEntry.text = existing.password
       if (typeof pw2Entry.set_text === "function") pw2Entry.set_text(existing.password)
       else pw2Entry.text = existing.password
 
       const onEdited = () => { formTouched = true; validate() }
+
+      // Writing the suggestion emits `changed` on the hostname entry exactly like
+      // a keystroke would, which is the same trap the fill above documents: read
+      // naively, our own write would count as the person editing the field and
+      // end the following on the first character they typed into the username.
+      // The flag is what tells the two apart.
+      const onUsernameEdited = () => {
+        if (hostnameFollowsUsername) {
+          const uname = (usernameEntry.get_text?.() ?? usernameEntry.text ?? "").trim()
+          const suggested = deriveHostname(uname)
+          syncingHostname = true
+          if (typeof hostnameEntry.set_text === "function") hostnameEntry.set_text(suggested)
+          else hostnameEntry.text = suggested
+          syncingHostname = false
+        }
+        onEdited()
+      }
+
+      // ONE rule, asked at both moments: on restore above, and here on every
+      // keystroke. Typing anything of their own ends the following — and CLEARING
+      // the field hands it back to the page, which is the same sentence read the
+      // other way and the reason this is not a one-way flag.
+      const onHostnameEdited = () => {
+        if (syncingHostname) return   // ours; the username handler validates right after
+        const hname = (hostnameEntry.get_text?.() ?? hostnameEntry.text ?? "").trim()
+        const uname = (usernameEntry.get_text?.() ?? usernameEntry.text ?? "").trim()
+        hostnameFollowsUsername = hostnameStillFollows(hname, uname)
+        onEdited()
+      }
+
       fullNameEntry.connect("changed", onEdited)
-      usernameEntry.connect("changed", onEdited)
-      hostnameEntry.connect("changed", onEdited)
+      usernameEntry.connect("changed", onUsernameEdited)
+      hostnameEntry.connect("changed", onHostnameEdited)
       pwEntry.connect("changed", onEdited)
       pw2Entry.connect("changed", onEdited)
 

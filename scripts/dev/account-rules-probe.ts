@@ -27,12 +27,19 @@
 //     were told and meets a dead button again for a reason nobody mentioned.
 //
 // ⚠️ The `touched` half is the subtle one and it is why the flag is a parameter.
-// The form opens PRE-FILLED, so a first paint must not greet anybody with four
-// complaints about fields they have not touched — but "required" waiting for the
-// first edit is exactly what makes a silent dead button possible, so both
-// readings of every empty field are cases below.
+// A first paint must not greet anybody with four complaints about fields they
+// have not touched — the page arrives EMPTY now, and arrives pre-filled when
+// somebody walks back into it — but "required" waiting for the first edit is
+// exactly what makes a silent dead button possible, so both readings of every
+// empty field are cases below.
+//
+// The last table is a different function on the same page: `deriveHostname`,
+// which suggests the machine's name from the account's. It is here because what
+// it must never do is return a CONSTANT — the field used to open holding
+// `nidara`, and a fleet of machines that all answer to `nidara` collide with
+// each other in mDNS the moment there are two.
 
-import { accountProblems, type AccountFields } from "../../ui/installer/lib/account-problems"
+import { accountProblems, deriveHostname, hostnameStillFollows, type AccountFields, HOSTNAME_REGEX } from "../../ui/installer/lib/account-problems"
 import { t } from "../../ui/installer/lib/i18n"
 
 let failures = 0
@@ -176,6 +183,60 @@ for (const c of CASES) {
   if (got.valid && shown.length > 0) {
     fail(c.name, `valid while ${shown.join(", ")} is showing a message`)
   }
+}
+
+// ─── what the machine gets called, when nobody says ──────────────────────────
+interface HostCase { username: string; want: string; why: string }
+
+const HOST_CASES: HostCase[] = [
+  { username: "jane", want: "jane-nidara", why: "the ordinary one" },
+  { username: "jane_doe", want: "jane-doe-nidara", why: "`_` is legal in a username and not in a hostname" },
+  { username: "_jane", want: "jane-nidara", why: "a hostname label cannot start with a dash" },
+  { username: "jane-", want: "jane-nidara", why: "nor end with one" },
+  { username: "", want: "", why: "nothing to suggest — the placeholder comes back" },
+  { username: "___", want: "", why: "nothing LEFT to suggest, which is not the same as nothing typed" },
+  {
+    username: "a".repeat(60),
+    want: `${"a".repeat(56)}-nidara`,
+    why: "cut to fit, because a suggestion that fails the field's own rule is a complaint about a field nobody touched",
+  },
+]
+
+print("")
+for (const c of HOST_CASES) {
+  const got = deriveHostname(c.username)
+  print(`   ${JSON.stringify(c.username).padEnd(20)} → ${JSON.stringify(got).padEnd(24)} ${c.why}`)
+  if (got !== c.want) fail(`deriveHostname(${JSON.stringify(c.username)})`, `expected ${JSON.stringify(c.want)}, got ${JSON.stringify(got)}`)
+  // Whatever it suggests has to pass the validation sitting next to it.
+  if (got !== "" && !HOSTNAME_REGEX.test(got)) {
+    fail(`deriveHostname(${JSON.stringify(c.username)})`, `suggested ${JSON.stringify(got)}, which HOSTNAME_REGEX refuses`)
+  }
+}
+
+// ⚠️ The property no table of examples can state: two DIFFERENT accounts must not
+// be handed the same machine name. This is the whole reason the old constant was
+// a bug, and a table of expected strings would still pass if the function were
+// rewritten to ignore its argument.
+const distinct = new Set(["jane", "john", "ana"].map(deriveHostname))
+if (distinct.size !== 3) {
+  fail("deriveHostname", `three different usernames produced ${distinct.size} distinct hostname(s): ${[...distinct].join(", ")}`)
+}
+
+// ─── and whether the page may still change it for you ────────────────────────
+const FOLLOW_CASES: [string, string, boolean, string][] = [
+  ["", "jane", true, "nothing typed — the field is still the page's to fill"],
+  ["jane-nidara", "jane", true, "exactly the suggestion: untouched, so correcting the username moves it"],
+  ["workstation", "jane", false, "theirs, and it stays theirs"],
+  ["jane-nidara", "john", false, "the suggestion for somebody ELSE — typed before the username changed, so it is not ours to overwrite"],
+  ["", "", true, "an empty form: nothing is anybody's yet"],
+  ["", "workstation", true, "cleared by hand — the field goes BACK to the page, which is why this is not a one-way flag"],
+]
+
+print("")
+for (const [hostname, username, want, why] of FOLLOW_CASES) {
+  const got = hostnameStillFollows(hostname, username)
+  print(`   ${(got ? "follows" : "theirs").padEnd(9)} ${JSON.stringify(hostname).padEnd(15)} + ${JSON.stringify(username).padEnd(8)} ${why}`)
+  if (got !== want) fail(`hostnameStillFollows(${JSON.stringify(hostname)}, ${JSON.stringify(username)})`, `expected ${want}, got ${got}`)
 }
 
 print(failures === 0 ? "\nALL RULES HOLD" : `\n${failures} FAILURE(S)`)
