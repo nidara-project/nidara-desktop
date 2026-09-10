@@ -912,6 +912,12 @@ sudo systemctl enable --now power-profiles-daemon 2>/dev/null || true
 # even on machines that DO have Bluetooth. Idle and harmless where there's no adapter.
 echo "  Enabling bluetooth..."
 sudo systemctl enable --now bluetooth.service 2>/dev/null || true
+
+# ── Printing (system — skipped by --user, #492) ───────────────────────────────
+# Astal/GTK print dialog talks to CUPS over /run/cups/cups.sock. Socket activation
+# starts cupsd on-demand when an app prints, saving memory and boot time when idle.
+echo "  Enabling CUPS printing socket..."
+sudo systemctl enable --now cups.socket 2>/dev/null || true
 fi  # USER_ONLY
 
 if [ -z "$USER_ONLY" ]; then

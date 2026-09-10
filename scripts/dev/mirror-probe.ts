@@ -15,7 +15,11 @@
 // four hundred uncommented servers in alphabetical order, which reads exactly
 // like a successful measurement and is the opposite of one.
 
+import GLib from "gi://GLib"
 import { reflectorArgs, parseServers } from "../../ui/installer/lib/mirrors"
+import { assemblePlan } from "../../ui/installer/lib/plan"
+import type { Answers } from "../../ui/installer/lib/answers"
+import type { BaseConfigResult } from "../../ui/installer/lib/base-config"
 
 const print = (s: string) => console.log(s)
 let failures = 0
@@ -139,6 +143,50 @@ for (const c of CASES) {
   const same = got.length === c.want.length && got.every((u, i) => u === c.want[i])
   if (same) print(`   ${String(got.length).padStart(2)} server(s)  ${c.name}`)
   else fail(c.name, `expected ${JSON.stringify(c.want)}, got ${JSON.stringify(got)}`)
+}
+
+print("\n── optional repositories (#492) ─────────────────────────────────────────\n")
+
+{
+  const mockBase: BaseConfigResult = {
+    path: "mock.json",
+    config: {
+      custom_commands: ["SUDO_USER=nidara nidara-setup"],
+      mirror_config: {
+        optional_repositories: [],
+      },
+    },
+  }
+
+  const mockAnswers: Answers = {
+    country: null,
+    language: null,
+    keyboard: null,
+    timezone: null,
+    disk: null,
+    account: {
+      fullName: "Test",
+      username: "test",
+      hostname: "test-box",
+      password: "pass",
+    },
+  }
+
+  const plan = assemblePlan(mockAnswers, mockBase)
+  const opt = (plan.config.mirror_config as any)?.optional_repositories
+  if (Array.isArray(opt) && opt.includes("multilib")) {
+    print("   ok           assemblePlan injects multilib into optional_repositories")
+  } else {
+    fail("multilib in assemblePlan", `expected multilib in optional_repositories, got: ${JSON.stringify(opt)}`)
+  }
+
+  const planWithMirrors = assemblePlan(mockAnswers, mockBase, ["https://mirror.example.com"])
+  const optWithMirrors = (planWithMirrors.config.mirror_config as any)?.optional_repositories
+  if (Array.isArray(optWithMirrors) && optWithMirrors.includes("multilib")) {
+    print("   ok           assemblePlan preserves multilib alongside measured mirrors")
+  } else {
+    fail("multilib with measured mirrors", `expected multilib preserved, got: ${JSON.stringify(optWithMirrors)}`)
+  }
 }
 
 print(failures === 0 ? "\nALL INVARIANTS HOLD" : `\n${failures} FAILURE(S)`)
