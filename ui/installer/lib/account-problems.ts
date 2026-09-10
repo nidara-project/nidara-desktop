@@ -25,6 +25,53 @@ export const USERNAME_REGEX = /^[a-z_][a-z0-9_-]{0,31}$/
 /** RFC 1123 label: alphanumeric ends, dashes inside, 63 characters. */
 export const HOSTNAME_REGEX = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/
 
+/** What every derived hostname ends in, and the reason it is not the whole name. */
+const HOSTNAME_SUFFIX = "-nidara"
+
+/**
+ * The machine's name, suggested from the account's, while nobody has typed one.
+ *
+ * ⚠️ It must not be a CONSTANT, and it used to be one: the page opened with
+ * `nidara` already sitting in the field — a value, not a hint, and a person who
+ * accepted it could not tell it apart from one they had chosen. The damage is
+ * not that it went unchosen. It is that every Nidara machine then answers to the
+ * same name, so the second one on a network collides with the first in mDNS
+ * (`nidara.local`), in the router's lease list, and in anybody's `ssh nidara` —
+ * a default that breaks precisely by being used twice. Deriving it from the
+ * username is what Ubuntu and macOS do, and this is why.
+ *
+ * A username is not a hostname: `useradd` allows `_` and a leading underscore,
+ * RFC 1123 allows neither. Anything a hostname cannot carry becomes a dash,
+ * dashes cannot be the ends, and the stem is cut so the result still fits in the
+ * 63 characters HOSTNAME_REGEX will accept — a suggestion that fails the
+ * validation next to it is a complaint about a field nobody touched.
+ *
+ * Empty in, empty out: with no username there is nothing to suggest, and the
+ * field goes back to showing its placeholder.
+ */
+export function deriveHostname(username: string): string {
+  const stem = username
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 63 - HOSTNAME_SUFFIX.length)
+    .replace(/-+$/, "")
+  return stem ? `${stem}${HOSTNAME_SUFFIX}` : ""
+}
+
+/**
+ * Is this hostname still a SUGGESTION, or did somebody type it?
+ *
+ * The page cannot ask the widget: a restored draft looks identical either way.
+ * It asks this instead — empty, or exactly what the username would have
+ * produced, means nobody has claimed the field, so walking back to correct the
+ * username updates the machine's name too. Anything else is theirs and is left
+ * alone, which is what makes the following a suggestion rather than a fight.
+ */
+export function hostnameStillFollows(hostname: string, username: string): boolean {
+  return hostname === "" || hostname === deriveHostname(username)
+}
+
 /**
  * Names the installed system already gives to something else. Taking one does
  * not fail at install time — it fails at `useradd`, inside the chroot, with the

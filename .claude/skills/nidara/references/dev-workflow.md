@@ -758,8 +758,8 @@ of those conditions, with nothing making them agree — the same shape `manualPr
 prevent on the disk page.
 
 ⚠️ `valid` is **not** "no messages", and the asymmetry is the thing to keep. An untouched empty
-field is deliberately silent (the form opens PRE-FILLED, so a first paint must not greet anybody
-with four complaints) and still not installable. What must never happen is the reverse — `valid`
+field is deliberately silent (a first paint must not greet anybody with four complaints — the page
+arrives EMPTY, and arrives pre-filled when somebody walks back into it) and still not installable. What must never happen is the reverse — `valid`
 true while any message shows, which is a Continue button lighting up over a visible complaint. The
 probe asserts that direction on every case rather than declaring it once.
 
@@ -996,6 +996,27 @@ FullName, LoginName, **Hostname**, Password) and subiquity does too; Anaconda pu
 "Network & Host Name"; archinstall gives it a top-level entry. Two with the account, one with the
 system, one loose — so it stays where it is, and what was missing was the line saying what it is
 FOR, which subiquity bothers to write and we did not.
+
+⚠️ **What it must NOT be is a constant, and it was one until 2026-09-10.** The page opened with
+`Nidara User` / `nidara` / `nidara` already written into the three name fields — values, not hints,
+which `Gtk.Entry` renders identically to something a person typed — so somebody who typed a password
+and pressed Continue installed `nidara@nidara` without ever being asked. That is the same argument
+already written next to the password fill (a suggested NAME is a convenience, a suggested CREDENTIAL
+is a credential); the hostname carries a second one of its own: **a machine name that is the same
+string on every install collides with itself.** Two Nidara machines on one network fight over
+`nidara.local`, the router lists two identical leases, and `ssh nidara` reaches whichever answered
+first.
+
+So the fields open empty behind their placeholders, and `deriveHostname()` in
+`lib/account-problems.ts` suggests `<username>-nidara` as the username is typed — what Ubuntu and
+macOS do, and why. It stops following the moment somebody edits the hostname themselves, and
+`steps/account.ts` decides on RESTORE which of the two it is looking at (empty, or exactly what the
+username would produce ⇒ still a suggestion), so walking back to fix the username updates it. ⚠️ The
+write emits `changed` exactly like a keystroke, so a flag tells our own write apart from the
+person's — the same trap the initial fill documents two paragraphs above it in that file.
+`deriveHostname` also sanitises (`useradd` allows `_` and a leading underscore, RFC 1123 allows
+neither) and cuts the stem to fit 63 characters, because a suggestion that fails the validation next
+to it is a complaint about a field nobody touched.
 
 ⚠️ Also no convention: how curated the language list is (archinstall exposes all 328 of glibc's,
 Calamares and Anaconda only what they translate), keyboard abstraction, and GeoIP.

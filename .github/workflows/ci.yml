@@ -516,6 +516,30 @@ jobs:
           cp /tmp/account-problems.bak ui/installer/lib/account-problems.ts
           git diff --quiet ui/installer/lib/account-problems.ts
 
+      # A second control, for the rule the page shipped for months: a machine name
+      # that is the same string on every install. A table of expected strings would
+      # still pass a function that ignored its argument, so the probe checks the
+      # DISTINCTNESS property as well — and this is what proves that check is live.
+      - name: The hostname suggestion cannot be a constant (control, must be caught)
+        run: |
+          cp ui/installer/lib/account-problems.ts /tmp/account-problems-host.bak
+          sed -i 's|^  return stem ?.*|  return "nidara" // deliberately constant|' \
+            ui/installer/lib/account-problems.ts
+          if ! git diff --quiet ui/installer/lib/account-problems.ts; then
+            echo "control: deriveHostname now hands every account the same machine name"
+          else
+            echo "::error::the control patched nothing — deriveHostname's return has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/account-rules-probe.ts /tmp/account-host-defect.js
+          if gjs -m /tmp/account-host-defect.js; then
+            echo "::error::the probe passed with the hostname suggestion turned back into a constant"
+            cp /tmp/account-problems-host.bak ui/installer/lib/account-problems.ts
+            exit 1
+          fi
+          cp /tmp/account-problems-host.bak ui/installer/lib/account-problems.ts
+          git diff --quiet ui/installer/lib/account-problems.ts
+
       - name: What the account form accepts and refuses (must succeed)
         run: |
           ./scripts/bundle.sh --js scripts/dev/account-rules-probe.ts /tmp/account-probe.js
