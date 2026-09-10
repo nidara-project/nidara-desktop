@@ -9,6 +9,7 @@ import { createSchematicMap } from "../../common/WorkspaceSchematic"
 import hs, { type ClientGeometry } from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
+import { makeWorkspaceModeBadge } from "../../common/WorkspaceModeControl"
 import { warmUp as warmUpCapture } from "../../core/WindowCapture"
 
 /**
@@ -165,7 +166,14 @@ export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
             halign: Gtk.Align.CENTER,
             margin_bottom: 4
         })
-        header.append(dot); header.append(label); header.append(count)
+        // The label and the mode badge share one line: the badge is a property OF
+        // this workspace, so it reads next to its name rather than as a third
+        // stacked item. Clicking it flips the mode (#513) — see the CAPTURE-phase
+        // gesture in WorkspaceModeControl for why it does not switch workspace.
+        const titleRow = new Gtk.Box({ spacing: 6, halign: Gtk.Align.CENTER })
+        titleRow.append(label)
+        titleRow.append(makeWorkspaceModeBadge(i))
+        header.append(dot); header.append(titleRow); header.append(count)
 
         // `.wo-item` is the PAINTED box (fill, border, radius, hover/active
         // states) and holds no spacing of its own. Its inset is the inner box's

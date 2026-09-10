@@ -416,6 +416,8 @@ export default {
     "prism.section.files": "Archivos recientes",
 
     // Workspace Overview
+    "workspace.mode.floating": "Flotante",
+    "workspace.mode.tiling": "Mosaico",
     "overview.workspace": "Escritorio",
     "overview.empty": "Vacío",
     "overview.window": "ventana",
@@ -641,6 +643,7 @@ export default {
     "bar.window-menu.center": "Centrar en pantalla",
     "bar.window-menu.pin": "Fijar en todos los espacios",
     "bar.window-menu.move-to": "Mover al espacio",
+    "bar.window-menu.workspace-mode": "Modo del espacio",
     "bar.window-menu.workspace": "Espacio",
     "bar.window-menu.float-all": "Hacer flotantes todas las ventanas",
     "bar.window-menu.no-window": "Ninguna ventana enfocada",
