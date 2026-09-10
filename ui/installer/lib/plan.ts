@@ -9,6 +9,7 @@ import GLib from "gi://GLib"
 import { exec } from "../../lib/process"
 import { readBaseConfig, type BaseConfigResult, type BaseConfig } from "./base-config"
 import { entireDiskConfig, manualDiskConfig } from "./disk-config"
+import { getNvidiaDriverPackages } from "./graphics"
 import type { Answers } from "./answers"
 
 export interface LocaleConfig {
@@ -217,6 +218,29 @@ export function assemblePlan(
   if (measuredMirrors.length > 0) {
     const mirror = (config.mirror_config ?? {}) as Record<string, unknown>
     config.mirror_config = { ...mirror, custom_servers: measuredMirrors.map(url => ({ url })) }
+  }
+
+  // ── Kernel selection (#311) ───────────────────────────────────────────────
+  //
+  // Defaults to "linux", or uses the user's explicit choice (linux, linux-lts, linux-zen).
+  const kernel = answers.system?.kernel || "linux"
+  config.kernels = [kernel]
+
+  // ── Hardware graphics drivers (#495) ──────────────────────────────────────
+  //
+  // Archinstall's Minimal profile ignores `gfx_driver` entirely. Instead of
+  // relying on an inert key in base.json, we install the required packages
+  // ourselves. For NVIDIA Turing+ GPUs with open drivers requested, we inject
+  // the kernel-matching driver package + utilities.
+  if (config.profile_config && typeof config.profile_config === "object") {
+    delete (config.profile_config as Record<string, unknown>).gfx_driver
+  }
+
+  if (answers.system?.installNvidiaOpen) {
+    const driverPkgs = getNvidiaDriverPackages(kernel)
+    const existingPkgs = Array.isArray(config.packages) ? (config.packages as string[]) : []
+    const merged = new Set([...existingPkgs, ...driverPkgs])
+    config.packages = [...merged]
   }
 
   // ── Root is left as Arch leaves it, and that is a decision ────────────────
