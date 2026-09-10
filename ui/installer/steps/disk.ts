@@ -18,6 +18,7 @@ import {
   NidaraButton,
   NidaraSelectionCheck,
   NidaraTable,
+  type NidaraTableRow,
 } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import {
@@ -29,7 +30,7 @@ import {
   type ManualPartitionMount,
 } from "../lib/answers"
 import { espMount } from "../lib/disk-config"
-import { ESP_MOUNTS, manualProblems } from "../lib/manual-problems"
+import { ESP_MOUNTS, manualProblems, type ManualProblem } from "../lib/manual-problems"
 import { freeSpaceGaps } from "../lib/free-space"
 import { isUefi, secureBootState } from "../lib/firmware"
 import { findBitlockerDevices, bitlockerWarnings } from "../lib/bitlocker"
@@ -423,14 +424,32 @@ export function DiskStep(): Step {
       // nobody is looking (D-19, and the reason the account form was rebuilt).
       let editorError = ""
 
+      const tableRowMap = new Map<string, NidaraTableRow>()
+
       refreshProblems = () => {
-        const problems = manualProblems(
-          Array.from(manualMounts.values()).filter(m => m.mountpoint !== ""),
-          isUefi(),
-        )
-        if (editorError) problems.unshift(editorError)
-        problemLabel.label = problems.join("\n")
-        problemLabel.visible = problems.length > 0
+        const activeMounts = Array.from(manualMounts.values()).filter(m => m.mountpoint !== "")
+        const problems = manualProblems(activeMounts, isUefi())
+
+        // Collect keys of all partition entries carrying a fault (#509)
+        const errorKeys = new Set<string>()
+        for (const prob of problems) {
+          if (prob.entry) {
+            for (const [key, mount] of manualMounts.entries()) {
+              if (mount === prob.entry) errorKeys.add(key)
+            }
+          }
+        }
+
+        // Apply error state to offending table rows and clear recovered ones
+        for (const [key, rowWidget] of tableRowMap.entries()) {
+          rowWidget.setValidationState(errorKeys.has(key) ? "error" : "none")
+        }
+
+        // Only problems with NO row belong in problemLabel above the table (#509)
+        const unassigned = problems.filter(p => !p.entry).map(p => p.message)
+        if (editorError) unassigned.unshift(editorError)
+        problemLabel.label = unassigned.join("\n")
+        problemLabel.visible = unassigned.length > 0
       }
 
       // A BitLocker volume cannot be shrunk from Linux (#448). The notice is shown
@@ -464,6 +483,7 @@ export function DiskStep(): Step {
 
       const buildPartitionsList = () => {
         table.clear()
+        tableRowMap.clear()
 
         const partitions = listPartitions()
 
@@ -753,13 +773,14 @@ export function DiskStep(): Step {
             updatePartitionState()
           })
 
-          table.appendRow([
+          const tableRow = table.appendRow([
             rowName,
             formatSize(p.size),
             mountDropDown,
             formatCheck,
             fsDropDown,
           ])
+          tableRowMap.set(p.key, tableRow)
         }
       }
 

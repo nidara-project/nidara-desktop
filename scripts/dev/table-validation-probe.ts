@@ -17,6 +17,8 @@ import system from "system"
 import { NidaraTable } from "../../ui/lib/nidara-kit/table"
 import { NidaraFieldRow } from "../../ui/lib/nidara-kit/row"
 import { AccountStep } from "../../ui/installer/steps/account"
+import { manualProblems } from "../../ui/installer/lib/manual-problems"
+import type { ManualPartitionMount } from "../../ui/installer/lib/answers"
 
 Gtk.init()
 
@@ -305,6 +307,100 @@ if (listBox) {
 
     assert(step.ready(), "Step reports ready() === true when all fields are valid")
 }
+
+console.log("\n=== 4. Manual Partitioning Row Validation Contract (#509) ===")
+
+const mockMounts: ManualPartitionMount[] = [
+    {
+        name: "sda1", path: "/dev/sda1", device: "/dev/sda", start: 1048576, size: 512 * 1024 * 1024,
+        logicalSectorSize: 512, fsType: "vfat", label: null, mountpoint: "/boot", filesystem: "vfat", format: false,
+    },
+    {
+        name: "sda2", path: "/dev/sda2", device: "/dev/sda", start: 537919488, size: 50 * 1024 * 1024 * 1024,
+        logicalSectorSize: 512, fsType: null, label: null, mountpoint: "/", filesystem: "btrfs", format: true,
+    },
+    {
+        name: "sda3", path: "/dev/sda3", device: "/dev/sda", start: 54228819968, size: 50 * 1024 * 1024 * 1024,
+        logicalSectorSize: 512, fsType: null, label: null, mountpoint: "/", filesystem: "btrfs", format: true,
+    },
+]
+
+const manualTable = NidaraTable([
+    { title: "Partition" },
+    { title: "Size" },
+    { title: "Mount point" },
+])
+
+const rBoot = manualTable.appendRow(["/dev/sda1", "512 MiB", "/boot"])
+const rRoot1 = manualTable.appendRow(["/dev/sda2", "50 GiB", "/"])
+const rRoot2 = manualTable.appendRow(["/dev/sda3", "50 GiB", "/"])
+
+const rowMap = new Map<string, typeof rBoot>([
+    ["/dev/sda1", rBoot],
+    ["/dev/sda2", rRoot1],
+    ["/dev/sda3", rRoot2],
+])
+
+function applyManualProblems(mounts: ManualPartitionMount[]) {
+    const problems = manualProblems(mounts, true)
+    const errorEntries = new Set<ManualPartitionMount>()
+    for (const prob of problems) {
+        if (prob.entry) errorEntries.add(prob.entry)
+    }
+    for (const m of mounts) {
+        const r = rowMap.get(m.path)
+        if (r) r.setValidationState(errorEntries.has(m) ? "error" : "none")
+    }
+    const unassigned = problems.filter(p => !p.entry).map(p => p.message)
+    return { problems, unassigned }
+}
+
+// Check duplicate root mounts
+const res1 = applyManualProblems(mockMounts)
+assert(
+    rRoot1.has_css_class("nidara-table-row--error"),
+    "First partition on / wears .nidara-table-row--error",
+)
+assert(
+    rRoot2.has_css_class("nidara-table-row--error"),
+    "Second partition on / wears .nidara-table-row--error",
+)
+assert(
+    !rBoot.has_css_class("nidara-table-row--error"),
+    "/boot partition is valid and unmarked",
+)
+assert(
+    res1.unassigned.length === 0,
+    "Duplicate mount fault belongs to rows, so unassigned block above table is empty",
+)
+
+// Fix duplicate by moving sda3 to /home
+mockMounts[2].mountpoint = "/home"
+const res2 = applyManualProblems(mockMounts)
+assert(
+    !rRoot1.has_css_class("nidara-table-row--error"),
+    "First partition clears error when duplicate is removed",
+)
+assert(
+    !rRoot2.has_css_class("nidara-table-row--error"),
+    "Second partition clears error when moved to /home",
+)
+assert(
+    res2.problems.length === 0 && res2.unassigned.length === 0,
+    "Layout is now fully valid with no problems",
+)
+
+// Layout with no root at all
+mockMounts[1].mountpoint = ""
+const res3 = applyManualProblems(mockMounts.filter(m => m.mountpoint !== ""))
+assert(
+    !rRoot1.has_css_class("nidara-table-row--error") && !rRoot2.has_css_class("nidara-table-row--error"),
+    "No rows are marked error when root is simply missing",
+)
+assert(
+    res3.unassigned.length > 0,
+    "Missing root appears in unassigned block above table (sentence: diskErrNoRoot)",
+)
 
 if (failures === 0) {
     console.log("\nALL CHECKS PASSED: NidaraTable & NidaraFieldRow validation contract verified.")

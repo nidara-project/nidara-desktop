@@ -80,10 +80,19 @@ export const ESP_MIN_BYTES = 300 * 1024 * 1024
  * machine are a normal layout, and unlike a mount point swap is not a place —
  * `swapon` takes as many as it is given.
  */
-export function manualProblems(mounts: ManualPartitionMount[], uefi: boolean): string[] {
-  const problems: string[] = []
-  if (!mounts.some(m => m.mountpoint === "/")) problems.push(t("diskErrNoRoot"))
-  if (uefi && !mounts.some(m => ESP_MOUNTS.has(m.mountpoint))) problems.push(t("diskErrNoBoot"))
+export interface ManualProblem {
+  message: string
+  /**
+   * The offending partition mount, or null when the problem is something missing
+   * from the layout (no root, no ESP) rather than something wrong with a row.
+   */
+  entry: ManualPartitionMount | null
+}
+
+export function manualProblems(mounts: ManualPartitionMount[], uefi: boolean): ManualProblem[] {
+  const problems: ManualProblem[] = []
+  if (!mounts.some(m => m.mountpoint === "/")) problems.push({ message: t("diskErrNoRoot"), entry: null })
+  if (uefi && !mounts.some(m => ESP_MOUNTS.has(m.mountpoint))) problems.push({ message: t("diskErrNoBoot"), entry: null })
 
   // ⚠️ The EFI system partition has to be FAT32, and nothing said so: the
   // filesystem dropdown defaults to btrfs and applies to whatever the row was
@@ -104,7 +113,7 @@ export function manualProblems(mounts: ManualPartitionMount[], uefi: boolean): s
   // reports has to be FAT — including the case where it reports nothing at all,
   // which is not a filesystem the firmware can read either.
   if (esp && (esp.format ? esp.filesystem !== "vfat" : esp.fsType !== "vfat")) {
-    problems.push(t("diskErrEfiNotFat"))
+    problems.push({ message: t("diskErrEfiNotFat"), entry: esp })
   }
 
   // ⚠️ And it has to be big enough to hold a kernel, which nothing checked (#446).
@@ -113,7 +122,7 @@ export function manualProblems(mounts: ManualPartitionMount[], uefi: boolean): s
   // the one thing they have to go and change, in a partition editor, on another
   // screen.
   if (esp && esp.size < ESP_MIN_BYTES) {
-    problems.push(t("diskErrEfiTooSmall") + formatSize(esp.size) + ".")
+    problems.push({ message: t("diskErrEfiTooSmall") + formatSize(esp.size) + ".", entry: esp })
   }
 
   // ⚠️ Swap is the one row whose filesystem is not a choice, so an untick means
@@ -121,8 +130,10 @@ export function manualProblems(mounts: ManualPartitionMount[], uefi: boolean): s
   // a partition with no mount point and a type that is not `linux-swap` is
   // silently skipped, and the machine boots with no swap at all. That is the same
   // shape as the ESP check above: an answer accepted and then quietly dropped.
-  if (mounts.some(m => m.mountpoint === "swap" && !m.format && m.fsType !== "swap")) {
-    problems.push(t("diskErrSwapNotSwap"))
+  for (const m of mounts) {
+    if (m.mountpoint === "swap" && !m.format && m.fsType !== "swap") {
+      problems.push({ message: t("diskErrSwapNotSwap"), entry: m })
+    }
   }
 
   // ⚠️ The Format tick is editable on every row, including the one assigned to
@@ -144,7 +155,7 @@ export function manualProblems(mounts: ManualPartitionMount[], uefi: boolean): s
   // second — and an empty root cannot be told from a full one from this page
   // without mounting it, which this bundle deliberately no longer does.
   const root = mounts.find(m => m.mountpoint === "/")
-  if (root && !root.format) problems.push(t("diskErrRootNotFormatted"))
+  if (root && !root.format) problems.push({ message: t("diskErrRootNotFormatted"), entry: root })
 
   const seen = new Set<string>()
   const dupes = new Set<string>()
@@ -153,7 +164,14 @@ export function manualProblems(mounts: ManualPartitionMount[], uefi: boolean): s
     if (seen.has(m.mountpoint)) dupes.add(m.mountpoint)
     seen.add(m.mountpoint)
   }
-  if (dupes.size > 0) problems.push(t("diskErrDuplicateMount") + [...dupes].join(", "))
+  if (dupes.size > 0) {
+    const msg = t("diskErrDuplicateMount") + [...dupes].join(", ")
+    for (const m of mounts) {
+      if (dupes.has(m.mountpoint)) {
+        problems.push({ message: msg, entry: m })
+      }
+    }
+  }
 
   return problems
 }
