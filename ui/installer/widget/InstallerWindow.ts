@@ -370,9 +370,12 @@ export function InstallerWindow(): Gtk.Window {
   const [, columnHeight] = shell.contentColumn!.measure(Gtk.Orientation.VERTICAL, Math.min(WINDOW_LAYOUT.wizardContent, win.default_width))
   const listBudget = (WIZARD_LAYOUT.listRows - WIZARD_LAYOUT.minListRows) * ROW_HEIGHT.double
   const effectiveMinHeight = Math.min(WINDOW_LAYOUT.minHeight, cap)
+  const DESIRED_INSTALLER_HEIGHT = 780
+  const measuredHeight = chromeHeight + columnHeight + listBudget
+  const targetHeight = Math.max(DESIRED_INSTALLER_HEIGHT, measuredHeight)
   win.default_height = Math.max(
       effectiveMinHeight,
-      Math.min(chromeHeight + columnHeight + listBudget, cap),
+      Math.min(targetHeight, cap),
   )
   win.connect("destroy", () => app.quit())
 

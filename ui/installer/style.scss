@@ -312,6 +312,24 @@ window.nidara-installer-window {
       color: var(--nidara-text-secondary);
     }
   }
+
+  // ── Partition Bar & Legend ────────────────────────────────────────────────
+  .nidara-partition-bar-container {
+    background-color: var(--nidara-surface);
+    border: 1px solid var(--nidara-border);
+    border-radius: var(--nidara-radius-md);
+    padding: 14px 16px;
+    margin-bottom: 6px;
+  }
+
+  .nidara-partition-bar-canvas {
+    margin: 4px 0 2px 0;
+  }
+
+  .nidara-partition-legend {
+    margin-top: 4px;
+    opacity: 0.9;
+  }
 }
 
 

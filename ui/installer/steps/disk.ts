@@ -36,6 +36,7 @@ import { freeSpaceGaps } from "../lib/free-space"
 import { isUefi, secureBootState } from "../lib/firmware"
 import { findBitlockerDevices, bitlockerWarnings } from "../lib/bitlocker"
 import { heading, prose, formatSize } from "./common"
+import { NidaraPartitionBar, type PartitionBarSlice, type PartitionBarResult } from "../widget/PartitionBar"
 
 interface RawBlockDevice {
   name: string
@@ -285,6 +286,7 @@ export function DiskStep(): Step {
       // and the sentence explaining why it is not accepted have to move together:
       // every path that changes a mount point goes through syncAnswer.
       let refreshProblems: () => void = () => {}
+      let updatePartitionBars: () => void = () => {}
 
       const syncAnswer = () => {
         if (currentMode === "entire_disk") {
@@ -313,6 +315,7 @@ export function DiskStep(): Step {
           })
         }
         refreshProblems()
+        updatePartitionBars()
         notifyReady?.()
       }
 
@@ -656,6 +659,13 @@ export function DiskStep(): Step {
       bitlockerNotice.visible = false
       manualBox.append(bitlockerNotice)
 
+      const partitionBarsBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 12,
+        margin_bottom: 4,
+      })
+      manualBox.append(partitionBarsBox)
+
       // ⚠️ The columns are the deliverable of #399, not decoration. A row used to
       // be a path, a dropdown, a checkbox and another dropdown with nothing saying
       // what any of them was (D-13) — the format checkbox carried its own label
@@ -677,9 +687,20 @@ export function DiskStep(): Step {
       ])
       manualBox.append(table.box)
 
+      const rowFocusMap = new Map<string, Gtk.Widget>()
+
       const buildPartitionsList = () => {
         table.clear()
         tableRowMap.clear()
+        rowFocusMap.clear()
+
+        // Clear partition bars
+        let pbChild = partitionBarsBox.get_first_child()
+        while (pbChild) {
+          const next = pbChild.get_next_sibling()
+          partitionBarsBox.remove(pbChild)
+          pbChild = next
+        }
 
         const partitions = listPartitions()
 
@@ -733,6 +754,58 @@ export function DiskStep(): Step {
         if (rows.length === 0) {
           table.appendMessage(t("diskNoPartitions"))
           return
+        }
+
+        // ── Visual Partition Bars (Calamares-style interactive disk layout) ──
+        const diskBars: Array<{
+          diskPath: string
+          bar: PartitionBarResult
+        }> = []
+
+        const getSlicesForDisk = (diskPath: string): PartitionBarSlice[] => {
+          return rows
+            .filter(r => r.device === diskPath)
+            .map(r => {
+              const entry = manualMounts.get(r.key)
+              return {
+                key: r.key,
+                path: r.path || r.key,
+                label: r.label,
+                size: r.size,
+                start: r.start,
+                fstype: r.fstype,
+                isFree: r.isFree,
+                mountpoint: entry?.mountpoint,
+              }
+            })
+        }
+
+        const uniqueDisks = Array.from(new Set(rows.map(r => r.device)))
+        for (let i = 0; i < uniqueDisks.length; i++) {
+          const dPath = uniqueDisks[i]
+          const d = allDisks.find(x => x.path === dPath)
+          const diskName = d ? (d.model || d.name) : dPath
+          const diskSize = d ? d.size : rows.filter(r => r.device === dPath).reduce((acc, r) => acc + r.size, 0)
+          const isLast = i === uniqueDisks.length - 1
+
+          const barResult = NidaraPartitionBar({
+            diskPath: dPath,
+            diskName,
+            diskSize,
+            slices: getSlicesForDisk(dPath),
+            showLegend: isLast,
+            onSliceClick: (slice) => {
+              rowFocusMap.get(slice.key)?.grab_focus()
+            },
+          })
+          partitionBarsBox.append(barResult.widget)
+          diskBars.push({ diskPath: dPath, bar: barResult })
+        }
+
+        updatePartitionBars = () => {
+          for (const item of diskBars) {
+            item.bar.updateSlices(getSlicesForDisk(item.diskPath))
+          }
         }
 
         // ── One heading per disk (#447's neighbour, from the T2 matrix) ────
@@ -977,6 +1050,7 @@ export function DiskStep(): Step {
             fsDropDown,
           ])
           tableRowMap.set(p.key, tableRow)
+          rowFocusMap.set(p.key, mountDropDown)
         }
       }
 
@@ -1031,7 +1105,7 @@ export function DiskStep(): Step {
         editorError = ""
         refreshProblems?.()
         gpartedBtn.sensitive = false
-        execAsync(["gparted"])
+        execAsync(["sudo", "-E", "gparted"])
           .then(() => {
             // It exited, so the disk may be a different shape than the table is
             // showing. Re-reading it is the whole point of having sent somebody
