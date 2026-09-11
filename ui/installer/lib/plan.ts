@@ -219,6 +219,20 @@ export function assemblePlan(
     config.mirror_config = { ...mirror, custom_servers: measuredMirrors.map(url => ({ url })) }
   }
 
+  // ── Multilib repository (#492) ────────────────────────────────────────────
+  //
+  // Enables 32-bit software (Steam, Wine, lib32-*) on the target system.
+  // archinstall's `mirror_config.optional_repositories` uncomments [multilib] in
+  // the target /etc/pacman.conf during installation.
+  const mirrorConf = (config.mirror_config ?? {}) as Record<string, unknown>
+  const existingOpt = Array.isArray(mirrorConf.optional_repositories)
+    ? (mirrorConf.optional_repositories as string[])
+    : []
+  if (!existingOpt.includes("multilib")) {
+    mirrorConf.optional_repositories = [...existingOpt, "multilib"]
+  }
+  config.mirror_config = mirrorConf
+
   // ── Root is left as Arch leaves it, and that is a decision ────────────────
   //
   // No `root_enc_password`. archinstall only touches root when that field is
