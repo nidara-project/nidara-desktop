@@ -20,6 +20,7 @@ import { RunStep } from "../steps/run"
 import { WINDOW_LAYOUT, WIZARD_LAYOUT, ROW_HEIGHT } from "../../lib/tokens"
 import { t, onLocaleChange } from "../lib/i18n"
 import { isPreview } from "../lib/preview"
+import { initGeoIpLookup } from "../lib/geoip"
 
 function header(onClose: () => void): {
   start: Gtk.Widget
@@ -55,6 +56,7 @@ function header(onClose: () => void): {
 }
 
 export function InstallerWindow(): Gtk.Window {
+  initGeoIpLookup()
   const steps: Step[] = [
     WelcomeStep(),
     RegionStep(),

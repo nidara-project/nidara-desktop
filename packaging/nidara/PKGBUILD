@@ -75,7 +75,7 @@ depends=(
   # imports — that typelib used to arrive via libastal-network. `upower` is now
   # load-bearing the same way: it owns UPowerGlib-1.0.typelib, which
   # core/BatteryService.ts imports.
-  networkmanager bluez bluez-libs bluez-utils upower accountsservice
+  networkmanager bluez bluez-libs bluez-utils upower accountsservice cups
   # `libwireplumber` is the same shape as `upower` above: it owns
   # Wp-0.5.typelib, which core/wireplumber.ts imports. It arrives as a
   # dependency of `wireplumber`, and that is exactly the accident this array

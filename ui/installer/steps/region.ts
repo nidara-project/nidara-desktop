@@ -44,9 +44,10 @@ import {
 } from "../lib/answers"
 import {
   countries, timezonesFor, allTimezones, localeFor,
-  keyboardsFor, defaultsFor,
+  keyboardsFor, defaultsFor, countryForTimezone,
   type Country,
 } from "../lib/region"
+import { getGeoIpSuggestion } from "../lib/geoip"
 // The WHOLE shared catalogue, the same 597 Settings offers (#498). It used to be
 // the bridged slice — the 58 systemd can name in both namespaces — on the reasoning
 // that this page writes the console keymap as well as the layout. Two things were
@@ -149,6 +150,8 @@ function scoped<T>(own: T[], all: T[], key: (x: T) => string): T[] {
 }
 
 export function RegionStep(): Step {
+  let suggestedCountryCode: string | null = null
+
   return {
     id: "region",
     title: () => t("regionTitle"),
@@ -163,17 +166,36 @@ export function RegionStep(): Step {
       return a.country !== null && a.language !== null && a.keyboard !== null && a.timezone !== null
     },
 
-    // The language chosen on the welcome page carries a TERRITORY, and it is a
-    // better first guess at the country than nothing: es_AR means Argentina.
-    // Only a suggestion, and only when nothing has been chosen — walking back to
-    // change the language must not silently move a country somebody picked.
+    // The country can be suggested by GeoIP (#491) or inferred from the language's
+    // territory. Only a suggestion, and only when nothing has been chosen — walking
+    // back to change the language must not silently move a country somebody picked.
     //
     // ⚠️ Deliberately NOT seeded from the medium's own en_US, which would suggest
     // the United States to every person on earth who has not answered yet. The
     // welcome page sets that locale as its default; a default is not an answer.
     onEnter() {
       const a = getAnswers()
-      if (a.country || !a.language || a.language.locale === "en_US.UTF-8") return
+      if (a.country) return
+
+      // GeoIP suggestion (#491): if connection provides a timezone and country,
+      // offer that country pre-selected with a visible, attenuated suggestion notice.
+      const geo = getGeoIpSuggestion()
+      if (geo) {
+        const territory = /^[a-z]+_([A-Z]+)/.exec(a.language?.locale ?? "")?.[1] ?? null
+        const countryCode = countryForTimezone(geo.timezone, territory) ?? geo.countryCode
+        const c = countries().find(x => x.code === countryCode)
+        if (c) {
+          suggestedCountryCode = c.code
+          const k = answerCountry(c)
+          if (timezonesFor(c.code).includes(geo.timezone)) {
+            setTimezoneAnswer({ timezone: geo.timezone })
+          }
+          if (k) applyKeyboardLive(k)
+          return
+        }
+      }
+
+      if (!a.language || a.language.locale === "en_US.UTF-8") return
       const territory = /^[a-z]+_([A-Z]+)/.exec(a.language.locale)?.[1]
       if (!territory) return
       const c = countries().find(x => x.code === territory)
@@ -214,7 +236,11 @@ export function RegionStep(): Step {
       const list = searchableList({
         placeholder: t("regionCountryPlaceholder"),
         items: named,
-        row: ({ c, label }, check) => NidaraRow(label, c.code, check),
+        row: ({ c, label }, check) => {
+          const isSuggested = suggestedCountryCode !== null && c.code === suggestedCountryCode && selectedCode === suggestedCountryCode
+          const subtitle = isSuggested ? `${c.code} — ${t("regionCountrySuggested")}` : c.code
+          return NidaraRow(label, subtitle, check)
+        },
         // The reader's name, tzdata's English one AND the code — not just what is
         // on screen. Matching only the display name is how the English list came
         // to be unfindable by typing "España"; matching only English is the same
@@ -333,6 +359,7 @@ export function RegionStep(): Step {
       }
 
       function selectCountry(c: Country) {
+        suggestedCountryCode = null
         selectedCode = c.code
         const k = answerCountry(c)
         if (k) applyKeyboardLive(k)
