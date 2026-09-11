@@ -66,6 +66,12 @@ end
 -- ── Monitor ───────────────────────────────────────────────────────────────────
 -- Per-monitor overrides live in nidara-monitor.lua (sourced at the bottom).
 hl.monitor({ output = "", mode = "preferred", position = "auto", scale = "auto" })
+-- Virtual machines (QEMU/KVM/VirtualBox): DRM advertises 640x480@144Hz, which
+-- Hyprland's "preferred" algorithm chooses because of the high refresh rate.
+-- Default virtual displays to 1920x1080@60 unless overridden by nidara-monitor.lua.
+hl.monitor({ output = "Virtual-1", mode = "1920x1080@60", position = "auto", scale = 1 })
+hl.monitor({ output = "Virtual-0", mode = "1920x1080@60", position = "auto", scale = 1 })
+hl.monitor({ output = "Virtual1",  mode = "1920x1080@60", position = "auto", scale = 1 })
 
 
 -- ── Look & feel ───────────────────────────────────────────────────────────────

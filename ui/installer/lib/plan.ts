@@ -32,6 +32,7 @@ export interface ArchinstallUser {
 
 export interface ArchinstallCreds {
   users: ArchinstallUser[]
+  encryption_password?: string
 }
 
 export interface AssembledPlan {
@@ -257,7 +258,6 @@ export function assemblePlan(
     config.packages = [...merged]
   }
 
-
   // ── Root is left as Arch leaves it, and that is a decision ────────────────
   //
   // No `root_enc_password`. archinstall only touches root when that field is
@@ -278,6 +278,13 @@ export function assemblePlan(
         enc_password: hashPassword(account.password),
       },
     ],
+  }
+
+  if (answers.disk?.mode === "entire_disk" && answers.disk.encryption?.enabled) {
+    if (!answers.disk.encryption.passphrase) {
+      throw new Error("Disk encryption is enabled but no passphrase was provided")
+    }
+    creds.encryption_password = answers.disk.encryption.passphrase
   }
 
   // Dump support for debugging/inspection

@@ -103,7 +103,23 @@ app.start({
     //   DISK_PROBE_SEED=swap  a swap row: the filesystem cell has no question to
     //                         ask, so it says `swap` and is not a choice (#423)
     const seed = GLib.getenv("DISK_PROBE_SEED")
-    if (seed) {
+    if (seed === "enc") {
+      setDiskAnswer({
+        mode: "entire_disk",
+        disk: {
+          name: "sda",
+          path: "/dev/sda",
+          size: 1000204886016,
+          model: "CT1000MX500SSD1",
+          type: "disk",
+        },
+        filesystem: "btrfs",
+        encryption: {
+          enabled: true,
+          passphrase: "secretpassword",
+        },
+      })
+    } else if (seed) {
       const parts = listProbePartitions()
       const esp = parts.find(p => p.fstype === "vfat") ?? parts[0]
       const root = parts.filter(p => p !== esp).sort((a, b) => b.size - a.size)[0] ?? parts[0]
@@ -128,7 +144,7 @@ app.start({
 
     if (seed) {
       const a: any = getAnswers().disk
-      console.log("[disk-probe] seeded: " + JSON.stringify(a.mounts.map((m: any) => `${m.path}→${m.mountpoint}`)))
+      console.log("[disk-probe] seeded: " + (a.mounts ? JSON.stringify(a.mounts.map((m: any) => `${m.path}→${m.mountpoint}`)) : JSON.stringify(a)))
     }
 
     const step = DiskStep()
@@ -304,6 +320,18 @@ app.start({
       //     LANG=$l.UTF-8 DISK_PROBE_ONCE=1 /tmp/disk-probe 2>&1 | grep 'pane required'
       //   done
       if (GLib.getenv("DISK_PROBE_ONCE") === "1") app.quit()
+
+      const snapPath = GLib.getenv("DISK_PROBE_SCREENSHOT")
+      if (snapPath) {
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => {
+          exec(["grim", snapPath])
+          GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+            app.quit()
+            return GLib.SOURCE_REMOVE
+          })
+          return GLib.SOURCE_REMOVE
+        })
+      }
     })
 
     // Big enough that the whole page is on screen at once — the probe exists to

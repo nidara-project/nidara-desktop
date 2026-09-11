@@ -85,7 +85,7 @@ function applyKeyboardLive(k: KeyboardLayout) {
   // ONE eval — two would leave a frame configured with the new layout and the old
   // variant. Same form as the greeter's LocaleBar.
   const expr = `hl.config({ input = { kb_layout = "${luaStr(k.layout)}", kb_variant = "${luaStr(k.variant)}" } })`
-  execAsync(["hyprctl", "eval", expr])
+  execAsync(["hyprctl", "-i", "0", "eval", expr])
     .catch(e => console.warn("[region] live keyboard change:", e))
 }
 

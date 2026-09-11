@@ -70,61 +70,12 @@ export function SystemStep(): Step {
         notifyReady()
       }
 
-      // ── Kernel Selection ──────────────────────────────────────────────────
-      const { box: kernelContainer, listBox: kernelListBox } = NidaraList(
-        t("systemKernelSection"),
-        [],
-        "",
-        { pick: true },
-      )
-      kernelContainer.set_margin_bottom(4)
-
-      const checkLinux = NidaraSelectionCheck(16)
-      const checkLts = NidaraSelectionCheck(16)
-      const checkZen = NidaraSelectionCheck(16)
-
-      const rowLinux = NidaraRow(t("kernelLinuxTitle"), t("kernelLinuxDesc"), checkLinux)
-      const rowLts = NidaraRow(t("kernelLtsTitle"), t("kernelLtsDesc"), checkLts)
-      const rowZen = NidaraRow(t("kernelZenTitle"), t("kernelZenDesc"), checkZen)
-
-      const updateKernelSelection = (selected: KernelOption) => {
-        draft.kernel = selected
-        rowLinux.remove_css_class("is-selected")
-        rowLts.remove_css_class("is-selected")
-        rowZen.remove_css_class("is-selected")
-
-        checkLinux.visible = selected === "linux"
-        checkLts.visible = selected === "linux-lts"
-        checkZen.visible = selected === "linux-zen"
-
-        if (selected === "linux") rowLinux.add_css_class("is-selected")
-        else if (selected === "linux-lts") rowLts.add_css_class("is-selected")
-        else if (selected === "linux-zen") rowZen.add_css_class("is-selected")
-
-        renderGpuSection()
-        syncAnswer()
-      }
-
-      rowLinux.connect("activate", () => updateKernelSelection("linux"))
-      rowLts.connect("activate", () => updateKernelSelection("linux-lts"))
-      rowZen.connect("activate", () => updateKernelSelection("linux-zen"))
-
-      kernelListBox.append(rowLinux)
-      kernelListBox.append(rowLts)
-      kernelListBox.append(rowZen)
-
-      // Initial visual selection
-      updateKernelSelection(draft.kernel)
-
-      rootBox.append(kernelContainer)
-
       // ── Hardware Graphics Drivers ─────────────────────────────────────────
       const { box: gfxContainer, listBox: gfxListBox } = NidaraList(
         t("systemGraphicsSection"),
         [],
         "",
       )
-      rootBox.append(gfxContainer)
 
       function renderGpuSection() {
         // Clear previous rows from gfxListBox
@@ -173,6 +124,57 @@ export function SystemStep(): Step {
           ))
         }
       }
+
+      // ── Kernel Selection ──────────────────────────────────────────────────
+      const { box: kernelContainer, listBox: kernelListBox } = NidaraList(
+        t("systemKernelSection"),
+        [],
+        "",
+        { pick: true },
+      )
+      kernelContainer.set_margin_bottom(4)
+
+      const checkLinux = NidaraSelectionCheck(16)
+      const checkLts = NidaraSelectionCheck(16)
+      const checkZen = NidaraSelectionCheck(16)
+
+      const rowLinux = NidaraRow(t("kernelLinuxTitle"), t("kernelLinuxDesc"), checkLinux)
+      const rowLts = NidaraRow(t("kernelLtsTitle"), t("kernelLtsDesc"), checkLts)
+      const rowZen = NidaraRow(t("kernelZenTitle"), t("kernelZenDesc"), checkZen)
+
+      const updateKernelSelection = (selected: KernelOption) => {
+        draft.kernel = selected
+        rowLinux.remove_css_class("is-selected")
+        rowLts.remove_css_class("is-selected")
+        rowZen.remove_css_class("is-selected")
+
+        checkLinux.visible = selected === "linux"
+        checkLts.visible = selected === "linux-lts"
+        checkZen.visible = selected === "linux-zen"
+
+        if (selected === "linux") rowLinux.add_css_class("is-selected")
+        else if (selected === "linux-lts") rowLts.add_css_class("is-selected")
+        else if (selected === "linux-zen") rowZen.add_css_class("is-selected")
+
+        renderGpuSection()
+        syncAnswer()
+      }
+
+      kernelListBox.connect("row-activated", (_, row) => {
+        if (row === rowLinux) updateKernelSelection("linux")
+        else if (row === rowLts) updateKernelSelection("linux-lts")
+        else if (row === rowZen) updateKernelSelection("linux-zen")
+      })
+
+      kernelListBox.append(rowLinux)
+      kernelListBox.append(rowLts)
+      kernelListBox.append(rowZen)
+
+      // Initial visual selection
+      updateKernelSelection(draft.kernel)
+
+      rootBox.append(kernelContainer)
+      rootBox.append(gfxContainer)
 
       if (draft.gpus === null) {
         detectGpus().then(gpus => {

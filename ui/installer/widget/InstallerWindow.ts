@@ -17,7 +17,7 @@ import { AccountStep } from "../steps/account"
 import { SystemStep } from "../steps/system"
 import { SummaryStep } from "../steps/summary"
 import { RunStep } from "../steps/run"
-import { WINDOW_LAYOUT, WIZARD_LAYOUT, ROW_HEIGHT } from "../../lib/tokens"
+import { WINDOW_LAYOUT, WIZARD_LAYOUT, ROW_HEIGHT, minWindowWidthFor } from "../../lib/tokens"
 import { t, onLocaleChange } from "../lib/i18n"
 import { isPreview } from "../lib/preview"
 import { initGeoIpLookup } from "../lib/geoip"
@@ -122,8 +122,11 @@ export function InstallerWindow(): Gtk.Window {
   const closeActionBtn = NidaraButton({ label: t("runClose"), variant: "secondary" })
   const restartActionBtn = NidaraButton({ label: t("runRestart"), variant: "primary" })
 
+  let isShowingAlert = false
+
   back.connect("clicked", () => flow.back())
   next.connect("clicked", () => {
+    if (isShowingAlert) return
     const step = flow.current()
     if (step.ready && !step.ready()) return
     // The last click before the install is a different kind of click, and it used
@@ -135,15 +138,21 @@ export function InstallerWindow(): Gtk.Window {
       flow.next()
       return
     }
+    isShowingAlert = true
+    next.sensitive = false
     showNidaraAlert({
       parent: win,
       heading: confirm.heading,
       body: confirm.body,
       responses: [
-        { id: "cancel", label: confirm.cancelLabel, suggested: true },
-        { id: "proceed", label: confirm.confirmLabel, destructive: true },
+        { id: "cancel", label: confirm.cancelLabel },
+        { id: "proceed", label: confirm.confirmLabel, suggested: true },
       ],
-      onResponse: (id) => { if (id === "proceed") flow.next() },
+      onResponse: (id) => {
+        isShowingAlert = false
+        next.sensitive = true
+        if (id === "proceed") flow.next()
+      },
     })
   })
   closeActionBtn.connect("clicked", () => shell.close())
@@ -197,9 +206,9 @@ export function InstallerWindow(): Gtk.Window {
   // under them) is what the window asks for, and the scroller goes back to being
   // what a scroller is for: the case where the window is smaller than that.
   const { widget: scrolledContent, scrolled } = NidaraScrolled({
-    child: NidaraClamp(flow.widget, WINDOW_LAYOUT.wizardContent, true, WINDOW_LAYOUT.wizardContent),
+    child: NidaraClamp(flow.widget, WINDOW_LAYOUT.wizardContent, true, WINDOW_LAYOUT.contentFloor),
     reserveLane: false,
-    hscrollPolicy: Gtk.PolicyType.EXTERNAL,
+    hscrollPolicy: Gtk.PolicyType.AUTOMATIC,
     propagateNaturalHeight: true,
     cornerRadius: NIDARA_WINDOW_RADIUS,
     cssClasses: ["installer-page-scroll"],
@@ -265,21 +274,21 @@ export function InstallerWindow(): Gtk.Window {
     onClose: () => {
         if (!canExit()) return true
         if (confirmedQuit || flow.currentIndex() === 0) return false
-        // ⚠️ The body depends on WHERE the flow is. "Nothing has been written to
-        // the disk" is true on every page before the install and flatly wrong
-        // after one — and it is the sentence somebody reads while deciding
-        // whether it is safe to close (D-28). Reaching the run step at all means
-        // the install was started; not being busy there means it has finished.
-        const installed = flow.current().id === "run"
+        // Once the install step is reached and finished, closing requires no confirmation
+        if (flow.current().id === "run") return false
+        if (isShowingAlert) return true
+
+        isShowingAlert = true
         showNidaraAlert({
             parent: win,
             heading: t("quitHeading"),
-            body: installed ? t("quitBodyAfter") : t("quitBody"),
+            body: t("quitBody"),
             responses: [
                 { id: "stay", label: t("quitStay"), suggested: true },
                 { id: "quit", label: t("quitConfirm"), destructive: true },
             ],
             onResponse: (id) => {
+                isShowingAlert = false
                 if (id !== "quit") return
                 confirmedQuit = true
                 shell.close()
@@ -341,29 +350,47 @@ export function InstallerWindow(): Gtk.Window {
   // it left the gutter out and the window opened 852 instead of 898, with the page
   // flush against the sidebar on one side and the glass rim on the other.
   const openWidth = win.default_width
+  const minFloorWidth = minWindowWidthFor(WINDOW_LAYOUT.contentFloor)
+  const monitorWidths = app.get_monitors().map(m => m.get_geometry().width).filter(w => w > 0)
   const monitorHeights = app.get_monitors().map(m => m.get_geometry().height).filter(h => h > 0)
+
+  if (monitorWidths.length > 0) {
+    const minMonWidth = Math.min(...monitorWidths)
+    const maxAllowedWidth = Math.round(minMonWidth * WIZARD_LAYOUT.maxMonitorFraction)
+    if (openWidth > maxAllowedWidth) {
+      win.default_width = Math.max(minFloorWidth, maxAllowedWidth)
+    }
+  }
+
   const cap = Math.round(
       Math.min(...(monitorHeights.length ? monitorHeights : [WINDOW_LAYOUT.minHeight]))
       * WIZARD_LAYOUT.maxMonitorFraction,
   )
-  const [, chromeHeight] = shell.glass.measure(Gtk.Orientation.VERTICAL, openWidth)
-  const [, columnHeight] = shell.contentColumn!.measure(Gtk.Orientation.VERTICAL, WINDOW_LAYOUT.wizardContent)
+  const [, chromeHeight] = shell.glass.measure(Gtk.Orientation.VERTICAL, win.default_width)
+  const [, columnHeight] = shell.contentColumn!.measure(Gtk.Orientation.VERTICAL, Math.min(WINDOW_LAYOUT.wizardContent, win.default_width))
   const listBudget = (WIZARD_LAYOUT.listRows - WIZARD_LAYOUT.minListRows) * ROW_HEIGHT.double
-  // The HEIGHT only. `set_default_size` would take the width with it, and the
-  // width is not ours to state.
+  const effectiveMinHeight = Math.min(WINDOW_LAYOUT.minHeight, cap)
   win.default_height = Math.max(
-      WINDOW_LAYOUT.minHeight,
+      effectiveMinHeight,
       Math.min(chromeHeight + columnHeight + listBudget, cap),
   )
   win.connect("destroy", () => app.quit())
 
-  function sync() {
-    if (scrolled?.vadjustment) {
-      scrolled.vadjustment.value = 0
-    }
+  let lastStepIndex = -1
 
+  function sync() {
     const step = flow.current()
     const index = flow.currentIndex() + 1
+
+    // Only reset scroll position when transitioning between different steps.
+    // Resetting on every sync() breaks form entry: any keystroke that triggers
+    // validation (notifyReady) would scroll the page to top and steal focus.
+    if (index !== lastStepIndex) {
+      lastStepIndex = index
+      if (scrolled?.vadjustment) {
+        scrolled.vadjustment.value = 0
+      }
+    }
     const title = typeof step.title === "function" ? step.title() : step.title
     const nextLabel = typeof step.nextLabel === "function" ? step.nextLabel() : step.nextLabel
 
@@ -424,6 +451,7 @@ export function InstallerWindow(): Gtk.Window {
   // that handler is still running on. Let the emission finish first.
   onLocaleChange(() => {
     GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      lastStepIndex = -1
       flow.invalidate()
       sync()
       return GLib.SOURCE_REMOVE

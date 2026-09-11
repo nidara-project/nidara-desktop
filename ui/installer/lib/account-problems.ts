@@ -108,36 +108,28 @@ export interface AccountProblems {
  *   mismatch messages do not: those describe something that is actually typed.
  */
 export function accountProblems(f: AccountFields, touched: boolean): AccountProblems {
-  // ⚠️ EVERY fault, not the first one (D-20). This used to fill a single string
-  // and stop at the first `if`, so a form with a bad username AND mismatched
-  // passwords reported one fault, and the next only after the first was fixed:
-  // the person fixes what they were told, presses Continue, and it is dead again
-  // for a different reason nobody mentioned.
   let username = ""
-  if (f.username.length === 0) {
-    if (touched) username = t("accountErrUsernameRequired")
-  } else if (!USERNAME_REGEX.test(f.username)) {
-    username = t("accountErrUsernameFormat")
-  } else if (SYSTEM_USERS.has(f.username)) {
-    username = t("accountErrUsernameReserved")
+  if (f.username.length > 0) {
+    if (!USERNAME_REGEX.test(f.username)) {
+      username = t("accountErrUsernameFormat")
+    } else if (SYSTEM_USERS.has(f.username)) {
+      username = t("accountErrUsernameReserved")
+    }
   }
 
   let hostname = ""
-  if (f.hostname.length === 0) {
-    if (touched) hostname = t("accountErrHostnameRequired")
-  } else if (!HOSTNAME_REGEX.test(f.hostname)) {
-    hostname = t("accountErrHostnameFormat")
+  if (f.hostname.length > 0) {
+    if (!HOSTNAME_REGEX.test(f.hostname)) {
+      hostname = t("accountErrHostnameFormat")
+    }
   }
 
-  const password = f.password.length === 0 && touched ? t("accountErrPasswordRequired") : ""
+  const password = ""
 
-  // The mismatch belongs to the SECOND field, and only once there is something in
-  // it to compare: a message that appears on the first keystroke of a
-  // confirmation is a message that is wrong for as long as it takes to type the
-  // rest of it.
   let confirm = ""
-  if (f.confirm.length > 0 && f.password !== f.confirm) confirm = t("accountErrPasswordMismatch")
-  else if (f.confirm.length === 0 && f.password.length > 0 && touched) confirm = t("accountErrPasswordConfirm")
+  if (f.confirm.length > 0 && f.password !== f.confirm) {
+    confirm = t("accountErrPasswordMismatch")
+  }
 
   const valid = f.username.length > 0
     && USERNAME_REGEX.test(f.username)

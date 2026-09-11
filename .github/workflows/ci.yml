@@ -488,6 +488,26 @@ jobs:
           cp /tmp/manual-problems.bak ui/installer/lib/manual-problems.ts
           git diff --quiet ui/installer/lib/manual-problems.ts
 
+      - name: The disk encryption probe can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/disk-config.ts /tmp/disk-config.bak
+          sed -i 's|if (answer.encryption?.enabled) {|if (false \&\& answer.encryption?.enabled) {|' \
+            ui/installer/lib/disk-config.ts
+          if ! git diff --quiet ui/installer/lib/disk-config.ts; then
+            echo "control: encryption block emission was disabled"
+          else
+            echo "::error::the control patched nothing — the rule it disables has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/disk-config-probe.ts /tmp/probe-defect-enc.js
+          if gjs -m /tmp/probe-defect-enc.js; then
+            echo "::error::the probe passed with encryption emission disabled — it is not checking encryption"
+            cp /tmp/disk-config.bak ui/installer/lib/disk-config.ts
+            exit 1
+          fi
+          cp /tmp/disk-config.bak ui/installer/lib/disk-config.ts
+          git diff --quiet ui/installer/lib/disk-config.ts
+
       - name: The layouts we emit and the ones we refuse (must succeed)
         run: |
           ./scripts/bundle.sh --js scripts/dev/disk-config-probe.ts /tmp/probe.js
@@ -632,34 +652,7 @@ jobs:
           ./scripts/bundle.sh --js scripts/dev/mirror-probe.ts /tmp/mirror-probe.js
           gjs -m /tmp/mirror-probe.js
 
-      # Fifth of the same shape: GeoIP timezone mapping (#491). The probe checks
-      # that IANA timezones map to the ISO country code. A broken lookup or deleted
-      # countryForTimezone mapping must fail the probe.
-      - name: The geoip probe can fail (control, must be caught)
-        run: |
-          cp ui/installer/lib/region.ts /tmp/region.bak
-          sed -i 's|return row.codes\[0\]|return null // deliberately broken|' ui/installer/lib/region.ts
-          if ! git diff --quiet ui/installer/lib/region.ts; then
-            echo "control: countryForTimezone fallback removed"
-          else
-            echo "::error::the control patched nothing — the return statement has moved or been rewritten"
-            exit 1
-          fi
-          ./scripts/bundle.sh --js scripts/dev/geoip-probe.ts /tmp/geoip-defect.js
-          if gjs -m /tmp/geoip-defect.js; then
-            echo "::error::the probe passed while countryForTimezone returned null — it is not checking what it prints"
-            cp /tmp/region.bak ui/installer/lib/region.ts
-            exit 1
-          fi
-          cp /tmp/region.bak ui/installer/lib/region.ts
-          git diff --quiet ui/installer/lib/region.ts
-
-      - name: GeoIP timezone suggestion and IANA mapping (must succeed)
-        run: |
-          ./scripts/bundle.sh --js scripts/dev/geoip-probe.ts /tmp/geoip-probe.js
-          gjs -m /tmp/geoip-probe.js
-
-      # Sixth of the same shape (#311, #495). `lib/graphics.ts` detects GPU
+      # Fifth of the same shape (#311, #495). `lib/graphics.ts` detects GPU
       # hardware and maps the kernel to the correct NVIDIA driver packages.
       # `lib/plan.ts` injects the chosen kernel and packages while stripping
       # archinstall's inert `profile_config.gfx_driver`.
@@ -687,6 +680,32 @@ jobs:
           ./scripts/bundle.sh --js scripts/dev/graphics-kernel-probe.ts /tmp/graphics-kernel-probe.js
           gjs -m /tmp/graphics-kernel-probe.js
 
+      # GeoIP timezone mapping (#491). The probe checks that IANA timezones map
+      # to the ISO country code. A broken lookup or deleted countryForTimezone
+      # mapping must fail the probe.
+      - name: The geoip probe can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/region.ts /tmp/region.bak
+          sed -i 's|return row.codes\[0\]|return null // deliberately broken|' ui/installer/lib/region.ts
+          if ! git diff --quiet ui/installer/lib/region.ts; then
+            echo "control: countryForTimezone fallback removed"
+          else
+            echo "::error::the control patched nothing — the return statement has moved or been rewritten"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/geoip-probe.ts /tmp/geoip-defect.js
+          if gjs -m /tmp/geoip-defect.js; then
+            echo "::error::the probe passed while countryForTimezone returned null — it is not checking what it prints"
+            cp /tmp/region.bak ui/installer/lib/region.ts
+            exit 1
+          fi
+          cp /tmp/region.bak ui/installer/lib/region.ts
+          git diff --quiet ui/installer/lib/region.ts
+
+      - name: GeoIP timezone suggestion and IANA mapping (must succeed)
+        run: |
+          ./scripts/bundle.sh --js scripts/dev/geoip-probe.ts /tmp/geoip-probe.js
+          gjs -m /tmp/geoip-probe.js
 
       # ⚠️ And the bundle itself, which nothing was building. The probes above
       # reach `lib/`, so a syntax error THERE has always been caught on the way

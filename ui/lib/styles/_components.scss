@@ -353,8 +353,7 @@ checkbutton:disabled {
     }
 }
 
-.nidara-table-row--error,
-.nidara-row--error {
+.nidara-table-row--error {
     background-color: var(--nidara-surface-raised);
     &:hover { background-color: var(--nidara-surface-strong); }
     .nidara-table-cell {

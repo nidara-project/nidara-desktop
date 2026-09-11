@@ -75,9 +75,9 @@ const CASES: Case[] = [
     fields: f({ password: "", confirm: "" }), touched: false, want: {}, valid: false,
   },
   {
-    name: "the same form once something has been typed — now it says what it needs",
+    name: "the form with empty password: not valid, but silent (no redundant error line)",
     fields: f({ password: "", confirm: "" }), touched: true,
-    want: { password: "accountErrPasswordRequired" }, valid: false,
+    want: {}, valid: false,
   },
   {
     name: "a capitalised username — useradd's rule, and the one people hit first",
@@ -133,9 +133,9 @@ const CASES: Case[] = [
     want: { confirm: "accountErrPasswordMismatch" }, valid: false,
   },
   {
-    name: "the confirmation not typed yet — asked for, not called a mismatch",
+    name: "the confirmation not typed yet — form not valid, but silent",
     fields: f({ confirm: "" }), touched: true,
-    want: { confirm: "accountErrPasswordConfirm" }, valid: false,
+    want: {}, valid: false,
   },
   {
     name: "the first keystroke of a confirmation IS a mismatch, and says so on that field",
@@ -149,15 +149,10 @@ const CASES: Case[] = [
     valid: false,
   },
   {
-    // Four bad fields, THREE messages: an empty confirmation of an empty password
-    // is not a fault, and saying it were would be a fourth complaint about
-    // something nobody has done yet.
-    name: "four bad fields, and deliberately only three messages",
+    name: "empty fields remain silent, while invalid format is reported",
     fields: f({ username: "", hostname: "bad_host", password: "", confirm: "" }), touched: true,
     want: {
-      username: "accountErrUsernameRequired",
       hostname: "accountErrHostnameFormat",
-      password: "accountErrPasswordRequired",
     },
     valid: false,
   },

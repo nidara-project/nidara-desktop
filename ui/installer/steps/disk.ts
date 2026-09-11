@@ -18,6 +18,7 @@ import {
   NidaraButton,
   NidaraSelectionCheck,
   NidaraTable,
+  NidaraFieldRow,
   type NidaraTableRow,
 } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
@@ -195,6 +196,12 @@ const mountLabels = () =>
 
 const FS_OPTIONS: FilesystemType[] = ["btrfs", "ext4", "xfs", "f2fs", "vfat"]
 
+let encryptionDraft = {
+  enabled: false,
+  passphrase: "",
+  confirm: "",
+}
+
 export function DiskStep(): Step {
   return {
     id: "disk",
@@ -213,7 +220,13 @@ export function DiskStep(): Step {
       if (!isUefi()) return false
       const a = getAnswers().disk
       if (!a) return false
-      if (a.mode === "entire_disk") return a.disk !== null
+      if (a.mode === "entire_disk") {
+        if (a.disk === null) return false
+        if (a.encryption?.enabled) {
+          return a.encryption.passphrase.length > 0
+        }
+        return true
+      }
       // The same list the page prints under the table — see manualProblems.
       if (a.mode === "manual") return manualProblems(a.mounts, isUefi()).length === 0
       return false
@@ -254,6 +267,13 @@ export function DiskStep(): Step {
         currentMode = existingAnswer.mode
         if (existingAnswer.mode === "entire_disk") {
           selectedDisk = existingAnswer.disk
+          if (existingAnswer.encryption) {
+            encryptionDraft = {
+              enabled: existingAnswer.encryption.enabled,
+              passphrase: existingAnswer.encryption.passphrase,
+              confirm: existingAnswer.encryption.passphrase,
+            }
+          }
         } else {
           for (const m of existingAnswer.mounts) {
             manualMounts.set(m.path, m)
@@ -269,10 +289,18 @@ export function DiskStep(): Step {
       const syncAnswer = () => {
         if (currentMode === "entire_disk") {
           if (selectedDisk) {
+            const isEncValid = !encryptionDraft.enabled || (
+              encryptionDraft.passphrase.length > 0 &&
+              encryptionDraft.passphrase === encryptionDraft.confirm
+            )
             setDiskAnswer({
               mode: "entire_disk",
               disk: selectedDisk,
               filesystem: ENTIRE_DISK_FS,
+              encryption: encryptionDraft.enabled ? {
+                enabled: true,
+                passphrase: isEncValid ? encryptionDraft.passphrase : "",
+              } : undefined,
             })
           } else {
             setDiskAnswer(null)
@@ -345,7 +373,12 @@ export function DiskStep(): Step {
       entireBox.append(prose(t("diskEntireFsNote")))
 
       const disks = listDisks()
-      const { box: diskListBoxContainer, listBox: diskListBox } = NidaraList("", [], "", { pick: true })
+      const { box: diskListBoxContainer, listBox: diskListBox } = NidaraList(
+        t("diskTargetSection"),
+        [],
+        "",
+        { pick: true },
+      )
       const diskRowMap = new Map<BlockDevice, Gtk.ListBoxRow>()
       const diskCheckMap = new Map<BlockDevice, Gtk.Widget>()
 
@@ -362,12 +395,17 @@ export function DiskStep(): Step {
         }
       }
 
+      let resetEncryptionOnDiskChange = () => {}
+
       if (disks.length === 0) {
         diskListBox.append(NidaraEmptyRow(t("diskNoDisks")))
       } else {
         if (!selectedDisk) selectedDisk = disks[0]
 
         const selectThisDisk = (disk: BlockDevice) => {
+          if (selectedDisk && selectedDisk.path !== disk.path) {
+            resetEncryptionOnDiskChange()
+          }
           selectedDisk = disk
           updateDiskSelection(disk)
           syncAnswer()
@@ -399,6 +437,164 @@ export function DiskStep(): Step {
       }
 
       entireBox.append(diskListBoxContainer)
+
+      // ──── Disk Encryption (LUKS) ──────────────────────────────────────
+      const encContainer = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 10,
+        hexpand: true,
+        visible: disks.length > 0,
+        margin_top: 4,
+      })
+
+      const encCheck = new Gtk.CheckButton({
+        active: encryptionDraft.enabled,
+        valign: Gtk.Align.START,
+      })
+      encCheck.update_property([Gtk.AccessibleProperty.LABEL], [t("diskEncryptToggle")])
+      encCheck.update_property([Gtk.AccessibleProperty.DESCRIPTION], [t("diskEncryptToggleDesc")])
+
+      const checkLabelBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 2,
+        margin_start: 8,
+        valign: Gtk.Align.CENTER,
+      })
+      const checkTitle = new Gtk.Label({
+        label: t("diskEncryptToggle"),
+        css_classes: ["installer-check-title"],
+        halign: Gtk.Align.START,
+        xalign: 0,
+      })
+      const checkDesc = new Gtk.Label({
+        label: t("diskEncryptToggleDesc"),
+        css_classes: ["installer-check-desc"],
+        halign: Gtk.Align.START,
+        xalign: 0,
+        wrap: true,
+      })
+      checkLabelBox.append(checkTitle)
+      checkLabelBox.append(checkDesc)
+      encCheck.set_child(checkLabelBox)
+
+      encContainer.append(encCheck)
+
+      const encDetailsBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 12,
+        hexpand: true,
+        visible: encryptionDraft.enabled,
+        margin_top: 2,
+      })
+
+      const encNoticeBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 6,
+        hexpand: true,
+      })
+      encNoticeBox.append(prose(t("diskEncryptNoticeBoot"), "installer-prose--dim"))
+      encNoticeBox.append(prose(t("diskEncryptNoticeLost"), "installer-prose--warning"))
+      encNoticeBox.append(prose(t("diskEncryptNoticeSecurity"), "installer-prose--dim"))
+
+      const kbAnswer = getAnswers().keyboard
+      if (kbAnswer && !kbAnswer.keymap) {
+        const fallback = kbAnswer.fallbackKeymap || "us"
+        encNoticeBox.append(
+          prose(t("diskEncryptNoticeKeyboard").replace("%s", fallback), "installer-prose--warning"),
+        )
+      }
+
+      encDetailsBox.append(encNoticeBox)
+
+      const { box: encFieldsContainer, listBox: encFieldsList } = NidaraList()
+
+      const pwEntry = new Gtk.PasswordEntry({
+        show_peek_icon: true,
+        hexpand: true,
+      })
+      if (encryptionDraft.passphrase) {
+        pwEntry.text = encryptionDraft.passphrase
+      }
+      pwEntry.update_property([Gtk.AccessibleProperty.LABEL], [t("diskEncryptPassword")])
+
+      const pw2Entry = new Gtk.PasswordEntry({
+        show_peek_icon: true,
+        hexpand: true,
+      })
+      if (encryptionDraft.confirm) {
+        pw2Entry.text = encryptionDraft.confirm
+      }
+      pw2Entry.update_property([Gtk.AccessibleProperty.LABEL], [t("diskEncryptConfirmPassword")])
+
+      const pwField = NidaraFieldRow(t("diskEncryptPassword"), "", pwEntry)
+      const pw2Field = NidaraFieldRow(t("diskEncryptConfirmPassword"), "", pw2Entry)
+
+      encFieldsList.append(pwField.row)
+      encFieldsList.append(pw2Field.row)
+      encDetailsBox.append(encFieldsContainer)
+
+      let encTouched = false
+
+      const validateEncryption = () => {
+        const pw = pwEntry.get_text?.() ?? pwEntry.text ?? ""
+        const pw2 = pw2Entry.get_text?.() ?? pw2Entry.text ?? ""
+        encryptionDraft.passphrase = pw
+        encryptionDraft.confirm = pw2
+
+        let pwErr = ""
+        let pw2Err = ""
+
+        if (encryptionDraft.enabled) {
+          if (pw2.length > 0 && pw !== pw2) {
+            pw2Err = t("accountErrPasswordMismatch")
+          }
+        }
+
+        pwField.setError(pwErr)
+        pw2Field.setError(pw2Err)
+
+        syncAnswer()
+      }
+
+      pwEntry.connect("changed", () => {
+        encTouched = true
+        validateEncryption()
+      })
+      pw2Entry.connect("changed", () => {
+        encTouched = true
+        validateEncryption()
+      })
+
+      encCheck.connect("toggled", () => {
+        const active = encCheck.get_active()
+        encryptionDraft.enabled = active
+        encDetailsBox.set_visible(active)
+        if (!active) {
+          encTouched = false
+          pwField.setError("")
+          pw2Field.setError("")
+        }
+        validateEncryption()
+        if (active) {
+          pwEntry.grab_focus()
+        }
+      })
+
+      resetEncryptionOnDiskChange = () => {
+        encryptionDraft.enabled = false
+        encCheck.set_active(false)
+        encDetailsBox.set_visible(false)
+        pwEntry.text = ""
+        pw2Entry.text = ""
+        encryptionDraft.passphrase = ""
+        encryptionDraft.confirm = ""
+        pwField.setError("")
+        pw2Field.setError("")
+        encTouched = false
+      }
+
+      encContainer.append(encDetailsBox)
+      entireBox.append(encContainer)
 
       stack.add_named(entireBox, "entire_disk")
 

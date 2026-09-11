@@ -64,6 +64,7 @@
 // fixtures are all well-behaved is the same thing wearing a check.
 
 import { entireDiskConfig, manualDiskConfig, espMount } from "../../ui/installer/lib/disk-config"
+import { assemblePlan } from "../../ui/installer/lib/plan"
 import { loaderRoot } from "../../ui/installer/lib/bootloader"
 import { swapFstabEntry } from "../../ui/installer/lib/swap"
 import { ESP_MIN_BYTES, manualProblems } from "../../ui/installer/lib/manual-problems"
@@ -146,6 +147,115 @@ for (const c of CASES) {
   } else {
     if (parts[1].mountpoint !== "/") fail(c.name, "a root without subvolumes must mount at /")
     if (parts[1].btrfs.length !== 0) fail(c.name, "subvolumes on a non-btrfs root")
+  }
+}
+
+// ─── ENTIRE-DISK ENCRYPTION (#310) ───────────────────────────────────────────
+{
+  const encAnswer: EntireDiskAnswer = {
+    mode: "entire_disk",
+    filesystem: "btrfs",
+    disk: {
+      name: "probe-enc",
+      path: "/dev/probe-enc",
+      size: 50 * 1024 * MIB,
+      model: null,
+      rm: false,
+      logicalSectorSize: 512,
+    },
+    encryption: {
+      enabled: true,
+      passphrase: "test-luks-passphrase",
+    },
+  }
+
+  const encConfig = entireDiskConfig(encAnswer)
+  const parts = encConfig.device_modifications[0].partitions
+  const espPart = parts[0]
+  const rootPart = parts[1]
+
+  if (!encConfig.disk_encryption) {
+    fail("encryption-enabled", "disk_encryption block is missing")
+  } else {
+    if (encConfig.disk_encryption.encryption_type !== "luks") {
+      fail("encryption-type", `expected "luks", got ${encConfig.disk_encryption.encryption_type}`)
+    }
+    if (!encConfig.disk_encryption.partitions.includes(rootPart.obj_id)) {
+      fail("encryption-root", "root partition obj_id is not in encrypted partitions list")
+    }
+    if (encConfig.disk_encryption.partitions.includes(espPart.obj_id)) {
+      fail("encryption-esp", "ESP partition must NEVER be in encrypted partitions list")
+    }
+    if (encConfig.disk_encryption.partitions.length !== 1) {
+      fail("encryption-partitions-count", `expected exactly 1 encrypted partition, got ${encConfig.disk_encryption.partitions.length}`)
+    }
+    if (!Array.isArray(encConfig.disk_encryption.lvm_volumes) || encConfig.disk_encryption.lvm_volumes.length !== 0) {
+      fail("encryption-lvm-empty", "lvm_volumes must be empty array")
+    }
+  }
+
+  const noEncAnswer: EntireDiskAnswer = {
+    mode: "entire_disk",
+    filesystem: "btrfs",
+    disk: {
+      name: "probe-no-enc",
+      path: "/dev/probe-no-enc",
+      size: 50 * 1024 * MIB,
+      model: null,
+      rm: false,
+      logicalSectorSize: 512,
+    },
+    encryption: {
+      enabled: false,
+      passphrase: "",
+    },
+  }
+
+  const noEncConfig = entireDiskConfig(noEncAnswer)
+  if (noEncConfig.disk_encryption) {
+    fail("encryption-disabled", "disk_encryption block must be omitted when disabled")
+  }
+
+  // Plan assembly check with credentials
+  const dummyBase = {
+    config: {
+      hostname: "nidara",
+      locale_config: { kb_layout: "us", sys_enc: "UTF-8", sys_lang: "en_US" },
+      custom_commands: [],
+      profile_config: {},
+      packages: [],
+    } as any,
+    raw: "{}",
+  }
+
+  const planEnc = assemblePlan(
+    {
+      account: { fullName: "User", username: "user", hostname: "nidara", password: "userpw" },
+      disk: encAnswer,
+    } as any,
+    dummyBase,
+  )
+
+  if (planEnc.creds.encryption_password !== "test-luks-passphrase") {
+    fail("plan-encryption-creds", `expected "test-luks-passphrase", got ${planEnc.creds.encryption_password}`)
+  }
+  if (!planEnc.config.disk_config.disk_encryption) {
+    fail("plan-encryption-config", "disk_encryption missing from plan config")
+  }
+
+  const planNoEnc = assemblePlan(
+    {
+      account: { fullName: "User", username: "user", hostname: "nidara", password: "userpw" },
+      disk: noEncAnswer,
+    } as any,
+    dummyBase,
+  )
+
+  if (planNoEnc.creds.encryption_password !== undefined) {
+    fail("plan-no-encryption-creds", "encryption_password must be undefined when disabled")
+  }
+  if (planNoEnc.config.disk_config.disk_encryption !== undefined) {
+    fail("plan-no-encryption-config", "disk_encryption must be undefined when disabled")
   }
 }
 
