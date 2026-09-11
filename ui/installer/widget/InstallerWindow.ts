@@ -14,6 +14,7 @@ import { WelcomeStep } from "../steps/welcome"
 import { RegionStep } from "../steps/region"
 import { DiskStep } from "../steps/disk"
 import { AccountStep } from "../steps/account"
+import { SystemStep } from "../steps/system"
 import { SummaryStep } from "../steps/summary"
 import { RunStep } from "../steps/run"
 import { WINDOW_LAYOUT, WIZARD_LAYOUT, ROW_HEIGHT } from "../../lib/tokens"
@@ -61,6 +62,7 @@ export function InstallerWindow(): Gtk.Window {
     RegionStep(),
     DiskStep(),
     AccountStep(),
+    SystemStep(),
     SummaryStep(),
     RunStep(),
   ]
@@ -76,6 +78,7 @@ export function InstallerWindow(): Gtk.Window {
     { id: "region", titleKey: "regionTitle", iconName: "globe" },
     { id: "disk", titleKey: "diskTitle", iconName: "hard-drive" },
     { id: "account", titleKey: "accountTitle", iconName: "user-round" },
+    { id: "system", titleKey: "systemTitle", iconName: "cpu" },
     { id: "summary", titleKey: "summaryTitle", iconName: "clipboard-list" },
     { id: "run", titleKey: "runTitle", iconName: "rocket" },
   ]

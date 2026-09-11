@@ -13,6 +13,7 @@
 // reversible after the next button.
 
 import Gtk from "gi://Gtk?version=4.0"
+import GLib from "gi://GLib"
 import type { Step } from "../lib/flow"
 import { NidaraList, NidaraRow } from "../../lib/nidara-kit"
 import { t, onLocaleChange, getLocale } from "../lib/i18n"
@@ -21,6 +22,7 @@ import { getAnswers, type ManualPartitionMount } from "../lib/answers"
 import { getLiveDefaults } from "../lib/plan"
 import { espMount } from "../lib/disk-config"
 import { readBaseConfig, basePackages, type BaseConfig } from "../lib/base-config"
+import { getNvidiaDriverPackages } from "../lib/graphics"
 import { heading, prose, formatSize } from "./common"
 
 /**
@@ -231,6 +233,19 @@ export function SummaryStep(): Step {
         const chosenTz = answers.timezone?.timezone ?? live.timezone
         chosen.listBox.append(NidaraRow(t("summaryTimezone"), chosenTz))
 
+        const chosenKernel = answers.system?.kernel ?? "linux"
+        chosen.listBox.append(NidaraRow(t("summaryKernel"), chosenKernel))
+
+        const system = answers.system
+        let gfxDesc = t("summaryGraphicsMesa")
+        if (system?.installNvidiaOpen) {
+          const driverPkg = getNvidiaDriverPackages(chosenKernel)[0]
+          gfxDesc = GLib.strdup_printf(t("summaryGraphicsOpenNvidia"), driverPkg)
+        } else if (system?.detectedGpus.some(g => g.vendor === "nvidia")) {
+          gfxDesc = t("summaryGraphicsNouveau")
+        }
+        chosen.listBox.append(NidaraRow(t("summaryGraphics"), gfxDesc))
+
         // ── What Nidara decided ──────────────────────────────────────────────
         // The filesystem is the first of these and NOT from base.json: entire-disk
         // mode installs btrfs and does not ask, because the subvolume layout is
@@ -256,23 +271,6 @@ export function SummaryStep(): Step {
           const packages = basePackages(config)
           if (packages.length > 0) {
             decided.listBox.append(NidaraRow(t("summaryPackages"), packages.join(" · ")))
-          }
-
-          const kernels = pick(config, ["kernels"])
-          if (Array.isArray(kernels) && kernels.length > 0) {
-            decided.listBox.append(NidaraRow(t("summaryKernel"), (kernels as string[]).join(" · ")))
-          }
-
-          const gfx = pick(config, ["profile_config", "gfx_driver"])
-          if (typeof gfx === "string" && gfx.length > 0) {
-            // The archinstall enum is the value we act on; the sentence is what
-            // it MEANS to somebody with an NVIDIA card in front of them, which is
-            // the disclosure the audit asked for. An unknown value is printed raw
-            // rather than glossed — a wrong gloss is worse than jargon.
-            decided.listBox.append(NidaraRow(
-              t("summaryGraphics"),
-              gfx === "All open-source" ? t("summaryGraphicsOpen") : gfx,
-            ))
           }
 
           const bootloader = pick(config, ["bootloader_config", "bootloader"])

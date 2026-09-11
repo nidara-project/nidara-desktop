@@ -123,6 +123,15 @@ export interface TimezoneAnswer {
   timezone: string
 }
 
+export type { KernelOption, DetectedGpu } from "./graphics"
+import type { KernelOption, DetectedGpu } from "./graphics"
+
+export interface SystemAnswer {
+  kernel: KernelOption
+  installNvidiaOpen: boolean
+  detectedGpus: DetectedGpu[]
+}
+
 export interface Answers {
   /** Asked first; it narrows the three below without answering them. */
   country: CountryAnswer | null
@@ -131,6 +140,7 @@ export interface Answers {
   timezone: TimezoneAnswer | null
   disk: DiskAnswer | null
   account: AccountAnswer | null
+  system: SystemAnswer | null
 }
 
 const _answers: Answers = {
@@ -140,6 +150,7 @@ const _answers: Answers = {
   timezone: null,
   disk: null,
   account: null,
+  system: null,
 }
 
 export function getAnswers(): Readonly<Answers> {
@@ -168,5 +179,9 @@ export function setDiskAnswer(disk: DiskAnswer | null): void {
 
 export function setAccountAnswer(account: AccountAnswer | null): void {
   _answers.account = account
+}
+
+export function setSystemAnswer(system: SystemAnswer | null): void {
+  _answers.system = system
 }
 

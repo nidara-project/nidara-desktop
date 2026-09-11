@@ -659,6 +659,35 @@ jobs:
           ./scripts/bundle.sh --js scripts/dev/geoip-probe.ts /tmp/geoip-probe.js
           gjs -m /tmp/geoip-probe.js
 
+      # Sixth of the same shape (#311, #495). `lib/graphics.ts` detects GPU
+      # hardware and maps the kernel to the correct NVIDIA driver packages.
+      # `lib/plan.ts` injects the chosen kernel and packages while stripping
+      # archinstall's inert `profile_config.gfx_driver`.
+      - name: The graphics and kernel probe can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/plan.ts /tmp/plan.bak
+          sed -i 's|config.kernels = \[kernel\]|config.kernels = ["linux"]|' ui/installer/lib/plan.ts
+          if ! git diff --quiet ui/installer/lib/plan.ts; then
+            echo "control: plan assembly now forces linux kernel regardless of choice"
+          else
+            echo "::error::the control patched nothing — the kernel assignment has moved or been rewritten"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/graphics-kernel-probe.ts /tmp/graphics-kernel-defect.js
+          if gjs -m /tmp/graphics-kernel-defect.js; then
+            echo "::error::the probe passed while kernel choice was ignored — it is not checking what it prints"
+            cp /tmp/plan.bak ui/installer/lib/plan.ts
+            exit 1
+          fi
+          cp /tmp/plan.bak ui/installer/lib/plan.ts
+          git diff --quiet ui/installer/lib/plan.ts
+
+      - name: Kernel and graphics package resolution (must succeed)
+        run: |
+          ./scripts/bundle.sh --js scripts/dev/graphics-kernel-probe.ts /tmp/graphics-kernel-probe.js
+          gjs -m /tmp/graphics-kernel-probe.js
+
+
       # ⚠️ And the bundle itself, which nothing was building. The probes above
       # reach `lib/`, so a syntax error THERE has always been caught on the way
       # in — but `steps/` and `app.ts` are in no job at all, and the installer is
