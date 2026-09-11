@@ -632,6 +632,33 @@ jobs:
           ./scripts/bundle.sh --js scripts/dev/mirror-probe.ts /tmp/mirror-probe.js
           gjs -m /tmp/mirror-probe.js
 
+      # Fifth of the same shape: GeoIP timezone mapping (#491). The probe checks
+      # that IANA timezones map to the ISO country code. A broken lookup or deleted
+      # countryForTimezone mapping must fail the probe.
+      - name: The geoip probe can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/region.ts /tmp/region.bak
+          sed -i 's|return row.codes\[0\]|return null // deliberately broken|' ui/installer/lib/region.ts
+          if ! git diff --quiet ui/installer/lib/region.ts; then
+            echo "control: countryForTimezone fallback removed"
+          else
+            echo "::error::the control patched nothing — the return statement has moved or been rewritten"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/geoip-probe.ts /tmp/geoip-defect.js
+          if gjs -m /tmp/geoip-defect.js; then
+            echo "::error::the probe passed while countryForTimezone returned null — it is not checking what it prints"
+            cp /tmp/region.bak ui/installer/lib/region.ts
+            exit 1
+          fi
+          cp /tmp/region.bak ui/installer/lib/region.ts
+          git diff --quiet ui/installer/lib/region.ts
+
+      - name: GeoIP timezone suggestion and IANA mapping (must succeed)
+        run: |
+          ./scripts/bundle.sh --js scripts/dev/geoip-probe.ts /tmp/geoip-probe.js
+          gjs -m /tmp/geoip-probe.js
+
       # ⚠️ And the bundle itself, which nothing was building. The probes above
       # reach `lib/`, so a syntax error THERE has always been caught on the way
       # in — but `steps/` and `app.ts` are in no job at all, and the installer is
