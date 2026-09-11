@@ -106,9 +106,16 @@ interface DeviceModification {
   partitions: Partition[]
 }
 
+export interface DiskEncryptionConfig {
+  encryption_type: "luks"
+  partitions: string[]
+  lvm_volumes: string[]
+}
+
 export interface DiskConfig {
   config_type: "manual_partitioning"
   device_modifications: DeviceModification[]
+  disk_encryption?: DiskEncryptionConfig
 }
 
 /**
@@ -221,7 +228,7 @@ export function entireDiskConfig(answer: EntireDiskAnswer): DiskConfig {
     btrfs: useSubvolumes ? SUBVOLUMES : [],
   }
 
-  return {
+  const config: DiskConfig = {
     config_type: "manual_partitioning",
     device_modifications: [
       {
@@ -234,6 +241,16 @@ export function entireDiskConfig(answer: EntireDiskAnswer): DiskConfig {
       },
     ],
   }
+
+  if (answer.encryption?.enabled) {
+    config.disk_encryption = {
+      encryption_type: "luks",
+      partitions: [root.obj_id],
+      lvm_volumes: [],
+    }
+  }
+
+  return config
 }
 
 // ─── MANUAL MODE ─────────────────────────────────────────────────────────────

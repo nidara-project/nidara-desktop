@@ -176,6 +176,10 @@ export function SummaryStep(): Step {
               t("summaryDisk"),
               `${d.model || d.name} · ${formatSize(d.size)} · ${d.path}${d.rm ? ` · ${t("diskRemovable")}` : ""}`,
             ))
+            chosen.listBox.append(NidaraRow(
+              t("summaryEncryption"),
+              disk.encryption?.enabled ? t("summaryEncryptionEnabled") : t("summaryEncryptionDisabled"),
+            ))
           } else {
             // ⚠️ ONE LINE PER MOUNT, not a comma-joined sentence (D-26). This is
             // the last screen before a disk is written, and what a reader has to

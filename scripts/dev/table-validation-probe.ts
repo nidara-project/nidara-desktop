@@ -240,21 +240,21 @@ if (listBox) {
         "Confirm password row wears .nidara-row--error",
     )
 
-    // Now test empty password with touched form -> reports password required
+    // Now test empty password with touched form -> empty fields remain silent, step not ready
     pEntry.set_text("")
     pEntry.emit("changed")
     cEntry.set_text("")
     cEntry.emit("changed")
     assert(
-        passwordF.errorLabel.visible && passwordF.errorLabel.label.length > 0,
-        `Password required error reported: "${passwordF.errorLabel.label}"`,
+        !passwordF.errorLabel.visible,
+        "Password field remains silent when empty",
     )
     assert(
-        passwordF.row.has_css_class("nidara-row--error"),
-        "Password row wears .nidara-row--error",
+        !passwordF.row.has_css_class("nidara-row--error"),
+        "Password row does not wear .nidara-row--error when empty",
     )
 
-    assert(!step.ready(), "Step remains not ready while faults are present")
+    assert(!step.ready(), "Step remains not ready while required fields are empty")
 
     // Fix all fields with valid inputs
     uEntry.set_text("nidara")

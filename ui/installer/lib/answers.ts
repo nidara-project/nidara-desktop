@@ -25,10 +25,16 @@ export interface BlockDevice {
   logicalSectorSize: number
 }
 
+export interface DiskEncryptionAnswer {
+  enabled: boolean
+  passphrase: string
+}
+
 export interface EntireDiskAnswer {
   mode: "entire_disk"
   disk: BlockDevice
   filesystem: FilesystemType
+  encryption?: DiskEncryptionAnswer
 }
 
 export interface ManualPartitionMount {

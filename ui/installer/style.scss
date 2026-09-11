@@ -125,6 +125,17 @@ window.nidara-installer-window {
   // without spending the red this DE reserves for recording and for failure.
   .installer-prose--warning { color: var(--nidara-text); font-weight: 500; }
 
+  .installer-check-title {
+    font-size: $fs-body;
+    font-weight: 500;
+    color: var(--nidara-text);
+  }
+
+  .installer-check-desc {
+    font-size: $fs-small;
+    color: var(--nidara-text-secondary);
+  }
+
   // The one sentence on the summary that says what cannot be undone (#401, D-25).
   // One step UP the ramp from page prose and heavier, because the page it leads
   // is two cards of fifteen rows and "this disk will be erased" must not read as
