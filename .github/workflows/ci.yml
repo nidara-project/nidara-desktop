@@ -471,7 +471,7 @@ jobs:
       - name: The probe can fail (control, must be caught)
         run: |
           cp ui/installer/lib/manual-problems.ts /tmp/manual-problems.bak
-          sed -i 's|^  if (root && !root.format) problems.push(t("diskErrRootNotFormatted"))|  // deliberately removed|' \
+          sed -i 's|^  if (root && !root.format) problems.push({ message: t("diskErrRootNotFormatted"), entry: root })|  // deliberately removed|' \
             ui/installer/lib/manual-problems.ts
           if ! git diff --quiet ui/installer/lib/manual-problems.ts; then
             echo "control: the root-format rule was removed"

@@ -841,16 +841,16 @@ for (const c of REFUSAL_CASES) {
   // `diskErrDuplicateMount` ends in the offending mount points, so the expected
   // message is a prefix rather than the whole string.
   const want = c.want.map(k => t(k as any))
-  const matched = want.filter(w => got.some(g => g.startsWith(w)))
-  const unexpected = got.filter(g => !want.some(w => g.startsWith(w)))
+  const matched = want.filter(w => got.some(g => g.message.startsWith(w)))
+  const unexpected = got.filter(g => !want.some(w => g.message.startsWith(w)))
 
   print(`   ${got.length === 0 ? "installable" : `${got.length} refusal(s)`.padEnd(11)}  ${c.name}`)
 
   if (matched.length !== want.length) {
-    fail(c.name, `expected ${JSON.stringify(c.want)}, got ${JSON.stringify(got)}`)
+    fail(c.name, `expected ${JSON.stringify(c.want)}, got ${JSON.stringify(got.map(g => g.message))}`)
   }
   if (unexpected.length > 0) {
-    fail(c.name, `refused for reasons this case did not expect: ${JSON.stringify(unexpected)}`)
+    fail(c.name, `refused for reasons this case did not expect: ${JSON.stringify(unexpected.map(g => g.message))}`)
   }
 }
 
