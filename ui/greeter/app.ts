@@ -4,8 +4,7 @@ import GLib from "gi://GLib"
 import Greeter from "./widget/Greeter"
 import { getPreferredUser } from "./lib/greeter-prefs"
 import { initProcessLocale } from "./lib/i18n"
-import { accentCssFor, ACCENT_HEX, type AccentKey } from "../lib/accent"
-import { setAccentRim } from "../lib/glass-capsule"
+import { initAppearance } from "../lib/nidara-kit"
 import { applyCrispFontRendering } from "../lib/font-rendering"
 import { chooseLoginSkin, applyLoginSkin } from "../lib/login-skin"
 
@@ -17,42 +16,6 @@ GLib.setenv("GTK_THEME", "nidara", true)
 const cssPath = GLib.file_test("./style.css", GLib.FileTest.EXISTS)
   ? "./style.css"
   : "/usr/share/nidara/ui/greeter/style.css"
-
-function readAppearanceJson(): Record<string, unknown> | null {
-  // Try the last-logged-in user's home dir first (works if /home/<user> is not
-  // 700). Fall back to /var/tmp/nidara/appearance.json — written by ThemeManager
-  // as a world-readable mirror so the greeter (system user) can always read it.
-  const candidates: string[] = [
-    `${getPreferredUser().homeDir}/.config/nidara/appearance.json`,
-    "/var/tmp/nidara/appearance.json",
-  ]
-  for (const path of candidates) {
-    try {
-      const [ok, data] = GLib.file_get_contents(path)
-      if (!ok) continue
-      return JSON.parse(new TextDecoder().decode(data as Uint8Array))
-    } catch { /* try next */ }
-  }
-  return null
-}
-
-function loadAccentCss(): string {
-  try {
-    const cfg = readAppearanceJson()
-    // ⚠️ THE PAINTED RIM NEEDS THE ACCENT AS A VALUE, not as a CSS custom property —
-    // the capsules are drawn in Cairo and cannot read one. The lockscreen's copy of
-    // this function has always done this; the greeter's did not, so its focus ring was
-    // hardcoded `#0088ff` (the `accentRim` default) no matter what accent the user
-    // picked, while every CSS-driven accent on the same screen followed them. Two
-    // functions with the same name, the same input and the same job, one line apart in
-    // behaviour — which is the shape this repo keeps finding under "the greeter and the
-    // lockscreen duplicate code" (tech-debt #60).
-    setAccentRim(ACCENT_HEX[cfg?.accent as AccentKey] ?? ACCENT_HEX.blue)
-    return accentCssFor(cfg?.accent as string | undefined)
-  } catch {
-    return ""
-  }
-}
 
 app.start({
   applicationId: "org.nidara.greeter",
@@ -74,12 +37,12 @@ app.start({
     const display = Gdk.Display.get_default()
     if (!display) { console.error("[Greeter] No display"); return }
 
-    const accentCss = loadAccentCss()
-    if (accentCss) {
-      // load_from_string with the same USER priority, but added AFTER the base CSS
-      // → same priority + later order = wins in GTK4 cascade
-      app.apply_css(accentCss)
-    }
+    // Initialize the token engine and accent rim for the greeter process.
+    // Runs with portal: false (system user) and inspects preferred user's home dir.
+    initAppearance({
+      portal: false,
+      homeDir: getPreferredUser().homeDir,
+    })
 
     // Login UI on the primary monitor only. The other outputs already show the
     // generic wallpaper painted by awww in the compositor (it covers all

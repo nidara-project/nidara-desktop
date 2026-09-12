@@ -4,8 +4,7 @@ import GLib from "gi://GLib"
 // @ts-ignore
 import Gtk4SessionLock from "gi://Gtk4SessionLock"
 import { Lock, LockOverlay } from "./widget/Lock"
-import { accentCssFor, ACCENT_HEX, type AccentKey } from "../lib/accent"
-import { setAccentRim } from "../lib/glass-capsule"
+import { initAppearance } from "../lib/nidara-kit"
 import { applyCrispFontRendering } from "../lib/font-rendering"
 import { chooseLoginSkin, applyLoginSkin } from "../lib/login-skin"
 import type { Skin } from "../lib/backdrop-skin"
@@ -16,21 +15,6 @@ GLib.setenv("GTK_THEME", "nidara", true)
 const cssPath = GLib.file_test("/usr/share/nidara/ui/greeter/style.css", GLib.FileTest.EXISTS)
   ? "/usr/share/nidara/ui/greeter/style.css"
   : "../greeter/style.css"
-
-function loadAccentCss(): string {
-  try {
-    const path = `${GLib.get_user_config_dir()}/nidara/appearance.json`
-    const [ok, data] = GLib.file_get_contents(path)
-    if (!ok) return ""
-    const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))
-    // The capsules are painted, not CSS-drawn, so the painter needs the accent
-    // as a value — it cannot read a CSS custom property (see GlassBackdrop.ts).
-    setAccentRim(ACCENT_HEX[cfg.accent as AccentKey] ?? ACCENT_HEX.blue)
-    return accentCssFor(cfg.accent as string | undefined)
-  } catch {
-    return ""
-  }
-}
 
 // The skin both window paths dress themselves in — decided ONCE, for the whole lock.
 //
@@ -68,9 +52,8 @@ app.start({
     const display = Gdk.Display.get_default()
     if (!display) { console.error("[Lock] No display"); return }
 
-    // Accent override: same USER priority but added AFTER base CSS → later wins
-    const accentCss = loadAccentCss()
-    if (accentCss) app.apply_css(accentCss)
+    // Initialize the token engine and accent rim for the lockscreen process.
+    initAppearance({ portal: false })
 
     // Which skin does this wallpaper want? (tech-debt #82 — see ui/lib/backdrop-skin.ts.)
     // Decided here, before any window exists, because both paths below create windows

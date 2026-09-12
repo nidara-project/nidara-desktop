@@ -66,6 +66,13 @@ export interface AppearanceOpts {
    * wrong user.
    */
   portal?: boolean
+
+  /**
+   * Optional home directory to inspect for user appearance file before falling back
+   * to system/default locations. Used when running under a service account (like greeter)
+   * that knows which user is logging in.
+   */
+  homeDir?: string
 }
 
 const APPEARANCE_NS = "org.freedesktop.appearance"
@@ -74,11 +81,16 @@ const PORTAL_BUS = "org.freedesktop.portal.Desktop"
 const PORTAL_PATH = "/org/freedesktop/portal/desktop"
 const PORTAL_IFACE = "org.freedesktop.portal.Settings"
 
-/** Where `ThemeManager` writes: the session's copy, then the world-readable mirror. */
-const FILE_PATHS = [
-  `${GLib.get_user_config_dir()}/nidara/appearance.json`,
-  "/var/tmp/nidara/appearance.json",
-]
+/** Where `ThemeManager` writes: the user copy, session's copy, then the world-readable mirror. */
+function candidateFilePaths(opts: AppearanceOpts = {}): string[] {
+  const paths: string[] = []
+  if (opts.homeDir) {
+    paths.push(`${opts.homeDir}/.config/nidara/appearance.json`)
+  }
+  paths.push(`${GLib.get_user_config_dir()}/nidara/appearance.json`)
+  paths.push("/var/tmp/nidara/appearance.json")
+  return paths
+}
 
 /** The defaults, as one object, so every "key missing" answer comes from one place. */
 const FALLBACK: AppearanceState = { ...DEFAULT_CONFIG, isDark: false }
@@ -98,12 +110,12 @@ function asGlass(v: unknown, dflt: number): number {
 // ── The file backend ─────────────────────────────────────────────────────────
 
 /** The first appearance file that exists, or null when this machine has none. */
-function filePath(): string | null {
-  return FILE_PATHS.find((p) => GLib.file_test(p, GLib.FileTest.EXISTS)) ?? null
+function filePath(opts: AppearanceOpts = {}): string | null {
+  return candidateFilePaths(opts).find((p) => GLib.file_test(p, GLib.FileTest.EXISTS)) ?? null
 }
 
-function readFileState(): AppearanceState | null {
-  for (const path of FILE_PATHS) {
+function readFileState(opts: AppearanceOpts = {}): AppearanceState | null {
+  for (const path of candidateFilePaths(opts)) {
     try {
       const [ok, data] = GLib.file_get_contents(path)
       if (!ok) continue
@@ -242,7 +254,7 @@ export function readAppearance(opts: AppearanceOpts = {}): AppearanceState {
     if (fromPortal) { lastSource = "portal"; base = fromPortal }
   }
   if (!base) {
-    const fromFile = readFileState()
+    const fromFile = readFileState(opts)
     if (fromFile) { lastSource = "file"; base = fromFile }
     else { lastSource = "defaults"; base = { ...FALLBACK } }
   }
@@ -306,7 +318,7 @@ export function watchAppearance(
   } catch {}
 
   // 3. Durable directory file monitors (catches atomic file renames)
-  for (const path of FILE_PATHS) {
+  for (const path of candidateFilePaths(opts)) {
     try {
       const dirPath = GLib.path_get_dirname(path)
       const targetBasename = GLib.path_get_basename(path)

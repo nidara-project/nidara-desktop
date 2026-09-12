@@ -308,6 +308,17 @@ function contrastVariant() {
     return new GLib.Variant("u", val)
 }
 
+function reducedMotionVariant() {
+    // 0: no preference (animations on), 1: reduced motion (animations off)
+    let val = 0
+    if (interfaceSettings) {
+        try {
+            if (!interfaceSettings.get_boolean("enable-animations")) val = 1
+        } catch (_) {}
+    }
+    return new GLib.Variant("u", val)
+}
+
 /**
  * Does this ReadAll's namespace list ask for `ns`?
  *
@@ -375,6 +386,7 @@ class SettingsBackend {
                 "accent-color": accentRgbVariant(),
                 "color-scheme": colorSchemeVariant(),
                 "contrast": contrastVariant(),
+                "reduced-motion": reducedMotionVariant(),
             }
         }
         if (nsMatches(namespaces, NIDARA_NS)) dict[NIDARA_NS] = nidaraKeys()
@@ -394,6 +406,10 @@ class SettingsBackend {
             }
             if (key === "contrast") {
                 invocation.return_value(new GLib.Variant("(v)", [contrastVariant()]))
+                return
+            }
+            if (key === "reduced-motion") {
+                invocation.return_value(new GLib.Variant("(v)", [reducedMotionVariant()]))
                 return
             }
         }
@@ -649,6 +665,13 @@ Gio.bus_own_name(
                 )
             })
         }
+
+        interfaceSettings.connect("changed::enable-animations", () => {
+            exportedSettings.emit_signal(
+                "SettingChanged",
+                new GLib.Variant("(ssv)", [APPEARANCE_NS, "reduced-motion", reducedMotionVariant()]),
+            )
+        })
 
         // Our namespace changes when the FILE changes, so the signal comes from a
         // file monitor rather than a gsettings key. Held in a module-level
