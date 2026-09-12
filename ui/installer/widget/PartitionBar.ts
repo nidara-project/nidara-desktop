@@ -1,4 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
 import Pango from "gi://Pango"
 import PangoCairo from "gi://PangoCairo"
 import { formatSize } from "../lib/format-size"
@@ -9,6 +10,7 @@ export interface PartitionBarSlice {
   key: string
   path: string
   label: string | null
+  partlabel?: string | null
   size: number
   start: number
   fstype: string | null
@@ -22,12 +24,14 @@ export interface PartitionBarOpts {
   diskSize: number
   slices: PartitionBarSlice[]
   showLegend?: boolean
+  diskSelector?: Gtk.Widget
   onSliceClick?: (slice: PartitionBarSlice) => void
 }
 
 export interface PartitionBarResult {
   widget: Gtk.Box
   updateSlices: (slices: PartitionBarSlice[]) => void
+  setSelectedKey: (key: string | null) => void
 }
 
 // Slice Color Scheme
@@ -69,6 +73,7 @@ function roundRectPath(cr: any, x: number, y: number, w: number, h: number, r: n
 export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
   let currentSlices = [...opts.slices]
   let hoveredIndex = -1
+  let selectedKey: string | null = null
 
   const container = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
@@ -89,13 +94,17 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
     headerBox.append(new Gtk.Image({ gicon: diskIcon, pixel_size: 16, css_classes: ["nd-icon"] }))
   }
 
-  const diskLabel = new Gtk.Label({
-    label: `${opts.diskName}  ·  ${formatSize(opts.diskSize)}  ·  ${opts.diskPath}`,
-    css_classes: ["installer-check-title"],
-    halign: Gtk.Align.START,
-    hexpand: true,
-  })
-  headerBox.append(diskLabel)
+  if (opts.diskSelector) {
+    headerBox.append(opts.diskSelector)
+  } else {
+    const diskLabel = new Gtk.Label({
+      label: `${opts.diskName}  ·  ${formatSize(opts.diskSize)}  ·  ${opts.diskPath}`,
+      css_classes: ["installer-check-title"],
+      halign: Gtk.Align.START,
+      hexpand: true,
+    })
+    headerBox.append(diskLabel)
+  }
   container.append(headerBox)
 
   // ── The Visual Canvas ──
@@ -106,7 +115,22 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
     css_classes: ["nidara-partition-bar-canvas"],
   })
   da.set_size_request(-1, 38)
-  da.has_tooltip = true
+
+  // Anchored popover tooltip (styled with Nidara glass theme, anchored stably to slice center)
+  const popover = new Gtk.Popover({
+    autohide: false,
+    can_focus: false,
+    cascade_popdown: false,
+    has_arrow: true,
+    position: Gtk.PositionType.BOTTOM,
+    css_classes: ["nidara-partition-popover"],
+  })
+  popover.set_parent(da)
+
+  const popoverLabel = new Gtk.Label({
+    css_classes: ["nidara-partition-popover-text"],
+  })
+  popover.set_child(popoverLabel)
 
   // Geometry calculation helper
   interface SliceLayout {
@@ -178,9 +202,10 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
     for (let i = 0; i < calculatedLayouts.length; i++) {
       const { slice, x, w, color } = calculatedLayouts[i]
       const isHovered = i === hoveredIndex
+      const isSelected = slice.key === selectedKey
 
-      // Base fill
-      const brightness = isHovered ? 1.25 : 1.0
+      // Base fill with highlight boost
+      const brightness = isSelected ? 1.35 : (isHovered ? 1.2 : 1.0)
       const r = Math.min(1.0, color.r * brightness)
       const g = Math.min(1.0, color.g * brightness)
       const b = Math.min(1.0, color.b * brightness)
@@ -208,16 +233,23 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
       cr.save()
       cr.rectangle(x, 0, w, height / 2)
       cr.clip()
-      cr.setSourceRGBA(1, 1, 1, isHovered ? 0.18 : 0.08)
+      cr.setSourceRGBA(1, 1, 1, isHovered || isSelected ? 0.22 : 0.08)
       cr.fill()
       cr.restore()
 
-      // Hover outline
-      if (isHovered) {
+      // Selection or Hover outline
+      if (isSelected) {
+        cr.save()
+        cr.setSourceRGBA(1, 1, 1, 0.95)
+        cr.setLineWidth(2.5)
+        cr.rectangle(x + 1.25, 1.25, Math.max(1, w - 2.5), height - 2.5)
+        cr.stroke()
+        cr.restore()
+      } else if (isHovered) {
         cr.save()
         cr.setSourceRGBA(1, 1, 1, 0.4)
         cr.setLineWidth(1.5)
-        cr.rectangle(x + 0.75, 0.75, w - 1.5, height - 1.5)
+        cr.rectangle(x + 0.75, 0.75, Math.max(1, w - 1.5), height - 1.5)
         cr.stroke()
         cr.restore()
       }
@@ -279,6 +311,27 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
       hoveredIndex = newIdx
       da.set_cursor_from_name(hoveredIndex >= 0 ? "pointer" : null)
       da.queue_draw()
+
+      if (hoveredIndex >= 0 && hoveredIndex < calculatedLayouts.length) {
+        const l = calculatedLayouts[hoveredIndex]
+        const s = l.slice
+        const displayLabel = s.partlabel || s.label
+        const nameStr = s.isFree ? t("diskFreeSpace") : s.path
+        const tagStr = displayLabel ? ` (${displayLabel})` : ""
+        const fsStr = s.fstype ? ` · ${s.fstype}` : ""
+        const mpStr = s.mountpoint ? ` → ${s.mountpoint}` : ""
+        popoverLabel.label = `${nameStr}${tagStr} · ${formatSize(s.size)}${fsStr}${mpStr}`
+
+        const rect = new Gdk.Rectangle()
+        rect.x = Math.round(l.x)
+        rect.y = 0
+        rect.width = Math.max(1, Math.round(l.w))
+        rect.height = 38
+        popover.set_pointing_to(rect)
+        popover.popup()
+      } else {
+        popover.popdown()
+      }
     }
   })
   motion.connect("leave", () => {
@@ -287,8 +340,13 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
       da.set_cursor_from_name(null)
       da.queue_draw()
     }
+    popover.popdown()
   })
   da.add_controller(motion)
+
+  da.connect("unmap", () => {
+    popover.popdown()
+  })
 
   const click = new Gtk.GestureClick()
   click.connect("pressed", (_, n_press: number, x: number) => {
@@ -296,27 +354,14 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
     for (let i = 0; i < calculatedLayouts.length; i++) {
       const l = calculatedLayouts[i]
       if (x >= l.x && x <= l.x + l.w) {
+        selectedKey = l.slice.key
+        da.queue_draw()
         opts.onSliceClick?.(l.slice)
         break
       }
     }
   })
   da.add_controller(click)
-
-  // Tooltip
-  da.connect("query-tooltip", (_, x: number, _y: number, _kb: boolean, tooltip: Gtk.Tooltip) => {
-    for (const l of calculatedLayouts) {
-      if (x >= l.x && x <= l.x + l.w) {
-        const s = l.slice
-        const name = s.isFree ? t("diskFreeSpace") : s.path
-        const fs = s.fstype ? ` (${s.fstype})` : ""
-        const mp = s.mountpoint ? `  →  ${s.mountpoint}` : ""
-        tooltip.set_text(`${name} · ${formatSize(s.size)}${fs}${mp}`)
-        return true
-      }
-    }
-    return false
-  })
 
   container.append(da)
 
@@ -329,6 +374,12 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
     updateSlices: (newSlices: PartitionBarSlice[]) => {
       currentSlices = [...newSlices]
       da.queue_draw()
+    },
+    setSelectedKey: (key: string | null) => {
+      if (selectedKey !== key) {
+        selectedKey = key
+        da.queue_draw()
+      }
     },
   }
 }

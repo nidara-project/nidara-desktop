@@ -45,6 +45,7 @@ interface RawBlockDevice {
   model?: string | null
   fstype?: string | null
   label?: string | null
+  partlabel?: string | null
   mountpoint?: string | null
   type: string
   rm?: boolean | string | number
@@ -90,6 +91,7 @@ interface DetectedPartition {
   logicalSectorSize: number
   fstype: string | null
   label: string | null
+  partlabel: string | null
   pkname: string | null
 }
 
@@ -115,7 +117,7 @@ function listPartitions(): DetectedPartition[] {
   try {
     const raw = exec([
       "lsblk", "-J", "-b", "-o",
-      "NAME,PATH,SIZE,FSTYPE,LABEL,MOUNTPOINT,TYPE,PKNAME,START,LOG-SEC",
+      "NAME,PATH,SIZE,FSTYPE,LABEL,PARTLABEL,MOUNTPOINT,TYPE,PKNAME,START,LOG-SEC",
     ])
     const parsed = JSON.parse(raw)
     const results: DetectedPartition[] = []
@@ -138,6 +140,7 @@ function listPartitions(): DetectedPartition[] {
               logicalSectorSize: Number(item["log-sec"] ?? parent?.["log-sec"]) || 512,
               fstype: item.fstype || null,
               label: item.label || null,
+              partlabel: item.partlabel || null,
               pkname: item.pkname || null,
             })
           }
@@ -618,11 +621,6 @@ export function DiskStep(): Step {
 
       // A partition editor that did not start, said where the rest of the page
       // says things. It goes through `refreshProblems` rather than into a label
-      // of its own because this page already has ONE place where it tells you
-      // what is wrong, and a second one is how a message ends up somewhere
-      // nobody is looking (D-19, and the reason the account form was rebuilt).
-      let editorError = ""
-
       const tableRowMap = new Map<string, NidaraTableRow>()
 
       refreshProblems = () => {
@@ -646,7 +644,6 @@ export function DiskStep(): Step {
 
         // Only problems with NO row belong in problemLabel above the table (#509)
         const unassigned = problems.filter(p => !p.entry).map(p => p.message)
-        if (editorError) unassigned.unshift(editorError)
         problemLabel.label = unassigned.join("\n")
         problemLabel.visible = unassigned.length > 0
       }
@@ -666,17 +663,9 @@ export function DiskStep(): Step {
       })
       manualBox.append(partitionBarsBox)
 
-      // ⚠️ The columns are the deliverable of #399, not decoration. A row used to
-      // be a path, a dropdown, a checkbox and another dropdown with nothing saying
-      // what any of them was (D-13) — the format checkbox carried its own label
-      // because it was the only one that could, which made it the only control on
-      // the row that read as a question.
-      //
-      // The mount point is the widest column and it is the one the page is FOR, so
-      // it is not squeezed: `WINDOW_LAYOUT.wizardContent` is derived from what this
-      // table measures (see the note there). Only the partition path expands.
       const table = NidaraTable([
-        { title: t("diskColPartition"), expand: true },
+        { title: t("diskColPartition") },
+        { title: t("diskColName"), expand: true, dim: true },
         { title: t("diskColSize"), align: Gtk.Align.END, dim: true },
         { title: t("diskMountpoint") },
         // Centred: the cell is a checkbox, which is a mark rather than a value,
@@ -688,6 +677,27 @@ export function DiskStep(): Step {
       manualBox.append(table.box)
 
       const rowFocusMap = new Map<string, Gtk.Widget>()
+      let selectedManualDiskPath = (selectedDisk ? selectedDisk.path : "")
+      let selectedPartitionKey: string | null = null
+      let activePartitionBar: PartitionBarResult | null = null
+
+      const selectPartition = (key: string | null, focusControl = true) => {
+        if (selectedPartitionKey === key && !focusControl) return
+        selectedPartitionKey = key
+
+        activePartitionBar?.setSelectedKey(key)
+
+        for (const [rKey, rowWidget] of tableRowMap.entries()) {
+          if (rKey === key) {
+            rowWidget.add_css_class("is-selected")
+            if (focusControl) {
+              rowFocusMap.get(rKey)?.grab_focus()
+            }
+          } else {
+            rowWidget.remove_css_class("is-selected")
+          }
+        }
+      }
 
       const buildPartitionsList = () => {
         table.clear()
@@ -733,7 +743,7 @@ export function DiskStep(): Step {
         const freeRows: RowSource[] = allDisks.flatMap(d =>
           freeSpaceGaps(d, partitions).map(g => ({
             name: "", path: "", device: g.device, start: g.start, size: g.size,
-            logicalSectorSize: g.logicalSectorSize, fstype: null, label: null, pkname: null,
+            logicalSectorSize: g.logicalSectorSize, fstype: null, label: null, partlabel: null, pkname: null,
             isFree: true, key: `free:${g.device}@${g.start}`,
           })))
         const rows: RowSource[] = [
@@ -756,11 +766,12 @@ export function DiskStep(): Step {
           return
         }
 
-        // ── Visual Partition Bars (Calamares-style interactive disk layout) ──
-        const diskBars: Array<{
-          diskPath: string
-          bar: PartitionBarResult
-        }> = []
+        const availableDisks = allDisks.filter(d => rows.some(r => r.device === d.path))
+        const diskList = availableDisks.length > 0 ? availableDisks : allDisks
+
+        if (!selectedManualDiskPath || !diskList.some(d => d.path === selectedManualDiskPath)) {
+          selectedManualDiskPath = diskList[0]?.path ?? ""
+        }
 
         const getSlicesForDisk = (diskPath: string): PartitionBarSlice[] => {
           return rows
@@ -771,6 +782,7 @@ export function DiskStep(): Step {
                 key: r.key,
                 path: r.path || r.key,
                 label: r.label,
+                partlabel: r.partlabel,
                 size: r.size,
                 start: r.start,
                 fstype: r.fstype,
@@ -780,65 +792,55 @@ export function DiskStep(): Step {
             })
         }
 
-        const uniqueDisks = Array.from(new Set(rows.map(r => r.device)))
-        for (let i = 0; i < uniqueDisks.length; i++) {
-          const dPath = uniqueDisks[i]
-          const d = allDisks.find(x => x.path === dPath)
-          const diskName = d ? (d.model || d.name) : dPath
-          const diskSize = d ? d.size : rows.filter(r => r.device === dPath).reduce((acc, r) => acc + r.size, 0)
-          const isLast = i === uniqueDisks.length - 1
-
-          const barResult = NidaraPartitionBar({
-            diskPath: dPath,
-            diskName,
-            diskSize,
-            slices: getSlicesForDisk(dPath),
-            showLegend: isLast,
-            onSliceClick: (slice) => {
-              rowFocusMap.get(slice.key)?.grab_focus()
-            },
+        let diskSelectorWidget: Gtk.Widget | undefined
+        if (diskList.length > 1) {
+          const diskLabels = diskList.map(d => `${d.model || d.name}  ·  ${formatSize(d.size)}  ·  ${d.path}`)
+          const diskDropDown = NidaraDropDown({
+            model: Gtk.StringList.new(diskLabels),
+            valign: Gtk.Align.CENTER,
           })
-          partitionBarsBox.append(barResult.widget)
-          diskBars.push({ diskPath: dPath, bar: barResult })
+          const currentDiskIdx = diskList.findIndex(d => d.path === selectedManualDiskPath)
+          if (currentDiskIdx >= 0) {
+            diskDropDown.set_selected(currentDiskIdx)
+          }
+          diskDropDown.connect("notify::selected", () => {
+            const selIdx = diskDropDown.get_selected()
+            if (selIdx >= 0 && selIdx < diskList.length) {
+              const newPath = diskList[selIdx].path
+              if (newPath !== selectedManualDiskPath) {
+                selectedManualDiskPath = newPath
+                buildPartitionsList()
+              }
+            }
+          })
+          diskSelectorWidget = diskDropDown
         }
+
+        const currentDisk = diskList.find(d => d.path === selectedManualDiskPath) || diskList[0]
+        const dPath = currentDisk ? currentDisk.path : selectedManualDiskPath
+        const diskName = currentDisk ? (currentDisk.model || currentDisk.name) : dPath
+        const diskSize = currentDisk ? currentDisk.size : 0
+
+        const barResult = NidaraPartitionBar({
+          diskPath: dPath,
+          diskName,
+          diskSize,
+          slices: getSlicesForDisk(dPath),
+          showLegend: true,
+          diskSelector: diskSelectorWidget,
+          onSliceClick: (slice) => {
+            selectPartition(slice.key, true)
+          },
+        })
+        activePartitionBar = barResult
+        partitionBarsBox.append(barResult.widget)
 
         updatePartitionBars = () => {
-          for (const item of diskBars) {
-            item.bar.updateSlices(getSlicesForDisk(item.diskPath))
-          }
+          barResult.updateSlices(getSlicesForDisk(dPath))
         }
 
-        // ── One heading per disk (#447's neighbour, from the T2 matrix) ────
-        //
-        // The table listed every partition of every drive in one flat run, and
-        // the only thing separating `/dev/sda2` from `/dev/nvme0n1p2` was the
-        // path in the first cell. Every installer in the field either filters to
-        // one disk (Calamares, a combo box above the table) or groups by it
-        // (Ubiquity's flat list with per-disk headings; YaST and subiquity, a
-        // tree). We were alone in doing neither.
-        //
-        // A heading rather than a filter, for the reason a filter exists at all:
-        // dual-boot layouts routinely span drives — the ESP on the disk that
-        // boots, `/home` on the spinning one — and a page that shows one disk at
-        // a time hides the half of the answer somebody is trying to check. It
-        // matters more since gaps became rows: "19.5 GiB free" means nothing
-        // until you know which drive it is on.
-        const diskLabel = (path: string) => {
-          const d = allDisks.find(x => x.path === path)
-          if (!d) return path
-          const name = d.model || d.name
-          return `${name}  ·  ${formatSize(d.size)}  ·  ${d.path}${d.rm ? `  ·  ${t("diskRemovable")}` : ""}`
-        }
-
-        let sectionFor = ""
-        for (const p of rows) {
-          // `rows` is sorted by (disk, offset), so a change of device is the
-          // boundary — no grouping pass, and the heading cannot end up somewhere
-          // the order does not actually break.
-          if (p.device !== sectionFor) {
-            sectionFor = p.device
-            table.appendSection(diskLabel(p.device))
-          }
+        const diskRows = rows.filter(r => r.device === dPath)
+        for (const p of diskRows) {
           const currentEntry = manualMounts.get(p.key)
 
           // ── ONE filesystem column, and it always reads FORWARDS ────────────
@@ -864,10 +866,10 @@ export function DiskStep(): Step {
           //
           // The label is not lost, it moves: `oldroot` says WHICH partition this
           // is, which is the identity column's job, not the filesystem's.
-          const rowName = p.isFree ? t("diskFreeSpace") : [p.path, p.label].filter(Boolean).join("  ·  ")
-          // An em dash where lsblk knows of no filesystem — the honest answer, and
-          // the same one the old `Contents` cell gave (D-15).
+          const partCol = p.isFree ? t("diskFreeSpace") : p.path
+          const partName = p.isFree ? "—" : (p.partlabel || p.label || "—")
           const keptFsLabel = p.fstype || "—"
+          const accessibleName = p.isFree ? t("diskFreeSpace") : p.path
 
           // Every control in a table cell is a control with no visible label of
           // its own — the column heading is the label, and a heading is not in the
@@ -884,7 +886,7 @@ export function DiskStep(): Step {
           const mountDropDown = NidaraDropDown({
             model: mountStringList,
             valign: Gtk.Align.CENTER,
-            accessibleDescription: `${t("diskMountpoint")} — ${rowName}`,
+            accessibleDescription: `${t("diskMountpoint")} — ${accessibleName}`,
           })
 
           let initialMountIdx = 0
@@ -903,13 +905,13 @@ export function DiskStep(): Step {
             active: p.isFree ? true : currentEntry ? currentEntry.format : false,
           })
           formatCheck.update_property(
-            [Gtk.AccessibleProperty.LABEL], [`${t("diskFormat")} — ${rowName}`])
+            [Gtk.AccessibleProperty.LABEL], [`${t("diskFormat")} — ${accessibleName}`])
 
           const fsStringList = Gtk.StringList.new(FS_OPTIONS)
           const fsDropDown = NidaraDropDown({
             model: fsStringList,
             valign: Gtk.Align.CENTER,
-            accessibleDescription: `${t("diskFs")} — ${rowName}`,
+            accessibleDescription: `${t("diskFs")} — ${accessibleName}`,
           })
           const curFsIdx = currentEntry ? FS_OPTIONS.indexOf(currentEntry.filesystem) : 0
           fsDropDown.set_selected(curFsIdx >= 0 ? curFsIdx : 0)
@@ -1043,7 +1045,8 @@ export function DiskStep(): Step {
           })
 
           const tableRow = table.appendRow([
-            rowName,
+            partCol,
+            partName,
             formatSize(p.size),
             mountDropDown,
             formatCheck,
@@ -1051,6 +1054,25 @@ export function DiskStep(): Step {
           ])
           tableRowMap.set(p.key, tableRow)
           rowFocusMap.set(p.key, mountDropDown)
+
+          const rowClick = new Gtk.GestureClick()
+          rowClick.connect("pressed", () => {
+            selectPartition(p.key, false)
+          })
+          tableRow.add_controller(rowClick)
+
+          const rowFocus = new Gtk.EventControllerFocus()
+          rowFocus.connect("enter", () => {
+            selectPartition(p.key, false)
+          })
+          tableRow.add_controller(rowFocus)
+        }
+
+        if (selectedPartitionKey && tableRowMap.has(selectedPartitionKey)) {
+          selectPartition(selectedPartitionKey, false)
+        } else {
+          activePartitionBar?.setSelectedKey(null)
+          selectedPartitionKey = null
         }
       }
 
@@ -1086,40 +1108,16 @@ export function DiskStep(): Step {
       })
       gpartedBtn.visible = GLib.find_program_in_path("gparted") !== null
       gpartedBtn.connect("clicked", () => {
-        // ⚠️ The failure used to land in `console.error`, which on the medium is
-        // a stream with no reader: the installer's window has no console and the
-        // session's journal is not something anybody is looking at while they
-        // are trying to make room on a disk. Pressing the button did nothing,
-        // said nothing, and looked exactly like a program that had opened
-        // somewhere behind the window.
-        //
-        // It matters more now than when it was written, because since
-        // nidara-project/nidara-iso#23 the program is actually ON the medium —
-        // so a silence here is no longer "we do not ship it", it is a real
-        // failure. The likeliest one is escalation: GParted needs root and asks
-        // for it through pkexec, which needs an authentication agent and the
-        // live account's password. That password is `nidara` and it is on the
-        // boot menu, but somebody who does not know that sees a prompt they
-        // cannot answer, cancels it, and lands back here — which is precisely
-        // the case that has to say something.
-        editorError = ""
-        refreshProblems?.()
         gpartedBtn.sensitive = false
         execAsync(["sudo", "-E", "gparted"])
-          .then(() => {
-            // It exited, so the disk may be a different shape than the table is
-            // showing. Re-reading it is the whole point of having sent somebody
-            // to an editor, and leaving it to the Refresh button next door means
-            // the page can sit there describing a layout that no longer exists.
+          .catch(e => {
+            console.error("[Installer] GParted error:", e)
+          })
+          .finally(() => {
+            gpartedBtn.sensitive = true
             buildPartitionsList()
             syncAnswer()
           })
-          .catch(e => {
-            editorError = t("diskErrGpartedFailed")
-            refreshProblems?.()
-            console.error("[Installer] Failed to launch GParted:", e)
-          })
-          .finally(() => { gpartedBtn.sensitive = true })
       })
 
       const refreshBtn = NidaraButton({
