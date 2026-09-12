@@ -550,21 +550,24 @@ function watchNidaraAppearance(onChanged) {
     let previous = nidaraKeys()
     let monitor = null
     try {
-        monitor = Gio.File.new_for_path(path).monitor_file(Gio.FileMonitorFlags.NONE, null)
+        const dirPath = GLib.path_get_dirname(path)
+        const targetBasename = GLib.path_get_basename(path)
+        const dir = Gio.File.new_for_path(dirPath)
+        monitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null)
+        monitor.connect("changed", (_mon, file, _other, event) => {
+            if (file && file.get_basename() !== targetBasename) return
+            const next = nidaraKeys()
+            for (const key of Object.keys(next)) {
+                // `equal()` compares the VALUE, not the boxed variant's identity.
+                if (previous[key] && next[key].equal(previous[key])) continue
+                onChanged(key, next[key])
+            }
+            previous = next
+        })
     } catch (e) {
         printerr(`[nidara-portal] cannot watch ${path}: ${e}`)
         return null
     }
-
-    monitor.connect("changed", () => {
-        const next = nidaraKeys()
-        for (const key of Object.keys(next)) {
-            // `equal()` compares the VALUE, not the boxed variant's identity.
-            if (previous[key] && next[key].equal(previous[key])) continue
-            onChanged(key, next[key])
-        }
-        previous = next
-    })
     return monitor
 }
 
@@ -600,12 +603,23 @@ Gio.bus_own_name(
                 "SettingChanged",
                 new GLib.Variant("(ssv)", [APPEARANCE_NS, "accent-color", accentRgbVariant()]),
             )
+            const accentName = interfaceSettings.get_string("accent-color")
+            exportedSettings.emit_signal(
+                "SettingChanged",
+                new GLib.Variant("(ssv)", [NIDARA_NS, "accent", new GLib.Variant("s", accentName)]),
+            )
         })
 
         interfaceSettings.connect("changed::color-scheme", () => {
             exportedSettings.emit_signal(
                 "SettingChanged",
                 new GLib.Variant("(ssv)", [APPEARANCE_NS, "color-scheme", colorSchemeVariant()]),
+            )
+            const scheme = interfaceSettings.get_string("color-scheme")
+            const isDark = scheme === "prefer-dark"
+            exportedSettings.emit_signal(
+                "SettingChanged",
+                new GLib.Variant("(ssv)", [NIDARA_NS, "is-dark", new GLib.Variant("b", isDark)]),
             )
         })
 

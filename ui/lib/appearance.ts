@@ -169,6 +169,22 @@ function readPortalState(): AppearanceState | null {
   }
 }
 
+function readGSettingsState(): Partial<AppearanceState> | null {
+  try {
+    const schemaSource = Gio.SettingsSchemaSource.get_default()
+    if (schemaSource && schemaSource.lookup("org.gnome.desktop.interface", true)) {
+      const s = new Gio.Settings({ schema: "org.gnome.desktop.interface" })
+      const accent = s.get_string("accent-color")
+      const scheme = s.get_string("color-scheme")
+      return {
+        accent: asAccent(accent),
+        isDark: scheme === "prefer-dark",
+      }
+    }
+  } catch {}
+  return null
+}
+
 // ── The door ─────────────────────────────────────────────────────────────────
 
 export type AppearanceSource = "portal" | "file" | "defaults"
@@ -187,25 +203,37 @@ let lastSource: AppearanceSource = "defaults"
  * worse than one painted with the wrong accent.
  */
 export function readAppearance(opts: AppearanceOpts = {}): AppearanceState {
+  let base: AppearanceState | null = null
+
   if (opts.portal !== false) {
     const fromPortal = readPortalState()
-    if (fromPortal) { lastSource = "portal"; return fromPortal }
+    if (fromPortal) { lastSource = "portal"; base = fromPortal }
   }
-  const fromFile = readFileState()
-  if (fromFile) { lastSource = "file"; return fromFile }
-  lastSource = "defaults"
-  return { ...FALLBACK }
+  if (!base) {
+    const fromFile = readFileState()
+    if (fromFile) { lastSource = "file"; base = fromFile }
+    else { lastSource = "defaults"; base = { ...FALLBACK } }
+  }
+
+  // If GSettings is reachable in this session, its accent-color and color-scheme
+  // are the instant source of truth (ThemeManager writes them on every click).
+  const gsettings = readGSettingsState()
+  if (gsettings) {
+    if (gsettings.accent) base.accent = gsettings.accent
+    if (gsettings.isDark !== undefined) base.isDark = gsettings.isDark
+  }
+
+  return base
 }
 
 /**
  * Call `cb` whenever the appearance changes, with the complete new state.
  *
- * Returns an unsubscribe. The subscription follows the same backend the read did:
- * the portal's `SettingChanged` when it answered, a `Gio.FileMonitor` otherwise.
- * Both are coalesced to "here is the whole state again" rather than "this key
- * moved", because every consumer regenerates a full stylesheet anyway, and a
- * per-key API would make each of them reassemble the state themselves — which is
- * the duplication this module exists to end.
+ * Returns an unsubscribe. The subscription follows three complementary layers:
+ * 1. The portal's `SettingChanged` signal (standard for sandboxed & desktop apps).
+ * 2. GSettings `org.gnome.desktop.interface` (instant in-session response).
+ * 3. Durable directory file monitors on `~/.config/nidara/` and `/var/tmp/nidara/`
+ *    (immune to inode replacement on atomic file saves).
  */
 export function watchAppearance(
   cb: (state: AppearanceState) => void,
@@ -219,7 +247,7 @@ export function watchAppearance(
       const bus = Gio.DBus.session
       if (bus) {
         const id = bus.signal_subscribe(
-          PORTAL_BUS, PORTAL_IFACE, "SettingChanged", PORTAL_PATH, null,
+          null, PORTAL_IFACE, "SettingChanged", PORTAL_PATH, null,
           Gio.DBusSignalFlags.NONE,
           () => cb(readAppearance(opts)),
         )
@@ -228,13 +256,36 @@ export function watchAppearance(
     } catch {}
   }
 
-  // 2. File monitors on all known appearance paths
+  // 2. Direct GSettings listener when running in user session (instant 0ms response)
+  try {
+    const schemaSource = Gio.SettingsSchemaSource.get_default()
+    if (schemaSource && schemaSource.lookup("org.gnome.desktop.interface", true)) {
+      const gsettings = new Gio.Settings({ schema: "org.gnome.desktop.interface" })
+      const idAccent = gsettings.connect("changed::accent-color", () => cb(readAppearance(opts)))
+      const idScheme = gsettings.connect("changed::color-scheme", () => cb(readAppearance(opts)))
+      unsubs.push(() => {
+        try {
+          gsettings.disconnect(idAccent)
+          gsettings.disconnect(idScheme)
+        } catch {}
+      })
+    }
+  } catch {}
+
+  // 3. Durable directory file monitors (catches atomic file renames)
   for (const path of FILE_PATHS) {
     try {
-      const file = Gio.File.new_for_path(path)
-      const monitor = file.monitor_file(Gio.FileMonitorFlags.NONE, null)
-      const id = monitor.connect("changed", () => cb(readAppearance(opts)))
-      unsubs.push(() => { try { monitor.disconnect(id); monitor.cancel() } catch {} })
+      const dirPath = GLib.path_get_dirname(path)
+      const targetBasename = GLib.path_get_basename(path)
+      const dir = Gio.File.new_for_path(dirPath)
+      if (dir.query_exists(null)) {
+        const monitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null)
+        const id = monitor.connect("changed", (_mon, file) => {
+          if (file && file.get_basename() !== targetBasename) return
+          cb(readAppearance(opts))
+        })
+        unsubs.push(() => { try { monitor.disconnect(id); monitor.cancel() } catch {} })
+      }
     } catch {}
   }
 
