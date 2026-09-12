@@ -684,7 +684,9 @@ sudo update-desktop-database /usr/share/applications/ 2>/dev/null || true
 #   daemon, D-Bus-activated): serves org.freedesktop.appearance accent-color so
 #   libadwaita/GNOME apps follow the Nidara accent under Hyprland. The Settings
 #   portal AGGREGATES backends (verified in x-d-p 1.20 src/settings.c): nidara
-#   serves only accent-color; gtk keeps serving color-scheme/contrast.
+#   serves the whole org.freedesktop.appearance namespace plus org.nidara.appearance
+#   (the appearance contract, architecture.md); gtk keeps serving
+#   org.gnome.desktop.interface (fonts, icons, cursor).
 # - Config goes in /etc/xdg-desktop-portal/hyprland-portals.conf (matched via
 #   XDG_CURRENT_DESKTOP=Hyprland; /etc outranks /usr/share, and the /usr/share
 #   one is OWNED BY THE HYPRLAND PACKAGE — never overwrite it). NOTE: the
