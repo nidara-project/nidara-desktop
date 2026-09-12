@@ -1,5 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
+import GLib from "gi://GLib"
 import Pango from "gi://Pango"
 import PangoCairo from "gi://PangoCairo"
 import { formatSize } from "../lib/format-size"
@@ -115,22 +116,7 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
     css_classes: ["nidara-partition-bar-canvas"],
   })
   da.set_size_request(-1, 38)
-
-  // Anchored popover tooltip (styled with Nidara glass theme, anchored stably to slice center)
-  const popover = new Gtk.Popover({
-    autohide: false,
-    can_focus: false,
-    cascade_popdown: false,
-    has_arrow: true,
-    position: Gtk.PositionType.BOTTOM,
-    css_classes: ["nidara-partition-popover"],
-  })
-  popover.set_parent(da)
-
-  const popoverLabel = new Gtk.Label({
-    css_classes: ["nidara-partition-popover-text"],
-  })
-  popover.set_child(popoverLabel)
+  da.has_tooltip = true
 
   // Geometry calculation helper
   interface SliceLayout {
@@ -311,27 +297,6 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
       hoveredIndex = newIdx
       da.set_cursor_from_name(hoveredIndex >= 0 ? "pointer" : null)
       da.queue_draw()
-
-      if (hoveredIndex >= 0 && hoveredIndex < calculatedLayouts.length) {
-        const l = calculatedLayouts[hoveredIndex]
-        const s = l.slice
-        const displayLabel = s.partlabel || s.label
-        const nameStr = s.isFree ? t("diskFreeSpace") : s.path
-        const tagStr = displayLabel ? ` (${displayLabel})` : ""
-        const fsStr = s.fstype ? ` · ${s.fstype}` : ""
-        const mpStr = s.mountpoint ? ` → ${s.mountpoint}` : ""
-        popoverLabel.label = `${nameStr}${tagStr} · ${formatSize(s.size)}${fsStr}${mpStr}`
-
-        const rect = new Gdk.Rectangle()
-        rect.x = Math.round(l.x)
-        rect.y = 0
-        rect.width = Math.max(1, Math.round(l.w))
-        rect.height = 38
-        popover.set_pointing_to(rect)
-        popover.popup()
-      } else {
-        popover.popdown()
-      }
     }
   })
   motion.connect("leave", () => {
@@ -340,12 +305,35 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
       da.set_cursor_from_name(null)
       da.queue_draw()
     }
-    popover.popdown()
   })
   da.add_controller(motion)
 
-  da.connect("unmap", () => {
-    popover.popdown()
+  // ── Native Anchored Tooltip ──
+  da.connect("query-tooltip", (_, x: number, _y: number, _kb: boolean, tooltip: Gtk.Tooltip) => {
+    for (const l of calculatedLayouts) {
+      if (x >= l.x && x <= l.x + l.w) {
+        const s = l.slice
+        const name = s.isFree ? t("diskFreeSpace") : s.path
+        const tags: string[] = []
+        if (s.partlabel) tags.push(s.partlabel)
+        if (s.label && s.label !== s.partlabel) tags.push(s.label)
+        const tagStr = tags.length > 0 ? ` (${GLib.markup_escape_text(tags.join(" · "), -1)})` : ""
+        const fsStr = s.fstype ? ` · ${GLib.markup_escape_text(s.fstype, -1)}` : ""
+        const mpStr = s.mountpoint ? ` → ${GLib.markup_escape_text(s.mountpoint, -1)}` : ""
+        const escapedName = GLib.markup_escape_text(name, -1)
+
+        tooltip.set_markup(`<span weight="bold">${escapedName}</span>${tagStr} · ${formatSize(s.size)}${fsStr}${mpStr}`)
+
+        const rect = new Gdk.Rectangle()
+        rect.x = Math.round(l.x)
+        rect.y = 0
+        rect.width = Math.max(1, Math.round(l.w))
+        rect.height = 38
+        tooltip.set_tip_area(rect)
+        return true
+      }
+    }
+    return false
   })
 
   const click = new Gtk.GestureClick()

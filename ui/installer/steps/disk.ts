@@ -664,8 +664,9 @@ export function DiskStep(): Step {
       manualBox.append(partitionBarsBox)
 
       const table = NidaraTable([
-        { title: t("diskColPartition") },
-        { title: t("diskColName"), expand: true, dim: true },
+        { title: t("diskColPartition"), expand: true },
+        { title: t("diskColName"), dim: true },
+        { title: t("diskColLabel"), dim: true },
         { title: t("diskColSize"), align: Gtk.Align.END, dim: true },
         { title: t("diskMountpoint") },
         // Centred: the cell is a checkbox, which is a mark rather than a value,
@@ -867,7 +868,8 @@ export function DiskStep(): Step {
           // The label is not lost, it moves: `oldroot` says WHICH partition this
           // is, which is the identity column's job, not the filesystem's.
           const partCol = p.isFree ? t("diskFreeSpace") : p.path
-          const partName = p.isFree ? "—" : (p.partlabel || p.label || "—")
+          const partName = p.isFree ? "—" : (p.partlabel || "—")
+          const partLabel = p.isFree ? "—" : (p.label || "—")
           const keptFsLabel = p.fstype || "—"
           const accessibleName = p.isFree ? t("diskFreeSpace") : p.path
 
@@ -1047,6 +1049,7 @@ export function DiskStep(): Step {
           const tableRow = table.appendRow([
             partCol,
             partName,
+            partLabel,
             formatSize(p.size),
             mountDropDown,
             formatCheck,
