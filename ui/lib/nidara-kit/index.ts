@@ -105,3 +105,8 @@ export { showNidaraAlert } from "./alert-dialog"
 export type { FormResponse, FormDialogHandle, NidaraFormDialogOpts } from "./form-dialog"
 export { showNidaraFormDialog } from "./form-dialog"
 
+// attachTooltip — the one Nidara tooltip (Cairo glass bubble with pointer arrow)
+export type { NidaraTooltipOpts, NidaraTooltipHandle, NidaraTooltipText } from "./tooltip"
+export { attachTooltip } from "./tooltip"
+
+

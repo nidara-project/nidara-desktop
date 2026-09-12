@@ -84,12 +84,14 @@ import { safeDisconnect } from "./core/signals"
 // blue slider on a light track and one warning in the log. See
 // `ui/lib/nidara-kit/appearance.ts`.
 setKitAppearance({
-  accent:        () => Theme.accentPalette[Theme.accentColor].color,
-  surfaceIsDark: (widget) => Theme.surfaceIsDark(widget),
-  onChange:      (cb) => {
+  accent:         () => Theme.accentPalette[Theme.accentColor].color,
+  surfaceIsDark:  (widget) => Theme.surfaceIsDark(widget),
+  onChange:       (cb) => {
     const id = Theme.connect("changed", cb)
     return () => safeDisconnect(Theme, id)
   },
+  overlayOpacity: () => Theme.overlayOpacity,
+  chromeIsDark:   () => Theme.chromeIsDark,
 })
 
 // Minimal interface for windows managed by the shell

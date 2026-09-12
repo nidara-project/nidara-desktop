@@ -6,6 +6,8 @@ import PangoCairo from "gi://PangoCairo"
 import { formatSize } from "../lib/format-size"
 import { t, getLocale } from "../lib/i18n"
 import { ndIcon } from "../../lib/icons"
+import { attachTooltip, type NidaraTooltipHandle } from "../../lib/nidara-kit"
+
 
 export interface PartitionBarSlice {
   key: string
@@ -116,7 +118,7 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
     css_classes: ["nidara-partition-bar-canvas"],
   })
   da.set_size_request(-1, 38)
-  da.has_tooltip = true
+
 
   // Geometry calculation helper
   interface SliceLayout {
@@ -177,9 +179,119 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
     return layouts
   }
 
+  // Overlay and Hitboxes for clean hover, clicks and native Nidara tooltips
+  interface HitboxEntry {
+    box: Gtk.Box
+    tooltipHandle: NidaraTooltipHandle
+    slice: PartitionBarSlice
+  }
+
+  let hitboxes: HitboxEntry[] = []
+  let lastWidth = -1
+
+  function getTooltipMarkup(s: PartitionBarSlice): string {
+    const name = s.isFree ? t("diskFreeSpace") : s.path
+    const tags: string[] = []
+    if (s.partlabel) tags.push(s.partlabel)
+    if (s.label && s.label !== s.partlabel) tags.push(s.label)
+    const tagStr = tags.length > 0 ? ` (${GLib.markup_escape_text(tags.join(" · "), -1)})` : ""
+    const fsStr = s.fstype ? ` · ${GLib.markup_escape_text(s.fstype, -1)}` : ""
+    const mpStr = s.mountpoint ? ` → ${GLib.markup_escape_text(s.mountpoint, -1)}` : ""
+    const escapedName = GLib.markup_escape_text(name, -1)
+
+    return `<span weight="bold">${escapedName}</span>${tagStr} · ${formatSize(s.size)}${fsStr}${mpStr}`
+  }
+
+  const trackOverlay = new Gtk.Overlay({ hexpand: true })
+  trackOverlay.set_child(da)
+
+  const hitboxesBox = new Gtk.Box({
+    orientation: Gtk.Orientation.HORIZONTAL,
+    spacing: 2,
+    hexpand: true,
+  })
+  trackOverlay.add_overlay(hitboxesBox)
+
+  function updateHitboxSizes(layouts: SliceLayout[]) {
+    if (layouts.length !== hitboxes.length) return
+    for (let i = 0; i < layouts.length; i++) {
+      const w = Math.max(1, Math.round(layouts[i].w))
+      hitboxes[i].box.set_size_request(w, 38)
+    }
+  }
+
+  function rebuildHitboxes() {
+    for (const h of hitboxes) {
+      h.tooltipHandle.destroy()
+    }
+    let child = hitboxesBox.get_first_child()
+    while (child) {
+      const next = child.get_next_sibling()
+      hitboxesBox.remove(child)
+      child = next
+    }
+    hitboxes = []
+
+    for (let i = 0; i < currentSlices.length; i++) {
+      const slice = currentSlices[i]
+      const sliceBox = new Gtk.Box({
+        can_target: true,
+        can_focus: false,
+        hexpand: false,
+        cursor: Gdk.Cursor.new_from_name("pointer", null),
+      })
+      sliceBox.set_size_request(10, 38)
+
+      // Official Nidara glass tooltip
+      const tooltipHandle = attachTooltip(sliceBox, () => getTooltipMarkup(slice), {
+        position: Gtk.PositionType.BOTTOM,
+        markup: true,
+        chrome: false,
+      })
+
+      // Hover to highlight slice on the canvas
+      const hover = new Gtk.EventControllerMotion()
+      hover.connect("enter", () => {
+        hoveredIndex = i
+        da.queue_draw()
+      })
+      hover.connect("leave", () => {
+        if (hoveredIndex === i) {
+          hoveredIndex = -1
+          da.queue_draw()
+        }
+      })
+      sliceBox.add_controller(hover)
+
+      // Click to select slice
+      const click = new Gtk.GestureClick()
+      click.connect("pressed", (_, n_press: number) => {
+        if (n_press !== 1) return
+        selectedKey = slice.key
+        da.queue_draw()
+        opts.onSliceClick?.(slice)
+      })
+      sliceBox.add_controller(click)
+
+      hitboxesBox.append(sliceBox)
+      hitboxes.push({ box: sliceBox, tooltipHandle, slice })
+    }
+  }
+
+  rebuildHitboxes()
+
   da.set_draw_func((_, cr: any, width: number, height: number) => {
     calculatedLayouts = computeLayout(width, height)
     if (calculatedLayouts.length === 0) return
+
+    if (width !== lastWidth) {
+      lastWidth = width
+      const layoutsCopy = [...calculatedLayouts]
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        updateHitboxSizes(layoutsCopy)
+        return GLib.SOURCE_REMOVE
+      })
+    }
 
     // Background track clip
     roundRectPath(cr, 0, 0, width, height, 8)
@@ -282,85 +394,26 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
     cr.stroke()
   })
 
-  // ── Motion and Click Controller ──
-  const motion = new Gtk.EventControllerMotion()
-  motion.connect("motion", (_, x: number) => {
-    let newIdx = -1
-    for (let i = 0; i < calculatedLayouts.length; i++) {
-      const l = calculatedLayouts[i]
-      if (x >= l.x && x <= l.x + l.w) {
-        newIdx = i
-        break
-      }
-    }
-    if (newIdx !== hoveredIndex) {
-      hoveredIndex = newIdx
-      da.set_cursor_from_name(hoveredIndex >= 0 ? "pointer" : null)
-      da.queue_draw()
-    }
-  })
-  motion.connect("leave", () => {
-    if (hoveredIndex !== -1) {
-      hoveredIndex = -1
-      da.set_cursor_from_name(null)
-      da.queue_draw()
-    }
-  })
-  da.add_controller(motion)
-
-  // ── Native Anchored Tooltip ──
-  da.connect("query-tooltip", (_, x: number, _y: number, _kb: boolean, tooltip: Gtk.Tooltip) => {
-    for (const l of calculatedLayouts) {
-      if (x >= l.x && x <= l.x + l.w) {
-        const s = l.slice
-        const name = s.isFree ? t("diskFreeSpace") : s.path
-        const tags: string[] = []
-        if (s.partlabel) tags.push(s.partlabel)
-        if (s.label && s.label !== s.partlabel) tags.push(s.label)
-        const tagStr = tags.length > 0 ? ` (${GLib.markup_escape_text(tags.join(" · "), -1)})` : ""
-        const fsStr = s.fstype ? ` · ${GLib.markup_escape_text(s.fstype, -1)}` : ""
-        const mpStr = s.mountpoint ? ` → ${GLib.markup_escape_text(s.mountpoint, -1)}` : ""
-        const escapedName = GLib.markup_escape_text(name, -1)
-
-        tooltip.set_markup(`<span weight="bold">${escapedName}</span>${tagStr} · ${formatSize(s.size)}${fsStr}${mpStr}`)
-
-        const rect = new Gdk.Rectangle()
-        rect.x = Math.round(l.x)
-        rect.y = 0
-        rect.width = Math.max(1, Math.round(l.w))
-        rect.height = 38
-        tooltip.set_tip_area(rect)
-        return true
-      }
-    }
-    return false
-  })
-
-  const click = new Gtk.GestureClick()
-  click.connect("pressed", (_, n_press: number, x: number) => {
-    if (n_press !== 1) return
-    for (let i = 0; i < calculatedLayouts.length; i++) {
-      const l = calculatedLayouts[i]
-      if (x >= l.x && x <= l.x + l.w) {
-        selectedKey = l.slice.key
-        da.queue_draw()
-        opts.onSliceClick?.(l.slice)
-        break
-      }
-    }
-  })
-  da.add_controller(click)
-
-  container.append(da)
+  container.append(trackOverlay)
 
   if (opts.showLegend !== false) {
     container.append(NidaraPartitionLegend())
   }
 
+  container.connect("destroy", () => {
+    for (const h of hitboxes) {
+      h.tooltipHandle.destroy()
+    }
+    hitboxes = []
+  })
+
   return {
     widget: container,
     updateSlices: (newSlices: PartitionBarSlice[]) => {
       currentSlices = [...newSlices]
+      hoveredIndex = -1
+      lastWidth = -1
+      rebuildHitboxes()
       da.queue_draw()
     },
     setSelectedKey: (key: string | null) => {

@@ -41,6 +41,10 @@ export interface KitAppearance {
     surfaceIsDark(widget: Gtk.Widget): boolean
     /** Subscribe to appearance changes (accent, mode). Returns an unsubscribe. */
     onChange(cb: () => void): () => void
+    /** Overlay opacity for glass elements (default: 0.55). */
+    overlayOpacity?: () => number
+    /** Whether shell chrome (pinned appearance) is dark (default: follows surfaceIsDark). */
+    chromeIsDark?: () => boolean
 }
 
 let warned = false
@@ -56,6 +60,8 @@ const FALLBACK: KitAppearance = {
     },
     surfaceIsDark: () => false,
     onChange: () => () => {},
+    overlayOpacity: () => 0.55,
+    chromeIsDark: () => false,
 }
 
 let current: KitAppearance = FALLBACK
