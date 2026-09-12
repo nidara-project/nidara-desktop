@@ -377,12 +377,27 @@ package_nidara-desktop() {
   _icon_theme="$(sed -n 's/.*"iconTheme"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
                  defaults/appearance.json | head -1)"
   [ -n "$_icon_theme" ] || { echo "no iconTheme in defaults/appearance.json" >&2; return 1; }
+  # The accent and the mode, for the same reason and one more: gsettings is their
+  # HOME (the contract in ui/lib/appearance.ts), so this is the value a fresh
+  # account starts with — and the one every app reads through the Settings portal
+  # before the shell has run once. Without it a new account reports
+  # `color-scheme=default` ("no preference") instead of the light mode we ship.
+  local _accent _is_dark _scheme
+  _accent="$(sed -n 's/.*"accent"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+             defaults/appearance.json | head -1)"
+  _is_dark="$(sed -n 's/.*"isDark"[[:space:]]*:[[:space:]]*\(true\|false\).*/\1/p' \
+              defaults/appearance.json | head -1)"
+  [ -n "$_accent" ] || { echo "no accent in defaults/appearance.json" >&2; return 1; }
+  [ -n "$_is_dark" ] || { echo "no isDark in defaults/appearance.json" >&2; return 1; }
+  _scheme=prefer-light; [ "$_is_dark" = true ] && _scheme=prefer-dark
   install -Dm644 /dev/stdin "$pkgdir/etc/dconf/db/local.d/00-nidara-appearance" <<EOF
 # Generated from defaults/appearance.json when this package was built. Edit that
 # file, not this one — and note this is a DEFAULT: whatever the person chose in
 # their own dconf wins, because /etc/dconf/profile/user reads user-db first.
 [org/gnome/desktop/interface]
 icon-theme='$_icon_theme'
+accent-color='$_accent'
+color-scheme='$_scheme'
 EOF
   install -Dm644 packaging/nidara/nidara-dconf.hook \
     "$pkgdir/usr/share/libalpm/hooks/90-nidara-dconf.hook"

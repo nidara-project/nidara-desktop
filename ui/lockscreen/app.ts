@@ -4,7 +4,7 @@ import GLib from "gi://GLib"
 // @ts-ignore
 import Gtk4SessionLock from "gi://Gtk4SessionLock"
 import { Lock, LockOverlay } from "./widget/Lock"
-import { initAppearance } from "../lib/nidara-kit"
+import { initAppearance } from "../lib/appearance-css"
 import { applyCrispFontRendering } from "../lib/font-rendering"
 import { chooseLoginSkin, applyLoginSkin } from "../lib/login-skin"
 import type { Skin } from "../lib/backdrop-skin"
@@ -52,8 +52,10 @@ app.start({
     const display = Gdk.Display.get_default()
     if (!display) { console.error("[Lock] No display"); return }
 
-    // Initialize the token engine and accent rim for the lockscreen process.
-    initAppearance({ portal: false })
+    // The token ramp, the kit's Cairo seam and the glass rim — read from the Settings
+    // portal like any application: the lock runs inside the user's own session, so the
+    // portal there answers for exactly the person it is locking. See ui/lib/appearance.ts.
+    initAppearance()
 
     // Which skin does this wallpaper want? (tech-debt #82 — see ui/lib/backdrop-skin.ts.)
     // Decided here, before any window exists, because both paths below create windows

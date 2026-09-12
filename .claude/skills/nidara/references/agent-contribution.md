@@ -97,7 +97,8 @@ Examples (real, straight from this project's history):
   the input region; the Settings `.desktop` being shadowed by a dangling symlink; a Pixman
   warning on dark/light toggle.
 - **Missing capability that benefits all:** a portal backend so libadwaita apps follow the
-  accent; a new reusable `nidara-*` component.
+  accent (done — and the rule it set is that apps read the portal, never a Nidara-private
+  channel: architecture.md, "The appearance contract"); a new reusable `nidara-*` component.
 - **Performance / robustness:** reducing redraws, fixing a crash, de-duplicating logic.
 
 ### When unsure → ask the user, default to PERSONAL

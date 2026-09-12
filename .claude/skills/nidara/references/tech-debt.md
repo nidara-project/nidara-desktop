@@ -1267,7 +1267,8 @@ their own two-mode ramp in `ui/greeter/style.scss`. The migration is the same th
 installer took, but the risk is not the same: those two surfaces have no dev mode, an installed
 `style.css` outranks a source one, and getting it wrong locks somebody out of their desktop. Do
 it against `scripts/dev/lock-probe.js` or a VM, seeing each screen, not by reasoning about the
-diff — and note the greeter must pass `{ portal: false }` (it runs as another user).
+diff — and note the greeter must pass `{ channel: "mirror" }` (it runs as another user, outside
+any session; see architecture.md, "The appearance contract").
 
 **The reasoning, kept because it is why the FIRST proposed fix was wrong:**
 `ui/shell/core/NidaraTheme.ts` — `nidaraVars()`, mode-aware, opacity-aware, the full ramp —
@@ -3635,6 +3636,18 @@ Sitting alongside it, from the same review and still open: the progress bar is a
 80 ms timeout with no phase behind it, the host name is asked for as the third field of the
 ACCOUNT card, and `nidara-setup` creates `.config/{hypr,kitty,nidara,uwsm}` as `1000:0` (an
 `install -d` with no `-g`) while its siblings come out `1000:1000`.
+
+### 103. ⚠️ OPEN — three appearance keys still have two homes (2026-09-13)
+
+> **Queue entry: #536.** The rest of the portal (Secret unrouted, four interfaces with no backend,
+> GTK3 dialogs) is **#535**.
+
+The appearance contract (architecture.md) says every setting has ONE home, and #534 moved the accent
+and the mode to gsettings. `icon-theme`, `cursor-theme` and `gtk-theme` still live in
+`appearance.json` and are pushed over gsettings by `ThemeManager.applyAll()` on every start, so a
+`gsettings set` of any of them reaches every app through the portal, never reaches the shell, and is
+reverted at the next login. Do the same move #534 did; the cursor's listener also has to reach
+Hyprland and the Xcursor default (#72).
 
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 

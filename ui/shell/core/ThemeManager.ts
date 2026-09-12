@@ -121,13 +121,24 @@ class ThemeManager extends GObject.Object {
         console.log("[ThemeManager] NEW instance created. ")
         this.loadSettings()
         
-        // Monitor system color scheme changes
+        // The accent and the mode LIVE in gsettings (the contract in
+        // ui/lib/appearance.ts), so a change made anywhere else — `gsettings set`, an
+        // agent, another tool — is a change of the desktop, exactly as in GNOME. The
+        // `!==` guards are what stop our own writes from echoing back as a loop:
+        // the setters update the in-memory value BEFORE they write the key.
         this.interfaceSettings.connect("changed::color-scheme", () => {
             const scheme = this.interfaceSettings.get_string("color-scheme")
             const isDark = scheme === "prefer-dark"
             if (this.state.isDark !== isDark) {
                 console.log(`[ThemeManager] External Dark Mode change detected: ${scheme}`)
                 this.setDarkMode(isDark)
+            }
+        })
+        this.interfaceSettings.connect("changed::accent-color", () => {
+            const accent = this.interfaceSettings.get_string("accent-color")
+            if (accent in ACCENT_PALETTE && accent !== this.fcConfig.accent) {
+                console.log(`[ThemeManager] External accent change detected: ${accent}`)
+                this.setAccentColor(accent as AccentKey)
             }
         })
 
@@ -740,9 +751,10 @@ class ThemeManager extends GObject.Object {
             hs.setCursor(this.state.cursorTheme, settings.get_int("cursor-size") || 24)
         }
         this.syncHyprlandGroupAccent()
-        const target = this.state.isDark ? "prefer-dark" : "prefer-light"
-        if (settings.get_string("color-scheme") !== target) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", target])
-        if (settings.get_string("accent-color") !== this.fcConfig.accent) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "accent-color", this.fcConfig.accent]).catch(() => {})
+        // No push of the accent or the mode into gsettings here. It used to copy
+        // appearance.json over them on every start, which made the FILE the real
+        // home and reverted anything set through gsettings at the next login. They
+        // are read FROM gsettings in loadSettings() now, so there is nothing to sync.
 
         this._isReady = true
         this.emit("ready")
@@ -763,15 +775,20 @@ class ThemeManager extends GObject.Object {
             glassModel: GLASS_MODEL,
         }
         const json = JSON.stringify(merged, null, 2)
+        // `accent` and `isDark` are still written, but in THIS file they are a record,
+        // not a home: loadSettings() takes both from gsettings. They are here because
+        // the mirror below is the same JSON, and the mirror needs them.
         writeFile(this.configPath, json)
 
-        // Mirror to /var/tmp so the greeter (which runs as a system user without
-        // access to the user home dir) can read the accent on next login screen.
+        // The greeter's MIRROR — the one surface outside any session, with no portal
+        // to ask (ui/lib/appearance.ts, rule 3). 0644, stated: the default of
+        // `writeFile` is 0600, and a mirror nobody else can read is #488 — the login
+        // screen stuck on blue on every machine installed after 0.11.0.
         try {
             const sharedDir = "/var/tmp/nidara"
             if (!GLib.file_test(sharedDir, GLib.FileTest.EXISTS))
                 GLib.mkdir_with_parents(sharedDir, 0o755)
-            writeFile(`${sharedDir}/appearance.json`, json)
+            writeFile(`${sharedDir}/appearance.json`, json, 0o644)
         } catch (e) {
             console.warn("[ThemeManager] could not write shared appearance:", e)
         }
@@ -833,6 +850,28 @@ class ThemeManager extends GObject.Object {
             }
         } catch (e) {
             this.syncFromSystem()
+        }
+        this.readSessionHomedKeys()
+    }
+
+    /**
+     * The accent and the mode, from their HOME — `org.gnome.desktop.interface`, where
+     * GNOME keeps them and where the Settings portal serves them to every app from.
+     * Whatever appearance.json says about them is a record, not an input.
+     *
+     * No migration needed: until this change every start pushed the file's values
+     * into these keys, so on an existing machine they already agree. A fresh install
+     * reads the system default (`/etc/dconf/db/local.d`, generated from
+     * defaults/appearance.json by the PKGBUILD).
+     */
+    private readSessionHomedKeys() {
+        try {
+            const s = this.interfaceSettings
+            this.state.isDark = s.get_string("color-scheme") === "prefer-dark"
+            const accent = s.get_string("accent-color")
+            if (accent in ACCENT_PALETTE) this.fcConfig.accent = accent as AccentKey
+        } catch (e) {
+            console.warn("[ThemeManager] could not read the accent/mode from gsettings:", e)
         }
     }
 

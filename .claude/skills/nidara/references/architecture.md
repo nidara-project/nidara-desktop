@@ -1626,6 +1626,116 @@ shelling out to hyprctl — add a method to HyprlandState if the vocabulary is m
 shell itself (greeter excluded — separate bundle, own Lua config) has zero direct hyprctl
 calls outside HyprlandState.
 
+## The appearance contract — how ANY process learns what the user picked (2026-09-13, #534)
+
+Nidara is a desktop, so it does what GNOME does, and the rule is the same for our own windows as
+for anybody else's app. This section is the reference; the code-side copy is the header of
+`ui/lib/appearance.ts`. **Read it before a new window, app or surface needs the accent, the mode
+or an opacity** — every earlier attempt to wire one "just for this window" produced a second
+channel, and the second channel is where the bugs lived.
+
+**Rule 1 — every setting has exactly ONE home.** `ThemeManager` (the shell) is the only writer.
+
+| key | home | reaches apps as |
+|---|---|---|
+| accent | gsettings `org.gnome.desktop.interface accent-color` | `org.freedesktop.appearance accent-color` `(ddd)` |
+| dark / light | gsettings `…interface color-scheme` | `org.freedesktop.appearance color-scheme` `u` (0 none · 1 dark · 2 light) |
+| high contrast | gsettings `org.gnome.desktop.a11y.interface high-contrast` | `org.freedesktop.appearance contrast` |
+| reduced motion | gsettings `…interface enable-animations` (inverted) | `org.freedesktop.appearance reduced-motion` |
+| fonts, icon theme, cursor | gsettings `…interface` | `org.gnome.desktop.interface` (served by the gtk backend) |
+| window / bar / overlay / dock opacity, shell-appearance | `~/.config/nidara/appearance.json` | `org.nidara.appearance` (kebab-case), served ONLY there |
+
+`accent` and `isDark` are still written into `appearance.json`, but there they are a **record**:
+`ThemeManager.loadSettings()` takes both from gsettings (`readSessionHomedKeys`) and listens to
+`changed::accent-color` / `changed::color-scheme`, so `gsettings set … accent-color pink` from a
+terminal or an agent changes the whole desktop live — as in GNOME. Until #534 every start copied
+the file OVER gsettings, which made the file the real home and silently reverted such a change at
+the next login. A fresh account's values come from the system dconf default the PKGBUILD generates
+from `defaults/appearance.json` (`/etc/dconf/db/local.d/00-nidara-appearance`).
+⚠️ Not yet true of `icon-theme`, `cursor-theme` and `gtk-theme`: they are still pushed from the
+file at start (tech-debt #103, queue #536). The rest of the portal beyond appearance — what is
+served, what has no backend, the GTK3 dialogs — is audited in #535.
+
+**Rule 2 — an application reads the Settings portal, and nothing else.** The installer, the lock
+screen, any future Nidara app and every third-party app are the same kind of client. Most of it
+comes free, from libraries we do not own:
+
+- **GTK ≥ 4.20 reads `color-scheme`, `contrast` and `reduced-motion` from the portal by itself**
+  (`gtk-interface-color-scheme` & co.) and exposes them to CSS as `@media (prefers-color-scheme:
+  dark)`, `(prefers-contrast: more)`, `(prefers-reduced-motion: reduce)`. Checked in the 4.22.4
+  binary: `org.freedesktop.appearance`, `ReadAll`, `SettingChanged` and the three `prefers-*`
+  names are all in `libgtk-4.so`.
+- **libadwaita reads the accent** from the same namespace and maps the RGB to its nearest named
+  accent — which is exactly what `rgbToClosestAccent` does for us.
+- **Our own processes** call `initAppearance()` (`ui/lib/appearance-css.ts`), which reads BOTH
+  namespaces in one `ReadAll`, applies each `SettingChanged` from its payload (no re-read, no
+  blocking call per key), coalesces a burst into one restyle per frame, and re-reads in full when
+  the portal's name appears (a cold session). Nothing in it is private to Nidara: a third-party
+  developer can do exactly the same with any D-Bus binding, and a sandboxed Flatpak can too.
+
+There is **no fallback to another channel**. A portal that does not answer — or answers with no
+backend serving the namespaces — gives the shipped defaults and a `[appearance] …` warning, and
+`appearanceSource()` says `defaults`. libadwaita falls back to gsettings when unsandboxed; we
+deliberately do not, because a quiet second answer is how #533's bugs stayed invisible.
+
+**Rule 3 — the one exception is a surface OUTSIDE any session: the greeter.** It runs as the
+`greeter` system user in its own compositor; no portal exists there, and one would answer for the
+wrong person. It declares `initAppearance({ channel: "mirror" })` and reads
+`/var/tmp/nidara/appearance.json`, an EXPORT the shell writes for it, mode **0644**. The lock screen
+is NOT this exception — it runs inside the user's own session, where the portal answers for exactly
+the person it is locking.
+
+⚠️ **`writeFile(path, content, mode)` only applies `mode` to a file it CREATES.** Replacing an
+existing file keeps the old permissions (measured: a 0600 file rewritten with 0644 stays 0600), so
+`writeFile` now `chmod`s explicitly whenever the mode is not the 0600 default. Without that, every
+machine that already had a 0600 mirror from 0.11.0 on (#488) would have kept a greeter stuck on blue.
+
+**The shell is the writer, not a client.** It keeps its live `ThemeManager` (per-surface skin
+pinning, icon filters, GTK theme) and does not read the portal — like gnome-shell, which owns its
+settings rather than asking a portal for them.
+
+### What #533 did, so it is not tried again
+
+It read the portal, then the file, then let **gsettings override both**. In the greeter gsettings
+answers with the SCHEMA default (blue, "no preference") — measured with `env -i HOME=<empty> gjs`
+against a real green + dark account — so the login screen ignored the user entirely. Everywhere
+else one click arrived through three channels (portal signal, gsettings signal, two directory
+monitors) as ≥7 full restyles, each starting with a synchronous `ReadAll`. It also subscribed to
+`SettingChanged` from ANY sender, served `accent`/`is-dark` under a second name in our namespace,
+and made `NidaraWindow` call `initAppearance()` silently — which turned a missing line in an
+`app.ts` into a window that looked right by accident. All four are gone; a bundle that forgets
+`initAppearance()` gets the kit's loud fallback warning again.
+
+### Adding an appearance key
+
+1. Decide its home FIRST. If the desktop standard (gsettings / the portal spec) already names it,
+   that is the home and nothing Nidara-specific is added. Only a key nobody else has goes into
+   `appearance.json`.
+2. `bin/nidara-portal` serves it — in `org.freedesktop.appearance` only if the spec defines it,
+   otherwise in `org.nidara.appearance` — and emits `SettingChanged` when it moves (gsettings
+   `changed::` or the directory monitor, which already announces only the keys that changed).
+3. `applyPortalKey()` in `ui/lib/appearance.ts` folds it in. That one function serves the first
+   read AND every signal, so the two cannot interpret a key differently.
+4. Never serve one value under two names.
+5. Prove it with `scripts/dev/appearance-contract-probe.sh` (below).
+
+### `scripts/dev/appearance-contract-probe.sh` — the chain, off-screen
+
+Builds a private session bus with its own dconf, the real `xdg-desktop-portal` frontend, THIS
+checkout's `bin/nidara-portal` and the real client code, then moves settings underneath it and
+prints what an application receives: the first read, a dconf change, a file change whose
+`accent`/`isDark` must be ignored, and a two-key burst that must arrive as one state. A control
+with the frontend up and no backend of ours must report `defaults`. Measured 2026-09-13: all pass,
+and the real `~/.config/dconf/user` is byte-identical before and after.
+
+🔴 **The isolation is the part that bit.** The first version exported `XDG_CONFIG_HOME` inside
+`dbus-run-session -- bash -c '…'`. A D-Bus-ACTIVATED service inherits the DAEMON's environment,
+not the caller's: `dconf-service` wrote the real database and the maintainer's desktop changed
+colour mid-test; the "no backend" control silently activated the INSTALLED `/usr/bin/nidara-portal`.
+Hence: variables on the daemon's command line, a dconf canary that must land in the private
+database before anything else is written, and the backend started explicitly and checked to be
+the owner of its bus name.
+
 ## `ui/lib/nidara-kit/`
 
 Pure-GTK4 primitives + Nidara tokens, **no Adwaita, no resets**. Mostly consumed by the shell's Settings pages, plus what the greeter/lockscreen adopted (the dropdown, the login card, the clock):
@@ -1642,7 +1752,7 @@ Pure-GTK4 primitives + Nidara tokens, **no Adwaita, no resets**. Mostly consumed
   with the effective layout staged to `es,us`.
 - **`appearance.ts` — the kit's appearance seam. Read this before adding any Cairo-painted kit component.** Everything else in the kit needs nothing but GTK from its host. A Cairo painter does: Cairo cannot read a CSS token, so the accent must arrive as a real `#rrggbb` and "is the surface under me dark?" must be answered by whoever knows what that surface is (in the shell, `core/ThemeManager` — which the kit may not import, or it stops being usable from the greeter). So the BUNDLE injects it: `setKitAppearance({ accent, surfaceIsDark, onChange })`, once, at module scope in its `app.ts`, before `main()` builds anything. Same shape as injecting the greeter's `t()` into the shared login card. ⚠️ **An unregistered bundle does not fail — it renders the fallback (blue, light surface).** That is the silent-default trap the token contract warns about, so the fallback logs a warning on first use; the greeter/lock have no dev mode to notice it in otherwise. Only the shell registers today, because only the shell has sliders. Measured A/B on 2026-08-15, same widget: registered → fill `#D45A94` (pink accent) and no warning; unregistered → `#017BE9` and the warning.
 
-- **`ui/lib/appearance.ts` + `ui/lib/appearance-css.ts` — how a NON-shell bundle wears the desktop (2026-08-26).** `installAppearance()` is the one call: it loads the full `--nidara-*` ramp as CSS (from the engine, now at `ui/lib/theme-tokens.ts`), registers the kit's Cairo seam, sets the glass rim, and re-does all three when the user changes their mind. Before it, each bundle wired those four by hand and got a different subset — the installer emitted 12 of the ~37 colour tokens and omitted the one its own button hovered with. **Two backends, and both are permanent.** The portal first: `bin/nidara-portal` serves an `org.nidara.appearance` namespace (accent · is-dark · the four opacities · shell-appearance) beside the spec's `org.freedesktop.appearance`, so one `ReadAll` answers both and `SettingChanged` reports each key that moves — measured 2026-08-26: the frontend forwards a custom namespace to our impl, an identical rewrite of the file emits nothing, one moved key emits exactly one signal. The mirror file second, and not as a fallback for a broken portal: **the greeter runs as the `greeter` system user in its own compositor**, where there is no session portal and any portal there would answer for the wrong user — so it passes `{ portal: false }` and says what it knows about itself rather than being sniffed at. ⚠️ `ThemeManager` is still the only WRITER; the portal namespace is a view of the file, never a second copy of the truth. ⚠️ The SHELL does not use `installAppearance()` — it has the live ThemeManager, pins its skin per-surface, and regenerates far more than the ramp.
+- **`ui/lib/appearance.ts` + `ui/lib/appearance-css.ts` — how a NON-shell bundle wears the desktop.** `initAppearance()` is the one call: it loads the full `--nidara-*` ramp as CSS (from the engine at `ui/lib/theme-tokens.ts`), registers the kit's Cairo seam, sets the glass rim, and re-does all three when the user changes their mind. WHERE the values come from is the appearance contract — see "The appearance contract" above: an application reads the Settings portal and nothing else, and only the greeter reads the mirror (`{ channel: "mirror" }`). ⚠️ It is imported from `ui/lib/appearance-css.ts`, NOT from the kit's index: the kit stays a toolkit that is handed its appearance through the seam, and knows nothing about portals. ⚠️ The SHELL does not use it — it is the writer.
 
 - **`NidaraWindow` — THE window of this desktop, sidebar OPTIONAL (2026-08-26).** A window here is a fixed set of decisions: undecorated; the glass painted by a BOX inside the toplevel (so the toplevel stays transparent and the compositor has a low-alpha region to blur); a draggable header because there is no titlebar; its own app-id; and ONE close path. Slots: `header` ({start, center, end} — `start` takes an ARRAY, because a header start is a row and wrapping two widgets in a second box would double the spacing), `content`, `footer`. Pass `sidebar: { widget, toggleIcon, top?, width?, contentWidth? }` and you additionally get the full-height capsule, the split view, the docking breakpoint and a toggle button prepended to the header row; omit it and the header simply crosses the card. ⚠️ **`onClose` returning `true` REFUSES the close**, and the header button, the compositor's close-request and Escape all go through it — which is what makes "the installer cannot be quit mid-install" one rule instead of three places to remember. `closeMode` is `"hide"` for a window reused across toggles (Settings: rebuilding its 21 eagerly-built pages on every open is visible) and `"destroy"` otherwise (About: a hidden window keeps the application alive). `ui/lib/nidara-kit/app-window.ts` is the layer underneath — the toplevel, the glass, the close policy — and is deliberately NOT exported.
 

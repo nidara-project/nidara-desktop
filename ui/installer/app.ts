@@ -13,7 +13,7 @@
 
 import app from "../lib/host"
 import GLib from "gi://GLib"
-import { initAppearance } from "../lib/nidara-kit"
+import { initAppearance } from "../lib/appearance-css"
 import { applyCrispFontRendering } from "../lib/font-rendering"
 import { InstallerWindow } from "./widget/InstallerWindow"
 
@@ -40,8 +40,8 @@ app.start({
     // whatever accent, mode and window opacity the user picked while trying the
     // desktop is what this window wears, and it follows them changing it with the
     // installer open. One call — the full token ramp, the kit's Cairo seam and the
-    // glass rim, from the portal when it answers and from ThemeManager's mirror
-    // file when it does not. See ui/lib/appearance.ts for why both exist.
+    // glass rim — read from the Settings portal, exactly as a third-party app reads
+    // it. See the contract in ui/lib/appearance.ts.
     initAppearance()
 
     InstallerWindow().present()
