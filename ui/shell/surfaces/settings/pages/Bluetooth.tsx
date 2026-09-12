@@ -6,8 +6,7 @@ import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as BT from "../../../core/BluetoothService"
 import { safeDisconnect } from "../../../core/signals"
-import { NidaraButton, NidaraRow, NidaraEmptyRow, showNidaraAlert, type AlertHandle } from "../../../../lib/nidara-kit"
-import { attachTooltip } from "../../../common/Tooltip"
+import { NidaraButton, NidaraRow, NidaraEmptyRow, showNidaraAlert, type AlertHandle, attachTooltip } from "../../../../lib/nidara-kit"
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 

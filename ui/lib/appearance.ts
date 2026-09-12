@@ -1,6 +1,6 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import { ACCENT_HEX, type AccentKey } from "./accent"
+import { ACCENT_HEX, rgbToClosestAccent, type AccentKey } from "./accent"
 import {
   DEFAULT_CONFIG,
   clampGlass,
@@ -66,18 +66,31 @@ export interface AppearanceOpts {
    * wrong user.
    */
   portal?: boolean
+
+  /**
+   * Optional home directory to inspect for user appearance file before falling back
+   * to system/default locations. Used when running under a service account (like greeter)
+   * that knows which user is logging in.
+   */
+  homeDir?: string
 }
 
+const APPEARANCE_NS = "org.freedesktop.appearance"
 const NIDARA_NS = "org.nidara.appearance"
 const PORTAL_BUS = "org.freedesktop.portal.Desktop"
 const PORTAL_PATH = "/org/freedesktop/portal/desktop"
 const PORTAL_IFACE = "org.freedesktop.portal.Settings"
 
-/** Where `ThemeManager` writes: the session's copy, then the world-readable mirror. */
-const FILE_PATHS = [
-  `${GLib.get_user_config_dir()}/nidara/appearance.json`,
-  "/var/tmp/nidara/appearance.json",
-]
+/** Where `ThemeManager` writes: the user copy, session's copy, then the world-readable mirror. */
+function candidateFilePaths(opts: AppearanceOpts = {}): string[] {
+  const paths: string[] = []
+  if (opts.homeDir) {
+    paths.push(`${opts.homeDir}/.config/nidara/appearance.json`)
+  }
+  paths.push(`${GLib.get_user_config_dir()}/nidara/appearance.json`)
+  paths.push("/var/tmp/nidara/appearance.json")
+  return paths
+}
 
 /** The defaults, as one object, so every "key missing" answer comes from one place. */
 const FALLBACK: AppearanceState = { ...DEFAULT_CONFIG, isDark: false }
@@ -97,12 +110,12 @@ function asGlass(v: unknown, dflt: number): number {
 // ── The file backend ─────────────────────────────────────────────────────────
 
 /** The first appearance file that exists, or null when this machine has none. */
-function filePath(): string | null {
-  return FILE_PATHS.find((p) => GLib.file_test(p, GLib.FileTest.EXISTS)) ?? null
+function filePath(opts: AppearanceOpts = {}): string | null {
+  return candidateFilePaths(opts).find((p) => GLib.file_test(p, GLib.FileTest.EXISTS)) ?? null
 }
 
-function readFileState(): AppearanceState | null {
-  for (const path of FILE_PATHS) {
+function readFileState(opts: AppearanceOpts = {}): AppearanceState | null {
+  for (const path of candidateFilePaths(opts)) {
     try {
       const [ok, data] = GLib.file_get_contents(path)
       if (!ok) continue
@@ -126,47 +139,94 @@ function readFileState(): AppearanceState | null {
 
 // ── The portal backend ───────────────────────────────────────────────────────
 
+function ensureSessionBus(): void {
+  if (!GLib.getenv("DBUS_SESSION_BUS_ADDRESS")) {
+    const runtime = GLib.getenv("XDG_RUNTIME_DIR")
+    if (runtime) {
+      const busPath = `${runtime}/bus`
+      if (GLib.file_test(busPath, GLib.FileTest.EXISTS)) {
+        GLib.setenv("DBUS_SESSION_BUS_ADDRESS", `unix:path=${busPath}`, true)
+      }
+    }
+  }
+}
+
 /**
- * `ReadAll` our namespace, or null when the portal cannot answer it.
+ * `ReadAll` standard and Nidara namespaces, or null when the portal cannot answer.
  *
- * Null covers every "not here" at once — no session bus, no portal running, no
- * backend serving our namespace — because the caller does the same thing in all
- * of them: read the file. The call is synchronous and short-timeout on purpose:
- * this runs once, before the first window is built, and a portal that is slow to
- * activate must not hold the first frame.
+ * Conforms fully to `org.freedesktop.appearance` (standard XDG Desktop Portal spec)
+ * while enriching with `org.nidara.appearance` when running on a Nidara system.
  */
 function readPortalState(): AppearanceState | null {
+  ensureSessionBus()
   if (!GLib.getenv("DBUS_SESSION_BUS_ADDRESS")) return null
   try {
     const bus = Gio.DBus.session
     if (!bus) return null
     const reply = bus.call_sync(
       PORTAL_BUS, PORTAL_PATH, PORTAL_IFACE, "ReadAll",
-      new GLib.Variant("(as)", [[NIDARA_NS]]),
+      new GLib.Variant("(as)", [[APPEARANCE_NS, NIDARA_NS]]),
       new GLib.VariantType("(a{sa{sv}})"),
       Gio.DBusCallFlags.NONE, 1500, null,
     )
     const all = reply.deepUnpack() as [Record<string, Record<string, unknown>>]
-    const ns = all[0]?.[NIDARA_NS]
-    // An empty answer is not a failure of the call — it is what comes back when no
-    // backend serves the namespace. Treat it as "not available here".
-    if (!ns || Object.keys(ns).length === 0) return null
-    const val = (k: string) => {
-      const v = ns[k] as { deepUnpack?: () => unknown } | undefined
+    const fdNs = all[0]?.[APPEARANCE_NS]
+    const nidaraNs = all[0]?.[NIDARA_NS]
+    if ((!fdNs || Object.keys(fdNs).length === 0) && (!nidaraNs || Object.keys(nidaraNs).length === 0)) {
+      return null
+    }
+
+    const val = (dict: Record<string, unknown> | undefined, k: string) => {
+      const v = dict?.[k] as { deepUnpack?: () => unknown } | undefined
       return v && typeof v.deepUnpack === "function" ? v.deepUnpack() : v
     }
+
+    let accent: AccentKey = FALLBACK.accent
+    if (nidaraNs && typeof val(nidaraNs, "accent") === "string") {
+      accent = asAccent(val(nidaraNs, "accent"))
+    } else if (fdNs) {
+      const rgb = val(fdNs, "accent-color")
+      if (Array.isArray(rgb) && rgb.length >= 3) {
+        accent = rgbToClosestAccent(rgb[0], rgb[1], rgb[2])
+      }
+    }
+
+    let isDark: boolean = FALLBACK.isDark
+    if (nidaraNs && val(nidaraNs, "is-dark") !== undefined) {
+      isDark = val(nidaraNs, "is-dark") === true
+    } else if (fdNs && val(fdNs, "color-scheme") !== undefined) {
+      // 0: default, 1: prefer-dark, 2: prefer-light
+      isDark = val(fdNs, "color-scheme") === 1
+    }
+
     return {
-      accent: asAccent(val("accent")),
-      isDark: val("is-dark") === true,
-      windowOpacity: asGlass(val("window-opacity"), FALLBACK.windowOpacity),
-      barOpacity: asGlass(val("bar-opacity"), FALLBACK.barOpacity),
-      overlayOpacity: asGlass(val("overlay-opacity"), FALLBACK.overlayOpacity),
-      dockOpacity: asGlass(val("dock-opacity"), FALLBACK.dockOpacity),
-      shellAppearance: asShellAppearance(val("shell-appearance")),
+      accent,
+      isDark,
+      windowOpacity: asGlass(val(nidaraNs, "window-opacity"), FALLBACK.windowOpacity),
+      barOpacity: asGlass(val(nidaraNs, "bar-opacity"), FALLBACK.barOpacity),
+      overlayOpacity: asGlass(val(nidaraNs, "overlay-opacity"), FALLBACK.overlayOpacity),
+      dockOpacity: asGlass(val(nidaraNs, "dock-opacity"), FALLBACK.dockOpacity),
+      shellAppearance: asShellAppearance(val(nidaraNs, "shell-appearance")),
     }
   } catch {
     return null
   }
+}
+
+function readGSettingsState(): Partial<AppearanceState> | null {
+  try {
+    const schemaSource = Gio.SettingsSchemaSource.get_default()
+    if (schemaSource && schemaSource.lookup("org.gnome.desktop.interface", true)) {
+      const s = new Gio.Settings({ schema: "org.gnome.desktop.interface" })
+      const accent = s.get_string("accent-color")
+      const scheme = s.get_string("color-scheme")
+      return {
+        accent: asAccent(accent),
+        isDark: scheme === "prefer-dark",
+      }
+    }
+  } catch {}
+  return null
 }
 
 // ── The door ─────────────────────────────────────────────────────────────────
@@ -187,25 +247,37 @@ let lastSource: AppearanceSource = "defaults"
  * worse than one painted with the wrong accent.
  */
 export function readAppearance(opts: AppearanceOpts = {}): AppearanceState {
+  let base: AppearanceState | null = null
+
   if (opts.portal !== false) {
     const fromPortal = readPortalState()
-    if (fromPortal) { lastSource = "portal"; return fromPortal }
+    if (fromPortal) { lastSource = "portal"; base = fromPortal }
   }
-  const fromFile = readFileState()
-  if (fromFile) { lastSource = "file"; return fromFile }
-  lastSource = "defaults"
-  return { ...FALLBACK }
+  if (!base) {
+    const fromFile = readFileState(opts)
+    if (fromFile) { lastSource = "file"; base = fromFile }
+    else { lastSource = "defaults"; base = { ...FALLBACK } }
+  }
+
+  // If GSettings is reachable in this session, its accent-color and color-scheme
+  // are the instant source of truth (ThemeManager writes them on every click).
+  const gsettings = readGSettingsState()
+  if (gsettings) {
+    if (gsettings.accent) base.accent = gsettings.accent
+    if (gsettings.isDark !== undefined) base.isDark = gsettings.isDark
+  }
+
+  return base
 }
 
 /**
  * Call `cb` whenever the appearance changes, with the complete new state.
  *
- * Returns an unsubscribe. The subscription follows the same backend the read did:
- * the portal's `SettingChanged` when it answered, a `Gio.FileMonitor` otherwise.
- * Both are coalesced to "here is the whole state again" rather than "this key
- * moved", because every consumer regenerates a full stylesheet anyway, and a
- * per-key API would make each of them reassemble the state themselves — which is
- * the duplication this module exists to end.
+ * Returns an unsubscribe. The subscription follows three complementary layers:
+ * 1. The portal's `SettingChanged` signal (standard for sandboxed & desktop apps).
+ * 2. GSettings `org.gnome.desktop.interface` (instant in-session response).
+ * 3. Durable directory file monitors on `~/.config/nidara/` and `/var/tmp/nidara/`
+ *    (immune to inode replacement on atomic file saves).
  */
 export function watchAppearance(
   cb: (state: AppearanceState) => void,
@@ -214,12 +286,13 @@ export function watchAppearance(
   const unsubs: (() => void)[] = []
 
   // 1. Portal signal subscription (catches both org.freedesktop.appearance and org.nidara.appearance)
+  ensureSessionBus()
   if (opts.portal !== false && GLib.getenv("DBUS_SESSION_BUS_ADDRESS")) {
     try {
       const bus = Gio.DBus.session
       if (bus) {
         const id = bus.signal_subscribe(
-          PORTAL_BUS, PORTAL_IFACE, "SettingChanged", PORTAL_PATH, null,
+          null, PORTAL_IFACE, "SettingChanged", PORTAL_PATH, null,
           Gio.DBusSignalFlags.NONE,
           () => cb(readAppearance(opts)),
         )
@@ -228,13 +301,36 @@ export function watchAppearance(
     } catch {}
   }
 
-  // 2. File monitors on all known appearance paths
-  for (const path of FILE_PATHS) {
+  // 2. Direct GSettings listener when running in user session (instant 0ms response)
+  try {
+    const schemaSource = Gio.SettingsSchemaSource.get_default()
+    if (schemaSource && schemaSource.lookup("org.gnome.desktop.interface", true)) {
+      const gsettings = new Gio.Settings({ schema: "org.gnome.desktop.interface" })
+      const idAccent = gsettings.connect("changed::accent-color", () => cb(readAppearance(opts)))
+      const idScheme = gsettings.connect("changed::color-scheme", () => cb(readAppearance(opts)))
+      unsubs.push(() => {
+        try {
+          gsettings.disconnect(idAccent)
+          gsettings.disconnect(idScheme)
+        } catch {}
+      })
+    }
+  } catch {}
+
+  // 3. Durable directory file monitors (catches atomic file renames)
+  for (const path of candidateFilePaths(opts)) {
     try {
-      const file = Gio.File.new_for_path(path)
-      const monitor = file.monitor_file(Gio.FileMonitorFlags.NONE, null)
-      const id = monitor.connect("changed", () => cb(readAppearance(opts)))
-      unsubs.push(() => { try { monitor.disconnect(id); monitor.cancel() } catch {} })
+      const dirPath = GLib.path_get_dirname(path)
+      const targetBasename = GLib.path_get_basename(path)
+      const dir = Gio.File.new_for_path(dirPath)
+      if (dir.query_exists(null)) {
+        const monitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null)
+        const id = monitor.connect("changed", (_mon, file) => {
+          if (file && file.get_basename() !== targetBasename) return
+          cb(readAppearance(opts))
+        })
+        unsubs.push(() => { try { monitor.disconnect(id); monitor.cancel() } catch {} })
+      }
     } catch {}
   }
 

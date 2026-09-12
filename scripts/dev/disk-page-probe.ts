@@ -26,7 +26,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import app from "../../ui/lib/host"
-import { installAppearance } from "../../ui/lib/appearance-css"
+import { initAppearance } from "../../ui/lib/nidara-kit"
 import { applyCrispFontRendering } from "../../ui/lib/font-rendering"
 import { NidaraWindow, NidaraClamp, NidaraScrolled, NIDARA_WINDOW_RADIUS } from "../../ui/lib/nidara-kit"
 import { WINDOW_LAYOUT } from "../../ui/lib/tokens"
@@ -89,7 +89,7 @@ app.start({
 
   main() {
     applyCrispFontRendering()
-    installAppearance()
+    initAppearance()
 
     // DISK_PROBE_SEED opens the page with manual mode already answered, the way
     // REGION_PROBE_COUNTRY opens the region page with a country. Driving six

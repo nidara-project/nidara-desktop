@@ -25,7 +25,7 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import GLib from "gi://GLib"
 import System from "system"
 import { createSquirclePath, glassRimGradient } from "../../ui/shell/common/DrawingUtils"
-import { bubblePath, ARROW_W, ARROW_H } from "../../ui/shell/common/GlassBubble"
+import { bubblePath, ARROW_W, ARROW_H } from "../../ui/lib/nidara-kit/glass-bubble"
 import { GLASS_TINT, GLASS_SPECULAR } from "../../ui/lib/tokens"
 
 const PATCH = Number(System.programArgs[2] ?? 0)

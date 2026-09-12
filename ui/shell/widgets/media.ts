@@ -9,9 +9,8 @@ import Icons from "../core/Icons"
 import { safeDisconnect } from "../core/signals"
 import * as media from "../core/MediaService"
 import Theme from "../core/ThemeManager"
-import { attachTooltip } from "../common/Tooltip"
+import { attachTooltip, GlassBubbleMenu } from "../../lib/nidara-kit"
 import { menuRow, menuSeparator } from "../common/MenuRow"
-import GlassBubbleMenu from "../common/GlassBubbleMenu"
 
 // NO bar variant. The Activity Island already carries the player as an activity
 // (IslandActivities' mediaActivity: cover art in the compact capsule the moment

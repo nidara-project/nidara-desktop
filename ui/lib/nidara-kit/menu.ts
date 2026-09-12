@@ -1,17 +1,16 @@
 import Gtk from "gi://Gtk?version=4.0"
-import Theme from "../core/ThemeManager"
-import { safeDisconnect } from "../core/signals"
-import { RADIUS, rowInsetFor } from "../../lib/tokens"
-import { sideFor, paintGlassBubble, ARROW_H, BUF, type ArrowSide } from "./GlassBubble"
+import { RADIUS, rowInsetFor } from "../tokens"
+import { kitAppearance } from "./appearance"
+import { sideFor, paintGlassBubble, ARROW_H, BUF, type ArrowSide } from "./glass-bubble"
 
-// Universal Cairo glass bubble menu popover. Shared by the dock context menu
-// (`surfaces/dock/DockItem.tsx`), the launcher context menu (`surfaces/app-grid/AppGrid.tsx`),
-// and the CC media player source picker (`widgets/media.ts`).
+// Universal Cairo glass bubble menu popover. Shared by dock context menu,
+// launcher context menu, media widget, and any Nidara surface or app needing
+// a glass popover menu.
 //
-// Encapsulates the Gtk.Popover chrome reset (`.nidara-menu-popover`), the Cairo
-// squircle bubble with arrow (`paintGlassBubble`), the rows container (`.nidara-menu`),
-// proper margin calculation (`rowInsetFor(RADIUS.lg)` + halo + arrow offset), and
-// Theme invalidation tracking.
+// Encapsulates Gtk.Popover styling (.nidara-menu-popover), Cairo squircle
+// bubble with arrow (paintGlassBubble), rows container (.nidara-menu),
+// proper margin calculation (rowInsetFor(RADIUS.lg) + halo + arrow offset),
+// and kit appearance invalidation tracking.
 
 export interface GlassBubbleMenuOpts {
     /** The widget the popover anchors to. */
@@ -36,7 +35,7 @@ export class GlassBubbleMenu {
     private _side: ArrowSide
     private _radiusMax: number
     private _n: number
-    private _themeId = 0
+    private _unsubTheme: (() => void) | null = null
 
     constructor(opts: GlassBubbleMenuOpts) {
         const pos = opts.position ?? Gtk.PositionType.BOTTOM
@@ -69,7 +68,7 @@ export class GlassBubbleMenu {
         grid.attach(this.rows, 0, 0, 1, 1)
         this.layout()
 
-        this._themeId = Theme.connect("changed", () => {
+        this._unsubTheme = kitAppearance().onChange(() => {
             if (this.drawingArea.get_mapped()) this.drawingArea.queue_draw()
         })
         this.popover.connect("destroy", () => this.destroy())
@@ -120,11 +119,12 @@ export class GlassBubbleMenu {
     }
 
     destroy() {
-        if (this._themeId) {
-            safeDisconnect(Theme, this._themeId)
-            this._themeId = 0
+        if (this._unsubTheme) {
+            this._unsubTheme()
+            this._unsubTheme = null
         }
     }
 }
 
+export { GlassBubbleMenu as NidaraMenu }
 export default GlassBubbleMenu

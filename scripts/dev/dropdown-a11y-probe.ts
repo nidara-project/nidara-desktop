@@ -44,8 +44,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import app from "../../ui/lib/host"
-import { installAppearance } from "../../ui/lib/appearance-css"
-import { NidaraWindow, NidaraDropDown } from "../../ui/lib/nidara-kit"
+import { NidaraWindow, NidaraDropDown, initAppearance } from "../../ui/lib/nidara-kit"
 
 GLib.setenv("GTK_THEME", "nidara", true)
 
@@ -57,7 +56,7 @@ app.start({
   logDomain: "dropdown-a11y",
 
   main() {
-    installAppearance()
+    initAppearance()
 
     const body = new Gtk.Box({
       orientation: Gtk.Orientation.VERTICAL, spacing: 12,

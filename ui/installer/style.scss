@@ -18,8 +18,9 @@
   @include radius-vars;
 
   // ⚠️ THE COLOUR RAMP IS NOT HERE ANY MORE (2026-08-26).
-  // `installAppearance()` (ui/lib/appearance-css.ts) generates all ~37
-  // `--nidara-*` colour tokens at runtime from the user's actual accent, mode and
+  // `initAppearance()` (ui/lib/nidara-kit) generates all ~37
+  // color and material tokens dynamically at runtime based on the user's
+  // accent and dark/light mode preference, and
   // window opacity, and loads them at a HIGHER provider priority than this sheet.
   // Two of the three things that made a hand-typed ramp wrong are unfixable in
   // SCSS — the accent and the opacity are the USER's — and the third is what a

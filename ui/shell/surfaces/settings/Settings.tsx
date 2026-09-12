@@ -23,7 +23,7 @@ import { beginPage, endPage, clearSearchIndex, getSearchIndex, indexPage, indexP
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import IconButton from "../../common/IconButton"
-import { attachTooltip } from "../../common/Tooltip"
+import { attachTooltip } from "../../../lib/nidara-kit"
 
 // ── Non-declarative page components registry (P3 #341) ───────────────────────
 // Builders for browser and info pages. Compile-time verified via `satisfies`:

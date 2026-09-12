@@ -10,7 +10,7 @@ import { ACCENT_PALETTE, GLASS_RANGE, type AccentKey } from "../../../core/Nidar
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { createRow, bindWhileRealized } from "../SettingsHelpers"
-import { attachTooltip } from "../../../common/Tooltip"
+import { attachTooltip } from "../../../../lib/nidara-kit"
 import { safeDisconnect } from "../../../core/signals"
 import type { PageCtx, ItemBuilder } from "../PreferencePage"
 

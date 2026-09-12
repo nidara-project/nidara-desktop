@@ -1,8 +1,8 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import { NidaraRow, NidaraStackedRow, NidaraList, NidaraButton,
-         NidaraToggleRow, NidaraDropDownRow, NidaraSliderRow, type NidaraSliderRowOpts } from "../../../lib/nidara-kit"
-import { attachTooltip } from "../../common/Tooltip"
+         NidaraToggleRow, NidaraDropDownRow, NidaraSliderRow, type NidaraSliderRowOpts,
+         attachTooltip } from "../../../lib/nidara-kit"
 import { t } from "../../core/i18n"
 import { getConfigEntry } from "../../core/ConfigRegistry"
 import type { PageDecl, ItemDecl } from "./manifest"

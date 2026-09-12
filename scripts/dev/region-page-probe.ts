@@ -18,9 +18,8 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import app from "../../ui/lib/host"
-import { installAppearance } from "../../ui/lib/appearance-css"
 import { applyCrispFontRendering } from "../../ui/lib/font-rendering"
-import { NidaraWindow, NidaraClamp, NidaraScrolled, NIDARA_WINDOW_RADIUS } from "../../ui/lib/nidara-kit"
+import { NidaraWindow, NidaraClamp, NidaraScrolled, NIDARA_WINDOW_RADIUS, initAppearance } from "../../ui/lib/nidara-kit"
 import { WINDOW_LAYOUT } from "../../ui/lib/tokens"
 import { RegionStep } from "../../ui/installer/steps/region"
 import {
@@ -43,7 +42,7 @@ app.start({
 
   main() {
     applyCrispFontRendering()
-    installAppearance()
+    initAppearance()
 
     // REGION_PROBE_COUNTRY=ES opens with a country already chosen, so the derived
     // half of the page can be looked at without driving the list by hand. It goes

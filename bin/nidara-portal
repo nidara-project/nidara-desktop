@@ -266,10 +266,27 @@ function readNidaraAppearance() {
 function nidaraKeys() {
     const a = readNidaraAppearance()
     const num = (v, dflt) => (typeof v === "number" && isFinite(v) ? v : dflt)
+
+    let accentName = typeof a.accent === "string" ? a.accent : "blue"
+    if (interfaceSettings) {
+        try {
+            const s = interfaceSettings.get_string("accent-color")
+            if (s && s in ACCENT_HEX) accentName = s
+        } catch (_) {}
+    }
+
+    let isDark = a.isDark === true
+    if (interfaceSettings) {
+        try {
+            const scheme = interfaceSettings.get_string("color-scheme")
+            isDark = scheme === "prefer-dark"
+        } catch (_) {}
+    }
+
     return {
-        "accent": new GLib.Variant("s", typeof a.accent === "string" ? a.accent : "blue"),
+        "accent": new GLib.Variant("s", accentName),
         // A MISSING key means light, matching the shell's own DEFAULT_CONFIG.
-        "is-dark": new GLib.Variant("b", a.isDark === true),
+        "is-dark": new GLib.Variant("b", isDark),
         "window-opacity": new GLib.Variant("d", num(a.windowOpacity, 0.48)),
         "bar-opacity": new GLib.Variant("d", num(a.barOpacity, 0.48)),
         "overlay-opacity": new GLib.Variant("d", num(a.overlayOpacity, 0.48)),
@@ -279,12 +296,24 @@ function nidaraKeys() {
     }
 }
 
+
 function contrastVariant() {
     // 0: no preference, 1: high contrast
     let val = 0
     if (a11ySettings) {
         try {
             if (a11ySettings.get_boolean("high-contrast")) val = 1
+        } catch (_) {}
+    }
+    return new GLib.Variant("u", val)
+}
+
+function reducedMotionVariant() {
+    // 0: no preference (animations on), 1: reduced motion (animations off)
+    let val = 0
+    if (interfaceSettings) {
+        try {
+            if (!interfaceSettings.get_boolean("enable-animations")) val = 1
         } catch (_) {}
     }
     return new GLib.Variant("u", val)
@@ -357,6 +386,7 @@ class SettingsBackend {
                 "accent-color": accentRgbVariant(),
                 "color-scheme": colorSchemeVariant(),
                 "contrast": contrastVariant(),
+                "reduced-motion": reducedMotionVariant(),
             }
         }
         if (nsMatches(namespaces, NIDARA_NS)) dict[NIDARA_NS] = nidaraKeys()
@@ -376,6 +406,10 @@ class SettingsBackend {
             }
             if (key === "contrast") {
                 invocation.return_value(new GLib.Variant("(v)", [contrastVariant()]))
+                return
+            }
+            if (key === "reduced-motion") {
+                invocation.return_value(new GLib.Variant("(v)", [reducedMotionVariant()]))
                 return
             }
         }
@@ -550,21 +584,24 @@ function watchNidaraAppearance(onChanged) {
     let previous = nidaraKeys()
     let monitor = null
     try {
-        monitor = Gio.File.new_for_path(path).monitor_file(Gio.FileMonitorFlags.NONE, null)
+        const dirPath = GLib.path_get_dirname(path)
+        const targetBasename = GLib.path_get_basename(path)
+        const dir = Gio.File.new_for_path(dirPath)
+        monitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null)
+        monitor.connect("changed", (_mon, file, _other, event) => {
+            if (file && file.get_basename() !== targetBasename) return
+            const next = nidaraKeys()
+            for (const key of Object.keys(next)) {
+                // `equal()` compares the VALUE, not the boxed variant's identity.
+                if (previous[key] && next[key].equal(previous[key])) continue
+                onChanged(key, next[key])
+            }
+            previous = next
+        })
     } catch (e) {
         printerr(`[nidara-portal] cannot watch ${path}: ${e}`)
         return null
     }
-
-    monitor.connect("changed", () => {
-        const next = nidaraKeys()
-        for (const key of Object.keys(next)) {
-            // `equal()` compares the VALUE, not the boxed variant's identity.
-            if (previous[key] && next[key].equal(previous[key])) continue
-            onChanged(key, next[key])
-        }
-        previous = next
-    })
     return monitor
 }
 
@@ -600,12 +637,23 @@ Gio.bus_own_name(
                 "SettingChanged",
                 new GLib.Variant("(ssv)", [APPEARANCE_NS, "accent-color", accentRgbVariant()]),
             )
+            const accentName = interfaceSettings.get_string("accent-color")
+            exportedSettings.emit_signal(
+                "SettingChanged",
+                new GLib.Variant("(ssv)", [NIDARA_NS, "accent", new GLib.Variant("s", accentName)]),
+            )
         })
 
         interfaceSettings.connect("changed::color-scheme", () => {
             exportedSettings.emit_signal(
                 "SettingChanged",
                 new GLib.Variant("(ssv)", [APPEARANCE_NS, "color-scheme", colorSchemeVariant()]),
+            )
+            const scheme = interfaceSettings.get_string("color-scheme")
+            const isDark = scheme === "prefer-dark"
+            exportedSettings.emit_signal(
+                "SettingChanged",
+                new GLib.Variant("(ssv)", [NIDARA_NS, "is-dark", new GLib.Variant("b", isDark)]),
             )
         })
 
@@ -617,6 +665,13 @@ Gio.bus_own_name(
                 )
             })
         }
+
+        interfaceSettings.connect("changed::enable-animations", () => {
+            exportedSettings.emit_signal(
+                "SettingChanged",
+                new GLib.Variant("(ssv)", [APPEARANCE_NS, "reduced-motion", reducedMotionVariant()]),
+            )
+        })
 
         // Our namespace changes when the FILE changes, so the signal comes from a
         // file monitor rather than a gsettings key. Held in a module-level

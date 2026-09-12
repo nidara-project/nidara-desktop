@@ -4,8 +4,7 @@ import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as Net from "../../../core/NetworkService"
 import type { VpnProfile } from "../../../core/NetworkService"
-import { NidaraButton, NidaraEmptyRow } from "../../../../lib/nidara-kit"
-import { attachTooltip } from "../../../common/Tooltip"
+import { NidaraButton, NidaraEmptyRow, attachTooltip } from "../../../../lib/nidara-kit"
 import { safeDisconnect } from "../../../core/signals"
 
 function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow {

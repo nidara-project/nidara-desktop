@@ -75,3 +75,13 @@ export function setKitAppearance(source: KitAppearance): void {
 export function kitAppearance(): KitAppearance {
     return current
 }
+
+/** Whether appearance has been initialized (or if it's still using the unconfigured FALLBACK). */
+export function isAppearanceInitialized(): boolean {
+    return current !== FALLBACK
+}
+
+/** Backwards-compatibility alias. */
+export const isKitAppearanceInstalled = isAppearanceInitialized
+
+

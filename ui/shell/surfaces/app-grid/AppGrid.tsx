@@ -19,9 +19,8 @@ import Cairo from "gi://cairo"
 import shellActions from "../../core/ShellActions"
 import { createSchematicMap } from "../../common/WorkspaceSchematic"
 import { safeDisconnect } from "../../core/signals"
-import { attachTooltip } from "../../common/Tooltip"
+import { attachTooltip, GlassBubbleMenu } from "../../../lib/nidara-kit"
 import { renderMenuModel } from "../../common/NidaraMenu"
-import GlassBubbleMenu from "../../common/GlassBubbleMenu"
 
 // Extract just the desktop basename, stripping path and .desktop extension
 const normId = (s: string) => {

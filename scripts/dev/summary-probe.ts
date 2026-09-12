@@ -35,9 +35,8 @@
 import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
 import app from "../../ui/lib/host"
-import { installAppearance } from "../../ui/lib/appearance-css"
 import { applyCrispFontRendering } from "../../ui/lib/font-rendering"
-import { NidaraClamp, NidaraScrolled, NidaraWindow } from "../../ui/lib/nidara-kit"
+import { NidaraClamp, NidaraScrolled, NidaraWindow, initAppearance } from "../../ui/lib/nidara-kit"
 import { WINDOW_LAYOUT } from "../../ui/lib/tokens"
 import { SummaryStep } from "../../ui/installer/steps/summary"
 import {
@@ -89,7 +88,7 @@ app.start({
 
   main() {
     applyCrispFontRendering()
-    installAppearance()
+    initAppearance()
 
     const seed = GLib.getenv("SUMMARY_PROBE_SEED") || "swap"
 

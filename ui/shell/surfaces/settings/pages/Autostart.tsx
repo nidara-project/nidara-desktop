@@ -5,8 +5,7 @@ import { listGroup, createRow, pageBox, type SettingsNav } from "../SettingsHelp
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import appService, { type AppData } from "../../../core/AppService"
-import { NidaraButton, NidaraScrolled, NidaraEmptyRow } from "../../../../lib/nidara-kit"
-import { attachTooltip } from "../../../common/Tooltip"
+import { NidaraButton, NidaraScrolled, NidaraEmptyRow, attachTooltip } from "../../../../lib/nidara-kit"
 import { makeIconImage } from "./AppIconImage"
 
 // ── Config path ───────────────────────────────────────────────────────────────

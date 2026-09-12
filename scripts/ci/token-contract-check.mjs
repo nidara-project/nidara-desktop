@@ -70,7 +70,7 @@ for (const b of BUNDLES) {
 
     // What it can satisfy them with.
     const own = defined(sheet)
-    const runtime = new RegExp("installAppearance\\s*\\(").test(
+    const runtime = new RegExp("(initAppearance|installAppearance)\\s*\\(").test(
         // one grep over the bundle's entry point is enough: it is called once, in app.ts
         read(`${b.code}/app.ts`),
     )

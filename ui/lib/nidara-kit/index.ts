@@ -82,7 +82,9 @@ export { makeSlider, makeHSlider, makeVerticalFillTile, makeVolumeSlider } from 
 // source once, in app.ts. Cairo cannot read CSS tokens, so the accent and the
 // surface's mode have to be handed to the kit. See appearance.ts.
 export type { KitAppearance } from "./appearance"
-export { setKitAppearance, kitAppearance } from "./appearance"
+export { setKitAppearance, kitAppearance, isAppearanceInitialized, isKitAppearanceInstalled } from "./appearance"
+export type { InitAppearanceOpts, InstallAppearanceOpts, AppearanceHandle } from "../appearance-css"
+export { initAppearance, installAppearance } from "../appearance-css"
 
 // The COMPOSED rows — "label + subtitle + the control that edits it", which is what a
 // preferences pane is made of. They take the row BUILDER as a parameter (`mkRow`,
@@ -108,5 +110,10 @@ export { showNidaraFormDialog } from "./form-dialog"
 // attachTooltip — the one Nidara tooltip (Cairo glass bubble with pointer arrow)
 export type { NidaraTooltipOpts, NidaraTooltipHandle, NidaraTooltipText } from "./tooltip"
 export { attachTooltip } from "./tooltip"
+
+// GlassBubbleMenu / NidaraMenu — universal Cairo glass bubble context menu popover
+export type { GlassBubbleMenuOpts } from "./menu"
+export { GlassBubbleMenu, NidaraMenu } from "./menu"
+
 
 
