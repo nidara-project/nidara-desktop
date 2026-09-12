@@ -337,6 +337,8 @@ package_nidara-desktop() {
 
   # Session entry + app entries
   install -Dm644 config/wayland-sessions/nidara.desktop "$pkgdir/usr/share/wayland-sessions/nidara.desktop"
+  # A system-wide $BROWSER must not contradict Settings → Default Apps (see the file).
+  install -Dm644 config/uwsm/nidara-browser "$pkgdir/usr/share/uwsm/env-hyprland.d/nidara-browser"
   mkdir -p "$pkgdir/usr/share/applications"
   install -m644 config/applications/*.desktop "$pkgdir/usr/share/applications/"
 

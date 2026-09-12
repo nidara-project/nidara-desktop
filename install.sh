@@ -673,6 +673,9 @@ sudo cp "$REPO_DIR/bin/nidara.service" /usr/lib/systemd/user/nidara.service
 # the nidara pacman package — keep ONE source, don't reintroduce a heredoc here)
 sudo mkdir -p /usr/share/wayland-sessions
 sudo cp "$REPO_DIR/config/wayland-sessions/nidara.desktop" /usr/share/wayland-sessions/nidara.desktop
+# uwsm env fragment: a system-wide $BROWSER must not contradict Settings → Default
+# Apps. Shared file (config/uwsm/), also shipped by the pacman package.
+sudo install -Dm644 "$REPO_DIR/config/uwsm/nidara-browser" /usr/share/uwsm/env-hyprland.d/nidara-browser
 
 # Application entries
 sudo mkdir -p /usr/share/applications

@@ -1,0 +1,29 @@
+# Installed to /usr/share/uwsm/env-hyprland.d/nidara-browser — sourced by uwsm's env
+# loader for every Hyprland session it starts, BEFORE /etc/xdg/uwsm and
+# ~/.config/uwsm (lowest priority of the three).
+#
+# ── Why a Nidara session drops a SYSTEM-WIDE $BROWSER ───────────────────────
+# The default browser is chosen in Settings → Apps → Default Apps, which writes the
+# freedesktop associations (x-scheme-handler/http[s], text/html) that xdg-open,
+# GIO, xdg-settings and the Settings portal all read. `$BROWSER` is a second,
+# older answer that many programs consult FIRST — Python's `webbrowser`, most CLI
+# tools, login flows that "open your browser" — and a distribution may set it for
+# everybody in /etc/environment (EndeavourOS ships `BROWSER=firefox`). With both
+# present the desktop keeps two defaults: measured 2026-09-13 on such a machine,
+# every freedesktop path said Chrome while Python's webbrowser picked Firefox.
+#
+# GNOME sets no `$BROWSER`, and with it unset those programs fall back to xdg-open —
+# i.e. to the user's choice. So the value inherited from the system (pam_env puts
+# it in the login environment AND in the systemd user manager) is removed here.
+#
+# ⚠️ It has to be HERE, not in bin/nidara: uwsm merges the systemd user manager's
+# environment — which already carries pam_env's BROWSER — over the launcher's, so an
+# `unset` in the launcher comes straight back. A variable that disappears while
+# uwsm loads its env files is one uwsm removes from the systemd manager itself
+# (`unset_varnames` in uwsm's prepare_env), which is what reaches D-Bus-activated
+# services and every app.
+#
+# 🔑 Still overridable, on purpose: somebody who wants `$BROWSER` sets it in
+# ~/.config/uwsm/env (loaded after this file). ⚠️ Not in ~/.profile — uwsm sources
+# the profile BEFORE its env files, so this unset runs after it.
+unset BROWSER
