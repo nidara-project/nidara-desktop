@@ -95,3 +95,27 @@ export function accentCssFor(accent: string | null | undefined): string {
     `}`,
   ].join("\n")
 }
+
+/** Map an (r, g, b) triple (0..1 or 0..255) to the closest Nidara AccentKey. */
+export function rgbToClosestAccent(r: number, g: number, b: number): AccentKey {
+  const r255 = r <= 1.0 ? r * 255 : r
+  const g255 = g <= 1.0 ? g * 255 : g
+  const b255 = b <= 1.0 ? b * 255 : b
+
+  let closestKey: AccentKey = "blue"
+  let minDistance = Infinity
+
+  for (const [key, hex] of Object.entries(ACCENT_HEX)) {
+    const hr = parseInt(hex.slice(1, 3), 16)
+    const hg = parseInt(hex.slice(3, 5), 16)
+    const hb = parseInt(hex.slice(5, 7), 16)
+    const dist = Math.hypot(r255 - hr, g255 - hg, b255 - hb)
+    if (dist < minDistance) {
+      minDistance = dist
+      closestKey = key as AccentKey
+    }
+  }
+
+  return closestKey
+}
+

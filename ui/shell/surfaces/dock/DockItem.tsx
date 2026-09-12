@@ -18,9 +18,8 @@ import { iconAssetPath } from "../../core/Icons"
 import { t } from "../../core/i18n"
 import shellActions from "../../core/ShellActions"
 import { safeDisconnect } from "../../core/signals"
-import { attachTooltip } from "../../common/Tooltip"
+import { attachTooltip, GlassBubbleMenu } from "../../../lib/nidara-kit"
 import { renderMenuModel } from "../../common/NidaraMenu"
-import GlassBubbleMenu from "../../common/GlassBubbleMenu"
 import { INK } from "../../../lib/tokens"
 
 // hypr kept as alias for hs to minimise diff surface in this file

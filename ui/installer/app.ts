@@ -13,7 +13,7 @@
 
 import app from "../lib/host"
 import GLib from "gi://GLib"
-import { installAppearance } from "../lib/appearance-css"
+import { installAppearance } from "../lib/nidara-kit"
 import { applyCrispFontRendering } from "../lib/font-rendering"
 import { InstallerWindow } from "./widget/InstallerWindow"
 

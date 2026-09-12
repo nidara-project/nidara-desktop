@@ -266,10 +266,27 @@ function readNidaraAppearance() {
 function nidaraKeys() {
     const a = readNidaraAppearance()
     const num = (v, dflt) => (typeof v === "number" && isFinite(v) ? v : dflt)
+
+    let accentName = typeof a.accent === "string" ? a.accent : "blue"
+    if (interfaceSettings) {
+        try {
+            const s = interfaceSettings.get_string("accent-color")
+            if (s && s in ACCENT_HEX) accentName = s
+        } catch (_) {}
+    }
+
+    let isDark = a.isDark === true
+    if (interfaceSettings) {
+        try {
+            const scheme = interfaceSettings.get_string("color-scheme")
+            isDark = scheme === "prefer-dark"
+        } catch (_) {}
+    }
+
     return {
-        "accent": new GLib.Variant("s", typeof a.accent === "string" ? a.accent : "blue"),
+        "accent": new GLib.Variant("s", accentName),
         // A MISSING key means light, matching the shell's own DEFAULT_CONFIG.
-        "is-dark": new GLib.Variant("b", a.isDark === true),
+        "is-dark": new GLib.Variant("b", isDark),
         "window-opacity": new GLib.Variant("d", num(a.windowOpacity, 0.48)),
         "bar-opacity": new GLib.Variant("d", num(a.barOpacity, 0.48)),
         "overlay-opacity": new GLib.Variant("d", num(a.overlayOpacity, 0.48)),
@@ -278,6 +295,7 @@ function nidaraKeys() {
             typeof a.shellAppearance === "string" ? a.shellAppearance : "system"),
     }
 }
+
 
 function contrastVariant() {
     // 0: no preference, 1: high contrast

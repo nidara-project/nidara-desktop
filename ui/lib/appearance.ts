@@ -1,6 +1,6 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import { ACCENT_HEX, type AccentKey } from "./accent"
+import { ACCENT_HEX, rgbToClosestAccent, type AccentKey } from "./accent"
 import {
   DEFAULT_CONFIG,
   clampGlass,
@@ -68,6 +68,7 @@ export interface AppearanceOpts {
   portal?: boolean
 }
 
+const APPEARANCE_NS = "org.freedesktop.appearance"
 const NIDARA_NS = "org.nidara.appearance"
 const PORTAL_BUS = "org.freedesktop.portal.Desktop"
 const PORTAL_PATH = "/org/freedesktop/portal/desktop"
@@ -126,43 +127,74 @@ function readFileState(): AppearanceState | null {
 
 // ── The portal backend ───────────────────────────────────────────────────────
 
+function ensureSessionBus(): void {
+  if (!GLib.getenv("DBUS_SESSION_BUS_ADDRESS")) {
+    const runtime = GLib.getenv("XDG_RUNTIME_DIR")
+    if (runtime) {
+      const busPath = `${runtime}/bus`
+      if (GLib.file_test(busPath, GLib.FileTest.EXISTS)) {
+        GLib.setenv("DBUS_SESSION_BUS_ADDRESS", `unix:path=${busPath}`, true)
+      }
+    }
+  }
+}
+
 /**
- * `ReadAll` our namespace, or null when the portal cannot answer it.
+ * `ReadAll` standard and Nidara namespaces, or null when the portal cannot answer.
  *
- * Null covers every "not here" at once — no session bus, no portal running, no
- * backend serving our namespace — because the caller does the same thing in all
- * of them: read the file. The call is synchronous and short-timeout on purpose:
- * this runs once, before the first window is built, and a portal that is slow to
- * activate must not hold the first frame.
+ * Conforms fully to `org.freedesktop.appearance` (standard XDG Desktop Portal spec)
+ * while enriching with `org.nidara.appearance` when running on a Nidara system.
  */
 function readPortalState(): AppearanceState | null {
+  ensureSessionBus()
   if (!GLib.getenv("DBUS_SESSION_BUS_ADDRESS")) return null
   try {
     const bus = Gio.DBus.session
     if (!bus) return null
     const reply = bus.call_sync(
       PORTAL_BUS, PORTAL_PATH, PORTAL_IFACE, "ReadAll",
-      new GLib.Variant("(as)", [[NIDARA_NS]]),
+      new GLib.Variant("(as)", [[APPEARANCE_NS, NIDARA_NS]]),
       new GLib.VariantType("(a{sa{sv}})"),
       Gio.DBusCallFlags.NONE, 1500, null,
     )
     const all = reply.deepUnpack() as [Record<string, Record<string, unknown>>]
-    const ns = all[0]?.[NIDARA_NS]
-    // An empty answer is not a failure of the call — it is what comes back when no
-    // backend serves the namespace. Treat it as "not available here".
-    if (!ns || Object.keys(ns).length === 0) return null
-    const val = (k: string) => {
-      const v = ns[k] as { deepUnpack?: () => unknown } | undefined
+    const fdNs = all[0]?.[APPEARANCE_NS]
+    const nidaraNs = all[0]?.[NIDARA_NS]
+    if ((!fdNs || Object.keys(fdNs).length === 0) && (!nidaraNs || Object.keys(nidaraNs).length === 0)) {
+      return null
+    }
+
+    const val = (dict: Record<string, unknown> | undefined, k: string) => {
+      const v = dict?.[k] as { deepUnpack?: () => unknown } | undefined
       return v && typeof v.deepUnpack === "function" ? v.deepUnpack() : v
     }
+
+    let accent: AccentKey = FALLBACK.accent
+    if (nidaraNs && typeof val(nidaraNs, "accent") === "string") {
+      accent = asAccent(val(nidaraNs, "accent"))
+    } else if (fdNs) {
+      const rgb = val(fdNs, "accent-color")
+      if (Array.isArray(rgb) && rgb.length >= 3) {
+        accent = rgbToClosestAccent(rgb[0], rgb[1], rgb[2])
+      }
+    }
+
+    let isDark: boolean = FALLBACK.isDark
+    if (nidaraNs && val(nidaraNs, "is-dark") !== undefined) {
+      isDark = val(nidaraNs, "is-dark") === true
+    } else if (fdNs && val(fdNs, "color-scheme") !== undefined) {
+      // 0: default, 1: prefer-dark, 2: prefer-light
+      isDark = val(fdNs, "color-scheme") === 1
+    }
+
     return {
-      accent: asAccent(val("accent")),
-      isDark: val("is-dark") === true,
-      windowOpacity: asGlass(val("window-opacity"), FALLBACK.windowOpacity),
-      barOpacity: asGlass(val("bar-opacity"), FALLBACK.barOpacity),
-      overlayOpacity: asGlass(val("overlay-opacity"), FALLBACK.overlayOpacity),
-      dockOpacity: asGlass(val("dock-opacity"), FALLBACK.dockOpacity),
-      shellAppearance: asShellAppearance(val("shell-appearance")),
+      accent,
+      isDark,
+      windowOpacity: asGlass(val(nidaraNs, "window-opacity"), FALLBACK.windowOpacity),
+      barOpacity: asGlass(val(nidaraNs, "bar-opacity"), FALLBACK.barOpacity),
+      overlayOpacity: asGlass(val(nidaraNs, "overlay-opacity"), FALLBACK.overlayOpacity),
+      dockOpacity: asGlass(val(nidaraNs, "dock-opacity"), FALLBACK.dockOpacity),
+      shellAppearance: asShellAppearance(val(nidaraNs, "shell-appearance")),
     }
   } catch {
     return null
@@ -242,6 +274,7 @@ export function watchAppearance(
   const unsubs: (() => void)[] = []
 
   // 1. Portal signal subscription (catches both org.freedesktop.appearance and org.nidara.appearance)
+  ensureSessionBus()
   if (opts.portal !== false && GLib.getenv("DBUS_SESSION_BUS_ADDRESS")) {
     try {
       const bus = Gio.DBus.session

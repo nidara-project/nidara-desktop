@@ -1,6 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { NidaraCircleButton, type NidaraCircleVariant } from "../../lib/nidara-kit"
-import { attachTooltip } from "./Tooltip"
+import { NidaraCircleButton, type NidaraCircleVariant, attachTooltip } from "../../lib/nidara-kit"
 
 /** Re-exported from the kit: this file no longer owns the vocabulary. */
 export type IconBtnVariant = NidaraCircleVariant

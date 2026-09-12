@@ -4,10 +4,9 @@ import ccLayout from "../../control-center/CCLayoutManager"
 import registry, { widgetAvailable, CATEGORY_ORDER } from "../../../widgets/index"
 import { AtomicWidget, WidgetCategory } from "../../../common/widget-kit"
 import { pageBox, listGroup, createRow, type SettingsNav } from "../SettingsHelpers"
-import { NidaraButton } from "../../../../lib/nidara-kit"
+import { NidaraButton, attachTooltip } from "../../../../lib/nidara-kit"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
-import { attachTooltip } from "../../../common/Tooltip"
 
 // A compact labelled switch ("Bar" / "Center" + a Gtk.Switch), the unit the
 // widget row places to its right. The tooltip rides the (always-sensitive) group

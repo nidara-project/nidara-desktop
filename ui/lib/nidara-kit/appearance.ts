@@ -75,3 +75,9 @@ export function setKitAppearance(source: KitAppearance): void {
 export function kitAppearance(): KitAppearance {
     return current
 }
+
+/** Whether a bundle has registered an appearance source (or if it's using FALLBACK). */
+export function isKitAppearanceInstalled(): boolean {
+    return current !== FALLBACK
+}
+
