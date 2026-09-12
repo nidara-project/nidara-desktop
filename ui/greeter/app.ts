@@ -4,7 +4,7 @@ import GLib from "gi://GLib"
 import Greeter from "./widget/Greeter"
 import { getPreferredUser } from "./lib/greeter-prefs"
 import { initProcessLocale } from "./lib/i18n"
-import { initAppearance } from "../lib/nidara-kit"
+import { initAppearance } from "../lib/appearance-css"
 import { applyCrispFontRendering } from "../lib/font-rendering"
 import { chooseLoginSkin, applyLoginSkin } from "../lib/login-skin"
 
@@ -37,12 +37,11 @@ app.start({
     const display = Gdk.Display.get_default()
     if (!display) { console.error("[Greeter] No display"); return }
 
-    // Initialize the token engine and accent rim for the greeter process.
-    // Runs with portal: false (system user) and inspects preferred user's home dir.
-    initAppearance({
-      portal: false,
-      homeDir: getPreferredUser().homeDir,
-    })
+    // The token ramp, the kit's Cairo seam and the glass rim. The greeter is the ONE
+    // surface outside any user session — the `greeter` system user, its own
+    // compositor, no portal — so it reads the mirror the shell exports for it
+    // (/var/tmp/nidara/appearance.json) instead. See the contract in ui/lib/appearance.ts.
+    initAppearance({ channel: "mirror" })
 
     // Login UI on the primary monitor only. The other outputs already show the
     // generic wallpaper painted by awww in the compositor (it covers all

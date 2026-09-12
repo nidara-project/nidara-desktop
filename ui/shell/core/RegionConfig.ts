@@ -82,7 +82,8 @@ class RegionConfigManager extends GObject.Object {
                 const sharedDir = "/var/tmp/nidara"
                 if (!GLib.file_test(sharedDir, GLib.FileTest.EXISTS))
                     GLib.mkdir_with_parents(sharedDir, 0o755)
-                writeFile(`${sharedDir}/region.json`, json)
+                // 0644: the greeter (another user) reads it. See writeFile's mode note.
+                writeFile(`${sharedDir}/region.json`, json, 0o644)
             } catch (e) {
                 console.warn("[RegionConfig] could not write shared region:", e)
             }

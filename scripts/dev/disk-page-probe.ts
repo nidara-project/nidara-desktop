@@ -26,7 +26,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import app from "../../ui/lib/host"
-import { initAppearance } from "../../ui/lib/nidara-kit"
+import { initAppearance } from "../../ui/lib/appearance-css"
 import { applyCrispFontRendering } from "../../ui/lib/font-rendering"
 import { NidaraWindow, NidaraClamp, NidaraScrolled, NIDARA_WINDOW_RADIUS } from "../../ui/lib/nidara-kit"
 import { WINDOW_LAYOUT } from "../../ui/lib/tokens"

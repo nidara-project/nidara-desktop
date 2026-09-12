@@ -19,7 +19,8 @@
 import GLib from "gi://GLib"
 import app from "../../ui/lib/host"
 import { applyCrispFontRendering } from "../../ui/lib/font-rendering"
-import { NidaraWindow, NidaraList, NidaraDropDownRow, initAppearance } from "../../ui/lib/nidara-kit"
+import { NidaraWindow, NidaraList, NidaraDropDownRow } from "../../ui/lib/nidara-kit"
+import { initAppearance } from "../../ui/lib/appearance-css"
 import { allKeyboards, bridgedKeyboards, keyboardById } from "../../ui/lib/keyboards"
 
 const here = GLib.get_current_dir()

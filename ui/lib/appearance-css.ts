@@ -2,7 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import { ACCENT_HEX } from "./accent"
 import { setAccentRim } from "./glass-capsule"
-import { setKitAppearance } from "./nidara-kit"
+import { setKitAppearance } from "./nidara-kit/appearance"
 import { generateTokensCss } from "./theme-tokens"
 import {
   appearanceSource,
@@ -13,7 +13,7 @@ import {
 } from "./appearance"
 
 /**
- * NIDARA — one call, and this bundle wears the desktop
+ * NIDARA — one call, and this process wears the desktop
  * =====================================================
  *
  * Everything a Nidara process needs in order to look like Nidara, wired in one
@@ -21,17 +21,19 @@ import {
  * through the kit's appearance seam, the glass capsule's accent rim, and a live
  * subscription so all three follow the user changing their mind.
  *
- * Before this existed, each bundle did the four by hand and got a different
- * subset. The installer's copy emitted twelve of the sixty tokens and forgot the
- * one its own close button hovered with; the greeter and the lockscreen emit six
- * (`accentCssFor`) and hard-code the rest of the ramp in SCSS; only the shell had
- * all of it, because only the shell could reach the engine.
+ * WHERE the values come from is not decided here — `ui/lib/appearance.ts` holds the
+ * contract: an application reads the Settings portal and nothing else; the greeter,
+ * which lives outside any session, reads the mirror and says so with
+ * `{ channel: "mirror" }`.
  *
- * ⚠️ **The shell does NOT use this.** It has a live `ThemeManager` that owns the
- * config, writes it, pins the shell skin per-surface against the system mode, and
+ * ⚠️ **The shell does NOT use this.** It IS the writer: `ThemeManager` owns the
+ * settings, pins the shell skin per-surface against the system mode, and
  * regenerates far more than the ramp (icon filters, GTK theme, `@define-color`).
- * This is the seam for every OTHER process — a second window in a running Nidara,
- * which reads what the shell decided and never argues with it.
+ *
+ * ⚠️ **Nothing calls this for you.** A bundle that builds a kit window without it
+ * paints the kit's fallback and the kit logs the warning — kept loud on purpose.
+ * (#533 made `NidaraWindow` call it silently, which turned a missing line in an
+ * `app.ts` into a window that looked right by accident.)
  */
 
 export interface InitAppearanceOpts extends AppearanceOpts {
@@ -44,11 +46,8 @@ export interface InitAppearanceOpts extends AppearanceOpts {
   onChange?: (state: AppearanceState) => void
 }
 
-/** Backwards-compatibility alias. */
-export type InstallAppearanceOpts = InitAppearanceOpts
-
 export interface AppearanceHandle {
-  /** The state as of the last read. */
+  /** The state as of the last change. */
   current: () => AppearanceState
   /** Stop following changes. The CSS already applied stays applied. */
   stop: () => void
@@ -61,8 +60,6 @@ export interface AppearanceHandle {
  * to be registered before any Cairo widget paints, and the tokens have to be in
  * place before the first widget is measured, or the first frame lays out against
  * GTK's defaults and visibly re-flows.
- *
- * (NidaraWindow will also call this automatically if it hasn't been initialized yet.)
  */
 export function initAppearance(opts: InitAppearanceOpts = {}): AppearanceHandle {
   let state = readAppearance(opts)
@@ -111,17 +108,13 @@ export function initAppearance(opts: InitAppearanceOpts = {}): AppearanceHandle 
 
   apply()
 
-  // One line, once: which backend answered. It is the first thing to ask when a
+  // One line, once: which channel answered. It is the first thing to ask when a
   // second window does not match the desktop, and it is invisible otherwise —
-  // "file" in a session that should have had a portal means the portal is not
-  // running, which no amount of staring at the window would tell you.
+  // "defaults" in a session means the portal did not answer, which no amount of
+  // staring at the window would tell you.
   console.log(`[appearance] ${appearanceSource()} — accent ${state.accent}, `
             + `${state.isDark ? "dark" : "light"}, window ${state.windowOpacity.toFixed(2)}`)
 
-  const stop = watchAppearance((next) => { state = next; apply() }, opts)
+  const stop = watchAppearance(state, (next) => { state = next; apply() }, opts)
   return { current: () => state, stop }
 }
-
-/** Backwards-compatibility alias for initAppearance. */
-export const installAppearance = initAppearance
-

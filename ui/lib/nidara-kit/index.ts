@@ -82,9 +82,7 @@ export { makeSlider, makeHSlider, makeVerticalFillTile, makeVolumeSlider } from 
 // source once, in app.ts. Cairo cannot read CSS tokens, so the accent and the
 // surface's mode have to be handed to the kit. See appearance.ts.
 export type { KitAppearance } from "./appearance"
-export { setKitAppearance, kitAppearance, isAppearanceInitialized, isKitAppearanceInstalled } from "./appearance"
-export type { InitAppearanceOpts, InstallAppearanceOpts, AppearanceHandle } from "../appearance-css"
-export { initAppearance, installAppearance } from "../appearance-css"
+export { setKitAppearance, kitAppearance } from "./appearance"
 
 // The COMPOSED rows — "label + subtitle + the control that edits it", which is what a
 // preferences pane is made of. They take the row BUILDER as a parameter (`mkRow`,

@@ -89,7 +89,7 @@ provider.load_from_path(SHEET)
 Gtk.StyleContext.add_provider_for_display(
     Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
 
-// The installer's own tokens are emitted at runtime by installAppearance(); the
+// The installer's own tokens are emitted at runtime by initAppearance(); the
 // two this view paints with are all it needs, and giving them literal values
 // here keeps the probe from depending on a user's appearance.json.
 const tokens = Gtk.CssProvider.new()

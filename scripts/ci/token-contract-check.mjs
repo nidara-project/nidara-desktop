@@ -15,7 +15,7 @@
 //
 // Two ways a bundle can satisfy the contract, and this check accepts either:
 //   1. the token is declared in its own SCSS (or in a mixin it @includes), or
-//   2. the bundle calls `installAppearance()` (ui/lib/appearance-css.ts), which
+//   2. the bundle calls `initAppearance()` (ui/lib/appearance-css.ts), which
 //      loads the token ENGINE's output at runtime — the whole colour ramp, from
 //      the user's real accent and opacity.
 //
@@ -70,7 +70,7 @@ for (const b of BUNDLES) {
 
     // What it can satisfy them with.
     const own = defined(sheet)
-    const runtime = new RegExp("(initAppearance|installAppearance)\\s*\\(").test(
+    const runtime = new RegExp("initAppearance\\s*\\(").test(
         // one grep over the bundle's entry point is enough: it is called once, in app.ts
         read(`${b.code}/app.ts`),
     )
@@ -96,7 +96,7 @@ if (failed) {
     console.error("A `--nidara-*` with no definition is not an error in GTK4: the declaration")
     console.error("using it is silently dropped, so the control renders with no hover, no edge,")
     console.error("or no background and nothing is logged. Either declare the token in the")
-    console.error("bundle's own sheet, or call installAppearance() from its app.ts to load the")
+    console.error("bundle's own sheet, or call initAppearance() from its app.ts to load the")
     console.error("engine's full ramp (ui/lib/appearance-css.ts).")
     process.exit(1)
 }

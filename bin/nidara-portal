@@ -9,7 +9,16 @@
 // 1. Under Hyprland no standard portal backend serves `org.freedesktop.appearance
 //    accent-color`, so libadwaita/GNOME apps stay on their default blue.
 //    This daemon serves the complete `org.freedesktop.appearance` namespace
-//    (accent-color, color-scheme, contrast).
+//    (accent-color, color-scheme, contrast, reduced-motion) and Nidara's own
+//    `org.nidara.appearance` extension.
+//
+//    🔑 THE CONTRACT (#534 — the full text is in ui/lib/appearance.ts): every
+//    setting has ONE home, and this daemon is how APPLICATIONS reach it. GTK 4.22
+//    reads color-scheme/contrast/reduced-motion from here by itself; libadwaita
+//    reads the accent; our own installer, lock screen and any Nidara app read BOTH
+//    namespaces from here and from nowhere else. So a key served here must never
+//    also be served under a second name — a client that can read one value two
+//    ways will, sooner or later, read two different values.
 // 2. Under Hyprland no portal backend implements `org.freedesktop.impl.portal.Wallpaper`,
 //    so "Set as Desktop Background" in browsers (Firefox, Chrome) and image viewers
 //    fails. This daemon implements SetWallpaperURI to apply and persist wallpapers.
@@ -54,11 +63,12 @@ const ACCENT_HEX = {
 const APPEARANCE_NS = "org.freedesktop.appearance"
 
 // ── Our own namespace ────────────────────────────────────────────────────────
-// `org.freedesktop.appearance` is a THREE-KEY spec: accent, colour scheme,
-// contrast. It is the right channel for those and the reason third-party GTK apps
-// follow Nidara's accent at all — but it has no room for the desktop's own
-// vocabulary, and the accent it carries is an (r,g,b) triple, not the palette KEY
-// our surfaces index by.
+// `org.freedesktop.appearance` is a FOUR-KEY spec: accent, colour scheme,
+// contrast, reduced motion. It is the right channel for those and the reason
+// third-party GTK apps follow Nidara's accent at all — but it has no room for the
+// desktop's own vocabulary (the glass opacities). Its accent is an (r,g,b) triple;
+// a client that wants a palette KEY maps it to the nearest entry, exactly as
+// libadwaita does, and from this backend the match is exact.
 //
 // So Nidara serves a second namespace beside it. The Settings portal's ReadAll
 // takes a LIST of namespaces and merges what every impl backend answers, so a
@@ -67,19 +77,18 @@ const APPEARANCE_NS = "org.freedesktop.appearance"
 // one read, one `SettingChanged` signal, and it crosses a sandbox boundary — a
 // Flatpak app cannot see `~/.config/nidara/appearance.json` and can see this.
 //
-// ⚠️ The file remains the SOURCE; this is a view of it. `ThemeManager` owns
-// appearance.json and always will, because one surface cannot reach the portal at
-// all: the greeter runs as the `greeter` system user, in its own compositor, with
-// no session portal — and a portal there would answer for the wrong user anyway.
-// Any consumer therefore needs the file fallback regardless (see
-// `ui/lib/appearance.ts`), and this namespace must never become the only copy.
+// ⚠️ ONLY the keys that have no standard home. The accent and the dark/light mode
+// are NOT here: they live in `org.gnome.desktop.interface` and reach clients as
+// `org.freedesktop.appearance` above. #533 served them under both names (`accent`,
+// `is-dark`), and the day the two disagreed nobody could say which one was true.
+//
+// The home of these keys is `~/.config/nidara/appearance.json`, written by
+// `ThemeManager`. This daemon runs in the user's session and reads THAT file only —
+// `/var/tmp/nidara/appearance.json` is the greeter's mirror, an export for a surface
+// outside any session, and nothing in a session reads it back.
 const NIDARA_NS = "org.nidara.appearance"
 
-/** Where ThemeManager writes, in the order `ui/lib/appearance.ts` also tries. */
-const APPEARANCE_PATHS = [
-    `${GLib.get_user_config_dir()}/nidara/appearance.json`,
-    "/var/tmp/nidara/appearance.json",
-]
+const APPEARANCE_PATH = `${GLib.get_user_config_dir()}/nidara/appearance.json`
 const BUS_NAME = "org.freedesktop.impl.portal.desktop.nidara"
 const OBJECT_PATH = "/org/freedesktop/portal/desktop"
 
@@ -242,15 +251,12 @@ function colorSchemeVariant() {
     return new GLib.Variant("u", val)
 }
 
-/** The desktop's own appearance state, as ThemeManager last wrote it. */
+/** The desktop's own appearance keys, as ThemeManager last wrote them. */
 function readNidaraAppearance() {
-    for (const path of APPEARANCE_PATHS) {
-        try {
-            const [ok, data] = GLib.file_get_contents(path)
-            if (!ok) continue
-            return JSON.parse(new TextDecoder().decode(data))
-        } catch (_) { /* try the next one */ }
-    }
+    try {
+        const [ok, data] = GLib.file_get_contents(APPEARANCE_PATH)
+        if (ok) return JSON.parse(new TextDecoder().decode(data))
+    } catch (_) { /* no file yet (a first login) or mid-replace: the defaults */ }
     return {}
 }
 
@@ -266,27 +272,7 @@ function readNidaraAppearance() {
 function nidaraKeys() {
     const a = readNidaraAppearance()
     const num = (v, dflt) => (typeof v === "number" && isFinite(v) ? v : dflt)
-
-    let accentName = typeof a.accent === "string" ? a.accent : "blue"
-    if (interfaceSettings) {
-        try {
-            const s = interfaceSettings.get_string("accent-color")
-            if (s && s in ACCENT_HEX) accentName = s
-        } catch (_) {}
-    }
-
-    let isDark = a.isDark === true
-    if (interfaceSettings) {
-        try {
-            const scheme = interfaceSettings.get_string("color-scheme")
-            isDark = scheme === "prefer-dark"
-        } catch (_) {}
-    }
-
     return {
-        "accent": new GLib.Variant("s", accentName),
-        // A MISSING key means light, matching the shell's own DEFAULT_CONFIG.
-        "is-dark": new GLib.Variant("b", isDark),
         "window-opacity": new GLib.Variant("d", num(a.windowOpacity, 0.48)),
         "bar-opacity": new GLib.Variant("d", num(a.barOpacity, 0.48)),
         "overlay-opacity": new GLib.Variant("d", num(a.overlayOpacity, 0.48)),
@@ -574,21 +560,19 @@ class BackgroundBackend {
  * Watch the appearance file and report the keys whose value changed.
  *
  * Returns the monitor, which the caller MUST keep — see the note at the call site.
- * The file that gets watched is the first one that exists, in the same order the
- * reader tries: a session normally has `~/.config`, and `/var/tmp` is the mirror.
+ * It watches the DIRECTORY, for two reasons: ThemeManager replaces the file by
+ * rename on every save (a monitor on the file stops at the first one), and on a
+ * first login the file does not exist yet when this daemon is activated — a watch
+ * that required it to exist used to give up and never announce anything.
  */
 function watchNidaraAppearance(onChanged) {
-    const path = APPEARANCE_PATHS.find(p => GLib.file_test(p, GLib.FileTest.EXISTS))
-    if (!path) return null
-
     let previous = nidaraKeys()
     let monitor = null
     try {
-        const dirPath = GLib.path_get_dirname(path)
-        const targetBasename = GLib.path_get_basename(path)
-        const dir = Gio.File.new_for_path(dirPath)
+        const targetBasename = GLib.path_get_basename(APPEARANCE_PATH)
+        const dir = Gio.File.new_for_path(GLib.path_get_dirname(APPEARANCE_PATH))
         monitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null)
-        monitor.connect("changed", (_mon, file, _other, event) => {
+        monitor.connect("changed", (_mon, file) => {
             if (file && file.get_basename() !== targetBasename) return
             const next = nidaraKeys()
             for (const key of Object.keys(next)) {
@@ -599,7 +583,7 @@ function watchNidaraAppearance(onChanged) {
             previous = next
         })
     } catch (e) {
-        printerr(`[nidara-portal] cannot watch ${path}: ${e}`)
+        printerr(`[nidara-portal] cannot watch ${APPEARANCE_PATH}: ${e}`)
         return null
     }
     return monitor
@@ -637,23 +621,12 @@ Gio.bus_own_name(
                 "SettingChanged",
                 new GLib.Variant("(ssv)", [APPEARANCE_NS, "accent-color", accentRgbVariant()]),
             )
-            const accentName = interfaceSettings.get_string("accent-color")
-            exportedSettings.emit_signal(
-                "SettingChanged",
-                new GLib.Variant("(ssv)", [NIDARA_NS, "accent", new GLib.Variant("s", accentName)]),
-            )
         })
 
         interfaceSettings.connect("changed::color-scheme", () => {
             exportedSettings.emit_signal(
                 "SettingChanged",
                 new GLib.Variant("(ssv)", [APPEARANCE_NS, "color-scheme", colorSchemeVariant()]),
-            )
-            const scheme = interfaceSettings.get_string("color-scheme")
-            const isDark = scheme === "prefer-dark"
-            exportedSettings.emit_signal(
-                "SettingChanged",
-                new GLib.Variant("(ssv)", [NIDARA_NS, "is-dark", new GLib.Variant("b", isDark)]),
             )
         })
 
@@ -680,7 +653,7 @@ Gio.bus_own_name(
         //
         // Only the keys that actually MOVED are announced. The file is rewritten
         // on every frame of an opacity slider drag, and a namespace that re-emits
-        // all seven keys per write would make every listener rebuild its whole
+        // all five keys per write would make every listener rebuild its whole
         // stylesheet sixty times a second.
         appearanceMonitor = watchNidaraAppearance((key, value) => {
             exportedSettings.emit_signal(

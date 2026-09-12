@@ -28,9 +28,13 @@ export function readFile(file: string | Gio.File): string {
 /**
  * Write UTF-8 text, creating the parent directory tree if needed.
  *
+ * `mode` defaults to 0600: nearly everything here is the user's own config. Pass
+ * 0644 only for a file ANOTHER user must read — the greeter's mirrors in
+ * /var/tmp/nidara.
+ *
  * @returns the `Gio.File` written, as the AGS version did
  */
-export function writeFile(file: string | Gio.File, content: string): Gio.File {
+export function writeFile(file: string | Gio.File, content: string, mode = 0o600): Gio.File {
   const gfile = typeof file === "string" ? Gio.File.new_for_path(file) : file
   const path = typeof file === "string" ? file : gfile.get_path()
   if (!path) throw Error("path is null")
@@ -55,7 +59,12 @@ export function writeFile(file: string | Gio.File, content: string): Gio.File {
     path,
     content,
     GLib.FileSetContentsFlags.CONSISTENT | GLib.FileSetContentsFlags.DURABLE,
-    0o600,
+    mode,
   )
+  // ⚠️ `mode` only applies to a file being CREATED. Replacing one that exists keeps
+  // its old permissions — measured 2026-09-13: a 0600 file rewritten with 0644 stays
+  // 0600. So a mode is enforced explicitly, or every machine that already got a
+  // 0600 mirror (#488, since 0.11.0) would keep it forever.
+  if (mode !== 0o600) GLib.chmod(path, mode)
   return gfile
 }
