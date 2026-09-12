@@ -4,8 +4,8 @@ import { NidaraAppWindow, type NidaraCloseMode } from "./app-window"
 import { NidaraScrolled } from "./scrolled"
 import { NidaraSplitView, type NidaraSplitViewResult } from "./split-view"
 import { RADIUS, WINDOW_LAYOUT, collapseAtFor, minWindowWidthFor } from "../tokens"
-import { isKitAppearanceInstalled } from "./appearance"
-import { installAppearance } from "../appearance-css"
+import { isAppearanceInitialized } from "./appearance"
+import { initAppearance } from "../appearance-css"
 
 /**
  * Chrome radii, named for what they dress: the window is `glass(floating)` =
@@ -162,9 +162,9 @@ export interface NidaraWindowResult {
  * then — a parameter nobody uses today is a third way for two windows to drift.
  */
 export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
-    if (!isKitAppearanceInstalled()) {
+    if (!isAppearanceInitialized()) {
         try {
-            installAppearance()
+            initAppearance()
         } catch {}
     }
 

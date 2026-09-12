@@ -13,7 +13,7 @@
 
 import app from "../lib/host"
 import GLib from "gi://GLib"
-import { installAppearance } from "../lib/nidara-kit"
+import { initAppearance } from "../lib/nidara-kit"
 import { applyCrispFontRendering } from "../lib/font-rendering"
 import { InstallerWindow } from "./widget/InstallerWindow"
 
@@ -42,7 +42,7 @@ app.start({
     // installer open. One call — the full token ramp, the kit's Cairo seam and the
     // glass rim, from the portal when it answers and from ThemeManager's mirror
     // file when it does not. See ui/lib/appearance.ts for why both exist.
-    installAppearance()
+    initAppearance()
 
     InstallerWindow().present()
   },

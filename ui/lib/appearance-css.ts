@@ -34,15 +34,18 @@ import {
  * which reads what the shell decided and never argues with it.
  */
 
-export interface InstallAppearanceOpts extends AppearanceOpts {
+export interface InitAppearanceOpts extends AppearanceOpts {
   /**
    * Called after every appearance change, with the new state — for the parts of a
    * bundle that are neither CSS nor Cairo (a window class toggled for light mode,
-   * a wallpaper re-read). Called once at install time too, so a caller has exactly
+   * a wallpaper re-read). Called once at init time too, so a caller has exactly
    * one code path instead of "apply now, and also on change".
    */
   onChange?: (state: AppearanceState) => void
 }
+
+/** Backwards-compatibility alias. */
+export type InstallAppearanceOpts = InitAppearanceOpts
 
 export interface AppearanceHandle {
   /** The state as of the last read. */
@@ -52,14 +55,16 @@ export interface AppearanceHandle {
 }
 
 /**
- * Dress this process in the user's appearance, and keep it dressed.
+ * Initialize the desktop's appearance for this process and keep it in sync.
  *
  * Call once from `main()`, BEFORE the first window is built — the kit's seam has
  * to be registered before any Cairo widget paints, and the tokens have to be in
  * place before the first widget is measured, or the first frame lays out against
  * GTK's defaults and visibly re-flows.
+ *
+ * (NidaraWindow will also call this automatically if it hasn't been initialized yet.)
  */
-export function installAppearance(opts: InstallAppearanceOpts = {}): AppearanceHandle {
+export function initAppearance(opts: InitAppearanceOpts = {}): AppearanceHandle {
   let state = readAppearance(opts)
   const listeners = new Set<() => void>()
 
@@ -116,3 +121,7 @@ export function installAppearance(opts: InstallAppearanceOpts = {}): AppearanceH
   const stop = watchAppearance((next) => { state = next; apply() }, opts)
   return { current: () => state, stop }
 }
+
+/** Backwards-compatibility alias for initAppearance. */
+export const installAppearance = initAppearance
+

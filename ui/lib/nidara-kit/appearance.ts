@@ -76,8 +76,12 @@ export function kitAppearance(): KitAppearance {
     return current
 }
 
-/** Whether a bundle has registered an appearance source (or if it's using FALLBACK). */
-export function isKitAppearanceInstalled(): boolean {
+/** Whether appearance has been initialized (or if it's still using the unconfigured FALLBACK). */
+export function isAppearanceInitialized(): boolean {
     return current !== FALLBACK
 }
+
+/** Backwards-compatibility alias. */
+export const isKitAppearanceInstalled = isAppearanceInitialized
+
 
