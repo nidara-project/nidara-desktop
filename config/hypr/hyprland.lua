@@ -900,42 +900,24 @@ hl.window_rule({
     center = true,
 })
 
--- The installer floats. It exists only on the live medium (the `nidara-installer`
--- package, which nothing but the ISO's package list names), so on an installed
--- system this rule matches nothing at all — and that is cheaper than teaching the
--- medium to drop in a config of its own for one line.
--- Without it the window is TILED like any other application, which is how it was
--- first seen: a full-height pane sharing the screen with whatever else was open,
--- when what it needs is to be the thing in front of you.
+-- The installer centers when floating. All workspaces default to floating in
+-- Nidara (#513), so the installer opens centered in floating workspaces, but
+-- does not force float so it can tile if the user or workspace is in tiling mode.
 --
 -- 🔑 THE TWO CLASSES ARE ONE WINDOW, AND ONLY THE FIRST ONE DOES ANYTHING HERE.
 -- `org.nidara.installer` is the PROCESS app-id, the one GTK puts on the toplevel at
 -- creation (`ui/installer/app.ts`). `nidara-installer` is the per-toplevel override
--- `ui/lib/app-id.ts` stamps at MAP. `float` and `center` are STATIC effects, and a
--- static effect is matched ONCE at open against `initialClass` — so the second name
--- is INERT in this rule. It is kept because it is the same window's real identity
--- and because a DYNAMIC effect added here later would need it; it is not what makes
--- the window float.
---
--- Without the first name the window is TILED like any other application, which is
--- how it was first seen: a full-height pane sharing the screen with whatever else
--- was open, when what it needs is to be the thing in front of you. On an empty
--- workspace the tile is the whole work area, which is what "the installer opens at
--- monitor size" was.
---
--- Measured 2026-08-30 with a minimal GTK4 window, one variable per arm. The table
--- lives in `.claude/skills/nidara/references/dev-workflow.md` → "A window rule
--- matches an IDENTIFIER" and is deliberately NOT copied here: it was copied here
--- once, the copy and the original disagreed about the shell's birth class, and the
--- wrong one is the one somebody would have pasted into a new rule.
+-- `ui/lib/app-id.ts` stamps at MAP. `center` is a STATIC effect, and a static effect
+-- is matched ONCE at open against `initialClass` — so the second name is INERT in this
+-- rule. It is kept because it is the same window's real identity and because a
+-- DYNAMIC effect added here later would need it.
 --
 -- The rule below is what `scripts/ci/hypr-rule-check.mjs` enforces for every static
 -- rule naming one of our windows: name the birth class, because it is the only name
 -- that exists when the rule runs.
 hl.window_rule({
-    name   = "float-installer",
+    name   = "center-installer",
     match  = { class = "^(org\\.nidara\\.installer|nidara-installer)$" },
-    float  = true,
     center = true,
 })
 

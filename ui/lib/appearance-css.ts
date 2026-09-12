@@ -100,6 +100,8 @@ export function installAppearance(opts: InstallAppearanceOpts = {}): AppearanceH
     accent: () => ACCENT_HEX[state.accent],
     surfaceIsDark: () => state.isDark,
     onChange: (cb) => { listeners.add(cb); return () => { listeners.delete(cb) } },
+    overlayOpacity: () => state.overlayOpacity,
+    chromeIsDark: () => state.shellAppearance === "dark" ? true : state.shellAppearance === "light" ? false : state.isDark,
   })
 
   apply()

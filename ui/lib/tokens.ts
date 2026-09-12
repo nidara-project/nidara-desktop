@@ -462,7 +462,7 @@ export const WINDOW_LAYOUT = {
      * now, and measured: no answer widens the column in any locale. Russian still
      * decides the number, the number is still 760, and the slack is back to 57.
      */
-    wizardContent: 760,
+    wizardContent: 900,
     /** The distress width — only a compositor can push the pane here. */
     contentFloor: 560,
     /**
