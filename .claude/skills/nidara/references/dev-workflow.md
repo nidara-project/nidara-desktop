@@ -2913,6 +2913,18 @@ the same for `{ output = 'WAYLAND-1', disabled = true }`, and then **block until
 spawning anything. A bench that does not assert its own setup is a bench that reports confidently
 about a screen you never configured.
 
+🔴 **Trap 0 — a nested Hyprland WRITES THE LIVE DESKTOP'S GSETTINGS.** `cursor:sync_gsettings_theme`
+is ON by default (`src/config/values/ConfigValues.cpp:611`), and at startup Hyprland calls
+`g_settings_set_string("cursor-theme", …)` + `cursor-size` (`src/managers/XCursorManager.cpp`). A nested
+instance inherits the session's `DBUS_SESSION_BUS_ADDRESS`, so a bench config with no cursor theme set
+the maintainer's real `cursor-theme` to `'default'` (2026-09-13, encargo DIALOGOS — the rest of that
+bench was correctly isolated; this one boot line was not). Launch every nested compositor with
+`env -u DBUS_SESSION_BUS_ADDRESS` (or inside a verified private bus), AND put
+`cursor { sync_gsettings_theme = false }` in its config (`hl.config({ cursor = { sync_gsettings_theme = false } })`
+under Lua) — two locks, because a bench script is the one place a guard hook cannot see into.
+Check after any bench: `gsettings get org.gnome.desktop.interface cursor-theme` still matches
+`cursorTheme` in `~/.config/nidara/appearance.json`.
+
 ⚠️ **Trap 2 — the terminal you reach for is translucent, so two windows photograph as one.** The
 shipped `kitty.conf` sets a background opacity, so a red window under a blue one reads
 `#440484` — which is exactly `#ff0000` under `#0000ff` at 52%, and looks like a rendering bug
