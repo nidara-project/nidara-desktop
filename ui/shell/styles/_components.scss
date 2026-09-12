@@ -348,6 +348,14 @@ button.settings-icon-btn {
         color: var(--nidara-text);
         font-size: $fs-small;       // fixed px ramp — chrome must NOT reflow with the font picker
     }
+
+    &.dark .nidara-tooltip-label {
+        color: #ffffff;
+    }
+
+    &.light .nidara-tooltip-label {
+        color: #111116;
+    }
 }
 
 /* ── Cross-window pieces, moved out of _control-center.scss (2026-08-07) ──────

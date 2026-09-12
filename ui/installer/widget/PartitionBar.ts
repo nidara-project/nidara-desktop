@@ -246,7 +246,6 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
       const tooltipHandle = attachTooltip(sliceBox, () => getTooltipMarkup(slice), {
         position: Gtk.PositionType.BOTTOM,
         markup: true,
-        chrome: false,
       })
 
       // Hover to highlight slice on the canvas

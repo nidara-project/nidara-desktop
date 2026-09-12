@@ -90,6 +90,20 @@ export function attachTooltip(
     applyMargins()
     grid.attach(label, 0, 0, 1, 1)
 
+    const syncDarkClass = () => {
+        const dark = opts.chrome === false
+            ? kitAppearance().surfaceIsDark(widget)
+            : (kitAppearance().chromeIsDark?.() ?? kitAppearance().surfaceIsDark(widget))
+        if (dark) {
+            popover.remove_css_class("light")
+            popover.add_css_class("dark")
+        } else {
+            popover.remove_css_class("dark")
+            popover.add_css_class("light")
+        }
+    }
+    syncDarkClass()
+
     popover.set_child(grid)
     popover.set_parent(widget)
 
@@ -135,8 +149,11 @@ export function attachTooltip(
         layoutSurface = null; layoutId = null
     })
 
-    // Repaint the glass when appearance changes
-    const unsubTheme = kitAppearance().onChange(() => { if (da.get_mapped()) da.queue_draw() })
+    // Repaint the glass and sync contrast class when appearance changes
+    const unsubTheme = kitAppearance().onChange(() => {
+        syncDarkClass()
+        if (da.get_mapped()) da.queue_draw()
+    })
 
     const refresh = () => {
         const value = typeof textSource === "function" ? textSource() : textSource

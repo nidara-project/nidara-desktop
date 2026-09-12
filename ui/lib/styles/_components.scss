@@ -1054,5 +1054,13 @@ window.nidara-alert-dialog {
         color: var(--nidara-text);
         font-size: $fs-small;       // fixed px ramp — chrome must NOT reflow with the font picker
     }
+
+    &.dark .nidara-tooltip-label {
+        color: #ffffff;
+    }
+
+    &.light .nidara-tooltip-label {
+        color: #111116;
+    }
 }
 

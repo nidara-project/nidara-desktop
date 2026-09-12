@@ -169,7 +169,7 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
         : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
 
     // Glass alpha tracks the overlay slider, but FLOORED at 0.38 for popups with blur.
-    const alpha = opts.alpha ?? (chrome ? Math.max(app.overlayOpacity?.() ?? 0.55, 0.38) : 0.9)
+    const alpha = opts.alpha ?? Math.max(app.overlayOpacity?.() ?? 0.55, 0.38)
 
     // Body rect: inset by BUF all round, plus arrowH on the arrow side.
     const bx = BUF + (side === "left" ? arrowH : 0)
