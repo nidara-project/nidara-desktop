@@ -3,6 +3,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { setTransientForExported } from "./wayland-parent"
 import { setWindowAppId } from "../app-id"
+import { dialogButtonRow } from "./dialog-buttons"
 
 export interface AlertResponse {
     id: string
@@ -171,20 +172,6 @@ export function showNidaraAlert(opts: {
     const choiceState = (): Record<string, string> =>
         Object.fromEntries([...checks].map(([id, check]) => [id, check.active ? "true" : "false"]))
 
-    // Separator
-    root.append(new Gtk.Separator({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        css_classes: ["nidara-alert-sep"],
-        margin_top: 24,
-    }))
-
-    // ── Buttons ───────────────────────────────────────────────────────────────
-    const btnBox = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        homogeneous: true,
-        css_classes: ["nidara-alert-buttons"],
-    })
-
     let done = false
     let tickId = 0
     const respond = (id: string) => {
@@ -210,17 +197,8 @@ export function showNidaraAlert(opts: {
     const cancelId = (responses.find(r => !r.destructive) ?? responses[0])?.id ?? ""
     dialog.connect("close-request", () => { respond(cancelId); return true })
 
-    for (const resp of responses) {
-        const classes = ["nidara-alert-btn"]
-        if (resp.destructive) classes.push("nidara-alert-btn--destructive")
-        else if (resp.suggested) classes.push("nidara-alert-btn--suggested")
-
-        const btn = new Gtk.Button({ label: resp.label, css_classes: classes, hexpand: true })
-        btn.connect("clicked", () => respond(resp.id))
-        btnBox.append(btn)
-    }
-
-    root.append(btnBox)
+    // ── Buttons ───────────────────────────────────────────────────────────────
+    root.append(dialogButtonRow(responses, respond).box)
     dialog.set_child(root)
     dialog.present()
     entryWidget?.grab_focus()

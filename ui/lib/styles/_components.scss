@@ -1021,50 +1021,11 @@ window.nidara-alert-dialog {
         }
     }
 
-    .nidara-alert-sep {
-        background: var(--nidara-border);
-        min-height: 1px;
-        margin: 0;
-    }
-
-    .nidara-alert-buttons {
-        button.nidara-alert-btn {
-            @include nidara-reset;
-            // 14 is arithmetic toward a height, not a gap: 14 + 14 + the ~20px line box of
-            // $fse-small lands the dialog's footer buttons on the 48px row height. Snapping
-            // it to $space-4 would make them 52. Same reasoning as nidara-kit/row.ts.
-            padding: 14px $space-4;
-            font-size: $fse-small;
-            font-weight: $fw-medium;
-            color: var(--nidara-text);
-            border-radius: 0;
-            transition: background 0.15s ease;
-
-            // Round the bottom corners to match the dialog
-            &:first-child { border-bottom-left-radius: $nidara-radius-lg; }
-            &:last-child  { border-bottom-right-radius: $nidara-radius-lg; }
-
-            &:hover  { background: var(--nidara-surface-hover); }
-            &:active { background: var(--nidara-surface-active); }
-            &:focus-visible { @include nidara-focus-ring(-2px); }
-
-            &.nidara-alert-btn--destructive {
-                color: var(--nidara-danger);
-                &:hover { background: rgba(var(--nidara-danger-rgb), 0.1); }
-            }
-
-            &.nidara-alert-btn--suggested {
-                // Default action: marked by weight, not accent text (legibility).
-                color: var(--nidara-text);
-                font-weight: $fw-semibold;
-                &:hover { background: var(--nidara-accent-10); }
-            }
-        }
-
-        // Vertical divider between sibling buttons
-        button.nidara-alert-btn + button.nidara-alert-btn {
-            border-left: 1px solid var(--nidara-border);
-        }
+    // The response row (nidara-kit/dialog-buttons.ts): NidaraButtons, equal widths,
+    // inset from the glass edge. Replaced the flat full-bleed cells split by a
+    // hairline (2026-09-13) — a macOS-alert idiom nothing else in the desktop used.
+    .nidara-dialog-buttons {
+        margin: $space-6 $space-6 $space-6;
     }
 }
 
