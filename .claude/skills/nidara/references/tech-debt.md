@@ -3441,6 +3441,10 @@ has open — it is the same surface twice.
 
 > **Queue entry: #321.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
 
+⚠️ **2026-09-13: `Access` is routed to nidara and ASKS** — the prompt is drawn by the shell and every
+path that is not the user pressing Allow answers denied (architecture.md, "Consent prompts"). It is
+the model for re-routing the three below: same forwarding to `org.nidara.Shell.Consent`, same probes.
+
 `bin/nidara-portal` implements `Account`, `DynamicLauncher` and `Background`. All three return
 success immediately: `GetUserInformation` hands over the real name and avatar URI, `PrepareInstall`
 returns the caller's own name and icon for installation unreviewed, `RequestInstallToken` always

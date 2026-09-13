@@ -737,12 +737,14 @@
     "settings.gaming.transition.desc": "60cc1e34",
     "settings.gaming.performance-profile": "66733164",
     "settings.gaming.performance-profile.desc": "d6ed983d",
-    "settings.gaming.dialog.wallpaper": "4842be93"
+    "settings.gaming.dialog.wallpaper": "4842be93",
+    "consent.allow": "3ad0e369",
+    "consent.deny": "53577bb5"
   },
   "locales": {
     "de": {
-      "translated": 699,
-      "of": 737,
+      "translated": 701,
+      "of": 739,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -786,14 +788,14 @@
       "stale": []
     },
     "es": {
-      "translated": 737,
-      "of": 737,
+      "translated": 739,
+      "of": 739,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 699,
-      "of": 737,
+      "translated": 701,
+      "of": 739,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -837,8 +839,8 @@
       "stale": []
     },
     "it": {
-      "translated": 699,
-      "of": 737,
+      "translated": 701,
+      "of": 739,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -882,8 +884,8 @@
       "stale": []
     },
     "ja": {
-      "translated": 699,
-      "of": 737,
+      "translated": 701,
+      "of": 739,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -927,8 +929,8 @@
       "stale": []
     },
     "nl": {
-      "translated": 699,
-      "of": 737,
+      "translated": 701,
+      "of": 739,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -972,8 +974,8 @@
       "stale": []
     },
     "pl": {
-      "translated": 699,
-      "of": 737,
+      "translated": 701,
+      "of": 739,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1017,8 +1019,8 @@
       "stale": []
     },
     "pt-BR": {
-      "translated": 699,
-      "of": 737,
+      "translated": 701,
+      "of": 739,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1062,8 +1064,8 @@
       "stale": []
     },
     "pt-PT": {
-      "translated": 699,
-      "of": 737,
+      "translated": 701,
+      "of": 739,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1107,8 +1109,8 @@
       "stale": []
     },
     "ru": {
-      "translated": 699,
-      "of": 737,
+      "translated": 701,
+      "of": 739,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1152,8 +1154,8 @@
       "stale": []
     },
     "zh-CN": {
-      "translated": 699,
-      "of": 737,
+      "translated": 701,
+      "of": 739,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",

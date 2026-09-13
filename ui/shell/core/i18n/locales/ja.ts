@@ -786,4 +786,8 @@ export default {
     "widget.screenrecord.settings.save-to": "保存先",
     "widget.screenrecord.settings.choose-folder": "選択…",
     "widget.screenrecord.settings.dialog.folder": "録画の保存先フォルダーを選択",
+    // XDG portal consent prompts (surfaces/consent) — fallback button labels only;
+    // the frontend normally supplies its own, already translated.
+    "consent.allow": "許可",
+    "consent.deny": "拒否",
 }

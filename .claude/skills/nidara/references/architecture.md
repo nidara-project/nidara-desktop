@@ -1766,6 +1766,49 @@ property sidesteps the Flatpak activation trap described on `getLaunchCommand`. 
 ⚠️ Apps a user starts some other way (a terminal, `xdg-open`, D-Bus activation by another app) can
 still be anonymous; Chrome escapes it by creating its own `app-com.google.Chrome-<pid>.scope`. Check a
 running app with `cat /proc/<pid>/cgroup`.
+### Consent prompts: the portal asks, the shell draws (2026-09-13, #535)
+
+When an app asks for the camera, the microphone, location… `xdg-desktop-portal` calls
+`org.freedesktop.impl.portal.Access` on its backend. Nidara's backend is `bin/nidara-portal`, a GJS
+script with NO GTK — so it forwards the prompt to the shell, which draws it:
+
+    app ─portal─▶ xdg-desktop-portal ─impl.Access─▶ bin/nidara-portal ─org.nidara.Shell.Consent─▶ ui/shell/surfaces/consent/ConsentService.ts
+
+Same split as GNOME (xdg-desktop-portal-gnome hands Access to gnome-shell), and for the same reason:
+the shell already has the kit, the glass, the twelve catalogs, and — for Settings → Apps — the same
+decisions. The prompt is `showNidaraAlert` with options added for this case: `icon` (who is asking,
+resolved from the app id), `choices` (check boxes; the spec's `a(ssa(ss)s)` with an empty option
+list), `parentWindow` (the portal's `wayland:<handle>`, applied with `nidara-kit/wayland-parent.ts`
+→ `set_transient_for_exported`) and `appId`. It declares app-id `nidara-consent` and uses the heading
+as its window title.
+
+Rules, all load-bearing:
+- **`org.nidara.Shell.Consent` is NOT an IPC command.** `IPC_COMMANDS` are listed by
+  `nidara-ipc listActions` and driven by the agent and the MCP server; nothing that can answer a
+  consent prompt may be reachable from there. The interface serves exactly one caller — the current
+  owner of `org.freedesktop.impl.portal.desktop.nidara`, looked up at call time — and answers anyone
+  else `AccessDenied`.
+- **Never grants by default** (tech-debt #89): closing the dialog, the app's `Request.Close`, the
+  shell missing or failing all answer denied (1 or 2). Only the user pressing Allow answers 0.
+- **Remembering is the frontend's job**, not ours: for the interfaces that persist a decision,
+  xdg-desktop-portal reads the PermissionStore before calling the backend and writes the answer
+  after. Settings → Apps edits that same store.
+- **Pack a reply tuple from its children** (`GLib.Variant.new_tuple`): re-packing an existing
+  `a{sv}` Variant with `new GLib.Variant("(ua{sv})", …)` throws inside the reply callback, the
+  invocation is never answered, and the app hangs until its D-Bus timeout. Found by the probe below.
+
+Two probes, both isolated (private bus with env on the daemon line + dconf canary; nested Hyprland
+without the session bus and with `sync_gsettings_theme = false`), both asserting:
+- `scripts/dev/consent-portal-probe.sh` — the forwarding, with a fake shell: grant → `(0, {choices})`,
+  the app closing the request → `1`, no shell → `2` without hanging. Proven able to fail: with the
+  packing bug reintroduced, case (a) fails.
+- `scripts/dev/consent-dialog-probe.sh` — the REAL ConsentService drawn in a nested Hyprland: the
+  prompt maps centred on the requesting window (xdg-foreign), a foreign caller is refused, Close
+  dismisses it; leaves `consent-dialog.png`.
+
+⚠️ Per-app permissions only BIND sandboxed apps: an unsandboxed app is unconfined and can open a
+device without asking. The portal still records and shows decisions for it, and Settings → Apps
+must say which case an app is in rather than show switches that promise what they cannot enforce.
 
 ## `ui/lib/nidara-kit/`
 

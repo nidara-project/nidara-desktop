@@ -964,6 +964,17 @@ window.nidara-alert-dialog {
         color: var(--nidara-text);
     }
 
+    // Who is asking (the XDG portal's consent dialogs). The app's own icon, not
+    // tinted: it is the app's identity, not a symbol of ours.
+    .nidara-alert-icon {
+        -gtk-icon-shadow: none;
+    }
+
+    .nidara-alert-choices checkbutton {
+        font-size: $fse-small;
+        color: var(--nidara-text);
+    }
+
     .nidara-alert-body {
         font-size: $fse-small;
         color: var(--nidara-text-dim);

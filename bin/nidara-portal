@@ -1,6 +1,6 @@
 #!/usr/bin/env -S gjs -m
 // ─────────────────────────────────────────────────────────────────────────────
-// nidara-portal — Nidara's xdg-desktop-portal Settings & Wallpaper backend
+// nidara-portal — Nidara's xdg-desktop-portal Settings, Wallpaper & Access backend
 // Installed to /usr/bin/nidara-portal, D-Bus-activated as
 // org.freedesktop.impl.portal.desktop.nidara (see the .portal + .service
 // files installed by install.sh).
@@ -112,6 +112,46 @@ const SETTINGS_IFACE_XML = `
     </signal>
   </interface>
 </node>`
+
+// ── Access: consent prompts, DRAWN BY THE SHELL ──────────────────────────────
+// This script has no GTK, and a consent prompt has to look like the desktop and
+// speak its languages — so the prompt is forwarded to the shell's
+// `org.nidara.Shell.Consent` (ui/shell/surfaces/consent/ConsentService.ts), which
+// only answers this process. Remembering the answer is xdg-desktop-portal's own job
+// (it reads the PermissionStore before calling us and writes after).
+// 🔴 Never grants by default: shell missing, shell error, app closing the request —
+// every path that is not the user pressing Allow answers "denied" (tech-debt #89).
+const ACCESS_IFACE_XML = `
+<node>
+  <interface name="org.freedesktop.impl.portal.Access">
+    <method name="AccessDialog">
+      <arg type="o" name="handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="parent_window" direction="in"/>
+      <arg type="s" name="title" direction="in"/>
+      <arg type="s" name="subtitle" direction="in"/>
+      <arg type="s" name="body" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/>
+      <arg type="a{sv}" name="results" direction="out"/>
+    </method>
+  </interface>
+</node>`
+
+// The object a BACKEND exports at `handle` while a request is pending: the frontend
+// calls its `Close` when the app gives up waiting, and the prompt must go away.
+const REQUEST_IFACE_XML = `
+<node>
+  <interface name="org.freedesktop.impl.portal.Request">
+    <method name="Close"/>
+  </interface>
+</node>`
+
+const SHELL_BUS = "org.nidara.Shell"
+const CONSENT_PATH = "/org/nidara/Shell/Consent"
+const CONSENT_IFACE = "org.nidara.Shell.Consent"
+// Portal response codes: 0 success, 1 cancelled by the user, 2 other/failed.
+const RESPONSE_OTHER = 2
 
 const WALLPAPER_IFACE_XML = `
 <node>
@@ -414,6 +454,73 @@ class SettingsBackend {
     }
 }
 
+// ── Access Backend ───────────────────────────────────────────────────────────
+class AccessBackend {
+    AccessDialogAsync(params, invocation) {
+        const handle = params[0]
+        const connection = invocation.get_connection()
+        const raw = invocation.get_parameters()
+
+        // Forward the request as the frontend sent it — every argument untouched,
+        // except the handle, which crosses to the shell as a plain string (it is a
+        // key there, not an object on its bus).
+        const forwarded = GLib.Variant.new_tuple([
+            new GLib.Variant("s", handle),
+            ...[1, 2, 3, 4, 5, 6].map(i => raw.get_child_value(i)),
+        ])
+
+        let finished = false
+        let request = null
+        const finish = (response, results) => {
+            if (finished) return
+            finished = true
+            if (request) { try { request.unexport() } catch (_) {} request = null }
+            // `results` arrives as a GLib.Variant (a{sv}) — packed as a tuple CHILD, not
+            // re-packed: `new GLib.Variant("(ua{sv})", [r, variant])` throws inside this
+            // callback, the invocation is never answered, and the app hangs until its
+            // D-Bus timeout. Caught by scripts/dev/consent-portal-probe.sh.
+            try {
+                invocation.return_value(GLib.Variant.new_tuple([new GLib.Variant("u", response), results]))
+            } catch (e) {
+                printerr(`[nidara-portal] could not answer AccessDialog: ${e}`)
+                invocation.return_dbus_error("org.freedesktop.portal.Error.Failed", String(e))
+            }
+        }
+
+        try {
+            request = Gio.DBusExportedObject.wrapJSObject(REQUEST_IFACE_XML, {
+                CloseAsync(_params, inv) {
+                    // Dismiss the prompt; the shell answers the pending AccessDialog
+                    // as denied, which reaches `finish` below.
+                    Gio.DBus.session.call(SHELL_BUS, CONSENT_PATH, CONSENT_IFACE, "Close",
+                        new GLib.Variant("(s)", [handle]), null, Gio.DBusCallFlags.NONE, 5000, null, () => {})
+                    inv.return_value(null)
+                },
+            })
+            request.export(connection, handle)
+        } catch (e) {
+            printerr(`[nidara-portal] could not export Request at ${handle}: ${e}`)
+            request = null
+        }
+
+        Gio.DBus.session.call(
+            SHELL_BUS, CONSENT_PATH, CONSENT_IFACE, "AccessDialog", forwarded,
+            new GLib.VariantType("(ua{sv})"), Gio.DBusCallFlags.NONE,
+            // A person is answering: no timeout. The app's own Close ends it early.
+            GLib.MAXINT32, null,
+            (bus, res) => {
+                try {
+                    const reply = bus.call_finish(res)
+                    finish(reply.get_child_value(0).get_uint32(), reply.get_child_value(1))
+                } catch (e) {
+                    printerr(`[nidara-portal] consent prompt failed, answering denied: ${e}`)
+                    finish(RESPONSE_OTHER, new GLib.Variant("a{sv}", {}))
+                }
+            },
+        )
+    }
+}
+
 // ── Wallpaper Backend ────────────────────────────────────────────────────────
 class WallpaperBackend {
     SetWallpaperURIAsync(params, invocation) {
@@ -593,12 +700,14 @@ let appearanceMonitor = null
 
 const loop = new GLib.MainLoop(null, false)
 const settingsBackend = new SettingsBackend()
+const accessBackend = new AccessBackend()
 const wallpaperBackend = new WallpaperBackend()
 const dynamicLauncherBackend = new DynamicLauncherBackend()
 const accountBackend = new AccountBackend()
 const backgroundBackend = new BackgroundBackend()
 
 const exportedSettings = Gio.DBusExportedObject.wrapJSObject(SETTINGS_IFACE_XML, settingsBackend)
+const exportedAccess = Gio.DBusExportedObject.wrapJSObject(ACCESS_IFACE_XML, accessBackend)
 const exportedWallpaper = Gio.DBusExportedObject.wrapJSObject(WALLPAPER_IFACE_XML, wallpaperBackend)
 const exportedDynamicLauncher = Gio.DBusExportedObject.wrapJSObject(DYNAMIC_LAUNCHER_IFACE_XML, dynamicLauncherBackend)
 const exportedAccount = Gio.DBusExportedObject.wrapJSObject(ACCOUNT_IFACE_XML, accountBackend)
@@ -610,6 +719,7 @@ Gio.bus_own_name(
     Gio.BusNameOwnerFlags.NONE,
     (connection) => {
         exportedSettings.export(connection, OBJECT_PATH)
+        exportedAccess.export(connection, OBJECT_PATH)
         exportedWallpaper.export(connection, OBJECT_PATH)
         exportedDynamicLauncher.export(connection, OBJECT_PATH)
         exportedAccount.export(connection, OBJECT_PATH)
@@ -662,7 +772,7 @@ Gio.bus_own_name(
             )
         })
 
-        print(`[nidara-portal] serving Settings + Wallpaper + DynamicLauncher + Account + Background on ${BUS_NAME}`)
+        print(`[nidara-portal] serving Settings + Wallpaper + Access (+ unrouted DynamicLauncher, Account, Background) on ${BUS_NAME}`)
     },
     null,
     () => {

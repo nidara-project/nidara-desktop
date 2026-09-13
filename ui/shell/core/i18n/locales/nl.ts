@@ -786,4 +786,8 @@ export default {
     "widget.screenrecord.settings.save-to": "Opslaan in",
     "widget.screenrecord.settings.choose-folder": "Kiezen…",
     "widget.screenrecord.settings.dialog.folder": "Selecteer een map voor opnames",
+    // XDG portal consent prompts (surfaces/consent) — fallback button labels only;
+    // the frontend normally supplies its own, already translated.
+    "consent.allow": "Toestaan",
+    "consent.deny": "Weigeren",
 }

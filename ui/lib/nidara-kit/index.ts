@@ -98,8 +98,9 @@ export { NidaraToggleRow, NidaraDropDownRow, NidaraSliderRow, plainRow } from ".
 export { bindWhileRealized } from "./lifetime"
 
 // showNidaraAlert — modal confirmation dialog (replaces Adw.AlertDialog)
-export type { AlertResponse, AlertHandle } from "./alert-dialog"
+export type { AlertResponse, AlertHandle, AlertChoice } from "./alert-dialog"
 export { showNidaraAlert } from "./alert-dialog"
+export { setTransientForExported } from "./wayland-parent"
 
 // showNidaraFormDialog — modal form dialog with floating glass styling
 export type { FormResponse, FormDialogHandle, NidaraFormDialogOpts } from "./form-dialog"
