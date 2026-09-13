@@ -3653,6 +3653,18 @@ and the mode to gsettings. `icon-theme`, `cursor-theme` and `gtk-theme` still li
 reverted at the next login. Do the same move #534 did; the cursor's listener also has to reach
 Hyprland and the Xcursor default (#72).
 
+### 104. ⚠️ OPEN — `AppService.getAppInfo` answers for ids that are not apps (2026-09-13)
+
+Its last resort is a SUBSTRING match over desktop ids, so any string that happens to sit inside some
+entry's id resolves to that entry. The dock's own "launcher" item resolved to
+`fcitx5-wayland-launcher.desktop`: every app-grid click LAUNCHED that input-method helper and only
+toggled the grid once it died (1.2–1.3 s per open and per close, #550), and the item's right-click
+menu offered fcitx5's desktop actions. Fixed at the caller — `DockItem`'s `isSpecialItem` keeps the
+dock's own items (grid, home, trash) out of the registry entirely — but the fallback itself still
+serves every other caller, and a window class or stream name with no entry of its own can land on an
+unrelated app the same way. Before feeding `getAppInfo` a string you did not get from the registry,
+ask whether a wrong app is worse than `null` — for anything that LAUNCHES, it is.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a

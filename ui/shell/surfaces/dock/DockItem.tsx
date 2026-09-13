@@ -121,6 +121,12 @@ export function DockItem(
     referenceWidget?: Gtk.Widget
 ) {
     let { appId, appItem, updateDock, register, addresses = [], clientTitle, onPin, onUnpin, onReorder, isPinned, cleanId } = props
+    // The dock's own items (app grid, home, trash) are NOT apps, and must never be
+    // looked up as one: `appService.getAppInfo` falls back to a SUBSTRING match, so
+    // "launcher" resolved to `fcitx5-wayland-launcher.desktop`. Every grid click
+    // launched that input-method helper and only toggled the grid in the `.catch`
+    // once it died — which is what made the grid slow to open AND to close (#550).
+    const isSpecialItem = appId.startsWith("special:") || appId === "launcher" || appId === "home-shortcut" || appId === "trash"
     const isVertical = dockSettings.position === 'left' || dockSettings.position === 'right'
     let rawId = "void"
     if (appItem.get_id) {
@@ -553,7 +559,7 @@ export function DockItem(
         const mainSection = addSection(mainTitle)
 
         let desktopActions: string[] = []
-        const gAppInfo = appService.getAppInfo(appId)
+        const gAppInfo = isSpecialItem ? null : appService.getAppInfo(appId)
         if (gAppInfo && gAppInfo.list_actions) desktopActions = gAppInfo.list_actions()
 
         if (appId === "launcher" || appId === "special:launcher") {
@@ -578,7 +584,6 @@ export function DockItem(
             })
         }
 
-        const isSpecialItem = appId.startsWith("special:") || appId === "launcher" || appId === "home-shortcut" || appId === "trash"
         if (!isSpecialItem) {
             const pinSection = addSection(null)
             pinSection.append(
@@ -688,6 +693,10 @@ export function DockItem(
             if (target) {
                 hs.focusWindow(target)
             }
+        } else if (appId === "launcher" || appId === "special:launcher") {
+            // A toggle, not a launch: no bounce (nothing is starting), no frequency
+            // record, straight to the grid.
+            appItem.launch()
         } else {
             // Fallback or Launch
             try {
@@ -736,6 +745,9 @@ export function DockItem(
                     execAsync(["uwsm", "app", "--", "xdg-open", GLib.get_home_dir()]).catch(print)
                 } else if (appId === "nidara-settings") {
                     shellActions.openSettings?.()
+                } else if (isSpecialItem) {
+                    // Trash: its own launch, never an app-registry lookup (see isSpecialItem).
+                    appItem.launch()
                 } else {
                     // Origin-aware command (gtk-launch / flatpak run) — see AppService.
                     // getLaunchCommand. cd $HOME because children inherit the launcher's
