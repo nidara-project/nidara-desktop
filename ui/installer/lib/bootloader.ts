@@ -117,6 +117,61 @@ export function entryIsOurs(text: string, startedAt: string): boolean {
   return stamp >= startedAt
 }
 
+/**
+ * Every partition or filesystem identifier an entry's kernel command line names:
+ * `root=PARTUUID=…`, `root=UUID=…`, `cryptdevice=UUID=…:root`, and the systemd
+ * spellings `rd.luks.name=<uuid>=root` / `rd.luks.uuid=<uuid>`. Lowercased — lsblk
+ * reports them lowercase, a hand-edited entry may not.
+ */
+export function entryDeviceIds(text: string): string[] {
+  const opts = text.match(/^options[ \t]+(.*)$/m)?.[1] ?? ""
+  const ids = new Set<string>()
+  for (const m of opts.matchAll(/(?:PART)?UUID=([0-9A-Fa-f-]+)/g)) ids.add(m[1].toLowerCase())
+  for (const m of opts.matchAll(/rd\.luks\.(?:name|uuid)=(?:luks-)?([0-9A-Fa-f-]{36})/g)) ids.add(m[1].toLowerCase())
+  return [...ids]
+}
+
+/**
+ * Is this the entry of an EARLIER Nidara install whose system no longer exists?
+ *
+ * ## The case
+ * Reinstalling Nidara while keeping the EFI partition — manual mode, `/boot` kept
+ * — left the previous install's `Nidara (linux)` entry beside the new one
+ * (measured, 2026-09-13 manual-mode VM pass). Formatting `/` is a delete and
+ * re-create (`status: "modify"`), so the old entry's `root=PARTUUID=…` names a
+ * partition that is gone: two identical titles in the menu, one of which cannot
+ * boot. The default is right, so it bites the person who picks the wrong one.
+ *
+ * ## Why every condition, and which way each fails
+ * - not this run's (`entryIsOurs`) — ours are the new ones;
+ * - archinstall's header AND a `Nidara` title — only an entry WE produced before.
+ *   Another Arch on this ESP carries the header too, and a different title;
+ * - it names at least one identifier, and NONE of them exists on this machine.
+ *   An entry naming no identifier (`root=/dev/sda2`) cannot be judged and is kept.
+ *
+ * The caller renames rather than deletes (`.conf` → `.conf.stale`, which
+ * systemd-boot does not read), because the one way this can be wrong is a disk
+ * that is not plugged in right now — and renaming it back is the whole recovery.
+ */
+export function entryIsStaleNidara(text: string, startedAt: string, present: ReadonlySet<string>): boolean {
+  if (present.size === 0) return false
+  if (entryIsOurs(text, startedAt)) return false
+  if (!/^#\s*Created by:\s*archinstall\s*$/m.test(text)) return false
+  if (!/^title\s+Nidara\b/m.test(text)) return false
+  const ids = entryDeviceIds(text)
+  return ids.length > 0 && ids.every(id => !present.has(id))
+}
+
+/** Every UUID and PARTUUID on the machine right now, lowercased. Empty if unreadable. */
+function presentDeviceIds(): Set<string> {
+  try {
+    return new Set(runCmd(["lsblk", "-nr", "-o", "UUID,PARTUUID"])
+      .split(/\s+/).filter(Boolean).map(id => id.toLowerCase()))
+  } catch {
+    return new Set()
+  }
+}
+
 /** `title Arch Linux (linux)` → `title Nidara (linux)`. The kernel keeps its name. */
 export function retitleEntry(text: string): string {
   return text.replace(/^title(\s+)Arch Linux/m, "title\tNidara")
@@ -296,7 +351,27 @@ export function configureInstalledBootloader(
   const loaderDir = loaderRoot(answers)
   appendLog(`[BOOTLOADER] Configuring systemd-boot for Nidara (${loaderDir})...`)
 
-  const entries = readLoaderEntries(loaderDir)
+  const all = readLoaderEntries(loaderDir)
+
+  // 0. An earlier Nidara install's entry, whose system is gone — see
+  //    `entryIsStaleNidara`. Before counting "foreign": a dead entry of ours is not
+  //    a neighbour, and counting it made a machine with no other system look shared.
+  //    ⚠️ Read AFTER archinstall, so the partitions it just created are present and
+  //    the ones it recreated have their new identifiers.
+  const present = presentDeviceIds()
+  if (present.size === 0) appendLog("[BOOTLOADER] Note: could not list this machine's partitions; no entry is judged stale.")
+  const entries: LoaderEntry[] = []
+  for (const entry of all) {
+    if (!entryIsStaleNidara(entry.text, startedAt, present)) { entries.push(entry); continue }
+    try {
+      runCmd(["mv", entry.path, `${entry.path}.stale`])
+      appendLog(`[BOOTLOADER] ${entry.path} booted an earlier Nidara whose system no longer exists — `
+        + `hidden from the menu as ${entry.path}.stale (rename it back to restore it).`)
+    } catch (e: any) {
+      entries.push(entry)
+      appendLog(`[BOOTLOADER] Note: could not hide the stale entry ${entry.path}: ${e.message || e}`)
+    }
+  }
   const ours = entries.filter(e => entryIsOurs(e.text, startedAt))
   const foreign = entries.length - ours.length
   if (foreign > 0) {
