@@ -24,8 +24,15 @@ export type Connectivity = "full" | "limited" | "portal" | "none" | "unknown"
  * a warning that fires on a working connection teaches people to click past the
  * one that matters.
  */
-export function connectivity(): Promise<Connectivity> {
-  return execAsync(["nmcli", "-t", "networking", "connectivity"])
+export function connectivity(opts: { fresh?: boolean } = {}): Promise<Connectivity> {
+  // ⚠️ Without `check`, nmcli answers NetworkManager's LAST result, which it only
+  // refreshes every so often. Measured, 2026-09-14 VM: the internet cut off a few
+  // seconds before Install, the run step read the cached "full", archinstall
+  // started — and sat in `pacman -Sy` for 15 minutes behind "Preparing the disk".
+  // `check` makes NetworkManager ask again, now, and waits for the answer. It is
+  // a request to ping.archlinux.org, so it is for the one moment that decides
+  // whether to start (the run step), not for a page polling every few seconds.
+  return execAsync(["nmcli", "-t", "networking", "connectivity", ...(opts.fresh ? ["check"] : [])])
     .then(out => {
       const v = out.trim().toLowerCase()
       return (["full", "limited", "portal", "none", "unknown"].includes(v)

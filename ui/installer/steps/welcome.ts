@@ -29,6 +29,7 @@
 // literally "Same as language".
 
 import Gtk from "gi://Gtk?version=4.0"
+import GLib from "gi://GLib"
 import type { Step } from "../lib/flow"
 import { readBaseConfig } from "../lib/base-config"
 import { checkArchinstall, archinstallVerdict, blocksInstall } from "../lib/archinstall-check"
@@ -37,6 +38,7 @@ import { nidaraLogoIcon } from "../../lib/icons"
 import { NidaraRow } from "../../lib/nidara-kit"
 import { heading, prose, searchableList } from "./common"
 import { connectivity, isUsable } from "../lib/network"
+import { onBattery, readPowerSupplies } from "../lib/power"
 import { LANGUAGES, languageFor, type Language } from "../lib/languages"
 import { languageMenuLabels, languageHaystack } from "../../lib/locale-names"
 import { getAnswers, setLanguageAnswer } from "../lib/answers"
@@ -90,17 +92,45 @@ function languageRows(): Array<{ l: Language, label: string }> {
 export function WelcomeStep(): Step {
   const base = readBaseConfig()
 
-  // Advisory here, enforced in the run step. Warning without blocking is the
-  // right shape: the person can walk over to the desktop behind this window,
-  // join a network, and come back — and coming back re-runs onEnter, which is
-  // the whole reason the check can live on a page instead of in a dialog.
+  // ⚠️ Enforced HERE since 2026-09-14, and it used to be advisory. The warning
+  // showed, Continue stayed live, and somebody with no connection answered every
+  // page — region, disk, a LUKS passphrase, the account — to be refused by the run
+  // step after confirming the summary (measured on the VM: the first line of the
+  // log was the refusal). Calamares' welcome module holds the page instead
+  // (`required: [internet]` in CachyOS' welcome_online.conf).
+  //
+  // It is a requirement only while there is no offline install (#20, decided
+  // "later"): the day the medium carries its packages, this goes back to a
+  // warning. `unknown` still passes — see lib/network.ts — and the run step keeps
+  // its own check, because a connection can drop between here and there.
+  //
+  // The person joins a network from the desktop behind this window without
+  // leaving the page, so the page re-asks every few seconds while it is on screen
+  // and unlocks Continue on its own the moment there is one.
   let netWarn: Gtk.Label | null = null
   let netOk = true
+  let batteryWarn: Gtk.Label | null = null
+  let notifyNet: (() => void) | null = null
 
   const refreshNetwork = () => {
     connectivity().then(c => {
+      const was = netOk
       netOk = isUsable(c)
       if (netWarn) netWarn.visible = !netOk
+      if (was !== netOk) notifyNet?.()
+    })
+    // Cheap (a few sysfs reads), and plugging a charger in should clear it too.
+    if (batteryWarn) batteryWarn.visible = onBattery(readPowerSupplies())
+  }
+
+  // One timer for the page's lifetime, re-armed on rebuild (a language change
+  // rebuilds every page). It only asks while its label is actually on screen.
+  let pollId = 0
+  const startPolling = () => {
+    if (pollId) GLib.source_remove(pollId)
+    pollId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 3, () => {
+      if (netWarn?.get_mapped()) refreshNetwork()
+      return GLib.SOURCE_CONTINUE
     })
   }
 
@@ -157,12 +187,14 @@ export function WelcomeStep(): Step {
 
     // A language is always set, so Continue is live from the first frame: the
     // person who does not care clicks past, and the medium's own locale is what
-    // they get. Only `base` can hold the flow here, and that is not a question —
-    // it means this is not a Nidara medium and there is nothing to install from.
+    // they get. What holds the flow here is never a question: no `base` (this is
+    // not a Nidara medium), no usable network (see `refreshNetwork`), or an
+    // archinstall this medium cannot drive.
     // ⚠️ A verdict that has not arrived yet does NOT hold the button: see
     // `archinstallVerdict()` for why an unknown answer is allowed through.
     ready: () => base !== null
       && getAnswers().language !== null
+      && netOk
       && !blocksInstall(archinstallVerdict()),
 
     onEnter() {
@@ -211,7 +243,12 @@ export function WelcomeStep(): Step {
       netWarn = prose(t("welcomeNoNetwork"), "installer-prose--warning")
       netWarn.visible = !netOk
       box.append(netWarn)
+      batteryWarn = prose(t("welcomeOnBattery"), "installer-prose--warning")
+      batteryWarn.visible = false
+      box.append(batteryWarn)
+      notifyNet = () => notifyReady?.()
       refreshNetwork()
+      startPolling()
 
       notify = () => notifyReady?.()
       archWarn = prose("", "installer-prose--warning")
