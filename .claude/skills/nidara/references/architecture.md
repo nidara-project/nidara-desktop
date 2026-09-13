@@ -1820,6 +1820,20 @@ reaches it through its static `pulseaudio` socket. Probes: `scripts/dev/permissi
 (asserting, including that *Ask* leaves no entry — the check a stored `["ask"]` would otherwise pass)
 and `PERM_SEED=… scripts/dev/app-page-probe.sh` to render seeded decisions.
 
+**What a Flatpak got at INSTALL is a second, separate layer** — network, the `pulseaudio` socket (sound
+AND microphone: one socket), the GPU, the home folder — never prompted, held from the next launch.
+`ui/shell/core/FlatpakPermissions.ts` edits it through `flatpak override --user` (the interface Flatseal
+drives too, so each sees the other's changes); the app page shows one switch each, whether the app
+asked for it, and *Restore* = `--reset`. Three measured traps: `flatpak info --show-permissions` prints
+the MERGED set, so "what the app asked" is read from its `metadata` and the override keyfiles are
+layered on top (`!name` removes; system global → system app → user global → user app); `!home` does
+NOT take away a declared `host`, so revoking the home folder writes both (and GPU revokes `dri` and
+`all`); and a `Gio.FileMonitor` on a MISSING `overrides/` directory never fires when flatpak creates
+it, so the watcher creates it first. Probe: `scripts/dev/install-permissions-probe.sh` (a fake
+installation under `FLATPAK_USER_DIR`, fails if the real overrides directory changes);
+`INSTALL_SEED="<app> <flags>" scripts/dev/app-page-probe.sh <app>` renders it, also on a scratch
+installation.
+
 ⚠️ Per-app permissions only BIND sandboxed apps: an unsandboxed app is unconfined and can open a
 device without asking. The portal still records and shows decisions for it, and Settings → Apps
 must say which case an app is in rather than show switches that promise what they cannot enforce.

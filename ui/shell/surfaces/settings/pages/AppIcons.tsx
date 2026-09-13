@@ -1,9 +1,16 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { NidaraScrolled, NidaraRow, NidaraList, NidaraBadge, NidaraDropDownRow } from "../../../../lib/nidara-kit"
+import {
+    NidaraScrolled, NidaraRow, NidaraList, NidaraBadge, NidaraDropDownRow, NidaraToggleRow, NidaraButton,
+    bindWhileRealized,
+} from "../../../../lib/nidara-kit"
 import {
     PORTAL_PERMISSIONS, getPortalPermission, setPortalPermission, watchPortalPermission,
     type PortalPermissionKey, type PortalPermissionState,
 } from "../../../core/PermissionStore"
+import {
+    INSTALL_PERMISSIONS, readInstallPermissions, setInstallPermission, resetInstallPermissions,
+    watchInstallPermissions, type InstallPermission,
+} from "../../../core/FlatpakPermissions"
 import appService, { type AppData } from "../../../core/AppService"
 import { pageBox, listGroup, imagePickerRow, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
@@ -82,6 +89,66 @@ function permissionsGroup(app: AppData): Gtk.Widget | null {
     return box
 }
 
+// ── What an isolated app was given at install (#535 part 3) ─────────────────────
+// Not asked for at run time, so never prompted: network, sound, the GPU and the home
+// folder hold from the moment the Flatpak is installed (core/FlatpakPermissions).
+// On/off, because that is all they are — and each row says whether the app asked for
+// it, so "Restore" has something visible to restore TO. Changes reach the app on its
+// next launch; the footer says so, since a switch that does nothing now reads broken.
+
+const INSTALL_LABELS = {
+    network: "settings.apps.install.network",
+    // One socket carries both directions: turning it off also silences the microphone.
+    sound: "settings.apps.install.sound",
+    gpu: "settings.apps.install.gpu",
+    home: "settings.apps.install.home",
+} as const satisfies Record<InstallPermission, string>
+
+function installGroup(app: AppData): Gtk.Widget | null {
+    const flatpakId = appService.getFlatpakId(app.id)
+    const initial = flatpakId ? readInstallPermissions(flatpakId) : null
+    if (!flatpakId || !initial) return null
+
+    const { box, listBox } = listGroup(t("settings.apps.install.group"), t("settings.apps.install.footer"))
+    for (const permission of INSTALL_PERMISSIONS) {
+        listBox.append(NidaraToggleRow(
+            t(INSTALL_LABELS[permission]),
+            initial.declared[permission] ? t("settings.apps.install.requested") : t("settings.apps.install.not-requested"),
+            initial.effective[permission],
+            (on) => {
+                setInstallPermission(flatpakId, permission, on)
+                    .catch(e => console.error(`[apps] could not set ${permission} for ${flatpakId}:`, e))
+            },
+            (apply) => {
+                const sync = () => {
+                    const now = readInstallPermissions(flatpakId)
+                    if (now) apply(now.effective[permission])
+                }
+                sync()
+                return watchInstallPermissions(flatpakId, sync)
+            },
+        ))
+    }
+
+    const restore = NidaraButton({ label: t("settings.apps.restore"), valign: Gtk.Align.CENTER })
+    restore.connect("clicked", () => {
+        resetInstallPermissions(flatpakId)
+            .catch(e => console.error(`[apps] could not restore ${flatpakId}:`, e))
+    })
+    const restoreRow = NidaraRow(t("settings.apps.install.restore"), t("settings.apps.install.restore.desc"), restore)
+    restoreRow.activatable = false
+    const syncRestore = () => {
+        const now = readInstallPermissions(flatpakId)
+        restore.sensitive = !!now && INSTALL_PERMISSIONS.some(p => now.declared[p] !== now.effective[p])
+    }
+    bindWhileRealized(restore, () => {
+        syncRestore()
+        return watchInstallPermissions(flatpakId, syncRestore)
+    })
+    listBox.append(restoreRow)
+    return box
+}
+
 // ── Per-app detail subpage ──────────────────────────────────────────────────────
 // Each app drills into its own subpage (nav.pushSubpage) rather than a modal — more
 // room, and a foundation for future per-app settings beyond just the icon. Changes
@@ -94,6 +161,8 @@ export function buildAppIconDetailPage(app: AppData, syncRow: () => void): Gtk.W
     page.append(appHeader(app))
     const permissions = permissionsGroup(app)
     if (permissions) page.append(permissions)
+    const install = installGroup(app)
+    if (install) page.append(install)
     const { box, listBox } = listGroup(t("settings.apps.detail.group.icon"))
 
     // Choose image — the single, primary way to set an icon. The user picks an

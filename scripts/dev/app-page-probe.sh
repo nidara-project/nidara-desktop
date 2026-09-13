@@ -12,13 +12,29 @@
 # XDG_DATA_HOME is private too: it is where the portal's PermissionStore keeps its tables,
 # and the app page reads (and its rows can write) them. Seed decisions with PERM_SEED:
 #   PERM_SEED="devices camera org.gnome.clocks yes;wallpaper wallpaper org.gnome.clocks no"
+# The Flatpak installation is a scratch one too (FLATPAK_USER_DIR): each Flatpak named on
+# the command line gets a copy of its real `metadata` and nothing else, so the page's
+# install-time switches read what the app declared and can never write the real overrides.
+# Seed an override with INSTALL_SEED (flatpak override flags, per app):
+#   INSTALL_SEED="org.gnome.clocks --nosocket=pulseaudio --unshare=network"
 set -euo pipefail
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
 out_dir="${OUT:-$PWD}"; mkdir -p "$out_dir"
 work="$(mktemp -d -t nidara-app-page-XXXXXX)"
 cleanup() { [ -n "${HYPR:-}" ] && kill "$HYPR" 2>/dev/null; rm -rf "$work"; }
 trap cleanup EXIT
-mkdir -p "$work/runtime" "$work/config" "$work/data"; chmod 700 "$work/runtime"
+mkdir -p "$work/runtime" "$work/config" "$work/data" "$work/flatpak-sys"; chmod 700 "$work/runtime"
+for id in "$@"; do
+  loc=$(flatpak info --show-location "$id" 2>/dev/null) || continue
+  mkdir -p "$work/flatpak/app/$id/current/active"
+  cp "$loc/metadata" "$work/flatpak/app/$id/current/active/metadata"
+done
+if [ -n "${INSTALL_SEED:-}" ]; then
+  read -r seed_app seed_flags <<< "$INSTALL_SEED"
+  # shellcheck disable=SC2086
+  FLATPAK_USER_DIR="$work/flatpak" FLATPAK_SYSTEM_DIR="$work/flatpak-sys" flatpak override --user $seed_flags "$seed_app"
+  echo "seed override $seed_app: $(tr '\n' ' ' < "$work/flatpak/overrides/$seed_app")"
+fi
 
 "$repo/ui/shell/node_modules/.bin/sass" --no-charset "$repo/ui/shell/style.scss" "$work/style.css" 2>/dev/null
 "$repo/scripts/bundle.sh" --js "$repo/scripts/dev/app-page-probe.ts" "$work/probe.js" >/dev/null 2>&1
@@ -43,6 +59,7 @@ wl=$(HYPRLAND_INSTANCE_SIGNATURE="$sig" hyprctl -j instances | jq -r ".[] | sele
 
 env -u DBUS_SESSION_BUS_ADDRESS -u DISPLAY \
   WAYLAND_DISPLAY="$XDG_RUNTIME_DIR/$wl" XDG_RUNTIME_DIR="$work/runtime" XDG_CONFIG_HOME="$work/config" XDG_DATA_HOME="$work/data" \
+  FLATPAK_USER_DIR="$work/flatpak" FLATPAK_SYSTEM_DIR="$work/flatpak-sys" \
   XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}:/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share" \
   NIDARA_SHELL_ROOT="$repo/ui/shell" GIO_USE_VFS=local LANG="${LANG:-es_ES.UTF-8}" \
   work="$work" repo="$repo" out_dir="$out_dir" REAL_RUNTIME="$XDG_RUNTIME_DIR" PERM_SEED="${PERM_SEED:-}" \

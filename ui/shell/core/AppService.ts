@@ -667,6 +667,11 @@ class AppService {
         return file ? "system" : "unknown"
     }
 
+    /** The Flatpak ref name an entry launches (`X-Flatpak`), or null for anything that is not a Flatpak. */
+    getFlatpakId(lid: string): string | null {
+        try { return this.getAppInfo(lid)?.get_string?.("X-Flatpak") || null } catch (e) { return null }
+    }
+
     /**
      * Finds the DesktopAppInfo for any identifier: desktop ID, WM_CLASS, or variant.
      */
