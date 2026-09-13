@@ -34,7 +34,9 @@
 // instead of on the day somebody reports that their Ubuntu is gone from the menu.
 
 import {
+  entryDeviceIds,
   entryIsOurs,
+  entryIsStaleNidara,
   otherOsPresent,
   patchLoaderConf,
   retitleEntry,
@@ -79,6 +81,52 @@ check("theirs: our header, no stamp",
 // Fails SAFE: an unrecognised header means we edit nothing, which costs a title.
 check("unknown format: not claimed",
   entryIsOurs("# Created by: something-else\n# Created on: 2027-01-01_00-00-00\n", STARTED), false)
+
+print("\n── An earlier Nidara whose system is gone ──────────────────────────")
+
+// Measured, 2026-09-13 manual-mode VM: the first install's entry, still on the
+// kept ESP after a reinstall formatted `/` — which recreates the partition, so
+// the PARTUUID it names no longer exists. `PRESENT` is that machine afterwards.
+const STALE_MEASURED = "# Created by: archinstall\n# Created on: 2026-09-13_19-46-24\n"
+  + "title\tNidara (linux)\nlinux\t/vmlinuz-linux\ninitrd\t/initramfs-linux.img\n"
+  + "options root=PARTUUID=cfc41348-e153-418f-8f1a-61ca1050c127 zswap.enabled=0 rootflags=subvol=@ rw rootfstype=btrfs quiet splash\n"
+const PRESENT = new Set([
+  "bdf7-cfdc", "048bd879-ea30-4689-a543-c650de199c0c", "b22e0382-6c17-40b9-b389-391086c2db23",
+  "84470f70-8f40-4624-90eb-3afb29e1205d", "52ce6a60-9cc2-4c04-be43-f4350fbf8386",
+])
+const RETRY_STARTED = "2026-09-13_19-59-00"
+const nidaraEntry = (options: string, stamp = "2026-09-01_10-00-00") =>
+  `# Created by: archinstall\n# Created on: ${stamp}\ntitle\tNidara (linux)\nlinux\t/vmlinuz-linux\noptions ${options}\n`
+
+check("ids: a PARTUUID is one id, not also a UUID",
+  entryDeviceIds(STALE_MEASURED), ["cfc41348-e153-418f-8f1a-61ca1050c127"])
+check("ids: encrypted, both spellings, case folded",
+  entryDeviceIds("options cryptdevice=UUID=AAAA1111-2222-3333-4444-555566667777:root rd.luks.name=bbbb1111-2222-3333-4444-555566667777=root root=/dev/mapper/root\n"),
+  ["aaaa1111-2222-3333-4444-555566667777", "bbbb1111-2222-3333-4444-555566667777"])
+
+check("stale: the measured entry, its root recreated",
+  entryIsStaleNidara(STALE_MEASURED, RETRY_STARTED, PRESENT), true)
+check("stale: an encrypted earlier Nidara whose LUKS partition is gone",
+  entryIsStaleNidara(nidaraEntry("cryptdevice=PARTUUID=dead0000-0000-0000-0000-000000000000:root root=/dev/mapper/root rw"), RETRY_STARTED, PRESENT), true)
+// Everything below must be KEPT.
+check("kept: the same entry while its partition still exists",
+  entryIsStaleNidara(STALE_MEASURED, RETRY_STARTED, new Set([...PRESENT, "cfc41348-e153-418f-8f1a-61ca1050c127"])), false)
+check("kept: this run's own entry, even before its ids are known",
+  entryIsStaleNidara(nidaraEntry("root=PARTUUID=ffff0000-0000-0000-0000-000000000000 rw", "2026-09-13_20-00-00"), RETRY_STARTED, PRESENT), false)
+// A neighbouring Arch carries archinstall's header too. Whether ITS disk is
+// plugged in is not ours to judge.
+check("kept: another Arch whose root is not present",
+  entryIsStaleNidara(archEntry("2026-04-01_09-12-00", "linux", "root=PARTUUID=dead0000-0000-0000-0000-000000000000 rw"), RETRY_STARTED, PRESENT), false)
+check("kept: a hand-written Nidara-titled entry (no archinstall header)",
+  entryIsStaleNidara("title\tNidara (custom)\nlinux\t/vmlinuz-linux\noptions root=PARTUUID=dead0000-0000-0000-0000-000000000000\n", RETRY_STARTED, PRESENT), false)
+check("kept: an entry naming no identifier cannot be judged",
+  entryIsStaleNidara(nidaraEntry("root=/dev/sda2 rw"), RETRY_STARTED, PRESENT), false)
+check("kept: one of its two ids still exists",
+  entryIsStaleNidara(nidaraEntry("cryptdevice=UUID=84470f70-8f40-4624-90eb-3afb29e1205d:root root=PARTUUID=dead0000-0000-0000-0000-000000000000"), RETRY_STARTED, PRESENT), false)
+// The fail-safe that matters most: a failed lsblk is an EMPTY set, and against an
+// empty set every entry on the ESP would look dead.
+check("kept: the machine's partitions could not be read",
+  entryIsStaleNidara(STALE_MEASURED, RETRY_STARTED, new Set()), false)
 
 print("\n── The title ───────────────────────────────────────────────────────")
 

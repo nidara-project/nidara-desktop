@@ -641,6 +641,29 @@ jobs:
           cp /tmp/bootloader.bak ui/installer/lib/bootloader.ts
           git diff --quiet ui/installer/lib/bootloader.ts
 
+      # The stale-entry rule HIDES loader entries. Its worst defect is hiding one
+      # that is not an earlier Nidara — a neighbouring Arch carries archinstall's
+      # header too — so the title condition is the one this control deletes.
+      - name: The stale-entry rule can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/bootloader.ts /tmp/bootloader-stale.bak
+          sed -i 's|^  if (!/^title\\s+Nidara\\b/m.test(text)) return false$|  // deliberately removed|' \
+            ui/installer/lib/bootloader.ts
+          if ! git diff --quiet ui/installer/lib/bootloader.ts; then
+            echo "control: any archinstall entry whose root is absent now counts as an earlier Nidara"
+          else
+            echo "::error::the control patched nothing — the rule it deletes has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/bootloader-rules-probe.ts /tmp/bootloader-stale-defect.js
+          if gjs -m /tmp/bootloader-stale-defect.js; then
+            echo "::error::the probe passed while another Arch's entry could be hidden — it is not checking what it prints"
+            cp /tmp/bootloader-stale.bak ui/installer/lib/bootloader.ts
+            exit 1
+          fi
+          cp /tmp/bootloader-stale.bak ui/installer/lib/bootloader.ts
+          git diff --quiet ui/installer/lib/bootloader.ts
+
       - name: What we may touch on somebody else's ESP (must succeed)
         run: |
           ./scripts/bundle.sh --js scripts/dev/bootloader-rules-probe.ts /tmp/bootloader-probe.js
