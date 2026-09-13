@@ -13,6 +13,7 @@ import { archinstallStamp, configureInstalledBootloader } from "../lib/bootloade
 import { writeKeyboardConfig } from "../lib/keyboard-config"
 import { applyRealName } from "../lib/real-name"
 import { writeSwapFstabEntries } from "../lib/swap"
+import { copyNetworkConnections } from "../lib/network-connections"
 import { releaseTargetDisks } from "../lib/release-target"
 import { copyLogToTarget, openLiveLog, type LiveLog } from "../lib/install-log"
 import { stripAnsi } from "../lib/ansi"
@@ -443,6 +444,7 @@ export function RunStep(): Step {
                 applyRealName(isArm, answers, appendLog)
                 writeKeyboardConfig(isArm, answers, appendLog)
                 writeSwapFstabEntries(isArm, answers, appendLog)
+                copyNetworkConnections(isArm, answers, appendLog)
                 configureInstalledBootloader(isArm, answers, appendLog, startedAt)
               }
             } catch (e: any) {

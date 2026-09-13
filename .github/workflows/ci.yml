@@ -664,6 +664,35 @@ jobs:
           cp /tmp/bootloader-stale.bak ui/installer/lib/bootloader.ts
           git diff --quiet ui/installer/lib/bootloader.ts
 
+      # A saved network carried into the installed system (lib/network-connections.ts)
+      # is a copy with ONE edit: the live user becomes the new account. The defect
+      # worth a control is that edit reaching the rest of the file — an SSID, a
+      # password — so the control turns it into a blind replace over the whole text.
+      - name: The network-connections probe can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/network-connections.ts /tmp/network-connections.bak
+          sed -i 's|^  let section = ""$|  return text.split(liveUser).join(newUser) // deliberately blind\n  let section = ""|' \
+            ui/installer/lib/network-connections.ts
+          if ! git diff --quiet ui/installer/lib/network-connections.ts; then
+            echo "control: the owner rewrite now replaces the user name anywhere in the file"
+          else
+            echo "::error::the control patched nothing — the line it rewrites has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/network-connections-probe.ts /tmp/network-defect.js
+          if gjs -m /tmp/network-defect.js; then
+            echo "::error::the probe passed while a password could be rewritten — it is not checking what it prints"
+            cp /tmp/network-connections.bak ui/installer/lib/network-connections.ts
+            exit 1
+          fi
+          cp /tmp/network-connections.bak ui/installer/lib/network-connections.ts
+          git diff --quiet ui/installer/lib/network-connections.ts
+
+      - name: Saved networks carried into the installed system (must succeed)
+        run: |
+          ./scripts/bundle.sh --js scripts/dev/network-connections-probe.ts /tmp/network-probe.js
+          gjs -m /tmp/network-probe.js
+
       - name: What we may touch on somebody else's ESP (must succeed)
         run: |
           ./scripts/bundle.sh --js scripts/dev/bootloader-rules-probe.ts /tmp/bootloader-probe.js
