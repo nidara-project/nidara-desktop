@@ -67,6 +67,7 @@ import { entireDiskConfig, manualDiskConfig, espMount } from "../../ui/installer
 import { assemblePlan } from "../../ui/installer/lib/plan"
 import { loaderRoot } from "../../ui/installer/lib/bootloader"
 import { swapFstabEntry, partitionAtStart } from "../../ui/installer/lib/swap"
+import { releaseCommands, targetDisks, type BlockNode } from "../../ui/installer/lib/release-target"
 import { ESP_MIN_BYTES, manualProblems } from "../../ui/installer/lib/manual-problems"
 import { formatSize } from "../../ui/installer/lib/format-size"
 import { freeSpaceGaps } from "../../ui/installer/lib/free-space"
@@ -799,6 +800,97 @@ for (const c of START_CASES) {
   const got = partitionAtStart(LSBLK_VDA, c.start)
   print(`   ${JSON.stringify(got).padEnd(14)} ${c.name}`)
   if (got !== c.want) fail(c.name, `partitionAtStart returned ${JSON.stringify(got)}, expected ${JSON.stringify(c.want)}`)
+}
+
+
+// ─── WHAT A RETRY HAS TO RELEASE FIRST ───────────────────────────────────────
+//
+// A second attempt in the same live session died on `umount -R [SWAP]` before
+// writing anything: the first had left its swap on, and archinstall hands every
+// lsblk mountpoint to umount (lib/release-target.ts). The trees below are the
+// shape of `lsblk -J -o NAME,PATH,TYPE,MOUNTPOINTS` — the "retry" one is what the
+// 2026-09-13 manual-mode VM held after its first install (btrfs subvolumes are
+// several mountpoints on ONE node, which is how lsblk reports them).
+//
+// Checked as ORDER RULES rather than one exact list, because the rules are what
+// the kernel enforces: swaps before anything else, a mount before its parent,
+// crypt mappings only after every mount — and nothing on a disk the layout does
+// not name.
+
+const MANUAL_LEFTOVER: BlockNode[] = [
+  { name: "vda", path: "/dev/vda", type: "disk", mountpoints: [null], children: [
+    { name: "vda1", path: "/dev/vda1", type: "part", mountpoints: ["/mnt/boot"] },
+    { name: "vda2", path: "/dev/vda2", type: "part", mountpoints: ["/mnt/var/log", "/mnt/var/cache/pacman/pkg", "/mnt/.snapshots", "/mnt"] },
+    { name: "vda3", path: "/dev/vda3", type: "part", mountpoints: ["/mnt/home"] },
+    { name: "vda4", path: "/dev/vda4", type: "part", mountpoints: ["[SWAP]"] },
+  ] },
+  // Not a target: somebody's USB stick, mounted to copy files from, with a swap on it.
+  { name: "sdb", path: "/dev/sdb", type: "disk", mountpoints: [null], children: [
+    { name: "sdb1", path: "/dev/sdb1", type: "part", mountpoints: ["/run/media/live/STICK"] },
+    { name: "sdb2", path: "/dev/sdb2", type: "part", mountpoints: ["[SWAP]"] },
+  ] },
+]
+const ENCRYPTED_LEFTOVER: BlockNode[] = [
+  { name: "nvme0n1", path: "/dev/nvme0n1", type: "disk", mountpoints: [null], children: [
+    { name: "nvme0n1p1", path: "/dev/nvme0n1p1", type: "part", mountpoints: ["/mnt/boot"] },
+    { name: "nvme0n1p2", path: "/dev/nvme0n1p2", type: "part", mountpoints: [null], children: [
+      { name: "root", path: "/dev/mapper/root", type: "crypt", mountpoints: ["/mnt/home", "/mnt"] },
+    ] },
+  ] },
+]
+const FRESH: BlockNode[] = [
+  { name: "vda", path: "/dev/vda", type: "disk", mountpoints: [null], children: [
+    { name: "vda1", path: "/dev/vda1", type: "part", mountpoints: [null] },
+  ] },
+]
+
+const RELEASE_CASES = [
+  { name: "first attempt: nothing held, nothing to do", tree: FRESH, targets: ["/dev/vda"],
+    swaps: [], mounts: [], crypts: [] },
+  { name: "retry after a manual install (swap left on, /mnt left mounted)", tree: MANUAL_LEFTOVER, targets: ["/dev/vda"],
+    swaps: ["/dev/vda4"], mounts: ["/mnt/boot", "/mnt/var/log", "/mnt/var/cache/pacman/pkg", "/mnt/.snapshots", "/mnt", "/mnt/home"], crypts: [] },
+  { name: "retry after an encrypted install (mapping still open)", tree: ENCRYPTED_LEFTOVER, targets: ["/dev/nvme0n1"],
+    swaps: [], mounts: ["/mnt/boot", "/mnt/home", "/mnt"], crypts: ["root"] },
+  { name: "a disk the layout does not name is left alone", tree: MANUAL_LEFTOVER, targets: ["/dev/nvme0n1"],
+    swaps: [], mounts: [], crypts: [] },
+]
+
+print("")
+for (const c of RELEASE_CASES) {
+  const cmds = releaseCommands(c.tree, c.targets)
+  print(`   ${String(cmds.length).padStart(2)} command(s)  ${c.name}`)
+  const kind = (k: string) => cmds.map((cmd, i) => ({ cmd, i })).filter(x => x.cmd[0] === k)
+  const swapoffs = kind("swapoff"), umounts = kind("umount"), closes = kind("cryptsetup")
+  const same = (got: string[], want: string[]) => got.length === want.length && want.every(w => got.includes(w))
+
+  if (cmds.length !== swapoffs.length + umounts.length + closes.length) fail(c.name, `unexpected command in ${JSON.stringify(cmds)}`)
+  if (!same(swapoffs.map(x => x.cmd[1]), c.swaps)) fail(c.name, `swapoff ${JSON.stringify(swapoffs.map(x => x.cmd[1]))}, expected ${JSON.stringify(c.swaps)}`)
+  if (!same(umounts.map(x => x.cmd[1]), c.mounts)) fail(c.name, `umount ${JSON.stringify(umounts.map(x => x.cmd[1]))}, expected ${JSON.stringify(c.mounts)}`)
+  if (!same(closes.map(x => x.cmd[2]), c.crypts)) fail(c.name, `cryptsetup close ${JSON.stringify(closes.map(x => x.cmd[2]))}, expected ${JSON.stringify(c.crypts)}`)
+
+  // Swaps first: one can sit on the crypt mapping that has to close last.
+  if (swapoffs.some(s => umounts.some(u => u.i < s.i) || closes.some(x => x.i < s.i))) fail(c.name, "a swapoff comes after an umount or a close")
+  // A mount before its parent, or the parent's umount fails as busy.
+  for (const child of umounts) for (const parent of umounts) {
+    const p = parent.cmd[1], ch = child.cmd[1]
+    if (p !== ch && ch.startsWith(p === "/" ? "/" : p + "/") && parent.i < child.i) fail(c.name, `umount ${p} runs before ${ch}, which is inside it`)
+  }
+  // A mapping closes only once nothing on it is mounted.
+  if (closes.some(x => umounts.some(u => u.i > x.i))) fail(c.name, "cryptsetup close comes before an umount")
+}
+
+// Which disks those are, per mode: the chosen disk, or every disk a manual row is on.
+const TARGET_CASES = [
+  { name: "entire disk", answers: { disk: { mode: "entire_disk", disk: { path: "/dev/nvme0n1" } } }, want: ["/dev/nvme0n1"] },
+  { name: "manual, two disks, three rows", answers: { disk: { mode: "manual", mounts: [
+    { device: "/dev/sda" }, { device: "/dev/sdb" }, { device: "/dev/sda" },
+  ] } }, want: ["/dev/sda", "/dev/sdb"] },
+  { name: "nothing chosen", answers: { disk: null }, want: [] },
+]
+for (const c of TARGET_CASES) {
+  const got = targetDisks(c.answers as any)
+  print(`   ${JSON.stringify(got).padEnd(28)} ${c.name}`)
+  if (JSON.stringify(got) !== JSON.stringify(c.want)) fail(c.name, `targetDisks returned ${JSON.stringify(got)}, expected ${JSON.stringify(c.want)}`)
 }
 
 
