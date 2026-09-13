@@ -241,6 +241,24 @@ checkbutton:disabled {
 // one geometry; tiles do not. Bring the class back WITH variants if that
 // migration is ever attempted — do not restore it bare.)
 
+/* NidaraBadge — a neutral status pill beside a row's text (nidara-kit/badge.ts).
+   A fact, not a control: no hover, no accent (the accent marks selection). */
+.nidara-badge {
+    padding: 3px 10px;
+    border-radius: $nidara-radius-pill;
+    background: var(--nidara-surface);
+    border: 1px solid var(--nidara-border);
+
+    .nidara-badge-label {
+        font-size: $fse-caption;
+        font-weight: $fw-medium;
+        color: var(--nidara-text-dim);
+    }
+    .nidara-badge-icon {
+        color: var(--nidara-text-dim);
+    }
+}
+
 /* Title + label typography for the list/row components. */
 .nidara-list-title {
     font-size: $fse-caption;

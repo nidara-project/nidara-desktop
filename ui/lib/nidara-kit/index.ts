@@ -100,6 +100,9 @@ export { bindWhileRealized } from "./lifetime"
 // showNidaraAlert — modal confirmation dialog (replaces Adw.AlertDialog)
 export type { AlertResponse, AlertHandle, AlertChoice } from "./alert-dialog"
 export { showNidaraAlert } from "./alert-dialog"
+
+// NidaraBadge — a neutral status pill ("Isolated", "custom"); never a control.
+export { NidaraBadge } from "./badge"
 export { setTransientForExported } from "./wayland-parent"
 
 // showNidaraFormDialog — modal form dialog with floating glass styling

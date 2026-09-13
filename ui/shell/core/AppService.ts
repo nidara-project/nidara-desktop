@@ -645,6 +645,29 @@ class AppService {
     }
 
     /**
+     * Where an app comes from, read off its desktop entry — the question Settings →
+     * Apps answers with "Isolated" / "Not isolated" (#535).
+     *
+     * - `flatpak`: the entry carries `X-Flatpak` (Flatpak writes it into every export;
+     *   the launcher keys on the same field). The only origin that is SANDBOXED.
+     * - `snap`: the entry lives under snapd's export dir. Confinement varies per snap,
+     *   so it is reported as its own origin and never labelled isolated or not.
+     * - `user`: the entry lives in the user's own data dir (~/.local/share/applications)
+     *   — an app somebody put there by hand or with a per-user installer. Calling it a
+     *   "system package" would be wrong (this machine's Claude Desktop is one).
+     * - `system`: anywhere else — a distribution package.
+     */
+    getAppOrigin(lid: string): "flatpak" | "snap" | "user" | "system" | "unknown" {
+        const info = this.getAppInfo(lid)
+        if (!info) return "unknown"
+        try { if (info.get_string?.("X-Flatpak")) return "flatpak" } catch (e) { /* not keyfile-backed */ }
+        const file: string = info.get_filename?.() ?? ""
+        if (file.includes("/snapd/")) return "snap"
+        if (file.startsWith(GLib.get_user_data_dir())) return "user"
+        return file ? "system" : "unknown"
+    }
+
+    /**
      * Finds the DesktopAppInfo for any identifier: desktop ID, WM_CLASS, or variant.
      */
     getAppInfo(lid: string): any | null {
