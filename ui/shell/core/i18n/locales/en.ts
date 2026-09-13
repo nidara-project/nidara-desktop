@@ -840,4 +840,8 @@ export default {
     "settings.gaming.performance-profile":         "High-performance profile",
     "settings.gaming.performance-profile.desc":          "Activate performance power profile automatically when a game launches",
     "settings.gaming.dialog.wallpaper":    "Select wallpaper",
+    // XDG portal consent prompts (surfaces/consent) — fallback button labels only;
+    // the frontend normally supplies its own, already translated.
+    "consent.allow": "Allow",
+    "consent.deny": "Deny",
 }

@@ -1,5 +1,8 @@
 import Gtk from "gi://Gtk?version=4.0"
+import Gio from "gi://Gio"
 import GLib from "gi://GLib"
+import { setTransientForExported } from "./wayland-parent"
+import { setWindowAppId } from "../app-id"
 
 export interface AlertResponse {
     id: string
@@ -8,6 +11,13 @@ export interface AlertResponse {
     destructive?: boolean
     /** Accent / suggested-action styling */
     suggested?: boolean
+}
+
+/** A yes/no option shown as a check box under the body; its state reaches `onResponse`. */
+export interface AlertChoice {
+    id: string
+    label: string
+    initial?: boolean
 }
 
 export interface AlertHandle {
@@ -25,20 +35,33 @@ export interface AlertHandle {
  *
  * With `entry`, a single-line input is shown under the body; its text reaches
  * `onResponse` as the second argument, and Enter triggers the suggested response.
+ *
+ * For a prompt raised on behalf of ANOTHER app (the XDG portal's consent dialogs):
+ * `icon` shows who is asking above the heading, `choices` adds check boxes whose
+ * state reaches `onResponse` as the third argument, and `parentWindow` takes the
+ * portal's `wayland:<handle>` so the dialog sits on the requesting app's window.
  */
 export function showNidaraAlert(opts: {
     parent?: Gtk.Window | null
     heading: string
     body?: string
     responses: AlertResponse[]
-    onResponse: (id: string, text?: string) => void
+    onResponse: (id: string, text?: string, choices?: Record<string, string>) => void
     /** Auto-respond after a countdown (e.g. revert a risky change if not confirmed).
      *  `format(remaining)` renders the body text each tick. */
     countdown?: { seconds: number; respondId: string; format: (remaining: number) => string }
     /** Optional single-line input (PIN / passkey prompts). */
     entry?: { placeholder?: string; digitsOnly?: boolean; maxLength?: number }
+    /** Who is asking: an icon name or a Gio.Icon, shown above the heading. */
+    icon?: string | any | null   // an icon name or a Gio.Icon
+    /** Check boxes under the body; `onResponse` gets `{ id: "true" | "false" }`. */
+    choices?: AlertChoice[]
+    /** A window of ANOTHER process, as an XDG portal passes it (`wayland:<handle>`). */
+    parentWindow?: string | null
+    /** The Wayland app-id this dialog declares for itself (window rules, window lists). */
+    appId?: string
 }): AlertHandle {
-    const { parent, heading, body, responses, onResponse, countdown, entry } = opts
+    const { parent, heading, body, responses, onResponse, countdown, entry, icon, choices, parentWindow, appId } = opts
 
     // ── Window ────────────────────────────────────────────────────────────────
     // transient_for is set post-construction: GJS rejects `undefined` in the
@@ -49,14 +72,30 @@ export function showNidaraAlert(opts: {
         resizable: false,
         decorated: false,
         default_width: 360,
+        // The heading doubles as the window title: without one a screen reader and
+        // the compositor's window list name the dialog after the process.
+        title: heading,
         css_classes: ["nidara-alert-dialog"],
     })
+    if (appId) setWindowAppId(dialog, appId)
     if (parent) dialog.transient_for = parent
+    else if (parentWindow) setTransientForExported(dialog, parentWindow)
 
     // ── Layout ────────────────────────────────────────────────────────────────
     const root = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
     })
+
+    // Icon (who is asking)
+    if (icon) {
+        const image = typeof icon === "string"
+            ? Gtk.Image.new_from_icon_name(icon)
+            : Gtk.Image.new_from_gicon(icon)
+        image.pixel_size = 48
+        image.margin_top = 24
+        image.add_css_class("nidara-alert-icon")
+        root.append(image)
+    }
 
     // Heading
     root.append(new Gtk.Label({
@@ -64,7 +103,7 @@ export function showNidaraAlert(opts: {
         wrap: true,
         justify: Gtk.Justification.CENTER,
         css_classes: ["nidara-alert-heading"],
-        margin_top: 28,
+        margin_top: icon ? 12 : 28,
         margin_start: 24,
         margin_end: 24,
     }))
@@ -111,6 +150,27 @@ export function showNidaraAlert(opts: {
         root.append(entryWidget)
     }
 
+    // Choices (check boxes)
+    const checks = new Map<string, Gtk.CheckButton>()
+    if (choices && choices.length > 0) {
+        const box = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 6,
+            margin_top: 16,
+            margin_start: 24,
+            margin_end: 24,
+            css_classes: ["nidara-alert-choices"],
+        })
+        for (const c of choices) {
+            const check = new Gtk.CheckButton({ label: c.label, active: c.initial === true })
+            checks.set(c.id, check)
+            box.append(check)
+        }
+        root.append(box)
+    }
+    const choiceState = (): Record<string, string> =>
+        Object.fromEntries([...checks].map(([id, check]) => [id, check.active ? "true" : "false"]))
+
     // Separator
     root.append(new Gtk.Separator({
         orientation: Gtk.Orientation.HORIZONTAL,
@@ -131,7 +191,7 @@ export function showNidaraAlert(opts: {
         if (done) return
         done = true
         if (tickId) { GLib.source_remove(tickId); tickId = 0 }
-        onResponse(id, entryWidget?.text)
+        onResponse(id, entryWidget?.text, choiceState())
         dialog.destroy()
     }
 
