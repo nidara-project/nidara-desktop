@@ -232,6 +232,12 @@
     "settings.apps.title": "cb879c52",
     "settings.apps.tooltip.remove-override": "3696e33b",
     "settings.apps.badge.override": "1a95769f",
+    "settings.apps.badge.sandboxed": "6589a574",
+    "settings.apps.badge.unsandboxed": "aa3f434c",
+    "settings.apps.origin.flatpak": "89e71efd",
+    "settings.apps.origin.system": "4c86bd8f",
+    "settings.apps.origin.user": "75ec6d5e",
+    "settings.apps.origin.snap": "455673bb",
     "settings.apps.dialog.icon": "716f63b9",
     "settings.apps.dialog.select-icon": "82b331c7",
     "settings.apps.entry.search": "8a503e86",
@@ -743,8 +749,8 @@
   },
   "locales": {
     "de": {
-      "translated": 701,
-      "of": 739,
+      "translated": 707,
+      "of": 745,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -788,14 +794,14 @@
       "stale": []
     },
     "es": {
-      "translated": 739,
-      "of": 739,
+      "translated": 745,
+      "of": 745,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 701,
-      "of": 739,
+      "translated": 707,
+      "of": 745,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -839,8 +845,8 @@
       "stale": []
     },
     "it": {
-      "translated": 701,
-      "of": 739,
+      "translated": 707,
+      "of": 745,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -884,8 +890,8 @@
       "stale": []
     },
     "ja": {
-      "translated": 701,
-      "of": 739,
+      "translated": 707,
+      "of": 745,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -929,8 +935,8 @@
       "stale": []
     },
     "nl": {
-      "translated": 701,
-      "of": 739,
+      "translated": 707,
+      "of": 745,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -974,8 +980,8 @@
       "stale": []
     },
     "pl": {
-      "translated": 701,
-      "of": 739,
+      "translated": 707,
+      "of": 745,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1019,8 +1025,8 @@
       "stale": []
     },
     "pt-BR": {
-      "translated": 701,
-      "of": 739,
+      "translated": 707,
+      "of": 745,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1064,8 +1070,8 @@
       "stale": []
     },
     "pt-PT": {
-      "translated": 701,
-      "of": 739,
+      "translated": 707,
+      "of": 745,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1109,8 +1115,8 @@
       "stale": []
     },
     "ru": {
-      "translated": 701,
-      "of": 739,
+      "translated": 707,
+      "of": 745,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1154,8 +1160,8 @@
       "stale": []
     },
     "zh-CN": {
-      "translated": 701,
-      "of": 739,
+      "translated": 707,
+      "of": 745,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",

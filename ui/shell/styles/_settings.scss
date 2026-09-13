@@ -216,6 +216,18 @@ window.nidara-settings-window {
 
     }
 
+    // ── An app's own page: the header card (#535) ─────────────────────────────────
+    // Who the app is, not a control: no hover, a taller row, the name one step up
+    // the scale. Relative ramp ($fse-*), like every other text inside Settings.
+    row.settings-app-header {
+        min-height: 88px;
+        &:hover, &:active { background-color: transparent; }
+        .nidara-row-title {
+            font-size: $fse-title-3;
+            font-weight: $fw-semibold;
+        }
+    }
+
     // ── Search results ────────────────────────────────────────────────────────────
     .search-result-chip {
         font-size: $fse-caption;

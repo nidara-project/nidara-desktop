@@ -1,18 +1,58 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { NidaraScrolled, NidaraRow } from "../../../../lib/nidara-kit"
+import { NidaraScrolled, NidaraRow, NidaraList, NidaraBadge } from "../../../../lib/nidara-kit"
 import appService, { type AppData } from "../../../core/AppService"
 import { pageBox, listGroup, imagePickerRow, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { loadPixbuf, makeIconImage } from "./AppIconImage"
 
+// ── Isolation: the one fact every app page leads with (#535) ────────────────────
+// A Flatpak is sandboxed: it reaches the camera, the microphone, the files only
+// through the portal, so per-app permissions BIND it. Anything else runs unconfined
+// and a permission switch would promise what it cannot enforce — the page says so
+// instead. A snap is neither labelled isolated nor not: its confinement varies.
+
+function isolationBadge(app: AppData, showUnconfined: boolean): Gtk.Widget | null {
+    const origin = appService.getAppOrigin(app.id)
+    if (origin === "flatpak") return NidaraBadge(t("settings.apps.badge.sandboxed"), Icons.shield)
+    if (showUnconfined && (origin === "system" || origin === "user"))
+        return NidaraBadge(t("settings.apps.badge.unsandboxed"), Icons.shieldOff)
+    return null
+}
+
+function originLabel(app: AppData): string {
+    switch (appService.getAppOrigin(app.id)) {
+        case "flatpak": return t("settings.apps.origin.flatpak")
+        case "snap":    return t("settings.apps.origin.snap")
+        case "user":    return t("settings.apps.origin.user")
+        case "system":  return t("settings.apps.origin.system")
+        default:        return ""
+    }
+}
+
+/** The page's header card: who this app is and where it comes from. Not a control. */
+function appHeader(app: AppData): Gtk.Widget {
+    const { box, listBox } = NidaraList()
+    const icon = makeIconImage(appService.getCanonicalIconName(app.icon ?? ""), 56)
+    const subtitle = [app.id, originLabel(app)].filter(Boolean).join(" · ")
+    const row = NidaraRow(app.name, subtitle, isolationBadge(app, true) ?? undefined,
+                          ["settings-app-header"], undefined, icon)
+    row.activatable = false
+    row.selectable = false
+    listBox.append(row)
+    return box
+}
+
 // ── Per-app detail subpage ──────────────────────────────────────────────────────
 // Each app drills into its own subpage (nav.pushSubpage) rather than a modal — more
 // room, and a foundation for future per-app settings beyond just the icon. Changes
 // apply immediately (no Apply/Cancel step), matching every other Settings row.
 
-function buildAppIconDetailPage(app: AppData, syncRow: () => void): Gtk.Widget {
+export function buildAppIconDetailPage(app: AppData, syncRow: () => void): Gtk.Widget {
     const page = pageBox("app-icon-detail-page")
+    // The app's own page: everything that concerns this app lives here (icon today;
+    // permissions, notifications and defaults next — see the mockup in #535).
+    page.append(appHeader(app))
     const { box, listBox } = listGroup(t("settings.apps.detail.group.icon"))
 
     // Choose image — the single, primary way to set an icon. The user picks an
@@ -94,6 +134,10 @@ function buildAppRow(app: AppData, nav: SettingsNav): Gtk.ListBoxRow {
 
     const trailing = new Gtk.Box({ spacing: 16, valign: Gtk.Align.CENTER })
     trailing.append(badge)
+    // Only the isolated apps are marked in the LIST: a column of "Not isolated" on
+    // nearly every row is noise, and the app's own page states it either way.
+    const isolation = isolationBadge(app, false)
+    if (isolation) trailing.append(isolation)
     trailing.append(chevron)
 
     // NidaraRow, not createRow: this list is every installed app, rebuilt from the
@@ -172,7 +216,13 @@ export default function AppIconsPage(nav: SettingsNav) {
         css_classes: ["apps-list"],
     })
 
-    const apps = appService.getAllApps()
+    // The LAUNCHABLE apps — the same set the app grid shows (`listApps()`, i.e.
+    // g_app_info_should_show), not the whole registry. `getAllApps()` also holds
+    // NoDisplay/Hidden entries (a PolicyKit agent, xdg-user-dirs' updater…), which
+    // name windows and own icons but are not apps anybody opens, and a page about
+    // "the apps on this machine" listing them read as clutter (#535). Same call GNOME
+    // Settings makes.
+    const apps = appService.listApps()
     apps.forEach(app => appList.append(buildAppRow(app, nav)))
 
     // Filter
