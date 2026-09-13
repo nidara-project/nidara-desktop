@@ -79,6 +79,17 @@ export interface Step {
    * answer changes, or the frame will still be showing the state from before.
    */
   busy?(): boolean
+  /**
+   * How the step's work ENDED, once it has: "success", "failure", or null while
+   * it has not run or is still running. Only the run step has one.
+   *
+   * ⚠️ The footer used to offer the same two buttons after a failure as after a
+   * success — Close, and a primary, highlighted "Restart now" — so the first thing
+   * suggested to somebody whose install had just failed was to reboot into a disk
+   * that may be half written. Same contract as `busy`: call `notifyReady` when it
+   * changes.
+   */
+  outcome?(): "success" | "failure" | null
 }
 
 export interface FlowResult {

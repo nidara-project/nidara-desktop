@@ -423,8 +423,13 @@ export function InstallerWindow(): Gtk.Window {
         closeActionBtn.visible = false
         restartActionBtn.visible = false
       } else {
+        // Restart only after a success. After a failure the one thing to do is
+        // close and start again, so Close is the primary button there.
+        const failed = step.outcome?.() === "failure"
         closeActionBtn.visible = true
-        restartActionBtn.visible = true
+        restartActionBtn.visible = !failed
+        closeActionBtn[failed ? "add_css_class" : "remove_css_class"]("nidara-btn--primary")
+        closeActionBtn[failed ? "remove_css_class" : "add_css_class"]("nidara-btn--secondary")
       }
     } else {
       position.visible = true
