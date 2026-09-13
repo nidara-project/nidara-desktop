@@ -491,7 +491,7 @@ export default function AppGridPanel(
             // process's CWD (ui/shell).
             appService.recordLaunch(id || app.exec)
             const cmd = appService.getLaunchCommand(id || app.exec)
-            execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`])
+            execAsync(appService.getLaunchArgv(id || app.exec))
                 // gtk-launch fails when the desktop id isn't in the XDG index, and
                 // it does happen (this machine's ~/.cache/astal/apps-frequents.json
                 // had counted 7 fallbacks for one editor). Falling back to the Exec
