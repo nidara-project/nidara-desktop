@@ -1806,6 +1806,20 @@ without the session bus and with `sync_gsettings_theme = false`), both asserting
   prompt maps centred on the requesting window (xdg-foreign), a foreign caller is refused, Close
   dismisses it; leaves `consent-dialog.png`.
 
+**Settings → Apps edits those decisions** through `ui/shell/core/PermissionStore.ts` (a D-Bus client of
+`org.freedesktop.impl.portal.PermissionStore`, no UI): three states as the store has them — no entry =
+*Ask*, `["yes"]` = *Allow*, `["no"]` = *Deny* — and *Ask* DELETES the entry rather than storing a third
+value. The rows follow the store's `Changed` signal, so answering a prompt with Settings open moves them
+(the store also emits for a delete that removed nothing; a row applies that as a no-op). Which
+permissions exist is MEASURED, not recalled — requests made from inside the Flatpak `org.gnome.clocks`
+against a private store (xdg-desktop-portal 1.22.1): `Camera.AccessCamera` → `devices/camera`;
+`Wallpaper.SetWallpaperURI` without preview → `wallpaper/wallpaper`; `Background.RequestBackground` →
+`background/background` (but no Background backend is routed on Nidara, tech-debt #89);
+non-interactive `Screenshot` stores nothing. The microphone is not a portal permission: a Flatpak
+reaches it through its static `pulseaudio` socket. Probes: `scripts/dev/permission-store-probe.sh`
+(asserting, including that *Ask* leaves no entry — the check a stored `["ask"]` would otherwise pass)
+and `PERM_SEED=… scripts/dev/app-page-probe.sh` to render seeded decisions.
+
 ⚠️ Per-app permissions only BIND sandboxed apps: an unsandboxed app is unconfined and can open a
 device without asking. The portal still records and shows decisions for it, and Settings → Apps
 must say which case an app is in rather than show switches that promise what they cannot enforce.

@@ -1,5 +1,9 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { NidaraScrolled, NidaraRow, NidaraList, NidaraBadge } from "../../../../lib/nidara-kit"
+import { NidaraScrolled, NidaraRow, NidaraList, NidaraBadge, NidaraDropDownRow } from "../../../../lib/nidara-kit"
+import {
+    PORTAL_PERMISSIONS, getPortalPermission, setPortalPermission, watchPortalPermission,
+    type PortalPermissionKey, type PortalPermissionState,
+} from "../../../core/PermissionStore"
 import appService, { type AppData } from "../../../core/AppService"
 import { pageBox, listGroup, imagePickerRow, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
@@ -43,6 +47,41 @@ function appHeader(app: AppData): Gtk.Widget {
     return box
 }
 
+// ── Permissions an isolated app asks for (#535 part 2) ──────────────────────────
+// Three states, exactly as the portal's PermissionStore has them (core/PermissionStore):
+// Ask = no decision recorded, so the consent prompt appears next time. Only for a
+// Flatpak — an unconfined app is not bound by these, and a switch here would lie.
+// The row follows the store live: answering the prompt with Settings open moves it.
+
+function permissionRow(appId: string, label: string, key: PortalPermissionKey): Gtk.Widget {
+    const labels: Record<PortalPermissionState, string> = {
+        ask: t("settings.apps.permissions.ask"),
+        allow: t("settings.apps.permissions.allow"),
+        deny: t("settings.apps.permissions.deny"),
+    }
+    const order: PortalPermissionState[] = ["ask", "allow", "deny"]
+    return NidaraDropDownRow(label, "", labels.ask, order.map(o => labels[o]),
+        (_v, index) => {
+            const state = order[index ?? 0]
+            setPortalPermission(key, appId, state)
+                .catch(e => console.error(`[apps] could not set ${key.table}/${key.id} for ${appId}:`, e))
+        },
+        (apply) => {
+            // The real value arrives asynchronously; the row opens on "Ask" and moves.
+            getPortalPermission(key, appId).then(st => apply(labels[st]))
+            return watchPortalPermission(key, appId, st => apply(labels[st]))
+        },
+    )
+}
+
+function permissionsGroup(app: AppData): Gtk.Widget | null {
+    if (appService.getAppOrigin(app.id) !== "flatpak") return null
+    const { box, listBox } = listGroup(t("settings.apps.permissions.group"), t("settings.apps.permissions.footer"))
+    listBox.append(permissionRow(app.id, t("settings.apps.permissions.camera"), PORTAL_PERMISSIONS.camera))
+    listBox.append(permissionRow(app.id, t("settings.apps.permissions.wallpaper"), PORTAL_PERMISSIONS.wallpaper))
+    return box
+}
+
 // ── Per-app detail subpage ──────────────────────────────────────────────────────
 // Each app drills into its own subpage (nav.pushSubpage) rather than a modal — more
 // room, and a foundation for future per-app settings beyond just the icon. Changes
@@ -53,6 +92,8 @@ export function buildAppIconDetailPage(app: AppData, syncRow: () => void): Gtk.W
     // The app's own page: everything that concerns this app lives here (icon today;
     // permissions, notifications and defaults next — see the mockup in #535).
     page.append(appHeader(app))
+    const permissions = permissionsGroup(app)
+    if (permissions) page.append(permissions)
     const { box, listBox } = listGroup(t("settings.apps.detail.group.icon"))
 
     // Choose image — the single, primary way to set an icon. The user picks an
