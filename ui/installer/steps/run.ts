@@ -249,7 +249,7 @@ export function RunStep(): Step {
         // packages — and the first thing archinstall does is erase a partition
         // table. Failing after that leaves a machine with no operating system at
         // all, which is strictly worse than the one it had five minutes ago.
-        connectivity().then(c => {
+        connectivity({ fresh: true }).then(c => {
           if (!isUsable(c)) {
             appendLog(`[ERROR] ${t("runErrNoNetwork")}`)
             finishRun(false)
