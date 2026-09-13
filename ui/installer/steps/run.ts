@@ -14,6 +14,7 @@ import { writeKeyboardConfig } from "../lib/keyboard-config"
 import { applyRealName } from "../lib/real-name"
 import { writeSwapFstabEntries } from "../lib/swap"
 import { releaseTargetDisks } from "../lib/release-target"
+import { copyLogToTarget, openLiveLog, type LiveLog } from "../lib/install-log"
 import { stripAnsi } from "../lib/ansi"
 import { connectivity, isUsable } from "../lib/network"
 import { measureMirrors } from "../lib/mirrors"
@@ -154,6 +155,34 @@ export function RunStep(): Step {
         hexpand: true,
       })
       box.append(expander)
+
+      // Offered only once a run has FAILED: that is when the log has to leave this
+      // machine — onto a USB stick, into a report. A finished install already
+      // carries it in /var/log (lib/install-log.ts).
+      let liveLog: LiveLog = { path: "", write() {} }
+      const saveLogButton = NidaraButton({ label: t("runSaveLog"), halign: Gtk.Align.START })
+      saveLogButton.visible = false
+      const savedLabel = new Gtk.Label({
+        label: "", css_classes: ["installer-phase-detail"], visible: false,
+        halign: Gtk.Align.FILL, hexpand: true, xalign: 0, wrap: true,
+      })
+      saveLogButton.connect("clicked", () => {
+        const dialog = new Gtk.FileDialog({ title: t("runSaveLog"), initial_name: "nidara-installer.log", modal: true })
+        dialog.save(box.get_root() as Gtk.Window, null, (_d, res) => {
+          let dest: Gio.File | null = null
+          try { dest = dialog.save_finish(res) } catch { return } // cancelled
+          if (!dest) return
+          try {
+            Gio.File.new_for_path(liveLog.path).copy(dest, Gio.FileCopyFlags.OVERWRITE, null, null)
+            savedLabel.label = t("runLogSaved") + (dest.get_path() ?? dest.get_uri())
+          } catch (e: any) {
+            savedLabel.label = `${e.message || e}`
+          }
+          savedLabel.visible = true
+        })
+      })
+      box.append(saveLogButton)
+      box.append(savedLabel)
       // "Show log" while it is shut, "Hide log" while it is open. It used to say
       // Show in both states (D-27).
       expander.connect("notify::expanded", () => {
@@ -171,6 +200,7 @@ export function RunStep(): Step {
         if (line === "" && raw !== "") return
         const endIter = textBuffer.get_end_iter()
         textBuffer.insert(endIter, line + "\n", -1)
+        liveLog.write(line)
         // The same line the log gets, under the phase — so the page says what it
         // is doing without anybody having to open the expander to find out.
         if (line.trim()) detail.label = line.trim()
@@ -195,11 +225,14 @@ export function RunStep(): Step {
           desc.remove_css_class("installer-prose--dim")
           desc.add_css_class("installer-prose--warning")
           expander.expanded = true
+          saveLogButton.visible = liveLog.path !== ""
         }
       }
 
       // Execute archinstall
       GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        // First, so even a run that stops at the network check leaves a file.
+        liveLog = openLiveLog()
         setBusy(true)
         enterPhase(0)
         const answers = getAnswers()
@@ -415,6 +448,8 @@ export function RunStep(): Step {
             } catch (e: any) {
               appendLog(`[ERROR] Process exited with error: ${e.message || e}`)
             } finally {
+              // Success or not: a target that got as far as /var/log keeps the log.
+              copyLogToTarget(isArm, liveLog.path, appendLog)
               cleanup()
               finishRun(success)
             }
