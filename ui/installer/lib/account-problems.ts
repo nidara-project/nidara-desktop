@@ -23,6 +23,13 @@ import { t } from "./i18n"
 export const USERNAME_REGEX = /^[a-z_][a-z0-9_-]{0,31}$/
 
 /** RFC 1123 label: alphanumeric ends, dashes inside, 63 characters. */
+/**
+ * Below this, the account page warns that the password is short — and lets the
+ * person continue. 8 is the floor NIST SP 800-63B sets for a memorised secret a
+ * person chooses; it is where "short" stops being a matter of opinion.
+ */
+export const PASSWORD_ADVISED_MIN = 8
+
 export const HOSTNAME_REGEX = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/
 
 /** What every derived hostname ends in, and the reason it is not the whole name. */
@@ -97,6 +104,12 @@ export interface AccountProblems {
   hostname: string
   password: string
   confirm: string
+  /**
+   * Advice about the password that does NOT hold the flow — deliberately apart
+   * from the four messages above, which are all reasons Continue is off. See
+   * `PASSWORD_ADVISED_MIN`.
+   */
+  passwordWarning: string
   /** Every rule satisfied — what `ready()` asks, and what may be stored. */
   valid: boolean
 }
@@ -126,6 +139,14 @@ export function accountProblems(f: AccountFields, touched: boolean): AccountProb
 
   const password = ""
 
+  // Advice, not a rule (decided 2026-09-14). It is the account's own password,
+  // typed by its owner on their own machine, and a refusal here is how people end
+  // up with `Password1!`. Silent on an empty box — that is the required-field
+  // case, and the untouched form must open without complaints.
+  const passwordWarning = f.password.length > 0 && f.password.length < PASSWORD_ADVISED_MIN
+    ? t("accountWarnPasswordShort")
+    : ""
+
   let confirm = ""
   if (f.confirm.length > 0 && f.password !== f.confirm) {
     confirm = t("accountErrPasswordMismatch")
@@ -139,7 +160,7 @@ export function accountProblems(f: AccountFields, touched: boolean): AccountProb
     && f.password.length > 0
     && f.password === f.confirm
 
-  return { username, hostname, password, confirm, valid }
+  return { username, hostname, password, confirm, passwordWarning, valid }
 }
 
 /**

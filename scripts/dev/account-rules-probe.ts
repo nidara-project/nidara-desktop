@@ -183,6 +183,32 @@ for (const c of CASES) {
   }
 }
 
+// ─── a short password: advice, never a reason Continue is off ────────────────
+//
+// Decided 2026-09-14: warn below PASSWORD_ADVISED_MIN, do not refuse. So the two
+// facts checked on every case are the advice itself AND that it moves nothing
+// else — the same form with a long password must be exactly as installable.
+interface PwCase { name: string; password: string; confirm: string; warn: boolean; valid: boolean }
+const PW_CASES: PwCase[] = [
+  { name: "7 characters: warned, still installable", password: "hunter2", confirm: "hunter2", warn: true, valid: true },
+  { name: "exactly the advised minimum: no warning", password: "hunter22", confirm: "hunter22", warn: false, valid: true },
+  { name: "one character: warned, still installable", password: "x", confirm: "x", warn: true, valid: true },
+  { name: "empty: silent — that is the required-field case", password: "", confirm: "", warn: false, valid: false },
+  { name: "short AND mismatched: both said, and the mismatch is what holds it", password: "abc", confirm: "abd", warn: true, valid: false },
+]
+print("")
+for (const c of PW_CASES) {
+  const got = accountProblems(f({ password: c.password, confirm: c.confirm }), true)
+  print(`   ${(got.passwordWarning ? "warned" : "silent").padEnd(11)}  ${c.name}`)
+  if ((got.passwordWarning === t("accountWarnPasswordShort")) !== c.warn || (!c.warn && got.passwordWarning !== "")) {
+    fail(c.name, `passwordWarning is ${JSON.stringify(got.passwordWarning)}`)
+  }
+  if (got.valid !== c.valid) fail(c.name, `valid is ${got.valid}, expected ${c.valid}`)
+  if (got.password !== "") fail(c.name, `the password ERROR field says ${JSON.stringify(got.password)} — advice leaked into the errors`)
+  const longer = accountProblems(f({ password: c.password + "padding!", confirm: c.confirm + "padding!" }), true)
+  if (c.password.length > 0 && longer.valid !== got.valid) fail(c.name, "a longer password changed whether the form is installable")
+}
+
 // ─── what the machine gets called, when nobody says ──────────────────────────
 interface HostCase { username: string; want: string; why: string }
 
