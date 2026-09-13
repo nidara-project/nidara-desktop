@@ -22,14 +22,19 @@ function check(name: string, got: unknown, want: unknown): void {
   else { failures++; print(`   ✗ ${name}: expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`) }
 }
 
-// The shape NetworkManager writes for a Wi-Fi network joined from a session
-// (`nmcli`/D-Bus AddConnection with a user restriction).
+// The shape NetworkManager writes for a Wi-Fi network restricted to a user.
+// ⚠️ MEASURED, not recalled: `nmcli con add … connection.permissions user:live`
+// on the 2026-09-14 VM wrote `permissions=user:live:;` — a trailing reserved
+// field after the name. The first version of this probe used `user:live;`, a
+// shape NetworkManager does not write; the rule matched the invented shape, this
+// table passed, and the VM install came out with the connection still owned by
+// `live`. Only the real line catches that.
 const WIFI = [
   "[connection]",
   "id=live",                       // an SSID that happens to be the user's name
   "uuid=2f1a0c6e-9a53-4b4e-8a57-2c1f0d3b9e11",
   "type=wifi",
-  "permissions=user:live;",
+  "permissions=user:live:;",
   "",
   "[wifi]",
   "ssid=live",
@@ -42,18 +47,20 @@ const WIFI = [
 
 print("\n── Who the connection belongs to ───────────────────────────────────")
 const moved = withOwner(WIFI, "live", "ana")
-check("the live user becomes the new account", moved.includes("permissions=user:ana;"), true)
+check("the live user becomes the new account (NetworkManager's real shape)", moved.includes("permissions=user:ana:;"), true)
 check("the SSID that equals the user name is untouched", moved.includes("id=live\n") && moved.includes("ssid=live\n"), true)
 check("the password is byte-for-byte the same", moved.includes("psk=user:live;not-a-permission"), true)
-check("nothing else in the file moved", moved.replace("permissions=user:ana;", "permissions=user:live;"), WIFI)
+check("nothing else in the file moved", moved.replace("permissions=user:ana:;", "permissions=user:live:;"), WIFI)
 check("another user's restriction is not ours to change",
-  withOwner("[connection]\npermissions=user:bob;user:live;\n", "live", "ana"), "[connection]\npermissions=user:bob;user:ana;\n")
+  withOwner("[connection]\npermissions=user:bob:;user:live:;\n", "live", "ana"), "[connection]\npermissions=user:bob:;user:ana:;\n")
+check("the short form without the reserved field is understood too",
+  withOwner("[connection]\npermissions=user:live;\n", "live", "ana"), "[connection]\npermissions=user:ana;\n")
 check("an unrestricted connection is left alone",
   withOwner("[connection]\nid=home\ntype=ethernet\n", "live", "ana"), "[connection]\nid=home\ntype=ethernet\n")
 check("`permissions` outside [connection] is not the restriction",
-  withOwner("[vpn]\npermissions=user:live;\n", "live", "ana"), "[vpn]\npermissions=user:live;\n")
+  withOwner("[vpn]\npermissions=user:live:;\n", "live", "ana"), "[vpn]\npermissions=user:live:;\n")
 check("a user whose name only starts the same is not the live user",
-  withOwner("[connection]\npermissions=user:liveuser;\n", "live", "ana"), "[connection]\npermissions=user:liveuser;\n")
+  withOwner("[connection]\npermissions=user:liveuser:;\n", "live", "ana"), "[connection]\npermissions=user:liveuser:;\n")
 
 print("\n── Which files are connections ─────────────────────────────────────")
 check("keyfiles only, no dotfiles, no paths",

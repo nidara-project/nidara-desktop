@@ -40,7 +40,7 @@ const TARGET_DIR = "/mnt/etc/NetworkManager/system-connections"
 
 /**
  * The connection with `liveUser` replaced by `newUser` in its `permissions=` key,
- * which NetworkManager writes as `user:<name>;` entries (optionally several).
+ * which NetworkManager writes as `user:<name>:;` entries (optionally several).
  * Only the `[connection]` section's key is read; a different user, or the same
  * text anywhere else in the file (an SSID, a comment), is left as it is.
  */
@@ -52,7 +52,15 @@ export function withOwner(text: string, liveUser: string, newUser: string): stri
     if (section !== "connection") return line
     const m = line.match(/^(\s*permissions\s*=\s*)(.*)$/)
     if (!m) return line
-    const entries = m[2].split(";").map(e => (e.trim() === `user:${liveUser}` ? `user:${newUser}` : e))
+    // NetworkManager writes each entry as `user:<name>:<reserved>` — what it saved
+    // on the medium was `permissions=user:live:;` (measured, 2026-09-14 VM). The
+    // name is the second field; whatever follows it is kept as it was.
+    const entries = m[2].split(";").map(e => {
+      const parts = e.trim().split(":")
+      if (parts[0] !== "user" || parts[1] !== liveUser) return e
+      parts[1] = newUser
+      return parts.join(":")
+    })
     return m[1] + entries.join(";")
   }).join("\n")
 }
