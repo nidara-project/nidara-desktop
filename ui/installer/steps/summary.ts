@@ -38,6 +38,20 @@ function targetFs(m: ManualPartitionMount): string {
 }
 
 /**
+ * Where a row lives, as the disk page named it.
+ *
+ * ⚠️ Not `m.path` bare. A row made from a gap (#447) has no device node until
+ * archinstall creates the partition, so its path is the empty string, and the
+ * three places on this page that name a row printed `swap  ·    ·  2 GiB` —
+ * a hole where the one word that says WHICH space is being written should be,
+ * inside the warning about what is lost. The disk page calls that row "Free
+ * space"; so does this page.
+ */
+function place(m: ManualPartitionMount): string {
+  return m.path || t("diskFreeSpace")
+}
+
+/**
  * What this install is about to destroy, named, in the words the disk page used.
  *
  * ⚠️ One function, two readers: the loudest line on this page (#401, D-25) and
@@ -62,7 +76,7 @@ export function eraseSentence(): string {
     if (formatted.length > 0) {
       return t("summaryErasePartsPrefix") + "\n"
         + formatted
-          .map(m => `${m.path}  ·  ${formatSize(m.size)}  ·  ${m.mountpoint}  ·  ${targetFs(m)}`)
+          .map(m => `${place(m)}  ·  ${formatSize(m.size)}  ·  ${m.mountpoint}  ·  ${targetFs(m)}`)
           .join("\n")
     }
   }
@@ -190,7 +204,7 @@ export function SummaryStep(): Step {
             // No `toLowerCase()` anywhere near a translated string: German
             // capitalises its nouns, so "Formatieren" lowercased is a misspelling.
             const breakdown = disk.mounts
-              .map(m => `${m.mountpoint}  ·  ${m.path}  ·  ${formatSize(m.size)}  ·  ${m.format ? `${targetFs(m)} · ${t("diskFormat")}` : t("diskKeep")}`)
+              .map(m => `${m.mountpoint}  ·  ${place(m)}  ·  ${formatSize(m.size)}  ·  ${m.format ? `${targetFs(m)} · ${t("diskFormat")}` : t("diskKeep")}`)
               .join("\n")
             chosen.listBox.append(NidaraRow(t("summaryPartitionLayout"), breakdown))
           }
@@ -294,7 +308,7 @@ export function SummaryStep(): Step {
               // fourth chance for this page to name a different partition than the
               // one the bootloader lands on.
               const esp = espMount(disk.mounts)
-              if (esp) where = `${esp.mountpoint} · ${esp.path}`
+              if (esp) where = `${esp.mountpoint} · ${place(esp)}`
             }
             decided.listBox.append(NidaraRow(
               t("summaryBootloader"),
@@ -322,7 +336,7 @@ export function SummaryStep(): Step {
             ? disk.mounts.filter(m => m.mountpoint === "swap")
             : []
           const swapLines = [
-            ...swapParts.map(m => `${m.path || t("diskFreeSpace")}  ·  ${formatSize(m.size)}`),
+            ...swapParts.map(m => `${place(m)}  ·  ${formatSize(m.size)}`),
             ...(swapOn ? [`zram · ${typeof swapAlgo === "string" ? swapAlgo : "zstd"}`] : []),
           ]
           decided.listBox.append(NidaraRow(

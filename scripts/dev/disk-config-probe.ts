@@ -66,7 +66,7 @@
 import { entireDiskConfig, manualDiskConfig, espMount } from "../../ui/installer/lib/disk-config"
 import { assemblePlan } from "../../ui/installer/lib/plan"
 import { loaderRoot } from "../../ui/installer/lib/bootloader"
-import { swapFstabEntry } from "../../ui/installer/lib/swap"
+import { swapFstabEntry, partitionAtStart } from "../../ui/installer/lib/swap"
 import { ESP_MIN_BYTES, manualProblems } from "../../ui/installer/lib/manual-problems"
 import { formatSize } from "../../ui/installer/lib/format-size"
 import { freeSpaceGaps } from "../../ui/installer/lib/free-space"
@@ -773,6 +773,32 @@ for (const c of FSTAB_CASES) {
   // A blank line after the entry, like every block genfstab writes — so the next
   // one appended does not land on the same line as this one.
   if (!entry.endsWith("\n\n")) fail(c.dev, "entry does not end with a blank line")
+}
+
+
+// ─── WHICH NODE A CREATED SWAP GOT ────────────────────────────────────────────
+//
+// A swap row made from a gap has no path in the answer — archinstall creates the
+// partition — so `writeSwapFstabEntries` finds it by where it starts. The fixture
+// is `lsblk -nr -o PATH,START,TYPE /dev/vda` from the 2026-09-13 manual-mode VM,
+// where vda4 was created in the gap at 16897 MiB. The disk's own line has an
+// empty START (two fields, not three) and must not match anything; an offset
+// that no partition starts at must return "" rather than the nearest one.
+
+const LSBLK_VDA = "/dev/vda  disk\n/dev/vda1 2048 part\n/dev/vda2 1050624 part\n/dev/vda3 38799360 part\n/dev/vda4 34605056 part\n"
+const MiB = 1024 * 1024
+const START_CASES = [
+  { name: "created swap in the gap", start: 16897 * MiB, want: "/dev/vda4" },
+  { name: "first partition", start: 1 * MiB, want: "/dev/vda1" },
+  { name: "offset nothing starts at", start: 16896 * MiB, want: "" },
+  { name: "offset zero (the disk line)", start: 0, want: "" },
+]
+
+print("")
+for (const c of START_CASES) {
+  const got = partitionAtStart(LSBLK_VDA, c.start)
+  print(`   ${JSON.stringify(got).padEnd(14)} ${c.name}`)
+  if (got !== c.want) fail(c.name, `partitionAtStart returned ${JSON.stringify(got)}, expected ${JSON.stringify(c.want)}`)
 }
 
 
