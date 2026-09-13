@@ -81,6 +81,12 @@ depends=(
   # dependency of `wireplumber`, and that is exactly the accident this array
   # exists to stop relying on (#379).
   pipewire pipewire-audio pipewire-alsa pipewire-pulse wireplumber libwireplumber libpulse
+  # `rtkit` is only an OPTIONAL dependency of pipewire, so nothing pulled it in:
+  # a clean install ran pipewire and wireplumber at normal priority, with
+  # "RTKit error: ServiceUnknown" in the journal (VM, 2026-09-13), and audio
+  # that crackles as soon as the machine is busy. It is also what
+  # xdg-desktop-portal's Realtime interface asks for.
+  rtkit
   xdg-desktop-portal-gtk xdg-desktop-portal-hyprland
   # tools the shell/keybinds shell out to
   brightnessctl pamixer playerctl jq curl slurp grim wf-recorder
