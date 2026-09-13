@@ -152,7 +152,9 @@ export function AccountStep(): Step {
 
         usernameField.setError(problems.username)
         hostnameField.setError(problems.hostname)
-        passwordField.setError(problems.password)
+        passwordField.setError(problems.password || problems.passwordWarning)
+        // A warning is drawn as one, not as an error: it does not hold Continue.
+        if (!problems.password && problems.passwordWarning) passwordField.setValidationState("warning")
         confirmField.setError(problems.confirm)
 
         if (problems.valid) {
