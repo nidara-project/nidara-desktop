@@ -508,6 +508,30 @@ jobs:
           cp /tmp/disk-config.bak ui/installer/lib/disk-config.ts
           git diff --quiet ui/installer/lib/disk-config.ts
 
+      # The retry release (lib/release-target.ts) runs swapoff/umount/cryptsetup
+      # close as root on a live medium. Its worst possible defect is reaching past
+      # the target disks — somebody's mounted USB stick — so that is the rule this
+      # control deletes.
+      - name: The retry-release probe can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/release-target.ts /tmp/release-target.bak
+          sed -i 's|if (targets.includes(disk.path)) walk(disk, 0)|walk(disk, 0)|' \
+            ui/installer/lib/release-target.ts
+          if ! git diff --quiet ui/installer/lib/release-target.ts; then
+            echo "control: the target-disk scope was removed"
+          else
+            echo "::error::the control patched nothing — the rule it deletes has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/disk-config-probe.ts /tmp/probe-defect-release.js
+          if gjs -m /tmp/probe-defect-release.js; then
+            echo "::error::the probe passed with the disk scope removed — it is not checking what it releases"
+            cp /tmp/release-target.bak ui/installer/lib/release-target.ts
+            exit 1
+          fi
+          cp /tmp/release-target.bak ui/installer/lib/release-target.ts
+          git diff --quiet ui/installer/lib/release-target.ts
+
       - name: The layouts we emit and the ones we refuse (must succeed)
         run: |
           ./scripts/bundle.sh --js scripts/dev/disk-config-probe.ts /tmp/probe.js

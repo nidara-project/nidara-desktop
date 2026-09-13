@@ -659,6 +659,15 @@ created swap (now `partitionAtStart()`: the partition on `m.device` whose `START
 (`invalidate()` rebuilds every page) a swap or root put into free space came back as "None"
 (now `freeRowKey()` on both sides).
 
+⚠️ **A second attempt in the same live session inherits the first one's leftovers**, and archinstall
+dies on them before writing anything. archinstall `swapon`s what it creates and its `__exit__`
+unmounts nothing, so after any run — finished or failed — the swap is on and `/mnt` is mounted; the
+next run's `umount_all_existing` hands lsblk's mountpoint for that swap, the literal `[SWAP]`, to
+`umount -R` (measured 2026-09-13). `lib/release-target.ts` runs before the spawn: on the TARGET disks
+only, swapoff → umount deepest first → `cryptsetup close` deepest first, and the run stops before
+archinstall if something cannot be released. Its order and scope are probed in
+`disk-config-probe.ts`, with a CI control that deletes the disk scope.
+
 ⚠️ **Which partition is the ESP is `espMount()`, exported from `lib/disk-config.ts`, and there is
 one of it.** Four places need that answer — the page that refuses a non-FAT ESP, the summary that
 names it, the layout that flags it `boot`/`esp` (without the flag `get_efi_partition()` returns

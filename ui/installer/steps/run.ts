@@ -13,6 +13,7 @@ import { archinstallStamp, configureInstalledBootloader } from "../lib/bootloade
 import { writeKeyboardConfig } from "../lib/keyboard-config"
 import { applyRealName } from "../lib/real-name"
 import { writeSwapFstabEntries } from "../lib/swap"
+import { releaseTargetDisks } from "../lib/release-target"
 import { stripAnsi } from "../lib/ansi"
 import { connectivity, isUsable } from "../lib/network"
 import { measureMirrors } from "../lib/mirrors"
@@ -332,6 +333,17 @@ export function RunStep(): Step {
           )
         } else {
           appendLog("[INFO] Running in live installation mode.")
+        }
+
+        // ⚠️ Before the spawn, and it is what makes a second attempt possible: a
+        // failed or finished run leaves its swap on and its mounts (and, encrypted,
+        // its mapping) in place, and archinstall then dies on `umount -R [SWAP]`
+        // before writing anything (lib/release-target.ts). Stopping here if the
+        // disk cannot be freed is the same bargain as the network check above.
+        if (!releaseTargetDisks(isArm, answers, appendLog)) {
+          cleanup()
+          finishRun(false)
+          return
         }
 
         // ── The spawn starts in phase 1, and the child says when it is past it ─
