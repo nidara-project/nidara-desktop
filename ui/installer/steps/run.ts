@@ -23,6 +23,7 @@ import { heading, prose } from "./common"
 
 export function RunStep(): Step {
   let _busy = false
+  let _outcome: "success" | "failure" | null = null
   let _proc: Gio.Subprocess | null = null
   /**
    * Handed in at build time, and the reason the footer is honest.
@@ -44,6 +45,7 @@ export function RunStep(): Step {
     title: () => t("runTitle"),
     nextLabel: () => t("continue"),
     busy: () => _busy,
+    outcome: () => _outcome,
     ready: () => false,
 
     build(notifyReady) {
@@ -209,6 +211,9 @@ export function RunStep(): Step {
       }
 
       const finishRun = (success: boolean) => {
+        // Before setBusy: its notify is what repaints the footer, and the footer
+        // reads the outcome.
+        _outcome = success ? "success" : "failure"
         setBusy(false)
         if (success) { phase = PHASES.length; paintPhases() }
         progressBar.visible = false
@@ -450,6 +455,12 @@ export function RunStep(): Step {
             } finally {
               // Success or not: a target that got as far as /var/log keeps the log.
               copyLogToTarget(isArm, liveLog.path, appendLog)
+              // ⚠️ And then let go of the disk. archinstall unmounts nothing on exit,
+              // so a finished install sat mounted under /mnt with its swap on — and
+              // powering off from the button, or pulling the stick, is what somebody
+              // does next as often as pressing Restart. The same release a retry needs
+              // (lib/release-target.ts), after the last write: the log copy above.
+              releaseTargetDisks(isArm, answers, appendLog)
               cleanup()
               finishRun(success)
             }
