@@ -392,14 +392,6 @@ package_nidara-desktop() {
   # Settings portal get before the shell has run once.
   scripts/gen-dconf-defaults.sh defaults/appearance.json \
     | install -Dm644 /dev/stdin "$pkgdir/etc/dconf/db/local.d/00-nidara-appearance"
-# Generated from defaults/appearance.json when this package was built. Edit that
-# file, not this one — and note this is a DEFAULT: whatever the person chose in
-# their own dconf wins, because /etc/dconf/profile/user reads user-db first.
-[org/gnome/desktop/interface]
-icon-theme='$_icon_theme'
-accent-color='$_accent'
-color-scheme='$_scheme'
-EOF
   install -Dm644 packaging/nidara/nidara-dconf.hook \
     "$pkgdir/usr/share/libalpm/hooks/90-nidara-dconf.hook"
 
