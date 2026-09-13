@@ -1,4 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
+import { dialogButtonRow } from "./dialog-buttons"
 import { setWindowAppId } from "../app-id"
 
 export interface FormResponse {
@@ -99,23 +100,12 @@ export function showNidaraFormDialog(opts: {
         margin_start: 24,
         margin_end: 24,
         margin_top: 16,
-        margin_bottom: 20,
+        // No bottom margin: the response row (dialog-buttons) carries the 24px gap
+        // itself, as in showNidaraAlert — both margins would stack to 44.
+        margin_bottom: 0,
     })
     contentBox.append(content)
     root.append(contentBox)
-
-    // Separator
-    root.append(new Gtk.Separator({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        css_classes: ["nidara-alert-sep"],
-    }))
-
-    // ── Buttons ───────────────────────────────────────────────────────────────
-    const btnBox = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        homogeneous: true,
-        css_classes: ["nidara-alert-buttons"],
-    })
 
     const buttonMap = new Map<string, Gtk.Button>()
     let isClosed = false
@@ -154,23 +144,10 @@ export function showNidaraFormDialog(opts: {
         return true
     })
 
-    for (const resp of responses) {
-        const classes = ["nidara-alert-btn"]
-        if (resp.destructive) classes.push("nidara-alert-btn--destructive")
-        else if (resp.suggested) classes.push("nidara-alert-btn--suggested")
-
-        const btn = new Gtk.Button({
-            label: resp.label,
-            css_classes: classes,
-            hexpand: true,
-            sensitive: resp.sensitive !== false,
-        })
-        btn.connect("clicked", () => triggerResponse(resp.id))
-        buttonMap.set(resp.id, btn)
-        btnBox.append(btn)
-    }
-
-    root.append(btnBox)
+    // ── Buttons ───────────────────────────────────────────────────────────────
+    const row = dialogButtonRow(responses, triggerResponse)
+    row.buttons.forEach((btn, id) => buttonMap.set(id, btn))
+    root.append(row.box)
     dialog.set_child(root)
     dialog.present()
 
