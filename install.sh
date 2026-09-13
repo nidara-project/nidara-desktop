@@ -705,6 +705,15 @@ sudo cp "$REPO_DIR/config/portal/hyprland-portals.conf" /etc/xdg-desktop-portal/
 pkill -f nidara-portal 2>/dev/null || true
 systemctl --user restart xdg-desktop-portal 2>/dev/null || true
 
+# System dconf defaults (icon theme, accent, colour scheme) — the same two files the
+# package installs, from the same generator, so a --dev machine is not the one place
+# where a new account starts on Adwaita and nidara-setup warns on every run.
+# /etc/dconf/profile/user is ours outright (no package owns it; see its header).
+sudo install -Dm644 "$REPO_DIR/config/dconf/profile-user" /etc/dconf/profile/user
+"$REPO_DIR/scripts/gen-dconf-defaults.sh" "$REPO_DIR/defaults/appearance.json" \
+    | sudo install -Dm644 /dev/stdin /etc/dconf/db/local.d/00-nidara-appearance
+sudo dconf update
+
 # fontconfig: per-language CJK variant. Arch's noto-fonts-cjk ships no
 # fontconfig rules and fontconfig's own 65-nonlatin.conf hardcodes the KR face,
 # so zh/ja sessions render their Han characters with Korean stroke forms.
