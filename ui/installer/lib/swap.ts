@@ -73,6 +73,33 @@ export function swapFstabEntry(devPath: string, uuid: string): string {
 }
 
 /**
+ * The device node of the partition that starts at `startBytes`, from `lsblk -nr
+ * -o PATH,START,TYPE <disk>` output — or "" when there is none.
+ *
+ * ⚠️ Needed because a row made from a GAP (#447) has no path: the partition did
+ * not exist when the person answered, archinstall created it, and the node it got
+ * (`/dev/vda4`) is written nowhere in the answer. Handing `blkid` the empty path
+ * failed, the catch below logged a warning nobody reads, and the swap partition
+ * the person created went undeclared — measured on the 2026-09-13 manual-mode
+ * pass: `mkswap` ran, `swapon --show` listed it on the medium, fstab had no line.
+ *
+ * The start is what identifies it, because it is the one fact both sides agree
+ * on: the answer carries it in bytes and archinstall created the partition at
+ * exactly that offset (`status: "create"` sends it unrounded). `START` is in
+ * 512-byte units whatever the logical sector size — it is sysfs's `start` —
+ * which is also how the disk page turned it INTO bytes.
+ *
+ * Pure, so the probe can check it without a disk.
+ */
+export function partitionAtStart(lsblkOutput: string, startBytes: number): string {
+  for (const line of lsblkOutput.split("\n")) {
+    const [path, start, type] = line.trim().split(/\s+/)
+    if (type === "part" && Number(start) * 512 === startBytes) return path
+  }
+  return ""
+}
+
+/**
  * Declares every swap partition of a manual layout in the installed system's
  * fstab.
  *
@@ -104,38 +131,44 @@ export function writeSwapFstabEntries(
 
   for (const m of swaps) {
     try {
+      const dev = m.path
+        || partitionAtStart(run(["lsblk", "-nr", "-o", "PATH,START,TYPE", m.device]), m.start)
+      if (!dev) {
+        appendLog(`[WARN] No partition starts where the new swap was asked for on ${m.device} — no fstab entry written.`)
+        continue
+      }
       // ⚠️ Asked of the DEVICE, not assumed from the answer. A formatted row
       // reaches archinstall as `modify`, which deletes the partition and creates
       // it again, so the only honest source for both facts is the disk as it is
       // now. A device that is not swap gets a line saying so instead of an fstab
       // entry that would fail at boot.
-      const type = run(["blkid", "-s", "TYPE", "-o", "value", m.path]).trim()
+      const type = run(["blkid", "-s", "TYPE", "-o", "value", dev]).trim()
       if (type !== "swap") {
-        appendLog(`[WARN] ${m.path} is ${type || "unformatted"}, not swap — no fstab entry written.`)
+        appendLog(`[WARN] ${dev} is ${type || "unformatted"}, not swap — no fstab entry written.`)
         continue
       }
-      const uuid = run(["blkid", "-s", "UUID", "-o", "value", m.path]).trim()
+      const uuid = run(["blkid", "-s", "UUID", "-o", "value", dev]).trim()
       if (!uuid) {
-        appendLog(`[WARN] ${m.path} has no UUID — no fstab entry written.`)
+        appendLog(`[WARN] ${dev} has no UUID — no fstab entry written.`)
         continue
       }
       if (fstab.includes(uuid)) {
-        appendLog(`[SWAP] ${m.path} is already declared in the installed fstab.`)
+        appendLog(`[SWAP] ${dev} is already declared in the installed fstab.`)
         continue
       }
 
-      const entry = swapFstabEntry(m.path, uuid)
+      const entry = swapFstabEntry(dev, uuid)
       // `tee -a` over stdin rather than a shell redirection: the line carries
       // tabs, and a `bash -c` around it would be one quoting mistake away from
       // writing something else into the file that decides what the machine mounts.
       run(["tee", "-a", TARGET_FSTAB], entry)
       fstab += entry
-      appendLog(`[SWAP] ${m.path} declared in the installed fstab (UUID=${uuid}).`)
+      appendLog(`[SWAP] ${dev} declared in the installed fstab (UUID=${uuid}).`)
     } catch (e: any) {
       // Worth a line, not worth failing a finished install: systemd's
       // gpt-auto-generator still turns the partition on, which is exactly the
       // implicit behaviour this function exists to make explicit.
-      appendLog(`[WARN] Could not declare ${m.path} as swap in the installed fstab: ${e.message || e}`)
+      appendLog(`[WARN] Could not declare the swap on ${m.path || m.device} in the installed fstab: ${e.message || e}`)
     }
   }
 }

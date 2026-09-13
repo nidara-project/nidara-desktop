@@ -647,6 +647,18 @@ survives archinstall's delete-and-recreate. `lib/swap.ts` writes the entry ourse
 own column shape and keyed by UUID, so the machine declares what it has instead of relying on a
 mechanism nobody chose; the UUID check means an upstream fix would not produce a duplicate.
 
+⚠️ **A row made from a GAP (`create`, #447) has `path: ""` in the answer** — the partition does not
+exist until archinstall creates it, and the node it gets is written nowhere. Anything after the
+disk page that names or finds a row by `m.path` is wrong for those rows, silently. Three places
+were, all found on the 2026-09-13 manual-mode VM pass: the summary and the confirmation printed
+`swap  ·    ·  2 GiB` (now `place()` in `steps/summary.ts`, falling back to "Free space");
+`lib/swap.ts` handed `blkid` the empty path, logged a warning and wrote NO fstab line for a
+created swap (now `partitionAtStart()`: the partition on `m.device` whose `START`×512 equals
+`m.start`, probed in `disk-config-probe.ts`); and the disk page restored answers keyed by
+`m.path` while its table keys gaps `free:<disk>@<start>`, so after a language change
+(`invalidate()` rebuilds every page) a swap or root put into free space came back as "None"
+(now `freeRowKey()` on both sides).
+
 ⚠️ **Which partition is the ESP is `espMount()`, exported from `lib/disk-config.ts`, and there is
 one of it.** Four places need that answer — the page that refuses a non-FAT ESP, the summary that
 names it, the layout that flags it `boot`/`esp` (without the flag `get_efi_partition()` returns

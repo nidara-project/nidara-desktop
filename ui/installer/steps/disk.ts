@@ -158,6 +158,22 @@ function listPartitions(): DetectedPartition[] {
 }
 
 /**
+ * The table's key for a row that is a GAP rather than a partition.
+ *
+ * ⚠️ A gap has no path to key by, so it is keyed by where it starts — and the
+ * answer that restores the page after a rebuild has to spell it the SAME way.
+ * It used `m.path` for every row, which for a created one is the empty string:
+ * the restore put the assignment under `""`, the refresh below then dropped it as
+ * a row that is no longer on the disk, and a swap or root put into free space
+ * came back as "None" after going Back to change the language (`invalidate()`
+ * rebuilds every page). Measured on the 2026-09-13 manual-mode pass; the
+ * partition assigned beside it kept its mount point.
+ */
+function freeRowKey(device: string, start: number): string {
+  return `free:${device}@${start}`
+}
+
+/**
  * What a partition can be mounted as. The label IS the mount point, except for
  * the empty one — which is the only entry that is not a place and so is the only
  * one with a translated name.
@@ -280,7 +296,7 @@ export function DiskStep(): Step {
           }
         } else {
           for (const m of existingAnswer.mounts) {
-            manualMounts.set(m.path, m)
+            manualMounts.set(m.create ? freeRowKey(m.device, m.start) : m.path, m)
           }
         }
       }
@@ -745,7 +761,7 @@ export function DiskStep(): Step {
           freeSpaceGaps(d, partitions).map(g => ({
             name: "", path: "", device: g.device, start: g.start, size: g.size,
             logicalSectorSize: g.logicalSectorSize, fstype: null, label: null, partlabel: null, pkname: null,
-            isFree: true, key: `free:${g.device}@${g.start}`,
+            isFree: true, key: freeRowKey(g.device, g.start),
           })))
         const rows: RowSource[] = [
           ...partitions.map(p => ({ ...p, isFree: false, key: p.path })),
