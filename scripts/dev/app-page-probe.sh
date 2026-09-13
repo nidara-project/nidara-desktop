@@ -53,7 +53,7 @@ gjs -m "$repo/bin/nidara-portal" > "$work/portal.log" 2>&1 & portal=$!
 for t in list "$@"; do
   gjs -m "$work/probe.js" "$t" "$work/style.css" > "$work/probe-$t.log" 2>&1 & p=$!
   sleep 3
-  grep -h "^ORIGIN" "$work/probe-$t.log" || true
+  grep -hE "^(ORIGIN|LIST|HIDDEN)" "$work/probe-$t.log" || true
   XDG_RUNTIME_DIR="$REAL_RUNTIME" grim -o PROBE "$out_dir/app-page-$t.png" && echo "ok   $out_dir/app-page-$t.png"
   kill $p 2>/dev/null; wait $p 2>/dev/null
   grep -iE "error|critical" "$work/probe-$t.log" | head -3

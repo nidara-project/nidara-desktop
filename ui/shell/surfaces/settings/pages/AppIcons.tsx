@@ -216,7 +216,13 @@ export default function AppIconsPage(nav: SettingsNav) {
         css_classes: ["apps-list"],
     })
 
-    const apps = appService.getAllApps()
+    // The LAUNCHABLE apps — the same set the app grid shows (`listApps()`, i.e.
+    // g_app_info_should_show), not the whole registry. `getAllApps()` also holds
+    // NoDisplay/Hidden entries (a PolicyKit agent, xdg-user-dirs' updater…), which
+    // name windows and own icons but are not apps anybody opens, and a page about
+    // "the apps on this machine" listing them read as clutter (#535). Same call GNOME
+    // Settings makes.
+    const apps = appService.listApps()
     apps.forEach(app => appList.append(buildAppRow(app, nav)))
 
     // Filter

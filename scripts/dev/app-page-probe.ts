@@ -32,6 +32,9 @@ app.start({
     initAppearance()
     let page: Gtk.Widget
     if (target === "list") {
+      const all = appService.getAllApps(), listed = appService.listApps()
+      print(`LIST all=${all.length} listed=${listed.length} hidden=${all.length - listed.length}`)
+      for (const a of all) if (!a.visible) print(`HIDDEN ${a.name} (${a.id})`)
       page = AppIconsPage({ pushSubpage: () => {} } as any)
     } else {
       const data = appService.getAppData(target)
