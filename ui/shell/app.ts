@@ -691,8 +691,8 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       )
       // Same launch path as a dock click (DockItem.tsx): uwsm-scoped, cd $HOME so
       // children don't inherit the shell's CWD. Fire-and-forget.
-      execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`])
-        .catch(e => console.error("[IPC] launchApp:", e))
+      execAsync(appService.getLaunchArgv(target.id))
+        .catch(e => console.error(`[IPC] launchApp ${cmd}:`, e))
       return `launched ${target.id}${await focusLaunched(target, before)}`
     },
   },

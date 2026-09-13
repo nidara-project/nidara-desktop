@@ -742,8 +742,7 @@ export function DockItem(
                     // CWD (verified) and would open in the AGS process's dir (ui/shell).
                     // `exec` so the command replaces the shell (clean tree under uwsm).
                     appService.recordLaunch(appId)
-                    const cmd = appService.getLaunchCommand(appId)
-                    execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`])
+                    execAsync(appService.getLaunchArgv(appId))
                         .catch(() => { try { appItem.launch() } catch (_) {} })
                 }
             } catch (fallbackError) {

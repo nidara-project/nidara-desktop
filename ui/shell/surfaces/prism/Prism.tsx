@@ -108,8 +108,7 @@ export default function Prism() {
                 // run / gtk-launch) and cd $HOME so the app doesn't inherit the
                 // shell's CWD (ui/shell). Never hand-parse Exec=. See AppService.
                 appService.recordLaunch(data.id)
-                const cmd = appService.getLaunchCommand(data.id)
-                execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`]).catch(console.error)
+                execAsync(appService.getLaunchArgv(data.id)).catch(console.error)
             } catch (e) { console.error("[Prism] launch failed:", e) }
         }
     }

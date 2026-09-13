@@ -1736,6 +1736,37 @@ Hence: variables on the daemon's command line, a dconf canary that must land in 
 database before anything else is written, and the backend started explicitly and checked to be
 the owner of its bus name.
 
+### Launching an app: the scope IS the app's identity to the portal (2026-09-13)
+
+Every launch path — dock click and menu, app grid, Prism, `launchApp` — goes through ONE argv,
+`AppService.getLaunchArgv(id)` = `sh -c 'cd "$HOME" && exec uwsm app -- <id>.desktop'`. Do not build
+a launch command anywhere else.
+
+🔑 **Why it matters beyond "the window opens":** the XDG portal does not ask an unsandboxed app who it
+is. It reads the systemd unit the process lives in, accepts `app-<launcher>-<id>-<random>.scope`
+(or `…@<random>.service`), and only when `<id>.desktop` exists; anything else is the anonymous app
+`''`. Per-app portal decisions are keyed by that id — permissions, Background, and GlobalShortcuts,
+which refuses an empty id outright. Measured with a probe impl backend on a private bus:
+
+| unit | app_id the backend receives |
+|---|---|
+| `app-Hyprland-sh-…scope` — what `uwsm app -- sh -c "gtk-launch …"` produced for EVERY app | `''` |
+| `app-Hyprland-kitty-…scope` | `kitty` |
+| `app-Hyprland-google\x2dchrome-…scope` | `google-chrome` |
+| `app-Hyprland-nonexistent.app.Id-…scope` (control, no .desktop) | `''` |
+| `dbus-:1.1-org.gnome.Nautilus@….service` — D-Bus activation | `''` |
+
+`uwsm app -- <id>.desktop` names the scope after the entry AND runs `Exec=` itself, ignoring
+`DBusActivatable=true` (measured: Text Editor lands in `app-Hyprland-org.gnome.TextEditor-….scope`).
+`gtk-launch` D-Bus-activated those entries (12 on the maintainer's machine, Nautilus included), which
+put them in a `dbus-:1.1-…` unit — anonymous again, whatever the outer scope was called. The same
+property sidesteps the Flatpak activation trap described on `getLaunchCommand`. The keybinds in
+`hyprland.lua` use desktop ids for the same reason (`kitty.desktop`, `org.gnome.Nautilus.desktop`).
+
+⚠️ Apps a user starts some other way (a terminal, `xdg-open`, D-Bus activation by another app) can
+still be anonymous; Chrome escapes it by creating its own `app-com.google.Chrome-<pid>.scope`. Check a
+running app with `cat /proc/<pid>/cgroup`.
+
 ## `ui/lib/nidara-kit/`
 
 Pure-GTK4 primitives + Nidara tokens, **no Adwaita, no resets**. Mostly consumed by the shell's Settings pages, plus what the greeter/lockscreen adopted (the dropdown, the login card, the clock):

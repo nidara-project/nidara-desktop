@@ -715,6 +715,56 @@ class AppService {
     }
 
     /**
+     * The id the XDG portal will know this app by — its desktop-entry id without
+     * `.desktop`, or "" when there is no entry.
+     *
+     * 🔑 The portal does not ask an unsandboxed app who it is: it reads the systemd
+     * unit the process lives in, accepts only `app-<launcher>-<id>-<random>.scope`
+     * (or `…@<random>.service`), and only when `<id>.desktop` exists. Measured
+     * 2026-09-13 with a probe impl backend on a private bus, scope name → app_id:
+     *   app-Hyprland-sh-…                      → ''   (what every launch path produced)
+     *   app-Hyprland-kitty-…                   → 'kitty'
+     *   app-Hyprland-google\x2dchrome-…        → 'google-chrome'
+     *   app-Hyprland-nonexistent.app.Id-…      → ''   (no .desktop)
+     *   dbus-:1.1-org.gnome.Nautilus@….service → ''   (D-Bus activation)
+     * Every per-app portal decision — permissions, background, global shortcuts,
+     * which REQUIRE an id — is keyed by it.
+     */
+    portalAppId(lid: string): string {
+        const info = this.getAppInfo(lid)
+        return (info?.get_id?.() ?? "").replace(/\.desktop$/, "")
+    }
+
+    /**
+     * The argv that launches an app — THE launch, for every path that starts one
+     * (dock click, dock menu, app grid, Prism, `launchApp`).
+     *
+     * `uwsm app -- <id>.desktop` does three things the old
+     * `uwsm app -- sh -c "gtk-launch <id>"` did not:
+     *  - names the scope after the ENTRY (`app-Hyprland-<id>-<rand>.scope`), so the
+     *    portal identifies the app (see `portalAppId`) — through `sh` it was anonymous;
+     *  - runs `Exec=` itself inside that scope and ignores `DBusActivatable=true`
+     *    (measured: `app-Hyprland-org.gnome.TextEditor-f94d831e.scope`). gtk-launch
+     *    activated such apps over D-Bus, which put the process in a
+     *    `dbus-:1.1-<id>@….service` the portal also reads as anonymous — 12 entries on
+     *    the maintainer's machine, Nautilus and Text Editor among them;
+     *  - for that same reason sidesteps the Flatpak trap `getLaunchCommand` documents
+     *    (a DBusActivatable flatpak entry whose activation dies silently), because
+     *    the entry's own `Exec=flatpak run …` is executed, not activated.
+     * `cd $HOME` so the app does not inherit the shell's CWD (ui/shell); the outer
+     * `sh` is not in the app's scope — it `exec`s uwsm, which creates the scope.
+     *
+     * An id with no desktop entry (a bare command) keeps the old path.
+     */
+    getLaunchArgv(lid: string): string[] {
+        const entry = this.getAppInfo(lid)?.get_id?.() ?? ""
+        const inner = entry.endsWith(".desktop")
+            ? `uwsm app -- ${GLib.shell_quote(entry)}`
+            : `uwsm app -- ${this.getLaunchCommand(lid)}`
+        return ["sh", "-c", `cd "$HOME" && exec ${inner}`]
+    }
+
+    /**
      * Returns the launch command for the system's default file manager.
      */
     getDefaultFileManagerCommand(): string {
@@ -765,7 +815,10 @@ class AppService {
                 let command = freshInfo?.get_commandline() || data?.exec || launchId
                 // Absolute Isolation Sanitization
                 command = command.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
-                GLib.spawn_command_line_async(`uwsm app -- sh -c ${GLib.shell_quote(command)}`)
+                // `-a`: the scope is what the XDG portal identifies the app by — see portalAppId.
+                const scopeId = (freshInfo?.get_id?.() ?? "").replace(/\.desktop$/, "")
+                const nameArg = scopeId ? `-a ${GLib.shell_quote(scopeId)} ` : ""
+                GLib.spawn_command_line_async(`uwsm app ${nameArg}-- sh -c ${GLib.shell_quote(command)}`)
             }
         }
     }

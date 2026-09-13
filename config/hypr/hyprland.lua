@@ -375,8 +375,12 @@ end)
 
 
 -- ── Programs ──────────────────────────────────────────────────────────────────
-local terminal    = "kitty"
-local fileManager = "nautilus"
+-- DESKTOP ENTRY ids, not executables: `uwsm app -- <id>.desktop` launches the entry and
+-- names the systemd scope after it, and the XDG portal identifies an unsandboxed app by
+-- that scope name (see AppService.portalAppId). `uwsm app -- nautilus` gave the portal
+-- `nautilus`, which has no .desktop file — i.e. an anonymous app.
+local terminal    = "kitty.desktop"
+local fileManager = "org.gnome.Nautilus.desktop"
 local mainMod     = "SUPER"
 
 
