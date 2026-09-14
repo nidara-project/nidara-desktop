@@ -36,27 +36,12 @@ import { ActivityIsland } from "../island/ActivityIsland"
 import { IslandWindow } from "../island/IslandWindow"
 import { execAsync } from "../../../lib/process"
 import { t } from "../../core/i18n"
-import { barSettings, onBarSettingsChanged } from "./barState"
+import { barSettings, onBarSettingsChanged, resolveLauncherIcon, LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "./barState"
 import { dockSideState, dockSettings, onDockSettingsChanged } from "../dock/state"
 import Icons from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import hs from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
-import { SHELL_ROOT } from "../../core/Paths"
-
-const ASSETS_DIR = SHELL_ROOT
-
-export const LAUNCHER_ICON_PRESETS: Record<string, string> = {
-  "nidara": `${ASSETS_DIR}/assets/nidara/assets/nidara-symbolic.svg`,
-}
-
-export const DEFAULT_LAUNCHER_ICON = "nidara"
-
-function resolveIconPath(key: string): string | null {
-  if (LAUNCHER_ICON_PRESETS[key]) return LAUNCHER_ICON_PRESETS[key]
-  if (key.startsWith("/") && GLib.file_test(key, GLib.FileTest.EXISTS)) return key
-  return null
-}
 
 function SystemMenuIcon(): Gtk.Widget {
   const img = new Gtk.Image({ pixel_size: 18, css_classes: ["bar-distro-icon"], margin_start: 14, margin_end: 14 })
@@ -64,7 +49,7 @@ function SystemMenuIcon(): Gtk.Widget {
   const applyIcon = () => {
     // Fall back to the built-in mark for unknown presets (e.g. a stale "arch"
     // from before the rebrand) or a custom path that no longer exists.
-    const path = resolveIconPath(barSettings.launcherIcon || DEFAULT_LAUNCHER_ICON)
+    const path = resolveLauncherIcon(barSettings.launcherIcon || DEFAULT_LAUNCHER_ICON)
       ?? LAUNCHER_ICON_PRESETS[DEFAULT_LAUNCHER_ICON]
     img.gicon = Gio.FileIcon.new(Gio.File.new_for_path(path))
   }

@@ -1,0 +1,26 @@
+# settings-closure-check.mjs — forbidden modules Settings still reaches (#571).
+# This file may only SHRINK. Run `node scripts/ci/settings-closure-check.mjs --print`
+# for the import chain to each one; cut the first edge, then delete the line.
+core/NetworkAgent.ts
+core/NotifService.ts
+core/ShellActions.ts
+core/Status.ts
+core/notifd.ts
+surfaces/control-center/CCLayoutManager.ts
+widgets/battery.ts
+widgets/bluetooth.ts
+widgets/brightness.ts
+widgets/clipboard.ts
+widgets/cpu-memory.ts
+widgets/dark-mode.ts
+widgets/ethernet.ts
+widgets/focus.ts
+widgets/index.ts
+widgets/media.ts
+widgets/night-light.ts
+widgets/screenrecord.ts
+widgets/screenshot.ts
+widgets/volume.ts
+widgets/vpn.ts
+widgets/widgets.gen.ts
+widgets/wifi.ts

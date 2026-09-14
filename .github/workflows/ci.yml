@@ -333,6 +333,12 @@ jobs:
       # crashes the shell at BOOT, which tsc cannot see.
       - name: Widget boundary (no surface imports, kit stays a leaf)
         run: node scripts/ci/widget-boundary-check.mjs
+      # Settings is becoming its own process (#571), and a process runs the top level
+      # of everything it imports. On 2026-09-14 Settings.tsx alone reached 192 of the
+      # shell's 216 modules. A ratchet: a forbidden module reached and not in the
+      # allowlist fails, and so does a listed one that is no longer reached.
+      - name: Settings import closure (no shell surfaces, ratcheted)
+        run: node scripts/ci/settings-closure-check.mjs
 
   hypr-config:
     name: Hyprland config (parses + game mode)

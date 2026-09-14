@@ -1,16 +1,9 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { imagePickerRow } from "../SettingsHelpers"
-import { barSettings, updateBarSettings } from "../../bar/barState"
-import { LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "../../bar/Bar"
+import { barSettings, updateBarSettings, resolveLauncherIcon, LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "../../bar/barState"
 import { t } from "../../../core/i18n"
 import type { PageCtx, ItemBuilder } from "../PreferencePage"
-
-function resolveCurrentPath(key: string): string | null {
-    if (LAUNCHER_ICON_PRESETS[key]) return LAUNCHER_ICON_PRESETS[key]
-    if (key.startsWith("/") && GLib.file_test(key, GLib.FileTest.EXISTS)) return key
-    return null
-}
 
 export const build = (_ctx: PageCtx) => {
     // A launcherIcon is "custom" only when it points at an image file that still
@@ -30,7 +23,7 @@ export const build = (_ctx: PageCtx) => {
                 // Preview whatever the bar is ACTUALLY showing, falling back exactly
                 // as SystemMenuIcon does — not the raw stored string.
                 renderPreview: (img) => {
-                    const path = resolveCurrentPath(barSettings.launcherIcon)
+                    const path = resolveLauncherIcon(barSettings.launcherIcon)
                         ?? LAUNCHER_ICON_PRESETS[DEFAULT_LAUNCHER_ICON]
                     img.gicon = Gio.FileIcon.new(Gio.File.new_for_path(path))
                 },

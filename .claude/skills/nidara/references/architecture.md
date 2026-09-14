@@ -1457,6 +1457,18 @@ a daemon, pushing to the compositor, firing a user hook — must only be wired i
 shell is the only process, so nothing is wrong yet; `WorkspaceModes` (writes `nidara-workspaces.lua`
 and pushes to Hyprland from its constructor) is the first thing #571 has to split along that line.
 
+🔑 **What a Settings process would import is checked, not remembered** (#571). A process runs the top
+level of every module it imports, and on 2026-09-14 `surfaces/settings/Settings.tsx` alone reached
+192 of the shell's 216 modules — almost all through ONE edge: `custom/bar.ts` imported a constant
+from `Bar.tsx`, and with it came the bar, the Control Centre, the island, Prism and the notification
+server (the launcher-mark catalogue now lives in `bar/barState.ts`). `scripts/ci/settings-closure-check.mjs`
+walks the imports transitively and fails on any other surface's module, any `widgets/` module, or a
+module that makes a process THE shell (`Status`, `ShellActions`, `notifd`/`NotifService`, `tray`,
+`NetworkAgent`, `AgentService`). What still leaks is in `settings-closure-allowlist.txt`, which may
+only SHRINK — a listed module no longer reached fails too. `--print` gives the shortest import chain
+to each: cut its first edge, delete the line. A value Settings needs from a surface goes in that
+surface's store (`barState.ts`, `dock/state.ts` — both exempt), never imported from the window.
+
 **Moving a store** is three parts in one change: its schema (defaults, and `<range>`/`<choices>`
 where the validator has them, so `gsettings set` refuses what the store would), the one-line switch,
 and its file in `migrations/2026-09-14-settings-to-gsettings.sh`'s list — or a new unit of the same

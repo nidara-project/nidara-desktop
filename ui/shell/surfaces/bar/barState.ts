@@ -1,4 +1,6 @@
+import GLib from "gi://GLib"
 import { defineSettings } from "../../core/configFile"
+import { SHELL_ROOT } from "../../core/Paths"
 
 export interface BarSettings {
     showAppTitle: boolean
@@ -40,3 +42,20 @@ export function updateBarSettings(partial: Partial<BarSettings>) {
     barConfig.update(partial)
 }
 
+
+// The launcher mark's catalogue lives HERE, beside the setting it resolves, and not in
+// Bar.tsx: Settings reads it too, and importing it from Bar.tsx pulled the whole bar —
+// the Control Centre, the island, Prism, the notification server — into anything that
+// builds the Settings page (#571).
+export const LAUNCHER_ICON_PRESETS: Record<string, string> = {
+    "nidara": `${SHELL_ROOT}/assets/nidara/assets/nidara-symbolic.svg`,
+}
+
+export const DEFAULT_LAUNCHER_ICON = "nidara"
+
+/** A preset key or an image path that still exists → its file; anything else → null. */
+export function resolveLauncherIcon(key: string): string | null {
+    if (LAUNCHER_ICON_PRESETS[key]) return LAUNCHER_ICON_PRESETS[key]
+    if (key.startsWith("/") && GLib.file_test(key, GLib.FileTest.EXISTS)) return key
+    return null
+}
