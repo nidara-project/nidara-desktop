@@ -1,6 +1,4 @@
 import GObject from "gi://GObject"
-import Gio from "gi://Gio"
-import GLib from "gi://GLib"
 import { defineSettings } from "./configFile"
 
 const DEFAULT_TEMP = 4000
@@ -38,6 +36,28 @@ const config = defineSettings<NightLightSettings>("night-light", DEFAULTS, {
     temperature: v => Number.isFinite(v) && v >= TEMP_MIN && v <= TEMP_MAX,
 })
 
+/** Is `now` inside the `from`→`to` window? An overnight window (20:00 → 07:00) wraps
+ *  past midnight. Pure, so the shell's sync and anything else can ask. */
+export function isInSchedule(from: string, to: string, now = new Date()): boolean {
+    const nowMins = now.getHours() * 60 + now.getMinutes()
+    const [fh, fm] = from.split(":").map(Number)
+    const [th, tm] = to.split(":").map(Number)
+    const fromMins = fh * 60 + fm
+    const toMins   = th * 60 + tm
+    if (fromMins > toMins) return nowMins >= fromMins || nowMins < toMins
+    return nowMins >= fromMins && nowMins < toMins
+}
+
+/**
+ * Night light's settings — the store, and nothing that acts on it.
+ *
+ * ⚠️ Running hyprsunset and the schedule timer are NOT here: they live in
+ * core/NightLightSync.ts, started from app.ts, and react to the keys. They used to run
+ * in this class's constructor and setters, which meant (a) `gsettings set
+ * org.nidara.night-light enabled true` from a terminal changed the switch and not the
+ * screen, and (b) any second process importing this module (the Settings app, #571)
+ * would spawn a hyprsunset of its own. The setters below only write.
+ */
 class NightLightManager extends GObject.Object {
     static {
         GObject.registerClass({
@@ -46,25 +66,12 @@ class NightLightManager extends GObject.Object {
         }, this)
     }
 
-    private _proc: Gio.Subprocess | null = null
-    private _applyDebounce = 0
-    private _scheduleTimer = 0
-
     constructor() {
         super()
         // One notification path, not two. Every setter below writes through the
         // store, and the store is what decides a value actually moved — so the
         // signal fires once per real change instead of once per call.
         config.subscribeAll(() => this.emit("changed"))
-
-        if (config.get("scheduleEnabled")) {
-            // Always recompute from current time — don't trust the saved
-            // `enabled` value, which describes whichever half of the schedule we
-            // were in when the shell last ran.
-            config.set("enabled", this._isInSchedule())
-            this._startScheduleTimer()
-        }
-        if (config.get("enabled")) this._spawn()
     }
 
     get enabled()         { return config.get("enabled") }
@@ -73,97 +80,11 @@ class NightLightManager extends GObject.Object {
     get scheduleFrom()    { return config.get("scheduleFrom") }
     get scheduleTo()      { return config.get("scheduleTo") }
 
-    setEnabled(val: boolean) {
-        config.set("enabled", val)
-        if (val) this._spawn()
-        else this._kill()
-    }
-
-    setTemperature(k: number) {
-        config.set("temperature", Math.round(k))
-        if (!this.enabled) return
-        if (this._applyDebounce > 0) GLib.source_remove(this._applyDebounce)
-        this._applyDebounce = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
-            this._kill()
-            this._spawn()
-            this._applyDebounce = 0
-            return GLib.SOURCE_REMOVE
-        })
-    }
-
-    setScheduleEnabled(val: boolean) {
-        config.set("scheduleEnabled", val)
-        if (val) {
-            this._checkSchedule()
-            this._startScheduleTimer()
-        } else {
-            this._stopScheduleTimer()
-        }
-    }
-
-    setScheduleFrom(time: string) {
-        config.set("scheduleFrom", time)
-        if (this.scheduleEnabled) this._checkSchedule()
-    }
-
-    setScheduleTo(time: string) {
-        config.set("scheduleTo", time)
-        if (this.scheduleEnabled) this._checkSchedule()
-    }
-
-    private _isInSchedule(): boolean {
-        const now = new Date()
-        const nowMins = now.getHours() * 60 + now.getMinutes()
-        const [fh, fm] = this.scheduleFrom.split(":").map(Number)
-        const [th, tm] = this.scheduleTo.split(":").map(Number)
-        const fromMins = fh * 60 + fm
-        const toMins   = th * 60 + tm
-        // overnight schedule (e.g. 20:00 → 07:00) wraps past midnight
-        if (fromMins > toMins) return nowMins >= fromMins || nowMins < toMins
-        return nowMins >= fromMins && nowMins < toMins
-    }
-
-    private _checkSchedule() {
-        const inWindow = this._isInSchedule()
-        if (inWindow === this.enabled) return
-        config.set("enabled", inWindow)
-        if (inWindow) this._spawn(); else this._kill()
-    }
-
-    private _startScheduleTimer() {
-        if (this._scheduleTimer > 0) return
-        this._scheduleTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 60_000, () => {
-            this._checkSchedule()
-            return GLib.SOURCE_CONTINUE
-        })
-    }
-
-    private _stopScheduleTimer() {
-        if (this._scheduleTimer > 0) {
-            GLib.source_remove(this._scheduleTimer)
-            this._scheduleTimer = 0
-        }
-    }
-
-    private _spawn() {
-        this._kill()
-        try {
-            this._proc = Gio.Subprocess.new(
-                ["hyprsunset", "-t", String(this.temperature)],
-                Gio.SubprocessFlags.NONE,
-            )
-        } catch (e) {
-            console.error("[NightLight] Failed to start hyprsunset:", e)
-            this._proc = null
-        }
-    }
-
-    private _kill() {
-        if (this._proc) {
-            try { this._proc.force_exit() } catch (_) {}
-            this._proc = null
-        }
-    }
+    setEnabled(val: boolean)       { config.set("enabled", val) }
+    setTemperature(k: number)      { config.set("temperature", Math.round(k)) }
+    setScheduleEnabled(val: boolean) { config.set("scheduleEnabled", val) }
+    setScheduleFrom(time: string)  { config.set("scheduleFrom", time) }
+    setScheduleTo(time: string)    { config.set("scheduleTo", time) }
 
     /** Per-key change notification, for consumers that care about ONE field.
      *  The `changed` signal stays for the ones that re-read several. */

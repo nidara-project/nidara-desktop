@@ -306,7 +306,7 @@ the duplicated search+list scaffold between `AppIcons.tsx` and the Autostart pic
 "extract on third consumer" in both files.
 
 ### 32. `/var/tmp/nidara` greeter mirror is first-writer-owned — a second user can't update it (2026-07-10)
-`ThemeManager.writeGreeterMirror` and `RegionConfig` mirror the appearance + `region.json` into
+`core/AppearanceSync.ts` and `core/RegionSync.ts` (shell-only since #571) mirror the appearance + `region.json` into
 `/var/tmp/nidara` (dir 0755, owned by whoever wrote it first) so the greeter — a system user
 with no access to a 700 home — can render the accent and clock format. On a multi-user
 machine the SECOND user's shell cannot write there (fail-soft: a console warn, nothing
@@ -2743,7 +2743,7 @@ live session, Accessibility / Appearance / Control center / Display / Top bar at
 nothing overflows any more once the sidebar label ellipsizes — the two remaining symptoms are the
 nav truncating to `Notificatio…` and a row with TWO trailing controls (Top bar → Custom icon)
 squeezing its subtitle into four lines. So the cap is **`TEXT_SCALE_MAX = 1.5`** in
-`core/ThemeManager.ts` (one constant, also used by `applyAll` to clamp a factor stored by the
+`core/ThemeManager.ts` (one constant, also used by `core/AppearanceSync.ts` at start to clamp a factor stored by the
 older build whose slider went to 2.0 — a value above the max is a state the UI cannot represent).
 Raise it when the geometry scales too, and look again before you do.
 
