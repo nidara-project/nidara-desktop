@@ -5,7 +5,6 @@ import Pango from "gi://Pango"
 import Gdk from "gi://Gdk?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import { execAsync } from "../../lib/process"
-import { writeFile } from "../../lib/file"
 import { applyCrispFontRendering } from "../../lib/font-rendering"
 import {
     type NidaraThemeConfig,
@@ -18,8 +17,7 @@ import {
     generateChromeTokenScope,
     CHROME_SCOPE_WINDOWS,
 } from "./NidaraTheme"
-import { SHELL_ROOT, GREETER_MIRROR_DIR } from "./Paths"
-import hs from "./HyprlandState"
+import { SHELL_ROOT } from "./Paths"
 import { defineSettings } from "./configFile"
 
 // ── WHERE APPEARANCE LIVES (#573) ────────────────────────────────────
@@ -29,8 +27,14 @@ import { defineSettings } from "./configFile"
 //  - what only Nidara has — the four glass opacities and the shell's own skin — in
 //    `org.nidara.appearance`, below. bin/nidara-portal serves it to applications.
 // A change made by `gsettings set`, an agent or another process reaches this class
-// through `changed`, exactly like one made from Settings. The only file left is the
-// greeter's MIRROR (writeGreeterMirror), an export nobody reads back.
+// through `changed`, exactly like one made from Settings.
+//
+// ⚠️ This class is what ANY process needs to look like the desktop: the state, the
+// setters (which only write keys), and its own CSS/GTK settings. What the change does to
+// the rest of the desktop — settings.ini, the Xcursor default, Hyprland's cursor and
+// groupbar, the portal-gtk restart, the greeter's mirror, first-boot font seeds — is
+// core/AppearanceSync.ts, shell-only (#571). Do not add a file write, a subprocess or a
+// compositor call here: in a second process it runs a second time.
 // (appearance.json was imported once by migrations/2026-09-14c-appearance-to-gsettings.sh.)
 interface NidaraAppearance {
     barOpacity: number
@@ -80,7 +84,7 @@ async function probeAdwStyleManager(): Promise<any | null> {
  * The range the Accessibility text slider offers, and the range the reflowing
  * windows are known to survive. ⚠️ MEASURED, not chosen — see the bounds on
  * `accessibility.textScale` in `config-entries.ts` and tech-debt #62. It lives here
- * because `applyAll` has to clamp a value stored by an older build (the slider used
+ * because core/AppearanceSync.ts has to clamp a value stored by an older build (the slider used
  * to go to 2.0) — a factor above the maximum is a state the UI cannot represent.
  */
 export const TEXT_SCALE_MIN = 0.75
@@ -118,7 +122,8 @@ class ThemeManager extends GObject.Object {
                 "changed": {},
                 "ready": {},
                 // Emitted once `hyprctl setcursor` has RESOLVED — `changed` fires with
-                // that write still in flight. Consumed by common/CursorRefresh.ts.
+                // that write still in flight. EMITTED BY core/AppearanceSync.ts (the
+                // shell's side-effect half, #571); consumed by common/CursorRefresh.ts.
                 "cursor-applied": {}
             }
         }, this)
@@ -192,7 +197,6 @@ class ThemeManager extends GObject.Object {
             if (this.fcConfig[key] === value) return
             ;(this.fcConfig as unknown as Record<string, unknown>)[key] = value
             this.applyTokens()
-            this.writeGreeterMirror()
             this.emit("changed")
         })
 
@@ -278,7 +282,7 @@ class ThemeManager extends GObject.Object {
     getAvailableIconThemes(): string[] {
         const paths = ["/usr/share/icons", `${GLib.get_home_dir()}/.local/share/icons`, `${GLib.get_home_dir()}/.icons`]
         // System plumbing, never user-selectable: "default" is the Xcursor pointer
-        // (we write it ourselves in writeXcursorDefault), "hicolor" is the freedesktop
+        // (written by core/AppearanceSync.ts), "hicolor" is the freedesktop
         // fallback every theme inherits, "nidara" is our per-app icon overlay.
         const reserved = ["default", "hicolor", "nidara"]
         const themes = this.listDirs(paths).filter(t => {
@@ -419,7 +423,6 @@ class ThemeManager extends GObject.Object {
         this.state.iconTheme = icons
         try {
             await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "icon-theme", icons])
-            if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
             this.emit("changed")
         } catch (e) { console.error(e) }
     }
@@ -440,41 +443,19 @@ class ThemeManager extends GObject.Object {
         // default or settings.ini: the desktop keeps the cursor it has, and the log
         // says why. The key itself is left as written — it is the user's value, and
         // GTK falls back on its own — so fixing the name applies at once.
-        if (!this.cursorThemeInstalled(cursor)) {
-            console.warn(`[ThemeManager] cursor theme "${cursor}" is not installed (names are case-sensitive; installed: ${this.getAvailableCursorThemes().join(", ")}) — keeping "${this.state.cursorTheme}"`)
-            return
-        }
+        // (The shell's AppearanceSync logs the refusal — once, for the desktop.)
+        if (!this.cursorThemeInstalled(cursor)) return
         this.state.cursorTheme = cursor
-        const size = this.interfaceSettings.get_int("cursor-size") || 24
+        // gsettings is the home; Hyprland, the Xcursor default and settings.ini follow
+        // it from core/AppearanceSync.ts, whichever process wrote the key.
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", cursor])
-        // Three different consumers, three different mechanisms:
-        //  - gsettings      → GTK/GNOME Wayland apps
-        //  - hyprctl        → Hyprland's live compositor cursor
-        //  - Xcursor default → XWayland/X apps (Steam, etc.), which ignore the other two
-        this.writeXcursorDefault(cursor)
-        hs.setCursor(cursor, size).then(() => this.emit("cursor-applied"))
-        if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
         this.emit("changed")
     }
 
     async setCursorSize(size: number) {
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-size", String(size)])
-        // Same three consumers as the theme — push the size everywhere it's read.
-        if (this.state.cursorTheme) hs.setCursor(this.state.cursorTheme, size).then(() => this.emit("cursor-applied"))
-        if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
+        // Hyprland and settings.ini follow the key — core/AppearanceSync.ts.
         this.emit("changed")
-    }
-
-    /**
-     * Pin the "default" Xcursor theme that XWayland and legacy X apps resolve against.
-     * Without this, those apps stay on whatever Inherits= was last written (e.g. by
-     * nwg-look) regardless of gsettings/hyprctl — which is why Steam ignored the picker.
-     */
-    private writeXcursorDefault(cursor: string) {
-        const dir = `${GLib.get_home_dir()}/.local/share/icons/default`
-        if (!GLib.file_test(dir, GLib.FileTest.EXISTS)) GLib.mkdir_with_parents(dir, 0o755)
-        writeFile(`${dir}/index.theme`,
-            `[Icon Theme]\nName=Default\nComment=Default Cursor Theme\nInherits=${cursor}\n`)
     }
 
     /**
@@ -501,7 +482,7 @@ class ThemeManager extends GObject.Object {
      * Whole points, because that is the granularity every font picker offers; the
      * historical default "Inter 11" is what 15px rounds back to.
      */
-    private fontToPoints(fontName: string): string {
+    fontToPoints(fontName: string): string {
         try {
             const desc = Pango.FontDescription.from_string(fontName)
             if (!desc.get_size_is_absolute()) return fontName
@@ -527,30 +508,8 @@ class ThemeManager extends GObject.Object {
         return scaledDpi / (this.textScaling || 1)
     }
 
-    /**
-     * Migrate a font stored in absolute pixels back to points.
-     *
-     * Needed because #123/#124 wrote "<family> 15px" into gsettings on machines that
-     * already ran them, and `applyAll`'s seed only fires when the key has no user
-     * value — so without this an upgrading user keeps the pixel size and keeps the
-     * dead text slider. Idempotent: a point-sized font is returned untouched, so
-     * this can run on every boot. It also picks up a px font set by another tool
-     * (nwg-look, GNOME Tweaks, a dotfile).
-     */
-    private migrateFontsToPoints() {
-        for (const key of ["font-name", "monospace-font-name"]) {
-            const live = this.interfaceSettings.get_string(key)
-            const pts = this.fontToPoints(live)
-            if (pts !== live) {
-                console.log(`[ThemeManager] ${key}: "${live}" → "${pts}" (px → pt, so text scaling works)`)
-                this.interfaceSettings.set_string(key, pts)
-            }
-        }
-    }
-
     async setFont(fontName: string) {
         this.interfaceSettings.set_string("font-name", this.fontToPoints(fontName))
-        if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
         this.emit("changed")
     }
 
@@ -582,12 +541,9 @@ class ThemeManager extends GObject.Object {
         this.state.isDark = dark
         const scheme = dark ? "prefer-dark" : "prefer-light"
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", scheme])
-        this.writeGreeterMirror()
         await this.syncGtkTheme()
-        // The GTK3 file chooser served by xdg-desktop-portal-gtk reads the dark-theme flag
-        // once at process start and never re-reads settings.ini, so it stays stuck on the
-        // previous mode. Restart it so the next portal-driven picker matches the new mode.
-        execAsync(["systemctl", "--user", "restart", "xdg-desktop-portal-gtk.service"]).catch(() => {})
+        // settings.ini, the greeter's mirror and the xdg-desktop-portal-gtk restart follow
+        // the key from core/AppearanceSync.ts — once, in the shell, whoever wrote it.
         this.emit("changed")
         // The user hook is NOT fired here: a setter runs in whichever process calls
         // it, and a change made elsewhere never passes through it. The shell fires it
@@ -595,7 +551,8 @@ class ThemeManager extends GObject.Object {
     }
 
     /**
-     * Store Nidara's appearance keys and refresh the greeter's mirror, 500 ms after
+     * Store Nidara's appearance keys (the shell's AppearanceSync refreshes the greeter's
+     * mirror from the change), 500 ms after
      * the last call. A glass slider calls this on every frame of a drag: the tokens
      * are applied immediately (the caller does that), what waits is the WRITE, so
      * dconf and every portal listener see one change per gesture instead of sixty
@@ -609,7 +566,6 @@ class ThemeManager extends GObject.Object {
             const patch: Partial<NidaraAppearance> = {}
             for (const key of NIDARA_KEYS) (patch as Record<string, unknown>)[key] = this.fcConfig[key]
             nidaraAppearance.update(patch)
-            this.writeGreeterMirror()
             return GLib.SOURCE_REMOVE
         })
     }
@@ -617,24 +573,12 @@ class ThemeManager extends GObject.Object {
     async setAccentColor(accent: AccentKey) {
         this.fcConfig.accent = accent
         this.applyTokens()
-        this.syncHyprlandGroupAccent()
+        // Hyprland's groupbar follows the key — core/AppearanceSync.ts.
         execAsync(["gsettings", "set", "org.gnome.desktop.interface", "accent-color", accent]).catch(() => {})
         this.schedulePersistence()
         this.emit("changed")
         // The user hook fires from the change itself, in the shell only —
         // core/AppearanceHooks.ts, and see setDarkMode.
-    }
-
-    /** Push the accent into Hyprland's groupbar (active tab = persistent
-     *  selection — the one place accent enters compositor chrome; window
-     *  borders stay neutral glass on purpose). The rest of the groupbar
-     *  styling is static in hyprland.lua's `group` block. Gotcha: a groupbar
-     *  bakes its colors at group creation, so this colors FUTURE groups —
-     *  existing ones keep the old accent until recreated. */
-    private syncHyprlandGroupAccent() {
-        const hex = ACCENT_PALETTE[this.fcConfig.accent].color.slice(1)
-        const col = `rgba(${hex}99)`
-        hs.evalLua(`hl.config({ group = { groupbar = { col = { active = '${col}', locked_active = '${col}' } } } })`)
     }
 
     // One opacity range for every shell surface. The bounds and the reason the
@@ -740,7 +684,6 @@ class ThemeManager extends GObject.Object {
                 if (current !== theme) {
                     await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", theme])
                 }
-                this.updateSettingsIni(theme)
                 const settings = Gtk.Settings.get_default()
                 if (settings) settings.gtk_theme_name = theme
             }
@@ -751,107 +694,10 @@ class ThemeManager extends GObject.Object {
         } catch (e) { }
     }
 
-    private updateSettingsIni(theme: string) {
-        // GTK3 apps (and the GTK3 file chooser served by xdg-desktop-portal-gtk) don't
-        // read the portal's color-scheme — they switch dark/light via this flag. Without
-        // it, every GTK3 surface renders light Adwaita even though gsettings says prefer-dark.
-        const cursorSize = this.interfaceSettings.get_int("cursor-size") || 24
-        let ini = `[Settings]\n`
-            + `gtk-theme-name=${theme}\n`
-            + `gtk-application-prefer-dark-theme=${this.state.isDark ? 1 : 0}\n`
-            + `gtk-icon-theme-name=${this.state.iconTheme}\n`
-            + `gtk-font-name=${this.interfaceFont}\n`
-        if (this.state.cursorTheme) {
-            ini += `gtk-cursor-theme-name=${this.state.cursorTheme}\n`
-                + `gtk-cursor-theme-size=${cursorSize}\n`
-        }
-        for (const d of ["gtk-3.0", "gtk-4.0"]) {
-            // On a clean install these dirs don't exist yet (no GTK app created them),
-            // and writeFile would throw — swallowed by the caller's catch, leaving
-            // settings.ini unwritten AND skipping setPreferDark. So GTK apps rendered
-            // light Adwaita with no Papirus icons (clean-install bug, VM 06-22).
-            const dir = `${GLib.get_user_config_dir()}/${d}`
-            if (!GLib.file_test(dir, GLib.FileTest.EXISTS)) GLib.mkdir_with_parents(dir, 0o755)
-            writeFile(`${dir}/settings.ini`, ini)
-        }
-    }
-
-    private _isReady = false
-    get isReady() { return this._isReady }
-
-    private async applyAll() {
-        // Seed Nidara's default interface font on first boot. Unlike icon-theme/accent,
-        // the font isn't part of appearance.json — it's delegated to the GNOME gsetting,
-        // whose schema default on GTK ≥4.22 is "Adwaita Sans 11". Seed Inter ONLY when the
-        // user hasn't picked one (get_user_value === null distinguishes the factory default
-        // from an explicit choice), so a deliberate pick is never clobbered on later boots.
-        // Runs before syncGtkTheme so the settings.ini it writes also gets Inter.
-        if (this.interfaceSettings.get_user_value("font-name") === null)
-            // ⚠️ "Inter 11" — POINTS, and the same 11 every install has shipped since
-            // PR #6. #123 replaced it with "14px" to put the type ramp on whole pixels
-            // (which quietly shrank the default by 4.5%, since 11pt is 14.667px), and
-            // #124 then moved it to "15px". Both were chasing crisp text through the
-            // font SIZE; the lever turned out to be `gtk-hint-font-metrics`, which
-            // rounds the ascent at a fractional size just as well. An absolute size
-            // also kills the accessibility text scale outright — see `fontToPoints`.
-            this.interfaceSettings.set_string("font-name", "Inter 11")
-        // Same deal for the monospace font: the schema default ("Adwaita Mono 11")
-        // names a font we don't even install, while ttf-jetbrains-mono ships with
-        // every Nidara install. Seed it once; never clobber a user's pick.
-        // ⚠️ The family is "JetBrains Mono", NOT "JetBrainsMono Nerd Font" — that
-        // was the patched build, dropped for costing 232 MiB where the plain
-        // typeface plus ttf-nerd-fonts-symbols-mono cost 9.8 MiB. Naming the old
-        // family here would not error; it would silently resolve to whatever
-        // fontconfig substitutes, which is how a machine ends up rendering
-        // something nobody chose (it happened once already with Noto Sans).
-        if (this.interfaceSettings.get_user_value("monospace-font-name") === null)
-            this.interfaceSettings.set_string("monospace-font-name", "JetBrains Mono 11")
-
-        // Undo #123/#124 on machines that already ran them: a font stored in absolute
-        // pixels makes the accessibility text slider a no-op. Idempotent.
-        this.migrateFontsToPoints()
-
-        // Bring a factor stored by an older build (whose slider went to 2.0) back into
-        // the range the layout actually survives. Only downwards, and logged: this
-        // REDUCES someone's text size, so it must be findable in the log rather than
-        // just mysterious.
-        const scale = this.textScaling
-        if (scale > TEXT_SCALE_MAX) {
-            console.log(`[ThemeManager] text-scaling-factor ${scale} → ${TEXT_SCALE_MAX} (above the range the reflowing windows support)`)
-            this.interfaceSettings.set_double("text-scaling-factor", TEXT_SCALE_MAX)
-        }
-
-        await this.syncGtkTheme()
-        const settings = this.interfaceSettings
-        // No push of the icon or cursor theme into gsettings: they are READ from there
-        // (loadSettings), since #536 — pushing a file's copy over them on every start
-        // is what reverted a theme set elsewhere at the next login.
-        // Apply the cursor to Hyprland + the Xcursor default, so apps started later
-        // (Steam, etc.) inherit it instead of a stale default. gsettings alone misses them.
-        if (this.state.cursorTheme && this.cursorThemeInstalled(this.state.cursorTheme)) {
-            this.writeXcursorDefault(this.state.cursorTheme)
-            hs.setCursor(this.state.cursorTheme, settings.get_int("cursor-size") || 24)
-        }
-        this.syncHyprlandGroupAccent()
-        // No push of the accent or the mode into gsettings here. It used to copy
-        // appearance.json over them on every start, which made the FILE the real
-        // home and reverted anything set through gsettings at the next login. They
-        // are read FROM gsettings in loadSettings() now, so there is nothing to sync.
-
-        this._isReady = true
-        this.emit("ready")
-        console.log("[ThemeManager] Global Styles READY! ")
-    }
-
-    /**
-     * The greeter's MIRROR — the one surface outside any session, with no portal to
-     * ask (ui/lib/appearance.ts, rule 3). An export written from the two homes,
-     * never read back by this process. 0644, stated: the default of `writeFile` is
-     * 0600, and a mirror nobody else can read is #488 — the login screen stuck on
-     * blue on every machine installed after 0.11.0.
-     */
-    private writeGreeterMirror() {
-        const json = JSON.stringify({
+    /** What this process holds, for core/AppearanceSync.ts (settings.ini, the greeter's
+     *  mirror). A copy: nothing outside writes Theme's state. */
+    snapshot(): ThemeState & Pick<NidaraThemeConfig, "accent" | "barOpacity" | "overlayOpacity" | "dockOpacity" | "windowOpacity" | "shellAppearance"> {
+        return {
             ...this.state,
             accent: this.fcConfig.accent,
             barOpacity: this.fcConfig.barOpacity,
@@ -859,15 +705,22 @@ class ThemeManager extends GObject.Object {
             dockOpacity: this.fcConfig.dockOpacity,
             windowOpacity: this.fcConfig.windowOpacity,
             shellAppearance: this.fcConfig.shellAppearance,
-        }, null, 2)
-        try {
-            const sharedDir = GREETER_MIRROR_DIR
-            if (!GLib.file_test(sharedDir, GLib.FileTest.EXISTS))
-                GLib.mkdir_with_parents(sharedDir, 0o755)
-            writeFile(`${sharedDir}/appearance.json`, json, 0o644)
-        } catch (e) {
-            console.warn("[ThemeManager] could not write shared appearance:", e)
         }
+    }
+
+    private _isReady = false
+    get isReady() { return this._isReady }
+
+    private async applyAll() {
+        // This process's own look only. The first-boot font seeds, the px→pt migration,
+        // the text-scale clamp, the cursor pushed to Hyprland and the Xcursor default,
+        // and the groupbar accent are the DESKTOP's, and run once in the shell —
+        // core/AppearanceSync.ts (#571).
+        await this.syncGtkTheme()
+
+        this._isReady = true
+        this.emit("ready")
+        console.log("[ThemeManager] Global Styles READY! ")
     }
 
     /**
@@ -894,7 +747,6 @@ class ThemeManager extends GObject.Object {
             this.state.themeFamily = this.state.themeFamily || "Adwaita"
         }
         for (const key of NIDARA_KEYS) (this.fcConfig as unknown as Record<string, unknown>)[key] = nidaraAppearance.get(key)
-        this.writeGreeterMirror()
     }
 }
 

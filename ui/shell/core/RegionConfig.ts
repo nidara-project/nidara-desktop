@@ -4,7 +4,6 @@ import { readFile, writeFile } from "../../lib/file"
 import { execAsync } from "../../lib/process"
 import { formatDatePart } from "../../lib/date-names"
 import { defineSettings } from "./configFile"
-import { GREETER_MIRROR_DIR } from "./Paths"
 
 export type TimeFormat = "24h" | "12h"
 export type DateFormat = "none" | "short" | "short-year" | "long" | "numeric" | "iso"
@@ -61,35 +60,9 @@ class RegionConfigManager extends GObject.Object {
     constructor() {
         super()
         this._regionalLocale = this._readRegionalLocaleFromFile()
-        this.writeGreeterMirror()
-        // A change from any process — Settings, or `gsettings set` — restyles the
-        // clock and refreshes the greeter's copy.
-        clock.subscribeAll(() => {
-            this.writeGreeterMirror()
-            this.emit("changed")
-        })
-    }
-
-    /**
-     * Mirror the clock format to /var/tmp so the greeter (a system user with no
-     * access to a 700 home dir) can honor it — same pattern as ThemeManager's
-     * appearance mirror. An export, never read back.
-     */
-    private writeGreeterMirror() {
-        try {
-            const sharedDir = GREETER_MIRROR_DIR
-            if (!GLib.file_test(sharedDir, GLib.FileTest.EXISTS))
-                GLib.mkdir_with_parents(sharedDir, 0o755)
-            const json = JSON.stringify({
-                timeFormat: this.timeFormat,
-                dateFormat: this.dateFormat,
-                showSeconds: this.showSeconds,
-            }, null, 2)
-            // 0644: the greeter (another user) reads it. See writeFile's mode note.
-            writeFile(`${sharedDir}/region.json`, json, 0o644)
-        } catch (e) {
-            console.warn("[RegionConfig] could not write shared region:", e)
-        }
+        // A change from any process — Settings, or `gsettings set` — restyles the clock.
+        // The greeter's copy of it is written by the shell alone, core/RegionSync.ts (#571).
+        clock.subscribeAll(() => this.emit("changed"))
     }
 
     /** Reads LC_TIME from the environment.d file to detect the saved regional locale. */

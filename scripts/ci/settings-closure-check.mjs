@@ -56,6 +56,8 @@ const SHELL_ONLY = new Set([
     "core/GamingSync.ts",          // writes nidara-gaming.lua, pushes it to Hyprland
     "core/NightLightSync.ts",      // owns hyprsunset and the schedule timer
     "core/AppearanceHooks.ts",     // fires the appearance user hooks
+    "core/AppearanceSync.ts",      // settings.ini, cursor, portal-gtk, groupbar, greeter mirror
+    "core/RegionSync.ts",          // the greeter's clock-format mirror
     "core/WidgetCatalogSource.ts", // the registry + CC grid behind the catalogue seam
     "common/WifiSecretsAgent.ts",  // NetworkManager's secret prompts
 ])

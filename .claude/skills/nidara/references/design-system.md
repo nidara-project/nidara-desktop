@@ -3712,7 +3712,7 @@ wrong with it.
 So: **`gtk-font-name` holds a POINT size** (seeded `Inter 11` / `JetBrains Mono 11`, the
 same 11 every install has shipped since PR #6), `ThemeManager.fontToPoints` converts any pick —
 and any px font left by a previous version or by nwg-look/Tweaks — to whole points on the way in,
-and `migrateFontsToPoints` runs it once at boot so an upgraded install is repaired. Nothing in
+and the shell's `core/AppearanceSync.ts` runs it once at start (the px→pt repair) so an upgraded install is repaired. Nothing in
 `ThemeManager` touches the size when the text scale moves: GTK does it, through the dpi,
 continuously (measured: 1.10 → 16.13px, 1.13 → 16.57px, 1.17 → 17.16px).
 

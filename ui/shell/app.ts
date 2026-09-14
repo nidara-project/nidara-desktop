@@ -34,6 +34,8 @@ import workspaceModes, { type WorkspaceMode } from "./core/WorkspaceModes"
 import { startGamingSync } from "./core/GamingSync"
 import { startNightLightSync } from "./core/NightLightSync"
 import { startAppearanceHooks } from "./core/AppearanceHooks"
+import { startAppearanceSync } from "./core/AppearanceSync"
+import { startRegionSync } from "./core/RegionSync"
 
 // @ts-ignore
 import type { Monitor } from "gi://Gdk?version=4.0"
@@ -1076,6 +1078,12 @@ app.start({
     // The accent / dark-mode user hooks, fired from the change itself so a change
     // made by any process fires them exactly once. See core/AppearanceHooks.ts.
     startAppearanceHooks()
+    // …and what an appearance change does to the rest of the desktop (settings.ini, the
+    // cursor in Hyprland and Xcursor, the portal-gtk restart, the greeter's mirror), once,
+    // whoever wrote the key. See core/AppearanceSync.ts.
+    startAppearanceSync()
+    // The greeter's copy of the clock format. See core/RegionSync.ts.
+    startRegionSync()
 
     // (No DnD seeding here. The flag persists on its own — GSettings, via
     // core/NotifConfig.ts; the block that used to force it true at every main() —
