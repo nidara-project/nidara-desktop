@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import nightLight from "../core/NightLightManager"
 import { makeHSlider } from "../../lib/nidara-kit"
-import { AtomicWidget, ContentBudget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator, makeBarIcon } from "../common/widget-kit"
+import { AtomicWidget, ContentBudget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator, panelSwitch, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import { safeDisconnect } from "../core/signals"
@@ -45,8 +45,12 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
 function buildDetailPanel(_onClose: () => void): Gtk.Widget {
     const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })
 
-    const sw = new Gtk.Switch({ active: nightLight.enabled, valign: Gtk.Align.CENTER, sensitive: !nightLight.scheduleEnabled })
-    sw.connect("state-set", (_s: Gtk.Switch, state: boolean) => { nightLight.setEnabled(state); return false })
+    const onChanged = (sync: () => void) => {
+        const id = nightLight.connect("changed", sync)
+        return () => safeDisconnect(nightLight, id)
+    }
+    const sw = panelSwitch(() => nightLight.enabled, (on) => nightLight.setEnabled(on), onChanged)
+    sw.sensitive = !nightLight.scheduleEnabled
     const switchRow = panelRow(t("widget.night-light.name"), sw)
     switchRow.margin_bottom = 4      // air before the separator
     outer.append(switchRow)
@@ -71,7 +75,11 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
     outer.append(tempRow)
     outer.append(panelSeparator())
 
-    const schedSwitch = new Gtk.Switch({ active: nightLight.scheduleEnabled, valign: Gtk.Align.CENTER })
+    const schedSwitch = panelSwitch(() => nightLight.scheduleEnabled, (on) => {
+        nightLight.setScheduleEnabled(on)
+        sw.sensitive = !on
+        timeRow.visible = on
+    }, onChanged)
     const schedRow = panelRow(t("settings.appearance.night-light-schedule"), schedSwitch)
     schedRow.margin_top = 4          // air after the separator
     outer.append(schedRow)
@@ -126,17 +134,8 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
     timeRow.visible = nightLight.scheduleEnabled
     outer.append(timeRow)
 
-    schedSwitch.connect("state-set", (_s: Gtk.Switch, state: boolean) => {
-        nightLight.setScheduleEnabled(state)
-        sw.sensitive = !state
-        timeRow.visible = state
-        return false
-    })
-
     const syncId = nightLight.connect("changed", () => {
-        sw.active = nightLight.enabled
         sw.sensitive = !nightLight.scheduleEnabled
-        schedSwitch.active = nightLight.scheduleEnabled
         timeRow.visible = nightLight.scheduleEnabled
         from.sync(nightLight.scheduleFrom)
         to.sync(nightLight.scheduleTo)

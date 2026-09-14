@@ -52,6 +52,34 @@ export function panelRow(label: string, control: Gtk.Widget): Gtk.Box {
     return row
 }
 
+/** A switch that COMMANDS when the user flips it and only REFLECTS when the state
+ *  changes elsewhere — never both. GtkSwitch emits `state-set` for a programmatic
+ *  `active` too, so the hand-rolled `sw.active = get()` write-back every detail panel
+ *  had re-issued the command it was merely displaying. Against a service that settles
+ *  through intermediate states that is a feedback loop: the Wi-Fi panel's switch, on
+ *  a machine with two radios, toggled the radio ~14 times a second for as long as the
+ *  panel stayed open (measured 2026-09-14, 101 `nmcli radio` in 8 s) and left it OFF.
+ *  `subscribe` is the service's own watcher; it is disposed on `unrealize`. */
+export function panelSwitch(get: () => boolean, set: (on: boolean) => void, subscribe?: (sync: () => void) => () => void): Gtk.Switch {
+    const sw = new Gtk.Switch({ active: get(), valign: Gtk.Align.CENTER })
+    let syncing = false
+    sw.connect("state-set", (_sw: Gtk.Switch, state: boolean) => {
+        if (!syncing) set(state)
+        return false
+    })
+    if (subscribe) {
+        const dispose = subscribe(() => {
+            const on = get()
+            if (sw.active === on) return
+            syncing = true
+            sw.active = on
+            syncing = false
+        })
+        sw.connect("unrealize", dispose)
+    }
+    return sw
+}
+
 /** Label on the left, a live value on the right, and an `update()` that re-reads it.
  *  Was `infoRow`, duplicated BYTE FOR BYTE in wifi.ts and ethernet.ts. */
 export function panelInfoRow(label: string, getValue: () => string): { row: Gtk.Box; update: () => void } {

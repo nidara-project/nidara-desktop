@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { AtomicWidget, ContentBudget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, makeBarIcon } from "../common/widget-kit"
+import { AtomicWidget, ContentBudget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSwitch, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import { dontDisturb, toggleDontDisturb, setDontDisturb, watchDnd } from "../core/NotifService"
@@ -35,16 +35,12 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
 // page, revisit only if the plain toggle turns out to not be enough. ──
 
 function buildDetailPanel(_onClose: () => void): Gtk.Widget {
-    const sw = new Gtk.Switch({ active: dontDisturb(), valign: Gtk.Align.CENTER })
-    sw.connect("state-set", (_s: Gtk.Switch, state: boolean) => { setDontDisturb(state); return false })
+    const sw = panelSwitch(dontDisturb, setDontDisturb, watchDnd)
 
     const switchRow = panelRow(t("widget.focus.name"), sw)
 
     const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
     outer.append(switchRow)
-
-    const dispose = watchDnd(() => { sw.active = dontDisturb() })
-    outer.connect("unrealize", dispose)
 
     return outer
 }
