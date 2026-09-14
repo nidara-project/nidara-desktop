@@ -25,6 +25,14 @@
 # landed. A failure returns non-zero BEFORE any file is renamed: no marker, and
 # the next session retries with the files intact.
 #
+# 🔑 The same goes for a default that is COMPUTED on the machine — the store's
+# `computed` fields (recording's `hardware` and `saveDir`). The old store saved
+# them like everything else, so a file holding `~/Videos` is almost always the
+# default, not a choice; imported, it would stop following the XDG videos folder.
+# `computed_default` answers with the value the shell itself would compute, with
+# the SAME expression (RecordingConfig.ts), and a file value equal to it is
+# skipped. Keep the two in step when a store gains or changes a computed field.
+#
 # ⚠️ A key that already holds a user value is left alone. It can only have been
 # written after the shell switched to GSettings — i.e. by the user, since an
 # earlier failed run of this migration — and that is newer than the file.
@@ -48,6 +56,21 @@ legacy_dock="${XDG_CONFIG_HOME:-$HOME/.config}/dock_settings.json"
 if [ ! -f "$CONFIG_DIR/dock_settings.json" ] && [ -f "$legacy_dock" ]; then
     mv -f "$legacy_dock" "$CONFIG_DIR/dock_settings.json" || { warn "could not move $legacy_dock"; return 1; }
 fi
+
+# JSON of the value the shell computes for a `computed` field on this machine, or
+# nothing when the field is not computed (or cannot be computed here, in which
+# case the file value is imported — the conservative side).
+computed_default() {
+    case "$1.$2" in
+        recording.hardware)
+            [ -e /dev/dri/renderD128 ] && echo true || echo false ;;
+        recording.saveDir)
+            command -v gjs >/dev/null 2>&1 || return 0
+            gjs -c 'const G = imports.gi.GLib; print(JSON.stringify(
+                G.get_user_special_dir(G.UserDirectory.DIRECTORY_VIDEOS)
+                ?? G.build_filenamev([G.get_home_dir(), "Videos"])))' 2>/dev/null ;;
+    esac
+}
 
 pending=()
 for entry in "${settings_files[@]}"; do
@@ -94,6 +117,9 @@ for entry in "${pending[@]}"; do
             y|n|q|i|u|x|t) value="$(jq -c --arg f "$field" '.[$f] | if type == "number" then round else . end' "$file")" ;;
             *)             value="$(jq -c --arg f "$field" '.[$f]' "$file")" ;;
         esac
+
+        computed="$(computed_default "$name" "$field")"
+        [ -n "$computed" ] && [ "$computed" = "$value" ] && continue
 
         before="$(gsettings get "$schema" "$key")"
         if ! gsettings set "$schema" "$key" "$value" 2>/dev/null; then

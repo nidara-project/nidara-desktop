@@ -32,7 +32,7 @@ const ok = (n) => console.log(`  ok    ${n}`)
 const fail = (n, d) => { failures++; console.log(`  FAIL  ${n}${d ? `\n        ${d}` : ""}`) }
 
 if (!existsSync(UNITS_DIR)) { console.log("migrations-check: no migrations/ directory — nothing to check."); process.exit(0) }
-for (const bin of ["jq", "bash", "gsettings", "glib-compile-schemas"]) {
+for (const bin of ["jq", "bash", "gsettings", "glib-compile-schemas", "gjs"]) {
     if (spawnSync("sh", ["-c", `command -v ${bin}`]).status !== 0) {
         console.error(`migrations-check: ${bin} is missing`); process.exit(1)
     }
@@ -65,7 +65,7 @@ function run(files, { times = 1, clearMarkers = false, unitsDir = UNITS_DIR } = 
     const state = join(home, ".local", "state", "nidara", "migrations")
     mkdirSync(cfg, { recursive: true })
     for (const [name, body] of Object.entries(files)) {
-        writeFileSync(join(cfg, name), typeof body === "string" ? body : JSON.stringify(body, null, 2))
+        writeFileSync(join(cfg, name), (typeof body === "string" ? body : JSON.stringify(body, null, 2)).replaceAll("SCRATCH_HOME", home))
     }
     for (let i = 0; i < times; i++) {
         if (clearMarkers && i > 0) rmSync(state, { recursive: true, force: true })
@@ -81,9 +81,12 @@ function run(files, { times = 1, clearMarkers = false, unitsDir = UNITS_DIR } = 
         if (r.status !== 0) throw new Error(`runner exited ${r.status}: ${r.stderr}`)
     }
     const out = {}
-    for (const f of readdirSync(cfg)) out[f] = readFileSync(join(cfg, f), "utf8")
+    // Every run has its own scratch HOME, and a fixture that names it would make
+    // two identical runs look different — so it goes back to its placeholder.
+    const unscratch = (text) => text.replaceAll(home, "SCRATCH_HOME")
+    for (const f of readdirSync(cfg)) out[f] = unscratch(readFileSync(join(cfg, f), "utf8"))
     const keyfile = join(home, ".config", "glib-2.0", "settings", "keyfile")
-    if (existsSync(keyfile)) out["<gsettings keyfile>"] = readFileSync(keyfile, "utf8")
+    if (existsSync(keyfile)) out["<gsettings keyfile>"] = unscratch(readFileSync(keyfile, "utf8"))
     const markers = existsSync(state) ? readdirSync(state).sort() : []
     rmSync(home, { recursive: true, force: true })
     return { out, markers }
@@ -108,6 +111,10 @@ const LEGACY_FIXTURE = {
     "workspaces.json": { defaultMode: "tiling", workspaces: { "2": "floating" } },
     "bar-settings.json": { showAppTitle: true, launcherIcon: "/home/u/it's \"mine\".png" },
     "night-light.json": { temperature: 99999, scheduleFrom: "21:30" },
+    // Computed defaults: the scratch HOME has no user-dirs.dirs, so the shell would
+    // compute $HOME/Videos; `hardware` is whatever this machine has. `SCRATCH_HOME`
+    // is replaced by the harness with the run's HOME.
+    "recording.json": { framerate: 60, saveDir: "SCRATCH_HOME/Videos", hardware: existsSync("/dev/dri/renderD128") },
 }
 try {
     const once = run(LEGACY_FIXTURE, { times: 1 })
@@ -141,6 +148,9 @@ try {
         ["a value outside the range is dropped",      /\ntemperature=/, false],
         ["a map is imported",                         /\nworkspaces=\{'2': 'floating'\}/, true],
         ["a string with quotes survives",             /launcher-icon=.*it's \\?"mine\\?"\.png/, true],
+        ["a chosen recording setting is imported",    /\[org\/nidara\/recording\][^[]*framerate=60/, true],
+        ["a COMPUTED default (videos folder) is not imported", /save-dir=/, false],
+        ["a COMPUTED default (hardware) is not imported",      /\nhardware=/, false],
     ]
     for (const [label, re, present] of expect) {
         if (re.test(kf) === present) ok(`settings import: ${label}`)

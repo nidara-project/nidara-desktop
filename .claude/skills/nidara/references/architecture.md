@@ -1468,7 +1468,9 @@ where the validator has them, so `gsettings set` refuses what the store would), 
 and its file in `migrations/2026-09-14-settings-to-gsettings.sh`'s list — or a new unit of the same
 shape. The unit imports each field once, drops retired fields and values the schema refuses, does
 NOT import values equal to the default (the old store saved every field, so a file is mostly
-defaults the user never chose), and renames the file to `<name>.migrated`. What stays a FILE on
+defaults the user never chose) — including a `computed` default, which the unit's
+`computed_default` recomputes with the store's own expression, so a store that gains or changes a
+computed field must change it there too — and renames the file to `<name>.migrated`. What stays a FILE on
 purpose: `greeter-prefs.json` and the `/var/tmp/nidara/` mirrors (read by the greeter, another user,
 outside the session), `app-frequency.json` and other state that is written often, and every OUTPUT
 another program reads (`nidara-*.lua`, `hypridle.conf`, `settings.ini`).
