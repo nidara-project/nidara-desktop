@@ -424,7 +424,26 @@ class ThemeManager extends GObject.Object {
         } catch (e) { console.error(e) }
     }
 
+    /**
+     * Is `name` a cursor theme on this machine? Theme names are CASE-SENSITIVE
+     * directory names, and since #536 the key is followed live, so anything typed
+     * into `gsettings set` reaches here — `qogir` for the installed `Qogir` did, and
+     * Hyprland, handed a theme it cannot load, drew its own fallback (the Hyprland
+     * logo) while the Xcursor default pointed every X app at nothing.
+     */
+    cursorThemeInstalled(name: string): boolean {
+        return !!name && this.getAvailableCursorThemes().includes(name)
+    }
+
     async setCursorTheme(cursor: string) {
+        // A name that is not installed is not passed on to Hyprland, the Xcursor
+        // default or settings.ini: the desktop keeps the cursor it has, and the log
+        // says why. The key itself is left as written — it is the user's value, and
+        // GTK falls back on its own — so fixing the name applies at once.
+        if (!this.cursorThemeInstalled(cursor)) {
+            console.warn(`[ThemeManager] cursor theme "${cursor}" is not installed (names are case-sensitive; installed: ${this.getAvailableCursorThemes().join(", ")}) — keeping "${this.state.cursorTheme}"`)
+            return
+        }
         this.state.cursorTheme = cursor
         const size = this.interfaceSettings.get_int("cursor-size") || 24
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", cursor])
@@ -809,7 +828,7 @@ class ThemeManager extends GObject.Object {
         // is what reverted a theme set elsewhere at the next login.
         // Apply the cursor to Hyprland + the Xcursor default, so apps started later
         // (Steam, etc.) inherit it instead of a stale default. gsettings alone misses them.
-        if (this.state.cursorTheme) {
+        if (this.state.cursorTheme && this.cursorThemeInstalled(this.state.cursorTheme)) {
             this.writeXcursorDefault(this.state.cursorTheme)
             hs.setCursor(this.state.cursorTheme, settings.get_int("cursor-size") || 24)
         }

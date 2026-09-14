@@ -1717,7 +1717,11 @@ a change at the next login; its Nidara-only keys were imported into `org.nidara.
 load). A fresh account's GNOME-key values come from the system dconf default generated from
 `defaults/appearance.json` (`/etc/dconf/db/local.d/00-nidara-appearance`) — icon, GTK and cursor
 theme, accent, colour scheme. The cursor's listener does more than restyle: `setCursorTheme` pushes
-it to Hyprland and the Xcursor default too (tech-debt #72). The only FILE left is the greeter's
+it to Hyprland and the Xcursor default too (tech-debt #72). ⚠️ And it refuses a name that is not an installed cursor theme
+(`cursorThemeInstalled`): theme names are case-sensitive directory names, and `gsettings set …
+cursor-theme qogir` for the installed `Qogir` handed Hyprland a theme it could not load — it drew its
+own fallback, the Hyprland logo. The key keeps what was written; the desktop keeps its cursor and the
+log says why. The only FILE left is the greeter's
 mirror (rule 3), written by the shell from these homes. The accent / dark-mode USER HOOKS fire from
 the change itself (`core/AppearanceHooks.ts`, see user-hooks.md). The rest of the portal beyond
 appearance — what is served, what has no backend, the GTK3 dialogs — is audited in #535.
