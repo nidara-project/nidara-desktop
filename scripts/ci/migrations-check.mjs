@@ -190,6 +190,47 @@ try {
     }
 } catch (e) { fail("appearance import", e.message) }
 
+// ── 4e. widgets, CC layout, pins, region: reshaped into the schema's types ───
+try {
+    const { out } = run({
+        "widgets.json": { battery: { bar: true, cc: false }, focus: { bar: false, cc: true } },
+        "cc_layout.json": { positions: { media: { x: 0, y: 0 }, volume: { x: 2, y: 1 } }, sizes: { volume: "1x2" } },
+        // Order is the dock's order; the dock strips these prefixes; duplicates go.
+        "dock_pinned.json": ["zed", "pinned-firefox", "kitty", "zed", "/abs/path.desktop"],
+        "region.json": { timeFormat: "12h", dateFormat: "long", timezone: "Europe/Madrid", regionalLocale: "es_ES.UTF-8", showSeconds: false },
+    })
+    const kf = out["<gsettings keyfile>"] ?? ""
+    const expect = [
+        ["widget placement becomes id → (bar, cc)",           /placement=\{'battery': \(true, false\), 'focus': \(false, true\)\}/, true],
+        ["CC positions become id → (x, y)",                   /positions=\{'media': \(0, 0\), 'volume': \(2, 1\)\}/, true],
+        ["CC sizes are kept",                                  /sizes=\{'volume': '1x2'\}/, true],
+        ["pins keep their ORDER, lose prefixes and duplicates", /pinned=\['zed', 'firefox', 'kitty'\]/, true],
+        ["the clock format is imported",                       /time-format='12h'/, true],
+        ["a date format equal to the default is not",          /date-format=/, false],
+        ["the timezone is not imported (the system's)",         /timezone|Madrid/, false],
+        ["the regional locale is not imported (environment.d)", /locale|es_ES/i, false],
+    ]
+    for (const [label, re, present] of expect) {
+        if (re.test(kf) === present) ok(`widgets/pins/region import: ${label}`)
+        else fail(`widgets/pins/region import: ${label}`, `keyfile:\n${kf}`)
+    }
+    for (const f of ["widgets.json", "cc_layout.json", "dock_pinned.json", "region.json"]) {
+        if (out[f] !== undefined || out[`${f}.migrated`] === undefined) fail(`widgets/pins/region import: ${f} renamed to .migrated`, Object.keys(out).join(", "))
+    }
+    if (Object.keys(out).some(f => f.includes(".import.json"))) fail("widgets/pins/region import: no reshaped temp file is left behind", Object.keys(out).join(", "))
+    else ok("widgets/pins/region import: no reshaped temp file is left behind")
+    if (!out["dock_pinned.json.migrated"]?.includes("pinned-firefox")) fail("widgets/pins/region import: the user's original file is what stays", out["dock_pinned.json.migrated"])
+    else ok("widgets/pins/region import: the user's original file is what stays")
+} catch (e) { fail("widgets/pins/region import", e.message) }
+
+// ── 4f. a CC layout in the pre-2026-06-09 `order` format is set aside ────────
+try {
+    const { out } = run({ "cc_layout.json": { order: ["media", "volume"], sizes: {} } })
+    const kf = out["<gsettings keyfile>"] ?? ""
+    if (/positions=/.test(kf) || out["cc_layout.json.migrated"] === undefined) fail("an `order` CC layout is set aside, not half-imported", `${kf}\n${Object.keys(out)}`)
+    else ok("an `order` CC layout is set aside, not half-imported")
+} catch (e) { fail("cc order format", e.message) }
+
 // ── 4d. appearance: a PRE-rescale file, where the rescale changes the answer ─
 // 0.3 → 0.2 + 0.8·0.3 = 0.44 (and the legacy shellOpacity seeds overlay: 0.5 → 0.6).
 // The fixture in 4b cannot tell a missing rescale apart — its value clamps to 0.8

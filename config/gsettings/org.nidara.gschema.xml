@@ -109,6 +109,10 @@
       <default>"bottom"</default>
       <summary>Screen edge the dock sits on</summary>
     </key>
+    <key name="pinned" type="as">
+      <default>['nidara-settings', 'kitty', 'nidara-installer']</default>
+      <summary>Desktop ids pinned to the dock, in dock order. An id that is not installed is skipped (and pruned)</summary>
+    </key>
   </schema>
 
   <schema id="org.nidara.workspaces" path="/org/nidara/workspaces/">
@@ -321,6 +325,63 @@
       </choices>
       <default>"system"</default>
       <summary>The shell's own skin: follow the system mode, or pin it dark or light</summary>
+    </key>
+  </schema>
+
+  <!--
+    Which widgets show where. Keyed by widget id — the keys ARE the data, so the
+    map only holds what differs from, or was saved over, the code's first-run
+    placement (DEFAULT_PLACEMENT in ui/shell/widgets/index.ts, merged underneath).
+  -->
+  <schema id="org.nidara.widgets" path="/org/nidara/widgets/">
+    <key name="placement" type="a{s(bb)}">
+      <default>{}</default>
+      <summary>Widget id to (shown in the bar, shown in the Control Centre)</summary>
+    </key>
+  </schema>
+
+  <!-- The Control Centre grid. Empty = the default layout (CC_DEFAULT_ORDER). -->
+  <schema id="org.nidara.control-center" path="/org/nidara/control-center/">
+    <key name="positions" type="a{s(ii)}">
+      <default>{}</default>
+      <summary>Widget id to its grid cell (column, row)</summary>
+    </key>
+    <key name="sizes" type="a{ss}">
+      <default>{}</default>
+      <summary>Widget id to its footprint ("1x1", "2x1", "1x2", "2x2", "4x1") where it is not the widget's default</summary>
+    </key>
+  </schema>
+
+  <!--
+    How the clock reads. NOT the timezone (the system's, set through timedatectl)
+    and NOT the regional format (LC_* in ~/.config/environment.d/nidara-locale.conf,
+    read at login): each of those already has a home, and a copy here was a second
+    one. The shell mirrors these three to /var/tmp/nidara/region.json for the greeter.
+  -->
+  <schema id="org.nidara.region" path="/org/nidara/region/">
+    <key name="time-format" type="s">
+      <choices>
+        <choice value="24h"/>
+        <choice value="12h"/>
+      </choices>
+      <default>"24h"</default>
+      <summary>24- or 12-hour clock</summary>
+    </key>
+    <key name="date-format" type="s">
+      <choices>
+        <choice value="none"/>
+        <choice value="short"/>
+        <choice value="short-year"/>
+        <choice value="long"/>
+        <choice value="numeric"/>
+        <choice value="iso"/>
+      </choices>
+      <default>"long"</default>
+      <summary>Date shown beside the clock in the bar</summary>
+    </key>
+    <key name="show-seconds" type="b">
+      <default>false</default>
+      <summary>Show seconds in the clock</summary>
     </key>
   </schema>
 

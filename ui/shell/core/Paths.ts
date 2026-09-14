@@ -14,6 +14,15 @@ import GLib from "gi://GLib"
  */
 export const SHELL_ROOT = GLib.getenv("NIDARA_SHELL_ROOT") || GLib.get_current_dir()
 
+/**
+ * Where the shell writes the greeter's MIRRORS (appearance, clock format) — the
+ * world-readable copies for the one surface outside any session. Overridable ONLY
+ * so a probe that constructs ThemeManager or RegionConfig does not overwrite the
+ * real login screen's copy with its test values (scripts/dev/define-config-probe.sh
+ * sets it). The greeter always reads /var/tmp/nidara.
+ */
+export const GREETER_MIRROR_DIR = GLib.getenv("NIDARA_GREETER_MIRROR_DIR") || "/var/tmp/nidara"
+
 // Move the process CWD to $HOME so child processes (terminals, apps) open there.
 // Importing this module before anything spawns a child (see app.ts) makes this the
 // effective default for the whole shell, replacing the per-launch `cd "$HOME"`.

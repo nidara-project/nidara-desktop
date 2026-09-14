@@ -8,7 +8,7 @@ const TEMP_MIN = 2700
 const TEMP_MAX = 6500
 
 /** `HH:MM`, the only shape `_isInSchedule` can do arithmetic on. A hand-edited
- *  "8pm" is a string like any other, so `loadKnown`'s typeof check waves it
+ *  "8pm" is a string like any other, so the schema's type check waves it
  *  through and `"8pm".split(":")` then yields NaN minutes — a schedule that
  *  never fires and never explains itself. */
 const isTime = (v: string) => /^\d{2}:\d{2}$/.test(v)

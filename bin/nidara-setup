@@ -417,19 +417,9 @@ JSON
 chown "$REAL_USER:" "$CONFIG_DIR/.mcp.json"
 echo "  [Init] $CONFIG_DIR/.mcp.json (agent interface manifest)"
 
-# region.json — generated with detected timezone (not copied from defaults)
-if [ ! -f "$CONFIG_DIR/region.json" ]; then
-    cat > "$CONFIG_DIR/region.json" <<JSON
-{
-  "timeFormat": "24h",
-  "dateFormat": "long",
-  "timezone": "$SYS_TIMEZONE",
-  "showSeconds": false
-}
-JSON
-    chown "$REAL_USER:" "$CONFIG_DIR/region.json"
-    echo "  [Init] $CONFIG_DIR/region.json (timezone=$SYS_TIMEZONE)"
-fi
+# No region.json any more (#573): the clock format lives in GSettings
+# org.nidara.region (default "long", which is what this block used to seed), and the
+# timezone is the system's — never a copy.
 
 # Hyprland user overrides (created once, never overwritten)
 if [ ! -f "$CONFIG_DIR/hyprland-user.lua" ]; then

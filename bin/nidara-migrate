@@ -122,6 +122,13 @@ settings_import() {
         esac
         case "$type" in
             y|n|q|i|u|x|t) value="$(jq -c --arg f "$field" '.[$f] | if type == "number" then round else . end' "$file")" ;;
+            # A map of TUPLES (a{s(bb)}, a{s(ii)}): JSON has no tuple, and GVariant
+            # text reads `[true, false]` as an ARRAY, which the key refuses — so the
+            # file carries each tuple as a JSON array and it is spelled `(…)` here.
+            # Keys go through @json: a double-quoted string is valid GVariant text.
+            "a{s("*)       value="$(jq -r --arg f "$field" '.[$f] | "{" + (to_entries
+                               | map((.key | @json) + ": (" + (.value | map(tojson) | join(", ")) + ")")
+                               | join(", ")) + "}"' "$file")" ;;
             *)             value="$(jq -c --arg f "$field" '.[$f]' "$file")" ;;
         esac
 

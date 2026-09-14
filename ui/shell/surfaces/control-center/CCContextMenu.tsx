@@ -155,7 +155,7 @@ export function createCCContextMenu(opts: CCContextMenuOpts = {}): CCContextMenu
         }
 
         // Clear the authoritative placement flag too, else syncCCLayout re-adds the
-        // widget on next load (cc_layout.json and widgetConfig must agree).
+        // widget on next load (the CC layout and widgetConfig must agree).
         rows.append(menuRow({
             label: t("cc.menu.remove"),
             icon: Icons.trash,
