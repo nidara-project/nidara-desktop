@@ -37,7 +37,6 @@ io.popen = function(cmd)
     return { read = function() return nil end, close = function() end }
 end
 
-local realExecute = os.execute
 os.execute = function(cmd) table.insert(world.ran, cmd); return true end
 
 local function runCommand(cmd)
@@ -119,20 +118,17 @@ local function check(name, got, want)
     end
 end
 
--- The config reads ~/.config/nidara/gaming.json for `performanceProfile`. Point
--- HOME at a fixture so the test states its own preconditions instead of
--- inheriting the developer's.
-local fixtureHome = os.getenv("TMPDIR") or "/tmp"
-fixtureHome = fixtureHome .. "/nidara-gamemode-test"
-os.execute = realExecute
-os.execute("mkdir -p " .. fixtureHome .. "/.config/nidara")
+-- The config reads game mode's settings from the NIDARA_GAMING table the shell
+-- hands it (core/GamingSync.ts). Set it here so the test states its own
+-- preconditions instead of inheriting whatever the developer's shell last wrote.
 local function writeGamingCfg(perfOn)
-    local f = assert(io.open(fixtureHome .. "/.config/nidara/gaming.json", "w"))
-    f:write(string.format('{ "wallpaperMode": "none", "performanceProfile": %s }', tostring(perfOn)))
-    f:close()
+    NIDARA_GAMING = { wallpaperMode = "none", customWallpaper = "", transition = "grow", performanceProfile = perfOn }
 end
 os.execute = function(cmd) table.insert(world.ran, cmd); return true end
 
+-- HOME still points at a fixture: the config reads the wallpaper state from it, and
+-- must not read the developer's.
+local fixtureHome = (os.getenv("TMPDIR") or "/tmp") .. "/nidara-gamemode-test"
 local realGetenv = os.getenv
 os.getenv = function(k) if k == "HOME" then return fixtureHome end return realGetenv(k) end
 

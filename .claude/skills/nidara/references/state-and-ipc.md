@@ -712,7 +712,7 @@ registered in `config-entries.ts`):
   self-explanatory error, not a crash.
 
 Rules:
-- Writes are **gated by Settings → AI** (`AgentConfig.allowConfigWrite`, `ai.json`). When
+- Writes are **gated by Settings → AI** (`AgentConfig.allowConfigWrite`, GSettings `org.nidara.ai`). When
   disabled, `setConfig` refuses with a pointer to the page. Reads are never gated.
 - **Every `ai.*` key that GRANTS something is visible but not writable via setConfig** — a gate
   must not be flippable through the door it controls. The line is *grant*, not namespace:
@@ -720,7 +720,7 @@ Rules:
   writable, because it turns a *signal* on and off and permits nothing. That also makes it
   answerable — "stop glowing my windows" is a reasonable thing to ask the Assistant, and it is
   the one thing on this page it can do about itself.
-- **Every gate in `ai.json` must be registered here, `writable: false`** — all eight of them
+- **Every gate in `org.nidara.ai` must be registered here, `writable: false`** — all eight of them
   (`allowConfigWrite`, `allowScreenshot`, `allowWindowClose`, `allowMcp`, `allowComputerUse`,
   `allowComputerControl`, `allowFileRead`, `allowFileWrite`). The last four were added with the
   computer-use and file layers and **not registered until 2026-07-30**, which made
@@ -864,7 +864,7 @@ legs, and they run `nidara-a11y` / `nidara-act` / `nidara-type` directly (like `
 the doctor), **not** `nidara-ipc` — because reaching into a *third-party* app is not
 shell-self-control and must not live in the shell process. See "The computer-use layer" below.
 
-Governance: `ai.json.allowMcp` (Settings → AI → "Enable MCP Server") is re-read on **every**
+Governance: `org.nidara.ai allow-mcp` (Settings → AI → "Enable MCP Server") is re-read on **every**
 tool call, so the toggle applies live with no restarts; when off, every tool refuses with a
 pointer to the page. The finer gates (`allowConfigWrite`, `allowScreenshot`, `allowComputerUse`,
 `allowComputerControl`) are enforced downstream (by the shell, or by
@@ -904,9 +904,9 @@ exactly like MCP). The **file layer below is the one documented exception** to t
   `brainModels` is per-provider model memory (switching to Ollama no longer leaves
   `claude-opus-4-8` in the field). Adding a provider = one row in the registry + one i18n label;
   brand names are proper nouns and are NOT translated (only Off/Ollama (local)/Custom are).
-- **Config re-read from `ai.json` every turn** (`brainProvider`/`brainBackend`/`brainModel`/
+- **Config re-read from GSettings `org.nidara.ai` every turn** (`brainProvider`/`brainBackend`/`brainModel`/
   `brainEndpoint`, via `AgentConfig`), so a provider/model change takes effect live. The
-  **API key is NEVER in `ai.json`**: it lives in the DE keyring — **libsecret, schema
+  **API key is NEVER in GSettings**: it lives in the DE keyring — **libsecret, schema
   `org.nidara.Assistant`, attribute `provider`** (one key per PROVIDER, not per protocol —
   a key belongs to the company that issued it, and Google/Mistral/Groq all ride the openai
   path, so a protocol-keyed slot would make them overwrite each other and return a 401 from a
@@ -1067,7 +1067,7 @@ exactly like MCP). The **file layer below is the one documented exception** to t
   `brainModel` are visible read-only via `describeConfig`; the key is never exposed.
 - **Test headless with `scripts/dev/fake-brain.py`** (a scripted OpenAI-compatible SSE mock) — see
   `dev-workflow.md`. GOTCHA proven 2026-07-20: the write gate lives in the SHELL (it reads the
-  user's REAL `ai.json`), so pointing the daemon at a test config with `allowConfigWrite:false` does
+  user's REAL settings), so pointing the daemon at a test config with `allowConfigWrite:false` does
   NOT block a write — a `set_config` E2E hits the live shell for real. Test the daemon's
   rejection-surfacing non-destructively with an INVALID value instead (the validator refuses, nothing
   mutates), or flip the real gate in Settings.
@@ -1362,7 +1362,8 @@ here and it is one wrapper mode + one tool in each consumer. Phase 1 — percept
   navigation tracking; screenshots read the labels AT-SPI hides). Carries `UITree.ts`'s password
   redaction; caps nodes/depth + a soft deadline (AT-SPI calls are sync D-Bus and can hang — that's
   why it's a separate process, never the shell's main loop).
-- **Gate: `ai.json.allowComputerUse`** (Settings → AI → "Allow Agents to See Other Apps"), the
+- ⚠️ **Every helper reads its gate through `aiSetting(key)`, six standalone copies** (`nidara-a11y/act/click/type/mcp/agent`), each a fresh `Gio.Settings` so a gate flipped a moment ago answers. No schema installed reads as `undefined` = what a missing `ai.json` used to mean (use/control OFF, MCP ON). `scripts/ci/same-app-check.mjs` fails when one copy differs.
+- **Gate: `org.nidara.ai allow-computer-use`** (Settings → AI → "Allow Agents to See Other Apps"), the
   **only gate that defaults OFF** — it reaches outside the shell (privacy-sensitive, ≈ the
   screenshot gate). Enabling it (via `AgentConfig.setAllowComputerUse`) also turns on
   `toolkit-accessibility`, since the capability is useless while a11y is globally off. Re-read
@@ -1494,7 +1495,7 @@ Phase 2a — **action, deterministic only (built)**:
   (name + `actions[]`) with `query_app`, then acts by name with `do_app_action`. GTK4 exposes
   rich actions (incl. its GActions: `win.go-home`, `view.show-hidden-files`…); Qt often exposes
   only `SetFocus` (focus yes, click no — clicking Qt waits for synthetic input, Phase 2b).
-- **Gate: `ai.json.allowComputerControl`** (Settings → AI → "Allow Agents to Control Other
+- **Gate: `org.nidara.ai allow-computer-control`** (Settings → AI → "Allow Agents to Control Other
   Apps"), a **second** default-OFF gate distinct from perception. Enabling it (via
   `AgentConfig.setAllowComputerControl`) also enables `allowComputerUse` — you can't drive what
   you can't see. The effective check is `allowComputerControl && allowComputerUse`, re-read live

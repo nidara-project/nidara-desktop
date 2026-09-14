@@ -30,7 +30,7 @@
 // can only land in the app the agent named, while it is actually focused.
 //
 // Governance: same gate as nidara-act — BOTH `allowComputerControl` AND
-// `allowComputerUse` must be true in ai.json (Settings → AI). The shell shows
+// `allowComputerUse` must be true in org.nidara.ai (Settings → AI). The shell shows
 // the always-visible "AI CONTROL" indicator + kill switch while control is on.
 // Consent layer, not a security boundary (any local process can run wtype).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -38,7 +38,21 @@
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 
-const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
+// The Assistant's gates live in GSettings, `org.nidara.ai` (#573) — the same keys
+// Settings → AI writes. No schema installed reads as `undefined`, which every gate
+// below treats exactly as it treated a missing ai.json. Each read is a fresh
+// Gio.Settings, so a gate flipped a moment ago is the one that answers.
+// ⚠️ Six copies of this function (nidara-a11y/act/click/type/mcp/agent);
+// scripts/ci/same-app-check.mjs keeps them identical.
+function aiSetting(key) {
+    try {
+        const schema = Gio.SettingsSchemaSource.get_default()?.lookup("org.nidara.ai", true)
+        if (!schema) return undefined
+        return new Gio.Settings({ settings_schema: schema }).get_value(key).recursiveUnpack()
+    } catch {
+        return undefined
+    }
+}
 
 function emit(obj) { print(JSON.stringify(obj, null, 2)) }
 
@@ -60,17 +74,9 @@ function pingShell() {
     } catch {}
 }
 
-// Both gates required; both default OFF (absent/garbled ai.json → disabled).
+// Both gates required; both default OFF (no schema → disabled).
 function controlEnabled() {
-    try {
-        if (!GLib.file_test(AI_JSON, GLib.FileTest.EXISTS)) return false
-        const [ok, bytes] = GLib.file_get_contents(AI_JSON)
-        if (!ok) return false
-        const cfg = JSON.parse(new TextDecoder().decode(bytes))
-        return cfg.allowComputerControl === true && cfg.allowComputerUse === true
-    } catch {
-        return false
-    }
+    return aiSetting("allow-computer-control") === true && aiSetting("allow-computer-use") === true
 }
 
 function run(argv) {

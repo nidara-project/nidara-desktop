@@ -1785,8 +1785,8 @@ arrange — so it fakes **Hyprland** instead of faking a game: a stub `hl` table
 config asks the compositor to do, the real `config/hypr/hyprland.lua` is loaded against it, and the
 registered `window.open` / `window.destroy` callbacks are invoked directly with a game-shaped
 payload. `powerprofilesctl` is intercepted in both directions (`hl.exec_cmd` when the config sets a
-profile, `io.popen` when it reads one) and `HOME` points at a fixture holding `gaming.json`, so the
-test states its own preconditions and never touches the live session.
+profile, `io.popen` when it reads one), the test SETS the `NIDARA_GAMING` table the shell would hand
+over and `HOME` points at a fixture, so the test states its own preconditions and never touches the live session.
 
 What it asserts is that a game session is **undone**: the power profile after it is the one from
 before it, across all three profiles, across two windows for one game, when the user changes the
@@ -2342,7 +2342,7 @@ over `nidara-ipc` (so it needs no changes when IPC commands are added) — the e
 perception/action/keyboard tools, which run the standalone `nidara-a11y`/`nidara-act`/`nidara-type`
 helpers directly because reaching into a foreign app is not shell-self-control (`focus_window` is
 the exception-to-the-exception: it delegates back to the shell's `focusWindow`, which owns the
-Hyprland binding). Details and governance (`ai.json.allowMcp` / `allowComputerUse` /
+Hyprland binding). Details and governance (`org.nidara.ai` `allow-mcp` / `allow-computer-use` /
 `allowComputerControl`, live-read per call) in
 `references/state-and-ipc.md`.
 
@@ -3072,16 +3072,17 @@ OpenAI-compatible SSE mock (same spirit as the other `fake-*` helpers) that play
 tool-use round-trip:
 
 ```bash
-# 1) point an ISOLATED config at the mock (don't touch the real ai.json — the daemon
-#    reads $XDG_CONFIG_HOME/nidara/ai.json, but `nidara-ipc` still hits the live shell):
-mkdir -p /tmp/tc/nidara
-printf '{"brainBackend":"openai","brainModel":"mock","brainEndpoint":"http://localhost:11435/v1"}' \
-  > /tmp/tc/nidara/ai.json
+# 1) point an ISOLATED config at the mock. The daemon reads GSettings org.nidara.ai, so give
+#    it the KEYFILE backend in a scratch dir — overriding XDG_CONFIG_HOME alone does NOT
+#    isolate dconf (see "Persistence"). `nidara-ipc` still hits the live shell:
+mkdir -p /tmp/tc/glib-2.0/settings
+printf "[org/nidara/ai]\nbrain-backend='openai'\nbrain-model='mock'\nbrain-endpoint='http://localhost:11435/v1'\n" \
+  > /tmp/tc/glib-2.0/settings/keyfile
 # 2) run the mock (default = a harmless read: get_config appearance.accent):
 python3 scripts/dev/fake-brain.py &
 # 3) feed the daemon a user message, keeping stdin open, and read the event stream:
 { printf '{"t":"user","text":"what accent am I using?"}\n'; tail -f /dev/null; } \
-  | timeout 15 env XDG_CONFIG_HOME=/tmp/tc gjs -m bin/nidara-agent
+  | timeout 15 env XDG_CONFIG_HOME=/tmp/tc GSETTINGS_BACKEND=keyfile gjs -m bin/nidara-agent
 # expect: state thinking → acting → tool get_config → toolresult {...value:"blue"} →
 #         thinking → delta "Done." → done{usage} → idle
 ```
@@ -3089,7 +3090,7 @@ python3 scripts/dev/fake-brain.py &
 Env on the mock scripts the tool call: `FAKE_BRAIN_TOOL` / `FAKE_BRAIN_ARGS` (JSON) /
 `FAKE_BRAIN_FINAL`. Two gotchas (both proven 2026-07-20):
 - **The write gate is enforced by the SHELL, not the daemon.** The shell checks its OWN
-  `allowConfigWrite` (from the REAL `ai.json`), so a test config with `allowConfigWrite:false` does
+  `allowConfigWrite` (from the user's REAL settings), so a test config with `allowConfigWrite:false` does
   NOT stop a `set_config` — the daemon's tool hits the live shell and really writes (a `set_config`
   mock DID toggle night light for real; revert with `nidara-ipc setConfig … false`). To prove the
   daemon **surfaces a rejection** without mutating anything, script an **invalid value** (e.g.
@@ -3359,7 +3360,7 @@ hyprctl eval "hl.monitor({ output = 'Virtual-1', mode = '1280x720@60', position 
 
 ⚠️ **Settings are moving to GSettings (`org.nidara.*`, #573)** — `gsettings list-recursively
 org.nidara` shows the ones that already live there (dock, bar, notifications, night light,
-workspaces, recording). Architecture → "Where a setting lives" has the rules. For dev work:
+workspaces, recording, ai, gaming). Architecture → "Where a setting lives" has the rules. For dev work:
 
 - **The schema is read COMPILED.** Editing `config/gsettings/org.nidara.gschema.xml` changes nothing
   until `./install.sh --dev` installs and compiles it again — into `/usr/share/glib-2.0/schemas`,
@@ -3393,7 +3394,6 @@ Everything else still lives in `~/.config/nidara/`:
 | `cc_layout.json` | Control Center layout |
 | `widgets.json` | CC widget registry/metadata |
 | `region.json` | Time/date/timezone |
-| `gaming.json` | Game-mode config |
 | `wallpaper` | Current wallpaper path + transition (JSON; reserves a `surfaces` block for per-surface wallpapers — schema in `ui/lib/wallpaper.ts`) |
 | `greeter-prefs.json` | Greeter preferences |
 

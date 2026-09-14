@@ -6,10 +6,11 @@
 #   round 1 (user turn, no tool result yet)  → stream ONE tool_call
 #   round 2 (a role="tool" message present)  → stream a final text answer
 #
-# Point the daemon at it (ai.json):
-#   "brainBackend": "openai",
-#   "brainEndpoint": "http://localhost:11435/v1",
-#   "brainModel": "mock"
+# Point the daemon at it (GSettings org.nidara.ai — in a scratch keyfile backend,
+# see dev-workflow.md for the exact commands):
+#   brain-backend='openai'
+#   brain-endpoint='http://localhost:11435/v1'
+#   brain-model='mock'
 # then feed the daemon a user message on stdin and watch it call the tool via
 # `nidara-ipc` and answer.
 #

@@ -65,6 +65,107 @@ json_edit() {
     log "  edited $(basename "$file")"
 }
 
+# settings_import <file> <schema-name>
+#
+# Import a settings JSON under $CONFIG_DIR into GSettings `org.nidara.<schema-name>`
+# once, and rename the file to `<file>.migrated` (#573). Absent file = nothing to do.
+# Returns non-zero — and renames nothing — when the import cannot be trusted yet:
+# no dconf on the bus, schema not installed, a value that did not land. The unit
+# must `|| return 1` so the runner retries next session.
+#
+# Field names are camelCase in the file and kebab-case in the schema. Per field:
+#  - a field the schema no longer has is a retired setting: dropped (loadKnown's rule);
+#  - a key the user already set in GSettings is left alone — it can only have been
+#    written after the shell switched, so it is newer than the file;
+#  - a value the schema refuses (range, choices, type) is dropped, the key keeps
+#    its default;
+#  - 🔑 a value EQUAL to the default is not written, and neither is one equal to a
+#    default the shell COMPUTES (settings_computed_default): the old stores saved
+#    every field on every write, so a file is mostly defaults nobody chose, and
+#    importing them would freeze them against every future default change.
+#
+# ⚠️ `gsettings set` EXITS 0 WHILE FAILING with no session bus (#295, reproduced
+# 2026-09-14). Under the dconf backend this pings dconf's writer before starting
+# and checks each written value with `dconf read`. Under any other backend (CI
+# runs keyfile) those two checks are skipped.
+settings_import() {
+    local file="$CONFIG_DIR/$1" name="$2" schema="org.nidara.$2"
+    local using_dconf=1 field key type value computed before
+    [ -f "$file" ] || return 0
+
+    case "${GSETTINGS_BACKEND:-dconf}" in dconf) ;; *) using_dconf=0 ;; esac
+    command -v gsettings >/dev/null 2>&1 || { warn "gsettings is missing"; return 1; }
+    if [ "$using_dconf" = 1 ]; then
+        gdbus call --session --dest ca.desrt.dconf --object-path /ca/desrt/dconf/Writer/user \
+            --method org.freedesktop.DBus.Peer.Ping >/dev/null 2>&1 \
+            || { warn "dconf is not reachable on the session bus — $1 not imported yet"; return 1; }
+    fi
+    gsettings list-keys "$schema" >/dev/null 2>&1 \
+        || { warn "schema $schema is not installed — $1 not imported yet"; return 1; }
+    jq -e 'type == "object"' "$file" >/dev/null 2>&1 \
+        || { warn "$1 is not a JSON object — left in place, not imported"; return 0; }
+
+    while IFS= read -r field; do
+        key="$(printf '%s' "$field" | sed -E 's/([A-Z])/-\L\1/g')"
+        if ! gsettings list-keys "$schema" | grep -qx -- "$key"; then
+            log "  $name: dropped retired field $field"
+            continue
+        fi
+        if [ "$using_dconf" = 1 ] && [ -n "$(dconf read "/org/nidara/$name/$key")" ]; then
+            continue
+        fi
+
+        type="$(gsettings range "$schema" "$key" | head -1)"
+        case "$type" in
+            "range "*|"type "*) type="${type#* }"; type="${type%% *}" ;;
+            enum) type=s ;;
+        esac
+        case "$type" in
+            y|n|q|i|u|x|t) value="$(jq -c --arg f "$field" '.[$f] | if type == "number" then round else . end' "$file")" ;;
+            *)             value="$(jq -c --arg f "$field" '.[$f]' "$file")" ;;
+        esac
+
+        computed="$(settings_computed_default "$name" "$field")"
+        [ -n "$computed" ] && [ "$computed" = "$value" ] && continue
+
+        before="$(gsettings get "$schema" "$key")"
+        if ! gsettings set "$schema" "$key" "$value" 2>/dev/null; then
+            log "  $name: dropped $field=$value (the schema refuses it)"
+            continue
+        fi
+        if [ "$(gsettings get "$schema" "$key")" = "$before" ]; then
+            gsettings reset "$schema" "$key"
+            continue
+        fi
+        if [ "$using_dconf" = 1 ] && [ -z "$(dconf read "/org/nidara/$name/$key")" ]; then
+            warn "$schema $key did not reach dconf — $1 not imported yet"
+            return 1
+        fi
+    done < <(jq -r 'keys[]' "$file")
+
+    mv -f "$file" "$file.migrated" || { warn "could not rename $1"; return 1; }
+    log "  imported $1 into $schema"
+}
+
+# settings_computed_default <schema-name> <field>
+#
+# JSON of the value the shell COMPUTES for one of a store's `computed` fields on
+# this machine, with the same expression the store uses — or nothing, for a field
+# that is not computed (or cannot be computed here; the file value is then
+# imported, the conservative side). Keep in step with every `computed:` list
+# given to `defineSettings`.
+settings_computed_default() {
+    case "$1.$2" in
+        recording.hardware)         # RecordingConfig.ts hardwareAvailable()
+            [ -e /dev/dri/renderD128 ] && echo true || echo false ;;
+        recording.saveDir)          # RecordingConfig.ts defaultSaveDir()
+            command -v gjs >/dev/null 2>&1 || return 0
+            gjs -c 'const G = imports.gi.GLib; print(JSON.stringify(
+                G.get_user_special_dir(G.UserDirectory.DIRECTORY_VIDEOS)
+                ?? G.build_filenamev([G.get_home_dir(), "Videos"])))' 2>/dev/null ;;
+    esac
+}
+
 # ── The run ──────────────────────────────────────────────────────────────────
 [ -d "$MIGRATIONS_DIR" ] || exit 0
 mkdir -p "$STATE_DIR" 2>/dev/null || { warn "no state dir ($STATE_DIR) — skipping"; exit 0; }

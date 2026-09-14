@@ -224,6 +224,29 @@ for (const impl of extracted) {
     }
 }
 
+// 5. The Assistant's gate reader: six standalone copies of aiSetting() (#573).
+// A copy that drifted — a different schema id, a different "no schema" answer —
+// is a gate one helper enforces and another does not, which is worse than a
+// matching disagreement because nothing on screen shows it.
+{
+    const AI_FILES = [...BIN_FILES, "bin/nidara-mcp", "bin/nidara-agent"]
+    const blocks = AI_FILES.map(file => {
+        const src = readFileSync(file, "utf8")
+        const start = src.indexOf("function aiSetting(key) {")
+        const end = start === -1 ? -1 : src.indexOf("\n}\n", start)
+        return { file, block: start === -1 || end === -1 ? null : src.slice(start, end + 2) }
+    })
+    for (const { file, block } of blocks) {
+        if (!block) error(`${file}: no aiSetting(key) — does it still read the Assistant's gates?`)
+    }
+    const base = blocks.find(b => b.block)
+    for (const b of blocks) {
+        if (!b.block || b === base) continue
+        if (b.block !== base.block) error(`aiSetting in ${b.file} differs from ${base.file}`)
+        else pass(`aiSetting in ${b.file} matches ${base.file}`)
+    }
+}
+
 if (failed) {
     log("\nsame-app-check: FAILED")
     process.exit(1)

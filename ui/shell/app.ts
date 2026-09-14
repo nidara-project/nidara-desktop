@@ -31,6 +31,7 @@ import hyprlandState from "./core/HyprlandState"
 import queryUI from "./core/UITree"
 import Wallpaper from "./core/WallpaperManager"
 import workspaceModes, { type WorkspaceMode } from "./core/WorkspaceModes"
+import { startGamingSync } from "./core/GamingSync"
 
 // @ts-ignore
 import type { Monitor } from "gi://Gdk?version=4.0"
@@ -528,7 +529,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       // realistic way to trigger it. The prompt tells the assistant to ask before
       // anything destructive, but a rule in a prompt is a suggestion, not a lock.
       if (!agentConfig.allowWindowClose)
-        return "closing windows is disabled — enable it in Settings → AI (or ai.json)"
+        return "closing windows is disabled — enable it in Settings → AI"
       const w = resolveWindow(args[0])
       if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
       hyprlandState.closeWindow(w.address)
@@ -651,7 +652,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: args => {
       if (!args[0] || args[1] === undefined) return "usage: setConfig <key> <value>"
       if (!agentConfig.allowConfigWrite)
-        return "config writes are disabled — enable them in Settings → AI (or ai.json)"
+        return "config writes are disabled — enable them in Settings → AI"
       return setConfigValue(args[0], args.slice(1).join(" "))
     },
   },
@@ -659,7 +660,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     desc: "Capture the focused monitor to a PNG and return its path (`screenshot [path]`) — agent visual verification; gated by Settings → AI",
     run: args => {
       if (!agentConfig.allowScreenshot)
-        return "screenshots are disabled — enable them in Settings → AI (or ai.json)"
+        return "screenshots are disabled — enable them in Settings → AI"
       const path = args[0] || `/tmp/nidara-shot-${Date.now()}.png`
       try {
         const mon = hyprlandState.focusedMonitor?.name
@@ -1040,6 +1041,10 @@ app.start({
     // deleting or reordering it would have quietly stopped the desktop receiving
     // notifications at all, with no error anywhere.
     startNotifServer()
+
+    // Game mode's settings, handed to the compositor (hyprland.lua cannot read
+    // GSettings). Here and nowhere else — see core/GamingSync.ts.
+    startGamingSync()
 
     // (No DnD seeding here. The flag persists on its own — GSettings, via
     // core/NotifConfig.ts; the block that used to force it true at every main() —

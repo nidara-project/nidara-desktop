@@ -22,7 +22,7 @@
 // gi://Atspi ship with the shell, no Node runtime, no npm deps on installed
 // systems.
 //
-// Governance: Settings → AI → allowComputerUse (ai.json). This is the ONLY gate
+// Governance: Settings → AI → allowComputerUse (org.nidara.ai allow-computer-use). This is the ONLY gate
 // that defaults OFF — reading another app's content is privacy-sensitive (≈ the
 // screenshot gate) and reaches outside the shell's own surface. Consent layer,
 // not a security boundary: any local process can already read the a11y bus.
@@ -32,22 +32,29 @@ import Atspi from "gi://Atspi"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 
-const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
+// The Assistant's gates live in GSettings, `org.nidara.ai` (#573) — the same keys
+// Settings → AI writes. No schema installed reads as `undefined`, which every gate
+// below treats exactly as it treated a missing ai.json. Each read is a fresh
+// Gio.Settings, so a gate flipped a moment ago is the one that answers.
+// ⚠️ Six copies of this function (nidara-a11y/act/click/type/mcp/agent);
+// scripts/ci/same-app-check.mjs keeps them identical.
+function aiSetting(key) {
+    try {
+        const schema = Gio.SettingsSchemaSource.get_default()?.lookup("org.nidara.ai", true)
+        if (!schema) return undefined
+        return new Gio.Settings({ settings_schema: schema }).get_value(key).recursiveUnpack()
+    } catch {
+        return undefined
+    }
+}
 const MAX_NODES = 500       // mirrors UITree.ts
 const MAX_DEPTH = 40        // a11y trees can be deep; guard runaway recursion
 const DEADLINE_MS = 4000    // soft budget: bail out of a slow/huge tree gracefully
 
 // ── gate ─────────────────────────────────────────────────────────────────────
-// Defaults OFF: absent/garbled ai.json → disabled (opposite of allowMcp).
+// Defaults OFF: no schema → disabled (opposite of allowMcp).
 function computerUseEnabled() {
-    try {
-        if (!GLib.file_test(AI_JSON, GLib.FileTest.EXISTS)) return false
-        const [ok, bytes] = GLib.file_get_contents(AI_JSON)
-        if (!ok) return false
-        return JSON.parse(new TextDecoder().decode(bytes)).allowComputerUse === true
-    } catch {
-        return false
-    }
+    return aiSetting("allow-computer-use") === true
 }
 
 function emit(obj) {
@@ -655,7 +662,7 @@ function selectTargets(filter) {
 
 function main() {
     if (!computerUseEnabled()) {
-        emit({ error: "computer-use is disabled — enable it in Settings → AI (or set allowComputerUse in ai.json)" })
+        emit({ error: "computer-use is disabled — enable it in Settings → AI" })
         return
     }
 

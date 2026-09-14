@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   The desktop's own settings (#573). Every schema here is read and written through
-  `defineConfig` (ui/shell/core/configFile.ts), which maps each camelCase field of a
+  `defineSettings` (ui/shell/core/configFile.ts), which maps each camelCase field of a
   store's DEFAULTS to the kebab-case key of the same name below.
 
-  ⚠️ THE TS DEFAULTS AND THESE DEFAULTS MUST AGREE. `defineConfig` compares them at
+  ⚠️ THE TS DEFAULTS AND THESE DEFAULTS MUST AGREE. `defineSettings` compares them at
   start and logs a JS error on drift, which fails the headless smoke. A default that
   is COMPUTED at run time (recording's `hardware` and `save-dir`) is declared in the
   store's `computed` list instead; its default here is a placeholder that nothing
@@ -161,6 +161,125 @@
     <key name="save-dir" type="s">
       <default>""</default>
       <summary>Folder recordings are saved to. Unset: the XDG videos folder</summary>
+    </key>
+  </schema>
+
+  <!--
+    The Assistant and every agent client. The allow-* keys are GATES: read by the
+    shell, by bin/nidara-agent every turn, by bin/nidara-mcp and by the four
+    computer-use helpers (nidara-a11y/act/click/type), each of which refuses to act
+    when its gate is off. A helper that cannot find this schema treats the gate as
+    it used to treat a missing ai.json: computer use and control OFF, MCP ON.
+  -->
+  <schema id="org.nidara.ai" path="/org/nidara/ai/">
+    <key name="allow-config-write" type="b">
+      <default>true</default>
+      <summary>Agents may change desktop settings</summary>
+    </key>
+    <key name="allow-screenshot" type="b">
+      <default>true</default>
+      <summary>Agents may take screenshots</summary>
+    </key>
+    <key name="allow-window-close" type="b">
+      <default>true</default>
+      <summary>Agents may close windows</summary>
+    </key>
+    <key name="allow-mcp" type="b">
+      <default>true</default>
+      <summary>The MCP server answers</summary>
+    </key>
+    <key name="allow-computer-use" type="b">
+      <default>false</default>
+      <summary>Agents may see other applications (AT-SPI)</summary>
+    </key>
+    <key name="allow-computer-control" type="b">
+      <default>false</default>
+      <summary>Agents may act on other applications. Requires allow-computer-use</summary>
+    </key>
+    <key name="allow-file-read" type="b">
+      <default>true</default>
+      <summary>The Assistant may read files in its read roots</summary>
+    </key>
+    <key name="allow-file-write" type="b">
+      <default>false</default>
+      <summary>The Assistant may edit its three writable files. Requires allow-file-read</summary>
+    </key>
+    <key name="brain-provider" type="s">
+      <default>""</default>
+      <summary>Assistant provider id; empty = off</summary>
+    </key>
+    <key name="brain-backend" type="s">
+      <choices>
+        <choice value=""/>
+        <choice value="anthropic"/>
+        <choice value="gemini"/>
+        <choice value="openai"/>
+      </choices>
+      <default>""</default>
+      <summary>Wire protocol, derived from the provider</summary>
+    </key>
+    <key name="brain-model" type="s">
+      <default>""</default>
+      <summary>Model id of the active provider</summary>
+    </key>
+    <key name="brain-endpoint" type="s">
+      <default>"http://localhost:11434/v1"</default>
+      <summary>Base URL of the active provider</summary>
+    </key>
+    <key name="brain-models" type="a{ss}">
+      <default>{}</default>
+      <summary>Last model used, per provider id</summary>
+    </key>
+    <key name="brain-endpoints" type="a{ss}">
+      <default>{}</default>
+      <summary>Last endpoint used, per provider id</summary>
+    </key>
+    <key name="assistant-glow" type="b">
+      <default>true</default>
+      <summary>Glow the focused window's border while the Assistant works</summary>
+    </key>
+  </schema>
+
+  <!--
+    Game mode. The compositor needs these too and cannot read dconf: the shell
+    writes them into ~/.config/nidara/nidara-gaming.lua and pushes them live
+    (core/GamingSync.ts); config/hypr/hyprland.lua reads NIDARA_GAMING.
+  -->
+  <schema id="org.nidara.gaming" path="/org/nidara/gaming/">
+    <key name="wallpaper-mode" type="s">
+      <choices>
+        <choice value="artwork"/>
+        <choice value="custom"/>
+        <choice value="none"/>
+      </choices>
+      <default>"artwork"</default>
+      <summary>Wallpaper while a game runs</summary>
+    </key>
+    <key name="custom-wallpaper" type="s">
+      <default>""</default>
+      <summary>Image used when wallpaper-mode is custom</summary>
+    </key>
+    <key name="transition" type="s">
+      <choices>
+        <choice value="random"/>
+        <choice value="simple"/>
+        <choice value="fade"/>
+        <choice value="center"/>
+        <choice value="grow"/>
+        <choice value="outer"/>
+        <choice value="wipe"/>
+        <choice value="wave"/>
+        <choice value="left"/>
+        <choice value="right"/>
+        <choice value="top"/>
+        <choice value="bottom"/>
+      </choices>
+      <default>"grow"</default>
+      <summary>Wallpaper transition into and out of game mode</summary>
+    </key>
+    <key name="performance-profile" type="b">
+      <default>false</default>
+      <summary>Switch the power profile to performance while a game runs</summary>
     </key>
   </schema>
 
