@@ -32,11 +32,18 @@ const ok = (n) => console.log(`  ok    ${n}`)
 const fail = (n, d) => { failures++; console.log(`  FAIL  ${n}${d ? `\n        ${d}` : ""}`) }
 
 if (!existsSync(UNITS_DIR)) { console.log("migrations-check: no migrations/ directory — nothing to check."); process.exit(0) }
-for (const bin of ["jq", "bash"]) {
+for (const bin of ["jq", "bash", "gsettings", "glib-compile-schemas"]) {
     if (spawnSync("sh", ["-c", `command -v ${bin}`]).status !== 0) {
         console.error(`migrations-check: ${bin} is missing`); process.exit(1)
     }
 }
+
+// The schemas the settings migrations write into, compiled from the tree.
+const SCHEMA_DIR = mkdtempSync(join(tmpdir(), "nidara-mig-schemas-"))
+for (const f of readdirSync(join(ROOT, "config", "gsettings"))) {
+    if (f.endsWith(".gschema.xml")) writeFileSync(join(SCHEMA_DIR, f), readFileSync(join(ROOT, "config", "gsettings", f)))
+}
+execFileSync("glib-compile-schemas", ["--strict", SCHEMA_DIR])
 
 const units = readdirSync(UNITS_DIR).filter(f => f.endsWith(".sh")).sort()
 console.log(`migrations-check: ${units.length} unit(s)`)
@@ -65,12 +72,18 @@ function run(files, { times = 1, clearMarkers = false, unitsDir = UNITS_DIR } = 
         const r = spawnSync("bash", [RUNNER], {
             encoding: "utf8",
             env: { ...process.env, HOME: home, XDG_CONFIG_HOME: join(home, ".config"),
-                   XDG_STATE_HOME: join(home, ".local", "state"), NIDARA_MIGRATIONS_DIR: unitsDir },
+                   XDG_STATE_HOME: join(home, ".local", "state"), NIDARA_MIGRATIONS_DIR: unitsDir,
+                   // Settings migrations write GSettings. CI has no session bus and
+                   // no dconf, so they run against the keyfile backend, which lands
+                   // in the scratch HOME and is read back below.
+                   GSETTINGS_BACKEND: "keyfile", GSETTINGS_SCHEMA_DIR: SCHEMA_DIR },
         })
         if (r.status !== 0) throw new Error(`runner exited ${r.status}: ${r.stderr}`)
     }
     const out = {}
     for (const f of readdirSync(cfg)) out[f] = readFileSync(join(cfg, f), "utf8")
+    const keyfile = join(home, ".config", "glib-2.0", "settings", "keyfile")
+    if (existsSync(keyfile)) out["<gsettings keyfile>"] = readFileSync(keyfile, "utf8")
     const markers = existsSync(state) ? readdirSync(state).sort() : []
     rmSync(home, { recursive: true, force: true })
     return { out, markers }
@@ -89,6 +102,12 @@ try {
 // something to bite on. Add to it when you add a migration.
 const LEGACY_FIXTURE = {
     "appearance.json": { transparency: 0.15, accent: "blue", iconTheme: "Papirus" },
+    // settings-to-gsettings: a chosen value, a default, a retired field, a value
+    // the schema refuses, a fractional integer, a map, and a string with quotes.
+    "dock_settings.json": { iconSize: 72, magnification: true, position: "diagonal", hideDelay: 250.4, retiredThing: 1 },
+    "workspaces.json": { defaultMode: "tiling", workspaces: { "2": "floating" } },
+    "bar-settings.json": { showAppTitle: true, launcherIcon: "/home/u/it's \"mine\".png" },
+    "night-light.json": { temperature: 99999, scheduleFrom: "21:30" },
 }
 try {
     const once = run(LEGACY_FIXTURE, { times: 1 })
@@ -106,6 +125,32 @@ try {
     if (JSON.stringify(kept.out) !== JSON.stringify(single.out)) fail("the marker stops the second run", JSON.stringify(kept.out))
     else ok("the marker stops the second run")
 } catch (e) { fail("the marker stops the second run", e.message) }
+
+// ── 4b. settings-to-gsettings imported what it should, and only that ──────────
+// Each expectation is a line the keyfile must (or must not) contain. Groups are
+// /org/nidara/<schema>/ and values are GVariant text.
+try {
+    const { out } = run(LEGACY_FIXTURE, { times: 1 })
+    const kf = out["<gsettings keyfile>"] ?? ""
+    const expect = [
+        ["a chosen value is imported",               /\[org\/nidara\/dock\][^[]*\nicon-size=72/, true],
+        ["a fractional integer is rounded",          /\nhide-delay=250\n/, true],
+        ["a default is NOT imported as a user value", /\nmagnification=/, false],
+        ["a value outside the choices is dropped",    /\nposition=/, false],
+        ["a retired field is dropped",                /retired/, false],
+        ["a value outside the range is dropped",      /\ntemperature=/, false],
+        ["a map is imported",                         /\nworkspaces=\{'2': 'floating'\}/, true],
+        ["a string with quotes survives",             /launcher-icon=.*it's \\?"mine\\?"\.png/, true],
+    ]
+    for (const [label, re, present] of expect) {
+        if (re.test(kf) === present) ok(`settings import: ${label}`)
+        else fail(`settings import: ${label}`, `keyfile:\n${kf}`)
+    }
+    for (const f of ["dock_settings.json", "workspaces.json", "bar-settings.json", "night-light.json"]) {
+        if (out[f] !== undefined || out[`${f}.migrated`] === undefined) fail(`settings import: ${f} renamed to .migrated`, Object.keys(out).join(", "))
+    }
+    if (out["appearance.json"] === undefined) fail("settings import: appearance.json is not touched by it")
+} catch (e) { fail("settings import", e.message) }
 
 // ── 5. POSITIVE CONTROL ──────────────────────────────────────────────────────
 // A unit that appends on every run. Check 3 MUST catch it; if it does not, the

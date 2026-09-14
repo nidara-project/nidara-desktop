@@ -6,17 +6,15 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { writeFile, readFile } from "../../../lib/file"
 import GLib from "gi://GLib"
-import { defineConfig, loadKnown, type ConfigValidators } from "../../core/configFile"
+import { defineSettings, type ConfigValidators } from "../../core/configFile"
 // --- PERSISTENCE ---
 // All Nidara config lives under ~/.config/nidara/ (matches ThemeManager,
-// WidgetConfig, RegionConfig, CCLayoutManager, …). These two dock files used to
-// be written to the bare ~/.config/ root; loadPinned() and the settings loader
-// below migrate them from there on first run and remove the strays.
+// WidgetConfig, RegionConfig, CCLayoutManager, …). The pinned list used to be
+// written to the bare ~/.config/ root; loadPinned() migrates it from there on
+// first run and removes the stray. The dock's SETTINGS are in GSettings.
 const CONFIG_DIR = GLib.get_user_config_dir() + "/nidara"
 const PINNED_FILE = CONFIG_DIR + "/dock_pinned.json"
-const SETTINGS_FILE = CONFIG_DIR + "/dock_settings.json"
 const LEGACY_PINNED_FILE = GLib.get_user_config_dir() + "/dock_pinned.json"
-const LEGACY_SETTINGS_FILE = GLib.get_user_config_dir() + "/dock_settings.json"
 
 const ensureConfigDir = () => {
     if (!GLib.file_test(CONFIG_DIR, GLib.FileTest.EXISTS))
@@ -65,34 +63,11 @@ const DOCK_VALIDATORS: ConfigValidators<DockSettings> = {
     hideDelay: inRange(0, 2000),
 }
 
-/**
- * The one-time move of the settings file out of the bare `~/.config/` root.
- *
- * It runs BEFORE the store is built, because a migration is a fact about this
- * machine's history rather than part of a settings lifecycle — folding it in
- * would make every module carry a hook for a path only the dock ever used.
- *
- * ⚠️ It writes the file through `loadKnown` rather than copying it byte for
- * byte. A straight copy is what the old code effectively did, and it carries
- * retired keys across to the new path, where they sit until the user happens to
- * change a dock setting: the exact one-way ratchet `loadKnown` exists to stop.
- * We are already writing the file here, so writing the DECLARED SHAPE is free.
- */
-function migrateLegacySettingsFile() {
-    if (GLib.file_test(SETTINGS_FILE, GLib.FileTest.EXISTS)) return
-    if (!GLib.file_test(LEGACY_SETTINGS_FILE, GLib.FileTest.EXISTS)) return
-    try {
-        const known = loadKnown(DOCK_DEFAULTS, JSON.parse(readFile(LEGACY_SETTINGS_FILE)), DOCK_VALIDATORS)
-        ensureConfigDir()
-        writeFile(SETTINGS_FILE, JSON.stringify(known, null, 2))
-        GLib.unlink(LEGACY_SETTINGS_FILE)
-    } catch (e) {
-        console.error("[DockSettings] Legacy migration failed:", e)
-    }
-}
-migrateLegacySettingsFile()
+// Stored in GSettings, `org.nidara.dock` (#573). The old dock_settings.json — and
+// its older copy in the bare ~/.config/ — are imported once by
+// migrations/2026-09-14-settings-to-gsettings.sh, before the shell starts.
 
-const config = defineConfig<DockSettings>("dock_settings.json", DOCK_DEFAULTS, DOCK_VALIDATORS)
+const config = defineSettings<DockSettings>("dock", DOCK_DEFAULTS, DOCK_VALIDATORS)
 
 /** The live settings object — same identity for the life of the process, which
  *  is what the ~40 read sites throughout the dock and the bar rely on. */

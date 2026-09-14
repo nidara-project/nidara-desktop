@@ -63,7 +63,7 @@ export function isCritical(n: Notification): boolean {
 // The LIVE flag, not a preference about it — the CC focus tile, Settings →
 // Notifications and `notifications.doNotDisturb` in the agent registry are four
 // faces of this one bit (the bar's focus widget is the fourth), and
-// `notif-config.json` is its only home.
+// GSettings `org.nidara.notifications do-not-disturb` is its only home.
 
 export function dontDisturb(): boolean {
     return notifConfig.doNotDisturb

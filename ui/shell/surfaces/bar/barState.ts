@@ -1,4 +1,4 @@
-import { defineConfig } from "../../core/configFile"
+import { defineSettings } from "../../core/configFile"
 
 export interface BarSettings {
     showAppTitle: boolean
@@ -28,7 +28,7 @@ const DEFAULTS: BarSettings = {
 //
 // Filtering here rather than spreading `raw` means those dead keys are dropped
 // from the file on the next write instead of being re-persisted forever.
-export const barConfig = defineConfig("bar-settings.json", DEFAULTS)
+export const barConfig = defineSettings("bar", DEFAULTS)
 
 export const barSettings: BarSettings = barConfig.all as BarSettings
 

@@ -1,4 +1,4 @@
-import { defineConfig } from "./configFile"
+import { defineSettings } from "./configFile"
 
 // 🔑 `doNotDisturb` is the LIVE flag, not a preference about it — the CC focus
 // tile, Settings → Notifications and the agent key `notifications.doNotDisturb`
@@ -26,7 +26,7 @@ const DEFAULTS: NotifSettings = {
 
 type NotifKey = keyof NotifSettings
 
-const config = defineConfig("notif-config.json", DEFAULTS)
+const config = defineSettings("notifications", DEFAULTS)
 
 export const notifConfig = {
     get popupTimeout() { return config.get("popupTimeout") },

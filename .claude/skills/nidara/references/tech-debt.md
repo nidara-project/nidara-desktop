@@ -3582,6 +3582,11 @@ and a static rule only ever sees the one the window was BORN with".
 Found while pricing whether Settings should be its own process. It should not be — but the number
 that came out of the measurement is worth more than the question that prompted it.
 
+⚠️ **That "should not be" was REVERSED on 2026-09-14** (#571): it priced memory only, and the case
+for a separate process is failure isolation — four shell SIGSEGVs that day came from code Settings
+runs. The split is now three phases (#573 settings to GSettings → #571 → #574); see architecture.md
+→ "Where a setting lives". The memory measurement below still stands.
+
     fresh shell, Settings never opened      RSS 330.1 MB   PSS 202.7 MB   (stable over 30 s)
     the same unit after 21 h 21 m uptime    RSS 792.5 MB   PSS 637.9 MB
 

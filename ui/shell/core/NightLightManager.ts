@@ -1,7 +1,7 @@
 import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import { defineConfig } from "./configFile"
+import { defineSettings } from "./configFile"
 
 const DEFAULT_TEMP = 4000
 const TEMP_MIN = 2700
@@ -29,7 +29,7 @@ const DEFAULTS: NightLightSettings = {
     scheduleTo: "07:00",
 }
 
-const config = defineConfig<NightLightSettings>("night-light.json", DEFAULTS, {
+const config = defineSettings<NightLightSettings>("night-light", DEFAULTS, {
     scheduleFrom: isTime,
     scheduleTo: isTime,
     // The value is passed to `hyprsunset -t`. Out of range it is not a crash,
