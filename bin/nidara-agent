@@ -20,9 +20,9 @@
 // subprocess — the house pattern (every HTTP call in the repo is curl), so this
 // adds zero dependencies.
 //
-// CONFIG (re-read from ai.json EVERY turn, so changes take effect live):
+// CONFIG (re-read from GSettings org.nidara.ai EVERY turn, so changes take effect live):
 //   brainBackend ("" | "anthropic" | "openai"), brainModel, brainEndpoint.
-// The API KEY is never in ai.json — it lives in the DE keyring (libsecret,
+// The API KEY is never in GSettings — it lives in the DE keyring (libsecret,
 // schema org.nidara.Assistant, attribute `backend`), written by Settings → AI.
 //
 // PROTOCOL (newline-delimited JSON):
@@ -37,7 +37,21 @@ import Gio from "gi://Gio"
 import GioUnix from "gi://GioUnix"
 import Secret from "gi://Secret"
 
-const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
+// The Assistant's gates live in GSettings, `org.nidara.ai` (#573) — the same keys
+// Settings → AI writes. No schema installed reads as `undefined`, which every gate
+// below treats exactly as it treated a missing ai.json. Each read is a fresh
+// Gio.Settings, so a gate flipped a moment ago is the one that answers.
+// ⚠️ Six copies of this function (nidara-a11y/act/click/type/mcp/agent);
+// scripts/ci/same-app-check.mjs keeps them identical.
+function aiSetting(key) {
+    try {
+        const schema = Gio.SettingsSchemaSource.get_default()?.lookup("org.nidara.ai", true)
+        if (!schema) return undefined
+        return new Gio.Settings({ settings_schema: schema }).get_value(key).recursiveUnpack()
+    } catch {
+        return undefined
+    }
+}
 // Hard cap on tool-use round-trips per user turn. Was 8, sized for "open the
 // control center" — one action and an answer. Reading files makes turns genuinely
 // longer (find the file → read it → correlate with state → answer), and a turn
@@ -88,10 +102,17 @@ function textFile(path) {
     return new TextDecoder().decode(bytes)
 }
 
+/** The whole of org.nidara.ai as the camelCase object the rest of this file reads
+ *  (`cfg.brainModel`, `cfg.allowFileRead`…) — the shape ai.json had. No schema
+ *  gives `{}`, which reads every gate as off, as a missing file did. */
 function readAiJson() {
     try {
-        if (!GLib.file_test(AI_JSON, GLib.FileTest.EXISTS)) return {}
-        return JSON.parse(textFile(AI_JSON))
+        const schema = Gio.SettingsSchemaSource.get_default()?.lookup("org.nidara.ai", true)
+        if (!schema) return {}
+        const cfg = {}
+        for (const key of schema.list_keys())
+            cfg[key.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = aiSetting(key)
+        return cfg
     } catch {
         return {}
     }
@@ -201,7 +222,7 @@ function fileGate(mode) {
     if (mode === "write") {
         if (cfg.allowFileWrite !== true) return "Editing files is turned off. The user can enable it in Settings → AI → Files."
         // Defence in depth: the shell keeps these consistent (setAllowFileWrite
-        // implies read), but ai.json is a plain file anyone can hand-edit into an
+        // implies read), but `gsettings set` can put org.nidara.ai into an
         // inconsistent state, and "write without read" is exactly the combination
         // that corrupts a file instead of editing it.
         if (cfg.allowFileRead !== true) return "Editing files needs reading them first, which is turned off (Settings → AI → Files)."
@@ -219,7 +240,7 @@ function fileGate(mode) {
 // D-Bus and can hang, which is exactly why they live in short-lived processes and
 // not on the shell's main loop.
 //
-// The helpers own the enforcement — each re-reads ai.json, verifies the target is
+// The helpers own the enforcement — each re-reads org.nidara.ai, verifies the target is
 // the focused window, plays the AI-cursor choreography and honours the kill switch
 // mid-animation. So the assistant is the SAME kind of client here as MCP is, and
 // gets all of that for free. What this file adds is the two things a conversation
@@ -309,7 +330,7 @@ function agsRequest(args) {
 // providers share the openai-compatible protocol but each has its own key, so a
 // protocol-keyed slot would make them collide. The shell owns the provider table
 // (ui/shell/core/AgentProviders.ts) and writes the resolved backend/endpoint into
-// ai.json — this daemon only needs the id to find the right key.
+// GSettings (org.nidara.ai) — this daemon only needs the id to find the right key.
 const KEY_SCHEMA = Secret.Schema.new(
     "org.nidara.Assistant",
     Secret.SchemaFlags.NONE,

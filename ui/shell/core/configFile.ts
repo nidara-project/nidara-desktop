@@ -1,9 +1,8 @@
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-import { readFile, writeFile } from "../../lib/file"
 
 /**
- * Per-key shape guard for the values read back off disk.
+ * Per-key shape guard for the values read back from storage.
  *
  * `loadKnown` already refuses a saved value whose `typeof` disagrees with the
  * default, which catches a string where the code will do arithmetic. It cannot
@@ -13,11 +12,12 @@ import { readFile, writeFile } from "../../lib/file"
  * bogus `format` survives the typeof check and then indexes `CODECS` to
  * `undefined`. This is that check, declared beside the shape it belongs to.
  *
- * ⚠️ It runs on LOAD ONLY, and that line is deliberate. The file is user state
- * we do not control, so a value we cannot use falls back to the default and the
- * desktop starts. A bad value passed to `set` comes from OUR code, and a store
- * that silently swallowed it would hide the bug instead of the call site fixing
- * it — setters that need clamping still clamp at the setter.
+ * ⚠️ It runs on every value READ from storage — at start and on every change
+ * another process makes — and never on `set`, and that line is deliberate. What
+ * is stored is user state we do not control, so a value we cannot use falls back
+ * to the default and the desktop starts. A bad value passed to `set` comes from
+ * OUR code, and a store that silently swallowed it would hide the bug instead of
+ * the call site fixing it — setters that need clamping still clamp at the setter.
  */
 export type ConfigValidators<T> = { [K in keyof T]?: (value: T[K]) => boolean }
 
@@ -79,7 +79,7 @@ function isEqual<V>(a: V, b: V): boolean {
     return false
 }
 
-export interface ConfigFileStore<T extends object> {
+export interface SettingsStore<T extends object> {
     get<K extends keyof T>(key: K): T[K]
     set<K extends keyof T>(key: K, value: T[K]): void      // persiste + notifica
     update(patch: Partial<T>): void                        // varias claves, UNA escritura
@@ -89,127 +89,11 @@ export interface ConfigFileStore<T extends object> {
 }
 
 /**
- * Single lifecycle owner for a JSON settings file under `~/.config/nidara/`.
- *
- * Provides:
- *  - durable, atomic persistence via `writeFile` (CONSISTENT | DURABLE)
- *  - key-filtered deserialization via `loadKnown` (retired keys drop), with an
- *    optional per-key `validate` for values whose type is right and shape wrong
- *  - equality guard: identical values do not touch the filesystem or notify
- *  - per-key subscription and grouped updates with a single write
- *  - explicit disposer on every subscription
- */
-export function defineConfig<T extends object>(
-    fileName: string,
-    defaults: T,
-    validate?: ConfigValidators<T>,
-): ConfigFileStore<T> {
-    const filePath = `${GLib.get_user_config_dir()}/nidara/${fileName}`
-    const state: T = { ...defaults }
-
-    try {
-        if (GLib.file_test(filePath, GLib.FileTest.EXISTS)) {
-            const raw = JSON.parse(readFile(filePath))
-            Object.assign(state, loadKnown(defaults, raw, validate))
-        }
-    } catch (e) {
-        console.error(`[defineConfig:${fileName}] Failed to load:`, e)
-    }
-
-    function persist() {
-        try {
-            writeFile(filePath, JSON.stringify(state, null, 2))
-        } catch (e) {
-            console.error(`[defineConfig:${fileName}] Failed to persist:`, e)
-        }
-    }
-
-    const keyListeners = new Map<keyof T, Set<(v: any) => void>>()
-    const allListeners = new Set<(key: keyof T) => void>()
-
-    function notifyKey<K extends keyof T>(key: K, value: T[K]) {
-        const listeners = keyListeners.get(key)
-        if (listeners) {
-            for (const cb of [...listeners]) {
-                try {
-                    cb(value)
-                } catch (e) {
-                    console.error(`[defineConfig:${fileName}] Listener error on ${String(key)}:`, e)
-                }
-            }
-        }
-        for (const cb of [...allListeners]) {
-            try {
-                cb(key)
-            } catch (e) {
-                console.error(`[defineConfig:${fileName}] All-listener error on ${String(key)}:`, e)
-            }
-        }
-    }
-
-    return {
-        get<K extends keyof T>(key: K): T[K] {
-            return state[key]
-        },
-
-        set<K extends keyof T>(key: K, value: T[K]): void {
-            if (isEqual(state[key], value)) return
-            state[key] = value
-            persist()
-            notifyKey(key, value)
-        },
-
-        update(patch: Partial<T>): void {
-            const changed: { key: keyof T; value: any }[] = []
-            for (const key of Object.keys(patch) as (keyof T)[]) {
-                if (!(key in defaults)) continue
-                const val = patch[key]
-                if (val !== undefined && !isEqual(state[key], val)) {
-                    state[key] = val as T[keyof T]
-                    changed.push({ key, value: val })
-                }
-            }
-            if (changed.length === 0) return
-            persist()
-            for (const { key, value } of changed) {
-                notifyKey(key, value)
-            }
-        },
-
-        subscribe<K extends keyof T>(key: K, cb: (v: T[K]) => void): () => void {
-            let set = keyListeners.get(key)
-            if (!set) {
-                set = new Set()
-                keyListeners.set(key, set)
-            }
-            set.add(cb)
-            return () => {
-                set!.delete(cb)
-                if (set!.size === 0) {
-                    keyListeners.delete(key)
-                }
-            }
-        },
-
-        subscribeAll(cb: (key: keyof T) => void): () => void {
-            allListeners.add(cb)
-            return () => {
-                allListeners.delete(cb)
-            }
-        },
-
-        get all(): Readonly<T> {
-            return state
-        },
-    }
-}
-
-/**
  * A settings store whose home is GSettings, `org.nidara.<name>` (#573).
  *
- * Same interface as `defineConfig`, so a module moves by changing one line, and
- * the difference is the one that matters: the value is no longer owned by THIS
- * process. dconf notifies every process that reads a key, so a change made by
+ * It replaced `defineConfig`, the JSON-file store, keeping its interface so each
+ * module moved by one line (#573). The difference is the one that matters: the
+ * value is no longer owned by THIS process. dconf notifies every process that reads a key, so a change made by
  * `gsettings set`, by another Nidara process or by this one reaches every store
  * of the same schema — and each of them updates its `all` object in place and
  * notifies its subscribers exactly as a local `set` would.
@@ -250,7 +134,7 @@ export function defineSettings<T extends object>(
     defaults: T,
     validate?: ConfigValidators<T>,
     options: { computed?: (keyof T)[] } = {},
-): ConfigFileStore<T> {
+): SettingsStore<T> {
     const schemaId = `${SCHEMA_ROOT}.${name}`
     const keys = Object.keys(defaults) as (keyof T)[]
     const computed = new Set(options.computed ?? [])
@@ -443,7 +327,7 @@ function makeListeners<T extends object>(label: string) {
 }
 
 /** The no-schema fallback: the desktop starts, nothing is persisted. */
-function memoryStore<T extends object>(label: string, defaults: T): ConfigFileStore<T> {
+function memoryStore<T extends object>(label: string, defaults: T): SettingsStore<T> {
     const state: T = { ...defaults }
     const listeners = makeListeners<T>(label)
     return {

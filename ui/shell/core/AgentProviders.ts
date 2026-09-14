@@ -14,9 +14,9 @@
 // symptom would be a 401 from a provider whose key the user just "saved".
 //
 // Adding a provider = one row here + one label in i18n. The daemon needs no
-// change: the shell writes the resolved backend/endpoint into ai.json for it.
+// change: the shell writes the resolved backend/endpoint into org.nidara.ai for it.
 export interface AgentProvider {
-    /** Stable id. Persisted in ai.json AND used as the libsecret attribute. */
+    /** Stable id. Persisted in org.nidara.ai AND used as the libsecret attribute. */
     id: string
     /** Wire protocol, and the tiering is deliberate: NATIVE (`anthropic`, `gemini`)
      *  for the providers we ship as a first choice, COMPAT (`openai`) as the

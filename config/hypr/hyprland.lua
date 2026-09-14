@@ -964,15 +964,16 @@ local function getSteamAppId(pid)
     return nil
 end
 
+-- Game mode's settings live in GSettings (org.nidara.gaming, #573), which Lua in
+-- here cannot read. The shell hands them over as the NIDARA_GAMING table — in
+-- nidara-gaming.lua, required at the bottom of this file, and pushed live with
+-- `hyprctl eval` on every change (ui/shell/core/GamingSync.ts). Read at the moment
+-- a game opens, so a change made mid-session applies to the next game. No table
+-- (a shell that has never run) = the schema's defaults.
 local function readGamingCfg()
-    local f = io.open(os.getenv("HOME") .. "/.config/nidara/gaming.json", "r")
-    if not f then return nil, nil, "grow", false end
-    local raw = f:read("*a"); f:close()
-    local mode       = raw:match('"wallpaperMode"%s*:%s*"([^"]+)"')
-    local custom     = raw:match('"customWallpaper"%s*:%s*"([^"]+)"')
-    local transition = raw:match('"transition"%s*:%s*"([^"]+)"') or "grow"
-    local perfOn     = raw:match('"performanceProfile"%s*:%s*(true)') ~= nil
-    return mode, custom, transition, perfOn
+    local g = NIDARA_GAMING or {}
+    return g.wallpaperMode or "artwork", g.customWallpaper, g.transition or "grow",
+        g.performanceProfile == true
 end
 
 local function findSteamHero(appid)
@@ -1263,6 +1264,12 @@ end)
 safe_require("nidara-settings")
 safe_require("nidara-monitor")
 safe_require("nidara-workspaces")
+-- Written by the shell the first time it starts (core/GamingSync.ts), so absent on
+-- a first login — not a failure worth a notification, unlike the three above.
+do
+    local f = io.open(home .. "/.config/nidara/nidara-gaming.lua", "r")
+    if f then f:close(); safe_require("nidara-gaming") end
+end
 
 -- ── User overrides ────────────────────────────────────────────────────────────
 -- Your personal config: keyboard layout, monitors, startup apps, keybinds, etc.

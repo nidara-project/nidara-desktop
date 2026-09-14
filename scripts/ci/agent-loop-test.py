@@ -14,7 +14,7 @@
 # HERMETIC: no network, no API key, no real provider, no running shell. A tiny
 # OpenAI-compatible mock stands in for the LLM; a stub `nidara-ipc` on PATH stands in for
 # the shell so tool execution returns a value instead of failing. The daemon runs
-# exactly as installed (gjs), reading a throwaway ai.json under a temp
+# exactly as installed (gjs), reading throwaway settings (GSettings keyfile backend) under a temp
 # XDG_CONFIG_HOME and persisting its session under a temp XDG_STATE_HOME — both
 # per case, so cases cannot leak history into each other and running this on a
 # real machine cannot touch your own conversation. Needs only: gjs, curl, python3
@@ -35,6 +35,28 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 DAEMON = REPO / "bin" / "nidara-agent"
+
+# The daemon reads its configuration from GSettings, org.nidara.ai (#573). Each case
+# gets the keyfile backend inside its own temp XDG_CONFIG_HOME, against schemas
+# compiled once from the tree — no bus, no dconf, and never the developer's own
+# settings (with the default backend a dev machine would hand the daemon ITS gates).
+SCHEMA_DIR = Path(tempfile.mkdtemp(prefix="nidara-agent-schemas-"))
+for xml in (REPO / "config" / "gsettings").glob("*.gschema.xml"):
+    shutil.copy(xml, SCHEMA_DIR)
+subprocess.run(["glib-compile-schemas", "--strict", str(SCHEMA_DIR)], check=True)
+
+
+def write_ai_settings(config_home: Path, values: dict) -> None:
+    """Write org.nidara.ai into the keyfile backend's file. Field names are the
+    store's camelCase; values become GVariant text (JSON strings, maps and
+    booleans are all valid GVariant text as they are)."""
+    kebab = lambda k: "".join("-" + c.lower() if c.isupper() else c for c in k)
+    lines = ["[org/nidara/ai]"]
+    for k, v in values.items():
+        lines.append(f"{kebab(k)}={json.dumps(v)}")
+    keyfile = config_home / "glib-2.0" / "settings" / "keyfile"
+    keyfile.parent.mkdir(parents=True, exist_ok=True)
+    keyfile.write_text("\n".join(lines) + "\n")
 
 TOOL = "set_config"
 ARGS = '{"key":"appearance.accent","value":"blue"}'
@@ -404,14 +426,14 @@ def drive_daemon(port: int, anthropic_rec: Path | None = None,
         (tmp / "nidara").mkdir()
         # Empty provider → the keyring is never touched (no D-Bus in CI); the mock
         # needs no key anyway.
-        (tmp / "nidara" / "ai.json").write_text(json.dumps({
+        write_ai_settings(tmp, {
             "brainBackend": ("anthropic" if anthropic_rec
                              else "gemini" if gemini_rec else "openai"),
             "brainProvider": "",
             "brainModel": "mock",
             "brainEndpoint": f"http://127.0.0.1:{port}/v1",
             **(ai_extra or {}),
-        }))
+        })
         bind = tmp / "bin"
         bind.mkdir()
         make_stub_ipc(bind)
@@ -424,6 +446,8 @@ def drive_daemon(port: int, anthropic_rec: Path | None = None,
 
         env = dict(os.environ)
         env["XDG_CONFIG_HOME"] = str(tmp)
+        env["GSETTINGS_BACKEND"] = "keyfile"
+        env["GSETTINGS_SCHEMA_DIR"] = str(SCHEMA_DIR)
         # The daemon persists its conversation under XDG_STATE_HOME and RESTORES it
         # on startup, so this has to be per-case or "a fresh daemon" is a lie: the
         # previous case's history would arrive in request 1 and the Anthropic stub,

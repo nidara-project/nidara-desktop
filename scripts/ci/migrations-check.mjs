@@ -115,6 +115,9 @@ const LEGACY_FIXTURE = {
     // compute $HOME/Videos; `hardware` is whatever this machine has. `SCRATCH_HOME`
     // is replaced by the harness with the run's HOME.
     "recording.json": { framerate: 60, saveDir: "SCRATCH_HOME/Videos", hardware: existsSync("/dev/dri/renderD128") },
+    // ai-and-gaming: a gate turned on, a default gate, a per-provider map.
+    "ai.json": { allowComputerUse: true, allowMcp: true, brainModels: { anthropic: "claude-opus-5" } },
+    "gaming.json": { wallpaperMode: "none", transition: "grow" },
 }
 try {
     const once = run(LEGACY_FIXTURE, { times: 1 })
@@ -151,12 +154,16 @@ try {
         ["a chosen recording setting is imported",    /\[org\/nidara\/recording\][^[]*framerate=60/, true],
         ["a COMPUTED default (videos folder) is not imported", /save-dir=/, false],
         ["a COMPUTED default (hardware) is not imported",      /\nhardware=/, false],
+        ["a gate the user turned on is imported",      /\[org\/nidara\/ai\][^[]*allow-computer-use=true/, true],
+        ["a gate left at its default is not",          /allow-mcp=/, false],
+        ["the per-provider model map is imported",     /brain-models=\{'anthropic': 'claude-opus-5'\}/, true],
+        ["game mode's wallpaper choice is imported",   /\[org\/nidara\/gaming\][^[]*wallpaper-mode='none'/, true],
     ]
     for (const [label, re, present] of expect) {
         if (re.test(kf) === present) ok(`settings import: ${label}`)
         else fail(`settings import: ${label}`, `keyfile:\n${kf}`)
     }
-    for (const f of ["dock_settings.json", "workspaces.json", "bar-settings.json", "night-light.json"]) {
+    for (const f of ["dock_settings.json", "workspaces.json", "bar-settings.json", "night-light.json", "recording.json", "ai.json", "gaming.json"]) {
         if (out[f] !== undefined || out[`${f}.migrated`] === undefined) fail(`settings import: ${f} renamed to .migrated`, Object.keys(out).join(", "))
     }
     if (out["appearance.json"] === undefined) fail("settings import: appearance.json is not touched by it")

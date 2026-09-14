@@ -1,6 +1,6 @@
 import GLib from "gi://GLib"
 import { providerById } from "./AgentProviders"
-import { defineConfig } from "./configFile"
+import { defineSettings } from "./configFile"
 
 // Governance for the agent-facing surface (Settings → AI). This gates the
 // OFFICIAL door (`nidara-ipc setConfig`, future MCP server) — it is a consent
@@ -29,7 +29,7 @@ interface AgentSettings {
                                    // (see computerActing / pulseComputerAction)
 
     // ── The built-in Assistant's FILE access (tier 1) ───────────────────────
-    // Read live by bin/nidara-agent (re-reads ai.json per turn). These gate the
+    // Read live by bin/nidara-agent (re-reads org.nidara.ai per turn). These gate the
     // daemon's own file tools, NOT an IPC action: external MCP clients already
     // bring their own file tools, so there is nothing to mirror onto that surface.
     // The frontier itself (which paths) lives in the daemon — this is only the
@@ -51,7 +51,7 @@ interface AgentSettings {
     // ── The built-in Assistant's BRAIN (BYOK) ───────────────────────────────
     // Which LLM the native assistant (surfaces/island Agent mode + bin/nidara-agent)
     // talks to. NOT a gate — these are plain config values the daemon re-reads per
-    // turn from ai.json. "" = no brain configured (assistant shows an empty state).
+    // turn from org.nidara.ai. "" = no brain configured (assistant shows an empty state).
     // The API KEY is NEVER stored here — it lives in the DE keyring (libsecret,
     // schema org.nidara.Assistant, attribute provider). See Settings → AI.
     //
@@ -99,10 +99,10 @@ const DEFAULTS: AgentSettings = {
 
 const BACKENDS: readonly AgentSettings["brainBackend"][] = ["", "anthropic", "gemini", "openai"]
 
-const config = defineConfig<AgentSettings>("ai.json", DEFAULTS, {
+const config = defineSettings<AgentSettings>("ai", DEFAULTS, {
     // The one string in this file the daemon BRANCHES on: bin/nidara-agent picks
     // its wire protocol from it. Every other string here is free-form (a model
-    // id, a URL), and `loadKnown`'s typeof check is the right guard for those.
+    // id, a URL), and the schema's type is the right guard for those.
     brainBackend: v => BACKENDS.includes(v),
 })
 
@@ -212,12 +212,12 @@ export const agentConfig = {
     },
 
     // Read live by the standalone nidara-mcp process (it re-reads
-    // ai.json on every tool call), so flipping this needs no restarts.
+    // org.nidara.ai on every tool call), so flipping this needs no restarts.
     setAllowMcp(val: boolean) {
         config.set("allowMcp", val)
     },
 
-    // Read live by the standalone nidara-a11y helper (re-reads ai.json per
+    // Read live by the standalone nidara-a11y helper (re-reads org.nidara.ai per
     // call). Enabling it also turns on toolkit-accessibility — the capability is
     // useless while the a11y stack is globally off, and GTK4 apps only fully
     // populate their AT-SPI tree when it's on. Best-effort; never flipped back
@@ -228,7 +228,7 @@ export const agentConfig = {
     },
 
     // Read live by the standalone nidara-act helper + the do_app_action MCP
-    // tool (both re-read ai.json per call). Control REQUIRES perception: enabling
+    // tool (both re-read org.nidara.ai per call). Control REQUIRES perception: enabling
     // it implies allowComputerUse (which also flips on toolkit-accessibility) —
     // you can't drive what you can't see. The shell renders a bar indicator +
     // kill switch while this is on.
@@ -242,7 +242,7 @@ export const agentConfig = {
         if (implyUse) enableToolkitAccessibility()
     },
 
-    // Read live by bin/nidara-agent (re-reads ai.json per turn), so flipping
+    // Read live by bin/nidara-agent (re-reads org.nidara.ai per turn), so flipping
     // these takes effect on the next message with no restart.
     setAllowFileRead(val: boolean) {
         // Writing without reading is how you clobber a file someone else lives
@@ -263,7 +263,7 @@ export const agentConfig = {
     },
 
     // ── Assistant brain setters ─────────────────────────────────────────────
-    // Read live by bin/nidara-agent (re-reads ai.json per turn), so changing the
+    // Read live by bin/nidara-agent (re-reads org.nidara.ai per turn), so changing the
     // brain needs no restart. The API key is handled separately (keyring), never here.
     /** Pick a provider by id. Resolves the wire backend + endpoint and restores the
      *  model last used with THAT provider (falling back to its default), so the three

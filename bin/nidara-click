@@ -43,7 +43,21 @@ import Atspi from "gi://Atspi"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 
-const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
+// The Assistant's gates live in GSettings, `org.nidara.ai` (#573) — the same keys
+// Settings → AI writes. No schema installed reads as `undefined`, which every gate
+// below treats exactly as it treated a missing ai.json. Each read is a fresh
+// Gio.Settings, so a gate flipped a moment ago is the one that answers.
+// ⚠️ Six copies of this function (nidara-a11y/act/click/type/mcp/agent);
+// scripts/ci/same-app-check.mjs keeps them identical.
+function aiSetting(key) {
+    try {
+        const schema = Gio.SettingsSchemaSource.get_default()?.lookup("org.nidara.ai", true)
+        if (!schema) return undefined
+        return new Gio.Settings({ settings_schema: schema }).get_value(key).recursiveUnpack()
+    } catch {
+        return undefined
+    }
+}
 const MAX_NODES = 4000
 const MAX_DEPTH = 40
 
@@ -63,13 +77,7 @@ function pingShell() {
 function safe(fn, fb) { try { const v = fn(); return v == null ? fb : v } catch { return fb } }
 
 function controlEnabled() {
-    try {
-        if (!GLib.file_test(AI_JSON, GLib.FileTest.EXISTS)) return false
-        const [ok, b] = GLib.file_get_contents(AI_JSON)
-        if (!ok) return false
-        const c = JSON.parse(new TextDecoder().decode(b))
-        return c.allowComputerControl === true && c.allowComputerUse === true
-    } catch { return false }
+    return aiSetting("allow-computer-control") === true && aiSetting("allow-computer-use") === true
 }
 
 function runJson(cmd) {

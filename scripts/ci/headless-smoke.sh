@@ -342,7 +342,7 @@ phase_run() {
     fi
 
     # ── 6b. The config store's invariants, exercised ─────────────────────────
-    # `scripts/dev/define-config-probe.ts` asserts what `defineConfig` promises and
+    # `scripts/dev/define-config-probe.ts` asserts what `defineSettings` promises and
     # what a reader cannot see by looking: that a subscriber to one key is NOT woken
     # by another, that writing an identical value neither notifies nor touches the
     # file (checked by mtime), and that the two migrated modules kept their public

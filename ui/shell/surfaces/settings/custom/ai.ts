@@ -11,7 +11,7 @@ import { t } from "../../../core/i18n"
 import type { PageCtx, ItemBuilder } from "../PreferencePage"
 
 // The built-in Assistant's API key lives in the DE keyring (libsecret), never in
-// ai.json. One entry per PROVIDER (attribute `provider`), not per wire protocol:
+// GSettings. One entry per PROVIDER (attribute `provider`), not per wire protocol:
 // a key belongs to the company that issued it, and OpenAI/Google/SpaceXAI (plus
 // anything behind "Other API endpoint…") all ride the same openai-compatible path
 // — keyed by protocol they would overwrite each other's key and the user would get

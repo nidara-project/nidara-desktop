@@ -55,7 +55,7 @@ try {
     process.exit(1)
 }
 
-const { luaLiteral, luaConfigExpr, luaConfigBlock, luaWorkspaceModesBlock } = await import(OUT)
+const { luaLiteral, luaConfigExpr, luaConfigBlock, luaWorkspaceModesBlock, luaGamingBlock } = await import(OUT)
 
 /** null when luac accepts the chunk, its complaint otherwise. */
 function parses(src, name = "chunk") {
@@ -122,6 +122,40 @@ else ok("workspace default mode is rendered")
 
 if (!/\[2\]\s*=\s*"tiling"/.test(wsBlockWithOverrides)) fail("workspace override [2] = 'tiling' is rendered", wsBlockWithOverrides)
 else ok("workspace override [2] = 'tiling' is rendered")
+
+// ── Game mode (nidara-gaming.lua, and the same chunk pushed with eval) ───────
+// Parsing is not enough here: readGamingCfg() in hyprland.lua reads the VALUES,
+// and a custom wallpaper is a user path — quotes, backslashes, spaces. So the chunk
+// is RUN and every field read back, which is the contract end to end.
+{
+    const values = {
+        wallpaperMode: "custom",
+        customWallpaper: '/home/u/My "Games"/it\'s a \\ path.png',
+        transition: "grow",
+        performanceProfile: true,
+    }
+    const chunk = luaGamingBlock(values)
+    const err = parses(chunk, "gaming")
+    if (err) fail("the generated game-mode table parses", `${err}\n${chunk}`)
+    else ok("the generated game-mode table parses")
+
+    const LUA = ["lua5.4", "lua"].find(which)
+    if (!LUA) fail("the generated game-mode table round-trips", "no lua interpreter on PATH")
+    else {
+        const file = join(tmp, "gaming-roundtrip.lua")
+        writeFileSync(file, chunk + [
+            "print(NIDARA_GAMING.wallpaperMode)",
+            "print(NIDARA_GAMING.customWallpaper)",
+            "print(NIDARA_GAMING.transition)",
+            "print(tostring(NIDARA_GAMING.performanceProfile))",
+        ].join("\n"))
+        const r = spawnSync(LUA, [file], { encoding: "utf8" })
+        const got = (r.stdout ?? "").split("\n").slice(0, 4)
+        const want = [values.wallpaperMode, values.customWallpaper, values.transition, "true"]
+        if (JSON.stringify(got) !== JSON.stringify(want)) fail("the generated game-mode table round-trips", `got ${JSON.stringify(got)}\n        want ${JSON.stringify(want)}`)
+        else ok("the generated game-mode table round-trips every field, including a path with quotes and a backslash")
+    }
+}
 
 // ── Every single-option eval ─────────────────────────────────────────────────
 let evalBad = null

@@ -24,7 +24,7 @@
 // Plain GJS (gi://Atspi), same no-Node pattern as nidara-a11y/nidara-portal.
 //
 // Governance: BOTH `allowComputerControl` AND `allowComputerUse` must be true in
-// ai.json (Settings → AI). Control requires perception; both default OFF.
+// org.nidara.ai (Settings → AI). Control requires perception; both default OFF.
 // Consent layer, not a security boundary — any local process can already drive
 // the a11y bus. The shell renders an always-visible indicator + kill switch
 // while control is granted.
@@ -34,7 +34,21 @@ import Atspi from "gi://Atspi"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 
-const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
+// The Assistant's gates live in GSettings, `org.nidara.ai` (#573) — the same keys
+// Settings → AI writes. No schema installed reads as `undefined`, which every gate
+// below treats exactly as it treated a missing ai.json. Each read is a fresh
+// Gio.Settings, so a gate flipped a moment ago is the one that answers.
+// ⚠️ Six copies of this function (nidara-a11y/act/click/type/mcp/agent);
+// scripts/ci/same-app-check.mjs keeps them identical.
+function aiSetting(key) {
+    try {
+        const schema = Gio.SettingsSchemaSource.get_default()?.lookup("org.nidara.ai", true)
+        if (!schema) return undefined
+        return new Gio.Settings({ settings_schema: schema }).get_value(key).recursiveUnpack()
+    } catch {
+        return undefined
+    }
+}
 const MAX_NODES = 4000   // a match scan can touch more nodes than a perception cap
 const MAX_DEPTH = 40
 
@@ -60,17 +74,9 @@ function safe(fn, fallback) {
     try { const v = fn(); return v == null ? fallback : v } catch { return fallback }
 }
 
-// Both gates required; both default OFF (absent/garbled ai.json → disabled).
+// Both gates required; both default OFF (no schema → disabled).
 function controlEnabled() {
-    try {
-        if (!GLib.file_test(AI_JSON, GLib.FileTest.EXISTS)) return false
-        const [ok, bytes] = GLib.file_get_contents(AI_JSON)
-        if (!ok) return false
-        const cfg = JSON.parse(new TextDecoder().decode(bytes))
-        return cfg.allowComputerControl === true && cfg.allowComputerUse === true
-    } catch {
-        return false
-    }
+    return aiSetting("allow-computer-control") === true && aiSetting("allow-computer-use") === true
 }
 
 function children(acc) {

@@ -1,6 +1,5 @@
-// define-config-probe.ts — exercises core/configFile.ts (defineConfig, the JSON
-// store, and defineSettings, the GSettings one) and two modules built on it
-// (barState, NotifConfig).
+// define-config-probe.ts — exercises core/configFile.ts's settings store
+// (defineSettings, GSettings) and two modules built on it (barState, NotifConfig).
 //
 // Run with (never gjs directly — the launcher is what keeps it off YOUR settings):
 //   scripts/dev/define-config-probe.sh
@@ -8,8 +7,7 @@
 import "./gtk-init"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-import { defineConfig, defineSettings, settingsSchemaProblems } from "../../ui/shell/core/configFile"
-import { readFile, writeFile } from "../../ui/lib/file"
+import { defineSettings, settingsSchemaProblems } from "../../ui/shell/core/configFile"
 import { barConfig, barSettings, updateBarSettings, onBarSettingsChanged } from "../../ui/shell/surfaces/bar/barState"
 import { notifConfig } from "../../ui/shell/core/NotifConfig"
 import { registerConfigEntries } from "../../ui/shell/config-entries"
@@ -27,23 +25,6 @@ function assert(condition: boolean, message: string) {
         printerr(`  FAIL  ${message}`)
         throw new Error(`Assertion failed: ${message}`)
     }
-}
-
-function getFileMtime(path: string): string {
-    const file = Gio.File.new_for_path(path)
-    const info = file.query_info("time::modified,time::modified-usec", Gio.FileQueryInfoFlags.NONE, null)
-    const sec = info.get_attribute_uint64("time::modified")
-    const usec = info.get_attribute_uint32("time::modified-usec")
-    return `${sec}.${usec}`
-}
-
-function sleep(ms: number) {
-    const loop = GLib.MainLoop.new(null, false)
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
-        loop.quit()
-        return GLib.SOURCE_REMOVE
-    })
-    loop.run()
 }
 
 /** `gsettings get` in ANOTHER process: what the desktop sees, not our cache. */
@@ -76,168 +57,7 @@ async function run() {
         imports.system.exit(2)
     }
 
-    print("=== 1. Isolated defineConfig tests ===")
-
-    const testFileName = "__probe_define_config_test__.json"
-    const testFilePath = `${GLib.get_user_config_dir()}/nidara/${testFileName}`
-
-    // Clean up any stale file
-    try {
-        const f = Gio.File.new_for_path(testFilePath)
-        if (f.query_exists(null)) f.delete(null)
-    } catch {}
-
-    interface TestSchema {
-        num: number
-        str: string
-        flag: boolean
-    }
-
-    const DEFAULTS: TestSchema = {
-        num: 10,
-        str: "initial",
-        flag: false,
-    }
-
-    const store = defineConfig(testFileName, DEFAULTS)
-
-    // Check initial values
-    assert(store.get("num") === 10, "initial get(num) matches default")
-    assert(store.get("str") === "initial", "initial get(str) matches default")
-    assert(store.get("flag") === false, "initial get(flag) matches default")
-    assert(store.all.num === 10, "store.all.num matches default")
-
-    let countNum = 0
-    let lastNumVal = 0
-    let countStr = 0
-    let lastStrVal = ""
-    let allEvents: string[] = []
-
-    const unsubNum = store.subscribe("num", (v) => {
-        countNum++
-        lastNumVal = v
-    })
-
-    const unsubStr = store.subscribe("str", (v) => {
-        countStr++
-        lastStrVal = v
-    })
-
-    const unsubAll = store.subscribeAll((k) => {
-        allEvents.push(String(k))
-    })
-
-    // Assert subscribing did NOT invoke callbacks immediately
-    assert(countNum === 0, "subscribing to 'num' did not run callback immediately")
-    assert(countStr === 0, "subscribing to 'str' did not run callback immediately")
-    assert(allEvents.length === 0, "subscribeAll did not run callback immediately")
-
-    // 1. Change 'str' -> 'num' callback must NOT run!
-    print("\n--- Key isolation test: mutate 'str', assert 'num' listener is silent ---")
-    store.set("str", "changed-1")
-    assert(countNum === 0, "callback for 'num' did NOT run when 'str' changed")
-    assert(countStr === 1, "callback for 'str' ran exactly once")
-    assert(lastStrVal === "changed-1", "callback for 'str' received new value")
-    assert(store.get("str") === "changed-1", "get('str') returns updated value")
-    assert(store.all.str === "changed-1", "store.all.str reflects updated value")
-    assert(allEvents.length === 1 && allEvents[0] === "str", "subscribeAll saw 'str'")
-
-    // 2. Change 'num' -> 'num' callback must run once
-    print("\n--- Mutate 'num', assert 'num' listener runs once ---")
-    store.set("num", 42)
-    assert(countNum === 1, "callback for 'num' ran exactly once")
-    assert(lastNumVal === 42, "callback for 'num' received new value")
-    assert(countStr === 1, "callback for 'str' did NOT run when 'num' changed")
-    assert(store.get("num") === 42, "get('num') returns updated value")
-    assert(store.all.num === 42, "store.all.num reflects updated value")
-    assert(allEvents.length === 2 && allEvents[1] === "num", "subscribeAll saw 'num'")
-
-    // 3. Equality guard: setting the identical value must NOT notify and NOT touch file
-    print("\n--- Equality guard test: set same value, assert no notification and no mtime touch ---")
-    sleep(50)
-    const mtimeBefore = getFileMtime(testFilePath)
-
-    store.set("num", 42)
-    assert(countNum === 1, "callback for 'num' did NOT run on identical value write")
-    assert(countStr === 1, "callback for 'str' did NOT run on identical value write")
-    assert(allEvents.length === 2, "subscribeAll did NOT run on identical value write")
-
-    const mtimeAfterSame = getFileMtime(testFilePath)
-    assert(mtimeBefore === mtimeAfterSame, `file mtime was NOT modified (${mtimeBefore} === ${mtimeAfterSame})`)
-
-    // 4. Positive control: setting a different value DOES notify and DOES update mtime
-    print("\n--- Positive control: set different value, assert notification and mtime updated ---")
-    sleep(50)
-    store.set("num", 99)
-    assert(countNum === 2, "callback for 'num' ran on different value")
-    assert(lastNumVal === 99, "callback for 'num' received 99")
-
-    const mtimeAfterDiff = getFileMtime(testFilePath)
-    assert(mtimeBefore !== mtimeAfterDiff, `file mtime DID change on write (${mtimeBefore} -> ${mtimeAfterDiff})`)
-
-    // 5. Update() with multiple keys in a single write
-    print("\n--- update() batching test ---")
-    sleep(50)
-    const mtimeBeforeUpdate = getFileMtime(testFilePath)
-    allEvents = []
-
-    store.update({ num: 200, str: "batch-update" })
-    assert(countNum === 3, "callback for 'num' ran once for batch update")
-    assert(countStr === 2, "callback for 'str' ran once for batch update")
-    assert(lastNumVal === 200, "num value is 200")
-    assert(lastStrVal === "batch-update", "str value is 'batch-update'")
-    assert(allEvents.includes("num") && allEvents.includes("str"), "subscribeAll notified for both keys")
-
-    const mtimeAfterUpdate = getFileMtime(testFilePath)
-    assert(mtimeBeforeUpdate !== mtimeAfterUpdate, "file was written for batch update")
-
-    // Equality guard on update(): all identical values
-    sleep(50)
-    store.update({ num: 200, str: "batch-update" })
-    assert(countNum === 3, "callback for 'num' did NOT run on identical update()")
-    assert(countStr === 2, "callback for 'str' did NOT run on identical update()")
-    const mtimeAfterSameUpdate = getFileMtime(testFilePath)
-    assert(mtimeAfterUpdate === mtimeAfterSameUpdate, "file was NOT touched on identical update()")
-
-    // 6. Disposers
-    print("\n--- Disposer test ---")
-    unsubNum()
-    store.set("num", 300)
-    assert(countNum === 3, "callback for 'num' did NOT run after disposer called")
-    assert(store.get("num") === 300, "num updated in store")
-    unsubNum()
-    assert(true, "disposer is idempotent and safe to call multiple times")
-
-    unsubStr()
-    unsubAll()
-
-    // 7. loadKnown integration: retired keys drop from disk
-    print("\n--- loadKnown integration: retired keys on disk drop on write ---")
-    const fileWithRetired = {
-        num: 777,
-        str: "persisted",
-        flag: true,
-        retiredDeadKey: "should_disappear",
-    }
-    writeFile(testFilePath, JSON.stringify(fileWithRetired, null, 2))
-
-    const freshStore = defineConfig(testFileName, DEFAULTS)
-    assert(freshStore.get("num") === 777, "freshStore loaded num: 777")
-    assert((freshStore.all as any).retiredDeadKey === undefined, "retiredDeadKey is not in freshStore.all")
-
-    // Mutate and persist
-    freshStore.set("flag", false)
-    const contentOnDisk = readFile(testFilePath)
-    const parsedOnDisk = JSON.parse(contentOnDisk)
-    assert(parsedOnDisk.retiredDeadKey === undefined, "retiredDeadKey was dropped from disk on write")
-    assert(parsedOnDisk.flag === false, "updated flag: false on disk")
-
-    // Cleanup test file
-    try {
-        Gio.File.new_for_path(testFilePath).delete(null)
-    } catch {}
-
-    print("\n=== 1b. defineSettings (GSettings) ===")
+    print("=== 1. defineSettings (GSettings) ===")
 
     interface SettingsShape {
         num: number

@@ -19,7 +19,7 @@
 // implemented (initialize / tools/list / tools/call / ping) is the stable
 // core of the protocol.
 //
-// Governance: Settings → AI. `ai.json.allowMcp` is re-read on every call, so
+// Governance: Settings → AI. `org.nidara.ai allow-mcp` is re-read on every call, so
 // flipping the toggle takes effect live (off = every tool refuses). The
 // finer gates (allowConfigWrite, allowScreenshot) are enforced downstream by
 // the shell itself — this is a consent layer, not a security boundary.
@@ -30,7 +30,21 @@ import Gio from "gi://Gio"
 import GioUnix from "gi://GioUnix"
 
 const PROTOCOL_VERSION = "2025-06-18"
-const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
+// The Assistant's gates live in GSettings, `org.nidara.ai` (#573) — the same keys
+// Settings → AI writes. No schema installed reads as `undefined`, which every gate
+// below treats exactly as it treated a missing ai.json. Each read is a fresh
+// Gio.Settings, so a gate flipped a moment ago is the one that answers.
+// ⚠️ Six copies of this function (nidara-a11y/act/click/type/mcp/agent);
+// scripts/ci/same-app-check.mjs keeps them identical.
+function aiSetting(key) {
+    try {
+        const schema = Gio.SettingsSchemaSource.get_default()?.lookup("org.nidara.ai", true)
+        if (!schema) return undefined
+        return new Gio.Settings({ settings_schema: schema }).get_value(key).recursiveUnpack()
+    } catch {
+        return undefined
+    }
+}
 
 // Dev-checkout pointer written by `install.sh --dev` (absent on system installs).
 function devRepo() {
@@ -69,34 +83,17 @@ function textFile(path) {
 }
 
 function mcpEnabled() {
-    try {
-        if (!GLib.file_test(AI_JSON, GLib.FileTest.EXISTS)) return true
-        const cfg = JSON.parse(textFile(AI_JSON))
-        return cfg.allowMcp !== false
-    } catch {
-        return true
-    }
+    return aiSetting("allow-mcp") !== false
 }
 
 // Computer-use (third-party perception) defaults OFF — opposite of the others.
 function computerUseEnabled() {
-    try {
-        if (!GLib.file_test(AI_JSON, GLib.FileTest.EXISTS)) return false
-        return JSON.parse(textFile(AI_JSON)).allowComputerUse === true
-    } catch {
-        return false
-    }
+    return aiSetting("allow-computer-use") === true
 }
 
 // Computer-control (acting on third-party apps) defaults OFF and REQUIRES perception.
 function computerControlEnabled() {
-    try {
-        if (!GLib.file_test(AI_JSON, GLib.FileTest.EXISTS)) return false
-        const cfg = JSON.parse(textFile(AI_JSON))
-        return cfg.allowComputerControl === true && cfg.allowComputerUse === true
-    } catch {
-        return false
-    }
+    return aiSetting("allow-computer-control") === true && aiSetting("allow-computer-use") === true
 }
 
 // Run a command synchronously, capturing stdout+stderr. The server handles
@@ -251,7 +248,7 @@ const TOOLS = [
         handler: ({ app } = {}) => {
             if (!computerUseEnabled())
                 return errResult(
-                    "computer-use is disabled — enable 'Allow Agents to See Other Apps' in Settings → AI (or set allowComputerUse in ai.json)",
+                    "computer-use is disabled — enable 'Allow Agents to See Other Apps' in Settings → AI",
                 )
             const a11y = findTool("nidara-a11y")
             if (!a11y) return errResult("nidara-a11y not found — re-run install.sh")
@@ -701,7 +698,7 @@ function handle(msg) {
             if (!tool) return replyError(id, -32602, `unknown tool: ${params?.name}`)
             if (!mcpEnabled())
                 return reply(id, errResult(
-                    "MCP access is disabled — enable it in Settings → AI (or set allowMcp in ai.json)",
+                    "MCP access is disabled — enable it in Settings → AI",
                 ))
             try {
                 return reply(id, tool.handler(params?.arguments ?? {}))
