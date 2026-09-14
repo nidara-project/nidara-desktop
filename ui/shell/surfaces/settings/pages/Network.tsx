@@ -6,6 +6,7 @@ import * as Net from "../../../core/NetworkService"
 import type { VpnProfile } from "../../../core/NetworkService"
 import { NidaraButton, NidaraEmptyRow, attachTooltip } from "../../../../lib/nidara-kit"
 import { safeDisconnect } from "../../../core/signals"
+import { joinHiddenNetwork, setupNetwork } from "../../network/WifiSecretsDialog"
 
 function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow {
     let active = profile.active
@@ -136,13 +137,22 @@ function buildApRow(ap: any, isSaved: boolean, onRefresh: () => void, onDetails?
             return
         }
         failedSsids.delete(ssid)
-        // No password here, ever: NetworkManager asks for one through the shell's
-        // secret agent (core/NetworkAgent) when — and each time — it needs it.
-        Net.connectAp(ap).catch(e => {
+        const onFail = (e: any) => {
             if (!(e instanceof Net.ConnectError)) console.error("[Network] connect failed:", e)
             if (e?.reason !== "cancelled") failedSsids.add(ssid)
             onRefresh()
-        })
+        }
+        // No password here, ever: NetworkManager asks for one through the shell's
+        // secret agent (core/NetworkAgent) when — and each time — it needs it. Only an
+        // enterprise network needs its form first, and only the first time.
+        if (!isSaved && Net.needsSetupDialog(ap)) {
+            setupNetwork(ap).then(conn => {
+                if (!conn) { btn.sensitive = true; return }
+                Net.connectAp(ap, conn).catch(onFail)
+            })
+            return
+        }
+        Net.connectAp(ap).catch(onFail)
     })
 
     const subtitle = link === "idle" && failedSsids.has(ssid)
@@ -327,7 +337,23 @@ export default function NetworkPage(nav?: SettingsNav) {
         hexpand: true,
         margin_start: 20,
     })
+    // A hidden network is not in the list to click; libnma's form names it.
+    const otherBtn = NidaraButton({
+        label: t("settings.network.ap.other"),
+        variant: "secondary",
+        pill: true,
+        valign: Gtk.Align.CENTER,
+        halign: Gtk.Align.END,
+    })
+    otherBtn.margin_end = 8
+    otherBtn.connect("clicked", () => {
+        joinHiddenNetwork().then(conn => {
+            if (conn) Net.connectAp(null, conn).catch(e => console.error("[Network] hidden network:", e))
+        })
+    })
+
     headerBox.append(groupTitleLabel)
+    headerBox.append(otherBtn)
     headerBox.append(scanBtn)
 
     // Replace the plain title in apBox with the header+scan button row

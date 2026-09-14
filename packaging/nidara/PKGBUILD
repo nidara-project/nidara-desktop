@@ -74,8 +74,10 @@ depends=(
   # daemon, and `libnm` (its dep) for the NM-1.0 typelib core/NetworkService.ts
   # imports — that typelib used to arrive via libastal-network. `upower` is now
   # load-bearing the same way: it owns UPowerGlib-1.0.typelib, which
-  # core/BatteryService.ts imports.
-  networkmanager bluez bluez-libs bluez-utils upower accountsservice
+  # core/BatteryService.ts imports. `libnma-gtk4` owns NMA4-1.0.typelib: the Wi-Fi
+  # dialogs (password, enterprise, hidden network) surfaces/network/WifiSecretsDialog.ts
+  # builds — without it the shell's NetworkManager secret agent has nothing to show.
+  networkmanager libnma-gtk4 bluez bluez-libs bluez-utils upower accountsservice
   # (no `cups`: nothing in the desktop talks to it — printing is system policy
   # and lives in nidara-system, which also enables cups.socket)
   # `libwireplumber` is the same shape as `upower` above: it owns

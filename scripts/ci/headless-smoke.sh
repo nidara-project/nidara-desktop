@@ -53,7 +53,7 @@ phase_deps() {
     pacman -Syu --needed --noconfirm \
         base-devel git gobject-introspection glib2-devel esbuild \
         gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 pam \
-        libpulse networkmanager bluez-libs upower libnotify \
+        libpulse networkmanager libnma-gtk4 bluez-libs upower libnotify \
         pipewire wireplumber libwireplumber \
         nodejs npm gjs \
         hyprland mesa dbus seatd systemd \

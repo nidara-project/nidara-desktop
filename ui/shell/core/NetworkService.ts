@@ -374,7 +374,8 @@ export function wifiEnabled(w: WifiHandle | null = wifi()): boolean {
 // password passed as `nmcli … password X` is in argv — readable by any local user
 // with `ps` — and nmcli cannot be asked again when the key is wrong. The shell
 // now activates WITHOUT secrets and NetworkManager asks core/NetworkAgent for
-// them, as often as it needs to (a wrong key, a router whose password changed).
+// them, as often as it needs to (a wrong key, a router whose password changed);
+// the dialogs that ask are libnma's (surfaces/network/WifiSecretsDialog.ts).
 
 /** Why a connection attempt ended without a connection. */
 export class ConnectError extends Error {
@@ -414,22 +415,48 @@ export function savedWifiSsids(): Set<string> {
     return set
 }
 
+/** The objects libnma's Wi-Fi dialogs are built from. Only surfaces/network may use
+ *  them — every other surface asks this module in its own vocabulary. */
+export function nmObjects(): { client: NM.Client; device: NM.DeviceWifi } | null {
+    const c = client()
+    const d = wifi()?.device ?? null
+    return c && d ? { client: c, device: d } : null
+}
+
+/** A visible access point broadcasting `conn`'s SSID, strongest first — what libnma's
+ *  dialog needs to be built for a connection. Null for a hidden or out-of-range one. */
+export function apForConnection(conn: NM.Connection): NM.AccessPoint | null {
+    const want = ssidBytesOf(conn)
+    return (_wifiDevice?.get_access_points() ?? [])
+        .filter(ap => sameBytes(ap.ssid?.get_data() ?? null, want))
+        .sort((a, b) => b.strength - a.strength)[0] ?? null
+}
+
+/** True when joining `ap` needs more than a password — an 802.1X (enterprise) network,
+ *  which NM cannot complete from the access point alone: identity, EAP method and
+ *  certificates have to come from a dialog BEFORE the connection exists. */
+export function needsSetupDialog(ap: NM.AccessPoint): boolean {
+    return ((ap.rsn_flags ?? 0) & SEC_KEY_8021X) !== 0 || ((ap.wpa_flags ?? 0) & SEC_KEY_8021X) !== 0
+}
+
 /**
  * Join `ap`. Resolves once the connection is ACTIVATED; rejects with a
- * ConnectError when it ends any other way. A password, if one is needed, is asked
- * for by NetworkManager through the agent — never passed from here.
+ * ConnectError when it ends any other way. Secrets are never passed from here: a
+ * `connection` built by libnma's dialog carries what the user typed over D-Bus, and
+ * anything still missing — or refused — NetworkManager asks the agent for.
  *
- * A profile this call CREATED is deleted again if the attempt fails, so a
- * cancelled prompt or a refused key does not leave a "saved" network behind that
+ * With no saved profile and no `connection`, NM completes one from the access point
+ * itself. A profile this call CREATED is deleted again if the attempt fails, so a
+ * cancelled dialog or a refused key does not leave a "saved" network behind that
  * has no working key in it.
  */
-export function connectAp(ap: NM.AccessPoint): Promise<void> {
+export function connectAp(ap: NM.AccessPoint | null, connection: NM.Connection | null = null): Promise<void> {
     return new Promise((resolve, reject) => {
         const c = client()
         const dev = _wifiDevice
-        if (!c || !dev) return reject(new ConnectError("failed"))
+        if (!c || !dev || (!ap && !connection)) return reject(new ConnectError("failed"))
 
-        const saved = savedProfilesFor(ap)[0] ?? null
+        const saved = connection || !ap ? null : savedProfilesFor(ap)[0] ?? null
         const follow = (ac: NM.ActiveConnection, fresh: boolean) => {
             let id = 0
             const done = (ok: boolean, why: ConnectError["reason"] = "failed") => {
@@ -444,22 +471,23 @@ export function connectAp(ap: NM.AccessPoint): Promise<void> {
             const check = (state: number) => {
                 if (state === NM.ActiveConnectionState.ACTIVATED) done(true)
                 else if (state === NM.ActiveConnectionState.DEACTIVATED)
-                    done(false, takeUserCancel(apSsid(ap)) ? "cancelled" : "failed")
+                    done(false, takeUserCancel(ac.get_uuid() ?? "") ? "cancelled" : "failed")
             }
             id = ac.connect("state-changed", (_a: any, state: number) => check(state))
             check(ac.get_state())
         }
 
         try {
-            if (saved) {
+            if (saved && ap) {
                 c.activate_connection_async(saved, dev, ap.get_path(), null, (o: any, r: any) => {
                     try { follow(o.activate_connection_finish(r), false) }
                     catch (e) { console.error("[Network] activate:", e); reject(new ConnectError("failed")) }
                 })
             } else {
-                // null connection: NM completes it from the access point itself —
-                // SSID, and the security scheme (WPA2, WPA3, open) the AP announces.
-                c.add_and_activate_connection_async(null, dev, ap.get_path(), null, (o: any, r: any) => {
+                // A null connection is completed by NM from the access point itself —
+                // SSID, and the security scheme (WPA2, WPA3, open) the AP announces. A
+                // hidden network has no AP to point at: its connection names the SSID.
+                c.add_and_activate_connection_async(connection, dev, ap?.get_path() ?? null, null, (o: any, r: any) => {
                     try { follow(o.add_and_activate_connection_finish(r), true) }
                     catch (e) { console.error("[Network] add and activate:", e); reject(new ConnectError("failed")) }
                 })

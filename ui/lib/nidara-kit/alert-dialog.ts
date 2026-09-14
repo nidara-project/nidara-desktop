@@ -36,8 +36,6 @@ export interface AlertHandle {
  *
  * With `entry`, a single-line input is shown under the body; its text reaches
  * `onResponse` as the second argument, and Enter triggers the suggested response.
- * `password` makes it a masked field with a reveal toggle; `valid` keeps the
- * suggested response (button AND Enter) unavailable until the text passes it.
  *
  * For a prompt raised on behalf of ANOTHER app (the XDG portal's consent dialogs):
  * `icon` shows who is asking above the heading, `choices` adds check boxes whose
@@ -54,7 +52,7 @@ export function showNidaraAlert(opts: {
      *  `format(remaining)` renders the body text each tick. */
     countdown?: { seconds: number; respondId: string; format: (remaining: number) => string }
     /** Optional single-line input (PIN / passkey prompts). */
-    entry?: { placeholder?: string; digitsOnly?: boolean; maxLength?: number; password?: boolean; valid?: (text: string) => boolean }
+    entry?: { placeholder?: string; digitsOnly?: boolean; maxLength?: number }
     /** Who is asking: an icon name or a Gio.Icon, shown above the heading. */
     icon?: string | any | null   // an icon name or a Gio.Icon
     /** Check boxes under the body; `onResponse` gets `{ id: "true" | "false" }`. */
@@ -126,20 +124,9 @@ export function showNidaraAlert(opts: {
         root.append(bodyLabel)
     }
 
-    // Entry (PIN / passkey / password input)
-    let entryWidget: Gtk.Entry | Gtk.PasswordEntry | null = null
-    if (entry?.password) {
-        // Not a Gtk.Entry subclass: no max_length / input_purpose, and its own CSS node
-        // (`passwordentry`), which the stylesheet names next to `entry`.
-        entryWidget = new Gtk.PasswordEntry({
-            placeholder_text: entry.placeholder ?? "",
-            show_peek_icon: true,
-            css_classes: ["nidara-alert-entry"],
-            margin_top: 16,
-            margin_start: 24,
-            margin_end: 24,
-        })
-    } else if (entry) {
+    // Entry (PIN / passkey input)
+    let entryWidget: Gtk.Entry | null = null
+    if (entry) {
         entryWidget = new Gtk.Entry({
             placeholder_text: entry.placeholder ?? "",
             max_length: entry.maxLength ?? 0,
@@ -149,9 +136,7 @@ export function showNidaraAlert(opts: {
             margin_start: 24,
             margin_end: 24,
         })
-    }
-    if (entry && entryWidget) {
-        if (entry.digitsOnly && entryWidget instanceof Gtk.Entry) {
+        if (entry.digitsOnly) {
             // input_purpose is only a hint to virtual keyboards — enforce it.
             entryWidget.connect("changed", () => {
                 const txt = entryWidget!.text
@@ -161,7 +146,7 @@ export function showNidaraAlert(opts: {
         }
         entryWidget.connect("activate", () => {
             const def = responses.find(r => r.suggested) ?? responses[responses.length - 1]
-            if (def && (!entry.valid || entry.valid(entryWidget!.text))) respond(def.id)
+            if (def) respond(def.id)
         })
         root.append(entryWidget)
     }
@@ -213,17 +198,7 @@ export function showNidaraAlert(opts: {
     dialog.connect("close-request", () => { respond(cancelId); return true })
 
     // ── Buttons ───────────────────────────────────────────────────────────────
-    const buttonRow = dialogButtonRow(responses, respond)
-    root.append(buttonRow.box)
-    if (entry?.valid && entryWidget) {
-        const suggested = responses.find(r => r.suggested)
-        const btn = suggested ? buttonRow.buttons.get(suggested.id) : undefined
-        if (btn) {
-            const sync = () => { btn.sensitive = entry.valid!(entryWidget!.text) }
-            entryWidget.connect("changed", sync)
-            sync()
-        }
-    }
+    root.append(dialogButtonRow(responses, respond).box)
     dialog.set_child(root)
     dialog.present()
     entryWidget?.grab_focus()

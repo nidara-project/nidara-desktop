@@ -1004,8 +1004,7 @@ window.nidara-alert-dialog {
     // _components.scss (0,0,1) — which is what has actually been painting this
     // field while the block was dead, so the entry is the one part of the dialog
     // that did NOT look raw.
-    entry.nidara-alert-entry,
-    passwordentry.nidara-alert-entry {
+    entry.nidara-alert-entry {
         background: var(--nidara-surface-back);
         border: 1px solid var(--nidara-border);
         border-radius: $nidara-radius-pill;

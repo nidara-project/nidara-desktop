@@ -2507,6 +2507,18 @@ Non-obvious traps this setup exposes, all of which bit real code:
   again with another `wpa_passphrase`: NM drops the link, autoconnect retries, and the prompt
   must appear on its own with the "couldn't connect" wording (REQUEST_NEW). Before the agent
   existed that network was unreachable until its profile was deleted by hand.
+- **An enterprise (802.1X) AP runs in the same rig.** hostapd has an internal EAP server:
+  a third `mac80211_hwsim` radio, `wpa_key_mgmt=WPA-EAP` + `ieee8021x=1` + `eap_server=1`, an
+  `eap_user_file` with a PEAP/MSCHAPv2 user and a throwaway openssl CA + server cert, plus its
+  own dnsmasq. Connect with "No CA certificate is required" ticked in libnma's form.
+- **Clicking a row by fixed coordinates lies when rows reorder.** The AP list sorts by
+  strength, and two hwsim APs both report 100 %, so their order flips between rebuilds — a
+  "connect NidaraTest" click joined the other network. Locate the button (`queryUI`) or keep
+  one AP up.
+- **A GJS object-lifetime bug does not show up in one click.** The libnma over-unref needed
+  several dialogs AND the AP leaving and coming back (libnm finalising the object) before the
+  shell died. The reproducer that proved it: join → AP stop/start → repeat; the negative
+  control crashed 2× in 6 rounds.
 - **A leaked password is caught with a `ps` loop, not by reading the code.** Poll
   `ps -eo user,args | grep <the key>` every 50 ms from another user during a connect; the
   positive control is that the same loop DID catch `nmcli … password …` before 2026-09-14.
