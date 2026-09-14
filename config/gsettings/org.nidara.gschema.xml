@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The desktop's own settings (#573). Every schema here is read and written through
+  `defineConfig` (ui/shell/core/configFile.ts), which maps each camelCase field of a
+  store's DEFAULTS to the kebab-case key of the same name below.
+
+  ⚠️ THE TS DEFAULTS AND THESE DEFAULTS MUST AGREE. `defineConfig` compares them at
+  start and logs a JS error on drift, which fails the headless smoke. A default that
+  is COMPUTED at run time (recording's `hardware` and `save-dir`) is declared in the
+  store's `computed` list instead; its default here is a placeholder that nothing
+  reads, and the store answers with the computed value while the user has not set
+  one.
+
+  Ranges and choices are the same bounds as the store's validators. They are here as
+  well so that `gsettings set` from a terminal refuses what the shell would refuse,
+  instead of accepting it and leaving the store to fall back silently.
+
+  Installed to /usr/share/glib-2.0/schemas by the PKGBUILD (glib2's pacman hook
+  compiles it) and by install.sh in both modes. Editing this file changes nothing
+  until it is installed and compiled again.
+-->
+<schemalist>
+
+  <schema id="org.nidara.notifications" path="/org/nidara/notifications/">
+    <key name="popup-timeout" type="i">
+      <default>6</default>
+      <summary>Seconds a notification banner stays on screen</summary>
+    </key>
+    <key name="do-not-disturb" type="b">
+      <default>false</default>
+      <summary>Suppress banners; notifications still reach the notification centre</summary>
+    </key>
+  </schema>
+
+  <schema id="org.nidara.night-light" path="/org/nidara/night-light/">
+    <key name="enabled" type="b">
+      <default>false</default>
+      <summary>Night light is on</summary>
+    </key>
+    <key name="temperature" type="i">
+      <range min="2700" max="6500"/>
+      <default>4000</default>
+      <summary>Colour temperature in kelvin</summary>
+    </key>
+    <key name="schedule-enabled" type="b">
+      <default>false</default>
+      <summary>Turn night light on and off on a schedule</summary>
+    </key>
+    <key name="schedule-from" type="s">
+      <default>"20:00"</default>
+      <summary>Schedule start, HH:MM</summary>
+    </key>
+    <key name="schedule-to" type="s">
+      <default>"07:00"</default>
+      <summary>Schedule end, HH:MM</summary>
+    </key>
+  </schema>
+
+  <schema id="org.nidara.bar" path="/org/nidara/bar/">
+    <key name="show-app-title" type="b">
+      <default>true</default>
+      <summary>Show the focused application's name in the bar</summary>
+    </key>
+    <key name="launcher-icon" type="s">
+      <default>"nidara"</default>
+      <summary>Launcher icon: a built-in name or an absolute path to an image</summary>
+    </key>
+  </schema>
+
+  <schema id="org.nidara.dock" path="/org/nidara/dock/">
+    <key name="icon-size" type="i">
+      <range min="32" max="96"/>
+      <default>64</default>
+      <summary>Icon size in pixels</summary>
+    </key>
+    <key name="magnification" type="b">
+      <default>true</default>
+      <summary>Magnify icons under the pointer</summary>
+    </key>
+    <key name="max-icon-size" type="i">
+      <range min="64" max="128"/>
+      <default>128</default>
+      <summary>Largest magnified icon size in pixels</summary>
+    </key>
+    <key name="show-indicators" type="b">
+      <default>true</default>
+      <summary>Show a dot under running applications</summary>
+    </key>
+    <key name="screen-gap" type="i">
+      <range min="4" max="32"/>
+      <default>8</default>
+      <summary>Gap between the dock and the screen edge in pixels</summary>
+    </key>
+    <key name="auto-hide" type="b">
+      <default>false</default>
+      <summary>Hide the dock until the pointer reaches its edge</summary>
+    </key>
+    <key name="hide-delay" type="i">
+      <range min="0" max="2000"/>
+      <default>500</default>
+      <summary>Milliseconds before an auto-hidden dock hides</summary>
+    </key>
+    <key name="position" type="s">
+      <choices>
+        <choice value="bottom"/>
+        <choice value="left"/>
+        <choice value="right"/>
+      </choices>
+      <default>"bottom"</default>
+      <summary>Screen edge the dock sits on</summary>
+    </key>
+  </schema>
+
+  <schema id="org.nidara.workspaces" path="/org/nidara/workspaces/">
+    <key name="default-mode" type="s">
+      <choices>
+        <choice value="floating"/>
+        <choice value="tiling"/>
+      </choices>
+      <default>"floating"</default>
+      <summary>Window mode of a workspace with no override</summary>
+    </key>
+    <key name="workspaces" type="a{ss}">
+      <default>{}</default>
+      <summary>Per-workspace mode overrides: workspace number to "floating" or "tiling"</summary>
+    </key>
+  </schema>
+
+  <schema id="org.nidara.recording" path="/org/nidara/recording/">
+    <key name="audio-source" type="s">
+      <default>"@system"</default>
+      <summary>Audio source: @system, @mic, or a PulseAudio source name</summary>
+    </key>
+    <key name="quality" type="s">
+      <choices>
+        <choice value="low"/>
+        <choice value="balanced"/>
+        <choice value="high"/>
+      </choices>
+      <default>"balanced"</default>
+      <summary>Encoding quality</summary>
+    </key>
+    <key name="framerate" type="i">
+      <range min="0" max="240"/>
+      <default>0</default>
+      <summary>Frames per second; 0 follows the compositor</summary>
+    </key>
+    <key name="hardware" type="b">
+      <default>false</default>
+      <summary>Encode on the GPU. Unset: on when a render node exists</summary>
+    </key>
+    <key name="format" type="s">
+      <choices>
+        <choice value="mp4"/>
+        <choice value="mkv"/>
+        <choice value="webm"/>
+      </choices>
+      <default>"mp4"</default>
+      <summary>Container format</summary>
+    </key>
+    <key name="save-dir" type="s">
+      <default>""</default>
+      <summary>Folder recordings are saved to. Unset: the XDG videos folder</summary>
+    </key>
+  </schema>
+
+</schemalist>

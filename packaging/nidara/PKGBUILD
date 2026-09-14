@@ -397,6 +397,10 @@ package_nidara-desktop() {
   install -Dm644 packaging/nidara/nidara-dconf.hook \
     "$pkgdir/usr/share/libalpm/hooks/90-nidara-dconf.hook"
 
+  # The desktop's settings schemas (#573). glib2 ships the pacman hook that
+  # compiles /usr/share/glib-2.0/schemas, so installing the XML is the whole job.
+  install -Dm644 -t "$pkgdir/usr/share/glib-2.0/schemas" config/gsettings/*.gschema.xml
+
   # fontconfig: per-language CJK variant — the 65-0- filename MUST sort before
   # fontconfig's 65-nonlatin.conf (see the file's header comment)
   install -Dm644 config/fontconfig/65-0-nidara-noto-cjk.conf \

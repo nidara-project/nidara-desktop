@@ -714,6 +714,13 @@ sudo install -Dm644 "$REPO_DIR/config/dconf/profile-user" /etc/dconf/profile/use
     | sudo install -Dm644 /dev/stdin /etc/dconf/db/local.d/00-nidara-appearance
 sudo dconf update
 
+# The desktop's settings schemas (#573). Same path as the package in BOTH modes:
+# a copy in ~/.local/share/glib-2.0/schemas would SHADOW the system one (measured
+# 2026-09-14), and outlive the dev checkout that put it there. Re-run this after
+# editing config/gsettings/ — the shell reads the COMPILED schema, not the XML.
+sudo install -Dm644 -t /usr/share/glib-2.0/schemas "$REPO_DIR"/config/gsettings/*.gschema.xml
+sudo glib-compile-schemas /usr/share/glib-2.0/schemas
+
 # fontconfig: per-language CJK variant. Arch's noto-fonts-cjk ships no
 # fontconfig rules and fontconfig's own 65-nonlatin.conf hardcodes the KR face,
 # so zh/ja sessions render their Han characters with Korean stroke forms.

@@ -1,7 +1,7 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import { writeFile } from "../../lib/file"
-import { defineConfig } from "./configFile"
+import { defineSettings } from "./configFile"
 import hs from "./HyprlandState"
 import { luaWorkspaceModesBlock } from "./hyprland-lua"
 
@@ -25,7 +25,7 @@ const DEFAULTS: WorkspacesSettings = {
     workspaces: {},
 }
 
-const config = defineConfig<WorkspacesSettings>("workspaces.json", DEFAULTS, {
+const config = defineSettings<WorkspacesSettings>("workspaces", DEFAULTS, {
     defaultMode: isMode,
     workspaces: v => {
         if (!v || typeof v !== "object" || Array.isArray(v)) return false

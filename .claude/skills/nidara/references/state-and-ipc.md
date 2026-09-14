@@ -307,7 +307,7 @@ Hyprland itself has no workspace mode primitive (`workspace = N, layout:floating
 therefore ours, structured in three layers:
 
 1. **Persistence & Shell service (`ui/shell/core/WorkspaceModes.ts`)**:
-   - `workspaces.json` managed via `defineConfig` stores `defaultMode` ("floating") and an overrides map (`Record<string, WorkspaceMode>`). Changing the default does not rewrite per-workspace overrides.
+   - GSettings `org.nidara.workspaces` (via `defineSettings`) stores `default-mode` ("floating") and an overrides map (`a{ss}`, `Record<string, WorkspaceMode>`). Changing the default does not rewrite per-workspace overrides.
    - Emits GObject `changed` signal on any mutation. Registered in `ConfigRegistry` as `workspaces.defaultMode` and `workspaces.workspace1Mode`..`5Mode` with UI metadata, visible on the Settings → Desktop page (`manifest.ts`) under two groups: default mode (segmented floating/tiling) and per-workspace mode (segmented with three states: default [inherited], floating, tiling). External IPC changes (e.g. `setWorkspaceMode`) reactively synchronize the UI via ConfigEntry subscriptions.
    - Generates `~/.config/nidara/nidara-workspaces.lua` containing the Lua table `NIDARA_WS_MODES = { default = "floating", [2] = "tiling" }`.
    - Hot-pushes changes live via `hs.evalLua("NIDARA_WS_MODES[id] = '...'")` (sub-4 ms IPC), and re-pushes on boot or when Hyprland reloads its config.
@@ -749,13 +749,15 @@ Rules:
   can only ever disagree with the real one.
 
   ⚠️ **That flag is ours now** (2026-08-18, when `core/notifd.ts` replaced AstalNotifd): it lives
-  in `notif-config.json` via `core/NotifConfig.ts`, because DnD was never daemon behaviour —
+  in `core/NotifConfig.ts` (GSettings `org.nidara.notifications`, since #573), because DnD was never daemon behaviour —
   AstalNotifd kept it in GSettings so its PROXIES could share the bit, and Nidara has none. The
   lesson survives its example: the question is still "who already stores this", and the answer is
   still "exactly one place". ⚠️ And when a library that owned a GSettings schema goes, **never
   read the old schema to migrate**: `Gio.Settings.new()` on a schema that is no longer installed
   ABORTS the process (guard with `Gio.SettingsSchemaSource.get_default().lookup()` if you ever
-  must). Users get the default once; a notification flag is not worth a crash loop.
+  must). Re-measured 2026-09-14: it is the C constructor that aborts; GJS's
+  `new Gio.Settings({ schema_id })` throws a catchable error instead — `defineSettings` uses
+  neither blind, it looks the schema up first. Users get the default once; a notification flag is not worth a crash loop.
 - **Reading an effective Hyprland option: READ IT THROUGH A TYPED READER, never off the raw
   JSON.** A `getoption -j` payload carries EXACTLY ONE typed field, named after the option's
   type — `int`, `bool`, `float`, `str` or `css` — and nothing alongside it, so naming the

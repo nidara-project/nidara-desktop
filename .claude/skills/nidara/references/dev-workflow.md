@@ -3357,21 +3357,43 @@ hyprctl eval "hl.monitor({ output = 'Virtual-1', mode = '1280x720@60', position 
 
 ## Persistence
 
-All persistent state lives in `~/.config/nidara/`:
+⚠️ **Settings are moving to GSettings (`org.nidara.*`, #573)** — `gsettings list-recursively
+org.nidara` shows the ones that already live there (dock, bar, notifications, night light,
+workspaces, recording). Architecture → "Where a setting lives" has the rules. For dev work:
+
+- **The schema is read COMPILED.** Editing `config/gsettings/org.nidara.gschema.xml` changes nothing
+  until `./install.sh --dev` installs and compiles it again — into `/usr/share/glib-2.0/schemas`,
+  the package's path, in BOTH modes. Never into `~/.local/share/glib-2.0/schemas`: measured
+  2026-09-14, a copy there SHADOWS the system one, and it would outlive the checkout that put it
+  there. A store whose schema is missing or stale logs `[defineSettings] …` in the shell log.
+- **The store probe writes settings, so run it through its launcher**:
+  `scripts/dev/define-config-probe.sh` gives it a scratch config dir and the keyfile backend (no
+  bus, nothing of yours). It still imports `config-entries.ts`, which reaches Hyprland and writes
+  under `$HOME`, so on a live desktop run it headless and fenced in as well (a short runtime dir —
+  a Wayland socket path over 108 bytes fails):
+  `env -u DISPLAY -u HYPRLAND_INSTANCE_SIGNATURE -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS HOME=<scratch> XDG_RUNTIME_DIR=<short scratch> WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 dbus-run-session -- cage -- scripts/dev/define-config-probe.sh <out>`.
+- ⚠️ **Overriding `XDG_CONFIG_HOME` does NOT isolate dconf.** The client reads the database under
+  its own `XDG_CONFIG_HOME`, but writes go through the ALREADY-RUNNING `dconf-service`, which writes
+  to yours — a test that "imported" and then read back nothing, measured 2026-09-14. Isolate with a
+  private bus whose activated dconf inherits the scratch dir, env set BEFORE the bus starts:
+  `env -u DBUS_SESSION_BUS_ADDRESS XDG_CONFIG_HOME=<scratch> XDG_RUNTIME_DIR=<short scratch> dbus-run-session -- <test>`.
+  Or use `GSETTINGS_BACKEND=keyfile`, which is what CI does.
+- **The migration only runs from `/usr/share/nidara/migrations`**, i.e. after `install.sh`; a dev
+  checkout reloaded without it reads defaults until then, and nothing is lost — the JSON files stay
+  until the migration takes them.
+
+Everything else still lives in `~/.config/nidara/`:
 
 | File | Purpose |
 |---|---|
 | `theme_settings.json` | Theme engine state |
 | `nidara.json` | Token engine config |
 | `appearance.json` | Appearance state (+ world-readable mirror at `/var/tmp/nidara/appearance.json` for the greeter) |
-| `dock_settings.json` | Dock layout/behavior |
 | `dock_pinned.json` | Dock pinned apps |
 | `cc_layout.json` | Control Center layout |
 | `widgets.json` | CC widget registry/metadata |
-| `bar-settings.json` | Bar config |
 | `region.json` | Time/date/timezone |
 | `gaming.json` | Game-mode config |
-| `night-light.json` | Night light schedule |
 | `wallpaper` | Current wallpaper path + transition (JSON; reserves a `surfaces` block for per-surface wallpapers — schema in `ui/lib/wallpaper.ts`) |
 | `greeter-prefs.json` | Greeter preferences |
 

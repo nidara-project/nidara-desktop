@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Test schemas for scripts/dev/define-config-probe.ts. Never installed.
+  `probe-store` agrees with the probe's DEFAULTS; `probe-drift` deliberately does
+  NOT (a default and a type), so the probe can show that `defineSettings` reports
+  drift instead of assuming it does.
+-->
+<schemalist>
+  <schema id="org.nidara.probe-store" path="/org/nidara/probe-store/">
+    <key name="num" type="i"><default>10</default></key>
+    <key name="str" type="s"><default>"initial"</default></key>
+    <key name="flag" type="b"><default>false</default></key>
+    <key name="some-map" type="a{ss}"><default>{}</default></key>
+    <key name="computed-dir" type="s"><default>""</default></key>
+  </schema>
+  <schema id="org.nidara.probe-drift" path="/org/nidara/probe-drift/">
+    <key name="num" type="i"><default>11</default></key>
+    <key name="str" type="i"><default>0</default></key>
+  </schema>
+</schemalist>

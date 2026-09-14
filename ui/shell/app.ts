@@ -1041,7 +1041,7 @@ app.start({
     // notifications at all, with no error anywhere.
     startNotifServer()
 
-    // (No DnD seeding here. `notif-config.json` persists the flag on its own — see
+    // (No DnD seeding here. The flag persists on its own — GSettings, via
     // core/NotifConfig.ts; the block that used to force it true at every main() —
     // which is every UI RELOAD, not just login — was removed 2026-08-16.)
 

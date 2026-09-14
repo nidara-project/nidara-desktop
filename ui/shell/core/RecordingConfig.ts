@@ -24,7 +24,7 @@
 
 import GLib from "gi://GLib"
 import { execAsync } from "../../lib/process"
-import { defineConfig } from "./configFile"
+import { defineSettings } from "./configFile"
 
 export type RecordQuality = "low" | "balanced" | "high"
 export type RecordFormat = "mp4" | "mkv" | "webm"
@@ -72,7 +72,7 @@ const DEFAULTS: RecordingSettings = {
     saveDir: defaultSaveDir(),
 }
 
-const config = defineConfig<RecordingSettings>("recording.json", DEFAULTS, {
+const config = defineSettings<RecordingSettings>("recording", DEFAULTS, {
     // `format` indexes CODECS and `quality` indexes the per-encoder preset maps.
     // Both are plain strings to `loadKnown`, so a hand-edited file reaches
     // `CODECS[undefined].sw` — a capture that fails with a TypeError rather than
@@ -81,11 +81,11 @@ const config = defineConfig<RecordingSettings>("recording.json", DEFAULTS, {
     format: v => FORMATS.includes(v),
     framerate: v => Number.isFinite(v) && v >= 0,
     saveDir: v => v.length > 0,
-})
+}, { computed: ["hardware", "saveDir"] })
 
 /** The live settings object. Reads stay as cheap as the module-level `_settings`
  *  they replaced; every write goes through `config.set`, which is the only thing
- *  that touches the file. */
+ *  that writes the setting (GSettings, `org.nidara.recording`). */
 const _settings: Readonly<RecordingSettings> = config.all
 
 // ── Audio devices ─────────────────────────────────────────────────────────────

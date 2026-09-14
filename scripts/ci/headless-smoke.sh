@@ -58,7 +58,7 @@ phase_deps() {
         nodejs npm gjs \
         hyprland mesa dbus seatd systemd \
         wayland-protocols hyprland-protocols wlr-protocols \
-        grim jq librsvg \
+        grim jq librsvg dconf \
         ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono inter-font noto-fonts-emoji
 
     ldconfig
@@ -68,6 +68,13 @@ phase_deps() {
 # Phase: bundle — SCSS + scripts/bundle.sh of the COMMITTED tree (as root)
 # ─────────────────────────────────────────────────────────────────────────────
 phase_bundle() {
+    # The desktop's settings schemas (#573), where the package puts them. Without
+    # them every settings store falls back to memory and says so in the log,
+    # which step 7b below turns into a failure.
+    install -Dm644 -t /usr/share/glib-2.0/schemas "$REPO"/config/gsettings/*.gschema.xml
+    glib-compile-schemas --strict /usr/share/glib-2.0/schemas
+    log "gsettings schemas OK"
+
     # libnidara-wl first. The shell TOLERATES it missing (VisibleRegion.ts imports
     # it lazily and falls back to full surfaces), so this is not about booting —
     # it is so the smoke exercises the real path, and so a broken build.sh fails
@@ -345,8 +352,10 @@ phase_run() {
     # ⚠️ It is wired in rather than left as a file someone might remember to run: a
     # committed instrument nothing executes is one that rots, and this whole issue
     # is about invariants that hold silently until they do not.
-    if /repo/scripts/bundle.sh --js /repo/scripts/dev/define-config-probe.ts /tmp/smoke/dcp.js >/dev/null 2>&1 \
-       && gjs -m /tmp/smoke/dcp.js > /tmp/smoke/define-config.txt 2>&1; then
+    #
+    # Through its launcher: the probe writes settings, and the launcher is what
+    # gives it a scratch config dir and the keyfile GSettings backend.
+    if /repo/scripts/dev/define-config-probe.sh /tmp/smoke/dcp > /tmp/smoke/define-config.txt 2>&1; then
         log "config store OK — $(grep -c '^  PASS' /tmp/smoke/define-config.txt) assertions"
     else
         log "FAIL: config store probe"
@@ -358,6 +367,16 @@ phase_run() {
     if grep -nE "JS ERROR|Unhandled promise rejection" "$shell_log" > /tmp/smoke/js-errors.txt; then
         log "FAIL: JS errors during boot:"
         cat /tmp/smoke/js-errors.txt
+        exit 1
+    fi
+
+    # ── 7b. Every settings store agrees with its installed schema ─────────────
+    # `defineSettings` never throws on a missing schema, a missing key or a default
+    # that differs from the code — the desktop has to start — so it only logs.
+    # This is where that log line stops being ignorable.
+    if grep -n "\[defineSettings\]" "$shell_log" > /tmp/smoke/settings-schema.txt; then
+        log "FAIL: settings stores disagree with their schemas:"
+        cat /tmp/smoke/settings-schema.txt
         exit 1
     fi
 
