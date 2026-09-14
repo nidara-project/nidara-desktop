@@ -1,7 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import app from "../../../lib/host"
-import status from "../../core/Status"
 import {
     NidaraClamp, NidaraScrolled, NidaraSidebar, NidaraWindow, NidaraRow,
     NIDARA_WINDOW_RADIUS as WINDOW_RADIUS,
@@ -511,15 +510,10 @@ export default function Settings(monitor: Gdk.Monitor) {
     // import shell common/, so the caller attaches it to the exposed handle).
     attachTooltip(cw.sidebarToggle, t("settings.nav.menu"), { chrome: false })
 
-    // Keep status.settings_open honest — it's what dumpState reports as
-    // overlays.settings. notify::visible catches every show/hide path (present(),
-    // the close button's set_visible(false), and close-request), so the flag tracks
-    // the real window state instead of staying permanently false. (One window in
-    // practice; on a multi-monitor multi-window setup the last event wins, which is
-    // moot until that design is revisited — see tech-debt #16.)
-    status.settings_open = win.get_visible()
+    // (dumpState's `overlays.settings` is NOT reported from here any more: the shell
+    // reads it off Hyprland's client list — `isSettingsClient` in app.ts — because a
+    // Settings window in its own process cannot write the shell's Status, #571.)
     win.connect("notify::visible", () => {
-        status.settings_open = win.get_visible()
         // Reopening on the page you left does not go through showPage, and hiding
         // the window does not unrealize the page either — so without this, the one
         // page a user returns to most often is the one that never refreshes.

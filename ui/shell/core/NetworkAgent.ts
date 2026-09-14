@@ -39,6 +39,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import NM from "gi://NM?version=1.0"
 import Secret from "gi://Secret"
+import { recordUserCancel } from "./NetworkCancels"
 
 const NM_NAME = "org.freedesktop.NetworkManager"
 const AGENT_PATH = "/org/freedesktop/NetworkManager/SecretAgent"   // fixed by NM, not ours to pick
@@ -101,19 +102,6 @@ export interface WifiSecretsHandler {
     prompt(req: WifiSecretsRequest): Promise<GLib.Variant | null>
     /** NM withdrew the request (timeout, the activation was cancelled) — close the dialog. */
     cancel(): void
-}
-
-/** Connection UUIDs whose dialog the user dismissed, with when. NM does not carry that
- *  fact to the activation: a cancelled prompt ends it with reason DEVICE_DISCONNECTED,
- *  not NO_SECRETS (measured), so the only place that knows is here. */
-const userCancels = new Map<string, number>()
-
-/** Did the user dismiss the secrets dialog for the connection `uuid` in the last
- *  half-minute? Consumes the record, so one cancel explains one failed attempt. */
-export function takeUserCancel(uuid: string): boolean {
-    const at = userCancels.get(uuid)
-    userCancels.delete(uuid)
-    return at !== undefined && Date.now() - at < 30_000
 }
 
 let handler: WifiSecretsHandler | null = null
@@ -189,7 +177,7 @@ function getSecrets(params: any[], inv: any): void {
                 // try: NM may have timed the call out while the user was typing.
                 try {
                     if (secrets === null) {
-                        userCancels.set(uuid, Date.now())
+                        recordUserCancel(uuid)
                         inv.return_dbus_error(`${ERR}.UserCanceled`, "cancelled by the user")
                     } else {
                         inv.return_value(GLib.Variant.new_tuple([secrets]))

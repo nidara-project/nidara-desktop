@@ -5,8 +5,6 @@ import NM from "gi://NM?version=1.0"
 import NMA from "gi://NMA4?version=1.0"
 import { setWindowAppId } from "../../lib/app-id"
 import * as Net from "../core/NetworkService"
-import status from "../core/Status"
-import { startNetworkAgent, type WifiSecretsRequest } from "../core/NetworkAgent"
 
 // The Wi-Fi dialogs are libnma's (libnma-gtk4), the same library GNOME Settings
 // builds its connection editor on: personal and enterprise (802.1X, certificates),
@@ -17,7 +15,8 @@ import { startNetworkAgent, type WifiSecretsRequest } from "../core/NetworkAgent
 // In common/, not in a surface: Settings → Network AND the Control Centre's Wi-Fi
 // detail join networks, and a widget may not import a surface. Three doors, all in
 // the shell process (no helper process — see #571 for Settings as its own process):
-//   · secrets NetworkManager asks for (startWifiSecretsDialogs → the agent);
+//   · secrets NetworkManager asks for — common/WifiSecretsAgent.ts, shell-only, which
+//     builds its dialog with `runWifiDialog` from here;
 //   · an enterprise network joined from Settings, which needs its form BEFORE a
 //     connection can exist (setupNetwork);
 //   · "Other network…", a hidden SSID (joinHiddenNetwork).
@@ -26,12 +25,9 @@ import { startNetworkAgent, type WifiSecretsRequest } from "../core/NetworkAgent
 //   - `WifiDialog.new_for_secrets(client, conn, setting, hints)`: the GIR types
 //     `hints` as a string while the C reads a NULL-terminated string ARRAY. An empty
 //     JS string is read as a pointer array (SIGSEGV in g_strdupv); null is refused by
-//     GJS. Eight NUL bytes ARE a valid empty array, so that is what `NO_HINTS` is —
+//     GJS. Eight NUL bytes ARE a valid empty array, so that is what `NO_HINTS` is (in WifiSecretsAgent.ts, its only user) —
 //     used only where there is no access point to build `WifiDialog.new` from.
 //   - every constructor argument is non-nullable from GJS (connection, device, ap).
-
-/** An empty `const char * const *` in the shape GJS will marshal: see the note above. */
-const NO_HINTS = "\0\0\0\0\0\0\0\0"
 
 /**
  * ⚠️ The third trap, and the one that crashes the SHELL: `WifiDialog.get_connection()`
@@ -51,10 +47,6 @@ const NO_HINTS = "\0\0\0\0\0\0\0\0"
 const borrowedRefs = new Gio.ListStore()
 borrowedRefs.append(borrowedRefs)
 
-/** The dialog answering the AGENT, so NM withdrawing a request closes that one and
- *  never a form the user opened from Settings. */
-let agentDialog: NMA.WifiDialog | null = null
-
 /** Every text field in `w`'s tree, in order. */
 function entries(w: Gtk.Widget | null, out: Gtk.Entry[] = []): Gtk.Entry[] {
     for (let c = w?.get_first_child() ?? null; c; c = c.get_next_sibling()) {
@@ -64,8 +56,14 @@ function entries(w: Gtk.Widget | null, out: Gtk.Entry[] = []): Gtk.Entry[] {
     return out
 }
 
-/** Present `dialog` and resolve with its connection on OK, null on anything else. */
-function run(dialog: NMA.WifiDialog): Promise<[NM.Connection, NM.Device | null, NM.AccessPoint | null] | null> {
+/**
+ * Present `dialog` and resolve with its connection on OK, null on anything else.
+ * `beforePresent` runs right before the dialog shows — the shell passes
+ * `status.closeOverlays()` there, because an open overlay holds the keyboard grab and the
+ * form could not be typed into. It is a parameter and not an import so that this module
+ * never needs Status: Settings joins networks through it too (#571).
+ */
+export function runWifiDialog(dialog: NMA.WifiDialog, beforePresent?: () => void): Promise<[NM.Connection, NM.Device | null, NM.AccessPoint | null] | null> {
     // A window that owns the desktop's name: without it Hyprland and the dock file the
     // dialog under the shell PROCESS id and it shows up as an unknown app.
     setWindowAppId(dialog, "nidara-settings")
@@ -113,40 +111,8 @@ function run(dialog: NMA.WifiDialog): Promise<[NM.Connection, NM.Device | null, 
             dialog.destroy()
             resolve(result)
         })
-        // Whatever overlay is open holds the keyboard grab (see Status.closeOverlays).
-        status.closeOverlays()
+        beforePresent?.()
         dialog.present()
-    })
-}
-
-function prompt(req: WifiSecretsRequest): Promise<GLib.Variant | null> {
-    const nm = Net.nmObjects()
-    if (!nm) return Promise.resolve(null)
-    const ap = Net.apForConnection(req.connection)
-    let dialog: NMA.WifiDialog
-    try {
-        dialog = ap
-            ? (NMA.WifiDialog as any).new(nm.client, req.connection, nm.device, ap, true)
-            : NMA.WifiDialog.new_for_secrets(nm.client, req.connection, req.settingName, NO_HINTS)
-    } catch (e) {
-        console.error("[WifiSecrets] could not build the dialog:", e)
-        return Promise.resolve(null)
-    }
-    agentDialog = dialog
-    return run(dialog).then(result => {
-        if (agentDialog === dialog) agentDialog = null
-        if (!result) return null
-        // Only the secrets travel back to NM, and over D-Bus — never argv.
-        return result[0].to_dbus(NM.ConnectionSerializationFlags.ONLY_SECRETS)
-    })
-}
-
-/** Serve NetworkManager's secret requests for the whole session. Called once from app.ts. */
-export function startWifiSecretsDialogs(): void {
-    startNetworkAgent({
-        prompt,
-        // Through `response`, so the pending run() resolves and the dialog is destroyed once.
-        cancel: () => { (agentDialog as any)?.response(Gtk.ResponseType.CANCEL) },
     })
 }
 
@@ -154,7 +120,7 @@ export function startWifiSecretsDialogs(): void {
  * The enterprise form for `ap`, then the connection it describes. Resolves null when
  * the user cancelled. The caller activates the connection.
  */
-export function setupNetwork(ap: NM.AccessPoint): Promise<NM.Connection | null> {
+export function setupNetwork(ap: NM.AccessPoint, beforePresent?: () => void): Promise<NM.Connection | null> {
     const nm = Net.nmObjects()
     if (!nm) return Promise.resolve(null)
     // A skeleton naming the network: libnma fills in security from the AP.
@@ -162,7 +128,7 @@ export function setupNetwork(ap: NM.AccessPoint): Promise<NM.Connection | null> 
     conn.add_setting(new NM.SettingConnection({ id: Net.apSsid(ap), uuid: NM.utils_uuid_generate(), type: "802-11-wireless" }))
     conn.add_setting(new NM.SettingWireless({ ssid: ap.ssid }))
     try {
-        return run((NMA.WifiDialog as any).new(nm.client, conn, nm.device, ap, false)).then(r => r?.[0] ?? null)
+        return runWifiDialog((NMA.WifiDialog as any).new(nm.client, conn, nm.device, ap, false), beforePresent).then(r => r?.[0] ?? null)
     } catch (e) {
         console.error("[WifiSecrets] could not build the setup dialog:", e)
         return Promise.resolve(null)
@@ -170,11 +136,11 @@ export function setupNetwork(ap: NM.AccessPoint): Promise<NM.Connection | null> 
 }
 
 /** "Other network…": name + security for a hidden SSID, then the connection to join. */
-export function joinHiddenNetwork(): Promise<NM.Connection | null> {
+export function joinHiddenNetwork(beforePresent?: () => void): Promise<NM.Connection | null> {
     const nm = Net.nmObjects()
     if (!nm) return Promise.resolve(null)
     try {
-        return run(NMA.WifiDialog.new_for_other(nm.client)).then(r => r?.[0] ?? null)
+        return runWifiDialog(NMA.WifiDialog.new_for_other(nm.client), beforePresent).then(r => r?.[0] ?? null)
     } catch (e) {
         console.error("[WifiSecrets] could not build the hidden-network dialog:", e)
         return Promise.resolve(null)
@@ -185,18 +151,19 @@ export function joinHiddenNetwork(): Promise<NM.Connection | null> {
  * Join `ap` the way a user means it: an enterprise network the first time gets its
  * form, anything else is activated and NetworkManager asks for what it lacks.
  * Rejects with Net.ConnectError; a cancelled form rejects with reason "cancelled".
+ * `beforePresent`: see runWifiDialog — only called if a form is actually shown.
  */
-export function joinNetwork(ap: NM.AccessPoint, isSaved: boolean): Promise<void> {
+export function joinNetwork(ap: NM.AccessPoint, isSaved: boolean, beforePresent?: () => void): Promise<void> {
     if (isSaved || !Net.needsSetupDialog(ap)) return Net.connectAp(ap)
-    return setupNetwork(ap).then(conn => {
+    return setupNetwork(ap, beforePresent).then(conn => {
         if (!conn) throw new Net.ConnectError("cancelled")
         return Net.connectAp(ap, conn)
     })
 }
 
 /** "Other network…" end to end: the form, then the connection it describes. */
-export function joinOtherNetwork(): Promise<void> {
-    return joinHiddenNetwork().then(conn => {
+export function joinOtherNetwork(beforePresent?: () => void): Promise<void> {
+    return joinHiddenNetwork(beforePresent).then(conn => {
         if (!conn) throw new Net.ConnectError("cancelled")
         return Net.connectAp(null, conn)
     })

@@ -16,7 +16,6 @@ export class UIStatus extends GObject.Object {
                 "prism-open": GObject.ParamSpec.boolean("prism-open", "Prism Open", "Prism Search visibility", GObject.ParamFlags.READWRITE, false),
                 "app-grid-open": GObject.ParamSpec.boolean("app-grid-open", "App Grid Open", "App grid visibility", GObject.ParamFlags.READWRITE, false),
                 "notif-active": GObject.ParamSpec.boolean("notif-active", "Notif Active", "Popups visibility", GObject.ParamFlags.READWRITE, false),
-                "settings-open": GObject.ParamSpec.boolean("settings-open", "Settings Open", "Settings window visibility", GObject.ParamFlags.READWRITE, false),
                 "cc-edit-mode": GObject.ParamSpec.boolean("cc-edit-mode", "CC Edit Mode", "CC edit mode active", GObject.ParamFlags.READWRITE, false),
                 "system-menu-open": GObject.ParamSpec.boolean("system-menu-open", "System Menu Open", "System Menu visibility", GObject.ParamFlags.READWRITE, false),
                 "island-mode": GObject.ParamSpec.string("island-mode", "Island Mode", "Active Activity Island mode id, empty = collapsed", GObject.ParamFlags.READWRITE, ""),
@@ -33,7 +32,6 @@ export class UIStatus extends GObject.Object {
     private _prism_open = false
     private _app_grid_open = false
     private _notif_active = false
-    private _settings_open = false
     private _cc_edit_mode  = false
     private _system_menu_open = false
     private _island_mode = ""
@@ -127,13 +125,6 @@ export class UIStatus extends GObject.Object {
         this._app_grid_open = v
         if (v) this.closeExclusive("_app_grid_open", { notif: true, barExpanded: true })
         this.notify("app-grid-open")
-    }
-
-    public get settings_open() { return this._settings_open }
-    public set settings_open(v: boolean) {
-        if (this._settings_open === v) return
-        this._settings_open = v
-        this.notify("settings-open")
     }
 
     public get cc_edit_mode() { return this._cc_edit_mode }
