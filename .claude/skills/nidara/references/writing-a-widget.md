@@ -118,7 +118,9 @@ the shape: the widget never pushes, the host pulls when the subscribe fires.
 
 Everything else on `AtomicWidget` is optional and documented at its field in
 `common/widget-kit/contract.ts`: `buildBarExpanded`, `buildCCDetail`, `buildSettings` (a
-Configure subpage — keep a widget's own options with the widget), `isAvailable`/`watchAvailable`
+Configure subpage — keep a widget's own options with the widget; ⚠️ it is the one field Settings
+cannot receive once it runs in its own process (#571), so put the options themselves in GSettings
+and keep the page a thin set of rows over them, as `screenrecord` does), `isAvailable`/`watchAvailable`
 (a hardware gate: without it the widget stops existing for the user rather than showing
 broken), `getActive`/`watchActive` (fills the whole island with the accent, the standard
 quick-settings convention), `getFill` (the gauge variant), `barClick` (intercept the pill's

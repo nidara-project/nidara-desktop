@@ -1469,6 +1469,17 @@ only SHRINK — a listed module no longer reached fails too. `--print` gives the
 to each: cut its first edge, delete the line. A value Settings needs from a surface goes in that
 surface's store (`barState.ts`, `dock/state.ts` — both exempt), never imported from the window.
 
+**Settings → Widgets reads the widgets as DATA** (`core/WidgetCatalog.ts`). It used to import
+`widgets/index` and `CCLayoutManager` — every widget's implementation and every service they start.
+It now calls `widgetCatalog().list()` (id, name, icon, category, hardware present, placement, "fits in
+the CC") and `setBar`/`setCc`; the shell registers the answer once in `app.ts`
+(`setWidgetCatalog(widgetCatalogSource)`, the same module-scope seam as `setKitAppearance`), and a
+Settings process will get the same interface over `org.nidara.Shell`. `WidgetCatalog.ts` must stay a
+leaf; `WidgetCatalogSource.ts` is shell-only. The one non-data field is `buildSettings` — see
+`writing-a-widget.md`. `scripts/dev/widgets-page-probe.sh` proves the catalogue equals the page's old
+computation field for field, round-trips both switches, and screenshots the page in a nested
+Hyprland (every `hyprctl` lands on the nested instance; HOME/XDG/mirror dirs are scratch).
+
 **Moving a store** is three parts in one change: its schema (defaults, and `<range>`/`<choices>`
 where the validator has them, so `gsettings set` refuses what the store would), the one-line switch,
 and its file in `migrations/2026-09-14-settings-to-gsettings.sh`'s list — or a new unit of the same

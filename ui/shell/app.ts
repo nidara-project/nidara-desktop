@@ -78,6 +78,10 @@ import Theme, { setPreferDark } from "./core/ThemeManager"
 import AboutWindow from "./surfaces/about/AboutWindow"
 import { setKitAppearance } from "../lib/nidara-kit"
 import { safeDisconnect } from "./core/signals"
+import { setWidgetCatalog } from "./core/WidgetCatalog"
+// Last on purpose: by the time it evaluates, the registry and the CC grid already have
+// (through Settings and the bar), so adding the seam did not reorder the shell's boot.
+import { widgetCatalogSource } from "./core/WidgetCatalogSource"
 
 // ── The kit's appearance seam ────────────────────────────────────────────────
 // `nidara-kit/slider.ts` paints in Cairo, and Cairo cannot read a CSS token: it
@@ -97,6 +101,13 @@ setKitAppearance({
   overlayOpacity: () => Theme.overlayOpacity,
   chromeIsDark:   () => Theme.chromeIsDark,
 })
+
+// ── The widget catalogue seam ────────────────────────────────────────────────
+// Settings → Widgets reads the widgets as data through this, never by importing
+// them: a Settings process that imported widgets/ would run a second copy of every
+// service they start (#571). Same module-scope timing as the appearance seam above.
+// See core/WidgetCatalog.ts.
+setWidgetCatalog(widgetCatalogSource)
 
 // Minimal interface for windows managed by the shell
 interface ShellWindow {
