@@ -50,6 +50,12 @@ A bar expansion (`buildBarExpanded`) and a Control-Centre detail (`buildCCDetail
 vertical column of rows:
 
 - `panelRow(label, control)` — label on the left, a switch or a button on the right.
+- `panelSwitch(get, set, subscribe?)` — **the only switch a panel should hold.** It calls `set`
+  when the USER flips it and only reflects `get()` when `subscribe` fires. Do not hand-roll
+  `new Gtk.Switch` + `state-set` + `sw.active = get()`: GtkSwitch emits `state-set` for a
+  programmatic `active` too, so the write-back re-issues the command. Against an async service
+  that passes through intermediate states that is a loop — the Wi-Fi detail toggled the radio
+  ~14×/s until the panel closed (2026-09-14), and nothing in `tsc` or a single click shows it.
 - `panelInfoRow(label, getValue)` — label + a live value, and an `update()` that re-reads it.
 - `panelSeparator()` — a rule carrying 2px of its own air.
 - `PANEL_W` — the width tiers, `sm` 200 / `md` 220 / `lg` 240 / `xl` 280 / `full` 356. **Never a

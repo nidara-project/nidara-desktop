@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { AtomicWidget, ContentBudget, WidgetSize, makeIconTile, makeCapsuleTile, panelRow, panelInfoRow, panelSeparator } from "../common/widget-kit"
+import { AtomicWidget, ContentBudget, WidgetSize, makeIconTile, makeCapsuleTile, panelRow, panelInfoRow, panelSeparator, panelSwitch } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as Net from "../core/NetworkService"
@@ -66,14 +66,7 @@ function buildInfoPanel(): Gtk.Widget {
 }
 
 function buildDetailPanel(_onClose: () => void): Gtk.Widget {
-    const sw = new Gtk.Switch({ active: Net.wifiEnabled(), valign: Gtk.Align.CENTER })
-    sw.connect("state-set", (_sw: Gtk.Switch, state: boolean) => {
-        Net.setWifiEnabled(state)
-        return false
-    })
-    const dispose = Net.watchWifiEnabled(() => { sw.active = Net.wifiEnabled() })
-    sw.connect("unrealize", dispose)
-
+    const sw = panelSwitch(() => Net.wifiEnabled(), (on) => { Net.setWifiEnabled(on) }, Net.watchWifiEnabled)
     const switchRow = panelRow(t("cc.wifi.name"), sw)
     switchRow.margin_bottom = 4      // air before the separator
 
