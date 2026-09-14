@@ -175,6 +175,10 @@ command -v jq >/dev/null 2>&1 || { warn "jq is missing — skipping migrations";
 ran=0
 # Sorted by filename, and filenames are dated, so the order is the order they
 # were written. A migration may depend on its predecessor having run.
+# ⚠️ In BYTE order: a glob sorts by the locale's collation, and es_ES (measured)
+# ignores punctuation, putting `2026-09-14b-…` before `2026-09-14-settings…` —
+# the opposite of C. The same set of units must run in the same order everywhere.
+LC_COLLATE=C
 for unit in "$MIGRATIONS_DIR"/*.sh; do
     [ -e "$unit" ] || break
     name="$(basename "$unit" .sh)"

@@ -3,11 +3,5 @@
   "iconTheme": "Papirus",
   "cursorTheme": "Adwaita",
   "isDark": false,
-  "accent": "blue",
-  "tintStrength": 0,
-  "tintPanels": {
-    "controlCenter": false,
-    "appGrid": false
-  },
-  "qtTheme": "Default"
+  "accent": "blue"
 }

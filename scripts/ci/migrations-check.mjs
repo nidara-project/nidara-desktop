@@ -163,11 +163,45 @@ try {
         if (re.test(kf) === present) ok(`settings import: ${label}`)
         else fail(`settings import: ${label}`, `keyfile:\n${kf}`)
     }
-    for (const f of ["dock_settings.json", "workspaces.json", "bar-settings.json", "night-light.json", "recording.json", "ai.json", "gaming.json"]) {
+    // appearance: the fixture's `transparency: 0.15` becomes windowOpacity 0.85
+    // (2026-09-02), has no glassModel, so it is rescaled to 0.88 and clamped to 0.8.
+    if (/\[org\/nidara\/appearance\][^[]*window-opacity=0\.(8\b|80000)/.test(kf)) ok("settings import: a pre-rescale opacity is rescaled and clamped")
+    else fail("settings import: a pre-rescale opacity is rescaled and clamped", `keyfile:\n${kf}`)
+    if (/accent|icon-theme|isDark/i.test(kf.slice(kf.indexOf("[org/nidara/appearance]")))) fail("settings import: GNOME-homed appearance keys are not imported", kf)
+    else ok("settings import: GNOME-homed appearance keys are not imported")
+    for (const f of ["appearance.json", "dock_settings.json", "workspaces.json", "bar-settings.json", "night-light.json", "recording.json", "ai.json", "gaming.json"]) {
         if (out[f] !== undefined || out[`${f}.migrated`] === undefined) fail(`settings import: ${f} renamed to .migrated`, Object.keys(out).join(", "))
     }
-    if (out["appearance.json"] === undefined) fail("settings import: appearance.json is not touched by it")
 } catch (e) { fail("settings import", e.message) }
+
+// ── 4c. appearance: a CURRENT-model file, not rescaled ───────────────────────
+try {
+    const { out } = run({ "appearance.json": { glassModel: 2, barOpacity: 0.6, dockOpacity: 0.1, overlayOpacity: 0.48, shellAppearance: "dark", accent: "red" } })
+    const kf = out["<gsettings keyfile>"] ?? ""
+    const expect = [
+        ["a current-model opacity is imported as is",            /bar-opacity=0\.(6\b|59999)/, true],
+        ["an opacity under the floor is clamped (= default, not stored)", /dock-opacity=/, false],
+        ["an opacity equal to the default is not stored",        /overlay-opacity=/, false],
+        ["the shell's pinned skin is imported",                   /shell-appearance='dark'/, true],
+    ]
+    for (const [label, re, present] of expect) {
+        if (re.test(kf) === present) ok(`appearance import: ${label}`)
+        else fail(`appearance import: ${label}`, `keyfile:\n${kf}`)
+    }
+} catch (e) { fail("appearance import", e.message) }
+
+// ── 4d. appearance: a PRE-rescale file, where the rescale changes the answer ─
+// 0.3 → 0.2 + 0.8·0.3 = 0.44 (and the legacy shellOpacity seeds overlay: 0.5 → 0.6).
+// The fixture in 4b cannot tell a missing rescale apart — its value clamps to 0.8
+// either way.
+try {
+    const { out } = run({ "appearance.json": { barOpacity: 0.3, shellOpacity: 0.5 } })
+    const kf = out["<gsettings keyfile>"] ?? ""
+    if (/bar-opacity=0\.(44\b|44000|43999)/.test(kf)) ok("appearance import: a pre-rescale opacity becomes 0.2 + 0.8·α")
+    else fail("appearance import: a pre-rescale opacity becomes 0.2 + 0.8·α", `keyfile:\n${kf}`)
+    if (/overlay-opacity=0\.(6\b|60000|59999)/.test(kf)) ok("appearance import: the legacy shellOpacity seeds a missing overlay opacity")
+    else fail("appearance import: the legacy shellOpacity seeds a missing overlay opacity", `keyfile:\n${kf}`)
+} catch (e) { fail("appearance rescale", e.message) }
 
 // ── 5. POSITIVE CONTROL ──────────────────────────────────────────────────────
 // A unit that appends on every run. Check 3 MUST catch it; if it does not, the

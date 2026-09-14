@@ -59,7 +59,7 @@ export function hexToFloatRgb(hex: string): { r: number, g: number, b: number } 
 /**
  * CSS block defining the --nidara-accent* custom properties for a given accent
  * key. Used by the greeter and lockscreen (which read the accent from
- * appearance.json and apply this via app.apply_css). Unknown/empty keys → "".
+ * the appearance mirror and apply this via app.apply_css). Unknown/empty keys → "".
  *
  * ⚠️ `--nidara-state-selected` is an ACCENT token and is emitted here, which it was
  * not until 2026-09-07 (tech-debt #92 / issue #323). The login sheet declares it once

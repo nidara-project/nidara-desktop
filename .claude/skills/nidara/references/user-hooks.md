@@ -68,9 +68,20 @@ One gap, stated rather than hidden: `update-completed` does **not** fire on the 
 updates with the repo — and an `exec`d process has nothing left to run afterwards. The package and
 stable paths both fire it.
 
-And one rule for the easy ones: fire at the **specific setter**, never on `ThemeManager`'s generic
-`"changed"` signal. Every opacity slider emits that too, so a hook wired there would fire dozens of
-times per drag.
+And the rule for an event that is a SETTING changing: **fire it from the change, in the shell, never
+from the setter** (#573). A setter runs in whichever process calls it — the Settings app (#571), an
+agent's process — and a change made by `gsettings set` passes through no setter at all, so a hook
+fired there runs in the wrong cgroup, twice, or never. `core/AppearanceHooks.ts` is the pattern: its
+own `Gio.Settings` on the key, started from `app.ts` only, firing once per change of the value the
+HOOK cares about (`default` → `prefer-light` is no change of mode). dconf emits nothing for a value
+written equal to the stored one, so a repeated write is free. Measured with a scratch hooks dir and
+another process writing: teal, teal, prefer-light, prefer-dark, prefer-dark, red → exactly
+`accent teal`, `dark-mode dark`, `accent red`. And never wire it to `ThemeManager`'s generic
+`"changed"` signal: every opacity slider emits that too.
+
+⚠️ The limit that comes with it: a change made while the shell is DOWN (a crash, the second of a
+reload) fires nothing, because nobody is watching. Moving the observer into a session daemon (#574)
+is what would close it.
 
 ## Adding an event
 

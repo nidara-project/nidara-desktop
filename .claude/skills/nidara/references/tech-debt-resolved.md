@@ -2017,3 +2017,24 @@ anything the skin needs to override must be emitted by that same emitter, not ty
 Verified by resolving the token through a real GTK cascade under both skins with a green accent
 (`color: var(--nidara-state-selected)` read back off a label): rgba(121,183,87,0.22) dark,
 rgba(121,183,87,0.16) light. Not yet seen on a real greeter — that needs the VM.
+
+### 103. ✅ RESOLVED 2026-09-14 — three appearance keys had two homes (2026-09-13)
+
+> **Queue entry: #536.** The rest of the portal (Secret unrouted, four interfaces with no backend,
+> GTK3 dialogs) is **#535**.
+
+The appearance contract (architecture.md) says every setting has ONE home, and #534 moved the accent
+and the mode to gsettings. `icon-theme`, `cursor-theme` and `gtk-theme` still live in
+`appearance.json` and are pushed over gsettings by `ThemeManager.applyAll()` on every start, so a
+`gsettings set` of any of them reaches every app through the portal, never reaches the shell, and is
+reverted at the next login. Do the same move #534 did; the cursor's listener also has to reach
+Hyprland and the Xcursor default (#72).
+
+**Resolved 2026-09-14 (#536, folded into #573).** `ThemeManager.loadSettings()` reads all three from
+`org.gnome.desktop.interface` and follows `changed::gtk-theme` / `icon-theme` / `cursor-theme`; the
+cursor's handler goes through `setCursorTheme`, so Hyprland and the Xcursor default follow too.
+`applyAll()` no longer pushes anything over them, `gen-dconf-defaults.sh` now ships the GTK and
+cursor theme as system defaults beside the icon theme, and `appearance.json` itself is gone — its
+Nidara-only keys live in `org.nidara.appearance`. No migration was needed for these three: every
+earlier start had already pushed the file's values into the keys.
+

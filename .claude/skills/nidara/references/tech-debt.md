@@ -306,7 +306,7 @@ the duplicated search+list scaffold between `AppIcons.tsx` and the Autostart pic
 "extract on third consumer" in both files.
 
 ### 32. `/var/tmp/nidara` greeter mirror is first-writer-owned — a second user can't update it (2026-07-10)
-`ThemeManager.saveSettings` and `RegionConfig` mirror `appearance.json` + `region.json` into
+`ThemeManager.writeGreeterMirror` and `RegionConfig` mirror the appearance + `region.json` into
 `/var/tmp/nidara` (dir 0755, owned by whoever wrote it first) so the greeter — a system user
 with no access to a 700 home — can render the accent and clock format. On a multi-user
 machine the SECOND user's shell cannot write there (fail-soft: a console warn, nothing
@@ -3646,18 +3646,6 @@ Sitting alongside it, from the same review and still open: the progress bar is a
 ACCOUNT card, and `nidara-setup` creates `.config/{hypr,kitty,nidara,uwsm}` as `1000:0` (an
 `install -d` with no `-g`) while its siblings come out `1000:1000`.
 
-### 103. ⚠️ OPEN — three appearance keys still have two homes (2026-09-13)
-
-> **Queue entry: #536.** The rest of the portal (Secret unrouted, four interfaces with no backend,
-> GTK3 dialogs) is **#535**.
-
-The appearance contract (architecture.md) says every setting has ONE home, and #534 moved the accent
-and the mode to gsettings. `icon-theme`, `cursor-theme` and `gtk-theme` still live in
-`appearance.json` and are pushed over gsettings by `ThemeManager.applyAll()` on every start, so a
-`gsettings set` of any of them reaches every app through the portal, never reaches the shell, and is
-reverted at the next login. Do the same move #534 did; the cursor's listener also has to reach
-Hyprland and the Xcursor default (#72).
-
 ### 104. ⚠️ OPEN — `AppService.getAppInfo` answers for ids that are not apps (2026-09-13)
 
 Its last resort is a SUBSTRING match over desktop ids, so any string that happens to sit inside some
@@ -3727,3 +3715,4 @@ number is never accidentally reused. 51 items; the split itself was 2026-08-23.
 - **#92** — RESOLVED — the login screens' selected row follows the user's accent, in both skins (2026-08-25 → 2026-09-07) → `tech-debt-resolved.md`
 - **#93** — FIXED same day — About's key column was a constant, and a constant is a locale bug with a delay on it (2026-08-25) → `tech-debt-resolved.md`
 - **#94** — RESOLVED same day — the two About surfaces are a summary and its detail, and one reader answers both (2026-08-25) → `tech-debt-resolved.md`
+- **#103** — ✅ RESOLVED 2026-09-14 — the icon / cursor / GTK theme have one home, and appearance.json is gone (#536 in #573) → `tech-debt-resolved.md`

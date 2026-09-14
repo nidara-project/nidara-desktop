@@ -107,27 +107,15 @@ export interface NidaraThemeConfig {
  */
 export const GLASS_RANGE = { min: 0.24, max: 0.80 } as const
 
-/** Bumped when the MEANING of a stored opacity changes, so `loadSettings` knows
- *  whether a file predates the change. 2 = post-`brightness 1.0` (2026-08-23). */
-export const GLASS_MODEL = 2
-
 /** The one clamp. Every setter and every slider bound goes through it. */
 export const clampGlass = (v: number) => Math.max(GLASS_RANGE.min, Math.min(GLASS_RANGE.max, v))
 
-/**
- * Read ONE stored opacity, migrating it if the file predates `GLASS_MODEL`.
- *
- * ⚠️ The `typeof stored !== "number"` guard is the whole safety of this function,
- * not a null-check habit: a fresh install has no stored value, and running the
- * migration over `DEFAULT_CONFIG` would move its floor to 0.392. Defaults are
- * already expressed in the new model — only what a USER stored gets migrated.
- *
- * The expression is `0.2 + 0.8·α` because compositing glass at α over a backdrop
- * the compositor dimmed to 80% covers exactly as much as compositing at
- * `0.2 + 0.8·α` over an undimmed one. See `GLASS_RANGE` for why the dimming left.
- */
-export const readGlass = (stored: unknown, dflt: number, stale: boolean) =>
-    typeof stored !== "number" ? dflt : clampGlass(stale ? 0.2 + 0.8 * stored : stored)
+// A stored opacity from before the glass rescale (2026-08-23) is `0.2 + 0.8·α` in
+// today's model: glass at α over a backdrop the compositor dimmed to 80% covers as
+// much as `0.2 + 0.8·α` over an undimmed one. That conversion used to run in the
+// reader on every load (`readGlass`, keyed on appearance.json's `glassModel`); it
+// is applied once by migrations/2026-09-14c-appearance-to-gsettings.sh now, and
+// the stored values are always in this model.
 
 /** The out-of-the-box glass for everything except the dock (2026-08-24, owner's call).
  *

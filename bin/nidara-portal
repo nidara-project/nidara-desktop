@@ -75,20 +75,20 @@ const APPEARANCE_NS = "org.freedesktop.appearance"
 // caller asks for both in one round trip and gets one dictionary back. That is
 // what makes this worth doing instead of every bundle opening the file itself:
 // one read, one `SettingChanged` signal, and it crosses a sandbox boundary — a
-// Flatpak app cannot see `~/.config/nidara/appearance.json` and can see this.
+// Flatpak app cannot read the user's dconf and can see this.
 //
 // ⚠️ ONLY the keys that have no standard home. The accent and the dark/light mode
 // are NOT here: they live in `org.gnome.desktop.interface` and reach clients as
 // `org.freedesktop.appearance` above. #533 served them under both names (`accent`,
 // `is-dark`), and the day the two disagreed nobody could say which one was true.
 //
-// The home of these keys is `~/.config/nidara/appearance.json`, written by
-// `ThemeManager`. This daemon runs in the user's session and reads THAT file only —
-// `/var/tmp/nidara/appearance.json` is the greeter's mirror, an export for a surface
-// outside any session, and nothing in a session reads it back.
+// The home of these keys is GSettings `org.nidara.appearance` (#573) — same key
+// names as this namespace, written by `ThemeManager` or by anybody with `gsettings`.
+// This daemon runs in the user's session and reads THAT only — `/var/tmp/nidara/
+// appearance.json` is the greeter's mirror, an export for a surface outside any
+// session, and nothing in a session reads it back.
 const NIDARA_NS = "org.nidara.appearance"
-
-const APPEARANCE_PATH = `${GLib.get_user_config_dir()}/nidara/appearance.json`
+const NIDARA_KEYS = ["window-opacity", "bar-opacity", "overlay-opacity", "dock-opacity", "shell-appearance"]
 const BUS_NAME = "org.freedesktop.impl.portal.desktop.nidara"
 const OBJECT_PATH = "/org/freedesktop/portal/desktop"
 
@@ -284,42 +284,49 @@ function colorSchemeVariant() {
     // `default | prefer-dark | prefer-light`, and this used to read
     // `scheme === "prefer-light" ? 2 : 1` — which reported `default` as "prefer
     // DARK" to every app that asked. Nidara now seeds `prefer-light` explicitly
-    // (defaults/appearance.json + ThemeManager.applyAll), so the bad branch is
+    // (defaults/appearance.json → the system dconf default), so the bad branch is
     // rarely reached on our own installs; it was wrong for everyone else.
     const scheme = interfaceSettings.get_string("color-scheme")
     const val = scheme === "prefer-light" ? 2 : scheme === "prefer-dark" ? 1 : 0
     return new GLib.Variant("u", val)
 }
 
-/** The desktop's own appearance keys, as ThemeManager last wrote them. */
-function readNidaraAppearance() {
-    try {
-        const [ok, data] = GLib.file_get_contents(APPEARANCE_PATH)
-        if (ok) return JSON.parse(new TextDecoder().decode(data))
-    } catch (_) { /* no file yet (a first login) or mid-replace: the defaults */ }
-    return {}
+/**
+ * org.nidara.appearance, or null when the schema is not installed — a broken
+ * install, where the namespace answers with the shipped defaults instead of taking
+ * the daemon down (`new Gio.Settings` on a missing schema throws).
+ */
+let nidaraSettings = null
+try {
+    const schema = Gio.SettingsSchemaSource.get_default()?.lookup(NIDARA_NS, true)
+    if (schema) nidaraSettings = new Gio.Settings({ settings_schema: schema })
+    else printerr(`[nidara-portal] schema ${NIDARA_NS} is not installed — serving its defaults`)
+} catch (e) {
+    printerr(`[nidara-portal] cannot open ${NIDARA_NS}: ${e}`)
+}
+
+const NIDARA_DEFAULTS = {
+    "window-opacity": new GLib.Variant("d", 0.48),
+    "bar-opacity": new GLib.Variant("d", 0.48),
+    "overlay-opacity": new GLib.Variant("d", 0.48),
+    "dock-opacity": new GLib.Variant("d", 0.24),
+    "shell-appearance": new GLib.Variant("s", "system"),
 }
 
 /**
- * Our namespace's payload. Kebab-case keys, like every other portal namespace.
+ * Our namespace's payload. Kebab-case keys, like every other portal namespace, and
+ * the SAME names as the schema's keys, so this is a straight read.
  *
- * Only what a SECOND process needs to look like Nidara. Not the whole file: the
- * icon/cursor/font settings already reach apps through `org.gnome.desktop.interface`
- * (the gtk backend serves that from gsettings, which ThemeManager writes), and
+ * Only what a SECOND process needs to look like Nidara. The icon/cursor/font
+ * settings already reach apps through `org.gnome.desktop.interface`, and
  * duplicating them here would create a second answer to a question that already
  * has one.
  */
 function nidaraKeys() {
-    const a = readNidaraAppearance()
-    const num = (v, dflt) => (typeof v === "number" && isFinite(v) ? v : dflt)
-    return {
-        "window-opacity": new GLib.Variant("d", num(a.windowOpacity, 0.48)),
-        "bar-opacity": new GLib.Variant("d", num(a.barOpacity, 0.48)),
-        "overlay-opacity": new GLib.Variant("d", num(a.overlayOpacity, 0.48)),
-        "dock-opacity": new GLib.Variant("d", num(a.dockOpacity, 0.24)),
-        "shell-appearance": new GLib.Variant("s",
-            typeof a.shellAppearance === "string" ? a.shellAppearance : "system"),
-    }
+    const out = {}
+    for (const key of NIDARA_KEYS)
+        out[key] = nidaraSettings ? nidaraSettings.get_value(key) : NIDARA_DEFAULTS[key]
+    return out
 }
 
 
@@ -663,40 +670,6 @@ class BackgroundBackend {
     }
 }
 
-/**
- * Watch the appearance file and report the keys whose value changed.
- *
- * Returns the monitor, which the caller MUST keep — see the note at the call site.
- * It watches the DIRECTORY, for two reasons: ThemeManager replaces the file by
- * rename on every save (a monitor on the file stops at the first one), and on a
- * first login the file does not exist yet when this daemon is activated — a watch
- * that required it to exist used to give up and never announce anything.
- */
-function watchNidaraAppearance(onChanged) {
-    let previous = nidaraKeys()
-    let monitor = null
-    try {
-        const targetBasename = GLib.path_get_basename(APPEARANCE_PATH)
-        const dir = Gio.File.new_for_path(GLib.path_get_dirname(APPEARANCE_PATH))
-        monitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null)
-        monitor.connect("changed", (_mon, file) => {
-            if (file && file.get_basename() !== targetBasename) return
-            const next = nidaraKeys()
-            for (const key of Object.keys(next)) {
-                // `equal()` compares the VALUE, not the boxed variant's identity.
-                if (previous[key] && next[key].equal(previous[key])) continue
-                onChanged(key, next[key])
-            }
-            previous = next
-        })
-    } catch (e) {
-        printerr(`[nidara-portal] cannot watch ${APPEARANCE_PATH}: ${e}`)
-        return null
-    }
-    return monitor
-}
-
-let appearanceMonitor = null
 
 const loop = new GLib.MainLoop(null, false)
 const settingsBackend = new SettingsBackend()
@@ -756,21 +729,19 @@ Gio.bus_own_name(
             )
         })
 
-        // Our namespace changes when the FILE changes, so the signal comes from a
-        // file monitor rather than a gsettings key. Held in a module-level
-        // variable: an unreferenced Gio.FileMonitor is collected and stops
-        // delivering with no error at all.
-        //
-        // Only the keys that actually MOVED are announced. The file is rewritten
-        // on every frame of an opacity slider drag, and a namespace that re-emits
-        // all five keys per write would make every listener rebuild its whole
-        // stylesheet sixty times a second.
-        appearanceMonitor = watchNidaraAppearance((key, value) => {
-            exportedSettings.emit_signal(
-                "SettingChanged",
-                new GLib.Variant("(ssv)", [NIDARA_NS, key, value]),
-            )
-        })
+        // Our namespace: one `changed::<key>` per key that actually moved. dconf
+        // emits nothing for a value written equal to the stored one, and ThemeManager
+        // writes once per slider GESTURE, so a listener is not asked to rebuild its
+        // stylesheet on every frame of a drag.
+        if (nidaraSettings) {
+            nidaraSettings.connect("changed", (_s, key) => {
+                if (!NIDARA_KEYS.includes(key)) return
+                exportedSettings.emit_signal(
+                    "SettingChanged",
+                    new GLib.Variant("(ssv)", [NIDARA_NS, key, nidaraSettings.get_value(key)]),
+                )
+            })
+        }
 
         print(`[nidara-portal] serving Settings + Wallpaper + Access (+ unrouted DynamicLauncher, Account, Background) on ${BUS_NAME}`)
     },

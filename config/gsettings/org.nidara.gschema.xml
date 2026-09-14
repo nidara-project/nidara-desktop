@@ -283,4 +283,45 @@
     </key>
   </schema>
 
+  <!--
+    The appearance keys only Nidara has (#573). The ones the desktop standard
+    already names — accent, colour scheme, GTK/icon/cursor theme, fonts — live in
+    org.gnome.desktop.interface, where every app reads them. Applications (and our
+    own installer and lock screen) never read THIS schema: bin/nidara-portal serves
+    it as the org.nidara.appearance portal namespace, under these same key names,
+    and the shell writes the greeter's mirror from it. Ranges = GLASS_RANGE
+    (ui/lib/theme-tokens.ts).
+  -->
+  <schema id="org.nidara.appearance" path="/org/nidara/appearance/">
+    <key name="bar-opacity" type="d">
+      <range min="0.24" max="0.8"/>
+      <default>0.48</default>
+      <summary>Glass opacity of the bar</summary>
+    </key>
+    <key name="overlay-opacity" type="d">
+      <range min="0.24" max="0.8"/>
+      <default>0.48</default>
+      <summary>Glass opacity of the panels that open from the bar</summary>
+    </key>
+    <key name="dock-opacity" type="d">
+      <range min="0.24" max="0.8"/>
+      <default>0.24</default>
+      <summary>Glass opacity of the dock</summary>
+    </key>
+    <key name="window-opacity" type="d">
+      <range min="0.24" max="0.8"/>
+      <default>0.48</default>
+      <summary>Glass opacity of Nidara's own windows</summary>
+    </key>
+    <key name="shell-appearance" type="s">
+      <choices>
+        <choice value="system"/>
+        <choice value="dark"/>
+        <choice value="light"/>
+      </choices>
+      <default>"system"</default>
+      <summary>The shell's own skin: follow the system mode, or pin it dark or light</summary>
+    </key>
+  </schema>
+
 </schemalist>
