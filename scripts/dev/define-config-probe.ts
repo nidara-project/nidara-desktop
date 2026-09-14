@@ -15,6 +15,7 @@ import widgetConfig from "../../ui/shell/core/WidgetConfig"
 import ccLayout from "../../ui/shell/surfaces/control-center/CCLayoutManager"
 import { pinnedState, savePinned, onPinnedChanged } from "../../ui/shell/surfaces/dock/state"
 import regionConfig from "../../ui/shell/core/RegionConfig"
+import { startRegionSync } from "../../ui/shell/core/RegionSync"
 import { getConfigValue, setConfigValue, getConfigEntry } from "../../ui/shell/core/ConfigRegistry"
 
 let totalChecks = 0
@@ -376,12 +377,18 @@ async function run() {
     assert(layoutChanges === 1, `…and emits "changed" once (${layoutChanges})`)
 
     // Region: the clock format is stored; the mirror follows; timezone is the system's.
+    // The mirror is the SHELL's to write (core/RegionSync.ts, #571): the store alone writes
+    // nothing — a Settings process that builds it must not — and this probe, playing the
+    // shell, starts the sync.
+    const mirrorDir = GLib.getenv("NIDARA_GREETER_MIRROR_DIR")!
+    assert(!GLib.file_test(`${mirrorDir}/region.json`, GLib.FileTest.EXISTS), "RegionConfig alone writes no greeter mirror")
+    startRegionSync()
+    assert(GLib.file_test(`${mirrorDir}/region.json`, GLib.FileTest.EXISTS), "RegionSync writes the mirror at start")
     let regionChanges = 0
     regionConfig.connect("changed", () => regionChanges++)
     regionConfig.setTimeFormat("12h")
     assert(gsettingsGet("org.nidara.region", "time-format") === "'12h'", "setTimeFormat persists")
     assert(regionChanges === 1, `…and emits "changed" once (${regionChanges})`)
-    const mirrorDir = GLib.getenv("NIDARA_GREETER_MIRROR_DIR")!
     const [, mirrorBytes] = GLib.file_get_contents(`${mirrorDir}/region.json`)
     assert(JSON.parse(new TextDecoder().decode(mirrorBytes)).timeFormat === "12h", "the greeter mirror follows, in the probe's own mirror dir")
     gsettingsSetExternally("set org.nidara.region show-seconds true", () => regionConfig.showSeconds)
