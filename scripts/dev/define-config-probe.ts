@@ -11,6 +11,10 @@ import { defineSettings, settingsSchemaProblems } from "../../ui/shell/core/conf
 import { barConfig, barSettings, updateBarSettings, onBarSettingsChanged } from "../../ui/shell/surfaces/bar/barState"
 import { notifConfig } from "../../ui/shell/core/NotifConfig"
 import { registerConfigEntries } from "../../ui/shell/config-entries"
+import widgetConfig from "../../ui/shell/core/WidgetConfig"
+import ccLayout from "../../ui/shell/surfaces/control-center/CCLayoutManager"
+import { pinnedState, savePinned, onPinnedChanged } from "../../ui/shell/surfaces/dock/state"
+import regionConfig from "../../ui/shell/core/RegionConfig"
 import { getConfigValue, setConfigValue, getConfigEntry } from "../../ui/shell/core/ConfigRegistry"
 
 let totalChecks = 0
@@ -331,6 +335,58 @@ async function run() {
     await setConfigValue("notifications.doNotDisturb", currDnd.toString())
     assert(notifConfig.doNotDisturb === currDnd, "doNotDisturb restored")
     unsubDndExt()
+
+    print("\n=== 5. The structured stores: widgets, CC layout, pins, region ===")
+    assert(!settingsSchemaProblems().some(p => /org\.nidara\.(widgets|control-center|dock|region)\b/.test(p)),
+        `the shipped schema agrees with WidgetConfig, CCLayoutManager, the pin store and RegionConfig (${settingsSchemaProblems().join("; ")})`)
+
+    // Widget placement: a map of tuples, merged over the registry's defaults.
+    const firstWidget = widgetConfig.allIds()[0]
+    const wasBar = widgetConfig.get(firstWidget).bar
+    widgetConfig.setBar(firstWidget, !wasBar)
+    const placement = gsettingsGet("org.nidara.widgets", "placement")
+    assert(placement.includes(`'${firstWidget}': (${!wasBar}, `), `setBar persists as a (bar, cc) tuple (${placement.slice(0, 80)}…)`)
+    let widgetChanges = 0
+    widgetConfig.connect("changed", () => widgetChanges++)
+    gsettingsSetExternally(`set org.nidara.widgets placement "{'${firstWidget}': (${wasBar}, true)}"`, () => widgetConfig.get(firstWidget).bar === wasBar)
+    assert(widgetConfig.get(firstWidget).bar === wasBar && widgetConfig.get(firstWidget).cc === true, "an external placement change reaches WidgetConfig")
+    assert(widgetChanges === 1, `…and emits "changed" once (${widgetChanges})`)
+
+    // Pins: order kept, a caller's in-place push still writes, one notification.
+    let pinChanges = 0
+    const unsubPins = onPinnedChanged(() => pinChanges++)
+    pinnedState.list.push("probe-app")
+    savePinned()
+    assert(gsettingsGet("org.nidara.dock", "pinned").endsWith("'probe-app']"), "a pin pushed in place and saved reaches GSettings, at the end")
+    assert(pinChanges === 1, `…and notifies once (${pinChanges})`)
+    gsettingsSetExternally(`set org.nidara.dock pinned "['b-app', 'a-app']"`, () => pinnedState.list.join() === "b-app,a-app")
+    assert(pinnedState.list.join() === "b-app,a-app", "an external pin change replaces the list, in its order")
+    assert(pinChanges === 2, `…and notifies once more (${pinChanges})`)
+    unsubPins()
+
+    // CC layout: positions as (x, y), reloaded on an external change.
+    const tile = ccLayout.layout[0]?.id
+    assert(!!tile, "the CC layout has a default tile to move")
+    ccLayout.remove(tile)
+    assert(!gsettingsGet("org.nidara.control-center", "positions").includes(`'${tile}'`), "removing a tile persists positions without it")
+    let layoutChanges = 0
+    ccLayout.connect("changed", () => layoutChanges++)
+    gsettingsSetExternally(`set org.nidara.control-center positions "{'${tile}': (0, 0)}"`, () => ccLayout.layout.some(e => e.id === tile))
+    assert(ccLayout.layout.length === 1 && ccLayout.layout[0].id === tile, "an external positions change reloads the layout")
+    assert(layoutChanges === 1, `…and emits "changed" once (${layoutChanges})`)
+
+    // Region: the clock format is stored; the mirror follows; timezone is the system's.
+    let regionChanges = 0
+    regionConfig.connect("changed", () => regionChanges++)
+    regionConfig.setTimeFormat("12h")
+    assert(gsettingsGet("org.nidara.region", "time-format") === "'12h'", "setTimeFormat persists")
+    assert(regionChanges === 1, `…and emits "changed" once (${regionChanges})`)
+    const mirrorDir = GLib.getenv("NIDARA_GREETER_MIRROR_DIR")!
+    const [, mirrorBytes] = GLib.file_get_contents(`${mirrorDir}/region.json`)
+    assert(JSON.parse(new TextDecoder().decode(mirrorBytes)).timeFormat === "12h", "the greeter mirror follows, in the probe's own mirror dir")
+    gsettingsSetExternally("set org.nidara.region show-seconds true", () => regionConfig.showSeconds)
+    assert(regionConfig.showSeconds && regionChanges === 2, "an external clock change reaches RegionConfig and emits once")
+    assert(!gsettingsGet("org.nidara.region", "timezone").startsWith("'"), "the timezone is not a stored key")
 
     print(`\n========================================`)
     print(`ALL CHECKS PASSED: ${passedChecks}/${totalChecks}`)

@@ -173,7 +173,7 @@ function makeIslandWidget(
     content.set_can_target(false)
 
     // Clear the placement flag too (not just the layout), or syncCCLayout re-adds
-    // the widget on next load — cc_layout.json and widgetConfig must agree.
+    // the widget on next load — the CC layout and widgetConfig must agree.
     const removeBtn = IconButton({
         icon: Icons.close, iconSize: 13, variant: "danger",
         halign: Gtk.Align.END, valign: Gtk.Align.START,

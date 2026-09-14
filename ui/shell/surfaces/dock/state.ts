@@ -4,22 +4,7 @@
  */
 
 import Gtk from "gi://Gtk?version=4.0"
-import { writeFile, readFile } from "../../../lib/file"
-import GLib from "gi://GLib"
 import { defineSettings, type ConfigValidators } from "../../core/configFile"
-// --- PERSISTENCE ---
-// All Nidara config lives under ~/.config/nidara/ (matches ThemeManager,
-// WidgetConfig, RegionConfig, CCLayoutManager, …). The pinned list used to be
-// written to the bare ~/.config/ root; loadPinned() migrates it from there on
-// first run and removes the stray. The dock's SETTINGS are in GSettings.
-const CONFIG_DIR = GLib.get_user_config_dir() + "/nidara"
-const PINNED_FILE = CONFIG_DIR + "/dock_pinned.json"
-const LEGACY_PINNED_FILE = GLib.get_user_config_dir() + "/dock_pinned.json"
-
-const ensureConfigDir = () => {
-    if (!GLib.file_test(CONFIG_DIR, GLib.FileTest.EXISTS))
-        GLib.mkdir_with_parents(CONFIG_DIR, 0o755)
-}
 
 // --- DOCK SETTINGS (Reactive, Persisted) ---
 
@@ -93,47 +78,31 @@ export const pinnedState = {
     list: [] as string[]
 }
 
-// Default pins for a FRESH install (no file yet). The dock already shows the
-// Files/Home shortcut, the launcher and Trash as fixed items, so this is
-// *additional*, and the array order IS the dock order (left→right, right of the
-// launcher): Settings first, then the terminal. List only apps install.sh
-// guarantees; the dock skips any id that doesn't resolve to an installed app, so
-// an optional app shipped only by the ISO (e.g. a browser) is safe to add here
-// too. `nidara-installer` is present on the live ISO medium but absent on an
-// installed system; `pruneOrphanedPins` (in DockCore.tsx) prunes pins that do not
-// resolve to an installed app, so on an installed system it safely vanishes.
-// Applied in memory only — persisted the first time the user pins/unpins,
-// after which it stops applying.
+// Stored in GSettings, `org.nidara.dock pinned` (#573), in dock order (left→right,
+// right of the launcher). The schema default is the FRESH-install pin list: the
+// dock already shows the Files/Home shortcut, the launcher and Trash as fixed
+// items, so these are *additional* — Settings first, then the terminal. List only
+// apps install.sh guarantees; the dock skips any id that doesn't resolve to an
+// installed app, so an optional app shipped only by the ISO is safe to add.
+// `nidara-installer` is present on the live medium and absent on an installed
+// system, where `pruneOrphanedPins` (DockCore.tsx) drops it. dock_pinned.json (and
+// its older copy in the bare ~/.config/) was imported once by
+// migrations/2026-09-14d-widgets-pinned-region.sh.
+//
+// A second store on the same schema as the settings above, on purpose: the
+// whole-object `onDockSettingsChanged` consumers must not rebuild on a pin.
 const DEFAULT_PINNED = ["nidara-settings", "kitty", "nidara-installer"]
+const pinStore = defineSettings<{ pinned: string[] }>("dock", { pinned: DEFAULT_PINNED })
 
 const sanitizePinned = (raw: string[]) =>
     [...new Set(raw)]
         .filter(id => id && !id.startsWith("/"))
         .map(id => id.replace(/^pinned-/, "").replace(/^pinned-ghost-/, "").replace(/^running-/, ""))
 
-function loadPinned(): string[] {
-    // 1. Current location.
-    try {
-        const raw = JSON.parse(readFile(PINNED_FILE)) as string[]
-        const clean = sanitizePinned(raw)
-        if (clean.length !== raw.length) {
-            ensureConfigDir()
-            writeFile(PINNED_FILE, JSON.stringify(clean, null, 2))
-        }
-        return clean
-    } catch { /* not at the current path */ }
-    // 2. Legacy ~/.config/dock_pinned.json → migrate to the nidara/ path.
-    try {
-        const clean = sanitizePinned(JSON.parse(readFile(LEGACY_PINNED_FILE)) as string[])
-        ensureConfigDir()
-        writeFile(PINNED_FILE, JSON.stringify(clean, null, 2))
-        try { GLib.unlink(LEGACY_PINNED_FILE) } catch {}
-        return clean
-    } catch { /* no legacy file */ }
-    // 3. Truly fresh install → seed defaults (persisted on first pin change).
-    return [...DEFAULT_PINNED]
-}
-pinnedState.list = loadPinned()
+// ⚠️ ALWAYS A COPY. Callers mutate `pinnedState.list` in place (push) before
+// calling savePinned(); if it were the store's own array, the store's equality
+// check would compare the array with itself and never write.
+pinnedState.list = sanitizePinned([...pinStore.get("pinned")])
 
 const _pinnedListeners = new Set<() => void>()
 
@@ -142,15 +111,15 @@ export function onPinnedChanged(fn: () => void) {
     return () => _pinnedListeners.delete(fn)
 }
 
+// Every change of the stored list — a pin made here or by another process — lands
+// here once: savePinned() only writes, and the store calls back synchronously.
+pinStore.subscribe("pinned", v => {
+    pinnedState.list = sanitizePinned([...v])
+    _pinnedListeners.forEach(fn => fn())
+})
+
 export const savePinned = () => {
-    const list = pinnedState.list
-    try {
-        ensureConfigDir()
-        writeFile(PINNED_FILE, JSON.stringify(list, null, 2))
-        _pinnedListeners.forEach(fn => fn())
-    } catch (e) {
-        console.error(`[Dock] Failed to persist pinned list:`, e);
-    }
+    pinStore.set("pinned", [...pinnedState.list])
 }
 
 // --- ANIMATION STATE ---

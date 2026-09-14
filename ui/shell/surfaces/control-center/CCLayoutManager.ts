@@ -1,6 +1,5 @@
-import GLib from "gi://GLib"
 import GObject from "gi://GObject"
-import { readFile, writeFile } from "../../../lib/file"
+import { defineSettings } from "../../core/configFile"
 import { WidgetSize } from "../../common/widget-kit"
 import { WIDGET_META, CC_DEFAULT_ORDER } from "../../widgets/index"
 
@@ -51,10 +50,16 @@ export interface LayoutEntry {
     size?: WidgetSize
 }
 
-interface SaveData {
-    positions: Record<string, { x: number; y: number }>
-    sizes: Record<string, WidgetSize>
+// Stored in GSettings, `org.nidara.control-center` (#573): positions as id → (x, y),
+// sizes as id → "WxH". Empty positions = the default layout. cc_layout.json was
+// imported once by migrations/2026-09-14d-widgets-pinned-region.sh, which also
+// converted the oldest array format; the `order` format (before 2026-06-09) needed
+// a flow-pack only this class can do, so such a file resets to the default layout.
+interface StoredLayout {
+    positions: Record<string, [number, number]>
+    sizes: Record<string, string>
 }
+const store = defineSettings<StoredLayout>("control-center", { positions: {}, sizes: {} })
 
 type Cell = { x: number; y: number }
 type PosMap = Map<string, Cell>
@@ -76,59 +81,36 @@ class CCLayoutManager extends GObject.Object {
 
     private _pos: Record<string, Cell> = {}
     private _sizes: Record<string, WidgetSize> = {}
-    private configPath = `${GLib.get_user_config_dir()}/nidara/cc_layout.json`
 
     constructor() {
         super()
-        this.loadFromDisk()
+        this.load()
+        // A layout changed by another process. Our own saves arrive here equal to
+        // what we hold (compared after the same normalisation) and stop.
+        store.subscribeAll(() => {
+            const before = JSON.stringify([this._pos, this._sizes])
+            this.load()
+            if (JSON.stringify([this._pos, this._sizes]) !== before) this.emit("changed")
+        })
     }
 
-    private loadFromDisk() {
-        try {
-            if (GLib.file_test(this.configPath, GLib.FileTest.EXISTS)) {
-                const raw = JSON.parse(readFile(this.configPath))
-
-                if (Array.isArray(raw)) {
-                    // Oldest format: [{id,x,y,size}] — already positional.
-                    const entries = (raw as Array<LayoutEntry>).filter(e => WIDGET_META[e.id])
-                    if (entries.length > 0) {
-                        this._pos = {}; this._sizes = {}
-                        for (const e of entries) {
-                            this._pos[e.id] = { x: e.x | 0, y: e.y | 0 }
-                            if (e.size) this._sizes[e.id] = e.size
-                        }
-                        this.normalize(); return
-                    }
-                } else if (raw && typeof raw === "object" && raw.positions) {
-                    const sizes = (raw.sizes ?? {}) as Record<string, WidgetSize>
-                    this._pos = {}; this._sizes = {}
-                    for (const id of Object.keys(raw.positions))
-                        if (WIDGET_META[id]) this._pos[id] = { x: raw.positions[id].x | 0, y: raw.positions[id].y | 0 }
-                    for (const id of Object.keys(sizes))
-                        if (WIDGET_META[id]) this._sizes[id] = sizes[id]
-                    if (Object.keys(this._pos).length > 0) { this.normalize(); return }
-                } else if (raw && typeof raw === "object" && raw.order) {
-                    // Legacy order-based format → flow-pack once into positions.
-                    const order = ((raw.order ?? []) as string[]).filter(id => WIDGET_META[id])
-                    this._sizes = (raw.sizes ?? {}) as Record<string, WidgetSize>
-                    if (order.length > 0) { this.seedFromOrder(order); return }
-                }
-            }
-        } catch {}
+    private load() {
+        const positions = store.get("positions")
+        const sizes = store.get("sizes")
+        this._pos = {}; this._sizes = {}
+        for (const [id, cell] of Object.entries(positions))
+            if (WIDGET_META[id] && Array.isArray(cell)) this._pos[id] = { x: cell[0] | 0, y: cell[1] | 0 }
+        for (const [id, size] of Object.entries(sizes))
+            if (WIDGET_META[id]) this._sizes[id] = size as WidgetSize
+        if (Object.keys(this._pos).length > 0) { this.normalize(); return }
         this._sizes = {}
         this.seedFromOrder([...CC_DEFAULT_ORDER])
     }
 
     private save() {
-        try {
-            const dir = `${GLib.get_user_config_dir()}/nidara`
-            if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
-                GLib.mkdir_with_parents(dir, 0o755)
-            const data: SaveData = { positions: this._pos, sizes: this._sizes }
-            writeFile(this.configPath, JSON.stringify(data, null, 2))
-        } catch (e) {
-            console.error("[CCLayout] Save failed:", e)
-        }
+        const positions: Record<string, [number, number]> = {}
+        for (const [id, c] of Object.entries(this._pos)) positions[id] = [c.x, c.y]
+        store.update({ positions, sizes: { ...this._sizes } })
     }
 
     // ── Geometry helpers ───────────────────────────────────────────────────────

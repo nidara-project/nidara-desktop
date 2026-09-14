@@ -74,7 +74,7 @@ const DEFAULTS: RecordingSettings = {
 
 const config = defineSettings<RecordingSettings>("recording", DEFAULTS, {
     // `format` indexes CODECS and `quality` indexes the per-encoder preset maps.
-    // Both are plain strings to `loadKnown`, so a hand-edited file reaches
+    // Both are plain strings to a type check, so a hand-set value reaches
     // `CODECS[undefined].sw` — a capture that fails with a TypeError rather than
     // one that falls back to mp4.
     quality: v => QUALITIES.includes(v),

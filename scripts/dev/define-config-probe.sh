@@ -25,5 +25,9 @@ mkdir -p "$schemas" "$config/nidara"
 cp "$REPO"/config/gsettings/*.gschema.xml "$REPO"/scripts/dev/probe-schemas/*.gschema.xml "$schemas/"
 glib-compile-schemas --strict "$schemas"
 
+# The greeter mirrors too: ThemeManager and RegionConfig write them when they are
+# constructed, and the real ones in /var/tmp/nidara are what the login screen shows.
+mkdir -p "$OUT/mirror"
 exec env XDG_CONFIG_HOME="$config" GSETTINGS_BACKEND=keyfile GSETTINGS_SCHEMA_DIR="$schemas" \
+    NIDARA_GREETER_MIRROR_DIR="$OUT/mirror" \
     NIDARA_DEFINE_CONFIG_PROBE=1 gjs -m "$OUT/dcp.js"

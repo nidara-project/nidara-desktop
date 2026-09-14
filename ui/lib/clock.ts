@@ -8,11 +8,11 @@ import { playEntrance } from "./entrance"
 // embedding straight into the surface.
 //
 // ── WHAT WAS ACTUALLY DIFFERENT BETWEEN THE TWO COPIES ──────────────────────
-// One thing, and it is not cosmetic: WHERE region.json is read from. The
-// lockscreen runs AS the user, so it reads its own `XDG_CONFIG_HOME`. The greeter
-// runs as a SYSTEM user who owns no such file and may not be able to read the
-// user's, so it tries the last-logged-in user's home first and then the
-// world-readable mirror at /var/tmp/nidara. That is a privilege difference, not a
+// One thing, and it is not cosmetic: WHERE the clock format is read from. The
+// lockscreen runs AS the user, in the session, so it reads GSettings
+// `org.nidara.region` (#573). The greeter runs as a SYSTEM user outside any
+// session, with no access to that user's dconf, so it reads the world-readable
+// mirror the shell writes to /var/tmp/nidara/region.json. That is a privilege difference, not a
 // preference, so it stays with the bundle and arrives here as a function.
 //
 // Everything else — the format strings, both timers, the classes, the column —

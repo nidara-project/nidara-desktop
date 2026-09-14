@@ -1,6 +1,5 @@
-import GLib from "gi://GLib"
 import GObject from "gi://GObject"
-import { readFile, writeFile } from "../../lib/file"
+import { defineSettings } from "./configFile"
 import { DEFAULT_PLACEMENT as DEFAULTS, BAR_ORDER } from "../widgets/index"
 
 export interface WidgetPlacement {
@@ -11,6 +10,13 @@ export interface WidgetPlacement {
 // BAR_ORDER (curated bar pill order) and DEFAULTS (first-run placement) are
 // derived from the widget registry — see widgets/index.ts.
 
+// Stored in GSettings, `org.nidara.widgets placement` (#573): widget id → (bar, cc).
+// The schema default is `{}` and the code's DEFAULTS are merged UNDER what is stored,
+// so a widget added to the registry later gets its first-run placement for everybody.
+// widgets.json was imported once by migrations/2026-09-14d-widgets-pinned-region.sh.
+type StoredPlacement = Record<string, [boolean, boolean]>
+const store = defineSettings<{ placement: StoredPlacement }>("widgets", { placement: {} })
+
 class WidgetConfigManager extends GObject.Object {
     static {
         GObject.registerClass({
@@ -20,37 +26,38 @@ class WidgetConfigManager extends GObject.Object {
     }
 
     private _config: Record<string, WidgetPlacement> = {}
-    private configPath = `${GLib.get_user_config_dir()}/nidara/widgets.json`
 
     constructor() {
         super()
         this._config = this.load()
+        // A placement changed by another process (the Settings app, `gsettings set`).
+        // Our own saves come back here too; they rebuild an identical map and the
+        // comparison stops them.
+        store.subscribe("placement", () => {
+            const next = this.load()
+            if (JSON.stringify(next) === JSON.stringify(this._config)) return
+            this._config = next
+            this.emit("changed")
+        })
     }
 
     private load(): Record<string, WidgetPlacement> {
-        try {
-            if (GLib.file_test(this.configPath, GLib.FileTest.EXISTS)) {
-                const data = JSON.parse(readFile(this.configPath)) as Record<string, WidgetPlacement>
-                // A spread is CORRECT here and must stay — unlike the other config
-                // files, this one's keys ARE the data (widget ids), so `DEFAULTS`
-                // seeds them rather than enumerating the valid ones. Don't reach for
-                // `core/configFile.ts`'s `loadKnown`: it would drop every widget the
-                // shipped defaults don't happen to name, third-party ones included.
-                return { ...DEFAULTS, ...data }
-            }
-        } catch {}
-        return { ...DEFAULTS }
+        // A spread is CORRECT here and must stay — this map's keys ARE the data
+        // (widget ids), so `DEFAULTS` seeds them rather than enumerating the valid
+        // ones; a key-filtering load would drop every widget the shipped defaults
+        // don't happen to name, third-party ones included.
+        const out: Record<string, WidgetPlacement> = {}
+        for (const [id, p] of Object.entries(DEFAULTS)) out[id] = { ...p }
+        for (const [id, pair] of Object.entries(store.get("placement"))) {
+            if (Array.isArray(pair) && pair.length === 2) out[id] = { bar: pair[0] === true, cc: pair[1] === true }
+        }
+        return out
     }
 
     private save() {
-        try {
-            const dir = `${GLib.get_user_config_dir()}/nidara`
-            if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
-                GLib.mkdir_with_parents(dir, 0o755)
-            writeFile(this.configPath, JSON.stringify(this._config, null, 2))
-        } catch (e) {
-            console.error("[WidgetConfig] Save failed:", e)
-        }
+        const placement: StoredPlacement = {}
+        for (const [id, p] of Object.entries(this._config)) placement[id] = [p.bar, p.cc]
+        store.set("placement", placement)
     }
 
     get(id: string): WidgetPlacement {

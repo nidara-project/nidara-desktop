@@ -3360,8 +3360,8 @@ hyprctl eval "hl.monitor({ output = 'Virtual-1', mode = '1280x720@60', position 
 ## Persistence
 
 ⚠️ **Settings are moving to GSettings (`org.nidara.*`, #573)** — `gsettings list-recursively
-org.nidara` shows the ones that already live there (dock, bar, notifications, night light,
-workspaces, recording, ai, gaming). Architecture → "Where a setting lives" has the rules. For dev work:
+org.nidara` shows them all (dock incl. pinned apps, bar, notifications, night light, workspaces,
+recording, ai, gaming, appearance, widgets, control-center, region). Architecture → "Where a setting lives" has the rules. For dev work:
 
 - **The schema is read COMPILED.** Editing `config/gsettings/org.nidara.gschema.xml` changes nothing
   until `./install.sh --dev` installs and compiles it again — into `/usr/share/glib-2.0/schemas`,
@@ -3384,19 +3384,16 @@ workspaces, recording, ai, gaming). Architecture → "Where a setting lives" has
   checkout reloaded without it reads defaults until then, and nothing is lost — the JSON files stay
   until the migration takes them.
 
-Everything else still lives in `~/.config/nidara/`:
+What still lives in `~/.config/nidara/` as a file, and why (every PREFERENCE is in GSettings —
+`gsettings list-schemas | grep org.nidara`):
 
 | File | Purpose |
 |---|---|
-| `theme_settings.json` | Theme engine state |
-| `nidara.json` | Token engine config |
-| `appearance.json` | Appearance state (+ world-readable mirror at `/var/tmp/nidara/appearance.json` for the greeter) |
-| `dock_pinned.json` | Dock pinned apps |
-| `cc_layout.json` | Control Center layout |
-| `widgets.json` | CC widget registry/metadata |
-| `region.json` | Time/date/timezone |
-| `wallpaper` | Current wallpaper path + transition (JSON; reserves a `surfaces` block for per-surface wallpapers — schema in `ui/lib/wallpaper.ts`) |
-| `greeter-prefs.json` | Greeter preferences |
+| `wallpaper` | Current wallpaper path + transition — read by `hyprland.lua` and the lock screen too, which cannot read GSettings (JSON; reserves a `surfaces` block for per-surface wallpapers — schema in `ui/lib/wallpaper.ts`) |
+| `greeter-prefs.json` | Greeter preferences (read by the greeter, another user) |
+| `app-frequency.json` | Launch counts — a cache written on every launch, not a preference |
+| `nidara-settings.lua`, `nidara-monitor.lua`, `nidara-workspaces.lua`, `nidara-gaming.lua` | OUTPUTS the shell generates for Hyprland, which cannot read GSettings |
+| `*.migrated` | The user's original files, kept after the one-time import (#573) |
 
 ### Hyprland config ownership model (settled 2026-06-05 — do NOT re-litigate)
 

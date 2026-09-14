@@ -2,21 +2,17 @@ import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import { NidaraClock, type RegionSettings } from "../../lib/clock"
 import { type DateFormat } from "../../lib/date-names"
-import { getPreferredUser } from "../lib/greeter-prefs"
 import { onLocaleChange } from "../lib/i18n"
 
-// The greeter's half of the shared clock: WHERE to read region.json, which is a
+// The greeter's half of the shared clock: WHERE to read the clock format, which is a
 // privilege question this bundle is the only one that has. Everything the widget
 // does with the answer lives in ui/lib/clock.ts.
 function readRegionConfig(): RegionSettings {
   const fallback = { timeFormat: "24h" as const, showSeconds: false, dateFormat: "long" as DateFormat }
-  // Try the last-logged-in user's home first (works if /home/<user> is not
-  // 700), then the world-readable mirror RegionConfig writes to
-  // /var/tmp/nidara — same pattern as the greeter's appearance.json read in app.ts.
-  const candidates = [
-    `${getPreferredUser().homeDir}/.config/nidara/region.json`,
-    "/var/tmp/nidara/region.json",
-  ]
+  // The mirror the shell writes to /var/tmp/nidara (0644) — the only copy a system
+  // user outside the session can read. The user's own region.json used to be tried
+  // first; the clock format lives in their dconf now (#573), which is not ours to read.
+  const candidates = ["/var/tmp/nidara/region.json"]
   for (const path of candidates) {
     try {
       const [ok, data] = GLib.file_get_contents(path)

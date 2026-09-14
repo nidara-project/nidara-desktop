@@ -18,7 +18,7 @@ import {
     generateChromeTokenScope,
     CHROME_SCOPE_WINDOWS,
 } from "./NidaraTheme"
-import { SHELL_ROOT } from "./Paths"
+import { SHELL_ROOT, GREETER_MIRROR_DIR } from "./Paths"
 import hs from "./HyprlandState"
 import { defineSettings } from "./configFile"
 
@@ -861,7 +861,7 @@ class ThemeManager extends GObject.Object {
             shellAppearance: this.fcConfig.shellAppearance,
         }, null, 2)
         try {
-            const sharedDir = "/var/tmp/nidara"
+            const sharedDir = GREETER_MIRROR_DIR
             if (!GLib.file_test(sharedDir, GLib.FileTest.EXISTS))
                 GLib.mkdir_with_parents(sharedDir, 0o755)
             writeFile(`${sharedDir}/appearance.json`, json, 0o644)
