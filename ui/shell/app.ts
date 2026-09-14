@@ -22,6 +22,7 @@ import appService, { type AppData } from "./core/AppService"
 import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue, setConfigLocations } from "./core/ConfigRegistry"
 import { registerConfigEntries } from "./config-entries"
 import { exportConsentService } from "./surfaces/consent/ConsentService"
+import { startWifiPasswordPrompt } from "./surfaces/network/WifiPasswordPrompt"
 import { configLocations } from "./surfaces/settings/configLocations"
 import { initReduceMotion } from "./core/ReduceMotion"
 import { fireSessionStartedOnce, initBatteryLowHook } from "./core/Hooks"
@@ -1063,6 +1064,9 @@ app.start({
     // The XDG portal's consent prompts (camera, microphone, location…), drawn here
     // on behalf of bin/nidara-portal. NOT an IPC command — see the file.
     exportConsentService()
+    // NetworkManager's secret agent: the Wi-Fi password prompt, for the session.
+    // Nothing else may put a password on nmcli's command line — see core/NetworkAgent.ts.
+    startWifiPasswordPrompt()
 
     // "The Assistant is working in this window" — the inner glow follows
     // agentService.busy. Also clears a glow left on by a shell that died mid-turn.

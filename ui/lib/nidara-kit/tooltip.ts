@@ -170,6 +170,13 @@ export function attachTooltip(
         if (popover.visible || timer !== null) return
         timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
             timer = null
+            // The widget can leave its window inside the delay without being
+            // destroyed — a list that rebuilds its rows under the pointer. Popping up
+            // a popover whose parent has no surface is not an error in GTK, it is a
+            // SIGSEGV in gtk_widget_realize (Settings → Network, forgetting a
+            // network, 2026-09-14). `unmap` below cancels the timer; this is the
+            // same check for a source that was already dispatching.
+            if (!widget.get_mapped() || !widget.get_root()) return GLib.SOURCE_REMOVE
             refresh()
             popover.popup()
             return GLib.SOURCE_REMOVE
@@ -177,6 +184,7 @@ export function attachTooltip(
     })
     motion.connect("leave", () => { cancelTimer(); popover.popdown() })
     widget.add_controller(motion)
+    widget.connect("unmap", () => { cancelTimer(); popover.popdown() })
 
     let destroyed = false
     const destroy = () => {

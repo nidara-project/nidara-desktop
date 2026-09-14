@@ -2498,6 +2498,18 @@ Non-obvious traps this setup exposes, all of which bit real code:
   `NM.Client.wireless_enabled`. With no wireless hardware at all NM reports it **false**,
   which is why `Net.wifiEnabled()` answers `true` when there is no adapter — absent is not
   off, and the bar must not paint a "radio off" icon on a machine that never had a radio.
+- **A password prompt needs a process INSIDE the session.** The shell's secret agent answers
+  NetworkManager only for requests it is allowed to see, and `nmcli` over SSH is an inactive
+  session to polkit ("Not authorized"). To drive the real flow, click Connect in Settings; to
+  run a probe that registers its own agent or activates a connection, start it from Hyprland:
+  `hyprctl dispatch 'hl.dsp.exec_cmd("gjs -m /tmp/probe.js > /tmp/probe.log 2>&1")'`.
+- **Changing the AP's passphrase is the router-password-changed test.** Stop the AP, start it
+  again with another `wpa_passphrase`: NM drops the link, autoconnect retries, and the prompt
+  must appear on its own with the "couldn't connect" wording (REQUEST_NEW). Before the agent
+  existed that network was unreachable until its profile was deleted by hand.
+- **A leaked password is caught with a `ps` loop, not by reading the code.** Poll
+  `ps -eo user,args | grep <the key>` every 50 ms from another user during a connect; the
+  positive control is that the same loop DID catch `nmcli … password …` before 2026-09-14.
 - **DHCP lands after the SSID.** `notify::active-access-point` fires well before an address
   exists, so anything showing an IP must also watch the device's `ip4-config` (that is the
   difference between `watchWifiNetwork` and the wider `watchWifi`).
