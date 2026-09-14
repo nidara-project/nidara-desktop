@@ -6,6 +6,9 @@ import shellActions from "../core/ShellActions"
 import status from "../core/Status"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
+
+// A form opened from the CC must close it first: an open overlay holds the keyboard grab.
+const closeOverlays = () => status.closeOverlays()
 import * as Net from "../core/NetworkService"
 
 // The adapter is read through Net.wifi() on every call rather than captured, so a
@@ -150,7 +153,7 @@ function buildNetworkList(): { box: Gtk.Box; refresh: () => void } {
                 onClick: () => {
                     if (link !== "idle") return
                     failed.delete(ssid)
-                    joinNetwork(ap, saved.has(ssid)).catch((e: any) => {
+                    joinNetwork(ap, saved.has(ssid), closeOverlays).catch((e: any) => {
                         if (e?.reason !== "cancelled") failed.add(ssid)
                         refresh()
                     })
@@ -176,7 +179,7 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
     const footer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })
     footer.append(menuRow({
         label: t("settings.network.ap.other"),
-        onClick: () => { joinOtherNetwork().catch(() => {}) },
+        onClick: () => { joinOtherNetwork(closeOverlays).catch(() => {}) },
     }))
     footer.append(menuRow({
         label: t("widget.wifi.settings"),

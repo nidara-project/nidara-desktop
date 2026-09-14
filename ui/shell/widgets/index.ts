@@ -1,5 +1,5 @@
 import Gio from "gi://Gio"
-import { AtomicWidget, WidgetSize, WidgetCategory } from "../common/widget-kit"
+import { AtomicWidget, WidgetSize, WidgetCategory, CATEGORY_ORDER } from "../common/widget-kit"
 // Auto-registration: ALL_WIDGETS comes from the generated widgets.gen.ts —
 // dropping a file in widgets/ that default-exports an AtomicWidget is ALL it
 // takes to register a widget (see scripts/gen-widget-index.mjs).
@@ -66,10 +66,8 @@ export const DEFAULT_PLACEMENT: Record<string, { bar: boolean; cc: boolean }> = 
     }])
 )
 
-// Category order, left → right across the bar: optional/content on the left,
-// system/connectivity on the right (nearest the tray). Also the
-// section order in Settings → Widgets.
-export const CATEGORY_ORDER: WidgetCategory[] = ["media", "utilities", "system"]
+// Declared in the contract (Settings reads it without importing a widget); re-exported for the bar.
+export { CATEGORY_ORDER }
 
 // Curated bar pill order, DERIVED from each widget's declared category + barOrder —
 // no hand-maintained list. Adding a widget places it in its category automatically.

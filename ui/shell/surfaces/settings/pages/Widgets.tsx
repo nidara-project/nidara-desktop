@@ -1,8 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
-import widgetConfig from "../../../core/WidgetConfig"
-import ccLayout from "../../control-center/CCLayoutManager"
-import registry, { widgetAvailable, CATEGORY_ORDER } from "../../../widgets/index"
-import { AtomicWidget, WidgetCategory } from "../../../common/widget-kit"
+import { widgetCatalog, type WidgetCatalogEntry } from "../../../core/WidgetCatalog"
+import { CATEGORY_ORDER, type WidgetCategory } from "../../../common/widget-kit/contract"
 import { pageBox, listGroup, createRow, type SettingsNav } from "../SettingsHelpers"
 import { NidaraButton, attachTooltip } from "../../../../lib/nidara-kit"
 import { t } from "../../../core/i18n"
@@ -26,12 +24,11 @@ function controlGroup(label: string, active: boolean, sensitive: boolean, toolti
 // switches on the right — and NOTHING else in that trailing slot, which is what
 // keeps the switch columns aligned down the whole page. A widget with its own
 // settings grows a second line inside the SAME row (see the footer below).
-function buildWidgetRow(nav: SettingsNav, w: AtomicWidget): Gtk.ListBoxRow {
-    const placement = widgetConfig.get(w.id)
+function buildWidgetRow(nav: SettingsNav, w: WidgetCatalogEntry): Gtk.ListBoxRow {
     // Hardware gate: the row stays visible (so the user sees WHY it's off) but the
     // switches render off + disabled with a hint, and the icon dims. Placement
     // config is untouched — the saved state comes back with the hardware.
-    const available = widgetAvailable(w)
+    const available = w.available
     const noHw = t("settings.widgets.tooltip.no-hardware")
 
     const leadingIcon = new Gtk.Image({
@@ -43,26 +40,21 @@ function buildWidgetRow(nav: SettingsNav, w: AtomicWidget): Gtk.ListBoxRow {
     const controls = new Gtk.Box({ spacing: 20, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
 
     // Bar switch — only for widgets that can actually render in the bar.
-    if (w.locations?.includes("bar") && w.buildBarContent != null) {
+    if (w.canBar) {
         controls.append(controlGroup(
-            t("settings.widgets.col.bar"), available && placement.bar, available,
+            t("settings.widgets.col.bar"), available && w.bar, available,
             available ? "" : noHw,
-            (v) => widgetConfig.setBar(w.id, v),
+            (v) => widgetCatalog().setBar(w.id, v),
         ))
     }
 
     // Control Center switch — disabled (with a tooltip) when the hardware is
     // missing, or when the grid is full and the widget isn't already in it.
-    if (w.locations?.includes("cc")) {
-        const ccFits = placement.cc || ccLayout.canAdd(w.id)
+    if (w.canCc) {
         controls.append(controlGroup(
-            t("settings.widgets.col.cc"), available && placement.cc, available && ccFits,
-            !available ? noHw : ccFits ? "" : t("settings.widgets.tooltip.no-space"),
-            (v) => {
-                widgetConfig.setCC(w.id, v)
-                if (v) ccLayout.add(w.id)
-                else ccLayout.remove(w.id)
-            },
+            t("settings.widgets.col.cc"), available && w.cc, available && w.ccFits,
+            !available ? noHw : w.ccFits ? "" : t("settings.widgets.tooltip.no-space"),
+            (v) => widgetCatalog().setCc(w.id, v),
         ))
     }
 
@@ -86,7 +78,7 @@ function buildWidgetRow(nav: SettingsNav, w: AtomicWidget): Gtk.ListBoxRow {
 /** The in-row "Configure" control. Reuses the key that used to label this
  *  control's tooltip — already translated in all 12 catalogues, so moving it
  *  cost no new translation debt. */
-function configureButton(nav: SettingsNav, w: AtomicWidget): Gtk.Button {
+function configureButton(nav: SettingsNav, w: WidgetCatalogEntry): Gtk.Button {
     const btn = NidaraButton({
         // ghost + compact is exactly what the size ramp documents this slot for:
         // a control inside a dense row that must not out-weigh the row's own
@@ -125,12 +117,13 @@ export default function WidgetsPage(nav: SettingsNav): Gtk.Widget {
     // Which categories actually render depends on what the machine has, so the
     // groups are resolved before the loop — the reorder note rides as the LAST
     // one's footer.
+    const all = widgetCatalog().list()
     const groups = CATEGORY_ORDER
         .map(cat => ({
             cat,
-            widgets: registry.all()
+            widgets: all
                 .filter(w => w.category === cat)
-                .sort((a, b) => (a.barOrder ?? 0) - (b.barOrder ?? 0)),
+                .sort((a, b) => a.barOrder - b.barOrder),
         }))
         .filter(g => g.widgets.length > 0)
 

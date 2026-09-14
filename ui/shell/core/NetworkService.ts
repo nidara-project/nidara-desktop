@@ -28,7 +28,7 @@
 import { execAsync } from "../../lib/process"
 import NM from "gi://NM?version=1.0"
 import { t } from "./i18n"
-import { takeUserCancel } from "./NetworkAgent"
+import { takeUserCancel } from "./NetworkCancels"
 import { safeDisconnect } from "./signals"
 
 type Dispose = () => void

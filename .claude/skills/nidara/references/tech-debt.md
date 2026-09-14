@@ -1367,9 +1367,9 @@ These were paid down; the *rule* remains:
   `Nidara Settings` — the class was AGS's `io.Astal.ags` until 2026-08-18), which switches to its workspace like clicking any running dock app.
   Same pattern applies to any normal (non-layer-shell) window the shell wants to summon.
   `toggleSettings` is kept as a **compat alias** (the `hyprland.lua` Super+S
-  keybind / user scripts) — don't drop it without updating those. `status.settings_open`
-  (→ `dumpState.overlays.settings`) is wired to the window's `notify::visible` in
-  `Settings.tsx` — keep it honest. There's deliberately **no IPC to CLOSE** Settings: restart
+  keybind / user scripts) — don't drop it without updating those. `dumpState.overlays.settings`
+  is derived from Hyprland's clients with the same class+title predicate
+  (`isSettingsClient`, app.ts) — `status.settings_open` is gone since #571. There's deliberately **no IPC to CLOSE** Settings: restart
   the shell to reset state in a verification run, and use `queryUI` (a `nidara-settings-window`
   toplevel present = open) as the ground truth.
 - **(was #10) Boot-time `g_list_store_remove` CRITICAL (astal-tray)** fixed upstream:

@@ -14,8 +14,14 @@ export type WidgetLocation = "bar" | "cc"
 // Coarse grouping that drives BOTH the curated bar order (system rightmost, nearest
 // the tray) and the Settings → Widgets section grouping. Single source
 // of truth: each widget declares its category; BAR_ORDER and the Settings sections are
-// derived from it (see widgets/index.ts CATEGORY_ORDER), never hand-maintained.
+// derived from it (see CATEGORY_ORDER below), never hand-maintained.
 export type WidgetCategory = "system" | "utilities" | "media"
+
+// Category order, left → right across the bar: optional/content on the left,
+// system/connectivity on the right (nearest the tray). Also the section order in
+// Settings → Widgets — which is why it lives in the contract and not in
+// widgets/index.ts: Settings reads it without importing a single widget (#571).
+export const CATEGORY_ORDER: WidgetCategory[] = ["media", "utilities", "system"]
 
 export enum WidgetSize {
     SINGLE = "1x1",

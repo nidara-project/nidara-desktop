@@ -22,7 +22,7 @@ import appService, { type AppData } from "./core/AppService"
 import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue, setConfigLocations } from "./core/ConfigRegistry"
 import { registerConfigEntries } from "./config-entries"
 import { exportConsentService } from "./surfaces/consent/ConsentService"
-import { startWifiSecretsDialogs } from "./common/WifiSecretsDialog"
+import { startWifiSecretsDialogs } from "./common/WifiSecretsAgent"
 import { configLocations } from "./surfaces/settings/configLocations"
 import { initReduceMotion } from "./core/ReduceMotion"
 import { fireSessionStartedOnce, initBatteryLowHook } from "./core/Hooks"
@@ -78,6 +78,10 @@ import Theme, { setPreferDark } from "./core/ThemeManager"
 import AboutWindow from "./surfaces/about/AboutWindow"
 import { setKitAppearance } from "../lib/nidara-kit"
 import { safeDisconnect } from "./core/signals"
+import { setWidgetCatalog } from "./core/WidgetCatalog"
+// Last on purpose: by the time it evaluates, the registry and the CC grid already have
+// (through Settings and the bar), so adding the seam did not reorder the shell's boot.
+import { widgetCatalogSource } from "./core/WidgetCatalogSource"
 
 // ── The kit's appearance seam ────────────────────────────────────────────────
 // `nidara-kit/slider.ts` paints in Cairo, and Cairo cannot read a CSS token: it
@@ -97,6 +101,20 @@ setKitAppearance({
   overlayOpacity: () => Theme.overlayOpacity,
   chromeIsDark:   () => Theme.chromeIsDark,
 })
+
+// The Settings window as Hyprland sees it. Class AND title: the About window shares the
+// `nidara-settings` class on purpose (both carry Settings' registry icon), and the title
+// is NidaraWindow's, set in surfaces/settings/Settings.tsx.
+function isSettingsClient(c: { class: string; title: string }): boolean {
+  return c.class === "nidara-settings" && c.title === "Nidara Settings"
+}
+
+// ── The widget catalogue seam ────────────────────────────────────────────────
+// Settings → Widgets reads the widgets as data through this, never by importing
+// them: a Settings process that imported widgets/ would run a second copy of every
+// service they start (#571). Same module-scope timing as the appearance seam above.
+// See core/WidgetCatalog.ts.
+setWidgetCatalog(widgetCatalogSource)
 
 // Minimal interface for windows managed by the shell
 interface ShellWindow {
@@ -783,7 +801,11 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             // panel — and close it (`setIsland closed`) instead of clicking where
             // the user cannot see. null = the island is painting nothing there.
             islandBounds: islandRect(),
-            settings: status.settings_open,
+            // Read off the compositor, not Status: the Settings window is a normal
+            // client, and once it lives in its own process (#571) nothing it does can
+            // reach the shell's Status. A hidden Settings window is unmapped, so it is
+            // not a client — same answer notify::visible used to give.
+            settings: hyprlandState.clients.some(isSettingsClient),
             about: status.about_open,
           },
           flags: {
@@ -1228,8 +1250,7 @@ app.start({
     // deliberately shares the class so both carry Settings' registry icon.
     const raiseSettings = () => {
       settingsWindows.forEach(s => { try { s.present() } catch (e) { console.error(e) } })
-      const c = hyprlandState.clients.find(
-        (c: any) => c.class === "nidara-settings" && c.title === "Nidara Settings")
+      const c = hyprlandState.clients.find(isSettingsClient)
       if (c?.address) hyprlandState.focusWindow(c.address)
     }
     // Open/raise Settings — a normal window (NOT a toggle: re-invoking just

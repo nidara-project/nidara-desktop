@@ -31,7 +31,7 @@ None of the three produces an error, a warning or a failed build when missed. Tw
 ### Other tracked props
 
 - `about_open` — `AboutWindow` is create+destroy, not hide: `app.ts` listens on `notify::about-open` and creates/destroys the window. Flipped by `status.toggleAbout()` (the system-menu item, and the `toggleAbout` IPC action).
-- `settings_open` — Settings hides on close instead.
+- ~~`settings_open`~~ — **removed** (#571). `dumpState.overlays.settings` is read off Hyprland's client list (`isSettingsClient` in `app.ts`: class `nidara-settings` + title `Nidara Settings`), because a Settings window in its own process cannot write the shell's Status. A hidden Settings window is unmapped, so it is not a client.
 - `recording`
 - `cc_edit_mode`
 - `bar_expanded_id` — which Bar pill is currently expanded.
