@@ -667,6 +667,27 @@ next run's `umount_all_existing` hands lsblk's mountpoint for that swap, the lit
 only, swapoff → umount deepest first → `cryptsetup close` deepest first, and the run stops before
 archinstall if something cannot be released. Its order and scope are probed in
 `disk-config-probe.ts`, with a CI control that deletes the disk scope.
+Since #565 the same release also runs at the END of every run, after the log copy, so a finished
+install no longer sits mounted under `/mnt`: anything that inspects the target after "Installation
+complete" (the VM harness does) must mount it itself.
+
+⚠️ **The end of a run has an outcome, and the footer reads it** (`Step.outcome`, #565). After a
+failure only Close shows, as the primary button; "Restart now" appears only after a success. Set the
+outcome BEFORE `setBusy(false)`: that notify is what repaints the footer.
+
+⚠️ **`nmcli networking connectivity` without `check` is NetworkManager's CACHED answer**, refreshed only
+every so often. The run step read "full" seconds after the internet was cut and archinstall then hung
+15 min in `pacman -Sy` (measured 2026-09-14). `connectivity({ fresh: true })` adds `check` and is for
+the one moment that decides to start; the welcome page polls every 3 s and must keep the cached read —
+a forced check is a request to ping.archlinux.org. The welcome page HOLDS Continue without a usable
+network (#566) only while there is no offline install (nidara-iso#20).
+
+⚠️ **NetworkManager writes a user restriction as `permissions=user:<name>:;`** — a trailing reserved
+field. `lib/network-connections.ts` (#564) carries the live session's saved `*.nmconnection` into the
+target (Calamares' `networkcfg`; archinstall's `iso` network type copies iwd/networkd, not NM) and
+rewrites that user to the new account. Its first version matched an invented `user:live;`, the probe
+built on the same invented shape passed, and only the VM install caught it — probe fixtures for
+another program's file format come from a MEASURED file, never from memory.
 
 ⚠️ **Which partition is the ESP is `espMount()`, exported from `lib/disk-config.ts`, and there is
 one of it.** Four places need that answer — the page that refuses a non-FAT ESP, the summary that
