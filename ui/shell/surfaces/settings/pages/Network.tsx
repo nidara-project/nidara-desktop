@@ -6,6 +6,7 @@ import * as Net from "../../../core/NetworkService"
 import type { VpnProfile } from "../../../core/NetworkService"
 import { NidaraButton, NidaraEmptyRow, attachTooltip } from "../../../../lib/nidara-kit"
 import { safeDisconnect } from "../../../core/signals"
+import { joinHiddenNetwork, setupNetwork } from "../../network/WifiSecretsDialog"
 
 function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow {
     let active = profile.active
@@ -61,14 +62,21 @@ const ipOf = (service: any) => Net.getIp(service, t("settings.network.label.none
 
 // ── AP row ────────────────────────────────────────────────────────────────────
 
-function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean, onRefresh: () => void, onDetails?: () => void): Gtk.ListBoxRow {
+/** The last attempt that ended in a failure, per SSID — the only state a row cannot
+ *  read back from NM. Rows are rebuilt on every AP-list / device-state change, so
+ *  anything a row kept in its own closure (the old "Connecting…" and "Error" labels)
+ *  was thrown away mid-attempt: a refused password showed "Disconnect", as if
+ *  connected, and then went back to "Connect" without a word. */
+const failedSsids = new Set<string>()
+
+function buildApRow(ap: any, isSaved: boolean, onRefresh: () => void, onDetails?: () => void): Gtk.ListBoxRow {
     // An SSID is arbitrary bytes on the wire, so NM hands it over as GLib.Bytes —
     // Net.apSsid is the decoder. Everything else on an AP is read straight off it.
     const ssid    = Net.apSsid(ap)
     const secured = Net.isSecured(ap)
-    // NM.AccessPoint has no `active` property — the active AP is derived by the
-    // caller from the device's active_access_point.bssid.
-    let active    = isActive
+    // Connected / connecting / idle comes from the adapter at build time; the page
+    // rebuilds this row whenever that changes (Net.watchAccessPoints).
+    const link    = Net.apLinkState(ap)
 
     // Right-side widget: optional info + (forget) + action button. (The lock for a
     // secured AP rides next to the SSID via createRow's titleIcon, not here.)
@@ -88,9 +96,8 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
         rightBox.append(infoBtn)
     }
 
-    // Forget — only for saved, currently-disconnected networks (you disconnect
-    // first, then forget). The row is rebuilt on connect/disconnect so this tracks.
-    if (isSaved && !active) {
+    // Forget — only for saved networks the adapter is not on or joining.
+    if (isSaved && link === "idle") {
         const forgetBtn = NidaraButton({
             variant: "danger",
             pill: true,
@@ -98,143 +105,59 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
         })
         attachTooltip(forgetBtn, t("settings.network.ap.forget"), { chrome: false })
         forgetBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["nd-icon"] }))
-        forgetBtn.connect("clicked", async () => {
+        forgetBtn.connect("clicked", () => {
             forgetBtn.sensitive = false
-            try { await Net.forgetProfile(ssid) }
-            catch (e) { console.error("[Network] forget failed:", e); forgetBtn.sensitive = true }
-            setTimeout(onRefresh, 800)
+            failedSsids.delete(ssid)
+            // The row rebuilds itself on NM's connection-removed.
+            Net.forgetNetwork(ap).catch(e => { console.error("[Network] forget failed:", e); forgetBtn.sensitive = true })
         })
         rightBox.append(forgetBtn)
     }
 
     const btn = NidaraButton({ pill: true })
     rightBox.append(btn)
-
-    function setState(state: "connect" | "disconnect" | "loading" | "error") {
-        switch (state) {
-            case "connect":
-                btn.label = t("settings.network.ap.connect")
-                btn.add_css_class("nidara-btn--primary")
-                btn.sensitive = true
-                break
-            case "disconnect":
-                // Reversible → neutral (secondary); danger is reserved for forget.
-                btn.label = t("settings.network.ap.disconnect")
-                btn.remove_css_class("nidara-btn--primary")
-                btn.sensitive = true
-                break
-            case "loading":
-                btn.label = t("settings.network.ap.connecting")
-                btn.sensitive = false
-                break
-            case "error":
-                btn.label = t("settings.network.ap.label.error")
-                btn.sensitive = false
-                setTimeout(() => setState(active ? "disconnect" : "connect"), 2000)
-                break
-        }
+    switch (link) {
+        case "connected":
+            // Reversible → neutral (secondary); danger is reserved for forget.
+            btn.label = t("settings.network.ap.disconnect")
+            break
+        case "connecting":
+            btn.label = t("settings.network.ap.connecting")
+            btn.sensitive = false
+            break
+        default:
+            btn.label = t("settings.network.ap.connect")
+            btn.add_css_class("nidara-btn--primary")
     }
 
-    setState(active ? "disconnect" : "connect")
-
-    // Password popover — created lazily, only for secured new networks
-    let pwdPopover: Gtk.Popover | null = null
-    let pwdEntry: Gtk.PasswordEntry | null = null
-
-    function getOrBuildPopover(): Gtk.Popover {
-        if (pwdPopover) return pwdPopover
-
-        pwdEntry = new Gtk.PasswordEntry({
-            placeholder_text: t("settings.network.ap.password-placeholder"),
-            show_peek_icon: true,
-            hexpand: true,
-        })
-
-        const confirmBtn = NidaraButton({
-            label: t("settings.network.ap.connect"),
-            variant: "primary",
-            pill: true,
-        })
-        confirmBtn.hexpand = true
-
-        const titleLabel = new Gtk.Label({
-            label: `${t("settings.network.ap.password-for")} ${ssid}`,
-            css_classes: ["nidara-row-title"],
-            halign: Gtk.Align.START,
-            ellipsize: 3, // PANGO_ELLIPSIZE_END
-            max_width_chars: 26,
-        })
-
-        const popBox = new Gtk.Box({
-            orientation: Gtk.Orientation.VERTICAL,
-            spacing: 12,
-            margin_top: 12, margin_bottom: 12,
-            margin_start: 16, margin_end: 16,
-            width_request: 260,
-        })
-        popBox.append(titleLabel)
-        popBox.append(pwdEntry)
-        popBox.append(confirmBtn)
-
-        pwdPopover = new Gtk.Popover({ autohide: true })
-        pwdPopover.set_child(popBox)
-        pwdPopover.set_parent(btn)
-        btn.connect("unrealize", () => { try { pwdPopover?.unparent() } catch {} })
-
-        const submit = () => {
-            const pwd = pwdEntry!.text.trim()
-            if (!pwd) return
-            pwdPopover!.popdown()
-            performConnect(pwd, true)
-        }
-        confirmBtn.connect("clicked", submit)
-        pwdEntry.connect("activate", submit)
-
-        return pwdPopover
-    }
-
-    async function performConnect(password?: string, freshProfile = false) {
-        setState("loading")
-        try {
-            await Net.connectAp(ssid, password)
-            active = true
-            setState("disconnect")
-            setTimeout(onRefresh, 2000)
-        } catch (e) {
-            console.error("[Network] connect failed:", e)
-            // A wrong password still leaves a broken saved profile behind; the next
-            // attempt would silently reuse it and fail forever. Drop the just-created
-            // profile so the password prompt reappears.
-            if (freshProfile) { try { await Net.forgetProfile(ssid) } catch {} }
-            setState("error")
-        }
-    }
-
-    btn.connect("clicked", async () => {
-        if (active) {
-            setState("loading")
-            try {
-                await Net.disconnectIface(iface)
-                active = false
-                setState("connect")
-                setTimeout(onRefresh, 1000)
-            } catch (e) {
-                console.error("[Network] disconnect failed:", e)
-                setState("disconnect")
-            }
+    btn.connect("clicked", () => {
+        btn.sensitive = false
+        if (link === "connected") {
+            Net.disconnectWifi().catch(e => { console.error("[Network] disconnect failed:", e); btn.sensitive = true })
             return
         }
-
-        if (!secured || isSaved) {
-            performConnect()
-        } else {
-            const pop = getOrBuildPopover()
-            if (pwdEntry) pwdEntry.text = ""
-            pop.popup()
+        failedSsids.delete(ssid)
+        const onFail = (e: any) => {
+            if (!(e instanceof Net.ConnectError)) console.error("[Network] connect failed:", e)
+            if (e?.reason !== "cancelled") failedSsids.add(ssid)
+            onRefresh()
         }
+        // No password here, ever: NetworkManager asks for one through the shell's
+        // secret agent (core/NetworkAgent) when — and each time — it needs it. Only an
+        // enterprise network needs its form first, and only the first time.
+        if (!isSaved && Net.needsSetupDialog(ap)) {
+            setupNetwork(ap).then(conn => {
+                if (!conn) { btn.sensitive = true; return }
+                Net.connectAp(ap, conn).catch(onFail)
+            })
+            return
+        }
+        Net.connectAp(ap).catch(onFail)
     })
 
-    const subtitle = `${ap.strength}% • ${ap.frequency} MHz`
+    const subtitle = link === "idle" && failedSsids.has(ssid)
+        ? t("settings.network.ap.failed")
+        : `${ap.strength}% • ${ap.frequency} MHz`
     return createRow(ssid, subtitle, rightBox, lockIcon)
 }
 
@@ -414,7 +337,23 @@ export default function NetworkPage(nav?: SettingsNav) {
         hexpand: true,
         margin_start: 20,
     })
+    // A hidden network is not in the list to click; libnma's form names it.
+    const otherBtn = NidaraButton({
+        label: t("settings.network.ap.other"),
+        variant: "secondary",
+        pill: true,
+        valign: Gtk.Align.CENTER,
+        halign: Gtk.Align.END,
+    })
+    otherBtn.margin_end = 8
+    otherBtn.connect("clicked", () => {
+        joinHiddenNetwork().then(conn => {
+            if (conn) Net.connectAp(null, conn).catch(e => console.error("[Network] hidden network:", e))
+        })
+    })
+
     headerBox.append(groupTitleLabel)
+    headerBox.append(otherBtn)
     headerBox.append(scanBtn)
 
     // Replace the plain title in apBox with the header+scan button row
@@ -422,17 +361,11 @@ export default function NetworkPage(nav?: SettingsNav) {
     if (firstChild) apBox.remove(firstChild)
     apBox.prepend(headerBox)
 
-    // Bumped on every refresh; the async saved-profiles fetch below bails if a
-    // newer refresh superseded it, so overlapping scan bursts can't duplicate rows.
-    let refreshGen = 0
-    async function refreshAps() {
+    // Synchronous end to end (saved profiles are read from libnm, not an nmcli
+    // spawn), so overlapping refreshes cannot interleave and duplicate rows.
+    function refreshAps() {
         const wifi = Net.wifi()
         if (!wifi) { apBox.visible = false; return }
-        const gen = ++refreshGen
-
-        // Read live: the interface name belongs to whichever adapter is present
-        // NOW, and `disconnect` is issued against it by name.
-        const iface = wifi.device.get_iface() || ""
 
         const enabled     = wifi.enabled
         const activeAp    = wifi.active_access_point
@@ -448,8 +381,7 @@ export default function NetworkPage(nav?: SettingsNav) {
             aps.unshift(activeAp)
         }
 
-        const savedSsids = await Net.listSavedWifiSsids()
-        if (gen !== refreshGen) return   // a newer refresh already ran
+        const savedSsids = Net.savedWifiSsids()
 
         let child = apList.get_first_child()
         while (child) { apList.remove(child); child = apList.get_first_child() }
@@ -465,8 +397,7 @@ export default function NetworkPage(nav?: SettingsNav) {
                 })
                 : undefined
             apList.append(buildApRow(
-                ap, iface,
-                !!activeBssid && ap.bssid === activeBssid,
+                ap,
                 savedSsids.has(ssid),
                 refreshAps,
                 onDetails,
@@ -540,7 +471,7 @@ export default function NetworkPage(nav?: SettingsNav) {
     // Bumped on every refresh. `listVpnProfiles` is an async nmcli call and this
     // list is now re-read on every visit, so two refreshes can overlap: without a
     // generation guard the second one clears the list, both promises resolve, and
-    // every profile appears twice. Same shape as the AP list's `refreshGen` above.
+    // every profile appears twice.
     let vpnGen = 0
     const refreshVpn = () => {
         const gen = ++vpnGen

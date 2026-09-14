@@ -3,8 +3,9 @@
 //
 // It used to be a stateless facade over AstalNetwork. It is not any more: the
 // read half now sits directly on `libnm` (`gi://NM`), the same C library Astal's
-// Vala wrapper was wrapping. The write half never went through Astal at all —
-// every mutation here has always been an `nmcli` call.
+// Vala wrapper was wrapping. The write half never went through Astal at all: it
+// was `nmcli` calls, and joining/leaving/forgetting a Wi-Fi network moved to libnm
+// on 2026-09-14 (see "Wi-Fi commands") — the radio, rescan and VPN still spawn nmcli.
 //
 // WHY the wrapper went away (tech-debt #22/#71): `AstalNetwork.Network` resolves
 // its Wifi/Wired wrappers ONCE, in `construct`, from a single `get_devices()`
@@ -21,12 +22,13 @@
 // NM-flag/frequency derivations and the notify-subscription helpers; it never
 // imports Gtk and never builds anything.
 //
-// Everything below is READ-ONLY against NM except the nmcli commands. Widgets
+// Everything below is READ-ONLY against NM except the commands. Widgets
 // must not import `gi://NM` — they ask this module, like they already did.
 
 import { execAsync } from "../../lib/process"
 import NM from "gi://NM?version=1.0"
 import { t } from "./i18n"
+import { takeUserCancel } from "./NetworkAgent"
 import { safeDisconnect } from "./signals"
 
 type Dispose = () => void
@@ -338,6 +340,9 @@ export function apSsid(ap: NM.AccessPoint): string {
 export function getIp(service: any, fallback = "—"): string {
     const device = service?.device
     if (!device) return fallback
+    // Only while ACTIVATED: NM leaves the last ip4-config on a device that has just
+    // gone away — Wi-Fi switched off, cable pulled — and it read as still connected.
+    if (device.get_state?.() !== NM.DeviceState.ACTIVATED) return fallback
     try {
         const addrs = device.get_ip4_config()?.get_addresses()
         if (addrs?.length > 0) return String(addrs[0].get_address())
@@ -363,16 +368,170 @@ export function wifiEnabled(w: WifiHandle | null = wifi()): boolean {
     return w.enabled
 }
 
-// ── Wi-Fi commands (nmcli) ──────────────────────────────────────────────────
+// ── Wi-Fi commands ──────────────────────────────────────────────────────────
+//
+// Joining, leaving and forgetting a network go through libnm, never `nmcli`: a
+// password passed as `nmcli … password X` is in argv — readable by any local user
+// with `ps` — and nmcli cannot be asked again when the key is wrong. The shell
+// now activates WITHOUT secrets and NetworkManager asks core/NetworkAgent for
+// them, as often as it needs to (a wrong key, a router whose password changed);
+// the dialogs that ask are libnma's (surfaces/network/WifiSecretsDialog.ts).
 
-export function connectAp(ssid: string, password?: string): Promise<string> {
-    const args = ["nmcli", "device", "wifi", "connect", ssid]
-    if (password) args.push("password", password)
-    return execAsync(args)
+/** Why a connection attempt ended without a connection. */
+export class ConnectError extends Error {
+    constructor(readonly reason: "cancelled" | "failed") { super(reason) }
 }
 
-export function disconnectIface(iface: string): Promise<string> {
-    return execAsync(["nmcli", "device", "disconnect", iface])
+function ssidBytesOf(conn: NM.Connection): Uint8Array | null {
+    const w = conn.get_setting_wireless?.()
+    const data = w?.get_ssid()?.get_data()
+    return data && data.length > 0 ? data : null
+}
+
+function sameBytes(a: Uint8Array | null, b: Uint8Array | null): boolean {
+    if (!a || !b || a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+    return true
+}
+
+/** Saved Wi-Fi profiles for this access point's network, matched by SSID BYTES —
+ *  not by profile name, which only coincides when the shell itself created it
+ *  (a profile made in nmtui as "Casa" is still this network). Newest first. */
+function savedProfilesFor(ap: NM.AccessPoint): NM.RemoteConnection[] {
+    const want = ap.ssid?.get_data() ?? null
+    return (client()?.get_connections() ?? [])
+        .filter(c => c.get_connection_type() === "802-11-wireless" && sameBytes(ssidBytesOf(c), want))
+        .sort((a, b) => Number(b.get_setting_connection()?.get_timestamp() ?? 0) - Number(a.get_setting_connection()?.get_timestamp() ?? 0))
+}
+
+/** SSIDs (as text) that have at least one saved Wi-Fi profile. */
+export function savedWifiSsids(): Set<string> {
+    const set = new Set<string>()
+    for (const c of client()?.get_connections() ?? []) {
+        if (c.get_connection_type() !== "802-11-wireless") continue
+        const data = ssidBytesOf(c)
+        if (data) { try { set.add(NM.utils_ssid_to_utf8(data)) } catch {} }
+    }
+    return set
+}
+
+/** The objects libnma's Wi-Fi dialogs are built from. Only surfaces/network may use
+ *  them — every other surface asks this module in its own vocabulary. */
+export function nmObjects(): { client: NM.Client; device: NM.DeviceWifi } | null {
+    const c = client()
+    const d = wifi()?.device ?? null
+    return c && d ? { client: c, device: d } : null
+}
+
+/** A visible access point broadcasting `conn`'s SSID, strongest first — what libnma's
+ *  dialog needs to be built for a connection. Null for a hidden or out-of-range one. */
+export function apForConnection(conn: NM.Connection): NM.AccessPoint | null {
+    const want = ssidBytesOf(conn)
+    return (_wifiDevice?.get_access_points() ?? [])
+        .filter(ap => sameBytes(ap.ssid?.get_data() ?? null, want))
+        .sort((a, b) => b.strength - a.strength)[0] ?? null
+}
+
+/** True when joining `ap` needs more than a password — an 802.1X (enterprise) network,
+ *  which NM cannot complete from the access point alone: identity, EAP method and
+ *  certificates have to come from a dialog BEFORE the connection exists. */
+export function needsSetupDialog(ap: NM.AccessPoint): boolean {
+    return ((ap.rsn_flags ?? 0) & SEC_KEY_8021X) !== 0 || ((ap.wpa_flags ?? 0) & SEC_KEY_8021X) !== 0
+}
+
+/**
+ * Join `ap`. Resolves once the connection is ACTIVATED; rejects with a
+ * ConnectError when it ends any other way. Secrets are never passed from here: a
+ * `connection` built by libnma's dialog carries what the user typed over D-Bus, and
+ * anything still missing — or refused — NetworkManager asks the agent for.
+ *
+ * With no saved profile and no `connection`, NM completes one from the access point
+ * itself. A profile this call CREATED is deleted again if the attempt fails, so a
+ * cancelled dialog or a refused key does not leave a "saved" network behind that
+ * has no working key in it.
+ */
+export function connectAp(ap: NM.AccessPoint | null, connection: NM.Connection | null = null): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const c = client()
+        const dev = _wifiDevice
+        if (!c || !dev || (!ap && !connection)) return reject(new ConnectError("failed"))
+
+        const saved = connection || !ap ? null : savedProfilesFor(ap)[0] ?? null
+        const follow = (ac: NM.ActiveConnection, fresh: boolean) => {
+            let id = 0
+            const done = (ok: boolean, why: ConnectError["reason"] = "failed") => {
+                if (id) { safeDisconnect(ac, id); id = 0 }
+                if (ok) return resolve()
+                if (fresh) {
+                    const rc = ac.get_connection()
+                    rc?.delete_async(null, (o: any, r: any) => { try { o.delete_finish(r) } catch {} })
+                }
+                reject(new ConnectError(why))
+            }
+            const check = (state: number) => {
+                if (state === NM.ActiveConnectionState.ACTIVATED) done(true)
+                else if (state === NM.ActiveConnectionState.DEACTIVATED)
+                    done(false, takeUserCancel(ac.get_uuid() ?? "") ? "cancelled" : "failed")
+            }
+            id = ac.connect("state-changed", (_a: any, state: number) => check(state))
+            check(ac.get_state())
+        }
+
+        try {
+            if (saved && ap) {
+                c.activate_connection_async(saved, dev, ap.get_path(), null, (o: any, r: any) => {
+                    try { follow(o.activate_connection_finish(r), false) }
+                    catch (e) { console.error("[Network] activate:", e); reject(new ConnectError("failed")) }
+                })
+            } else {
+                // A null connection is completed by NM from the access point itself —
+                // SSID, and the security scheme (WPA2, WPA3, open) the AP announces. A
+                // hidden network has no AP to point at: its connection names the SSID.
+                c.add_and_activate_connection_async(connection, dev, ap?.get_path() ?? null, null, (o: any, r: any) => {
+                    try { follow(o.add_and_activate_connection_finish(r), true) }
+                    catch (e) { console.error("[Network] add and activate:", e); reject(new ConnectError("failed")) }
+                })
+            }
+        } catch (e) {
+            console.error("[Network] connect:", e)
+            reject(new ConnectError("failed"))
+        }
+    })
+}
+
+/** Leave whatever Wi-Fi network the adapter is on. */
+export function disconnectWifi(): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const dev = _wifiDevice
+        if (!dev) return resolve()
+        dev.disconnect_async(null, (o: any, r: any) => {
+            try { o.disconnect_finish(r); resolve() } catch (e) { reject(e) }
+        })
+    })
+}
+
+/** Delete every saved profile for `ap`'s network. */
+export function forgetNetwork(ap: NM.AccessPoint): Promise<void> {
+    return Promise.all(savedProfilesFor(ap).map(rc => new Promise<void>((resolve, reject) => {
+        rc.delete_async(null, (o: any, r: any) => { try { o.delete_finish(r); resolve() } catch (e) { reject(e) } })
+    }))).then(() => {})
+}
+
+/** Where the adapter stands with this access point, for a row that must survive
+ *  being rebuilt: read from NM each time, never kept in the row. */
+export function apLinkState(ap: NM.AccessPoint): "connected" | "connecting" | "idle" {
+    const dev = _wifiDevice
+    if (!dev) return "idle"
+    const st = dev.get_state()
+    if (st === NM.DeviceState.ACTIVATED)
+        return dev.get_active_access_point()?.get_bssid() === ap.get_bssid() ? "connected" : "idle"
+    if (st < NM.DeviceState.PREPARE || st > NM.DeviceState.ACTIVATED) return "idle"
+    // While joining, the active AP is not reliable: NM drops it between a refused key
+    // and the next attempt (the device goes back to scanning while it waits in
+    // NEED_AUTH for the prompt). The connection being activated still names the
+    // network, so match on its SSID.
+    const rc = dev.get_active_connection()?.get_connection() ?? null
+    return rc && sameBytes(ssidBytesOf(rc), ap.ssid?.get_data() ?? null) ? "connecting" : "idle"
 }
 
 export function rescan(): Promise<string> {
@@ -388,29 +547,6 @@ export function setWifiEnabled(on: boolean): Promise<string> {
 /** Flip the WiFi radio based on its current state. */
 export function toggleWifi(): Promise<string> {
     return setWifiEnabled(!wifiEnabled())
-}
-
-// ── Saved connection profiles ───────────────────────────────────────────────
-
-/** Saved Wi-Fi connection profiles, by name. Filtering on the wifi type avoids
- *  matching a VPN/wired profile that happens to share an SSID's name. */
-export async function listSavedWifiSsids(): Promise<Set<string>> {
-    const set = new Set<string>()
-    try {
-        const out = await execAsync(["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"])
-        for (const line of out.trim().split("\n")) {
-            if (!line) continue
-            const parts = line.split(":")
-            const type = parts.pop() ?? ""           // TYPE is the last field, never contains ":"
-            const name = parts.join(":").replace(/\\:/g, ":")
-            if (type === "802-11-wireless") set.add(name)
-        }
-    } catch {}
-    return set
-}
-
-export function forgetProfile(name: string): Promise<string> {
-    return execAsync(["nmcli", "connection", "delete", name])
 }
 
 // ── VPN ─────────────────────────────────────────────────────────────────────
@@ -511,13 +647,19 @@ export function watchWifi(cb: () => void): Dispose {
     }, cb)
 }
 
-/** The access-point list, the active AP, and the radio flag — the Settings list. */
+/** The access-point list, the active AP, the radio flag, how far the adapter has
+ *  got with it (device state) and which networks are saved — everything an AP row
+ *  shows, so a row can be rebuilt from NM instead of remembering anything. */
 export function watchAccessPoints(cb: () => void): Dispose {
     return rebindable(() => {
         const w = wifi()
         const b = bag()
         b.on(client(), "notify::wireless-enabled", cb)
+        b.on(client(), "connection-added", cb)
+        b.on(client(), "connection-removed", cb)
         if (!w) return b.dispose
+
+        b.on(w.device, "notify::state", cb)
 
         b.on(w.device, "access-point-added", cb)
         b.on(w.device, "access-point-removed", cb)

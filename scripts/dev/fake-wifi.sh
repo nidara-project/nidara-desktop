@@ -10,10 +10,10 @@
 # Layout: wlan1 = the fake AP (taken out of NM, driven by hostapd)
 #         wlan0 = the client (left to NetworkManager → the page scans/connects)
 #
-# Why wlan1 is the AP, not wlan0: libastal-network's get_device() returns the
-# FIRST wifi device when none has an active connection (network.vala) — i.e.
-# wlan0. The Network page therefore watches wlan0, so wlan0 must be the scanning
-# client and wlan1 the broadcaster.
+# Why wlan1 is the AP, not wlan0: NetworkService.pickDevice() returns the FIRST
+# wifi device when none has an active connection — i.e. wlan0. The Network page
+# therefore watches wlan0, so wlan0 must be the scanning client and wlan1 the
+# broadcaster.
 #
 # Usage:  sudo ./fake-wifi.sh start   # broadcast "NidaraTest" (WPA2)
 #         sudo ./fake-wifi.sh stop    # tear down, give wlan0 back to NM
