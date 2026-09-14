@@ -114,7 +114,7 @@ function applyCursor(): void {
         }
         return
     }
-    lastRefusedCursor = ""
+    lastRefusedCursor = ""   // an installed theme clears the silence, so a later bad pick warns
     writeXcursorDefault(cursor)
     hs.setCursor(cursor, size).then(() => Theme.emit("cursor-applied"))
 }
@@ -231,6 +231,9 @@ export function startAppearanceSync(): void {
 
     const mode = () => iface.get_string("color-scheme") === "prefer-dark" ? "dark" : "light"
     lastMode = mode()
+    // A cursor theme that is not installed AT START is skipped silently, as it always was
+    // (a container or a fresh system may hold `default`); the warning is for a CHANGE to one.
+    lastRefusedCursor = iface.get_string("cursor-theme")
 
     iface.connect("changed::gtk-theme", () => schedule("ini", "mirror"))
     iface.connect("changed::icon-theme", () => schedule("ini", "mirror"))

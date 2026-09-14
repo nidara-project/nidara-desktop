@@ -423,9 +423,12 @@ const HOST_FONT = settings.gtk_font_name
  * change to the shipped default moves this gate with it instead of leaving it
  * measuring a font nobody runs.
  */
-const themeSrc = read(`${REPO}/ui/shell/core/ThemeManager.ts`)
+// The seed moved from ThemeManager to the shell-only AppearanceSync in #571 — it is a write
+// to gsettings that must happen once, not once per process.
+const SEED_SRC = "ui/shell/core/AppearanceSync.ts"
+const themeSrc = read(`${REPO}/${SEED_SRC}`)
 const SHIPPED_FONT = themeSrc.match(/set_string\("font-name",\s*"([^"]+)"\)/)?.[1]
-if (!SHIPPED_FONT) { printerr("could not read the seeded default font from core/ThemeManager.ts"); system.exit(2) }
+if (!SHIPPED_FONT) { printerr(`could not read the seeded default font from ${SEED_SRC}`); system.exit(2) }
 const FONT = argOf("--font", SHIPPED_FONT)
 
 // Refuse a silent substitution. Pango resolves any description to SOMETHING, so
