@@ -32,6 +32,7 @@ import queryUI from "./core/UITree"
 import Wallpaper from "./core/WallpaperManager"
 import workspaceModes, { type WorkspaceMode } from "./core/WorkspaceModes"
 import { startGamingSync } from "./core/GamingSync"
+import { startNightLightSync } from "./core/NightLightSync"
 import { startAppearanceHooks } from "./core/AppearanceHooks"
 
 // @ts-ignore
@@ -1068,6 +1069,9 @@ app.start({
     // Game mode's settings, handed to the compositor (hyprland.lua cannot read
     // GSettings). Here and nowhere else — see core/GamingSync.ts.
     startGamingSync()
+    // hyprsunset and the schedule, from org.nidara.night-light — here and nowhere else,
+    // so a change from any process applies once. See core/NightLightSync.ts.
+    startNightLightSync()
 
     // The accent / dark-mode user hooks, fired from the change itself so a change
     // made by any process fires them exactly once. See core/AppearanceHooks.ts.
