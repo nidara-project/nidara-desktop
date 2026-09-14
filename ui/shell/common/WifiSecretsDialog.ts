@@ -3,9 +3,10 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import NM from "gi://NM?version=1.0"
 import NMA from "gi://NMA4?version=1.0"
-import { setWindowAppId } from "../../../lib/app-id"
-import * as Net from "../../core/NetworkService"
-import { startNetworkAgent, type WifiSecretsRequest } from "../../core/NetworkAgent"
+import { setWindowAppId } from "../../lib/app-id"
+import * as Net from "../core/NetworkService"
+import status from "../core/Status"
+import { startNetworkAgent, type WifiSecretsRequest } from "../core/NetworkAgent"
 
 // The Wi-Fi dialogs are libnma's (libnma-gtk4), the same library GNOME Settings
 // builds its connection editor on: personal and enterprise (802.1X, certificates),
@@ -13,8 +14,9 @@ import { startNetworkAgent, type WifiSecretsRequest } from "../../core/NetworkAg
 // dialog — one set of forms, maintained upstream, instead of ours for the common
 // case and theirs for the rest. How they LOOK is an open follow-up.
 //
-// Three doors, all in the shell process (no helper process — see the note in
-// core/NetworkAgent.ts):
+// In common/, not in a surface: Settings → Network AND the Control Centre's Wi-Fi
+// detail join networks, and a widget may not import a surface. Three doors, all in
+// the shell process (no helper process — see #571 for Settings as its own process):
 //   · secrets NetworkManager asks for (startWifiSecretsDialogs → the agent);
 //   · an enterprise network joined from Settings, which needs its form BEFORE a
 //     connection can exist (setupNetwork);
@@ -111,6 +113,8 @@ function run(dialog: NMA.WifiDialog): Promise<[NM.Connection, NM.Device | null, 
             dialog.destroy()
             resolve(result)
         })
+        // Whatever overlay is open holds the keyboard grab (see Status.closeOverlays).
+        status.closeOverlays()
         dialog.present()
     })
 }
@@ -175,4 +179,25 @@ export function joinHiddenNetwork(): Promise<NM.Connection | null> {
         console.error("[WifiSecrets] could not build the hidden-network dialog:", e)
         return Promise.resolve(null)
     }
+}
+
+/**
+ * Join `ap` the way a user means it: an enterprise network the first time gets its
+ * form, anything else is activated and NetworkManager asks for what it lacks.
+ * Rejects with Net.ConnectError; a cancelled form rejects with reason "cancelled".
+ */
+export function joinNetwork(ap: NM.AccessPoint, isSaved: boolean): Promise<void> {
+    if (isSaved || !Net.needsSetupDialog(ap)) return Net.connectAp(ap)
+    return setupNetwork(ap).then(conn => {
+        if (!conn) throw new Net.ConnectError("cancelled")
+        return Net.connectAp(ap, conn)
+    })
+}
+
+/** "Other network…" end to end: the form, then the connection it describes. */
+export function joinOtherNetwork(): Promise<void> {
+    return joinHiddenNetwork().then(conn => {
+        if (!conn) throw new Net.ConnectError("cancelled")
+        return Net.connectAp(null, conn)
+    })
 }

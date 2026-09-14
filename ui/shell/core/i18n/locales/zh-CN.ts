@@ -632,6 +632,8 @@ export default {
     "widget.wifi.row.network": "网络",
     "widget.wifi.row.status": "状态",
     "widget.wifi.row.disabled": "已禁用",
+    "widget.wifi.no-networks": "范围内没有网络",
+    "widget.wifi.settings": "网络设置…",
 
     // Battery widget
     "widget.battery.label.unavailable": "电池不可用",

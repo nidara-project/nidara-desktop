@@ -696,6 +696,8 @@ export default {
     "widget.wifi.row.network": "Red",
     "widget.wifi.row.status": "Estado",
     "widget.wifi.row.disabled": "Desactivado",
+    "widget.wifi.no-networks": "No hay redes al alcance",
+    "widget.wifi.settings": "Ajustes de red…",
 
     // Activity Island — captura de pantalla en curso
     "island.recording.title": "Grabando la pantalla",

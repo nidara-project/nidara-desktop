@@ -6,7 +6,7 @@ import * as Net from "../../../core/NetworkService"
 import type { VpnProfile } from "../../../core/NetworkService"
 import { NidaraButton, NidaraEmptyRow, attachTooltip } from "../../../../lib/nidara-kit"
 import { safeDisconnect } from "../../../core/signals"
-import { joinHiddenNetwork, setupNetwork } from "../../network/WifiSecretsDialog"
+import { joinNetwork, joinOtherNetwork } from "../../../common/WifiSecretsDialog"
 
 function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow {
     let active = profile.active
@@ -145,14 +145,7 @@ function buildApRow(ap: any, isSaved: boolean, onRefresh: () => void, onDetails?
         // No password here, ever: NetworkManager asks for one through the shell's
         // secret agent (core/NetworkAgent) when — and each time — it needs it. Only an
         // enterprise network needs its form first, and only the first time.
-        if (!isSaved && Net.needsSetupDialog(ap)) {
-            setupNetwork(ap).then(conn => {
-                if (!conn) { btn.sensitive = true; return }
-                Net.connectAp(ap, conn).catch(onFail)
-            })
-            return
-        }
-        Net.connectAp(ap).catch(onFail)
+        joinNetwork(ap, isSaved).catch(e => { if (e?.reason === "cancelled") btn.sensitive = true; onFail(e) })
     })
 
     const subtitle = link === "idle" && failedSsids.has(ssid)
@@ -347,9 +340,7 @@ export default function NetworkPage(nav?: SettingsNav) {
     })
     otherBtn.margin_end = 8
     otherBtn.connect("clicked", () => {
-        joinHiddenNetwork().then(conn => {
-            if (conn) Net.connectAp(null, conn).catch(e => console.error("[Network] hidden network:", e))
-        })
+        joinOtherNetwork().catch(e => { if (e?.reason !== "cancelled") console.error("[Network] hidden network:", e) })
     })
 
     headerBox.append(groupTitleLabel)
