@@ -32,6 +32,7 @@ import queryUI from "./core/UITree"
 import Wallpaper from "./core/WallpaperManager"
 import workspaceModes, { type WorkspaceMode } from "./core/WorkspaceModes"
 import { startGamingSync } from "./core/GamingSync"
+import { startAppearanceHooks } from "./core/AppearanceHooks"
 
 // @ts-ignore
 import type { Monitor } from "gi://Gdk?version=4.0"
@@ -1045,6 +1046,10 @@ app.start({
     // Game mode's settings, handed to the compositor (hyprland.lua cannot read
     // GSettings). Here and nowhere else — see core/GamingSync.ts.
     startGamingSync()
+
+    // The accent / dark-mode user hooks, fired from the change itself so a change
+    // made by any process fires them exactly once. See core/AppearanceHooks.ts.
+    startAppearanceHooks()
 
     // (No DnD seeding here. The flag persists on its own — GSettings, via
     // core/NotifConfig.ts; the block that used to force it true at every main() —

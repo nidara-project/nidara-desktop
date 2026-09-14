@@ -19,9 +19,13 @@ src="${1:-defaults/appearance.json}"
 
 field() { sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p" "$src" | head -1; }
 icon_theme="$(field iconTheme)"
+gtk_theme="$(field themeFamily)"
+cursor_theme="$(field cursorTheme)"
 accent="$(field accent)"
 is_dark="$(sed -n 's/.*"isDark"[[:space:]]*:[[:space:]]*\(true\|false\).*/\1/p' "$src" | head -1)"
 [ -n "$icon_theme" ] || { echo "gen-dconf-defaults: no iconTheme in $src" >&2; exit 1; }
+[ -n "$gtk_theme" ]  || { echo "gen-dconf-defaults: no themeFamily in $src" >&2; exit 1; }
+[ -n "$cursor_theme" ] || { echo "gen-dconf-defaults: no cursorTheme in $src" >&2; exit 1; }
 [ -n "$accent" ]     || { echo "gen-dconf-defaults: no accent in $src" >&2; exit 1; }
 [ -n "$is_dark" ]    || { echo "gen-dconf-defaults: no isDark in $src" >&2; exit 1; }
 scheme=prefer-light; [ "$is_dark" = true ] && scheme=prefer-dark
@@ -32,6 +36,8 @@ cat <<KEYFILE
 # own dconf wins, because /etc/dconf/profile/user reads user-db first.
 [org/gnome/desktop/interface]
 icon-theme='$icon_theme'
+gtk-theme='$gtk_theme'
+cursor-theme='$cursor_theme'
 accent-color='$accent'
 color-scheme='$scheme'
 KEYFILE

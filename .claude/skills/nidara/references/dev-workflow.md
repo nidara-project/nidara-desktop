@@ -2989,8 +2989,9 @@ bench was correctly isolated; this one boot line was not). Launch every nested c
 `env -u DBUS_SESSION_BUS_ADDRESS` (or inside a verified private bus), AND put
 `cursor { sync_gsettings_theme = false }` in its config (`hl.config({ cursor = { sync_gsettings_theme = false } })`
 under Lua) — two locks, because a bench script is the one place a guard hook cannot see into.
-Check after any bench: `gsettings get org.gnome.desktop.interface cursor-theme` still matches
-`cursorTheme` in `~/.config/nidara/appearance.json`.
+Check after any bench: `gsettings get org.gnome.desktop.interface cursor-theme` is still the cursor
+you chose. ⚠️ Since #536 that key IS the home — the shell follows it live and nothing puts it back at
+the next login, so a bench that rewrites it changes your desktop for good.
 
 ⚠️ **Trap 2 — the terminal you reach for is translucent, so two windows photograph as one.** The
 shipped `kitty.conf` sets a background opacity, so a red window under a blue one reads

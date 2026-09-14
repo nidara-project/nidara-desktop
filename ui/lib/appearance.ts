@@ -20,9 +20,10 @@ import {
  * 1. **Every setting has exactly ONE home.** The keys the desktop standard already
  *    names live where GNOME keeps them — `accent-color` and `color-scheme` in
  *    `org.gnome.desktop.interface`, `high-contrast` in `…a11y.interface`,
- *    `enable-animations` for reduced motion. The keys only Nidara has (the four
- *    glass opacities, `shell-appearance`) live in `~/.config/nidara/appearance.json`.
- *    `ThemeManager` (the shell) is the one WRITER of both.
+ *    `enable-animations` for reduced motion, and the GTK / icon / cursor theme. The
+ *    keys only Nidara has (the four glass opacities, `shell-appearance`) live in
+ *    GSettings `org.nidara.appearance` (#573). Anybody with `gsettings` can write
+ *    either; `ThemeManager` (the shell) follows both live.
  *
  * 2. **An application reads the portal, and only the portal.** `xdg-desktop-portal`'s
  *    Settings interface serves the spec's `org.freedesktop.appearance` and our

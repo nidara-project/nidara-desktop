@@ -4,17 +4,18 @@
 # Builds the whole chain an application goes through, on a PRIVATE session bus so
 # nothing of the running desktop is read or touched:
 #
-#   dconf (private XDG_CONFIG_HOME)          ← the HOME of accent-color / color-scheme
-#   <private>/nidara/appearance.json         ← the HOME of the Nidara-only keys
+#   dconf (private XDG_CONFIG_HOME)          ← the HOME of accent-color / color-scheme,
+#                                              and of the Nidara-only keys
+#                                              (org.nidara.appearance, #573)
 #   bin/nidara-portal (THIS checkout)        ← the impl backend
 #   /usr/lib/xdg-desktop-portal              ← the real frontend apps talk to
 #   ui/lib/appearance.ts                     ← the client, via appearance-contract-probe.ts
 #
 # What it shows (the contract lives in ui/lib/appearance.ts):
 #   1. the client's first read comes from the portal, with the values from their homes;
-#   2. the FILE's accent/isDark are ignored — there they are a record, not a home;
+#   2. a leftover appearance.json is ignored — it is nobody's home any more;
 #   3. the Nidara namespace carries no `accent` / `is-dark` (one key, one name);
-#   4. live changes arrive — from dconf AND from the file — and a burst is one state.
+#   4. live changes arrive — for both namespaces — and a burst is one state.
 # And a control that must NOT say "portal": the frontend up with no backend of ours.
 #
 # ⚠️ ISOLATION IS THE WHOLE POINT, and the first version of this script did not have
@@ -35,17 +36,20 @@ trap 'rm -rf "$work"' EXIT
 
 "$repo/scripts/bundle.sh" --js "$repo/scripts/dev/appearance-contract-probe.ts" "$work/probe.js" >/dev/null 2>&1
 
-mkdir -p "$work/config/nidara" "$work/runtime" "$work/portals-none" "$work/portals"
+mkdir -p "$work/config/nidara" "$work/runtime" "$work/portals-none" "$work/portals" "$work/schemas"
+# This checkout's schemas, not the installed ones: the backend under test reads them.
+cp "$repo"/config/gsettings/*.gschema.xml "$work/schemas/"
+glib-compile-schemas "$work/schemas"
 chmod 700 "$work/runtime"
 cp "$repo/config/portal/nidara.portal" "$work/portals/"
 printf '[preferred]\ndefault=none\norg.freedesktop.impl.portal.Settings=nidara\n' > "$work/portals/hyprland-portals.conf"
 printf '[preferred]\ndefault=none\n' > "$work/portals-none/hyprland-portals.conf"
-# The file DISAGREES with dconf on purpose (green/light vs pink/dark): check 2.
-printf '{ "accent": "green", "isDark": false, "windowOpacity": 0.6 }\n' > "$work/config/nidara/appearance.json"
+# A leftover file that DISAGREES with dconf on purpose (green/light/0.3): check 2.
+printf '{ "accent": "green", "isDark": false, "windowOpacity": 0.3 }\n' > "$work/config/nidara/appearance.json"
 
 env -u WAYLAND_DISPLAY -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
     XDG_CONFIG_HOME="$work/config" XDG_RUNTIME_DIR="$work/runtime" \
-    XDG_CURRENT_DESKTOP=Hyprland GIO_USE_VFS=local \
+    XDG_CURRENT_DESKTOP=Hyprland GIO_USE_VFS=local GSETTINGS_SCHEMA_DIR="$work/schemas" \
     work="$work" repo="$repo" \
     dbus-run-session -- bash -c '
 set -uo pipefail
@@ -66,6 +70,7 @@ say "ok   dconf is private ($work/config/dconf/user)"
 
 gsettings set org.gnome.desktop.interface accent-color pink
 gsettings set org.gnome.desktop.interface color-scheme prefer-dark
+gsettings set org.nidara.appearance window-opacity 0.6
 
 # ── control: the frontend up, NO backend of ours. Must not report "portal". ──
 XDG_DESKTOP_PORTAL_DIR="$work/portals-none" /usr/lib/xdg-desktop-portal -r >"$work/xdp0.log" 2>&1 & xdp=$!
@@ -93,9 +98,10 @@ sleep 1
 say "   (dconf: accent → teal)"
 gsettings set org.gnome.desktop.interface accent-color teal
 sleep 0.8
-say "   (the file: windowOpacity → 0.7, and accent/isDark there → red/dark, which must be IGNORED)"
-printf "{ \"accent\": \"red\", \"isDark\": true, \"windowOpacity\": 0.7 }\n" > "$XDG_CONFIG_HOME/nidara/appearance.json.tmp"
-mv "$XDG_CONFIG_HOME/nidara/appearance.json.tmp" "$XDG_CONFIG_HOME/nidara/appearance.json"
+say "   (org.nidara.appearance: window-opacity → 0.7)"
+gsettings set org.nidara.appearance window-opacity 0.7
+say "   (the leftover file rewritten to red/dark/0.2, which must be IGNORED)"
+printf "{ \"accent\": \"red\", \"isDark\": true, \"windowOpacity\": 0.2 }\n" > "$XDG_CONFIG_HOME/nidara/appearance.json"
 sleep 0.8
 say "   (a burst, one call: accent → orange AND scheme → prefer-light)"
 dconf load /org/gnome/desktop/interface/ <<EOF

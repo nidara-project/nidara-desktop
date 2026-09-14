@@ -5,27 +5,53 @@ import Pango from "gi://Pango"
 import Gdk from "gi://Gdk?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import { execAsync } from "../../lib/process"
-import { readFile, writeFile } from "../../lib/file"
+import { writeFile } from "../../lib/file"
 import { applyCrispFontRendering } from "../../lib/font-rendering"
 import {
     type NidaraThemeConfig,
     type AccentKey,
     type ShellAppearance,
     DEFAULT_CONFIG,
-    GLASS_MODEL,
     clampGlass,
-    readGlass,
     ACCENT_PALETTE,
     generateTokensCss,
     generateChromeTokenScope,
     CHROME_SCOPE_WINDOWS,
 } from "./NidaraTheme"
 import { SHELL_ROOT } from "./Paths"
-import { fireHook } from "./Hooks"
 import hs from "./HyprlandState"
+import { defineSettings } from "./configFile"
 
-// ── CONSTANTS ────────────────────────────────────────────────────────
-// No default theme forced — themeFamily is read from system on first run via syncFromSystem()
+// ── WHERE APPEARANCE LIVES (#573) ────────────────────────────────────
+// Two homes, no file:
+//  - what the desktop standard already names — accent, colour scheme, GTK / icon /
+//    cursor theme, fonts — in `org.gnome.desktop.interface`, where every app reads it;
+//  - what only Nidara has — the four glass opacities and the shell's own skin — in
+//    `org.nidara.appearance`, below. bin/nidara-portal serves it to applications.
+// A change made by `gsettings set`, an agent or another process reaches this class
+// through `changed`, exactly like one made from Settings. The only file left is the
+// greeter's MIRROR (writeGreeterMirror), an export nobody reads back.
+// (appearance.json was imported once by migrations/2026-09-14c-appearance-to-gsettings.sh.)
+interface NidaraAppearance {
+    barOpacity: number
+    overlayOpacity: number
+    dockOpacity: number
+    windowOpacity: number
+    shellAppearance: ShellAppearance
+}
+
+const nidaraAppearance = defineSettings<NidaraAppearance>("appearance", {
+    barOpacity: DEFAULT_CONFIG.barOpacity,
+    overlayOpacity: DEFAULT_CONFIG.overlayOpacity,
+    dockOpacity: DEFAULT_CONFIG.dockOpacity,
+    windowOpacity: DEFAULT_CONFIG.windowOpacity,
+    shellAppearance: DEFAULT_CONFIG.shellAppearance,
+}, {
+    shellAppearance: v => v === "system" || v === "dark" || v === "light",
+})
+
+/** The fields of `NidaraThemeConfig` that live in `org.nidara.appearance`. */
+const NIDARA_KEYS = ["barOpacity", "overlayOpacity", "dockOpacity", "windowOpacity", "shellAppearance"] as const
 
 // ── DARK/LIGHT: the one allowed way to set it in-process ────────────────────
 // The shell is libadwaita-free, but AGS's own runtime (lib/gtk4/app.ts) calls
@@ -99,14 +125,13 @@ class ThemeManager extends GObject.Object {
     }
 
     private state: ThemeState = {
-        themeFamily: "",   // populated by syncFromSystem() on first run
-        iconTheme: "",     // populated by syncFromSystem() on first run
-        cursorTheme: "",   // populated by syncFromSystem() on first run
+        themeFamily: "",   // read from org.gnome.desktop.interface by loadSettings()
+        iconTheme: "",
+        cursorTheme: "",
         isDark: true,
     }
 
     private fcConfig: NidaraThemeConfig = { ...DEFAULT_CONFIG }
-    private configPath = `${GLib.get_user_config_dir()}/nidara/appearance.json`
     private _lastTokensCss: string = ""
 
     private mainProvider = new Gtk.CssProvider()
@@ -140,6 +165,35 @@ class ThemeManager extends GObject.Object {
                 console.log(`[ThemeManager] External accent change detected: ${accent}`)
                 this.setAccentColor(accent as AccentKey)
             }
+        })
+
+        // The three themes live there too (#536): a theme picked by `gsettings set`,
+        // GNOME Tweaks or an agent is the desktop's theme, and used to be reverted at
+        // the next login by the file this class pushed over them. Same guard as above.
+        this.interfaceSettings.connect("changed::gtk-theme", () => {
+            const theme = this.interfaceSettings.get_string("gtk-theme")
+            if (theme && theme !== "nidara" && theme !== this.state.themeFamily) this.setGtkTheme(theme)
+        })
+        this.interfaceSettings.connect("changed::icon-theme", () => {
+            const icons = this.interfaceSettings.get_string("icon-theme")
+            if (icons !== this.state.iconTheme) this.setIconTheme(icons)
+        })
+        this.interfaceSettings.connect("changed::cursor-theme", () => {
+            // Not just a restyle: the cursor also has to reach Hyprland and the
+            // Xcursor default (tech-debt #72), which setCursorTheme does.
+            const cursor = this.interfaceSettings.get_string("cursor-theme")
+            if (cursor !== this.state.cursorTheme) this.setCursorTheme(cursor)
+        })
+
+        // Nidara's own keys, changed by another process. Our own writes come back
+        // here equal to what we hold, and stop at the comparison.
+        nidaraAppearance.subscribeAll(key => {
+            const value = nidaraAppearance.get(key)
+            if (this.fcConfig[key] === value) return
+            ;(this.fcConfig as unknown as Record<string, unknown>)[key] = value
+            this.applyTokens()
+            this.writeGreeterMirror()
+            this.emit("changed")
         })
 
         // Monitor font preference changes
@@ -358,7 +412,6 @@ class ThemeManager extends GObject.Object {
         console.log(`[ThemeManager] Setting GTK Theme to: ${theme}`)
         this.state.themeFamily = theme
         await this.syncGtkTheme()
-        this.saveSettings()
         this.emit("changed")
     }
 
@@ -366,12 +419,31 @@ class ThemeManager extends GObject.Object {
         this.state.iconTheme = icons
         try {
             await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "icon-theme", icons])
-            this.saveSettings()
+            if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
             this.emit("changed")
         } catch (e) { console.error(e) }
     }
 
+    /**
+     * Is `name` a cursor theme on this machine? Theme names are CASE-SENSITIVE
+     * directory names, and since #536 the key is followed live, so anything typed
+     * into `gsettings set` reaches here — `qogir` for the installed `Qogir` did, and
+     * Hyprland, handed a theme it cannot load, drew its own fallback (the Hyprland
+     * logo) while the Xcursor default pointed every X app at nothing.
+     */
+    cursorThemeInstalled(name: string): boolean {
+        return !!name && this.getAvailableCursorThemes().includes(name)
+    }
+
     async setCursorTheme(cursor: string) {
+        // A name that is not installed is not passed on to Hyprland, the Xcursor
+        // default or settings.ini: the desktop keeps the cursor it has, and the log
+        // says why. The key itself is left as written — it is the user's value, and
+        // GTK falls back on its own — so fixing the name applies at once.
+        if (!this.cursorThemeInstalled(cursor)) {
+            console.warn(`[ThemeManager] cursor theme "${cursor}" is not installed (names are case-sensitive; installed: ${this.getAvailableCursorThemes().join(", ")}) — keeping "${this.state.cursorTheme}"`)
+            return
+        }
         this.state.cursorTheme = cursor
         const size = this.interfaceSettings.get_int("cursor-size") || 24
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", cursor])
@@ -382,7 +454,6 @@ class ThemeManager extends GObject.Object {
         this.writeXcursorDefault(cursor)
         hs.setCursor(cursor, size).then(() => this.emit("cursor-applied"))
         if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
-        this.saveSettings()
         this.emit("changed")
     }
 
@@ -511,23 +582,34 @@ class ThemeManager extends GObject.Object {
         this.state.isDark = dark
         const scheme = dark ? "prefer-dark" : "prefer-light"
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", scheme])
-        this.saveSettings()
+        this.writeGreeterMirror()
         await this.syncGtkTheme()
         // The GTK3 file chooser served by xdg-desktop-portal-gtk reads the dark-theme flag
         // once at process start and never re-reads settings.ini, so it stays stuck on the
         // previous mode. Restart it so the next portal-driven picker matches the new mode.
         execAsync(["systemctl", "--user", "restart", "xdg-desktop-portal-gtk.service"]).catch(() => {})
         this.emit("changed")
-        fireHook("dark-mode-changed", dark ? "dark" : "light")
+        // The user hook is NOT fired here: a setter runs in whichever process calls
+        // it, and a change made elsewhere never passes through it. The shell fires it
+        // once, from the change itself — core/AppearanceHooks.ts.
     }
 
+    /**
+     * Store Nidara's appearance keys and refresh the greeter's mirror, 500 ms after
+     * the last call. A glass slider calls this on every frame of a drag: the tokens
+     * are applied immediately (the caller does that), what waits is the WRITE, so
+     * dconf and every portal listener see one change per gesture instead of sixty
+     * per second.
+     */
     private persistenceDebounceId = 0
     private schedulePersistence() {
         if (this.persistenceDebounceId > 0) GLib.source_remove(this.persistenceDebounceId)
         this.persistenceDebounceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-            console.log(`[ThemeManager] Token persistence triggered`)
-            this.saveSettings()
             this.persistenceDebounceId = 0
+            const patch: Partial<NidaraAppearance> = {}
+            for (const key of NIDARA_KEYS) (patch as Record<string, unknown>)[key] = this.fcConfig[key]
+            nidaraAppearance.update(patch)
+            this.writeGreeterMirror()
             return GLib.SOURCE_REMOVE
         })
     }
@@ -539,9 +621,8 @@ class ThemeManager extends GObject.Object {
         execAsync(["gsettings", "set", "org.gnome.desktop.interface", "accent-color", accent]).catch(() => {})
         this.schedulePersistence()
         this.emit("changed")
-        // Not on the generic "changed" signal: every opacity slider emits it too,
-        // so a hook wired there would fire dozens of times per drag.
-        fireHook("accent-changed", accent)
+        // The user hook fires from the change itself, in the shell only —
+        // core/AppearanceHooks.ts, and see setDarkMode.
     }
 
     /** Push the accent into Hyprland's groupbar (active tab = persistent
@@ -742,11 +823,12 @@ class ThemeManager extends GObject.Object {
 
         await this.syncGtkTheme()
         const settings = this.interfaceSettings
-        if (settings.get_string("icon-theme") !== this.state.iconTheme) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "icon-theme", this.state.iconTheme])
-        if (settings.get_string("cursor-theme") !== this.state.cursorTheme) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", this.state.cursorTheme])
+        // No push of the icon or cursor theme into gsettings: they are READ from there
+        // (loadSettings), since #536 — pushing a file's copy over them on every start
+        // is what reverted a theme set elsewhere at the next login.
         // Apply the cursor to Hyprland + the Xcursor default, so apps started later
         // (Steam, etc.) inherit it instead of a stale default. gsettings alone misses them.
-        if (this.state.cursorTheme) {
+        if (this.state.cursorTheme && this.cursorThemeInstalled(this.state.cursorTheme)) {
             this.writeXcursorDefault(this.state.cursorTheme)
             hs.setCursor(this.state.cursorTheme, settings.get_int("cursor-size") || 24)
         }
@@ -761,10 +843,15 @@ class ThemeManager extends GObject.Object {
         console.log("[ThemeManager] Global Styles READY! ")
     }
 
-    private saveSettings() {
-        const dir = `${GLib.get_user_config_dir()}/nidara`
-        if (!GLib.file_test(dir, GLib.FileTest.EXISTS)) GLib.mkdir_with_parents(dir, 0o755)
-        const merged = {
+    /**
+     * The greeter's MIRROR — the one surface outside any session, with no portal to
+     * ask (ui/lib/appearance.ts, rule 3). An export written from the two homes,
+     * never read back by this process. 0644, stated: the default of `writeFile` is
+     * 0600, and a mirror nobody else can read is #488 — the login screen stuck on
+     * blue on every machine installed after 0.11.0.
+     */
+    private writeGreeterMirror() {
+        const json = JSON.stringify({
             ...this.state,
             accent: this.fcConfig.accent,
             barOpacity: this.fcConfig.barOpacity,
@@ -772,18 +859,7 @@ class ThemeManager extends GObject.Object {
             dockOpacity: this.fcConfig.dockOpacity,
             windowOpacity: this.fcConfig.windowOpacity,
             shellAppearance: this.fcConfig.shellAppearance,
-            glassModel: GLASS_MODEL,
-        }
-        const json = JSON.stringify(merged, null, 2)
-        // `accent` and `isDark` are still written, but in THIS file they are a record,
-        // not a home: loadSettings() takes both from gsettings. They are here because
-        // the mirror below is the same JSON, and the mirror needs them.
-        writeFile(this.configPath, json)
-
-        // The greeter's MIRROR — the one surface outside any session, with no portal
-        // to ask (ui/lib/appearance.ts, rule 3). 0644, stated: the default of
-        // `writeFile` is 0600, and a mirror nobody else can read is #488 — the login
-        // screen stuck on blue on every machine installed after 0.11.0.
+        }, null, 2)
         try {
             const sharedDir = "/var/tmp/nidara"
             if (!GLib.file_test(sharedDir, GLib.FileTest.EXISTS))
@@ -794,100 +870,31 @@ class ThemeManager extends GObject.Object {
         }
     }
 
+    /**
+     * Everything, from its home. No migration here: appearance.json was imported
+     * into org.nidara.appearance once, before this process started, and the GNOME
+     * keys already held the file's values on every existing machine — every start
+     * used to push them there. A fresh install reads the system defaults
+     * (/etc/dconf/db/local.d, generated from defaults/appearance.json).
+     */
     private loadSettings() {
         try {
-            let data: Record<string, unknown> = {}
-
-            if (GLib.file_test(this.configPath, GLib.FileTest.EXISTS)) {
-                data = JSON.parse(readFile(this.configPath))
-            } else {
-                // Migrate from old split files if they exist
-                const oldFcPath = `${GLib.get_user_config_dir()}/nidara/nidara.json`
-                const oldThemePath = `${GLib.get_user_config_dir()}/nidara/theme_settings.json`
-                if (GLib.file_test(oldFcPath, GLib.FileTest.EXISTS))
-                    data = { ...data, ...JSON.parse(readFile(oldFcPath)) }
-                if (GLib.file_test(oldThemePath, GLib.FileTest.EXISTS))
-                    data = { ...data, ...JSON.parse(readFile(oldThemePath)) }
-                if (Object.keys(data).length === 0) this.syncFromSystem()
-            }
-
-            const rawTheme = data.themeFamily as string
-            this.state = {
-                themeFamily: (rawTheme && rawTheme !== "nidara") ? rawTheme : (this.state.themeFamily || "Adwaita"),
-                iconTheme:   (data.iconTheme as string)   ?? this.state.iconTheme,
-                cursorTheme: (data.cursorTheme as string) ?? this.state.cursorTheme,
-                isDark:      (data.isDark as boolean)     ?? this.state.isDark,
-            }
-            // ⚠️ The glass migration applies ONLY to a value that was actually
-            // stored. Running it over DEFAULT_CONFIG would move a fresh install's
-            // floor to 0.392 — the defaults are already expressed in the new model.
-            const staleGlass = data.glassModel !== GLASS_MODEL
-            const glass = (stored: unknown, dflt: number) => readGlass(stored, dflt, staleGlass)
-            this.fcConfig = {
-                accent:       (data.accent as AccentKey)                  ?? DEFAULT_CONFIG.accent,
-                // Migrate: the old single `shellOpacity` seeds both bar + overlays.
-                barOpacity:     glass(data.barOpacity     ?? data.shellOpacity, DEFAULT_CONFIG.barOpacity),
-                overlayOpacity: glass(data.overlayOpacity ?? data.shellOpacity, DEFAULT_CONFIG.overlayOpacity),
-                dockOpacity:    glass(data.dockOpacity,                         DEFAULT_CONFIG.dockOpacity),
-                // The old `transparency` key (transparency sense, `1 - t`) used to be
-                // read here on EVERY load, forever, because nothing recorded which
-                // machines had already been converted. It is a dated migration now —
-                // `migrations/2026-09-02-window-opacity-from-transparency.sh`, run once
-                // per machine by `nidara-migrate` before this process starts — so the
-                // legacy name is gone from the reader rather than carried for good.
-                windowOpacity:  glass(data.windowOpacity, DEFAULT_CONFIG.windowOpacity),
-                shellAppearance: (data.shellAppearance as ShellAppearance) ?? DEFAULT_CONFIG.shellAppearance,
-            }
-            // Stamp the new model NOW, not through the 500 ms persistence debounce.
-            // The migration is idempotent only because this marker stops it running a
-            // second time (`0.2 + 0.8·0.24 = 0.392`), so a shell that died inside the
-            // debounce window would come back and migrate an already-migrated file.
-            // Its own try/catch: a stamp that cannot be written must not throw into the
-            // outer catch, which would discard a config we just read correctly.
-            if (staleGlass) {
-                try { this.saveSettings() }
-                catch (e) { console.warn("[ThemeManager] could not stamp glassModel:", e) }
-            }
-        } catch (e) {
-            this.syncFromSystem()
-        }
-        this.readSessionHomedKeys()
-    }
-
-    /**
-     * The accent and the mode, from their HOME — `org.gnome.desktop.interface`, where
-     * GNOME keeps them and where the Settings portal serves them to every app from.
-     * Whatever appearance.json says about them is a record, not an input.
-     *
-     * No migration needed: until this change every start pushed the file's values
-     * into these keys, so on an existing machine they already agree. A fresh install
-     * reads the system default (`/etc/dconf/db/local.d`, generated from
-     * defaults/appearance.json by the PKGBUILD).
-     */
-    private readSessionHomedKeys() {
-        try {
             const s = this.interfaceSettings
-            this.state.isDark = s.get_string("color-scheme") === "prefer-dark"
+            const gtk = s.get_string("gtk-theme")
+            this.state = {
+                themeFamily: (gtk && gtk !== "nidara") ? gtk : "Adwaita",
+                iconTheme: s.get_string("icon-theme"),
+                cursorTheme: s.get_string("cursor-theme"),
+                isDark: s.get_string("color-scheme") === "prefer-dark",
+            }
             const accent = s.get_string("accent-color")
             if (accent in ACCENT_PALETTE) this.fcConfig.accent = accent as AccentKey
         } catch (e) {
-            console.warn("[ThemeManager] could not read the accent/mode from gsettings:", e)
+            console.warn("[ThemeManager] could not read org.gnome.desktop.interface:", e)
+            this.state.themeFamily = this.state.themeFamily || "Adwaita"
         }
-    }
-
-    private syncFromSystem() {
-        try {
-            const s = this.interfaceSettings
-            this.state.iconTheme = s.get_string("icon-theme")
-            this.state.cursorTheme = s.get_string("cursor-theme")
-            this.state.isDark = s.get_string("color-scheme") === "prefer-dark"
-            const gtk = s.get_string("gtk-theme")
-            this.state.themeFamily = (gtk && gtk !== "nidara") ? gtk : "Adwaita"
-            const sysAccent = s.get_string("accent-color") as AccentKey
-            if (sysAccent && sysAccent in ACCENT_PALETTE) this.fcConfig.accent = sysAccent
-        } catch (e) {
-            this.state.themeFamily = "Adwaita"
-        }
+        for (const key of NIDARA_KEYS) (this.fcConfig as unknown as Record<string, unknown>)[key] = nidaraAppearance.get(key)
+        this.writeGreeterMirror()
     }
 }
 
