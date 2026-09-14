@@ -639,6 +639,8 @@ export default {
     "widget.wifi.row.network": "Сеть",
     "widget.wifi.row.status": "Статус",
     "widget.wifi.row.disabled": "Отключено",
+    "widget.wifi.no-networks": "Нет сетей поблизости",
+    "widget.wifi.settings": "Настройки сети…",
 
     // Battery widget
     "widget.battery.label.unavailable": "Батарея недоступна",

@@ -375,7 +375,7 @@ export function wifiEnabled(w: WifiHandle | null = wifi()): boolean {
 // with `ps` — and nmcli cannot be asked again when the key is wrong. The shell
 // now activates WITHOUT secrets and NetworkManager asks core/NetworkAgent for
 // them, as often as it needs to (a wrong key, a router whose password changed);
-// the dialogs that ask are libnma's (surfaces/network/WifiSecretsDialog.ts).
+// the dialogs that ask are libnma's (common/WifiSecretsDialog.ts).
 
 /** Why a connection attempt ended without a connection. */
 export class ConnectError extends Error {
@@ -415,7 +415,7 @@ export function savedWifiSsids(): Set<string> {
     return set
 }
 
-/** The objects libnma's Wi-Fi dialogs are built from. Only surfaces/network may use
+/** The objects libnma's Wi-Fi dialogs are built from. Only common/WifiSecretsDialog may use
  *  them — every other surface asks this module in its own vocabulary. */
 export function nmObjects(): { client: NM.Client; device: NM.DeviceWifi } | null {
     const c = client()
@@ -534,6 +534,65 @@ export function apLinkState(ap: NM.AccessPoint): "connected" | "connecting" | "i
     return rc && sameBytes(ssidBytesOf(rc), ap.ssid?.get_data() ?? null) ? "connecting" : "idle"
 }
 
+/** Where the Wi-Fi adapter stands, as the bar and the Control Centre show it. */
+export type WifiLink =
+    | { state: "absent" }                        // no adapter
+    | { state: "off" }                           // radio switched off
+    | { state: "disconnected" }
+    | { state: "connecting"; ssid: string }
+    | { state: "connected"; ssid: string; strength: number }
+
+export function wifiLink(): WifiLink {
+    const w = wifi()
+    if (!w) return { state: "absent" }
+    if (!w.enabled) return { state: "off" }
+    const st = w.device.get_state()
+    const ap = w.device.get_active_access_point()
+    if (st === NM.DeviceState.ACTIVATED && ap) return { state: "connected", ssid: apSsid(ap), strength: ap.strength }
+    if (st >= NM.DeviceState.PREPARE && st < NM.DeviceState.ACTIVATED) {
+        const rc = w.device.get_active_connection()?.get_connection() ?? null
+        const bytes = rc ? ssidBytesOf(rc) : null
+        let ssid = ""
+        try { ssid = bytes ? NM.utils_ssid_to_utf8(bytes) : "" } catch {}
+        return { state: "connecting", ssid }
+    }
+    return { state: "disconnected" }
+}
+
+/**
+ * Signal strength (0–100, as NM reports it) as the 0–3 arcs of an icon. Thresholds
+ * are GNOME's, collapsed from its five steps to our four glyphs: under 30 is the
+ * dot alone, 30–54 one arc, 55–79 two, 80 and up all three.
+ */
+export function signalLevel(strength: number): 0 | 1 | 2 | 3 {
+    if (strength >= 80) return 3
+    if (strength >= 55) return 2
+    if (strength >= 30) return 1
+    return 0
+}
+
+/**
+ * The networks in range, one row per SSID — an access point per radio and band is an
+ * implementation detail, not a choice for the user (a dual-band router is two APs
+ * with one name). Keeps the strongest AP of each; the network the adapter is on or
+ * joining comes first, then by strength. Hidden networks (empty SSID) are not listed.
+ */
+export function visibleNetworks(limit = 12): NM.AccessPoint[] {
+    const dev = _wifiDevice
+    if (!dev) return []
+    const best = new Map<string, NM.AccessPoint>()
+    for (const ap of dev.get_access_points() ?? []) {
+        const ssid = apSsid(ap)
+        if (!ssid) continue
+        const prev = best.get(ssid)
+        if (!prev || ap.strength > prev.strength) best.set(ssid, ap)
+    }
+    const rank = (ap: NM.AccessPoint) => apLinkState(ap) === "idle" ? 0 : 1
+    return [...best.values()]
+        .sort((a, b) => rank(b) - rank(a) || b.strength - a.strength)
+        .slice(0, limit)
+}
+
 export function rescan(): Promise<string> {
     return execAsync(["nmcli", "device", "wifi", "rescan"]).catch(() => "")
 }
@@ -612,6 +671,33 @@ export function watchWifiEnabled(cb: () => void): Dispose {
  * `watchWifi` on purpose: `bitrate` and `ip4-config` churn hard while a scan or a
  * transfer is running, and a Control Center capsule redraws for nothing on both.
  */
+/**
+ * Everything `wifiLink()` reads: the radio flag, the device state, which AP it is
+ * on, and THAT AP's strength — re-armed whenever the active AP changes. The bar
+ * icon's subscription. Strength churns with every scan, so a consumer must compare
+ * what it derives (a signal LEVEL, not the raw number) before touching a widget.
+ */
+export function watchWifiLink(cb: () => void): Dispose {
+    return rebindable(() => {
+        const w = wifi()
+        const b = bag()
+        b.on(client(), "notify::wireless-enabled", cb)
+        if (!w) return b.dispose
+        let ap: NM.AccessPoint | null = null
+        let apId = 0
+        const rearm = () => {
+            if (ap && apId) safeDisconnect(ap, apId)
+            ap = w.device.get_active_access_point() ?? null
+            apId = ap ? ap.connect("notify::strength", cb) : 0
+        }
+        rearm()
+        b.on(w.device, "notify::state", cb)
+        b.on(w.device, "notify::active-access-point", () => { rearm(); cb() })
+        b.add(() => { if (ap && apId) safeDisconnect(ap, apId) })
+        return b.dispose
+    }, cb)
+}
+
 export function watchWifiNetwork(cb: () => void): Dispose {
     return rebindable(() => {
         const w = wifi()

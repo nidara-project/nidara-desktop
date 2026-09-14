@@ -29,7 +29,7 @@
 // "ask every time" ones are never stored anywhere.
 //
 // core/ never touches the UI: this file is D-Bus + libsecret only. The dialog (libnma's,
-// see surfaces/network/WifiSecretsDialog.ts) is handed in by `startNetworkAgent`.
+// see common/WifiSecretsDialog.ts) is handed in by `startNetworkAgent`.
 //
 // Scope: Wi-Fi connections — the `802-11-wireless-security` and `802-1x` settings.
 // Anything else (VPN plugins, which bring their own auth dialogs; mobile broadband)

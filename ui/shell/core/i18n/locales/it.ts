@@ -632,6 +632,8 @@ export default {
     "widget.wifi.row.network": "Rete",
     "widget.wifi.row.status": "Stato",
     "widget.wifi.row.disabled": "Disattivato",
+    "widget.wifi.no-networks": "Nessuna rete nelle vicinanze",
+    "widget.wifi.settings": "Impostazioni di rete…",
 
     // Battery widget
     "widget.battery.label.unavailable": "Batteria non disponibile",

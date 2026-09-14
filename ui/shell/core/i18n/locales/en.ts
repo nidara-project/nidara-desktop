@@ -727,6 +727,8 @@ export default {
     "widget.wifi.row.network": "Network",
     "widget.wifi.row.status": "Status",
     "widget.wifi.row.disabled": "Disabled",
+    "widget.wifi.no-networks": "No networks in range",
+    "widget.wifi.settings": "Network Settings…",
 
     // Activity Island — live screen capture
     "island.recording.title": "Recording screen",

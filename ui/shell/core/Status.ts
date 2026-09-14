@@ -218,6 +218,15 @@ export class UIStatus extends GObject.Object {
         this.notify("cc-detail-id")
     }
 
+    /**
+     * Close every overlay, the island's expanded modes and a bar expansion — for a
+     * WINDOW that needs the keyboard now. An open overlay holds the compositor's focus
+     * grab, and a toplevel that appears beneath it paints on top but never receives a
+     * keystroke: the Wi-Fi password dialog opened from the Control Centre swallowed
+     * the whole password that way (2026-09-14).
+     */
+    closeOverlays() { this.closeExclusive("", { notif: true, barExpanded: true }) }
+
     toggleCC() { this.cc_open = !this.cc_open }
     toggleNC() { this.nc_open = !this.nc_open }
     togglePrism() { this.prism_open = !this.prism_open }

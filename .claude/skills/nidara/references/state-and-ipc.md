@@ -18,6 +18,8 @@ Setting any of these to `true` closes all the rest:
 
 The exclusion is implemented by the private `closeExclusive(keep, opts)` helper — each setter calls it on open.
 
+`closeOverlays()` is the public door to the same helper with nothing kept: every overlay, the island's modes and a bar expansion. Call it before presenting a **toplevel window that needs typing** (the Wi-Fi password dialog does). An open overlay holds the compositor's focus grab, and a window that appears beneath it paints on top yet never gets a keystroke — no error, the text just vanishes (2026-09-14, a whole password typed from the Control Centre).
+
 ⚠️ **Adding a new exclusive overlay is THREE edits, and only the first one is obvious. The other two fail in SILENCE** (both shipped broken with the app grid's move, 2026-08-09 — `tech-debt.md` §18):
 
 1. The setter itself: add `_field → notify-name` to the `EXCLUSIVE` map and call `closeExclusive` from the new setter (don't touch the other setters).

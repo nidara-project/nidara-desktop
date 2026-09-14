@@ -632,6 +632,8 @@ export default {
     "widget.wifi.row.network": "ネットワーク",
     "widget.wifi.row.status": "状態",
     "widget.wifi.row.disabled": "無効",
+    "widget.wifi.no-networks": "範囲内にネットワークがありません",
+    "widget.wifi.settings": "ネットワーク設定…",
 
     // Battery widget
     "widget.battery.label.unavailable": "バッテリーが利用できません",
