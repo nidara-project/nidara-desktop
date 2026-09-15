@@ -696,11 +696,14 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
             const launcherItem = {
                 name: t("dock.special.launcher.name"),
-                // Theme-first: full-color themed grid beats the flat symbolic;
-                // our shipped asset only when the theme has neither. ("crys-grid"
-                // was a dead name — no such icon exists anywhere.)
+                // The icon theme's, full-colour first, then the symbolic (which DockIcon
+                // tints with the text colour). No shipped fallback any more: it was Lucide's
+                // `grid` — a 3×3 table outline, not an app grid, drawn black because it is
+                // not a symbolic file. A theme with none of these names falls to
+                // application-x-executable until the interface icon theme's shipped fallback
+                // exists (#587). ("crys-grid" was a dead name — no such icon exists anywhere.)
                 icon_name: ["view-app-grid", "org.gnome.Shell.Apps", "view-app-grid-symbolic",
-                    "org.gnome.Shell.Apps-symbolic", iconAssetPath("grid")],
+                    "org.gnome.Shell.Apps-symbolic"],
                 launch: () => { shellActions.toggleAppGrid?.() }
             }
             configs.push({
