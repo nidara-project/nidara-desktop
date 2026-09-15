@@ -210,12 +210,24 @@ class ThemeManager extends GObject.Object {
         this.applyAll()
     }
 
+    /**
+     * Held on the instance, not in a local: a Gio.FileMonitor nothing references is collected
+     * by GJS, and a collected monitor emits nothing. As a `const` this hot reload worked until
+     * the first full GC and then never again — measured with scripts/dev/style-hot-reload-probe.ts
+     * (reloads without `system.gc()`, silent after it).
+     */
+    private styleMonitor: Gio.FileMonitor | null = null
+
     private setupStyleMonitor() {
         const stylePath = `${SHELL_ROOT}/style.css`
         const file = Gio.File.new_for_path(stylePath)
         try {
-            const monitor = file.monitor_file(Gio.FileMonitorFlags.NONE, null)
-            monitor.connect("changed", () => {
+            this.styleMonitor = file.monitor_file(Gio.FileMonitorFlags.NONE, null)
+            this.styleMonitor.connect("changed", (_m: any, _f: any, _o: any, event: number) => {
+                // One reload per write. Both an in-place write (sass) and an atomic replace
+                // (temp + rename) END with CHANGES_DONE_HINT; the CHANGED/CREATED events before
+                // it would each load a file that is still being written.
+                if (event !== Gio.FileMonitorEvent.CHANGES_DONE_HINT) return
                 console.log(`[ThemeManager] Style Hot-Reload: ${stylePath}`)
                 this.mainProvider.load_from_path(stylePath)
             })
