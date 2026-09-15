@@ -20,6 +20,7 @@ import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import { safeDisconnect } from "../../core/signals"
 import { type Notification, notifications as allNotifications, watchNotified, watchResolved } from "../../core/NotifService"
+import { cairoDraw } from "../../../lib/cairo-draw"
 
 export function createIconWidget(n: Notification, size: number) {
     const entry = n.desktop_entry || n.app_name || ""
@@ -392,7 +393,7 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
     // narrower (more inset), peeks a bit lower, and is fainter, for a stacked-card look.
     const stripH = PEEK + (layers - 1) * STEP
     const da = new Gtk.DrawingArea({ height_request: stripH })
-    da.set_draw_func((_da: any, cr: any, w: number, _h: number) => {
+    da.set_draw_func(cairoDraw((_da: any, cr: any, w: number, _h: number) => {
         if (w <= 0 || _h <= 0) return
         const color = Theme.chromeIsDark
             ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
@@ -415,7 +416,7 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
             drawSquircle(cr, w - inset * 2, CARD_H, undefined, Theme.overlayOpacity * depth, false, color, CARD_R, false, { r: 1, g: 1, b: 1, a: 0.07 * depth }, 3.2, 1.0, 0)
             cr.restore()
         }
-    })
+    }))
     const themeConn = Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
     da.connect("destroy", () => safeDisconnect(Theme, themeConn))
     wrapper.append(da)

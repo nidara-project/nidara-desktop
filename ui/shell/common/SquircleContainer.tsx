@@ -2,6 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import { drawGlassShadow, drawSquircle, hexToFloatRgb } from "./DrawingUtils"
 import Theme from "../core/ThemeManager"
 import { RADIUS, GLASS_TINT } from "../../lib/tokens"
+import { cairoDraw } from "../../lib/cairo-draw"
 
 export enum Shape {
     SQUIRCLE,
@@ -175,7 +176,7 @@ export default function SquircleContainer({
         Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
     }
 
-    da.set_draw_func((_, cr, w, h) => {
+    da.set_draw_func(cairoDraw((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
         // Shell-skin capsules (default) follow the pinned shell appearance;
         // app-mode surfaces (chrome:false, e.g. About) follow the system mode.
@@ -242,7 +243,7 @@ export default function SquircleContainer({
             drawN, borderWidth, techInset,
             undefined, fillFrac, baseColor, baseAlpha,
         )
-    })
+    }))
 
     const grid = new Gtk.Grid({
         css_classes,

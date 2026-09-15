@@ -48,6 +48,7 @@ import hs from "../../core/HyprlandState"
 import agentConfig from "../../core/AgentConfig"
 import { t } from "../../core/i18n"
 import { hexToFloatRgb } from "../../common/DrawingUtils"
+import { cairoDraw } from "../../../lib/cairo-draw"
 
 type Kind = "click" | "rightclick" | "move" | "scroll" | "drag"
 type Phase = "hidden" | "materialize" | "travel" | "landed" | "effect" | "dragGlide" | "idle" | "fadeout"
@@ -351,7 +352,7 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
         cr.closePath()
     }
 
-    da.set_draw_func((_widget: any, cr: any, _w: number, _h: number) => {
+    da.set_draw_func(cairoDraw((_widget: any, cr: any, _w: number, _h: number) => {
         if (phase === "hidden" || alpha <= 0) return
         const accent = hexToFloatRgb(Theme.accentPalette[Theme.accentColor].color)
 
@@ -447,7 +448,7 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
         cr.setSourceRGBA(dark ? 1 : 0.1, dark ? 1 : 0.1, dark ? 1 : 0.1, 0.95 * alpha)
         cr.moveTo(bx + padH, by + padV)
         PangoCairo.show_layout(cr, layout)
-    })
+    }))
 
     // ── Public surface (methods hung off the window, DockCore precedent) ─────
 

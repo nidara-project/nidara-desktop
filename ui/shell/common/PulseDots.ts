@@ -23,6 +23,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Theme from "../core/ThemeManager"
+import { cairoDraw } from "../../lib/cairo-draw"
 
 const FRAME_MS = 100
 const STEP = 0.45
@@ -101,7 +102,7 @@ export function makePulseDots(opts: { ghost?: boolean } = {}): PulseHandle & { w
         valign: Gtk.Align.CENTER,
     })
 
-    da.set_draw_func((_, cr, w, h) => {
+    da.set_draw_func(cairoDraw((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
         const c = Theme.chromeIsDark ? 1 : 0
         const cy = h / 2
@@ -112,7 +113,7 @@ export function makePulseDots(opts: { ghost?: boolean } = {}): PulseHandle & { w
             cr.arc(DOT_R + i * (DOT_R * 2 + GAP), cy, DOT_R, 0, Math.PI * 2)
             cr.fill()
         }
-    })
+    }))
 
     const redraw = () => da.queue_draw()
     const sync = () => {

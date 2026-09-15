@@ -8,6 +8,7 @@ import { buildMediaDetailPanel } from "../../widgets/media"
 import * as media from "../../core/MediaService"
 import Theme from "../../core/ThemeManager"
 import { safeDisconnect } from "../../core/signals"
+import { cairoDraw } from "../../../lib/cairo-draw"
 
 // The Activity Island's PLAYER mode — both halves of the media activity:
 //
@@ -120,7 +121,7 @@ export function PlayerCompact(opts: {
     })
     // Per-bar speeds desynced so the motion reads organic, not metronomic.
     const EQ_SPEED = [1.0, 1.35, 0.8]
-    eq.set_draw_func((_, cr, w, h) => {
+    eq.set_draw_func(cairoDraw((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
         const c = Theme.chromeIsDark ? 1 : 0
         const bw = 3
@@ -139,7 +140,7 @@ export function PlayerCompact(opts: {
             cr.lineTo(x, top)
             cr.stroke()
         }
-    })
+    }))
     const ensureEqTimer = () => {
         if (opts.ghost || eqTimer !== null || !playing || !eq.get_mapped()) return
         eqTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, EQ_FRAME_MS, () => {

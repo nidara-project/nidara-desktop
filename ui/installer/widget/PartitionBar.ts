@@ -7,6 +7,7 @@ import { formatSize } from "../lib/format-size"
 import { t, getLocale } from "../lib/i18n"
 import { ndIcon } from "../../lib/icons"
 import { attachTooltip, type NidaraTooltipHandle } from "../../lib/nidara-kit"
+import { cairoDraw } from "../../lib/cairo-draw"
 
 
 export interface PartitionBarSlice {
@@ -279,7 +280,7 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
 
   rebuildHitboxes()
 
-  da.set_draw_func((_, cr: any, width: number, height: number) => {
+  da.set_draw_func(cairoDraw((_, cr: any, width: number, height: number) => {
     calculatedLayouts = computeLayout(width, height)
     if (calculatedLayouts.length === 0) return
 
@@ -391,7 +392,7 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
     cr.setSourceRGBA(1, 1, 1, 0.15)
     cr.setLineWidth(1)
     cr.stroke()
-  })
+  }))
 
   container.append(trackOverlay)
 
@@ -442,7 +443,7 @@ export function NidaraPartitionLegend(): Gtk.Box {
       valign: Gtk.Align.CENTER,
     })
     dot.set_size_request(10, 10)
-    dot.set_draw_func((_, cr, w, h) => {
+    dot.set_draw_func(cairoDraw((_, cr, w, h) => {
       roundRectPath(cr, 1, 1, w - 2, h - 2, 3)
       cr.setSourceRGB(color.r, color.g, color.b)
       cr.fill()
@@ -452,7 +453,7 @@ export function NidaraPartitionLegend(): Gtk.Box {
         cr.setLineWidth(1)
         cr.stroke()
       }
-    })
+    }))
     const lbl = new Gtk.Label({
       label,
       css_classes: ["installer-check-desc"],

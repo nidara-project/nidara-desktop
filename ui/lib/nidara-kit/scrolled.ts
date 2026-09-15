@@ -1,6 +1,7 @@
 import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
 import { RADIUS } from "../tokens"
+import { cairoDraw } from "../cairo-draw"
 
 /**
  * NidaraScrolled — the shell's scroll view. One component for overlay surfaces AND
@@ -274,7 +275,7 @@ export function attachScrollBar(
         })
     }
 
-    bar.set_draw_func((da: any, cr: any, w: number, h: number) => {
+    bar.set_draw_func(cairoDraw((da: any, cr: any, w: number, h: number) => {
         const t = thumbRect(h)
         if (!t) return
         const col = da.get_style_context().get_color()
@@ -291,7 +292,7 @@ export function attachScrollBar(
         // surface's own border. The rest of the lane is invisible hit area.
         pillPath(cr, w - EDGE_CLEAR - thumbW, t.y, thumbW, t.h)
         cr.fill()
-    })
+    }))
 
     const clearHide = () => { if (hideId) { GLib.source_remove(hideId); hideId = 0 } }
 

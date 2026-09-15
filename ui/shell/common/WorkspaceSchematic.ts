@@ -9,6 +9,7 @@ import { makeCoverFit } from "./DrawingUtils"
 import { safeDisconnect } from "../core/signals"
 import { RADIUS } from "../../lib/tokens"
 import { makeWindowThumbnail, type WindowThumbnail } from "./WindowThumbnail"
+import { cairoDraw } from "../../lib/cairo-draw"
 
 export interface SchematicHandle {
     wrapper: Gtk.Widget
@@ -134,7 +135,7 @@ export function createSchematicMap(wsId: number, initialWidth: number, options: 
     // they DO share the decode behind it (WallpaperManager.preview).
     const coverFit = makeCoverFit()
 
-    canvas.set_draw_func((da, cr, areaW, areaH) => {
+    canvas.set_draw_func(cairoDraw((da, cr, areaW, areaH) => {
         if (areaW <= 0 || areaH <= 0) return
 
         // The backdrop is now a picture, so it needs a frame: a photo running
@@ -171,7 +172,7 @@ export function createSchematicMap(wsId: number, initialWidth: number, options: 
             cr.fill()
         }
         cr.restore()
-    })
+    }))
 
     // The decode is asynchronous and the wallpaper can change while a surface is
     // closed, so the canvas cannot just read it once at build time.

@@ -6,6 +6,7 @@ import Cairo from "gi://cairo"
 import { NidaraButton, makeHSlider } from "../../lib/nidara-kit"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
+import { cairoDraw } from "../../lib/cairo-draw"
 
 // Minimal circular avatar cropper: pan (drag) + zoom (slider) over a fixed square
 // canvas with a circular cutout, then renders the framed region to a square pixbuf
@@ -40,7 +41,7 @@ export function showAvatarCropper(
         width_request: DISPLAY, height_request: DISPLAY,
         css_classes: ["avatar-cropper-canvas"],
     })
-    area.set_draw_func((_: any, cr: any, w: number, h: number) => {
+    area.set_draw_func(cairoDraw((_: any, cr: any, w: number, h: number) => {
         const cx = w / 2, cy = h / 2, r = Math.min(w, h) / 2
 
         cr.save()
@@ -62,7 +63,7 @@ export function showAvatarCropper(
         cr.setLineWidth(2)
         cr.arc(cx, cy, r - 1, 0, 2 * Math.PI)
         cr.stroke()
-    })
+    }))
 
     // ── Pan ─────────────────────────────────────────────────────────────────────
     const drag = new Gtk.GestureDrag()

@@ -3576,7 +3576,20 @@ survive a 1366x768 work area?) or a live-medium layout that gives the installer 
 window rule is not where this lives — see `dev-workflow.md` → "A window rule matches an IDENTIFIER,
 and a static rule only ever sees the one the window was BORN with".
 
-### 100. ⚠️ OPEN — the shell grew 460 MB over 21 hours, and it is NOT the JS side (2026-08-30)
+### 100. 🔧 FOUND, fix in review — the shell grew 460 MB over 21 hours, and it is NOT the JS side (2026-08-30)
+
+🔑 **Cause (2026-09-15): undisposed Cairo contexts in draw functions, driven by animation.** A GJS
+`cairo.Context` lives until its JS wrapper is collected, and GJS's collector runs on JS-heap pressure,
+which a draw function barely creates — so every frame's context (and the surface
+`Gdk.cairo_set_source_pixbuf` copies an icon into) waits in the NATIVE heap. Characterised live with a
+10 s `/proc` sampler and one action per step: opening Settings +7 MB, a cursor theme +11 MB once (a
+cache: the second switch +0), mode/accent/night light/widget toggles 0 — and **30 s of pointer over
+the dock: +325, +309, +100 MB** (heap 140 → 874). Reproduced headless (ten 128 px icons repainted
+while their size animates): 5 → 647 MB in 40 s without `cr.$dispose()`, 5 → 14 MB with it. The fix is
+`ui/lib/cairo-draw.ts` (`set_draw_func(cairoDraw(…))`, dispose in a `finally`) on all 25 draw
+functions plus `$dispose()` after `MorphRevealer`'s `append_cairo`, enforced by
+`scripts/ci/cairo-dispose-check.mjs`. Close #305 once the dock test, repeated on a shell running the
+fix, stays flat. The history below is kept because the measurements in it are still true.
 
 > **Queue entry: #305.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
 

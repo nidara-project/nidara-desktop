@@ -10,6 +10,7 @@ import { kitAppearance } from "./appearance"
 import { bindWhileRealized } from "./lifetime"
 import { safeDisconnect } from "../signals"
 import { hexToFloatRgb } from "../accent"
+import { cairoDraw } from "../cairo-draw"
 
 const TRACK_H  = 6   // px — track thickness
 const THUMB_R  = 9   // px — thumb radius (visual)
@@ -133,7 +134,7 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
     }
 
     // ── Draw ────────────────────────────────────────────────────────────────────
-    da.set_draw_func((_: any, cr: any, w: number, h: number) => {
+    da.set_draw_func(cairoDraw((_: any, cr: any, w: number, h: number) => {
         if (w <= 0 || h <= 0) return
         const L = horiz ? w : h
         const cc = (horiz ? h : w) / 2
@@ -210,7 +211,7 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
             cr.setSourceRGBA(0, 0, 0, 0.25); cr.newPath(); cr.arc(cx, cy + 1, tr, 0, 2 * Math.PI); cr.fill()
             cr.setSourceRGBA(1, 1, 1, pressed ? 0.55 : 0.95); cr.newPath(); cr.arc(cx, cy, tr, 0, 2 * Math.PI); cr.fill()
         }
-    })
+    }))
 
     // ── Commit machinery ────────────────────────────────────────────────────────
     let pendingId = 0

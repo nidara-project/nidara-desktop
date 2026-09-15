@@ -2,6 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import { RADIUS, rowInsetFor } from "../tokens"
 import { kitAppearance } from "./appearance"
 import { sideFor, paintGlassBubble, ARROW_H, BUF, type ArrowSide } from "./glass-bubble"
+import { cairoDraw } from "../cairo-draw"
 
 // Universal Cairo glass bubble menu popover. Shared by dock context menu,
 // launcher context menu, media widget, and any Nidara surface or app needing
@@ -56,9 +57,9 @@ export class GlassBubbleMenu {
             hexpand: true, vexpand: true,
             halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
         })
-        this.drawingArea.set_draw_func((_da, cr, w, h) =>
+        this.drawingArea.set_draw_func(cairoDraw((_da, cr, w, h) =>
             paintGlassBubble(cr, w, h, this._side, { radiusMax: this._radiusMax, n: this._n })
-        )
+        ))
         grid.attach(this.drawingArea, 0, 0, 1, 1)
 
         this.rows = new Gtk.Box({

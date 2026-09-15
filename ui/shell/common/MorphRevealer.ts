@@ -365,6 +365,9 @@ export class MorphRevealer extends Gtk.Widget {
             },
             lerp(gFrom.n, gTo.n, k), 1.0, GLASS_INSET,
         )
+        // Released now, not at the next JS GC: a morph appends a context per frame, and an
+        // undisposed one holds native memory the collector never feels (#100, ui/lib/cairo-draw.ts).
+        cr.$dispose()
 
         // 2. THE CONTENT — child painted with the glass rect mapped onto R(p)
         // (glassArea is opacity-0, so only content pixels land); contentTarget

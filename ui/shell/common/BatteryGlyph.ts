@@ -31,6 +31,7 @@ import * as Battery from "../core/BatteryService"
 import { hexToFloatRgb } from "./DrawingUtils"
 import { DANGER_HEX, SUCCESS_HEX } from "../../lib/status-colors"
 import { INK } from "../../lib/tokens"
+import { cairoDraw } from "../../lib/cairo-draw"
 
 /** A real battery device is present (false on desktops, where the display
  *  device exists but reports is_present = false). */
@@ -66,7 +67,7 @@ export function makeBatteryGlyph(box: number, fill = false): Gtk.DrawingArea {
     const da = new Gtk.DrawingArea(fill
         ? { hexpand: true, vexpand: true, halign: Gtk.Align.FILL, valign: Gtk.Align.FILL }
         : { width_request: box, height_request: box, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER })
-    da.set_draw_func((_, cr, w, h) => {
+    da.set_draw_func(cairoDraw((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
         const f = batteryFrac()
         // The bolt means "on AC", not "still filling" — so FULLY_CHARGED keeps it.
@@ -113,6 +114,6 @@ export function makeBatteryGlyph(box: number, fill = false): Gtk.DrawingArea {
             cr.setSourceRGBA(fr, fg, fb, fa)
             cr.fill()
         }
-    })
+    }))
     return da
 }
