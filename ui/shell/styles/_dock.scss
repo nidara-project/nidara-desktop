@@ -61,10 +61,14 @@ window.nidara-dock-window,
         border-radius: 0px;
     }
 
-    /* --- Launcher Icon Visibility ---
-       `cd-icon-box-<appId>` is stamped per item in DockItem.tsx; "launcher" is
-       the permanent first slot (DockCore's DOCK_PERMANENT_IDS). */
-    #cd-icon-box-launcher image {
+    /* --- Symbolic icon colour ---
+       A `*-symbolic` icon is a mask that takes the text colour. The dock draws its icons as
+       DockIcon (`.cd-icon`), which tints symbolic ones with its CSS `color`; `image` is the
+       Gtk.Image fallback, which GTK tints the same way. Full-colour icons ignore `color`.
+       This used to be `#cd-icon-box-launcher image` only, and nothing drew the launcher as an
+       image any more — so the launcher kept its SVG's placeholder #444444 in dark mode. */
+    .cd-icon-container .cd-icon,
+    .cd-icon-container image {
         color: var(--nidara-text);
         // NO -gtk-icon-shadow here: the dock is a blurred layer with ignore_alpha 0.04
         // (pinned just under dockOpacity's 0.05 floor so the 5%-frost capsule still

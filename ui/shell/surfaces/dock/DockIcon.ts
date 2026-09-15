@@ -3,6 +3,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import Gsk from "gi://Gsk?version=4.0"
 import GdkPixbuf from "gi://GdkPixbuf"
+import GLib from "gi://GLib"
 import Graphene from "gi://Graphene"
 
 /**
@@ -24,11 +25,21 @@ import Graphene from "gi://Graphene"
  *    and max only exist for a few frames each, where that softness does not register, and at
  *    max (128) it is exact.
  * The rest copy is rebuilt when the rest size changes (the icon-size setting, a scale change).
+ *
+ * SYMBOLIC icons (a `*-symbolic` file: Papirus' `view-app-grid-symbolic` is the launcher on the
+ * owner's machine) ship a placeholder fill (#444444) that GTK replaces with the CSS `color` when
+ * it draws them as a Gtk.Image. Loaded as a pixbuf nothing replaces it, so the launcher drew
+ * dark grey in dark mode (measured live, 2026-09-15). With `symbolic` set, the icon keeps its
+ * alpha and takes this widget's CSS `color` — `.cd-icon` in _dock.scss — and re-tints when the
+ * colour changes (dark/light), like a Gtk.Image would.
  */
 export const DockIcon = GObject.registerClass({
     GTypeName: "NidaraDockIcon",
 }, class DockIcon extends Gtk.Widget {
+    private _source: GdkPixbuf.Pixbuf | null = null
     private _pixbuf: GdkPixbuf.Pixbuf | null = null
+    private _symbolic = false
+    private _tint = ""
     private _full: Gdk.Texture | null = null
     private _rest: Gdk.Texture | null = null
     private _restKey = ""
@@ -36,12 +47,51 @@ export const DockIcon = GObject.registerClass({
      *  the icon-size setting changes it live without rebuilding the dock. */
     restSize: () => number = () => 0
 
-    setPixbuf(pixbuf: GdkPixbuf.Pixbuf): void {
+    setPixbuf(pixbuf: GdkPixbuf.Pixbuf, symbolic = false): void {
+        this._source = pixbuf
+        this._symbolic = symbolic
+        this._tint = ""
+        this._useSource(symbolic ? this._tinted(pixbuf, this.get_color()) : pixbuf)
+        if (symbolic) this._tint = this._colorKey()
+    }
+
+    private _useSource(pixbuf: GdkPixbuf.Pixbuf): void {
         this._pixbuf = pixbuf
         this._full = Gdk.Texture.new_for_pixbuf(pixbuf)
         this._rest = null
         this._restKey = ""
         this.queue_draw()
+    }
+
+    private _colorKey(): string {
+        const c = this.get_color()
+        return `${c.red},${c.green},${c.blue},${c.alpha}`
+    }
+
+    /** The icon's alpha, filled with `color` — what GTK does to a symbolic icon. */
+    private _tinted(src: GdkPixbuf.Pixbuf, color: Gdk.RGBA): GdkPixbuf.Pixbuf {
+        const pb = src.get_has_alpha() ? src : src.add_alpha(false, 0, 0, 0)
+        const w = pb.get_width(), h = pb.get_height(), stride = pb.get_rowstride(), n = pb.get_n_channels()
+        const px = pb.read_pixel_bytes().toArray() as Uint8Array
+        const out = new Uint8Array(px.length)
+        const r = Math.round(color.red * 255), g = Math.round(color.green * 255), b = Math.round(color.blue * 255)
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const i = y * stride + x * n
+                out[i] = r; out[i + 1] = g; out[i + 2] = b
+                out[i + 3] = Math.round(px[i + 3] * color.alpha)
+            }
+        }
+        return GdkPixbuf.Pixbuf.new_from_bytes(new GLib.Bytes(out), GdkPixbuf.Colorspace.RGB, true, 8, w, h, stride)
+    }
+
+    vfunc_css_changed(change: any): void {
+        super.vfunc_css_changed(change)
+        if (!this._symbolic || !this._source) return
+        const key = this._colorKey()
+        if (key === this._tint) return
+        this._tint = key
+        this._useSource(this._tinted(this._source, this.get_color()))
     }
 
     /** The icon's box inside a w×h square, aspect preserved and centred — the old "contain". */

@@ -24,6 +24,9 @@ import { INK } from "../../../lib/tokens"
 import { cairoDraw } from "../../../lib/cairo-draw"
 import { DockIcon } from "./DockIcon"
 
+/** A `*-symbolic` icon is a mask meant to take the text colour (see DockIcon). */
+const isSymbolicFile = (path: string | null | undefined) => !!path && /-symbolic\.(svg|png)$/.test(path)
+
 // hypr kept as alias for hs to minimise diff surface in this file
 const hypr = hs
 
@@ -299,9 +302,9 @@ export function DockItem(
 
     if (pixbuf) {
         // GPU textures, not a Cairo repaint per frame — see DockIcon.ts for the measurements.
-        const icon = new DockIcon({ valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER })
+        const icon = new DockIcon({ valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER, css_classes: ["cd-icon"] })
         icon.restSize = () => DOCK_CONSTANTS.ICON_SIZE
-        icon.setPixbuf(pixbuf)
+        icon.setPixbuf(pixbuf, isSymbolicFile(resolvedPath))
         child = icon
     } else {
         // Fallback for system icons
@@ -341,7 +344,7 @@ export function DockItem(
                     const next = (GdkPixbuf as any).Pixbuf.new_from_file_at_scale(path, sourceSize, sourceSize, true)
                     if (next) {
                         pixbuf = next
-                        if (child instanceof DockIcon) (child as DockIcon).setPixbuf(next)
+                        if (child instanceof DockIcon) (child as DockIcon).setPixbuf(next, isSymbolicFile(path))
                     }
                 }
             } catch (e) { console.error("[Dock] trash icon swap failed:", e) }

@@ -4,8 +4,9 @@
 // needs layer-shell and Hyprland): window.nidara-dock-window#nidara-dock > GtkOverlay >
 // GtkOverlay.cd-layout > GtkBox.cd-bar > GtkRevealer.cd-revealer > GtkBox.cd-item >
 // GtkBox.cd-icon-container > icon, plus the separator. States forced so rules that only
-// apply to them get exercised: item 2 :hover (PRELIGHT), item 3 .cd-dragging, and the
-// launcher slot as a Gtk.Image (the fallback path `#cd-icon-box-launcher image` targets).
+// apply to them get exercised: item 2 :hover (PRELIGHT), item 3 .cd-dragging; the launcher
+// is a symbolic icon in a DockIcon (tinted by `.cd-icon` color) and the last slot is the
+// Gtk.Image fallback. Second arg `dark|light` picks the token set.
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
@@ -13,14 +14,14 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import { DockIcon } from "../../ui/shell/surfaces/dock/DockIcon"
 import { generateTokensCss, generateChromeTokenScope, DEFAULT_CONFIG } from "../../ui/shell/core/NidaraTheme"
 
-const css = ((globalThis as any).ARGV ?? [])[0]
+const [css, mode = "dark"] = (globalThis as any).ARGV ?? []
 Gtk.init()
 const provider = new Gtk.CssProvider()
 provider.load_from_path(css)
 Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default()!, provider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 10)
 // The --nidara-* tokens ThemeManager injects, dark, so `var()` rules resolve as in the shell.
 const tokens = new Gtk.CssProvider()
-tokens.load_from_string(generateTokensCss(DEFAULT_CONFIG, true) + "\n" + generateChromeTokenScope(DEFAULT_CONFIG, true, true))
+tokens.load_from_string(generateTokensCss(DEFAULT_CONFIG, mode === "dark") + "\n" + generateChromeTokenScope(DEFAULT_CONFIG, mode === "dark", mode === "dark"))
 Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default()!, tokens, Gtk.STYLE_PROVIDER_PRIORITY_USER + 30)
 
 const pix = GdkPixbuf.Pixbuf.new_from_file_at_scale("/usr/share/icons/hicolor/scalable/apps/firefox.svg", 128, 128, true)!
@@ -43,8 +44,10 @@ function item(appId: string, icon: Gtk.Widget, state?: "hover" | "dragging") {
     if (state === "dragging") itemBox.add_css_class("cd-dragging")
     bar.append(rev)
 }
-const dockIcon = () => { const d = new DockIcon({ valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER }); d.restSize = () => 64; d.setPixbuf(pix); return d }
-item("launcher", new Gtk.Image({ icon_name: "view-app-grid-symbolic", pixel_size: 64 }))
+const dockIcon = (pb = pix, symbolic = false) => { const d = new DockIcon({ valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER, css_classes: ["cd-icon"] }); d.restSize = () => 64; d.setPixbuf(pb, symbolic); return d }
+// The launcher as the real dock draws it: a SYMBOLIC file loaded as a pixbuf into DockIcon.
+const SYMBOLIC = "/usr/share/icons/Papirus/32x32/symbolic/actions/view-app-grid-symbolic.svg"
+item("launcher", dockIcon(GdkPixbuf.Pixbuf.new_from_file_at_scale(SYMBOLIC, 128, 128, true)!, true))
 item("firefox", dockIcon())
 item("hovered", dockIcon(), "hover")
 item("dragging", dockIcon(), "dragging")
