@@ -6,6 +6,7 @@ import { pollWhileMapped } from "../common/poll"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import { INK } from "../../lib/tokens"
+import { cairoDraw } from "../../lib/cairo-draw"
 
 function readFile(path: string): string {
     try {
@@ -47,7 +48,7 @@ function makeArc(
         halign: Gtk.Align.CENTER,
     })
     let pct = 0
-    canvas.set_draw_func((_, cr, w, h) => {
+    canvas.set_draw_func(cairoDraw((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
         const r = Math.min(w, h) / 2 - 2
         const xc = w / 2, yc = h / 2
@@ -63,7 +64,7 @@ function makeArc(
             cr.arc(xc, yc, r, -Math.PI / 2, (pct / 100) * 2 * Math.PI - Math.PI / 2)
             cr.stroke()
         }
-    })
+    }))
 
     const icon = new Gtk.Label({
         label,
@@ -128,7 +129,7 @@ function makeCCMetric(
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
     })
     let pct = 0
-    canvas.set_draw_func((_, cr, w, h) => {
+    canvas.set_draw_func(cairoDraw((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
         const r = Math.min(w, h) / 2 - lineW / 2 - 1
         const xc = w / 2, yc = h / 2
@@ -144,7 +145,7 @@ function makeCCMetric(
             cr.arc(xc, yc, r, -Math.PI / 2, (pct / 100) * 2 * Math.PI - Math.PI / 2)
             cr.stroke()
         }
-    })
+    }))
 
     const value = new Gtk.Label({
         label: "0", css_classes: ["resource-value"],

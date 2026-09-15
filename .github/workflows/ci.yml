@@ -236,6 +236,12 @@ jobs:
       - name: tsc --noEmit (must succeed)
         working-directory: ui/shell
         run: npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json
+      # A GJS cairo.Context lives until JS GC, which does not feel native memory: an
+      # undisposed draw function filled the shell's native heap 140 → 874 MB in three passes
+      # over the dock (#100). Not a type error, not a visible glitch — hence a check.
+      - name: Cairo contexts are disposed (cairoDraw / append_cairo)
+        working-directory: .
+        run: node scripts/ci/cairo-dispose-check.mjs
 
       # ── greeter + lockscreen: NAMES ONLY, and that is a deliberate ceiling ──
       # These two bundles cannot be fully typechecked yet. Their `gi.d.ts` declares

@@ -21,6 +21,7 @@ import { safeDisconnect } from "../../core/signals"
 import { attachTooltip, GlassBubbleMenu } from "../../../lib/nidara-kit"
 import { renderMenuModel } from "../../common/NidaraMenu"
 import { INK } from "../../../lib/tokens"
+import { cairoDraw } from "../../../lib/cairo-draw"
 
 // hypr kept as alias for hs to minimise diff surface in this file
 const hypr = hs
@@ -304,7 +305,7 @@ export function DockItem(
             ; (child as any).set_content_width(DOCK_CONSTANTS.ICON_SIZE)
             ; (child as any).set_content_height(DOCK_CONSTANTS.ICON_SIZE)
 
-            ; (child as any).set_draw_func((area: any, cr: any, w: number, h: number) => {
+            ; (child as any).set_draw_func(cairoDraw((area: any, cr: any, w: number, h: number) => {
                 if (w <= 0 || h <= 0) return
                 // The actual icon shape only occupies ~82% of the total canvas.
                 // V610: The global clipping and plate scale is locked at exactly 90%
@@ -340,7 +341,7 @@ export function DockItem(
                 cr.restore()
                 // Bounce frames are driven by the animLoop timer (which queues draws
                 // itself) — no need to self-queue from inside the draw func.
-            })
+            }))
     } else {
         // Fallback for system icons
         const iconProps: any = {
@@ -429,14 +430,14 @@ export function DockItem(
     ;(dot as any).set_content_width(DOT_SIZE)
     ;(dot as any).set_content_height(DOT_SIZE)
     dot.set_visible(false)
-    ;(dot as any).set_draw_func((_area: any, cr: any, w: number, h: number) => {
+    ;(dot as any).set_draw_func(cairoDraw((_area: any, cr: any, w: number, h: number) => {
         if (w <= 0 || h <= 0) return
         const r = Math.min(w, h) / 2
         cr.arc(w / 2, h / 2, r, 0, 2 * Math.PI)
         const c = Theme.chromeIsDark ? 1 : 0   // dock running-dot — follows the pinned chrome appearance
         cr.setSourceRGBA(c, c, c, INK.solid)
         cr.fill()
-    })
+    }))
 
     if (isVertical) {
         // Mirror of the horizontal dotZone (which sits PILL_PADDING tall below the icon):

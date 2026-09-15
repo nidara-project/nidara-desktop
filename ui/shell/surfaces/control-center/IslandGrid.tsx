@@ -18,6 +18,7 @@ import Theme from "../../core/ThemeManager"
 import { DANGER_HEX } from "../../../lib/status-colors"
 import IconButton from "../../common/IconButton"
 import { createCCContextMenu } from "./CCContextMenu"
+import { cairoDraw } from "../../../lib/cairo-draw"
 
 const pixelX = (gx: number) => gx * (UNIT + GAP)
 const pixelY = (gy: number) => gy * (UNIT + GAP)
@@ -34,11 +35,11 @@ function makeDropGhost(size: WidgetSize, w: number, h: number): { widget: Gtk.Dr
     let invalid = false
     const da = new Gtk.DrawingArea({ width_request: w, height_request: h })
     da.set_can_target(false)
-    da.set_draw_func((_widget: Gtk.DrawingArea, cr: any, dw: number, dh: number) => {
+    da.set_draw_func(cairoDraw((_widget: Gtk.DrawingArea, cr: any, dw: number, dh: number) => {
         const { radius: r, n, perfect } = resolveDrawParams(shape, radius, 3.2, false, dw, dh)
         const accent = invalid ? GHOST_DANGER : hexToFloatRgb(Theme.accentPalette[Theme.accentColor].color)
         drawSquircle(cr, dw, dh, undefined, 0.12, false, accent, r, perfect, { ...accent, a: 0.6 }, n, 2, 2.0, [4, 3])
-    })
+    }))
     return {
         widget: da,
         setInvalid: (v: boolean) => { if (v !== invalid) { invalid = v; da.queue_draw() } },

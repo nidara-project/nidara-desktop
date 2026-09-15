@@ -24,6 +24,7 @@ import Theme from "../../core/ThemeManager"
 import inputYield from "../../core/InputYield"
 import { dockSettings, dockSideState } from "./state"
 import type { AnimState } from "./state"
+import { cairoDraw } from "../../../lib/cairo-draw"
 
 type Rect = { x: number, y: number, width: number, height: number }
 
@@ -202,7 +203,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 can_focus: false,
             })
             // theme→redraw handled by DockCore (single, disconnected on destroy)
-            da.set_draw_func((_, cr, w, _h) => {
+            da.set_draw_func(cairoDraw((_, cr, w, _h) => {
                 if (w <= 0 || _h <= 0) return
                 const dark = Theme.chromeIsDark   // dock = chrome → follows appearance.shellAppearance
                 const dockAlpha = Theme.dockOpacity
@@ -217,7 +218,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                     (_h - DOCK_SHADOW_PAD * 2) / 2, 3.2, false,
                     GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop)
                 drawSquircle(cr, w, _h, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
-            })
+            }))
 
             const initialMargin = Math.round((monMain - initialSmoothedMain) / 2)
             bar.margin_start = Math.max(0, initialMargin)
@@ -567,7 +568,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 can_focus: false,
             })
             // theme→redraw handled by DockCore (single, disconnected on destroy)
-            da.set_draw_func((_, cr, _w, _h) => {
+            da.set_draw_func(cairoDraw((_, cr, _w, _h) => {
                 if (_w <= 0 || _h <= 0) return
                 if (_h !== realizedMain) {
                     // The true compositor-allocated height arrived (or changed). The pill
@@ -601,7 +602,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                     GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop)
                 drawSquircle(cr, pw + DOCK_SHADOW_PAD * 2, ph + DOCK_SHADOW_PAD * 2, undefined,
                     dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
-            })
+            }))
 
             // Shim: positioned by margin_top (set dynamically via updateSize → getGtkCenter).
             shim = new Gtk.Box({

@@ -3,6 +3,7 @@ import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 import { ARROW_H, BUF, sideFor, paintGlassBubble, type ArrowSide } from "./glass-bubble"
 import { kitAppearance } from "./appearance"
+import { cairoDraw } from "../cairo-draw"
 
 export type NidaraTooltipText = string | (() => string)
 
@@ -72,12 +73,12 @@ export function attachTooltip(
         hexpand: true, vexpand: true,
         halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
     })
-    da.set_draw_func((_da, cr, w, h) => {
+    da.set_draw_func(cairoDraw((_da, cr, w, h) => {
         const dark = opts.chrome === false
             ? kitAppearance().surfaceIsDark(widget)
             : undefined
         paintGlassBubble(cr, w, h, side, { chrome, arrowOffset, dark })
-    })
+    }))
     grid.attach(da, 0, 0, 1, 1)
 
     const label = new Gtk.Label({ css_classes: ["nidara-tooltip-label"] })

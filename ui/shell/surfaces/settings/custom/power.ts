@@ -7,6 +7,7 @@ import Theme from "../../../core/ThemeManager"
 import { safeDisconnect } from "../../../core/signals"
 import { NidaraRow } from "../../../../lib/nidara-kit"
 import type { PageCtx, ItemBuilder } from "../PreferencePage"
+import { cairoDraw } from "../../../../lib/cairo-draw"
 
 // Selection checkmark, Cairo-drawn. `accent-icon` (color: var(--nidara-accent)) on a
 // Gtk.Image has NO effect here: our icons are Gio.FileIcon → raw SVG files, rendered
@@ -31,7 +32,7 @@ function buildSelectionCheck(size = 16): Gtk.Widget {
         css_classes: ["power-profile-check"],
     })
     da.set_can_target(false)
-    da.set_draw_func((_w: Gtk.DrawingArea, cr: any, w: number, h: number) => {
+    da.set_draw_func(cairoDraw((_w: Gtk.DrawingArea, cr: any, w: number, h: number) => {
         const v = Theme.isDark ? 1 : 0
         const s = Math.min(w, h) / 24
         cr.setLineWidth(2 * s)
@@ -42,7 +43,7 @@ function buildSelectionCheck(size = 16): Gtk.Widget {
         cr.lineTo(9 * s, 17 * s)
         cr.lineTo(20 * s, 6 * s)
         cr.stroke()
-    })
+    }))
     bindWhileRealized(da, () => {
         const sigId = Theme.connect("changed", () => da.queue_draw())
         return () => safeDisconnect(Theme, sigId)

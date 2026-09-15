@@ -1,4 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
+import { cairoDraw } from "../cairo-draw"
 
 /**
  * NidaraSelectionCheck — universal checkmark widget for single-select option rows.
@@ -15,7 +16,7 @@ export function NidaraSelectionCheck(size = 16, extraClasses: string[] = []): Gt
         css_classes: ["nidara-selection-check", ...extraClasses],
     })
     da.set_can_target(false)
-    da.set_draw_func((widget: Gtk.DrawingArea, cr: any, w: number, h: number) => {
+    da.set_draw_func(cairoDraw((widget: Gtk.DrawingArea, cr: any, w: number, h: number) => {
         const color = widget.get_color()
         const s = Math.min(w, h) / 24
         cr.setLineWidth(2.2 * s)
@@ -26,6 +27,6 @@ export function NidaraSelectionCheck(size = 16, extraClasses: string[] = []): Gt
         cr.lineTo(9 * s, 17 * s)
         cr.lineTo(20 * s, 6 * s)
         cr.stroke()
-    })
+    }))
     return da
 }

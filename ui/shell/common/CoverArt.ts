@@ -26,6 +26,7 @@ import Theme from "../core/ThemeManager"
 import { safeDisconnect } from "../core/signals"
 import * as media from "../core/MediaService"
 import { INK } from "../../lib/tokens"
+import { cairoDraw } from "../../lib/cairo-draw"
 
 /** The media detail panel's artwork box, and the radius that goes with it. The
  *  island's compact art derives its own radius from this pair so the morph's two
@@ -80,7 +81,7 @@ export function makeCoverArt(opts: CoverArtOpts): Gtk.DrawingArea {
         ? new Gtk.DrawingArea({ width_request: size, height_request: size })
         : new Gtk.DrawingArea({ hexpand: true, vexpand: true, halign: Gtk.Align.FILL, valign: Gtk.Align.FILL })
 
-    da.set_draw_func((_, cr, w, h) => {
+    da.set_draw_func(cairoDraw((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
         sync(false)
 
@@ -115,7 +116,7 @@ export function makeCoverArt(opts: CoverArtOpts): Gtk.DrawingArea {
             cr.fill()
         }
         cr.restore()
-    })
+    }))
 
     // Realized lifetime, not a one-shot unrealize: the CC builds its tiles once and
     // hides them, so a plain unrealize-cleanup would leave the art frozen at whatever

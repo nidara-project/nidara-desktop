@@ -151,6 +151,7 @@ export function makeCoverFit() {
 }
 
 import { RADIUS } from "../../lib/tokens"
+import { cairoDraw } from "../../lib/cairo-draw"
 
 /** Canonical squircle thumbnail corner ratio (25%, matching macOS icon proportion). */
 export const THUMB_RADIUS_RATIO = 0.25
@@ -179,11 +180,11 @@ export function squircleThumb(
     const r = radius ?? Math.max(6, Math.min(RADIUS.md, Math.round(Math.min(w, h) * THUMB_RADIUS_RATIO)))
     const da = new Gtk.DrawingArea({ width_request: w, height_request: h, css_classes: [cssClass] })
     const coverFit = makeCoverFit()
-    da.set_draw_func((_da: any, cr: any, dw: number, dh: number) => {
+    da.set_draw_func(cairoDraw((_da: any, cr: any, dw: number, dh: number) => {
         if (dw <= 0 || dh <= 0) return
         const fit = coverFit(pixbuf, dw, dh)
         cr.save(); createSquirclePath(cr, 0, 0, dw, dh, r, 3.2); cr.clip()
         Gdk.cairo_set_source_pixbuf(cr, fit.pixbuf, fit.x, fit.y); cr.paint(); cr.restore()
-    })
+    }))
     return da
 }
