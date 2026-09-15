@@ -25,13 +25,16 @@ import inputYield from "../../core/InputYield"
 import { dockSettings, dockSideState } from "./state"
 import type { AnimState } from "./state"
 import { cairoDraw } from "../../../lib/cairo-draw"
+import { SlicedCairoArea } from "../../../lib/sliced-cairo"
 
 type Rect = { x: number, y: number, width: number, height: number }
 
 // Widgets the adapter builds; DockCore assembles them into the window.
 export interface AxisWidgets {
     bar: Gtk.Box
-    da: Gtk.DrawingArea
+    /** The glass layer: a SlicedCairoArea on the horizontal axis, a DrawingArea on the
+     *  vertical one (see each factory for why). DockCore only needs queue_draw/get_mapped. */
+    da: Gtk.Widget
     shim: Gtk.Box
     layout: Gtk.Overlay
 }
@@ -141,7 +144,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
     const WIN_H = gdkmonitor.get_geometry().height
 
     let bar!: Gtk.Box
-    let da!: Gtk.DrawingArea
+    let da!: Gtk.Widget
     let shim!: Gtk.Box
     let layout!: Gtk.Overlay
     let smoothedBarMain = 0
@@ -194,7 +197,11 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 vexpand: false,
             })
 
-            da = new Gtk.DrawingArea({
+            // Three GPU textures, not a Cairo repaint per frame: the capsule only changes
+            // WIDTH while the dock magnifies, and its ends and middle column do not depend on
+            // it (the rim gradient is vertical, the fill uniform). perf put this repaint at
+            // 38 % of the shell's main thread during dock hover — see ui/lib/sliced-cairo.ts.
+            const gloss = new SlicedCairoArea({
                 name: "dock-gloss-layer",
                 valign: Gtk.Align.END,
                 halign: Gtk.Align.START,
@@ -202,23 +209,29 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 margin_bottom: Math.max(0, dockSettings.screenGap - DOCK_SHADOW_PAD),
                 can_focus: false,
             })
-            // theme→redraw handled by DockCore (single, disconnected on destroy)
-            da.set_draw_func(cairoDraw((_, cr, w, _h) => {
-                if (w <= 0 || _h <= 0) return
-                const dark = Theme.chromeIsDark   // dock = chrome → follows appearance.shellAppearance
-                const dockAlpha = Theme.dockOpacity
-                const dockColor = dark
-                    ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
-                    : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
-                const borderCol = dark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
-                // The pad is the `inset`, so the capsule lands where it always did; the
-                // shadow gets the ring the DrawingArea grew to hold it.
-                drawGlassShadow(cr, DOCK_SHADOW_PAD, DOCK_SHADOW_PAD,
-                    w - DOCK_SHADOW_PAD * 2, _h - DOCK_SHADOW_PAD * 2,
-                    (_h - DOCK_SHADOW_PAD * 2) / 2, 3.2, false,
-                    GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop)
-                drawSquircle(cr, w, _h, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
-            }))
+            gloss.configure({
+                key: () => `${Theme.chromeIsDark}|${Theme.dockOpacity}`,
+                // The squircle's corner spans its radius (half the pill) from the inset edge;
+                // one more pixel keeps the rim's antialiasing inside the cap.
+                capLength: (h) => DOCK_SHADOW_PAD + (h - DOCK_SHADOW_PAD * 2) / 2 + 1,
+                paint: (cr, w, _h) => {
+                    if (w <= 0 || _h <= 0) return
+                    const dark = Theme.chromeIsDark   // dock = chrome → follows appearance.shellAppearance
+                    const dockAlpha = Theme.dockOpacity
+                    const dockColor = dark
+                        ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
+                        : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
+                    const borderCol = dark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
+                    // The pad is the `inset`, so the capsule lands where it always did; the
+                    // shadow gets the ring the widget grew to hold it.
+                    drawGlassShadow(cr, DOCK_SHADOW_PAD, DOCK_SHADOW_PAD,
+                        w - DOCK_SHADOW_PAD * 2, _h - DOCK_SHADOW_PAD * 2,
+                        (_h - DOCK_SHADOW_PAD * 2) / 2, 3.2, false,
+                        GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop)
+                    drawSquircle(cr, w, _h, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
+                },
+            })
+            da = gloss
 
             const initialMargin = Math.round((monMain - initialSmoothedMain) / 2)
             bar.margin_start = Math.max(0, initialMargin)
@@ -561,6 +574,9 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 vexpand: false,
             })
 
+            // Stays a Cairo DrawingArea: the rim gradient runs top→bottom, i.e. ALONG a
+            // vertical capsule, so its middle is not one repeated row and SlicedCairoArea's
+            // contract does not hold (ui/lib/sliced-cairo.ts).
             da = new Gtk.DrawingArea({
                 name: "dock-gloss-layer",
                 valign: Gtk.Align.FILL,
