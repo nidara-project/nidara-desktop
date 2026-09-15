@@ -3576,56 +3576,6 @@ survive a 1366x768 work area?) or a live-medium layout that gives the installer 
 window rule is not where this lives — see `dev-workflow.md` → "A window rule matches an IDENTIFIER,
 and a static rule only ever sees the one the window was BORN with".
 
-### 100. 🔧 FOUND, fix in review — the shell grew 460 MB over 21 hours, and it is NOT the JS side (2026-08-30)
-
-🔑 **Cause (2026-09-15): undisposed Cairo contexts in draw functions, driven by animation.** A GJS
-`cairo.Context` lives until its JS wrapper is collected, and GJS's collector runs on JS-heap pressure,
-which a draw function barely creates — so every frame's context (and the surface
-`Gdk.cairo_set_source_pixbuf` copies an icon into) waits in the NATIVE heap. Characterised live with a
-10 s `/proc` sampler and one action per step: opening Settings +7 MB, a cursor theme +11 MB once (a
-cache: the second switch +0), mode/accent/night light/widget toggles 0 — and **30 s of pointer over
-the dock: +325, +309, +100 MB** (heap 140 → 874). Reproduced headless (ten 128 px icons repainted
-while their size animates): 5 → 647 MB in 40 s without `cr.$dispose()`, 5 → 14 MB with it. The fix is
-`ui/lib/cairo-draw.ts` (`set_draw_func(cairoDraw(…))`, dispose in a `finally`) on all 25 draw
-functions plus `$dispose()` after `MorphRevealer`'s `append_cairo`, enforced by
-`scripts/ci/cairo-dispose-check.mjs`. Close #305 once the dock test, repeated on a shell running the
-fix, stays flat. The history below is kept because the measurements in it are still true.
-
-> **Queue entry: #305.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
-
-Found while pricing whether Settings should be its own process. It should not be — but the number
-that came out of the measurement is worth more than the question that prompted it.
-
-⚠️ **That "should not be" was REVERSED on 2026-09-14** (#571): it priced memory only, and the case
-for a separate process is failure isolation — four shell SIGSEGVs that day came from code Settings
-runs. The split is now three phases (#573 settings to GSettings → #571 → #574); see architecture.md
-→ "Where a setting lives". The memory measurement below still stands.
-
-    fresh shell, Settings never opened      RSS 330.1 MB   PSS 202.7 MB   (stable over 30 s)
-    the same unit after 21 h 21 m uptime    RSS 792.5 MB   PSS 637.9 MB
-
-330 MB is the figure this project has always quoted as healthy, so the fresh number is right and the
-old one is growth, not a bad baseline. Where it sits, from the old process's `smaps` before it was
-restarted:
-
-    [heap]                453.1 MB     native malloc
-    /usr/lib/libLLVM      83.5 MB      Mesa's shader compiler, shared + clean, not ours
-    [anon:js-gc-heap]     42.1 MB      the JS side, and it is SMALL
-
-🔑 **So this is not widgets kept alive in JavaScript.** GJS's GC heap is 42 MB against 453 MB of C
-heap, which points at native allocations — Cairo/pixman surfaces, GdkTextures, Pango layouts — that
-something keeps a reference to, or that are never returned to the allocator.
-
-For scale, the thing it was measured against: **the hidden Settings window retains 15.3 MB**
-(345.4 with it built and hidden, 330.1 without it, and re-opening is free). Whatever is eating
-460 MB is thirty times that and has nothing to do with it.
-
-⚠️ Not yet characterised, and the evidence was destroyed by the restart that produced the clean
-baseline: whether the growth is monotonic with uptime or driven by activity (that session had heavy
-Settings, overlay and window-probe traffic), and what allocates it. The way to find out is to leave
-a shell up and sample `smaps_rollup` on a schedule, with the desktop idle for one arm and exercised
-for the other — an idle arm that also grows is a different bug from one that does not.
-
 ### 101. ⚠️ OPEN — the installer's log stops one command short of the end (2026-08-31)
 
 > **Queue entry: nidara-iso#10.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
@@ -3729,4 +3679,5 @@ number is never accidentally reused. 51 items; the split itself was 2026-08-23.
 - **#92** — RESOLVED — the login screens' selected row follows the user's accent, in both skins (2026-08-25 → 2026-09-07) → `tech-debt-resolved.md`
 - **#93** — FIXED same day — About's key column was a constant, and a constant is a locale bug with a delay on it (2026-08-25) → `tech-debt-resolved.md`
 - **#94** — RESOLVED same day — the two About surfaces are a summary and its detail, and one reader answers both (2026-08-25) → `tech-debt-resolved.md`
+- **#100** — ✅ RESOLVED 2026-09-15 — the shell's native heap grew with every animated frame: undisposed Cairo contexts (#581, #305) → `tech-debt-resolved.md`
 - **#103** — ✅ RESOLVED 2026-09-14 — the icon / cursor / GTK theme have one home, and appearance.json is gone (#536 in #573) → `tech-debt-resolved.md`

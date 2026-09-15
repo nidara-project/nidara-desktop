@@ -22,6 +22,7 @@ import { attachTooltip, GlassBubbleMenu } from "../../../lib/nidara-kit"
 import { renderMenuModel } from "../../common/NidaraMenu"
 import { INK } from "../../../lib/tokens"
 import { cairoDraw } from "../../../lib/cairo-draw"
+import { DockIcon } from "./DockIcon"
 
 // hypr kept as alias for hs to minimise diff surface in this file
 const hypr = hs
@@ -297,51 +298,11 @@ export function DockItem(
 
 
     if (pixbuf) {
-        // Custom Drawing
-        child = new Gtk.DrawingArea()
-        child.set_valign(Gtk.Align.CENTER)
-        child.set_halign(Gtk.Align.CENTER)
-            // Explicitly cast to any because TS definitions for Gtk4 DrawingArea might be incomplete in this environment
-            ; (child as any).set_content_width(DOCK_CONSTANTS.ICON_SIZE)
-            ; (child as any).set_content_height(DOCK_CONSTANTS.ICON_SIZE)
-
-            ; (child as any).set_draw_func(cairoDraw((area: any, cr: any, w: number, h: number) => {
-                if (w <= 0 || h <= 0) return
-                // The actual icon shape only occupies ~82% of the total canvas.
-                // V610: The global clipping and plate scale is locked at exactly 90%
-                // V700: No artificial SAFE_RATIO. Use full canvas area.
-                const cx = w / 2
-                const cy = h / 2
-
-                // Native aspect ratio
-                const iconW = pixbuf.get_width()
-                const iconH = pixbuf.get_height()
-
-                // Scale to fit available area (in the 0.90 scaled context, space is w,h)
-                const scaleX = w / iconW
-                const scaleY = h / iconH
-                // Contain strategy to guarantee it fits
-                const scale = Math.min(scaleX, scaleY)
-
-                // Center in the widget area (w, h)
-                const drawW = iconW * scale
-                const drawH = iconH * scale
-                const x = (w - drawW) / 2
-                const y = (h - drawH) / 2
-
-                cr.save()
-
-                const isTrash = appId === "trash" || appId === "special:trash"
-
-                cr.translate(x, y)
-                cr.scale(scale, scale)
-
-                Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
-                cr.paint()
-                cr.restore()
-                // Bounce frames are driven by the animLoop timer (which queues draws
-                // itself) — no need to self-queue from inside the draw func.
-            }))
+        // GPU textures, not a Cairo repaint per frame — see DockIcon.ts for the measurements.
+        const icon = new DockIcon({ valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER })
+        icon.restSize = () => DOCK_CONSTANTS.ICON_SIZE
+        icon.setPixbuf(pixbuf)
+        child = icon
     } else {
         // Fallback for system icons
         const iconProps: any = {
@@ -360,8 +321,8 @@ export function DockItem(
     child.set_has_tooltip(false)
     child.set_size_request(DOCK_CONSTANTS.ICON_SIZE, DOCK_CONSTANTS.ICON_SIZE)
 
-    // Trash icon tracks trash contents (full ↔ empty) in place: swap the pixbuf the
-    // draw func reads from its closure and queue_draw — no widget rebuild, no flash.
+    // Trash icon tracks trash contents (full ↔ empty) in place: hand the DockIcon the new
+    // pixbuf (it rebuilds its textures and redraws) — no widget rebuild, no flash.
     let unsubTrash: (() => void) | null = null
     if (appId === "trash" || appId === "special:trash") {
         const applyTrashIcon = () => {
@@ -378,7 +339,10 @@ export function DockItem(
                 }
                 if (path) {
                     const next = (GdkPixbuf as any).Pixbuf.new_from_file_at_scale(path, sourceSize, sourceSize, true)
-                    if (next) pixbuf = next
+                    if (next) {
+                        pixbuf = next
+                        if (child instanceof DockIcon) (child as DockIcon).setPixbuf(next)
+                    }
                 }
             } catch (e) { console.error("[Dock] trash icon swap failed:", e) }
             if (child instanceof Gtk.Image) (child as Gtk.Image).set_from_icon_name(r.name || "user-trash")
