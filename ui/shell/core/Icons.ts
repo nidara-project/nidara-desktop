@@ -65,14 +65,23 @@ export const iconAssetPath = (name: string) => `${DIR}/${name}-symbolic.svg`
  *     the only name that fitted them was `document-edit`, which one of them had
  *     to give up anyway.
  *
- * Not every name is in every theme, and that is fine — it is what the last link
- * is for. Measured by `scripts/dev/icon-registry-probe.sh` against Adwaita, the
- * theme every Arch install has: 78 of the 83 concepts resolve, and five fall
- * through to our drawing — `moon` (`system-suspend`), `panelTop`
- * (`view-top-pane`), `bluetoothConnected` (`bluetooth-paired`), `clipboardList`
- * (`format-list-unordered`), all four of which Papirus does carry, and `wifiCog`
- * (`network-wireless-configure`), which no theme has: the Naming Spec simply does
- * not name "configure THIS wireless network".
+ * 🔑 **`null` means there is no standard name for this concept, so no theme is
+ * ever asked and the drawing is always ours.** It is not a gap to fill in later.
+ * The Icon Naming Spec is from 2006 and simply does not name an AI assistant, a
+ * CPU chip, a dock, a clipboard history or a floating-window mode — and a theme
+ * asked for the nearest-sounding name answers with something that MEANS something
+ * else. The study had to give all 85 concepts a name, so it forced one: the
+ * assistant glyph was mapped to `system-help`, and picking Adwaita turned Nidara's
+ * AI into a question mark. Owner's rule, 2026-09-16: when there is no standard
+ * name, fall back to ours rather than to something "similar" from the theme.
+ *
+ * Not every real name is in every theme either, and that is fine — same last
+ * link. Measured by `scripts/dev/icon-registry-probe.sh` against Adwaita, the
+ * theme every Arch install has: 66 of the 83 concepts resolve to it and 17 fall
+ * through — the 11 `null`s, plus `moon` (`system-suspend`) and
+ * `bluetoothConnected` (`bluetooth-paired`), which it does not carry, and `check`,
+ * `settings`, `palette` and `mousePointer`, which it has ONLY as full-colour PNGs
+ * in `legacy/` — and `resolve` refuses anything that is not a symbolic SVG.
  *
  * ⚠️ Do NOT check that list by looking for files under a theme's directory. That
  * is how it was first written here and it was wrong in both directions: GTK
@@ -80,7 +89,7 @@ export const iconAssetPath = (name: string) => `${DIR}/${name}-symbolic.svg`
  * does not hold. Ask the resolver — that is what the probe is.
  */
 const CONCEPTS = {
-    app:                 ["window-new",                        "app-window"],
+    app:                 [null,                                "app-window"],
     mic:                 ["audio-input-microphone",            "mic"],
     speaker:             ["audio-speakers",                    "speaker"],
     volumeHigh:          ["audio-volume-high",                 "volume-2"],
@@ -92,8 +101,8 @@ const CONCEPTS = {
     userRoundPlus:       ["contact-new",                       "user-round-plus"],
     battery:             ["battery",                           "battery"],
     bluetooth:           ["bluetooth-active",                  "bluetooth"],
-    cpu:                 ["applications-system",               "cpu"],
-    hand:                ["help-about",                        "hand"],
+    cpu:                 [null,                                "cpu"],
+    hand:                [null,                                "hand"],
     hardDrive:           ["drive-harddisk",                    "hard-drive"],
     wifi:                ["network-wireless",                  "wifi"],
     ethernet:            ["network-wired",                     "ethernet-port"],
@@ -117,7 +126,7 @@ const CONCEPTS = {
     skipBack:            ["media-skip-backward",               "skip-back"],
     skipForward:         ["media-skip-forward",                "skip-forward"],
     wifiOff:             ["network-wireless-disabled",         "wifi-off"],
-    wifiCog:             ["network-wireless-configure",        "wifi-cog"],
+    wifiCog:             [null,                                "wifi-cog"],
     wifiHigh:            ["network-wireless-signal-ok",        "wifi-high"],
     wifiLow:             ["network-wireless-signal-weak",      "wifi-low"],
     wifiZero:            ["network-wireless-signal-none",      "wifi-zero"],
@@ -130,7 +139,7 @@ const CONCEPTS = {
     settings:            ["preferences-desktop",               "settings"],
     terminal:            ["utilities-terminal",                "terminal"],
     grid:                ["view-grid",                         "grid"],
-    sidebar:             ["view-paged",                        "sidebar"],
+    sidebar:             ["sidebar-show",                      "sidebar"],
     close:               ["window-close",                      "x"],
     lock:                ["system-lock-screen",                "lock"],
     logOut:              ["application-exit",                  "log-out"],
@@ -144,26 +153,26 @@ const CONCEPTS = {
     mousePointer:        ["preferences-desktop-peripherals",   "mouse-pointer"],
     zap:                 ["power-profile-performance",         "zap"],
     leaf:                ["power-profile-power-saver",         "leaf"],
-    dock:                ["user-desktop",                      "dock"],
+    dock:                [null,                                "dock"],
     accessibility:       ["preferences-desktop-accessibility", "accessibility"],
-    puzzle:              ["application-x-addon",               "puzzle"],
-    panelTop:            ["view-top-pane",                     "panel-top"],
-    rocket:              ["system-run",                        "rocket"],
+    puzzle:              [null,                                "puzzle"],
+    panelTop:            [null,                                "panel-top"],
+    rocket:              [null,                                "rocket"],
     bluetoothConnected:  ["bluetooth-paired",                  "bluetooth-connected"],
     bluetoothOff:        ["bluetooth-disabled",                "bluetooth-off"],
     bluetoothSearching:  ["bluetooth-acquiring",               "bluetooth-searching"],
     globe:               ["preferences-system-network",        "globe"],
-    clipboard:           ["edit-paste",                        "clipboard"],
-    clipboardList:       ["format-list-unordered",             "clipboard-list"],
+    clipboard:           [null,                                "clipboard"],
+    clipboardList:       [null,                                "clipboard-list"],
     camera:              ["camera-photo",                      "camera"],
     record:              ["media-record",                      "record"],
     recordStop:          ["media-playback-stop",               "record-stop"],
     shield:              ["network-vpn",                       "shield"],
     shieldOff:           ["network-vpn-disconnected",          "shield-off"],
-    sparkles:            ["system-help",                       "sparkles"],
+    sparkles:            [null,                                "sparkles"],
     music:               ["audio-x-generic",                   "music"],
     gamepad:             ["input-gaming",                      "gamepad-2"],
-} as const satisfies Record<string, readonly [standard: string, asset: string]>
+} as const satisfies Record<string, readonly [standard: string | null, asset: string]>
 
 export type IconConcept = keyof typeof CONCEPTS
 
@@ -247,7 +256,7 @@ const ICON_SIZE = 24
  */
 function resolve(concept: IconConcept): Gio.FileIcon {
     const [standard, asset] = CONCEPTS[concept]
-    if (interfaceTheme) {
+    if (standard && interfaceTheme) {
         const symbolic = `${standard}-symbolic`
         const name = interfaceTheme.has_icon(symbolic) ? symbolic
             : interfaceTheme.has_icon(standard) ? standard

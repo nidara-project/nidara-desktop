@@ -22,8 +22,11 @@
  * So this checks, mechanically:
  *
  *   1. every concept's shipped drawing exists on disk, under its `-symbolic` name;
- *   2. every concept names a standard icon, and no two concepts claim the same
- *      one — two concepts under one name is a theme that cannot tell them apart;
+ *   2. no two concepts claim the same standard name — two concepts under one name
+ *      is a theme that cannot tell them apart. A concept whose standard name is
+ *      `null` has none on purpose and is skipped: the Naming Spec has no word for
+ *      an AI assistant or a clipboard history, and a nearest-sounding substitute
+ *      means something else (#587);
  *   3. no shipped drawing is orphaned: a file in the asset directory that no
  *      concept points at is either dead weight or a concept somebody forgot to
  *      register.
@@ -62,9 +65,16 @@ if (!table) {
     process.exit(1)
 }
 
+// `null` in the standard slot is a decision, not a hole: the concept has no
+// standard name, so no theme is ever asked for it. Those rows are read and then
+// deliberately skipped by the name checks below.
 const concepts = []
-for (const m of table[1].matchAll(/^\s*(\w+):\s*\["([^"]+)",\s*"([^"]+)"\],/gm)) {
-    concepts.push({ concept: m[1], standard: m[2], asset: m[3] })
+for (const m of table[1].matchAll(/^\s*(\w+):\s*\[(null|"[^"]+"),\s*"([^"]+)"\],/gm)) {
+    concepts.push({
+        concept: m[1],
+        standard: m[2] === "null" ? null : m[2].slice(1, -1),
+        asset: m[3],
+    })
 }
 if (concepts.length === 0) {
     log(`icon-registry-check: the CONCEPTS table in ${REGISTRY} parsed as empty`)
@@ -86,9 +96,12 @@ for (const { concept, asset } of concepts) {
 log("\nNo two concepts claim the same standard name:")
 const byStandard = new Map()
 for (const { concept, standard } of concepts) {
+    if (standard === null) continue
     if (!byStandard.has(standard)) byStandard.set(standard, [])
     byStandard.get(standard).push(concept)
 }
+const ownOnly = concepts.filter(c => c.standard === null)
+if (ownOnly.length) pass(`${ownOnly.length} concepts have no standard name and are never asked of a theme: ${ownOnly.map(c => c.concept).join(", ")}`)
 for (const [standard, owners] of byStandard) {
     if (owners.length === 1) pass(`${standard} — ${owners[0]}`)
     else error(`${owners.join(", ")} all ask for "${standard}": an interface theme has one drawing for that name, so these concepts become indistinguishable the moment a theme is chosen.`)
@@ -115,6 +128,9 @@ if (themeFlag !== -1) {
     const SIZES = ["scalable/actions", "16x16/actions"]
     log(`\n${theme}: every concept resolves, in both size directories:`)
     for (const { concept, standard } of concepts) {
+        // A concept with no standard name is not asked of any theme, ours
+        // included — its drawing, already checked above, is the whole chain.
+        if (standard === null) continue
         // existsSync follows symlinks, which is what we want: the standard names
         // ARE symlinks, and a broken one is exactly the failure being hunted.
         const missing = SIZES.filter(s =>

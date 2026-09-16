@@ -7,10 +7,9 @@ alarm,alarm-clock,study
 application-certificate,file-badge,study
 application-exit,log-out,registry
 application-rss+xml,rss,study
-application-x-addon,puzzle,registry
+application-x-addon,puzzle,study
 applications-games,gamepad-2,study
 applications-graphics,palette,study
-applications-system,cpu,registry
 applications-utilities,wrench,study
 appointment-missed,calendar-x,study
 appointment-new,calendar-plus,study
@@ -79,7 +78,6 @@ edit-cut,scissors,study
 edit-delete,trash-2,study
 edit-find,search,study
 edit-find-replace,replace,study
-edit-paste,clipboard,registry
 edit-redo,redo-2,study
 edit-undo,undo-2,study
 emblem-default,check,registry
@@ -107,7 +105,6 @@ format-justify-center,align-center,study
 format-justify-fill,align-justify,study
 format-justify-left,align-left,study
 format-justify-right,align-right,study
-format-list-unordered,clipboard-list,registry
 format-text-bold,bold,study
 format-text-italic,italic,study
 format-text-plaintext,file-text,study
@@ -122,7 +119,7 @@ go-next,arrow-right,study
 go-previous,arrow-left,study
 go-top,arrow-up-to-line,study
 go-up,arrow-up,study
-help-about,hand,registry
+help-about,info,study
 help-browser,circle-help,study
 image-x-generic,image,study
 input-gaming,gamepad-2,registry
@@ -179,7 +176,6 @@ network-vpn-disconnected,shield-off,registry
 network-wired,ethernet-port,registry
 network-wireless,wifi,registry
 network-wireless-acquiring,wifi-sync,registry
-network-wireless-configure,wifi-cog,registry
 network-wireless-connected,wifi,study
 network-wireless-disabled,wifi-off,registry
 network-wireless-signal-none,wifi-zero,registry
@@ -222,15 +218,14 @@ radio-checked,circle-dot,study
 screen-shared,screen-share,study
 security-high,shield-check,study
 semi-starred,star-half,study
-sidebar-show,panel-left,study
+sidebar-show,sidebar,registry
 sidebar-show-right,panel-right,study
 starred,star,study
 system-file-manager,folder,study
-system-help,sparkles,registry
+system-help,circle-help,study
 system-lock-screen,lock,registry
 system-log-out,log-out,study
 system-reboot,rotate-ccw,registry
-system-run,rocket,registry
 system-search,search,registry
 system-shutdown,power,registry
 system-suspend,moon,registry
@@ -240,7 +235,6 @@ text-x-generic,file-text,study
 tools-check-spelling,spell-check,study
 tv,tv,study
 user-bookmarks,bookmark,study
-user-desktop,dock,registry
 user-home,home,study
 user-trash,trash,registry
 utilities-terminal,terminal,registry
@@ -257,14 +251,12 @@ view-list-bullet,list,study
 view-list-ordered,list-ordered,study
 view-more,more-vertical,study
 view-more-horizontal,more-horizontal,study
-view-paged,sidebar,registry
 view-pin,pin,study
 view-refresh,refresh-cw,study
 view-restore,minimize,study
 view-reveal,eye,study
 view-sort-ascending,list-sort-ascending,study
 view-sort-descending,list-sort-descending,study
-view-top-pane,panel-top,registry
 weather-clear,sun,study
 weather-clear-night,moon,study
 weather-few-clouds,cloud-sun,study
@@ -280,7 +272,6 @@ weather-tornado,tornado,study
 weather-windy,wind,study
 window-close,x,registry
 window-minimize,minus,study
-window-new,app-window,registry
 x-office-address-book,contact,study
 x-office-calendar,calendar,study
 x-office-document,file-text,study
