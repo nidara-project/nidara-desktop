@@ -151,6 +151,8 @@ export const ICON_NAMES = [
     "value-increase",
     "video-display",
     "view-grid",
+    "weather-clear",
+    "weather-clear-night",
     "window-close",
     "zoom-in",
     "zoom-out",
