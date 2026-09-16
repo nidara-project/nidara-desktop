@@ -229,12 +229,21 @@ try { watchSetting() } catch (e) { console.warn("[Icons] Interface icon theme se
 const ICON_SIZE = 24
 
 /**
- * The `Gio.FileIcon` for a concept: the interface theme's drawing when it has one
- * under the standard name, ours otherwise.
+ * The `Gio.FileIcon` for a concept: the interface theme's drawing when it has a
+ * SYMBOLIC one under the standard name, ours otherwise.
  *
  * `has_icon` is the test, not the lookup: `lookup_icon` never fails — it hands
  * back `image-missing` — so asking it whether a theme covers a name is asking
  * the wrong question.
+ *
+ * ⚠️ The resolved FILE has to end in `-symbolic.svg`, and that is checked rather
+ * than assumed. Asking a theme for the bare standard name is not the same
+ * question: Adwaita answers `emblem-default`, `preferences-desktop`,
+ * `preferences-desktop-theme` and `preferences-desktop-peripherals` out of its
+ * `legacy/` folder, with full-colour PNGs. A bitmap does not recolour and does
+ * not follow the dark/light mode, so the menu tick would have become a small
+ * coloured picture pinned to one palette. Anything that is not a symbolic SVG
+ * falls through to our own drawing, which is the whole point of having one.
  */
 function resolve(concept: IconConcept): Gio.FileIcon {
     const [standard, asset] = CONCEPTS[concept]
@@ -247,7 +256,8 @@ function resolve(concept: IconConcept): Gio.FileIcon {
             const paintable = interfaceTheme.lookup_icon(
                 name, null, ICON_SIZE, 1, Gtk.TextDirection.NONE, 0)
             const path = paintable?.get_file()?.get_path()
-            if (path && GLib.file_test(path, GLib.FileTest.EXISTS)) {
+            if (path && path.endsWith("-symbolic.svg")
+                && GLib.file_test(path, GLib.FileTest.EXISTS)) {
                 return Gio.FileIcon.new(Gio.File.new_for_path(path))
             }
         }
