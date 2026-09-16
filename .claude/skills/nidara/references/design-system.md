@@ -2198,6 +2198,14 @@ only when someone boots a VM). The `styles` job now compiles it too.
     `set_theme_name` accepts anything without looking, so a mistyped name silently resolves
     NOTHING and looks exactly like the setting never having been touched. The name is checked
     against `index.theme` on the search path before use, and a near-miss is named in the log.
+  - **a theme change reaches icons already on screen through `common/IconThemeRefresh.ts`,
+    not through the cache.** A `Gio.FileIcon` is one file; clearing the cache re-asks nobody, so
+    the first version of the Settings selector changed nothing until a restart. On change it
+    walks every toplevel (hidden ones too — Settings keeps its tree) and swaps each `Gtk.Image`
+    holding a file `uiIcon` ever handed out (`uiIconNameForFile`). An icon stored at MODULE
+    LOAD and turned into a widget later (a widget's catalogue `icon`, a config entry's slider
+    `icons`) is not in any tree yet — its consumer wraps it in `currentUiIcon(…)`. Store names,
+    not `uiIcon(…)` results, in anything new that outlives a theme change.
   Three more things that are easy to get wrong:
   - the interface theme is a **private `Gtk.IconTheme`**, never
     `Gtk.IconTheme.get_for_display()`. The display's theme belongs to APPLICATION icons (the dock,

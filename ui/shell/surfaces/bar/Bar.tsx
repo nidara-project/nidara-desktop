@@ -38,7 +38,7 @@ import { execAsync } from "../../../lib/process"
 import { t } from "../../core/i18n"
 import { barSettings, onBarSettingsChanged, resolveLauncherIcon, LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "./barState"
 import { dockSideState, dockSettings, onDockSettingsChanged } from "../dock/state"
-import { uiIcon } from "../../core/Icons"
+import { uiIcon, currentUiIcon } from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import hs from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
@@ -1083,7 +1083,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       const hasCCDetail = !!w.buildCCDetail
       const btn = menuRow({
         label: w.name,
-        icon: w.icon,
+        icon: currentUiIcon(w.icon),
         onClick: () => {
           // Same first refusal as a visible pill (see rebuildBarWidgets) — an
           // overflowed widget must not behave differently from a shown one.

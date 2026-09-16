@@ -432,7 +432,41 @@ export function uiIcon(name: IconName): Gio.FileIcon {
     if (hit) return hit
     const resolved = resolve(name)
     cache.set(name, resolved)
+    const path = resolved.get_file().get_path()
+    if (path) handedOut.set(path, name)
     return resolved
+}
+
+/**
+ * Every file `uiIcon` has ever answered with, and the name it answered for.
+ *
+ * Never cleared, on purpose: it is what lets an icon resolved under the PREVIOUS
+ * theme be recognised after a change, when the cache no longer knows it. It is
+ * bounded by concepts × themes the user has tried in one session.
+ */
+const handedOut = new Map<string, IconName>()
+
+/**
+ * The name behind a file `uiIcon` handed out, or null if it never did.
+ * What `common/IconThemeRefresh.ts` uses to find the icons already on screen.
+ */
+export function uiIconNameForFile(path: string): IconName | null {
+    return handedOut.get(path) ?? null
+}
+
+/**
+ * `icon` as the CURRENT theme draws it — for an icon captured once, at module load,
+ * and turned into a widget later (a widget's catalogue icon, a slider's end icons).
+ *
+ * ⚠️ A `Gio.FileIcon` is one file and cannot change, so anything that stored
+ * `uiIcon(…)` keeps the old theme's drawing forever. Icons already inside a widget
+ * are swapped by `common/IconThemeRefresh.ts`; this is for the ones that are not in
+ * a widget YET. Anything that is not ours passes through untouched.
+ */
+export function currentUiIcon<T extends Gio.FileIcon | null | undefined>(icon: T): T {
+    const path = icon?.get_file().get_path()
+    const name = path ? handedOut.get(path) : undefined
+    return (name ? uiIcon(name) : icon) as T
 }
 
 export type IconGIcon = Gio.FileIcon

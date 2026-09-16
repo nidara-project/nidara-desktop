@@ -27,6 +27,7 @@ import { configLocations } from "./surfaces/settings/configLocations"
 import { initReduceMotion } from "./core/ReduceMotion"
 import { fireSessionStartedOnce, initBatteryLowHook } from "./core/Hooks"
 import { bindCursorThemeRefresh } from "./common/CursorRefresh"
+import { bindInterfaceIconRefresh } from "./common/IconThemeRefresh"
 import hyprlandState from "./core/HyprlandState"
 import queryUI from "./core/UITree"
 import Wallpaper from "./core/WallpaperManager"
@@ -1119,6 +1120,9 @@ app.start({
     // A new cursor theme/size never reaches the cursor already on screen — Hyprland
     // reloads the theme but never re-issues the shape. See common/CursorRefresh.ts.
     bindCursorThemeRefresh(Theme)
+    // Same for a new interface icon theme: nothing re-asks a widget for its icon.
+    // See common/IconThemeRefresh.ts.
+    bindInterfaceIconRefresh()
 
     // Note: the nidara-bar/dock blur layer rules live in hyprland.lua
     // (hl.layer_rule). They used to be re-applied here via `hyprctl keyword`,
