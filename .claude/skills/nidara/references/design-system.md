@@ -2165,6 +2165,26 @@ only when someone boots a VM). The `styles` job now compiles it too.
   (found live, corrected same day). Cairo-drawing a glyph means picking its colour is now on you;
   default to mode-aware white/black (`Theme.isDark`) like `--nidara-text`, and only reach for
   live accent when the glyph sits on the shell's own neutral glass, not on another accent fill.
+- **`core/Icons.ts` is a CONCEPT registry, not a list of files (#587).** Each entry is
+  `concept: ["standard-icon-name", "our-shipped-drawing"]`, and `Icons.<concept>` resolves that
+  chain: the user's INTERFACE icon theme first (GSettings `org.nidara.appearance
+  interface-icon-theme`, empty by default), our own drawing as the last link. Adding an icon means
+  adding a concept with a name from the freedesktop Icon Naming Spec — **not** dropping an SVG in
+  and pointing at it. Three things that are easy to get wrong:
+  - the interface theme is a **private `Gtk.IconTheme`**, never
+    `Gtk.IconTheme.get_for_display()`. The display's theme belongs to APPLICATION icons (the dock,
+    the tray, the app grid) and it **refuses `set_theme_name` outright** — it is a singleton
+    (`assertion '!self->is_display_singleton' failed`). GTK gives one theme per process and these
+    are the two the shell needs at once. Route A of the #587 prototype — putting the interface
+    theme on the display — was measured to change the art of 57 of 72 real app icons.
+  - **no two concepts may claim one standard name.** A theme has one drawing per name, so a shared
+    name makes both concepts the same glyph the moment a theme is chosen.
+    `scripts/ci/icon-registry-check.mjs` fails on that, on a concept whose drawing is missing, and
+    on a drawing no concept points at.
+  - **do not check a theme's coverage by looking for files in its directory.** GTK resolves through
+    `Inherits`, so it finds names the directory does not hold, and misses some it does. Ask the
+    resolver: `scripts/dev/icon-registry-probe.sh [theme]` runs the real module off-screen under
+    `cage` and prints where every concept landed, with a control run that must disagree.
 - **NEVER put `nd-icon` on a third-party APP icon** — only on our own monochrome UI glyphs.
   `.nd-icon` is `-gtk-icon-filter: invert(1)`, an unconditional invert; on full-colour app artwork
   it hands back a photo negative. This has now been found three separate times (the notification

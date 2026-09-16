@@ -424,6 +424,12 @@ jobs:
       # gives the user a documented directory that can only stay empty.
       - name: User-hook events declared == events fired (must succeed)
         run: node scripts/ci/hook-events-check.mjs
+      # The interface-icon chain must never end in a gap. A concept whose shipped
+      # drawing is gone, or two concepts sharing one standard name, costs a glyph
+      # with no error anywhere — GTK hands back image-missing and the surface just
+      # draws a hole. The check caught four shared names on its first run.
+      - name: Every interface-icon concept can be drawn (must succeed)
+        run: node scripts/ci/icon-registry-check.mjs
 
   i18n:
     name: Translations (parity + ledger)

@@ -326,6 +326,19 @@
       <default>"system"</default>
       <summary>The shell's own skin: follow the system mode, or pin it dark or light</summary>
     </key>
+    <!--
+      The icon theme Nidara's OWN surfaces draw from (#587) — a different thing
+      from org.gnome.desktop.interface icon-theme, which is the theme for
+      APPLICATION icons and is what the dock, the tray and the app grid resolve
+      against. Empty means the drawings shipped with the shell, which is the
+      default and what every install has today. Not served by the portal yet:
+      the greeter and the lock screen still carry their own copies of these
+      icons (ui/lib/icons.ts), and they join when the migration reaches them.
+    -->
+    <key name="interface-icon-theme" type="s">
+      <default>""</default>
+      <summary>Icon theme for Nidara's own interface icons; empty = the shipped drawings</summary>
+    </key>
   </schema>
 
   <!--
