@@ -1207,7 +1207,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   //   (Centring on the allocation boxes gives 40, which looks pegged-right because both draw narrower.)
   // The gap is a plain 16px spacer that just reserves the width (no shift when the dot shows/hides).
   // Detail + Stop/kill-switch live in the CC banner. Badge can_target:false → clicks hit the capsule.
-  const ccGear = new Gtk.Image({ gicon: uiIcon("emblem-system"), pixel_size: 16, margin_start: 16, css_classes: ["nd-icon"] })
+  const ccGear = new Gtk.Image({ gicon: uiIcon("preferences-system"), pixel_size: 16, margin_start: 16, css_classes: ["nd-icon"] })
   const ccInner = new Gtk.Box({ valign: Gtk.Align.CENTER })
   ccInner.append(ccGear)
   ccInner.append(new Gtk.Box({ width_request: 16 }))   // reserve the right gap → capsule stays 48px
