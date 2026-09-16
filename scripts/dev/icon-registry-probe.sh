@@ -18,16 +18,29 @@
 # The display is `cage` with wlroots' headless backend — GTK4 starts and resolves
 # icons for real, and nothing appears on the user's screen.
 #
-# Usage: scripts/dev/icon-registry-probe.sh [theme-name]
-#   theme-name defaults to Adwaita, which every Arch install has.
+# Usage: scripts/dev/icon-registry-probe.sh [theme-name | theme-directory]
+#   Defaults to Adwaita, which every Arch install has. Given a DIRECTORY instead,
+#   it puts that theme on a private XDG_DATA_HOME and asks for it by its directory
+#   name — which is how you check a theme you have just built without installing
+#   it anywhere.
 #
 # Needs: gjs, esbuild, cage, glib-compile-schemas. No display of your own.
 set -euo pipefail
 
-theme="${1:-Adwaita}"
+arg="${1:-Adwaita}"
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
 work="$(mktemp -d -t nidara-icon-probe-XXXXXX)"
 trap 'rm -rf "$work"' EXIT
+
+if [ -d "$arg" ]; then
+    theme="$(basename "$(cd "$arg" && pwd)")"
+    mkdir -p "$work/data/icons"
+    ln -s "$(cd "$arg" && pwd)" "$work/data/icons/$theme"
+    data_home="$work/data"
+else
+    theme="$arg"
+    data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+fi
 
 "$repo/scripts/bundle.sh" --js "$repo/scripts/dev/icon-registry-probe.ts" "$work/probe.js" >/dev/null
 
@@ -47,6 +60,7 @@ glib-compile-schemas "$work/schemas"
 run() {  # run <theme-name>
     env -u WAYLAND_DISPLAY -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS \
         XDG_CONFIG_HOME="$work/config" XDG_RUNTIME_DIR="$work/runtime" \
+        XDG_DATA_HOME="$data_home" \
         GSETTINGS_SCHEMA_DIR="$work/schemas" GIO_USE_VFS=local \
         NIDARA_SHELL_ROOT="$repo/ui/shell" \
         WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 \

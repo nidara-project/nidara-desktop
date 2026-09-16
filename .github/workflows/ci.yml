@@ -431,6 +431,33 @@ jobs:
       - name: Every interface-icon concept can be drawn (must succeed)
         run: node scripts/ci/icon-registry-check.mjs
 
+  icons:
+    name: Icon theme builds and covers the registry
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      # The theme is BUILT, never committed: 1839 drawings in two sizes is not a
+      # diff anybody can read, and the source is a pinned npm package anyway.
+      # This installs exactly that package — the same one install.sh and the
+      # PKGBUILD build from — so CI is checking the artefact users get.
+      - name: Fetch the pinned lucide-static
+        run: npm install --no-save --prefix ui/shell "lucide-static@$(node -p "require('./ui/shell/package.json').devDependencies['lucide-static']")"
+      - name: Build the theme
+        run: python3 scripts/icons/build-icon-theme.py --src ui/shell/node_modules/lucide-static --out "$RUNNER_TEMP/nidara-symbolic"
+      # Twice, into different trees, and they must be byte-identical. A generator
+      # that is not deterministic makes every rebuild a diff nobody can review,
+      # and hides a real change inside the noise.
+      - name: The build is deterministic (must succeed)
+        run: |
+          python3 scripts/icons/build-icon-theme.py --src ui/shell/node_modules/lucide-static --out "$RUNNER_TEMP/again" --quiet
+          diff -r "$RUNNER_TEMP/nidara-symbolic" "$RUNNER_TEMP/again"
+      - name: Every concept resolves in the theme, in both sizes (must succeed)
+        run: node scripts/ci/icon-registry-check.mjs --theme "$RUNNER_TEMP/nidara-symbolic"
+
   i18n:
     name: Translations (parity + ledger)
     runs-on: ubuntu-latest

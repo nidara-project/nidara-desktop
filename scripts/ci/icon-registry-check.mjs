@@ -2,7 +2,7 @@
 /*
  * icon-registry-check — every interface-icon concept can still be drawn.
  *
- *   node scripts/ci/icon-registry-check.mjs
+ *   node scripts/ci/icon-registry-check.mjs [--theme <built theme dir>]
  *
  * ── Why this exists ──────────────────────────────────────────────────────────
  *
@@ -28,9 +28,16 @@
  *      concept points at is either dead weight or a concept somebody forgot to
  *      register.
  *
- * It deliberately does NOT check the standard names against Adwaita. Seven of
+ * It deliberately does NOT check the standard names against Adwaita. Several of
  * them are not in Adwaita at all (see the registry's comment), and that is fine:
  * that is what the shipped drawing is for. What must hold is (1).
+ *
+ * With `--theme <dir>` it also checks a BUILT theme — the one
+ * `scripts/icons/build-icon-theme.py` produces. That theme is Nidara's own, so
+ * for it "the shipped drawing catches it" is not an excuse: every concept must
+ * resolve there, in BOTH size directories. The second half matters on its own —
+ * the icon study's first alias pass wrote the standard names only into
+ * `scalable/`, and at 16px GTK then silently drew the thin variant.
  */
 
 import { readFileSync, readdirSync, existsSync } from "node:fs"
@@ -93,6 +100,26 @@ for (const file of files) {
     error(`${file}.svg is in ${ASSETS} but no concept points at it — either dead weight to delete, or a concept missing from the registry.`)
 }
 if (files.every(f => used.has(f))) pass(`${files.length} files, all registered`)
+
+// ── 5. A built theme covers every concept, in both sizes ─────────────────────
+const themeFlag = process.argv.indexOf("--theme")
+if (themeFlag !== -1) {
+    const theme = process.argv[themeFlag + 1]
+    if (!theme) {
+        log("icon-registry-check: --theme needs a directory")
+        process.exit(1)
+    }
+    const SIZES = ["scalable/actions", "16x16/actions"]
+    log(`\n${theme}: every concept resolves, in both size directories:`)
+    for (const { concept, standard } of concepts) {
+        // existsSync follows symlinks, which is what we want: the standard names
+        // ARE symlinks, and a broken one is exactly the failure being hunted.
+        const missing = SIZES.filter(s =>
+            !existsSync(join(theme, s, `${standard}-symbolic.svg`)))
+        if (missing.length === 0) pass(`${concept} → ${standard}-symbolic.svg`)
+        else error(`${concept} asks for "${standard}", which the theme does not carry in ${missing.join(" and ")}. Nidara's own theme is the end of the chain — a gap here is a glyph nobody can supply.`)
+    }
+}
 
 if (failed) {
     log("\nicon-registry-check: FAILED")

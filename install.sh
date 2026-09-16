@@ -540,6 +540,27 @@ sudo cp "$REPO_DIR/ui/shell/style.css" /usr/share/nidara/ui/shell/
 sudo rm -rf /usr/share/nidara/ui/shell/assets
 sudo cp -r "$REPO_DIR/ui/shell/assets" /usr/share/nidara/ui/shell/
 
+# Nidara's own symbolic icon theme (#587), built from the pinned lucide-static
+# that §3's `npm install` already fetched. It goes to /usr/share/icons like any
+# other theme, because that is where a theme has to be for the user to be able to
+# CHOOSE it — and for the greeter and lock screen, which run outside the session,
+# to find it. Empty `interface-icon-theme` still means the drawings inside
+# assets/, so installing this changes nothing until it is picked.
+LUCIDE_SRC="$REPO_DIR/ui/shell/node_modules/lucide-static"
+if [ -d "$LUCIDE_SRC/icons" ]; then
+    ICON_THEME_TMP="$(mktemp -d)"
+    if python3 "$REPO_DIR/scripts/icons/build-icon-theme.py" \
+            --src "$LUCIDE_SRC" --out "$ICON_THEME_TMP/nidara-symbolic" --quiet; then
+        sudo rm -rf /usr/share/icons/nidara-symbolic
+        sudo cp -r "$ICON_THEME_TMP/nidara-symbolic" /usr/share/icons/
+    else
+        echo "  WARNING: the icon theme did not build — the shell falls back to its own drawings"
+    fi
+    rm -rf "$ICON_THEME_TMP"
+else
+    echo "  WARNING: lucide-static is not installed; skipping the icon theme"
+fi
+
 # Greeter bundle + style
 sudo mkdir -p /usr/share/nidara/ui/greeter/build
 sudo cp "$REPO_DIR/ui/greeter/build/nidara-greeter" /usr/share/nidara/ui/greeter/build/

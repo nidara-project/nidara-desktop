@@ -17,6 +17,6 @@
     "tabWidth": 2
   },
   "devDependencies": {
-    "lucide-static": "^1.11.0"
+    "lucide-static": "1.46.0"
   }
 }

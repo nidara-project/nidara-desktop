@@ -39,7 +39,7 @@
 # `gnome` is in Arch. ⚠️ Do NOT create it while the `replaces=(nidara)` below is
 # still doing its job: a package named `nidara` and a package replacing `nidara`
 # in the same repository is a resolution somebody's `-Syu` has to guess at.
-pkgname=(nidara-desktop nidara-installer)
+pkgname=(nidara-desktop nidara-installer nidara-icon-theme)
 pkgver=0.12.1
 pkgrel=1
 pkgdesc="Nidara — a fluid, glassmorphic desktop environment (Hyprland + GTK4/GJS)"
@@ -244,10 +244,27 @@ build() {
   # libnidara-auth: PAM authentication for the lockscreen, reachable
   # from GJS via introspection (mirrors install.sh §5)
   lib/nidara-auth/build.sh "$srcdir/nidara-desktop-$pkgver/build/nidara-auth"
+
+  # The symbolic icon theme (#587), built from the lucide-static that `npm
+  # install` above already fetched — pinned to an exact version in
+  # ui/shell/package.json, because an icon theme whose drawings change with the
+  # phase of the moon is not a theme anybody can rely on. Not committed: 1839
+  # drawings in two sizes is not a diff a human reviews.
+  python3 scripts/icons/build-icon-theme.py \
+    --src ui/shell/node_modules/lucide-static \
+    --out "$srcdir/nidara-desktop-$pkgver/build/nidara-symbolic"
 }
 
 package_nidara-desktop() {
   install=nidara.install
+  # OPTIONAL, not a hard dep, and deliberately so while the shell still carries
+  # its own drawings inside assets/: `interface-icon-theme` defaults to empty, the
+  # chain ends at those, and a desktop without the theme installed looks exactly
+  # like one with it. It also keeps install.sh's `makepkg --pkg nidara-desktop`
+  # installable on its own — that path builds ONE package and hands it to
+  # `pacman -U`, which would refuse a dependency nothing produced. This becomes a
+  # real `depends` when the migration takes the drawings out of assets/ (#587).
+  optdepends=('nidara-icon-theme: Nidara Symbolic, the interface icon theme')
   backup=(etc/xdg-desktop-portal/hyprland-portals.conf
           etc/pam.d/nidara-lock)
   # The rename dance, and all three are load-bearing:
@@ -439,4 +456,24 @@ package_nidara-installer() {
   install -Dm644 ui/installer/style.css "$pkgdir/usr/share/nidara/ui/installer/style.css"
   install -Dm644 packaging/nidara-installer/nidara-installer.desktop \
     "$pkgdir/usr/share/applications/nidara-installer.desktop"
+}
+
+# The icon theme is its own package for two reasons, neither of them size. Its
+# LICENCE is not ours — the drawings are Lucide's (ISC, with MIT for the part
+# inherited from Feather) and a package carries one licence field. And it belongs
+# in /usr/share/icons, where a theme has to be for anyone to CHOOSE it, and where
+# the greeter and the lock screen can reach it from outside any session.
+package_nidara-icon-theme() {
+  pkgdesc="Nidara Symbolic — the desktop's own interface icon theme, built from Lucide"
+  arch=(any)
+  license=(ISC MIT)
+  depends=()
+
+  cd "$srcdir/nidara-desktop-$pkgver"
+  # cp -r, not `install`: the theme is mostly relative SYMLINKS (one drawing, many
+  # names), and `install -D` would silently expand every one of them into a full
+  # copy — the same tree, three times the size.
+  install -dm755 "$pkgdir/usr/share/icons"
+  cp -r build/nidara-symbolic "$pkgdir/usr/share/icons/nidara-symbolic"
+  chmod -R u=rwX,go=rX "$pkgdir/usr/share/icons/nidara-symbolic"
 }

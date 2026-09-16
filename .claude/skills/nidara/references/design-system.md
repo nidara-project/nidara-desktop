@@ -2183,8 +2183,30 @@ only when someone boots a VM). The `styles` job now compiles it too.
     on a drawing no concept points at.
   - **do not check a theme's coverage by looking for files in its directory.** GTK resolves through
     `Inherits`, so it finds names the directory does not hold, and misses some it does. Ask the
-    resolver: `scripts/dev/icon-registry-probe.sh [theme]` runs the real module off-screen under
-    `cage` and prints where every concept landed, with a control run that must disagree.
+    resolver: `scripts/dev/icon-registry-probe.sh [theme | theme-dir]` runs the real module
+    off-screen under `cage` and prints where every concept landed, with a control run that must
+    disagree.
+- **The shipped theme is BUILT, never committed.** `scripts/icons/build-icon-theme.py` turns the
+  pinned `lucide-static` (exact version in `ui/shell/package.json` — a theme whose drawings move
+  under it is not a theme) into `nidara-symbolic`: 1839 drawings, ~15 MB, freedesktop names from
+  `scripts/icons/aliases.csv`, in `scalable/actions` **and** `16x16/actions`. `install.sh` builds it
+  into `/usr/share/icons`, the PKGBUILD ships it as the separate `nidara-icon-theme` package (its
+  licence is Lucide's ISC/MIT, not our GPL), and CI rebuilds it twice to prove the build is
+  deterministic. Three things the generator exists to get right:
+  - **symbolic classes, from the EFFECTIVE fill.** A shape's own `fill`, else the root's — which is
+    where `record-stop` keeps it. `foreground-stroke` only when the stroke is `currentColor`, so
+    `record`'s filled dot (which carries `stroke="none"`) does not get GTK's forced 2-unit stroke
+    laid over it. Without classes, a stroke-only icon renders as a filled blob.
+  - **the 16-unit variant, for a real 2px stroke in the bar.** GTK forces symbolic strokes to 2 SVG
+    *user units*, so a 24-unit drawing at 16px strokes 1.33px. A `<g transform="scale(…)">` does
+    NOT fix it — the stroke scales too; the coordinates have to be rewritten.
+    ⚠️ Measured: that variant only wins at **12–16px, scale 1**. At 18px, and at every size on a
+    scale-2 display, GTK takes the scalable one. `Type=Threshold` does not widen the band (tried,
+    no effect). Nidara's own drawings go in `scripts/icons/nidara/` and win over Lucide's.
+  - **aliases in BOTH size directories.** The study's first pass wrote the standard names only into
+    `scalable/`, so at 16px GTK silently drew the thin variant. The generator refuses to finish
+    with a broken link, and `icon-registry-check.mjs --theme <dir>` fails if any concept is missing
+    from either size.
 - **NEVER put `nd-icon` on a third-party APP icon** — only on our own monochrome UI glyphs.
   `.nd-icon` is `-gtk-icon-filter: invert(1)`, an unconditional invert; on full-colour app artwork
   it hands back a photo negative. This has now been found three separate times (the notification
