@@ -2171,7 +2171,10 @@ only when someone boots a VM). The `styles` job now compiles it too.
   live accent when the glyph sits on the shell's own neutral glass, not on another accent fill.
 - **Interface icons are asked for by STANDARD NAME, and there is only one name (#587).**
   `uiIcon("network-wireless")` looks for that name in the user's interface icon theme (GSettings
-  `org.nidara.appearance interface-icon-theme`, empty by default) and then in our own
+  `org.nidara.appearance interface-icon-theme`, empty by default — chosen in Settings →
+  Appearance → *Interface icons*, config key `appearance.interfaceIconTheme`, where the empty
+  value is spelled `nidara` and `nidara-symbolic` is left off the list because it IS our drawings,
+  packaged) and then in our own
   `assets/icons/hicolor/scalable/actions/network-wireless-symbolic.svg` — the same name, two
   places. Nothing translates anything: `core/Icons.ts` holds `ICON_NAMES`, a flat LIST that exists
   only so the compiler can refuse a name we do not ship. Adding an icon means adding a name and a

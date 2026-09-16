@@ -241,6 +241,12 @@ function setInterfaceTheme(name: string) {
     cache.clear()
 }
 
+/** The setting, once it has been opened — null on a schema that predates the key. */
+let settings: InstanceType<typeof Gio.Settings> | null = null
+
+/** Everyone listening for a change of interface theme (Settings' row, `describeConfig`). */
+const listeners = new Set<(name: string) => void>()
+
 /**
  * Follow the setting. The key is Nidara's own (#573 keeps the keys the desktop
  * standard does not name in `org.nidara.appearance`); an install whose schema
@@ -250,14 +256,40 @@ function setInterfaceTheme(name: string) {
 function watchSetting() {
     const source = Gio.SettingsSchemaSource.get_default()
     if (!source?.lookup(APPEARANCE_SCHEMA, true)?.has_key(THEME_KEY)) return
-    const settings = new Gio.Settings({ schema_id: APPEARANCE_SCHEMA })
-    setInterfaceTheme(settings.get_string(THEME_KEY))
-    settings.connect(`changed::${THEME_KEY}`, () => {
-        setInterfaceTheme(settings.get_string(THEME_KEY))
+    const s = new Gio.Settings({ schema_id: APPEARANCE_SCHEMA })
+    settings = s
+    setInterfaceTheme(s.get_string(THEME_KEY))
+    s.connect(`changed::${THEME_KEY}`, () => {
+        setInterfaceTheme(s.get_string(THEME_KEY))
         console.log(`[Icons] Interface icon theme: ${themeName || "(none — shipped drawings)"}`)
+        for (const cb of listeners) cb(themeName)
     })
 }
 try { watchSetting() } catch (e) { console.warn("[Icons] Interface icon theme setting unreadable:", e) }
+
+/**
+ * The interface icon theme as the user CHOSE it — `""` for our own drawings.
+ *
+ * ⚠️ Not what is drawing: a chosen theme that is not installed still reads back
+ * here (see `setInterfaceTheme`), because the value is the user's and the row
+ * has to keep saying what was picked.
+ */
+export const interfaceIconTheme = (): string => themeName
+
+/** Choose the interface icon theme; `""` goes back to our own drawings. */
+export function setInterfaceIconTheme(name: string) {
+    if (!settings) {
+        console.warn("[Icons] Interface icon theme cannot be set: this install's schema has no interface-icon-theme key.")
+        return
+    }
+    settings.set_string(THEME_KEY, name)
+}
+
+/** Call `cb` with the theme name whenever it changes, from anywhere. Returns the unsubscribe. */
+export function onInterfaceIconThemeChange(cb: (name: string) => void): () => void {
+    listeners.add(cb)
+    return () => { listeners.delete(cb) }
+}
 
 /**
  * The size the theme lookup asks for — deliberately far larger than anything we
