@@ -387,7 +387,7 @@ function buildClipboardContent(onClose: () => void): Gtk.Widget {
 // ── Bar content ───────────────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    return new Gtk.Image({ gicon: uiIcon("nd-clipboard"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+    return new Gtk.Image({ gicon: uiIcon("edit-paste"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
 }
 
 function buildBarExpanded(onClose: () => void): Gtk.Widget {
@@ -408,12 +408,12 @@ function buildCCDetail(onClose: () => void): Gtk.Widget {
 function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
         const box = new Gtk.Box({ hexpand: true, vexpand: true })
-        box.append(new Gtk.Image({ gicon: uiIcon("nd-clipboard"), pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] }))
+        box.append(new Gtk.Image({ gicon: uiIcon("edit-paste"), pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] }))
         return box
     }
 
     // Action tile (no on/off state) → no status subtitle; just the name.
-    return makeCapsuleTile(() => uiIcon("nd-clipboard"), () => t("widget.clipboard.name"), () => "", undefined, budget)
+    return makeCapsuleTile(() => uiIcon("edit-paste"), () => t("widget.clipboard.name"), () => "", undefined, budget)
 }
 
 // ── Widget registration ────────────────────────────────────────────────────────
@@ -423,7 +423,7 @@ const clipboardWidget: AtomicWidget = {
     category: "utilities",
     barOrder: 40,
     name: t("widget.clipboard.name"),
-    icon: uiIcon("nd-clipboard"),
+    icon: uiIcon("edit-paste"),
     locations: ["bar", "cc"],
     defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.WIDE,

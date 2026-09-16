@@ -79,6 +79,7 @@ edit-cut,scissors,study
 edit-delete,trash-2,study
 edit-find,search,study
 edit-find-replace,replace,study
+edit-paste,clipboard,registry
 edit-redo,redo-2,study
 edit-undo,undo-2,study
 emblem-default,check,registry
