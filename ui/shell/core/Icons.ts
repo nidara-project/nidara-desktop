@@ -1,6 +1,9 @@
 import Gio from "gi://Gio"
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
+import Gdk from "gi://Gdk?version=4.0"
+import Gsk from "gi://Gsk"
+import Graphene from "gi://Graphene"
 import { SHELL_ROOT } from "./Paths"
 
 /**
@@ -296,6 +299,73 @@ const ICON_SIZE = 512
  * coloured picture pinned to one palette. Anything that is not a symbolic SVG
  * falls through to our own drawing, which is the whole point of having one.
  */
+let inkTestFailed = false
+
+/**
+ * Does this icon actually put ink on the screen?
+ *
+ * ⚠️ Measured, GTK 4.22.5: a theme can ship a perfectly valid `*-symbolic.svg`
+ * that GTK resolves, reports as symbolic, and then draws as NOTHING. It happens
+ * when the drawing hangs off a `<g transform="translate(…)">` and the file has no
+ * `viewBox`: the symbolic path of GTK's own SVG renderer drops the group's matrix,
+ * the geometry lands hundreds of units outside the 16-unit viewport, and the clip
+ * leaves an empty square. The same file through `new_from_file` (librsvg) draws
+ * correctly, so it is the pipeline, not the file. Upstream: GNOME/gtk#7834.
+ *
+ * Across the ten independent theme families measured for #587 this hits **two** of
+ * them — Suru++ (12 of our concepts: battery, wi-fi, terminal, disks…) and La
+ * Capitaine (5: audio, wi-fi). Without this test the user picks one of those and
+ * silently loses those icons, with nothing in the log.
+ *
+ * 🔑 The test is the RENDER, not the file's shape. Flagging the structure instead
+ * (a `<g transform>` and no `viewBox`) catches all 17 real holes — and also 59
+ * icons that draw perfectly, 36 of them in Arc alone, which would then be replaced
+ * by ours for no reason. Neither does the size of the translation separate them:
+ * holes span 2–1073 units, healthy ones 0–3221. Only drawing it tells.
+ *
+ * Cost: 0.21 ms per icon, once per concept per theme, behind the same cache as
+ * the lookup. Fails OPEN — if the renderer cannot be had, the theme's icon is
+ * used, because a broken instrument must not cost the user their whole theme.
+ */
+function drawsInk(icon: Gio.FileIcon, theme: Gtk.IconTheme): boolean {
+    if (inkTestFailed) return true
+    // ⚠️ The renderer is built and torn down per call, and the `unrealize()` lives
+    // in a `finally`. A realized `GskRenderer` that reaches disposal aborts the
+    // process outright — `gsk_renderer_dispose: assertion failed (!is_realized)`
+    // is a `g_error`, not a warning, so it takes the shell with it. Keeping one
+    // alive for the session cost nothing in speed (0.21 ms per icon either way)
+    // and cost the whole process on exit: the first version of this did exactly
+    // that and the off-screen probe died with SIGABRT after resolving, with no
+    // message, before it could print a single result.
+    let renderer: Gsk.Renderer | null = null
+    try {
+        const paintable = theme.lookup_by_gicon(icon, 16, 1, Gtk.TextDirection.NONE, 0)
+        const snapshot = Gtk.Snapshot.new()
+        paintable.snapshot_symbolic(snapshot, 16, 16,
+            [new Gdk.RGBA({ red: 1, green: 1, blue: 1, alpha: 1 })])
+        const node = snapshot.to_node()
+        // No node at all is the clearest possible empty: nothing was recorded.
+        if (!node) return false
+        // The viewport is given explicitly: a hole's node measures 0×0, and
+        // `render_texture` refuses a zero-sized one rather than reporting empty.
+        renderer = Gsk.CairoRenderer.new()
+        renderer.realize(null)
+        const texture = renderer.render_texture(node, Graphene.Rect.alloc().init(0, 0, 16, 16))
+        const downloaded = new Gdk.TextureDownloader(texture).download_bytes()
+        const bytes = Array.isArray(downloaded) ? downloaded[0] : downloaded
+        const data = bytes.get_data()
+        if (!data) return true
+        for (let i = 3; i < data.length; i += 4) if (data[i] > 0) return true
+        return false
+    } catch (e) {
+        console.warn("[Icons] Ink test unavailable, taking theme icons as drawn:", e)
+        inkTestFailed = true
+        return true
+    } finally {
+        renderer?.unrealize()
+    }
+}
+
 function resolve(name: IconName): Gio.FileIcon {
     // An `nd-` name is ours by definition — asking a theme for it would only ever
     // hit something that happened to share the name.
@@ -310,7 +380,9 @@ function resolve(name: IconName): Gio.FileIcon {
             const path = paintable?.get_file()?.get_path()
             if (path && path.endsWith("-symbolic.svg")
                 && GLib.file_test(path, GLib.FileTest.EXISTS)) {
-                return Gio.FileIcon.new(Gio.File.new_for_path(path))
+                const themed = Gio.FileIcon.new(Gio.File.new_for_path(path))
+                // Resolving is not the same as drawing — see drawsInk.
+                if (drawsInk(themed, interfaceTheme)) return themed
             }
         }
     }
