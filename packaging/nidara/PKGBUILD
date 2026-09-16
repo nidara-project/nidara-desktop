@@ -175,6 +175,12 @@ depends=(
 makedepends=(
   nodejs npm esbuild wlr-protocols wayland-protocols hyprland-protocols
   wayland gtk4 gobject-introspection pkgconf
+  # python: build() runs scripts/icons/build-icon-theme.py to produce
+  # nidara-icon-theme. Not optional and not implied — nidara-repo's container
+  # builds with `makepkg --nodeps` and installs exactly what the PKGBUILDs
+  # declare, so an undeclared interpreter fails at PUBLISH time, not here.
+  # (v0.7.0 died mid-release on a hyprland-protocols omission of this shape.)
+  python
 )
 # etc/pam.d/nidara-lock is tracked so a local customization survives an upgrade —
 # this is where someone adds fprintd or a hardware key to the unlock stack.
