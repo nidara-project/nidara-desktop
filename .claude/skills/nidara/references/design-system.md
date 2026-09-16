@@ -2182,6 +2182,11 @@ only when someone boots a VM). The `styles` job now compiles it too.
     study mapped the assistant to `system-help`, so picking Adwaita turned Nidara's AI into a
     question mark. Use a standard name when one exists, `nd-` when none does, and never `nd-` for
     something the desktop already names — CI fails on that.
+  - **the lookup asks for size 512, on purpose.** A `Gio.FileIcon` is one file, so the size decides
+    WHICH of a theme's variants we get, and fixed-size directories are often drawn with padding —
+    Colloid's `status/24` icons fill 63% of their box against 97% for its scalable ones. Asking for
+    24 hit that directory exactly, and was the only size that did (16/32/48/128/512 all give the
+    scalable drawing); the owner saw it as "the ethernet icon is smaller". Ask big, get scalable.
   - **a theme's answer only counts when it is a symbolic SVG.** Adwaita answers `emblem-default`,
     `preferences-desktop`, `preferences-desktop-theme` and `preferences-desktop-peripherals` out
     of `legacy/` with full-colour PNGs, which do not recolour and do not follow the mode. The

@@ -257,16 +257,27 @@ function watchSetting() {
 try { watchSetting() } catch (e) { console.warn("[Icons] Interface icon theme setting unreadable:", e) }
 
 /**
- * The size the theme lookup asks for.
+ * The size the theme lookup asks for — deliberately far larger than anything we
+ * draw, to land on the theme's SCALABLE drawing.
  *
- * A `Gio.FileIcon` is ONE file, so the size has to be chosen here rather than by
- * the widget. 24 is the scalable drawing, which every size renders from. It is
- * deliberately not 16: measured on #587, a theme's `16x16` directory only wins at
- * exactly 16px and scale 1 — so picking it here would hand a 16px drawing to the
- * 28px icons too. Bar-sized icons getting their own heavier variant is a separate
- * step of #587, and it needs the size at the call site.
+ * A `Gio.FileIcon` is ONE file, so the size is chosen here rather than by the
+ * widget, and the choice decides WHICH of a theme's variants we get. Themes ship
+ * fixed-size directories beside the scalable one, and those are often drawn with
+ * padding: measured on Colloid, its `status/24` icons fill 63% of their box while
+ * its per-context `symbolic` ones fill 97%, and ours fill 92%. Asking for 24 hit that
+ * directory exactly — the owner saw it as "the ethernet icon is smaller" — and it
+ * was the ONLY size that did: 16, 32, 48, 128 and 512 all resolve to the scalable
+ * drawing. Adwaita and Papirus give the same file at every size.
+ *
+ * So: ask big. A theme with no scalable variant hands back its largest fixed one,
+ * which is still the best it has.
+ *
+ * ⚠️ This is also why our own `16x16` variant (the 2px stroke) never reaches a
+ * `Gio.FileIcon`: it only wins when a lookup asks for 16 at scale 1, and this one
+ * never does. Bar-sized icons getting that variant needs the size at the call
+ * site, which is a separate step of #587.
  */
-const ICON_SIZE = 24
+const ICON_SIZE = 512
 
 /**
  * The `Gio.FileIcon` for a concept: the interface theme's drawing when it has a
