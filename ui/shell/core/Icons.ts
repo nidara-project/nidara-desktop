@@ -125,6 +125,7 @@ export const ICON_NAMES = [
     "notifications",
     "notifications-disabled",
     "open-menu",
+    "org.gnome.tweaks",
     "pan-down",
     "pan-end",
     "pan-start",

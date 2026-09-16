@@ -192,6 +192,7 @@ object-rotate-left,rotate-ccw,study
 object-rotate-right,rotate-cw,study
 object-select,mouse-pointer,study
 open-menu,menu,registry
+org.gnome.tweaks,settings-2,registry
 package-x-generic,package,study
 pan-down,chevron-down,registry
 pan-end,chevron-right,registry
