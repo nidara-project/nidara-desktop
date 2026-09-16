@@ -7,7 +7,7 @@ import IconButton from "../../common/IconButton"
 import status from "../../core/Status"
 import shellActions from "../../core/ShellActions"
 import { t } from "../../core/i18n"
-import Icons from "../../core/Icons"
+import { uiIcon } from "../../core/Icons"
 import { SHELL_ROOT, readShellVersion } from "../../core/Paths"
 import { safeDisconnect } from "../../core/signals"
 import * as sys from "../../core/SystemInfo"
@@ -196,7 +196,7 @@ export default function AboutWindow(): Gtk.Window | null {
     // card's margin_top 12 = 24px top gap, equal to the card's 24px end margin
     // (the corner-diagonal rule the Settings close follows too).
     const closeBtn = IconButton({
-        icon: Icons.close,
+        icon: uiIcon("window-close"),
         iconSize: 14,
         variant: "danger",
         tooltip: t("settings.about.close"),

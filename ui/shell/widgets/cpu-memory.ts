@@ -4,7 +4,7 @@ import Theme from "../core/ThemeManager"
 import { AtomicWidget, WidgetSize, ContentBudget } from "../common/widget-kit"
 import { pollWhileMapped } from "../common/poll"
 import { t } from "../core/i18n"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 import { INK } from "../../lib/tokens"
 import { cairoDraw } from "../../lib/cairo-draw"
 
@@ -213,7 +213,7 @@ const cpuMemoryWidget: AtomicWidget = {
     category: "utilities",
     barOrder: 10,
     name: t("widget.cpu-memory.name"),
-    icon: Icons.cpu,
+    icon: uiIcon("nd-cpu"),
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],

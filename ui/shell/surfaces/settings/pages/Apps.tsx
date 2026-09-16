@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { listGroup, createRow, pageBox, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
-import Icons from "../../../core/Icons"
+import { uiIcon } from "../../../core/Icons"
 import { SUBPAGE_BUILDERS, subpagesOf } from "../subpages"
 
 // Apps landing — a parent page that drills into the three app-related screens
@@ -16,7 +16,7 @@ function navRow(
     sub: { id: string; build: () => Gtk.Widget },
 ): Gtk.ListBoxRow {
     const chevron = new Gtk.Image({
-        gicon: Icons.chevronRight, pixel_size: 16,
+        gicon: uiIcon("pan-end"), pixel_size: 16,
         opacity: 0.4, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"],
     })
     const row = createRow(label, subtitle, chevron)

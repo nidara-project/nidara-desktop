@@ -17,7 +17,7 @@ import status from "../../core/Status"
 import { dockSideState } from "../dock/state"
 import { UNIT, GAP, GRID_WIDTH } from "./CCLayoutManager"
 import { t } from "../../core/i18n"
-import Icons from "../../core/Icons"
+import { uiIcon } from "../../core/Icons"
 import { safeDisconnect } from "../../core/signals"
 import { type Notification, notifications as allNotifications, watchNotified, watchResolved } from "../../core/NotifService"
 import { cairoDraw } from "../../../lib/cairo-draw"
@@ -52,7 +52,7 @@ export function createIconWidget(n: Notification, size: number) {
         else if (fallback) img.icon_name = fallback
         // nd-icon ONLY on our own Lucide fallback art (black stroke → mode filter);
         // app icons must never get the invert — it corrupted their colors once.
-        else { img.gicon = Icons.info; img.add_css_class("nd-icon") }
+        else { img.gicon = uiIcon("dialog-information"); img.add_css_class("nd-icon") }
     }
     return img
 }
@@ -123,8 +123,8 @@ export function GroupControlHeader(props: { name: string, count: number, onToggl
     labelBox.append(new Gtk.Label({ label: `${count}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
     // captureClick: the header capsule below carries a release-phase tap (collapse) and
     // a swipe gesture — the buttons claim on press so they beat both.
-    const collapseBtn = IconButton({ icon: Icons.chevronUp, iconSize: 14, variant: "neutral", captureClick: true, onClick: onToggle })
-    const clearAllBtn = IconButton({ icon: Icons.close, iconSize: 14, variant: "danger", captureClick: true, onClick: onClearGroup })
+    const collapseBtn = IconButton({ icon: uiIcon("pan-up"), iconSize: 14, variant: "neutral", captureClick: true, onClick: onToggle })
+    const clearAllBtn = IconButton({ icon: uiIcon("window-close"), iconSize: 14, variant: "danger", captureClick: true, onClick: onClearGroup })
     box.append(labelBox); box.append(collapseBtn); box.append(clearAllBtn)
     // Paint the background with the same shellOpacity squircle as the cards (the old CSS
     // surface fill was fixed and didn't follow the Settings opacity). Tapping the header
@@ -182,7 +182,7 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
     // Close button — collapsed groups clear the whole group, otherwise dismiss the one.
     const isCollapsedGroup = !isPopup && groupCount > 1 && !isExpanded && !!onToggle
     const clearBtn = IconButton({
-        icon: Icons.close, iconSize: 13, variant: "danger", captureClick: true,
+        icon: uiIcon("window-close"), iconSize: 13, variant: "danger", captureClick: true,
         onClick: () => { if (groupCount > 1 && !isExpanded && onClearGroup) onClearGroup(); else n.dismiss() },
     })
 
@@ -268,7 +268,7 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
     if (isCollapsedGroup) {
         header.append(new Gtk.Label({ label: `${groupCount}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
     } else if (expandable) {
-        chevBtn = IconButton({ icon: itemExpanded ? Icons.chevronUp : Icons.chevronDown, iconSize: 13, variant: "neutral", captureClick: true, onClick: onToggleItem })
+        chevBtn = IconButton({ icon: itemExpanded ? uiIcon("pan-up") : uiIcon("pan-down"), iconSize: 13, variant: "neutral", captureClick: true, onClick: onToggleItem })
         chevBtn.set_visible(false)
         header.append(chevBtn)
     }

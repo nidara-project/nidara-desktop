@@ -3,7 +3,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { execAsync } from "../../../lib/process"
 import status from "../../core/Status"
-import Icons from "../../core/Icons"
+import { uiIcon } from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/tokens"
@@ -90,31 +90,31 @@ export function SystemMenuOverlay() {
     action()
   }
 
-  menuBox.append(makeRow(Icons.info, t("bar.system-menu.about"), false, () => {
+  menuBox.append(makeRow(uiIcon("dialog-information"), t("bar.system-menu.about"), false, () => {
     dispatchAction(() => status.toggleAbout())
   }))
   menuBox.append(sep())
-  menuBox.append(makeRow(Icons.settings, t("bar.system-menu.settings"), false, () => {
+  menuBox.append(makeRow(uiIcon("preferences-desktop"), t("bar.system-menu.settings"), false, () => {
     dispatchAction(() => shellActions.openSettings?.())
   }))
   menuBox.append(sep())
-  menuBox.append(makeRow(Icons.lock, t("bar.system-menu.lock"), false, () => {
+  menuBox.append(makeRow(uiIcon("system-lock-screen"), t("bar.system-menu.lock"), false, () => {
     dispatchAction(() => { execAsync(["nidara-lock"]).catch(console.error) })
   }))
-  menuBox.append(makeRow(Icons.moon, t("bar.system-menu.suspend"), false, () =>
+  menuBox.append(makeRow(uiIcon("system-suspend"), t("bar.system-menu.suspend"), false, () =>
     closeAndRun(["systemctl", "suspend"])
   ))
   menuBox.append(sep())
-  menuBox.append(makeRow(Icons.logOut, t("bar.system-menu.logout"), true, () =>
-    showConfirm(Icons.logOut, t("bar.system-menu.confirm.logout"), t("bar.system-menu.confirm.action.logout"), true,
+  menuBox.append(makeRow(uiIcon("application-exit"), t("bar.system-menu.logout"), true, () =>
+    showConfirm(uiIcon("application-exit"), t("bar.system-menu.confirm.logout"), t("bar.system-menu.confirm.action.logout"), true,
       () => closeAndRun(["uwsm", "stop"]))
   ))
-  menuBox.append(makeRow(Icons.rotateCcw, t("bar.system-menu.restart"), false, () =>
-    showConfirm(Icons.rotateCcw, t("bar.system-menu.confirm.restart"), t("bar.system-menu.confirm.action.restart"), false,
+  menuBox.append(makeRow(uiIcon("system-reboot"), t("bar.system-menu.restart"), false, () =>
+    showConfirm(uiIcon("system-reboot"), t("bar.system-menu.confirm.restart"), t("bar.system-menu.confirm.action.restart"), false,
       () => closeAndRun(["systemctl", "reboot"]))
   ))
-  menuBox.append(makeRow(Icons.power, t("bar.system-menu.shutdown"), true, () =>
-    showConfirm(Icons.power, t("bar.system-menu.confirm.shutdown"), t("bar.system-menu.confirm.action.shutdown"), true,
+  menuBox.append(makeRow(uiIcon("system-shutdown"), t("bar.system-menu.shutdown"), true, () =>
+    showConfirm(uiIcon("system-shutdown"), t("bar.system-menu.confirm.shutdown"), t("bar.system-menu.confirm.action.shutdown"), true,
       () => closeAndRun(["systemctl", "poweroff"]))
   ))
 

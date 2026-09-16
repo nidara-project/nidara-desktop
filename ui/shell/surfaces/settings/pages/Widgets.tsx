@@ -4,7 +4,7 @@ import { CATEGORY_ORDER, type WidgetCategory } from "../../../common/widget-kit/
 import { pageBox, listGroup, createRow, type SettingsNav } from "../SettingsHelpers"
 import { NidaraButton, attachTooltip } from "../../../../lib/nidara-kit"
 import { t } from "../../../core/i18n"
-import Icons from "../../../core/Icons"
+import { uiIcon } from "../../../core/Icons"
 
 // A compact labelled switch ("Bar" / "Center" + a Gtk.Switch), the unit the
 // widget row places to its right. The tooltip rides the (always-sensitive) group
@@ -32,7 +32,7 @@ function buildWidgetRow(nav: SettingsNav, w: WidgetCatalogEntry): Gtk.ListBoxRow
     const noHw = t("settings.widgets.tooltip.no-hardware")
 
     const leadingIcon = new Gtk.Image({
-        gicon: w.icon ?? Icons.app, pixel_size: 18,
+        gicon: w.icon ?? uiIcon("nd-window-floating"), pixel_size: 18,
         css_classes: ["nd-icon"], valign: Gtk.Align.CENTER,
         opacity: available ? 1 : 0.5,
     })

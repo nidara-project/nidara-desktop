@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { listGroup, createRow, staticLabel, pageBox, onPageShown, bindWhileRealized, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
-import Icons from "../../../core/Icons"
+import { uiIcon } from "../../../core/Icons"
 import * as Net from "../../../core/NetworkService"
 import type { VpnProfile } from "../../../core/NetworkService"
 import { NidaraButton, NidaraEmptyRow, attachTooltip } from "../../../../lib/nidara-kit"
@@ -84,14 +84,14 @@ function buildApRow(ap: any, isSaved: boolean, onRefresh: () => void, onDetails?
 
     // Lock badge next to the network name when the AP is secured.
     const lockIcon = secured
-        ? new Gtk.Image({ gicon: Icons.lock, pixel_size: 13, opacity: 0.5, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] })
+        ? new Gtk.Image({ gicon: uiIcon("system-lock-screen"), pixel_size: 13, opacity: 0.5, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] })
         : undefined
 
     // Network details subpage (security, band, channel, BSSID, IP when connected).
     if (onDetails) {
         const infoBtn = NidaraButton({ variant: "secondary", pill: true, icon: true })
         attachTooltip(infoBtn, t("settings.network.ap.details"), { chrome: false })
-        infoBtn.set_child(new Gtk.Image({ gicon: Icons.wifiCog, pixel_size: 16, css_classes: ["nd-icon"] }))
+        infoBtn.set_child(new Gtk.Image({ gicon: uiIcon("nd-network-wireless-configure"), pixel_size: 16, css_classes: ["nd-icon"] }))
         infoBtn.connect("clicked", onDetails)
         rightBox.append(infoBtn)
     }
@@ -104,7 +104,7 @@ function buildApRow(ap: any, isSaved: boolean, onRefresh: () => void, onDetails?
             icon: true,
         })
         attachTooltip(forgetBtn, t("settings.network.ap.forget"), { chrome: false })
-        forgetBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["nd-icon"] }))
+        forgetBtn.set_child(new Gtk.Image({ gicon: uiIcon("user-trash"), pixel_size: 16, css_classes: ["nd-icon"] }))
         forgetBtn.connect("clicked", () => {
             forgetBtn.sensitive = false
             failedSsids.delete(ssid)

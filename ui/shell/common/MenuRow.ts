@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 
 // Shared menu-row builders for flat nidara menus (.nidara-menu-row lists in a
 // SquircleContainer, never Gtk.Popover — see project_nidara_ui). Used by the
@@ -64,7 +64,7 @@ export function menuRow(opts: MenuRowOpts): Gtk.Button {
     // and nowhere else. User-caught in the CC's media source selector 2026-08-10,
     // against the island's copy of the same menu, which never matched that rule.
     const check = new Gtk.Image({
-        gicon: Icons.check, pixel_size: 15,
+        gicon: uiIcon("emblem-default"), pixel_size: 15,
         css_classes: ["nd-icon"],
         valign: Gtk.Align.CENTER,
         visible: !!opts.checked,

@@ -12,7 +12,7 @@ import agentService from "../../core/AgentService"
 import agentConfig from "../../core/AgentConfig"
 import { makeBatteryGlyph, batteryPresent, batteryFrac } from "../../common/BatteryGlyph"
 import { makeWorkspaceDot, makeActiveDotGlyph, WS_COUNT } from "../../common/WorkspaceDot"
-import Icons from "../../core/Icons"
+import { uiIcon } from "../../core/Icons"
 import type { IslandActivity } from "./ActivityIsland"
 
 // ── Browser and Foreground Player Matching ──────────────────────────────────
@@ -165,7 +165,7 @@ function mediaActivity(): IslandActivity {
             makeGhost: makeArtGhost,
             getSource: () => ((compact as any).artDa as Gtk.Widget) ?? null,
         },
-        indicator: () => new Gtk.Image({ gicon: Icons.music, pixel_size: 16, css_classes: ["nd-icon"] }),
+        indicator: () => new Gtk.Image({ gicon: uiIcon("audio-x-generic"), pixel_size: 16, css_classes: ["nd-icon"] }),
         watch: (cb) => {
             changed = cb
             media.subscribe(rewire)
@@ -354,7 +354,7 @@ function agentActivity(): IslandActivity {
         // before you open it.
         indicator: () => {
             const wrap = new Gtk.Overlay()
-            wrap.set_child(new Gtk.Image({ gicon: Icons.sparkles, pixel_size: 16, css_classes: ["nd-icon"] }))
+            wrap.set_child(new Gtk.Image({ gicon: uiIcon("nd-ai"), pixel_size: 16, css_classes: ["nd-icon"] }))
             const badge = new Gtk.Box({
                 css_classes: ["island-chip-badge"],
                 width_request: 7, height_request: 7,

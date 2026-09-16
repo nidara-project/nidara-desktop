@@ -1,11 +1,11 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { AtomicWidget, ContentBudget, WidgetSize, makeIconTile, makeCapsuleTile, panelInfoRow } from "../common/widget-kit"
 import { t } from "../core/i18n"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 import * as Net from "../core/NetworkService"
 
 function buildBarContent(): Gtk.Widget {
-    return new Gtk.Image({ gicon: Icons.ethernet, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+    return new Gtk.Image({ gicon: uiIcon("network-wired"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
 }
 
 function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
@@ -20,9 +20,9 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     }
 
     if (size === WidgetSize.SINGLE)
-        return makeIconTile(() => Icons.ethernet)
+        return makeIconTile(() => uiIcon("network-wired"))
 
-    return makeCapsuleTile(() => Icons.ethernet, () => t("cc.ethernet.name"), getSub, Net.watchWired, budget)
+    return makeCapsuleTile(() => uiIcon("network-wired"), () => t("cc.ethernet.name"), getSub, Net.watchWired, budget)
 }
 
 function buildInfoPanel(): Gtk.Widget {
@@ -57,7 +57,7 @@ const ethernetWidget: AtomicWidget = {
     category: "system",
     barOrder: 70,
     name: t("cc.ethernet.name"),
-    icon: Icons.ethernet,
+    icon: uiIcon("network-wired"),
     locations: ["bar", "cc"],
     defaultInCc: false,   // off by default — Wi-Fi covers the common case; available to add
     isAvailable: () => !!Net.wired(),

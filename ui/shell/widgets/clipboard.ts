@@ -11,7 +11,7 @@ import { RADIUS, rowInsetFor } from "../../lib/tokens"
 import { AtomicWidget, ContentBudget, PANEL_W, WidgetSize, makeCapsuleTile } from "../common/widget-kit"
 
 import { t } from "../core/i18n"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 
 // ── cliphist helpers ──────────────────────────────────────────────────────────
 
@@ -259,7 +259,7 @@ function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh:
                 // 0 + can_target false, not visible=false) so revealing it on hover cannot
                 // reflow the row under the pointer — same recipe as the notification rows.
                 const del = IconButton({
-                    icon: Icons.close, iconSize: 12, variant: "danger", captureClick: true,
+                    icon: uiIcon("window-close"), iconSize: 12, variant: "danger", captureClick: true,
                     valign: Gtk.Align.CENTER,
                     tooltip: t("widget.clipboard.delete"),
                     onClick: () => {
@@ -321,7 +321,7 @@ function buildClearFooter(refresh: () => void): Gtk.Widget {
     confirmRow.append(cancelBtn); confirmRow.append(confirmBtn)
 
     const clearRow = menuRow({
-        label: t("widget.clipboard.clear"), icon: Icons.trash, danger: true, center: true,
+        label: t("widget.clipboard.clear"), icon: uiIcon("user-trash"), danger: true, center: true,
         onClick: () => show(confirmRow),
     })
     cancelBtn.connect("clicked", () => show(clearRow))
@@ -387,7 +387,7 @@ function buildClipboardContent(onClose: () => void): Gtk.Widget {
 // ── Bar content ───────────────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    return new Gtk.Image({ gicon: Icons.clipboard, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+    return new Gtk.Image({ gicon: uiIcon("nd-clipboard"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
 }
 
 function buildBarExpanded(onClose: () => void): Gtk.Widget {
@@ -408,12 +408,12 @@ function buildCCDetail(onClose: () => void): Gtk.Widget {
 function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
         const box = new Gtk.Box({ hexpand: true, vexpand: true })
-        box.append(new Gtk.Image({ gicon: Icons.clipboard, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] }))
+        box.append(new Gtk.Image({ gicon: uiIcon("nd-clipboard"), pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] }))
         return box
     }
 
     // Action tile (no on/off state) → no status subtitle; just the name.
-    return makeCapsuleTile(() => Icons.clipboard, () => t("widget.clipboard.name"), () => "", undefined, budget)
+    return makeCapsuleTile(() => uiIcon("nd-clipboard"), () => t("widget.clipboard.name"), () => "", undefined, budget)
 }
 
 // ── Widget registration ────────────────────────────────────────────────────────
@@ -423,7 +423,7 @@ const clipboardWidget: AtomicWidget = {
     category: "utilities",
     barOrder: 40,
     name: t("widget.clipboard.name"),
-    icon: Icons.clipboard,
+    icon: uiIcon("nd-clipboard"),
     locations: ["bar", "cc"],
     defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.WIDE,

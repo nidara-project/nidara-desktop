@@ -16,7 +16,7 @@
 // That is `mixer-api` + `default-nodes-api` + one `WpObjectManager`. Everything
 // else AstalWp modelled — devices, profiles, routes, video, recorders, channel
 // objects — has no consumer here: Nidara draws speakers and mics with its own
-// `Icons.speaker`/`Icons.mic`, so even the endpoint→device→`device.icon-name`
+// `icon("audio-speakers")`/`icon("audio-input-microphone")`, so even the endpoint→device→`device.icon-name`
 // chain (device.c, 725 lines) was dead weight. Only STREAM icons are read.
 //
 // `core/AudioService.ts` keeps its public API unchanged, so no surface moved.

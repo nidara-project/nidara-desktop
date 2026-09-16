@@ -3,7 +3,7 @@ import nightLight from "../core/NightLightManager"
 import { makeHSlider } from "../../lib/nidara-kit"
 import { AtomicWidget, ContentBudget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator, panelSwitch, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 import { safeDisconnect } from "../core/signals"
 
 const subscribe = (sync: () => void) => {
@@ -15,13 +15,13 @@ function buildBarContent() {
     return makeBarIcon({
         // Dedicated icon (warm sunset) — distinct from dark-mode's moon/sun. On/off
         // is conveyed by the toggle's active state, not an icon swap.
-        getIcon: () => Icons.sunset,
+        getIcon: () => uiIcon("daytime-sunset"),
         onAction: () => nightLight.setEnabled(!nightLight.enabled),
         subscribe,
     })
 }
 
-const getIcon = () => Icons.sunset
+const getIcon = () => uiIcon("daytime-sunset")
 const getSub = () => nightLight.enabled
     ? `${nightLight.temperature}K`
     : t("widget.night-light.sub.off")
@@ -68,9 +68,9 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
         debounce: 24,
     })
     const tempRow = new Gtk.Box({ spacing: 8, margin_top: 8, margin_bottom: 8 })
-    tempRow.append(new Gtk.Image({ gicon: Icons.minus, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
+    tempRow.append(new Gtk.Image({ gicon: uiIcon("value-decrease"), pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     tempRow.append(tempSlider)
-    tempRow.append(new Gtk.Image({ gicon: Icons.plus, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
+    tempRow.append(new Gtk.Image({ gicon: uiIcon("value-increase"), pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     tempRow.append(tempValueLabel)
     outer.append(tempRow)
     outer.append(panelSeparator())
@@ -150,7 +150,7 @@ const nightLightWidget: AtomicWidget = {
     category: "system",
     barOrder: 20,
     name: t("widget.night-light.name"),
-    icon: Icons.sunset,
+    icon: uiIcon("daytime-sunset"),
     locations: ["bar", "cc"],
     defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.SINGLE,

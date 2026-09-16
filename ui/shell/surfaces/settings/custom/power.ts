@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { execAsync } from "../../../../lib/process"
 import { listGroup, bindWhileRealized, onPageShown } from "../SettingsHelpers"
-import Icons from "../../../core/Icons"
+import { uiIcon } from "../../../core/Icons"
 import { t } from "../../../core/i18n"
 import Theme from "../../../core/ThemeManager"
 import { safeDisconnect } from "../../../core/signals"
@@ -59,9 +59,9 @@ export const build = (_ctx: PageCtx) => {
             profileGroup.listBox.selection_mode = Gtk.SelectionMode.SINGLE
 
             const profiles = [
-                { id: "performance", label: t("settings.power.profile.performance"),  icon: Icons.zap },
-                { id: "balanced",    label: t("settings.power.profile.balanced"),     icon: Icons.battery },
-                { id: "power-saver", label: t("settings.power.profile.power-saver"),  icon: Icons.leaf },
+                { id: "performance", label: t("settings.power.profile.performance"),  icon: uiIcon("power-profile-performance") },
+                { id: "balanced",    label: t("settings.power.profile.balanced"),     icon: uiIcon("battery") },
+                { id: "power-saver", label: t("settings.power.profile.power-saver"),  icon: uiIcon("power-profile-power-saver") },
             ]
             const checkIcons = new Map<string, Gtk.Widget>()
 

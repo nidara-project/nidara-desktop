@@ -2169,22 +2169,39 @@ only when someone boots a VM). The `styles` job now compiles it too.
   (found live, corrected same day). Cairo-drawing a glyph means picking its colour is now on you;
   default to mode-aware white/black (`Theme.isDark`) like `--nidara-text`, and only reach for
   live accent when the glyph sits on the shell's own neutral glass, not on another accent fill.
-- **`core/Icons.ts` is a CONCEPT registry, not a list of files (#587).** Each entry is
-  `concept: ["standard-icon-name", "our-shipped-drawing"]`, and `Icons.<concept>` resolves that
-  chain: the user's INTERFACE icon theme first (GSettings `org.nidara.appearance
-  interface-icon-theme`, empty by default), our own drawing as the last link. Adding an icon means
-  adding a concept with a name from the freedesktop Icon Naming Spec — **not** dropping an SVG in
-  and pointing at it. Three things that are easy to get wrong:
+- **Interface icons are asked for by STANDARD NAME, and there is only one name (#587).**
+  `uiIcon("network-wireless")` looks for that name in the user's interface icon theme (GSettings
+  `org.nidara.appearance interface-icon-theme`, empty by default) and then in our own
+  `assets/icons/hicolor/scalable/actions/network-wireless-symbolic.svg` — the same name, two
+  places. Nothing translates anything: `core/Icons.ts` holds `ICON_NAMES`, a flat LIST that exists
+  only so the compiler can refuse a name we do not ship. Adding an icon means adding a name and a
+  drawing beside it, **not** dropping an SVG in and pointing at it from a table.
+  - **a name starting `nd-` is OURS and no theme will have it** — `nd-ai`, `nd-clipboard-history`,
+    `nd-dock`. The Naming Spec is from 2006 and has no word for those, and a theme asked for the
+    nearest-sounding standard name answers with something that MEANS something else: the icon
+    study mapped the assistant to `system-help`, so picking Adwaita turned Nidara's AI into a
+    question mark. Use a standard name when one exists, `nd-` when none does, and never `nd-` for
+    something the desktop already names — CI fails on that.
+  - **a theme's answer only counts when it is a symbolic SVG.** Adwaita answers `emblem-default`,
+    `preferences-desktop`, `preferences-desktop-theme` and `preferences-desktop-peripherals` out
+    of `legacy/` with full-colour PNGs, which do not recolour and do not follow the mode. The
+    resolver checks the resolved FILE ends in `-symbolic.svg` and falls through to ours otherwise.
+  - **a theme name is a case-sensitive DIRECTORY name.** `adwaita` is not `Adwaita`, and
+    `set_theme_name` accepts anything without looking, so a mistyped name silently resolves
+    NOTHING and looks exactly like the setting never having been touched. The name is checked
+    against `index.theme` on the search path before use, and a near-miss is named in the log.
+  Three more things that are easy to get wrong:
   - the interface theme is a **private `Gtk.IconTheme`**, never
     `Gtk.IconTheme.get_for_display()`. The display's theme belongs to APPLICATION icons (the dock,
     the tray, the app grid) and it **refuses `set_theme_name` outright** — it is a singleton
     (`assertion '!self->is_display_singleton' failed`). GTK gives one theme per process and these
     are the two the shell needs at once. Route A of the #587 prototype — putting the interface
     theme on the display — was measured to change the art of 57 of 72 real app icons.
-  - **no two concepts may claim one standard name.** A theme has one drawing per name, so a shared
-    name makes both concepts the same glyph the moment a theme is chosen.
-    `scripts/ci/icon-registry-check.mjs` fails on that, on a concept whose drawing is missing, and
-    on a drawing no concept points at.
+  - **one name is one icon.** Two meanings under one name become the same glyph the moment a theme
+    is chosen — which is exactly what a shared name did while this was a concept table. Name by
+    MEANING, not by drawing: `moon` did double duty as Suspend and as low-brightness precisely
+    because it was named after a picture. `scripts/ci/icon-registry-check.mjs` fails on a name with
+    no drawing, and on a drawing no name asks for.
   - **do not check a theme's coverage by looking for files in its directory.** GTK resolves through
     `Inherits`, so it finds names the directory does not hold, and misses some it does. Ask the
     resolver: `scripts/dev/icon-registry-probe.sh [theme | theme-dir]` runs the real module

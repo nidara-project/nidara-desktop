@@ -1,7 +1,7 @@
 import Theme from "../core/ThemeManager"
 import { AtomicWidget, WidgetSize, roundToggleSpec, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 import { safeDisconnect } from "../core/signals"
 
 const themeSubscribe = (sync: () => void) => {
@@ -11,7 +11,7 @@ const themeSubscribe = (sync: () => void) => {
 
 function buildBarContent() {
     return makeBarIcon({
-        getIcon: () => Theme.isDark ? Icons.moon : Icons.sun,
+        getIcon: () => Theme.isDark ? uiIcon("system-suspend") : uiIcon("display-brightness"),
         onAction: () => Theme.setDarkMode(!Theme.isDark),
         subscribe: themeSubscribe,
     })
@@ -22,13 +22,13 @@ const darkModeWidget: AtomicWidget = {
     category: "system",
     barOrder: 10,
     name: t("widget.dark-mode.name"),
-    icon: Icons.moon,
+    icon: uiIcon("system-suspend"),
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent: (size, budget) => roundToggleSpec(
         "dark-mode", t("widget.dark-mode.name"),
-        () => Theme.isDark ? Icons.moon : Icons.sun,
+        () => Theme.isDark ? uiIcon("system-suspend") : uiIcon("display-brightness"),
         () => Theme.isDark,
         () => Theme.setDarkMode(!Theme.isDark),
         () => Theme.isDark ? t("widget.dark-mode.sub.dark") : t("widget.dark-mode.sub.light"),

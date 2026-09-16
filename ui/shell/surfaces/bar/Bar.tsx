@@ -38,7 +38,7 @@ import { execAsync } from "../../../lib/process"
 import { t } from "../../core/i18n"
 import { barSettings, onBarSettingsChanged, resolveLauncherIcon, LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "./barState"
 import { dockSideState, dockSettings, onDockSettingsChanged } from "../dock/state"
-import Icons from "../../core/Icons"
+import { uiIcon } from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import hs from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
@@ -1062,7 +1062,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   timeLabel.connect("unrealize", () => { try { GLib.source_remove(clockTimer) } catch {} })
   regionConfig.connect("changed", updateClock)
   updateClock()
-  const bellIcon = new Gtk.Image({ gicon: Icons.bell, pixel_size: 16, visible: false , css_classes: ["nd-icon"] })
+  const bellIcon = new Gtk.Image({ gicon: uiIcon("preferences-system-notifications"), pixel_size: 16, visible: false , css_classes: ["nd-icon"] })
   const syncBell = () => { bellIcon.set_visible(notifications().length > 0) }
   watchNotified(syncBell)
   watchResolved(syncBell)
@@ -1193,7 +1193,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // manages its own visibility (hidden while empty).
   const trayInner = Tray(openCustomExpansion, () => scheduleBarLayoutSync())
   right.append(trayInner)
-  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: uiIcon("system-search"), pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(searchCapsule)
   // CC capsule layout: [16px left pad][gear 16px][16px right-gap] = 48px (matches the
   // search capsule). The status-indicator dot (recording / AI control) sits in that right
@@ -1207,7 +1207,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   //   (Centring on the allocation boxes gives 40, which looks pegged-right because both draw narrower.)
   // The gap is a plain 16px spacer that just reserves the width (no shift when the dot shows/hides).
   // Detail + Stop/kill-switch live in the CC banner. Badge can_target:false → clicks hit the capsule.
-  const ccGear = new Gtk.Image({ gicon: Icons.settings2, pixel_size: 16, margin_start: 16, css_classes: ["nd-icon"] })
+  const ccGear = new Gtk.Image({ gicon: uiIcon("preferences-system"), pixel_size: 16, margin_start: 16, css_classes: ["nd-icon"] })
   const ccInner = new Gtk.Box({ valign: Gtk.Align.CENTER })
   ccInner.append(ccGear)
   ccInner.append(new Gtk.Box({ width_request: 16 }))   // reserve the right gap → capsule stays 48px

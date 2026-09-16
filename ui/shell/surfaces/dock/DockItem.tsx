@@ -330,8 +330,8 @@ export function DockItem(
     if (appId === "trash" || appId === "special:trash") {
         const applyTrashIcon = () => {
             ;(appItem as any).icon_name = trashService.isEmpty
-                ? ["user-trash", "trashcan-empty", "trash", iconAssetPath("trash")]
-                : ["user-trash-full", "trashcan-full", "user-trash", "trash", iconAssetPath("trash")]
+                ? ["user-trash", "trashcan-empty", "trash", iconAssetPath("user-trash")]
+                : ["user-trash-full", "trashcan-full", "user-trash", "trash", iconAssetPath("user-trash")]
             const r = getIcon()
             try {
                 let path = r.path || null

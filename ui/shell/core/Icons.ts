@@ -4,10 +4,10 @@ import GLib from "gi://GLib"
 import { SHELL_ROOT } from "./Paths"
 
 /**
- * Nidara — the interface icons, as CONCEPTS rather than file names (#587).
+ * Nidara — the interface icons, by STANDARD NAME (#587).
  *
- * A surface asks for a concept (`Icons.wifi`, `Icons.battery`) and gets back a
- * `Gio.FileIcon`, exactly as before. What changed is where that icon comes from:
+ * A surface asks for a name (`uiIcon("network-wireless")`) and gets back a
+ * `Gio.FileIcon`. That name is looked for in two places, in order:
  *
  *   1. the INTERFACE icon theme, if one is set — a private `Gtk.IconTheme`, NOT
  *      the display's. The display keeps serving the user's APP icon theme
@@ -15,13 +15,23 @@ import { SHELL_ROOT } from "./Paths"
  *      tray and the app grid resolve against. GTK gives one theme per process,
  *      and these are the two we need at once;
  *   2. our own shipped drawing, as the last link — `assets/icons/hicolor/
- *      scalable/actions/<name>-symbolic.svg`. With no interface theme set, which
- *      is the default, every concept resolves here.
+ *      scalable/actions/<name>-symbolic.svg`, named with that SAME name. With no
+ *      interface theme set, which is the default, every icon resolves here.
  *
- * ⚠️ A theme icon is asked for under its STANDARD name (freedesktop Icon Naming
- * Spec plus the de-facto GNOME symbolic names), never ours. That is the contract
- * a user's chosen theme is measured against, and the vocabulary third-party
- * widgets will use.
+ * 🔑 There is ONE name, not two. A surface asks for `system-search`, and that
+ * same name is looked for in the interface theme first and in our own
+ * `assets/icons/…/system-search-symbolic.svg` second. Nothing translates anything:
+ * the names are the freedesktop Icon Naming Spec's, plus the de-facto GNOME
+ * symbolic ones, which is what themes are built around.
+ *
+ * ⚠️ A name starting `nd-` is OURS, and no theme will ever have it — which is the
+ * point. The Naming Spec is from 2006 and has no word for an AI assistant
+ * (`nd-ai`), a clipboard history (`nd-clipboard-history`), a dock or a
+ * floating-window mode. It used to have one anyway, because the icon study was
+ * asked to give all 85 concepts a standard name and forced the nearest-SOUNDING
+ * one where none existed — the assistant was mapped to `system-help`, so picking
+ * Adwaita turned Nidara's AI into a question mark. The prefix makes "this is ours,
+ * never substituted" visible at the call site instead of hidden in a table.
  *
  * ⚠️ Measured, GTK 4.22.5 (the A/B prototype on #587): a `Gio.FileIcon` pointing
  * at a `*-symbolic.svg` recolours from CSS `color` EXACTLY like an icon looked up
@@ -50,131 +60,100 @@ const f = (name: string) => Gio.FileIcon.new(Gio.File.new_for_path(`${DIR}/${nam
 export const iconAssetPath = (name: string) => `${DIR}/${name}-symbolic.svg`
 
 /**
- * concept → [ standard icon name, our shipped drawing ].
+ * Every interface icon Nidara asks for, by name.
  *
- * The standard names come from the icon study on #587, which audited all 85
- * against the Naming Spec, Adwaita and Papirus. Two corrections were needed on
- * the way in, both because the study graded each icon on its own and so could
- * not see them:
- *
- *   - four pairs had landed on ONE name (`user`/`userRound`,
- *     `bluetooth`/`bluetoothConnected`, `wifiCog`/`globe`, `filePen`/`wifiPen`).
- *     A theme has one drawing per name, so a shared name makes two concepts
- *     indistinguishable the moment a theme is chosen;
- *   - `filePen` and `wifiPen` are dropped outright. Neither had a caller, and
- *     the only name that fitted them was `document-edit`, which one of them had
- *     to give up anyway.
- *
- * 🔑 **`null` means there is no standard name for this concept, so no theme is
- * ever asked and the drawing is always ours.** It is not a gap to fill in later.
- * The Icon Naming Spec is from 2006 and simply does not name an AI assistant, a
- * CPU chip, a dock, a clipboard history or a floating-window mode — and a theme
- * asked for the nearest-sounding name answers with something that MEANS something
- * else. The study had to give all 85 concepts a name, so it forced one: the
- * assistant glyph was mapped to `system-help`, and picking Adwaita turned Nidara's
- * AI into a question mark. Owner's rule, 2026-09-16: when there is no standard
- * name, fall back to ours rather than to something "similar" from the theme.
- *
- * Not every real name is in every theme either, and that is fine — same last
- * link. Measured by `scripts/dev/icon-registry-probe.sh` against Adwaita, the
- * theme every Arch install has: 66 of the 83 concepts resolve to it and 17 fall
- * through — the 11 `null`s, plus `moon` (`system-suspend`) and
- * `bluetoothConnected` (`bluetooth-paired`), which it does not carry, and `check`,
- * `settings`, `palette` and `mousePointer`, which it has ONLY as full-colour PNGs
- * in `legacy/` — and `resolve` refuses anything that is not a symbolic SVG.
- *
- * ⚠️ Do NOT check that list by looking for files under a theme's directory. That
- * is how it was first written here and it was wrong in both directions: GTK
- * resolves through the theme's `Inherits` chain, so it finds names the directory
- * does not hold. Ask the resolver — that is what the probe is.
+ * This is a LIST, not a mapping — it exists so the compiler can refuse a name we
+ * do not ship and so `scripts/ci/icon-registry-check.mjs` can check that each one
+ * has a drawing. Add a name here and a `<name>-symbolic.svg` beside it; a
+ * standard name if the concept has one, an `nd-` name if it does not.
  */
-const CONCEPTS = {
-    app:                 [null,                                "app-window"],
-    mic:                 ["audio-input-microphone",            "mic"],
-    speaker:             ["audio-speakers",                    "speaker"],
-    volumeHigh:          ["audio-volume-high",                 "volume-2"],
-    volumeMedium:        ["audio-volume-medium",               "volume-1"],
-    volumeLow:           ["audio-volume-low",                  "volume"],
-    volumeMuted:         ["audio-volume-muted",                "volume-x"],
-    user:                ["system-users",                      "user"],
-    userRound:           ["avatar-default",                    "user-round"],
-    userRoundPlus:       ["contact-new",                       "user-round-plus"],
-    battery:             ["battery",                           "battery"],
-    bluetooth:           ["bluetooth-active",                  "bluetooth"],
-    cpu:                 [null,                                "cpu"],
-    hand:                [null,                                "hand"],
-    hardDrive:           ["drive-harddisk",                    "hard-drive"],
-    wifi:                ["network-wireless",                  "wifi"],
-    ethernet:            ["network-wired",                     "ethernet-port"],
-    moon:                ["system-suspend",                    "moon"],
-    sun:                 ["display-brightness",                "sun"],
-    sunset:              ["daytime-sunset",                    "sunset"],
-    info:                ["dialog-information",                "info"],
-    key:                 ["dialog-password",                   "key"],
-    trash:               ["user-trash",                        "trash"],
-    search:              ["system-search",                     "search"],
-    chevronRight:        ["pan-end",                           "chevron-right"],
-    chevronLeft:         ["pan-start",                         "chevron-left"],
-    chevronUp:           ["pan-up",                            "chevron-up"],
-    chevronDown:         ["pan-down",                          "chevron-down"],
-    plus:                ["value-increase",                    "plus"],
-    minus:               ["value-decrease",                    "minus"],
-    zoomIn:              ["zoom-in",                           "zoom-in"],
-    zoomOut:             ["zoom-out",                          "zoom-out"],
-    pause:               ["media-playback-pause",              "pause"],
-    play:                ["media-playback-start",              "play"],
-    skipBack:            ["media-skip-backward",               "skip-back"],
-    skipForward:         ["media-skip-forward",                "skip-forward"],
-    wifiOff:             ["network-wireless-disabled",         "wifi-off"],
-    wifiCog:             [null,                                "wifi-cog"],
-    wifiHigh:            ["network-wireless-signal-ok",        "wifi-high"],
-    wifiLow:             ["network-wireless-signal-weak",      "wifi-low"],
-    wifiZero:            ["network-wireless-signal-none",      "wifi-zero"],
-    wifiSync:            ["network-wireless-acquiring",        "wifi-sync"],
-    bell:                ["preferences-system-notifications",  "bell"],
-    bellOff:             ["notifications-disabled",            "bell-off"],
-    check:               ["emblem-default",                    "check"],
-    menu:                ["open-menu",                         "menu"],
-    settings2:           ["preferences-system",                "settings-2"],
-    settings:            ["preferences-desktop",               "settings"],
-    terminal:            ["utilities-terminal",                "terminal"],
-    grid:                ["view-grid",                         "grid"],
-    sidebar:             ["sidebar-show",                      "sidebar"],
-    close:               ["window-close",                      "x"],
-    lock:                ["system-lock-screen",                "lock"],
-    logOut:              ["application-exit",                  "log-out"],
-    power:               ["system-shutdown",                   "power"],
-    rotateCcw:           ["system-reboot",                     "rotate-ccw"],
-    palette:             ["preferences-desktop-theme",         "palette"],
-    monitor:             ["video-display",                     "monitor"],
-    keyboard:            ["input-keyboard",                    "keyboard"],
-    clock:               ["preferences-system-time",           "clock"],
-    type:                ["preferences-desktop-font",          "type"],
-    mousePointer:        ["preferences-desktop-peripherals",   "mouse-pointer"],
-    zap:                 ["power-profile-performance",         "zap"],
-    leaf:                ["power-profile-power-saver",         "leaf"],
-    dock:                [null,                                "dock"],
-    accessibility:       ["preferences-desktop-accessibility", "accessibility"],
-    puzzle:              [null,                                "puzzle"],
-    panelTop:            [null,                                "panel-top"],
-    rocket:              [null,                                "rocket"],
-    bluetoothConnected:  ["bluetooth-paired",                  "bluetooth-connected"],
-    bluetoothOff:        ["bluetooth-disabled",                "bluetooth-off"],
-    bluetoothSearching:  ["bluetooth-acquiring",               "bluetooth-searching"],
-    globe:               ["preferences-system-network",        "globe"],
-    clipboard:           [null,                                "clipboard"],
-    clipboardList:       [null,                                "clipboard-list"],
-    camera:              ["camera-photo",                      "camera"],
-    record:              ["media-record",                      "record"],
-    recordStop:          ["media-playback-stop",               "record-stop"],
-    shield:              ["network-vpn",                       "shield"],
-    shieldOff:           ["network-vpn-disconnected",          "shield-off"],
-    sparkles:            [null,                                "sparkles"],
-    music:               ["audio-x-generic",                   "music"],
-    gamepad:             ["input-gaming",                      "gamepad-2"],
-} as const satisfies Record<string, readonly [standard: string | null, asset: string]>
+export const ICON_NAMES = [
+    "application-exit",
+    "audio-input-microphone",
+    "audio-speakers",
+    "audio-volume-high",
+    "audio-volume-low",
+    "audio-volume-medium",
+    "audio-volume-muted",
+    "audio-x-generic",
+    "avatar-default",
+    "battery",
+    "bluetooth-acquiring",
+    "bluetooth-active",
+    "bluetooth-disabled",
+    "bluetooth-paired",
+    "camera-photo",
+    "contact-new",
+    "daytime-sunset",
+    "dialog-information",
+    "dialog-password",
+    "display-brightness",
+    "drive-harddisk",
+    "emblem-default",
+    "input-gaming",
+    "input-keyboard",
+    "media-playback-pause",
+    "media-playback-start",
+    "media-playback-stop",
+    "media-record",
+    "media-skip-backward",
+    "media-skip-forward",
+    "nd-ai",
+    "nd-bar",
+    "nd-clipboard",
+    "nd-clipboard-history",
+    "nd-cpu",
+    "nd-dock",
+    "nd-hand",
+    "nd-launch",
+    "nd-network-wireless-configure",
+    "nd-plugin",
+    "nd-window-floating",
+    "network-vpn",
+    "network-vpn-disconnected",
+    "network-wired",
+    "network-wireless",
+    "network-wireless-acquiring",
+    "network-wireless-disabled",
+    "network-wireless-signal-none",
+    "network-wireless-signal-ok",
+    "network-wireless-signal-weak",
+    "notifications-disabled",
+    "open-menu",
+    "pan-down",
+    "pan-end",
+    "pan-start",
+    "pan-up",
+    "power-profile-performance",
+    "power-profile-power-saver",
+    "preferences-desktop",
+    "preferences-desktop-accessibility",
+    "preferences-desktop-font",
+    "preferences-desktop-peripherals",
+    "preferences-desktop-theme",
+    "preferences-system",
+    "preferences-system-network",
+    "preferences-system-notifications",
+    "preferences-system-time",
+    "sidebar-show",
+    "system-lock-screen",
+    "system-reboot",
+    "system-search",
+    "system-shutdown",
+    "system-suspend",
+    "system-users",
+    "user-trash",
+    "utilities-terminal",
+    "value-decrease",
+    "value-increase",
+    "video-display",
+    "view-grid",
+    "window-close",
+    "zoom-in",
+    "zoom-out",
+] as const
 
-export type IconConcept = keyof typeof CONCEPTS
+export type IconName = typeof ICON_NAMES[number]
 
 /**
  * The interface icon theme, or null while none is set.
@@ -193,7 +172,7 @@ const APPEARANCE_SCHEMA = "org.nidara.appearance"
 const THEME_KEY = "interface-icon-theme"
 
 /** Icons already resolved under the current theme. Cleared when it changes. */
-const cache = new Map<IconConcept, Gio.FileIcon>()
+const cache = new Map<IconName, Gio.FileIcon>()
 
 /**
  * Is `name` an icon theme on this machine, and spelled the way the disk spells it?
@@ -306,16 +285,17 @@ const ICON_SIZE = 24
  * coloured picture pinned to one palette. Anything that is not a symbolic SVG
  * falls through to our own drawing, which is the whole point of having one.
  */
-function resolve(concept: IconConcept): Gio.FileIcon {
-    const [standard, asset] = CONCEPTS[concept]
-    if (standard && interfaceTheme) {
-        const symbolic = `${standard}-symbolic`
-        const name = interfaceTheme.has_icon(symbolic) ? symbolic
-            : interfaceTheme.has_icon(standard) ? standard
+function resolve(name: IconName): Gio.FileIcon {
+    // An `nd-` name is ours by definition — asking a theme for it would only ever
+    // hit something that happened to share the name.
+    if (interfaceTheme && !name.startsWith("nd-")) {
+        const symbolic = `${name}-symbolic`
+        const asked = interfaceTheme.has_icon(symbolic) ? symbolic
+            : interfaceTheme.has_icon(name) ? name
             : null
-        if (name) {
+        if (asked) {
             const paintable = interfaceTheme.lookup_icon(
-                name, null, ICON_SIZE, 1, Gtk.TextDirection.NONE, 0)
+                asked, null, ICON_SIZE, 1, Gtk.TextDirection.NONE, 0)
             const path = paintable?.get_file()?.get_path()
             if (path && path.endsWith("-symbolic.svg")
                 && GLib.file_test(path, GLib.FileTest.EXISTS)) {
@@ -323,29 +303,21 @@ function resolve(concept: IconConcept): Gio.FileIcon {
             }
         }
     }
-    return f(asset)
+    return f(name)
 }
 
 
 /**
- * `Icons.<concept>` — a `Gio.FileIcon`, resolved on first use and cached until the
- * interface theme changes. Lazy on purpose: the theme is read from GSettings at
- * module load, and a concept nobody draws costs nothing.
+ * `uiIcon("system-search")` — a `Gio.FileIcon`, resolved on first use and cached
+ * until the interface theme changes. Lazy on purpose: nothing is looked up for a
+ * name nobody draws.
  */
-const Icons = Object.defineProperties(
-    {} as { [K in IconConcept]: Gio.FileIcon },
-    Object.fromEntries((Object.keys(CONCEPTS) as IconConcept[]).map(k => [k, {
-        enumerable: true,
-        get: () => {
-            const hit = cache.get(k)
-            if (hit) return hit
-            const icon = resolve(k)
-            cache.set(k, icon)
-            return icon
-        },
-    }])),
-)
+export function uiIcon(name: IconName): Gio.FileIcon {
+    const hit = cache.get(name)
+    if (hit) return hit
+    const resolved = resolve(name)
+    cache.set(name, resolved)
+    return resolved
+}
 
 export type IconGIcon = Gio.FileIcon
-export type IconName = IconConcept
-export default Icons

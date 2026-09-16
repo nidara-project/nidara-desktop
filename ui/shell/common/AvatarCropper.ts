@@ -5,7 +5,7 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import Cairo from "gi://cairo"
 import { NidaraButton, makeHSlider } from "../../lib/nidara-kit"
 import { t } from "../core/i18n"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 import { cairoDraw } from "../../lib/cairo-draw"
 
 // Minimal circular avatar cropper: pan (drag) + zoom (slider) over a fixed square
@@ -121,9 +121,9 @@ export function showAvatarCropper(
     }))
 
     const zoomRow = new Gtk.Box({ spacing: 12, hexpand: true })
-    zoomRow.append(new Gtk.Image({ gicon: Icons.zoomOut, pixel_size: 20, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))
+    zoomRow.append(new Gtk.Image({ gicon: uiIcon("zoom-out"), pixel_size: 20, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))
     zoomRow.append(zoomSlider)
-    zoomRow.append(new Gtk.Image({ gicon: Icons.zoomIn, pixel_size: 20, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))
+    zoomRow.append(new Gtk.Image({ gicon: uiIcon("zoom-in"), pixel_size: 20, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))
     box.append(zoomRow)
 
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })

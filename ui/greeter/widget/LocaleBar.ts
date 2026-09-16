@@ -193,7 +193,7 @@ export default function LocaleBar(): Gtk.Widget {
   })
 
   // ── Layout: [⌨ kbDrp] [sep] [langDrp] ─────────────────────────────────────
-  const kbIcon = new Gtk.Image(ndImageProps("keyboard", "input-keyboard-symbolic", 12))
+  const kbIcon = new Gtk.Image(ndImageProps("input-keyboard", "input-keyboard-symbolic", 12))
   kbIcon.add_css_class("locale-bar-icon")
 
   const row = new Gtk.Box({

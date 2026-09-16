@@ -8,7 +8,7 @@ import Wallpaper from "../../../core/WallpaperManager"
 import { getBundledWallpapers } from "../../../../lib/wallpaper"
 import { ACCENT_PALETTE, GLASS_RANGE, type AccentKey } from "../../../core/NidaraTheme"
 import { t } from "../../../core/i18n"
-import Icons from "../../../core/Icons"
+import { uiIcon } from "../../../core/Icons"
 import { createRow, bindWhileRealized } from "../SettingsHelpers"
 import { attachTooltip } from "../../../../lib/nidara-kit"
 import { safeDisconnect } from "../../../core/signals"
@@ -241,9 +241,9 @@ export const build = (ctx: PageCtx) => {
 
     const masterBox = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, hexpand: false })
     const mkGlassEnd = (icon: Gio.FileIcon) => new Gtk.Image({ gicon: icon, pixel_size: 16, opacity: 0.5, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER })
-    masterBox.append(mkGlassEnd(Icons.minus))
+    masterBox.append(mkGlassEnd(uiIcon("value-decrease")))
     masterBox.append(masterSlider)
-    masterBox.append(mkGlassEnd(Icons.plus))
+    masterBox.append(mkGlassEnd(uiIcon("value-increase")))
     masterBox.append(masterValue)
 
     // ── Night Light Schedule Times ──────────────────────────────────────────

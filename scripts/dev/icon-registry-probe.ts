@@ -13,11 +13,11 @@
 //
 // Output lines are machine-greppable:
 //   THEME <name-or-empty>
-//   ICON <concept> <theme|shipped> <path>
+//   ICON <name> <theme|shipped> <path>
 //   TOTAL <from-theme> <from-shipped>
 
 import Gtk from "gi://Gtk?version=4.0"
-import Icons from "../../ui/shell/core/Icons"
+import { ICON_NAMES, uiIcon } from "../../ui/shell/core/Icons"
 
 Gtk.init()
 
@@ -30,10 +30,10 @@ print(`THEME ${settings.get_string("interface-icon-theme")}`)
 const SHIPPED = "/ui/shell/assets/icons/"
 
 let fromTheme = 0, fromShipped = 0
-for (const concept of Object.keys(Icons) as (keyof typeof Icons)[]) {
-    const path = Icons[concept].get_file()?.get_path() ?? ""
+for (const name of ICON_NAMES) {
+    const path = uiIcon(name).get_file()?.get_path() ?? ""
     const link = path.includes(SHIPPED) ? "shipped" : "theme"
     if (link === "theme") fromTheme++; else fromShipped++
-    print(`ICON ${concept} ${link} ${path}`)
+    print(`ICON ${name} ${link} ${path}`)
 }
 print(`TOTAL ${fromTheme} ${fromShipped}`)
