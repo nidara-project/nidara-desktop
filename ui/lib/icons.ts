@@ -18,12 +18,13 @@ import GLib from "gi://GLib"
  * and install.sh ships the shell's assets there in both dev and user mode;
  * NIDARA_SHELL_ROOT covers running from a source tree.
  *
- * ⚠️ These are Lucide SVGs, not symbolic icons: they render BLACK
- * (stroke=currentColor, non-symbolic) and GTK only recolours a file whose name
- * ends in `-symbolic`. So a consumer MUST add the `nd-icon` class, which
- * inverts them to white — the same mechanism as the shell's `_reset.scss`. An
- * unconditional invert is safe on these two surfaces: both are permanently dark
- * glass, with no light mode to flip to.
+ * ⚠️ These ARE symbolic icons since #587 — `<name>-symbolic.svg`, with the
+ * symbolic classes on every shape — so GTK recolours them from CSS `color` and
+ * nothing inverts them any more. Before that they rendered black and every
+ * consumer had to remember the `nd-icon` class, whose `-gtk-icon-filter:
+ * invert(1)` then turned a real symbolic icon BLACK as soon as an interface icon
+ * theme was set. GTK gates recolouring on the FILENAME, so the suffix is not
+ * decoration: drop it and the icon goes black again with no error anywhere.
  */
 
 const SHELL_ROOT = GLib.getenv("NIDARA_SHELL_ROOT") ?? "/usr/share/nidara/ui/shell"
@@ -37,7 +38,7 @@ const DIR = `${SHELL_ROOT}/assets/icons/hicolor/scalable/actions`
  * used before as a last resort — see `ndImage`.
  */
 export function ndIcon(name: string): Gio.Icon | null {
-    const path = `${DIR}/${name}.svg`
+    const path = `${DIR}/${name}-symbolic.svg`
     return GLib.file_test(path, GLib.FileTest.EXISTS)
         ? Gio.FileIcon.new(Gio.File.new_for_path(path))
         : null
@@ -63,13 +64,13 @@ export function nidaraLogoIcon(): Gio.Icon | null {
  * Properties for a `Gtk.Image` showing the shipped icon `name`, falling back to
  * the theme icon `themeFallback` when the asset tree is missing.
  *
- * The `nd-icon` class rides along ONLY on the shipped path: the theme fallback
- * is a symbolic icon that already follows the CSS colour, and inverting it
- * would turn it black on black.
+ * Both branches are now symbolic and both follow CSS `color`, so neither needs a
+ * class of its own. The `nd-icon` that used to ride along on the shipped path
+ * was there to invert a black drawing; there is no black drawing left to invert.
  */
 export function ndImageProps(name: string, themeFallback: string, pixelSize: number) {
     const gicon = ndIcon(name)
     return gicon
-        ? { gicon, pixel_size: pixelSize, css_classes: ["nd-icon"] }
+        ? { gicon, pixel_size: pixelSize }
         : { icon_name: themeFallback, pixel_size: pixelSize }
 }

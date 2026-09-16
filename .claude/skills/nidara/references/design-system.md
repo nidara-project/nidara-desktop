@@ -476,11 +476,12 @@ column 0 forever. Nothing warns. Follow every buffer mutation with `entry.set_po
 (GtkEditable: "after the last character"), ideally by routing all of them through one helper, as
 `AppGrid.tsx`'s `searchInsert`/`searchBackspace` now do. Shipped broken; user-caught 2026-08-10.
 
-⚠️ **Do not tint the magnifier on focus.** It is an `nd-icon`, so `color` cannot reach it — the glyph
-is monochrome and driven by `-gtk-icon-filter: invert(1)`, a black/white toggle, not a recolor (see
-"Most icon glyphs cannot be CSS-recolored" below). The focus signal belongs on the BOX: border and
-fill. An accent rule on the app grid's search icon was written, was dead for other reasons, and was
-deleted rather than repaired once that was understood (2026-08-10).
+⚠️ **Do not tint the magnifier on focus.** The original reason was mechanical — `color` could not
+reach an `nd-icon`, which was `-gtk-icon-filter: invert(1)`, a black/white toggle — and that reason is
+**gone since #587**: the glyphs are symbolic and take `color`. The rule stands on taste instead, so
+keep it: the focus signal belongs on the BOX, border and fill. An accent rule on the app grid's
+search icon was written, was dead for other reasons, and was deleted rather than repaired
+(2026-08-10).
 
 ## Ghost descenders on filter — FIXED AT THE ROOT 2026-08-11, not by a line height
 
@@ -1721,12 +1722,12 @@ way for GTK4 to fail without saying anything.
    button. The rule was there, the token was not, so the button's hover resolved to nothing
    and the control looked inert. A missing custom property is not an error in GTK4; it is a
    declaration that quietly does not apply.
-2. **No `.nd-icon` rule at all.** The shipped icons are Lucide SVGs: they render BLACK and
-   only become white through `-gtk-icon-filter: invert(1)` (see `ui/lib/icons.ts`). The shell
-   has the rule in `_reset.scss`, the greeter/lock sheet has its own; the installer had
-   neither, so its close glyph was black-on-dark-glass. **Any bundle that shows a shipped icon
-   owes this rule and its light-mode counterpart** — and a bundle WITH a light mode owes both,
-   which is why the greeter's unconditional invert could not simply be copied.
+2. **No `.nd-icon` rule at all.** The installer had no such rule, so its close glyph was
+   black-on-dark-glass. **Any bundle that shows a shipped icon owes this rule**, which is now
+   `color: var(--nidara-text)` in all three sheets. Before #587 it was
+   `-gtk-icon-filter: invert(1)` plus a light-mode counterpart, because the drawings were
+   non-symbolic and rendered black — a bundle with a light mode owed both halves, so the
+   greeter's unconditional invert could not simply be copied. A colour needs no such pair.
 3. **`window.<class> *` silently kills the glass.** `.nidara-window-glass` is one class,
    (0,1,0). `window.nidara-installer-window *` is a type plus a class, (0,1,1). So a blanket
    `background-color: transparent` written to reach the children out-ranks the glass and the
@@ -2045,9 +2046,11 @@ button was measuring the wrong string. The rules those left:
   ~40 installed themes provide that name on one dev box), so it would make the login screen's
   chevron take whatever shape the `greeter` system user's icon theme happened to supply. Exactly
   the defect `ui/lib/icons.ts` was written to end for the power glyphs. The path is relative so it
-  holds both installed and from source; the `-gtk-icon-filter: invert(1)` beside it is not
-  optional, because a Lucide SVG is non-symbolic and GTK paints it BLACK — the `.nd-icon`
-  mechanism, applied to a CSS node because an `arrow` has no widget to hang a class on.
+  holds both installed and from source; the `-gtk-icon-filter` beside it is not optional, because
+  `-gtk-icon-source` loads the file as a plain image rather than looking it up as an icon. Whether
+  that path honours the `-symbolic` suffix could not be measured off-screen (every harness rendered
+  the `arrow` node empty), so since #587 the filter is `brightness(0) invert(1)` — white whichever
+  way it goes — rather than a bare invert that would turn a recoloured glyph black.
   ⚠️ **Every other icon on that screen renders**, because
   the peek eye and the Lucide glyphs are `icon-name`/`gicon` set in CODE and owe the theme nothing
   — only the CSS-sourced node goes blank, which is why the screen looks like it has icons and one
@@ -2148,16 +2151,17 @@ only when someone boots a VM). The `styles` job now compiles it too.
   pill was left with 0.6px and the user saw the curve under it on hover. **Subtract
   `GLASS_INSET` (exported from `SquircleContainer`) whenever a child must meet the curve** —
   flush margins, scroll `cornerInset`, anything measuring from the rect.
-- **Most icon glyphs cannot be CSS-recolored to an arbitrary colour — verify before assuming
-  `color:` works on one.** GTK4 only recolours a `Gio.FileIcon` if its filename ends in
-  `-symbolic` (see "The bar launcher mark" below) — that's the WHOLE mechanism, filename-gated,
-  nothing to do with the SVG's own `fill="currentColor"`. Our general icon set (`core/Icons.ts`,
-  Lucide-derived — `wifi.svg`, `check.svg`, etc.) doesn't use that suffix, so `color: var(--nidara-accent)`
-  on a `Gtk.Image` showing one of them silently does nothing; the only real lever is `.nd-icon`'s
-  `-gtk-icon-filter: invert(1)`, a fixed black/white toggle for dark/light, not a recolor. Found
-  this dead on Settings → Power's profile checkmark (`accent-icon`, deleted 2026-07-01) — verify
-  empirically (screenshot + crop, don't trust the CSS alone) before relying on `color:` on any of
-  these icons. Anything that genuinely needs a live-coloured glyph draws in Cairo instead —
+- **Icon glyphs are CSS-recolorable — but only because the FILENAME says so.** GTK4 recolours a
+  `Gio.FileIcon` if, and only if, its filename ends in `-symbolic` — that's the WHOLE mechanism,
+  filename-gated, nothing to do with the SVG's own `fill="currentColor"`. Since #587 our own set
+  (`core/Icons.ts` → `wifi-symbolic.svg`, `check-symbolic.svg`, …) carries the suffix and the
+  symbolic classes, so `color: var(--nidara-accent)` on a `Gtk.Image` showing one now works.
+  ⚠️ **Drop the suffix and the icon silently goes black again** — no error, anywhere; that is what
+  `icon-registry-check.mjs` guards. It was the other way round until #587: the drawings had no
+  suffix, `color` did nothing, and the only lever was `.nd-icon`'s `-gtk-icon-filter: invert(1)`,
+  a black/white toggle rather than a recolor — found dead on Settings → Power's profile checkmark
+  (`accent-icon`, deleted 2026-07-01). Verify empirically (screenshot + crop, don't trust the CSS
+  alone) before relying on `color:`. A glyph that needs to be live-coloured may still draw in Cairo —
   `buildSelectionCheck` in `Power.tsx` (a 3-point path matching Lucide's "check") is the reference.
   **Don't reach for accent by default, though:** that checkmark sits on a `.nidara-row:selected`
   row, whose background is *already* an accent tint (`--nidara-state-selected`, itself derived
@@ -2197,6 +2201,9 @@ only when someone boots a VM). The `styles` job now compiles it too.
     where `record-stop` keeps it. `foreground-stroke` only when the stroke is `currentColor`, so
     `record`'s filled dot (which carries `stroke="none"`) does not get GTK's forced 2-unit stroke
     laid over it. Without classes, a stroke-only icon renders as a filled blob.
+    The same converter produced the shell's own `assets/icons/hicolor/scalable/actions/*-symbolic.svg`
+    — measured against the previous inverted rendering, the two are pixel-identical for `wifi` and
+    `battery`, 5e-06 RMSE for `bell` and 0.06% for `record` (the filled dot).
   - **the 16-unit variant, for a real 2px stroke in the bar.** GTK forces symbolic strokes to 2 SVG
     *user units*, so a 24-unit drawing at 16px strokes 1.33px. A `<g transform="scale(…)">` does
     NOT fix it — the stroke scales too; the coordinates have to be rewritten.
@@ -2208,8 +2215,9 @@ only when someone boots a VM). The `styles` job now compiles it too.
     with a broken link, and `icon-registry-check.mjs --theme <dir>` fails if any concept is missing
     from either size.
 - **NEVER put `nd-icon` on a third-party APP icon** — only on our own monochrome UI glyphs.
-  `.nd-icon` is `-gtk-icon-filter: invert(1)`, an unconditional invert; on full-colour app artwork
-  it hands back a photo negative. This has now been found three separate times (the notification
+  `.nd-icon` is `color: var(--nidara-text)`; on full-colour app artwork a symbolic recolour flattens
+  every colour to one. It was `-gtk-icon-filter: invert(1)` before #587, which handed back a photo
+  negative — a louder symptom for the same mistake. This has now been found three separate times (the notification
   centre's app icon, Settings → Audio's per-app row, and the CC audio detail's per-app row — the
   last one fixed 2026-08-02, reported by the user as "los iconos salen invertidos"). The pattern to
   copy when an image is *sometimes* ours and sometimes the app's: decide per icon, like

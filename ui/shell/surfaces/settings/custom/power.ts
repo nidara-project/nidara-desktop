@@ -9,12 +9,13 @@ import { NidaraRow } from "../../../../lib/nidara-kit"
 import type { PageCtx, ItemBuilder } from "../PreferencePage"
 import { cairoDraw } from "../../../../lib/cairo-draw"
 
-// Selection checkmark, Cairo-drawn. `accent-icon` (color: var(--nidara-accent)) on a
-// Gtk.Image has NO effect here: our icons are Gio.FileIcon → raw SVG files, rendered
-// outside GTK's symbolic-icon recolor pipeline (the only lever we have on them is
-// `-gtk-icon-filter: invert(1)`, a fixed black/white toggle, not a real recolor) —
-// anything that needs a genuinely live-coloured glyph goes through Cairo instead
-// (same reasoning as the battery glyph). NOT accent-coloured on purpose: the row
+// Selection checkmark, Cairo-drawn. It was Cairo because `accent-icon`
+// (color: var(--nidara-accent)) on a Gtk.Image had NO effect: our icons were raw,
+// non-symbolic SVG files, rendered outside GTK's symbolic-icon recolor pipeline, and
+// the only lever on them was `-gtk-icon-filter: invert(1)` — a black/white toggle,
+// not a recolor. Since #587 the drawings ARE symbolic and `color` reaches them, so
+// that constraint is gone and this could be a Gtk.Image. It stays Cairo because it
+// already works and nothing asks it to change. NOT accent-coloured on purpose: the row
 // itself already carries the accent (`.nidara-row:selected` → `--nidara-state-selected`,
 // which tracks the live accent too), so an accent check on an accent-tinted row has
 // almost no contrast. Plain mode-aware white/black — the same "readable on whatever's

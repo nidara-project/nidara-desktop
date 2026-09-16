@@ -168,10 +168,13 @@ function generateTokenHeader(config: NidaraThemeConfig, isDark: boolean): string
     lines.push(`  --accent-${key}: ${color};`)
   }
 
+  // No `.nd-icon` rule rides along any more: the shipped drawings are symbolic
+  // files, so they take the CSS `color` that `--nidara-text` above already
+  // carries for this mode. This used to append `-gtk-icon-filter: none` in light
+  // mode, to undo the invert the sheets applied for dark.
   lines.push(
     ...nidaraVars(config, isDark),
     `}`,
-    isDark ? `` : `.nd-icon { -gtk-icon-filter: none; }`,
   )
   return lines.join("\n")
 }
@@ -304,8 +307,9 @@ export function generateTokensCss(config: NidaraThemeConfig, isDark: boolean): s
  * panel); the dock, the Activity Island and the app grid are each their own
  * toplevel. App-mode windows — Settings (`nidara-settings-window`) and About
  * (`nidara-about`) — are SEPARATE toplevels, deliberately NOT in the scope, so
- * they keep the system mode like any third-party app. The `.nd-icon` filter is
- * mirrored too: symbolic icons invert in dark and not in light.
+ * they keep the system mode like any third-party app. Nothing else has to be
+ * mirrored: the icons are symbolic and follow `--nidara-text`, which this scope
+ * already redefines.
  *
  * ⚠️ THIS LIST IS A COUPLING TO WHICH SURFACES EXIST, AND IT HAS BEEN WRONG
  * BEFORE. It said "bar and dock" from the days when the island and the app grid

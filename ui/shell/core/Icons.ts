@@ -14,9 +14,9 @@ import { SHELL_ROOT } from "./Paths"
  *      (`org.gnome.desktop.interface icon-theme`), which is what the dock, the
  *      tray and the app grid resolve against. GTK gives one theme per process,
  *      and these are the two we need at once;
- *   2. our own shipped drawing, as the last link. It is what every concept
- *      resolves to today, so with no interface theme set NOTHING changes on
- *      screen — which is the whole point of this first step.
+ *   2. our own shipped drawing, as the last link — `assets/icons/hicolor/
+ *      scalable/actions/<name>-symbolic.svg`. With no interface theme set, which
+ *      is the default, every concept resolves here.
  *
  * ⚠️ A theme icon is asked for under its STANDARD name (freedesktop Icon Naming
  * Spec plus the de-facto GNOME symbolic names), never ours. That is the contract
@@ -25,11 +25,15 @@ import { SHELL_ROOT } from "./Paths"
  *
  * ⚠️ Measured, GTK 4.22.5 (the A/B prototype on #587): a `Gio.FileIcon` pointing
  * at a `*-symbolic.svg` recolours from CSS `color` EXACTLY like an icon looked up
- * on the display theme — same rendered pixels. That is why the ~172 call sites do
- * not have to change, and why `.nd-icon`'s `invert(1)` can go once the shipped
- * theme is symbolic. Our current drawings are NOT symbolic (no `-symbolic`
- * suffix, plain `stroke="currentColor"`), so they still render black and still
- * need that class — see `ui/lib/icons.ts`.
+ * on the display theme — same rendered pixels. That is why the ~172 call sites did
+ * not have to change when this became a registry.
+ *
+ * ⚠️ Our own drawings are symbolic too now — `<name>-symbolic.svg`, with the
+ * symbolic classes on every shape. GTK gates recolouring on the FILENAME, so the
+ * suffix is not decoration. Before that, they rendered black and every consumer
+ * had to remember `.nd-icon`'s `-gtk-icon-filter: invert(1)` — which then turned
+ * a theme's already-white symbolic icon BLACK the moment an interface theme was
+ * set. That inversion is gone; icons take CSS `color` like any other glyph.
  *
  * ⚠️ `instanceof Gtk.SymbolicPaintable` does NOT tell you whether an icon
  * recolours: a non-symbolic file reports `true` and still draws black. Only the
@@ -39,11 +43,11 @@ import { SHELL_ROOT } from "./Paths"
 // Assets resolve against SHELL_ROOT (source tree in dev, /usr/share in prod).
 // See core/Paths.ts. install.sh ships assets/ into both.
 const DIR = `${SHELL_ROOT}/assets/icons/hicolor/scalable/actions`
-const f = (name: string) => Gio.FileIcon.new(Gio.File.new_for_path(`${DIR}/${name}.svg`))
+const f = (name: string) => Gio.FileIcon.new(Gio.File.new_for_path(`${DIR}/${name}-symbolic.svg`))
 
 /** Absolute path of a shipped asset icon — for chains that fall back to our
  *  own art only when the icon theme has nothing (see AppService.resolveIconChain). */
-export const iconAssetPath = (name: string) => `${DIR}/${name}.svg`
+export const iconAssetPath = (name: string) => `${DIR}/${name}-symbolic.svg`
 
 /**
  * concept → [ standard icon name, our shipped drawing ].

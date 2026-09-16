@@ -200,9 +200,9 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_start: 12, margin_end: 12, margin_top: 8, margin_bottom: 8 })
 
     const header = new Gtk.Box({ spacing: 8 })
-    // Real app icon — NO `nd-icon`. That class is `-gtk-icon-filter: invert(1)`
-    // (_reset.scss), meant for our monochrome UI glyphs; on a full-colour app icon
-    // it inverts the artwork. Same note as Settings → Audio's stream row.
+    // Real app icon — NO `nd-icon`. That class marks OUR monochrome glyphs and
+    // paints them --nidara-text (_reset.scss); on full-colour app artwork it would
+    // flatten every colour to one. Same note as Settings → Audio's stream row.
     header.append(new Gtk.Image({ icon_name: iconName, pixel_size: 20, valign: Gtk.Align.CENTER }))
     header.append(new Gtk.Label({
         label: appName,

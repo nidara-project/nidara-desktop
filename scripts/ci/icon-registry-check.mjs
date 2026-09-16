@@ -21,7 +21,7 @@
  *
  * So this checks, mechanically:
  *
- *   1. every concept's shipped drawing exists on disk;
+ *   1. every concept's shipped drawing exists on disk, under its `-symbolic` name;
  *   2. every concept names a standard icon, and no two concepts claim the same
  *      one — two concepts under one name is a theme that cannot tell them apart;
  *   3. no shipped drawing is orphaned: a file in the asset directory that no
@@ -74,9 +74,12 @@ log(`${REGISTRY}: ${concepts.length} concepts`)
 
 // ── 2. Every concept's shipped drawing exists ────────────────────────────────
 log("\nEvery concept has its shipped drawing:")
+// The `-symbolic` suffix is load-bearing, not a naming convention: GTK gates
+// recolouring on the FILENAME, so a drawing that loses it renders black and no
+// error is raised anywhere.
 for (const { concept, asset } of concepts) {
-    if (existsSync(join(ASSETS, `${asset}.svg`))) pass(`${concept} → ${asset}.svg`)
-    else error(`${concept} points at ${asset}.svg, which is not in ${ASSETS}: the last link of the chain is missing, so this concept draws nothing when the interface theme has no icon for it.`)
+    if (existsSync(join(ASSETS, `${asset}-symbolic.svg`))) pass(`${concept} → ${asset}-symbolic.svg`)
+    else error(`${concept} points at ${asset}-symbolic.svg, which is not in ${ASSETS}: the last link of the chain is missing, so this concept draws nothing when the interface theme has no icon for it.`)
 }
 
 // ── 3. No two concepts share a standard name ─────────────────────────────────
@@ -93,11 +96,11 @@ for (const [standard, owners] of byStandard) {
 
 // ── 4. No orphaned drawing ───────────────────────────────────────────────────
 log("\nEvery shipped drawing belongs to a concept:")
-const used = new Set(concepts.map(c => c.asset))
+const used = new Set(concepts.map(c => `${c.asset}-symbolic`))
 const files = readdirSync(ASSETS).filter(f => f.endsWith(".svg")).map(f => f.slice(0, -4))
 for (const file of files) {
     if (used.has(file)) continue
-    error(`${file}.svg is in ${ASSETS} but no concept points at it — either dead weight to delete, or a concept missing from the registry.`)
+    error(`${file}.svg is in ${ASSETS} but no concept points at it — either dead weight to delete, a concept missing from the registry, or a drawing that lost its -symbolic suffix.`)
 }
 if (files.every(f => used.has(f))) pass(`${files.length} files, all registered`)
 
