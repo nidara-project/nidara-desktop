@@ -328,44 +328,26 @@ class AppService {
             return n
         }
 
-        // Deep filesystem fallback — searches icon theme directories directly
-        let themeName = theme.get_theme_name()
-        if (themeName === "Adwaita" || themeName === "hicolor") {
-            try {
-                const settings = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
-                const configuredTheme = settings.get_string("icon-theme")
-                if (configuredTheme) themeName = configuredTheme
-            } catch (e) { }
-        }
-
-        const visited = new Set<string>()
-        const subdirs = ["scalable/apps", "apps", "48x48/apps", "32x32/apps", ""]
-
-        const searchBases = (bases: string[]) => {
-            for (const base of bases) {
-                for (const sub of subdirs) {
-                    for (const ext of extensions) {
-                        const path = `${base}/${sub}/${n}${ext}`.replace("//", "/")
-                        if (!visited.has(path) && GLib.file_test(path, GLib.FileTest.EXISTS)) return path
-                        visited.add(path)
-                    }
-                }
-            }
-            return null
-        }
-
-        // Current theme + hicolor + pixmaps. Deliberately NOT other installed
-        // themes: themes must never mix — an icon the active theme lacks falls
-        // back to the app's own hicolor icon, and the per-app override in
-        // Settings → Apps is the escape hatch beyond that.
-        const primary = searchBases([
-            `${GLib.get_home_dir()}/.local/share/icons/${themeName}`,
-            `/usr/share/icons/${themeName}`,
-            `/usr/share/icons/hicolor`,
-            `/usr/share/pixmaps`
-        ])
-        if (primary) return primary
-
+        // No filesystem sweep here. There used to be one — the active theme's
+        // directory, hicolor and /usr/share/pixmaps, walked by hand over a fixed
+        // list of subdirectories — and it rescued NOTHING, because it re-asked a
+        // question GTK had already answered properly.
+        //
+        // Measured over the 71 distinct `Icon=` values of this host's .desktop
+        // files, against four installed themes: GTK's own lookup answers 71/71
+        // (Papirus, Colloid, MacTahoe) and 70/71 (Adwaita), and the sweep saved
+        // 0 in every run. `/usr/share/pixmaps` needs no help either — GTK 4 already
+        // carries it in the default search path, along with the Flatpak and Snap
+        // exports, so the four apps whose icon sits loose there (antigravity,
+        // nwg-look, pinentry, stoken-gui) resolve through `has_icon` above.
+        //
+        // 🔑 Why it could never have worked: a directory walk answers "is there a
+        // file at this path", and GTK answers "what does this theme resolve, via
+        // its Inherits chain". A theme that keeps app icons in 64x64/apps, or
+        // inherits the icon from another theme, is invisible to the walk and
+        // ordinary to GTK — so the sweep was both useless and quietly wrong about
+        // what "the active theme has no icon for this" means.
+        //
         // Steam fallback: handles steam_icon_APPID (from .desktop Icon= field) and
         // steam_app_APPID (Hyprland window class when no .desktop file exists).
         // Steam stores per-game icons as hash-named JPEGs in its own appcache — outside
