@@ -130,6 +130,7 @@ export const manifest = [
                 items: [
                     "appearance.gtkTheme",
                     "appearance.iconTheme",
+                    "appearance.interfaceIconTheme",
                     "appearance.cursorTheme",
                 ],
             },

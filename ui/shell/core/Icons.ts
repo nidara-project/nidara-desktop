@@ -71,7 +71,6 @@ export const iconAssetPath = (name: string) => `${DIR}/${name}-symbolic.svg`
  * standard name if the concept has one, an `nd-` name if it does not.
  */
 export const ICON_NAMES = [
-    "application-exit",
     "audio-input-microphone",
     "audio-speakers",
     "audio-volume-high",
@@ -87,12 +86,14 @@ export const ICON_NAMES = [
     "bluetooth-paired",
     "camera-photo",
     "contact-new",
-    "daytime-sunset",
     "dialog-information",
     "dialog-password",
     "display-brightness",
+    "display-brightness-low",
     "drive-harddisk",
+    "edit-paste",
     "emblem-default",
+    "emblem-system",
     "input-gaming",
     "input-keyboard",
     "media-playback-pause",
@@ -103,7 +104,6 @@ export const ICON_NAMES = [
     "media-skip-forward",
     "nd-ai",
     "nd-bar",
-    "nd-clipboard",
     "nd-clipboard-history",
     "nd-cpu",
     "nd-dock",
@@ -121,8 +121,11 @@ export const ICON_NAMES = [
     "network-wireless-signal-none",
     "network-wireless-signal-ok",
     "network-wireless-signal-weak",
+    "night-light",
+    "notifications",
     "notifications-disabled",
     "open-menu",
+    "org.gnome.tweaks",
     "pan-down",
     "pan-end",
     "pan-start",
@@ -140,6 +143,7 @@ export const ICON_NAMES = [
     "preferences-system-time",
     "sidebar-show",
     "system-lock-screen",
+    "system-log-out",
     "system-reboot",
     "system-search",
     "system-shutdown",
@@ -151,6 +155,8 @@ export const ICON_NAMES = [
     "value-increase",
     "video-display",
     "view-grid",
+    "weather-clear",
+    "weather-clear-night",
     "window-close",
     "zoom-in",
     "zoom-out",
@@ -241,6 +247,12 @@ function setInterfaceTheme(name: string) {
     cache.clear()
 }
 
+/** The setting, once it has been opened — null on a schema that predates the key. */
+let settings: InstanceType<typeof Gio.Settings> | null = null
+
+/** Everyone listening for a change of interface theme (Settings' row, `describeConfig`). */
+const listeners = new Set<(name: string) => void>()
+
 /**
  * Follow the setting. The key is Nidara's own (#573 keeps the keys the desktop
  * standard does not name in `org.nidara.appearance`); an install whose schema
@@ -250,14 +262,40 @@ function setInterfaceTheme(name: string) {
 function watchSetting() {
     const source = Gio.SettingsSchemaSource.get_default()
     if (!source?.lookup(APPEARANCE_SCHEMA, true)?.has_key(THEME_KEY)) return
-    const settings = new Gio.Settings({ schema_id: APPEARANCE_SCHEMA })
-    setInterfaceTheme(settings.get_string(THEME_KEY))
-    settings.connect(`changed::${THEME_KEY}`, () => {
-        setInterfaceTheme(settings.get_string(THEME_KEY))
+    const s = new Gio.Settings({ schema_id: APPEARANCE_SCHEMA })
+    settings = s
+    setInterfaceTheme(s.get_string(THEME_KEY))
+    s.connect(`changed::${THEME_KEY}`, () => {
+        setInterfaceTheme(s.get_string(THEME_KEY))
         console.log(`[Icons] Interface icon theme: ${themeName || "(none — shipped drawings)"}`)
+        for (const cb of listeners) cb(themeName)
     })
 }
 try { watchSetting() } catch (e) { console.warn("[Icons] Interface icon theme setting unreadable:", e) }
+
+/**
+ * The interface icon theme as the user CHOSE it — `""` for our own drawings.
+ *
+ * ⚠️ Not what is drawing: a chosen theme that is not installed still reads back
+ * here (see `setInterfaceTheme`), because the value is the user's and the row
+ * has to keep saying what was picked.
+ */
+export const interfaceIconTheme = (): string => themeName
+
+/** Choose the interface icon theme; `""` goes back to our own drawings. */
+export function setInterfaceIconTheme(name: string) {
+    if (!settings) {
+        console.warn("[Icons] Interface icon theme cannot be set: this install's schema has no interface-icon-theme key.")
+        return
+    }
+    settings.set_string(THEME_KEY, name)
+}
+
+/** Call `cb` with the theme name whenever it changes, from anywhere. Returns the unsubscribe. */
+export function onInterfaceIconThemeChange(cb: (name: string) => void): () => void {
+    listeners.add(cb)
+    return () => { listeners.delete(cb) }
+}
 
 /**
  * The size the theme lookup asks for — deliberately far larger than anything we
@@ -400,7 +438,41 @@ export function uiIcon(name: IconName): Gio.FileIcon {
     if (hit) return hit
     const resolved = resolve(name)
     cache.set(name, resolved)
+    const path = resolved.get_file().get_path()
+    if (path) handedOut.set(path, name)
     return resolved
+}
+
+/**
+ * Every file `uiIcon` has ever answered with, and the name it answered for.
+ *
+ * Never cleared, on purpose: it is what lets an icon resolved under the PREVIOUS
+ * theme be recognised after a change, when the cache no longer knows it. It is
+ * bounded by concepts × themes the user has tried in one session.
+ */
+const handedOut = new Map<string, IconName>()
+
+/**
+ * The name behind a file `uiIcon` handed out, or null if it never did.
+ * What `common/IconThemeRefresh.ts` uses to find the icons already on screen.
+ */
+export function uiIconNameForFile(path: string): IconName | null {
+    return handedOut.get(path) ?? null
+}
+
+/**
+ * `icon` as the CURRENT theme draws it — for an icon captured once, at module load,
+ * and turned into a widget later (a widget's catalogue icon, a slider's end icons).
+ *
+ * ⚠️ A `Gio.FileIcon` is one file and cannot change, so anything that stored
+ * `uiIcon(…)` keeps the old theme's drawing forever. Icons already inside a widget
+ * are swapped by `common/IconThemeRefresh.ts`; this is for the ones that are not in
+ * a widget YET. Anything that is not ours passes through untouched.
+ */
+export function currentUiIcon<T extends Gio.FileIcon | null | undefined>(icon: T): T {
+    const path = icon?.get_file().get_path()
+    const name = path ? handedOut.get(path) : undefined
+    return (name ? uiIcon(name) : icon) as T
 }
 
 export type IconGIcon = Gio.FileIcon

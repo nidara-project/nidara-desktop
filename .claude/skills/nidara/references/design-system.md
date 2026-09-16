@@ -2171,7 +2171,10 @@ only when someone boots a VM). The `styles` job now compiles it too.
   live accent when the glyph sits on the shell's own neutral glass, not on another accent fill.
 - **Interface icons are asked for by STANDARD NAME, and there is only one name (#587).**
   `uiIcon("network-wireless")` looks for that name in the user's interface icon theme (GSettings
-  `org.nidara.appearance interface-icon-theme`, empty by default) and then in our own
+  `org.nidara.appearance interface-icon-theme`, empty by default — chosen in Settings →
+  Appearance → *Interface icons*, config key `appearance.interfaceIconTheme`, where the empty
+  value is spelled `nidara` and `nidara-symbolic` is left off the list because it IS our drawings,
+  packaged) and then in our own
   `assets/icons/hicolor/scalable/actions/network-wireless-symbolic.svg` — the same name, two
   places. Nothing translates anything: `core/Icons.ts` holds `ICON_NAMES`, a flat LIST that exists
   only so the compiler can refuse a name we do not ship. Adding an icon means adding a name and a
@@ -2182,6 +2185,16 @@ only when someone boots a VM). The `styles` job now compiles it too.
     study mapped the assistant to `system-help`, so picking Adwaita turned Nidara's AI into a
     question mark. Use a standard name when one exists, `nd-` when none does, and never `nd-` for
     something the desktop already names — CI fails on that.
+  - **a name is chosen by what themes DRAW for it, not by how it reads.** Three names from the
+    icon study were wrong in a way only a render shows (2026-09-16): dark mode asked for
+    `system-suspend` (a moon in Adwaita, the suspend button in Papirus/Qogir/Colloid), the bar's
+    bell for `preferences-system-notifications` (the Settings PANEL's icon — a speech bubble with
+    "!" in most themes; right for the Settings sidebar, wrong for a bell) and the Control Centre
+    gear for `preferences-system` (tools in Adwaita). Before adding or changing a name, run
+    `gjs -m scripts/dev/icon-theme-audit.js [themes…] > a.tsv` and
+    `python3 scripts/dev/icon-theme-sheet.py a.tsv /tmp/sheet`, and check that every column
+    draws the same IDEA. The same concept can need two names by context: the notifications
+    Settings page keeps `preferences-system-notifications`, the bell is `notifications`.
   - **the lookup asks for size 512, on purpose.** A `Gio.FileIcon` is one file, so the size decides
     WHICH of a theme's variants we get, and fixed-size directories are often drawn with padding —
     Colloid's `status/24` icons fill 63% of their box against 97% for its scalable ones. Asking for
@@ -2195,6 +2208,14 @@ only when someone boots a VM). The `styles` job now compiles it too.
     `set_theme_name` accepts anything without looking, so a mistyped name silently resolves
     NOTHING and looks exactly like the setting never having been touched. The name is checked
     against `index.theme` on the search path before use, and a near-miss is named in the log.
+  - **a theme change reaches icons already on screen through `common/IconThemeRefresh.ts`,
+    not through the cache.** A `Gio.FileIcon` is one file; clearing the cache re-asks nobody, so
+    the first version of the Settings selector changed nothing until a restart. On change it
+    walks every toplevel (hidden ones too — Settings keeps its tree) and swaps each `Gtk.Image`
+    holding a file `uiIcon` ever handed out (`uiIconNameForFile`). An icon stored at MODULE
+    LOAD and turned into a widget later (a widget's catalogue `icon`, a config entry's slider
+    `icons`) is not in any tree yet — its consumer wraps it in `currentUiIcon(…)`. Store names,
+    not `uiIcon(…)` results, in anything new that outlives a theme change.
   Three more things that are easy to get wrong:
   - the interface theme is a **private `Gtk.IconTheme`**, never
     `Gtk.IconTheme.get_for_display()`. The display's theme belongs to APPLICATION icons (the dock,

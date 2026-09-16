@@ -181,11 +181,14 @@
     "settings.appearance.image.desc": "4e89ef7d",
     "settings.appearance.gtk-theme.desc": "91bc47f4",
     "settings.appearance.cursor.desc": "b4cf5e25",
-    "settings.appearance.icons.desc": "ce21680a",
+    "settings.appearance.icons.desc": "e8702009",
     "settings.appearance.dark-mode.desc": "a04840a2",
     "settings.appearance.accent": "e49578ed",
     "settings.appearance.cursor": "2239943c",
-    "settings.appearance.icons": "edb8f6c1",
+    "settings.appearance.icons": "b0852b31",
+    "settings.appearance.interface-icons": "e5abd991",
+    "settings.appearance.interface-icons.desc": "5dc5a91a",
+    "settings.appearance.interface-icons.opt.nidara": "aa436230",
     "settings.appearance.image": "50e19fda",
     "settings.appearance.dark-mode": "9cf83d1f",
     "settings.appearance.shell-appearance": "49af0169",
@@ -768,8 +771,8 @@
   },
   "locales": {
     "de": {
-      "translated": 726,
-      "of": 764,
+      "translated": 729,
+      "of": 767,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -813,14 +816,14 @@
       "stale": []
     },
     "es": {
-      "translated": 764,
-      "of": 764,
+      "translated": 767,
+      "of": 767,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 726,
-      "of": 764,
+      "translated": 729,
+      "of": 767,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -864,8 +867,8 @@
       "stale": []
     },
     "it": {
-      "translated": 726,
-      "of": 764,
+      "translated": 729,
+      "of": 767,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -909,8 +912,8 @@
       "stale": []
     },
     "ja": {
-      "translated": 726,
-      "of": 764,
+      "translated": 729,
+      "of": 767,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -954,8 +957,8 @@
       "stale": []
     },
     "nl": {
-      "translated": 726,
-      "of": 764,
+      "translated": 729,
+      "of": 767,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -999,8 +1002,8 @@
       "stale": []
     },
     "pl": {
-      "translated": 726,
-      "of": 764,
+      "translated": 729,
+      "of": 767,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1044,8 +1047,8 @@
       "stale": []
     },
     "pt-BR": {
-      "translated": 726,
-      "of": 764,
+      "translated": 729,
+      "of": 767,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1089,8 +1092,8 @@
       "stale": []
     },
     "pt-PT": {
-      "translated": 726,
-      "of": 764,
+      "translated": 729,
+      "of": 767,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1134,8 +1137,8 @@
       "stale": []
     },
     "ru": {
-      "translated": 726,
-      "of": 764,
+      "translated": 729,
+      "of": 767,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1179,8 +1182,8 @@
       "stale": []
     },
     "zh-CN": {
-      "translated": 726,
-      "of": 764,
+      "translated": 729,
+      "of": 767,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",

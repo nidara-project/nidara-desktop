@@ -5,6 +5,7 @@ import { NidaraRow, NidaraStackedRow, NidaraList, NidaraButton,
          attachTooltip } from "../../../lib/nidara-kit"
 import { t } from "../../core/i18n"
 import { getConfigEntry } from "../../core/ConfigRegistry"
+import { currentUiIcon } from "../../core/Icons"
 import type { PageDecl, ItemDecl } from "./manifest"
 
 /**
@@ -324,6 +325,8 @@ export const settingRow = (key: string): Gtk.ListBoxRow => {
             const init = Number(entry.get())
             const cb = (v: number) => { entry.set?.(v) }
             const opts: NidaraSliderRowOpts = { ...ui.slider }
+            // Stored once at registration — see currentUiIcon.
+            if (opts.icons) opts.icons = [currentUiIcon(opts.icons[0]), currentUiIcon(opts.icons[1])]
             if (!opts.onExtChange && entry.subscribe) {
                 opts.onExtChange = (apply: (v: number) => void) => {
                     return entry.subscribe!((v) => apply(Number(v)))

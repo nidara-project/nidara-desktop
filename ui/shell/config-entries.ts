@@ -29,7 +29,7 @@ import regionConfig from "./core/RegionConfig"
 import { getIdleConfig, updateIdleConfig, onHypridleChanged } from "./core/PowerConfig"
 import inputConfig from "./core/InputConfig"
 import { allKeyboards, keyboardById, keyboardId, parseKeyboardId } from "../lib/keyboards"
-import { uiIcon } from "./core/Icons"
+import { uiIcon, interfaceIconTheme, setInterfaceIconTheme, onInterfaceIconThemeChange } from "./core/Icons"
 import { safeDisconnect } from "./core/signals"
 import { t } from "./core/i18n"
 import workspaceModes, {
@@ -234,6 +234,33 @@ export function registerConfigEntries() {
         ui: {
             i18n: "settings.appearance.icons",
             optI18n: v => v,
+        },
+    })
+    // The theme for Nidara's OWN icons (#587) — the bar, the menus, Settings —
+    // beside `appearance.iconTheme` above, which is the one applications draw from.
+    // "nidara" stands for the stored empty string (our shipped drawings): an empty
+    // value is a poor thing to hand an agent or type on a command line, and no
+    // installed theme can take the name — `getAvailableIconThemes` reserves it.
+    // `nidara-symbolic` is left out because it IS those drawings, packaged for other
+    // processes; offering it would list the default twice under two names.
+    registerConfig("appearance.interfaceIconTheme", {
+        desc: "Icon theme for Nidara's own interface icons (bar, menus, Settings), separate from the app icon theme. 'nidara' = Nidara's own drawings (default). Any icon the chosen theme lacks, or cannot draw, falls back to Nidara's.",
+        type: "enum",
+        enum: (() => {
+            const themes = Theme.getAvailableIconThemes().filter(n => n !== "nidara-symbolic")
+            const current = interfaceIconTheme()
+            if (current && current !== "nidara-symbolic" && !themes.includes(current)) themes.push(current)
+            return ["nidara", ...themes.sort()]
+        })(),
+        get: () => interfaceIconTheme() || "nidara",
+        set: v => setInterfaceIconTheme(v === "nidara" ? "" : v as string),
+        subscribe: (apply) => {
+            apply(interfaceIconTheme() || "nidara")
+            return onInterfaceIconThemeChange(n => apply(n || "nidara"))
+        },
+        ui: {
+            i18n: "settings.appearance.interface-icons",
+            optI18n: v => v === "nidara" ? t("settings.appearance.interface-icons.opt.nidara") : v,
         },
     })
     registerConfig("appearance.cursorTheme", {

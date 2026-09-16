@@ -121,6 +121,7 @@ export function NidaraDropDownRow(
     // way in. The keyboard row is what forced it — the xkb catalogue is 598
     // entries (#473), and no one scrolls to `us-dvorak-alt-intl`.
     if (opts.length > SEARCHABLE_FROM) {
+        const listFactory = drp.list_factory
         drp.expression = Gtk.PropertyExpression.new(Gtk.StringObject.$gtype, null, "string")
         drp.enable_search = true
         // ⚠️ And SUBSTRING, which is not the default. GtkDropDown searches by
@@ -129,6 +130,15 @@ export function NidaraDropDownRow(
         // search box was there, took the text, and found nothing. Caught by
         // opening it and typing, not by any type or count.
         if ("search_match_mode" in drp) drp.search_match_mode = Gtk.StringFilterMatchMode.SUBSTRING
+        // ⚠️ And the list factory again, AFTER the two lines above. Turning search
+        // on puts GTK's default factory back into the popup, over the one
+        // `NidaraDropDown` installed — so every searchable dropdown drew bare
+        // labels with GTK's checkmark and none of our row fill, hover or padding,
+        // while every short one looked right. No error, no warning. Measured
+        // offscreen (`SEARCH=1 scripts/dev/gtk-probe.js`: `box.horizontal` + label +
+        // image per row, 17 px tall; with `REAPPLY=1` it is `.nidara-dropdown-item`
+        // again, 29 px); the owner saw it first, 2026-09-16.
+        drp.list_factory = listFactory
     }
 
     // 🔑 **A value that is not in the list is ADDED to it, never rounded down to

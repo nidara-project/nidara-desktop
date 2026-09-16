@@ -20,7 +20,7 @@ import { manifest, type PageDecl } from "./manifest"
 import { buildPreferencePage } from "./PreferencePage"
 import { beginPage, endPage, clearSearchIndex, getSearchIndex, indexPage, indexPreferencePage, runPageRefreshers, type SettingsNav } from "./SettingsHelpers"
 import { t } from "../../core/i18n"
-import { uiIcon } from "../../core/Icons"
+import { uiIcon, currentUiIcon } from "../../core/Icons"
 import IconButton from "../../common/IconButton"
 import { attachTooltip } from "../../../lib/nidara-kit"
 
@@ -343,7 +343,7 @@ export default function Settings(monitor: Gdk.Monitor) {
                 // come first" answerable without a screenshot.
                 isPage ? ["search-result-row", "search-result-page"] : ["search-result-row"], undefined,
                 new Gtk.Image({
-                    gicon: cat?.icon ?? uiIcon("preferences-desktop"),
+                    gicon: currentUiIcon(cat?.icon) ?? uiIcon("preferences-desktop"),
                     pixel_size: 18,
                     css_classes: ["search-result-page-icon", "nd-icon"],
                     opacity: isPage ? 1 : 0.6,

@@ -36,6 +36,10 @@
  *                 error for this: padding just reads 0. Pick the window your widget
  *                 really lives in, and if a value looks suspiciously bare, suspect
  *                 this first.
+ *   ITEMS=… SEARCH=1 REAPPLY=1
+ *                 option count; the popup's search box on (as NidaraDropDownRow does
+ *                 past 24 options); and our list factory set again AFTER it, which
+ *                 is the kit's fix — search alone swaps GTK's default factory back in.
  *   EXTRA_CSS=…   loaded ABOVE style.css — "what if we also said this?"
  *   LOW_CSS=…     loaded at the THEME priority — stands in for Adwaita, so you can
  *                 test whether one of our declarations really beats the theme's.
@@ -139,6 +143,15 @@ factory.connect("bind", (_f, item) => {
 // FACTORY=gtk keeps GTK's default list factory — the before/after that shows what
 // our own rows actually changed (GTK's item carries a checkmark; ours does not).
 if (GLib.getenv("FACTORY") !== "gtk") drop.list_factory = factory
+// SEARCH=1 turns on the popup's search box, the way `NidaraDropDownRow` does above
+// its threshold — a searchable dropdown is a different popup tree, and it has to
+// be measured as one.
+if (GLib.getenv("SEARCH") === "1") {
+    drop.expression = Gtk.PropertyExpression.new(Gtk.StringObject.$gtype, null, "string")
+    drop.enable_search = true
+    print("[search] enabled")
+    if (GLib.getenv("REAPPLY") === "1" && GLib.getenv("FACTORY") !== "gtk") { drop.list_factory = factory; print("[search] list factory re-applied") }
+}
 page.append(drop)
 
 const popoverOf = (w) => {

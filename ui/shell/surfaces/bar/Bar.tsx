@@ -38,7 +38,7 @@ import { execAsync } from "../../../lib/process"
 import { t } from "../../core/i18n"
 import { barSettings, onBarSettingsChanged, resolveLauncherIcon, LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "./barState"
 import { dockSideState, dockSettings, onDockSettingsChanged } from "../dock/state"
-import { uiIcon } from "../../core/Icons"
+import { uiIcon, currentUiIcon } from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import hs from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
@@ -1062,7 +1062,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   timeLabel.connect("unrealize", () => { try { GLib.source_remove(clockTimer) } catch {} })
   regionConfig.connect("changed", updateClock)
   updateClock()
-  const bellIcon = new Gtk.Image({ gicon: uiIcon("preferences-system-notifications"), pixel_size: 16, visible: false , css_classes: ["nd-icon"] })
+  const bellIcon = new Gtk.Image({ gicon: uiIcon("notifications"), pixel_size: 16, visible: false , css_classes: ["nd-icon"] })
   const syncBell = () => { bellIcon.set_visible(notifications().length > 0) }
   watchNotified(syncBell)
   watchResolved(syncBell)
@@ -1083,7 +1083,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       const hasCCDetail = !!w.buildCCDetail
       const btn = menuRow({
         label: w.name,
-        icon: w.icon,
+        icon: currentUiIcon(w.icon),
         onClick: () => {
           // Same first refusal as a visible pill (see rebuildBarWidgets) — an
           // overflowed widget must not behave differently from a shown one.
@@ -1207,7 +1207,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   //   (Centring on the allocation boxes gives 40, which looks pegged-right because both draw narrower.)
   // The gap is a plain 16px spacer that just reserves the width (no shift when the dot shows/hides).
   // Detail + Stop/kill-switch live in the CC banner. Badge can_target:false → clicks hit the capsule.
-  const ccGear = new Gtk.Image({ gicon: uiIcon("preferences-system"), pixel_size: 16, margin_start: 16, css_classes: ["nd-icon"] })
+  // Two sliders, like macOS's Control Centre. The freedesktop spec has no name for
+  // that; the one icon themes draw that way is GNOME Tweaks' (Colloid, MacTahoe, Qogir,
+  // Tela — as two switches). `preferences-system` is a gear or tools everywhere (#587).
+  const ccGear = new Gtk.Image({ gicon: uiIcon("org.gnome.tweaks"), pixel_size: 16, margin_start: 16, css_classes: ["nd-icon"] })
   const ccInner = new Gtk.Box({ valign: Gtk.Align.CENTER })
   ccInner.append(ccGear)
   ccInner.append(new Gtk.Box({ width_request: 16 }))   // reserve the right gap → capsule stays 48px

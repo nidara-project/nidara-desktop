@@ -105,8 +105,8 @@ export function SystemMenuOverlay() {
     closeAndRun(["systemctl", "suspend"])
   ))
   menuBox.append(sep())
-  menuBox.append(makeRow(uiIcon("application-exit"), t("bar.system-menu.logout"), true, () =>
-    showConfirm(uiIcon("application-exit"), t("bar.system-menu.confirm.logout"), t("bar.system-menu.confirm.action.logout"), true,
+  menuBox.append(makeRow(uiIcon("system-log-out"), t("bar.system-menu.logout"), true, () =>
+    showConfirm(uiIcon("system-log-out"), t("bar.system-menu.confirm.logout"), t("bar.system-menu.confirm.action.logout"), true,
       () => closeAndRun(["uwsm", "stop"]))
   ))
   menuBox.append(makeRow(uiIcon("system-reboot"), t("bar.system-menu.restart"), false, () =>

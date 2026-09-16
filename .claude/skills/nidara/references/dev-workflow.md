@@ -1950,6 +1950,11 @@ each node's bounds / padding / border / margin / state, the same deltas `queryUI
 `save_to_png`, so you can count pixels of the actual render. `EXTRA_CSS=` loads above
 style.css and `LOW_CSS=` loads at the *theme's* priority, which turns it from a dump into an
 experiment: "does our declaration really beat the theme's?" is one run, not an argument.
+`ITEMS=N` sets the option count and `SEARCH=1` turns the popup's search box on the way
+`NidaraDropDownRow` does above 24 options — **a searchable dropdown is a different popup, measure
+it as one**: turning search on puts GTK's default list factory back over ours (bare labels + a
+checkmark, 17 px rows, none of our fill), which is why the kit re-applies its factory afterwards.
+`REAPPLY=1` is that re-application, so the before/after is two runs (caught 2026-09-16).
 
 Why offscreen and not the live shell: it is reproducible, it needs nobody to hold a popover
 open, and it can answer counterfactuals ("what did the PREVIOUS commit's CSS measure?") that a
