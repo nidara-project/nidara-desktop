@@ -195,14 +195,66 @@ const THEME_KEY = "interface-icon-theme"
 /** Icons already resolved under the current theme. Cleared when it changes. */
 const cache = new Map<IconConcept, Gio.FileIcon>()
 
+/**
+ * Is `name` an icon theme on this machine, and spelled the way the disk spells it?
+ *
+ * ⚠️ A theme name is a DIRECTORY name, so it is case-sensitive: `adwaita` is not
+ * `Adwaita`. `set_theme_name` accepts anything — it does not look, and there is no
+ * error — and a theme that is not there resolves NOTHING, so every concept
+ * quietly falls back to our drawing and the desktop looks exactly as if the
+ * setting had never been touched. The owner hit this within minutes of the
+ * setting existing (2026-09-16), and `ThemeManager.cursorThemeInstalled` exists
+ * because the cursor theme had already taught the same lesson (tech-debt #72).
+ *
+ * The test is the one GTK itself would use: an `index.theme` under one of the
+ * search path's directories.
+ */
+function installedIconTheme(theme: Gtk.IconTheme, name: string): boolean {
+    return theme.get_search_path()?.some(dir =>
+        GLib.file_test(`${dir}/${name}/index.theme`, GLib.FileTest.EXISTS)) ?? false
+}
+
+/** The same name as the disk spells it, when only the case is wrong. */
+function spelledOnDisk(theme: Gtk.IconTheme, name: string): string | null {
+    const wanted = name.toLowerCase()
+    for (const dir of theme.get_search_path() ?? []) {
+        // No type annotations on these two: the generated GI typings do not
+        // export Gio.FileEnumerator or Gio.FileInfo as types (same gap as Gio.Icon).
+        let e
+        try {
+            e = Gio.File.new_for_path(dir).enumerate_children(
+                "standard::name", Gio.FileQueryInfoFlags.NONE, null)
+        } catch { continue }
+        let info
+        while ((info = e.next_file(null))) {
+            const candidate = info.get_name()
+            if (candidate.toLowerCase() === wanted && candidate !== name
+                && GLib.file_test(`${dir}/${candidate}/index.theme`, GLib.FileTest.EXISTS)) {
+                return candidate
+            }
+        }
+    }
+    return null
+}
+
 function setInterfaceTheme(name: string) {
     if (name === themeName) return
     themeName = name
     interfaceTheme = null
     if (name) {
         const t = new Gtk.IconTheme()
-        t.set_theme_name(name)
-        interfaceTheme = t
+        if (installedIconTheme(t, name)) {
+            t.set_theme_name(name)
+            interfaceTheme = t
+        } else {
+            // Left unset rather than guessed at: the value is the user's, and
+            // correcting it here would write over what they typed. Say what is
+            // wrong instead — silence is what made this hard to notice.
+            const onDisk = spelledOnDisk(t, name)
+            console.warn(onDisk
+                ? `[Icons] Interface icon theme "${name}" is not installed — did you mean "${onDisk}"? Theme names are case-sensitive directory names. Using Nidara's own drawings.`
+                : `[Icons] Interface icon theme "${name}" is not installed. Using Nidara's own drawings.`)
+        }
     }
     cache.clear()
 }

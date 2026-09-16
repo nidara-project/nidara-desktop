@@ -10,10 +10,15 @@
 # and requires the two runs to disagree:
 #
 #   1. interface-icon-theme = ""        → every concept resolves to our drawing;
-#   2. interface-icon-theme = <a theme> → a good share resolve to the theme's.
+#   2. interface-icon-theme = <a theme> → a good share resolve to the theme's;
+#   3. the same name MISSPELLED         → our drawing again, and a log line saying why.
 #
 # Run 2 is the control that can fail: if the resolver silently ignored the theme,
-# run 2 would look exactly like run 1 and the probe says so.
+# run 2 would look exactly like run 1 and the probe says so. Run 3 is the other
+# half of that: a theme name is a case-sensitive DIRECTORY name, `set_theme_name`
+# accepts anything, and a name that is not there resolves nothing — which looks
+# identical to the setting never having been touched. The owner hit exactly that
+# with `adwaita` for `Adwaita`, so the resolver must SAY so.
 #
 # The display is `cage` with wlroots' headless backend — GTK4 starts and resolves
 # icons for real, and nothing appears on the user's screen.
@@ -72,7 +77,7 @@ run() {  # run <theme-name>
                 echo "ABORT the dconf canary did not reach the private database" >&2; exit 1; }
             gsettings set org.nidara.appearance interface-icon-theme "$theme"
             exec cage -- gjs -m "$work/probe.js"
-        ' 2>/dev/null | grep -E '^(THEME|ICON|TOTAL)'
+        ' 2>"$work/stderr.txt" | grep -E '^(THEME|ICON|TOTAL)'
 }
 
 fail=0
@@ -103,6 +108,22 @@ else
     say "   ok   $on_theme concepts drew from $theme; the other $on_shipped fell through to ours"
     say "   (the fall-through list — these are the names $theme does not carry:)"
     awk '$1=="ICON" && $3=="shipped"{print "     " $2}' "$work/on.txt" | head -20
+fi
+
+say "── 3. the same name misspelled: our drawings, and the log must say why ──"
+bad="$(printf '%s' "$theme" | tr '[:upper:]' '[:lower:]')x"
+run "$bad" > "$work/bad.txt"
+bad_theme=$(awk '$1=="TOTAL"{print $2}' "$work/bad.txt")
+if [ "$bad_theme" != "0" ]; then
+    say "   FAIL \"$bad\" is not a theme, yet $bad_theme concepts came from one"
+    fail=1
+elif ! grep -q "is not installed" "$work/stderr.txt"; then
+    say "   FAIL nothing was logged — a mistyped theme name would fail silently:"
+    sed 's/^/     /' "$work/stderr.txt" | head -5
+    fail=1
+else
+    say "   ok   fell back to ours AND said why:"
+    grep -o "\[Icons\].*" "$work/stderr.txt" | head -1 | sed 's/^/     /'
 fi
 
 if [ "$fail" = "0" ]; then say "icon-registry-probe: OK"; else say "icon-registry-probe: FAILED"; fi
