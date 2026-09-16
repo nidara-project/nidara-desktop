@@ -47,12 +47,12 @@ window.nidara-installer-window {
   color: var(--nidara-text);
 }
 
-// The shipped icons are Lucide SVGs: they render BLACK and only turn white through
-// this filter (see ui/lib/icons.ts). Light mode wants them black again — and that
-// half is emitted BY THE ENGINE (`generateTokensCss` appends the `none` rule when
-// the mode is light), at a higher priority than this sheet, which is why there is
-// no `.installer-light .nd-icon` rule here to keep in sync.
-.nd-icon { -gtk-icon-filter: invert(1); }
+// The shipped icons are SYMBOLIC files (#587), so GTK paints them with the CSS
+// `color` of their node and light mode needs no rule of its own — the token moves
+// with the mode and the glyph follows. This was `-gtk-icon-filter: invert(1)`,
+// with the `none` half emitted by the engine (`generateTokensCss`) for light mode;
+// both went when the drawings stopped rendering black. See ui/lib/icons.ts.
+.nd-icon { color: var(--nidara-text); }
 
 // ── The frame ────────────────────────────────────────────────────────────────
 window.nidara-installer-window {

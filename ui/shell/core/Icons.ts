@@ -1,104 +1,334 @@
 import Gio from "gi://Gio"
+import Gtk from "gi://Gtk?version=4.0"
+import GLib from "gi://GLib"
 import { SHELL_ROOT } from "./Paths"
+
+/**
+ * Nidara — the interface icons, by STANDARD NAME (#587).
+ *
+ * A surface asks for a name (`uiIcon("network-wireless")`) and gets back a
+ * `Gio.FileIcon`. That name is looked for in two places, in order:
+ *
+ *   1. the INTERFACE icon theme, if one is set — a private `Gtk.IconTheme`, NOT
+ *      the display's. The display keeps serving the user's APP icon theme
+ *      (`org.gnome.desktop.interface icon-theme`), which is what the dock, the
+ *      tray and the app grid resolve against. GTK gives one theme per process,
+ *      and these are the two we need at once;
+ *   2. our own shipped drawing, as the last link — `assets/icons/hicolor/
+ *      scalable/actions/<name>-symbolic.svg`, named with that SAME name. With no
+ *      interface theme set, which is the default, every icon resolves here.
+ *
+ * 🔑 There is ONE name, not two. A surface asks for `system-search`, and that
+ * same name is looked for in the interface theme first and in our own
+ * `assets/icons/…/system-search-symbolic.svg` second. Nothing translates anything:
+ * the names are the freedesktop Icon Naming Spec's, plus the de-facto GNOME
+ * symbolic ones, which is what themes are built around.
+ *
+ * ⚠️ A name starting `nd-` is OURS, and no theme will ever have it — which is the
+ * point. The Naming Spec is from 2006 and has no word for an AI assistant
+ * (`nd-ai`), a clipboard history (`nd-clipboard-history`), a dock or a
+ * floating-window mode. It used to have one anyway, because the icon study was
+ * asked to give all 85 concepts a standard name and forced the nearest-SOUNDING
+ * one where none existed — the assistant was mapped to `system-help`, so picking
+ * Adwaita turned Nidara's AI into a question mark. The prefix makes "this is ours,
+ * never substituted" visible at the call site instead of hidden in a table.
+ *
+ * ⚠️ Measured, GTK 4.22.5 (the A/B prototype on #587): a `Gio.FileIcon` pointing
+ * at a `*-symbolic.svg` recolours from CSS `color` EXACTLY like an icon looked up
+ * on the display theme — same rendered pixels. That is why the ~172 call sites did
+ * not have to change when this became a registry.
+ *
+ * ⚠️ Our own drawings are symbolic too now — `<name>-symbolic.svg`, with the
+ * symbolic classes on every shape. GTK gates recolouring on the FILENAME, so the
+ * suffix is not decoration. Before that, they rendered black and every consumer
+ * had to remember `.nd-icon`'s `-gtk-icon-filter: invert(1)` — which then turned
+ * a theme's already-white symbolic icon BLACK the moment an interface theme was
+ * set. That inversion is gone; icons take CSS `color` like any other glyph.
+ *
+ * ⚠️ `instanceof Gtk.SymbolicPaintable` does NOT tell you whether an icon
+ * recolours: a non-symbolic file reports `true` and still draws black. Only the
+ * render distinguishes them.
+ */
 
 // Assets resolve against SHELL_ROOT (source tree in dev, /usr/share in prod).
 // See core/Paths.ts. install.sh ships assets/ into both.
 const DIR = `${SHELL_ROOT}/assets/icons/hicolor/scalable/actions`
-const f = (name: string) => Gio.FileIcon.new(Gio.File.new_for_path(`${DIR}/${name}.svg`))
+const f = (name: string) => Gio.FileIcon.new(Gio.File.new_for_path(`${DIR}/${name}-symbolic.svg`))
 
 /** Absolute path of a shipped asset icon — for chains that fall back to our
  *  own art only when the icon theme has nothing (see AppService.resolveIconChain). */
-export const iconAssetPath = (name: string) => `${DIR}/${name}.svg`
+export const iconAssetPath = (name: string) => `${DIR}/${name}-symbolic.svg`
 
-const Icons = {
-    app:          f("app-window"),
-    mic:          f("mic"),
-    speaker:      f("speaker"),
-    volumeHigh:   f("volume-2"),
-    volumeMedium: f("volume-1"),
-    volumeLow:    f("volume"),
-    volumeMuted:  f("volume-x"),
-    user:         f("user"),
-    userRound:     f("user-round"),
-    userRoundPlus: f("user-round-plus"),
-    battery:      f("battery"),
-    bluetooth:    f("bluetooth"),
-    cpu:          f("cpu"),
-    hand:         f("hand"),
-    hardDrive:    f("hard-drive"),
-    wifi:         f("wifi"),
-    ethernet:     f("ethernet-port"),
-    moon:         f("moon"),
-    sun:          f("sun"),
-    sunset:       f("sunset"),
-    info:         f("info"),
-    key:          f("key"),
-    filePen:      f("file-pen"),
-    trash:        f("trash"),
-    search:       f("search"),
-    chevronRight: f("chevron-right"),
-    chevronLeft:  f("chevron-left"),
-    chevronUp:    f("chevron-up"),
-    chevronDown:  f("chevron-down"),
-    plus:         f("plus"),
-    minus:        f("minus"),
-    zoomIn:       f("zoom-in"),
-    zoomOut:      f("zoom-out"),
-    pause:        f("pause"),
-    play:         f("play"),
-    skipBack:     f("skip-back"),
-    skipForward:  f("skip-forward"),
-    wifiOff:      f("wifi-off"),
-    wifiCog:      f("wifi-cog"),
-    wifiHigh:     f("wifi-high"),
-    wifiLow:      f("wifi-low"),
-    wifiZero:     f("wifi-zero"),
-    wifiPen:      f("wifi-pen"),
-    wifiSync:     f("wifi-sync"),
-    bell:         f("bell"),
-    bellOff:      f("bell-off"),
-    check:        f("check"),
-    menu:         f("menu"),
-    settings2:    f("settings-2"),
-    settings:     f("settings"),
-    terminal:     f("terminal"),
-    grid:         f("grid"),
-    sidebar:      f("sidebar"),
-    close:        f("x"),
-    lock:         f("lock"),
-    logOut:       f("log-out"),
-    power:        f("power"),
-    rotateCcw:    f("rotate-ccw"),
-    palette:      f("palette"),
-    monitor:      f("monitor"),
-    keyboard:     f("keyboard"),
-    clock:        f("clock"),
-    type:         f("type"),
-    mousePointer: f("mouse-pointer"),
-    zap:          f("zap"),
-    leaf:         f("leaf"),
-    dock:              f("dock"),
-    accessibility:     f("accessibility"),
-    puzzle:            f("puzzle"),
-    panelTop:          f("panel-top"),
-    rocket:            f("rocket"),
-    bluetoothConnected: f("bluetooth-connected"),
-    bluetoothOff:      f("bluetooth-off"),
-    bluetoothSearching: f("bluetooth-searching"),
-    globe:             f("globe"),
-    clipboard:         f("clipboard"),
-    clipboardList:     f("clipboard-list"),
-    camera:            f("camera"),
-    record:            f("record"),
-    recordStop:        f("record-stop"),
-    shield:            f("shield"),
-    shieldOff:         f("shield-off"),
-    sparkles:          f("sparkles"),
-    music:             f("music"),
-    gamepad:           f("gamepad-2"),
-} as const
+/**
+ * Every interface icon Nidara asks for, by name.
+ *
+ * This is a LIST, not a mapping — it exists so the compiler can refuse a name we
+ * do not ship and so `scripts/ci/icon-registry-check.mjs` can check that each one
+ * has a drawing. Add a name here and a `<name>-symbolic.svg` beside it; a
+ * standard name if the concept has one, an `nd-` name if it does not.
+ */
+export const ICON_NAMES = [
+    "application-exit",
+    "audio-input-microphone",
+    "audio-speakers",
+    "audio-volume-high",
+    "audio-volume-low",
+    "audio-volume-medium",
+    "audio-volume-muted",
+    "audio-x-generic",
+    "avatar-default",
+    "battery",
+    "bluetooth-acquiring",
+    "bluetooth-active",
+    "bluetooth-disabled",
+    "bluetooth-paired",
+    "camera-photo",
+    "contact-new",
+    "daytime-sunset",
+    "dialog-information",
+    "dialog-password",
+    "display-brightness",
+    "drive-harddisk",
+    "emblem-default",
+    "input-gaming",
+    "input-keyboard",
+    "media-playback-pause",
+    "media-playback-start",
+    "media-playback-stop",
+    "media-record",
+    "media-skip-backward",
+    "media-skip-forward",
+    "nd-ai",
+    "nd-bar",
+    "nd-clipboard",
+    "nd-clipboard-history",
+    "nd-cpu",
+    "nd-dock",
+    "nd-hand",
+    "nd-launch",
+    "nd-network-wireless-configure",
+    "nd-plugin",
+    "nd-window-floating",
+    "network-vpn",
+    "network-vpn-disconnected",
+    "network-wired",
+    "network-wireless",
+    "network-wireless-acquiring",
+    "network-wireless-disabled",
+    "network-wireless-signal-none",
+    "network-wireless-signal-ok",
+    "network-wireless-signal-weak",
+    "notifications-disabled",
+    "open-menu",
+    "pan-down",
+    "pan-end",
+    "pan-start",
+    "pan-up",
+    "power-profile-performance",
+    "power-profile-power-saver",
+    "preferences-desktop",
+    "preferences-desktop-accessibility",
+    "preferences-desktop-font",
+    "preferences-desktop-peripherals",
+    "preferences-desktop-theme",
+    "preferences-system",
+    "preferences-system-network",
+    "preferences-system-notifications",
+    "preferences-system-time",
+    "sidebar-show",
+    "system-lock-screen",
+    "system-reboot",
+    "system-search",
+    "system-shutdown",
+    "system-suspend",
+    "system-users",
+    "user-trash",
+    "utilities-terminal",
+    "value-decrease",
+    "value-increase",
+    "video-display",
+    "view-grid",
+    "window-close",
+    "zoom-in",
+    "zoom-out",
+] as const
+
+export type IconName = typeof ICON_NAMES[number]
+
+/**
+ * The interface icon theme, or null while none is set.
+ *
+ * A freshly constructed `Gtk.IconTheme` already carries the full XDG search path
+ * (verified: ~/.local/share/icons … /usr/share/icons … the Flatpak and Snap
+ * exports), so it finds any installed theme without help. It is deliberately NOT
+ * `Gtk.IconTheme.get_for_display()`: that one is the display singleton, it
+ * belongs to the user's app icons, and it refuses `set_theme_name` outright
+ * (`assertion '!self->is_display_singleton' failed`).
+ */
+let interfaceTheme: Gtk.IconTheme | null = null
+let themeName = ""
+
+const APPEARANCE_SCHEMA = "org.nidara.appearance"
+const THEME_KEY = "interface-icon-theme"
+
+/** Icons already resolved under the current theme. Cleared when it changes. */
+const cache = new Map<IconName, Gio.FileIcon>()
+
+/**
+ * Is `name` an icon theme on this machine, and spelled the way the disk spells it?
+ *
+ * ⚠️ A theme name is a DIRECTORY name, so it is case-sensitive: `adwaita` is not
+ * `Adwaita`. `set_theme_name` accepts anything — it does not look, and there is no
+ * error — and a theme that is not there resolves NOTHING, so every concept
+ * quietly falls back to our drawing and the desktop looks exactly as if the
+ * setting had never been touched. The owner hit this within minutes of the
+ * setting existing (2026-09-16), and `ThemeManager.cursorThemeInstalled` exists
+ * because the cursor theme had already taught the same lesson (tech-debt #72).
+ *
+ * The test is the one GTK itself would use: an `index.theme` under one of the
+ * search path's directories.
+ */
+function installedIconTheme(theme: Gtk.IconTheme, name: string): boolean {
+    return theme.get_search_path()?.some(dir =>
+        GLib.file_test(`${dir}/${name}/index.theme`, GLib.FileTest.EXISTS)) ?? false
+}
+
+/** The same name as the disk spells it, when only the case is wrong. */
+function spelledOnDisk(theme: Gtk.IconTheme, name: string): string | null {
+    const wanted = name.toLowerCase()
+    for (const dir of theme.get_search_path() ?? []) {
+        // No type annotations on these two: the generated GI typings do not
+        // export Gio.FileEnumerator or Gio.FileInfo as types (same gap as Gio.Icon).
+        let e
+        try {
+            e = Gio.File.new_for_path(dir).enumerate_children(
+                "standard::name", Gio.FileQueryInfoFlags.NONE, null)
+        } catch { continue }
+        let info
+        while ((info = e.next_file(null))) {
+            const candidate = info.get_name()
+            if (candidate.toLowerCase() === wanted && candidate !== name
+                && GLib.file_test(`${dir}/${candidate}/index.theme`, GLib.FileTest.EXISTS)) {
+                return candidate
+            }
+        }
+    }
+    return null
+}
+
+function setInterfaceTheme(name: string) {
+    if (name === themeName) return
+    themeName = name
+    interfaceTheme = null
+    if (name) {
+        const t = new Gtk.IconTheme()
+        if (installedIconTheme(t, name)) {
+            t.set_theme_name(name)
+            interfaceTheme = t
+        } else {
+            // Left unset rather than guessed at: the value is the user's, and
+            // correcting it here would write over what they typed. Say what is
+            // wrong instead — silence is what made this hard to notice.
+            const onDisk = spelledOnDisk(t, name)
+            console.warn(onDisk
+                ? `[Icons] Interface icon theme "${name}" is not installed — did you mean "${onDisk}"? Theme names are case-sensitive directory names. Using Nidara's own drawings.`
+                : `[Icons] Interface icon theme "${name}" is not installed. Using Nidara's own drawings.`)
+        }
+    }
+    cache.clear()
+}
+
+/**
+ * Follow the setting. The key is Nidara's own (#573 keeps the keys the desktop
+ * standard does not name in `org.nidara.appearance`); an install whose schema
+ * predates it simply has no interface theme, and every concept keeps resolving
+ * to our shipped drawing.
+ */
+function watchSetting() {
+    const source = Gio.SettingsSchemaSource.get_default()
+    if (!source?.lookup(APPEARANCE_SCHEMA, true)?.has_key(THEME_KEY)) return
+    const settings = new Gio.Settings({ schema_id: APPEARANCE_SCHEMA })
+    setInterfaceTheme(settings.get_string(THEME_KEY))
+    settings.connect(`changed::${THEME_KEY}`, () => {
+        setInterfaceTheme(settings.get_string(THEME_KEY))
+        console.log(`[Icons] Interface icon theme: ${themeName || "(none — shipped drawings)"}`)
+    })
+}
+try { watchSetting() } catch (e) { console.warn("[Icons] Interface icon theme setting unreadable:", e) }
+
+/**
+ * The size the theme lookup asks for — deliberately far larger than anything we
+ * draw, to land on the theme's SCALABLE drawing.
+ *
+ * A `Gio.FileIcon` is ONE file, so the size is chosen here rather than by the
+ * widget, and the choice decides WHICH of a theme's variants we get. Themes ship
+ * fixed-size directories beside the scalable one, and those are often drawn with
+ * padding: measured on Colloid, its `status/24` icons fill 63% of their box while
+ * its per-context `symbolic` ones fill 97%, and ours fill 92%. Asking for 24 hit that
+ * directory exactly — the owner saw it as "the ethernet icon is smaller" — and it
+ * was the ONLY size that did: 16, 32, 48, 128 and 512 all resolve to the scalable
+ * drawing. Adwaita and Papirus give the same file at every size.
+ *
+ * So: ask big. A theme with no scalable variant hands back its largest fixed one,
+ * which is still the best it has.
+ *
+ * ⚠️ This is also why our own `16x16` variant (the 2px stroke) never reaches a
+ * `Gio.FileIcon`: it only wins when a lookup asks for 16 at scale 1, and this one
+ * never does. Bar-sized icons getting that variant needs the size at the call
+ * site, which is a separate step of #587.
+ */
+const ICON_SIZE = 512
+
+/**
+ * The `Gio.FileIcon` for a concept: the interface theme's drawing when it has a
+ * SYMBOLIC one under the standard name, ours otherwise.
+ *
+ * `has_icon` is the test, not the lookup: `lookup_icon` never fails — it hands
+ * back `image-missing` — so asking it whether a theme covers a name is asking
+ * the wrong question.
+ *
+ * ⚠️ The resolved FILE has to end in `-symbolic.svg`, and that is checked rather
+ * than assumed. Asking a theme for the bare standard name is not the same
+ * question: Adwaita answers `emblem-default`, `preferences-desktop`,
+ * `preferences-desktop-theme` and `preferences-desktop-peripherals` out of its
+ * `legacy/` folder, with full-colour PNGs. A bitmap does not recolour and does
+ * not follow the dark/light mode, so the menu tick would have become a small
+ * coloured picture pinned to one palette. Anything that is not a symbolic SVG
+ * falls through to our own drawing, which is the whole point of having one.
+ */
+function resolve(name: IconName): Gio.FileIcon {
+    // An `nd-` name is ours by definition — asking a theme for it would only ever
+    // hit something that happened to share the name.
+    if (interfaceTheme && !name.startsWith("nd-")) {
+        const symbolic = `${name}-symbolic`
+        const asked = interfaceTheme.has_icon(symbolic) ? symbolic
+            : interfaceTheme.has_icon(name) ? name
+            : null
+        if (asked) {
+            const paintable = interfaceTheme.lookup_icon(
+                asked, null, ICON_SIZE, 1, Gtk.TextDirection.NONE, 0)
+            const path = paintable?.get_file()?.get_path()
+            if (path && path.endsWith("-symbolic.svg")
+                && GLib.file_test(path, GLib.FileTest.EXISTS)) {
+                return Gio.FileIcon.new(Gio.File.new_for_path(path))
+            }
+        }
+    }
+    return f(name)
+}
+
+
+/**
+ * `uiIcon("system-search")` — a `Gio.FileIcon`, resolved on first use and cached
+ * until the interface theme changes. Lazy on purpose: nothing is looked up for a
+ * name nobody draws.
+ */
+export function uiIcon(name: IconName): Gio.FileIcon {
+    const hit = cache.get(name)
+    if (hit) return hit
+    const resolved = resolve(name)
+    cache.set(name, resolved)
+    return resolved
+}
 
 export type IconGIcon = Gio.FileIcon
-export type IconName = keyof typeof Icons
-export default Icons
-

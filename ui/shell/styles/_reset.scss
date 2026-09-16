@@ -4,9 +4,17 @@
    NIDARA DESIGN SYSTEM - NEUTRALIZATION LAYER
    ========================================================================== */
 
-/* Lucide SVGs: black stroke, inverted to white in dark mode via filter.
-   Light mode disables the filter (injected by NidaraTheme.ts). */
-.nd-icon { -gtk-icon-filter: invert(1); }
+/* Our interface glyphs (core/Icons.ts) are SYMBOLIC files, so GTK paints them
+   with the CSS `color` of their node — the `image` rule below already binds that
+   to --nidara-text, and a pinned shell skin only has to move the token.
+   This class used to be `-gtk-icon-filter: invert(1)`, because the drawings were
+   non-symbolic and rendered black. That inversion could not tell OUR black
+   drawing from a THEME's already-white symbolic icon, so the moment #587 let a
+   user choose an interface icon theme, every icon it supplied came out black.
+   It is kept as a marker — "this image is one of our monochrome UI glyphs, never
+   an app's artwork" — and to carry the colour on surfaces whose own sheet does
+   not have the `image` rule. */
+.nd-icon { color: var(--nidara-text); }
 
 /* Adwaita is force-loaded in-process (AGS calls Adw.init(); we can't unload it —
    tech-debt #9) and colours <button> and <calendar> labels by ELEMENT selector,

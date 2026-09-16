@@ -5,7 +5,7 @@ import { joinNetwork, joinOtherNetwork } from "../common/WifiSecretsDialog"
 import shellActions from "../core/ShellActions"
 import status from "../core/Status"
 import { t } from "../core/i18n"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 
 // A form opened from the CC must close it first: an open overlay holds the keyboard grab.
 const closeOverlays = () => status.closeOverlays()
@@ -15,7 +15,7 @@ import * as Net from "../core/NetworkService"
 // dongle plugged in mid-session reaches these; the watchers re-arm themselves on
 // that hot-plug (see NetworkService.watchDevices — tech-debt #22/#71).
 
-const LEVEL_ICONS = [Icons.wifiZero, Icons.wifiLow, Icons.wifiHigh, Icons.wifi]
+const LEVEL_ICONS = [uiIcon("network-wireless-signal-none"), uiIcon("network-wireless-signal-weak"), uiIcon("network-wireless-signal-ok"), uiIcon("network-wireless")]
 
 /**
  * The icon for where the adapter stands. Until 2026-09-14 it said only whether the
@@ -28,10 +28,10 @@ const LEVEL_ICONS = [Icons.wifiZero, Icons.wifiLow, Icons.wifiHigh, Icons.wifi]
 function getIcon() {
     const link = Net.wifiLink()
     switch (link.state) {
-        case "off":        return Icons.wifiOff
-        case "connecting": return Icons.wifiSync
+        case "off":        return uiIcon("network-wireless-disabled")
+        case "connecting": return uiIcon("network-wireless-acquiring")
         case "connected":  return LEVEL_ICONS[Net.signalLevel(link.strength)]
-        default:           return Icons.wifi
+        default:           return uiIcon("network-wireless")
     }
 }
 
@@ -142,7 +142,7 @@ function buildNetworkList(): { box: Gtk.Box; refresh: () => void } {
                 : ""
             if (note) trailing.append(new Gtk.Label({ label: note, css_classes: ["nidara-row-subtitle"] }))
             if (Net.isSecured(ap))
-                trailing.append(new Gtk.Image({ gicon: Icons.lock, pixel_size: 12, opacity: 0.5, css_classes: ["nd-icon"] }))
+                trailing.append(new Gtk.Image({ gicon: uiIcon("system-lock-screen"), pixel_size: 12, opacity: 0.5, css_classes: ["nd-icon"] }))
 
             box.append(menuRow({
                 label: ssid,
@@ -221,7 +221,7 @@ const wifiWidget: AtomicWidget = {
     category: "system",
     barOrder: 80,
     name: t("cc.wifi.name"),
-    icon: Icons.wifi,
+    icon: uiIcon("network-wireless"),
     locations: ["bar", "cc"],
     defaultInBar: true,
     isAvailable: () => !!Net.wifi(),

@@ -1,19 +1,19 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { AtomicWidget, ContentBudget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSwitch, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 import { dontDisturb, toggleDontDisturb, setDontDisturb, watchDnd } from "../core/NotifService"
 
 function buildBarContent() {
     return makeBarIcon({
-        getIcon: () => dontDisturb() ? Icons.bellOff : Icons.bell,
+        getIcon: () => dontDisturb() ? uiIcon("notifications-disabled") : uiIcon("preferences-system-notifications"),
         onAction: toggleDontDisturb,
         activeClass: "bar-widget-active",
         getActive: dontDisturb,
     })
 }
 
-const getIcon = () => dontDisturb() ? Icons.bellOff : Icons.bell
+const getIcon = () => dontDisturb() ? uiIcon("notifications-disabled") : uiIcon("preferences-system-notifications")
 const getTitle = () => dontDisturb() ? t("cc.focus.title.on") : t("cc.focus.title.off")
 const getSub = () => dontDisturb() ? t("cc.focus.sub.on") : ""
 
@@ -50,7 +50,7 @@ const focusWidget: AtomicWidget = {
     category: "utilities",
     barOrder: 20,
     name: t("widget.focus.name"),
-    icon: Icons.bellOff,
+    icon: uiIcon("notifications-disabled"),
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],

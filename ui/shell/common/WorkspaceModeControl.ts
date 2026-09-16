@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 import { menuRow } from "./MenuRow"
 import { t } from "../core/i18n"
 import workspaceModes, { WORKSPACE_MODES, type WorkspaceMode } from "../core/WorkspaceModes"
@@ -18,7 +18,7 @@ import workspaceModes, { WORKSPACE_MODES, type WorkspaceMode } from "../core/Wor
  * floating (one window, free). Both are already in our icon set; neither is an
  * emoji and neither is a hardcoded colour — commandment 10.
  */
-export const modeIcon = (mode: WorkspaceMode) => (mode === "tiling" ? Icons.grid : Icons.app)
+export const modeIcon = (mode: WorkspaceMode) => (mode === "tiling" ? uiIcon("view-grid") : uiIcon("nd-window-floating"))
 
 export const modeLabel = (mode: WorkspaceMode) =>
     t(mode === "tiling" ? "workspace.mode.tiling" : "workspace.mode.floating")

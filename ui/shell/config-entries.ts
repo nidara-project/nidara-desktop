@@ -29,7 +29,7 @@ import regionConfig from "./core/RegionConfig"
 import { getIdleConfig, updateIdleConfig, onHypridleChanged } from "./core/PowerConfig"
 import inputConfig from "./core/InputConfig"
 import { allKeyboards, keyboardById, keyboardId, parseKeyboardId } from "../lib/keyboards"
-import Icons from "./core/Icons"
+import { uiIcon } from "./core/Icons"
 import { safeDisconnect } from "./core/signals"
 import { t } from "./core/i18n"
 import workspaceModes, {
@@ -209,7 +209,7 @@ export function registerConfigEntries() {
         subscribe: onThemeCfg(() => Theme.windowOpacity),
         ui: {
             i18n: "settings.appearance.window-glass",
-            slider: { pct: true, icons: [Icons.minus, Icons.plus] },
+            slider: { pct: true, icons: [uiIcon("value-decrease"), uiIcon("value-increase")] },
         },
     })
     registerConfig("appearance.gtkTheme", {
@@ -417,7 +417,7 @@ export function registerConfigEntries() {
                 // se sigue viendo moverse porque la etiqueta la pinta
                 // `onValueChanged`, que no es la que escribe.
                 commitOnRelease: true,
-                icons: [Icons.mousePointer, Icons.mousePointer],
+                icons: [uiIcon("preferences-desktop-peripherals"), uiIcon("preferences-desktop-peripherals")],
                 pct: true,
             },
         },
@@ -565,7 +565,7 @@ export function registerConfigEntries() {
         },
         ui: {
             i18n: "settings.appearance.night-light-temp",
-            slider: { unit: "K", icons: [Icons.minus, Icons.plus] },
+            slider: { unit: "K", icons: [uiIcon("value-decrease"), uiIcon("value-increase")] },
         },
     })
     registerConfig("nightlight.scheduleEnabled", {
@@ -647,7 +647,7 @@ export function registerConfigEntries() {
             i18n: "settings.accessibility.cursor-size",
             slider: {
                 unit: "px",
-                icons: [Icons.mousePointer, Icons.mousePointer],
+                icons: [uiIcon("preferences-desktop-peripherals"), uiIcon("preferences-desktop-peripherals")],
                 commitOnRelease: true,
             },
         },

@@ -3,7 +3,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { listGroup, createRow, pageBox, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
-import Icons from "../../../core/Icons"
+import { uiIcon } from "../../../core/Icons"
 import appService, { type AppData } from "../../../core/AppService"
 import { NidaraButton, NidaraScrolled, NidaraEmptyRow, attachTooltip } from "../../../../lib/nidara-kit"
 import { makeIconImage } from "./AppIconImage"
@@ -160,7 +160,7 @@ function buildAppPickerPage(onPick: (cmd: string) => void, existingCommands: str
         margin_bottom: 4,
     })
     searchEntry.append(new Gtk.Image({
-        gicon: Icons.search,
+        gicon: uiIcon("system-search"),
         pixel_size: 15,
         css_classes: ["nd-icon", "settings-search-icon"],
         valign: Gtk.Align.CENTER,
@@ -192,7 +192,7 @@ function buildAppPickerPage(onPick: (cmd: string) => void, existingCommands: str
                 valign: Gtk.Align.CENTER,
             })
             : new Gtk.Image({
-                gicon: Icons.plus, pixel_size: 16,
+                gicon: uiIcon("value-increase"), pixel_size: 16,
                 opacity: 0.4, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"],
             })
 
@@ -267,7 +267,7 @@ function buildAppPickerPage(onPick: (cmd: string) => void, existingCommands: str
         margin_top: 12,
         margin_bottom: 12,
     })
-    rowBox.append(new Gtk.Image({ gicon: Icons.terminal, pixel_size: 18, valign: Gtk.Align.CENTER, opacity: 0.6, css_classes: ["nd-icon"] }))
+    rowBox.append(new Gtk.Image({ gicon: uiIcon("utilities-terminal"), pixel_size: 18, valign: Gtk.Align.CENTER, opacity: 0.6, css_classes: ["nd-icon"] }))
     rowBox.append(entryField)
     rowBox.append(addBtn)
 
@@ -297,7 +297,7 @@ export default function AutostartPage(nav: SettingsNav) {
         // app icons, so titles align across resolved/unresolved/add rows.
         const leadingIcon = app
             ? makeIconImage(appService.getCanonicalIconName(app.icon ?? ""), 32)
-            : new Gtk.Image({ gicon: Icons.terminal, pixel_size: 18, width_request: 32, css_classes: ["nd-icon"] })
+            : new Gtk.Image({ gicon: uiIcon("utilities-terminal"), pixel_size: 18, width_request: 32, css_classes: ["nd-icon"] })
         leadingIcon.valign = Gtk.Align.CENTER
         leadingIcon.opacity = entry.enabled ? 1.0 : 0.5
 
@@ -310,7 +310,7 @@ export default function AutostartPage(nav: SettingsNav) {
         })
 
         const deleteBtn = new Gtk.Button({
-            child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["nd-icon"] }),
+            child: new Gtk.Image({ gicon: uiIcon("user-trash"), pixel_size: 16, css_classes: ["nd-icon"] }),
             css_classes: ["nidara-btn", "nidara-btn--danger"],
             valign: Gtk.Align.CENTER,
         })
@@ -348,11 +348,11 @@ export default function AutostartPage(nav: SettingsNav) {
 
     const buildAddNavRow = (): Gtk.ListBoxRow => {
         const plusIcon = new Gtk.Image({
-            gicon: Icons.plus, pixel_size: 18, width_request: 32,
+            gicon: uiIcon("value-increase"), pixel_size: 18, width_request: 32,
             opacity: 0.6, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"],
         })
         const chevron = new Gtk.Image({
-            gicon: Icons.chevronRight, pixel_size: 16,
+            gicon: uiIcon("pan-end"), pixel_size: 16,
             opacity: 0.4, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"],
         })
         const row = createRow(t("settings.autostart.add-app"), "", chevron, undefined, plusIcon)

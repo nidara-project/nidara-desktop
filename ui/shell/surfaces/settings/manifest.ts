@@ -33,7 +33,7 @@ export interface PageDecl {
     id: string
     kind: PageKind
     label: string                 // clave i18n del título
-    icon?: IconName               // nombre, no el icono: el manifiesto sigue sin `gi://`
+    icon?: IconName               // el NOMBRE estándar, no el icono: el manifiesto sigue sin `gi://`
     groupStart?: boolean          // divisor de la barra lateral
     parent?: string               // subpágina: no va en la barra lateral
     subtitle?: string             // subpágina: la segunda línea de la fila con que su padre la lista
@@ -50,7 +50,7 @@ export const manifest = [
         id: "network",
         kind: "browser",
         label: "settings.network.title",
-        icon: "globe",
+        icon: "preferences-system-network",
         builder: "network",
         reason: "Object browser for physical network interfaces, Wi-Fi access points, and VPN connections.",
     },
@@ -58,7 +58,7 @@ export const manifest = [
         id: "bluetooth",
         kind: "browser",
         label: "settings.bluetooth.title",
-        icon: "bluetooth",
+        icon: "bluetooth-active",
         builder: "bluetooth",
         reason: "Object browser for dynamic Bluetooth adapter state and device discovery/pairing lifecycles.",
     },
@@ -67,7 +67,7 @@ export const manifest = [
         id: "appearance",
         kind: "preference",
         label: "settings.appearance.title",
-        icon: "palette",
+        icon: "preferences-desktop-theme",
         groupStart: true,
         groups: [
             {
@@ -146,7 +146,7 @@ export const manifest = [
         id: "display",
         kind: "browser",
         label: "settings.display.title",
-        icon: "monitor",
+        icon: "video-display",
         builder: "display",
         reason: "Object browser for dynamically connected physical monitors, layouts, and mode enumeration.",
     },
@@ -154,7 +154,7 @@ export const manifest = [
         id: "audio",
         kind: "browser",
         label: "settings.audio.title",
-        icon: "speaker",
+        icon: "audio-speakers",
         builder: "audio",
         reason: "Object browser for dynamic PipeWire audio endpoints and per-application volume streams.",
     },
@@ -162,7 +162,7 @@ export const manifest = [
         id: "bar",
         kind: "preference",
         label: "settings.bar.title",
-        icon: "panelTop",
+        icon: "nd-bar",
         groups: [
             {
                 i18n: "settings.bar.group.layout",
@@ -195,7 +195,7 @@ export const manifest = [
         id: "dock",
         kind: "preference",
         label: "settings.dock.title",
-        icon: "dock",
+        icon: "nd-dock",
         groups: [
             {
                 i18n: "settings.dock.group.position",
@@ -233,7 +233,7 @@ export const manifest = [
         id: "desktop",
         kind: "preference",
         label: "settings.desktop.title",
-        icon: "app",
+        icon: "nd-window-floating",
         groups: [
             {
                 i18n: "settings.desktop.group.default",
@@ -257,7 +257,7 @@ export const manifest = [
         id: "widgets",
         kind: "browser",
         label: "settings.widgets.title",
-        icon: "settings2",
+        icon: "preferences-system",
         builder: "widgets",
         reason: "Object browser for dynamic widget registry placement (bar vs control center) and subpage settings.",
     },
@@ -265,7 +265,7 @@ export const manifest = [
         id: "gaming",
         kind: "preference",
         label: "settings.gaming.title",
-        icon: "gamepad",
+        icon: "input-gaming",
         groups: [
             {
                 i18n: "settings.gaming.group.wallpaper",
@@ -295,7 +295,7 @@ export const manifest = [
         id: "notifications",
         kind: "preference",
         label: "settings.notif.title",
-        icon: "bell",
+        icon: "preferences-system-notifications",
         groups: [
             {
                 i18n: "",
@@ -316,7 +316,7 @@ export const manifest = [
         id: "accessibility",
         kind: "preference",
         label: "settings.accessibility.title",
-        icon: "accessibility",
+        icon: "preferences-desktop-accessibility",
         groups: [
             {
                 i18n: "settings.accessibility.group.vision",
@@ -337,7 +337,7 @@ export const manifest = [
         id: "apps",
         kind: "browser",
         label: "settings.apps.section",
-        icon: "grid",
+        icon: "view-grid",
         builder: "apps",
         reason: "Navigation hub for app management subpages (default apps, icon associations, autostart).",
     },
@@ -346,7 +346,7 @@ export const manifest = [
         id: "input",
         kind: "preference",
         label: "settings.input.title",
-        icon: "keyboard",
+        icon: "input-keyboard",
         groupStart: true,
         groups: [
             {
@@ -404,7 +404,7 @@ export const manifest = [
         id: "region",
         kind: "preference",
         label: "settings.region.title",
-        icon: "clock",
+        icon: "preferences-system-time",
         header: {
             custom: "clockPreview",
             note: "Live clock preview before the first group. 1s tick armed in bindWhileRealized on pageBox.",
@@ -454,7 +454,7 @@ export const manifest = [
         id: "users",
         kind: "browser",
         label: "settings.users.title",
-        icon: "userRound",
+        icon: "avatar-default",
         builder: "users",
         reason: "Object browser for system user accounts via AccountsService D-Bus and administration actions.",
     },
@@ -462,7 +462,7 @@ export const manifest = [
         id: "ai",
         kind: "preference",
         label: "settings.ai.title",
-        icon: "sparkles",
+        icon: "nd-ai",
         groups: [
             {
                 i18n: "settings.ai.brain.group",
@@ -548,7 +548,7 @@ export const manifest = [
         id: "about",
         kind: "info",
         label: "settings.about.title",
-        icon: "info",
+        icon: "dialog-information",
         builder: "about",
         reason: "System diagnostics and hardware information display with live updates trigger.",
     },

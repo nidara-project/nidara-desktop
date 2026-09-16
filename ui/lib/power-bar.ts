@@ -37,13 +37,13 @@ export interface PowerBarDeps {
 }
 
 // The three actions the shell's system menu also offers, drawn with the SAME
-// shipped art it uses (Icons.moon / rotateCcw / power) instead of whatever the
+// shipped art it uses (icon("system-suspend") / rotateCcw / power) instead of whatever the
 // user's icon theme supplies — see ui/lib/icons.ts. The theme names stay as a
 // last resort for a tree with no shipped assets.
 const ACTION_ICONS = {
-    suspend: { name: "moon", themeFallback: "media-playback-pause-symbolic" },
-    restart: { name: "rotate-ccw", themeFallback: "system-reboot-symbolic" },
-    shutdown: { name: "power", themeFallback: "system-shutdown-symbolic" },
+    suspend: { name: "system-suspend", themeFallback: "media-playback-pause-symbolic" },
+    restart: { name: "system-reboot", themeFallback: "system-reboot-symbolic" },
+    shutdown: { name: "system-shutdown", themeFallback: "system-shutdown-symbolic" },
 } as const
 
 function PowerButton(

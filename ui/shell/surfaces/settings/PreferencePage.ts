@@ -3,7 +3,7 @@ import { manifest, type PageDecl, type WhenDecl, type ItemDecl } from "./manifes
 import { listGroup, createRow, settingRow, pageBox, bindWhileRealized, setPageRefresherScope, clearPageRefresherScope } from "./SettingsHelpers"
 import { getConfigEntry } from "../../core/ConfigRegistry"
 import { t } from "../../core/i18n"
-import Icons from "../../core/Icons"
+import { uiIcon } from "../../core/Icons"
 import { build as buildBar } from "./custom/bar"
 import { build as buildGaming } from "./custom/gaming"
 import { build as buildPower } from "./custom/power"
@@ -199,7 +199,7 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
                     }
                     container.append(row)
                 } else if ("disclosure" in item) {
-                    const advChevron = new Gtk.Image({ gicon: Icons.chevronDown, pixel_size: 16, css_classes: ["nd-icon"] })
+                    const advChevron = new Gtk.Image({ gicon: uiIcon("pan-down"), pixel_size: 16, css_classes: ["nd-icon"] })
                     const advToggleRow = createRow(t(item.disclosure as any), "", advChevron)
                     container.append(advToggleRow)
 
@@ -217,7 +217,7 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
                         if (row !== advToggleRow) return
                         const open = !advRevealer.reveal_child
                         advRevealer.reveal_child = open
-                        advChevron.gicon = open ? Icons.chevronDown : Icons.chevronRight
+                        advChevron.gicon = open ? uiIcon("pan-down") : uiIcon("pan-end")
                     })
                 } else if ("key" in item) {
                     const row = settingRow(item.key)

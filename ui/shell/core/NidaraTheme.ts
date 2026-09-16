@@ -28,10 +28,12 @@ export function generateChromeTokenScope(
   // An id-qualified universal per window: the bare container selector does not
   // reach the children (see the note above about GTK4 custom properties).
   const sel = CHROME_SCOPE_WINDOWS.map((w) => `window#${w}, window#${w} *`).join(", ")
-  const iconSel = CHROME_SCOPE_WINDOWS.map((w) => `window#${w} .nd-icon`).join(", ")
   const body = nidaraVars(config, chromeIsDark).join("\n")
-  const iconFilter = chromeIsDark ? "invert(1)" : "none"
-  return `${sel} {\n${body}\n}\n`
-    + `${iconSel} { -gtk-icon-filter: ${iconFilter}; }`
+  // The icons need no rule of their own: they are symbolic files and take the
+  // CSS `color` that `--nidara-text` — redefined right here for the pinned skin —
+  // already gives them. This used to emit a second selector flipping
+  // `-gtk-icon-filter` between invert(1) and none, which is what a non-symbolic
+  // black drawing needed.
+  return `${sel} {\n${body}\n}`
 }
 

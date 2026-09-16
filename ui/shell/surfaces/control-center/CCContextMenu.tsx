@@ -3,7 +3,7 @@ import ccLayout, { GRID_WIDTH, SIZE_TIER, SizeTier } from "./CCLayoutManager"
 import { WidgetSize } from "../../common/widget-kit"
 import widgetConfig from "../../core/WidgetConfig"
 import registry from "../../widgets/index"
-import Icons from "../../core/Icons"
+import { uiIcon } from "../../core/Icons"
 import { t } from "../../core/i18n"
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/tokens"
@@ -158,7 +158,7 @@ export function createCCContextMenu(opts: CCContextMenuOpts = {}): CCContextMenu
         // widget on next load (the CC layout and widgetConfig must agree).
         rows.append(menuRow({
             label: t("cc.menu.remove"),
-            icon: Icons.trash,
+            icon: uiIcon("user-trash"),
             danger: true,
             onClick: () => { widgetConfig.setCC(id, false); ccLayout.remove(id); close() },
         }))

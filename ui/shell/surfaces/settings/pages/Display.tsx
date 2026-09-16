@@ -3,7 +3,7 @@ import { listGroup, createRow, pageBox, staticLabel, bindWhileRealized, onPageSh
 import { showNidaraAlert, NidaraDropDown } from "../../../../lib/nidara-kit"
 import hs from "../../../core/HyprlandState"
 import { t } from "../../../core/i18n"
-import Icons from "../../../core/Icons"
+import { uiIcon } from "../../../core/Icons"
 import monitorConfig from "../../../core/MonitorConfig"
 import { safeDisconnect } from "../../../core/signals"
 

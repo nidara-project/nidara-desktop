@@ -35,7 +35,7 @@ export function makeAvatar(size: number, cssClasses: string[] = ["greeter-avatar
   // renders BLACK (stroke=currentColor, non-symbolic), so the nd-icon class
   // inverts it to white — glyph only, same trick as Settings; the theme icon
   // stays as last resort (symbolic → follows CSS color, must NOT be inverted).
-  const glyphPath = `${GLib.getenv("NIDARA_SHELL_ROOT") ?? "/usr/share/nidara/ui/shell"}/assets/icons/hicolor/scalable/actions/user-round.svg`
+  const glyphPath = `${GLib.getenv("NIDARA_SHELL_ROOT") ?? "/usr/share/nidara/ui/shell"}/assets/icons/hicolor/scalable/actions/avatar-default-symbolic.svg`
   const fallback = new Gtk.Image({
     pixel_size: Math.round(size * 0.625),  // Settings profile ratio (60/96)
     width_request: size,
@@ -44,7 +44,6 @@ export function makeAvatar(size: number, cssClasses: string[] = ["greeter-avatar
   })
   if (GLib.file_test(glyphPath, GLib.FileTest.EXISTS)) {
     fallback.gicon = Gio.FileIcon.new(Gio.File.new_for_path(glyphPath))
-    fallback.add_css_class("nd-icon")
   } else {
     fallback.icon_name = "avatar-default-symbolic"
   }

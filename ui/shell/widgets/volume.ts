@@ -2,7 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import { PANEL_W, AtomicWidget, WidgetSize, makeHSliderTile } from "../common/widget-kit"
 import { makeVolumeSlider, makeVerticalFillTile, bindWhileRealized } from "../../lib/nidara-kit"
 import { t } from "../core/i18n"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 import * as AudioSvc from "../core/AudioService"
 import { safeDisconnect } from "../core/signals"
 import { NidaraButton } from "../../lib/nidara-kit/button"
@@ -13,7 +13,7 @@ import { NidaraButton } from "../../lib/nidara-kit/button"
 // Takes a GETTER, not the endpoint: see the note on buildCCContent for why nothing
 // here may capture the default speaker.
 function buildVolumeIcon(speaker: () => any): Gtk.Widget {
-    const getIcon = () => { const s = speaker(); return s ? AudioSvc.targetVolumeIcon(s) : Icons.volumeMuted }
+    const getIcon = () => { const s = speaker(); return s ? AudioSvc.targetVolumeIcon(s) : uiIcon("audio-volume-muted") }
     const icon = new Gtk.Image({ gicon: getIcon(), pixel_size: 28, css_classes: ["nd-icon"] })
     const btn = new Gtk.Button({
         css_classes: ["nidara-atomic-round-btn"],
@@ -70,7 +70,7 @@ function buildCCContent(size: WidgetSize): Gtk.Widget {
         // Capsule-filling vertical slider: fill rises edge-to-edge, % overlaid on
         // top, icon at the bottom — the same kit component brightness uses.
         return makeVerticalFillTile(
-            () => { const s = speaker(); return s ? AudioSvc.targetVolumeIcon(s) : Icons.volumeMuted },
+            () => { const s = speaker(); return s ? AudioSvc.targetVolumeIcon(s) : uiIcon("audio-volume-muted") },
             { value: getVolumePct(), onChange: setVolumePct, onExtChange: onVolumeExtChange },
             // Follows the default endpoint; never captures it.
             (sync) => AudioSvc.watchDefaultSpeaker(sync),
@@ -78,8 +78,8 @@ function buildCCContent(size: WidgetSize): Gtk.Widget {
     }
 
     return makeHSliderTile({
-        low:  { icon: Icons.volumeLow },
-        high: { icon: Icons.volumeHigh },
+        low:  { icon: uiIcon("audio-volume-low") },
+        high: { icon: uiIcon("audio-volume-high") },
         getValue: getVolumePct,
         onChange: setVolumePct,
         onExtChange: onVolumeExtChange,
@@ -91,7 +91,7 @@ function buildCCContent(size: WidgetSize): Gtk.Widget {
 function buildBarContent(): Gtk.Widget {
     // `speaker` is the module-level getter, resolved on every use and never captured
     // — see the note on it above; the bar icon has the same stake as the CC tile.
-    const getIcon = () => { const s = speaker(); return s ? AudioSvc.targetVolumeIcon(s) : Icons.volumeMuted }
+    const getIcon = () => { const s = speaker(); return s ? AudioSvc.targetVolumeIcon(s) : uiIcon("audio-volume-muted") }
 
     const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
 
@@ -119,16 +119,16 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
         width_request: PANEL_W.sm,
     })
 
-    const muteImg = new Gtk.Image({ gicon: (speaker as any)?.mute ? Icons.volumeMuted : Icons.volumeHigh, pixel_size: 16, css_classes: ["nd-icon"] })
+    const muteImg = new Gtk.Image({ gicon: (speaker as any)?.mute ? uiIcon("audio-volume-muted") : uiIcon("audio-volume-high"), pixel_size: 16, css_classes: ["nd-icon"] })
     const muteBtn = new Gtk.Button({ child: muteImg, css_classes: ["bar-popover-icon-btn"], valign: Gtk.Align.CENTER })
     muteBtn.connect("clicked", () => {
         if (speaker) (speaker as any).mute = !((speaker as any).mute ?? false)
-        muteImg.gicon = (speaker as any)?.mute ? Icons.volumeMuted : Icons.volumeHigh
+        muteImg.gicon = (speaker as any)?.mute ? uiIcon("audio-volume-muted") : uiIcon("audio-volume-high")
     })
 
     if (speaker) {
         const id = (speaker as any).connect?.("notify::mute", () => {
-            muteImg.gicon = (speaker as any)?.mute ? Icons.volumeMuted : Icons.volumeHigh
+            muteImg.gicon = (speaker as any)?.mute ? uiIcon("audio-volume-muted") : uiIcon("audio-volume-high")
         }) ?? 0
         muteBtn.connect("unrealize", () => safeDisconnect(speaker, id))
     }
@@ -178,9 +178,9 @@ function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
         onExternal: () => { muteImg.gicon = AudioSvc.targetVolumeIcon(ep) },
     })
     const sliderRow = new Gtk.Box({ spacing: 8 })
-    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
+    sliderRow.append(new Gtk.Image({ gicon: uiIcon("audio-volume-low"), pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     sliderRow.append(scale)
-    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
+    sliderRow.append(new Gtk.Image({ gicon: uiIcon("audio-volume-high"), pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     sliderRow.append(valLabel)
     box.append(sliderRow)
 
@@ -200,9 +200,9 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_start: 12, margin_end: 12, margin_top: 8, margin_bottom: 8 })
 
     const header = new Gtk.Box({ spacing: 8 })
-    // Real app icon — NO `nd-icon`. That class is `-gtk-icon-filter: invert(1)`
-    // (_reset.scss), meant for our monochrome UI glyphs; on a full-colour app icon
-    // it inverts the artwork. Same note as Settings → Audio's stream row.
+    // Real app icon — NO `nd-icon`. That class marks OUR monochrome glyphs and
+    // paints them --nidara-text (_reset.scss); on full-colour app artwork it would
+    // flatten every colour to one. Same note as Settings → Audio's stream row.
     header.append(new Gtk.Image({ icon_name: iconName, pixel_size: 20, valign: Gtk.Align.CENTER }))
     header.append(new Gtk.Label({
         label: appName,
@@ -228,9 +228,9 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
         onExternal: () => { muteImg.gicon = AudioSvc.targetVolumeIcon(stream) },
     })
     const sliderRow = new Gtk.Box({ spacing: 8 })
-    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
+    sliderRow.append(new Gtk.Image({ gicon: uiIcon("audio-volume-low"), pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     sliderRow.append(scale)
-    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
+    sliderRow.append(new Gtk.Image({ gicon: uiIcon("audio-volume-high"), pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     sliderRow.append(valLabel)
     box.append(sliderRow)
 
@@ -305,7 +305,7 @@ const volumeWidget: AtomicWidget = {
     category: "system",
     barOrder: 90,
     name: t("cc.volume.name"),
-    icon: Icons.volumeHigh,
+    icon: uiIcon("audio-volume-high"),
     locations: ["bar", "cc"],
     defaultInBar: true,
     defaultSize: WidgetSize.FULL_WIDTH,

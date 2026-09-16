@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 
 // MenuModelLike / ActionGroupLike aren't surfaced by the @girs stub here — alias
 // them. The three callers pass a real Gio.MenuModel: the dock and app grid build
@@ -120,7 +120,7 @@ export function renderMenuModel(
         }))
         if (opts.checked) {
             inner.append(new Gtk.Image({
-                gicon: Icons.check,
+                gicon: uiIcon("emblem-default"),
                 pixel_size: 15,
                 css_classes: ["nd-icon"],
                 valign: Gtk.Align.CENTER,

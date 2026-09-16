@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 
 // Shared menu-row builders for flat nidara menus (.nidara-menu-row lists in a
 // SquircleContainer, never Gtk.Popover — see project_nidara_ui). Used by the
@@ -12,8 +12,8 @@ export interface MenuRowOpts {
     /** A GIcon as produced by core/Icons (the GI typings don't export Gio.Icon). */
     icon?: Gio.FileIcon
     /** The icon is full-color app art (desktop-entry GIcon) — skip `nd-icon`,
-     *  whose invert(1) recolor is meant for the shell's black symbolic SVGs
-     *  and turns a color icon negative. */
+     *  which paints its image --nidara-text and would flatten the artwork to one
+     *  colour. (It was an invert(1) before #587, which turned it negative.) */
     appIcon?: boolean
     /** Shows a trailing accent check. The check widget always exists (hidden when
      *  false/undefined) so setRowChecked can flip it after an async state read. */
@@ -54,15 +54,17 @@ export function menuRow(opts: MenuRowOpts): Gtk.Button {
             : new Gtk.Label({ label: opts.label, halign: Gtk.Align.START, hexpand: true, css_classes: ["nidara-menu-label"] }))
     if (opts.trailing) inner.append(opts.trailing)
     // `nd-icon` ONLY. It used to carry `accent-label` too, meaning to tint the tick
-    // accent — which a Gtk.Image never obeys (an nd-icon is monochrome, driven by
-    // `-gtk-icon-filter: invert(1)`; see design-system.md). The one part of that
+    // accent — which a Gtk.Image did not obey then, because an nd-icon was monochrome
+    // and driven by `-gtk-icon-filter: invert(1)`. Since #587 the glyphs are symbolic
+    // and `color` DOES reach them, so that tint is now possible; it is still not what
+    // this row wants, for the reason power.ts gives. The one part of that
     // class that DID apply was the rest of it: `.accent-label` is the audio detail's
     // "Default" BADGE — pill background, radius and padding — so inside
     // `.nidara-detail-panel` every checked menu row drew an accent pill behind its tick,
     // and nowhere else. User-caught in the CC's media source selector 2026-08-10,
     // against the island's copy of the same menu, which never matched that rule.
     const check = new Gtk.Image({
-        gicon: Icons.check, pixel_size: 15,
+        gicon: uiIcon("emblem-default"), pixel_size: 15,
         css_classes: ["nd-icon"],
         valign: Gtk.Align.CENTER,
         visible: !!opts.checked,

@@ -5,7 +5,7 @@ import GLib from "gi://GLib"
 import { execAsync } from "../../lib/process"
 
 import { t } from "../core/i18n"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 import hs from "../core/HyprlandState"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ function buildControls(onClose: () => void): Gtk.Widget {
 // ── Bar icon ──────────────────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    return new Gtk.Image({ gicon: Icons.camera, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+    return new Gtk.Image({ gicon: uiIcon("camera-photo"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
 }
 
 function buildBarExpanded(onClose: () => void): Gtk.Widget {
@@ -124,12 +124,12 @@ function buildBarExpanded(onClose: () => void): Gtk.Widget {
 function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
         const box = new Gtk.Box({ hexpand: true, vexpand: true })
-        box.append(new Gtk.Image({ gicon: Icons.camera, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] }))
+        box.append(new Gtk.Image({ gicon: uiIcon("camera-photo"), pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] }))
         return box
     }
 
     // Action tile (no on/off state) → no status subtitle; just the name.
-    return makeCapsuleTile(() => Icons.camera, () => t("widget.screenshot.name"), () => "", undefined, budget)
+    return makeCapsuleTile(() => uiIcon("camera-photo"), () => t("widget.screenshot.name"), () => "", undefined, budget)
 }
 
 // ── Widget registration ───────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ const screenshotWidget: AtomicWidget = {
     category: "utilities",
     barOrder: 50,
     name: t("widget.screenshot.name"),
-    icon: Icons.camera,
+    icon: uiIcon("camera-photo"),
     locations: ["bar", "cc"],
     defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.WIDE,

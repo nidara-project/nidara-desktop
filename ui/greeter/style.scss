@@ -258,20 +258,14 @@ window.skin-light * {
 }
 
 // ── Shipped icons ───────────────────────────────────────────────────────────
-// Same rule, same reason as the shell's _reset.scss: the Lucide SVGs we ship
-// are not symbolic icons (GTK only recolours a file whose name ends in
-// `-symbolic`), so they render black and get inverted to white here. The shell
-// makes this conditional because it has a light mode; these two surfaces are
-// permanently dark glass over the wallpaper, so the invert is unconditional.
-// Consumers: ui/lib/icons.ts (power bar, keyboard glyph) and the avatar
-// fallback in ui/lib/avatar.ts, which used to carry its own copy of this rule.
-.nd-icon { -gtk-icon-filter: invert(1); }
-// ...and under the light skin it is the invert that would break them: they render
-// black, which is already the ink of that skin. This is the shell's `_reset.scss`
-// conditional arriving here with the mode that made it necessary — the sentence
-// above ("permanently dark glass, so the invert is unconditional") was true for as
-// long as there was one skin.
-window.skin-light .nd-icon { -gtk-icon-filter: none; }
+// Same rule, same reason as the shell's _reset.scss: the icons we ship are
+// SYMBOLIC files (#587), so GTK paints them with the CSS `color` of their node
+// and the skin only has to move --nidara-text. Consumers: ui/lib/icons.ts (power
+// bar, keyboard glyph) and the avatar fallback in ui/lib/avatar.ts.
+// This was `-gtk-icon-filter: invert(1)` for as long as the drawings were
+// non-symbolic and rendered black, with a second rule turning the invert OFF
+// under the light skin. Both are gone: a colour needs no mode of its own.
+.nd-icon { color: var(--nidara-text); }
 
 // ── Window ─────────────────────────────────────────────────────────────────
 window,
@@ -835,17 +829,25 @@ dropdown > button {
     // installed (`/usr/share/nidara/ui/greeter/` → `../shell/assets/…`) and from source
     // (`ui/greeter/` → `../shell/assets/…`) — which is why it is not absolute.
     //
-    // ⚠️ The invert is not optional and not cosmetic: these are Lucide SVGs, non-symbolic
-    // (`stroke=currentColor`), so GTK loads them as a plain image and paints them BLACK.
-    // Same mechanism as the `.nd-icon` class, applied to a CSS node because an `arrow`
-    // has no widget to hang a class on. Unconditional is safe for the same documented
-    // reason: both these surfaces are permanently dark glass.
+    // ⚠️ The filter is not optional and not cosmetic, and it is deliberately
+    // `brightness(0) invert(1)` rather than a bare `invert(1)`.
     //
-    // Consequence to know: the chevron no longer follows `color`, so it does not brighten
-    // with the label on `:hover`. That is already true of every other shipped glyph on
-    // these two screens, so it is consistent — but it IS a change from the symbolic icon.
-    -gtk-icon-source: url("../shell/assets/icons/hicolor/scalable/actions/chevron-down.svg");
-    -gtk-icon-filter: invert(1);
+    // This is the one glyph that does NOT arrive through `Gtk.Image` — an `arrow` is a
+    // CSS node with no widget to hang a class on, so it comes in through
+    // `-gtk-icon-source`, which loads the file as a plain image rather than looking it
+    // up as an icon. Whether that path honours the `-symbolic` suffix and recolours from
+    // `color`, the way a looked-up icon does, is the one thing about this rule I could
+    // not measure off-screen: every harness I built rendered the `arrow` node empty.
+    // So the filter is written to land on white either way — `brightness(0)` flattens
+    // whatever came out to black, `invert(1)` turns that white. Unconditional is safe
+    // for the same documented reason as before: both these surfaces are permanently
+    // dark glass.
+    //
+    // Consequence to know: the chevron does not follow `color`, so it does not brighten
+    // with the label on `:hover`. That was already true before the icons became
+    // symbolic, and this rule keeps it true on purpose rather than by accident.
+    -gtk-icon-source: url("../shell/assets/icons/hicolor/scalable/actions/pan-down-symbolic.svg");
+    -gtk-icon-filter: brightness(0) invert(1);
   }
 }
 

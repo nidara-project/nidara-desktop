@@ -10,7 +10,7 @@ import hs from "../../core/HyprlandState"
 import appService, { type AppData } from "../../core/AppService"
 import { pinnedState, savePinned } from "../dock/state"
 import { t } from "../../core/i18n"
-import Icons from "../../core/Icons"
+import { uiIcon } from "../../core/Icons"
 import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
 import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/tokens"
@@ -62,7 +62,7 @@ export default function AppGridPanel(
         spacing: 12,
         hexpand: true,
     })
-    searchBox.append(new Gtk.Image({ gicon: Icons.search, pixel_size: 18, css_classes: ["app-grid-search-icon", "nd-icon"] }))
+    searchBox.append(new Gtk.Image({ gicon: uiIcon("system-search"), pixel_size: 18, css_classes: ["app-grid-search-icon", "nd-icon"] }))
     searchBox.append(searchEntry)
 
     // Typing reaches the grid's WINDOW-level key handler, not the entry — the focus
@@ -220,7 +220,7 @@ export default function AppGridPanel(
         visible: false,
     })
     const noResultsIcon = new Gtk.Image({
-        gicon: Icons.search,
+        gicon: uiIcon("system-search"),
         pixel_size: 48,
         css_classes: ["app-grid-no-results-icon", "nd-icon"],
     })

@@ -2,19 +2,19 @@ import Gtk from "gi://Gtk?version=4.0"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 import { AtomicWidget, ContentBudget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator, panelSwitch, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 import * as BT from "../core/BluetoothService"
 
 function buildBarContent() {
     return makeBarIcon({
-        getIcon: () => Icons.bluetooth,
+        getIcon: () => uiIcon("bluetooth-active"),
         onAction: () => BT.togglePower(),
         activeClass: "bar-widget-active",
         getActive: () => BT.isPowered(),
     })
 }
 
-const getIcon = () => BT.isPowered() ? Icons.bluetooth : Icons.bluetoothOff
+const getIcon = () => BT.isPowered() ? uiIcon("bluetooth-active") : uiIcon("bluetooth-disabled")
 const getSub = () => BT.isPowered() ? t("widget.bluetooth.sub.active") : t("widget.bluetooth.sub.inactive")
 
 function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
@@ -55,7 +55,7 @@ function buildDeviceList(): { box: Gtk.ListBox; refresh: () => void } {
 
         devices.forEach(dev => {
             const devImg = new Gtk.Image({ pixel_size: 18, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] })
-            if (dev.icon) devImg.icon_name = dev.icon; else devImg.gicon = Icons.bluetooth
+            if (dev.icon) devImg.icon_name = dev.icon; else devImg.gicon = uiIcon("bluetooth-active")
 
             const nameLabel = new Gtk.Label({
                 label: BT.deviceName(dev), css_classes: ["nidara-row-title"],
@@ -121,7 +121,7 @@ const btWidget: AtomicWidget = {
     category: "system",
     barOrder: 60,
     name: t("widget.bluetooth.name"),
-    icon: Icons.bluetooth,
+    icon: uiIcon("bluetooth-active"),
     locations: ["bar", "cc"],
     isAvailable: () => BT.hasAdapter(),
     watchAvailable: (cb) => { BT.watchAdapter(cb) },

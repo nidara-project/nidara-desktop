@@ -40,10 +40,12 @@ window.nidara-app-grid-window {
            top-level but, once the file went inside the window scope, expanded `&`
            to `#nidara-app-grid .app-grid-search-icon` and compiled to a window
            nested inside a search box. Restoring it turned out to be the wrong fix:
-           `.nd-icon` glyphs are monochrome and get their colour from
-           `-gtk-icon-filter: invert(1)` (_reset.scss), so a `color` on them only
-           ever flips black↔white — an accent token cannot reach the pixels. The
-           focus signal is the box's own border and fill, above, which is enough.
+           `.nd-icon` glyphs took their colour from `-gtk-icon-filter: invert(1)`
+           then, so a `color` on them only ever flipped black↔white and an accent
+           token could not reach the pixels. Since #587 they are SYMBOLIC files and
+           `color` does reach them — so an accent magnifier is now possible, and was
+           left undone on its merits rather than blocked: the focus signal is the
+           box's own border and fill, above, which is enough.
            (Parent-referencing `&` and a scope wrapper still do not mix: when a
            rule needs an ancestor's state, nest it under that ancestor.) */
     }

@@ -5,7 +5,7 @@ import { execAsync } from "../../lib/process"
 import { makeHSlider, makeVerticalFillTile } from "../../lib/nidara-kit"
 import { pollWhileMapped } from "../common/poll"
 import { t } from "../core/i18n"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 
 // ── brightnessctl helpers ─────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 // Small (1×1): centered indicator icon, mirroring the bar icon.
 function buildBrightnessIcon(): Gtk.Widget {
     return new Gtk.Image({
-        gicon: Icons.sun, pixel_size: 28,
+        gicon: uiIcon("display-brightness"), pixel_size: 28,
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         hexpand: true, vexpand: true,
         css_classes: ["nd-icon"],
@@ -61,7 +61,7 @@ function buildVertical(): Gtk.Widget {
     // after a user change so the in-flight result doesn't snap the slider back.
     let ignoreUntil = 0
     let sync: ((v: number) => void) | undefined
-    const tile = makeVerticalFillTile(Icons.sun, {
+    const tile = makeVerticalFillTile(uiIcon("display-brightness"), {
         value: _cachedPct,
         onChange: (v) => { ignoreUntil = GLib.get_monotonic_time() + 800_000; setBrightness(v) },
         onExtChange: (cb) => { sync = cb; return () => { sync = undefined } },
@@ -83,8 +83,8 @@ function buildHorizontal(): Gtk.Widget {
         // what this tile has always drawn and no machine here has a backlight to
         // check it on (`hasBacklight` is false without /sys/class/backlight, so the
         // widget does not exist to be looked at) — not because anyone decided it.
-        low:  { icon: Icons.moon, size: 14, opacity: 0.5 },
-        high: { icon: Icons.sun },
+        low:  { icon: uiIcon("system-suspend"), size: 14, opacity: 0.5 },
+        high: { icon: uiIcon("display-brightness") },
         getValue: () => _cachedPct,
         onChange: (v) => {
             ignoreUntil = GLib.get_monotonic_time() + 500_000
@@ -105,7 +105,7 @@ function buildHorizontal(): Gtk.Widget {
 // ── Bar widget (icon only) ────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    return new Gtk.Image({ gicon: Icons.sun, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+    return new Gtk.Image({ gicon: uiIcon("display-brightness"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
 }
 
 // ── Bar expansion panel content ───────────────────────────────────────────────
@@ -132,7 +132,7 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
     })
 
     const row = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
-    row.append(new Gtk.Image({ gicon: Icons.moon, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
+    row.append(new Gtk.Image({ gicon: uiIcon("system-suspend"), pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     row.append(slider)
     row.append(valueLabel)
 
@@ -163,7 +163,7 @@ const brightnessWidget: AtomicWidget = {
     category: "system",
     barOrder: 30,
     name: t("widget.brightness.name"),
-    icon: Icons.sun,
+    icon: uiIcon("display-brightness"),
     locations: ["bar", "cc"],
     isAvailable: hasBacklight,
     defaultSize: WidgetSize.FULL_WIDTH,

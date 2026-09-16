@@ -4,7 +4,7 @@
 // activity needed the same glyph (universal painters live in common/, not in
 // a widget file another surface has to reach into).
 //
-// It is `assets/icons/hicolor/scalable/actions/battery.svg` REDRAWN IN CAIRO,
+// It is `assets/icons/hicolor/scalable/actions/battery-symbolic.svg` REDRAWN IN CAIRO,
 // not a battery of its own invention: same 24-unit viewBox, same path coords
 // (body rect 1,6 18.5×12 r2 · terminal nub at x=23 from y=10 to y=14 · stroke 2),
 // so it sizes and reads exactly like any other Lucide icon in the set. EDIT BOTH

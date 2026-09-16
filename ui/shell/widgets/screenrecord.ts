@@ -8,7 +8,7 @@ import GLib from "gi://GLib"
 import { execAsync } from "../../lib/process"
 
 import { t } from "../core/i18n"
-import Icons from "../core/Icons"
+import { uiIcon } from "../core/Icons"
 import { safeDisconnect } from "../core/signals"
 import status, { recordingElapsed } from "../core/Status"
 import recordingConfig, {
@@ -156,7 +156,7 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
 function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     if (size === WidgetSize.SINGLE)
         return makeIconTile(
-            () => status.recording ? Icons.recordStop : Icons.record,
+            () => status.recording ? uiIcon("media-playback-stop") : uiIcon("media-record"),
             (sync) => {
                 const sigId = status.connect("notify::recording", sync)
                 return () => safeDisconnect(status, sigId)
@@ -175,7 +175,7 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     // .rec-stop-icon/.rec-label colour overrides are gone: the WHOLE capsule fills
     // now, and .rec-stop-icon was dead CSS anyway — colour never applies to a
     // Gtk.Image, only -gtk-icon-filter does, see design-system.md).
-    const getIcon  = () => status.recording ? Icons.recordStop : Icons.record
+    const getIcon  = () => status.recording ? uiIcon("media-playback-stop") : uiIcon("media-record")
     const getTitle = () => status.recording ? t("widget.screenrecord.recording") : t("widget.screenrecord.name")
     const getSub   = () => status.recording ? recordingElapsed() : ""
 
@@ -197,7 +197,7 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
 // ── Bar icon (dynamic recording state indicator) ──────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    const image = new Gtk.Image({ gicon: Icons.record, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+    const image = new Gtk.Image({ gicon: uiIcon("media-record"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
     // The GLYPH is the whole signal: record ⇄ stop, matching what the click now
     // does. No colour class — `.rec-bar-active` had no rule anywhere and could
     // never have had one: `color:` does not recolour a Gtk.Image unless the icon
@@ -205,7 +205,7 @@ function buildBarContent(): Gtk.Widget {
     // `.rec-stop-icon` that was deleted for the same reason. The red belongs to
     // the island dot two capsules away, which is where the state is stated.
     const syncState = () => {
-        image.gicon = status.recording ? Icons.recordStop : Icons.record
+        image.gicon = status.recording ? uiIcon("media-playback-stop") : uiIcon("media-record")
     }
     const sigId = status.connect("notify::recording", syncState)
     image.connect("unrealize", () => { safeDisconnect(status, sigId) })
@@ -433,7 +433,7 @@ const screenrecordWidget: AtomicWidget = {
     category: "utilities",
     barOrder: 60,
     name: t("widget.screenrecord.name"),
-    icon: Icons.record,
+    icon: uiIcon("media-record"),
     locations: ["bar", "cc"],
     defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.WIDE,
