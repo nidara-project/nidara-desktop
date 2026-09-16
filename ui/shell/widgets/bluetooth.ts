@@ -5,16 +5,20 @@ import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
 import * as BT from "../core/BluetoothService"
 
+const getIcon = () => BT.isPowered() ? uiIcon("bluetooth-active") : uiIcon("bluetooth-disabled")
+
+// The same icon as the Control Centre tile, off included — the pill used to show
+// `bluetooth-active` whatever the state. And subscribed: the power flips
+// asynchronously, so the sync right after the click still reads the old state.
 function buildBarContent() {
     return makeBarIcon({
-        getIcon: () => uiIcon("bluetooth-active"),
+        getIcon,
         onAction: () => BT.togglePower(),
         activeClass: "bar-widget-active",
         getActive: () => BT.isPowered(),
+        subscribe: BT.watchPower,
     })
 }
-
-const getIcon = () => BT.isPowered() ? uiIcon("bluetooth-active") : uiIcon("bluetooth-disabled")
 const getSub = () => BT.isPowered() ? t("widget.bluetooth.sub.active") : t("widget.bluetooth.sub.inactive")
 
 function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {

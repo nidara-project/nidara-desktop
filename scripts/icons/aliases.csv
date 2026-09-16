@@ -5,7 +5,7 @@ accessories-text-editor,file-pen,study
 airplane-mode,plane,study
 alarm,alarm-clock,study
 application-certificate,file-badge,study
-application-exit,log-out,registry
+application-exit,log-out,study
 application-rss+xml,rss,study
 application-x-addon,puzzle,study
 applications-games,gamepad-2,study
@@ -56,13 +56,14 @@ checkbox-mixed,minus-square,study
 color-select,pipette,study
 contact-new,user-round-plus,registry
 daytime-sunrise,sunrise,study
-daytime-sunset,sunset,registry
+daytime-sunset,sunset,study
 dialog-error,circle-x,study
 dialog-information,info,registry
 dialog-password,key,registry
 dialog-question,circle-help,study
 dialog-warning,triangle-alert,study
 display-brightness,sun,registry
+display-brightness-low,sun-dim,registry
 display-projector,projector,study
 document-edit,file-pen,study
 document-new,file-plus,study
@@ -84,7 +85,7 @@ emblem-default,check,registry
 emblem-favorite,star,study
 emblem-readonly,lock,study
 emblem-shared,share-2,study
-emblem-system,settings,study
+emblem-system,settings,registry
 error-correct,spell-check,study
 face-angry,angry,study
 face-laugh,laugh,study
@@ -181,8 +182,9 @@ network-wireless-disabled,wifi-off,registry
 network-wireless-signal-none,wifi-zero,registry
 network-wireless-signal-ok,wifi-high,registry
 network-wireless-signal-weak,wifi-low,registry
-night-light,sun-moon,study
+night-light,sun-moon,registry
 non-starred,star-off,study
+notifications,bell,registry
 notifications-disabled,bell-off,registry
 object-flip-horizontal,flip-horizontal,study
 object-flip-vertical,flip-vertical,study
@@ -224,7 +226,7 @@ starred,star,study
 system-file-manager,folder,study
 system-help,circle-help,study
 system-lock-screen,lock,registry
-system-log-out,log-out,study
+system-log-out,log-out,registry
 system-reboot,rotate-ccw,registry
 system-search,search,registry
 system-shutdown,power,registry

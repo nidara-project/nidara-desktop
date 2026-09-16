@@ -15,13 +15,13 @@ function buildBarContent() {
     return makeBarIcon({
         // Dedicated icon (warm sunset) — distinct from dark-mode's moon/sun. On/off
         // is conveyed by the toggle's active state, not an icon swap.
-        getIcon: () => uiIcon("daytime-sunset"),
+        getIcon: () => uiIcon("night-light"),
         onAction: () => nightLight.setEnabled(!nightLight.enabled),
         subscribe,
     })
 }
 
-const getIcon = () => uiIcon("daytime-sunset")
+const getIcon = () => uiIcon("night-light")
 const getSub = () => nightLight.enabled
     ? `${nightLight.temperature}K`
     : t("widget.night-light.sub.off")
@@ -150,7 +150,7 @@ const nightLightWidget: AtomicWidget = {
     category: "system",
     barOrder: 20,
     name: t("widget.night-light.name"),
-    icon: uiIcon("daytime-sunset"),
+    icon: uiIcon("night-light"),
     locations: ["bar", "cc"],
     defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.SINGLE,

@@ -6,14 +6,14 @@ import { dontDisturb, toggleDontDisturb, setDontDisturb, watchDnd } from "../cor
 
 function buildBarContent() {
     return makeBarIcon({
-        getIcon: () => dontDisturb() ? uiIcon("notifications-disabled") : uiIcon("preferences-system-notifications"),
+        getIcon: () => dontDisturb() ? uiIcon("notifications-disabled") : uiIcon("notifications"),
         onAction: toggleDontDisturb,
         activeClass: "bar-widget-active",
         getActive: dontDisturb,
     })
 }
 
-const getIcon = () => dontDisturb() ? uiIcon("notifications-disabled") : uiIcon("preferences-system-notifications")
+const getIcon = () => dontDisturb() ? uiIcon("notifications-disabled") : uiIcon("notifications")
 const getTitle = () => dontDisturb() ? t("cc.focus.title.on") : t("cc.focus.title.off")
 const getSub = () => dontDisturb() ? t("cc.focus.sub.on") : ""
 

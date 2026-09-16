@@ -2185,6 +2185,16 @@ only when someone boots a VM). The `styles` job now compiles it too.
     study mapped the assistant to `system-help`, so picking Adwaita turned Nidara's AI into a
     question mark. Use a standard name when one exists, `nd-` when none does, and never `nd-` for
     something the desktop already names — CI fails on that.
+  - **a name is chosen by what themes DRAW for it, not by how it reads.** Three names from the
+    icon study were wrong in a way only a render shows (2026-09-16): dark mode asked for
+    `system-suspend` (a moon in Adwaita, the suspend button in Papirus/Qogir/Colloid), the bar's
+    bell for `preferences-system-notifications` (the Settings PANEL's icon — a speech bubble with
+    "!" in most themes; right for the Settings sidebar, wrong for a bell) and the Control Centre
+    gear for `preferences-system` (tools in Adwaita). Before adding or changing a name, run
+    `gjs -m scripts/dev/icon-theme-audit.js [themes…] > a.tsv` and
+    `python3 scripts/dev/icon-theme-sheet.py a.tsv /tmp/sheet`, and check that every column
+    draws the same IDEA. The same concept can need two names by context: the notifications
+    Settings page keeps `preferences-system-notifications`, the bell is `notifications`.
   - **the lookup asks for size 512, on purpose.** A `Gio.FileIcon` is one file, so the size decides
     WHICH of a theme's variants we get, and fixed-size directories are often drawn with padding —
     Colloid's `status/24` icons fill 63% of their box against 97% for its scalable ones. Asking for

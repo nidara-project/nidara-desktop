@@ -83,7 +83,7 @@ function buildHorizontal(): Gtk.Widget {
         // what this tile has always drawn and no machine here has a backlight to
         // check it on (`hasBacklight` is false without /sys/class/backlight, so the
         // widget does not exist to be looked at) — not because anyone decided it.
-        low:  { icon: uiIcon("system-suspend"), size: 14, opacity: 0.5 },
+        low:  { icon: uiIcon("display-brightness-low"), size: 14, opacity: 0.5 },
         high: { icon: uiIcon("display-brightness") },
         getValue: () => _cachedPct,
         onChange: (v) => {
@@ -132,7 +132,7 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
     })
 
     const row = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
-    row.append(new Gtk.Image({ gicon: uiIcon("system-suspend"), pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
+    row.append(new Gtk.Image({ gicon: uiIcon("display-brightness-low"), pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     row.append(slider)
     row.append(valueLabel)
 
