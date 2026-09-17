@@ -199,7 +199,7 @@ export default function BluetoothPage() {
 
         devices.forEach(dev => {
             const devImg = new Gtk.Image({ pixel_size: 20, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] })
-            if (dev.icon) devImg.icon_name = dev.icon; else devImg.gicon = uiIcon("bluetooth-active")
+            if (dev.icon) devImg.icon_name = dev.icon; else devImg.gicon = uiIcon("nd-bluetooth-active")
 
             // The trailing cluster keeps its own 12px spacing — this migration moves
             // the ROW's metrics into the component, it does not re-space each row's
@@ -215,7 +215,7 @@ export default function BluetoothPage() {
                     icon: true,
                 })
                 attachTooltip(removeBtn, t("settings.bluetooth.tooltip.forget"), { chrome: false })
-                removeBtn.set_child(new Gtk.Image({ gicon: uiIcon("user-trash"), pixel_size: 16, css_classes: ["nd-icon"] }))
+                removeBtn.set_child(new Gtk.Image({ gicon: uiIcon("nd-user-trash"), pixel_size: 16, css_classes: ["nd-icon"] }))
                 removeBtn.connect("clicked", () => {
                     BT.removeDevice(dev)
                 })

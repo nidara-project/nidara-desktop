@@ -3622,6 +3622,22 @@ serves every other caller, and a window class or stream name with no entry of it
 unrelated app the same way. Before feeding `getAppInfo` a string you did not get from the registry,
 ask whether a wrong app is worse than `null` — for anything that LAUNCHES, it is.
 
+### 105. ⚠️ OPEN — some `nd-` icon names still do double duty, and two installer icons do not exist (2026-09-17)
+
+The Nidara icon spec (#587, `ui/shell/assets/icons/nidara/SPEC.md`) promises one meaning per name, because
+every theme made for it draws a name once. The rename split the three clearest cases, but these still
+share a name, and a theme author redrawing one changes the other:
+`nd-pan-up` (collapse, and the assistant's SEND button), `nd-network-vpn-disconnected` (VPN off, and the
+"not isolated" badge on Settings → Apps), `nd-system-lock-screen` (lock the screen, and a secured Wi-Fi
+network), `nd-dialog-information` (About, and a notification with no icon), `nd-value-increase` (a
+slider's "more" end, and Autostart's add button). SPEC.md's *Where* column lists them honestly. Split
+one by adding a name (`scripts/icons/nidara-icons.py add`, then ICON_NAMES and the SPEC row), and bump
+the spec version.
+
+Separately, found while renaming: the installer asks `ndIcon("clipboard-list")` and `ndIcon("rocket")`
+for its Summary and Run steps (`ui/installer/widget/InstallerWindow.ts`), and neither drawing has ever
+been shipped — `ndIcon` returns null and those two sidebar rows draw no icon.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a

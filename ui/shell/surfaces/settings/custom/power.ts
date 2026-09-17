@@ -59,9 +59,9 @@ export const build = (_ctx: PageCtx) => {
             profileGroup.listBox.selection_mode = Gtk.SelectionMode.SINGLE
 
             const profiles = [
-                { id: "performance", label: t("settings.power.profile.performance"),  icon: uiIcon("power-profile-performance") },
-                { id: "balanced",    label: t("settings.power.profile.balanced"),     icon: uiIcon("battery") },
-                { id: "power-saver", label: t("settings.power.profile.power-saver"),  icon: uiIcon("power-profile-power-saver") },
+                { id: "performance", label: t("settings.power.profile.performance"),  icon: uiIcon("nd-power-profile-performance") },
+                { id: "balanced",    label: t("settings.power.profile.balanced"),     icon: uiIcon("nd-power-profile-balanced") },
+                { id: "power-saver", label: t("settings.power.profile.power-saver"),  icon: uiIcon("nd-power-profile-power-saver") },
             ]
             const checkIcons = new Map<string, Gtk.Widget>()
 

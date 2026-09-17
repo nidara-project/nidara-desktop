@@ -16,7 +16,7 @@ function navRow(
     sub: { id: string; build: () => Gtk.Widget },
 ): Gtk.ListBoxRow {
     const chevron = new Gtk.Image({
-        gicon: uiIcon("pan-end"), pixel_size: 16,
+        gicon: uiIcon("nd-pan-end"), pixel_size: 16,
         opacity: 0.4, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"],
     })
     const row = createRow(label, subtitle, chevron)

@@ -28,7 +28,7 @@ import GLib from "gi://GLib"
  */
 
 const SHELL_ROOT = GLib.getenv("NIDARA_SHELL_ROOT") ?? "/usr/share/nidara/ui/shell"
-const DIR = `${SHELL_ROOT}/assets/icons/hicolor/scalable/actions`
+const DIR = `${SHELL_ROOT}/assets/icons/nidara/scalable/actions`
 
 /**
  * The shipped icon `name`, or `null` when the asset tree is not there.

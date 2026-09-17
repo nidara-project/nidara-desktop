@@ -51,7 +51,7 @@ function bindSync(root: Gtk.Widget, sync: () => void) {
 function notPresent(): Gtk.Widget {
     const box = new Gtk.Box({ hexpand: true, vexpand: true })
     box.append(new Gtk.Image({
-        gicon: uiIcon("battery"), pixel_size: 28, opacity: 0.5,
+        gicon: uiIcon("nd-battery"), pixel_size: 28, opacity: 0.5,
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         hexpand: true, vexpand: true, css_classes: ["nd-icon"],
     }))
@@ -183,7 +183,7 @@ function buildPanel(_onClose: () => void): Gtk.Widget {
 // ── Bar icon (live glyph reflecting charge / charging / low) ───────────────────
 function buildBarContent(): Gtk.Widget {
     if (!present()) {
-        return new Gtk.Image({ gicon: uiIcon("battery"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+        return new Gtk.Image({ gicon: uiIcon("nd-battery"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
     }
     // 16 = the pixel_size every other bar icon uses, so this capsule is exactly
     // as wide as theirs (a hand-tuned glyph box made it 9px wider — don't).
@@ -199,7 +199,7 @@ const batteryWidget: AtomicWidget = {
     category: "system",
     barOrder: 40,
     name: t("widget.battery.name"),
-    icon: uiIcon("battery"),
+    icon: uiIcon("nd-battery"),
     locations: ["bar", "cc"],
     defaultInBar: true,   // laptops only — hardware gate (isAvailable: present) hides it on desktops
     defaultInCc: false,   // situational — lives in the bar by default, available to add to the CC

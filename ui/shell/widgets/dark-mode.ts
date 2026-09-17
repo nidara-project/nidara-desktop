@@ -14,7 +14,7 @@ const themeSubscribe = (sync: () => void) => {
 // computer" action, which Nidara's own drawing and Adwaita happen to draw as a moon
 // and Papirus, Qogir or Colloid draw as a power/sleep button; the second is the
 // brightness control's. `weather-clear(-night)` is in every theme measured (#587).
-const darkModeIcon = () => Theme.isDark ? uiIcon("weather-clear-night") : uiIcon("weather-clear")
+const darkModeIcon = () => Theme.isDark ? uiIcon("nd-dark-mode") : uiIcon("nd-light-mode")
 
 function buildBarContent() {
     return makeBarIcon({
@@ -29,7 +29,7 @@ const darkModeWidget: AtomicWidget = {
     category: "system",
     barOrder: 10,
     name: t("widget.dark-mode.name"),
-    icon: uiIcon("weather-clear-night"),
+    icon: uiIcon("nd-dark-mode"),
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],

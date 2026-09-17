@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="8" cy="8" r="2.6667" class="foreground-stroke transparent-fill" />
+  <path d="M 8 2.6667 h 0.0067" class="foreground-stroke transparent-fill" />
+  <path d="M 13.3333 8 h 0.0067" class="foreground-stroke transparent-fill" />
+  <path d="M 8 13.3333 h 0.0067" class="foreground-stroke transparent-fill" />
+  <path d="M 2.6667 8 h 0.0067" class="foreground-stroke transparent-fill" />
+  <path d="M 11.7713 4.2287 h 0.0067" class="foreground-stroke transparent-fill" />
+  <path d="M 11.7713 11.7713 h 0.0067" class="foreground-stroke transparent-fill" />
+  <path d="M 4.2287 11.7713 h 0.0067" class="foreground-stroke transparent-fill" />
+  <path d="M 4.2287 4.2287 h 0.0067" class="foreground-stroke transparent-fill" />
+</svg>

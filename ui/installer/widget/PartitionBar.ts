@@ -93,7 +93,7 @@ export function NidaraPartitionBar(opts: PartitionBarOpts): PartitionBarResult {
     valign: Gtk.Align.CENTER,
   })
 
-  const diskIcon = ndIcon("drive-harddisk")
+  const diskIcon = ndIcon("nd-drive-harddisk")
   if (diskIcon) {
     headerBox.append(new Gtk.Image({ gicon: diskIcon, pixel_size: 16, css_classes: ["nd-icon"] }))
   }

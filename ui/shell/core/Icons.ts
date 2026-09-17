@@ -7,34 +7,42 @@ import Graphene from "gi://Graphene"
 import { SHELL_ROOT } from "./Paths"
 
 /**
- * Nidara — the interface icons, by STANDARD NAME (#587).
+ * Nidara — the interface icons, by NIDARA ICON SPEC name (#587).
  *
- * A surface asks for a name (`uiIcon("network-wireless")`) and gets back a
+ * A surface asks for a name (`uiIcon("nd-network-wireless")`) and gets back a
  * `Gio.FileIcon`. That name is looked for in two places, in order:
  *
- *   1. the INTERFACE icon theme, if one is set — a private `Gtk.IconTheme`, NOT
- *      the display's. The display keeps serving the user's APP icon theme
- *      (`org.gnome.desktop.interface icon-theme`), which is what the dock, the
- *      tray and the app grid resolve against. GTK gives one theme per process,
- *      and these are the two we need at once;
- *   2. our own shipped drawing, as the last link — `assets/icons/hicolor/
- *      scalable/actions/<name>-symbolic.svg`, named with that SAME name. With no
- *      interface theme set, which is the default, every icon resolves here.
+ *   1. the INTERFACE icon theme, if one is set AND it declares the spec — a
+ *      private `Gtk.IconTheme`, NOT the display's. The display keeps serving the
+ *      user's APP icon theme (`org.gnome.desktop.interface icon-theme`), which is
+ *      what the dock, the tray and the app grid resolve against. GTK gives one
+ *      theme per process, and these are the two we need at once;
+ *   2. our own drawing, as the last link — `assets/icons/nidara/scalable/
+ *      actions/<name>-symbolic.svg`, named with that SAME name. With no interface
+ *      theme set, which is the default, every icon resolves here.
  *
- * 🔑 There is ONE name, not two. A surface asks for `system-search`, and that
- * same name is looked for in the interface theme first and in our own
- * `assets/icons/…/system-search-symbolic.svg` second. Nothing translates anything:
- * the names are the freedesktop Icon Naming Spec's, plus the de-facto GNOME
- * symbolic ones, which is what themes are built around.
+ * `assets/icons/nidara/` IS the Nidara icon theme — the spec's reference theme, and
+ * the only copy of these drawings. It is a complete theme directory (index.theme,
+ * both sizes, SPEC.md), installed to /usr/share/icons/nidara as a symlink to itself,
+ * which is where a theme author finds it to start from. Reading the files straight
+ * from it, rather than through a `Gtk.IconTheme`, keeps the default path free of any
+ * lookup; the result is the same file. It used to be two copies — these files and a
+ * `nidara-symbolic` theme generated from Lucide at install — and nine of the 83
+ * drawings had drifted apart between them (owner: one copy, 2026-09-17).
  *
- * ⚠️ A name starting `nd-` is OURS, and no theme will ever have it — which is the
- * point. The Naming Spec is from 2006 and has no word for an AI assistant
- * (`nd-ai`), a clipboard history (`nd-clipboard-history`), a dock or a
- * floating-window mode. It used to have one anyway, because the icon study was
- * asked to give all 85 concepts a standard name and forced the nearest-SOUNDING
- * one where none existed — the assistant was mapped to `system-help`, so picking
- * Adwaita turned Nidara's AI into a question mark. The prefix makes "this is ours,
- * never substituted" visible at the call site instead of hidden in a table.
+ * 🔑 Every name is OURS — `nd-` — and is defined in `assets/icons/nidara/SPEC.md`, which
+ * says what each one represents. They used to be freedesktop names, asked of
+ * whatever theme the user picked, and that kept drawing the wrong THING: dark mode
+ * came out as a suspend button, the Control Centre as a toolbox, the bell as a
+ * speech bubble (all fixed one by one in #591). The Icon Naming Spec is frozen
+ * since 2007, and GNOME itself calls Adwaita's UI icons a private set with no API.
+ * So Nidara has its own spec, and only a theme made for it changes these icons
+ * (owner decision on #587, 2026-09-17). APP icons keep their freedesktop names —
+ * there the name comes from each application's `.desktop` file, and it works.
+ *
+ * A theme opts in with `X-Nidara-Icon-Spec=<version>` in its `index.theme`. It is
+ * DECLARED, not detected: a partial theme (ten icons redrawn, the rest ours) is
+ * legitimate, so counting `nd-` files would need a threshold nobody can justify.
  *
  * ⚠️ Measured, GTK 4.22.5 (the A/B prototype on #587): a `Gio.FileIcon` pointing
  * at a `*-symbolic.svg` recolours from CSS `color` EXACTLY like an icon looked up
@@ -55,7 +63,7 @@ import { SHELL_ROOT } from "./Paths"
 
 // Assets resolve against SHELL_ROOT (source tree in dev, /usr/share in prod).
 // See core/Paths.ts. install.sh ships assets/ into both.
-const DIR = `${SHELL_ROOT}/assets/icons/hicolor/scalable/actions`
+const DIR = `${SHELL_ROOT}/assets/icons/nidara/scalable/actions`
 const f = (name: string) => Gio.FileIcon.new(Gio.File.new_for_path(`${DIR}/${name}-symbolic.svg`))
 
 /** Absolute path of a shipped asset icon — for chains that fall back to our
@@ -67,99 +75,94 @@ export const iconAssetPath = (name: string) => `${DIR}/${name}-symbolic.svg`
  *
  * This is a LIST, not a mapping — it exists so the compiler can refuse a name we
  * do not ship and so `scripts/ci/icon-registry-check.mjs` can check that each one
- * has a drawing. Add a name here and a `<name>-symbolic.svg` beside it; a
- * standard name if the concept has one, an `nd-` name if it does not.
+ * has a drawing and a line in `assets/icons/nidara/SPEC.md`. Adding one is adding all
+ * three. Name by MEANING, one meaning per name: two uses sharing a name become
+ * the same glyph in every theme made for the spec.
  */
 export const ICON_NAMES = [
-    "audio-input-microphone",
-    "audio-speakers",
-    "audio-volume-high",
-    "audio-volume-low",
-    "audio-volume-medium",
-    "audio-volume-muted",
-    "audio-x-generic",
-    "avatar-default",
-    "battery",
-    "bluetooth-acquiring",
-    "bluetooth-active",
-    "bluetooth-disabled",
-    "bluetooth-paired",
-    "camera-photo",
-    "contact-new",
-    "dialog-information",
-    "dialog-password",
-    "display-brightness",
-    "display-brightness-low",
-    "drive-harddisk",
-    "edit-paste",
-    "emblem-default",
-    "emblem-system",
-    "input-gaming",
-    "input-keyboard",
-    "media-playback-pause",
-    "media-playback-start",
-    "media-playback-stop",
-    "media-record",
-    "media-skip-backward",
-    "media-skip-forward",
     "nd-ai",
+    "nd-audio-input-microphone",
+    "nd-audio-speakers",
+    "nd-audio-volume-high",
+    "nd-audio-volume-low",
+    "nd-audio-volume-medium",
+    "nd-audio-volume-muted",
+    "nd-audio-x-generic",
+    "nd-avatar-default",
     "nd-bar",
-    "nd-clipboard-history",
+    "nd-battery",
+    "nd-bluetooth-active",
+    "nd-bluetooth-disabled",
+    "nd-clipboard",
+    "nd-contact-new",
+    "nd-control-center",
+    "nd-conversation-reset",
     "nd-cpu",
+    "nd-dark-mode",
+    "nd-dialog-information",
+    "nd-dialog-password",
+    "nd-display-brightness",
+    "nd-display-brightness-low",
     "nd-dock",
+    "nd-drive-harddisk",
+    "nd-emblem-default",
     "nd-hand",
-    "nd-launch",
+    "nd-input-gaming",
+    "nd-input-keyboard",
+    "nd-light-mode",
+    "nd-media-playback-pause",
+    "nd-media-playback-start",
+    "nd-media-playback-stop",
+    "nd-media-record",
+    "nd-media-skip-backward",
+    "nd-media-skip-forward",
+    "nd-network-vpn",
+    "nd-network-vpn-disconnected",
+    "nd-network-wired",
+    "nd-network-wireless",
+    "nd-network-wireless-acquiring",
     "nd-network-wireless-configure",
-    "nd-plugin",
+    "nd-network-wireless-disabled",
+    "nd-network-wireless-signal-none",
+    "nd-network-wireless-signal-ok",
+    "nd-network-wireless-signal-weak",
+    "nd-night-light",
+    "nd-notifications",
+    "nd-notifications-disabled",
+    "nd-pan-down",
+    "nd-pan-end",
+    "nd-pan-start",
+    "nd-pan-up",
+    "nd-power-profile-balanced",
+    "nd-power-profile-performance",
+    "nd-power-profile-power-saver",
+    "nd-preferences-desktop",
+    "nd-preferences-desktop-accessibility",
+    "nd-preferences-desktop-peripherals",
+    "nd-preferences-desktop-theme",
+    "nd-preferences-system",
+    "nd-preferences-system-network",
+    "nd-preferences-system-notifications",
+    "nd-preferences-system-time",
+    "nd-screenshot",
+    "nd-sidebar-show",
+    "nd-system-lock-screen",
+    "nd-system-log-out",
+    "nd-system-reboot",
+    "nd-system-search",
+    "nd-system-shutdown",
+    "nd-system-suspend",
+    "nd-user-trash",
+    "nd-utilities-terminal",
+    "nd-value-decrease",
+    "nd-value-increase",
+    "nd-video-display",
+    "nd-view-grid",
+    "nd-window-close",
     "nd-window-floating",
-    "network-vpn",
-    "network-vpn-disconnected",
-    "network-wired",
-    "network-wireless",
-    "network-wireless-acquiring",
-    "network-wireless-disabled",
-    "network-wireless-signal-none",
-    "network-wireless-signal-ok",
-    "network-wireless-signal-weak",
-    "night-light",
-    "notifications",
-    "notifications-disabled",
-    "open-menu",
-    "org.gnome.tweaks",
-    "pan-down",
-    "pan-end",
-    "pan-start",
-    "pan-up",
-    "power-profile-performance",
-    "power-profile-power-saver",
-    "preferences-desktop",
-    "preferences-desktop-accessibility",
-    "preferences-desktop-font",
-    "preferences-desktop-peripherals",
-    "preferences-desktop-theme",
-    "preferences-system",
-    "preferences-system-network",
-    "preferences-system-notifications",
-    "preferences-system-time",
-    "sidebar-show",
-    "system-lock-screen",
-    "system-log-out",
-    "system-reboot",
-    "system-search",
-    "system-shutdown",
-    "system-suspend",
-    "system-users",
-    "user-trash",
-    "utilities-terminal",
-    "value-decrease",
-    "value-increase",
-    "video-display",
-    "view-grid",
-    "weather-clear",
-    "weather-clear-night",
-    "window-close",
-    "zoom-in",
-    "zoom-out",
+    "nd-window-tiling",
+    "nd-zoom-in",
+    "nd-zoom-out",
 ] as const
 
 export type IconName = typeof ICON_NAMES[number]
@@ -179,6 +182,61 @@ let themeName = ""
 
 const APPEARANCE_SCHEMA = "org.nidara.appearance"
 const THEME_KEY = "interface-icon-theme"
+
+/**
+ * The spec version this shell implements, and the `index.theme` key a theme
+ * declares it with. A theme written for an OLDER version is still used — the
+ * names added since simply fall back to ours; a newer one is used too, and the
+ * names we do not know are never asked for. Bump this when `SPEC.md` gains names.
+ */
+export const ICON_SPEC_VERSION = 1
+const SPEC_KEY = "X-Nidara-Icon-Spec"
+
+/**
+ * The spec version theme directory `dir` declares, or 0 when it declares none.
+ * `X-` keys are the index.theme format's own extension mechanism; GTK ignores
+ * them, so declaring the spec costs a theme nothing anywhere else.
+ */
+function declaredSpec(dir: string): number {
+    try {
+        const kf = new GLib.KeyFile()
+        kf.load_from_file(`${dir}/index.theme`, GLib.KeyFileFlags.NONE)
+        const v = kf.get_integer("Icon Theme", SPEC_KEY)
+        return v > 0 ? v : 0
+    } catch {
+        return 0   // no index.theme, no [Icon Theme], no key, or not a number
+    }
+}
+
+/**
+ * The spec version theme `name` declares, looked up the way GTK finds the theme:
+ * the FIRST `index.theme` along the search path is the one that counts.
+ */
+function themeSpec(theme: Gtk.IconTheme, name: string): number {
+    for (const dir of theme.get_search_path() ?? []) {
+        if (GLib.file_test(`${dir}/${name}/index.theme`, GLib.FileTest.EXISTS)) return declaredSpec(`${dir}/${name}`)
+    }
+    return 0
+}
+
+/**
+ * Every installed icon theme that declares the Nidara icon spec — what Settings
+ * offers as interface icon themes. Directory names, sorted, each once even when
+ * it is installed in more than one place.
+ */
+export function specIconThemes(): string[] {
+    const theme = new Gtk.IconTheme()
+    const found = new Set<string>()
+    for (const dir of theme.get_search_path() ?? []) {
+        let e
+        try { e = GLib.Dir.open(dir, 0) } catch { continue }
+        let n
+        while ((n = e.read_name())) {
+            if (!found.has(n) && themeSpec(theme, n) > 0) found.add(n)
+        }
+    }
+    return [...found].sort()
+}
 
 /** Icons already resolved under the current theme. Cleared when it changes. */
 const cache = new Map<IconName, Gio.FileIcon>()
@@ -232,8 +290,15 @@ function setInterfaceTheme(name: string) {
     if (name) {
         const t = new Gtk.IconTheme()
         if (installedIconTheme(t, name)) {
-            t.set_theme_name(name)
-            interfaceTheme = t
+            if (themeSpec(t, name) > 0) {
+                t.set_theme_name(name)
+                interfaceTheme = t
+            } else {
+                // Settings never offers such a theme, but the key can be written by
+                // hand — and an install upgraded from before the spec may still hold
+                // "Adwaita". It would resolve nothing anyway; say why instead.
+                console.warn(`[Icons] Interface icon theme "${name}" does not follow Nidara's icon spec (no ${SPEC_KEY} in its index.theme). Using Nidara's own drawings.`)
+            }
         } else {
             // Left unset rather than guessed at: the value is the user's, and
             // correcting it here would write over what they typed. Say what is
@@ -321,21 +386,19 @@ export function onInterfaceIconThemeChange(cb: (name: string) => void): () => vo
 const ICON_SIZE = 512
 
 /**
- * The `Gio.FileIcon` for a concept: the interface theme's drawing when it has a
- * SYMBOLIC one under the standard name, ours otherwise.
+ * The `Gio.FileIcon` for a name: the interface theme's drawing when it has one, ours
+ * otherwise.
  *
  * `has_icon` is the test, not the lookup: `lookup_icon` never fails — it hands
  * back `image-missing` — so asking it whether a theme covers a name is asking
  * the wrong question.
  *
  * ⚠️ The resolved FILE has to end in `-symbolic.svg`, and that is checked rather
- * than assumed. Asking a theme for the bare standard name is not the same
- * question: Adwaita answers `emblem-default`, `preferences-desktop`,
- * `preferences-desktop-theme` and `preferences-desktop-peripherals` out of its
- * `legacy/` folder, with full-colour PNGs. A bitmap does not recolour and does
- * not follow the dark/light mode, so the menu tick would have become a small
- * coloured picture pinned to one palette. Anything that is not a symbolic SVG
- * falls through to our own drawing, which is the whole point of having one.
+ * than assumed. The name asked is `<name>-symbolic`, but GTK also falls back along
+ * `Inherits`, and a theme that inherits from one shipping bitmaps can hand back a
+ * PNG — Adwaita did exactly that from `legacy/` while these were freedesktop names.
+ * A bitmap does not recolour and does not follow the dark/light mode, so anything
+ * that is not a symbolic SVG falls through to our own drawing.
  */
 let inkTestFailed = false
 
@@ -350,10 +413,12 @@ let inkTestFailed = false
  * leaves an empty square. The same file through `new_from_file` (librsvg) draws
  * correctly, so it is the pipeline, not the file. Upstream: GNOME/gtk#7834.
  *
- * Across the ten independent theme families measured for #587 this hits **two** of
- * them — Suru++ (12 of our concepts: battery, wi-fi, terminal, disks…) and La
- * Capitaine (5: audio, wi-fi). Without this test the user picks one of those and
- * silently loses those icons, with nothing in the log.
+ * Across the ten independent theme families measured for #587 (while these were
+ * still freedesktop names) this hit **two** of them — Suru++ (12 of our concepts:
+ * battery, wi-fi, terminal, disks…) and La Capitaine (5: audio, wi-fi). A theme
+ * made for the spec is built the same way, by people starting from those same
+ * files, so the test stays: without it such a theme silently loses those icons,
+ * with nothing in the log.
  *
  * 🔑 The test is the RENDER, not the file's shape. Flagging the structure instead
  * (a `<g transform>` and no `viewBox`) catches all 17 real holes — and also 59
@@ -405,16 +470,11 @@ function drawsInk(icon: Gio.FileIcon, theme: Gtk.IconTheme): boolean {
 }
 
 function resolve(name: IconName): Gio.FileIcon {
-    // An `nd-` name is ours by definition — asking a theme for it would only ever
-    // hit something that happened to share the name.
-    if (interfaceTheme && !name.startsWith("nd-")) {
+    if (interfaceTheme) {
         const symbolic = `${name}-symbolic`
-        const asked = interfaceTheme.has_icon(symbolic) ? symbolic
-            : interfaceTheme.has_icon(name) ? name
-            : null
-        if (asked) {
+        if (interfaceTheme.has_icon(symbolic)) {
             const paintable = interfaceTheme.lookup_icon(
-                asked, null, ICON_SIZE, 1, Gtk.TextDirection.NONE, 0)
+                symbolic, null, ICON_SIZE, 1, Gtk.TextDirection.NONE, 0)
             const path = paintable?.get_file()?.get_path()
             if (path && path.endsWith("-symbolic.svg")
                 && GLib.file_test(path, GLib.FileTest.EXISTS)) {
@@ -429,7 +489,7 @@ function resolve(name: IconName): Gio.FileIcon {
 
 
 /**
- * `uiIcon("system-search")` — a `Gio.FileIcon`, resolved on first use and cached
+ * `uiIcon("nd-system-search")` — a `Gio.FileIcon`, resolved on first use and cached
  * until the interface theme changes. Lazy on purpose: nothing is looked up for a
  * name nobody draws.
  */

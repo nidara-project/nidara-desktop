@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M 6.6667 5.3333 h 0.0067" class="foreground-stroke transparent-fill" />
+  <path d="M 8 8 h 0.0067" class="foreground-stroke transparent-fill" />
+  <path d="M 9.3333 5.3333 h 0.0067" class="foreground-stroke transparent-fill" />
+  <path d="M 10.6667 8 h 0.0067" class="foreground-stroke transparent-fill" />
+  <path d="M 12 5.3333 h 0.0067" class="foreground-stroke transparent-fill" />
+  <path d="M 4 5.3333 h 0.0067" class="foreground-stroke transparent-fill" />
+  <path d="M 4.6667 10.6667 h 6.6667" class="foreground-stroke transparent-fill" />
+  <path d="M 5.3333 8 h 0.0067" class="foreground-stroke transparent-fill" />
+  <rect width="13.3333" height="10.6667" x="1.3333" y="2.6667" rx="1.3333" class="foreground-stroke transparent-fill" />
+</svg>

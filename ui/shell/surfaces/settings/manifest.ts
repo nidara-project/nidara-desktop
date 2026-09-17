@@ -50,7 +50,7 @@ export const manifest = [
         id: "network",
         kind: "browser",
         label: "settings.network.title",
-        icon: "preferences-system-network",
+        icon: "nd-preferences-system-network",
         builder: "network",
         reason: "Object browser for physical network interfaces, Wi-Fi access points, and VPN connections.",
     },
@@ -58,7 +58,7 @@ export const manifest = [
         id: "bluetooth",
         kind: "browser",
         label: "settings.bluetooth.title",
-        icon: "bluetooth-active",
+        icon: "nd-bluetooth-active",
         builder: "bluetooth",
         reason: "Object browser for dynamic Bluetooth adapter state and device discovery/pairing lifecycles.",
     },
@@ -67,7 +67,7 @@ export const manifest = [
         id: "appearance",
         kind: "preference",
         label: "settings.appearance.title",
-        icon: "preferences-desktop-theme",
+        icon: "nd-preferences-desktop-theme",
         groupStart: true,
         groups: [
             {
@@ -147,7 +147,7 @@ export const manifest = [
         id: "display",
         kind: "browser",
         label: "settings.display.title",
-        icon: "video-display",
+        icon: "nd-video-display",
         builder: "display",
         reason: "Object browser for dynamically connected physical monitors, layouts, and mode enumeration.",
     },
@@ -155,7 +155,7 @@ export const manifest = [
         id: "audio",
         kind: "browser",
         label: "settings.audio.title",
-        icon: "audio-speakers",
+        icon: "nd-audio-speakers",
         builder: "audio",
         reason: "Object browser for dynamic PipeWire audio endpoints and per-application volume streams.",
     },
@@ -258,7 +258,7 @@ export const manifest = [
         id: "widgets",
         kind: "browser",
         label: "settings.widgets.title",
-        icon: "preferences-system",
+        icon: "nd-preferences-system",
         builder: "widgets",
         reason: "Object browser for dynamic widget registry placement (bar vs control center) and subpage settings.",
     },
@@ -266,7 +266,7 @@ export const manifest = [
         id: "gaming",
         kind: "preference",
         label: "settings.gaming.title",
-        icon: "input-gaming",
+        icon: "nd-input-gaming",
         groups: [
             {
                 i18n: "settings.gaming.group.wallpaper",
@@ -296,7 +296,7 @@ export const manifest = [
         id: "notifications",
         kind: "preference",
         label: "settings.notif.title",
-        icon: "preferences-system-notifications",
+        icon: "nd-preferences-system-notifications",
         groups: [
             {
                 i18n: "",
@@ -317,7 +317,7 @@ export const manifest = [
         id: "accessibility",
         kind: "preference",
         label: "settings.accessibility.title",
-        icon: "preferences-desktop-accessibility",
+        icon: "nd-preferences-desktop-accessibility",
         groups: [
             {
                 i18n: "settings.accessibility.group.vision",
@@ -338,7 +338,7 @@ export const manifest = [
         id: "apps",
         kind: "browser",
         label: "settings.apps.section",
-        icon: "view-grid",
+        icon: "nd-view-grid",
         builder: "apps",
         reason: "Navigation hub for app management subpages (default apps, icon associations, autostart).",
     },
@@ -347,7 +347,7 @@ export const manifest = [
         id: "input",
         kind: "preference",
         label: "settings.input.title",
-        icon: "input-keyboard",
+        icon: "nd-input-keyboard",
         groupStart: true,
         groups: [
             {
@@ -380,7 +380,7 @@ export const manifest = [
         id: "power",
         kind: "preference",
         label: "settings.power.title",
-        icon: "battery",
+        icon: "nd-battery",
         groups: [
             {
                 i18n: "settings.power.group.profile",
@@ -405,7 +405,7 @@ export const manifest = [
         id: "region",
         kind: "preference",
         label: "settings.region.title",
-        icon: "preferences-system-time",
+        icon: "nd-preferences-system-time",
         header: {
             custom: "clockPreview",
             note: "Live clock preview before the first group. 1s tick armed in bindWhileRealized on pageBox.",
@@ -455,7 +455,7 @@ export const manifest = [
         id: "users",
         kind: "browser",
         label: "settings.users.title",
-        icon: "avatar-default",
+        icon: "nd-avatar-default",
         builder: "users",
         reason: "Object browser for system user accounts via AccountsService D-Bus and administration actions.",
     },
@@ -549,7 +549,7 @@ export const manifest = [
         id: "about",
         kind: "info",
         label: "settings.about.title",
-        icon: "dialog-information",
+        icon: "nd-dialog-information",
         builder: "about",
         reason: "System diagnostics and hardware information display with live updates trigger.",
     },

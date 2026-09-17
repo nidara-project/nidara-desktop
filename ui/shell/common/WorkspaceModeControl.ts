@@ -18,7 +18,7 @@ import workspaceModes, { WORKSPACE_MODES, type WorkspaceMode } from "../core/Wor
  * floating (one window, free). Both are already in our icon set; neither is an
  * emoji and neither is a hardcoded colour — commandment 10.
  */
-export const modeIcon = (mode: WorkspaceMode) => (mode === "tiling" ? uiIcon("view-grid") : uiIcon("nd-window-floating"))
+export const modeIcon = (mode: WorkspaceMode) => (mode === "tiling" ? uiIcon("nd-window-tiling") : uiIcon("nd-window-floating"))
 
 export const modeLabel = (mode: WorkspaceMode) =>
     t(mode === "tiling" ? "workspace.mode.tiling" : "workspace.mode.floating")

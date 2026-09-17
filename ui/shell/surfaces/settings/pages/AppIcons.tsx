@@ -25,9 +25,9 @@ import { loadPixbuf, makeIconImage } from "./AppIconImage"
 
 function isolationBadge(app: AppData, showUnconfined: boolean): Gtk.Widget | null {
     const origin = appService.getAppOrigin(app.id)
-    if (origin === "flatpak") return NidaraBadge(t("settings.apps.badge.sandboxed"), uiIcon("network-vpn"))
+    if (origin === "flatpak") return NidaraBadge(t("settings.apps.badge.sandboxed"), uiIcon("nd-network-vpn"))
     if (showUnconfined && (origin === "system" || origin === "user"))
-        return NidaraBadge(t("settings.apps.badge.unsandboxed"), uiIcon("network-vpn-disconnected"))
+        return NidaraBadge(t("settings.apps.badge.unsandboxed"), uiIcon("nd-network-vpn-disconnected"))
     return null
 }
 
@@ -238,7 +238,7 @@ function buildAppRow(app: AppData, nav: SettingsNav): Gtk.ListBoxRow {
     // buildAppIconDetailPage. Decorative chevron mirrors Apps.tsx's navRow; the
     // whole row is the click target since nothing else in it is interactive.
     const chevron = new Gtk.Image({
-        gicon: uiIcon("pan-end"), pixel_size: 16,
+        gicon: uiIcon("nd-pan-end"), pixel_size: 16,
         opacity: 0.4, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"],
     })
 
@@ -302,7 +302,7 @@ export default function AppIconsPage(nav: SettingsNav) {
         margin_bottom: 4,
     })
     searchEntry.append(new Gtk.Image({
-        gicon: uiIcon("system-search"),
+        gicon: uiIcon("nd-system-search"),
         pixel_size: 15,
         css_classes: ["nd-icon", "settings-search-icon"],
         valign: Gtk.Align.CENTER,

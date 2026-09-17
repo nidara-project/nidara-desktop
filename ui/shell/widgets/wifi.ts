@@ -15,7 +15,7 @@ import * as Net from "../core/NetworkService"
 // dongle plugged in mid-session reaches these; the watchers re-arm themselves on
 // that hot-plug (see NetworkService.watchDevices — tech-debt #22/#71).
 
-const LEVEL_ICONS = [uiIcon("network-wireless-signal-none"), uiIcon("network-wireless-signal-weak"), uiIcon("network-wireless-signal-ok"), uiIcon("network-wireless")]
+const LEVEL_ICONS = [uiIcon("nd-network-wireless-signal-none"), uiIcon("nd-network-wireless-signal-weak"), uiIcon("nd-network-wireless-signal-ok"), uiIcon("nd-network-wireless")]
 
 /**
  * The icon for where the adapter stands. Until 2026-09-14 it said only whether the
@@ -28,10 +28,10 @@ const LEVEL_ICONS = [uiIcon("network-wireless-signal-none"), uiIcon("network-wir
 function getIcon() {
     const link = Net.wifiLink()
     switch (link.state) {
-        case "off":        return uiIcon("network-wireless-disabled")
-        case "connecting": return uiIcon("network-wireless-acquiring")
+        case "off":        return uiIcon("nd-network-wireless-disabled")
+        case "connecting": return uiIcon("nd-network-wireless-acquiring")
         case "connected":  return LEVEL_ICONS[Net.signalLevel(link.strength)]
-        default:           return uiIcon("network-wireless")
+        default:           return uiIcon("nd-network-wireless")
     }
 }
 
@@ -142,7 +142,7 @@ function buildNetworkList(): { box: Gtk.Box; refresh: () => void } {
                 : ""
             if (note) trailing.append(new Gtk.Label({ label: note, css_classes: ["nidara-row-subtitle"] }))
             if (Net.isSecured(ap))
-                trailing.append(new Gtk.Image({ gicon: uiIcon("system-lock-screen"), pixel_size: 12, opacity: 0.5, css_classes: ["nd-icon"] }))
+                trailing.append(new Gtk.Image({ gicon: uiIcon("nd-system-lock-screen"), pixel_size: 12, opacity: 0.5, css_classes: ["nd-icon"] }))
 
             box.append(menuRow({
                 label: ssid,
@@ -221,7 +221,7 @@ const wifiWidget: AtomicWidget = {
     category: "system",
     barOrder: 80,
     name: t("cc.wifi.name"),
-    icon: uiIcon("network-wireless"),
+    icon: uiIcon("nd-network-wireless"),
     locations: ["bar", "cc"],
     defaultInBar: true,
     isAvailable: () => !!Net.wifi(),

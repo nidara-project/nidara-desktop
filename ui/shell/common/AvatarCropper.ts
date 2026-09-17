@@ -121,9 +121,9 @@ export function showAvatarCropper(
     }))
 
     const zoomRow = new Gtk.Box({ spacing: 12, hexpand: true })
-    zoomRow.append(new Gtk.Image({ gicon: uiIcon("zoom-out"), pixel_size: 20, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))
+    zoomRow.append(new Gtk.Image({ gicon: uiIcon("nd-zoom-out"), pixel_size: 20, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))
     zoomRow.append(zoomSlider)
-    zoomRow.append(new Gtk.Image({ gicon: uiIcon("zoom-in"), pixel_size: 20, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))
+    zoomRow.append(new Gtk.Image({ gicon: uiIcon("nd-zoom-in"), pixel_size: 20, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))
     box.append(zoomRow)
 
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })

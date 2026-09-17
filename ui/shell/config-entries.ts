@@ -29,7 +29,7 @@ import regionConfig from "./core/RegionConfig"
 import { getIdleConfig, updateIdleConfig, onHypridleChanged } from "./core/PowerConfig"
 import inputConfig from "./core/InputConfig"
 import { allKeyboards, keyboardById, keyboardId, parseKeyboardId } from "../lib/keyboards"
-import { uiIcon, interfaceIconTheme, setInterfaceIconTheme, onInterfaceIconThemeChange } from "./core/Icons"
+import { uiIcon, interfaceIconTheme, setInterfaceIconTheme, onInterfaceIconThemeChange, specIconThemes } from "./core/Icons"
 import { safeDisconnect } from "./core/signals"
 import { t } from "./core/i18n"
 import workspaceModes, {
@@ -209,7 +209,7 @@ export function registerConfigEntries() {
         subscribe: onThemeCfg(() => Theme.windowOpacity),
         ui: {
             i18n: "settings.appearance.window-glass",
-            slider: { pct: true, icons: [uiIcon("value-decrease"), uiIcon("value-increase")] },
+            slider: { pct: true, icons: [uiIcon("nd-value-decrease"), uiIcon("nd-value-increase")] },
         },
     })
     registerConfig("appearance.gtkTheme", {
@@ -238,18 +238,20 @@ export function registerConfigEntries() {
     })
     // The theme for Nidara's OWN icons (#587) — the bar, the menus, Settings —
     // beside `appearance.iconTheme` above, which is the one applications draw from.
-    // "nidara" stands for the stored empty string (our shipped drawings): an empty
-    // value is a poor thing to hand an agent or type on a command line, and no
-    // installed theme can take the name — `getAvailableIconThemes` reserves it.
-    // `nidara-symbolic` is left out because it IS those drawings, packaged for other
-    // processes; offering it would list the default twice under two names.
+    // "nidara" is our own theme, the Nidara icon theme (assets/icons/nidara, linked
+    // as /usr/share/icons/nidara). It is stored as the empty string, which reads the
+    // same files straight from assets/ — so it is listed once, first, and filtered
+    // out of what `specIconThemes` finds. Only themes that declare Nidara's icon spec
+    // are offered: no other theme has an `nd-` name, so picking one would change
+    // nothing. The row stays visible with "Nidara" alone — it is how a user learns
+    // their own theme can go there.
     registerConfig("appearance.interfaceIconTheme", {
-        desc: "Icon theme for Nidara's own interface icons (bar, menus, Settings), separate from the app icon theme. 'nidara' = Nidara's own drawings (default). Any icon the chosen theme lacks, or cannot draw, falls back to Nidara's.",
+        desc: "Icon theme for Nidara's own interface icons (bar, menus, Settings), separate from the app icon theme. 'nidara' = Nidara's own drawings (default). Only themes made for Nidara's icon spec (X-Nidara-Icon-Spec in index.theme, see ui/shell/assets/icons/nidara/SPEC.md) are listed. Any icon the chosen theme lacks, or cannot draw, falls back to Nidara's.",
         type: "enum",
         enum: (() => {
-            const themes = Theme.getAvailableIconThemes().filter(n => n !== "nidara-symbolic")
+            const themes = specIconThemes().filter(n => n !== "nidara")
             const current = interfaceIconTheme()
-            if (current && current !== "nidara-symbolic" && !themes.includes(current)) themes.push(current)
+            if (current && current !== "nidara" && !themes.includes(current)) themes.push(current)
             return ["nidara", ...themes.sort()]
         })(),
         get: () => interfaceIconTheme() || "nidara",
@@ -444,7 +446,7 @@ export function registerConfigEntries() {
                 // se sigue viendo moverse porque la etiqueta la pinta
                 // `onValueChanged`, que no es la que escribe.
                 commitOnRelease: true,
-                icons: [uiIcon("preferences-desktop-peripherals"), uiIcon("preferences-desktop-peripherals")],
+                icons: [uiIcon("nd-preferences-desktop-peripherals"), uiIcon("nd-preferences-desktop-peripherals")],
                 pct: true,
             },
         },
@@ -592,7 +594,7 @@ export function registerConfigEntries() {
         },
         ui: {
             i18n: "settings.appearance.night-light-temp",
-            slider: { unit: "K", icons: [uiIcon("value-decrease"), uiIcon("value-increase")] },
+            slider: { unit: "K", icons: [uiIcon("nd-value-decrease"), uiIcon("nd-value-increase")] },
         },
     })
     registerConfig("nightlight.scheduleEnabled", {
@@ -674,7 +676,7 @@ export function registerConfigEntries() {
             i18n: "settings.accessibility.cursor-size",
             slider: {
                 unit: "px",
-                icons: [uiIcon("preferences-desktop-peripherals"), uiIcon("preferences-desktop-peripherals")],
+                icons: [uiIcon("nd-preferences-desktop-peripherals"), uiIcon("nd-preferences-desktop-peripherals")],
                 commitOnRelease: true,
             },
         },

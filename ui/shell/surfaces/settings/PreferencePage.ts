@@ -199,7 +199,7 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
                     }
                     container.append(row)
                 } else if ("disclosure" in item) {
-                    const advChevron = new Gtk.Image({ gicon: uiIcon("pan-down"), pixel_size: 16, css_classes: ["nd-icon"] })
+                    const advChevron = new Gtk.Image({ gicon: uiIcon("nd-pan-down"), pixel_size: 16, css_classes: ["nd-icon"] })
                     const advToggleRow = createRow(t(item.disclosure as any), "", advChevron)
                     container.append(advToggleRow)
 
@@ -217,7 +217,7 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
                         if (row !== advToggleRow) return
                         const open = !advRevealer.reveal_child
                         advRevealer.reveal_child = open
-                        advChevron.gicon = open ? uiIcon("pan-down") : uiIcon("pan-end")
+                        advChevron.gicon = open ? uiIcon("nd-pan-down") : uiIcon("nd-pan-end")
                     })
                 } else if ("key" in item) {
                     const row = settingRow(item.key)

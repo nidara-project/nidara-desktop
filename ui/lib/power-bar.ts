@@ -41,9 +41,9 @@ export interface PowerBarDeps {
 // user's icon theme supplies — see ui/lib/icons.ts. The theme names stay as a
 // last resort for a tree with no shipped assets.
 const ACTION_ICONS = {
-    suspend: { name: "system-suspend", themeFallback: "media-playback-pause-symbolic" },
-    restart: { name: "system-reboot", themeFallback: "system-reboot-symbolic" },
-    shutdown: { name: "system-shutdown", themeFallback: "system-shutdown-symbolic" },
+    suspend: { name: "nd-system-suspend", themeFallback: "media-playback-pause-symbolic" },
+    restart: { name: "nd-system-reboot", themeFallback: "system-reboot-symbolic" },
+    shutdown: { name: "nd-system-shutdown", themeFallback: "system-shutdown-symbolic" },
 } as const
 
 function PowerButton(

@@ -55,9 +55,9 @@ function createVolumeRow(
     })
 
     const slider = new Gtk.Box({ spacing: 8 })
-    slider.append(new Gtk.Image({ gicon: uiIcon("audio-volume-low"), pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
+    slider.append(new Gtk.Image({ gicon: uiIcon("nd-audio-volume-low"), pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     slider.append(scale)
-    slider.append(new Gtk.Image({ gicon: uiIcon("audio-volume-high"), pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
+    slider.append(new Gtk.Image({ gicon: uiIcon("nd-audio-volume-high"), pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     slider.append(valLabel)
 
     // NidaraRow, not createRow: a sound card and a playing app are hardware state,
@@ -114,7 +114,7 @@ function createDeviceRow(
         endpoint,
         endpoint.description || endpoint.name || t("settings.audio.device"),
         new Gtk.Image({
-            gicon: isMic ? uiIcon("audio-input-microphone") : uiIcon("audio-speakers"),
+            gicon: isMic ? uiIcon("nd-audio-input-microphone") : uiIcon("nd-audio-speakers"),
             pixel_size: 18, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER,
         }),
         defaultControl,

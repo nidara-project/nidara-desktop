@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <line x1="4" x2="6.6667" y1="7.3333" y2="7.3333" class="foreground-stroke transparent-fill" />
+  <line x1="5.3333" x2="5.3333" y1="6" y2="8.6667" class="foreground-stroke transparent-fill" />
+  <line x1="10" x2="10.0067" y1="8" y2="8" class="foreground-stroke transparent-fill" />
+  <line x1="12" x2="12.0067" y1="6.6667" y2="6.6667" class="foreground-stroke transparent-fill" />
+  <path d="M 11.5467 3.3333 H 4.4533 a 2.6667 2.6667 0 0 0 -2.652 2.3933 c -0.004 0.0347 -0.0067 0.0673 -0.0113 0.1013 C 1.736 6.2773 1.3333 9.6373 1.3333 10.6667 a 2 2 0 0 0 2 2 c 0.6667 0 1 -0.3333 1.3333 -0.6667 l 0.9427 -0.9427 A 1.3333 1.3333 0 0 1 6.552 10.6667 h 2.896 a 1.3333 1.3333 0 0 1 0.9427 0.3907 L 11.3333 12 c 0.3333 0.3333 0.6667 0.6667 1.3333 0.6667 a 2 2 0 0 0 2 -2 c 0 -1.03 -0.4027 -4.3893 -0.4567 -4.8387 -0.0047 -0.0333 -0.0073 -0.0667 -0.0113 -0.1007 A 2.6667 2.6667 0 0 0 11.5467 3.3333 z" class="foreground-stroke transparent-fill" />
+</svg>

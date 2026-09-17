@@ -1,0 +1,18 @@
+[Icon Theme]
+Name=Nidara
+Comment=Nidara's own icons — the reference theme of the Nidara icon spec (SPEC.md)
+Inherits=hicolor
+X-Nidara-Icon-Spec=1
+Directories=16x16/actions,scalable/actions
+
+[16x16/actions]
+Context=Actions
+Size=16
+Type=Fixed
+
+[scalable/actions]
+Context=Actions
+Size=24
+MinSize=16
+MaxSize=512
+Type=Scalable

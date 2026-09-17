@@ -241,9 +241,9 @@ export const build = (ctx: PageCtx) => {
 
     const masterBox = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, hexpand: false })
     const mkGlassEnd = (icon: Gio.FileIcon) => new Gtk.Image({ gicon: icon, pixel_size: 16, opacity: 0.5, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER })
-    masterBox.append(mkGlassEnd(uiIcon("value-decrease")))
+    masterBox.append(mkGlassEnd(uiIcon("nd-value-decrease")))
     masterBox.append(masterSlider)
-    masterBox.append(mkGlassEnd(uiIcon("value-increase")))
+    masterBox.append(mkGlassEnd(uiIcon("nd-value-increase")))
     masterBox.append(masterValue)
 
     // ── Night Light Schedule Times ──────────────────────────────────────────

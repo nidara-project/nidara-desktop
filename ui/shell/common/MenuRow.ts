@@ -64,7 +64,7 @@ export function menuRow(opts: MenuRowOpts): Gtk.Button {
     // and nowhere else. User-caught in the CC's media source selector 2026-08-10,
     // against the island's copy of the same menu, which never matched that rule.
     const check = new Gtk.Image({
-        gicon: uiIcon("emblem-default"), pixel_size: 15,
+        gicon: uiIcon("nd-emblem-default"), pixel_size: 15,
         css_classes: ["nd-icon"],
         valign: Gtk.Align.CENTER,
         visible: !!opts.checked,

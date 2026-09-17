@@ -58,18 +58,6 @@ try {
   console.warn("[App] Initialization failed:", e)
 }
 
-// Register custom nidara icon theme (nd-xxx-symbolic icons)
-try {
-  const display = Gdk.Display.get_default()
-  if (display) {
-    const iconsPath = `${SHELL_ROOT}/assets/icons`
-    const theme = Gtk.IconTheme.get_for_display(display)
-    if (GLib.file_test(iconsPath, GLib.FileTest.IS_DIR)) theme.add_search_path(iconsPath)
-  }
-} catch (e) {
-  console.warn("[Icons] Failed to register icon search path:", e)
-}
-
 // Widget Imports
 import Dock from "./surfaces/dock/Dock"
 import { syncConstants } from "./surfaces/dock/DockPhysics"

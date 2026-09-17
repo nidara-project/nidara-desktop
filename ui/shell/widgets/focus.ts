@@ -6,14 +6,14 @@ import { dontDisturb, toggleDontDisturb, setDontDisturb, watchDnd } from "../cor
 
 function buildBarContent() {
     return makeBarIcon({
-        getIcon: () => dontDisturb() ? uiIcon("notifications-disabled") : uiIcon("notifications"),
+        getIcon: () => dontDisturb() ? uiIcon("nd-notifications-disabled") : uiIcon("nd-notifications"),
         onAction: toggleDontDisturb,
         activeClass: "bar-widget-active",
         getActive: dontDisturb,
     })
 }
 
-const getIcon = () => dontDisturb() ? uiIcon("notifications-disabled") : uiIcon("notifications")
+const getIcon = () => dontDisturb() ? uiIcon("nd-notifications-disabled") : uiIcon("nd-notifications")
 const getTitle = () => dontDisturb() ? t("cc.focus.title.on") : t("cc.focus.title.off")
 const getSub = () => dontDisturb() ? t("cc.focus.sub.on") : ""
 
@@ -50,7 +50,7 @@ const focusWidget: AtomicWidget = {
     category: "utilities",
     barOrder: 20,
     name: t("widget.focus.name"),
-    icon: uiIcon("notifications-disabled"),
+    icon: uiIcon("nd-notifications-disabled"),
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],

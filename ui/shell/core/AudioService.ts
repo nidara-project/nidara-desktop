@@ -32,10 +32,10 @@ export type { AudioNode }
 /** Volume-level icon. Same ladder for outputs and inputs (a muted mic reads
  *  better as volume-muted than a plain mic glyph). */
 export function volumeIcon(volume: number, muted = false) {
-    if (muted || volume === 0) return uiIcon("audio-volume-muted")
-    if (volume < 0.34) return uiIcon("audio-volume-low")
-    if (volume < 0.67) return uiIcon("audio-volume-medium")
-    return uiIcon("audio-volume-high")
+    if (muted || volume === 0) return uiIcon("nd-audio-volume-muted")
+    if (volume < 0.34) return uiIcon("nd-audio-volume-low")
+    if (volume < 0.67) return uiIcon("nd-audio-volume-medium")
+    return uiIcon("nd-audio-volume-high")
 }
 
 /** Same, reading `.volume`/`.mute` straight off an endpoint or stream object. */

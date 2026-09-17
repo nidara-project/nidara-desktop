@@ -5,7 +5,7 @@ import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
 import * as BT from "../core/BluetoothService"
 
-const getIcon = () => BT.isPowered() ? uiIcon("bluetooth-active") : uiIcon("bluetooth-disabled")
+const getIcon = () => BT.isPowered() ? uiIcon("nd-bluetooth-active") : uiIcon("nd-bluetooth-disabled")
 
 // The same icon as the Control Centre tile, off included — the pill used to show
 // `bluetooth-active` whatever the state. And subscribed: the power flips
@@ -59,7 +59,7 @@ function buildDeviceList(): { box: Gtk.ListBox; refresh: () => void } {
 
         devices.forEach(dev => {
             const devImg = new Gtk.Image({ pixel_size: 18, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] })
-            if (dev.icon) devImg.icon_name = dev.icon; else devImg.gicon = uiIcon("bluetooth-active")
+            if (dev.icon) devImg.icon_name = dev.icon; else devImg.gicon = uiIcon("nd-bluetooth-active")
 
             const nameLabel = new Gtk.Label({
                 label: BT.deviceName(dev), css_classes: ["nidara-row-title"],
@@ -125,7 +125,7 @@ const btWidget: AtomicWidget = {
     category: "system",
     barOrder: 60,
     name: t("widget.bluetooth.name"),
-    icon: uiIcon("bluetooth-active"),
+    icon: uiIcon("nd-bluetooth-active"),
     locations: ["bar", "cc"],
     isAvailable: () => BT.hasAdapter(),
     watchAvailable: (cb) => { BT.watchAdapter(cb) },

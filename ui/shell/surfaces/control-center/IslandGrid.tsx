@@ -176,7 +176,7 @@ function makeIslandWidget(
     // Clear the placement flag too (not just the layout), or syncCCLayout re-adds
     // the widget on next load — the CC layout and widgetConfig must agree.
     const removeBtn = IconButton({
-        icon: uiIcon("window-close"), iconSize: 13, variant: "danger",
+        icon: uiIcon("nd-window-close"), iconSize: 13, variant: "danger",
         halign: Gtk.Align.END, valign: Gtk.Align.START,
         onClick: () => { widgetConfig.setCC(id, false); ccLayout.remove(id) },
     })
@@ -335,7 +335,7 @@ export default function IslandGrid() {
         // the glass, and its content takes the same 12 the detail rows use, so the title
         // and every row title share one left edge (they did not — 10 against 6).
         const backBtnChild = new Gtk.Box({ spacing: 8, margin_start: 12, margin_end: 12, margin_top: 12, margin_bottom: 12 })
-        backBtnChild.append(new Gtk.Image({ gicon: uiIcon("pan-start"), pixel_size: 14, css_classes: ["nd-icon"] }))
+        backBtnChild.append(new Gtk.Image({ gicon: uiIcon("nd-pan-start"), pixel_size: 14, css_classes: ["nd-icon"] }))
         backBtnChild.append(new Gtk.Label({ label: w.name, css_classes: ["cc-detail-title"], halign: Gtk.Align.START }))
         const backBtn = new Gtk.Button({
             child: backBtnChild, css_classes: ["cc-detail-back-btn"], halign: Gtk.Align.START,

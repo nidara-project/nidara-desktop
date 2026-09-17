@@ -196,7 +196,7 @@ export default function AboutWindow(): Gtk.Window | null {
     // card's margin_top 12 = 24px top gap, equal to the card's 24px end margin
     // (the corner-diagonal rule the Settings close follows too).
     const closeBtn = IconButton({
-        icon: uiIcon("window-close"),
+        icon: uiIcon("nd-window-close"),
         iconSize: 14,
         variant: "danger",
         tooltip: t("settings.about.close"),

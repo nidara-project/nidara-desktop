@@ -62,7 +62,7 @@ export default function AppGridPanel(
         spacing: 12,
         hexpand: true,
     })
-    searchBox.append(new Gtk.Image({ gicon: uiIcon("system-search"), pixel_size: 18, css_classes: ["app-grid-search-icon", "nd-icon"] }))
+    searchBox.append(new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 18, css_classes: ["app-grid-search-icon", "nd-icon"] }))
     searchBox.append(searchEntry)
 
     // Typing reaches the grid's WINDOW-level key handler, not the entry — the focus
@@ -220,7 +220,7 @@ export default function AppGridPanel(
         visible: false,
     })
     const noResultsIcon = new Gtk.Image({
-        gicon: uiIcon("system-search"),
+        gicon: uiIcon("nd-system-search"),
         pixel_size: 48,
         css_classes: ["app-grid-no-results-icon", "nd-icon"],
     })

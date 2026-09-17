@@ -7,11 +7,11 @@
  * ── Why this exists ──────────────────────────────────────────────────────────
  *
  * `core/Icons.ts` lists the icon names the shell, the greeter, the lock screen
- * and the installer ask for. There is only ONE name per icon (#587): a
- * freedesktop standard name when the concept has one, an `nd-` name of ours when
- * it does not. That same name is looked for in the user's interface icon theme
- * first and in `ui/shell/assets/…/<name>-symbolic.svg` second, so the shipped
- * drawing is the end of the chain and the chain must never end in a gap.
+ * and the installer ask for. Since 2026-09-17 every one of them is an `nd-` name
+ * of the Nidara icon spec (#587), defined in `ui/shell/assets/icons/nidara/SPEC.md`. A
+ * name is looked for in the user's interface icon theme — only one that declares
+ * the spec — first, and in `ui/shell/assets/…/<name>-symbolic.svg` second, so the
+ * shipped drawing is the end of the chain and the chain must never end in a gap.
  *
  * It breaks silently. A missing icon file is not a compile error and not a
  * runtime error either: GTK hands back `image-missing` (or, for a `Gio.FileIcon`
@@ -25,21 +25,25 @@
  *      so a drawing that loses it renders black with no error anywhere;
  *   2. no drawing is orphaned — a file no name points at is either dead weight or
  *      a name somebody forgot to list;
- *   3. an `nd-` name is one no icon theme defines. If a standard name exists for
- *      the concept, use it; `nd-` is for what the Naming Spec has no word for.
+ *   3. the spec and the code say the same thing: every name is `nd-`, SPEC.md's
+ *      table holds exactly the names in ICON_NAMES, and the spec version is the
+ *      same in SPEC.md, `ICON_SPEC_VERSION` and the Nidara theme's index.theme
+ *      (without it Settings would not list our own theme). The spec is
+ *      what theme authors build against — a name the shell asks for that the spec
+ *      does not list is an icon no theme will ever draw.
  *
- * With `--theme <dir>` it also checks a BUILT theme — the one
- * `scripts/icons/build-icon-theme.py` produces. That theme is Nidara's own, so
- * every non-`nd-` name must resolve in it, in BOTH size directories. The second
- * half matters on its own: the icon study's first alias pass wrote the standard
- * names only into `scalable/`, and at 16px GTK then silently drew the thin one.
+ * With `--theme <dir>` it also checks an icon theme DIRECTORY as a spec theme:
+ * it declares the spec version, and every name resolves in it in BOTH size
+ * directories. CI runs it on `ui/shell/assets/icons/nidara`, our own theme, which
+ * must be complete. The second half matters on its own: an earlier alias pass
+ * wrote names only into `scalable/`, and at 16px GTK then silently drew the thin one.
  */
 
 import { readFileSync, readdirSync, existsSync } from "node:fs"
 import { join } from "node:path"
 
 const REGISTRY = "ui/shell/core/Icons.ts"
-const ASSETS = "ui/shell/assets/icons/hicolor/scalable/actions"
+const ASSETS = "ui/shell/assets/icons/nidara/scalable/actions"
 
 let failed = false
 const log = s => console.log(s)
@@ -60,8 +64,7 @@ if (names.length === 0) {
     log(`icon-registry-check: ICON_NAMES in ${REGISTRY} parsed as empty`)
     process.exit(1)
 }
-const own = names.filter(n => n.startsWith("nd-"))
-log(`${REGISTRY}: ${names.length} icon names (${own.length} of them ours: ${own.join(", ")})`)
+log(`${REGISTRY}: ${names.length} icon names`)
 
 // ── 2. Every name has its drawing ────────────────────────────────────────────
 log("\nEvery name has its shipped drawing:")
@@ -80,23 +83,34 @@ for (const file of files) {
 }
 if (files.every(f => used.has(f))) pass(`${files.length} files, all asked for`)
 
-// ── 4. `nd-` is for what has no standard name ────────────────────────────────
-// Not a coverage test — plenty of standard names are missing from plenty of
-// themes, and the shipped drawing is what that is for. This is about intent: a
-// name we invented must not be one the desktop already has a word for.
-log("\nOur own names are not shadowing standard ones:")
-const THEMES = ["/usr/share/icons/Adwaita", "/usr/share/icons/hicolor"]
-for (const name of own) {
-    const bare = name.slice(3)
-    const clash = THEMES.some(root => {
-        try {
-            return readdirSync(root, { recursive: true })
-                .some(f => typeof f === "string" && (f.endsWith(`/${bare}-symbolic.svg`) || f.endsWith(`/${bare}.svg`)))
-        } catch { return false }
-    })
-    if (clash) error(`"${name}" invents a name for "${bare}", which an installed theme already defines — drop the nd- prefix and let themes supply it.`)
-    else pass(`${name}`)
+// ── 4. The spec and the code agree ───────────────────────────────────────────
+const SPEC = "ui/shell/assets/icons/nidara/SPEC.md"
+const THEME_INDEX = "ui/shell/assets/icons/nidara/index.theme"
+log("\nThe spec lists exactly the names the code asks for:")
+for (const name of names) {
+    if (!name.startsWith("nd-")) error(`"${name}" is not an nd- name. Interface icons use Nidara's icon spec only; freedesktop names belong to APP icons.`)
 }
+const specSrc = readFileSync(SPEC, "utf8")
+const specNames = [...specSrc.matchAll(/^\| `(nd-[^`]+)` \|/gm)].map(m => m[1])
+if (specNames.length === 0) error(`${SPEC}: no names parsed from its table — reformatted?`)
+const inSpec = new Set(specNames), inCode = new Set(names)
+for (const n of names) if (!inSpec.has(n)) error(`"${n}" is in ICON_NAMES but not in ${SPEC}: no theme author will know to draw it.`)
+for (const n of specNames) if (!inCode.has(n)) error(`"${n}" is in ${SPEC} but not in ICON_NAMES: the spec promises a name the shell never asks for.`)
+const dupes = specNames.filter((n, i) => specNames.indexOf(n) !== i)
+for (const n of dupes) error(`"${n}" is listed twice in ${SPEC}.`)
+if (names.every(n => inSpec.has(n)) && specNames.every(n => inCode.has(n)) && dupes.length === 0) pass(`${specNames.length} names, same set in both`)
+
+const versions = {
+    [SPEC]: specSrc.match(/^\*\*Version (\d+)\.\*\*/m)?.[1],
+    [REGISTRY]: src.match(/export const ICON_SPEC_VERSION = (\d+)/)?.[1],
+    [THEME_INDEX]: readFileSync(THEME_INDEX, "utf8").match(/^X-Nidara-Icon-Spec=(\d+)$/m)?.[1],
+}
+const specVersion = versions[REGISTRY]
+for (const [file, v] of Object.entries(versions)) {
+    if (!v) error(`${file}: spec version not found — reformatted?`)
+    else if (v !== specVersion) error(`${file} says spec version ${v}, ${REGISTRY} says ${specVersion}.`)
+}
+if (Object.values(versions).every(v => v && v === specVersion)) pass(`spec version ${specVersion} everywhere`)
 
 // ── 5. A built theme covers every standard name, in both sizes ───────────────
 const themeFlag = process.argv.indexOf("--theme")
@@ -107,10 +121,12 @@ if (themeFlag !== -1) {
         process.exit(1)
     }
     const SIZES = ["scalable/actions", "16x16/actions"]
-    log(`\n${theme}: every standard name resolves, in both size directories:`)
+    const declared = readFileSync(join(theme, "index.theme"), "utf8").match(/^X-Nidara-Icon-Spec=(\d+)$/m)?.[1]
+    log(`\n${theme}: declares the spec, so Settings lists it:`)
+    if (declared === specVersion) pass(`X-Nidara-Icon-Spec=${declared}`)
+    else error(`index.theme declares X-Nidara-Icon-Spec=${declared ?? "(nothing)"}, expected ${specVersion}.`)
+    log(`\n${theme}: every name resolves, in both size directories:`)
     for (const name of names) {
-        // An `nd-` name is ours by definition; no theme is asked for it.
-        if (name.startsWith("nd-")) continue
         // existsSync follows symlinks, which is what we want: the standard names
         // ARE symlinks, and a broken one is exactly the failure being hunted.
         const missing = SIZES.filter(s => !existsSync(join(theme, s, `${name}-symbolic.svg`)))

@@ -1062,7 +1062,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   timeLabel.connect("unrealize", () => { try { GLib.source_remove(clockTimer) } catch {} })
   regionConfig.connect("changed", updateClock)
   updateClock()
-  const bellIcon = new Gtk.Image({ gicon: uiIcon("notifications"), pixel_size: 16, visible: false , css_classes: ["nd-icon"] })
+  const bellIcon = new Gtk.Image({ gicon: uiIcon("nd-notifications"), pixel_size: 16, visible: false , css_classes: ["nd-icon"] })
   const syncBell = () => { bellIcon.set_visible(notifications().length > 0) }
   watchNotified(syncBell)
   watchResolved(syncBell)
@@ -1193,7 +1193,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // manages its own visibility (hidden while empty).
   const trayInner = Tray(openCustomExpansion, () => scheduleBarLayoutSync())
   right.append(trayInner)
-  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: uiIcon("system-search"), pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(searchCapsule)
   // CC capsule layout: [16px left pad][gear 16px][16px right-gap] = 48px (matches the
   // search capsule). The status-indicator dot (recording / AI control) sits in that right
@@ -1210,7 +1210,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Two sliders, like macOS's Control Centre. The freedesktop spec has no name for
   // that; the one icon themes draw that way is GNOME Tweaks' (Colloid, MacTahoe, Qogir,
   // Tela — as two switches). `preferences-system` is a gear or tools everywhere (#587).
-  const ccGear = new Gtk.Image({ gicon: uiIcon("org.gnome.tweaks"), pixel_size: 16, margin_start: 16, css_classes: ["nd-icon"] })
+  const ccGear = new Gtk.Image({ gicon: uiIcon("nd-control-center"), pixel_size: 16, margin_start: 16, css_classes: ["nd-icon"] })
   const ccInner = new Gtk.Box({ valign: Gtk.Align.CENTER })
   ccInner.append(ccGear)
   ccInner.append(new Gtk.Box({ width_request: 16 }))   // reserve the right gap → capsule stays 48px
