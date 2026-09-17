@@ -505,6 +505,28 @@ bare interactive drag fires no event either. Upstream's `misc:float_force_onscre
 applied from `setPositionGlobal` and will cover those routes when a release carries them — but they
 only ever MOVE, so the size clamp stays ours. #511 tracks the rest.
 
+#### A monitor that goes away and comes back shifts every floating window by FALLBACK's width
+
+Powering the only monitor off and on left every floating window **1920 px to the left**, most of them
+entirely off-screen (measured on the host: three of six had their right edge at `2551 − 1920`). The
+clamp does not catch it — it defends only the top edge, on purpose.
+
+🔑 **It is Hyprland's own arithmetic** (read in 0.56.2, unchanged in `main` of 2026-09-07): with no
+other monitor, `onDisconnect` moves nothing and the headless `FALLBACK` (1920x1080) takes x = 0. The
+monitor that returns is a NEW `CMonitor` whose position is the unset sentinel `(-1,-1)`; `onConnect`
+moves the returning workspaces onto it before arranging (no old monitor → no translation), `arrange()`
+puts it `auto` right of FALLBACK at 1920 and `moveTo` **skips** translating from the sentinel, then
+FALLBACK is destroyed and the next `arrange()` moves it back to 0 — and **this** `moveTo` translates
+every floating window by −1920. Tiled windows get re-laid-out and never show it.
+
+The fix in `hyprland.lua` is a snapshot, not a clamp, because after the fact nothing knows where the
+window WAS: `monitor.removed` records each floating window still inside the removed monitor's box,
+relative to it, and `monitor.layout_changed` restores them once **no FALLBACK remains** (earlier
+layout changes are intermediate arrangements). With a second monitor alive Hyprland moves the
+workspaces before `removed` fires, those windows are outside the box, and the snapshot stays out of
+it — that multi-head path is unmeasured. ⚠️ Verifying needs a real power cycle (or an output
+removed/re-added in the VM); never a display command on the host.
+
 ⚠️ **kitty remembers its window size**, so it is a contaminated instrument for this: a probe run
 left a later "clean" kitty coming up 2544x1284 and looking like a regression the clamp had caused,
 when the hook was off. Pass `-o remember_window_size=no -o initial_window_width=… -o
