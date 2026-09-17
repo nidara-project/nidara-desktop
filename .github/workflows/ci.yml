@@ -802,6 +802,48 @@ jobs:
           ./scripts/bundle.sh --js scripts/dev/power-probe.ts /tmp/power-probe.js
           gjs -m /tmp/power-probe.js
 
+      # The install page's network-stall warning and its download-failure text
+      # (lib/stall.ts). Two defects cost the most: warning during the desktop
+      # download, which prints nothing for minutes while it moves gigabytes — the
+      # first control drops the traffic half of the rule — and blaming the network
+      # for a failure that was not the network, which the second one does.
+      - name: The stall rules can fail (controls, must be caught)
+        run: |
+          cp ui/installer/lib/stall.ts /tmp/stall.bak
+          sed -i 's|^  return s.sinceLastLineMs >= STALL_QUIET_MS && s.downloadedInWindow < STALL_IDLE_BYTES$|  return s.sinceLastLineMs >= STALL_QUIET_MS // deliberately removed|' \
+            ui/installer/lib/stall.ts
+          if git diff --quiet ui/installer/lib/stall.ts; then
+            echo "::error::the control patched nothing — looksStalled has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/stall-probe.ts /tmp/stall-defect-1.js
+          if gjs -m /tmp/stall-defect-1.js; then
+            echo "::error::the probe passed with download progress ignored"
+            cp /tmp/stall.bak ui/installer/lib/stall.ts
+            exit 1
+          fi
+          cp /tmp/stall.bak ui/installer/lib/stall.ts
+
+          sed -i 's|^  return lines.some(l => DOWNLOAD_FAILURE.some(re => re.test(l)))$|  return lines.length > 0 // deliberately removed|' \
+            ui/installer/lib/stall.ts
+          if git diff --quiet ui/installer/lib/stall.ts; then
+            echo "::error::the control patched nothing — failedDownloading has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/stall-probe.ts /tmp/stall-defect-2.js
+          if gjs -m /tmp/stall-defect-2.js; then
+            echo "::error::the probe passed with every failure blamed on the network"
+            cp /tmp/stall.bak ui/installer/lib/stall.ts
+            exit 1
+          fi
+          cp /tmp/stall.bak ui/installer/lib/stall.ts
+          git diff --quiet ui/installer/lib/stall.ts
+
+      - name: When the install page says the network is the problem (must succeed)
+        run: |
+          ./scripts/bundle.sh --js scripts/dev/stall-probe.ts /tmp/stall-probe.js
+          gjs -m /tmp/stall-probe.js
+
       - name: What we may touch on somebody else's ESP (must succeed)
         run: |
           ./scripts/bundle.sh --js scripts/dev/bootloader-rules-probe.ts /tmp/bootloader-probe.js

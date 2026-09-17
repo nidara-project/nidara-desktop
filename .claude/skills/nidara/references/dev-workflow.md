@@ -1047,6 +1047,35 @@ the network warning is on screen, so on any machine with a connection — every 
 install — plugging the charger in never cleared the battery warning. It updates from UPower's
 `notify` instead.
 
+### Losing the network mid-install: two failures that look nothing alike
+
+Measured in a VM (2026-09-17, `lib/stall.ts` has the detail):
+
+- **Link gone** (QMP `set_link n0 off`) → pacman fails within about a minute on `Could not resolve
+  host`. The page now says the connection was lost (`failedDownloading`, matched on the CHILD's
+  output) instead of "an error occurred" over a traceback asking to report it to archinstall.
+- **Link up, nothing arriving** (`iptables -I OUTPUT -p tcp -m multiport --dports 80,443 -j DROP`
+  inside the Live medium — DNS keeps working) → `pacman -Sy` sat on "Synchronizing package
+  databases" for 20 minutes with no output: pacman was walking the medium's 431-server mirrorlist,
+  10 s per server, and archinstall only passes pacstrap's output through when it RETURNS. Restored
+  at 20 min it was already too late — the list ran out four minutes later (`failed to synchronize
+  all databases`). The page says the connection stopped responding and to start again if the install stops. It
+  does not promise a recovery: restored 108 s into a package-download stall, the install still
+  failed (skipped mirrors, then HTTP 416 on the resumed `.part` files) — no stalled run in four
+  recovered.
+- **When** it stalls decides how long it lasts: during the PACKAGE download it failed on its own at
+  ~3 min (twice) — each mirror is skipped after a few timeouts and archinstall's pacstrap retries
+  fail on the sync at once; during the DATABASE sync it ran past 20 min. That is why the quiet
+  window is one minute, not two (two put the warning on screen next to the failure).
+
+⚠️ **Silence is not a stall.** archinstall runs the desktop's `pacman -Sy nidara-desktop …` as a
+custom command and prints NOTHING until it returns — about a minute on a fast VM link, many minutes
+for ~1.5 GB on a slow one. The warning therefore needs no child line for 1 min AND under 256 KiB
+added to the target's pacman download directories AND a fresh `nmcli networking connectivity check` saying the connection is unusable. Test
+the no-false-warning half with `tc qdisc add dev enp0s3 root tbf rate 30mbit burst 64kbit latency
+400ms` on the medium, which makes that step long and silent while those directories keep growing. (The first version counted bytes on the interface; the
+harness's own SSH reads crossed the floor and flickered the warning off.)
+
 ### The LANGUAGE is asked first, and the country is never the first screen
 
 Researched 2026-09-03 against Calamares, Anaconda, subiquity, GNOME Initial Setup and archinstall
