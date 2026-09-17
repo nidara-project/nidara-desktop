@@ -7,68 +7,48 @@
 // a WARNING, not a refusal, because a charged battery finishes an install and
 // only the person knows how charged theirs is.
 //
-// Read from /sys/class/power_supply, the kernel's own answer, rather than UPower:
-// nothing to be running, and every field below is one file.
+// ⚠️ The answer comes from UPower's composite DisplayDevice — the same object the
+// bar's battery glyph reads (`ui/shell/core/BatteryService.ts`). It used to come
+// from /sys/class/power_supply, and that had two costs: a second rule that could
+// disagree with the bar about the same laptop, and a warning nobody could see
+// outside real hardware, because a VM has no power supply and sysfs cannot be
+// faked. UPower can (`scripts/dev/fake-battery.sh`), so the page is now testable
+// the way the bar is. The reader is `lib/upower.ts`; THIS file stays free of
+// UPowerGlib so the rule runs in a probe on a machine without the typelib.
+//
+// What UPower already does that the sysfs rule had to do by hand: the
+// DisplayDevice aggregates only batteries that power the SYSTEM, so a wireless
+// mouse's battery (`scope=Device`, "Discharging" all day) never reaches it.
 
-import GLib from "gi://GLib"
+/** `UPowerGlib.DeviceState`, spelled out so this file needs no typelib. */
+export const DeviceState = {
+  UNKNOWN: 0,
+  CHARGING: 1,
+  DISCHARGING: 2,
+  EMPTY: 3,
+  FULLY_CHARGED: 4,
+  PENDING_CHARGE: 5,
+  PENDING_DISCHARGE: 6,
+} as const
 
-export interface PowerSupply {
-  /** `type`: "Battery", "Mains", "USB", "UPS", "Wireless". */
-  type: string
-  /** `online`: 1 when a charger/mains supply is delivering power. Absent on batteries. */
-  online?: number
-  /** `status` on a battery: "Discharging", "Charging", "Full", "Not charging", "Unknown". */
-  status?: string
-  /** `scope`: "System" or "Device". A wireless mouse's battery is "Device". */
-  scope?: string
+export interface DisplayDevice {
+  /** `is_present`: false on a desktop, where the DisplayDevice still exists. */
+  present: boolean
+  /** `state`, one of `DeviceState`. */
+  state: number
 }
 
 /**
- * True when the SYSTEM is running on battery.
+ * True when the system is drawing from its battery.
  *
- * ⚠️ Device batteries do not count. A Bluetooth mouse or keyboard reports a
- * `Battery` with `scope=Device`, and it is "Discharging" all day — on a desktop
- * with no battery of its own, counting it would warn every single time.
- *
- * - any system supply that powers the machine (Mains/USB/UPS) online → not on battery;
- * - otherwise, a system battery that says Discharging → on battery;
- * - anything else (no battery, Full, Charging, Unknown) → not on battery. A
- *   warning that fires on a machine plugged in teaches people to skip warnings.
+ * - no battery (a desktop) → not on battery;
+ * - DISCHARGING, or PENDING_DISCHARGE (unplugged, not yet reported as draining)
+ *   → on battery;
+ * - anything else — CHARGING, FULLY_CHARGED, PENDING_CHARGE (plugged in and held
+ *   by a charge threshold), UNKNOWN → not. A warning that fires on a machine
+ *   plugged in teaches people to skip warnings.
  */
-export function onBattery(supplies: PowerSupply[]): boolean {
-  const system = supplies.filter(s => (s.scope ?? "System") !== "Device")
-  if (system.some(s => s.type !== "Battery" && s.online === 1)) return false
-  return system.some(s => s.type === "Battery" && s.status === "Discharging")
-}
-
-function readTrimmed(path: string): string | undefined {
-  try {
-    const [ok, bytes] = GLib.file_get_contents(path)
-    return ok ? new TextDecoder().decode(bytes).trim() : undefined
-  } catch {
-    return undefined
-  }
-}
-
-/** The machine's power supplies as the kernel lists them. Empty if unreadable. */
-export function readPowerSupplies(root = "/sys/class/power_supply"): PowerSupply[] {
-  const out: PowerSupply[] = []
-  try {
-    const dir = GLib.Dir.open(root, 0)
-    let name: string | null
-    while ((name = dir.read_name()) !== null) {
-      const base = `${root}/${name}`
-      const type = readTrimmed(`${base}/type`)
-      if (!type) continue
-      const online = readTrimmed(`${base}/online`)
-      out.push({
-        type,
-        online: online === undefined ? undefined : Number(online),
-        status: readTrimmed(`${base}/status`),
-        scope: readTrimmed(`${base}/scope`),
-      })
-    }
-    dir.close()
-  } catch {}
-  return out
+export function onBattery(device: DisplayDevice | null): boolean {
+  if (!device || !device.present) return false
+  return device.state === DeviceState.DISCHARGING || device.state === DeviceState.PENDING_DISCHARGE
 }

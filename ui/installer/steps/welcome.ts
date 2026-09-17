@@ -38,7 +38,8 @@ import { nidaraLogoIcon } from "../../lib/icons"
 import { NidaraRow } from "../../lib/nidara-kit"
 import { heading, prose, searchableList } from "./common"
 import { connectivity, isUsable } from "../lib/network"
-import { onBattery, readPowerSupplies } from "../lib/power"
+import { onBattery } from "../lib/power"
+import { readDisplayDevice, watchDisplayDevice } from "../lib/upower"
 import { LANGUAGES, languageFor, type Language } from "../lib/languages"
 import { languageMenuLabels, languageHaystack } from "../../lib/locale-names"
 import { getAnswers, setLanguageAnswer } from "../lib/answers"
@@ -119,9 +120,17 @@ export function WelcomeStep(): Step {
       if (netWarn) netWarn.visible = !netOk
       if (was !== netOk) notifyNet?.()
     })
-    // Cheap (a few sysfs reads), and plugging a charger in should clear it too.
-    if (batteryWarn) batteryWarn.visible = onBattery(readPowerSupplies())
   }
+
+  // ⚠️ Not part of the network poll. It used to be, and that poll only runs while
+  // the NETWORK warning is on screen — so on a machine with a connection, which is
+  // every machine that can install at all, plugging the charger in never cleared
+  // the battery warning. UPower tells us instead; one watcher for the installer's
+  // lifetime, pointed at whichever label the latest rebuild made.
+  const refreshBattery = () => {
+    if (batteryWarn) batteryWarn.visible = onBattery(readDisplayDevice())
+  }
+  let batteryWatched = false
 
   // One timer for the page's lifetime, re-armed on rebuild (a language change
   // rebuilds every page). It only asks while its label is actually on screen.
@@ -246,6 +255,11 @@ export function WelcomeStep(): Step {
       batteryWarn = prose(t("welcomeOnBattery"), "installer-prose--warning")
       batteryWarn.visible = false
       box.append(batteryWarn)
+      refreshBattery()
+      if (!batteryWatched) {
+        batteryWatched = true
+        watchDisplayDevice(refreshBattery)
+      }
       notifyNet = () => notifyReady?.()
       refreshNetwork()
       startPolling()

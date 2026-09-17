@@ -736,23 +736,23 @@ jobs:
           ./scripts/bundle.sh --js scripts/dev/network-connections-probe.ts /tmp/network-probe.js
           gjs -m /tmp/network-probe.js
       # The battery warning on the welcome page (lib/power.ts). Its costly defect is
-      # firing on a machine that is plugged in — a desktop with a wireless mouse,
-      # whose battery the kernel lists as `scope=Device` — so that is the rule the
-      # control deletes.
+      # firing on a machine that is plugged in — above all a desktop, whose UPower
+      # DisplayDevice exists and reports is_present = false — so that is the rule
+      # the control deletes.
       - name: The battery rule can fail (control, must be caught)
         run: |
           cp ui/installer/lib/power.ts /tmp/power.bak
-          sed -i 's|^  const system = supplies.filter(s => (s.scope ?? "System") !== "Device")$|  const system = supplies // deliberately removed|' \
+          sed -i 's|^  if (!device \|\| !device.present) return false$|  if (!device) return false // deliberately removed|' \
             ui/installer/lib/power.ts
           if ! git diff --quiet ui/installer/lib/power.ts; then
-            echo "control: a mouse's battery now counts as the machine's"
+            echo "control: a desktop with no battery now counts as on battery"
           else
             echo "::error::the control patched nothing — the rule it deletes has moved or been reworded"
             exit 1
           fi
           ./scripts/bundle.sh --js scripts/dev/power-probe.ts /tmp/power-defect.js
           if gjs -m /tmp/power-defect.js; then
-            echo "::error::the probe passed with device batteries counted — it is not checking what it prints"
+            echo "::error::the probe passed with is_present ignored — it is not checking what it prints"
             cp /tmp/power.bak ui/installer/lib/power.ts
             exit 1
           fi
