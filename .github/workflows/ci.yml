@@ -551,6 +551,44 @@ jobs:
           cp /tmp/disk-config.bak ui/installer/lib/disk-config.ts
           git diff --quiet ui/installer/lib/disk-config.ts
 
+      # A disk too small for the layout used to be offered, carried through the
+      # summary and refused only after Install was pressed; a manual `/` had no
+      # floor at all. Both refusals now happen on the disk page, and each control
+      # below deletes one of them.
+      - name: The disk size probe can fail (controls, must be caught)
+        run: |
+          cp ui/installer/lib/disk-config.ts /tmp/disk-config.bak
+          sed -i 's|^  return entireDiskRootMib(disk.size) >= MIN_ROOT_MIB$|  return true // deliberately removed|' \
+            ui/installer/lib/disk-config.ts
+          if git diff --quiet ui/installer/lib/disk-config.ts; then
+            echo "::error::the control patched nothing — entireDiskFits has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/disk-config-probe.ts /tmp/probe-defect-fits.js
+          if gjs -m /tmp/probe-defect-fits.js; then
+            echo "::error::the probe passed with entireDiskFits accepting every disk"
+            cp /tmp/disk-config.bak ui/installer/lib/disk-config.ts
+            exit 1
+          fi
+          cp /tmp/disk-config.bak ui/installer/lib/disk-config.ts
+          git diff --quiet ui/installer/lib/disk-config.ts
+
+          cp ui/installer/lib/manual-problems.ts /tmp/manual-problems.bak
+          sed -i 's|^  if (root && root.size < MIN_ROOT_MIB \* 1024 \* 1024) {$|  if (false) { // deliberately removed|' \
+            ui/installer/lib/manual-problems.ts
+          if git diff --quiet ui/installer/lib/manual-problems.ts; then
+            echo "::error::the control patched nothing — the manual root-size rule has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/disk-config-probe.ts /tmp/probe-defect-rootsize.js
+          if gjs -m /tmp/probe-defect-rootsize.js; then
+            echo "::error::the probe passed with the manual root-size rule deleted"
+            cp /tmp/manual-problems.bak ui/installer/lib/manual-problems.ts
+            exit 1
+          fi
+          cp /tmp/manual-problems.bak ui/installer/lib/manual-problems.ts
+          git diff --quiet ui/installer/lib/manual-problems.ts
+
       # The retry release (lib/release-target.ts) runs swapoff/umount/cryptsetup
       # close as root on a live medium. Its worst possible defect is reaching past
       # the target disks — somebody's mounted USB stick — so that is the rule this

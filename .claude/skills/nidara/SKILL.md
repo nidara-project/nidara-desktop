@@ -66,12 +66,19 @@ its base archinstall config is airootfs content in nidara-iso
 rebuilding anything here. `nidara-iso/INSTALLER.md` is the decision record — including why it is
 not Calamares.
 
-⚠️ **That record still says the bundle "never partitions, formats or writes a bootloader". It
-does, since 2026-08-28.** `steps/run.ts` runs `sgdisk`/`mkfs.*`/`mount` itself and
-`lib/bootloader.ts` writes the loader entries, the kernel cmdline and the mkinitcpio hook —
-`archinstall` was left owning only the pacstrap. Whatever you read about that boundary, read
-`references/dev-workflow.md` → "The installer partitions with its own hands now" first: the
-arming rule that decides whether any of it runs is the thing to know before you touch that file.
+⚠️ **archinstall owns the disk, in both modes.** Between 2026-08-28 and 2026-09-04 `steps/run.ts`
+ran `sgdisk`/`mkfs.*`/`mount` itself; #310 gave partitioning back, and `lib/disk-config.ts` now
+only EMITS the `disk_config` archinstall carries out. What the bundle still writes itself is the
+boot side, after archinstall: `lib/bootloader.ts` edits the loader entries, the kernel cmdline
+and the mkinitcpio hook. Read `references/dev-workflow.md` → "Who owns the disk — archinstall, in
+both modes" and "The installer runs in a VM, or it does not run" (the arming rule) before
+touching either file.
+
+⚠️ **Every refusal belongs on the page that asked, never on the run page.** `assemblePlan` is
+first called after Install is pressed, so a rule that lives only there refuses a disk the person
+already confirmed erasing. The size floor was that bug until 2026-09-17: the disk page now asks
+`entireDiskFits` (and `manualProblems` holds a manual `/` to the same `MIN_ROOT_MIB`), and the
+throw inside `entireDiskConfig` is the last word, not the first.
 
 ## The ten inviolable commandments
 
