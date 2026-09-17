@@ -1032,6 +1032,21 @@ destructive path has to be genuinely reachable for the control to be worth anyth
 reproduce it is therefore a safety decision, not a convenience one. That one goes in the VM before
 it goes anywhere.
 
+### The installer's battery warning reads UPower, so a VM can show it
+
+The welcome page's "running on battery" warning asks UPower's DisplayDevice — the object the bar's
+battery glyph reads — through `lib/upower.ts`; the rule itself (`lib/power.ts`) is a pure function
+the probe runs with no typelib. It read `/sys/class/power_supply` until 2026-09-17, which a VM
+cannot fake, so the warning had never been seen outside real hardware. To see it now, on the Live
+medium as root: `pacman -S python-dbusmock`, then `scripts/dev/fake-battery.sh start 100 full`
+**before** opening the installer (its UPower client binds to whoever owns the name at that moment),
+then `start 40 discharging` / `start 41 charging` flip the warning live.
+
+⚠️ It is NOT part of the page's network poll, and must not go back in. That poll runs only while
+the network warning is on screen, so on any machine with a connection — every machine that can
+install — plugging the charger in never cleared the battery warning. It updates from UPower's
+`notify` instead.
+
 ### The LANGUAGE is asked first, and the country is never the first screen
 
 Researched 2026-09-03 against Calamares, Anaconda, subiquity, GNOME Initial Setup and archinstall

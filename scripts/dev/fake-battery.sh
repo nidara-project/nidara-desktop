@@ -54,7 +54,11 @@ seed() {
     full)        state=4; tte=0;     ttf=0;    pct=100 ;;
     *)           state=2; tte=9000;  ttf=0;    [ "$pct" -le 15 ] && warn=3 ;;
   esac
-  setp Type        u 2
+  # ⚠️ python-dbusmock 0.38 makes `Type` read-only ("Property “Type” is not
+  # writable"), and under `set -e` that killed the FIRST start before IsPresent
+  # or State were seeded. Its template already says 2 (battery), so a refusal
+  # here is harmless — the rest must still run.
+  setp Type        u 2 2>/dev/null || true
   setp IsPresent   b true
   setp State       u "$state"
   setp Percentage  d "$pct"
