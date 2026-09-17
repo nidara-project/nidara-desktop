@@ -18,6 +18,7 @@ import { releaseTargetDisks } from "../lib/release-target"
 import { copyLogToTarget, openLiveLog, type LiveLog } from "../lib/install-log"
 import { stripAnsi } from "../lib/ansi"
 import { connectivity, isUsable } from "../lib/network"
+import { DOWNLOAD_DIRS, STALL_QUIET_MS, failedDownloading, looksStalled } from "../lib/stall"
 import { measureMirrors } from "../lib/mirrors"
 import { isPreview, previewSkip } from "../lib/preview"
 import { heading, prose } from "./common"
@@ -103,6 +104,15 @@ export function RunStep(): Step {
         ellipsize: Pango.EllipsizeMode.END, single_line_mode: true,
       })
       box.append(detail)
+
+      // Shown only while the install is waiting on a connection that has gone —
+      // see lib/stall.ts for what counts, and for why nothing is killed.
+      const stallWarn = prose(t("runWaitingForNetwork"), "installer-prose--warning")
+      stallWarn.visible = false
+      box.append(stallWarn)
+      // The child's last lines, kept to tell a download failure from any other
+      // one when the run ends. Ours are not in it.
+      let childTail: string[] = []
 
       const paintPhases = () => {
         phaseRows.forEach((r, i) => {
@@ -227,7 +237,11 @@ export function RunStep(): Step {
           desc.add_css_class("installer-prose--dim")
         } else {
           head.label = t("runFailedHeading")
-          desc.label = t("runFailedProse")
+          // archinstall's own last words for a download that died are a Python
+          // traceback and "please report it to archinstall" — accurate about
+          // where it failed and useless about why. When the child's output shows
+          // it could not download, say that, and what to do about it.
+          desc.label = failedDownloading(childTail) ? t("runFailedNetworkProse") : t("runFailedProse")
           desc.remove_css_class("installer-prose--dim")
           desc.add_css_class("installer-prose--warning")
           expander.expanded = true
@@ -409,6 +423,7 @@ export function RunStep(): Step {
         // `init_time` when its Installer is constructed, which is after this, so
         // ours can only be the earlier of the two.
         const startedAt = archinstallStamp()
+        let lastLineAt = GLib.get_monotonic_time()
 
         appendLog(`[EXEC] ${cmd.join(" ")}`)
 
@@ -426,6 +441,9 @@ export function RunStep(): Step {
                 try {
                   const [line] = dataStream.read_line_finish_utf8(res)
                   if (line !== null) {
+                    lastLineAt = GLib.get_monotonic_time()
+                    childTail.push(line)
+                    if (childTail.length > 300) childTail = childTail.slice(-300)
                     if (awaitingBasePhase && line.includes("Installing packages:")) {
                       awaitingBasePhase = false
                       enterPhase(2)
@@ -439,7 +457,51 @@ export function RunStep(): Step {
             readLineAsync()
           }
 
+          // ── Is it waiting on a connection that has gone? ──────────────────────
+          // Every 20 s: how long since the child printed, and how much the
+          // download directories grew in the last STALL_QUIET_MS. Only when both
+          // say "nothing" is NetworkManager asked, afresh — and only its answer
+          // shows the warning. A line or growth hides it again.
+          const dirBytes = (path: string): number => {
+            let total = 0
+            try {
+              const en = Gio.File.new_for_path(path).enumerate_children("standard::size", Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS, null)
+              let info: Gio.FileInfo | null
+              while ((info = en.next_file(null)) !== null) total += info.get_size()
+              en.close(null)
+            } catch {}
+            return total
+          }
+          const sizeHistory: Array<{ at: number, bytes: number }> = []
+          let asking = false
+          const stallTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 20, () => {
+            const now = GLib.get_monotonic_time()
+            const bytes = DOWNLOAD_DIRS.reduce((sum, d) => sum + dirBytes(d), 0)
+            sizeHistory.push({ at: now, bytes })
+            const windowUs = STALL_QUIET_MS * 1000
+            while (sizeHistory.length > 1 && now - sizeHistory[1].at >= windowUs) sizeHistory.shift()
+            // Not enough history to cover a whole window yet: not a stall.
+            if (now - sizeHistory[0].at < windowUs) { stallWarn.visible = false; return GLib.SOURCE_CONTINUE }
+            const stalled = looksStalled({
+              sinceLastLineMs: (now - lastLineAt) / 1000,
+              downloadedInWindow: bytes - sizeHistory[0].bytes,
+            })
+            if (!stalled) { stallWarn.visible = false; return GLib.SOURCE_CONTINUE }
+            if (!asking) {
+              asking = true
+              connectivity({ fresh: true }).then(c => {
+                asking = false
+                const waiting = !isUsable(c)
+                if (waiting && !stallWarn.visible) appendLog(`[NETWORK] ${t("runWaitingForNetwork")}`)
+                stallWarn.visible = waiting
+              })
+            }
+            return GLib.SOURCE_CONTINUE
+          })
+
           _proc.wait_async(null, (_procSrc, res) => {
+            GLib.source_remove(stallTimer)
+            stallWarn.visible = false
             let success = false
             try {
               _proc?.wait_finish(res)
