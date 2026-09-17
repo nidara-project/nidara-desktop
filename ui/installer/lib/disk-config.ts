@@ -165,8 +165,35 @@ const ESP_SIZE_MIB = 512
  * meaning anything: 512 MiB of ESP plus a root partition with room for the base
  * system and the desktop. It exists to fail HERE, naming the disk, rather than
  * as an archinstall traceback after the summary page has been confirmed.
+ *
+ * ⚠️ "Here" used to be the Install button. `entireDiskConfig` is first called
+ * by the run page, so a disk that was too small was offered, selectable, carried
+ * through the summary, and refused only after the person had confirmed erasing
+ * it. The disk page now asks `entireDiskFits` and does not let the row be
+ * picked; the throw below stays as the last word, not the first. Manual mode
+ * holds its `/` to the same number (`manualProblems`).
  */
-const MIN_ROOT_MIB = 8 * 1024
+export const MIN_ROOT_MIB = 8 * 1024
+
+/** What entire-disk mode leaves for `/` on a disk of `diskBytes`. */
+function entireDiskRootMib(diskBytes: number): number {
+  // `total.gpt_end().align()`: one MiB is reserved for the backup GPT header at
+  // the end of the device, and what remains is floored to a MiB boundary because
+  // an unaligned length is refused.
+  const availableMib = Math.floor((diskBytes - MIB) / MIB)
+  return availableMib - (ESP_START_MIB + ESP_SIZE_MIB)
+}
+
+/**
+ * The smallest disk entire-disk mode accepts, in bytes — the inverse of
+ * `entireDiskRootMib` at `MIN_ROOT_MIB`, so the page can say the number.
+ */
+export const ENTIRE_DISK_MIN_BYTES = (ESP_START_MIB + ESP_SIZE_MIB + MIN_ROOT_MIB + 1) * MIB
+
+/** Whether entire-disk mode can lay its layout onto this disk at all. */
+export function entireDiskFits(disk: { size: number }): boolean {
+  return entireDiskRootMib(disk.size) >= MIN_ROOT_MIB
+}
 
 /**
  * Build the `disk_config` for entire-disk mode.
@@ -179,14 +206,10 @@ export function entireDiskConfig(answer: EntireDiskAnswer): DiskConfig {
   const sector_size: SectorSize = { value: disk.logicalSectorSize, unit: "B" }
   const mib = (value: number): ArchSize => ({ value, unit: "MiB", sector_size })
 
-  // `total.gpt_end().align()`: one MiB is reserved for the backup GPT header at
-  // the end of the device, and what remains is floored to a MiB boundary because
-  // an unaligned length is refused.
-  const availableMib = Math.floor((disk.size - MIB) / MIB)
   const rootStartMib = ESP_START_MIB + ESP_SIZE_MIB
-  const rootSizeMib = availableMib - rootStartMib
+  const rootSizeMib = entireDiskRootMib(disk.size)
 
-  if (rootSizeMib < MIN_ROOT_MIB) {
+  if (!entireDiskFits(disk)) {
     throw new Error(
       `${disk.path} is too small for Nidara: ${Math.max(0, rootSizeMib)} MiB would be left for the `
       + `system after a ${ESP_SIZE_MIB} MiB EFI partition, and at least ${MIN_ROOT_MIB} MiB is needed.`,

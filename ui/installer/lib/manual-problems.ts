@@ -8,7 +8,7 @@
 // before.
 
 import { t } from "./i18n"
-import { espMount } from "./disk-config"
+import { espMount, MIN_ROOT_MIB } from "./disk-config"
 import { formatSize } from "./format-size"
 import type { ManualPartitionMount } from "./answers"
 
@@ -156,6 +156,16 @@ export function manualProblems(mounts: ManualPartitionMount[], uefi: boolean): M
   // without mounting it, which this bundle deliberately no longer does.
   const root = mounts.find(m => m.mountpoint === "/")
   if (root && !root.format) problems.push({ message: t("diskErrRootNotFormatted"), entry: root })
+
+  // ⚠️ And `/` has to hold the system, which nothing asked in this mode: entire-
+  // disk mode refuses a disk that leaves less than `MIN_ROOT_MIB`, and a manual
+  // layout could assign a 2 GiB partition to `/`, pass every rule above, and run
+  // out of space inside pacstrap with the table already rewritten. Same number
+  // as entire-disk mode, stated with both sizes for the same reason the ESP one
+  // is.
+  if (root && root.size < MIN_ROOT_MIB * 1024 * 1024) {
+    problems.push({ message: t("diskErrRootTooSmall") + formatSize(root.size) + ".", entry: root })
+  }
 
   const seen = new Set<string>()
   const dupes = new Set<string>()

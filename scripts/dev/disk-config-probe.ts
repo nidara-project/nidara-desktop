@@ -63,7 +63,7 @@
 // only ever printed "ok" has not been tested, it has been run — and a probe whose
 // fixtures are all well-behaved is the same thing wearing a check.
 
-import { entireDiskConfig, manualDiskConfig, espMount } from "../../ui/installer/lib/disk-config"
+import { ENTIRE_DISK_MIN_BYTES, MIN_ROOT_MIB, entireDiskConfig, entireDiskFits, manualDiskConfig, espMount } from "../../ui/installer/lib/disk-config"
 import { assemblePlan } from "../../ui/installer/lib/plan"
 import { loaderRoot } from "../../ui/installer/lib/bootloader"
 import { swapFstabEntry, partitionAtStart } from "../../ui/installer/lib/swap"
@@ -90,7 +90,23 @@ const CASES: Array<{ name: string, size: number, sector: number, fs: FilesystemT
   { name: "not a whole number of MiB", size: 20 * 1024 * MIB + 777777, sector: 512, fs: "btrfs" },
   { name: "8.6 GiB, just above the floor", size: Math.round(8.6 * 1024 * MIB), sector: 512, fs: "btrfs" },
   { name: "8 GiB, below the floor", size: 8 * 1024 * MIB, sector: 512, fs: "btrfs" },
+  // The two sides of the number the disk page STATES. Without both, the page
+  // could promise a size the layout then refuses, or grey out one it would take.
+  { name: "exactly ENTIRE_DISK_MIN_BYTES", size: ENTIRE_DISK_MIN_BYTES, sector: 512, fs: "btrfs" },
+  { name: "one byte under ENTIRE_DISK_MIN_BYTES", size: ENTIRE_DISK_MIN_BYTES - 1, sector: 512, fs: "btrfs" },
 ]
+
+// ⚠️ The disk page greys a disk out with `entireDiskFits` and the run page builds
+// it with `entireDiskConfig`. If the two ever disagree, a disk is either offered
+// and then refused after the summary (the bug this pair was written for), or
+// refused on the page and perfectly installable. So what is asserted is that they
+// AGREE on every case, plus the one boundary the page's text names.
+const EXPECT_FITS: Record<string, boolean> = {
+  "8.6 GiB, just above the floor": true,
+  "8 GiB, below the floor": false,
+  "exactly ENTIRE_DISK_MIN_BYTES": true,
+  "one byte under ENTIRE_DISK_MIN_BYTES": false,
+}
 
 let failures = 0
 function fail(name: string, msg: string): void {
@@ -108,10 +124,17 @@ for (const c of CASES) {
     },
   } as EntireDiskAnswer
 
+  const fits = entireDiskFits(answer.disk!)
+  if (c.name in EXPECT_FITS && fits !== EXPECT_FITS[c.name]) {
+    fail(c.name, `entireDiskFits says ${fits}, expected ${EXPECT_FITS[c.name]}`)
+  }
+
   let config: ReturnType<typeof entireDiskConfig>
   try {
     config = entireDiskConfig(answer)
+    if (!fits) fail(c.name, "the page would grey this disk out, and the layout accepts it")
   } catch (e: any) {
+    if (fits) fail(c.name, `the page offers this disk, and the layout refuses it: ${e?.message ?? e}`)
     // Refusing a disk that cannot hold the layout is an ANSWER, not a failure —
     // the last case is here to be refused, and it names the disk when it is.
     print(`\n${c.name} (${c.size} B)\n   refused: ${e?.message ?? e}`)
@@ -973,6 +996,32 @@ const REFUSAL_CASES: RefusalCase[] = [
     ],
   },
   {
+    // The root had no floor at all in this mode: a 2 GiB `/` passed every rule
+    // and ran out of space inside pacstrap, after the table was rewritten.
+    name: "a 2 GiB root — the system does not fit",
+    uefi: true, want: ["diskErrRootTooSmall"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat", size: ESP_MIN_BYTES },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs", size: 2 * 1024 * MIB },
+    ],
+  },
+  {
+    name: "a root of exactly MIN_ROOT_MIB is installable",
+    uefi: true, want: [],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat", size: ESP_MIN_BYTES },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs", size: MIN_ROOT_MIB * MIB },
+    ],
+  },
+  {
+    name: "a root one byte under MIN_ROOT_MIB",
+    uefi: true, want: ["diskErrRootTooSmall"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat", size: ESP_MIN_BYTES },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs", size: MIN_ROOT_MIB * MIB - 1 },
+    ],
+  },
+  {
     name: "512 MiB — what every installer makes, and what we make ourselves",
     uefi: true, want: [],
     mounts: [
@@ -1098,6 +1147,23 @@ for (const c of REFUSAL_CASES) {
       `ESP_MIN_BYTES is ${stated} and the English message does not say so: "${t("diskErrEfiTooSmall")}"`)
   } else {
     print(`   ok           the refusal states its own minimum (${stated})`)
+  }
+}
+
+// Same drift, for the two numbers added with the disk page's size check: the
+// manual refusal says "8 GiB" in words, and the disk row says the minimum through
+// `%s`, which cannot drift — but a translation that dropped the `%s` would print
+// "needs at least" and nothing after it.
+{
+  const stated = formatSize(MIN_ROOT_MIB * MIB)
+  if (!t("diskErrRootTooSmall").includes(stated)) {
+    fail("the root refusal states the minimum it enforces",
+      `MIN_ROOT_MIB is ${stated} and the message does not say so: "${t("diskErrRootTooSmall")}"`)
+  } else {
+    print(`   ok           the root refusal states its own minimum (${stated})`)
+  }
+  if (!t("diskTooSmall").includes("%s")) {
+    fail("the disk row states the minimum", `"diskTooSmall" has no %s: "${t("diskTooSmall")}"`)
   }
 }
 

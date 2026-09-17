@@ -30,7 +30,7 @@ import {
   type FilesystemType,
   type ManualPartitionMount,
 } from "../lib/answers"
-import { espMount } from "../lib/disk-config"
+import { ENTIRE_DISK_MIN_BYTES, entireDiskFits, espMount } from "../lib/disk-config"
 import { ESP_MOUNTS, manualProblems, type ManualProblem } from "../lib/manual-problems"
 import { freeSpaceGaps } from "../lib/free-space"
 import { isUefi, secureBootState } from "../lib/firmware"
@@ -242,6 +242,7 @@ export function DiskStep(): Step {
       if (!a) return false
       if (a.mode === "entire_disk") {
         if (a.disk === null) return false
+        if (!entireDiskFits(a.disk)) return false
         if (a.encryption?.enabled) {
           return a.encryption.passphrase.length > 0
         }
@@ -422,7 +423,13 @@ export function DiskStep(): Step {
       if (disks.length === 0) {
         diskListBox.append(NidaraEmptyRow(t("diskNoDisks")))
       } else {
-        if (!selectedDisk) selectedDisk = disks[0]
+        // A disk the layout cannot fit on is listed — the person should see the
+        // drive they expected, and why it is not on offer — but it is never the
+        // default and never selectable. Before, the first disk was preselected
+        // whatever its size and the refusal came from the run page, after the
+        // summary had been confirmed.
+        if (selectedDisk && !entireDiskFits(selectedDisk)) selectedDisk = null
+        if (!selectedDisk) selectedDisk = disks.find(d => entireDiskFits(d)) ?? null
 
         const selectThisDisk = (disk: BlockDevice) => {
           if (selectedDisk && selectedDisk.path !== disk.path) {
@@ -440,9 +447,16 @@ export function DiskStep(): Step {
           diskCheckMap.set(disk, check)
 
           const title = disk.model || disk.name
+          const fits = entireDiskFits(disk)
           const subtitle = `${formatSize(disk.size)} · ${disk.path}${disk.rm ? ` · ${t("diskRemovable")}` : ""}`
+            + (fits ? "" : ` · ${t("diskTooSmall").replace("%s", formatSize(ENTIRE_DISK_MIN_BYTES))}`)
 
           const row = NidaraRow(title, subtitle, check)
+          if (!fits) {
+            row.activatable = false
+            row.selectable = false
+            row.sensitive = false
+          }
           diskRowMap.set(disk, row)
 
           if (isCurrent) row.add_css_class("is-selected")
@@ -452,7 +466,7 @@ export function DiskStep(): Step {
 
         diskListBox.connect("row-activated", (_, row) => {
           const idx = row.get_index()
-          if (disks[idx]) {
+          if (disks[idx] && entireDiskFits(disks[idx])) {
             selectThisDisk(disks[idx])
           }
         })
