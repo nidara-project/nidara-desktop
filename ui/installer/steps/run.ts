@@ -5,7 +5,7 @@ import GLib from "gi://GLib"
 import Pango from "gi://Pango"
 import Gio from "gi://Gio"
 import type { Step } from "../lib/flow"
-import { NidaraButton, NidaraScrolled } from "../../lib/nidara-kit"
+import { NidaraButton, NidaraScrolled, showNidaraAlert } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
 import { getAnswers } from "../lib/answers"
 import { assemblePlan, type AssembledPlan } from "../lib/plan"
@@ -19,7 +19,7 @@ import { copyLogToTarget, openLiveLog, type LiveLog } from "../lib/install-log"
 import { stripAnsi } from "../lib/ansi"
 import { connectivity, isUsable } from "../lib/network"
 import { DOWNLOAD_DIRS, STALL_QUIET_MS, failedDownloading, looksStalled } from "../lib/stall"
-import { measureMirrors } from "../lib/mirrors"
+import { measureMirrors, prepareLiveMirrorlist, restoreTargetMirrorlist } from "../lib/mirrors"
 import { isPreview, previewSkip } from "../lib/preview"
 import { heading, prose } from "./common"
 
@@ -110,6 +110,28 @@ export function RunStep(): Step {
       const stallWarn = prose(t("runWaitingForNetwork"), "installer-prose--warning")
       stallWarn.visible = false
       box.append(stallWarn)
+      // Offered only while that warning is up: waiting is legitimate (the
+      // connection can come back), and so is not waiting — pacman takes minutes
+      // to give up on mirrors nobody is reaching, and no stalled run in four
+      // recovered. Whose choice that is was the question the owner answered: the
+      // person's, not a timer's.
+      let stopInstall: (() => void) | null = null
+      let stoppedByUser = false
+      const stopButton = NidaraButton({ label: t("runStopInstall"), halign: Gtk.Align.START })
+      stopButton.visible = false
+      stopButton.connect("clicked", () => {
+        showNidaraAlert({
+          parent: box.get_root() as Gtk.Window,
+          heading: t("runStopHeading"),
+          body: t("runStopBody"),
+          responses: [
+            { id: "wait", label: t("runStopKeepWaiting") },
+            { id: "stop", label: t("runStopConfirm"), suggested: true },
+          ],
+          onResponse: (id) => { if (id === "stop") stopInstall?.() },
+        })
+      })
+      box.append(stopButton)
       // The child's last lines, kept to tell a download failure from any other
       // one when the run ends. Ours are not in it.
       let childTail: string[] = []
@@ -208,7 +230,7 @@ export function RunStep(): Step {
       // the pipe means a caller added later cannot forget it. A line that was
       // something and is now nothing was pure terminal control: printing a blank
       // row for it is how the log came out padded with gaps.
-      const appendLog = (raw: string) => {
+      const appendLog = (raw: string, opts: { quiet?: boolean } = {}) => {
         const line = stripAnsi(raw)
         if (line === "" && raw !== "") return
         const endIter = textBuffer.get_end_iter()
@@ -216,7 +238,11 @@ export function RunStep(): Step {
         liveLog.write(line)
         // The same line the log gets, under the phase — so the page says what it
         // is doing without anybody having to open the expander to find out.
-        if (line.trim()) detail.label = line.trim()
+        //
+        // ⚠️ `quiet` is for the lines the page ALREADY says in its own words: the
+        // network warning went into the log AND into this one line, so the same
+        // sentence appeared twice, once elided to the column width.
+        if (line.trim() && !opts.quiet) detail.label = line.trim()
         const adj = scrolled.vadjustment
         if (adj) adj.value = adj.upper - adj.page_size
       }
@@ -241,7 +267,9 @@ export function RunStep(): Step {
           // traceback and "please report it to archinstall" — accurate about
           // where it failed and useless about why. When the child's output shows
           // it could not download, say that, and what to do about it.
-          desc.label = failedDownloading(childTail) ? t("runFailedNetworkProse") : t("runFailedProse")
+          desc.label = stoppedByUser
+            ? t("runFailedStoppedProse")
+            : failedDownloading(childTail) ? t("runFailedNetworkProse") : t("runFailedProse")
           desc.remove_css_class("installer-prose--dim")
           desc.add_css_class("installer-prose--warning")
           expander.expanded = true
@@ -398,6 +426,11 @@ export function RunStep(): Step {
           finishRun(false)
           return
         }
+        // Two leftovers in one file, both the LIVE mirrorlist: the servers earlier
+        // attempts prepended (archinstall never removes them), and 431 fallback
+        // servers, which is what decides how long a stalled download takes to
+        // fail. The full list goes to the installed system at the end.
+        const fullMirrorlist = prepareLiveMirrorlist(isArm, appendLog)
 
         // ── The spawn starts in phase 1, and the child says when it is past it ─
         //
@@ -481,27 +514,49 @@ export function RunStep(): Step {
             const windowUs = STALL_QUIET_MS * 1000
             while (sizeHistory.length > 1 && now - sizeHistory[1].at >= windowUs) sizeHistory.shift()
             // Not enough history to cover a whole window yet: not a stall.
-            if (now - sizeHistory[0].at < windowUs) { stallWarn.visible = false; return GLib.SOURCE_CONTINUE }
+            const waitingUI = (visible: boolean) => { stallWarn.visible = visible; stopButton.visible = visible }
+            if (now - sizeHistory[0].at < windowUs) { waitingUI(false); return GLib.SOURCE_CONTINUE }
             const stalled = looksStalled({
               sinceLastLineMs: (now - lastLineAt) / 1000,
               downloadedInWindow: bytes - sizeHistory[0].bytes,
             })
-            if (!stalled) { stallWarn.visible = false; return GLib.SOURCE_CONTINUE }
+            if (!stalled) { waitingUI(false); return GLib.SOURCE_CONTINUE }
             if (!asking) {
               asking = true
               connectivity({ fresh: true }).then(c => {
                 asking = false
                 const waiting = !isUsable(c)
-                if (waiting && !stallWarn.visible) appendLog(`[NETWORK] ${t("runWaitingForNetwork")}`)
-                stallWarn.visible = waiting
+                if (waiting && !stallWarn.visible) appendLog(`[NETWORK] ${t("runWaitingForNetwork")}`, { quiet: true })
+                waitingUI(waiting)
               })
             }
             return GLib.SOURCE_CONTINUE
           })
 
+          // ⚠️ Our child is `sudo -n archinstall …`, so killing IT kills sudo and
+          // leaves archinstall — and the pacstrap under it — running as root on a
+          // disk nobody is watching any more. The install is ended from the other
+          // end: archinstall itself, then what may outlive it.
+          stopInstall = () => {
+            stoppedByUser = true
+            stopButton.sensitive = false
+            appendLog(`[STOP] ${t("runStopHeading")}`, { quiet: true })
+            const asRoot = (cmd: string[]) => {
+              try {
+                const full = GLib.get_user_name() === "root" ? cmd : ["sudo", "-n", ...cmd]
+                Gio.Subprocess.new(full, Gio.SubprocessFlags.STDERR_MERGE).wait(null)
+              } catch {}
+            }
+            asRoot(["pkill", "-TERM", "-f", "bin/archinstall"])
+            asRoot(["pkill", "-TERM", "-x", "pacstrap"])
+            asRoot(["pkill", "-TERM", "-x", "pacman"])
+            try { _proc?.force_exit() } catch {}
+          }
+
           _proc.wait_async(null, (_procSrc, res) => {
             GLib.source_remove(stallTimer)
             stallWarn.visible = false
+            stopButton.visible = false
             let success = false
             try {
               _proc?.wait_finish(res)
@@ -513,6 +568,7 @@ export function RunStep(): Step {
                 writeSwapFstabEntries(isArm, answers, appendLog)
                 copyNetworkConnections(isArm, answers, appendLog)
                 configureInstalledBootloader(isArm, answers, appendLog, startedAt)
+                restoreTargetMirrorlist(isArm, fullMirrorlist, measuredMirrors, appendLog)
               }
             } catch (e: any) {
               appendLog(`[ERROR] Process exited with error: ${e.message || e}`)

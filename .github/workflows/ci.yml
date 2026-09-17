@@ -874,6 +874,48 @@ jobs:
           cp /tmp/mirrors.bak ui/installer/lib/mirrors.ts
           git diff --quiet ui/installer/lib/mirrors.ts
 
+      # archinstall prepends the measured servers to the LIVE mirrorlist every run
+      # and never takes them out, so each retry stacked another block (and pacstrap
+      # copied the stack into the installed system). This control makes the cleanup
+      # a no-op and requires the probe to notice.
+      - name: The mirrorlist cleanup can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/mirrors.ts /tmp/mirrors.bak
+          sed -i 's|^  return i === 0 ? text : lines.slice(i).join("\\n")$|  return text // deliberately removed|' ui/installer/lib/mirrors.ts
+          if git diff --quiet ui/installer/lib/mirrors.ts; then
+            echo "::error::the control patched nothing — withoutCustomServers has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/mirror-probe.ts /tmp/mirror-defect-cleanup.js
+          if gjs -m /tmp/mirror-defect-cleanup.js; then
+            echo "::error::the probe passed with the stacked Custom Servers blocks left in place"
+            cp /tmp/mirrors.bak ui/installer/lib/mirrors.ts
+            exit 1
+          fi
+          cp /tmp/mirrors.bak ui/installer/lib/mirrors.ts
+          git diff --quiet ui/installer/lib/mirrors.ts
+
+      # The fallback cap is a DEADLINE: the medium ships 431 servers and pacman
+      # tries them one at a time, which is why a stalled download took past 20
+      # minutes to fail. This control makes the cap a no-op.
+      - name: The mirrorlist cap can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/mirrors.ts /tmp/mirrors.bak
+          sed -i 's|^  if (servers.length <= max) return text$|  return text // deliberately removed|' \
+            ui/installer/lib/mirrors.ts
+          if git diff --quiet ui/installer/lib/mirrors.ts; then
+            echo "::error::the control patched nothing — cappedMirrorlist has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/mirror-probe.ts /tmp/mirror-defect-cap.js
+          if gjs -m /tmp/mirror-defect-cap.js; then
+            echo "::error::the probe passed with the fallback never shortened"
+            cp /tmp/mirrors.bak ui/installer/lib/mirrors.ts
+            exit 1
+          fi
+          cp /tmp/mirrors.bak ui/installer/lib/mirrors.ts
+          git diff --quiet ui/installer/lib/mirrors.ts
+
       - name: The reflector call, and what its answer means (must succeed)
         run: |
           ./scripts/bundle.sh --js scripts/dev/mirror-probe.ts /tmp/mirror-probe.js
