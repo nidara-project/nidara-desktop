@@ -6,12 +6,17 @@
 # set the standard names win. Both failures draw *an* icon, so neither shows up as
 # an error — only as the wrong glyph, on somebody's machine, later.
 #
-# So this runs `ui/shell/core/Icons.ts` twice against a PRIVATE GSettings database,
-# and requires the two runs to disagree:
+# So this runs `ui/shell/core/Icons.ts` against a PRIVATE GSettings database, and
+# requires the runs to disagree:
 #
 #   1. interface-icon-theme = ""        → every concept resolves to our drawing;
 #   2. interface-icon-theme = <a theme> → a good share resolve to the theme's;
-#   3. the same name MISSPELLED         → our drawing again, and a log line saying why.
+#   3. the same name MISSPELLED         → our drawing again, and a log line saying why;
+#   4. a theme WITHOUT the spec key     → our drawing again, and a log line saying why.
+#
+# Run 4 is the Nidara icon spec (#587, 2026-09-17): only a theme that declares
+# `X-Nidara-Icon-Spec` in its index.theme is used. The control is the SAME theme
+# directory as run 2 with that one line removed, so nothing but the key differs.
 #
 # Run 2 is the control that can fail: if the resolver silently ignored the theme,
 # run 2 would look exactly like run 1 and the probe says so. Run 3 is the other
@@ -23,29 +28,34 @@
 # The display is `cage` with wlroots' headless backend — GTK4 starts and resolves
 # icons for real, and nothing appears on the user's screen.
 #
-# Usage: scripts/dev/icon-registry-probe.sh [theme-name | theme-directory]
-#   Defaults to Adwaita, which every Arch install has. Given a DIRECTORY instead,
-#   it puts that theme on a private XDG_DATA_HOME and asks for it by its directory
-#   name — which is how you check a theme you have just built without installing
-#   it anywhere.
+# Usage: scripts/dev/icon-registry-probe.sh [theme-directory]
+#   A theme that declares the spec. Defaults to the installed nidara-symbolic; a
+#   theme you have just built works the same (`build-icon-theme.py --out <dir>`).
+#   It is put on a private XDG_DATA_HOME and asked for by its directory name, so
+#   nothing gets installed anywhere.
 #
 # Needs: gjs, esbuild, cage, glib-compile-schemas. No display of your own.
 set -euo pipefail
 
-arg="${1:-Adwaita}"
+arg="${1:-/usr/share/icons/nidara-symbolic}"
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
 work="$(mktemp -d -t nidara-icon-probe-XXXXXX)"
 trap 'rm -rf "$work"' EXIT
 
-if [ -d "$arg" ]; then
-    theme="$(basename "$(cd "$arg" && pwd)")"
-    mkdir -p "$work/data/icons"
-    ln -s "$(cd "$arg" && pwd)" "$work/data/icons/$theme"
-    data_home="$work/data"
-else
-    theme="$arg"
-    data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
-fi
+[ -d "$arg" ] || { echo "icon-registry-probe: $arg is not a theme directory" >&2; exit 2; }
+grep -q '^X-Nidara-Icon-Spec=' "$arg/index.theme" || {
+    echo "icon-registry-probe: $arg does not declare X-Nidara-Icon-Spec — run 2 needs a theme made for the spec" >&2; exit 2; }
+theme="$(basename "$(cd "$arg" && pwd)")"
+mkdir -p "$work/data/icons"
+ln -s "$(cd "$arg" && pwd)" "$work/data/icons/$theme"
+# The control for run 4: the same drawings, the index.theme without the key.
+nospec="$theme-nospec"
+mkdir -p "$work/data/icons/$nospec"
+for entry in "$arg"/*; do
+    [ "$(basename "$entry")" = index.theme ] || ln -s "$(cd "$(dirname "$entry")" && pwd)/$(basename "$entry")" "$work/data/icons/$nospec/"
+done
+grep -v '^X-Nidara-Icon-Spec=' "$arg/index.theme" > "$work/data/icons/$nospec/index.theme"
+data_home="$work/data"
 
 "$repo/scripts/bundle.sh" --js "$repo/scripts/dev/icon-registry-probe.ts" "$work/probe.js" >/dev/null
 
@@ -77,7 +87,7 @@ run() {  # run <theme-name>
                 echo "ABORT the dconf canary did not reach the private database" >&2; exit 1; }
             gsettings set org.nidara.appearance interface-icon-theme "$theme"
             exec cage -- gjs -m "$work/probe.js"
-        ' 2>"$work/stderr.txt" | grep -E '^(THEME|ICON|TOTAL)'
+        ' 2>"$work/stderr.txt" | grep -E '^(THEME|ICON|TOTAL|LISTED)'
 }
 
 fail=0
@@ -96,7 +106,7 @@ else
     say "   ok   nothing changes on screen, which is the promise of this step"
 fi
 
-say "── 2. interface theme = $theme: the standard names must win ──"
+say "── 2. interface theme = $theme: its drawings must win ──"
 run "$theme" > "$work/on.txt"
 on_theme=$(awk '$1=="TOTAL"{print $2}' "$work/on.txt")
 on_shipped=$(awk '$1=="TOTAL"{print $3}' "$work/on.txt")
@@ -108,6 +118,17 @@ else
     say "   ok   $on_theme concepts drew from $theme; the other $on_shipped fell through to ours"
     say "   (the fall-through list — these are the names $theme does not carry:)"
     awk '$1=="ICON" && $3=="shipped"{print "     " $2}' "$work/on.txt" | head -20
+fi
+
+listed=" $(awk '$1=="LISTED"{$1=""; print}' "$work/on.txt") "
+if [[ "$listed" != *" $theme "* ]]; then
+    say "   FAIL Settings would not offer $theme — the list is:$listed"
+    fail=1
+elif [[ "$listed" == *" $nospec "* ]]; then
+    say "   FAIL Settings would offer $nospec, which does not declare the spec"
+    fail=1
+else
+    say "   ok   Settings offers $theme and not $nospec"
 fi
 
 say "── 3. the same name misspelled: our drawings, and the log must say why ──"
@@ -123,6 +144,21 @@ elif ! grep -q "is not installed" "$work/stderr.txt"; then
     fail=1
 else
     say "   ok   fell back to ours AND said why:"
+    grep -o "\[Icons\].*" "$work/stderr.txt" | head -1 | sed 's/^/     /'
+fi
+
+say "── 4. $nospec (same drawings, no X-Nidara-Icon-Spec): our drawings, and the log must say why ──"
+run "$nospec" > "$work/nospec.txt"
+nospec_theme=$(awk '$1=="TOTAL"{print $2}' "$work/nospec.txt")
+if [ "$nospec_theme" != "0" ]; then
+    say "   FAIL \"$nospec\" does not declare the spec, yet $nospec_theme concepts came from it"
+    fail=1
+elif ! grep -q "does not follow Nidara's icon spec" "$work/stderr.txt"; then
+    say "   FAIL nothing was logged — a theme ignored for lacking the key would look like a broken setting:"
+    sed 's/^/     /' "$work/stderr.txt" | head -5
+    fail=1
+else
+    say "   ok   ignored AND said why:"
     grep -o "\[Icons\].*" "$work/stderr.txt" | head -1 | sed 's/^/     /'
 fi
 

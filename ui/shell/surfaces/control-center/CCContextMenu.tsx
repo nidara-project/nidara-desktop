@@ -158,7 +158,7 @@ export function createCCContextMenu(opts: CCContextMenuOpts = {}): CCContextMenu
         // widget on next load (the CC layout and widgetConfig must agree).
         rows.append(menuRow({
             label: t("cc.menu.remove"),
-            icon: uiIcon("user-trash"),
+            icon: uiIcon("nd-user-trash"),
             danger: true,
             onClick: () => { widgetConfig.setCC(id, false); ccLayout.remove(id); close() },
         }))

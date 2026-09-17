@@ -395,7 +395,7 @@ if (SCOPE === "greeter") {
 // `ICONS=0` to strip them for a pure type pass, and either way `iconState` says which
 // you got, on stdout AND stamped into the PNG when it is not the honest full render.
 const ICONS_ON = (GLib.getenv("ICONS") ?? "1") !== "0"
-const POWER_ROWS = [["suspend", "moon"], ["restart", "rotate-ccw"], ["shutdown", "power"]]
+const POWER_ROWS = [["suspend", "nd-system-suspend"], ["restart", "nd-system-reboot"], ["shutdown", "nd-system-shutdown"]]
 let iconsMissing = 0
 const powerBar = new Gtk.Box({
     spacing: 4, halign: Gtk.Align.CENTER, valign: Gtk.Align.END,
@@ -404,7 +404,7 @@ const powerBar = new Gtk.Box({
 for (const [key, glyph] of POWER_ROWS) {
     const inner = new Gtk.Box({ spacing: 6, halign: Gtk.Align.CENTER })
     if (ICONS_ON) {
-        const path = `${ICON_DIR}/${glyph}.svg`
+        const path = `${ICON_DIR}/${glyph}-symbolic.svg`
         if (GLib.file_test(path, GLib.FileTest.EXISTS)) {
             inner.append(new Gtk.Image({
                 gicon: Gio.FileIcon.new(Gio.File.new_for_path(path)),
@@ -436,7 +436,7 @@ const localeBar = (() => {
     // Same gate as the power bar's: one flag decides whether the render carries the
     // shipped glyphs, so `ICONS=0` cannot leave the two halves disagreeing about it.
     const icon = new Gtk.Image({ pixel_size: 12, css_classes: ["locale-bar-icon"] })
-    const glyph = `${ICON_DIR}/keyboard.svg`
+    const glyph = `${ICON_DIR}/nd-input-keyboard-symbolic.svg`
     if (ICONS_ON && GLib.file_test(glyph, GLib.FileTest.EXISTS)) {
         icon.gicon = Gio.FileIcon.new(Gio.File.new_for_path(glyph))
         icon.add_css_class("nd-icon")

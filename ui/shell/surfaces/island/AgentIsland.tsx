@@ -269,7 +269,7 @@ export default function AgentIsland() {
     const title = new Gtk.Label({ label: t("island.agent.title"), css_classes: ["agent-title"], halign: Gtk.Align.START })
     const statusLabel = new Gtk.Label({ css_classes: ["agent-status"], halign: Gtk.Align.END, valign: Gtk.Align.CENTER })
     const resetBtn = new Gtk.Button({ css_classes: ["agent-reset", "nd-icon-button"], valign: Gtk.Align.CENTER, tooltip_text: t("island.agent.reset") })
-    resetBtn.set_child(new Gtk.Image({ gicon: uiIcon("system-reboot"), pixel_size: 16, css_classes: ["nd-icon"] }))
+    resetBtn.set_child(new Gtk.Image({ gicon: uiIcon("nd-conversation-reset"), pixel_size: 16, css_classes: ["nd-icon"] }))
     resetBtn.connect("clicked", () => svc.reset())
     const header = new Gtk.Box({ css_classes: ["agent-header"], spacing: 8, margin_end: LANE })
     header.append(title)
@@ -296,7 +296,7 @@ export default function AgentIsland() {
     // Entry row.
     const entry = new Gtk.Text({ placeholder_text: t("island.agent.placeholder"), css_classes: ["agent-entry"], hexpand: true, valign: Gtk.Align.CENTER })
     const sendBtn = new Gtk.Button({ css_classes: ["agent-send", "nd-icon-button"], valign: Gtk.Align.CENTER })
-    sendBtn.set_child(new Gtk.Image({ gicon: uiIcon("pan-up"), pixel_size: 16, css_classes: ["nd-icon"] }))
+    sendBtn.set_child(new Gtk.Image({ gicon: uiIcon("nd-pan-up"), pixel_size: 16, css_classes: ["nd-icon"] }))
     const doSend = () => {
         const text = entry.get_text().trim()
         if (!text || svc.busy) return

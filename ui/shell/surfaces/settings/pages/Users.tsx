@@ -321,7 +321,7 @@ function buildUserRow(user: User, onRefresh: () => void): Gtk.ListBoxRow {
     const avatarImg = new Gtk.Image({ pixel_size: 36, css_classes: ["users-avatar-sm"], valign: Gtk.Align.CENTER })
     // The glyph fallback needs .nd-icon (dark-mode invert filter) — but only the
     // glyph: the same filter would invert a real photo.
-    const showGlyph = () => { avatarImg.gicon = uiIcon("avatar-default"); avatarImg.add_css_class("nd-icon") }
+    const showGlyph = () => { avatarImg.gicon = uiIcon("nd-avatar-default"); avatarImg.add_css_class("nd-icon") }
     if (user.avatarPath) { try { avatarImg.set_from_file(user.avatarPath) } catch { showGlyph() } }
     else showGlyph()
 
@@ -355,7 +355,7 @@ function buildUserRow(user: User, onRefresh: () => void): Gtk.ListBoxRow {
     })
 
     const pwBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: uiIcon("dialog-password"), pixel_size: 14 , css_classes: ["nd-icon"] }),
+        child: new Gtk.Image({ gicon: uiIcon("nd-dialog-password"), pixel_size: 14 , css_classes: ["nd-icon"] }),
         css_classes: ["nidara-icon-btn"],
         valign: Gtk.Align.CENTER,
     })
@@ -363,7 +363,7 @@ function buildUserRow(user: User, onRefresh: () => void): Gtk.ListBoxRow {
     pwBtn.connect("clicked", () => showChangePasswordDialog(user, windowOf(pwBtn)))
 
     const deleteBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: uiIcon("user-trash"), pixel_size: 14 , css_classes: ["nd-icon"] }),
+        child: new Gtk.Image({ gicon: uiIcon("nd-user-trash"), pixel_size: 14 , css_classes: ["nd-icon"] }),
         css_classes: ["nidara-icon-btn"],
         valign: Gtk.Align.CENTER,
     })
@@ -439,7 +439,7 @@ export default function UsersPage() {
     })
     // Glyph placeholder when there's no photo — same circular footprint.
     const avatarFallback = new Gtk.Image({
-        gicon: uiIcon("avatar-default"),
+        gicon: uiIcon("nd-avatar-default"),
         pixel_size: 60,
         width_request: AVATAR_SIZE,
         height_request: AVATAR_SIZE,
@@ -575,7 +575,7 @@ export default function UsersPage() {
             hexpand: true,
         })
         const addInner = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16, margin_top: 12, margin_bottom: 12 })
-        addInner.append(new Gtk.Image({ gicon: uiIcon("contact-new"), pixel_size: 20, opacity: 0.7 , css_classes: ["nd-icon"] }))
+        addInner.append(new Gtk.Image({ gicon: uiIcon("nd-contact-new"), pixel_size: 20, opacity: 0.7 , css_classes: ["nd-icon"] }))
         addInner.append(new Gtk.Label({ label: t("settings.users.other.add"), css_classes: ["nidara-row-title"], halign: Gtk.Align.START }))
         addBtn.set_child(addInner)
         addBtn.connect("clicked", () => showAddUserDialog(windowOf(addBtn), rebuildOtherUsers))

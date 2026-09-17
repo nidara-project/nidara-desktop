@@ -57,9 +57,9 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
         halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 26,
     })
 
-    const prevImg = new Gtk.Image({ gicon: uiIcon("media-skip-backward"),    pixel_size: 16, css_classes: ["nd-icon"] })
-    const playImg = new Gtk.Image({ gicon: uiIcon("media-playback-start"),        pixel_size: 20, css_classes: ["nd-icon"] })
-    const nextImg = new Gtk.Image({ gicon: uiIcon("media-skip-forward"), pixel_size: 16, css_classes: ["nd-icon"] })
+    const prevImg = new Gtk.Image({ gicon: uiIcon("nd-media-skip-backward"),    pixel_size: 16, css_classes: ["nd-icon"] })
+    const playImg = new Gtk.Image({ gicon: uiIcon("nd-media-playback-start"),        pixel_size: 20, css_classes: ["nd-icon"] })
+    const nextImg = new Gtk.Image({ gicon: uiIcon("nd-media-skip-forward"), pixel_size: 16, css_classes: ["nd-icon"] })
     const prev = new Gtk.Button({ child: prevImg, css_classes: ["nidara-media-btn"], valign: Gtk.Align.CENTER })
     const play = new Gtk.Button({ child: playImg, css_classes: ["nidara-media-btn", "nidara-media-play-btn"], valign: Gtk.Align.CENTER })
     const next = new Gtk.Button({ child: nextImg, css_classes: ["nidara-media-btn"], valign: Gtk.Align.CENTER })
@@ -76,8 +76,8 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
     // the panel. Opens a glass menu (same Gtk.Popover + GlassBubble + menuRow
     // pattern as the dock/app-grid context menus) listing every MPRIS player:
     // "Automatic" follows MediaService's heuristic; picking an app pins it.
-    const srcAppImg  = new Gtk.Image({ gicon: uiIcon("media-playback-start"), pixel_size: 16, css_classes: ["nd-icon"] })
-    const srcChevron = new Gtk.Image({ gicon: uiIcon("pan-down"), pixel_size: 10, css_classes: ["nd-icon"], opacity: 0.6 })
+    const srcAppImg  = new Gtk.Image({ gicon: uiIcon("nd-media-playback-start"), pixel_size: 16, css_classes: ["nd-icon"] })
+    const srcChevron = new Gtk.Image({ gicon: uiIcon("nd-pan-down"), pixel_size: 10, css_classes: ["nd-icon"], opacity: 0.6 })
     const srcInner = new Gtk.Box({ spacing: 2 })
     srcInner.append(srcAppImg); srcInner.append(srcChevron)
     const sourceBtn = new Gtk.Button({
@@ -116,7 +116,7 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
             const rowIcon = media.playerAppIcon(pl)
             bubbleMenu.rows.append(menuRow({
                 label: media.playerLabel(pl),
-                icon: rowIcon ?? uiIcon("media-playback-start"),
+                icon: rowIcon ?? uiIcon("nd-media-playback-start"),
                 appIcon: !!rowIcon,
                 checked: media.pinnedBus() === pl.bus_name,
                 trailing: hint,
@@ -205,7 +205,7 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
         titleLabel.label  = p?.title  || t("cc.media.no-media")
         artistLabel.label = p?.artist || ""
         // gicon assignment is NOT equality-guarded by GTK — same-icon reassign forces a redraw
-        const wantPlay = p?.playback_status === media.PlaybackStatus.PLAYING ? uiIcon("media-playback-pause") : uiIcon("media-playback-start")
+        const wantPlay = p?.playback_status === media.PlaybackStatus.PLAYING ? uiIcon("nd-media-playback-pause") : uiIcon("nd-media-playback-start")
         if (playImg.gicon !== wantPlay) playImg.gicon = wantPlay
         prev.sensitive = p?.can_go_previous !== false
         next.sensitive = p?.can_go_next    !== false
@@ -214,7 +214,7 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
         if (bus !== srcIconBus) {
             srcIconBus = bus
             const appIcon = media.playerAppIcon(p)
-            srcAppImg.gicon = appIcon ?? uiIcon("media-playback-start")
+            srcAppImg.gicon = appIcon ?? uiIcon("nd-media-playback-start")
             // App icons are full-color — nd-icon's invert(1) (for the shell's
             // black symbolic SVGs) turns them negative. Keep it only for the
             // play fallback.
@@ -341,9 +341,9 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
     header.append(artDa); header.append(title); header.append(artist)
 
     const controls = new Gtk.Box({ halign: Gtk.Align.CENTER, spacing: 16, margin_top: 4 })
-    const prevImg = new Gtk.Image({ gicon: uiIcon("media-skip-backward"),    pixel_size: 18 , css_classes: ["nd-icon"] })
-    const playImg = new Gtk.Image({ gicon: uiIcon("media-playback-start"),        pixel_size: 18 , css_classes: ["nd-icon"] })
-    const nextImg = new Gtk.Image({ gicon: uiIcon("media-skip-forward"), pixel_size: 18 , css_classes: ["nd-icon"] })
+    const prevImg = new Gtk.Image({ gicon: uiIcon("nd-media-skip-backward"),    pixel_size: 18 , css_classes: ["nd-icon"] })
+    const playImg = new Gtk.Image({ gicon: uiIcon("nd-media-playback-start"),        pixel_size: 18 , css_classes: ["nd-icon"] })
+    const nextImg = new Gtk.Image({ gicon: uiIcon("nd-media-skip-forward"), pixel_size: 18 , css_classes: ["nd-icon"] })
     const prev = new Gtk.Button({ child: prevImg, css_classes: ["nidara-media-btn"] })
     const play = new Gtk.Button({ child: playImg, css_classes: ["nidara-media-btn"] })
     const next = new Gtk.Button({ child: nextImg, css_classes: ["nidara-media-btn"] })
@@ -368,7 +368,7 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
         const p = state.currentPlayer
         title.label  = p?.title || t("cc.media.no-media")
         artist.label = p?.artist || ""
-        const wantPlay = p?.playback_status === media.PlaybackStatus.PLAYING ? uiIcon("media-playback-pause") : uiIcon("media-playback-start")
+        const wantPlay = p?.playback_status === media.PlaybackStatus.PLAYING ? uiIcon("nd-media-playback-pause") : uiIcon("nd-media-playback-start")
         if (playImg.gicon !== wantPlay) playImg.gicon = wantPlay
         prev.sensitive = p?.can_go_previous !== false
         next.sensitive = p?.can_go_next !== false
@@ -398,7 +398,7 @@ function buildWideContent(state: MediaState): Gtk.Widget {
     const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
     textBox.append(title); textBox.append(artist)
 
-    const widePlayImg = new Gtk.Image({ gicon: uiIcon("media-playback-start"), pixel_size: 18 , css_classes: ["nd-icon"] })
+    const widePlayImg = new Gtk.Image({ gicon: uiIcon("nd-media-playback-start"), pixel_size: 18 , css_classes: ["nd-icon"] })
     const play = new Gtk.Button({ child: widePlayImg, css_classes: ["nidara-media-btn"], valign: Gtk.Align.CENTER })
     play.set_size_request(32, 32)
 
@@ -414,7 +414,7 @@ function buildWideContent(state: MediaState): Gtk.Widget {
         const p = state.currentPlayer
         title.label  = p?.title || t("cc.media.no-media")
         artist.label = p?.artist || ""
-        const wantPlay = p?.playback_status === media.PlaybackStatus.PLAYING ? uiIcon("media-playback-pause") : uiIcon("media-playback-start")
+        const wantPlay = p?.playback_status === media.PlaybackStatus.PLAYING ? uiIcon("nd-media-playback-pause") : uiIcon("nd-media-playback-start")
         if (widePlayImg.gicon !== wantPlay) widePlayImg.gicon = wantPlay
     }
 
@@ -434,7 +434,7 @@ function buildWideContent(state: MediaState): Gtk.Widget {
 // panel, like the other 1×1 status tiles.
 function buildSingleContent(): Gtk.Widget {
     const fallback = new Gtk.Image({
-        gicon: uiIcon("media-playback-start"), pixel_size: 22, css_classes: ["nd-icon"],
+        gicon: uiIcon("nd-media-playback-start"), pixel_size: 22, css_classes: ["nd-icon"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
     })
 
@@ -472,7 +472,7 @@ const mediaWidget: AtomicWidget = {
     id: "media",
     category: "media",
     name: t("cc.media.name"),
-    icon: uiIcon("media-playback-start"),
+    icon: uiIcon("nd-media-playback-start"),
     locations: ["cc"],
     defaultSize: WidgetSize.SQUARE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],

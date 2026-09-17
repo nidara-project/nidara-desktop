@@ -68,14 +68,14 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     // ── Navigation controls ───────────────────────────────────────────────────
     const backBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: uiIcon("pan-start"), pixel_size: 14, css_classes: ["nd-icon"] }),
+        child: new Gtk.Image({ gicon: uiIcon("nd-pan-start"), pixel_size: 14, css_classes: ["nd-icon"] }),
         css_classes: ["nidara-icon-btn", "nav-btn"],
         sensitive: false,
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
     })
     const forwardBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: uiIcon("pan-end"), pixel_size: 14, css_classes: ["nd-icon"] }),
+        child: new Gtk.Image({ gicon: uiIcon("nd-pan-end"), pixel_size: 14, css_classes: ["nd-icon"] }),
         css_classes: ["nidara-icon-btn", "nav-btn"],
         sensitive: false,
         valign: Gtk.Align.CENTER,
@@ -328,7 +328,7 @@ export default function Settings(monitor: Gdk.Monitor) {
             const trailing = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
             // No chip on a page result: it would repeat the label verbatim.
             if (!isPage) trailing.append(new Gtk.Label({ label: item.pageLabel, css_classes: ["search-result-chip"] }))
-            trailing.append(new Gtk.Image({ gicon: uiIcon("pan-end"), pixel_size: 14, opacity: 0.4, css_classes: ["nd-icon"] }))
+            trailing.append(new Gtk.Image({ gicon: uiIcon("nd-pan-end"), pixel_size: 14, opacity: 0.4, css_classes: ["nd-icon"] }))
 
             // A result row shows a row that exists elsewhere, so it is built by the
             // same component those rows are — including the subtitle's wrap. The
@@ -343,7 +343,7 @@ export default function Settings(monitor: Gdk.Monitor) {
                 // come first" answerable without a screenshot.
                 isPage ? ["search-result-row", "search-result-page"] : ["search-result-row"], undefined,
                 new Gtk.Image({
-                    gicon: currentUiIcon(cat?.icon) ?? uiIcon("preferences-desktop"),
+                    gicon: currentUiIcon(cat?.icon) ?? uiIcon("nd-preferences-desktop"),
                     pixel_size: 18,
                     css_classes: ["search-result-page-icon", "nd-icon"],
                     opacity: isPage ? 1 : 0.6,
@@ -426,7 +426,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         valign: Gtk.Align.CENTER,
     })
     searchEntry.append(new Gtk.Image({
-        gicon: uiIcon("system-search"),
+        gicon: uiIcon("nd-system-search"),
         pixel_size: 15,
         css_classes: ["nd-icon", "settings-search-icon"],
         valign: Gtk.Align.CENTER,
@@ -465,7 +465,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     // Settings supplies the sidebar, the content, the search box (sidebar top), the
     // nav capsule + breadcrumb title (header start) and the close button (header end).
     const closeBtn = IconButton({
-        icon: uiIcon("window-close"),
+        icon: uiIcon("nd-window-close"),
         iconSize: 14,
         variant: "danger",
         tooltip: t("settings.window.close"),
@@ -491,7 +491,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         // is what turns this into the two-pane layout — same component either way.
         sidebar: {
             widget: sidebar.widget,
-            toggleIcon: uiIcon("sidebar-show"),
+            toggleIcon: uiIcon("nd-sidebar-show"),
             toggleLabel: t("settings.window.sidebar-toggle"),
             top: searchEntry,
             width: WINDOW_LAYOUT.sidebar,

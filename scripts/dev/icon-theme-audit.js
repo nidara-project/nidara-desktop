@@ -5,6 +5,11 @@
  *   gjs -m scripts/dev/icon-theme-audit.js [theme …] > /tmp/audit.tsv
  *   python3 scripts/dev/icon-theme-sheet.py /tmp/audit.tsv /tmp/audit   # → audit-N.png
  *
+ * Since the Nidara icon spec (#587, 2026-09-17) every name is `nd-`, so only a theme
+ * that declares `X-Nidara-Icon-Spec` has anything to show here, and those are the
+ * themes listed by default. The sheet is how a theme author checks their drawings
+ * against ours, row by row. The history below is why the names are ours now.
+ *
  * Why. A standard icon NAME is a promise about meaning that each theme keeps in its
  * own way, and the only way to know what a name means in practice is to draw it.
  * The #587 icon study mapped concepts to names by how the name READ, and three
@@ -28,7 +33,7 @@ const REPO = GLib.get_current_dir()
 const src = new TextDecoder().decode(GLib.file_get_contents(`${REPO}/ui/shell/core/Icons.ts`)[1])
 const block = src.match(/ICON_NAMES = \[([\s\S]*?)\] as const/)
 if (!block) { printerr("ICON_NAMES not found — run from the repo root"); imports.system?.exit?.(1) }
-const names = [...block[1].matchAll(/"([^"]+)"/g)].map(m => m[1]).filter(n => !n.startsWith("nd-"))
+const names = [...block[1].matchAll(/"([^"]+)"/g)].map(m => m[1])
 
 let themes = [...ARGV]
 if (!themes.length) {
@@ -38,17 +43,15 @@ if (!themes.length) {
         try { e = GLib.Dir.open(dir, 0) } catch { continue }
         let n
         while ((n = e.read_name())) {
+            // nidara-symbolic IS the first column (our drawings), so it is not repeated.
             if (["default", "hicolor", "nidara", "nidara-symbolic"].includes(n)) continue
-            // An icon theme declares Directories=; a cursor-only one (Adwaita's
-            // pointer as "default", say) carries only Inherits=. A theme that ships
-            // both, like Qogir, is still an icon theme.
             const index = `${dir}/${n}/index.theme`
             if (!GLib.file_test(index, GLib.FileTest.EXISTS)) continue
             try {
                 const kf = new GLib.KeyFile()
                 kf.load_from_file(index, GLib.KeyFileFlags.NONE)
-                if (kf.get_string("Icon Theme", "Directories").trim()) seen.add(n)
-            } catch { /* no [Icon Theme] Directories → not an icon theme */ }
+                if (kf.get_integer("Icon Theme", "X-Nidara-Icon-Spec") > 0) seen.add(n)
+            } catch { /* no [Icon Theme] or no X-Nidara-Icon-Spec → not made for the spec */ }
         }
     }
     themes = [...seen].sort()

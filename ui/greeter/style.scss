@@ -846,7 +846,7 @@ dropdown > button {
     // Consequence to know: the chevron does not follow `color`, so it does not brighten
     // with the label on `:hover`. That was already true before the icons became
     // symbolic, and this rule keeps it true on purpose rather than by accident.
-    -gtk-icon-source: url("../shell/assets/icons/hicolor/scalable/actions/pan-down-symbolic.svg");
+    -gtk-icon-source: url("../shell/assets/icons/hicolor/scalable/actions/nd-pan-down-symbolic.svg");
     -gtk-icon-filter: brightness(0) invert(1);
   }
 }

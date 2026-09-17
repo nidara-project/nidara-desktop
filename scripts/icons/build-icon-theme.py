@@ -32,13 +32,21 @@ has no icon for a concept.
    output becomes a relative symlink to the first name, which is what keeps the
    theme from being three times its size.
 
-4. **Standard names.** `aliases.csv` maps a freedesktop name to the Lucide drawing
-   that means it — the 83 our own registry asks for first, then the exact matches
-   from the icon study. Each alias is a symlink IN BOTH SIZE DIRECTORIES.
+4. **Names.** `aliases.csv` maps a name to the Lucide drawing that means it: first
+   the `nd-` names of Nidara's icon spec (`source=nidara-spec`, the names the shell
+   asks for — `ui/shell/assets/icons/SPEC.md`), then freedesktop names
+   (`standard`, what the registry used before the spec, and `study`, the exact
+   matches from the icon study) so the theme still works as a general symbolic
+   theme. Each alias is a symlink IN BOTH SIZE DIRECTORIES.
    ⚠️ The study's first pass wrote them only into `scalable/`, so at 16px GTK
    silently fell back to the thin drawing. Both, always.
 
-5. **Nidara's own drawings.** `scripts/icons/nidara/*.svg` are merged in as extra
+5. **The spec declaration.** `index.theme` carries `X-Nidara-Icon-Spec`, the
+   key the shell's Settings lists interface icon themes by. It must match
+   `ICON_SPEC_VERSION` in `ui/shell/core/Icons.ts`; `icon-registry-check.mjs`
+   fails when they drift.
+
+6. **Nidara's own drawings.** `scripts/icons/nidara/*.svg` are merged in as extra
    sources. Two icons live there because they are our edits, not stock Lucide:
    `record` (a filled dot) and `record-stop` (a filled square).
 
@@ -56,6 +64,9 @@ import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SVG_NS = "http://www.w3.org/2000/svg"
+
+# The Nidara icon spec version this theme implements — see step 5 above.
+NIDARA_ICON_SPEC = 1
 
 # 16/24. The scalable drawings are 24 units; the small variant is 16.
 SCALE = 16.0 / 24.0
@@ -271,6 +282,7 @@ INDEX_THEME = """[Icon Theme]
 Name={name}
 Comment={comment}
 Inherits=Adwaita,hicolor
+X-Nidara-Icon-Spec={spec}
 Directories=16x16/actions,scalable/actions
 
 [16x16/actions]
@@ -393,14 +405,14 @@ def main():
                 link(os.path.join(dirs[size], f"{std}-symbolic.svg"),
                      f"{lucide}-symbolic.svg")
             aliased += 1
-    say(f"{aliased} standard names aliased in BOTH size directories")
+    say(f"{aliased} names aliased in BOTH size directories")
     for std, lucide in missing:
         say(f"  !! {std} wants {lucide!r}, which is not a source drawing")
 
     # ── metadata ─────────────────────────────────────────────────────────────
     with open(os.path.join(args.out, "index.theme"), "w") as fp:
         fp.write(INDEX_THEME.format(
-            name=args.name,
+            name=args.name, spec=NIDARA_ICON_SPEC,
             comment=f"Symbolic icons for Nidara, built from Lucide {version}"))
     with open(os.path.join(args.out, "VERSION"), "w") as fp:
         fp.write(f"lucide-static {version}\n")

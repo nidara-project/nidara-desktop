@@ -15,9 +15,10 @@
 //   THEME <name-or-empty>
 //   ICON <name> <theme|shipped> <path>
 //   TOTAL <from-theme> <from-shipped>
+//   LISTED <theme> …   (what Settings offers: themes declaring the icon spec)
 
 import Gtk from "gi://Gtk?version=4.0"
-import { ICON_NAMES, uiIcon } from "../../ui/shell/core/Icons"
+import { ICON_NAMES, uiIcon, specIconThemes } from "../../ui/shell/core/Icons"
 
 Gtk.init()
 
@@ -37,3 +38,4 @@ for (const name of ICON_NAMES) {
     print(`ICON ${name} ${link} ${path}`)
 }
 print(`TOTAL ${fromTheme} ${fromShipped}`)
+print(`LISTED ${specIconThemes().join(" ")}`)

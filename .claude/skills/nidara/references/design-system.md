@@ -2169,41 +2169,55 @@ only when someone boots a VM). The `styles` job now compiles it too.
   (found live, corrected same day). Cairo-drawing a glyph means picking its colour is now on you;
   default to mode-aware white/black (`Theme.isDark`) like `--nidara-text`, and only reach for
   live accent when the glyph sits on the shell's own neutral glass, not on another accent fill.
-- **Interface icons are asked for by STANDARD NAME, and there is only one name (#587).**
-  `uiIcon("network-wireless")` looks for that name in the user's interface icon theme (GSettings
+- **Interface icons are asked for by `nd-` NAME, the Nidara icon spec's — and only by it (#587).**
+  `uiIcon("nd-network-wireless")` looks for that name in the user's interface icon theme (GSettings
   `org.nidara.appearance interface-icon-theme`, empty by default — chosen in Settings →
   Appearance → *Interface icons*, config key `appearance.interfaceIconTheme`, where the empty
   value is spelled `nidara` and `nidara-symbolic` is left off the list because it IS our drawings,
   packaged) and then in our own
-  `assets/icons/hicolor/scalable/actions/network-wireless-symbolic.svg` — the same name, two
-  places. Nothing translates anything: `core/Icons.ts` holds `ICON_NAMES`, a flat LIST that exists
-  only so the compiler can refuse a name we do not ship. Adding an icon means adding a name and a
-  drawing beside it, **not** dropping an SVG in and pointing at it from a table.
-  - **a name starting `nd-` is OURS and no theme will have it** — `nd-ai`, `nd-clipboard-history`,
-    `nd-dock`. The Naming Spec is from 2006 and has no word for those, and a theme asked for the
-    nearest-sounding standard name answers with something that MEANS something else: the icon
-    study mapped the assistant to `system-help`, so picking Adwaita turned Nidara's AI into a
-    question mark. Use a standard name when one exists, `nd-` when none does, and never `nd-` for
-    something the desktop already names — CI fails on that.
-  - **a name is chosen by what themes DRAW for it, not by how it reads.** Three names from the
-    icon study were wrong in a way only a render shows (2026-09-16): dark mode asked for
-    `system-suspend` (a moon in Adwaita, the suspend button in Papirus/Qogir/Colloid), the bar's
-    bell for `preferences-system-notifications` (the Settings PANEL's icon — a speech bubble with
-    "!" in most themes; right for the Settings sidebar, wrong for a bell) and the Control Centre
-    gear for `preferences-system` (tools in Adwaita). Before adding or changing a name, run
-    `gjs -m scripts/dev/icon-theme-audit.js [themes…] > a.tsv` and
-    `python3 scripts/dev/icon-theme-sheet.py a.tsv /tmp/sheet`, and check that every column
-    draws the same IDEA. The same concept can need two names by context: the notifications
-    Settings page keeps `preferences-system-notifications`, the bell is `notifications`.
+  `assets/icons/hicolor/scalable/actions/nd-network-wireless-symbolic.svg` — the same name, two
+  places. `core/Icons.ts` holds `ICON_NAMES`, a flat LIST that exists so the compiler can refuse a
+  name we do not ship. **Adding an icon is three things: the name there, the drawing beside it,
+  and its row in `ui/shell/assets/icons/SPEC.md`** — CI (`icon-registry-check.mjs`) fails on any
+  one missing.
+  - **why our own names (owner decision, 2026-09-17).** Until then these were freedesktop names,
+    asked of whatever theme the user picked, and a name kept drawing a different THING in
+    different themes: dark mode asked `system-suspend` (a moon in Adwaita, the suspend button in
+    Papirus/Qogir/Colloid), the bar's bell `preferences-system-notifications` (a speech bubble with
+    "!"), the Control Centre `preferences-system` (tools) — eight fixed one by one in #591, each
+    found by the owner. The Icon Naming Spec is frozen since 2007 and GNOME calls Adwaita's UI
+    icons a private set with no API; there was nothing stable to target. **Do not go back to
+    freedesktop names for interface icons**, and do not "help" a user's Papirus reach the bar:
+    only a theme made for the spec changes these icons. APP icons (dock, grid, tray,
+    notifications) keep freedesktop names — there each app's `.desktop` names its icon, and it works.
+  - **a theme opts in by DECLARING it:** `X-Nidara-Icon-Spec=<version>` in `[Icon Theme]` of its
+    `index.theme`, read from the FIRST `index.theme` on the search path (the one GTK uses).
+    Settings lists only those themes (`specIconThemes()`), and the row stays visible with "Nidara"
+    alone — owner's call: it is how a user learns their own theme can go there. Not detected by
+    counting `nd-` files: a partial theme is legitimate, so any threshold would be invented. A theme
+    chosen by hand without the key is ignored with a log line saying so. The version lives in
+    three places that CI keeps equal — `ICON_SPEC_VERSION` in `Icons.ts`, `**Version N.**` in
+    `SPEC.md`, `NIDARA_ICON_SPEC` in the theme generator; bump all three when the spec gains names
+    (an older theme keeps working, the new names fall back to ours).
+  - **name by MEANING, one meaning per name.** Every theme made for the spec draws a name once, so
+    two uses sharing a name become the same glyph everywhere. The rename split three that did
+    double duty (`nd-window-tiling` from the Apps page's `nd-view-grid`, `nd-conversation-reset`
+    from Restart, `nd-power-profile-balanced` from the battery). Some still share — see
+    tech-debt — and SPEC.md's *Where* column says so honestly. Before changing a name or a drawing,
+    `gjs -m scripts/dev/icon-theme-audit.js [themes…] > a.tsv` +
+    `python3 scripts/dev/icon-theme-sheet.py a.tsv /tmp/sheet` draws every name in every spec theme
+    beside ours — look at it.
   - **the lookup asks for size 512, on purpose.** A `Gio.FileIcon` is one file, so the size decides
     WHICH of a theme's variants we get, and fixed-size directories are often drawn with padding —
     Colloid's `status/24` icons fill 63% of their box against 97% for its scalable ones. Asking for
     24 hit that directory exactly, and was the only size that did (16/32/48/128/512 all give the
     scalable drawing); the owner saw it as "the ethernet icon is smaller". Ask big, get scalable.
-  - **a theme's answer only counts when it is a symbolic SVG.** Adwaita answers `emblem-default`,
-    `preferences-desktop`, `preferences-desktop-theme` and `preferences-desktop-peripherals` out
-    of `legacy/` with full-colour PNGs, which do not recolour and do not follow the mode. The
-    resolver checks the resolved FILE ends in `-symbolic.svg` and falls through to ours otherwise.
+  - **a theme's answer only counts when it is a symbolic SVG, and when it draws ink.** Only
+    `<name>-symbolic` is asked, but GTK falls back along `Inherits`, and Adwaita used to answer from
+    `legacy/` with full-colour PNGs that neither recolour nor follow the mode — the resolver checks
+    the resolved FILE ends in `-symbolic.svg`. And a valid symbolic file can render EMPTY
+    (GTK drops a group transform on some files without a `viewBox` — Suru++ and La Capitaine lost
+    17 icons that way), so each candidate is rendered off-screen once and used only if it leaves ink.
   - **a theme name is a case-sensitive DIRECTORY name.** `adwaita` is not `Adwaita`, and
     `set_theme_name` accepts anything without looking, so a mistyped name silently resolves
     NOTHING and looks exactly like the setting never having been touched. The name is checked
@@ -2216,27 +2230,23 @@ only when someone boots a VM). The `styles` job now compiles it too.
     LOAD and turned into a widget later (a widget's catalogue `icon`, a config entry's slider
     `icons`) is not in any tree yet — its consumer wraps it in `currentUiIcon(…)`. Store names,
     not `uiIcon(…)` results, in anything new that outlives a theme change.
-  Three more things that are easy to get wrong:
+  Two more things that are easy to get wrong:
   - the interface theme is a **private `Gtk.IconTheme`**, never
     `Gtk.IconTheme.get_for_display()`. The display's theme belongs to APPLICATION icons (the dock,
     the tray, the app grid) and it **refuses `set_theme_name` outright** — it is a singleton
     (`assertion '!self->is_display_singleton' failed`). GTK gives one theme per process and these
     are the two the shell needs at once. Route A of the #587 prototype — putting the interface
     theme on the display — was measured to change the art of 57 of 72 real app icons.
-  - **one name is one icon.** Two meanings under one name become the same glyph the moment a theme
-    is chosen — which is exactly what a shared name did while this was a concept table. Name by
-    MEANING, not by drawing: `moon` did double duty as Suspend and as low-brightness precisely
-    because it was named after a picture. `scripts/ci/icon-registry-check.mjs` fails on a name with
-    no drawing, and on a drawing no name asks for.
   - **do not check a theme's coverage by looking for files in its directory.** GTK resolves through
     `Inherits`, so it finds names the directory does not hold, and misses some it does. Ask the
-    resolver: `scripts/dev/icon-registry-probe.sh [theme | theme-dir]` runs the real module
-    off-screen under `cage` and prints where every concept landed, with a control run that must
-    disagree.
+    resolver: `scripts/dev/icon-registry-probe.sh [spec theme dir]` runs the real module
+    off-screen under `cage` — no theme, the theme, a misspelled name, and the same theme with the
+    `X-Nidara-Icon-Spec` line removed — and fails unless those runs disagree the way they must,
+    including what Settings would list.
 - **The shipped theme is BUILT, never committed.** `scripts/icons/build-icon-theme.py` turns the
   pinned `lucide-static` (exact version in `ui/shell/package.json` — a theme whose drawings move
-  under it is not a theme) into `nidara-symbolic`: 1839 drawings, ~15 MB, freedesktop names from
-  `scripts/icons/aliases.csv`, in `scalable/actions` **and** `16x16/actions`. `install.sh` builds it
+  under it is not a theme) into `nidara-symbolic`: 1839 drawings, ~15 MB, the spec's `nd-` names plus freedesktop names from
+  `scripts/icons/aliases.csv`, declaring `X-Nidara-Icon-Spec`, in `scalable/actions` **and** `16x16/actions`. `install.sh` builds it
   into `/usr/share/icons`, the PKGBUILD ships it as the separate `nidara-icon-theme` package (its
   licence is Lucide's ISC/MIT, not our GPL), and CI rebuilds it twice to prove the build is
   deterministic. Three things the generator exists to get right:

@@ -37,7 +37,7 @@ function header(onClose: () => void): {
   })
 
   const closeBtn = NidaraCircleButton({
-    icon: ndIcon("window-close"),
+    icon: ndIcon("nd-window-close"),
     iconName: "window-close-symbolic",
     accessibleLabel: t("a11yClose"),
     variant: "danger",
@@ -75,9 +75,9 @@ export function InstallerWindow(): Gtk.Window {
 
   const sidebarDefs = [
     { id: "welcome", titleKey: "welcomeTitle", iconName: "nd-hand" },
-    { id: "region", titleKey: "regionTitle", iconName: "preferences-system-network" },
-    { id: "disk", titleKey: "diskTitle", iconName: "drive-harddisk" },
-    { id: "account", titleKey: "accountTitle", iconName: "avatar-default" },
+    { id: "region", titleKey: "regionTitle", iconName: "nd-preferences-system-network" },
+    { id: "disk", titleKey: "diskTitle", iconName: "nd-drive-harddisk" },
+    { id: "account", titleKey: "accountTitle", iconName: "nd-avatar-default" },
     { id: "system", titleKey: "systemTitle", iconName: "nd-cpu" },
     { id: "summary", titleKey: "summaryTitle", iconName: "clipboard-list" },
     { id: "run", titleKey: "runTitle", iconName: "rocket" },
@@ -220,7 +220,7 @@ export function InstallerWindow(): Gtk.Window {
 
   let shell: NidaraWindowResult
   const head = header(() => shell.close())
-  const sidebarIcon = ndIcon("sidebar-show") ?? Gio.ThemedIcon.new("sidebar-show-symbolic")
+  const sidebarIcon = ndIcon("nd-sidebar-show") ?? Gio.ThemedIcon.new("sidebar-show-symbolic")
 
   // The banner is the whole reason preview is allowed to look like the installer:
   // a screenshot of a preview must never be mistakable for a screenshot of an

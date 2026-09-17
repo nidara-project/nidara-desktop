@@ -90,31 +90,31 @@ export function SystemMenuOverlay() {
     action()
   }
 
-  menuBox.append(makeRow(uiIcon("dialog-information"), t("bar.system-menu.about"), false, () => {
+  menuBox.append(makeRow(uiIcon("nd-dialog-information"), t("bar.system-menu.about"), false, () => {
     dispatchAction(() => status.toggleAbout())
   }))
   menuBox.append(sep())
-  menuBox.append(makeRow(uiIcon("preferences-desktop"), t("bar.system-menu.settings"), false, () => {
+  menuBox.append(makeRow(uiIcon("nd-preferences-desktop"), t("bar.system-menu.settings"), false, () => {
     dispatchAction(() => shellActions.openSettings?.())
   }))
   menuBox.append(sep())
-  menuBox.append(makeRow(uiIcon("system-lock-screen"), t("bar.system-menu.lock"), false, () => {
+  menuBox.append(makeRow(uiIcon("nd-system-lock-screen"), t("bar.system-menu.lock"), false, () => {
     dispatchAction(() => { execAsync(["nidara-lock"]).catch(console.error) })
   }))
-  menuBox.append(makeRow(uiIcon("system-suspend"), t("bar.system-menu.suspend"), false, () =>
+  menuBox.append(makeRow(uiIcon("nd-system-suspend"), t("bar.system-menu.suspend"), false, () =>
     closeAndRun(["systemctl", "suspend"])
   ))
   menuBox.append(sep())
-  menuBox.append(makeRow(uiIcon("system-log-out"), t("bar.system-menu.logout"), true, () =>
-    showConfirm(uiIcon("system-log-out"), t("bar.system-menu.confirm.logout"), t("bar.system-menu.confirm.action.logout"), true,
+  menuBox.append(makeRow(uiIcon("nd-system-log-out"), t("bar.system-menu.logout"), true, () =>
+    showConfirm(uiIcon("nd-system-log-out"), t("bar.system-menu.confirm.logout"), t("bar.system-menu.confirm.action.logout"), true,
       () => closeAndRun(["uwsm", "stop"]))
   ))
-  menuBox.append(makeRow(uiIcon("system-reboot"), t("bar.system-menu.restart"), false, () =>
-    showConfirm(uiIcon("system-reboot"), t("bar.system-menu.confirm.restart"), t("bar.system-menu.confirm.action.restart"), false,
+  menuBox.append(makeRow(uiIcon("nd-system-reboot"), t("bar.system-menu.restart"), false, () =>
+    showConfirm(uiIcon("nd-system-reboot"), t("bar.system-menu.confirm.restart"), t("bar.system-menu.confirm.action.restart"), false,
       () => closeAndRun(["systemctl", "reboot"]))
   ))
-  menuBox.append(makeRow(uiIcon("system-shutdown"), t("bar.system-menu.shutdown"), true, () =>
-    showConfirm(uiIcon("system-shutdown"), t("bar.system-menu.confirm.shutdown"), t("bar.system-menu.confirm.action.shutdown"), true,
+  menuBox.append(makeRow(uiIcon("nd-system-shutdown"), t("bar.system-menu.shutdown"), true, () =>
+    showConfirm(uiIcon("nd-system-shutdown"), t("bar.system-menu.confirm.shutdown"), t("bar.system-menu.confirm.action.shutdown"), true,
       () => closeAndRun(["systemctl", "poweroff"]))
   ))
 

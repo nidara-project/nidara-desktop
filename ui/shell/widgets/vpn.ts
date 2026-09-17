@@ -127,7 +127,7 @@ function buildVpnContent(onClose: () => void): Gtk.Widget {
 
 // ── CC content ────────────────────────────────────────────────────────────────
 
-const getIcon = () => vpnActiveName ? uiIcon("network-vpn") : uiIcon("network-vpn-disconnected")
+const getIcon = () => vpnActiveName ? uiIcon("nd-network-vpn") : uiIcon("nd-network-vpn-disconnected")
 const getSub  = () => vpnActiveName ?? t("widget.vpn.sub.disconnected")
 
 function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
@@ -143,8 +143,8 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
 // ── Bar icon ──────────────────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    const image = new Gtk.Image({ gicon: uiIcon("network-vpn-disconnected"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
-    activeVpnName().then(name => { image.gicon = name ? uiIcon("network-vpn") : uiIcon("network-vpn-disconnected") })
+    const image = new Gtk.Image({ gicon: uiIcon("nd-network-vpn-disconnected"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+    activeVpnName().then(name => { image.gicon = name ? uiIcon("nd-network-vpn") : uiIcon("nd-network-vpn-disconnected") })
     return image
 }
 
@@ -161,7 +161,7 @@ const vpnWidget: AtomicWidget = {
     category: "system",
     barOrder: 50,
     name: t("widget.vpn.name"),
-    icon: uiIcon("network-vpn"),
+    icon: uiIcon("nd-network-vpn"),
     locations: ["bar", "cc"],
     defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.WIDE,

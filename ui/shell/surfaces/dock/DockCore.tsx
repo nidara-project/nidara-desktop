@@ -872,8 +872,8 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
                 // with trash contents via TrashService (full ↔ empty, in place).
                 // Theme-first; our shipped asset only when the theme has no trash at all.
                 icon_name: trashService.isEmpty
-                    ? ["user-trash", "trashcan-empty", "trash", iconAssetPath("user-trash")]
-                    : ["user-trash-full", "trashcan-full", "user-trash", "trash", iconAssetPath("user-trash")],
+                    ? ["user-trash", "trashcan-empty", "trash", iconAssetPath("nd-user-trash")]
+                    : ["user-trash-full", "trashcan-full", "user-trash", "trash", iconAssetPath("nd-user-trash")],
                 launch: () => execAsync("nautilus trash:///").catch(print)
             }
             configs.push({

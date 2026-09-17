@@ -120,7 +120,7 @@ export function renderMenuModel(
         }))
         if (opts.checked) {
             inner.append(new Gtk.Image({
-                gicon: uiIcon("emblem-default"),
+                gicon: uiIcon("nd-emblem-default"),
                 pixel_size: 15,
                 css_classes: ["nd-icon"],
                 valign: Gtk.Align.CENTER,

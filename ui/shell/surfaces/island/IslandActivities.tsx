@@ -165,7 +165,7 @@ function mediaActivity(): IslandActivity {
             makeGhost: makeArtGhost,
             getSource: () => ((compact as any).artDa as Gtk.Widget) ?? null,
         },
-        indicator: () => new Gtk.Image({ gicon: uiIcon("audio-x-generic"), pixel_size: 16, css_classes: ["nd-icon"] }),
+        indicator: () => new Gtk.Image({ gicon: uiIcon("nd-audio-x-generic"), pixel_size: 16, css_classes: ["nd-icon"] }),
         watch: (cb) => {
             changed = cb
             media.subscribe(rewire)
