@@ -782,11 +782,97 @@ hl.on("window.move_to_workspace", function(w, ws)
 end)
 
 hl.on("window.update_rules", function(w) placeFloatingGuarded(w, false) end)
+
+-- ── A monitor that goes away gives its floating windows back where they were ──
+--
+-- Turning the only monitor off and on again left every floating window exactly
+-- 1920 px to the LEFT — often entirely off the screen, with no way to reach it.
+-- Measured on the host after one power cycle: three of six windows sat with their
+-- right edge at 2551 − 1920, i.e. flush against the usable area's right margin
+-- before the shift. 1920 is the width of Hyprland's headless FALLBACK output.
+--
+-- 🔑 The compositor's own arithmetic, read in 0.56.2 (and unchanged in `main` of
+-- 2026-09-07). With no other monitor to move them to, `CMonitor::onDisconnect`
+-- leaves the workspaces orphaned and the windows where they are; FALLBACK
+-- (1920x1080) takes x = 0. The monitor that comes back is a NEW `CMonitor`, whose
+-- position starts as the "unset" sentinel (-1,-1):
+--   1. `onConnect` moves the returning workspaces onto it BEFORE arranging it, so
+--      there is no old monitor to translate from and the windows keep their x.
+--   2. `arrange()` places it `auto`, right of FALLBACK, at x = 1920 — and
+--      `CMonitor::moveTo` skips translating windows when the old position is the
+--      sentinel. The windows now sit 1920 px left of their monitor.
+--   3. FALLBACK is destroyed, the next `arrange()` moves the monitor back to 0, and
+--      THIS time `moveTo` translates every floating window by the delta, −1920.
+-- Tiled windows are re-laid-out by the layout and never show it.
+--
+-- ⚠️ No clamp can fix this after the fact: nothing records where the window WAS,
+-- and pulling it back to the edge is not giving it back. So we take the snapshot
+-- ourselves at the one moment the geometry is still right — `monitor.removed`
+-- fires after the compositor has moved nothing — and put it back relative to the
+-- monitor once the layout has SETTLED, i.e. once no FALLBACK remains. Every
+-- `monitor.layout_changed` before that is an intermediate arrangement, and the
+-- restore writes absolute positions, so being early would only be undone.
+--
+-- Only windows still INSIDE the removed monitor's box are recorded. With a second
+-- monitor alive, Hyprland moves the workspaces onto it before `removed` fires and
+-- translates them itself; those windows are no longer inside the box, so this
+-- stays out of a path it was never measured on.
+local FALLBACK_OUTPUT = "FALLBACK"
+local offMonitor = {}   -- [monitor name] = { [selector] = { dx, dy } }
+
+hl.on("monitor.removed", function(mon)
+    if not mon or not mon.name or mon.name == FALLBACK_OUTPUT then return end
+    local ok, err = pcall(function()
+        local mx, my, mw, mh = mon.x or 0, mon.y or 0, mon.width or 0, mon.height or 0
+        if mw <= 0 or mh <= 0 then return end
+        local saved = {}
+        for _, w in ipairs(hl.get_windows() or {}) do
+            if w.floating and w.address and w.at and w.size and (w.fullscreen or 0) == 0 then
+                local cx, cy = w.at.x + w.size.x / 2, w.at.y + w.size.y / 2
+                if cx >= mx and cx < mx + mw and cy >= my and cy < my + mh then
+                    saved["address:" .. w.address] = { w.at.x - mx, w.at.y - my }
+                end
+            end
+        end
+        offMonitor[mon.name] = saved
+    end)
+    if not ok then print("Nidara: floating snapshot failed: " .. tostring(err)) end
+end)
+
+hl.on("monitor.layout_changed", function()
+    if next(offMonitor) == nil then return end
+    local ok, err = pcall(function()
+        local byName = {}
+        for _, m in ipairs(hl.get_monitors() or {}) do
+            if m.name == FALLBACK_OUTPUT then return end
+            byName[m.name] = m
+        end
+        for name, saved in pairs(offMonitor) do
+            local mon = byName[name]
+            if mon then
+                offMonitor[name] = nil
+                for _, w in ipairs(hl.get_windows() or {}) do
+                    local sel = "address:" .. (w.address or "")
+                    local rel = saved[sel]
+                    local wm  = w.monitor
+                    if rel and w.floating and wm and wm.name == name then
+                        hl.dispatch(hl.dsp.window.move({
+                            x = math.floor(mon.x + rel[1]), y = math.floor(mon.y + rel[2]), window = sel,
+                        }))
+                    end
+                end
+            end
+        end
+    end)
+    if not ok then print("Nidara: floating restore failed: " .. tostring(err)) end
+end)
+
 hl.on("window.destroy",      function(w)
     if not w or not w.address then return end
     local sel = "address:" .. w.address
     lastAsk[sel]  = nil
     fsState[sel]  = nil
+    for _, saved in pairs(offMonitor) do saved[sel] = nil end
 end)
 
 
