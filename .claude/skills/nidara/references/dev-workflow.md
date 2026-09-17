@@ -879,6 +879,19 @@ file (`:599`). So the measurement wins and the medium's list stays as the floor.
 live system before `minimal_installation()` pacstraps (`scripts/guided.py:100-103`), which is what
 makes it affect the download rather than only the installed machine's config file.
 
+⚠️ **"Prepended" means into the LIVE file, every run, and nothing takes it back out.** A second
+attempt in the same Live session stacked a second `## Custom Servers` block over the first — three
+after three attempts (VM, 2026-09-17) — and pacstrap copies that file into the installed system.
+`prepareLiveMirrorlist` (`lib/mirrors.ts`) strips the LEADING blocks before each spawn.
+
+⚠️ **The length of that list is a deadline.** pacman tries every server in turn with a 10 s connect
+timeout, so 431 of them is why a stalled download took past 20 minutes to fail. The same function
+caps the fallback at 20 for the duration of the install — taken EVENLY through the file, because the
+medium's order is alphabetical by country and the first twenty are all one side of the world — and
+`restoreTargetMirrorlist` writes the full list (measured servers still on top) into the installed
+system at the end, where the length costs nobody anything. Measured in a VM: 425 → 23 servers
+during, 428 after.
+
 ⚠️ **The country only narrows, it does not decide** — the same rule the region page follows.
 Measured 2026-09-08: `--country ES` takes **4.5 s**, worldwide takes **27.6 s**, and a country with
 no mirrors (`--country BO`) exits **1** with an empty stdout and `error: no mirrors found` on stderr.
@@ -1062,7 +1075,10 @@ Measured in a VM (2026-09-17, `lib/stall.ts` has the detail):
   all databases`). The page says the connection stopped responding and to start again if the install stops. It
   does not promise a recovery: restored 108 s into a package-download stall, the install still
   failed (skipped mirrors, then HTTP 416 on the resumed `.part` files) — no stalled run in four
-  recovered.
+  recovered. Beside the warning is a **Stop the installation** button (owner's call: the person
+  decides, not a timer). It kills archinstall from the other end — our child is `sudo`, so
+  `force_exit` would kill sudo and leave the pacstrap running as root — then pacstrap and pacman,
+  and the disk is released as on any other failure.
 - **When** it stalls decides how long it lasts: during the PACKAGE download it failed on its own at
   ~3 min (twice) — each mirror is skipped after a few timeouts and archinstall's pacstrap retries
   fail on the sync at once; during the DATABASE sync it ran past 20 min. That is why the quiet

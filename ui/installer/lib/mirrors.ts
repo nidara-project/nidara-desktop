@@ -111,6 +111,156 @@ export function parseServers(stdout: string): string[] {
   return out
 }
 
+/** The medium's mirrorlist, which archinstall edits in place. */
+const LIVE_MIRRORLIST = "/etc/pacman.d/mirrorlist"
+
+/**
+ * The medium's mirrorlist without the `## Custom Servers` blocks earlier runs
+ * put on top of it.
+ *
+ * ⚠️ archinstall writes `custom_servers` into the LIVE file, prepended, every run
+ * (`installer.py:605-610`: `f'{custom_servers}\n\n{content}'`, the block made by
+ * `custom_servers_config()` — `## Custom Servers` then one `Server = ` per line).
+ * Nothing takes it back out, so a second attempt in the same Live session stacked
+ * a second block over the first, and pacstrap copies that file into the installed
+ * system: three blocks were measured after three attempts (VM, 2026-09-17).
+ *
+ * Only LEADING blocks are removed, because that is the only place archinstall
+ * puts them; anything further down the file is the medium's own list and is left
+ * byte for byte.
+ */
+export function withoutCustomServers(text: string): string {
+  const lines = text.split("\n")
+  let i = 0
+  while (lines[i] === "## Custom Servers") {
+    i++
+    while (i < lines.length && /^Server\s*=/.test(lines[i])) i++
+    while (i < lines.length && lines[i].trim() === "") i++
+  }
+  return i === 0 ? text : lines.slice(i).join("\n")
+}
+
+/**
+ * How many of the medium's own servers stay in the list DURING the install.
+ *
+ * ⚠️ This is a deadline, not a quality setting. The medium ships 431 servers,
+ * every one uncommented, and pacman walks them one at a time with a 10 s
+ * connect timeout — so a connection that goes quiet mid-install took past 20
+ * minutes to fail while the page could only say "Installing the base system"
+ * (VM, 2026-09-17). Twenty servers put the worst case near three minutes, which
+ * is roughly what a stall during the package download already costs.
+ *
+ * The measured servers (`custom_servers`) go ON TOP of these, so what this
+ * shortens is the FALLBACK, and only for the duration of the install: the full
+ * list is written back to the installed system afterwards
+ * (`restoreTargetMirrorlist`).
+ */
+const FALLBACK_SERVERS_DURING_INSTALL = 20
+
+/**
+ * The medium's list cut down to at most `max` servers, taken EVENLY through the
+ * file rather than from the top.
+ *
+ * The medium's order is alphabetical by country (`## Albania`, `## Argentina`,
+ * `## Australia`…), so the first twenty are twenty servers on one side of the
+ * world. Spreading the pick keeps the fallback as geographically mixed as the
+ * list it comes from, which is all a fallback has to be.
+ */
+export function cappedMirrorlist(text: string, max = FALLBACK_SERVERS_DURING_INSTALL): string {
+  const servers = text.split("\n").filter(l => /^\s*Server\s*=/.test(l))
+  if (servers.length <= max) return text
+  const kept: string[] = []
+  for (let i = 0; i < max; i++) {
+    kept.push(servers[Math.round((i * (servers.length - 1)) / (max - 1))])
+  }
+  return [
+    "# Shortened by the Nidara installer for the duration of the install: pacman",
+    "# tries every server in turn, so a long list is a long wait when a connection",
+    `# goes quiet. ${servers.length} servers, spread evenly, became ${max}.`,
+    "# The full list is restored to the installed system when the install finishes.",
+    "",
+    ...kept,
+    "",
+  ].join("\n")
+}
+
+function writeAsRoot(path: string, content: string): void {
+  const [fd, tmp] = GLib.file_open_tmp("nidara-mirrorlist-XXXXXX")
+  GLib.close(fd)
+  GLib.file_set_contents(tmp, content)
+  const cmd = ["install", "-m", "644", "-o", "root", "-g", "root", tmp, path]
+  const full = GLib.get_user_name() === "root" ? cmd : ["sudo", "-n", ...cmd]
+  const proc = Gio.Subprocess.new(full, Gio.SubprocessFlags.STDERR_PIPE)
+  const [, , stderr] = proc.communicate_utf8(null, null)
+  try { Gio.File.new_for_path(tmp).delete(null) } catch {}
+  if (!proc.get_successful()) throw new Error(stderr?.trim() || `could not write ${path}`)
+}
+
+/**
+ * Prepare the medium's mirrorlist for one attempt, and hand back the list as it
+ * was so the installed system can have it whole.
+ *
+ * Two edits, both to the LIVE file, because that is the file pacstrap reads:
+ * the `## Custom Servers` blocks earlier attempts left behind come out
+ * (archinstall prepends and never removes), and the fallback is capped so a
+ * stalled download cannot take twenty minutes to fail.
+ *
+ * Returns the cleaned FULL list, or null when there is nothing to restore later.
+ * Every failure is logged and swallowed: a list we could not rewrite is the list
+ * we had, which installs fine.
+ */
+export function prepareLiveMirrorlist(arm: boolean, appendLog: (msg: string) => void): string | null {
+  if (!arm) return null
+  try {
+    const [ok, bytes] = GLib.file_get_contents(LIVE_MIRRORLIST)
+    if (!ok) return null
+    const text = new TextDecoder().decode(bytes)
+    const cleaned = withoutCustomServers(text)
+    if (cleaned !== text) appendLog("[MIRRORS] Removed the servers an earlier attempt added to the mirrorlist.")
+    const capped = cappedMirrorlist(cleaned)
+    if (capped === cleaned) {
+      if (cleaned !== text) writeAsRoot(LIVE_MIRRORLIST, cleaned)
+      return cleaned
+    }
+    writeAsRoot(LIVE_MIRRORLIST, capped)
+    appendLog(`[MIRRORS] Using ${FALLBACK_SERVERS_DURING_INSTALL} fallback servers during the install; the full list goes to the installed system.`)
+    return cleaned
+  } catch (e: any) {
+    appendLog(`[MIRRORS] Could not rewrite the mirrorlist: ${e?.message ?? e}`)
+    return null
+  }
+}
+
+/**
+ * After the install: give the installed system the medium's WHOLE list back,
+ * with this run's measured servers still on top.
+ *
+ * pacstrap copies the live file, so without this the installed machine would
+ * keep the shortened list forever — and there the length costs nothing, because
+ * nobody is watching a progress bar while pacman works down it.
+ */
+export function restoreTargetMirrorlist(
+  arm: boolean,
+  fullList: string | null,
+  measured: string[],
+  appendLog: (msg: string) => void,
+): void {
+  if (!arm || fullList === null) return
+  const target = `/mnt${LIVE_MIRRORLIST}`
+  if (!GLib.file_test(target, GLib.FileTest.EXISTS)) return
+  try {
+    // The same shape archinstall writes, so the file reads as one file and a
+    // later run of this code finds the block where it expects it.
+    const block = measured.length > 0
+      ? `## Custom Servers\n${measured.map(url => `Server = ${url}`).join("\n")}\n\n`
+      : ""
+    writeAsRoot(target, block + withoutCustomServers(fullList))
+    appendLog("[MIRRORS] The installed system has the full mirrorlist, measured servers first.")
+  } catch (e: any) {
+    appendLog(`[MIRRORS] Could not restore the full mirrorlist: ${e?.message ?? e}`)
+  }
+}
+
 /** Run one reflector, resolving to its stdout, or to "" for any failure at all. */
 function runReflector(args: string[], deadline: number): Promise<string> {
   return new Promise(resolve => {

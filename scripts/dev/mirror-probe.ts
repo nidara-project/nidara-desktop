@@ -16,7 +16,7 @@
 // like a successful measurement and is the opposite of one.
 
 import GLib from "gi://GLib"
-import { reflectorArgs, parseServers } from "../../ui/installer/lib/mirrors"
+import { cappedMirrorlist, reflectorArgs, parseServers, withoutCustomServers } from "../../ui/installer/lib/mirrors"
 import { assemblePlan } from "../../ui/installer/lib/plan"
 import type { Answers } from "../../ui/installer/lib/answers"
 import type { BaseConfigResult } from "../../ui/installer/lib/base-config"
@@ -186,6 +186,63 @@ print("\n── optional repositories (#492) ───────────�
     print("   ok           assemblePlan preserves multilib alongside measured mirrors")
   } else {
     fail("multilib with measured mirrors", `expected multilib preserved, got: ${JSON.stringify(optWithMirrors)}`)
+  }
+}
+
+print("\n── earlier attempts' custom servers ─────────────────────────────────────\n")
+
+{
+  // The medium's own list, as it ships: a header, then servers.
+  const STOCK = "##\n## Arch Linux repository mirrorlist\n##\n\n## Worldwide\nServer = https://geo.mirror.pkgbuild.com/$repo/os/$arch\n"
+  // What archinstall writes, verbatim shape: `${block}\n\n${content}`.
+  const block = (urls: string[]) => ["## Custom Servers", ...urls.map(u => `Server = ${u}`)].join("\n")
+  const prepend = (content: string, urls: string[]) => `${block(urls)}\n\n${content}`
+  const once = prepend(STOCK, ["https://a.example/$repo/os/$arch", "https://b.example/$repo/os/$arch"])
+  // Three attempts, as measured on the VM.
+  const thrice = prepend(prepend(once, ["https://c.example/$repo/os/$arch"]), ["https://d.example/$repo/os/$arch"])
+  const cases: [string, string, string][] = [
+    ["a stock list is left byte for byte", withoutCustomServers(STOCK), STOCK],
+    ["one earlier attempt's block is removed", withoutCustomServers(once), STOCK],
+    ["three stacked blocks are all removed", withoutCustomServers(thrice), STOCK],
+    ["a Custom Servers header NOT at the top is the medium's own and stays",
+      withoutCustomServers(STOCK + "\n## Custom Servers\nServer = https://x.example\n"),
+      STOCK + "\n## Custom Servers\nServer = https://x.example\n"],
+  ]
+  for (const [name, got, want] of cases) {
+    if (got === want) print(`   ok           ${name}`)
+    else fail(name, `expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`)
+  }
+}
+
+print("\n── the fallback the install waits on ────────────────────────────────────\n")
+
+{
+  // The medium's shape: country headers, alphabetical, everything uncommented.
+  const many = (n: number) => Array.from({ length: n }, (_, i) =>
+    `## Country ${i}\nServer = https://m${i}.example/$repo/os/$arch`).join("\n") + "\n"
+  const MEDIUM = many(431)
+  const capped = cappedMirrorlist(MEDIUM)
+  const servers = (t: string) => t.split("\n").filter(l => /^Server\s*=/.test(l))
+
+  const checks: [string, boolean, string][] = [
+    ["431 servers become 20", servers(capped).length === 20, `${servers(capped).length}`],
+    ["the first and the last survive, so the spread covers the file",
+      servers(capped)[0] === "Server = https://m0.example/$repo/os/$arch"
+      && servers(capped)[19] === "Server = https://m430.example/$repo/os/$arch",
+      JSON.stringify([servers(capped)[0], servers(capped)[19]])],
+    ["they are distinct — an even spread, not the same one twenty times",
+      new Set(servers(capped)).size === 20, `${new Set(servers(capped)).size}`],
+    ["they keep the file's order", servers(capped).join("\n") === [...servers(capped)].sort(
+      (a, b) => Number(/m(\d+)\./.exec(a)![1]) - Number(/m(\d+)\./.exec(b)![1])).join("\n"), ""],
+    ["the file says who shortened it and that the full list comes back",
+      capped.includes("Nidara installer") && capped.includes("restored to the installed system"), ""],
+    // Shorter lists are nobody's problem: a medium with twelve mirrors is left alone.
+    ["a list already under the cap is untouched", cappedMirrorlist(many(12)) === many(12), ""],
+    ["exactly the cap is untouched", cappedMirrorlist(many(20)) === many(20), ""],
+  ]
+  for (const [name, ok, got] of checks) {
+    if (ok) print(`   ok           ${name}`)
+    else fail(name, got)
   }
 }
 
