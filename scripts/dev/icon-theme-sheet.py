@@ -15,7 +15,7 @@ import os, subprocess, sys, tempfile
 
 tsv, prefix = sys.argv[1], sys.argv[2]
 per = int(sys.argv[3]) if len(sys.argv) > 3 else 25
-ASSETS = "ui/shell/assets/icons/hicolor/scalable/actions"
+ASSETS = "ui/shell/assets/icons/nidara/scalable/actions"
 
 names, themes, res = [], [], {}
 for line in open(tsv):

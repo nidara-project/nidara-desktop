@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M 9.3333 11.3333 H 3.3333" class="foreground-stroke transparent-fill" />
+  <path d="M 12.6667 4.6667 h -6" class="foreground-stroke transparent-fill" />
+  <circle cx="11.3333" cy="11.3333" r="2" class="foreground-stroke transparent-fill" />
+  <circle cx="4.6667" cy="4.6667" r="2" class="foreground-stroke transparent-fill" />
+</svg>

@@ -29,16 +29,16 @@
 # icons for real, and nothing appears on the user's screen.
 #
 # Usage: scripts/dev/icon-registry-probe.sh [theme-directory]
-#   A theme that declares the spec. Defaults to the installed nidara-symbolic; a
-#   theme you have just built works the same (`build-icon-theme.py --out <dir>`).
+#   A theme that declares the spec. Defaults to Nidara's own, in this checkout
+#   (ui/shell/assets/icons/nidara); a theme you are making works the same.
 #   It is put on a private XDG_DATA_HOME and asked for by its directory name, so
 #   nothing gets installed anywhere.
 #
 # Needs: gjs, esbuild, cage, glib-compile-schemas. No display of your own.
 set -euo pipefail
 
-arg="${1:-/usr/share/icons/nidara-symbolic}"
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
+arg="${1:-$repo/ui/shell/assets/icons/nidara}"
 work="$(mktemp -d -t nidara-icon-probe-XXXXXX)"
 trap 'rm -rf "$work"' EXIT
 

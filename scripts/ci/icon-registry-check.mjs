@@ -8,7 +8,7 @@
  *
  * `core/Icons.ts` lists the icon names the shell, the greeter, the lock screen
  * and the installer ask for. Since 2026-09-17 every one of them is an `nd-` name
- * of the Nidara icon spec (#587), defined in `ui/shell/assets/icons/SPEC.md`. A
+ * of the Nidara icon spec (#587), defined in `ui/shell/assets/icons/nidara/SPEC.md`. A
  * name is looked for in the user's interface icon theme — only one that declares
  * the spec — first, and in `ui/shell/assets/…/<name>-symbolic.svg` second, so the
  * shipped drawing is the end of the chain and the chain must never end in a gap.
@@ -27,23 +27,23 @@
  *      a name somebody forgot to list;
  *   3. the spec and the code say the same thing: every name is `nd-`, SPEC.md's
  *      table holds exactly the names in ICON_NAMES, and the spec version is the
- *      same in SPEC.md, `ICON_SPEC_VERSION` and the theme generator. The spec is
+ *      same in SPEC.md, `ICON_SPEC_VERSION` and the Nidara theme's index.theme
+ *      (without it Settings would not list our own theme). The spec is
  *      what theme authors build against — a name the shell asks for that the spec
  *      does not list is an icon no theme will ever draw.
  *
- * With `--theme <dir>` it also checks a BUILT theme — the one
- * `scripts/icons/build-icon-theme.py` produces. That theme is Nidara's own, so it
- * must declare the spec version in its `index.theme` (or Settings would not list
- * it) and every name must resolve in it, in BOTH size directories. The second
- * half matters on its own: the icon study's first alias pass wrote the standard
- * names only into `scalable/`, and at 16px GTK then silently drew the thin one.
+ * With `--theme <dir>` it also checks an icon theme DIRECTORY as a spec theme:
+ * it declares the spec version, and every name resolves in it in BOTH size
+ * directories. CI runs it on `ui/shell/assets/icons/nidara`, our own theme, which
+ * must be complete. The second half matters on its own: an earlier alias pass
+ * wrote names only into `scalable/`, and at 16px GTK then silently drew the thin one.
  */
 
 import { readFileSync, readdirSync, existsSync } from "node:fs"
 import { join } from "node:path"
 
 const REGISTRY = "ui/shell/core/Icons.ts"
-const ASSETS = "ui/shell/assets/icons/hicolor/scalable/actions"
+const ASSETS = "ui/shell/assets/icons/nidara/scalable/actions"
 
 let failed = false
 const log = s => console.log(s)
@@ -84,8 +84,8 @@ for (const file of files) {
 if (files.every(f => used.has(f))) pass(`${files.length} files, all asked for`)
 
 // ── 4. The spec and the code agree ───────────────────────────────────────────
-const SPEC = "ui/shell/assets/icons/SPEC.md"
-const GENERATOR = "scripts/icons/build-icon-theme.py"
+const SPEC = "ui/shell/assets/icons/nidara/SPEC.md"
+const THEME_INDEX = "ui/shell/assets/icons/nidara/index.theme"
 log("\nThe spec lists exactly the names the code asks for:")
 for (const name of names) {
     if (!name.startsWith("nd-")) error(`"${name}" is not an nd- name. Interface icons use Nidara's icon spec only; freedesktop names belong to APP icons.`)
@@ -103,7 +103,7 @@ if (names.every(n => inSpec.has(n)) && specNames.every(n => inCode.has(n)) && du
 const versions = {
     [SPEC]: specSrc.match(/^\*\*Version (\d+)\.\*\*/m)?.[1],
     [REGISTRY]: src.match(/export const ICON_SPEC_VERSION = (\d+)/)?.[1],
-    [GENERATOR]: readFileSync(GENERATOR, "utf8").match(/^NIDARA_ICON_SPEC = (\d+)/m)?.[1],
+    [THEME_INDEX]: readFileSync(THEME_INDEX, "utf8").match(/^X-Nidara-Icon-Spec=(\d+)$/m)?.[1],
 }
 const specVersion = versions[REGISTRY]
 for (const [file, v] of Object.entries(versions)) {

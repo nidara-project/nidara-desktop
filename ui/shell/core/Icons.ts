@@ -17,11 +17,20 @@ import { SHELL_ROOT } from "./Paths"
  *      user's APP icon theme (`org.gnome.desktop.interface icon-theme`), which is
  *      what the dock, the tray and the app grid resolve against. GTK gives one
  *      theme per process, and these are the two we need at once;
- *   2. our own shipped drawing, as the last link — `assets/icons/hicolor/
- *      scalable/actions/<name>-symbolic.svg`, named with that SAME name. With no
- *      interface theme set, which is the default, every icon resolves here.
+ *   2. our own drawing, as the last link — `assets/icons/nidara/scalable/
+ *      actions/<name>-symbolic.svg`, named with that SAME name. With no interface
+ *      theme set, which is the default, every icon resolves here.
  *
- * 🔑 Every name is OURS — `nd-` — and is defined in `assets/icons/SPEC.md`, which
+ * `assets/icons/nidara/` IS the Nidara icon theme — the spec's reference theme, and
+ * the only copy of these drawings. It is a complete theme directory (index.theme,
+ * both sizes, SPEC.md), installed to /usr/share/icons/nidara as a symlink to itself,
+ * which is where a theme author finds it to start from. Reading the files straight
+ * from it, rather than through a `Gtk.IconTheme`, keeps the default path free of any
+ * lookup; the result is the same file. It used to be two copies — these files and a
+ * `nidara-symbolic` theme generated from Lucide at install — and nine of the 83
+ * drawings had drifted apart between them (owner: one copy, 2026-09-17).
+ *
+ * 🔑 Every name is OURS — `nd-` — and is defined in `assets/icons/nidara/SPEC.md`, which
  * says what each one represents. They used to be freedesktop names, asked of
  * whatever theme the user picked, and that kept drawing the wrong THING: dark mode
  * came out as a suspend button, the Control Centre as a toolbox, the bell as a
@@ -54,7 +63,7 @@ import { SHELL_ROOT } from "./Paths"
 
 // Assets resolve against SHELL_ROOT (source tree in dev, /usr/share in prod).
 // See core/Paths.ts. install.sh ships assets/ into both.
-const DIR = `${SHELL_ROOT}/assets/icons/hicolor/scalable/actions`
+const DIR = `${SHELL_ROOT}/assets/icons/nidara/scalable/actions`
 const f = (name: string) => Gio.FileIcon.new(Gio.File.new_for_path(`${DIR}/${name}-symbolic.svg`))
 
 /** Absolute path of a shipped asset icon — for chains that fall back to our
@@ -66,7 +75,7 @@ export const iconAssetPath = (name: string) => `${DIR}/${name}-symbolic.svg`
  *
  * This is a LIST, not a mapping — it exists so the compiler can refuse a name we
  * do not ship and so `scripts/ci/icon-registry-check.mjs` can check that each one
- * has a drawing and a line in `assets/icons/SPEC.md`. Adding one is adding all
+ * has a drawing and a line in `assets/icons/nidara/SPEC.md`. Adding one is adding all
  * three. Name by MEANING, one meaning per name: two uses sharing a name become
  * the same glyph in every theme made for the spec.
  */

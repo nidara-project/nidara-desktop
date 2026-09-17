@@ -70,9 +70,11 @@ You do not need every name. **Any icon your theme lacks, or that draws nothing, 
 Nidara's own drawing** — a theme that redraws ten icons is a valid theme. A theme made for an
 earlier version of this spec keeps working; the names added since fall back the same way.
 
-Nidara's own drawings are a complete reference: `ui/shell/assets/icons/hicolor/scalable/actions/`
-in the repository, and the `nidara-symbolic` theme (`/usr/share/icons/nidara-symbolic`, package
-`nidara-icon-theme`) carries all of them in both sizes.
+**The Nidara theme is the reference, and a template.** It is complete, in both sizes, and it is
+the theme this file lives in: `/usr/share/icons/nidara` on an installed system,
+`ui/shell/assets/icons/nidara/` in the repository. Copy the directory, rename it, change `Name=`,
+and redraw what you want — delete the rest, and those icons fall back to Nidara's. Its drawings
+come from [Lucide](https://lucide.dev) (ISC, see `LICENSE`); keep that notice if you keep any of them.
 
 ## Names
 

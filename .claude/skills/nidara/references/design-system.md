@@ -2173,12 +2173,12 @@ only when someone boots a VM). The `styles` job now compiles it too.
   `uiIcon("nd-network-wireless")` looks for that name in the user's interface icon theme (GSettings
   `org.nidara.appearance interface-icon-theme`, empty by default — chosen in Settings →
   Appearance → *Interface icons*, config key `appearance.interfaceIconTheme`, where the empty
-  value is spelled `nidara` and `nidara-symbolic` is left off the list because it IS our drawings,
-  packaged) and then in our own
-  `assets/icons/hicolor/scalable/actions/nd-network-wireless-symbolic.svg` — the same name, two
+  value is spelled `nidara` — our own theme, so it is listed once, first, and filtered out of
+  what the scan finds) and then in our own
+  `assets/icons/nidara/scalable/actions/nd-network-wireless-symbolic.svg` — the same name, two
   places. `core/Icons.ts` holds `ICON_NAMES`, a flat LIST that exists so the compiler can refuse a
   name we do not ship. **Adding an icon is three things: the name there, the drawing beside it,
-  and its row in `ui/shell/assets/icons/SPEC.md`** — CI (`icon-registry-check.mjs`) fails on any
+  and its row in `ui/shell/assets/icons/nidara/SPEC.md`** — CI (`icon-registry-check.mjs`) fails on any
   one missing.
   - **why our own names (owner decision, 2026-09-17).** Until then these were freedesktop names,
     asked of whatever theme the user picked, and a name kept drawing a different THING in
@@ -2243,30 +2243,36 @@ only when someone boots a VM). The `styles` job now compiles it too.
     off-screen under `cage` — no theme, the theme, a misspelled name, and the same theme with the
     `X-Nidara-Icon-Spec` line removed — and fails unless those runs disagree the way they must,
     including what Settings would list.
-- **The shipped theme is BUILT, never committed.** `scripts/icons/build-icon-theme.py` turns the
-  pinned `lucide-static` (exact version in `ui/shell/package.json` — a theme whose drawings move
-  under it is not a theme) into `nidara-symbolic`: 1839 drawings, ~15 MB, the spec's `nd-` names plus freedesktop names from
-  `scripts/icons/aliases.csv`, declaring `X-Nidara-Icon-Spec`, in `scalable/actions` **and** `16x16/actions`. `install.sh` builds it
-  into `/usr/share/icons`, the PKGBUILD ships it as the separate `nidara-icon-theme` package (its
-  licence is Lucide's ISC/MIT, not our GPL), and CI rebuilds it twice to prove the build is
-  deterministic. Three things the generator exists to get right:
-  - **symbolic classes, from the EFFECTIVE fill.** A shape's own `fill`, else the root's — which is
-    where `record-stop` keeps it. `foreground-stroke` only when the stroke is `currentColor`, so
-    `record`'s filled dot (which carries `stroke="none"`) does not get GTK's forced 2-unit stroke
-    laid over it. Without classes, a stroke-only icon renders as a filled blob.
-    The same converter produced the shell's own `assets/icons/hicolor/scalable/actions/*-symbolic.svg`
-    — measured against the previous inverted rendering, the two are pixel-identical for `wifi` and
-    `battery`, 5e-06 RMSE for `bell` and 0.06% for `record` (the filled dot).
+- **The Nidara icon theme is COMMITTED, and it is the only copy.** `ui/shell/assets/icons/nidara/`
+  is a complete theme directory — `index.theme` (declaring `X-Nidara-Icon-Spec`), `scalable/actions`,
+  `16x16/actions`, `SPEC.md`, Lucide's `LICENSE` — and it is at once what the shell draws, what the
+  greeter/lock/installer read, and the spec's reference theme that authors copy. Installed, it is
+  linked as `/usr/share/icons/nidara` (install.sh and the PKGBUILD both make the symlink), so it sits
+  where themes are found with no second copy. **Do not reintroduce a generated theme.** Until
+  2026-09-17 a `nidara-symbolic` theme was rebuilt from the whole of `lucide-static` at install
+  (1839 drawings, ~15 MB, its own `nidara-icon-theme` package), and 9 of the 83 drawings had
+  silently drifted from the committed ones — owner: one copy. The name is plain `nidara`, not
+  `-symbolic`, to leave room for app icons of our own later; note `~/.local/share/icons/nidara/`
+  already exists as the per-user APP icon override dir (`AppService`), with no `index.theme` of its
+  own, so GTK and `specIconThemes()` read the system one. The drawings are Lucide's, so the package
+  licence is `GPL-3.0-only ISC MIT`.
+  `scripts/icons/nidara-icons.py` maintains it: **`add <lucide.svg> <nd-name>`** converts a stroke SVG
+  into both sizes; **`sync`** rewrites `16x16/actions` from `scalable/actions` (the scalable file is
+  THE drawing — edit that, then sync); CI runs **`sync --check`** plus `icon-registry-check.mjs --theme
+  ui/shell/assets/icons/nidara`. What the conversion exists to get right:
+  - **symbolic classes, from the EFFECTIVE fill.** A shape's own `fill`, else the root's.
+    `foreground-stroke` only when the stroke is `currentColor`, so a filled dot carrying
+    `stroke="none"` does not get GTK's forced 2-unit stroke laid over it. Without classes, a
+    stroke-only icon renders as a filled blob. **A shape that already has symbolic classes keeps
+    them** — in a converted file the class is the only place the intent survives: re-deriving
+    `nd-media-playback-stop` from its `fill="none"` root turned the filled square hollow.
   - **the 16-unit variant, for a real 2px stroke in the bar.** GTK forces symbolic strokes to 2 SVG
     *user units*, so a 24-unit drawing at 16px strokes 1.33px. A `<g transform="scale(…)">` does
     NOT fix it — the stroke scales too; the coordinates have to be rewritten.
     ⚠️ Measured: that variant only wins at **12–16px, scale 1**. At 18px, and at every size on a
     scale-2 display, GTK takes the scalable one. `Type=Threshold` does not widen the band (tried,
-    no effect). Nidara's own drawings go in `scripts/icons/nidara/` and win over Lucide's.
-  - **aliases in BOTH size directories.** The study's first pass wrote the standard names only into
-    `scalable/`, so at 16px GTK silently drew the thin variant. The generator refuses to finish
-    with a broken link, and `icon-registry-check.mjs --theme <dir>` fails if any concept is missing
-    from either size.
+    no effect). ⚠️ And the shell's own path never uses it today: `uiIcon` reads the scalable file
+    straight from disk (see `ICON_SIZE` in `Icons.ts`).
 - **NEVER put `nd-icon` on a third-party APP icon** — only on our own monochrome UI glyphs.
   `.nd-icon` is `color: var(--nidara-text)`; on full-colour app artwork a symbolic recolour flattens
   every colour to one. It was `-gtk-icon-filter: invert(1)` before #587, which handed back a photo

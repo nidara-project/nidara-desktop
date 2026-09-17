@@ -119,7 +119,7 @@ const CSS = GLib.getenv("CSS") || `${REPO}/ui/greeter/style.css`
 const BG = GLib.getenv("BG") || "#1b2430"
 const SCOPE = GLib.getenv("SCOPE") || "greeter"
 // Shipped Lucide glyphs, resolved exactly as ui/lib/icons.ts does at runtime.
-const ICON_DIR = `${GLib.getenv("NIDARA_SHELL_ROOT") ?? "/usr/share/nidara/ui/shell"}/assets/icons/hicolor/scalable/actions`
+const ICON_DIR = `${GLib.getenv("NIDARA_SHELL_ROOT") ?? "/usr/share/nidara/ui/shell"}/assets/icons/nidara/scalable/actions`
 const W = parseInt(GLib.getenv("W") || "1280", 10)
 const H = parseInt(GLib.getenv("H") || "800", 10)
 const LOCALE = GLib.getenv("LOCALE") || "es"

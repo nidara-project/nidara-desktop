@@ -43,8 +43,8 @@ if (!themes.length) {
         try { e = GLib.Dir.open(dir, 0) } catch { continue }
         let n
         while ((n = e.read_name())) {
-            // nidara-symbolic IS the first column (our drawings), so it is not repeated.
-            if (["default", "hicolor", "nidara", "nidara-symbolic"].includes(n)) continue
+            // nidara IS the first column (our drawings), so it is not repeated.
+            if (["default", "hicolor", "nidara"].includes(n)) continue
             const index = `${dir}/${n}/index.theme`
             if (!GLib.file_test(index, GLib.FileTest.EXISTS)) continue
             try {

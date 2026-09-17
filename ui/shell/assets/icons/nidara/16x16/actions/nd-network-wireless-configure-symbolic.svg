@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="m 9.5367 13.02 0.6153 -0.2547" class="foreground-stroke transparent-fill" />
+  <path d="m 10.152 11.2347 -0.6153 -0.2553" class="foreground-stroke transparent-fill" />
+  <path d="m 11.2347 10.152 -0.2553 -0.6153" class="foreground-stroke transparent-fill" />
+  <path d="m 11.2347 13.848 -0.2553 0.616" class="foreground-stroke transparent-fill" />
+  <path d="m 12.7653 10.152 0.2553 -0.6153" class="foreground-stroke transparent-fill" />
+  <path d="m 13.02 14.464 -0.2547 -0.616" class="foreground-stroke transparent-fill" />
+  <path d="M 1.3333 5.2133 a 10 10 0 0 1 13.3333 0" class="foreground-stroke transparent-fill" />
+  <path d="m 13.848 11.2347 0.616 -0.2553" class="foreground-stroke transparent-fill" />
+  <path d="m 13.848 12.7653 0.616 0.2553" class="foreground-stroke transparent-fill" />
+  <path d="M 3.3333 7.9053 a 6.6667 6.6667 0 0 1 7.6667 -1.19" class="foreground-stroke transparent-fill" />
+  <path d="M 5.6667 10.286 a 3.3333 3.3333 0 0 1 1.6087 -0.8733" class="foreground-stroke transparent-fill" />
+  <circle cx="12" cy="12" r="2" class="foreground-stroke transparent-fill" />
+</svg>

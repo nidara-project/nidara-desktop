@@ -238,21 +238,20 @@ export function registerConfigEntries() {
     })
     // The theme for Nidara's OWN icons (#587) — the bar, the menus, Settings —
     // beside `appearance.iconTheme` above, which is the one applications draw from.
-    // "nidara" stands for the stored empty string (our shipped drawings): an empty
-    // value is a poor thing to hand an agent or type on a command line, and no
-    // installed theme can take the name — `getAvailableIconThemes` reserves it.
-    // Only themes that declare Nidara's icon spec are offered (`specIconThemes`): no
-    // other theme has an `nd-` name, so picking one would change nothing. The row
-    // stays visible with "Nidara" alone — it is how a user learns their own theme
-    // can go there. `nidara-symbolic` is left out because it IS those drawings,
-    // packaged for other processes; offering it would list the default twice.
+    // "nidara" is our own theme, the Nidara icon theme (assets/icons/nidara, linked
+    // as /usr/share/icons/nidara). It is stored as the empty string, which reads the
+    // same files straight from assets/ — so it is listed once, first, and filtered
+    // out of what `specIconThemes` finds. Only themes that declare Nidara's icon spec
+    // are offered: no other theme has an `nd-` name, so picking one would change
+    // nothing. The row stays visible with "Nidara" alone — it is how a user learns
+    // their own theme can go there.
     registerConfig("appearance.interfaceIconTheme", {
-        desc: "Icon theme for Nidara's own interface icons (bar, menus, Settings), separate from the app icon theme. 'nidara' = Nidara's own drawings (default). Only themes made for Nidara's icon spec (X-Nidara-Icon-Spec in index.theme, see ui/shell/assets/icons/SPEC.md) are listed. Any icon the chosen theme lacks, or cannot draw, falls back to Nidara's.",
+        desc: "Icon theme for Nidara's own interface icons (bar, menus, Settings), separate from the app icon theme. 'nidara' = Nidara's own drawings (default). Only themes made for Nidara's icon spec (X-Nidara-Icon-Spec in index.theme, see ui/shell/assets/icons/nidara/SPEC.md) are listed. Any icon the chosen theme lacks, or cannot draw, falls back to Nidara's.",
         type: "enum",
         enum: (() => {
-            const themes = specIconThemes().filter(n => n !== "nidara-symbolic" && n !== "nidara")
+            const themes = specIconThemes().filter(n => n !== "nidara")
             const current = interfaceIconTheme()
-            if (current && current !== "nidara-symbolic" && !themes.includes(current)) themes.push(current)
+            if (current && current !== "nidara" && !themes.includes(current)) themes.push(current)
             return ["nidara", ...themes.sort()]
         })(),
         get: () => interfaceIconTheme() || "nidara",

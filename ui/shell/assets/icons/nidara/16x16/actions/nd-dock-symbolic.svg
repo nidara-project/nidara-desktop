@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M 1.3333 5.3333 h 13.3333" class="foreground-stroke transparent-fill" />
+  <rect width="13.3333" height="10.6667" x="1.3333" y="2.6667" rx="1.3333" class="foreground-stroke transparent-fill" />
+  <path d="M 4 10.6667 h 8" class="foreground-stroke transparent-fill" />
+</svg>
