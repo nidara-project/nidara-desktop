@@ -180,6 +180,14 @@ window.nidara-installer-window {
     margin-left: 24px;
   }
 
+  // Live elapsed timer displayed alongside progress.
+  .installer-phase-timer {
+    font-family: "JetBrains Mono", monospace;
+    font-size: $fs-small;
+    color: var(--nidara-text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
   // ── A list that scrolls inside its own card ───────────────────────────────
   // `NidaraList` paints the card on the LISTBOX, which is right for a list that
   // is as tall as its rows. For one that scrolls, the material has to move OUT to

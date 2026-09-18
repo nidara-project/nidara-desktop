@@ -21,7 +21,7 @@ import { connectivity, isUsable } from "../lib/network"
 import { DOWNLOAD_DIRS, STALL_QUIET_MS, failedDownloading, looksStalled } from "../lib/stall"
 import { measureMirrors, prepareLiveMirrorlist, restoreTargetMirrorlist } from "../lib/mirrors"
 import { isPreview, previewSkip } from "../lib/preview"
-import { heading, prose } from "./common"
+import { heading, prose, formatDuration, formatLiveTimer } from "./common"
 
 export function RunStep(): Step {
   let _busy = false
@@ -79,7 +79,27 @@ export function RunStep(): Step {
       let phase = -1
 
       const progressBar = new Gtk.ProgressBar({ hexpand: true, valign: Gtk.Align.CENTER })
-      box.append(progressBar)
+
+      const timerLabel = new Gtk.Label({
+        label: "00:00",
+        css_classes: ["installer-phase-timer"],
+        valign: Gtk.Align.CENTER,
+        halign: Gtk.Align.END,
+      })
+      timerLabel.update_property([Gtk.AccessibleProperty.LABEL], [t("runElapsedTime")])
+
+      const progressBox = new Gtk.Box({
+        orientation: Gtk.Orientation.HORIZONTAL,
+        spacing: 12,
+        hexpand: true,
+        valign: Gtk.Align.CENTER,
+      })
+      progressBox.append(progressBar)
+      progressBox.append(timerLabel)
+      box.append(progressBox)
+
+      let timerSourceId = 0
+      let startMonotonic = 0
 
       const phaseRows: { row: Gtk.Box; marker: Gtk.Label; title: Gtk.Label }[] = []
       const phaseBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, hexpand: true })
@@ -248,17 +268,27 @@ export function RunStep(): Step {
       }
 
       const finishRun = (success: boolean) => {
+        if (timerSourceId) {
+          GLib.source_remove(timerSourceId)
+          timerSourceId = 0
+        }
+        const totalSec = startMonotonic > 0
+          ? Math.max(0, Math.round((GLib.get_monotonic_time() - startMonotonic) / 1_000_000))
+          : 0
+
         // Before setBusy: its notify is what repaints the footer, and the footer
         // reads the outcome.
         _outcome = success ? "success" : "failure"
         setBusy(false)
         if (success) { phase = PHASES.length; paintPhases() }
-        progressBar.visible = false
+        progressBox.visible = false
         detail.visible = false
 
         if (success) {
           head.label = t("runSuccessHeading")
-          desc.label = t("runSuccessProse")
+          desc.label = totalSec > 0
+            ? t("runSuccessInTime").replace("%s", formatDuration(totalSec))
+            : t("runSuccessProse")
           desc.remove_css_class("installer-prose--warning")
           desc.add_css_class("installer-prose--dim")
         } else {
@@ -282,6 +312,16 @@ export function RunStep(): Step {
         // First, so even a run that stops at the network check leaves a file.
         liveLog = openLiveLog()
         setBusy(true)
+
+        startMonotonic = GLib.get_monotonic_time()
+        const updateTimer = () => {
+          const elapsedSec = Math.max(0, Math.floor((GLib.get_monotonic_time() - startMonotonic) / 1_000_000))
+          timerLabel.label = formatLiveTimer(elapsedSec)
+          return GLib.SOURCE_CONTINUE
+        }
+        updateTimer()
+        timerSourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, updateTimer)
+
         enterPhase(0)
         const answers = getAnswers()
 
@@ -592,6 +632,13 @@ export function RunStep(): Step {
         }
 
       }
+
+      box.connect("unmap", () => {
+        if (timerSourceId) {
+          GLib.source_remove(timerSourceId)
+          timerSourceId = 0
+        }
+      })
 
       return box
     },
