@@ -74,13 +74,13 @@ export function InstallerWindow(): Gtk.Window {
   let confirmedQuit = false
 
   const sidebarDefs = [
-    { id: "welcome", titleKey: "welcomeTitle", iconName: "nd-hand" },
-    { id: "region", titleKey: "regionTitle", iconName: "nd-preferences-system-network" },
-    { id: "disk", titleKey: "diskTitle", iconName: "nd-drive-harddisk" },
-    { id: "account", titleKey: "accountTitle", iconName: "nd-avatar-default" },
-    { id: "system", titleKey: "systemTitle", iconName: "nd-cpu" },
-    { id: "summary", titleKey: "summaryTitle", iconName: "nd-clipboard-list" },
-    { id: "run", titleKey: "runTitle", iconName: "nd-rocket" },
+    { id: "welcome", titleKey: "welcomeTitle", iconName: "nd-hand", themeFallback: "hand-symbolic" },
+    { id: "region", titleKey: "regionTitle", iconName: "nd-preferences-system-network", themeFallback: "preferences-system-network-symbolic" },
+    { id: "disk", titleKey: "diskTitle", iconName: "nd-drive-harddisk", themeFallback: "drive-harddisk-symbolic" },
+    { id: "account", titleKey: "accountTitle", iconName: "nd-avatar-default", themeFallback: "avatar-default-symbolic" },
+    { id: "system", titleKey: "systemTitle", iconName: "nd-cpu", themeFallback: "cpu-symbolic" },
+    { id: "summary", titleKey: "summaryTitle", iconName: "nd-clipboard-list", themeFallback: "clipboard-list-symbolic" },
+    { id: "run", titleKey: "runTitle", iconName: "nd-rocket", themeFallback: "system-run-symbolic" },
   ]
 
   const sidebar = NidaraSidebar(
@@ -88,6 +88,7 @@ export function InstallerWindow(): Gtk.Window {
       id: d.id,
       label: t(d.titleKey as any),
       icon: ndIcon(d.iconName) as any,
+      iconName: d.themeFallback,
     })),
     (id) => {
       if (flow.current().id === "run") return

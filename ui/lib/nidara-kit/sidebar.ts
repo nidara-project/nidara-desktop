@@ -7,7 +7,9 @@ export interface NidaraSidebarItem {
     id: string
     label: string
     /** Symbolic gicon shown before the label (tinted via .nd-icon). */
-    icon?: Gio.FileIcon
+    icon?: Gio.FileIcon | Gio.Icon
+    /** Theme icon name fallback when no gicon is supplied. */
+    iconName?: string
     /** Draw a thin, title-less divider before this item (thematic
      *  clustering). Ignored on the first item. Non-selectable, non-activatable. */
     groupStart?: boolean
@@ -78,6 +80,9 @@ export function NidaraSidebar(
         if (item.icon) {
             const icon = new Gtk.Image({ pixel_size: 18, css_classes: ["nd-icon"] })
             icon.gicon = item.icon
+            content.append(icon)
+        } else if (item.iconName) {
+            const icon = new Gtk.Image({ pixel_size: 18, icon_name: item.iconName, css_classes: ["nd-icon"] })
             content.append(icon)
         }
         // ⚠️ ELLIPSIZE, and it is structural rather than cosmetic. This label carries
