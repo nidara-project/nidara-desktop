@@ -73,13 +73,24 @@ export function InstallerWindow(): Gtk.Window {
   // a second time by the very hook that raised it.
   let confirmedQuit = false
 
+  // ⚠️ `themeFallback` is what draws when the Nidara asset tree is not found
+  // (`ndIcon` → null). It only fires with the whole tree missing, so it is a belt
+  // — but a belt made of a name no theme draws is worse than none: the row goes
+  // blank and nothing is logged. Every name here was MEASURED, not guessed
+  // (`scripts/dev/icon-fallback-audit.js`, 64 themes) and then LOOKED AT, because
+  // existing is not drawing: `help-about-symbolic` is an ⓘ in Adwaita and a STAR
+  // in Colloid/MacTahoe/Qogir, `user-available-symbolic` is a speech bubble
+  // everywhere. #603 transliterated three of these from their `nd-` names
+  // (`hand-symbolic`, `clipboard-list-symbolic`, `cpu-symbolic`) — Lucide names
+  // that exist in no icon theme at all; `cpu-symbolic` reaches only Papirus and
+  // Tela, not Adwaita, which is what a clean Arch install has.
   const sidebarDefs = [
-    { id: "welcome", titleKey: "welcomeTitle", iconName: "nd-hand", themeFallback: "hand-symbolic" },
+    { id: "welcome", titleKey: "welcomeTitle", iconName: "nd-hand", themeFallback: "go-home-symbolic" },
     { id: "region", titleKey: "regionTitle", iconName: "nd-preferences-system-network", themeFallback: "preferences-system-network-symbolic" },
     { id: "disk", titleKey: "diskTitle", iconName: "nd-drive-harddisk", themeFallback: "drive-harddisk-symbolic" },
     { id: "account", titleKey: "accountTitle", iconName: "nd-avatar-default", themeFallback: "avatar-default-symbolic" },
-    { id: "system", titleKey: "systemTitle", iconName: "nd-cpu", themeFallback: "cpu-symbolic" },
-    { id: "summary", titleKey: "summaryTitle", iconName: "nd-clipboard-list", themeFallback: "clipboard-list-symbolic" },
+    { id: "system", titleKey: "systemTitle", iconName: "nd-cpu", themeFallback: "computer-symbolic" },
+    { id: "summary", titleKey: "summaryTitle", iconName: "nd-clipboard-list", themeFallback: "view-list-symbolic" },
     { id: "run", titleKey: "runTitle", iconName: "nd-rocket", themeFallback: "system-run-symbolic" },
   ]
 

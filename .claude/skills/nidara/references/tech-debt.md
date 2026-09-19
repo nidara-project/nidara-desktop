@@ -3630,7 +3630,17 @@ share a name, and a theme author redrawing one changes the other:
 `nd-pan-up` (collapse, and the assistant's SEND button), `nd-network-vpn-disconnected` (VPN off, and the
 "not isolated" badge on Settings → Apps), `nd-system-lock-screen` (lock the screen, and a secured Wi-Fi
 network), `nd-dialog-information` (About, and a notification with no icon), `nd-value-increase` (a
-slider's "more" end, and Autostart's add button). SPEC.md's *Where* column lists them honestly. Split
+slider's "more" end, and Autostart's add button). SPEC.md's *Where* column lists them honestly.
+
+⚠️ **One more, found 2026-09-20 while auditing the installer, and it is the worst of the set
+because the NAME and the DRAWING disagree:** `nd-preferences-system-network` draws a **globe**, and
+it is asked for by Settings → Network (`surfaces/settings/manifest.ts`) *and* by the installer's
+**Region** page ("Where are you?"). SPEC.md line 148 says "Network / region" out loud. A globe is
+right for Region and passable for Network — but a theme author draws by NAME, so the first one who
+draws "network preferences" as an ethernet port puts a connector on the Region row of the
+installer. Splitting it needs a second drawing (Settings → Network would need a real network glyph;
+the globe goes to the region concept), which is why it is written here and not done: icon work is
+the owner's call. Split
 one by adding a name (`scripts/icons/nidara-icons.py add`, then ICON_NAMES and the SPEC row), and bump
 the spec version.
 
