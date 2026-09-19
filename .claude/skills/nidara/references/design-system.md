@@ -1713,7 +1713,13 @@ names something the borrowing bundle's sheet never defined.
 until #533) — see architecture.md, "The appearance contract". The installer no longer has a colour ramp of its own at all: the engine
 generates the whole thing from the user's real accent, mode and opacity, and
 `scripts/ci/token-contract-check.mjs` now fails the build if any bundle paints with a token
-nothing defines. Holes 2 and 3 stay as written — they are rules about writing a bundle's sheet,
+nothing defines — and since 2026-09-20 `scripts/ci/token-orphan-check.mjs` fails it for the
+mirror image, a token that is defined, emitted and read by nobody. Both directions are silent
+in GTK4, and the second one is worse to debug because everything renders: the value is simply
+not the one on screen, so the next person to retune it changes nothing and believes they did
+(tech-debt #106). The orphan check matches `var(--x)` AND `var(--x, fallback)` across `.scss`,
+`.ts` and `.tsx`, and strips comments first — this repo names tokens in prose constantly, and a
+token mentioned in a sentence must not count as a reader. Holes 2 and 3 stay as written — they are rules about writing a bundle's sheet,
 not about where the values come from. The four are kept in full because each one is a different
 way for GTK4 to fail without saying anything.
 

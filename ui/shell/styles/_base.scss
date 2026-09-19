@@ -29,11 +29,9 @@
     --nidara-accent-60: rgba(0, 136, 255, 0.6);
     --nidara-accent-30: rgba(0, 136, 255, 0.3);
     --nidara-accent-10: rgba(0, 136, 255, 0.1);
-    --nidara-accent-08: rgba(0, 136, 255, 0.08);
 
     /* --- Surface & Backgrounds --- */
     --nidara-bg: rgba(22, 22, 34, 0.5);
-    --nidara-bg-backdrop: rgba(22, 22, 34, 0.4);
     --nidara-surface-back: rgba(255, 255, 255, 0.04);   /* very subtle bg */
     --nidara-surface: rgba(255, 255, 255, 0.08);
     --nidara-surface-hover: rgba(255, 255, 255, 0.12);
@@ -57,9 +55,6 @@
     /* --- Semantic Colors --- */
     --nidara-danger: #ff3b30;
     --nidara-danger-rgb: 255, 59, 48;
-    --nidara-success: #30d158;
-    --nidara-warning: #f3ba4b;
-    --nidara-warning-rgb: 243, 186, 75;
 
     /* --- Borders & Shadows ---
        Recalibrated to a subtle "whisper" range (small blur, low alpha).
@@ -68,8 +63,6 @@
     --nidara-border: rgba(127, 127, 127, 0.15);
     --nidara-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.20), 0 1px 1px rgba(0, 0, 0, 0.16);
     --nidara-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.18);
-    --nidara-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.40), 0 2px 6px rgba(0, 0, 0, 0.24);
-    --nidara-icon-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
 
     /* --- Popover surfaces ---
        NidaraTheme floors the bg alpha (≥0.38) so compositor blur applies.

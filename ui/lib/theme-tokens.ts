@@ -30,7 +30,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { readFile, writeFile } from "./file"
 import { ACCENT_HEX, ACCENT_NAMES, hexToRgb, type AccentKey } from "./accent"
-import { DANGER_HEX, SUCCESS_HEX } from "./status-colors"
+import { DANGER_HEX } from "./status-colors"
 import { GLASS_TINT } from "./tokens"
 
 // -- COLOR PALETTES ---------------------------------------------------
@@ -214,14 +214,10 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
     ? {
         sm: "0 1px 2px rgba(0,0,0,0.20), 0 1px 1px rgba(0,0,0,0.16)",
         md: "0 2px 8px rgba(0,0,0,0.28), 0 1px 2px rgba(0,0,0,0.18)",
-        lg: "0 8px 24px rgba(0,0,0,0.40), 0 2px 6px rgba(0,0,0,0.24)",
-        icon: "0 2px 5px rgba(0,0,0,0.6)",
       }
     : {
         sm: "0 1px 2px rgba(0,0,0,0.06), 0 1px 1px rgba(0,0,0,0.04)",
         md: "0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05)",
-        lg: "0 8px 24px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06)",
-        icon: "0 2px 5px rgba(0,0,0,0.20)",
       }
   // ⚠️ `--nidara-edge` (the rim of light) is NOT emitted any more, and neither are
   // the four `--nidara-material-*` or `--nidara-shadow-popover`. Buried 2026-09-20,
@@ -237,9 +233,7 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
     `  --nidara-accent-60: rgba(${r}, ${g}, ${b}, 0.6);`,
     `  --nidara-accent-30: rgba(${r}, ${g}, ${b}, 0.3);`,
     `  --nidara-accent-10: rgba(${r}, ${g}, ${b}, 0.1);`,
-    `  --nidara-accent-08: rgba(${r}, ${g}, ${b}, 0.08);`,
     `  --nidara-bg: rgba(${bg}, ${bgAlpha});`,
-    `  --nidara-bg-backdrop: rgba(${bg}, ${bgAlpha});`,
     `  --nidara-surface-back: rgba(${fg}, 0.04);`,
     `  --nidara-surface: rgba(${fg}, 0.08);`,
     `  --nidara-surface-hover: rgba(${fg}, 0.12);`,
@@ -263,15 +257,10 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
     `  --nidara-text-disabled: rgba(${fg}, 0.3);`,
     `  --nidara-danger: ${DANGER_HEX};`,
     `  --nidara-danger-rgb: ${hexToRgb(DANGER_HEX)};`,
-    `  --nidara-success: ${SUCCESS_HEX};`,
-    `  --nidara-warning: #f3ba4b;`,
-    `  --nidara-warning-rgb: 243, 186, 75;`,
     `  --nidara-popover-bg: rgba(${pbR}, ${pbG}, ${pbB}, ${popoverAlpha});`,
     `  --nidara-popover-border: ${popoverBorder};`,
     `  --nidara-shadow-sm: ${sh.sm};`,
     `  --nidara-shadow-md: ${sh.md};`,
-    `  --nidara-shadow-lg: ${sh.lg};`,
-    `  --nidara-icon-shadow: ${sh.icon};`,
   ]
 }
 
