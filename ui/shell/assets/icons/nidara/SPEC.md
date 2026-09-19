@@ -1,6 +1,6 @@
 # Nidara icon spec
 
-**Version 2.** How to make an icon theme that changes Nidara's interface icons — the bar,
+**Version 3.** How to make an icon theme that changes Nidara's interface icons — the bar,
 the menus, the Control Centre, Settings, the login and lock screens.
 
 Nidara's interface asks for its own icon names, all starting with `nd-`. Only a theme that
@@ -110,6 +110,7 @@ check your drawing in place; it is not part of the contract and may grow.
 | `nd-dock` | The dock | Settings → Dock |
 | `nd-drive-harddisk` | A disk | Installer |
 | `nd-emblem-default` | Selected (a check mark) | Menus |
+| `nd-globe` | Where in the world you are (a globe) | Installer → Region |
 | `nd-hand` | Welcome (a waving hand) | Installer |
 | `nd-input-gaming` | Games | Settings → Gaming |
 | `nd-input-keyboard` | A keyboard / keyboard layout | Settings → Input, login screen |
@@ -123,7 +124,7 @@ check your drawing in place; it is not part of the contract and may grow.
 | `nd-network-vpn` | VPN connected | VPN widget |
 | `nd-network-vpn-disconnected` | VPN disconnected | VPN widget, Settings → Apps |
 | `nd-network-wired` | Wired network | Ethernet widget |
-| `nd-network-wireless` | Wi-Fi | Wi-Fi widget, Settings → Network |
+| `nd-network-wireless` | Wi-Fi | Wi-Fi widget |
 | `nd-network-wireless-acquiring` | Wi-Fi connecting | Wi-Fi widget |
 | `nd-network-wireless-configure` | Wi-Fi network details | Settings → Network |
 | `nd-network-wireless-disabled` | Wi-Fi off | Wi-Fi widget |
@@ -145,7 +146,7 @@ check your drawing in place; it is not part of the contract and may grow.
 | `nd-preferences-desktop-peripherals` | Pointer and touchpad | Settings → Input, pointer speed sliders |
 | `nd-preferences-desktop-theme` | Appearance | Settings → Appearance |
 | `nd-preferences-system` | Widgets | Settings → Widgets |
-| `nd-preferences-system-network` | Network / region | Settings → Network, installer |
+| `nd-preferences-system-network` | Network | Settings → Network |
 | `nd-preferences-system-notifications` | Notification settings | Settings → Notifications |
 | `nd-preferences-system-time` | Date, time and region | Settings → Region |
 | `nd-rocket` | Start installation | Installer |

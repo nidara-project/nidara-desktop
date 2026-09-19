@@ -2226,6 +2226,21 @@ only when someone boots a VM). The `styles` job now compiles it too.
     `gjs -m scripts/dev/icon-theme-audit.js [themes…] > a.tsv` +
     `python3 scripts/dev/icon-theme-sheet.py a.tsv /tmp/sheet` draws every name in every spec theme
     beside ours — look at it.
+  - **the THEME FALLBACK is the other half of `ndImageProps`, and it needs measuring too.**
+    `ndImageProps(name, themeFallback, size)` (`ui/lib/icons.ts`) draws the shipped `nd-` icon, or
+    the freedesktop `themeFallback` when the asset tree is not found at all. Commandment 10 governs
+    the PRIMARY ask, not this last resort — but a fallback naming something no theme draws is worse
+    than none: the row goes blank and nothing is logged (icon failures never log). #603 shipped
+    three transliterated straight from their `nd-` names — `hand-symbolic`,
+    `clipboard-list-symbolic`, `cpu-symbolic` — and the first two exist in **no icon theme at all**,
+    while the third reaches Papirus and Tela but not Adwaita, which is what a clean Arch install
+    has. `gjs -m scripts/dev/icon-fallback-audit.js` measures every fallback the tree ships (it
+    knows all three shapes: `themeFallback:`, `icon_name:` and `Gio.ThemedIcon.new("…")`), and with
+    names as arguments it prices candidates before you write one in.
+    ⚠️ **Coverage is necessary, not sufficient — then LOOK at the survivors**, same rule as our own
+    names: `help-about-symbolic` is an ⓘ in Adwaita and a four-pointed STAR in Colloid, MacTahoe and
+    Qogir; `user-available-symbolic` is a speech bubble in every family. The three replacements
+    (`go-home-symbolic`, `view-list-symbolic`, `computer-symbolic`) were picked by rendering them.
   - **the lookup asks for size 512, on purpose.** A `Gio.FileIcon` is one file, so the size decides
     WHICH of a theme's variants we get, and fixed-size directories are often drawn with padding —
     Colloid's `status/24` icons fill 63% of their box against 97% for its scalable ones. Asking for

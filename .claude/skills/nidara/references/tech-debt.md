@@ -3630,7 +3630,26 @@ share a name, and a theme author redrawing one changes the other:
 `nd-pan-up` (collapse, and the assistant's SEND button), `nd-network-vpn-disconnected` (VPN off, and the
 "not isolated" badge on Settings → Apps), `nd-system-lock-screen` (lock the screen, and a secured Wi-Fi
 network), `nd-dialog-information` (About, and a notification with no icon), `nd-value-increase` (a
-slider's "more" end, and Autostart's add button). SPEC.md's *Where* column lists them honestly. Split
+slider's "more" end, and Autostart's add button). SPEC.md's *Where* column lists them honestly.
+
+✅ **One more was found 2026-09-20 while auditing the installer and FIXED the same day (spec
+version 3):** `nd-preferences-system-network` draws a **globe** and was asked for by Settings →
+Network *and* by the installer's **Region** page ("Where are you?"), with SPEC.md saying "Network /
+region" out loud. A theme author draws by NAME, so whoever drew "network preferences" as an
+ethernet port would have put a connector on "Where are you?". The owner's call was to give the
+place concept its OWN drawing rather than share one: **`nd-globe`** (Lucide `globe-2`, a globe with
+a landmass — not a copy of the meridian globe, so the two names cannot be confused), fallback
+`globe-symbolic`, which is the only candidate measured at 65/65 themes and 7/7 families AND drawing
+the same idea in every one. Settings → Network and Settings → Region were deliberately left alone.
+⚠️ Note what is still true: **Settings → Region asks for `nd-preferences-system-time`, a CLOCK.**
+That is the same shape of problem one step away — the day a pure time/hour concept needs an icon,
+that name is already doing region duty. Same remedy when it comes up: give the new concept its own
+name, do not borrow.
+
+Found in the same pass and fixed: SPEC.md promised `nd-network-wireless` was used by "Wi-Fi widget,
+Settings → Network". It is not — only the Wi-Fi widget asks for it; Settings → Network asks for the
+globe. The *Where* column is documentation a theme author plans around, so a false entry there is
+not a typo. Split
 one by adding a name (`scripts/icons/nidara-icons.py add`, then ICON_NAMES and the SPEC row), and bump
 the spec version.
 
