@@ -3634,9 +3634,34 @@ slider's "more" end, and Autostart's add button). SPEC.md's *Where* column lists
 one by adding a name (`scripts/icons/nidara-icons.py add`, then ICON_NAMES and the SPEC row), and bump
 the spec version.
 
-Separately, found while renaming: the installer asks `ndIcon("clipboard-list")` and `ndIcon("rocket")`
-for its Summary and Run steps (`ui/installer/widget/InstallerWindow.ts`), and neither drawing has ever
-been shipped — `ndIcon` returns null and those two sidebar rows draw no icon.
+~~Separately, found while renaming: the installer asks `ndIcon("clipboard-list")` and `ndIcon("rocket")`
+for its Summary and Run steps, and neither drawing has ever been shipped.~~ ✅ **Second half FIXED
+2026-09-19 (#602, #603)**: both drawings ship as `nd-clipboard-list` / `nd-rocket` at spec version 2,
+`InstallerWindow.ts` asks for them by those names, and `NidaraSidebarItem` gained a `themeFallback`
+for the case where the asset tree is not found at all. The name-sharing half above is still open.
+
+### 106. ⚠️ OPEN — the `material*` vocabulary of `_base.scss` is dead, so `--nidara-edge` paints nothing (2026-09-19)
+
+`ui/shell/styles/_base.scss` defines three mixins nobody includes — `material-control`,
+`material-popover` and the `material($level)` vibrancy ladder — and the ladder is the ONLY reader of
+`--nidara-edge` in the repo (`border: var(--nidara-edge)`, line 152). So the rim of light is a token
+the shell emits, the greeter and the installer define, `token-contract-check` is satisfied by, and no
+rule consumes. Found the day #600 retuned that token's light value to fix a double border on window
+chrome: the edit was inert, and the way it looked verified was a pixel probe of a window fill the
+token never touched.
+
+Two ways out, and it is a design call, not a cleanup:
+- **Revive it.** The vocabulary is the surface system the design system describes (thin/regular/thick/
+  chrome, one material per z-level, "never hand-write background/border"); if the bar, dock and
+  overlays are supposed to speak it, they should `@include material(...)` and get the rim back.
+- **Bury it.** Delete the three mixins and `--nidara-edge` with them, and say in `design-system.md`
+  that the rim of light is drawn by the Cairo painters only (`GLASS_INSET`, `gloss`) — which is what
+  actually happens on screen today.
+
+⚠️ Until one of those happens, do NOT "fix" a border by moving `--nidara-edge`: nothing will change,
+and the next reader will believe the value describes what they see. The header comment on
+`@mixin material` already carries a scar from the same family (a parametric `@mixin material($level)`
+silently mis-emitting branches), which is probably why the call sites went away and the mixin did not.
 
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 

@@ -2141,6 +2141,14 @@ only when someone boots a VM). The `styles` job now compiles it too.
   circular `border-radius` (p=2.0) mismatches Hyprland's squircle (p=3.2) and visibly desyncs
   from the compositor border during window animations. Settings, About, and the installer all
   rely on Hyprland to frame and round the window.
+  ⚠️ **`--nidara-edge` is NOT that border, so do not retune it to fix window chrome.** It is the
+  rim of light — a specular, WHITE in both modes and stronger in light, because it has to survive
+  a bright body — and it belongs to the glass vocabulary, not to a window frame. #600 turned its
+  light value to ink while fixing the double border, which cannot have caused it: the token's only
+  reader is `@mixin material($level)` in `ui/shell/styles/_base.scss`, and nothing includes that
+  mixin (tech-debt #106), so the edit changed no pixel and left the greeter's own comment
+  contradicting the value beneath it. Window chrome is fixed in the window's rules
+  (`glass(floating)`, `window.nidara-app-window`), never in a shared token.
 - **A capsule's VISIBLE edge is `GLASS_INSET` (2px) inside its allocation.** `drawSquircle`
   paints the glass in from the widget rect so the border stroke never lands on the allocation
   edge, which means **a child laid out flush to the rect overhangs the shape**. Nothing warns

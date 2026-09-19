@@ -976,6 +976,48 @@ jobs:
           ./scripts/bundle.sh --js scripts/dev/geoip-probe.ts /tmp/geoip-probe.js
           gjs -m /tmp/geoip-probe.js
 
+      # The welcome page's low-RAM advisory (#604). Two halves, one control each:
+      # the READ (/proc/meminfo is in kB and the rule is in MiB — a unit mixup here
+      # warns every machine or none, and both look calm on the developer's box) and
+      # the THRESHOLD. The probe shipped with the feature and nothing ran it; a
+      # sonda nobody runs is a file, not a test.
+      - name: The low-RAM rules can fail (controls, must be caught)
+        run: |
+          cp ui/installer/lib/memory.ts /tmp/memory.bak
+          sed -i 's|^    return Math.round(kib / 1024)$|    return kib // deliberately broken|' \
+            ui/installer/lib/memory.ts
+          if git diff --quiet ui/installer/lib/memory.ts; then
+            echo "::error::the control patched nothing — the kB→MiB conversion has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/memory-probe.ts /tmp/memory-defect-unit.js
+          if gjs -m /tmp/memory-defect-unit.js; then
+            echo "::error::the probe passed while MemTotal was read in kB as MiB — it is not checking the unit"
+            cp /tmp/memory.bak ui/installer/lib/memory.ts
+            exit 1
+          fi
+          cp /tmp/memory.bak ui/installer/lib/memory.ts
+
+          sed -i 's|^  return memMib < thresholdMib$|  return false // deliberately removed|' \
+            ui/installer/lib/memory.ts
+          if git diff --quiet ui/installer/lib/memory.ts; then
+            echo "::error::the control patched nothing — the isLowMemory comparison has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/memory-probe.ts /tmp/memory-defect-threshold.js
+          if gjs -m /tmp/memory-defect-threshold.js; then
+            echo "::error::the probe passed with the threshold deleted — it is not checking what it prints"
+            cp /tmp/memory.bak ui/installer/lib/memory.ts
+            exit 1
+          fi
+          cp /tmp/memory.bak ui/installer/lib/memory.ts
+          git diff --quiet ui/installer/lib/memory.ts
+
+      - name: Total RAM is read and judged against the floor (must succeed)
+        run: |
+          ./scripts/bundle.sh --js scripts/dev/memory-probe.ts /tmp/memory-probe.js
+          gjs -m /tmp/memory-probe.js
+
       # ⚠️ And the bundle itself, which nothing was building. The probes above
       # reach `lib/`, so a syntax error THERE has always been caught on the way
       # in — but `steps/` and `app.ts` are in no job at all, and the installer is

@@ -7,14 +7,15 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import { readTotalMemoryMib, isLowMemory, MIN_RECOMMENDED_RAM_MIB } from "../../ui/installer/lib/memory"
 
+// ⚠️ The THROW is what makes this exit non-zero. What was here also scheduled a
+// `GLib.idle_add(… imports.system.exit(1))`, and that callback never runs: this
+// probe has no main loop, so the idle is dead code. A probe whose failure path is
+// dead prints FAIL and exits 0 — the exact defect the `installer-logic` controls
+// exist to catch (2026-09-05). The control in CI deletes the threshold comparison
+// and requires this to come back non-zero.
 function assert(condition: boolean, msg: string) {
   if (!condition) {
     console.error(`FAIL: ${msg}`)
-    GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-      // Exit non-zero on failure
-      imports.system.exit(1)
-      return GLib.SOURCE_REMOVE
-    })
     throw new Error(msg)
   }
 }

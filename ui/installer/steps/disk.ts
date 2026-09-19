@@ -33,7 +33,7 @@ import {
 import { ENTIRE_DISK_MIN_BYTES, entireDiskFits, espMount } from "../lib/disk-config"
 import { ESP_MOUNTS, manualProblems, type ManualProblem } from "../lib/manual-problems"
 import { freeSpaceGaps } from "../lib/free-space"
-import { isUefi, secureBootState } from "../lib/firmware"
+import { isUefi } from "../lib/firmware"
 import { findBitlockerDevices, bitlockerWarnings } from "../lib/bitlocker"
 import { heading, prose, formatSize } from "./common"
 import { NidaraPartitionBar, type PartitionBarSlice, type PartitionBarResult } from "../widget/PartitionBar"
@@ -237,6 +237,8 @@ export function DiskStep(): Step {
       //
       // Refusing is the honest answer while that is true: there is no BIOS path to
       // fall back to. If one is ever written, this is the guard that lifts.
+      //
+      // The user is TOLD on the welcome page, not here — see `steps/welcome.ts`.
       if (!isUefi()) return false
       const a = getAnswers().disk
       if (!a) return false
@@ -262,15 +264,12 @@ export function DiskStep(): Step {
 
       rootBox.append(heading(t("diskHeading")))
 
-      // Said at the top of the page, before any choice is offered: a refusal the
-      // user cannot see the reason for is just a Continue button that does nothing.
-      if (!isUefi()) {
-        rootBox.append(prose(t("diskErrNoUefi"), "installer-prose--warning"))
-      }
-
-      if (secureBootState() === "enforcing") {
-        rootBox.append(prose(t("diskWarnSecureBoot"), "installer-prose--warning"))
-      }
+      // ⚠️ The firmware paragraphs (`diskErrNoUefi`, `diskWarnSecureBoot`) are NOT
+      // repeated here. They are said on the welcome page, which is the first screen
+      // the medium shows and the page that now refuses to continue on legacy BIOS —
+      // so this page is unreachable in that state, and saying it twice is how a
+      // warning stops being read. The guard in `ready` above stays: it costs one
+      // `access()` and this is the page that emits the layout.
 
       let currentMode: "entire_disk" | "manual" = "entire_disk"
       let selectedDisk: BlockDevice | null = null

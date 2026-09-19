@@ -777,7 +777,15 @@ supposed to be installable.
 
 Firmware facts (`isUefi`, `secureBootState`) live in `ui/installer/lib/firmware.ts` rather than
 in the disk page, so they can be inspected without a display or a partitioned disk, and multiple
-steps (disk step now, summary later) can read them.
+steps can read them.
+
+⚠️ **Both paragraphs are SAID on the welcome page, and only there** (2026-09-19). They started on
+the disk page, which asks nothing about firmware and is three clicks in; a machine that cannot boot
+what we are about to install should hear it on the first screen. The welcome step's `ready` carries
+`isUefi()`, so the disk page is unreachable on legacy BIOS — its own `isUefi()` guard stays (a
+refusal is cheap and it is the page that emits the layout) but it no longer prints the text. #604
+added the welcome copy without removing the disk copy, and for two days the same wall of text
+appeared twice, which is how a warning stops being read.
 
 Secure Boot enforcement is read from Linux efivarfs (`/sys/firmware/efi/efivars/`):
 - Standard EFI Global Variable GUID `8be4df61-93ca-11d2-aa0d-00e098032b8c`
@@ -786,7 +794,7 @@ Secure Boot enforcement is read from Linux efivarfs (`/sys/firmware/efi/efivars/
 - "Enforcing" requires BOTH `SecureBoot == 1` AND `SetupMode == 0` (`secureBootState` = `"enforcing"`).
   With `SetupMode == 1` the firmware is in setup mode and does not reject anything (`"disabled"`).
 - Absence (legacy BIOS mode, or firmware not exposing the variable) returns `"unknown"`.
-  Absence = do NOT warn. A false warning on the disk page is worse than none.
+  Absence = do NOT warn. A false warning on the first page is worse than none.
 - ⚠️ Unlike legacy BIOS (`!isUefi()`), which blocks Continue because there is no BIOS boot path,
   Secure Boot enforcement **warns without blocking Continue** (#493): turning Secure Boot off in
   firmware settings is a user choice.
@@ -1059,6 +1067,22 @@ then `start 40 discharging` / `start 41 charging` flip the warning live.
 the network warning is on screen, so on any machine with a connection — every machine that can
 install — plugging the charger in never cleared the battery warning. It updates from UPower's
 `notify` instead.
+
+### The low-RAM advisory reads /proc/meminfo, and its probe is in CI
+
+The welcome page's "less than 3 GB of RAM" warning (`lib/memory.ts`, #604) parses `MemTotal` out of
+`/proc/meminfo` — readable unprivileged, so the `live` user gets it with no helper — and compares it
+against `MIN_RECOMMENDED_RAM_MIB` (2800). It **advises without blocking Continue**, like Secure Boot
+and unlike legacy BIOS: pacstrap on a 2 GB machine usually finishes, and when it does not the OOM
+killer is the one that says so. An unreadable or unparseable `/proc/meminfo` returns `null`, and
+`isLowMemory(null)` is `false` — absence never warns, same rule as the firmware facts.
+
+⚠️ The two halves have a control each in `installer-logic`, because both fail quietly on the
+developer's box: `/proc/meminfo` is in **kB** and the rule is in **MiB**, so a unit mixup warns every
+machine or none, and a deleted threshold warns none. The probe (`scripts/dev/memory-probe.ts`)
+shipped with the feature and nothing ran it for two days — a sonda nobody runs is a file, not a test,
+and the same review found its failure path was dead code (a `GLib.idle_add(… system.exit(1))` in a
+probe with no main loop; the `throw` is what exits non-zero).
 
 ### Losing the network mid-install: two failures that look nothing alike
 

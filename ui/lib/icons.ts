@@ -27,7 +27,23 @@ import GLib from "gi://GLib"
  * decoration: drop it and the icon goes black again with no error anywhere.
  */
 
+/**
+ * Where the shell's asset tree might be, best first.
+ *
+ * ⚠️ Order matters, and the INSTALLED path comes before the relative ones. The
+ * last three are CWD-relative and they ship inside the packaged binary — with
+ * them first, what a window draws depended on the directory the process happened
+ * to be started from, and any directory somebody can write to could hand the
+ * shell an SVG. The two dev signals that are explicit (`NIDARA_SHELL_ROOT`, the
+ * `.dev` marker `install.sh --dev` writes) still win over the installed tree, so
+ * the dev loop is unchanged; the relative ones are left as the last resort for a
+ * `npm run dev` inside a checkout on a machine with no package installed.
+ *
+ * Computed once: this is called per icon, and it reads a file.
+ */
+let candidateRoots: string[] | null = null
 function getCandidateShellRoots(): string[] {
+    if (candidateRoots) return candidateRoots
     const roots: string[] = []
 
     const envRoot = GLib.getenv("NIDARA_SHELL_ROOT")
@@ -42,11 +58,12 @@ function getCandidateShellRoots(): string[] {
         }
     } catch {}
 
+    roots.push("/usr/share/nidara/ui/shell")
     roots.push("./ui/shell")
     roots.push("../shell")
     roots.push("../../ui/shell")
-    roots.push("/usr/share/nidara/ui/shell")
-    return roots
+    candidateRoots = [...new Set(roots)]
+    return candidateRoots
 }
 
 function getCandidateIconDirs(): string[] {
@@ -79,10 +96,9 @@ export function ndIcon(name: string): Gio.FileIcon | null {
  * The official Nidara symbolic logo icon, recolourable by GTK CSS.
  */
 export function nidaraLogoIcon(): Gio.FileIcon | null {
-    const candidates = [
-        ...getCandidateShellRoots().map(r => `${r}/assets/nidara/assets/nidara-symbolic.svg`),
-        "/usr/share/nidara/ui/shell/assets/nidara/assets/nidara-symbolic.svg",
-    ]
+    // The installed path is already one of the roots — no need to name it twice.
+    const candidates = getCandidateShellRoots()
+        .map(r => `${r}/assets/nidara/assets/nidara-symbolic.svg`)
     for (const path of candidates) {
         if (GLib.file_test(path, GLib.FileTest.EXISTS)) {
             return Gio.FileIcon.new(Gio.File.new_for_path(path))

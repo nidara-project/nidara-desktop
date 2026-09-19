@@ -238,8 +238,16 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
         popover: "0 10px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)",
         icon: "0 2px 5px rgba(0,0,0,0.20)",
       }
-  // Rim-of-light edge: faint white hairline in dark, subtle ink hairline in light.
-  const edge = isDark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.08)"
+  // Rim-of-light edge: a faint WHITE top hairline on glass, in BOTH modes, and
+  // stronger in light — a specular has to survive a bright body. It is not a
+  // border and it does not follow the mode's ink.
+  // ⚠️ This is NOT the window's border: Hyprland draws that one (see
+  // `glass(floating)` in `ui/lib/styles/_mixins.scss`). #600 turned this value to
+  // ink chasing a double border on window chrome, which it cannot have caused —
+  // the token's only reader is `@mixin material($level)`, and nothing includes it
+  // (tech-debt #106). Restored to the documented intent; fix window chrome in the
+  // window's own rules.
+  const edge = isDark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(255,255,255,0.50)"
 
   return [
     `  --nidara-accent: ${accent};`,
