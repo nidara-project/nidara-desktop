@@ -241,12 +241,12 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
   // Rim-of-light edge: a faint WHITE top hairline on glass, in BOTH modes, and
   // stronger in light — a specular has to survive a bright body. It is not a
   // border and it does not follow the mode's ink.
-  // ⚠️ This is NOT the window's border: Hyprland draws that one (see
-  // `glass(floating)` in `ui/lib/styles/_mixins.scss`). #600 turned this value to
-  // ink chasing a double border on window chrome, which it cannot have caused —
-  // the token's only reader is `@mixin material($level)`, and nothing includes it
-  // (tech-debt #106). Restored to the documented intent; fix window chrome in the
-  // window's own rules.
+  // ⚠️ This is NOT the window's border: Hyprland draws that one. `glass(floating)`
+  // painted this token until #600 removed the border — correctly, the compositor
+  // owns it — and that removal took away the token's last live reader (what is
+  // left, `@mixin material($level)`, is included by nothing: tech-debt #106). The
+  // same commit also turned this value to ink, which therefore changed no pixel.
+  // Restored to the documented intent; fix window chrome in the window's own rules.
   const edge = isDark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(255,255,255,0.50)"
 
   return [

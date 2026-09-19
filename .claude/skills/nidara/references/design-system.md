@@ -2143,12 +2143,18 @@ only when someone boots a VM). The `styles` job now compiles it too.
   rely on Hyprland to frame and round the window.
   ⚠️ **`--nidara-edge` is NOT that border, so do not retune it to fix window chrome.** It is the
   rim of light — a specular, WHITE in both modes and stronger in light, because it has to survive
-  a bright body — and it belongs to the glass vocabulary, not to a window frame. #600 turned its
-  light value to ink while fixing the double border, which cannot have caused it: the token's only
-  reader is `@mixin material($level)` in `ui/shell/styles/_base.scss`, and nothing includes that
-  mixin (tech-debt #106), so the edit changed no pixel and left the greeter's own comment
-  contradicting the value beneath it. Window chrome is fixed in the window's rules
-  (`glass(floating)`, `window.nidara-app-window`), never in a shared token.
+  a bright body — and it belongs to the glass vocabulary, not to a window frame. Until #600 the
+  window card *did* paint it (`glass(floating)` carried `border: var(--nidara-edge)`), which is
+  exactly why a light-mode window wore an opaque white hairline inside Hyprland's own border. #600
+  fixed that the right way — remove the border, the radius and the shadow, and let the compositor
+  draw all three — and then ALSO turned the token's light value to ink. **That second edit is the
+  one to learn from**: it landed on a token the same commit had just orphaned. `glass(floating)`
+  was its only live reader; what is left is `@mixin material($level)` in
+  `ui/shell/styles/_base.scss`, which nothing includes (tech-debt #106). So it changed no pixel,
+  and it left the greeter's own #87(b) comment contradicting the value three lines beneath it. The
+  value is restored (2026-09-19); the removal is not. Window chrome is fixed in the window's rules
+  (`glass(floating)`, `window.nidara-app-window`), never in a shared token — a token reached by
+  other surfaces is the wrong lever for a bug you can see in one.
 - **A capsule's VISIBLE edge is `GLASS_INSET` (2px) inside its allocation.** `drawSquircle`
   paints the glass in from the widget rect so the border stroke never lands on the allocation
   edge, which means **a child laid out flush to the rect overhangs the shape**. Nothing warns
