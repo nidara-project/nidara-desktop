@@ -39,6 +39,8 @@ import { NidaraRow } from "../../lib/nidara-kit"
 import { heading, prose, searchableList } from "./common"
 import { connectivity, isUsable } from "../lib/network"
 import { onBattery } from "../lib/power"
+import { isUefi, secureBootState } from "../lib/firmware"
+import { readTotalMemoryMib, isLowMemory } from "../lib/memory"
 import { readDisplayDevice, watchDisplayDevice } from "../lib/upower"
 import { LANGUAGES, languageFor, type Language } from "../lib/languages"
 import { languageMenuLabels, languageHaystack } from "../../lib/locale-names"
@@ -204,6 +206,7 @@ export function WelcomeStep(): Step {
     ready: () => base !== null
       && getAnswers().language !== null
       && netOk
+      && isUefi()
       && !blocksInstall(archinstallVerdict()),
 
     onEnter() {
@@ -248,6 +251,15 @@ export function WelcomeStep(): Step {
 
       if (!base) {
         box.append(prose(t("welcomeNotMedium"), "installer-prose--warning"))
+      }
+      if (!isUefi()) {
+        box.append(prose(t("diskErrNoUefi"), "installer-prose--warning"))
+      }
+      if (secureBootState() === "enforcing") {
+        box.append(prose(t("diskWarnSecureBoot"), "installer-prose--warning"))
+      }
+      if (isLowMemory(readTotalMemoryMib())) {
+        box.append(prose(t("welcomeLowRam"), "installer-prose--warning"))
       }
       netWarn = prose(t("welcomeNoNetwork"), "installer-prose--warning")
       netWarn.visible = !netOk

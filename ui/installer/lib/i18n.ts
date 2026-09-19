@@ -196,6 +196,7 @@ const strings = {
     quitBodyAfter:              "The installation has already run. Closing this window will not undo it.",
     runRestart:                 "Restart now",
     runClose:                   "Close",
+    welcomeLowRam:              "This computer has less than 3 GB of RAM. At least 4 GB is recommended for optimal performance and installation stability.",
   },
   es: {
     back:                       "Atrás",
@@ -389,6 +390,7 @@ const strings = {
     quitBodyAfter:              "La instalación ya se ha ejecutado. Cerrar esta ventana no la deshace.",
     runRestart:                 "Reiniciar ahora",
     runClose:                   "Cerrar",
+    welcomeLowRam:              "Este equipo tiene menos de 3 GB de RAM. Se recomiendan al menos 4 GB para un rendimiento óptimo y estabilidad en la instalación.",
   },
   fr: {
     back:                       "Retour",
@@ -582,6 +584,7 @@ const strings = {
     quitBodyAfter:              "L'installation a déjà eu lieu. Fermer cette fenêtre ne l'annule pas.",
     runRestart:                 "Redémarrer maintenant",
     runClose:                   "Fermer",
+    welcomeLowRam:              "Cet ordinateur dispose de moins de 3 Go de RAM. Au moins 4 Go sont recommandés pour des performances optimales et la stabilité de l'installation.",
   },
   de: {
     back:                       "Zurück",
@@ -775,6 +778,7 @@ const strings = {
     quitBodyAfter:              "Die Installation ist bereits gelaufen. Dieses Fenster zu schließen macht sie nicht rückgängig.",
     runRestart:                 "Jetzt neu starten",
     runClose:                   "Schließen",
+    welcomeLowRam:              "Dieser Rechner verfügt über weniger als 3 GB RAM. Mindestens 4 GB werden für optimale Leistung und Installationsstabilität empfohlen.",
   },
   it: {
     back:                       "Indietro",
@@ -968,6 +972,7 @@ const strings = {
     quitBodyAfter:              "L'installazione è già stata eseguita. Chiudere questa finestra non la annulla.",
     runRestart:                 "Riavvia ora",
     runClose:                   "Chiudi",
+    welcomeLowRam:              "Questo computer ha meno di 3 GB di RAM. Si consigliano almeno 4 GB per prestazioni ottimali e stabilità di installazione.",
   },
   "pt-BR": {
     back:                       "Voltar",
@@ -1161,6 +1166,7 @@ const strings = {
     quitBodyAfter:              "A instalação já foi executada. Fechar esta janela não a desfaz.",
     runRestart:                 "Reiniciar agora",
     runClose:                   "Fechar",
+    welcomeLowRam:              "Este computador tem menos de 3 GB de RAM. Recomenda-se pelo menos 4 GB para um desempenho ideal e estabilidade da instalação.",
   },
   "pt-PT": {
     back:                       "Voltar",
@@ -1354,6 +1360,7 @@ const strings = {
     quitBodyAfter:              "A instalação já foi executada. Fechar esta janela não a desfaz.",
     runRestart:                 "Reiniciar agora",
     runClose:                   "Fechar",
+    welcomeLowRam:              "Este computador tem menos de 3 GB de RAM. Recomenda-se pelo menos 4 GB para um desempenho ideal e estabilidade da instalação.",
   },
   pl: {
     back:                       "Wstecz",
@@ -1547,6 +1554,7 @@ const strings = {
     quitBodyAfter:              "Instalacja już się wykonała. Zamknięcie tego okna jej nie cofnie.",
     runRestart:                 "Uruchom ponownie",
     runClose:                   "Zamknij",
+    welcomeLowRam:              "Ten komputer ma mniej niż 3 GB pamięci RAM. Zaleca się co najmniej 4 GB w celu zapewnienia optymalnej wydajności i stabilności instalacji.",
   },
   nl: {
     back:                       "Terug",
@@ -1740,6 +1748,7 @@ const strings = {
     quitBodyAfter:              "De installatie is al uitgevoerd. Dit venster sluiten maakt dat niet ongedaan.",
     runRestart:                 "Nu opnieuw opstarten",
     runClose:                   "Sluiten",
+    welcomeLowRam:              "Deze computer heeft minder dan 3 GB RAM. Ten minste 4 GB wordt aanbevolen voor optimale prestaties en installatiestabiliteit.",
   },
   ru: {
     back:                       "Назад",
@@ -1933,6 +1942,7 @@ const strings = {
     quitBodyAfter:              "Установка уже выполнена. Закрытие окна её не отменит.",
     runRestart:                 "Перезагрузить сейчас",
     runClose:                   "Закрыть",
+    welcomeLowRam:              "На этом компьютере менее 3 ГБ оперативной памяти. Рекомендуется как минимум 4 ГБ для оптимальной производительности и стабильности установки.",
   },
   "zh-CN": {
     back:                       "后退",
@@ -2126,6 +2136,7 @@ const strings = {
     quitBodyAfter:              "安装已经执行完毕。关闭此窗口不会撤销它。",
     runRestart:                 "立即重启",
     runClose:                   "关闭",
+    welcomeLowRam:              "此计算机的内存少于 3 GB。建议至少 4 GB，以获得最佳性能和安装稳定性。",
   },
   ja: {
     back:                       "戻る",
@@ -2319,6 +2330,7 @@ const strings = {
     quitBodyAfter:              "インストールはすでに実行されました。このウィンドウを閉じても取り消されません。",
     runRestart:                 "今すぐ再起動",
     runClose:                   "閉じる",
+    welcomeLowRam:              "このコンピューターのRAMは3GB未満です。快適なパフォーマンスとインストールの安定性のために、少なくとも4GBを推奨します。",
   },
 } as const
 
