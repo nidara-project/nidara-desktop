@@ -19,6 +19,7 @@ import GLib from "gi://GLib"
 const CANDIDATES = [
   "/usr/share/nidara-installer/base.json",
   "./base.json",
+  "./ui/installer/base.json",
 ]
 
 export interface BaseConfig {

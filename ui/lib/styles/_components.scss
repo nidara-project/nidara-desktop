@@ -226,6 +226,40 @@ checkbutton:disabled {
 .nidara-row--single { min-height: 48px; }
 .nidara-row--double { min-height: 72px; }
 
+/* Stacked form row (NidaraStackedRow, NidaraFieldRow): layout container holding
+   controls underneath. Inert container — must NOT react to hover, active, selection
+   or focus, so only the inner control (entry, switch, dropdown) receives focus and
+   selection states. */
+.nidara-row.nidara-row--stacked {
+    background: transparent;
+    background-color: transparent;
+    outline: none;
+    box-shadow: none;
+
+    &:hover,
+    &:active,
+    &:selected,
+    &.is-selected,
+    &:focus,
+    &:focus-visible,
+    &:focus-within {
+        background: transparent;
+        background-color: transparent;
+        outline: none;
+        box-shadow: none;
+    }
+
+    &.nidara-row--warning {
+        background-color: var(--nidara-surface-hover);
+        &:hover { background-color: var(--nidara-surface-hover); }
+    }
+
+    &.nidara-row--error {
+        background-color: var(--nidara-surface-raised);
+        &:hover { background-color: var(--nidara-surface-raised); }
+    }
+}
+
 // (`.nidara-tile` deleted 2026-08-10. It was declared in `69cce101 refactor(ui):
 // universal CrystalRow/CrystalList` as a placeholder for that plan's Increments
 // 2-3 — its own message says so — and the tile migration never happened while
@@ -371,7 +405,8 @@ checkbutton:disabled {
     }
 }
 
-.nidara-table-row--error {
+.nidara-table-row--error,
+.nidara-row--error {
     background-color: var(--nidara-surface-raised);
     &:hover { background-color: var(--nidara-surface-strong); }
     .nidara-table-cell {
