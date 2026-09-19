@@ -79,8 +79,8 @@ export function InstallerWindow(): Gtk.Window {
     { id: "disk", titleKey: "diskTitle", iconName: "nd-drive-harddisk" },
     { id: "account", titleKey: "accountTitle", iconName: "nd-avatar-default" },
     { id: "system", titleKey: "systemTitle", iconName: "nd-cpu" },
-    { id: "summary", titleKey: "summaryTitle", iconName: "clipboard-list" },
-    { id: "run", titleKey: "runTitle", iconName: "rocket" },
+    { id: "summary", titleKey: "summaryTitle", iconName: "nd-clipboard-list" },
+    { id: "run", titleKey: "runTitle", iconName: "nd-rocket" },
   ]
 
   const sidebar = NidaraSidebar(

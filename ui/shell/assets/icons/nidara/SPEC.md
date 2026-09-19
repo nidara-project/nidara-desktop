@@ -1,6 +1,6 @@
 # Nidara icon spec
 
-**Version 1.** How to make an icon theme that changes Nidara's interface icons — the bar,
+**Version 2.** How to make an icon theme that changes Nidara's interface icons — the bar,
 the menus, the Control Centre, Settings, the login and lock screens.
 
 Nidara's interface asks for its own icon names, all starting with `nd-`. Only a theme that
@@ -26,7 +26,7 @@ thing, and a theme made for it draws that thing.
    Name=My Theme
    Comment=Interface icons for Nidara
    Inherits=hicolor
-   X-Nidara-Icon-Spec=1
+   X-Nidara-Icon-Spec=2
    Directories=16x16/actions,scalable/actions
 
    [16x16/actions]
@@ -97,6 +97,7 @@ check your drawing in place; it is not part of the contract and may grow.
 | `nd-bluetooth-active` | Bluetooth on | Bluetooth widget, Settings → Bluetooth |
 | `nd-bluetooth-disabled` | Bluetooth off | Bluetooth widget |
 | `nd-clipboard` | The clipboard history | Clipboard widget |
+| `nd-clipboard-list` | Summary of settings (checklist on a clipboard) | Installer |
 | `nd-contact-new` | Add a user | Settings → Users |
 | `nd-control-center` | The Control Centre | Bar button |
 | `nd-conversation-reset` | Start the conversation over | Assistant |
@@ -147,6 +148,7 @@ check your drawing in place; it is not part of the contract and may grow.
 | `nd-preferences-system-network` | Network / region | Settings → Network, installer |
 | `nd-preferences-system-notifications` | Notification settings | Settings → Notifications |
 | `nd-preferences-system-time` | Date, time and region | Settings → Region |
+| `nd-rocket` | Start installation | Installer |
 | `nd-screenshot` | Take a screenshot | Screenshot widget |
 | `nd-sidebar-show` | Show or hide the sidebar | Settings, installer |
 | `nd-system-lock-screen` | Lock (the screen, or a secured network) | System menu, Wi-Fi lists |
@@ -169,4 +171,5 @@ check your drawing in place; it is not part of the contract and may grow.
 
 ## Changes
 
+- **2** — add `nd-clipboard-list` and `nd-rocket` (installer summary and run steps).
 - **1** — first version: 83 names.

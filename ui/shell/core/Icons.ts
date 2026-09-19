@@ -94,6 +94,7 @@ export const ICON_NAMES = [
     "nd-bluetooth-active",
     "nd-bluetooth-disabled",
     "nd-clipboard",
+    "nd-clipboard-list",
     "nd-contact-new",
     "nd-control-center",
     "nd-conversation-reset",
@@ -144,6 +145,7 @@ export const ICON_NAMES = [
     "nd-preferences-system-network",
     "nd-preferences-system-notifications",
     "nd-preferences-system-time",
+    "nd-rocket",
     "nd-screenshot",
     "nd-sidebar-show",
     "nd-system-lock-screen",
@@ -189,7 +191,7 @@ const THEME_KEY = "interface-icon-theme"
  * names added since simply fall back to ours; a newer one is used too, and the
  * names we do not know are never asked for. Bump this when `SPEC.md` gains names.
  */
-export const ICON_SPEC_VERSION = 1
+export const ICON_SPEC_VERSION = 2
 const SPEC_KEY = "X-Nidara-Icon-Spec"
 
 /**
