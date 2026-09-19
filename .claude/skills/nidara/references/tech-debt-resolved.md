@@ -59,8 +59,15 @@ in both, stronger in light, because a specular has to survive a bright body.
   by other surfaces is the wrong lever for a bug you can see in one.
 - ⚠️ **Do not reintroduce a CSS material for a layer-shell surface without moving the painter too.**
   Two vocabularies for one surface is exactly how this one died.
-- ⚠️ `token-contract-check` catches "I paint with a token I do not define". It does not catch the
-  other direction — a token defined, emitted and read by nobody — and nothing else does either.
+- ✅ `token-contract-check` catches "I paint with a token I do not define". It did not catch the
+  other direction — a token defined, emitted and read by nobody — and nothing else did, which is
+  why this item existed at all. **`scripts/ci/token-orphan-check.mjs` now does** (2026-09-20, with
+  a control in the `styles` job). On its first run it found ten more orphans, including
+  `--nidara-shadow-lg`, which #600 had killed in the same commit as the rim and which the manual
+  sweep for this item missed: `--nidara-icon-shadow` (last read by #37, 2026-07-15),
+  `--nidara-glass` and `--nidara-warning` (#99, 2026-08-09), `--nidara-accent-15`/`-20` (#114,
+  2026-08-10), and four that never had a reader in the whole history (`--nidara-bg-backdrop`,
+  `--nidara-success`, `--nidara-warning-rgb`, `--nidara-accent-08`). All ten were deleted with it.
 
 ---
 

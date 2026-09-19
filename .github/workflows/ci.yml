@@ -151,6 +151,40 @@ jobs:
       - name: Every bundle defines the tokens it paints with
         run: node scripts/ci/token-contract-check.mjs
 
+      # ...and the MIRROR IMAGE of that, which nothing caught for months. A token
+      # that is defined, computed by the engine and written into every process's
+      # stylesheet, and that no rule reads, is not tidiness debt: it is a value that
+      # DRIFTS from the one on screen. `--nidara-edge` (the rim of light) was retuned
+      # in #600 to fix a white hairline on window chrome and changed nothing, because
+      # its last reader had been deleted in the same commit (tech-debt #106). The
+      # check that was supposed to notice was satisfied — painting with a token you
+      # do not define is the other direction.
+      - name: Every token a bundle defines is read by something
+        run: node scripts/ci/token-orphan-check.mjs
+
+      # ⚠️ And the control, because a check that has only ever printed "ok" has been
+      # run, not tested. This declares a token nothing can possibly read and requires
+      # the check to come back non-zero. It proves the mechanism (defined AND unread
+      # ⇒ fail); it does not prove the comment-stripping, which is what stops a token
+      # NAMED in prose from counting as a reader — that half is exercised by the repo
+      # itself, which names tokens in comments on nearly every page.
+      - name: The orphan check can fail (control, must be caught)
+        run: |
+          cp ui/shell/styles/_base.scss /tmp/base.bak
+          sed -i 's|^    --nidara-border: |    --nidara-dead-canary: #ff00ff;\n    --nidara-border: |' \
+            ui/shell/styles/_base.scss
+          if git diff --quiet ui/shell/styles/_base.scss; then
+            echo "::error::the control patched nothing — the anchor declaration has moved or been reworded"
+            exit 1
+          fi
+          if node scripts/ci/token-orphan-check.mjs; then
+            echo "::error::the check passed with a token nothing reads — it is not checking what it prints"
+            cp /tmp/base.bak ui/shell/styles/_base.scss
+            exit 1
+          fi
+          cp /tmp/base.bak ui/shell/styles/_base.scss
+          git diff --quiet ui/shell/styles/_base.scss
+
       # A row's height lives in CSS, and the code that reasons about rows — a list
       # asking for six WHOLE rows, a window whose natural height follows from that —
       # cannot read CSS. Same mirror, same silence as the blur thresholds.

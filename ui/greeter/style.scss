@@ -58,8 +58,6 @@
   // the two lists must not drift apart.
   --nidara-accent-rgb:     0, 136, 255;
   --nidara-accent-10:      rgba(0, 136, 255, 0.10);
-  --nidara-accent-15:      rgba(0, 136, 255, 0.15);
-  --nidara-accent-20:      rgba(0, 136, 255, 0.20);
   --nidara-accent-30:      rgba(0, 136, 255, 0.30);
   // (--nidara-focus-ring, a 35 %-alpha accent halo, is GONE from both this block
   // and accentCssFor(). It was the dull focus state; the ring is now solid
@@ -89,15 +87,16 @@
   // lockscreen paints these capsules itself (widget/GlassBackdrop.ts) and a
   // Cairo painter cannot read a CSS custom property. Same deal as the radius
   // ladder: two representations, one decision, they move together.
-  // ⚠️ These three are now consumed almost entirely by the PAINTER, through
-  // LOCK_GLASS in ui/lib/tokens.ts — the CSS copies below are what is left for
-  // the handful of surfaces still drawn by CSS (the avatar ring, the dropdown
+  // ⚠️ The body FILL is the painter's alone now: its CSS copy (`--nidara-glass`,
+  // 0.24 = LOCK_GLASS.fill.a = the shell's GLASS_RANGE.min) was declared in both
+  // skins and read by no rule, and it went on 2026-09-20 with the rest of the
+  // orphans (tech-debt #106). The value itself did not move — it lives in
+  // LOCK_GLASS, where `blur-threshold-check` reads it. The two RIMS below are still
+  // CSS, for the surfaces still drawn that way (the avatar ring, the dropdown
   // popovers, the separator). Change one, change the other.
-  --nidara-glass:          rgba(22, 22, 34, 0.24);  // = LOCK_GLASS.fill.a = the shell's GLASS_RANGE.min
   --nidara-glass-border:   rgba(255, 255, 255, 0.22);
   --nidara-glass-border-sm:rgba(255, 255, 255, 0.14);
 
-  --nidara-warning:        #f3ba4b;
 
   // (--nidara-glass-light and --nidara-danger were declared here with zero
   // consumers. The danger one could not have had any: see .greeter-error, which
@@ -143,7 +142,6 @@
   --nidara-accent-fg:      #ffffff;
   --nidara-danger:         #ff3b30;
   --nidara-danger-rgb:     255, 59, 48;
-  --nidara-shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.40), 0 2px 6px rgba(0, 0, 0, 0.24);
   --nidara-bg:             rgba(22, 22, 34, 0.5);
 
   // ⚠️ THIS PREMISE EXPIRED, and the value outlived it by long enough to ship.
@@ -190,7 +188,7 @@
 // universal out-specifies the bare `*` that defines the dark set above.
 //
 // ⚠️ WHAT IS DELIBERATELY NOT HERE, and each for a different reason.
-//   · `--nidara-danger`, `--nidara-warning`, `--nidara-accent-fg`, `--nidara-border`
+//   · `--nidara-danger`, `--nidara-accent-fg`, `--nidara-border`
 //     (a neutral grey by construction) mean the same thing in both skins. A token
 //     repeated for no reason is a token that can drift for no reason.
 //   · Every ACCENT token, including `--nidara-state-selected`. `accentCssFor()`
@@ -224,7 +222,9 @@ window.skin-light * {
   // lighter-looking number here would stop the compositor blurring this screen at
   // all. `GLASS_TINT.light` is #fafafa, not pure white: light vibrancy is off-white
   // in the prior art we follow, and pure white has no material.
-  --nidara-glass:          rgba(250, 250, 250, 0.24);
+  // ⚠️ That decision now lives ONLY in `GLASS_TINT.light` / `LOCK_GLASS`
+  // (ui/lib/tokens.ts): the `--nidara-glass` copy that stood here had no reader and
+  // went with the other orphans on 2026-09-20 (tech-debt #106).
 
   // 🔑 THIS PAIR IS TECH-DEBT #87(b). These are not the capsule's painted rim — that
   // is a SPECULAR (the colour of the light, not of the surface) and stays white in
@@ -254,7 +254,6 @@ window.skin-light * {
 
   // Light shadows are not the dark ones dimmed — there is more ambient contrast to
   // work with, so they run at a fraction of the alpha. The shell's light set.
-  --nidara-shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 // ── Shipped icons ───────────────────────────────────────────────────────────

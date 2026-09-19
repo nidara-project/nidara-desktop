@@ -178,7 +178,7 @@ console.log(`  ${ceilingOk ? "ok  " : "FAIL"}  vs nidara-greeter ignore_alpha ${
 if (!ceilingOk) bad++
 
 const avatarOk = avatarAlpha >= greeterThreshold
-console.log(`\nlogin bodies that are NOT painted with --nidara-glass: .greeter-avatar-fallback = ${avatarAlpha}`)
+console.log(`\nlogin bodies that are NOT painted with LOCK_GLASS.fill: .greeter-avatar-fallback = ${avatarAlpha}`)
 console.log(`  ${avatarOk ? "ok  " : "FAIL"}  vs nidara-greeter ignore_alpha ${greeterThreshold}` +
             (avatarOk ? `  — clears it on its own`
                       : `  — UNDER IT: nothing frosts behind this body unless another layer carries it`))

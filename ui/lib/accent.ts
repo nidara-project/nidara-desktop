@@ -85,8 +85,6 @@ export function accentCssFor(accent: string | null | undefined): string {
     `  --nidara-accent:     ${color};`,
     `  --nidara-accent-rgb: ${rgb};`,
     `  --nidara-accent-10:  rgba(${rgb}, 0.10);`,
-    `  --nidara-accent-15:  rgba(${rgb}, 0.15);`,
-    `  --nidara-accent-20:  rgba(${rgb}, 0.20);`,
     `  --nidara-accent-30:  rgba(${rgb}, 0.30);`,
     `  --nidara-state-selected: rgba(${rgb}, 0.22);`,
     `}`,

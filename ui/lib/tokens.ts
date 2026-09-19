@@ -227,7 +227,9 @@ export const LOCK_GLASS = {
      *  that layer entirely — no error, no crash, just a flat login screen nobody is diffing.
      *  `scripts/ci/blur-threshold-check.mjs` reads both and is the only thing that notices.
      *
-     *  ⚠️ MIRRORED as `--nidara-glass` in ui/greeter/style.scss. Change one, change the other. */
+     *  ⚠️ NOT mirrored in CSS any more: the `--nidara-glass` copy in ui/greeter/style.scss
+ *  had no reader and went on 2026-09-20 (tech-debt #106). This constant is the only home,
+ *  and `scripts/ci/blur-threshold-check.mjs` reads it from here. */
     fill: { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b, a: 0.24 },
     /** 1px rim, primary controls. `--nidara-glass-border`. */
     rimStrong: { r: 1, g: 1, b: 1, a: 0.22 },
