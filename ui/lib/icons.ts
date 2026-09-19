@@ -65,7 +65,7 @@ function getCandidateIconDirs(): string[] {
  * an icon, never the login screen. Callers pair it with the theme name they
  * used before as a last resort — see `ndImage`.
  */
-export function ndIcon(name: string): Gio.Icon | null {
+export function ndIcon(name: string): Gio.FileIcon | null {
     for (const dir of getCandidateIconDirs()) {
         const path = `${dir}/${name}-symbolic.svg`
         if (GLib.file_test(path, GLib.FileTest.EXISTS)) {
@@ -78,7 +78,7 @@ export function ndIcon(name: string): Gio.Icon | null {
 /**
  * The official Nidara symbolic logo icon, recolourable by GTK CSS.
  */
-export function nidaraLogoIcon(): Gio.Icon | null {
+export function nidaraLogoIcon(): Gio.FileIcon | null {
     const candidates = [
         ...getCandidateShellRoots().map(r => `${r}/assets/nidara/assets/nidara-symbolic.svg`),
         "/usr/share/nidara/ui/shell/assets/nidara/assets/nidara-symbolic.svg",

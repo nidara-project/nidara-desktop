@@ -7,7 +7,7 @@ export interface NidaraSidebarItem {
     id: string
     label: string
     /** Symbolic gicon shown before the label (tinted via .nd-icon). */
-    icon?: Gio.FileIcon | Gio.Icon
+    icon?: Gio.FileIcon
     /** Theme icon name fallback when no gicon is supplied. */
     iconName?: string
     /** Draw a thin, title-less divider before this item (thematic
