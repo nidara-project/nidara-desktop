@@ -21,9 +21,11 @@ import { InstallerWindow } from "./widget/InstallerWindow"
 // /usr/share/themes/nidara/gtk-4.0/gtk.css, this sheet is the only CSS there is.
 GLib.setenv("GTK_THEME", "nidara", true)
 
-const cssPath = GLib.file_test("./style.css", GLib.FileTest.EXISTS)
-  ? "./style.css"
-  : "/usr/share/nidara/ui/installer/style.css"
+const cssPath = [
+  "./style.css",
+  "./ui/installer/style.css",
+  "/usr/share/nidara/ui/installer/style.css",
+].find(p => GLib.file_test(p, GLib.FileTest.EXISTS)) ?? "/usr/share/nidara/ui/installer/style.css"
 
 app.start({
   applicationId: "org.nidara.installer",
