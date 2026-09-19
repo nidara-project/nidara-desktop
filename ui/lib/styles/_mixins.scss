@@ -9,9 +9,10 @@
 // keeps seeing them under the same names and the compiled sheet is unchanged.
 //
 // ⚠️ Only what the KIT uses is here. `material-control`, `material-popover` and
-// the `material($level)` vibrancy ladder stayed in the shell on purpose: they
-// describe full-window layer-shell surfaces (how much wallpaper bleeds through a
-// bar or an overlay), which is a shell concern with no meaning in a login screen.
+// the `material($level)` vibrancy ladder used to stay in the shell for a reason
+// that turned out not to be true — they described full-window layer-shell surfaces,
+// and those surfaces are painted in Cairo. Nothing ever included them; all three
+// were buried on 2026-09-20 (tech-debt #106).
 //
 // ⚠️ Nothing here may emit CSS at import time — a mixin emits only where it is
 // included, which is what keeps this file free to be imported by three bundles.
@@ -19,8 +20,8 @@
 //
 // ⚠️ These mixins spend the custom properties listed in `_components.scss`'s
 // token contract (`--nidara-surface-hover`, `--nidara-border`,
-// `--nidara-state-selected`, `--nidara-edge`…). A bundle that includes them
-// without defining those gets declarations that are silently dropped.
+// `--nidara-state-selected`…). A bundle that includes them without defining those
+// gets declarations that are silently dropped.
 
 @use 'tokens' as *;
 

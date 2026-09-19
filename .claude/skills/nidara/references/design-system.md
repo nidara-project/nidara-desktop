@@ -1769,9 +1769,10 @@ rule silently.
 **Its sibling `ui/lib/styles/_mixins.scss` (2026-08-10) holds the mixins the KIT needs** —
 `nidara-reset`, `glass`, `material-card`, `nidara-row-states`, `nidara-tile-states` — for the
 same reason and with the same `@forward` from `_base.scss`. `material-control`,
-`material-popover` and the `material($level)` vibrancy ladder deliberately stayed in the
-shell: they describe full-window layer-shell surfaces, which has no meaning in a login
-screen.
+`material-popover` and the `material($level)` vibrancy ladder stayed in the shell on the
+grounds that they described full-window layer-shell surfaces — and on 2026-09-20 all three
+were deleted instead (tech-debt #106): those surfaces are painted in Cairo, the mixins had
+no call sites at all, and the tokens they spent had no reader but them.
 
 Three rules for extending it:
 
@@ -2141,20 +2142,16 @@ only when someone boots a VM). The `styles` job now compiles it too.
   circular `border-radius` (p=2.0) mismatches Hyprland's squircle (p=3.2) and visibly desyncs
   from the compositor border during window animations. Settings, About, and the installer all
   rely on Hyprland to frame and round the window.
-  ⚠️ **`--nidara-edge` is NOT that border, so do not retune it to fix window chrome.** It is the
-  rim of light — a specular, WHITE in both modes and stronger in light, because it has to survive
-  a bright body — and it belongs to the glass vocabulary, not to a window frame. Until #600 the
-  window card *did* paint it (`glass(floating)` carried `border: var(--nidara-edge)`), which is
-  exactly why a light-mode window wore an opaque white hairline inside Hyprland's own border. #600
-  fixed that the right way — remove the border, the radius and the shadow, and let the compositor
-  draw all three — and then ALSO turned the token's light value to ink. **That second edit is the
-  one to learn from**: it landed on a token the same commit had just orphaned. `glass(floating)`
-  was its only live reader; what is left is `@mixin material($level)` in
-  `ui/shell/styles/_base.scss`, which nothing includes (tech-debt #106). So it changed no pixel,
-  and it left the greeter's own #87(b) comment contradicting the value three lines beneath it. The
-  value is restored (2026-09-19); the removal is not. Window chrome is fixed in the window's rules
-  (`glass(floating)`, `window.nidara-app-window`), never in a shared token — a token reached by
-  other surfaces is the wrong lever for a bug you can see in one.
+  ⚠️ **There is no CSS rim token to reach for, and that is deliberate.** `--nidara-edge` — the rim
+  of light — was buried on 2026-09-20 (tech-debt #106) together with the whole `material*` vocabulary
+  of `_base.scss`. The rim is a SPECULAR, it is painted in Cairo (`ui/lib/glass-paint.ts`, mirrored
+  as numbers in `LOCK_GLASS`), and the window card was the last CSS surface still painting it —
+  which is exactly what #600 removed when it gave window chrome back to Hyprland. So: **window chrome
+  is fixed in the window's own rules** (`glass(floating)`, `window.nidara-app-window`), never in a
+  shared token, and a layer-shell surface gets its material from the painter, not from CSS. #600 also
+  retuned that token's light value to ink while fixing the double border; it changed no pixel,
+  because by then nothing read it. If you find yourself adjusting a token to fix something you can
+  see on one surface, that is the signal you are on the wrong lever.
 - **A capsule's VISIBLE edge is `GLASS_INSET` (2px) inside its allocation.** `drawSquircle`
   paints the glass in from the widget rect so the border stroke never lands on the allocation
   edge, which means **a child laid out flush to the rect overhangs the shape**. Nothing warns

@@ -231,7 +231,10 @@ export const LOCK_GLASS = {
     fill: { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b, a: 0.24 },
     /** 1px rim, primary controls. `--nidara-glass-border`. */
     rimStrong: { r: 1, g: 1, b: 1, a: 0.22 },
-    /** 1px rim, everything else — the shell's `--nidara-edge` colour exactly. */
+    /** 1px rim, everything else. The rim of light has ONE home now: this painter and
+     *  its mirror in `ui/lib/glass-paint.ts`. The CSS twin (`--nidara-edge`) was buried
+     *  on 2026-09-20 — tech-debt #106 — when its last reader, the window card, gave
+     *  window chrome back to Hyprland. */
     rimSubtle: { r: 1, g: 1, b: 1, a: 0.14 },
 } as const
 

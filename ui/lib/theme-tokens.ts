@@ -209,45 +209,26 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
   const pbG = parseInt(popoverBg.slice(3, 5), 16)
   const pbB = parseInt(popoverBg.slice(5, 7), 16)
 
-  // Material vibrancy ladder. Anchored to our reference values for our blur
-  // profile (size=2, passes=2, vibrancy=0.4 → "subtle" row: thin .30 / regular
-  // .45 / thick .65 / chrome .85), then OFFSET by the overlay opacity so the
-  // ladder still responds to user opacity.
-  // lower z → thicker; higher z → thinner. Clamped to keep blur visible + legible.
-  const ba = bgAlphaNum
-  const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
-  const delta = ba - 0.25
-  const matThin    = clamp(0.30 + delta, 0.18, 0.50).toFixed(3)
-  const matRegular = clamp(0.45 + delta, 0.30, 0.65).toFixed(3)
-  const matThick   = clamp(0.65 + delta, 0.50, 0.85).toFixed(3)
-  const matChrome  = clamp(0.85 + delta, 0.70, 0.95).toFixed(3)
-
   // Shadows: "whisper" range, heavier in dark (less ambient contrast).
   const sh = isDark
     ? {
         sm: "0 1px 2px rgba(0,0,0,0.20), 0 1px 1px rgba(0,0,0,0.16)",
         md: "0 2px 8px rgba(0,0,0,0.28), 0 1px 2px rgba(0,0,0,0.18)",
         lg: "0 8px 24px rgba(0,0,0,0.40), 0 2px 6px rgba(0,0,0,0.24)",
-        popover: "0 8px 24px rgba(0,0,0,0.22), 0 2px 6px rgba(0,0,0,0.14)",
         icon: "0 2px 5px rgba(0,0,0,0.6)",
       }
     : {
         sm: "0 1px 2px rgba(0,0,0,0.06), 0 1px 1px rgba(0,0,0,0.04)",
         md: "0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05)",
         lg: "0 8px 24px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06)",
-        popover: "0 10px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)",
         icon: "0 2px 5px rgba(0,0,0,0.20)",
       }
-  // Rim-of-light edge: a faint WHITE top hairline on glass, in BOTH modes, and
-  // stronger in light — a specular has to survive a bright body. It is not a
-  // border and it does not follow the mode's ink.
-  // ⚠️ This is NOT the window's border: Hyprland draws that one. `glass(floating)`
-  // painted this token until #600 removed the border — correctly, the compositor
-  // owns it — and that removal took away the token's last live reader (what is
-  // left, `@mixin material($level)`, is included by nothing: tech-debt #106). The
-  // same commit also turned this value to ink, which therefore changed no pixel.
-  // Restored to the documented intent; fix window chrome in the window's own rules.
-  const edge = isDark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(255,255,255,0.50)"
+  // ⚠️ `--nidara-edge` (the rim of light) is NOT emitted any more, and neither are
+  // the four `--nidara-material-*` or `--nidara-shadow-popover`. Buried 2026-09-20,
+  // tech-debt #106: the rim is painted in Cairo (`ui/lib/glass-paint.ts`, mirrored
+  // as numbers in `LOCK_GLASS`), the CSS copy had one reader left — the window card
+  // — and #600 correctly took that away by giving window chrome back to Hyprland.
+  // A token nothing reads is a value that drifts from the one on screen.
 
   return [
     `  --nidara-accent: ${accent};`,
@@ -287,15 +268,9 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
     `  --nidara-warning-rgb: 243, 186, 75;`,
     `  --nidara-popover-bg: rgba(${pbR}, ${pbG}, ${pbB}, ${popoverAlpha});`,
     `  --nidara-popover-border: ${popoverBorder};`,
-    `  --nidara-material-thin: rgba(${bg}, ${matThin});`,
-    `  --nidara-material-regular: rgba(${bg}, ${matRegular});`,
-    `  --nidara-material-thick: rgba(${bg}, ${matThick});`,
-    `  --nidara-material-chrome: rgba(${bg}, ${matChrome});`,
-    `  --nidara-edge: ${edge};`,
     `  --nidara-shadow-sm: ${sh.sm};`,
     `  --nidara-shadow-md: ${sh.md};`,
     `  --nidara-shadow-lg: ${sh.lg};`,
-    `  --nidara-shadow-popover: ${sh.popover};`,
     `  --nidara-icon-shadow: ${sh.icon};`,
   ]
 }

@@ -18,6 +18,52 @@ one of these describes, read it first.
 
 ---
 
+### 106. ✅ RESOLVED same day (2026-09-20) — the `material*` vocabulary and `--nidara-edge` are buried; the rim of light is Cairo's alone (2026-09-19)
+
+**What it was.** `ui/shell/styles/_base.scss` carried three mixins nobody included —
+`material-control`, `material-popover` and the `material($level)` vibrancy ladder (thin / regular /
+thick / chrome, "pick a material, never hand-write background/border") — and the ladder was the last
+reader of `--nidara-edge`, the rim of light. So the rim was a token the shell emitted, the greeter
+and the installer defined, `token-contract-check` was satisfied by, and **no rule consumed**.
+
+**How it got that way, which is the part worth keeping.** The CSS material vocabulary was written for
+full-window layer-shell surfaces, and then Cairo took that job: a bar or an overlay paints
+`background: transparent` (`ui/shell/styles/_bar.scss`) and the silhouette, the Fresnel rim ramp and
+the shadow all come from `ui/lib/glass-paint.ts`, with the numbers mirrored as TS constants
+(`LOCK_GLASS.rimSubtle` = white 0.14, "the shell's `--nidara-edge` colour exactly"). Two
+representations of one decision, and the CSS one quietly lost its call sites. What kept it alive on
+paper was that **one** CSS surface still painted the rim: the window card, `glass(floating)` →
+`border: var(--nidara-edge)`. #600 removed that border — correctly, because Hyprland owns window
+chrome (`border_size = 1`, squircle `rounding_power 3.2`, compositor shadow) — and in the same commit
+also retuned the token's light value from white 0.50 to ink 0.08. That second edit is the tell: it
+changed no pixel, and it left the greeter's #87(b) comment contradicting the value three lines
+beneath it.
+
+**What was deleted (2026-09-20, PR #605):** the three mixins; `--nidara-edge`,
+`--nidara-material-thin/regular/thick/chrome` and `--nidara-shadow-popover`, in both their static
+`_base.scss` fallbacks and the runtime emission in `ui/lib/theme-tokens.ts` (with the `matThin…
+matChrome` ladder computation and the `sh.popover` shadow entry); and the greeter's two
+`--nidara-edge` definitions. `--nidara-popover-bg` and `--nidara-popover-border` were KEPT: they look
+like part of the same closure, but `ui/lib/styles/_components.scss` reads them through the
+two-argument form `var(--token, fallback)`, which a `var(--token)` grep does not see.
+
+**The recipes, so that reviving is a lookup and not archaeology.** The ladder was anchored to our
+blur profile (size 2, passes 2, vibrancy 0.4 → thin .30 / regular .45 / thick .65 / chrome .85), then
+offset by the overlay opacity (`delta = bgAlpha − 0.25`) and clamped (.18–.50 / .30–.65 / .50–.85 /
+.70–.95) so the ladder still answered the user's transparency slider while keeping blur visible and
+text legible. The rim was `1px solid rgba(255,255,255,0.14)` in dark and `…,0.50)` in light — white
+in both, stronger in light, because a specular has to survive a bright body.
+
+**Standing rules this leaves:**
+- ⚠️ **Window chrome is fixed in the window's own rules**, never in a shared token. A token reached
+  by other surfaces is the wrong lever for a bug you can see in one.
+- ⚠️ **Do not reintroduce a CSS material for a layer-shell surface without moving the painter too.**
+  Two vocabularies for one surface is exactly how this one died.
+- ⚠️ `token-contract-check` catches "I paint with a token I do not define". It does not catch the
+  other direction — a token defined, emitted and read by nobody — and nothing else does either.
+
+---
+
 ### 102 (the second one — the number was reused by a slip; cite it by title). In MANUAL mode the bootloader patching was a silent no-op whenever the ESP was not at /boot — FIXED with the migration that removed the question (2026-09-04)
 
 `lib/bootloader.ts` patches the loader entries the install produced — the titles, the kernel
