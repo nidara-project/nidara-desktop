@@ -12,6 +12,7 @@ import { t } from "../lib/i18n"
 // Re-exported because the nine call sites in `steps/` are asking a step-level
 // question — "how do I show this to somebody" — and that is what this file is.
 export { formatSize } from "../lib/format-size"
+export { formatDuration, formatLiveTimer } from "../lib/duration"
 
 export function heading(text: string): Gtk.Label {
   return new Gtk.Label({
