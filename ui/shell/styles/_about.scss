@@ -20,6 +20,8 @@ window#nidara-about,
 .about-floating-window {
     background: transparent;
     background-color: transparent;
+    border: none;
+    box-shadow: none;
 
     // ⚠️ EVERY label here needs the token EXPLICITLY. This window was the one
     // surface of the shell whose text was left to GTK's default colour, and in

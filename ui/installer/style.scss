@@ -43,7 +43,10 @@
 // transparent background out-ranks the glass and the card stops painting. `color`
 // needs no help reaching the children: it inherits.
 window.nidara-installer-window {
+  background: transparent;
   background-color: transparent;
+  box-shadow: none;
+  border: none;
   color: var(--nidara-text);
 }
 
@@ -56,9 +59,9 @@ window.nidara-installer-window {
 
 // ── The frame ────────────────────────────────────────────────────────────────
 window.nidara-installer-window {
-  // The card. `.nidara-window-glass` (the kit's, @include glass(floating)) is
-  // what paints it; only the radius clip is ours.
-  .installer-root { padding: 0; border-radius: var(--nidara-radius-lg); }
+  // The card. `.nidara-window-glass` (the kit's, @include glass(floating))
+  // paints the background fill. Hyprland handles window border, rounding and shadows.
+  .installer-root { padding: 0; border: none; border-radius: 0; box-shadow: none; }
 
   .installer-title {
     font-size: $fs-title-3;

@@ -443,8 +443,18 @@ checkbutton:disabled {
 }
 
 /* ── Window shell (NidaraWindow) ──────────────────────────────────────────────
-   Chrome for a settings-style window. The sidebar capsule / collapsed popover /
-   icon-btn live with the rest of the window CSS for now. */
+   Chrome for any Nidara application window. The compositor (Hyprland) owns
+   the window border (border_size = 1), rounding (squircle 3.2), shadows, and
+   tiling. The GTK toplevel stays transparent, and .nidara-window-glass fills
+   the window area with the translucent glass background without inner borders
+   or inner radii that would conflict with Hyprland. */
+window.nidara-app-window {
+    background: transparent;
+    background-color: transparent;
+    box-shadow: none;
+    border: none;
+}
+
 .nidara-window-glass {
     @include glass(floating);
 }
