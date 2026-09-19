@@ -27,8 +27,36 @@ import GLib from "gi://GLib"
  * decoration: drop it and the icon goes black again with no error anywhere.
  */
 
-const SHELL_ROOT = GLib.getenv("NIDARA_SHELL_ROOT") ?? "/usr/share/nidara/ui/shell"
-const DIR = `${SHELL_ROOT}/assets/icons/nidara/scalable/actions`
+function getCandidateShellRoots(): string[] {
+    const roots: string[] = []
+
+    const envRoot = GLib.getenv("NIDARA_SHELL_ROOT")
+    if (envRoot) roots.push(envRoot)
+
+    const devMarker = `${GLib.get_home_dir()}/.config/nidara/.dev`
+    try {
+        const [ok, bytes] = GLib.file_get_contents(devMarker)
+        if (ok) {
+            const repoDir = new TextDecoder().decode(bytes).trim()
+            if (repoDir) roots.push(`${repoDir}/ui/shell`)
+        }
+    } catch {}
+
+    roots.push("./ui/shell")
+    roots.push("../shell")
+    roots.push("../../ui/shell")
+    roots.push("/usr/share/nidara/ui/shell")
+    return roots
+}
+
+function getCandidateIconDirs(): string[] {
+    const dirs: string[] = []
+    for (const root of getCandidateShellRoots()) {
+        dirs.push(`${root}/assets/icons/nidara/scalable/actions`)
+    }
+    dirs.push("/usr/share/icons/nidara/scalable/actions")
+    return dirs
+}
 
 /**
  * The shipped icon `name`, or `null` when the asset tree is not there.
@@ -37,19 +65,22 @@ const DIR = `${SHELL_ROOT}/assets/icons/nidara/scalable/actions`
  * an icon, never the login screen. Callers pair it with the theme name they
  * used before as a last resort — see `ndImage`.
  */
-export function ndIcon(name: string): Gio.Icon | null {
-    const path = `${DIR}/${name}-symbolic.svg`
-    return GLib.file_test(path, GLib.FileTest.EXISTS)
-        ? Gio.FileIcon.new(Gio.File.new_for_path(path))
-        : null
+export function ndIcon(name: string): Gio.FileIcon | null {
+    for (const dir of getCandidateIconDirs()) {
+        const path = `${dir}/${name}-symbolic.svg`
+        if (GLib.file_test(path, GLib.FileTest.EXISTS)) {
+            return Gio.FileIcon.new(Gio.File.new_for_path(path))
+        }
+    }
+    return null
 }
 
 /**
  * The official Nidara symbolic logo icon, recolourable by GTK CSS.
  */
-export function nidaraLogoIcon(): Gio.Icon | null {
+export function nidaraLogoIcon(): Gio.FileIcon | null {
     const candidates = [
-        `${SHELL_ROOT}/assets/nidara/assets/nidara-symbolic.svg`,
+        ...getCandidateShellRoots().map(r => `${r}/assets/nidara/assets/nidara-symbolic.svg`),
         "/usr/share/nidara/ui/shell/assets/nidara/assets/nidara-symbolic.svg",
     ]
     for (const path of candidates) {
