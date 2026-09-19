@@ -86,7 +86,7 @@ export function InstallerWindow(): Gtk.Window {
   // Tela, not Adwaita, which is what a clean Arch install has.
   const sidebarDefs = [
     { id: "welcome", titleKey: "welcomeTitle", iconName: "nd-hand", themeFallback: "go-home-symbolic" },
-    { id: "region", titleKey: "regionTitle", iconName: "nd-preferences-system-network", themeFallback: "preferences-system-network-symbolic" },
+    { id: "region", titleKey: "regionTitle", iconName: "nd-globe", themeFallback: "globe-symbolic" },
     { id: "disk", titleKey: "diskTitle", iconName: "nd-drive-harddisk", themeFallback: "drive-harddisk-symbolic" },
     { id: "account", titleKey: "accountTitle", iconName: "nd-avatar-default", themeFallback: "avatar-default-symbolic" },
     { id: "system", titleKey: "systemTitle", iconName: "nd-cpu", themeFallback: "computer-symbolic" },

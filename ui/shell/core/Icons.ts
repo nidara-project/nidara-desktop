@@ -107,6 +107,7 @@ export const ICON_NAMES = [
     "nd-dock",
     "nd-drive-harddisk",
     "nd-emblem-default",
+    "nd-globe",
     "nd-hand",
     "nd-input-gaming",
     "nd-input-keyboard",
@@ -191,7 +192,7 @@ const THEME_KEY = "interface-icon-theme"
  * names added since simply fall back to ours; a newer one is used too, and the
  * names we do not know are never asked for. Bump this when `SPEC.md` gains names.
  */
-export const ICON_SPEC_VERSION = 2
+export const ICON_SPEC_VERSION = 3
 const SPEC_KEY = "X-Nidara-Icon-Spec"
 
 /**
