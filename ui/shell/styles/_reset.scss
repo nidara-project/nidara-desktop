@@ -141,5 +141,5 @@ window.nidara-settings-window {
     background: transparent;
     box-shadow: none;
     border: none;
-    // Glass surface + border-radius live on .nidara-window-glass (its direct child)
+    // Glass surface fill lives on .nidara-window-glass (Hyprland handles border, rounding and shadows)
 }

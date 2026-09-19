@@ -49,9 +49,13 @@
         box-shadow: var(--nidara-shadow-md);
     } @else if $level == floating {
         background-color: var(--nidara-bg);
-        border: var(--nidara-edge);
-        border-radius: var(--nidara-radius-lg);
-        box-shadow: var(--nidara-shadow-lg);
+        // Hyprland owns window borders (border_size = 1), rounding (squircle 3.2),
+        // and shadows. The window card must not paint an inner border (which creates
+        // double borders and light-mode white rims), inner radius (which mismatches
+        // Hyprland's squircle and desyncs during animations), or CSS shadows.
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
     }
 }
 

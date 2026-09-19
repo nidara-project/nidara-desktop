@@ -2131,14 +2131,16 @@ only when someone boots a VM). The `styles` job now compiles it too.
 - **CSS** for anything with states (hover/active/focus/drag).
 - **Cairo** for complex static shapes (squircles, dots with halo, ring charts).
 - **Important:** if Cairo paints a node's background, CSS must **not** also declare `background-color`. You'll get double-paint artifacts.
-- **A real window's chrome is CSS, never a Cairo `SquircleContainer`.** Hyprland already
-  draws the 1px window border + `rounding` (squircle, `rounding_power 3.2`) at the window
-  rect; the CSS route (`.nidara-window-glass` → `glass(floating)`: `--nidara-bg` fill +
-  `--nidara-edge` + `radius-lg`) lines up with it and follows the window-opacity token.
-  A Cairo card inside the window CANNOT line up: `drawSquircle` insets the shape ~2px from
-  the rect (gap ring against the compositor border) and `gloss` paints its own 1px specular
-  rims regardless of `borderColor` — it reads as a double border no parameter can turn off
-  (this bit the About window twice). Settings and About both use the CSS chrome.
+- **A real window's chrome is CSS fill only, never a Cairo `SquircleContainer` or CSS border.**
+  Hyprland already draws the 1px window border (`border_size = 1`), `rounding` (squircle,
+  `rounding_power 3.2`), and compositor drop shadows around the window rect. The CSS route
+  (`.nidara-window-glass` → `glass(floating)`: `--nidara-bg` fill, `border: none`, `border-radius: 0`,
+  `box-shadow: none`) fills the window allocation cleanly and lets Hyprland own the window's
+  border, rounding, and compositor shadow in both floating and tiled modes. Drawing an inner
+  CSS border produces a redundant double border and light-mode white rims, while an inner
+  circular `border-radius` (p=2.0) mismatches Hyprland's squircle (p=3.2) and visibly desyncs
+  from the compositor border during window animations. Settings, About, and the installer all
+  rely on Hyprland to frame and round the window.
 - **A capsule's VISIBLE edge is `GLASS_INSET` (2px) inside its allocation.** `drawSquircle`
   paints the glass in from the widget rect so the border stroke never lands on the allocation
   edge, which means **a child laid out flush to the rect overhangs the shape**. Nothing warns

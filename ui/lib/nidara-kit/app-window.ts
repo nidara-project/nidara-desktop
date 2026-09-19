@@ -116,7 +116,7 @@ export function NidaraAppWindow(opts: NidaraAppWindowOpts): NidaraAppWindowResul
     const win = new Gtk.Window({
         title,
         application: app,
-        css_classes: cssClasses,
+        css_classes: ["nidara-app-window", ...cssClasses],
         decorated: false,
         visible: false,
     })

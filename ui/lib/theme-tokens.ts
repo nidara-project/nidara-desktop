@@ -238,8 +238,8 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
         popover: "0 10px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)",
         icon: "0 2px 5px rgba(0,0,0,0.20)",
       }
-  // Rim-of-light edge: faint white top hairline on glass.
-  const edge = isDark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(255,255,255,0.50)"
+  // Rim-of-light edge: faint white hairline in dark, subtle ink hairline in light.
+  const edge = isDark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.08)"
 
   return [
     `  --nidara-accent: ${accent};`,
