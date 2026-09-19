@@ -3634,14 +3634,16 @@ slider's "more" end, and Autostart's add button). SPEC.md's *Where* column lists
 one by adding a name (`scripts/icons/nidara-icons.py add`, then ICON_NAMES and the SPEC row), and bump
 the spec version.
 
-Separately, found while renaming: the installer asks `ndIcon("clipboard-list")` and `ndIcon("rocket")`
-for its Summary and Run steps (`ui/installer/widget/InstallerWindow.ts`), and neither drawing has ever
-been shipped — `ndIcon` returns null and those two sidebar rows draw no icon.
+~~Separately, found while renaming: the installer asks `ndIcon("clipboard-list")` and `ndIcon("rocket")`
+for its Summary and Run steps, and neither drawing has ever been shipped.~~ ✅ **Second half FIXED
+2026-09-19 (#602, #603)**: both drawings ship as `nd-clipboard-list` / `nd-rocket` at spec version 2,
+`InstallerWindow.ts` asks for them by those names, and `NidaraSidebarItem` gained a `themeFallback`
+for the case where the asset tree is not found at all. The name-sharing half above is still open.
 
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
-number is never accidentally reused. 51 items; the split itself was 2026-08-23.
+number is never accidentally reused. 55 items; the split itself was 2026-08-23.
 
 - **#7** — `pageHeader()` removed — RESOLVED → `tech-debt-resolved.md`
 - **#102** — ✅ RESOLVED 2026-08-31 — the shell's one door raises as well as focuses; the bench is a nested Hyprland → `tech-debt-resolved.md`
@@ -3697,3 +3699,4 @@ number is never accidentally reused. 51 items; the split itself was 2026-08-23.
 - **#94** — RESOLVED same day — the two About surfaces are a summary and its detail, and one reader answers both (2026-08-25) → `tech-debt-resolved.md`
 - **#100** — ✅ RESOLVED 2026-09-15 — the shell's native heap grew with every animated frame: undisposed Cairo contexts (#581, #305) → `tech-debt-resolved.md`
 - **#103** — ✅ RESOLVED 2026-09-14 — the icon / cursor / GTK theme have one home, and appearance.json is gone (#536 in #573) → `tech-debt-resolved.md`
+- **#106** — ✅ RESOLVED same day (2026-09-20) — the `material*` vocabulary and `--nidara-edge` were buried; the rim of light is Cairo's alone → `tech-debt-resolved.md`

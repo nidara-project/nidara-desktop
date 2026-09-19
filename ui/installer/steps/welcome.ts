@@ -252,6 +252,13 @@ export function WelcomeStep(): Step {
       if (!base) {
         box.append(prose(t("welcomeNotMedium"), "installer-prose--warning"))
       }
+      // ⚠️ The firmware facts are said HERE and nowhere else. They used to be on
+      // the disk page, which is the page that asks nothing about firmware and is
+      // three clicks in; a machine that cannot boot what we are about to install
+      // should be told on the first screen it shows. The disk page keeps the
+      // `isUefi()` guard in its `ready` (a refusal is cheap and it is the page
+      // that emits the layout) but no longer repeats these two paragraphs —
+      // printing the same wall of text twice is how a warning stops being read.
       if (!isUefi()) {
         box.append(prose(t("diskErrNoUefi"), "installer-prose--warning"))
       }
