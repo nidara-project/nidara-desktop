@@ -19,6 +19,7 @@ import {
   NidaraSelectionCheck,
   NidaraTable,
   NidaraFieldRow,
+  NidaraToggleRow,
   type NidaraTableRow,
 } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
@@ -482,37 +483,24 @@ export function DiskStep(): Step {
         margin_top: 4,
       })
 
-      const encCheck = new Gtk.CheckButton({
-        active: encryptionDraft.enabled,
-        valign: Gtk.Align.START,
-      })
-      encCheck.update_property([Gtk.AccessibleProperty.LABEL], [t("diskEncryptToggle")])
-      encCheck.update_property([Gtk.AccessibleProperty.DESCRIPTION], [t("diskEncryptToggleDesc")])
+      // ⚠️ The kit's toggle row inside a card, NOT a hand-rolled CheckButton.
+      // On this page the two install modes are cards you pick; encryption is the
+      // third decision on the same page and it used to be a bare checkbox beside
+      // them, so it read as a different KIND of thing than the choices above it.
+      // It is not: the system page's NVIDIA option is the same shape (an optional
+      // thing you turn on) and already uses this component. One job, one
+      // component — and the accessible name and description come with the row
+      // instead of being set by hand on a widget whose child carries the text.
+      //
+      // The table's per-partition "format" box in manual mode stays a CheckButton
+      // on purpose: that one is a cell in a table, not a standalone decision.
+      const { box: encCard, listBox: encList } = NidaraList()
 
-      const checkLabelBox = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 2,
-        margin_start: 8,
-        valign: Gtk.Align.CENTER,
-      })
-      const checkTitle = new Gtk.Label({
-        label: t("diskEncryptToggle"),
-        css_classes: ["installer-check-title"],
-        halign: Gtk.Align.START,
-        xalign: 0,
-      })
-      const checkDesc = new Gtk.Label({
-        label: t("diskEncryptToggleDesc"),
-        css_classes: ["installer-check-desc"],
-        halign: Gtk.Align.START,
-        xalign: 0,
-        wrap: true,
-      })
-      checkLabelBox.append(checkTitle)
-      checkLabelBox.append(checkDesc)
-      encCheck.set_child(checkLabelBox)
-
-      encContainer.append(encCheck)
+      // `onExt` is the kit's guarded external-sync contract — the ONLY correct way
+      // to move the switch from code, because it suppresses the callback that a
+      // plain `set_active` would fire back into us. It is bound while the row is
+      // realized, hence the nullable capture.
+      let applyEncryptionSwitch: ((v: boolean) => void) | null = null
 
       const encDetailsBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
@@ -600,24 +588,35 @@ export function DiskStep(): Step {
         validateEncryption()
       })
 
-      encCheck.connect("toggled", () => {
-        const active = encCheck.get_active()
-        encryptionDraft.enabled = active
-        encDetailsBox.set_visible(active)
-        if (!active) {
-          encTouched = false
-          pwField.setError("")
-          pw2Field.setError("")
-        }
-        validateEncryption()
-        if (active) {
-          pwEntry.grab_focus()
-        }
-      })
+      encList.append(NidaraToggleRow(
+        t("diskEncryptToggle"),
+        t("diskEncryptToggleDesc"),
+        encryptionDraft.enabled,
+        (active) => {
+          encryptionDraft.enabled = active
+          encDetailsBox.set_visible(active)
+          if (!active) {
+            encTouched = false
+            pwField.setError("")
+            pw2Field.setError("")
+          }
+          validateEncryption()
+          if (active) {
+            pwEntry.grab_focus()
+          }
+        },
+        (apply) => {
+          applyEncryptionSwitch = apply
+          return () => { applyEncryptionSwitch = null }
+        },
+      ))
+      encContainer.append(encCard)
 
       resetEncryptionOnDiskChange = () => {
         encryptionDraft.enabled = false
-        encCheck.set_active(false)
+        // Null before the row is realized — harmless, because the switch is built
+        // from `encryptionDraft.enabled`, which this line has just cleared.
+        applyEncryptionSwitch?.(false)
         encDetailsBox.set_visible(false)
         pwEntry.text = ""
         pw2Entry.text = ""

@@ -255,6 +255,12 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
     `  --nidara-text-secondary: rgba(${fg}, ${isDark ? "0.8" : "0.85"});`,
     `  --nidara-text-dim: rgba(${fg}, ${isDark ? "0.6" : "0.72"});`,
     `  --nidara-text-disabled: rgba(${fg}, 0.3);`,
+    // The switch thumb. WHITE in both modes, deliberately: it is the moving part
+    // of a control whose track goes accent when on, and it has to stay legible
+    // against both the accent and the off-track. It is emitted here rather than
+    // left in the shell's static block because the switch rules moved to the KIT
+    // on 2026-09-20 — every bundle that uses `NidaraToggleRow` now paints with it.
+    `  --nidara-thumb: #ffffff;`,
     `  --nidara-danger: ${DANGER_HEX};`,
     `  --nidara-danger-rgb: ${hexToRgb(DANGER_HEX)};`,
     `  --nidara-popover-bg: rgba(${pbR}, ${pbG}, ${pbB}, ${popoverAlpha});`,
