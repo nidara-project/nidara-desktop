@@ -1724,15 +1724,25 @@ calls outside HyprlandState.
 
 ## The appearance contract — how ANY process learns what the user picked (2026-09-13, #534)
 
-🔑 **ONE Settings backend, since 2026-09-20 — and the routing itself used to break the contract.**
-`config/portal/hyprland-portals.conf` said `org.freedesktop.impl.portal.Settings=nidara;gtk`. The
-gtk backend was in that list for a reason: it served `org.gnome.desktop.interface` — `gtk-theme`,
+🔑 **ONE Settings backend for READS, since 2026-09-20 — and the routing itself used to break the
+contract.** `config/portal/hyprland-portals.conf` said `org.freedesktop.impl.portal.Settings=nidara;gtk`.
+The gtk backend was in that list for a reason: it served `org.gnome.desktop.interface` — `gtk-theme`,
 `icon-theme`, `font-name` — which we did not. But it ALSO serves `org.freedesktop.appearance`, and
 so do we, so **every appearance change put two identical `SettingChanged` on the bus** (measured
-with `gdbus monitor`). A chain in `portals.conf` is a fallback order for CALLS; every backend in it
-still emits its own signals and the frontend relays them all. That is exactly the "a client that can
-read one value two ways will read two different values" the contract is written against — broken by
-our own routing rather than by an application.
+with `gdbus monitor`). That is exactly the "a client that can read one value two ways will read two
+different values" the contract is written against — broken by our own routing rather than by an
+application.
+
+⚠️ **Naming us alone did NOT fix the duplicate, and this file said it did for a day.** Measured
+live on 2026-09-21, one mode change, each bus name listened to separately: our backend emits 2
+(one per namespace, as the code says), **the gtk backend still emits 2 although `portals.conf`
+does not name it**, and the frontend relays all 4. A backend is loaded from its `.portal` file,
+not from `portals.conf`: xdg-desktop-portal 1.22.1 **aggregates Settings across every backend
+whose `.portal` declares the interface** and relays all of their signals, while `portals.conf`
+only orders them for CALLS. `gtk.portal` declares it and ships in a foreign package, so silencing
+it means shadowing that file and re-breaking on every gtk update. Left alone deliberately: both
+backends read the same gsettings and answer the same value, so the duplicate is redundancy, not
+conflict. **What `Settings=nidara` buys is precedence for reads, which is what Rule 1 needs.**
 
 `bin/nidara-portal` now serves all three namespaces: `org.freedesktop.appearance`,
 `org.nidara.appearance` and `org.gnome.desktop.interface`. The GNOME keys are **enumerated from the
@@ -1743,10 +1753,10 @@ Verified on a private bus (`dbus-run-session` + our daemon): `gtk-theme` → `Ad
 `Papirus`, `font-name` → `Inter Variable 11`, `color-scheme` → `uint32 1`, `ReadAll` returns the
 three namespaces, and a key that does not exist still answers `NotFound` — the control that proves
 the probe can fail.
-⚠️ Not directly tested: the `SettingChanged` for the GNOME namespace, because firing it needs a real
-dconf write and dconf is user-global — a private bus does not isolate it. The handler is one
-`interfaceSettings.connect("changed", …)` of the same shape as the `changed::color-scheme` one
-beside it, which is verified.
+✅ The `SettingChanged` for the GNOME namespace — the one thing a private bus could not test, since
+firing it needs a real dconf write and dconf is user-global — was verified in a live session on
+2026-09-21: a mode change puts `('org.gnome.desktop.interface', 'color-scheme', 'prefer-light')` on
+the bus alongside the `org.freedesktop.appearance` one.
 
 Nidara is a desktop, so it does what GNOME does, and the rule is the same for our own windows as
 for anybody else's app. This section is the reference; the code-side copy is the header of

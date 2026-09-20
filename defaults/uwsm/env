@@ -30,9 +30,29 @@ export ELECTRON_OZONE_PLATFORM_HINT=wayland
 #     todas ellas. Se probó el 2026-09-20 y se revirtió: el diálogo del portal pesa
 #     más que el tema de iconos.
 #
-# ⚠️ Coste asumido a sabiendas: las apps Qt caen a `hicolor` en iconos. La salida
-# correcta no es cambiar de plugin, es el fallback estándar de iconos (~/.icons/default)
-# y Fontconfig para la fuente.
+# ⚠️ Coste asumido a sabiendas, y MEDIDO el 2026-09-21 con una sonda propia
+# (QGuiApplication → QIcon::themeName, control positivo: el mismo binario responde
+# distinto según el plugin, así que mide de verdad):
+#
+#              xdgdesktopportal        gtk3
+#   iconos     hicolor                 Papirus
+#   folder     hasThemeIcon() = 0      = 1
+#   fuente     Sans Serif 9            Inter Variable 11
+#
+# No es «caen a hicolor»: es que NO HAY ICONO, ni siquiera `folder`, y además se
+# pierde la fuente. El resto del intercambio, medido el mismo día: `colorSchemeChanged`
+# llega con los DOS plugins y `palette()` no se invalida con NINGUNO (empate), el
+# diálogo del portal sale de otro proceso y el de gtk3 se dibuja dentro de la app Qt
+# (`class` de la propia app, con libgtk-3 mapeado en ella: 5 mapeos contra 0). El
+# dueño mantuvo el portal con esa foto delante.
+#
+# 🔴 NO re-proponer `~/.icons/default`: esta nota decía que esa era la salida correcta
+# y es FALSA. Medido con control positivo — un `index.theme` con `Inherits=Papirus`
+# ahí deja a Qt en `hicolor` igual, con y sin él (plantando un folder.svg en el
+# `hicolor` de ese mismo HOME, `hasThemeIcon` sí salta a 1, así que la sonda leía el
+# HOME). Y ese fichero ya está ocupado: `AppearanceSync.writeXcursorDefault()` lo
+# escribe con el tema de CURSOR, así que la vía además chocaba con él.
+# Lo que queda sin explorar es `qt6ct` o un baseTheme de Qt que lea gsettings.
 # Debe coincidir con bin/nidara; uwsm sourcea este fichero DESPUÉS de los exports del
 # lanzador, así que este valor es el que gana.
 export QT_QPA_PLATFORMTHEME=xdgdesktopportal

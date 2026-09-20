@@ -3776,6 +3776,16 @@ real settings.ini path, `Adwaita` and `Default` render **0 differing pixels**, s
 name falls back to the built-in), and for GTK3 only `Adwaita` works. The per-file mapping is gone;
 `ui/lib/gtk-theme.ts` holds the reasoning and the numbers.
 
+✅ **Verified on the owner's real screen, 2026-09-21** — the part that was still reasoning. A mode
+change repaints a RUNNING Chrome, browser chrome included and without restarting it: the window
+interior goes `44,54,80` → `236,236,236` and the tab strip `100,70,97` → `231,230,230` (`magick`
+on the window's rect, taken from `listWindows`). Chromium only ever calls
+`g_object_set(settings, "gtk-application-prefer-dark-theme", …)` on ITS OWN GTK3
+(`ui/gtk/gtk_ui.cc`), and that works because GTK3's gresource carries
+`theme/Adwaita/gtk-dark.css` — so `Adwaita` at the value is what reaches it.
+⛔ **This closes the `-dark` theme-pairs route for good.** Shipping `Nidara`/`Nidara-dark` as two
+installed themes was the alternative on the table; it is not needed, do not re-propose it.
+
 🔑 **The lesson this entry is worth keeping for:** "which name does GTK's built-in answer to" has
 two answers and step 2 asked only GTK4. And a value that the portal serves is a DESKTOP-WIDE value —
 correcting it per-file is correcting it where nothing on Wayland looks.
