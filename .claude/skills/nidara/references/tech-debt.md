@@ -3752,24 +3752,39 @@ while the code said "blank", with no symptom. The installer is the one that matt
 `nidara-installer`, on a live medium that need not carry `nidara-desktop`, which was the package
 installing the theme. `Empty` lives in libgtk's gresource and cannot go missing.
 
-🔴 **Step 2 shipped a regression, found by the owner on 2026-09-20 and fixed the same day: it
-turned dark mode OFF for every GTK3 app.** `Adwaita` was a ghost for GTK4 — and it is GTK3's REAL
-built-in, the only name whose dark variant GTK3 can find. Measured with a bare GTK3 window and
-`gtk-application-prefer-dark-theme = 1`: `Adwaita` → bg `rgb(53,53,53)` DARK; `Default`,
-`nidara` and `NoSuchTheme42` → `rgb(246,245,244)` light. GTK3 does **not** fall back to "the
-built-in with prefer-dark honoured" — an unresolvable name lands on the LIGHT theme, which is
-where GTK4 is the forgiving one and GTK3 is not. So writing GTK4's name into the GTK3 file is a
-dark-mode switch, not a cosmetic choice. Fixed in `core/AppearanceSync.ts`: the two settings.ini
-files are separate, so each gets the name ITS toolkit uses (`GTK3_BUILTIN_THEME` in
-`ui/lib/gtk-theme.ts`). Only the built-in sentinel is mapped — a theme the user actually picked
-goes to both files unchanged, and whether it has a dark variant is that theme's business.
-⚠️ The user-visible symptom was "choosing Default or nidara in Settings turns off dark mode in
-apps", and on a machine whose theme list holds only those two that reads as "choosing ANY theme".
+🔴 **Step 2 shipped a regression, and the FIRST fix for it was in the wrong layer.** The owner
+found it on 2026-09-20: selecting a theme in Settings turned dark mode off in GTK3 apps, in Chrome
+and in Telegram — all three ask GTK for the theme NAME and derive dark from it.
+
+`Adwaita` was a ghost for GTK4 — and it is GTK3's REAL built-in, the only name whose dark variant
+GTK3 can find. Measured with `gtk-application-prefer-dark-theme = 1`: `Adwaita` → bg `rgb(53,53,53)`
+DARK; `Default`, `nidara` and `NoSuchTheme42` → `rgb(246,245,244)` light. GTK3 does **not** fall back
+to "the built-in with prefer-dark honoured" — an unresolvable name lands on the LIGHT theme, and
+there GTK4 is the forgiving one.
+
+⚠️ **The first attempt mapped the name while writing `~/.config/gtk-3.0/settings.ini`** — the two
+files are separate, so each could get its own toolkit's name. It was verified end-to-end through the
+real file (GTK3 reading that ini: `Adwaita` → dark, `Default` → light) **and it changed nothing on
+the owner's screen**, because the Settings portal SERVES this key: `gdbus … Settings.Read
+"org.gnome.desktop.interface" "gtk-theme"` answers with the gsettings value, so a Wayland
+application reads it directly and never consults the per-toolkit file. A fix applied while writing a
+file nobody reads is a fix that measures green and does nothing.
+
+✅ **The fix is at the VALUE.** `GTK_BUILTIN_THEME` is `Adwaita` again, and the seed with it —
+because one name serves both toolkits: for GTK4 the two are interchangeable (measured through the
+real settings.ini path, `Adwaita` and `Default` render **0 differing pixels**, since an unresolvable
+name falls back to the built-in), and for GTK3 only `Adwaita` works. The per-file mapping is gone;
+`ui/lib/gtk-theme.ts` holds the reasoning and the numbers.
+
+🔑 **The lesson this entry is worth keeping for:** "which name does GTK's built-in answer to" has
+two answers and step 2 asked only GTK4. And a value that the portal serves is a DESKTOP-WIDE value —
+correcting it per-file is correcting it where nothing on Wayland looks.
 
 **2 · The seed names something real.** ✅ `defaults/appearance.json` seeded `themeFamily: "Adwaita"`
 and a clean Arch has no `/usr/share/themes/Adwaita` — GTK 4.22's built-in is `Default`, and
-everything worked only because GTK falls back. It now seeds `Default`, the name the built-in
-actually answers to. This is the value THIRD-PARTY apps read.
+everything worked only because GTK falls back. It seeded `Default` for one day and now seeds `Adwaita` again — see the
+regression above: `Default` is the name GTK4's built-in answers to, and `Adwaita` is the name that
+works in BOTH toolkits. This is the value THIRD-PARTY apps read, and the portal serves it to them.
 
 **3 · Settings' theme dropdown offers real themes and displays a real value.** ✅
 `getAvailableGtkThemes()` listed `/usr/share/themes` and subtracted three names, which on a clean
@@ -3778,8 +3793,10 @@ not widget themes. So the row showed a name that was neither on disk nor among i
 opening it offered an empty list: one bug seen from two ends. It now mirrors
 `getAvailableIconThemes()`: a directory counts only if it has a `gtk-4.0/` subdirectory (a
 `gnome-themes-extra` Adwaita carries only `gtk-2.0` and `gtk-3.0` and would change nothing for a
-GTK4 app), GTK's built-in `Default` is always offered since no directory scan can find it, and the
-configured value stays selectable. Proved both ways against the real method: a `gtk-4.0` theme is
+GTK4 app), the built-in is always offered under `GTK_BUILTIN_THEME` since no directory scan can
+find it, and the configured value stays selectable. ⚠️ That constant is `Adwaita`, not `Default` —
+so a real `/usr/share/themes/Adwaita` is filtered out of the scan and re-added as the built-in,
+which is right: under that name the two are the same offer to a GTK4 app. Proved both ways against the real method: a `gtk-4.0` theme is
 accepted, a `gtk-3.0`-only one is refused, and on `main` the same probe offered the `gtk-3.0`-only
 one and not `Default`.
 ⚠️ `enum:` is evaluated once, at registration, so a theme installed later does not appear until the

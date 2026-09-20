@@ -48,41 +48,38 @@ export function useNoGtkTheme(): void {
 }
 
 /**
- * The name GTK's own built-in widget theme answers to — the one in its gresource
- * beside `Empty`, and the honest value for "no custom theme" in gsettings
- * `org.gnome.desktop.interface gtk-theme`.
+ * The value we store in gsettings `org.gnome.desktop.interface gtk-theme` when the
+ * user has chosen no custom theme — the name THIRD-PARTY applications are told.
+ * Ours use `NO_GTK_THEME` and are not affected by it at all.
  *
- * ⚠️ It is NOT `Adwaita`. That was the seed until 2026-09-20 and it named a ghost:
- * a clean Arch has no `/usr/share/themes/Adwaita` at all, GTK 4.22 calls its
- * built-in `Default`, and everything worked only because an unresolvable name
- * falls back to exactly that (measured: `GTK_THEME=NoSuchTheme42` renders
- * pixel-identical to `GTK_THEME=Default`). A value nothing can resolve is also a
- * value no dropdown can offer, which is how Settings came to display a theme that
- * was not among its own options — tech-debt #107, step 2 and step 3 of the same bug.
+ * ⚠️ It has to satisfy TWO toolkits, and they do not agree. This value has now been
+ * wrong in both directions inside a week, so the measurements are here:
  *
- * ⚠️ This is the theme for THIRD-PARTY applications. Ours use `NO_GTK_THEME`.
+ *   · GTK4's built-in is called `Default` (`gresource list libgtk-4.so.1` →
+ *     theme/Default/gtk.css), and an unresolvable name falls back to it SILENTLY.
+ *     So for GTK4 the two names are interchangeable — measured through the real
+ *     settings.ini path, `Adwaita` and `Default` render **0 differing pixels**.
+ *   · GTK3's built-in is called `Adwaita` (`libgtk-3.so.0` → theme/Adwaita/…), and
+ *     it is the ONLY name whose dark variant GTK3 can find. GTK3 does not fall back
+ *     to "the built-in with prefer-dark honoured" — an unresolvable name lands on
+ *     the LIGHT theme. Measured with `gtk-application-prefer-dark-theme = 1`:
+ *     `Adwaita` → bg rgb(53,53,53) DARK; `Default`, `nidara` and `NoSuchTheme42` →
+ *     rgb(246,245,244) light.
+ *
+ * So `Adwaita` is free for GTK4 and load-bearing for GTK3, and one name serves both.
+ *
+ * ⚠️ It was `Default` for one day (tech-debt #107 step 2), on the reasoning that
+ * `Adwaita` "named a ghost" because no `/usr/share/themes/Adwaita` exists. That
+ * reasoning was GTK4-only: a name GTK4 cannot resolve is a harmless fallback, while
+ * the SAME name is GTK3's real built-in. The owner found the symptom the same week —
+ * GTK3 apps, Chrome and Telegram all going light on selecting the theme, because all
+ * three ask GTK for the theme NAME and derive dark from it.
+ *
+ * ⚠️ And the fix belongs HERE, at the value, not in `settings.ini`. The Settings
+ * portal SERVES this key (`gdbus … Settings.Read "org.gnome.desktop.interface"
+ * "gtk-theme"` answers with it), so a Wayland application reads it straight from
+ * gsettings and never consults the per-toolkit file. A mapping applied while writing
+ * `~/.config/gtk-3.0/settings.ini` is therefore bypassed by every app in a Wayland
+ * session — which was the first attempt at this fix, and it changed nothing on screen.
  */
-export const GTK_BUILTIN_THEME = "Default"
-
-/**
- * The same thing for GTK3 — and it is a DIFFERENT NAME, which is a dark-mode bug
- * waiting for anyone who assumes otherwise.
- *
- * GTK3's built-in theme is `Adwaita` (`gresource list /usr/lib/libgtk-3.so.0` →
- * `theme/Adwaita/…`), and it is the only name whose dark variant GTK3 can find.
- * Measured 2026-09-20 on a bare GTK3 window with
- * `gtk-application-prefer-dark-theme = 1`:
- *
- *     Adwaita        → bg rgb(53,53,53)     DARK
- *     Default        → bg rgb(246,245,244)  light
- *     NoSuchTheme42  → bg rgb(246,245,244)  light
- *
- * ⚠️ GTK3 does NOT fall back to "the built-in with prefer-dark honoured" — an
- * unresolvable name lands on the LIGHT theme. GTK4 is the forgiving one here.
- *
- * So `gtk-theme-name` is written per toolkit: `core/AppearanceSync.ts` puts this
- * name in `~/.config/gtk-3.0/settings.ini` and `GTK_BUILTIN_THEME` in the gtk-4.0
- * one, whenever the user's choice is "no custom theme". A theme the user actually
- * picked goes to both files unchanged.
- */
-export const GTK3_BUILTIN_THEME = "Adwaita"
+export const GTK_BUILTIN_THEME = "Adwaita"

@@ -35,7 +35,6 @@ import Theme, { TEXT_SCALE_MAX } from "./ThemeManager"
 import hs from "./HyprlandState"
 import { ACCENT_PALETTE, type AccentKey } from "./NidaraTheme"
 import { GREETER_MIRROR_DIR } from "./Paths"
-import { GTK_BUILTIN_THEME, GTK3_BUILTIN_THEME } from "../../lib/gtk-theme"
 
 type Effect = "ini" | "cursor" | "portal" | "groupbar" | "mirror"
 
@@ -78,34 +77,16 @@ function writeSettingsIni(): void {
     if (!snap.themeFamily) return
     const iface = keep[0]
     const cursorSize = iface.get_int("cursor-size") || 24
+    // 🔑 One theme name for both files, and it must be one GTK3 can resolve — its
+    // built-in is `Adwaita` and GTK4's is `Default`, and only the first has a dark
+    // variant GTK3 can find. That is settled at the VALUE (`GTK_BUILTIN_THEME` in
+    // ui/lib/gtk-theme.ts, with the measurements), not here: the Settings portal
+    // serves `gtk-theme`, so a Wayland app reads gsettings directly and never sees
+    // what we write into a per-toolkit file. Mapping the name here was the first
+    // attempt and it changed nothing on screen.
     for (const d of ["gtk-3.0", "gtk-4.0"]) {
-        // 🔑 GTK3 and GTK4 do not call the built-in theme the same thing, and the
-        // disagreement is a DARK MODE bug rather than a cosmetic one. GTK4's built-in
-        // is `Default` (`gresource list libgtk-4.so.1` → `theme/Default/gtk.css`);
-        // GTK3's is `Adwaita` (`libgtk-3.so.0` → `theme/Adwaita/…`), and `Adwaita` is
-        // the only name that carries a dark variant GTK3 can find. Measured 2026-09-20
-        // with a bare GTK3 window, `gtk-application-prefer-dark-theme` set to 1:
-        //
-        //   Adwaita        → bg rgb(53,53,53)     DARK
-        //   Default        → bg rgb(246,245,244)  light
-        //   nidara         → bg rgb(246,245,244)  light
-        //   NoSuchTheme42  → bg rgb(246,245,244)  light
-        //
-        // So GTK3's fallback for a name it cannot resolve is the LIGHT theme — it does
-        // not fall back to "the built-in, with prefer-dark honoured". Writing GTK4's
-        // name into the GTK3 file therefore turns dark mode OFF for every GTK3 app,
-        // whatever `gtk-application-prefer-dark-theme` says, which is exactly what
-        // tech-debt #107 step 2 did when it corrected the seed from `Adwaita` to
-        // `Default`: right for GTK4, and it took the GTK3 apps' dark mode with it.
-        //
-        // The two files are separate, so each gets the name ITS toolkit uses. This maps
-        // only the built-in sentinel: a real theme the user chose is written as-is to
-        // both, and whether it has a dark variant is that theme's business.
-        const themeName = d === "gtk-3.0" && snap.themeFamily === GTK_BUILTIN_THEME
-            ? GTK3_BUILTIN_THEME
-            : snap.themeFamily
         let ini = `[Settings]\n`
-            + `gtk-theme-name=${themeName}\n`
+            + `gtk-theme-name=${snap.themeFamily}\n`
             + `gtk-application-prefer-dark-theme=${snap.isDark ? 1 : 0}\n`
             + `gtk-icon-theme-name=${snap.iconTheme}\n`
             + `gtk-font-name=${Theme.interfaceFont}\n`

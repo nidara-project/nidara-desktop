@@ -302,10 +302,14 @@ class ThemeManager extends GObject.Object {
      *     subdirectory. That is the whole test, and it is the one that matters:
      *     `gnome-themes-extra` ships `/usr/share/themes/Adwaita` with `gtk-2.0` and
      *     `gtk-3.0` only, so offering it would change nothing for a GTK4 app.
-     *   · GTK's own built-in is always offered under the name it answers to,
-     *     `Default`. It is not on disk — it lives in libgtk's gresource — so no
-     *     directory scan can find it, and it is the honest name for "no custom
-     *     theme", which is the value a fresh install is seeded with.
+     *   · the built-in is always offered under `GTK_BUILTIN_THEME`. It is not on
+     *     disk — it lives in libgtk's gresource — so no directory scan can find it,
+     *     and it is the value a fresh install is seeded with. ⚠️ That name is
+     *     `Adwaita`, NOT GTK4's own `Default`, and the reason is GTK3: see
+     *     `ui/lib/gtk-theme.ts`, which holds the measurements. It also means a real
+     *     `/usr/share/themes/Adwaita` is filtered out of the disk scan and re-added
+     *     as the built-in — right, because under that name the two are the same
+     *     offer to a GTK4 app (measured: 0 differing pixels).
      *   · the configured value stays selectable even if it fails the test, so the
      *     row can still display what is actually set.
      *
