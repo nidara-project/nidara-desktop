@@ -112,9 +112,15 @@ scoped rules cannot reach them and `GTK_USE_PORTAL` is not set either. Captured 
 both substrates: with no theme the font dialog is legible and **undressed** — no frame on the
 search entry, none on the font list, no trough on the size slider, no chrome on the spin buttons,
 and no button chrome at all, so *Cancelar* and *Seleccionar* run together as two bare words. That
-is the third of the three outcomes #107 listed and the expensive one: dressing GTK's internal class
-names is where "our stylesheet" starts becoming, for our own processes, a GTK theme in all but
-name. The alternative is to stop using those two dialogs. **That is a look the owner decides.**
+🔑 **And the owner's answer, same day, is that this is the wrong way round.** Dressing GTK's
+internal nodes is not the cost of commandment 11, it is its DESTINATION: the stylesheet of a
+process that loads no theme *is* that process's theme. What the font dialog exposes is that our CSS
+is all per-surface scoped classes and has no BASE layer of element selectors — and a widget GTK
+builds itself can never carry one of our classes, so element selectors are the only lever that
+reaches it. A provider added with `add_provider_for_display` reaches our process and nothing
+outside it, so those rules were never leaking anywhere. Read tech-debt #107 step 5 before writing
+any of it: the layer is real, and it is built by measuring surface by surface, because bare-element
+rules are the sharp edge this repo has already paid for once.
 
 ⚠️ The probes are no longer blind to this. `installer-pages-probe` and `kit-gallery-probe` default
 to NO theme — what the surfaces actually run on — and take `PLATFORM_THEME=1` for the other arm of

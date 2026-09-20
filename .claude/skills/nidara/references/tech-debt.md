@@ -3784,16 +3784,15 @@ was eight; it is one, and the tally is the argument for having made it:
 | `expander` | **the arrow had never been drawn.** `.installer-expander` asked for a node called `arrow`; GTK 4.22 builds `expander`. A selector naming the wrong node looks exactly like one naming the right node, and the installer runs themeless, so nothing covered for it. Fixed, and it now uses OUR chevron by path rather than `-gtk-icontheme("pan-end-symbolic")` — commandment 10 |
 | `spinner` | ⛔ **still owed** — see below |
 
-⛔ **`spinner` is the one thing step 4 did not close, and it is a live bug.** A `Gtk.Spinner`
-renders NOTHING without a theme: GTK's rule is an `-gtk-icon-source` plus a rotation, and that is
-the entire widget. Three sites, and the greeter's is the worst — `ui/lib/auth-card.ts` shows it
-while a password is being checked, on a screen that has forced a themeless GTK since 2026-08-24, so
-the login screen's only piece of progress feedback has been blank ever since. It needs a DRAWING,
-and the options are not equivalent: an SVG by path (the greeter's chevron idiom) does not follow
-`color`, so it needs `-gtk-icon-filter` per mode; an `nd-` icon name does follow `color` but means
-a new name in the icon spec, which the owner has parked; a Cairo `NidaraSpinner` in the kit follows
-`color` for free and removes the node from this list entirely, and is a new component. **The owner
-decides which.**
+⛔ **`spinner` is the one thing step 4 did not close, and it is a live bug.** `GtkSpinner` paints
+nothing in C — it is an empty CSS node whose ENTIRE appearance is a theme property:
+`-gtk-icon-source` plus a rotation on `:checked`. With no theme there is no source, so there is
+nothing to rotate. The theme *is* the spinner, exactly as it was the expander's arrow. Three sites,
+and the greeter's is the worst: `ui/lib/auth-card.ts` shows it while a password is being checked,
+on a screen that has forced a themeless GTK since 2026-08-24, so the login screen's only piece of
+progress feedback has been blank ever since.
+🔑 Do NOT treat this as a standalone "which drawing?" question — that framing was the mistake. It
+is one node of the BASE LAYER described under step 5, and it gets answered there.
 
 **5 · Flip the SHELL.** ⛔ NOT DONE, and now blocked by a number rather than a worry. The other
 three bundles were already themeless and are on `Empty`; the shell is the one that unsets
@@ -3812,11 +3811,52 @@ no trough on the size slider, no chrome on the spin buttons, and no button chrom
 dress as well; it never mapped under broadway in twelve seconds, so there is no picture of it and
 no claim here about how it looks.
 
-That is the third of the three outcomes this entry listed, and the expensive one: writing rules for
-GTK's internal class names is where "our stylesheet" starts becoming, for our own processes, a GTK
-theme in all but name. The alternative is to stop using those two dialogs. **A look the owner
-decides**, and until it is decided the shell keeps its theme and `style-ownership-check` stays
-deliberately stricter than the runtime for that one bundle.
+🔑 **STRATEGY CORRECTION, owner, 2026-09-20 — and it reframes steps 5 and 6 entirely.** The
+paragraph that used to stand here called dressing GTK's internal nodes "where our stylesheet starts
+becoming, for our own processes, a GTK theme in all but name", and offered it as the COST. The
+owner's answer: that is not the cost, **it is the destination**. Commandment 11 says we use GTK
+with our styles and nothing by default; the stylesheet of a process that loads no theme *is* that
+process's theme, and saying so out loud is the point rather than the price.
+
+**What that makes the real defect — bigger than any node on the list above.** Our CSS is written
+almost entirely as per-surface SCOPED classes, and that leaves no base layer. Two facts settle why
+that is wrong here:
+
+- a `Gtk.CssProvider` added with `add_provider_for_display` reaches every widget in **our process**
+  and nothing outside it. Third-party applications are separate processes; unscoped rules of ours
+  have never been able to touch them. So commandment 2's scoping protects nobody from us — it only
+  keeps one of our surfaces from repainting another, which is an organisation concern, not a
+  safety one.
+- therefore the widgets GTK builds ITSELF, which can never carry one of our classes — the font
+  dialog's buttons, its list, its entry, its spin buttons — are reachable **only** by element
+  selectors. There is no other lever.
+
+So the shape is two layers, and we have only ever written the second:
+
+| layer | selector | job |
+|---|---|---|
+| base | `button`, `entry`, `list`, `separator`, `spinner`, `expander`, `textview`, … | dress EVERY node in the process, including GTK's own dialogs. This is the layer that does not exist |
+| variation | `.nidara-*`, `#nidara-bar …`, `window.nidara-settings-window …` | what a surface does differently |
+
+**Consequences to carry into the next session:**
+
+- `Gtk.FontDialog`/`Gtk.FileDialog` stop being a blocker and become the first thing the base layer
+  is measured against. They are undressed because there is no base layer, not because they are
+  unreachable.
+- The `spinner` still owed above stops being a separate "which drawing?" decision — it is one rule
+  of the base layer like any other node.
+- ⚠️ **Build it by measuring, surface by surface, never in one sweep.** Bare-element rules are the
+  sharp edge and this repo has already paid for that once: `ui/lib/styles/_components.scss` records
+  that when `entry` and `dropdown > button` arrived without a class, two properties reached
+  controls nobody intended and only one was findable by reading the cascade. The A/B is
+  `kit-gallery-probe` and `installer-pages-probe` (both now default to no theme, `PLATFORM_THEME=1`
+  for the other arm).
+- Commandment 2 needs rewording once this lands: "no unscoped global CSS" was written for a shell
+  that ran under Adwaita, and its exception list (`_base`, the two `_components`, `_reset`,
+  `@keyframes`) is the beginning of the base layer described here, not a set of special cases.
+
+Until that layer exists the shell keeps its theme, and `style-ownership-check` stays deliberately
+stricter than the runtime for that one bundle.
 
 **6 · Then, and only then, delete the resets** that exist solely to neutralise a theme that is no
 longer loaded — including the comment in `ui/shell/styles/_reset.scss` that still blames
