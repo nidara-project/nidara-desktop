@@ -36,7 +36,9 @@ import {
 
 // Same rule as installer-pages-probe: the substrate is the POINT here, so it is
 // explicit and the default is what the shell and the installer actually run under.
-if (GLib.getenv("BLANK_THEME")) GLib.setenv("GTK_THEME", "nidara", true)
+const forced = GLib.getenv("FORCE_THEME")
+if (forced) GLib.setenv("GTK_THEME", forced, true)
+else if (GLib.getenv("BLANK_THEME")) GLib.setenv("GTK_THEME", "nidara", true)
 
 const shot = GLib.getenv("SHOT")
 const here = GLib.get_current_dir()

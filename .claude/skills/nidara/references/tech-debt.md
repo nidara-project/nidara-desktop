@@ -2536,7 +2536,7 @@ yet. The first claim came from a probe that forces the blank theme, and generali
 instrument's own conditions is exactly the failure this file keeps recording. Moved to the kit's
 sheet on 2026-09-20 (PR #608) either way, with `--nidara-thumb` following it into the token engine:
 a kit component must not depend on the user's GTK theme to be drawn.
-✅ **The check exists now: `scripts/ci/kit-style-check.mjs`** (2026-09-20, in the `styles` job with
+✅ **The check exists now: `scripts/ci/style-ownership-check.mjs`** (2026-09-20, in the `styles` job with
 two controls). Every class the kit adds and every widget node it builds must be drawn by the kit's
 own sheet or be listed there with a reason. It immediately found `.nidara-menu` and
 `.nidara-menu-popover` in the same state as the switch — both moved, verified by the 584-pair
@@ -3708,6 +3708,64 @@ for its Summary and Run steps, and neither drawing has ever been shipped.~~ ✅ 
 2026-09-19 (#602, #603)**: both drawings ship as `nd-clipboard-list` / `nd-rocket` at spec version 2,
 `InstallerWindow.ts` asks for them by those names, and `NidaraSidebarItem` gained a `themeFallback`
 for the case where the asset tree is not found at all. The name-sharing half above is still open.
+
+### 107. ⛔ STANDING DECISION (owner, 2026-09-20) — Nidara's own processes run on NO GTK theme, and we draw what we use
+
+**The decision, in the owner's words:** *"si no usamos Adwaita, no usamos Adwaita, no lo usamos
+reseteado."* Loading a theme in order to neutralise it is paying twice for having none. Do NOT
+re-propose keeping Adwaita underneath our surfaces; the reasoning was had, with measurements, and
+this is the answer.
+
+**What it means, precisely — and what it does NOT mean.** Our processes (shell, Settings,
+installer, greeter, lock) select the blank theme per-process through `GTK_THEME`, which is an
+environment variable and reaches nothing else. **Third-party applications are untouched**: they
+follow gsettings `org.gnome.desktop.interface gtk-theme`, a different lever, which keeps seeding a
+real theme because we do not ship a GTK widget theme for other people's apps. A Nidara theme for
+THEM is a separate project that this decision neither requires nor forbids.
+
+**Why it is not a big leap.** Our CSS already loads above the theme's priority, so wherever we
+declare anything we were already beating Adwaita. Measured with `scripts/dev/kit-gallery-probe.ts`:
+one of each kit component under both substrates differs by 345 pixels out of 495 000, and the
+differences are exactly two — the `dropdown`'s arrow, which vanishes, and the entry `placeholder`,
+which stops being dimmed. Everything else is identical.
+
+**The order of work, cheapest and least reversible last:**
+1. **DELETE the blank theme — do not move it.** GTK ships its own empty theme in the same
+   gresource as the real one (`theme/Empty/gtk.css`), so `GTK_THEME=Empty` loads zero rules with no
+   file of ours anywhere. Measured 2026-09-20: the kit gallery under `GTK_THEME=Empty` is **0
+   pixels** different from the same gallery under our `nidara` blank. That retires the file, its
+   `install.sh` step, its PKGBUILD line, the three `ThemeManager` guards, and the whole
+   shared-namespace problem at once. ⚠️ Two more facts found the same day: GTK 4.22's built-in
+   theme is called **`Default`, not `Adwaita`**, and `/usr/share/themes/` holds only `Default`,
+   `Emacs` and `nidara` — so the `themeFamily: "Adwaita"` we seed **names a theme that is not
+   installed**, and everything falls back to `Default`. Fix the seed while you are there.
+2. **Draw the two known gaps in the KIT's sheet** (dropdown arrow, entry placeholder).
+3. ✅ **The inventory is TAKEN, and it is a gate rather than a list.**
+   `scripts/ci/style-ownership-check.mjs` (commandment 11, three controls) asks it of every bundle:
+   every GTK widget a bundle builds must have a rule in a sheet that bundle compiles. Today 16
+   bundle nodes and 7 kit nodes pass, and **eight are owed**, enumerated in that file's `OWED` map:
+   `expander`, `flowbox`, `picture`, `revealer`, `separator`, `spinner`, `stack`, `textview`.
+   ⚠️ All eight have rules in GTK's own theme — verified by extracting
+   `theme/Default/Default-light.css` from the gresource, after a first draft of the table guessed
+   that `revealer`, `stack` and `picture` "paint nothing" and was wrong. Whether each NEEDS a rule
+   from us is settled by looking at it under `GTK_THEME=Empty`, not by reading. `gtk4-widget-factory`
+   and `gtk4-demo` are installed and are the honest way to see them.
+4. **Flip one bundle at a time**, with a render diff as the gate, not a look.
+5. **Delete the resets that exist only to neutralise Adwaita** — and with them the stale comment in
+   `ui/shell/styles/_reset.scss` that still blames `Adw.init()` for a libadwaita that has been gone
+   since 2026-08-18.
+
+⚠️ **The one identified risk, and it is NOT measured yet.** `Gtk.FontDialog` (used by the kit's
+`NidaraFontButton`, i.e. Settings' font picker) is a dialog GTK builds ITSELF, in our process, and
+we do not set `GTK_USE_PORTAL`. Under a blank theme its internals — the font list, its search
+entry, its spin button, its buttons — have no rules from anywhere, and they are GTK's own widgetry
+rather than ours. The same question applies to `Gtk.FileDialog`. This must be measured before step
+4 reaches Settings. An attempt on 2026-09-20 failed to capture the dialog (the probe timed out
+without producing an image), so there is no number here — only the question, which is real. Three
+outcomes are possible and they size the work very differently: the dialogs are portal-backed and
+run in another process (no cost); they are in-process but our sheet already covers their widgetry
+(small); or they need rules for GTK's internal class names, which is where "our stylesheet" starts
+becoming, for our own processes, a GTK theme in all but name.
 
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 

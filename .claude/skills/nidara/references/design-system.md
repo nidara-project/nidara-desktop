@@ -8,14 +8,25 @@ Written 2026-09-20, because three mechanisms kept being read as one and the conf
 real bugs (a kit toggle that looked like Nidara in the shell and like GNOME in the installer, and
 a maintainer — me — who measured under one substrate and generalised to the other).
 
-**1 · The GTK theme.** GTK4 has Adwaita built INTO the library (this is not libadwaita, which is
-fully removed — it is GTK's own default stylesheet, compiled in as a resource). Nidara does not
-remove it: `defaults/appearance.json` seeds `themeFamily: "Adwaita"` and `ThemeManager` drives it
-through gsettings `org.gnome.desktop.interface gtk-theme`. That same value is what THIRD-PARTY apps
-use, which is why it is seeded to something real rather than to ours: we do not ship a GTK widget
-theme for other people's applications.
+**1 · The GTK theme.** GTK4 carries its own stylesheet INSIDE the library, as a gresource (this is
+not libadwaita, which is fully removed). ⚠️ **On GTK 4.22 it is called `Default`, not `Adwaita`** —
+`gresource list /usr/lib/libgtk-4.so.1` shows `theme/Default/gtk.css` and there is no Adwaita among
+them. On this machine `/usr/share/themes/` holds exactly `Default`, `Emacs` and `nidara`, so the
+`themeFamily: "Adwaita"` that `defaults/appearance.json` seeds **names a theme that is not
+installed**, and GTK falls back to its built-in `Default`. That value is also what THIRD-PARTY apps
+read (`ThemeManager` writes it to gsettings `org.gnome.desktop.interface gtk-theme`), which is why
+it is seeded to a real-looking name rather than to ours: we ship no GTK widget theme for other
+people's applications. The seeded name being wrong is its own small bug.
 
-**2 · The blank theme, and who actually uses it.** `/usr/share/themes/nidara/gtk-4.0/gtk.css` is
+🔑 **GTK also ships an EMPTY theme, and it is the right way to have none.**
+`theme/Empty/gtk.css` is in the same gresource, so `GTK_THEME=Empty` loads zero theme rules with no
+file of ours anywhere. Measured 2026-09-20: the kit gallery under `GTK_THEME=Empty` is **0 pixels**
+different from the same gallery under our own blank `nidara` theme. Everything we built around that
+blank theme — the file, its `install.sh` step, its PKGBUILD line, and the three `ThemeManager`
+guards that keep it out of theme lists — is answering a question GTK had already answered.
+
+**2 · The blank theme, and who actually uses it** (superseded by `GTK_THEME=Empty` above — this
+paragraph describes what is in the tree today). `/usr/share/themes/nidara/gtk-4.0/gtk.css` is
 three lines with no rules. ⚠️ **`GTK_THEME=nidara` is set by the GREETER (`ui/greeter/app.ts`) and
 by the dev probes, and by nothing else.** The shell does the opposite on purpose: `ThemeManager`
 UNSETS `GTK_THEME` and follows gsettings. The greeter needs it because it runs outside a session —
@@ -40,7 +51,7 @@ stale, and nobody has measured whether it still does anything.
 
 **5 · The bundle sheets.** `ui/lib/styles/` is the kit's and every bundle compiles it;
 `ui/shell/styles/` is the shell's and only the shell does; then each bundle's own sheet.
-`kit-style-check` gates the first against the second.
+`style-ownership-check` gates the first against the second.
 
 **6 · Tokens.** Static fallbacks in each sheet (the dark set, for the first frame) plus the runtime
 engine (`theme-tokens.ts` → `initAppearance()`), which emits the live ramp from the real accent,
@@ -79,13 +90,14 @@ the substrate from the session and accept `BLANK_THEME=1` to force the other; th
 been converted. A probe that forces a substrate its surface does not use is measuring a machine
 nobody has.
 
-⚠️ And whichever way it goes, the blank theme's LOCATION is a defect on its own: living in
-`/usr/share/themes/` puts it in the shared namespace, where any theme chooser offers it and picking
-it leaves every third-party GTK4 app unstyled. Our own Settings filters it out
-(`ThemeManager.listDirs(...).filter(t => !["Default","Emacs","nidara"].includes(t))`) and two more
-guards ignore it if it is set — three places defending against our own artefact. Measured
-2026-09-20: the same blank theme in a private `XDG_DATA_DIRS` prefix renders identically (0 pixels)
-and appears in nobody's list.
+✅ **DECIDED by the owner, 2026-09-20 — see tech-debt #107.** *"Si no usamos Adwaita, no usamos
+Adwaita, no lo usamos reseteado."* Our own processes run on NO GTK theme and we draw what we use.
+Loading a theme in order to neutralise it is paying twice for having none.
+
+⚠️ And the blank theme's LOCATION was a defect on its own: living in `/usr/share/themes/` put it in
+the shared namespace, where any theme chooser offers it and picking it leaves every third-party
+GTK4 app unstyled — which is why `ThemeManager` carries three guards against our own artefact. That
+whole problem is now moot: use GTK's built-in `Empty` and ship no theme at all.
 
 ## Nidara vocabulary
 
@@ -2272,7 +2284,7 @@ only when someone boots a VM). The `styles` job now compiles it too.
   the instrument's own conditions is the trap, not a detail. Same shape as the hole
   `token-contract-check` was born from, one level up — the TOKENS were checked, the RULES were
   not.
-  ✅ **`scripts/ci/kit-style-check.mjs` is the gate** (2026-09-20, two controls): every class the
+  ✅ **`scripts/ci/style-ownership-check.mjs` is the gate** (2026-09-20, two controls): every class the
   kit adds and every widget node it builds must be drawn by the kit's own sheet, or be listed in
   that file WITH a reason. It found `.nidara-menu` / `.nidara-menu-popover` in the same state as
   the switch and they moved with it. ⚠️ `nidara-tooltip` is NOT in that state and an earlier
