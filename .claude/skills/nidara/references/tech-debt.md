@@ -2519,6 +2519,56 @@ pairs whose relative order flipped, **zero** could apply to the same element at 
 specificity with a shared property — so no cascade outcome can have changed. Keep that script
 shape for any future extraction; a rule-set diff alone would have missed a real reorder bug.
 
+⚠️ **2026-09-20 — the verification above checked the wrong DIRECTION, and it cost six weeks.**
+"Same 534 selector→body pairs, none lost, none added" proves the SHELL did not change. It cannot
+prove that everything a kit component needs ARRIVED in the kit's half, and one thing did not: every
+rule that gives a `switch` a track and a thumb stayed in `ui/shell/styles/_components.scss`, while
+`NidaraToggleRow` sits in the kit. Nobody noticed because no other bundle used a toggle row until
+the installer's LUKS option became one.
+
+⚠️ **What it actually cost, measured after this entry first got it wrong.** `GTK_THEME=nidara` —
+the blank theme — is set by the GREETER and by the dev probes, and by nothing else: a real session
+seeds `themeFamily: "Adwaita"` and `ThemeManager` UNSETS `GTK_THEME`. Rendered with zero switch
+rules of ours under Adwaita, GTK draws the switch fine. So the installer's NVIDIA toggle was **not
+invisible** — it wore ADWAITA's switch while the shell's wore Nidara's. INVISIBLE is what happens
+on the greeter and the lock, which do force the blank theme, and no toggle row has reached those
+yet. The first claim came from a probe that forces the blank theme, and generalising from the
+instrument's own conditions is exactly the failure this file keeps recording. Moved to the kit's
+sheet on 2026-09-20 (PR #608) either way, with `--nidara-thumb` following it into the token engine:
+a kit component must not depend on the user's GTK theme to be drawn.
+✅ **The check exists now: `scripts/ci/kit-style-check.mjs`** (2026-09-20, in the `styles` job with
+two controls). Every class the kit adds and every widget node it builds must be drawn by the kit's
+own sheet or be listed there with a reason. It immediately found `.nidara-menu` and
+`.nidara-menu-popover` in the same state as the switch — both moved, verified by the 584-pair
+comparison and by each moved selector appearing exactly once in the compiled sheet. ⚠️ An earlier
+draft of this entry also named `nidara-tooltip`; that was **wrong**, the kit's sheet has had
+`.nidara-tooltip` all along. The check is what established which was which.
+
+⚠️ **Three bugs in that check before it was trustworthy, all found by running it rather than
+reading it, and the shape is worth remembering.** (1) It demanded a class be preceded by a space or
+a comma and reported THIRTEEN false failures — every element- or class-qualified selector we write
+(`window.nidara-alert-dialog`). (2) Its class scanner anchored straight to `[`, so
+`css_classes: opts.cssClasses ?? ["nidara-menu-popover"]` walked past it, hiding one half of the
+very component it had just caught. (3) It only failed when the SHELL styled the class, which leaves
+a rule that has already moved into the kit unprotected: rename it there and the class becomes
+"styled nowhere", which that draft accepted — the control caught a check written to protect
+`.nidara-menu` passing with `.nidara-menu` deleted. The default is now "must be styled by the kit",
+with an exception list where a human writes down which classes carry no paint on purpose (a name
+for `queryUI` perception, a variant hook).
+
+🔑 **AND THE BIGGER FRAME, owner, 2026-09-20 — this keeps resurfacing because the goal is wrong.**
+"The kit is shared by our three bundles" is not what he wants it to be: he wants **something like
+Adwaita** — a toolkit that serves the shell, Nidara's own applications, *and* anybody outside who
+wants to build an application or a widget with it. Under that goal every item above is a symptom
+rather than a task: a library whose look lives in one consumer's stylesheet is not a toolkit, it is
+a shell-internal module with exports. ⚠️ The HOW is explicitly undecided — he said so — so do not
+turn this paragraph into a plan or start migrating things toward it. What it settles is the
+DIRECTION, so that the next person who finds a fourth instance files it here instead of
+re-discovering the pattern. Prior art to read before proposing anything: libadwaita ships its own
+compiled stylesheet with the library, exposes its tokens as named colours with a documented
+contract, and versions its public API separately from any application. See also
+`project_ntk_toolkit` / `project_own_toolkit_vs_gtk` in the maintainer's memory.
+
 **Left open, in the order the NTK plan wants them:**
 1. **The greeter's three raw `Gtk.DropDown` → `NidaraDropDown`.** This is what earns the kit
    import, and it must bring the TOKEN CONTRACT with it (17 of the 23 `--nidara-*` properties

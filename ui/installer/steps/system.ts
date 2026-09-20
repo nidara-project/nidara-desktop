@@ -77,6 +77,17 @@ export function SystemStep(): Step {
         "",
       )
 
+      // ⚠️ An EXPLANATION is prose, not a row. What the driver situation means
+      // ("the free Mesa drivers will be used for this adapter") used to be a
+      // `NidaraRow` inside the card above, titled `systemGpuDetected` — so a
+      // sentence sat in the same clothes as the detected hardware beside it and as
+      // the kernel CHOICES in the card above, three different kinds of thing in one
+      // costume. Every other page on this wizard explains itself in prose under the
+      // thing it explains; this one now does too. The NVIDIA toggle stays IN the
+      // card, because that one really is a choice.
+      const gfxNote = prose("", "installer-prose--dim")
+      gfxNote.visible = false
+
       function renderGpuSection() {
         // Clear previous rows from gfxListBox
         let child = gfxListBox.get_first_child()
@@ -110,19 +121,17 @@ export function SystemStep(): Step {
             },
           )
           gfxListBox.append(toggleRow)
-        } else if (legacyNvidiaGpu) {
-          gfxListBox.append(NidaraRow(
-            t("systemGpuDetected"),
-            t("systemNvidiaLegacyNotice"),
-            null,
-          ))
+          gfxNote.visible = false
         } else {
-          gfxListBox.append(NidaraRow(
-            t("systemGpuDetected"),
-            t("systemGpuMesaNotice"),
-            null,
-          ))
+          gfxNote.label = legacyNvidiaGpu ? t("systemNvidiaLegacyNotice") : t("systemGpuMesaNotice")
+          gfxNote.visible = true
         }
+
+        // The card held exactly one row in every branch before the notices left
+        // it, so it could never be empty. Now it can: a machine whose `lspci` says
+        // nothing has no hardware rows and no toggle, and an empty card is a
+        // rectangle with a caption and nothing in it.
+        gfxContainer.visible = gpus.length > 0 || Boolean(turingGpu)
       }
 
       // ── Kernel Selection ──────────────────────────────────────────────────
@@ -175,6 +184,7 @@ export function SystemStep(): Step {
 
       rootBox.append(kernelContainer)
       rootBox.append(gfxContainer)
+      rootBox.append(gfxNote)
 
       if (draft.gpus === null) {
         detectGpus().then(gpus => {

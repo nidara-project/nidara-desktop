@@ -2138,6 +2138,16 @@ only when someone boots a VM). The `styles` job now compiles it too.
 - **CSS** for anything with states (hover/active/focus/drag).
 - **Cairo** for complex static shapes (squircles, dots with halo, ring charts).
 - **Important:** if Cairo paints a node's background, CSS must **not** also declare `background-color`. You'll get double-paint artifacts.
+- **A CHOICE, a FACT and an EXPLANATION must not wear the same clothes.** The wizard's vocabulary,
+  settled 2026-09-20 after a pass over all six pages side by side: a choice is a row inside a card
+  — `NidaraList(..., { pick: true })` for "pick one of these", `NidaraToggleRow` for "turn this on";
+  a fact is a row in a card with no `pick` (the detected GPU, every row of the summary); and an
+  explanation is **prose under the thing it explains**, never a row. Two pages had drifted: the
+  disk page's LUKS option was a hand-rolled `Gtk.CheckButton` floating beside the cards it should
+  have been one of, and the system page put "the free Mesa drivers will be used" in a
+  `NidaraRow` titled "Graphics hardware", so a sentence, a detected adapter and the kernel choices
+  above all looked like the same kind of item. ⚠️ The per-partition "format" box in manual mode
+  stays a `CheckButton` on purpose — a cell in a table is not a standalone decision.
 - **A real window's chrome is CSS fill only, never a Cairo `SquircleContainer` or CSS border.**
   Hyprland already draws the 1px window border (`border_size = 1`), `rounding` (squircle,
   `rounding_power 3.2`), and compositor drop shadows around the window rect. The CSS route
@@ -2158,6 +2168,37 @@ only when someone boots a VM). The `styles` job now compiles it too.
   retuned that token's light value to ink while fixing the double border; it changed no pixel,
   because by then nothing read it. If you find yourself adjusting a token to fix something you can
   see on one surface, that is the signal you are on the wrong lever.
+- **A kit COMPONENT whose rules live in the shell's sheet is a component with no clothes
+  anywhere else.** `ui/lib/styles/_components.scss` is the kit's half and every bundle compiles
+  it; `ui/shell/styles/_components.scss` is the shell's and only the shell does. So a widget
+  exported from `ui/lib/nidara-kit/` whose appearance is written in the second one renders
+  UNSTYLED in the installer, the greeter and the lock screen — and what that costs depends on
+  which, which is worth getting right because the first version of this paragraph did not.
+  ⚠️ **`GTK_THEME=nidara` — the three-line blank theme at
+  `/usr/share/themes/nidara/gtk-4.0/gtk.css` — is set by the GREETER (`ui/greeter/app.ts`) and by
+  the dev probes, and by nothing else.** A real session seeds `themeFamily: "Adwaita"`
+  (`defaults/appearance.json`) and `ThemeManager` explicitly UNSETS `GTK_THEME`, driving the theme
+  through gsettings. So on the **greeter and the lock** an unstyled widget is INVISIBLE, and in the
+  **shell and the installer** it is drawn by whatever GTK theme the user has. `NidaraToggleRow` was
+  in that state until 2026-09-20: the switch's rules were the shell's, so the installer's NVIDIA
+  toggle wore ADWAITA's switch while the shell's wore Nidara's. ⚠️ Measured, not reasoned —
+  rendered with zero switch rules of ours under Adwaita, GTK draws the switch perfectly well. The
+  claim that it was invisible came from a probe that FORCES the blank theme, and generalising from
+  the instrument's own conditions is the trap, not a detail. Same shape as the hole
+  `token-contract-check` was born from, one level up — the TOKENS were checked, the RULES were
+  not.
+  ✅ **`scripts/ci/kit-style-check.mjs` is the gate** (2026-09-20, two controls): every class the
+  kit adds and every widget node it builds must be drawn by the kit's own sheet, or be listed in
+  that file WITH a reason. It found `.nidara-menu` / `.nidara-menu-popover` in the same state as
+  the switch and they moved with it. ⚠️ `nidara-tooltip` is NOT in that state and an earlier
+  version of this paragraph said it was: the kit's sheet has had `.nidara-tooltip` all along
+  (the shell keeps its own copy on top).
+  Moving a block is not free — it changes cascade order. Verify it the way #59 did: compile the
+  shell's sheet before and after and compare selector→body pairs (identical set, 584 both times
+  for the menu move), then confirm each moved selector appears EXACTLY ONCE, so nothing can
+  compete with it at equal specificity and the reorder cannot change an outcome. And move the
+  tokens the rules spend with them — `--nidara-thumb` went from the shell's static block to the
+  engine in the same change, because the rules that read it now run in three processes.
 - **A capsule's VISIBLE edge is `GLASS_INSET` (2px) inside its allocation.** `drawSquircle`
   paints the glass in from the widget rect so the border stroke never lands on the allocation
   edge, which means **a child laid out flush to the rect overhangs the shape**. Nothing warns
