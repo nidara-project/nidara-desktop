@@ -8,9 +8,10 @@ import { initAppearance } from "../lib/appearance-css"
 import { applyCrispFontRendering } from "../lib/font-rendering"
 import { chooseLoginSkin, applyLoginSkin } from "../lib/login-skin"
 import type { Skin } from "../lib/backdrop-skin"
+import { useNoGtkTheme } from "../lib/gtk-theme"
 
-// Use our blank theme instead of Adwaita.
-GLib.setenv("GTK_THEME", "nidara", true)
+// No GTK theme at all — the greeter's sheet is the only CSS there is (commandment 11).
+useNoGtkTheme()
 
 const cssPath = GLib.file_test("/usr/share/nidara/ui/greeter/style.css", GLib.FileTest.EXISTS)
   ? "/usr/share/nidara/ui/greeter/style.css"

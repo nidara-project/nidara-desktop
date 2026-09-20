@@ -29,7 +29,7 @@ import {
 import { countries, defaultsFor } from "../../ui/installer/lib/region"
 import { languageName } from "../../ui/lib/locale-names"
 
-GLib.setenv("GTK_THEME", "nidara", true)
+GLib.setenv("GTK_THEME", "Empty", true)
 
 const here = GLib.get_current_dir()
 const css = [`${here}/ui/installer/style.css`, "./ui/installer/style.css", "./style.css"]

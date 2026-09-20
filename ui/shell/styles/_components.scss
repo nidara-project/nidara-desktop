@@ -82,6 +82,20 @@
     min-height: 1px;
 }
 
+// ── Bare GTK nodes we build and must therefore draw ──────────────────────────
+// Commandment 11: a GTK widget arrives WITH its rules, or it does not ship. With no
+// GTK theme under us, a node no rule of ours names is not "default-styled" — it is
+// blank. `separator` is the one that hides best: every separator this bundle builds
+// today carries a class that paints it (`.nidara-menu-sep`, `.about-sep`), so the
+// hole only opens the day somebody appends a plain `new Gtk.Separator()` and sees
+// nothing, with no error anywhere to say why. This is that default, and every class
+// above out-ranks it.
+separator {
+    background: var(--nidara-surface);
+    min-width: 1px;
+    min-height: 1px;
+}
+
 // ── Inline confirmation view ──────────────────────────────────────────────────
 // Confirm view buttons = nidara-menu-row (geometry + hover) + an emphasis tone.
 // UNIVERSAL (nidara-*), not the system menu's own: any flat list that needs a
@@ -117,8 +131,8 @@
 /* MOVED to ui/lib/styles/_components.scss on 2026-09-20. The rules lived here,
    in the SHELL's half of the components, while `NidaraToggleRow` lives in the
    kit — so every other bundle got the component and none of its appearance. The
-   GTK theme we ship (`/usr/share/themes/nidara`) is three lines and deliberately
-   draws nothing, so an unstyled switch is an INVISIBLE one: the installer's
+   installer loads no GTK theme at all (commandment 11, ui/lib/gtk-theme.ts), so an
+   unstyled switch is an INVISIBLE one: the installer's
    system page has had an NVIDIA toggle nobody could see since it was written,
    and it only appears on Turing-or-newer hardware, which is why it went
    unreported. Same shape as the hole `token-contract-check` was born from — a

@@ -45,7 +45,7 @@ import {
   type ManualPartitionMount,
 } from "../../ui/installer/lib/answers"
 
-GLib.setenv("GTK_THEME", "nidara", true)
+GLib.setenv("GTK_THEME", "Empty", true)
 
 const here = GLib.get_current_dir()
 const css = [`${here}/ui/installer/style.css`, "./ui/installer/style.css", "./style.css"]

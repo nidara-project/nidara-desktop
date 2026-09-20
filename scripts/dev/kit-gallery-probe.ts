@@ -2,25 +2,32 @@
 //
 //   ./scripts/bundle.sh scripts/dev/kit-gallery-probe.ts /tmp/gallery
 //   gtk4-broadwayd :5 &
-//   GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 SHOT=/tmp/gal-adwaita /tmp/gallery
-//   BLANK_THEME=1 GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 SHOT=/tmp/gal-blank /tmp/gallery
-//   magick compare -metric AE /tmp/gal-adwaita.png /tmp/gal-blank.png null:
+//   PLATFORM_THEME=1 GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 SHOT=/tmp/gal-themed /tmp/gallery
+//   GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 SHOT=/tmp/gal-none /tmp/gallery
+//   magick compare -metric AE /tmp/gal-themed.png /tmp/gal-none.png null:
 //
-// What it is for, and it is a MEASUREMENT rather than a look. Nidara runs two
-// different substrates and nobody chose that: the greeter and the lock force
-// `GTK_THEME=nidara` (a blank theme — zero rules), while the shell, Settings and the
-// installer run on GTK4's built-in Adwaita with `_reset.scss` on top. So the same kit
-// component has two different things underneath it, which is how `NidaraToggleRow`
-// came to look like Nidara in one process and like GNOME in another.
+//   FORCE_THEME=<name>  price one named theme instead of the developer's
 //
-// The difference between the two shots is the PRICE of making the blank theme
-// universal: every pixel that changes is a pixel Adwaita is drawing for us today and
-// that the kit would have to draw itself. Zero difference means the kit already owns
-// that component completely.
+// What it is for, and it is a MEASUREMENT rather than a look. Nidara used to run two
+// different substrates and nobody had chosen that: the greeter, the lock and the
+// installer selected a blank theme, while the SHELL — Settings included — unset
+// `GTK_THEME` and wore whatever GTK theme the user had, with `_reset.scss` on top. So
+// the same kit component had two different things underneath it, which is how
+// `NidaraToggleRow` came to look like Nidara in one process and like GNOME in another.
 //
-// ⚠️ Our CSS already WINS over Adwaita wherever it declares anything — the providers
+// Commandment 11 settled it: every Nidara process runs on `GTK_THEME=Empty`. This
+// probe is what PRICED that, and it stays as the instrument that re-prices it — the
+// difference between the two shots is every pixel the user's theme is drawing for us
+// and that the kit would have to draw itself. Zero difference means the kit already
+// owns that component completely.
+//
+// Measured 2026-09-20: 345 differing pixels of 495 000, and they are exactly two
+// things — the `dropdown`'s arrow (which vanishes) and the entry `placeholder` (which
+// stops being dimmed).
+//
+// ⚠️ Our CSS already WINS over a theme wherever it declares anything — the providers
 // load at `STYLE_PROVIDER_PRIORITY_USER`, above the theme's. So a difference here is
-// never "Adwaita overrode us": it is always "we said nothing, so Adwaita spoke".
+// never "the theme overrode us": it is always "we said nothing, so the theme spoke".
 // That is also exactly what a reset is for — a declaration whose only job is to give
 // us something to win with (see `ui/shell/styles/_reset.scss`).
 import Gtk from "gi://Gtk?version=4.0"
@@ -29,16 +36,19 @@ import GLib from "gi://GLib"
 import app from "../../ui/lib/host"
 import { applyCrispFontRendering } from "../../ui/lib/font-rendering"
 import { initAppearance } from "../../ui/lib/appearance-css"
+import { useNoGtkTheme } from "../../ui/lib/gtk-theme"
 import {
   NidaraWindow, NidaraList, NidaraRow, NidaraFieldRow, NidaraStackedRow,
   NidaraToggleRow, NidaraDropDownRow, NidaraButton, NidaraCircleButton, NidaraBadge,
 } from "../../ui/lib/nidara-kit"
 
 // Same rule as installer-pages-probe: the substrate is the POINT here, so it is
-// explicit and the default is what the shell and the installer actually run under.
+// explicit, and the default is what every Nidara process now runs on — no theme.
+// `PLATFORM_THEME=1` is the other arm of the A/B: the developer's own GTK theme,
+// which is what a third-party application gets and what our processes used to.
 const forced = GLib.getenv("FORCE_THEME")
 if (forced) GLib.setenv("GTK_THEME", forced, true)
-else if (GLib.getenv("BLANK_THEME")) GLib.setenv("GTK_THEME", "nidara", true)
+else if (GLib.getenv("PLATFORM_THEME") !== "1") useNoGtkTheme()
 
 const shot = GLib.getenv("SHOT")
 const here = GLib.get_current_dir()
@@ -59,6 +69,15 @@ function savePng(widget: Gtk.Widget, win: Gtk.Window, path: string) {
   if (!renderer) { printerr(`[shot] ${path}: no renderer`); return }
   renderer.render_texture(node, null).save_to_png(path)
   print(`[shot] ${path}  ${w}x${h}`)
+}
+
+/** A caption beside the widget, so a shot says which node each row is. */
+function labelled(name: string, w: Gtk.Widget): Gtk.Widget {
+  const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12 })
+  box.append(new Gtk.Label({ label: name, xalign: 0, width_request: 200 }))
+  w.hexpand = true
+  box.append(w)
+  return box
 }
 
 app.start({
@@ -100,6 +119,36 @@ app.start({
     buttons.append(NidaraBadge("Badge"))
     page.append(buttons)
 
+    // ── the RAW GTK nodes our bundles build ────────────────────────────────────
+    // `scripts/ci/style-ownership-check.mjs` keeps an OWED map of nodes some bundle
+    // builds and no sheet of ours draws. That list is a list of QUESTIONS, and the
+    // only thing that answers one is looking at the widget with no theme under it:
+    // "GTK's theme has a rule for it" and "we need a rule for it" are different
+    // claims, and several of these turned out to be the first without the second.
+    // Whatever is still in OWED should be visible here, so the answer can be seen.
+    const raw = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
+
+    const spinner = new Gtk.Spinner({ spinning: true, halign: Gtk.Align.START })
+    raw.append(labelled("spinner (spinning)", spinner))
+
+    const sep = new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL })
+    raw.append(labelled("separator", sep))
+
+    const expander = new Gtk.Expander({ label: "expander", expanded: false })
+    expander.set_child(new Gtk.Label({ label: "child" }))
+    raw.append(labelled("expander", expander))
+
+    const tv = new Gtk.TextView({ monospace: true, editable: false, height_request: 44 })
+    tv.buffer.set_text("textview line one\ntextview line two", -1)
+    raw.append(labelled("textview", tv))
+
+    const flow = new Gtk.FlowBox({ selection_mode: Gtk.SelectionMode.SINGLE, min_children_per_line: 3 })
+    for (const t of ["one", "two", "three"]) flow.append(new Gtk.Label({ label: t }))
+    flow.select_child(flow.get_child_at_index(1)!)
+    raw.append(labelled("flowbox (middle child selected)", flow))
+
+    page.append(raw)
+
     const shell = NidaraWindow({
       app,
       title: "Kit gallery probe",
@@ -111,7 +160,7 @@ app.start({
       header: { start: new Gtk.Label({ label: "kit", css_classes: ["installer-title"], xalign: 0 }) },
       closeOnEscape: true,
     })
-    shell.window.set_default_size(720, 620)
+    shell.window.set_default_size(720, 900)
     shell.window.connect("destroy", () => app.quit())
     shell.window.present()
 

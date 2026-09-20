@@ -285,15 +285,36 @@ window.nidara-installer-window {
         color: var(--nidara-text);
       }
 
-      arrow {
+      // ⚠️ The node is `expander`, NOT `arrow`, and this rule said `arrow` until
+      // 2026-09-20 — so it matched nothing and the disclosure triangle has never
+      // been drawn. Nothing covered for it either: this bundle runs with no GTK
+      // theme (commandment 11), which is precisely the arrangement in which a
+      // selector that matches nothing is a blank space rather than a default.
+      // GTK 4.22's tree, dumped rather than remembered:
+      //   expander-widget > box > title > [GtkBuiltinIcon css-name=expander] + label
+      //
+      // ⚠️ And the glyph is OURS, by path — not `-gtk-icontheme("pan-end-symbolic")`,
+      // which is what this rule used to ask for. That name resolves against the ICON
+      // theme, which is not ours and is not even set on a live medium, so the shape
+      // of the installer's one disclosure arrow would have been whatever the image
+      // happened to carry. Same reasoning, at length, in ui/greeter/style.scss where
+      // the login chevron made the same trip. The url is relative to THIS compiled
+      // sheet, which sits beside the greeter's in both layouts (source and
+      // /usr/share/nidara/ui/<bundle>/), so one path holds for both.
+      expander {
         min-width: 14px;
         min-height: 14px;
         margin-right: 6px;
-        -gtk-icon-source: -gtk-icontheme("pan-end-symbolic");
+        -gtk-icon-source: url("../shell/assets/icons/nidara/scalable/actions/nd-pan-end-symbolic.svg");
+        // `url()` loads a plain texture: it does NOT follow `color` the way a
+        // looked-up symbolic icon does (measured 2026-09-20 — the same probe that
+        // found the node name). The installer is permanently dark glass, so landing
+        // on white unconditionally is correct here, exactly as on the login screens.
+        -gtk-icon-filter: brightness(0) invert(1);
       }
 
-      &:checked arrow {
-        -gtk-icon-source: -gtk-icontheme("pan-down-symbolic");
+      &:checked expander {
+        -gtk-icon-source: url("../shell/assets/icons/nidara/scalable/actions/nd-pan-down-symbolic.svg");
       }
     }
   }

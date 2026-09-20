@@ -7,6 +7,8 @@
 //     GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 PAGE=$p SHOT=/tmp/page /tmp/pages
 //   done                                            # → /tmp/page-<p>.png
 //
+//   PLATFORM_THEME=1 …                              # the A/B; see the note below
+//
 // Without SHOT it presents the page instead of writing it, which is the mode for
 // poking at one.
 //
@@ -48,20 +50,26 @@ import {
 } from "../../ui/installer/lib/answers"
 import { countries, defaultsFor } from "../../ui/installer/lib/region"
 import { languageName } from "../../ui/lib/locale-names"
+import { useNoGtkTheme } from "../../ui/lib/gtk-theme"
 
-// ⚠️ The theme is a CHOICE here, and getting it wrong is how this probe produced a
-// false finding. It used to force `GTK_THEME=nidara` — the blank theme — which is
-// what the GREETER runs under and NOT what the installer does: a real session seeds
-// `themeFamily: "Adwaita"` and `ThemeManager` unsets `GTK_THEME`. Under the blank
-// theme a component whose rules we never wrote draws nothing, so an unstyled switch
-// looked like an invisible switch, and the conclusion drawn from it ("the NVIDIA
-// toggle has been invisible for six weeks") was wrong: under Adwaita GTK draws it.
+// ⚠️ The theme is a CHOICE here, and this probe has now got it wrong in BOTH
+// directions — which is worth the paragraph, because each mistake produced a
+// confident finding that was false.
 //
-// So: default to the session's theme, which is what the installer actually gets.
-// `BLANK_THEME=1` forces the blank one, and that is worth running deliberately —
-// under it, anything that still draws is drawing from OUR css, and anything that
-// vanishes was relying on the user's GTK theme, which a Nidara surface must not do.
-if (GLib.getenv("BLANK_THEME")) GLib.setenv("GTK_THEME", "nidara", true)
+// It first forced the blank theme, and an unstyled switch drew nothing, so "the
+// NVIDIA toggle has been invisible for six weeks" was read off the image. On
+// 2026-09-20 that was called a false finding and the default was flipped to the
+// session's theme, on the stated ground that "a real session seeds Adwaita and
+// ThemeManager unsets GTK_THEME" — true of the SHELL, and never true here.
+// `ui/installer/app.ts` has selected a themeless GTK since the bundle was born
+// (#268), so the first finding was right and the correction was the false one.
+//
+// So: no theme is the DEFAULT, because no theme is what the installer runs on
+// (commandment 11, `ui/lib/gtk-theme.ts`). Anything that draws here is drawing from
+// OUR css. `PLATFORM_THEME=1` borrows the developer's GTK theme instead, and that is
+// only ever for the A/B that tells you whether something you are looking at is
+// theme-supplied — never for a screenshot anyone reasons about.
+if (GLib.getenv("PLATFORM_THEME") !== "1") useNoGtkTheme()
 
 const PAGES: Record<string, () => Step> = {
   welcome: WelcomeStep,

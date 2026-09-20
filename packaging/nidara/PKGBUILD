@@ -350,10 +350,6 @@ package_nidara-desktop() {
   # perfectly on the maintainer's machine.
   cp -r skills "$pkgdir/usr/share/nidara/skills"
 
-  # Greeter's blank GTK4 theme (GTK_THEME=nidara → zero theme rules; GTK falls
-  # back to Adwaita silently if this file is missing — a real past bite)
-  install -Dm644 ui/greeter/theme/gtk.css "$pkgdir/usr/share/themes/nidara/gtk-4.0/gtk.css"
-
   # Session entry + app entries
   install -Dm644 config/wayland-sessions/nidara.desktop "$pkgdir/usr/share/wayland-sessions/nidara.desktop"
   # A system-wide $BROWSER must not contradict Settings → Default Apps (see the file).

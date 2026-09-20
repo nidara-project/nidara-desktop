@@ -938,6 +938,18 @@ dropdown.locale-bar-dropdown > button {
   margin-right: 2px;
 }
 
+// ── Bare GTK nodes this bundle builds and must therefore draw ────────────────
+// Commandment 11, and the same trap as the shell's copy: `.locale-bar-sep` below
+// paints the one separator these screens build today, so a plain
+// `new Gtk.Separator()` added tomorrow would be an invisible one. These screens are
+// the worst place for that — they have no dev mode, so nobody would see it until a
+// VM pass. The class below out-ranks this.
+separator {
+  background: var(--nidara-glass-border-sm);
+  min-width: 1px;
+  min-height: 1px;
+}
+
 .locale-bar-sep {
   background: var(--nidara-glass-border-sm);
   min-width: 1px;

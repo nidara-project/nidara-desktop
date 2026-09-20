@@ -18,7 +18,7 @@ import { WINDOW_LAYOUT } from "../../ui/lib/tokens"
 import appService from "../../ui/shell/core/AppService"
 import AppIconsPage, { buildAppIconDetailPage } from "../../ui/shell/surfaces/settings/pages/AppIcons"
 
-GLib.setenv("GTK_THEME", "nidara", true)
+GLib.setenv("GTK_THEME", "Empty", true)
 const argv: string[] = (globalThis as any).ARGV ?? []
 const target = argv[0] ?? "list"
 const css = argv[1]

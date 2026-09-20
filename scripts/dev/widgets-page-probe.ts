@@ -23,7 +23,7 @@ import { setWidgetCatalog, widgetCatalog } from "../../ui/shell/core/WidgetCatal
 import { widgetCatalogSource } from "../../ui/shell/core/WidgetCatalogSource"
 import WidgetsPage from "../../ui/shell/surfaces/settings/pages/Widgets"
 
-GLib.setenv("GTK_THEME", "nidara", true)
+GLib.setenv("GTK_THEME", "Empty", true)
 const argv: string[] = (globalThis as any).ARGV ?? []
 const css = argv[0]
 let failures = 0
