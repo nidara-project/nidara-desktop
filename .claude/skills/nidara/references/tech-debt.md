@@ -3729,31 +3729,34 @@ one of each kit component under both substrates differs by 345 pixels out of 495
 differences are exactly two — the `dropdown`'s arrow, which vanishes, and the entry `placeholder`,
 which stops being dimmed. Everything else is identical.
 
-**The order of work, cheapest and least reversible last:**
-1. **DELETE the blank theme — do not move it.** GTK ships its own empty theme in the same
-   gresource as the real one (`theme/Empty/gtk.css`), so `GTK_THEME=Empty` loads zero rules with no
-   file of ours anywhere. Measured 2026-09-20: the kit gallery under `GTK_THEME=Empty` is **0
-   pixels** different from the same gallery under our `nidara` blank. That retires the file, its
-   `install.sh` step, its PKGBUILD line, the three `ThemeManager` guards, and the whole
-   shared-namespace problem at once. ⚠️ Two more facts found the same day: GTK 4.22's built-in
-   theme is called **`Default`, not `Adwaita`**, and `/usr/share/themes/` holds only `Default`,
-   `Emacs` and `nidara` — so the `themeFamily: "Adwaita"` we seed **names a theme that is not
-   installed**, and everything falls back to `Default`. Fix the seed while you are there.
-2. **Draw the two known gaps in the KIT's sheet** (dropdown arrow, entry placeholder).
-3. ✅ **The inventory is TAKEN, and it is a gate rather than a list.**
-   `scripts/ci/style-ownership-check.mjs` (commandment 11, three controls) asks it of every bundle:
-   every GTK widget a bundle builds must have a rule in a sheet that bundle compiles. Today 16
-   bundle nodes and 7 kit nodes pass, and **eight are owed**, enumerated in that file's `OWED` map:
-   `expander`, `flowbox`, `picture`, `revealer`, `separator`, `spinner`, `stack`, `textview`.
-   ⚠️ All eight have rules in GTK's own theme — verified by extracting
-   `theme/Default/Default-light.css` from the gresource, after a first draft of the table guessed
-   that `revealer`, `stack` and `picture` "paint nothing" and was wrong. Whether each NEEDS a rule
-   from us is settled by looking at it under `GTK_THEME=Empty`, not by reading. `gtk4-widget-factory`
-   and `gtk4-demo` are installed and are the honest way to see them.
-4. **Flip one bundle at a time**, with a render diff as the gate, not a look.
-5. **Delete the resets that exist only to neutralise Adwaita** — and with them the stale comment in
-   `ui/shell/styles/_reset.scss` that still blames `Adw.init()` for a libadwaita that has been gone
-   since 2026-08-18.
+**THE CLEANUP, in order. Owner on 2026-09-20: "hay que hacer una limpieza total" — he is tired of
+GTK theming being a recurring headache, and the list below is every symptom he named, each with
+what it actually is.**
+
+1. **Delete our blank theme; use GTK's own `Empty`.** `ui/greeter/theme/gtk.css`, its `install.sh`
+   step, its PKGBUILD line, and the three `ThemeManager` guards against the name `nidara` all go.
+   `GTK_THEME=Empty` is a theme GTK ships inside its gresource and renders **0 pixels** different
+   (measured). Needs a **VM pass**: the greeter has no dev mode and fails silently.
+2. **Fix the seeded theme, which names a ghost.** `defaults/appearance.json` seeds
+   `themeFamily: "Adwaita"`, and on a clean Arch **there is no `/usr/share/themes/Adwaita`** — GTK
+   4.22's built-in is `Default`. Everything works only because GTK falls back. Decide what the
+   seed should be for THIRD-PARTY apps and make it name something real.
+3. **Fix Settings' theme dropdown, which offers nothing.** `getAvailableGtkThemes()` lists
+   `/usr/share/themes` and filters `Default`, `Emacs`, `nidara` — on a clean Arch that is the whole
+   directory, so the list comes back EMPTY while the row displays "Adwaita". That is the owner's
+   "themes that do not exist but appear in the dropdown". Whatever it lists must be (a) installed
+   and (b) usable, and the current value must be one of them.
+4. **Draw the eight owed nodes** (`style-ownership-check`'s `OWED` map). Look at each under
+   `GTK_THEME=Empty` first — some may need nothing, and that is a reasoned exception, not a
+   deletion of the line.
+5. **Flip the bundles to `Empty`, one at a time**, with a render diff as the gate.
+6. **Then, and only then, delete the resets** that exist solely to neutralise a theme that is no
+   longer loaded — including the comment in `ui/shell/styles/_reset.scss` that still blames
+   `Adw.init()` for a libadwaita gone since 2026-08-18. ⚠️ Not before step 4: a reset removed while
+   its node is still undrawn takes the pixel with it.
+
+⚠️ **Ordering rule that is easy to get wrong**: steps 1-3 are bookkeeping and can land together;
+step 5 must not precede step 4, and step 6 must not precede step 5.
 
 ⚠️ **The one identified risk, and it is NOT measured yet.** `Gtk.FontDialog` (used by the kit's
 `NidaraFontButton`, i.e. Settings' font picker) is a dialog GTK builds ITSELF, in our process, and
