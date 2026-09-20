@@ -477,6 +477,31 @@ checkbutton:disabled {
     transition: color 0.15s ease;
 }
 
+/* Menu — shared by the tray menu (renderMenuModel), the bar system menu and the
+   CC context menu. A flat list of .nidara-menu-row buttons, not a Gtk.Popover. */
+.nidara-menu {
+    @include nidara-reset;
+    color: var(--nidara-text);
+    -gtk-icon-palette: success white, warning white, error white;
+}
+
+/* Glass menu popover — the Gtk.Popover surface that hosts a Cairo glass bubble
+   (common/GlassBubble) + the .nidara-menu rows above. Shared by the dock context
+   menu and the app-grid context menu so every glass menu speaks one language.
+   Reset the native popover chrome to transparent (exactly like .nidara-tooltip) so
+   only our glass shows; the popover is its own surface and blurs on its layer
+   (blur_popups). */
+.nidara-menu-popover {
+    @include nidara-reset;
+
+    > contents {
+        @include nidara-reset;
+        padding: 0;
+        min-width: 0;
+        min-height: 0;
+    }
+}
+
 /* --- Toggles (Switches) --- */
 switch,
 .nidara-switch {

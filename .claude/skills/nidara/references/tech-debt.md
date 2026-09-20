@@ -2529,14 +2529,25 @@ the GTK theme we ship is three lines that draw nothing. The installer's NVIDIA t
 drawing an empty row since it was written; it only appears on Turing-or-newer hardware, which is
 why no one reported it. Moved to the kit's sheet on 2026-09-20 (PR #608), with `--nidara-thumb`
 following it into the token engine.
-⚠️ **Two more are in that state right now, latent only because no other bundle uses them yet:**
-the kit's `nidara-menu` (`nidara-kit/menu.ts`) and `nidara-tooltip` (`nidara-kit/tooltip.ts`), both
-styled only in the shell's half.
-🔑 **The missing check, and it is the shape of `token-contract-check` one level up.** That gate asks
-"does this bundle define the tokens it paints with". Nothing asks **"is every class a kit component
-emits styled in the kit's own sheet"** — which is the question that would have caught this on the
-day, instead of a person remembering. Not every class qualifies (some are deliberately left for the
-consuming bundle to style), so it needs a declared exception list, exactly like the orphan check's.
+✅ **The check exists now: `scripts/ci/kit-style-check.mjs`** (2026-09-20, in the `styles` job with
+two controls). Every class the kit adds and every widget node it builds must be drawn by the kit's
+own sheet or be listed there with a reason. It immediately found `.nidara-menu` and
+`.nidara-menu-popover` in the same state as the switch — both moved, verified by the 584-pair
+comparison and by each moved selector appearing exactly once in the compiled sheet. ⚠️ An earlier
+draft of this entry also named `nidara-tooltip`; that was **wrong**, the kit's sheet has had
+`.nidara-tooltip` all along. The check is what established which was which.
+
+⚠️ **Three bugs in that check before it was trustworthy, all found by running it rather than
+reading it, and the shape is worth remembering.** (1) It demanded a class be preceded by a space or
+a comma and reported THIRTEEN false failures — every element- or class-qualified selector we write
+(`window.nidara-alert-dialog`). (2) Its class scanner anchored straight to `[`, so
+`css_classes: opts.cssClasses ?? ["nidara-menu-popover"]` walked past it, hiding one half of the
+very component it had just caught. (3) It only failed when the SHELL styled the class, which leaves
+a rule that has already moved into the kit unprotected: rename it there and the class becomes
+"styled nowhere", which that draft accepted — the control caught a check written to protect
+`.nidara-menu` passing with `.nidara-menu` deleted. The default is now "must be styled by the kit",
+with an exception list where a human writes down which classes carry no paint on purpose (a name
+for `queryUI` perception, a variant hook).
 
 🔑 **AND THE BIGGER FRAME, owner, 2026-09-20 — this keeps resurfacing because the goal is wrong.**
 "The kit is shared by our three bundles" is not what he wants it to be: he wants **something like

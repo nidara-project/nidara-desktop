@@ -2179,11 +2179,18 @@ only when someone boots a VM). The `styles` job now compiles it too.
   track and no thumb. It went unreported because that toggle only appears on Turing-or-newer
   hardware. Same shape as the hole `token-contract-check` was born from, one level up — the
   TOKENS were checked, the RULES were not.
-  ⚠️ Still in that state, latent because no other bundle uses them yet: the kit's `nidara-menu`
-  and `nidara-tooltip`. Moving a block is not free — it changes cascade order — so check
-  `token-contract-check` after, and move the tokens it spends with it (`--nidara-thumb` went from
-  the shell's static block to the engine in the same change, because the rules that read it now
-  run in three processes).
+  ✅ **`scripts/ci/kit-style-check.mjs` is the gate** (2026-09-20, two controls): every class the
+  kit adds and every widget node it builds must be drawn by the kit's own sheet, or be listed in
+  that file WITH a reason. It found `.nidara-menu` / `.nidara-menu-popover` in the same state as
+  the switch and they moved with it. ⚠️ `nidara-tooltip` is NOT in that state and an earlier
+  version of this paragraph said it was: the kit's sheet has had `.nidara-tooltip` all along
+  (the shell keeps its own copy on top).
+  Moving a block is not free — it changes cascade order. Verify it the way #59 did: compile the
+  shell's sheet before and after and compare selector→body pairs (identical set, 584 both times
+  for the menu move), then confirm each moved selector appears EXACTLY ONCE, so nothing can
+  compete with it at equal specificity and the reorder cannot change an outcome. And move the
+  tokens the rules spend with them — `--nidara-thumb` went from the shell's static block to the
+  engine in the same change, because the rules that read it now run in three processes.
 - **A capsule's VISIBLE edge is `GLASS_INSET` (2px) inside its allocation.** `drawSquircle`
   paints the glass in from the widget rect so the border stroke never lands on the allocation
   edge, which means **a child laid out flush to the rect overhangs the shape**. Nothing warns
