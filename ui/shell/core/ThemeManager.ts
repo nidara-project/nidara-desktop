@@ -19,6 +19,7 @@ import {
 } from "./NidaraTheme"
 import { SHELL_ROOT } from "./Paths"
 import { defineSettings } from "./configFile"
+import { GTK_BUILTIN_THEME } from "../../lib/gtk-theme"
 
 // ── WHERE APPEARANCE LIVES (#573) ────────────────────────────────────
 // Two homes, no file:
@@ -177,7 +178,7 @@ class ThemeManager extends GObject.Object {
         // the next login by the file this class pushed over them. Same guard as above.
         this.interfaceSettings.connect("changed::gtk-theme", () => {
             const theme = this.interfaceSettings.get_string("gtk-theme")
-            if (theme && theme !== "nidara" && theme !== this.state.themeFamily) this.setGtkTheme(theme)
+            if (theme && theme !== this.state.themeFamily) this.setGtkTheme(theme)
         })
         this.interfaceSettings.connect("changed::icon-theme", () => {
             const icons = this.interfaceSettings.get_string("icon-theme")
@@ -286,9 +287,48 @@ class ThemeManager extends GObject.Object {
 
     // ── Discovery API ────────────────────────────────────────────────
 
+    /**
+     * The GTK theme for THIRD-PARTY applications — never for ours, which load none
+     * (commandment 11, `ui/lib/gtk-theme.ts`).
+     *
+     * ⚠️ Rewritten 2026-09-20 (tech-debt #107). The old version listed
+     * `/usr/share/themes` and subtracted three names, which on a clean Arch is the
+     * WHOLE directory — `Default` and `Emacs` are the only entries and both are
+     * gtk-3.0 KEYBINDING themes (`gtk-keys.css`), not widget themes. So the row
+     * offered an empty list while displaying a value that was not on disk either.
+     * Same shape as `getAvailableIconThemes()`, and this is the same three rules:
+     *
+     *   · a directory counts only if it is a REAL GTK4 theme — a `gtk-4.0/`
+     *     subdirectory. That is the whole test, and it is the one that matters:
+     *     `gnome-themes-extra` ships `/usr/share/themes/Adwaita` with `gtk-2.0` and
+     *     `gtk-3.0` only, so offering it would change nothing for a GTK4 app.
+     *   · the built-in is always offered under `GTK_BUILTIN_THEME`. It is not on
+     *     disk — it lives in libgtk's gresource — so no directory scan can find it,
+     *     and it is the value a fresh install is seeded with. ⚠️ That name is
+     *     `Adwaita`, NOT GTK4's own `Default`, and the reason is GTK3: see
+     *     `ui/lib/gtk-theme.ts`, which holds the measurements. It also means a real
+     *     `/usr/share/themes/Adwaita` is filtered out of the disk scan and re-added
+     *     as the built-in — right, because under that name the two are the same
+     *     offer to a GTK4 app (measured: 0 differing pixels).
+     *   · the configured value stays selectable even if it fails the test, so the
+     *     row can still display what is actually set.
+     *
+     * ⚠️ `enum:` is evaluated once, at registration (`ui/shell/config-entries.ts`),
+     * so a theme installed afterwards does not appear until the shell restarts.
+     */
     getAvailableGtkThemes(): string[] {
         const paths = ["/usr/share/themes", `${GLib.get_home_dir()}/.local/share/themes`, `${GLib.get_home_dir()}/.themes`]
-        return this.listDirs(paths).filter(t => !["Default", "Emacs", "nidara"].includes(t))
+        const themes = this.listDirs(paths).filter(t => {
+            if (t === GTK_BUILTIN_THEME) return false // added below; never from disk
+            for (const p of paths) {
+                if (GLib.file_test(`${p}/${t}/gtk-4.0`, GLib.FileTest.IS_DIR)) return true
+            }
+            return false
+        })
+        themes.push(GTK_BUILTIN_THEME)
+        const current = this.state.themeFamily
+        if (current && !themes.includes(current)) themes.push(current)
+        return themes.sort()
     }
 
     getAvailableIconThemes(): string[] {
@@ -747,7 +787,7 @@ class ThemeManager extends GObject.Object {
             const s = this.interfaceSettings
             const gtk = s.get_string("gtk-theme")
             this.state = {
-                themeFamily: (gtk && gtk !== "nidara") ? gtk : "Adwaita",
+                themeFamily: gtk || GTK_BUILTIN_THEME,
                 iconTheme: s.get_string("icon-theme"),
                 cursorTheme: s.get_string("cursor-theme"),
                 isDark: s.get_string("color-scheme") === "prefer-dark",
@@ -756,7 +796,7 @@ class ThemeManager extends GObject.Object {
             if (accent in ACCENT_PALETTE) this.fcConfig.accent = accent as AccentKey
         } catch (e) {
             console.warn("[ThemeManager] could not read org.gnome.desktop.interface:", e)
-            this.state.themeFamily = this.state.themeFamily || "Adwaita"
+            this.state.themeFamily = this.state.themeFamily || GTK_BUILTIN_THEME
         }
         for (const key of NIDARA_KEYS) (this.fcConfig as unknown as Record<string, unknown>)[key] = nidaraAppearance.get(key)
     }

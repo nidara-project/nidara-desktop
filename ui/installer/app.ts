@@ -16,10 +16,16 @@ import GLib from "gi://GLib"
 import { initAppearance } from "../lib/appearance-css"
 import { applyCrispFontRendering } from "../lib/font-rendering"
 import { InstallerWindow } from "./widget/InstallerWindow"
+import { useNoGtkTheme } from "../lib/gtk-theme"
 
-// Our blank theme instead of Adwaita: with an empty gtk.css at
-// /usr/share/themes/nidara/gtk-4.0/gtk.css, this sheet is the only CSS there is.
-GLib.setenv("GTK_THEME", "nidara", true)
+// No GTK theme at all — this sheet is the only CSS there is (commandment 11).
+//
+// ⚠️ This bundle is the reason the theme must come out of GTK's gresource rather
+// than off the disk. It ships as `nidara-installer` and runs on a live medium that
+// need not carry `nidara-desktop`, which is what installed the blank theme we used
+// to name here — so on an ISO built without the desktop package the installer ran
+// the full default GTK theme while this line claimed it was running on nothing.
+useNoGtkTheme()
 
 const cssPath = [
   "./style.css",

@@ -88,6 +88,24 @@ const APPEARANCE_NS = "org.freedesktop.appearance"
 // appearance.json` is the greeter's mirror, an export for a surface outside any
 // session, and nothing in a session reads it back.
 const NIDARA_NS = "org.nidara.appearance"
+
+/**
+ * The GNOME interface namespace — `gtk-theme`, `icon-theme`, `font-name`,
+ * `cursor-theme`, `cursor-size`, `color-scheme`… — served here since 2026-09-20.
+ *
+ * ⚠️ It used to be `xdg-desktop-portal-gtk`'s job, and that is exactly why the bus
+ * carried TWO `SettingChanged` for every mode change: `portals.conf` listed
+ * `Settings=nidara;gtk`, the gtk backend was there for THIS namespace, and both of
+ * us also served `org.freedesktop.appearance color-scheme`. A client that can read
+ * one value two ways eventually reads two different values — which is the appearance
+ * contract's own rule (#534), broken by our own routing.
+ *
+ * So we serve all three namespaces and `portals.conf` names only us. The keys are
+ * enumerated from the SCHEMA rather than listed here: a hand-written list is a list
+ * of what somebody remembered, and a key we forget is a setting that silently stops
+ * reaching every GTK3, Qt and Chromium application on the desktop.
+ */
+const GNOME_NS = "org.gnome.desktop.interface"
 const NIDARA_KEYS = ["window-opacity", "bar-opacity", "overlay-opacity", "dock-opacity", "shell-appearance"]
 const BUS_NAME = "org.freedesktop.impl.portal.desktop.nidara"
 const OBJECT_PATH = "/org/freedesktop/portal/desktop"
@@ -407,6 +425,22 @@ function applyWallpaperFallback(path) {
     }
 }
 
+/**
+ * Every key of `org.gnome.desktop.interface`, as the portal's `a{sv}`. Enumerated
+ * from the schema, so a key added by a future GLib arrives on its own.
+ */
+function gnomeKeys() {
+    const out = {}
+    try {
+        for (const key of interfaceSettings.settings_schema.list_keys()) {
+            out[key] = interfaceSettings.get_value(key)
+        }
+    } catch (e) {
+        printerr(`[nidara-portal] cannot enumerate ${GNOME_NS}: ${e}`)
+    }
+    return out
+}
+
 // ── Settings Backend ─────────────────────────────────────────────────────────
 class SettingsBackend {
     get version() { return 1 }
@@ -422,6 +456,7 @@ class SettingsBackend {
                 "reduced-motion": reducedMotionVariant(),
             }
         }
+        if (nsMatches(namespaces, GNOME_NS)) dict[GNOME_NS] = gnomeKeys()
         if (nsMatches(namespaces, NIDARA_NS)) dict[NIDARA_NS] = nidaraKeys()
         invocation.return_value(new GLib.Variant("(a{sa{sv}})", [dict]))
     }
@@ -453,7 +488,14 @@ class SettingsBackend {
                 return
             }
         }
-        // Fall through to other portal backends in portals.conf (e.g. gtk for font-name)
+        if (namespace === GNOME_NS) {
+            const keys = gnomeKeys()
+            if (keys[key]) {
+                invocation.return_value(new GLib.Variant("(v)", [keys[key]]))
+                return
+            }
+        }
+        // Nothing to fall through to: portals.conf names us alone for Settings.
         invocation.return_dbus_error(
             "org.freedesktop.portal.Error.NotFound",
             `nidara-portal does not serve ${namespace} ${key}`,
@@ -703,6 +745,17 @@ Gio.bus_own_name(
             exportedSettings.emit_signal(
                 "SettingChanged",
                 new GLib.Variant("(ssv)", [APPEARANCE_NS, "accent-color", accentRgbVariant()]),
+            )
+        })
+
+        // Every key of the GNOME namespace, announced under its own name. This is a
+        // SECOND signal for `color-scheme` and `accent-color` — deliberately: those two
+        // are announced under `org.freedesktop.appearance` as well, with different names
+        // and different types, and a client subscribes to one namespace or the other.
+        interfaceSettings.connect("changed", (_s, key) => {
+            exportedSettings.emit_signal(
+                "SettingChanged",
+                new GLib.Variant("(ssv)", [GNOME_NS, key, interfaceSettings.get_value(key)]),
             )
         })
 

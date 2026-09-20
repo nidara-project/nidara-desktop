@@ -118,7 +118,7 @@ other way round from the outside** (`pacman -U` into a scratch root under `faker
 
 - `/usr/bin/{nidara, nidara-ui, nidara-greeter, nidara-lock, nidara-game-mode, nidara-setup, nidara-update, …}`
 - `/usr/share/nidara/` — configs, bundles, `VERSION`, wallpaper, plus the setup payloads `defaults/` (minus wallpaper) and `config/greetd/` that `nidara-setup` reads — same layout whether shipped by the package or by install.sh §5
-- `/usr/share/themes/nidara/gtk-4.0/gtk.css` — the greeter's **blank** GTK4 theme (zero rules). The greeter starts with `GTK_THEME=nidara` so only its own app CSS applies; **GTK silently falls back to Adwaita if this theme isn't on disk** (a real bite — the install step was missing post-rename). The step also `rm -rf`s the pre-rename `crystal-shell` orphan. Source: `ui/greeter/theme/gtk.css`.
+- **No GTK theme is installed, and that is the point** (commandment 11, 2026-09-20). Our processes call `useNoGtkTheme()` — `GTK_THEME=Empty`, which GTK resolves out of its own gresource — so there is no file to ship and none to go missing. install.sh instead `rm -rf`s two artefacts it used to install: `/usr/share/themes/nidara` (our old blank theme, pixel-identical to `Empty` but offered by every theme chooser on the system) and the pre-rename `crystal-shell` orphan. ⚠️ Do not "fix" a missing theme by naming one: a `GTK_THEME` that resolves to nothing silently loads GTK's FULL built-in theme, which is how the old arrangement could be broken without any symptom. See `ui/lib/gtk-theme.ts`.
 - `/usr/share/wayland-sessions/nidara.desktop`
 - `/usr/share/applications/`
 - XDG portal config

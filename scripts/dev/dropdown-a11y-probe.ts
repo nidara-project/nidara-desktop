@@ -47,7 +47,7 @@ import app from "../../ui/lib/host"
 import { NidaraWindow, NidaraDropDown } from "../../ui/lib/nidara-kit"
 import { initAppearance } from "../../ui/lib/appearance-css"
 
-GLib.setenv("GTK_THEME", "nidara", true)
+GLib.setenv("GTK_THEME", "Empty", true)
 
 const MOUNTS = ["None", "/", "/boot", "/home", "swap"]
 

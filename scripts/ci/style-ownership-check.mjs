@@ -12,29 +12,33 @@
 // from every bundle; `ui/lib/styles/_components.scss` is the stylesheet every bundle
 // compiles. `ui/shell/styles/_components.scss` is the SHELL's, and only the shell
 // compiles it. So a kit component whose rules sit in the second file renders
-// unstyled everywhere else — and unstyled means one of two things, neither
-// acceptable: on the greeter and the lock screen, which force the blank theme we
-// ship (`/usr/share/themes/nidara/gtk-4.0/gtk.css`), it is INVISIBLE; in the shell
-// and the installer it is drawn by whatever GTK theme the user happens to have, so
-// our own component wears somebody else's clothes.
+// unstyled everywhere else — and with no GTK theme underneath (`ui/lib/gtk-theme.ts`),
+// unstyled means INVISIBLE rather than "GTK's default".
 //
 // That is not hypothetical. Every rule giving a `switch` its track and thumb stayed
 // in the shell's half when the kit's stylesheet was extracted (2026-08-10), and
 // `NidaraToggleRow` went out without them.
 //
-// ⚠️ CORRECTION, measured 2026-09-20 after this file first claimed otherwise. The
-// blank theme is NOT what the shell and the installer run under. `GTK_THEME=nidara`
-// is set by the GREETER (`ui/greeter/app.ts`) and by the dev probes; a real session
-// seeds `themeFamily: "Adwaita"` (`defaults/appearance.json`) and `ThemeManager`
-// explicitly UNSETS `GTK_THEME` and drives the theme through gsettings. Rendered
-// with zero switch rules of our own under Adwaita, GTK draws a switch perfectly
-// well. So the installer's NVIDIA toggle was never invisible — it wore ADWAITA's
-// switch while the shell's wore Nidara's, which is a different bug and a smaller
-// one. Invisible is what happens on the GREETER and the LOCK SCREEN, which do force
-// the blank theme; no toggle row has reached those yet, so that half is latent.
+// ⚠️ TWO CORRECTIONS, in order, because this header got the same fact wrong twice
+// and the second time it was written as a correction of the first.
 //
-// The rule this check enforces is unchanged, and its reason is stronger for being
-// accurate: a kit component must not depend on the user's GTK theme to be drawn.
+// It first said every bundle ran themeless. That was then "corrected" to: the blank
+// theme is the GREETER's, while the shell AND THE INSTALLER run on the user's GTK
+// theme — and so the installer's NVIDIA toggle "was never invisible, it wore
+// Adwaita's switch". The installer half of that is false. `ui/installer/app.ts` has
+// selected a themeless GTK since the bundle was born (#268), which the correction
+// never checked; the original reading was right, and an unstyled switch on the
+// installer's page was exactly as blank as it looked.
+//
+// What was true in it, and is still true, is the SHELL: it unsets `GTK_THEME` and
+// wears whatever theme gsettings names, so a kit component missing its rules there
+// wears somebody else's clothes instead of disappearing. That is the ONE bundle
+// commandment 11 has not reached yet, and it is held up by something measured
+// rather than feared — see tech-debt #107 step 5 and `GTK_OWN_DIALOGS` below.
+//
+// So this check is deliberately stricter than today's runtime for one of its four
+// bundles: it asks every bundle to own its widgets as if nothing were underneath,
+// because for three of them nothing is, and for the fourth that is the destination.
 //
 // ⚠️ Why the 2026-08-10 verification could not catch it: it proved the SHELL's
 // compiled sheet still held the same 534 selector→body pairs — that nothing was
@@ -96,6 +100,11 @@ const WIDGET_NODES = new Map([
     // why they are listed rather than ignored — the first draft of this table called
     // them "containers that paint nothing" and that was a guess, not a fact.
     ["ListBox", "list"], ["ListBoxRow", "row"], ["FlowBox", "flowbox"],
+    // ⚠️ `Gtk.Expander`'s own node is `expander-widget`; `expander` is the builtin
+    // icon inside its title, and it is the only part of the widget a theme draws.
+    // That is the node named here on purpose — and the one `.installer-expander`
+    // got wrong for as long as it existed. Dumped from a live widget, not recalled:
+    //   expander-widget > box > title > [GtkBuiltinIcon css-name=expander] + label
     ["ScrolledWindow", "scrolledwindow"], ["Popover", "popover"], ["Expander", "expander"],
     ["Separator", "separator"], ["Spinner", "spinner"], ["ProgressBar", "progressbar"],
     ["Stack", "stack"], ["Revealer", "revealer"], ["Picture", "picture"],
@@ -108,9 +117,26 @@ const WIDGET_NODES = new Map([
  * ⚠️ Dialogs GTK builds ITSELF, inside our process. Their internals are GTK's own
  * widgetry under GTK's own class names, so "draw it ourselves" is not a rule we can
  * simply write — and we do not set `GTK_USE_PORTAL`, so they are not somebody else's
- * process either. This is the one identified risk of commandment 11 and it is NOT
- * measured yet (tech-debt #107): an attempt on 2026-09-20 failed to capture the
- * dialog. Listed here so the check does not pretend the question is settled.
+ * process either. This is the one identified risk of commandment 11, and as of
+ * 2026-09-20 it is MEASURED rather than suspected.
+ *
+ * `Gtk.FontDialog` builds a `GtkFontChooserDialog` toplevel inside our process, and
+ * with no theme under it the dialog is legible and undressed: no frame on the search
+ * entry, no frame on the font list, no trough on the size slider, no chrome on the
+ * spin buttons, and — the one that reads as broken rather than plain — no button
+ * chrome at all, so "Cancelar" and "Seleccionar" sit side by side as bare words with
+ * nothing between them. Our sheets cannot reach it: the shell's `button` rules are
+ * scoped to the shell's windows, and this is a toplevel of GTK's with none of our
+ * classes on it.
+ *
+ * `Gtk.FileDialog` creates a `GtkFileChooserDialog` toplevel too — so it is also
+ * in-process and also ours to dress — but it never mapped under broadway in twelve
+ * seconds, so there is no picture of it and no claim here about how it looks.
+ *
+ * That is the third of the three outcomes tech-debt #107 listed, and the expensive
+ * one. It is why the SHELL has not been flipped: Settings is where both of these
+ * live. Listed here so the check does not fail on a widget whose answer is a
+ * decision, not a rule.
  */
 const GTK_OWN_DIALOGS = new Set(["FileDialog", "FontDialog"])
 
@@ -118,6 +144,17 @@ const WIDGET_EXCEPTIONS = new Map([
     ["dropdown", "the trigger is a `button` and the list is `popover.combo`; both are styled, and GTK's `dropdown` node itself paints nothing"],
     ["list", "`.nidara-list` is the painted surface; the bare `list` node has no fill of its own"],
     ["scrolledwindow", "`NidaraScrolled` paints its own bar (`.nidara-scroll-bar`) and the viewport is transparent by design"],
+    // ── settled 2026-09-20 by LOOKING, which is what OWED asked for ───────────
+    // `scripts/dev/kit-gallery-probe.ts` grew a section of these nodes and was shot
+    // twice, with a GTK theme under it and with none. Four of them turned out to
+    // need nothing from us, and "GTK's theme has a rule for it" was the reason they
+    // had been suspected — a different claim from "we need one", as the OWED comment
+    // warned. Each line below is what the two images showed, not what the CSS says.
+    ["picture", "GTK's only rule is `picture:disabled { opacity: .5 }`; with no theme a Gtk.Picture renders its paintable identically"],
+    ["revealer", "GTK styles `searchbar >`, `infobar >` and `actionbar > revealer > box` — composites we do not build. A bare revealer is a clip, and it clipped the same both ways"],
+    ["stack", "same shape as `revealer`: GTK's five rules are all `editablelabel >`, `dropdown >` and `notebook > stack`. A bare stack showed no difference"],
+    ["textview", "GTK gives `textview > text` a WHITE fill and black text, which is the opposite of what our surfaces want. With no theme it inherits our colour on our glass — the hole was the fix"],
+    ["flowbox", "the one FlowBox we build is the app grid, and `_app-grid.scss` resets `flowboxchild` to transparent on purpose to paint its own accent ring on `.app-grid-plate`. GTK's blue selection fill is what we were removing"],
 ])
 
 // Not widgets at all — controllers, models, providers, gestures, paintables — plus
@@ -234,27 +271,26 @@ const BUNDLES = [
 ]
 
 /**
- * Nodes we build somewhere and do not draw yet — the bill for commandment 11,
- * taken 2026-09-20 by reading GTK's own theme out of its gresource
- * (`gresource extract /usr/lib/libgtk-4.so.1 /org/gtk/libgtk/theme/Default/Default-light.css`),
- * which has rules for every one of them. They are listed so that a NEW widget fails
- * this check immediately while the existing debt stays visible and countable.
+ * Nodes we build somewhere and do not draw yet — the bill for commandment 11. It
+ * was eight on 2026-09-20, read off GTK's own theme out of its gresource; it is one.
  *
- * ⚠️ "Has a rule in GTK's theme" is not the same as "needs a rule from us": some of
- * these may turn out to be transitions or metrics we are happy to lose. That is
- * decided by LOOKING at the widget under `GTK_THEME=Empty`, not by reading. When one
- * is settled, either write the rule or move it to a reasoned exception — do not just
- * delete the line.
+ * ⚠️ "Has a rule in GTK's theme" is not the same as "needs a rule from us", and that
+ * warning earned its keep: of the eight, FOUR needed nothing, one needed the
+ * opposite of what GTK gives (`textview`), one was already drawn by a class
+ * (`separator`, now with a bare-node default under it so the next one is too), and
+ * one was drawn by a rule that matched no node at all — `.installer-expander`
+ * asked for `arrow` where GTK 4.22 builds `expander`, so the installer's disclosure
+ * triangle had never appeared. That last one is the argument for this list: the
+ * check could not see it, because a sheet that names the WRONG node looks exactly
+ * like a sheet that names the right one.
+ *
+ * Settle an entry by LOOKING at the widget with no theme under it —
+ * `scripts/dev/kit-gallery-probe.ts` mounts these nodes for exactly that — and then
+ * either write the rule or move it to `WIDGET_EXCEPTIONS` with what you saw. Do not
+ * just delete the line.
  */
 const OWED = new Map([
-    ["expander", "installer — tech-debt #107, not drawn yet"],
-    ["flowbox", "shell — tech-debt #107, not drawn yet"],
-    ["picture", "lockscreen — tech-debt #107, not drawn yet"],
-    ["revealer", "shell — tech-debt #107, not drawn yet"],
-    ["separator", "greeter — tech-debt #107, not drawn yet"],
-    ["spinner", "shell — tech-debt #107, not drawn yet"],
-    ["stack", "installer — tech-debt #107, not drawn yet"],
-    ["textview", "installer — tech-debt #107, not drawn yet"],
+    ["spinner", "THE SHELL ONLY, now — tech-debt #107. A Gtk.Spinner renders NOTHING without a theme: GTK's own rule is an `-gtk-icon-source` plus a rotation, and it is the whole widget. It is DRAWN as of 2026-09-20, in `ui/lib/styles/_base-layer.scss`: a ring whose track is `--nidara-surface-raised` and whose head is the accent, turning once a second on `:checked`, in CSS so it needs no asset, no `nd-` name and no SPEC bump. That reaches the greeter and the lock (`ui/lib/auth-card.ts`, blank since 2026-08-24) and the installer, because the base layer is wired from the sheets of the bundles that have NO theme. The shell does not compile it — it still wears the user's theme, which draws its two spinners (`settings/pages/Bluetooth.tsx`, `widgets/vpn.ts`) meanwhile — so the node stays listed here until step 5 flips the shell and the layer goes in with it"],
 ])
 
 const sheetText = (paths) => {

@@ -7,11 +7,10 @@ import { initProcessLocale } from "./lib/i18n"
 import { initAppearance } from "../lib/appearance-css"
 import { applyCrispFontRendering } from "../lib/font-rendering"
 import { chooseLoginSkin, applyLoginSkin } from "../lib/login-skin"
+import { useNoGtkTheme } from "../lib/gtk-theme"
 
-// Use our blank theme instead of Adwaita.
-// With an empty gtk.css at /usr/share/themes/nidara/gtk-4.0/gtk.css,
-// GTK4 loads zero theme rules — our app CSS is the only CSS that applies.
-GLib.setenv("GTK_THEME", "nidara", true)
+// No GTK theme at all — this sheet is the only CSS there is (commandment 11).
+useNoGtkTheme()
 
 const cssPath = GLib.file_test("./style.css", GLib.FileTest.EXISTS)
   ? "./style.css"

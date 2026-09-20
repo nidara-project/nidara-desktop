@@ -554,12 +554,12 @@ sudo mkdir -p /usr/share/nidara/ui/greeter/build
 sudo cp "$REPO_DIR/ui/greeter/build/nidara-greeter" /usr/share/nidara/ui/greeter/build/
 sudo cp "$REPO_DIR/ui/greeter/style.css" /usr/share/nidara/ui/greeter/
 
-# Greeter's blank GTK4 theme. The greeter starts with GTK_THEME=nidara so GTK4
-# loads ZERO theme rules (no Adwaita) and only the greeter's own CSS applies —
-# that only works if this empty theme exists at the matching name. (app.ts).
-sudo mkdir -p /usr/share/themes/nidara/gtk-4.0
-sudo cp "$REPO_DIR/ui/greeter/theme/gtk.css" /usr/share/themes/nidara/gtk-4.0/gtk.css
-# Remove the pre-rename orphan (was crystal-shell) so it doesn't linger.
+# Nidara installs NO GTK theme (commandment 11, tech-debt #107). Our processes ask
+# for `Empty`, which GTK resolves out of its own gresource — see ui/lib/gtk-theme.ts
+# for why a theme of ours on disk was worse than none. These two are the artefacts
+# that used to be installed here; remove them so a machine upgraded from an older
+# checkout stops offering them in every theme chooser on the system.
+sudo rm -rf /usr/share/themes/nidara
 sudo rm -rf /usr/share/themes/crystal-shell
 
 # Lockscreen bundle (shares greeter's style.css)

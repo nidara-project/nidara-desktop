@@ -2143,3 +2143,55 @@ baseline: whether the growth is monotonic with uptime or driven by activity (tha
 Settings, overlay and window-probe traffic), and what allocates it. The way to find out is to leave
 a shell up and sample `smaps_rollup` on a schedule, with the desktop idle for one arm and exercised
 for the other — an idle arm that also grows is a different bug from one that does not.
+
+### 109. ✅ RESOLVED same day (2026-09-20) — Qt applications get our colour scheme and NOT our icon theme
+
+Found while answering "why is Telegram always dark" — which turned out not to be ours, but this was
+underneath it. `telegram-desktop`'s own log, on a normal launch into a healthy session, says
+`Icon theme: hicolor` while the portal was serving `icon-theme` → `Papirus` the whole time.
+
+**What was measured, and it is the part worth keeping.**
+
+- **Qt reads nothing from GTK's `settings.ini` by itself.** `strings libQt6Gui.so.6` matches
+  `gtk-icon-theme-name`, `gtk-font-name`, `gtk-application-prefer-dark-theme` and
+  `gtk-3.0/settings.ini` **zero** times. So everything a Qt app knows about this desktop arrives
+  through its platform theme plugin, and nothing else.
+- **`libqxdgdesktopportal.so` carries the colour scheme and the FILE DIALOG, and nothing else.** Its
+  symbols are dominated by `QXdgDesktopPortalFileDialog`; it matches `org.freedesktop.appearance`,
+  `color-scheme` and `SettingChanged`, and has **no icon-theme strings at all**.
+- **`libqgtk3.so` carries all of it**: `notify::gtk-icon-theme-name`, `notify::gtk-font-name`,
+  `notify::gtk-application-prefer-dark-theme`, and it subclasses QGnomeTheme
+  (`QGnomeTheme::updateColorScheme`, `requestColorScheme`), so the colour scheme comes with it.
+- **The end-to-end proof used the app that raised it.** Telegram logs the icon theme it resolved, so
+  it was run twice under `cage` with the headless wlroots backend and a throwaway `-workdir`:
+
+  | `QT_QPA_PLATFORMTHEME` | Telegram resolved |
+  |---|---|
+  | `xdgdesktopportal` | `Icon theme: hicolor` |
+  | `gtk3` | `Icon theme: Papirus` |
+
+**Fixed** in the three places that set it — `defaults/uwsm/env`, `bin/nidara`, and the
+`bin/nidara-setup` migration, which now rewrites a stale `qt6ct` **or** `xdgdesktopportal` to `gtk3`.
+Sandboxed apps are unaffected: Qt detects flatpak/snap and uses the portal regardless of this value
+(the plugin's own `flatpak`/`snap` strings). No new dependency — both plugins ship in `qt6-base`, and
+`gtk3` was already in `depends`.
+
+⚠️ **What was NOT measured, stated so nobody repeats the search.** Qt's `colorScheme` value itself,
+under either plugin. There is no Qt application on a Nidara box that follows the system by default —
+a freshly created Telegram renders DARK with the session in light mode, identically under both
+plugins, because its Auto-Night Mode ships disabled — and the `qml` runtime refuses to load any
+document on this machine ("Did not load any objects"), so the property could not be read directly.
+The colour half rests on two things instead: `libqgtk3` carries the QGnomeTheme colour-scheme
+machinery, and the GtkSettings value it reads is one we already write and have verified with a real
+GTK3 app (light mode → `prefer-dark=false`, bg `rgb(246,245,244)`). If a Qt app ever comes out on
+the wrong side of dark/light, that is the untested link.
+
+🔑 **The comment that caused it** said "no qt6ct/Kvantum config is needed", which was true of COLOURS
+and got read as true of everything. Icons and fonts were never covered by that sentence.
+
+⚠️ **A silent near-miss in the fix itself.** The migration was first written as one `sed` with an
+alternation — `s|^…=\(qt6ct\|xdgdesktopportal\)$|…|` — and the `s` command's delimiter is `|`, so
+`\|` reads as an escaped delimiter and not as alternation. It matched nothing, and `bash -n` is
+happy with it. Caught by running it against all four inputs (both stale values, the new value, and a
+user's own custom value, which must not be touched). Two separate `-e` expressions now.
+
