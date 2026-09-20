@@ -63,3 +63,26 @@ export function useNoGtkTheme(): void {
  * ⚠️ This is the theme for THIRD-PARTY applications. Ours use `NO_GTK_THEME`.
  */
 export const GTK_BUILTIN_THEME = "Default"
+
+/**
+ * The same thing for GTK3 — and it is a DIFFERENT NAME, which is a dark-mode bug
+ * waiting for anyone who assumes otherwise.
+ *
+ * GTK3's built-in theme is `Adwaita` (`gresource list /usr/lib/libgtk-3.so.0` →
+ * `theme/Adwaita/…`), and it is the only name whose dark variant GTK3 can find.
+ * Measured 2026-09-20 on a bare GTK3 window with
+ * `gtk-application-prefer-dark-theme = 1`:
+ *
+ *     Adwaita        → bg rgb(53,53,53)     DARK
+ *     Default        → bg rgb(246,245,244)  light
+ *     NoSuchTheme42  → bg rgb(246,245,244)  light
+ *
+ * ⚠️ GTK3 does NOT fall back to "the built-in with prefer-dark honoured" — an
+ * unresolvable name lands on the LIGHT theme. GTK4 is the forgiving one here.
+ *
+ * So `gtk-theme-name` is written per toolkit: `core/AppearanceSync.ts` puts this
+ * name in `~/.config/gtk-3.0/settings.ini` and `GTK_BUILTIN_THEME` in the gtk-4.0
+ * one, whenever the user's choice is "no custom theme". A theme the user actually
+ * picked goes to both files unchanged.
+ */
+export const GTK3_BUILTIN_THEME = "Adwaita"
