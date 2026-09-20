@@ -4,7 +4,7 @@
 // the desktop needs DONE when the look changes, and it used to live in ThemeManager's
 // setters and constructor — so it ran in whichever process called a setter, and ran
 // AGAIN when the shell heard the change and called the same setter. With Settings in its
-// own process that meant xdg-desktop-portal-gtk restarted twice per mode switch, two
+// own process that meant the settings.ini was written twice per mode switch, two
 // `hyprctl setcursor`s, two writers of settings.ini and of the greeter's mirror.
 //
 // So the shell watches the keys and does each thing once, whoever wrote them:
@@ -13,7 +13,6 @@
 //   gtk-theme, icon-theme, font-name,        ~/.config/gtk-{3,4}.0/settings.ini
 //     color-scheme, cursor-theme/-size
 //   cursor-theme, cursor-size                Hyprland's cursor + the Xcursor default
-//   color-scheme (the MODE moved)            restart xdg-desktop-portal-gtk
 //   accent-color                             Hyprland's groupbar accent
 //   color-scheme, accent-color, gtk/icon/    the greeter's appearance mirror
 //     cursor theme, org.nidara.appearance
@@ -29,14 +28,13 @@
 
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import { execAsync } from "../../lib/process"
 import { writeFile } from "../../lib/file"
 import Theme, { TEXT_SCALE_MAX } from "./ThemeManager"
 import hs from "./HyprlandState"
 import { ACCENT_PALETTE, type AccentKey } from "./NidaraTheme"
 import { GREETER_MIRROR_DIR } from "./Paths"
 
-type Effect = "ini" | "cursor" | "portal" | "groupbar" | "mirror"
+type Effect = "ini" | "cursor" | "groupbar" | "mirror"
 
 let started = false
 const keep: InstanceType<typeof Gio.Settings>[] = []
@@ -62,7 +60,6 @@ function schedule(...effects: Effect[]): void {
 const EFFECTS: Record<Effect, () => void> = {
     ini: writeSettingsIni,
     cursor: applyCursor,
-    portal: restartPortalGtk,
     groupbar: syncGroupbarAccent,
     mirror: writeGreeterMirror,
 }
@@ -138,15 +135,27 @@ function writeXcursorDefault(cursor: string): void {
         `[Icon Theme]\nName=Default\nComment=Default Cursor Theme\nInherits=${cursor}\n`)
 }
 
-/**
- * The GTK3 file chooser served by xdg-desktop-portal-gtk reads the dark-theme flag once at
- * process start and never re-reads settings.ini, so it stays stuck on the previous mode.
- * Restart it so the next portal-driven picker matches. Only when the MODE moved — never at
- * start, and not for `default` ↔ `prefer-light`, which are the same mode.
+/*
+ * ⛔ `restartPortalGtk` lived here until 2026-09-20 and must NOT come back.
+ *
+ * It ran `systemctl --user restart xdg-desktop-portal-gtk.service` on every mode
+ * change, because the GTK3 file chooser that backend serves reads the dark flag once
+ * at process start. The premise is true; the remedy was not.
+ *
+ * 🔴 **It destroys requests that are in flight.** Measured with a probe that opened a
+ * `FileChooser.OpenFile` through the portal and then killed an ISOLATED backend: the
+ * dialog vanishes from the screen and the client gets
+ * `Backend call failed: Message recipient disconnected from message bus without
+ * replying`. Whatever the person was typing into that picker is gone — and the same
+ * applies to a `Secret` request, a screenshot or a consent prompt mid-flight.
+ *
+ * No desktop does this: GNOME's portal backend is GTK4 and reacts live, KDE's is Qt6.
+ * Nobody restarts a systemd unit in response to a UI event. It is also NOT the cause of
+ * the duplicated `SettingChanged` — that is two backends serving the same interface.
+ *
+ * The chooser's staleness is real and is left unsolved on purpose: it is one dialog,
+ * against a restart that can eat somebody's work.
  */
-function restartPortalGtk(): void {
-    execAsync(["systemctl", "--user", "restart", "xdg-desktop-portal-gtk.service"]).catch(() => {})
-}
 
 /**
  * Push the accent into Hyprland's groupbar (active tab = persistent selection — the one
@@ -252,14 +261,13 @@ export function startAppearanceSync(): void {
         const now = mode()
         if (now === lastMode) return
         lastMode = now
-        schedule("ini", "mirror", "portal")
+        schedule("ini", "mirror")
     })
     nidara.connect("changed", () => schedule("mirror"))
 
     seedAndRepair(iface)
 
-    // Everything the desktop needs from the current values, once — minus the portal
-    // restart, which answers a CHANGE of mode and has nothing to answer at start.
+    // Everything the desktop needs from the current values, once.
     // `cursor` at start is what makes apps launched later (Steam…) inherit the cursor
     // instead of a stale default. No push INTO gsettings: the values are read from there
     // since #536 — pushing a copy over them at start is what reverted a theme set elsewhere.

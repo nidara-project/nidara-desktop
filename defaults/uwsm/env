@@ -16,20 +16,26 @@ export MOZ_ENABLE_WAYLAND=1
 export OZONE_PLATFORM=wayland
 export ELECTRON_OZONE_PLATFORM_HINT=wayland
 
-# Qt theming — `gtk3`, not `xdgdesktopportal`, and the reason is measured.
-# Qt reads NOTHING from GTK's settings.ini by itself (0 matches for gtk-icon-theme-name,
-# gtk-font-name or gtk-application-prefer-dark-theme in libQt6Gui), so everything a Qt
-# app knows about this desktop comes from its platform theme plugin:
-#   · xdgdesktopportal → the colour scheme and the portal file dialog, and nothing else.
-#     Measured with Telegram, which logs what it resolved: `Icon theme: hicolor`, while
-#     the portal was serving Papirus the whole time.
-#   · gtk3            → `Icon theme: Papirus`, plus the font and prefer-dark from
-#     GtkSettings, and it subclasses QGnomeTheme so it carries the colour-scheme
-#     machinery too (QGnomeTheme::updateColorScheme in libqgtk3.so).
-# Sandboxed apps are unaffected: Qt detects flatpak/snap and uses the portal regardless.
-# Must match bin/nidara; uwsm sources this file AFTER the launcher's exports, so this
-# value is the one that actually wins.
-export QT_QPA_PLATFORMTHEME=gtk3
+# Qt theming — `xdgdesktopportal`. Medido, no elegido por descarte.
+# Qt no lee NADA del settings.ini de GTK por su cuenta (0 coincidencias de
+# gtk-icon-theme-name / gtk-font-name / gtk-application-prefer-dark-theme en
+# libQt6Gui), así que todo lo que una app Qt sabe de este escritorio llega por su
+# plugin de tema de plataforma. Los dos candidatos, con lo que cuesta cada uno:
+#
+#   · xdgdesktopportal → el esquema de color por D-Bus y, sobre todo, el DIÁLOGO DE
+#     ARCHIVOS del portal: fuera del proceso, compatible con sandbox, sin meter GTK3
+#     dentro de cada app Qt. No entrega tema de iconos (Telegram resuelve `hicolor`).
+#   · gtk3            → entrega iconos y fuente desde GtkSettings, pero instancia un
+#     GtkFileChooserDialog DENTRO del proceso Qt y carga libgtk-3/Cairo/Pango en
+#     todas ellas. Se probó el 2026-09-20 y se revirtió: el diálogo del portal pesa
+#     más que el tema de iconos.
+#
+# ⚠️ Coste asumido a sabiendas: las apps Qt caen a `hicolor` en iconos. La salida
+# correcta no es cambiar de plugin, es el fallback estándar de iconos (~/.icons/default)
+# y Fontconfig para la fuente.
+# Debe coincidir con bin/nidara; uwsm sourcea este fichero DESPUÉS de los exports del
+# lanzador, así que este valor es el que gana.
+export QT_QPA_PLATFORMTHEME=xdgdesktopportal
 
 # ── NVIDIA (uncomment if needed) ──────────────────────────────────────────────
 # export LIBVA_DRIVER_NAME=nvidia

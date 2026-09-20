@@ -14,11 +14,10 @@ export XDG_SESSION_TYPE=wayland
 export MOZ_ENABLE_WAYLAND=1
 export ELECTRON_OZONE_PLATFORM_HINT=auto
 export OZONE_PLATFORM=wayland
-# Qt theming — `gtk3` carries our icon theme, font and dark/light; the portal plugin
-# carries only the colour scheme and the file dialog (measured: Telegram resolves
-# `hicolor` under it and `Papirus` under gtk3). Reasoning in defaults/uwsm/env, which
-# is sourced after this and must hold the same value.
-export QT_QPA_PLATFORMTHEME=gtk3
+# Qt theming — el diálogo de archivos del portal pesa más que el tema de iconos.
+# Razonamiento y mediciones en defaults/uwsm/env, que se sourcea después de esto y
+# debe llevar el mismo valor.
+export QT_QPA_PLATFORMTHEME=xdgdesktopportal
 export CLUTTER_BACKEND=wayland
 
 # ── Input method (fcitx5) ─────────────────────────────────────────────────────
