@@ -619,13 +619,15 @@ ENVFILE="$UWSM_DIR/env"
 # this file as shell:
 #   - QT_QPA_PLATFORM=wayland;xcb  → the bare ';' ran 'xcb' as a command, truncating
 #     the var to just 'wayland'. Quote it.
-#   - QT_QPA_PLATFORMTHEME=qt6ct   → contradicts the portal-based Qt theming the
-#     launcher sets; since the env file is sourced AFTER the launcher it wins, so the
-#     stale qt6ct value was actually overriding xdgdesktopportal.
+#   - QT_QPA_PLATFORMTHEME=qt6ct or =xdgdesktopportal → both are stale now. Since the
+#     env file is sourced AFTER the launcher it wins, so either value overrides the
+#     `gtk3` the launcher sets — and `gtk3` is the only one that hands a Qt app our
+#     icon theme and font (measured; see defaults/uwsm/env).
 # sed -i recreates the file as root when we run under sudo, so chown it back after.
 sed -i \
     -e 's|^export QT_QPA_PLATFORM=wayland;xcb$|export QT_QPA_PLATFORM="wayland;xcb"|' \
-    -e 's|^export QT_QPA_PLATFORMTHEME=qt6ct$|export QT_QPA_PLATFORMTHEME=xdgdesktopportal|' \
+    -e 's|^export QT_QPA_PLATFORMTHEME=qt6ct$|export QT_QPA_PLATFORMTHEME=gtk3|' \
+    -e 's|^export QT_QPA_PLATFORMTHEME=xdgdesktopportal$|export QT_QPA_PLATFORMTHEME=gtk3|' \
     "$ENVFILE"
 chown "$REAL_USER:" "$ENVFILE"
 

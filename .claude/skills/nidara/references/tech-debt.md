@@ -4083,3 +4083,4 @@ number is never accidentally reused. 55 items; the split itself was 2026-08-23.
 - **#100** — ✅ RESOLVED 2026-09-15 — the shell's native heap grew with every animated frame: undisposed Cairo contexts (#581, #305) → `tech-debt-resolved.md`
 - **#103** — ✅ RESOLVED 2026-09-14 — the icon / cursor / GTK theme have one home, and appearance.json is gone (#536 in #573) → `tech-debt-resolved.md`
 - **#106** — ✅ RESOLVED same day (2026-09-20) — the `material*` vocabulary and `--nidara-edge` were buried; the rim of light is Cairo's alone → `tech-debt-resolved.md`
+- **#109** — ✅ RESOLVED same day (2026-09-20) — Qt applications get our icon theme and font: `QT_QPA_PLATFORMTHEME=gtk3` → `tech-debt-resolved.md`

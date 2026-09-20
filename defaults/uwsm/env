@@ -16,11 +16,20 @@ export MOZ_ENABLE_WAYLAND=1
 export OZONE_PLATFORM=wayland
 export ELECTRON_OZONE_PLATFORM_HINT=wayland
 
-# Qt theming — Qt 6.5+ reads the freedesktop color-scheme (dark/light) straight from
-# the portal, so no qt6ct/Kvantum config is needed. Must match bin/nidara;
-# since uwsm sources this file AFTER the launcher's exports, this value is the one that
-# actually wins.
-export QT_QPA_PLATFORMTHEME=xdgdesktopportal
+# Qt theming — `gtk3`, not `xdgdesktopportal`, and the reason is measured.
+# Qt reads NOTHING from GTK's settings.ini by itself (0 matches for gtk-icon-theme-name,
+# gtk-font-name or gtk-application-prefer-dark-theme in libQt6Gui), so everything a Qt
+# app knows about this desktop comes from its platform theme plugin:
+#   · xdgdesktopportal → the colour scheme and the portal file dialog, and nothing else.
+#     Measured with Telegram, which logs what it resolved: `Icon theme: hicolor`, while
+#     the portal was serving Papirus the whole time.
+#   · gtk3            → `Icon theme: Papirus`, plus the font and prefer-dark from
+#     GtkSettings, and it subclasses QGnomeTheme so it carries the colour-scheme
+#     machinery too (QGnomeTheme::updateColorScheme in libqgtk3.so).
+# Sandboxed apps are unaffected: Qt detects flatpak/snap and uses the portal regardless.
+# Must match bin/nidara; uwsm sources this file AFTER the launcher's exports, so this
+# value is the one that actually wins.
+export QT_QPA_PLATFORMTHEME=gtk3
 
 # ── NVIDIA (uncomment if needed) ──────────────────────────────────────────────
 # export LIBVA_DRIVER_NAME=nvidia
