@@ -3741,11 +3741,22 @@ what it actually is.**
    `themeFamily: "Adwaita"`, and on a clean Arch **there is no `/usr/share/themes/Adwaita`** — GTK
    4.22's built-in is `Default`. Everything works only because GTK falls back. Decide what the
    seed should be for THIRD-PARTY apps and make it name something real.
-3. **Fix Settings' theme dropdown, which offers nothing.** `getAvailableGtkThemes()` lists
-   `/usr/share/themes` and filters `Default`, `Emacs`, `nidara` — on a clean Arch that is the whole
-   directory, so the list comes back EMPTY while the row displays "Adwaita". That is the owner's
-   "themes that do not exist but appear in the dropdown". Whatever it lists must be (a) installed
-   and (b) usable, and the current value must be one of them.
+3. **Fix Settings' theme dropdown, which offers nothing and displays a ghost.**
+   `registerConfig("appearance.gtkTheme")` takes its options from `getAvailableGtkThemes()` and its
+   VALUE from `Theme.themeFamily`, which is the seeded "Adwaita" — so the row shows a name that is
+   not among its own options and is not on disk, and opening it offers an EMPTY list, because
+   `getAvailableGtkThemes()` lists `/usr/share/themes` and filters `Default`, `Emacs`, `nidara`,
+   which on a clean Arch is the entire directory. Ghost and empty list are one bug seen from two
+   ends.
+   🔑 **The fix is already written, one function away.** `getAvailableIconThemes()` solves exactly
+   these problems and the GTK one never got the same treatment: it filters reserved names, it
+   requires the directory to be a REAL theme (`isRealIconTheme` on its `index.theme`), and it keeps
+   the configured value selectable on purpose "so the dropdown can still display the current
+   value". Mirror all three — and for GTK the realness test is a **`gtk-4.0/` subdirectory**,
+   because a `/usr/share/themes/Adwaita` from `gnome-themes-extra` carries only `gtk-2.0` and
+   `gtk-3.0` and would be offered while changing nothing for a GTK4 app.
+   ⚠️ Also note `enum:` is evaluated once, at registration, so a theme installed later never
+   appears until the shell restarts. Same for the icon row.
 4. **Draw the eight owed nodes** (`style-ownership-check`'s `OWED` map). Look at each under
    `GTK_THEME=Empty` first — some may need nothing, and that is a reasoned exception, not a
    deletion of the line.
