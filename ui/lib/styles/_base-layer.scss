@@ -140,3 +140,38 @@ scale {
         }
     }
 }
+
+/* ── `spinner`: the theme IS the widget, and ours has been blank since August ──
+   `GtkSpinner` paints NOTHING in C. GTK's own rule is an `-gtk-icon-source` plus a
+   rotation on `:checked`, so with no theme there is no source and nothing to
+   rotate. Three sites build one; `ui/lib/auth-card.ts` is the one that matters,
+   because it is shown while a password is being checked on a screen that has
+   forced a themeless GTK since 2026-08-24 — the login screen's only piece of
+   progress feedback, blank ever since (tech-debt #107).
+
+   Drawn in CSS rather than with an icon: a ring whose track is `--nidara-surface-raised`
+   and whose head is the accent, turning once a second. It needs no asset, so no
+   `nd-` name, no registry entry and no SPEC bump — and the accent is doing what
+   the design system reserves it for, marking the one thing that is active.
+   `@keyframes` cannot be scoped (CSS has no mechanism), which is why the design
+   system lists them with the global layer; this one is named for us. */
+@keyframes nidara-spin {
+    to { transform: rotate(360deg); }
+}
+
+spinner {
+    min-width: 16px;
+    min-height: 16px;
+    border: 2px solid var(--nidara-surface-raised);
+    border-top-color: var(--nidara-accent);
+    border-radius: $nidara-radius-pill;
+    background: none;
+    opacity: 0;
+
+    /* GtkSpinner sets :checked while it is spinning — a stopped one must not be a
+       static ring sitting on the page pretending to work. */
+    &:checked {
+        opacity: 1;
+        animation: nidara-spin 1s linear infinite;
+    }
+}

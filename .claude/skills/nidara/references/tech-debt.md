@@ -3796,9 +3796,24 @@ was eight; it is one, and the tally is the argument for having made it:
 | `flowbox` | the app grid resets `flowboxchild` on purpose to paint its own accent ring; GTK's blue fill is what we were removing |
 | `separator` | invisible. Every one we build carries a class that paints it, so the hole only opens on the next bare one — a bare-node default now sits under them in both sheets that build one |
 | `expander` | **the arrow had never been drawn.** `.installer-expander` asked for a node called `arrow`; GTK 4.22 builds `expander`. A selector naming the wrong node looks exactly like one naming the right node, and the installer runs themeless, so nothing covered for it. Fixed, and it now uses OUR chevron by path rather than `-gtk-icontheme("pan-end-symbolic")` — commandment 10 |
-| `spinner` | ⛔ **still owed** — see below |
+| `spinner` | ✅ drawn 2026-09-20 as a base-layer rule — see below |
 
-⛔ **`spinner` is the one thing step 4 did not close, and it is a live bug.** `GtkSpinner` paints
+✅ **`spinner` is drawn, 2026-09-20 — and as one rule of the base layer, which is what the
+strategy correction said it would be.** A ring: track `--nidara-surface-raised`, head
+`--nidara-accent`, one turn a second, revealed on `:checked` so a stopped spinner is not a static
+ring pretending to work. **In CSS, so it needs no asset** — no `nd-` name, no registry entry, no
+SPEC bump — and the accent is doing exactly what the design system reserves it for. Verified by
+looking (the ring renders, caught mid-turn) and by shooting the gallery TWICE: the spinner's region
+differs between two independent shots, which is how a rotation is told apart from a static ring.
+⚠️ It costs one pixel of height in the probe's column — the widget now occupies the space it always
+claimed and never painted — so the gallery's control is no longer 0 against its old baseline. The
+diff was checked to be the spinner plus that 1 px shift and nothing else; the installer pages, which
+build no spinner, stayed at 0.
+⚠️ **Still owed by the SHELL**, and `style-ownership-check`'s OWED entry now says so in those words:
+the shell does not compile the base layer, and its two spinners (`settings/pages/Bluetooth.tsx`,
+`widgets/vpn.ts`) are drawn by the user's theme meanwhile. It closes when step 5 flips the shell.
+
+**What it was, for the record.** `GtkSpinner` paints
 nothing in C — it is an empty CSS node whose ENTIRE appearance is a theme property:
 `-gtk-icon-source` plus a rotation on `:checked`. With no theme there is no source, so there is
 nothing to rotate. The theme *is* the spinner, exactly as it was the expander's arrow. Three sites,

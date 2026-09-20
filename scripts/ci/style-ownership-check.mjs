@@ -290,7 +290,7 @@ const BUNDLES = [
  * just delete the line.
  */
 const OWED = new Map([
-    ["spinner", "every bundle — tech-debt #107. A Gtk.Spinner renders NOTHING without a theme: GTK's own rule is an `-gtk-icon-source` plus a rotation, and it is the whole widget. Three sites, and the greeter's is the worst of them — `ui/lib/auth-card.ts` shows it while a password is being checked, on a screen that has forced a themeless GTK since 2026-08-24, so the login screen's one piece of progress feedback has been blank ever since. The fix needs a DRAWING, which is a look the owner decides; the check keeps the hole visible until it exists"],
+    ["spinner", "THE SHELL ONLY, now — tech-debt #107. A Gtk.Spinner renders NOTHING without a theme: GTK's own rule is an `-gtk-icon-source` plus a rotation, and it is the whole widget. It is DRAWN as of 2026-09-20, in `ui/lib/styles/_base-layer.scss`: a ring whose track is `--nidara-surface-raised` and whose head is the accent, turning once a second on `:checked`, in CSS so it needs no asset, no `nd-` name and no SPEC bump. That reaches the greeter and the lock (`ui/lib/auth-card.ts`, blank since 2026-08-24) and the installer, because the base layer is wired from the sheets of the bundles that have NO theme. The shell does not compile it — it still wears the user's theme, which draws its two spinners (`settings/pages/Bluetooth.tsx`, `widgets/vpn.ts`) meanwhile — so the node stays listed here until step 5 flips the shell and the layer goes in with it"],
 ])
 
 const sheetText = (paths) => {
