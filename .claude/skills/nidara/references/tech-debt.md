@@ -3752,6 +3752,20 @@ while the code said "blank", with no symptom. The installer is the one that matt
 `nidara-installer`, on a live medium that need not carry `nidara-desktop`, which was the package
 installing the theme. `Empty` lives in libgtk's gresource and cannot go missing.
 
+🔴 **Step 2 shipped a regression, found by the owner on 2026-09-20 and fixed the same day: it
+turned dark mode OFF for every GTK3 app.** `Adwaita` was a ghost for GTK4 — and it is GTK3's REAL
+built-in, the only name whose dark variant GTK3 can find. Measured with a bare GTK3 window and
+`gtk-application-prefer-dark-theme = 1`: `Adwaita` → bg `rgb(53,53,53)` DARK; `Default`,
+`nidara` and `NoSuchTheme42` → `rgb(246,245,244)` light. GTK3 does **not** fall back to "the
+built-in with prefer-dark honoured" — an unresolvable name lands on the LIGHT theme, which is
+where GTK4 is the forgiving one and GTK3 is not. So writing GTK4's name into the GTK3 file is a
+dark-mode switch, not a cosmetic choice. Fixed in `core/AppearanceSync.ts`: the two settings.ini
+files are separate, so each gets the name ITS toolkit uses (`GTK3_BUILTIN_THEME` in
+`ui/lib/gtk-theme.ts`). Only the built-in sentinel is mapped — a theme the user actually picked
+goes to both files unchanged, and whether it has a dark variant is that theme's business.
+⚠️ The user-visible symptom was "choosing Default or nidara in Settings turns off dark mode in
+apps", and on a machine whose theme list holds only those two that reads as "choosing ANY theme".
+
 **2 · The seed names something real.** ✅ `defaults/appearance.json` seeded `themeFamily: "Adwaita"`
 and a clean Arch has no `/usr/share/themes/Adwaita` — GTK 4.22's built-in is `Default`, and
 everything worked only because GTK falls back. It now seeds `Default`, the name the built-in
@@ -3865,6 +3879,117 @@ reset removed while its node is still undrawn takes the pixel with it.
 
 ⚠️ **Ordering rule that is easy to get wrong**: step 5 must not precede step 4, and step 6 must not
 precede step 5.
+
+#### ▶️ Step 5 STARTED 2026-09-20 — the base layer exists, three rules deep, and the controls are at zero
+
+`ui/lib/styles/_base-layer.scss`, `@use`d from the kit's `_components.scss` so every bundle that
+compiles the kit gets it. `scripts/dev/kit-gallery-probe.ts` grew `FONT_DIALOG=1`, which opens
+`Gtk.FontDialog` and shoots the toplevel GTK builds for it — the ruler this layer is measured with.
+
+| rule | what the capture showed without it | how it was made safe |
+|---|---|---|
+| `window` | the dialog has **NO BACKGROUND**: mean alpha **0.048**, against 0.71 for the same dialog under a platform theme. Its entry, list, preview and buttons hang on whatever is behind the window | every Nidara window is `window.nidara-…` (0,1,1) AND declares `background: transparent` explicitly, so a (0,0,1) rule cannot reach one. `--nidara-popover-bg`, not `--nidara-bg`: a dialog is a floating surface and that token already carries the `max(windowOpacity, 0.38)` legibility floor |
+| `button` | **"CancelarSeleccionar"** — the two action buttons as one run-on string, no chrome, no gap. GTK's button node paints nothing; the theme IS the button | `button.nidara-btn` is (0,1,1) and "wipes GTK defaults completely"; every other button of ours carries a class too |
+| `scale` | the size slider draws **nothing** between its label and its value | **the repo never constructs a `Gtk.Scale`** — verified, every mention of the name is a comment saying so; `makeSlider` is a Cairo `DrawingArea`. So the rule can only reach a scale GTK built |
+
+After the three: the dialog carries a surface (mean alpha 0.41), two separated buttons, a pill
+trough with an accent fill and the white `--nidara-thumb`. **Control: the kit gallery and the six
+installer pages at 0 changed pixels**, re-measured after each rule.
+
+⚠️ **The instrument shared the blind spot it was built to find, and it cost a false result.** The
+first `FONT_DIALOG` arm shot `dialog.get_child()`. A GTK window's background is painted by the
+`window` node itself, so a snapshot of its CHILD can never contain it — the arm reported a
+background-less dialog (true, but for the wrong reason) and then **0 change from a `window` rule
+that was in fact working**. Shoot the window. Fixed in the probe with the reason on it.
+
+⚠️ **`installer-pages-probe`'s `welcome` page is not deterministic**: it differs from itself by
+10.41 px in a 1×19 box at +96+263 — the text caret, blinking, because every wizard step takes the
+caret when it opens. Re-run before believing it; the other five pages and the gallery are exact.
+
+✅ **The shell question is ANSWERED, and the answer came from building the probe rather than
+arguing.** `scripts/dev/shell-gallery-probe.ts` (new, 2026-09-20) is the shell's half of the A/B.
+It does not curate a list of widgets: it reads the shell's COMPILED sheet and enumerates every
+`<element>.<class>` compound in it, grouped by the window scope its selector sits under, then mounts
+each one inside a window carrying that scope — because a shell rule scoped to `#nidara-bar` does not
+apply anywhere else, and a probe that ignores that reports false breakage. `SCOPE=` picks the
+surface; with none it lists them.
+
+**On its first run it found a real regression.** With the base layer `@use`d from the kit's shared
+sheet — which put it in the shell — the A/B against the shell's own substrate (`PLATFORM_THEME=1`)
+came back at **35 134 px (bar), 28 039 px (alert dialog), 33 743 px (Settings)**, and the diff's
+shape was a whole column shifted DOWN: the base `button` rule's `padding` and `min-height` reaching
+shell buttons that had been taking their geometry from the theme. `button.accent-circle-btn`,
+`button.destructive-action` and `button.flat` are the first three; everything below them moved
+because the shift is cumulative.
+
+**So the layer is wired per BUNDLE, from the sheets of the ones that have no theme**
+(`ui/installer/style.scss`, `ui/greeter/style.scss` — the lock shares it), never from
+`ui/lib/styles/_components.scss`. Re-measured after the rewiring: shell back to **0 px** on all
+three scopes, the font dialog still dressed (mean alpha 0.41), kit gallery and the installer pages
+still 0. The shell wires it the day step 5 flips it, and this probe is what makes that flip
+measurable button by button. 🔑 The principle underneath: **a layer meant to REPLACE a theme,
+added under a process that still has one, is the two-substrate bug this repo already paid for.**
+And the shell's font dialog is not urgent, because a shell with a theme has a dressed dialog — it is
+the three themeless bundles whose GTK dialogs are undressed today.
+
+⚠️ **The probe's own blind spot, printed by the probe itself**: a rule written as a BARE class
+(`.cc-tile`) names no node, so there is nothing to mount it on, and those widgets are still exposed
+to an element rule for any property their class does not declare. The count is in its output.
+⚠️ Two GJS traps it hit, both now commented in the file: `GLib.file_get_contents` called twice in
+one expression comes back empty the second time, and `\b([a-z]+)\.` matches the TAIL of a class in
+a compound selector (`.nidara-bar.nidara-btn` → the "node" `bar`), which invented fourteen node
+types the probe then reported it could not build.
+
+🔑 **The other half of the decision, owner, 2026-09-20 — and it settles what step 5 is FOR.** The
+question asked forwards was whether our own applications should follow the user's GTK theme, since
+Nidara will publish apps outside this repo. **They should not:** `nidara-kit` is the platform
+library, our apps carry our look as a dependency, and the user's axis is the appearance portal, which
+already reaches third-party apps too. So the destination of the base layer is not a half-themed
+Settings — it is that the user's `gtk-theme` reaches **none** of our processes and means exactly one
+thing: other people's apps. The lever table is canonical in `design-system.md` ("Who may change each
+layer"). Two consequences land here:
+
+- the base layer's body is also the body of the **Nidara GTK theme for third-party apps** we do
+  intend to ship. Separate artefact, GTK's own vocabulary, GTK3 too, no Cairo — but built once. That
+  is another reason step 5 comes before any theme work, not after.
+- Settings' "Tema GTK" row becomes honest only after step 5, and until then it is a control that
+  repaints the font dialog and nothing else. Its string should say it is for applications other than
+  Nidara's own before that row is next touched.
+
+⚠️ **Owed measurement, small and load-bearing for the sentence above.** GTK loads the user's own
+`~/.config/gtk-4.0/gtk.css` at USER level — the same 800 as `ui/lib/host.ts`, not below it — and a
+tie is settled by insertion order. Nothing of ours writes that file (`AppearanceSync` writes only
+`settings.ini`), so it is theoretical; but "the user's theme reaches none of our processes" is proven
+of `gtk-theme` and unproven of a hand-written `gtk.css`. Measure it before that claim is repeated.
+
+---
+
+### 108. ⚠️ OPEN — the kit is not a package, so no app can be published outside this repo (2026-09-20)
+
+Raised by the owner while deciding the theming question above: *"si nuestras apps siempre van a tener
+nuestros estilos, tendríamos que tener esa hoja como dependencia de la app, cuando publiquemos apps
+fuera del repo del shell"*. Right — and today it is worse than a dependency.
+
+**Measured 2026-09-20.** `ui/shell/style.scss`, `ui/greeter/style.scss` and `ui/installer/style.scss`
+each `@use '../lib/styles/components'` and compile it **into their own CSS**: three copies of the
+same tissue, kept in step only because they share a working tree. And `ui/lib/nidara-kit/` has **no
+`package.json` at all** — nothing outside this checkout can depend on it. A calculator published as
+its own project could not import the kit; it would have to copy it, and that copy is the fourth one,
+the one that drifts where nobody is looking.
+
+So the decision that our apps carry their look as a dependency (see #107) has a precondition nobody
+has built: **the kit has to BE a dependency** — the widgets, its sheet (`ui/lib/styles/`), the
+appearance seam (`nidara-kit/appearance.ts`) and the token engine, versioned and installed, with the
+four in-repo bundles consuming the same artefact as an external app would. That is also the only
+honest test that the seam works: a bundle in this tree can accidentally reach into `ui/shell/`, and an
+external app cannot.
+
+⚠️ Do NOT treat this as packaging polish. It is what makes #59's failure mode structural rather than
+lucky: a kit component whose rules stayed behind renders bare in whoever imported it, and
+`style-ownership-check` can only see the copies that live in this repo.
+
+Related: #59 (the kit's stylesheet split, and the direction its verification did not check), #107
+(the theming decision this serves), #571 (Settings becoming its own process — the first consumer).
 
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 

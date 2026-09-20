@@ -116,8 +116,15 @@ These are non-negotiable. Violating them produces bugs that are hard to debug be
     dialogs GTK builds itself inside Settings (`Gtk.FontDialog`, `Gtk.FileDialog`) carry none of
     our classes. Read tech-debt #107 step 5 before touching the shell's substrate.
     ⚠️ This is about OUR processes. Third-party applications keep following gsettings
-    `gtk-theme`, a different lever entirely; a Nidara theme for THEM is a separate project this
-    neither requires nor forbids. `scripts/ci/style-ownership-check.mjs` is the gate.
+    `gtk-theme`, a different lever entirely. **And the other half of the same decision, taken the
+    same day: a Nidara APPLICATION is never reskinned by a foreign GTK theme either.** `nidara-kit`
+    is the platform library — what libadwaita is to a GNOME app — so Settings, the installer and any
+    app we publish outside this repo carry our look as a dependency, and the user's customisation
+    axis is the appearance portal (accent, colour scheme, contrast, font), which reaches ours AND
+    everybody else's apps. A Nidara GTK theme for THEIR apps is a separate artefact we do intend to
+    ship, and its body is the base layer of tech-debt #107. The lever table — who moves what, and how
+    far it reaches — is canonical in `references/design-system.md` ("Who may change each layer").
+    `scripts/ci/style-ownership-check.mjs` is the gate.
 
 ## Quick orientation: where to start
 

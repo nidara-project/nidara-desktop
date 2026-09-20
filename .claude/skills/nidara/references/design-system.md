@@ -2,7 +2,7 @@
 
 Read this when editing any SCSS, adding a new visual component, changing tokens, or deciding whether to use Adwaita or pure GTK4 for a new surface.
 
-## The style stack, bottom to top — and the one decision nobody has taken
+## The style stack, bottom to top — and who is allowed to change each layer
 
 Written 2026-09-20, because three mechanisms kept being read as one and the confusion produced
 real bugs (a kit toggle that looked like Nidara in the shell and like GNOME in the installer, and
@@ -47,7 +47,11 @@ seen from two ends (tech-debt #107).
 
 **3 · Provider priority — what actually decides.** Our CSS loads at
 `STYLE_PROVIDER_PRIORITY_USER` (`ui/lib/host.ts`) and `USER + 20` (`ui/lib/appearance-css.ts`),
-both ABOVE the theme's priority. **So wherever we declare a property, we already beat Adwaita** —
+both ABOVE the theme's priority. The constants, read from GTK 4.22 itself on 2026-09-20:
+**FALLBACK 1 · THEME 200 · SETTINGS 400 · APPLICATION 600 · USER 800** — so a theme sits at 200,
+our sheet at 800 and the token engine at 820. This is the number that settles what a user's theme
+can and cannot do to us, and it is why no theme has ever needed neutralising where we declare
+something. **So wherever we declare a property, we already beat Adwaita** —
 the blank theme is not what makes our CSS win. Measured: with Adwaita underneath or with the blank
 theme, three of the installer's six pages render PIXEL-IDENTICAL.
 
@@ -61,9 +65,22 @@ which is the one bundle still running on a theme**; they become dead weight the 
 not one day earlier — a reset removed while its node is still undrawn takes the pixel with it
 (tech-debt #107, the ordering rule).
 
-**5 · The bundle sheets.** `ui/lib/styles/` is the kit's and every bundle compiles it;
-`ui/shell/styles/` is the shell's and only the shell does; then each bundle's own sheet.
-`style-ownership-check` gates the first against the second.
+**5 · The bundle sheets — and, under them, the BASE LAYER.** `ui/lib/styles/` is the kit's and
+every bundle compiles it; `ui/shell/styles/` is the shell's and only the shell does; then each
+bundle's own sheet. `style-ownership-check` gates the first against the second.
+🔑 **`ui/lib/styles/_base-layer.scss` (2026-09-20) is the layer beneath all of them**: bare element
+selectors, every one of them (0,0,1), for the nodes no class of ours can reach — the toplevels GTK
+builds itself. ⚠️ It is `@use`d **from each THEMELESS bundle's sheet** (`ui/installer/style.scss`,
+`ui/greeter/style.scss`), deliberately NOT from the kit's `_components.scss`: wiring it there put it
+in the shell, which still wears a theme, and cost 35 134 changed pixels on the bar alone — a layer
+meant to replace a theme, added under a process that still has one, is the two-substrate bug again.
+The shell wires it the day step 5 flips it. Read the file's header before adding a rule: it carries
+the A/B commands and the rule that a rule lands only after the node has been looked at.
+🔑 **The A/B has three instruments now**, one per substrate question: `kit-gallery-probe`
+(`FONT_DIALOG=1` shoots the toplevel GTK builds for `Gtk.FontDialog`), `installer-pages-probe`, and
+`shell-gallery-probe` — which enumerates the shell's compiled sheet rather than curating a list, and
+mounts each `<element>.<class>` inside a window carrying its scope, because a rule scoped to
+`#nidara-bar` applies nowhere else.
 
 **6 · Tokens.** Static fallbacks in each sheet (the dark set, for the first frame) plus the runtime
 engine (`theme-tokens.ts` → `initAppearance()`), which emits the live ramp from the real accent,
@@ -127,6 +144,55 @@ to NO theme — what the surfaces actually run on — and take `PLATFORM_THEME=1
 the A/B. They used to do the opposite, and a probe that forces a substrate its surface does not use
 is measuring a machine nobody has; that mistake has now been made in both directions on the same
 file, once each way.
+
+### Who may change each layer — and what happens to OUR apps when they do
+
+✅ **DECIDED by the owner, 2026-09-20** — the same day as commandment 11 and the second half of the
+same question. It was asked forwards, not about the shell: *"habrá apps nuestras que sean como apps
+de terceros, y si un usuario quiere cambiar el tema espera que cambie todo, desde la calculadora
+hasta nuestras apps"*. Nidara will publish applications that ship OUTSIDE this repo, and a
+calculator of ours is an app like any other.
+
+**The answer: `nidara-kit` is the platform library, and a Nidara application is never reskinned by a
+foreign GTK theme.** The kit is to a Nidara app what libadwaita is to a GNOME app — a dependency
+that carries the look, not a substrate somebody swaps underneath it. What a user can change, and how
+far each lever reaches:
+
+| lever | who moves it | what it reaches | what it does NOT reach |
+|---|---|---|---|
+| `GTK_THEME=Empty` (env, per process) | us, in code — `useNoGtkTheme()` | only the process that sets it | everything else; it is an environment variable |
+| gsettings `gtk-theme`, mirrored to `~/.config/gtk-{3,4}.0/settings.ini` by `AppearanceSync` | **the user**, in Settings | third-party GTK3/GTK4 applications | our own processes, once the shell is on `Empty` too — and today it reaches only the holes in our sheet |
+| the Settings **portal** — accent, colour scheme, contrast, font | **the user** | **everything**: our shell, our apps AND third-party apps | — |
+| `~/.config/gtk-4.0/gtk.css`, written by hand | the user | any GTK4 app of theirs, ours included | ⚠️ unmeasured — see the bottom of this section |
+
+**Why "themeable" is not a switch anybody can flip.** By the priority numbers in point 3 above, a
+foreign theme can never beat a rule of ours; it shows through the HOLES in our sheet and nowhere
+else. So making our apps follow the user's theme means REMOVING our sheet from them — which removes
+the kit, the Cairo glass, the squircle window and the custom slider (9 of the kit's 24 files paint
+with Cairo, and there is no `Gtk.Scale` in this repo at all). That is a different product, not a
+setting. The alternative costed and rejected the same day was two skins per kit component — ours and
+a bare-GTK one a theme could dress — which is what KDE does and what KDE pays a whole subsystem for.
+
+**And the expectation being replaced is a GTK3 one.** libadwaita ignores `gtk-theme` on purpose: a
+GNOME user who installs a GTK theme today sees Nautilus, Calculator and Text Editor unchanged, and
+`adw-gtk3` exists for the opposite job — dressing the GTK3 leftovers to match. The axis that
+survived into GTK4 is accent / colour scheme / contrast / font, which is the portal row above, and
+that one already reaches everything including other people's apps.
+
+🔑 **So the coherence this buys is a DEFAULT, not a theme engine.** The way a Nidara desktop looks
+Nidara from our calculator to GIMP is: our apps carry the kit, and third-party apps get a Nidara GTK
+theme we ship and seed as `themeFamily`. ⚠️ That theme is a **separate artefact from our sheet**, not
+the same file installed twice — it has to speak GTK's own vocabulary (`headerbar`,
+`.suggested-action`) instead of our 97 `.nidara-*` classes, it has to cover GTK3 to reach anything
+much, and it can never carry the Cairo half. Its BODY is the base layer of tech-debt #107 step 5,
+which is the order to build things in: base layer, then the shell's flip, then the theme for others.
+
+⚠️ **One door is still open and unmeasured.** GTK loads the user's own `~/.config/gtk-4.0/gtk.css`
+at USER level — the SAME 800 as `host.ts` — and equal priorities are settled by insertion order,
+not by priority. The token engine at 820 is above it either way. Nothing of ours writes that file
+today (`AppearanceSync` touches only `settings.ini`), so this is theoretical, but until somebody
+measures it "the user's theme reaches none of our processes" is proven of `gtk-theme` and unproven
+of a hand-written `gtk.css`.
 
 ## Nidara vocabulary
 
