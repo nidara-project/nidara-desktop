@@ -1724,6 +1724,30 @@ calls outside HyprlandState.
 
 ## The appearance contract — how ANY process learns what the user picked (2026-09-13, #534)
 
+🔑 **ONE Settings backend, since 2026-09-20 — and the routing itself used to break the contract.**
+`config/portal/hyprland-portals.conf` said `org.freedesktop.impl.portal.Settings=nidara;gtk`. The
+gtk backend was in that list for a reason: it served `org.gnome.desktop.interface` — `gtk-theme`,
+`icon-theme`, `font-name` — which we did not. But it ALSO serves `org.freedesktop.appearance`, and
+so do we, so **every appearance change put two identical `SettingChanged` on the bus** (measured
+with `gdbus monitor`). A chain in `portals.conf` is a fallback order for CALLS; every backend in it
+still emits its own signals and the frontend relays them all. That is exactly the "a client that can
+read one value two ways will read two different values" the contract is written against — broken by
+our own routing rather than by an application.
+
+`bin/nidara-portal` now serves all three namespaces: `org.freedesktop.appearance`,
+`org.nidara.appearance` and `org.gnome.desktop.interface`. The GNOME keys are **enumerated from the
+schema**, not listed by hand — a key somebody forgets is a setting that silently stops reaching
+every GTK3, Qt and Chromium application. `portals.conf` names us alone for Settings; `default` still
+falls back to `hyprland;gtk` for everything else (FileChooser, Print, Notification…).
+Verified on a private bus (`dbus-run-session` + our daemon): `gtk-theme` → `Adwaita`, `icon-theme` →
+`Papirus`, `font-name` → `Inter Variable 11`, `color-scheme` → `uint32 1`, `ReadAll` returns the
+three namespaces, and a key that does not exist still answers `NotFound` — the control that proves
+the probe can fail.
+⚠️ Not directly tested: the `SettingChanged` for the GNOME namespace, because firing it needs a real
+dconf write and dconf is user-global — a private bus does not isolate it. The handler is one
+`interfaceSettings.connect("changed", …)` of the same shape as the `changed::color-scheme` one
+beside it, which is verified.
+
 Nidara is a desktop, so it does what GNOME does, and the rule is the same for our own windows as
 for anybody else's app. This section is the reference; the code-side copy is the header of
 `ui/lib/appearance.ts`. **Read it before a new window, app or surface needs the accent, the mode
