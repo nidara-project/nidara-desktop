@@ -2519,6 +2519,38 @@ pairs whose relative order flipped, **zero** could apply to the same element at 
 specificity with a shared property — so no cascade outcome can have changed. Keep that script
 shape for any future extraction; a rule-set diff alone would have missed a real reorder bug.
 
+⚠️ **2026-09-20 — the verification above checked the wrong DIRECTION, and it cost six weeks.**
+"Same 534 selector→body pairs, none lost, none added" proves the SHELL did not change. It cannot
+prove that everything a kit component needs ARRIVED in the kit's half, and one thing did not: every
+rule that gives a `switch` a track and a thumb stayed in `ui/shell/styles/_components.scss`, while
+`NidaraToggleRow` sits in the kit. Nobody noticed because no other bundle used a toggle row until
+the installer's LUKS option became one — and the consequence is not "ugly", it is INVISIBLE, since
+the GTK theme we ship is three lines that draw nothing. The installer's NVIDIA toggle had been
+drawing an empty row since it was written; it only appears on Turing-or-newer hardware, which is
+why no one reported it. Moved to the kit's sheet on 2026-09-20 (PR #608), with `--nidara-thumb`
+following it into the token engine.
+⚠️ **Two more are in that state right now, latent only because no other bundle uses them yet:**
+the kit's `nidara-menu` (`nidara-kit/menu.ts`) and `nidara-tooltip` (`nidara-kit/tooltip.ts`), both
+styled only in the shell's half.
+🔑 **The missing check, and it is the shape of `token-contract-check` one level up.** That gate asks
+"does this bundle define the tokens it paints with". Nothing asks **"is every class a kit component
+emits styled in the kit's own sheet"** — which is the question that would have caught this on the
+day, instead of a person remembering. Not every class qualifies (some are deliberately left for the
+consuming bundle to style), so it needs a declared exception list, exactly like the orphan check's.
+
+🔑 **AND THE BIGGER FRAME, owner, 2026-09-20 — this keeps resurfacing because the goal is wrong.**
+"The kit is shared by our three bundles" is not what he wants it to be: he wants **something like
+Adwaita** — a toolkit that serves the shell, Nidara's own applications, *and* anybody outside who
+wants to build an application or a widget with it. Under that goal every item above is a symptom
+rather than a task: a library whose look lives in one consumer's stylesheet is not a toolkit, it is
+a shell-internal module with exports. ⚠️ The HOW is explicitly undecided — he said so — so do not
+turn this paragraph into a plan or start migrating things toward it. What it settles is the
+DIRECTION, so that the next person who finds a fourth instance files it here instead of
+re-discovering the pattern. Prior art to read before proposing anything: libadwaita ships its own
+compiled stylesheet with the library, exposes its tokens as named colours with a documented
+contract, and versions its public API separately from any application. See also
+`project_ntk_toolkit` / `project_own_toolkit_vs_gtk` in the maintainer's memory.
+
 **Left open, in the order the NTK plan wants them:**
 1. **The greeter's three raw `Gtk.DropDown` → `NidaraDropDown`.** This is what earns the kit
    import, and it must bring the TOKEN CONTRACT with it (17 of the 23 `--nidara-*` properties
