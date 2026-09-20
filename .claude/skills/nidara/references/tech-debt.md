@@ -2524,11 +2524,18 @@ shape for any future extraction; a rule-set diff alone would have missed a real 
 prove that everything a kit component needs ARRIVED in the kit's half, and one thing did not: every
 rule that gives a `switch` a track and a thumb stayed in `ui/shell/styles/_components.scss`, while
 `NidaraToggleRow` sits in the kit. Nobody noticed because no other bundle used a toggle row until
-the installer's LUKS option became one — and the consequence is not "ugly", it is INVISIBLE, since
-the GTK theme we ship is three lines that draw nothing. The installer's NVIDIA toggle had been
-drawing an empty row since it was written; it only appears on Turing-or-newer hardware, which is
-why no one reported it. Moved to the kit's sheet on 2026-09-20 (PR #608), with `--nidara-thumb`
-following it into the token engine.
+the installer's LUKS option became one.
+
+⚠️ **What it actually cost, measured after this entry first got it wrong.** `GTK_THEME=nidara` —
+the blank theme — is set by the GREETER and by the dev probes, and by nothing else: a real session
+seeds `themeFamily: "Adwaita"` and `ThemeManager` UNSETS `GTK_THEME`. Rendered with zero switch
+rules of ours under Adwaita, GTK draws the switch fine. So the installer's NVIDIA toggle was **not
+invisible** — it wore ADWAITA's switch while the shell's wore Nidara's. INVISIBLE is what happens
+on the greeter and the lock, which do force the blank theme, and no toggle row has reached those
+yet. The first claim came from a probe that forces the blank theme, and generalising from the
+instrument's own conditions is exactly the failure this file keeps recording. Moved to the kit's
+sheet on 2026-09-20 (PR #608) either way, with `--nidara-thumb` following it into the token engine:
+a kit component must not depend on the user's GTK theme to be drawn.
 ✅ **The check exists now: `scripts/ci/kit-style-check.mjs`** (2026-09-20, in the `styles` job with
 two controls). Every class the kit adds and every widget node it builds must be drawn by the kit's
 own sheet or be listed there with a reason. It immediately found `.nidara-menu` and

@@ -4,15 +4,29 @@
 // from every bundle; `ui/lib/styles/_components.scss` is the stylesheet every bundle
 // compiles. `ui/shell/styles/_components.scss` is the SHELL's, and only the shell
 // compiles it. So a kit component whose rules sit in the second file renders
-// unstyled everywhere else — and unstyled is not "ugly", it is INVISIBLE: the GTK
-// theme we ship (`/usr/share/themes/nidara/gtk-4.0/gtk.css`) is a deliberate blank,
-// so whatever our CSS does not draw, nothing draws.
+// unstyled everywhere else — and unstyled means one of two things, neither
+// acceptable: on the greeter and the lock screen, which force the blank theme we
+// ship (`/usr/share/themes/nidara/gtk-4.0/gtk.css`), it is INVISIBLE; in the shell
+// and the installer it is drawn by whatever GTK theme the user happens to have, so
+// our own component wears somebody else's clothes.
 //
 // That is not hypothetical. Every rule giving a `switch` its track and thumb stayed
 // in the shell's half when the kit's stylesheet was extracted (2026-08-10), and
-// `NidaraToggleRow` went out without them. The installer's system page has had an
-// NVIDIA toggle drawing an empty row ever since; it only appears on Turing-or-newer
-// hardware, which is why nobody reported it for six weeks.
+// `NidaraToggleRow` went out without them.
+//
+// ⚠️ CORRECTION, measured 2026-09-20 after this file first claimed otherwise. The
+// blank theme is NOT what the shell and the installer run under. `GTK_THEME=nidara`
+// is set by the GREETER (`ui/greeter/app.ts`) and by the dev probes; a real session
+// seeds `themeFamily: "Adwaita"` (`defaults/appearance.json`) and `ThemeManager`
+// explicitly UNSETS `GTK_THEME` and drives the theme through gsettings. Rendered
+// with zero switch rules of our own under Adwaita, GTK draws a switch perfectly
+// well. So the installer's NVIDIA toggle was never invisible — it wore ADWAITA's
+// switch while the shell's wore Nidara's, which is a different bug and a smaller
+// one. Invisible is what happens on the GREETER and the LOCK SCREEN, which do force
+// the blank theme; no toggle row has reached those yet, so that half is latent.
+//
+// The rule this check enforces is unchanged, and its reason is stronger for being
+// accurate: a kit component must not depend on the user's GTK theme to be drawn.
 //
 // ⚠️ Why the 2026-08-10 verification could not catch it: it proved the SHELL's
 // compiled sheet still held the same 534 selector→body pairs — that nothing was

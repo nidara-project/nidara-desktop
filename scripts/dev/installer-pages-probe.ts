@@ -49,7 +49,19 @@ import {
 import { countries, defaultsFor } from "../../ui/installer/lib/region"
 import { languageName } from "../../ui/lib/locale-names"
 
-GLib.setenv("GTK_THEME", "nidara", true)
+// ⚠️ The theme is a CHOICE here, and getting it wrong is how this probe produced a
+// false finding. It used to force `GTK_THEME=nidara` — the blank theme — which is
+// what the GREETER runs under and NOT what the installer does: a real session seeds
+// `themeFamily: "Adwaita"` and `ThemeManager` unsets `GTK_THEME`. Under the blank
+// theme a component whose rules we never wrote draws nothing, so an unstyled switch
+// looked like an invisible switch, and the conclusion drawn from it ("the NVIDIA
+// toggle has been invisible for six weeks") was wrong: under Adwaita GTK draws it.
+//
+// So: default to the session's theme, which is what the installer actually gets.
+// `BLANK_THEME=1` forces the blank one, and that is worth running deliberately —
+// under it, anything that still draws is drawing from OUR css, and anything that
+// vanishes was relying on the user's GTK theme, which a Nidara surface must not do.
+if (GLib.getenv("BLANK_THEME")) GLib.setenv("GTK_THEME", "nidara", true)
 
 const PAGES: Record<string, () => Step> = {
   welcome: WelcomeStep,

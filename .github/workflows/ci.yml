@@ -190,8 +190,11 @@ jobs:
       # the KIT builds — and it did not: every rule giving a `switch` its track and
       # thumb stayed in the shell's half when the kit's stylesheet was extracted
       # (tech-debt #59), so `NidaraToggleRow` shipped without them and the
-      # installer's NVIDIA toggle drew an empty row for six weeks. Invisible, not
-      # ugly: the GTK theme we ship is a deliberate blank.
+      # installer's NVIDIA toggle was drawn by ADWAITA while the shell's switches wore
+      # Nidara's. ⚠️ Measured, after this comment first said "invisible": only the
+      # greeter and the lock force the blank theme we ship, so invisible is what
+      # happens THERE; the shell and the installer fall back to the user's GTK theme,
+      # which is its own bug — a kit component must not depend on it to be drawn.
       - name: The kit draws what the kit builds
         run: node scripts/ci/kit-style-check.mjs
 

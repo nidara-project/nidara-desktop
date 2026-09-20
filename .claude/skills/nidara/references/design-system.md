@@ -2172,13 +2172,21 @@ only when someone boots a VM). The `styles` job now compiles it too.
   anywhere else.** `ui/lib/styles/_components.scss` is the kit's half and every bundle compiles
   it; `ui/shell/styles/_components.scss` is the shell's and only the shell does. So a widget
   exported from `ui/lib/nidara-kit/` whose appearance is written in the second one renders
-  UNSTYLED in the installer, the greeter and the lock screen — and unstyled means invisible, not
-  ugly, because the GTK theme we ship (`/usr/share/themes/nidara/gtk-4.0/gtk.css`) is three lines
-  and deliberately draws nothing. `NidaraToggleRow` was in exactly that state until 2026-09-20:
-  the switch's rules were the shell's, so the installer's system page had an NVIDIA toggle with no
-  track and no thumb. It went unreported because that toggle only appears on Turing-or-newer
-  hardware. Same shape as the hole `token-contract-check` was born from, one level up — the
-  TOKENS were checked, the RULES were not.
+  UNSTYLED in the installer, the greeter and the lock screen — and what that costs depends on
+  which, which is worth getting right because the first version of this paragraph did not.
+  ⚠️ **`GTK_THEME=nidara` — the three-line blank theme at
+  `/usr/share/themes/nidara/gtk-4.0/gtk.css` — is set by the GREETER (`ui/greeter/app.ts`) and by
+  the dev probes, and by nothing else.** A real session seeds `themeFamily: "Adwaita"`
+  (`defaults/appearance.json`) and `ThemeManager` explicitly UNSETS `GTK_THEME`, driving the theme
+  through gsettings. So on the **greeter and the lock** an unstyled widget is INVISIBLE, and in the
+  **shell and the installer** it is drawn by whatever GTK theme the user has. `NidaraToggleRow` was
+  in that state until 2026-09-20: the switch's rules were the shell's, so the installer's NVIDIA
+  toggle wore ADWAITA's switch while the shell's wore Nidara's. ⚠️ Measured, not reasoned —
+  rendered with zero switch rules of ours under Adwaita, GTK draws the switch perfectly well. The
+  claim that it was invisible came from a probe that FORCES the blank theme, and generalising from
+  the instrument's own conditions is the trap, not a detail. Same shape as the hole
+  `token-contract-check` was born from, one level up — the TOKENS were checked, the RULES were
+  not.
   ✅ **`scripts/ci/kit-style-check.mjs` is the gate** (2026-09-20, two controls): every class the
   kit adds and every widget node it builds must be drawn by the kit's own sheet, or be listed in
   that file WITH a reason. It found `.nidara-menu` / `.nidara-menu-popover` in the same state as
