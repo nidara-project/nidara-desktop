@@ -246,21 +246,30 @@ jobs:
           # Control C — the BUNDLE half, which is the one that binds for work that
           # does not exist yet: a widget a bundle builds and nothing it compiles
           # draws. `calendar` is the subject because the shell really does build one.
-          cp ui/shell/styles/_reset.scss /tmp/reset.bak
+          #
+          # ⚠️ It patches EVERY sheet of the bundle, not one. The first version of
+          # this control renamed `calendar` in `_reset.scss` alone and the check went
+          # on passing, because `_control-center.scss` styles it too — so the control
+          # reported "control C passed" and failed the build for the right reason:
+          # it was not producing the defect it claimed to produce.
+          cp -r ui/shell/styles /tmp/shell-styles.bak
           python3 - <<'PY'
           import pathlib, re
-          p = pathlib.Path("ui/shell/styles/_reset.scss")
-          s = p.read_text()
-          out = re.sub(r"(^|[\s,])calendar([\s,{])", r"\1cal-DELIBERATELY-BROKEN\2", s, flags=re.M)
-          assert out != s, "control C patched nothing - the calendar rule moved or was reworded"
-          p.write_text(out)
+          hit = 0
+          for f in pathlib.Path("ui/shell/styles").glob("*.scss"):
+              s = f.read_text()
+              out = re.sub(r"(^|[\s,])calendar([\s,{])", r"\1cal-DELIBERATELY-BROKEN\2", s, flags=re.M)
+              if out != s:
+                  f.write_text(out)
+                  hit += 1
+          assert hit, "control C patched nothing - the calendar rules moved or were reworded"
           PY
           if node scripts/ci/style-ownership-check.mjs; then
             echo "::error::control C passed — a widget a bundle builds can go undrawn unnoticed"
-            cp /tmp/reset.bak ui/shell/styles/_reset.scss
+            rm -rf ui/shell/styles && cp -r /tmp/shell-styles.bak ui/shell/styles
             exit 1
           fi
-          cp /tmp/reset.bak ui/shell/styles/_reset.scss
+          rm -rf ui/shell/styles && cp -r /tmp/shell-styles.bak ui/shell/styles
 
           git diff --quiet ui/lib/styles/_components.scss ui/shell/styles/_components.scss ui/shell/styles/_reset.scss
 
