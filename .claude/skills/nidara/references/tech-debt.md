@@ -2536,7 +2536,7 @@ yet. The first claim came from a probe that forces the blank theme, and generali
 instrument's own conditions is exactly the failure this file keeps recording. Moved to the kit's
 sheet on 2026-09-20 (PR #608) either way, with `--nidara-thumb` following it into the token engine:
 a kit component must not depend on the user's GTK theme to be drawn.
-✅ **The check exists now: `scripts/ci/kit-style-check.mjs`** (2026-09-20, in the `styles` job with
+✅ **The check exists now: `scripts/ci/style-ownership-check.mjs`** (2026-09-20, in the `styles` job with
 two controls). Every class the kit adds and every widget node it builds must be drawn by the kit's
 own sheet or be listed there with a reason. It immediately found `.nidara-menu` and
 `.nidara-menu-popover` in the same state as the switch — both moved, verified by the 584-pair
@@ -3708,6 +3708,78 @@ for its Summary and Run steps, and neither drawing has ever been shipped.~~ ✅ 
 2026-09-19 (#602, #603)**: both drawings ship as `nd-clipboard-list` / `nd-rocket` at spec version 2,
 `InstallerWindow.ts` asks for them by those names, and `NidaraSidebarItem` gained a `themeFallback`
 for the case where the asset tree is not found at all. The name-sharing half above is still open.
+
+### 107. ⛔ STANDING DECISION (owner, 2026-09-20) — Nidara's own processes run on NO GTK theme, and we draw what we use
+
+**The decision, in the owner's words:** *"si no usamos Adwaita, no usamos Adwaita, no lo usamos
+reseteado."* Loading a theme in order to neutralise it is paying twice for having none. Do NOT
+re-propose keeping Adwaita underneath our surfaces; the reasoning was had, with measurements, and
+this is the answer.
+
+**What it means, precisely — and what it does NOT mean.** Our processes (shell, Settings,
+installer, greeter, lock) select the blank theme per-process through `GTK_THEME`, which is an
+environment variable and reaches nothing else. **Third-party applications are untouched**: they
+follow gsettings `org.gnome.desktop.interface gtk-theme`, a different lever, which keeps seeding a
+real theme because we do not ship a GTK widget theme for other people's apps. A Nidara theme for
+THEM is a separate project that this decision neither requires nor forbids.
+
+**Why it is not a big leap.** Our CSS already loads above the theme's priority, so wherever we
+declare anything we were already beating Adwaita. Measured with `scripts/dev/kit-gallery-probe.ts`:
+one of each kit component under both substrates differs by 345 pixels out of 495 000, and the
+differences are exactly two — the `dropdown`'s arrow, which vanishes, and the entry `placeholder`,
+which stops being dimmed. Everything else is identical.
+
+**THE CLEANUP, in order. Owner on 2026-09-20: "hay que hacer una limpieza total" — he is tired of
+GTK theming being a recurring headache, and the list below is every symptom he named, each with
+what it actually is.**
+
+1. **Delete our blank theme; use GTK's own `Empty`.** `ui/greeter/theme/gtk.css`, its `install.sh`
+   step, its PKGBUILD line, and the three `ThemeManager` guards against the name `nidara` all go.
+   `GTK_THEME=Empty` is a theme GTK ships inside its gresource and renders **0 pixels** different
+   (measured). Needs a **VM pass**: the greeter has no dev mode and fails silently.
+2. **Fix the seeded theme, which names a ghost.** `defaults/appearance.json` seeds
+   `themeFamily: "Adwaita"`, and on a clean Arch **there is no `/usr/share/themes/Adwaita`** — GTK
+   4.22's built-in is `Default`. Everything works only because GTK falls back. Decide what the
+   seed should be for THIRD-PARTY apps and make it name something real.
+3. **Fix Settings' theme dropdown, which offers nothing and displays a ghost.**
+   `registerConfig("appearance.gtkTheme")` takes its options from `getAvailableGtkThemes()` and its
+   VALUE from `Theme.themeFamily`, which is the seeded "Adwaita" — so the row shows a name that is
+   not among its own options and is not on disk, and opening it offers an EMPTY list, because
+   `getAvailableGtkThemes()` lists `/usr/share/themes` and filters `Default`, `Emacs`, `nidara`,
+   which on a clean Arch is the entire directory. Ghost and empty list are one bug seen from two
+   ends.
+   🔑 **The fix is already written, one function away.** `getAvailableIconThemes()` solves exactly
+   these problems and the GTK one never got the same treatment: it filters reserved names, it
+   requires the directory to be a REAL theme (`isRealIconTheme` on its `index.theme`), and it keeps
+   the configured value selectable on purpose "so the dropdown can still display the current
+   value". Mirror all three — and for GTK the realness test is a **`gtk-4.0/` subdirectory**,
+   because a `/usr/share/themes/Adwaita` from `gnome-themes-extra` carries only `gtk-2.0` and
+   `gtk-3.0` and would be offered while changing nothing for a GTK4 app.
+   ⚠️ Also note `enum:` is evaluated once, at registration, so a theme installed later never
+   appears until the shell restarts. Same for the icon row.
+4. **Draw the eight owed nodes** (`style-ownership-check`'s `OWED` map). Look at each under
+   `GTK_THEME=Empty` first — some may need nothing, and that is a reasoned exception, not a
+   deletion of the line.
+5. **Flip the bundles to `Empty`, one at a time**, with a render diff as the gate.
+6. **Then, and only then, delete the resets** that exist solely to neutralise a theme that is no
+   longer loaded — including the comment in `ui/shell/styles/_reset.scss` that still blames
+   `Adw.init()` for a libadwaita gone since 2026-08-18. ⚠️ Not before step 4: a reset removed while
+   its node is still undrawn takes the pixel with it.
+
+⚠️ **Ordering rule that is easy to get wrong**: steps 1-3 are bookkeeping and can land together;
+step 5 must not precede step 4, and step 6 must not precede step 5.
+
+⚠️ **The one identified risk, and it is NOT measured yet.** `Gtk.FontDialog` (used by the kit's
+`NidaraFontButton`, i.e. Settings' font picker) is a dialog GTK builds ITSELF, in our process, and
+we do not set `GTK_USE_PORTAL`. Under a blank theme its internals — the font list, its search
+entry, its spin button, its buttons — have no rules from anywhere, and they are GTK's own widgetry
+rather than ours. The same question applies to `Gtk.FileDialog`. This must be measured before step
+4 reaches Settings. An attempt on 2026-09-20 failed to capture the dialog (the probe timed out
+without producing an image), so there is no number here — only the question, which is real. Three
+outcomes are possible and they size the work very differently: the dialogs are portal-backed and
+run in another process (no cost); they are in-process but our sheet already covers their widgetry
+(small); or they need rules for GTK's internal class names, which is where "our stylesheet" starts
+becoming, for our own processes, a GTK theme in all but name.
 
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 

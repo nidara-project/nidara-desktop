@@ -1,4 +1,12 @@
-// kit-style-check — a component that ships in the kit must ship its LOOK in the kit.
+// style-ownership-check — we use GTK, with OUR styles. Nothing by default.
+//
+// Commandment 11 (owner's decision 2026-09-20, tech-debt #107) as a gate. Two halves:
+//
+//   A · the KIT half — a component that ships in the kit must ship its LOOK in the
+//       kit, because `ui/shell/styles/` is compiled by the shell alone.
+//   B · the BUNDLE half — every GTK widget ANY bundle builds must have a rule in a
+//       sheet that bundle compiles. This is the half that makes the rule bind for
+//       work that does not exist yet: add a widget, and the check names it.
 //
 // WHY THIS EXISTS (2026-09-20, tech-debt #59). `ui/lib/nidara-kit/` is importable
 // from every bundle; `ui/lib/styles/_components.scss` is the stylesheet every bundle
@@ -36,7 +44,7 @@
 // It is `token-contract-check`'s shape one level up. That one asks "does this bundle
 // define the tokens it paints with"; this one asks "does the kit draw what the kit
 // builds".
-import { readFileSync, readdirSync, statSync } from "node:fs"
+import { readFileSync, readdirSync, statSync, existsSync } from "node:fs"
 
 const KIT_SRC = "ui/lib/nidara-kit"
 const KIT_SHEETS = ["ui/lib/styles/_components.scss", "ui/lib/styles/_mixins.scss"]
@@ -75,16 +83,36 @@ const CLASS_EXCEPTIONS = new Map([
  * reason.
  */
 const WIDGET_NODES = new Map([
-    ["Switch", "switch"],
-    ["Entry", "entry"],
-    ["CheckButton", "checkbutton"],
-    ["Button", "button"],
-    ["DropDown", "dropdown"],
-    ["Popover", "popover"],
-    ["Window", "window"],
-    ["ListBox", "list"],
-    ["ScrolledWindow", "scrolledwindow"],
+    // Controls
+    ["Button", "button"], ["ToggleButton", "button"], ["CheckButton", "checkbutton"],
+    ["Switch", "switch"], ["DropDown", "dropdown"], ["SpinButton", "spinbutton"],
+    // Text
+    ["Entry", "entry"], ["PasswordEntry", "entry"], ["Text", "text"], ["TextView", "textview"],
+    // Containers and views GTK's theme DOES have rules for — verified 2026-09-20 by
+    // reading them out of the gresource, not by assuming:
+    //   gresource extract /usr/lib/libgtk-4.so.1 \
+    //     /org/gtk/libgtk/theme/Default/Default-light.css
+    // `revealer` (11 rules), `stack` (5) and `picture` (1) are in there too, which is
+    // why they are listed rather than ignored — the first draft of this table called
+    // them "containers that paint nothing" and that was a guess, not a fact.
+    ["ListBox", "list"], ["ListBoxRow", "row"], ["FlowBox", "flowbox"],
+    ["ScrolledWindow", "scrolledwindow"], ["Popover", "popover"], ["Expander", "expander"],
+    ["Separator", "separator"], ["Spinner", "spinner"], ["ProgressBar", "progressbar"],
+    ["Stack", "stack"], ["Revealer", "revealer"], ["Picture", "picture"],
+    ["Calendar", "calendar"],
+    // Windows
+    ["Window", "window"], ["ApplicationWindow", "window"],
 ])
+
+/**
+ * ⚠️ Dialogs GTK builds ITSELF, inside our process. Their internals are GTK's own
+ * widgetry under GTK's own class names, so "draw it ourselves" is not a rule we can
+ * simply write — and we do not set `GTK_USE_PORTAL`, so they are not somebody else's
+ * process either. This is the one identified risk of commandment 11 and it is NOT
+ * measured yet (tech-debt #107): an attempt on 2026-09-20 failed to capture the
+ * dialog. Listed here so the check does not pretend the question is settled.
+ */
+const GTK_OWN_DIALOGS = new Set(["FileDialog", "FontDialog"])
 
 const WIDGET_EXCEPTIONS = new Map([
     ["dropdown", "the trigger is a `button` and the list is `popover.combo`; both are styled, and GTK's `dropdown` node itself paints nothing"],
@@ -92,11 +120,17 @@ const WIDGET_EXCEPTIONS = new Map([
     ["scrolledwindow", "`NidaraScrolled` paints its own bar (`.nidara-scroll-bar`) and the viewport is transparent by design"],
 ])
 
+// Not widgets at all — controllers, models, providers, gestures, paintables — plus
+// the pure layout boxes GTK's theme has nothing for. Nothing here can be styled,
+// so nothing here can be owed.
 const IGNORED_WIDGETS = new Set([
-    "Box", "Label", "Image", "Grid", "Overlay", "CenterBox", "DrawingArea",
-    "ListBoxRow", "WindowHandle", "SizeGroup", "StringList", "SignalListItemFactory",
-    "FontDialog", "GestureDrag", "EventControllerMotion", "EventControllerKey",
-    "EventControllerScroll",
+    "Box", "CenterBox", "Grid", "Overlay", "Fixed", "WindowHandle",
+    "Label", "Image", "DrawingArea",
+    "Adjustment", "CssProvider", "DragSource", "EntryCompletion", "FileFilter",
+    "EventControllerFocus", "EventControllerKey", "EventControllerMotion",
+    "EventControllerScroll", "GestureClick", "GestureDrag", "GestureLongPress",
+    "IconTheme", "ListStore", "SignalListItemFactory", "SizeGroup", "Snapshot",
+    "StringList", "TextBuffer", "WidgetPaintable",
 ])
 
 const read = (p) => readFileSync(p, "utf8")
@@ -115,7 +149,7 @@ const stripComments = (src) =>
 
 const files = walk(KIT_SRC)
 if (files.length === 0) {
-    console.error(`kit-style-check: no sources under ${KIT_SRC} — did the kit move?`)
+    console.error(`style-ownership-check: no sources under ${KIT_SRC} — did the kit move?`)
     process.exit(1)
 }
 
@@ -189,9 +223,89 @@ for (const [c, file] of [...classes].sort()) {
             : `nothing styles it in ${SHELL_SHEET} either — either it should carry paint and does not, or it is a name for perception and belongs in CLASS_EXCEPTIONS with that reason`)
 }
 
+// ── B · the bundle half ──────────────────────────────────────────────────────
+// Each bundle, the sheets it actually compiles, and the sources it builds from.
+// The greeter's sheet is the lockscreen's too — one file, two bundles.
+const BUNDLES = [
+    { name: "shell", src: ["ui/shell"], sheets: ["ui/shell/styles"] },
+    { name: "installer", src: ["ui/installer"], sheets: ["ui/installer/style.scss"] },
+    { name: "greeter", src: ["ui/greeter"], sheets: ["ui/greeter/style.scss"] },
+    { name: "lockscreen", src: ["ui/lockscreen"], sheets: ["ui/greeter/style.scss"] },
+]
+
+/**
+ * Nodes we build somewhere and do not draw yet — the bill for commandment 11,
+ * taken 2026-09-20 by reading GTK's own theme out of its gresource
+ * (`gresource extract /usr/lib/libgtk-4.so.1 /org/gtk/libgtk/theme/Default/Default-light.css`),
+ * which has rules for every one of them. They are listed so that a NEW widget fails
+ * this check immediately while the existing debt stays visible and countable.
+ *
+ * ⚠️ "Has a rule in GTK's theme" is not the same as "needs a rule from us": some of
+ * these may turn out to be transitions or metrics we are happy to lose. That is
+ * decided by LOOKING at the widget under `GTK_THEME=Empty`, not by reading. When one
+ * is settled, either write the rule or move it to a reasoned exception — do not just
+ * delete the line.
+ */
+const OWED = new Map([
+    ["expander", "installer — tech-debt #107, not drawn yet"],
+    ["flowbox", "shell — tech-debt #107, not drawn yet"],
+    ["picture", "lockscreen — tech-debt #107, not drawn yet"],
+    ["revealer", "shell — tech-debt #107, not drawn yet"],
+    ["separator", "greeter — tech-debt #107, not drawn yet"],
+    ["spinner", "shell — tech-debt #107, not drawn yet"],
+    ["stack", "installer — tech-debt #107, not drawn yet"],
+    ["textview", "installer — tech-debt #107, not drawn yet"],
+])
+
+const sheetText = (paths) => {
+    let out = ""
+    for (const p of paths) {
+        if (!existsSync(p)) continue
+        if (statSync(p).isDirectory()) {
+            const stack = [p]
+            while (stack.length) {
+                const d = stack.pop()
+                for (const n of readdirSync(d)) {
+                    const f = `${d}/${n}`
+                    if (statSync(f).isDirectory()) stack.push(f)
+                    else if (n.endsWith(".scss")) out += stripComments(read(f))
+                }
+            }
+        } else out += stripComments(read(p))
+    }
+    return out
+}
+
+let okBundles = 0
+for (const b of BUNDLES) {
+    const css = sheetText([...b.sheets, "ui/lib/styles"])
+    const built = new Map()
+    for (const dir of b.src) {
+        if (!existsSync(dir)) continue
+        for (const f of walk(dir)) {
+            const src = stripComments(read(f))
+            for (const m of src.matchAll(/new Gtk\.([A-Za-z]+)/g))
+                if (!built.has(m[1])) built.set(m[1], f)
+        }
+    }
+    for (const [type, file] of [...built].sort()) {
+        if (IGNORED_WIDGETS.has(type) || GTK_OWN_DIALOGS.has(type)) continue
+        const node = WIDGET_NODES.get(type)
+        if (!node) {
+            report(`Gtk.${type} is built in the ${b.name} bundle and this check does not know its CSS node`, file,
+                "add it to WIDGET_NODES with the node GTK gives it, or to IGNORED_WIDGETS if it paints nothing")
+            continue
+        }
+        if (WIDGET_EXCEPTIONS.has(node) || OWED.has(node)) continue
+        if (styledNode(css, node)) { okBundles++; continue }
+        report(`Gtk.${type} draws as \`${node}\`, and nothing the ${b.name} bundle compiles has a rule for it`, file,
+            "commandment 11: a GTK widget arrives WITH its rules, or it does not ship")
+    }
+}
+
 let okWidgets = 0
 for (const [type, file] of [...widgets].sort()) {
-    if (IGNORED_WIDGETS.has(type)) continue
+    if (IGNORED_WIDGETS.has(type) || GTK_OWN_DIALOGS.has(type)) continue
     const node = WIDGET_NODES.get(type)
     if (!node) {
         report(`Gtk.${type} is built by the kit and this check does not know its CSS node`, file,
@@ -215,5 +329,7 @@ if (failed) {
     process.exit(1)
 }
 
-console.log(`kit-style-check: ${okClasses} kit classes and ${okWidgets} widget nodes are drawn by the kit's own sheet ` +
-            `(${CLASS_EXCEPTIONS.size} classes and ${WIDGET_EXCEPTIONS.size} nodes exempted, each with its reason).`)
+console.log(`style-ownership-check: ${okClasses} kit classes and ${okWidgets} widget nodes drawn by the kit's own sheet; ` +
+            `${okBundles} widget node(s) drawn by the bundle that builds them ` +
+            `(${CLASS_EXCEPTIONS.size} classes and ${WIDGET_EXCEPTIONS.size} nodes exempted with reasons, ` +
+            `${OWED.size} owed to commandment 11 — tech-debt #107).`)

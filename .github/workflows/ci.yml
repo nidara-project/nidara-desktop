@@ -195,8 +195,8 @@ jobs:
       # greeter and the lock force the blank theme we ship, so invisible is what
       # happens THERE; the shell and the installer fall back to the user's GTK theme,
       # which is its own bug — a kit component must not depend on it to be drawn.
-      - name: The kit draws what the kit builds
-        run: node scripts/ci/kit-style-check.mjs
+      - name: We use GTK with our styles — nothing by default
+        run: node scripts/ci/style-ownership-check.mjs
 
       # ⚠️ TWO controls, because the first version of this check passed one and
       # failed the other. It only complained when the SHELL styled a class, which
@@ -204,7 +204,7 @@ jobs:
       # the class becomes "styled nowhere", which that draft accepted. Control A is
       # that exact case; control B is the original bug, a rule back in the shell's
       # half.
-      - name: The kit-style check can fail (controls, must be caught)
+      - name: The style-ownership check can fail (controls, must be caught)
         run: |
           cp ui/lib/styles/_components.scss /tmp/kit.bak
           cp ui/shell/styles/_components.scss /tmp/shell.bak
@@ -217,7 +217,7 @@ jobs:
           assert out != s, "control A patched nothing - the .nidara-menu rule moved or was reworded"
           p.write_text(out)
           PY
-          if node scripts/ci/kit-style-check.mjs; then
+          if node scripts/ci/style-ownership-check.mjs; then
             echo "::error::control A passed — a kit rule can be deleted from the kit's sheet unnoticed"
             cp /tmp/kit.bak ui/lib/styles/_components.scss
             exit 1
@@ -234,7 +234,7 @@ jobs:
           sh = pathlib.Path("ui/shell/styles/_components.scss")
           sh.write_text(sh.read_text() + "\n" + m.group(0))
           PY
-          if node scripts/ci/kit-style-check.mjs; then
+          if node scripts/ci/style-ownership-check.mjs; then
             echo "::error::control B passed — a kit rule can live in the shell's half unnoticed"
             cp /tmp/kit.bak ui/lib/styles/_components.scss
             cp /tmp/shell.bak ui/shell/styles/_components.scss
@@ -242,7 +242,36 @@ jobs:
           fi
           cp /tmp/kit.bak ui/lib/styles/_components.scss
           cp /tmp/shell.bak ui/shell/styles/_components.scss
-          git diff --quiet ui/lib/styles/_components.scss ui/shell/styles/_components.scss
+
+          # Control C — the BUNDLE half, which is the one that binds for work that
+          # does not exist yet: a widget a bundle builds and nothing it compiles
+          # draws. `calendar` is the subject because the shell really does build one.
+          #
+          # ⚠️ It patches EVERY sheet of the bundle, not one. The first version of
+          # this control renamed `calendar` in `_reset.scss` alone and the check went
+          # on passing, because `_control-center.scss` styles it too — so the control
+          # reported "control C passed" and failed the build for the right reason:
+          # it was not producing the defect it claimed to produce.
+          cp -r ui/shell/styles /tmp/shell-styles.bak
+          python3 - <<'PY'
+          import pathlib, re
+          hit = 0
+          for f in pathlib.Path("ui/shell/styles").glob("*.scss"):
+              s = f.read_text()
+              out = re.sub(r"(^|[\s,])calendar([\s,{])", r"\1cal-DELIBERATELY-BROKEN\2", s, flags=re.M)
+              if out != s:
+                  f.write_text(out)
+                  hit += 1
+          assert hit, "control C patched nothing - the calendar rules moved or were reworded"
+          PY
+          if node scripts/ci/style-ownership-check.mjs; then
+            echo "::error::control C passed — a widget a bundle builds can go undrawn unnoticed"
+            rm -rf ui/shell/styles && cp -r /tmp/shell-styles.bak ui/shell/styles
+            exit 1
+          fi
+          rm -rf ui/shell/styles && cp -r /tmp/shell-styles.bak ui/shell/styles
+
+          git diff --quiet ui/lib/styles/_components.scss ui/shell/styles/_components.scss ui/shell/styles/_reset.scss
 
       # A row's height lives in CSS, and the code that reasons about rows — a list
       # asking for six WHOLE rows, a window whose natural height follows from that —

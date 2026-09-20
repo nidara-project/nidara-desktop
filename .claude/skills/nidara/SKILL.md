@@ -80,7 +80,7 @@ already confirmed erasing. The size floor was that bug until 2026-09-17: the dis
 `entireDiskFits` (and `manualProblems` holds a manual `/` to the same `MIN_ROOT_MIB`), and the
 throw inside `entireDiskConfig` is the last word, not the first.
 
-## The ten inviolable commandments
+## The eleven inviolable commandments
 
 These are non-negotiable. Violating them produces bugs that are hard to debug because the symptoms don't point at the cause.
 
@@ -102,6 +102,18 @@ These are non-negotiable. Violating them produces bugs that are hard to debug be
 8. **`AboutWindow` is create+destroy, not hide** (Settings is the opposite — it hides on close).
 9. **No CSS `transform: scale` or `transform: translate` on clickable widgets.** GTK respects them but they break hit-testing. Use `margin`, scale in Cairo, or `common/ScaleRevealer.ts` for transient show/hide grow animations (snapshot-time, ends at identity — see `references/design-system.md`).
 10. **No hardcoded colors. No emoji as iconography.** Resolve against `--nidara-*` tokens; use SVGs in `assets/nidara/assets/scalable/` or the `nd-*-symbolic` icon set — interface icons are asked for ONLY by `nd-` names of the Nidara icon spec (`ui/shell/assets/icons/nidara/SPEC.md`), never by freedesktop names; those are for APP icons.
+
+11. **We use GTK, with OUR styles. Nothing by default.** (Owner's decision, 2026-09-20 —
+    tech-debt #107, a STANDING DECISION.) A GTK widget that enters this codebase arrives WITH its
+    rules in one of our stylesheets, or it does not ship. The old habit — drop the widget in, see
+    GTK's default, patch it afterwards — is what produced a toggle that looked like Nidara in the
+    shell and like GNOME in the installer, and a "blank theme" hack to paper over the difference.
+    Our own processes run on **no GTK theme at all** (`GTK_THEME=Empty`, which GTK itself ships in
+    its gresource — measured pixel-identical to the blank theme we used to install ourselves), so
+    whatever our CSS does not draw is drawn by nothing.
+    ⚠️ This is about OUR processes. Third-party applications keep following gsettings
+    `gtk-theme`, a different lever entirely; a Nidara theme for THEM is a separate project this
+    neither requires nor forbids. `scripts/ci/style-ownership-check.mjs` is the gate.
 
 ## Quick orientation: where to start
 
@@ -157,7 +169,7 @@ one with a `timeout-minutes`):
 
 | job | gates |
 |---|---|
-| `styles` | the SCSS of the shell, the greeter/lock sheet and the installer compiles — **and the token contract holds in BOTH directions**: every bundle defines the `--nidara-*` its rules paint with (`token-contract-check.mjs`; an undefined custom property is silently dropped by GTK4, never an error), every token a bundle defines is read by something (`token-orphan-check.mjs`, with a control — an orphan is a value that drifts from the one on screen, which is how `--nidara-edge` was retuned in #600 and changed no pixel: tech-debt #106), and **the kit draws what the kit builds** (`kit-style-check.mjs`, two controls — a kit component styled only in `ui/shell/styles/` is INVISIBLE in every other bundle, because the GTK theme we ship is a deliberate blank: tech-debt #59) |
+| `styles` | the SCSS of the shell, the greeter/lock sheet and the installer compiles — **and the token contract holds in BOTH directions**: every bundle defines the `--nidara-*` its rules paint with (`token-contract-check.mjs`; an undefined custom property is silently dropped by GTK4, never an error), every token a bundle defines is read by something (`token-orphan-check.mjs`, with a control — an orphan is a value that drifts from the one on screen, which is how `--nidara-edge` was retuned in #600 and changed no pixel: tech-debt #106), and **the kit draws what the kit builds** (`style-ownership-check.mjs`, two controls — a kit component styled only in `ui/shell/styles/` is INVISIBLE in every other bundle, because the GTK theme we ship is a deliberate blank: tech-debt #59) |
 | `typecheck` | `tsc --noEmit`, against a compressed `@girs/` snapshot pulled from the repo's `ci-assets` release (`@girs/` itself stays git-ignored, ≈58 MB generated; a maintainer refreshes the snapshot when it goes stale) |
 | `widgets-gen` | the generated widget registry matches `widgets/` — **and the widget boundary holds**: `widgets/` imports nothing from `surfaces/`, and `common/widget-kit/` stays a leaf. Neither is a compile error (28 widget→surface imports type-checked on 2026-09-01) and the second one crashes the shell at BOOT, which `tsc` cannot see. **Also the Settings import closure** (`settings-closure-check.mjs`, #571): what Settings.tsx reaches transitively may not include another surface, a widget or a shell-only module beyond a shrink-only allowlist |
 | `smoke` | **a real headless boot** — official Arch packages in a container, build both C libraries (`libnidara-wl`, `libnidara-auth` + its eight signals), bundle the shell, boot it on real Hyprland over a virtual display (kernel vkms + llvmpipe); fails on death, silent IPC or JS errors, and uploads screenshots as artifacts |
