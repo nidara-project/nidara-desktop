@@ -12,6 +12,9 @@
 // The kit's stylesheet: NidaraButton and NidaraClamp are the two pieces this
 // bundle borrows, and they expect their classes to exist. Emitted BEFORE
 // everything below, so the rules in this file out-rank it at equal specificity.
+// The base layer: element selectors for the nodes GTK builds itself (#107 step 5).
+// Wired per THEMELESS bundle, never from the kit's shared sheet — see the note there.
+@use '../lib/styles/base-layer';
 @use '../lib/styles/components';
 
 * {

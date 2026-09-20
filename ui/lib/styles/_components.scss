@@ -64,6 +64,24 @@
 //    box. The real one was `entry > text { caret-color }`, which reaches the
 //    inner node directly and beats what the class above it inherits.)
 
+// ── The base layer is NOT wired from here, and that was measured ────────────
+// `ui/lib/styles/_base-layer.scss` holds the element-selector rules that dress the
+// nodes GTK builds itself (tech-debt #107 step 5). It was `@use`d from this file
+// for exactly one afternoon, which put it in every bundle that compiles the kit —
+// including the SHELL, the one bundle still wearing the user's GTK theme.
+//
+// `scripts/dev/shell-gallery-probe.ts` priced that on its first run: **~35 000
+// changed pixels** across the bar, the alert dialog and Settings, and the shape of
+// the diff was a whole column shifted DOWN — the base `button` rule's `padding` and
+// `min-height` reaching shell buttons that had been taking their geometry from the
+// theme (`accent-circle-btn`, `destructive-action`, `flat` are the first three).
+//
+// So the layer is wired from the sheets of the bundles that HAVE no theme —
+// `ui/installer/style.scss` and `ui/greeter/style.scss` (the lock shares it). The
+// shell wires it on the day it flips, and the probe is what will make that flip
+// measurable button by button. A layer meant to replace a theme, added under a
+// process that still has one, is the two-substrate bug this repo already paid for.
+
 @use 'tokens' as *;
 @use 'mixins' as *;
 

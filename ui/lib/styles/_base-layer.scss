@@ -1,0 +1,142 @@
+// =============================================================================
+// NIDARA — THE BASE LAYER: the nodes no class of ours can ever reach
+// =============================================================================
+//
+// tech-debt #107 step 5, and the owner's framing of 2026-09-20: **the stylesheet
+// of a process that loads no GTK theme IS that process's theme.** Everything else
+// we write is the VARIATION layer — `.nidara-*`, `#nidara-bar …`,
+// `window.nidara-settings-window …` — and all of it dresses widgets we built
+// ourselves. This file dresses the ones GTK builds: the font dialog, the file
+// dialog, and whatever a future widget arrives carrying.
+//
+// ── Why element selectors, and why they are not a leak ──────────────────────
+// A `Gtk.CssProvider` added with `add_provider_for_display` reaches every widget
+// in OUR process and nothing outside it. Third-party applications are separate
+// processes, so an unscoped rule of ours has never been able to touch one. What
+// commandment 2's scoping buys is one surface of ours not repainting another —
+// an organisation concern. And a toplevel GTK builds itself can never carry one
+// of our classes, so an element selector is the ONLY lever that reaches it.
+//
+// ── The contract: this layer always loses ───────────────────────────────────
+// Every selector here is (0,0,1), the lowest specificity there is, so ANY class
+// of ours outranks it. That is deliberate: the base layer is what shows when
+// nothing of ours has spoken, never something a component has to fight.
+//
+// ⚠️ Element selectors are this repo's sharp edge and it has already paid once —
+// `_components.scss` records `entry` and `dropdown > button` arriving without a
+// class and reaching two controls nobody intended. So a rule lands here only
+// after the node has been LOOKED at with no theme under it, and only with the A/B
+// that proves it changed nothing else:
+//
+//   ./scripts/bundle.sh scripts/dev/kit-gallery-probe.ts /tmp/gallery
+//   ./scripts/bundle.sh scripts/dev/installer-pages-probe.ts /tmp/pages
+//   gtk4-broadwayd :5 &
+//   GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 FONT_DIALOG=1 SHOT=/tmp/fd /tmp/gallery
+//   GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 SHOT=/tmp/gal /tmp/gallery
+//   for p in welcome region disk account system summary; do \
+//     GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 PAGE=$p SHOT=/tmp/pg /tmp/pages; done
+//   magick compare -metric AE before.png after.png null:      # must be 0
+//
+// The dialog is expected to CHANGE. The gallery and the six pages are the control
+// and must not move a pixel — if one does, the rule reached something of ours
+// that had been relying on saying nothing.
+
+@use 'tokens' as *;
+@use 'mixins' as *;
+
+/* ── The surface GTK's own toplevels have none of ────────────────────────────
+   Measured 2026-09-20 through `FONT_DIALOG=1`: with no theme, the toplevel
+   `Gtk.FontDialog` opens renders **151 711 of 192 400 pixels at alpha 0**. It is
+   not "undressed", it has NO BACKGROUND — the search entry, the font list, the
+   preview and the two action buttons hang on whatever happens to be behind the
+   window. Mean alpha 0.048 against 0.71 for the same dialog under a platform
+   theme. (An earlier note in #107 called it "legible and undressed"; that
+   reading came from a capture flattened onto white, which is the artefact
+   `feedback_screenshot_masks_render_artifacts` warns about.)
+
+   Checked rather than assumed before writing it: every Nidara window is styled
+   through `window.nidara-…` (0,1,1) — installer, app window, settings, dock,
+   app grid, alert dialog — and every one of them declares `background:
+   transparent` explicitly, because the glass is painted by `.nidara-window-glass`
+   and the chrome by Hyprland. So this (0,0,1) rule cannot reach a window of ours.
+   It lands only on a toplevel carrying no class of ours, which is exactly the set
+   GTK builds itself.
+
+   `--nidara-popover-bg` and not `--nidara-bg`: a dialog is a FLOATING surface,
+   like a popover, and that token already carries the legibility floor
+   (`max(windowOpacity, 0.38)`) that `--nidara-bg` deliberately does not — a
+   dialog the user cannot read is not WYSIWYG, it is a bug. */
+window {
+    background-color: var(--nidara-popover-bg);
+    color: var(--nidara-text);
+}
+
+/* ── `button`: the node that read as broken ──────────────────────────────────
+   Same capture, and it is the one difference a person would call a bug rather
+   than a plainness: the font dialog's two action buttons render as *bare words*
+   with no chrome and no gap — "CancelarSeleccionar", one run-on string. GTK's
+   button node carries no drawing of its own; the theme is the entire button.
+
+   This is `button.nidara-btn`'s secondary variant, minus everything that is a
+   VARIATION (the size ramp, the four variants, the transition). A button GTK
+   built for us should look like a button we built, because in our process there
+   is no other kind.
+
+   Specificity, checked before writing: `button.nidara-btn` is (0,1,1) and every
+   other button of ours carries a class too, so all of them outrank this (0,0,1)
+   rule property by property. The kit's button additionally "wipes GTK defaults
+   completely", so nothing here can reach it even where the values differ. The
+   control for that claim is the gallery + the six installer pages at 0 pixels. */
+button {
+    background-color: var(--nidara-surface);
+    border: 1px solid var(--nidara-border);
+    border-radius: $nidara-radius-sm;
+    color: var(--nidara-text);
+    padding: 5px 14px;
+    min-height: 20px;
+    background-image: none;
+    box-shadow: none;
+
+    &:hover    { background-color: var(--nidara-surface-hover); }
+    &:active   { background-color: var(--nidara-surface-active); }
+    &:disabled { opacity: 0.45; }
+    &:focus-visible { @include nidara-focus-ring; }
+}
+
+/* ── `scale`: a slider with no trough is a number with a gap beside it ───────
+   The third thing the capture showed: the font dialog's size slider draws
+   nothing at all between its label and its value. GtkScale is like GtkSpinner and
+   like the expander's arrow — the theme IS the widget.
+
+   This is the safest rule in the file and that was verified, not assumed: **the
+   repo never constructs a `Gtk.Scale`.** Every mention of the name is a comment
+   saying so (`nidara-kit/index.ts`, `slider.ts`, `core/UITree.ts`); the one slider
+   is `makeSlider`, a `Gtk.DrawingArea` painted in Cairo, which no CSS reaches. So
+   a `scale` node in a Nidara process can only be one GTK built itself.
+
+   The shape deliberately echoes the Cairo slider — pill trough, accent fill,
+   white thumb (`--nidara-thumb`, white in both modes for the same reason it is
+   there: it has to stay legible against the accent and against the empty
+   track) — so the one slider a person meets inside a GTK dialog is not a
+   different instrument from the ones in Settings. */
+scale {
+    > trough {
+        background-color: var(--nidara-surface-raised);
+        border-radius: $nidara-radius-pill;
+        min-height: 4px;
+
+        > highlight {
+            background-color: var(--nidara-accent);
+            border-radius: $nidara-radius-pill;
+        }
+
+        > slider {
+            background-color: var(--nidara-thumb);
+            border-radius: $nidara-radius-pill;
+            min-width: 14px;
+            min-height: 14px;
+            margin: -6px;
+            box-shadow: var(--nidara-shadow-sm);
+        }
+    }
+}
