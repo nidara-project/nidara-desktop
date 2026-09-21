@@ -67,6 +67,18 @@ export function NidaraToggleRow(
     mkRow: NidaraRowBuilder = plainRow,
 ): Gtk.ListBoxRow {
     const sw = new Gtk.Switch({ active: init, valign: Gtk.Align.CENTER })
+    // The row's words sit in a label BESIDE the switch and nothing connects the
+    // two, so in the accessibility tree the control is a bare `switch` named only
+    // by its position (#615). Two readers lose by that: a screen reader, and our
+    // own computer-use, which addresses controls BY NAME — `nidara-act` cannot
+    // point at something with no name.
+    // Same idea as NidaraDropDownRow below, opposite property: a `GtkDropDown`
+    // already publishes its selected value as its NAME, so there the title is the
+    // description. A switch has no name at all, so the title IS the name.
+    // (`LABELLED_BY` pointing at the real label would be the other shape, and it
+    // is not available here: that label is built inside `mkRow`, which hands back
+    // a finished row and not its parts.)
+    sw.update_property([Gtk.AccessibleProperty.LABEL], [label])
     let syncing = false
     sw.connect("state-set", (_: any, state: boolean) => {
         if (!syncing) {

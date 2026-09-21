@@ -302,6 +302,8 @@ export default function AutostartPage(nav: SettingsNav) {
         leadingIcon.opacity = entry.enabled ? 1.0 : 0.5
 
         const toggle = new Gtk.Switch({ active: entry.enabled, valign: Gtk.Align.CENTER })
+        // The row's own title, so the switch says WHICH entry it starts (#615).
+        toggle.update_property([Gtk.AccessibleProperty.LABEL], [app ? app.name : entry.command])
         toggle.connect("state-set", (_: any, state: boolean) => {
             entries[idx].enabled = state
             writeEntries(entries)
