@@ -5,8 +5,39 @@
 # Launched by greetd to run Hyprland silently without TTY text leaks.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Suppress stdout and stderr to prevent ASCII banner / early debug logs from leaking onto TTY
-exec 1>/dev/null 2>&1
+# ── Where this session's output goes (#614) ─────────────────────────────────
+#
+# greetd hands the session the VT's own stdin/stdout/stderr — that is how a TEXT
+# greeter like `agreety` works at all — so anything written here lands on the
+# console behind the splash. That is what this line was for; it used to be
+# `exec 1>/dev/null 2>&1`, and the cure cost more than the leak.
+#
+# The greeter is the ONE surface with no dev mode: its own system user, its own
+# compositor, before any session exists. The log is the only instrument it has,
+# and everything it said went nowhere — including the line `ui/greeter/app.ts`
+# tells you to read when somebody reports the login screen looking wrong. Chasing
+# exactly that (#612) meant patching this file by hand on the target and
+# restarting greetd.
+#
+# journald takes the output instead: the TTY stays clean and
+# `journalctl -t nidara-greeter -b` holds the whole session — the compositor, the
+# greeter bundle, and anything they spawn, because Hyprland's children inherit
+# these descriptors. nidara-system makes the journal persistent, so it also
+# survives the reboot that follows a failed login.
+#
+# ⚠️ BOTH streams go through it, and the GJS half is why: the bundle's
+# `console.log` never writes to fd 1 — it goes through GLib's `Gjs-Console` log
+# domain, and that writer puts it on **stderr**. Redirecting stdout alone would
+# have captured the shell and lost the greeter, which is the line anybody is
+# actually looking for. Measured before writing this, all six shapes arrive:
+# shell stdout, shell stderr, `console.log`, `console.warn`, `print`,
+# `printerr` — and `console.log` arrives on the stderr side.
+#
+# `exec` inside each substitution keeps it to one process, and its own stderr is
+# discarded so that a journald that is somehow not there cannot put systemd-cat's
+# complaint on the VT this line exists to protect.
+exec 1> >(exec systemd-cat -t nidara-greeter -p info 2>/dev/null) \
+     2> >(exec systemd-cat -t nidara-greeter -p warning 2>/dev/null)
 
 # ── Wait for a real GPU before starting the compositor (#477) ────────────────
 #
@@ -58,8 +89,10 @@ while ! _gpu_is_ready && [ "$_i" -lt 100 ]; do   # 100 × 50 ms = 5 s ceiling
     _i=$((_i + 1))
 done
 if [ "$_i" -ge 100 ]; then
-    # stdout/stderr are discarded above on purpose, so say it where it survives.
-    logger -t nidara-greeter-session "no DRM card with a real driver after 5s — starting anyway"
+    # Plain stderr: it reaches the journal under the same tag as everything else
+    # this session says, which is the point of the redirection above. It used to
+    # need `logger` precisely because it did not.
+    echo "no DRM card with a real driver after 5s — starting anyway" >&2
 fi
 
 # Freeze Plymouth splash to avoid intermediate TTY flashes before compositor paints
