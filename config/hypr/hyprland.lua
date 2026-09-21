@@ -12,14 +12,35 @@ package.path = package.path
     .. ";" .. home .. "/.config/nidara/?.lua"
     .. ";" .. home .. "/.config/hypr/?.lua"
 
--- Soft-load a module: missing files produce a notification, not a crash.
+-- Soft-load a module: a broken file produces a notification, not a crash.
 -- The handler itself is pcall-guarded: it once called a non-existent
 -- hl.notify(), so the "soft" path crashed the WHOLE config load on any
 -- machine missing a user .lua (caught by the CI smoke test's screenshot).
+--
+-- ⚠️ ABSENT IS NOT BROKEN, and telling them apart is the whole point of the
+-- searchpath below. Several of the files required at the bottom are written by
+-- the SHELL, which starts after Hyprland has already read this config — measured
+-- on a first boot: Hyprland up at 01:24:18, nidara-workspaces.lua written at
+-- 01:24:20. So on the first login of every machine, and on every boot of the
+-- live medium, `require` could not find it and the old version of this function
+-- threw a 22-line black panel at the user (the message plus Lua's entire list of
+-- paths it had tried) for something that is the normal order of events.
+-- A missing file is left to print(), like the other non-fatal diagnostics in
+-- this file; only a file that IS there and fails to load is worth interrupting
+-- somebody over — that is the case this exists for: a personal
+-- hyprland-user.lua with a syntax error in it, which Hyprland ALSO surfaces in
+-- its own config-error banner (verified in a VM, 2026-09-22).
 local function safe_require(mod)
+    if not package.searchpath(mod, package.path) then
+        print("Nidara: " .. mod .. ".lua is not there (yet) — skipping it")
+        return
+    end
     local ok, err = pcall(require, mod)
     if not ok then
-        local msg = "Nidara: failed to load " .. mod .. ".lua\n" .. tostring(err)
+        -- First line only: Lua appends its search path to some errors, and the
+        -- notification is a screen-wide panel with no scrollback.
+        local first = tostring(err):match("^[^\n]*") or tostring(err)
+        local msg = "Nidara: failed to load " .. mod .. ".lua\n" .. first
         local notified = pcall(function()
             hl.notification.create({ text = msg, duration = 8000 })
         end)
@@ -1350,12 +1371,13 @@ end)
 safe_require("nidara-settings")
 safe_require("nidara-monitor")
 safe_require("nidara-workspaces")
--- Written by the shell the first time it starts (core/GamingSync.ts), so absent on
--- a first login — not a failure worth a notification, unlike the three above.
-do
-    local f = io.open(home .. "/.config/nidara/nidara-gaming.lua", "r")
-    if f then f:close(); safe_require("nidara-gaming") end
-end
+-- nidara-workspaces.lua (core/WorkspaceModes.ts) and nidara-gaming.lua
+-- (core/GamingSync.ts) are both written by the shell as it starts, i.e. after
+-- this file has been read. safe_require knows that absent ≠ broken, so neither
+-- needs a guard of its own any more — this used to be an io.open() check that
+-- covered gaming and not workspaces, which is why only one of the two ever
+-- shouted at anybody.
+safe_require("nidara-gaming")
 
 -- ── User overrides ────────────────────────────────────────────────────────────
 -- Your personal config: keyboard layout, monitors, startup apps, keybinds, etc.
