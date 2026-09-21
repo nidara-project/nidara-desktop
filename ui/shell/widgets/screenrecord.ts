@@ -123,6 +123,7 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
 
     const audioRow = new Gtk.Box({ spacing: 8 })
     const audioSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER })
+    audioSwitch.update_property([Gtk.AccessibleProperty.LABEL], [t("widget.screenrecord.audio")])   // #615
     // nidara-row-title gives it the mode-aware text colour (a plain Gtk.Label
     // inherits an unreliable default that rendered white in light mode too).
     const audioLabel = new Gtk.Label({ label: t("widget.screenrecord.audio"), hexpand: true, halign: Gtk.Align.START, css_classes: ["nidara-row-title"] })

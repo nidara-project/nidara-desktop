@@ -136,6 +136,7 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
     const adminRow = new Gtk.Box({ spacing: 12, margin_top: 4 })
     adminRow.append(new Gtk.Label({ label: t("settings.users.other.admin"), hexpand: true, halign: Gtk.Align.START }))
     const adminSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER })
+    adminSwitch.update_property([Gtk.AccessibleProperty.LABEL], [t("settings.users.other.admin")])   // #615
     adminRow.append(adminSwitch)
 
     const statusLabel = new Gtk.Label({
@@ -335,6 +336,7 @@ function buildUserRow(user: User, onRefresh: () => void): Gtk.ListBoxRow {
     })
 
     const adminToggle = new Gtk.Switch({ active: admin, valign: Gtk.Align.CENTER })
+    adminToggle.update_property([Gtk.AccessibleProperty.LABEL], [t("settings.users.other.admin")])   // #615
     attachTooltip(adminToggle, t("settings.users.other.admin.tip"), { chrome: false })
     let reverting = false
     adminToggle.connect("state-set", (_: any, state: boolean) => {

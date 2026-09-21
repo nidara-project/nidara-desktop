@@ -275,6 +275,7 @@ export default function NetworkPage(nav?: SettingsNav) {
     const { box: wifiBox, listBox: wifiList } = listGroup(t("settings.network.group.wi-fi"))
 
     const wifiSwitch = new Gtk.Switch({ active: Net.wifiEnabled(), valign: Gtk.Align.CENTER })
+    wifiSwitch.update_property([Gtk.AccessibleProperty.LABEL], [t("settings.network.group.wi-fi")])   // #615
     // state-set issues the radio command; the switch's visible state is driven
     // back from the radio flag so it stays truthful if the radio is toggled
     // elsewhere (CC tile, nmcli) and doesn't fight the command. `syncing` marks

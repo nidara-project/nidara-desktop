@@ -15,6 +15,7 @@ function controlGroup(label: string, active: boolean, sensitive: boolean, toolti
     if (tooltip) attachTooltip(group, tooltip, { chrome: false })
     group.append(new Gtk.Label({ label, css_classes: ["nidara-row-subtitle"], valign: Gtk.Align.CENTER }))
     const sw = new Gtk.Switch({ active, sensitive, valign: Gtk.Align.CENTER })
+    sw.update_property([Gtk.AccessibleProperty.LABEL], [label])   // named like the kit's toggle row (#615)
     sw.connect("notify::active", () => cb(sw.get_active()))   // connected AFTER initial active → no spurious fire
     group.append(sw)
     return group

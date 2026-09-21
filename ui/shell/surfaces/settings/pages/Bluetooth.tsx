@@ -105,6 +105,7 @@ export default function BluetoothPage() {
     // ── Power toggle ─────────────────────────────────────────────────────────
     const powerGroup = listGroup(t("settings.bluetooth.title"))
     const powerSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER, active: BT.isPowered(bt) })
+    powerSwitch.update_property([Gtk.AccessibleProperty.LABEL], [t("settings.bluetooth.title")])   // #615
 
     let ignoreStateSet = false
     powerSwitch.connect("state-set", (_: any, state: boolean) => {

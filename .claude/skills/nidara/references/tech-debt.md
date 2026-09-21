@@ -4045,6 +4045,26 @@ lucky: a kit component whose rules stayed behind renders bare in whoever importe
 Related: #59 (the kit's stylesheet split, and the direction its verification did not check), #107
 (the theming decision this serves), #571 (Settings becoming its own process — the first consumer).
 
+### 109. ⚠️ OPEN — five detail-panel switches still have no accessible name (2026-09-21)
+
+Left over from #615, and left over on purpose. That fix named the kit's `NidaraToggleRow` and the
+seven switches a page builds directly, because in each of those the string is on the adjacent line.
+`panelSwitch()` (`ui/shell/common/widget-kit/panel.ts`) is the exception: it takes
+`get`/`set`/`subscribe` and **no label**, and its five callers — `widgets/bluetooth.ts:98`,
+`widgets/focus.ts:38`, `widgets/night-light.ts:52` and `:78`, `widgets/wifi.ts:169` — build the
+switch before anything names it. So those five read as a bare `switch` in the accessibility tree:
+a screen reader cannot say what they toggle, and `nidara-act`, which addresses controls BY NAME,
+cannot point at them at all.
+
+The fix is not one line: it is an optional `label` on `panelSwitch` plus a decision, per panel, of
+what its switch is CALLED — which is not the same as the panel's title (the Night Light panel has
+two switches, and "Night Light" names neither of them well). Inventing those strings without
+looking at the panels is how a control ends up named after the wrong thing, so it waits for
+somebody with the panels on screen.
+
+Related: #615 (the half that landed), and the computer-use surface in `dev-workflow.md` — perception
+and action both address by name.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
