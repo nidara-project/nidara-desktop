@@ -226,6 +226,16 @@ check a style change; look at it on the next login, in the VM, or offscreen with
 `scripts/dev/lock-probe.js` (which needs neither an install nor a session — it reads
 `ui/greeter/style.css` straight from the repo).
 
+**What the greeter says is readable again (#614, 2026-09-21): `journalctl -t nidara-greeter -b`.**
+`nidara-greeter-session` used to open with `exec 1>/dev/null 2>&1` — greetd hands the session the
+VT's own descriptors (that is how a text greeter like `agreety` works), so the redirect was there to
+keep the banner off the console behind the splash, and it took the only instrument the greeter has
+with it. Now both streams go through `systemd-cat`, so that one tag holds the compositor, the
+bundle and anything they spawn — Hyprland's children inherit the descriptors.
+⚠️ **Both** streams, because the bundle's `console.log` never writes to fd 1: it goes through
+GLib's `Gjs-Console` domain, which puts it on **stderr**. Redirecting stdout alone captures the
+shell and loses the greeter — which is the line you are looking for.
+
 Note the asymmetry this creates in a review: the greeter and the lockscreen **share one
 stylesheet**, so every greeter-visible change ships whether or not anyone looked at it.
 
