@@ -67,14 +67,13 @@ export function hexToFloatRgb(hex: string): { r: number, g: number, b: number } 
  * login screen except the selected row of a dropdown, which stayed blue forever — on
  * the two surfaces that have no dev mode to notice it in.
  *
- * 🔑 And it is emitted TWICE, because of the trap that kept it out of here. The light
- * skin is a class (`window.skin-light *`, ui/lib/login-skin.ts) and a class-qualified
- * universal out-specifies a bare `*` — so the light half cannot live in the
- * stylesheet: a value typed there would PIN the selection to whatever colour was
- * typed, for every user who chose a different one. Emitting both selectors from the
- * SAME accent is what lets the light skin have the shell's lighter 0.16 without
- * pinning anything. The two alphas are the shell's own, from
- * `ui/lib/theme-tokens.ts` ("Selection is the ONLY place accent enters").
+ * 🔑 It is emitted from HERE and not typed in the stylesheet, and the reason outlives
+ * the light skin it was written for: a value typed in the sheet would PIN the selection
+ * to whatever colour was typed, for every user who chose a different one. Emitting it
+ * from the same accent the rest of the screen uses is what keeps it following them.
+ * (Until 2026-09-21 this block had a second half under `window.skin-light *`, for the
+ * light skin's lighter 0.16 — the skin is gone, see #613.) The alpha is the shell's
+ * own, from `ui/lib/theme-tokens.ts` ("Selection is the ONLY place accent enters").
  */
 export function accentCssFor(accent: string | null | undefined): string {
   if (!accent || !(accent in ACCENT_HEX)) return ""
@@ -87,9 +86,6 @@ export function accentCssFor(accent: string | null | undefined): string {
     `  --nidara-accent-10:  rgba(${rgb}, 0.10);`,
     `  --nidara-accent-30:  rgba(${rgb}, 0.30);`,
     `  --nidara-state-selected: rgba(${rgb}, 0.22);`,
-    `}`,
-    `window.skin-light * {`,
-    `  --nidara-state-selected: rgba(${rgb}, 0.16);`,
     `}`,
   ].join("\n")
 }

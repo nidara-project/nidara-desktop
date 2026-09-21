@@ -1982,11 +1982,13 @@ Three rules for extending it:
   back **identical but for comments**, zero declarations moved.
 - **What stays per-bundle is the PALETTE**, and for a real reason: the shell rewrites its
   colour tokens at runtime per light/dark mode (`NidaraTheme.generateTokensCss`), while the
-  greeter and lockscreen wear ONE palette resolved before the window maps. So they take the
-  shell's **dark set** as literal values, plus a light counterpart under `window.skin-light`.
-  ⚠️ This bullet said "permanently dark glass over a wallpaper" until 2026-08-25, when the skin
-  started being measured from the wallpaper (#82) — the sentence was a description of what the
-  code could do, never a preference. They had been a near-miss copy of it — `0.70/0.45`
+  greeter and lockscreen wear ONE palette, fixed. So they take the shell's **dark set** as
+  literal values and nothing else.
+  ⚠️ Between 2026-08-25 and 2026-09-21 there was a second, light palette here, chosen by
+  measuring the wallpaper (#82's login half); the owner removed it (#613 — see "The login
+  screens wear ONE skin"). Their ink is also PINNED now, `initAppearance({ fixedDarkInk: true })`,
+  because the session's ramp is installed above this sheet and a light-mode desktop was
+  painting these two surfaces' text black (#612). They had been a near-miss copy of it — `0.70/0.45`
   against the shell's `0.80/0.55`, and a local name (`--nidara-text-muted`) for what the
   shell calls `-dim` — which made secondary text a step darker on the one surface with no
   card behind it.
@@ -2110,94 +2112,63 @@ element to this sheet.
 ⚠️ A full-size child of a `Gtk.Overlay` **takes input by default**. The scrim sets
 `can_target: false` in both bundles; without it, it swallows every click meant for the card.
 
-### The login screens choose their skin from the wallpaper (2026-08-25)
+### The login screens wear ONE skin, and the wallpaper no longer votes (2026-09-21)
 
-The two surfaces are no longer "permanently dark glass". Before any window maps, each
-one measures the wallpaper it is about to be painted over and wears the skin that
-wallpaper can carry — `ui/lib/backdrop-skin.ts` measures and decides,
-`ui/lib/login-skin.ts` knows where these screens keep their text and puts the skin on,
-and the light half of the palette lives beside the dark half in `ui/greeter/style.scss`
-under `window.skin-light`.
+**Removed by the owner's decision (#613).** For four weeks the greeter and the lock
+measured the wallpaper they were about to be painted over and chose between two
+palettes — `ui/lib/backdrop-skin.ts`, `ui/lib/login-skin.ts`, and a light half under
+`window.skin-light` in `ui/greeter/style.scss`. All of that is gone. The two surfaces
+are what their stylesheet always said they were: **permanently dark glass, white ink**,
+over whatever the wallpaper is.
 
-🔑 **Why choosing beats thickening, and it is not an opinion.** Sweep the RGB cube
-(140,608 backdrops) and score both skins over each — white text on `GLASS_TINT.dark`,
-black text on `GLASS_TINT.light`, both at `LOCK_GLASS.fill.a`:
+**Why it went, and none of the three reasons is "the measurement was wrong".** It
+wasn't: on the greeter's own wallpaper it scored `dark` at 9.3:1 against 4.0:1, which
+is the right answer.
 
-| | fails AA (4.5:1) on | worst case for the BETTER of the two |
-|---|---|---|
-| α 0.24 | white-on-dark **42.9 %** · black-on-light 14.9 % | **6.07:1** |
-| α 0.48 | white-on-dark 12.2 % | 8.75:1 |
+1. **It was already being overridden in production and nobody could tell.** The
+   appearance ramp this repo installs at `PRIORITY_USER + 20` carries `--nidara-text`,
+   so on a light-mode desktop the session painted every login label black while the
+   skin kept the material dark (#612). A mechanism whose output can be silently
+   replaced is not a mechanism.
+2. **Its decision could not be read.** The line it logs — *"the line to read when
+   someone reports the login screen changed colour"* — never reached any machine:
+   `nidara-greeter-session` sends the greeter's whole output to `/dev/null` (#614).
+3. **No comparable system ships one.** macOS, GNOME and Windows all draw this screen
+   with fixed light ink over a veil. Apple's Liquid Glass does flip material and
+   glyphs by backdrop, but that is in-app material, not the login screen. ⚠️ This file
+   used to cite that prior art as support for the mechanism — read it as what it is:
+   support for *adaptive material*, not for a login screen that analyses a photograph.
 
-**No backdrop defeats both skins.** That is a claim about every colour there is, not
-about the wallpapers we ship, and it is what makes the choice a complete answer where
-a floor never could be: #82's own table shows nothing under α 0.59 clears 4.5:1 on a
-white wallpaper, and 0.59 has stopped being glass. The material cannot buy legibility;
-the choice gives it away free.
+**The numbers are kept because they still bound the problem.** Sweeping the RGB cube
+(140,608 backdrops) at `LOCK_GLASS.fill.a`: white-on-dark fails AA on **42.9 %** of all
+backdrops, black-on-light on 14.9 %, and no backdrop defeats both. So a single skin
+*does* leave a real gap, and the veil is what has to close it — see the owed
+measurement below. #82's other table still stands too: nothing under α 0.59 clears
+4.5:1 on a white wallpaper, and 0.59 has stopped being glass, so **do not answer this
+by thickening the material**.
 
-**The prior art landed in the same place.** Apple's Liquid Glass (WWDC25) adapts the
-material to what is behind it, flipping light↔dark, and flips the symbols on top with
-it "to maximize contrast". Windows' Acrylic takes the other road — an exclusion-blend
-layer INSIDE the material, "to ensure contrast and legibility of UI placed on an
-acrylic background" — and that road is **closed to us**: our Cairo painters never see
-the backdrop, and the one knob that could have stood in for it (Hyprland's blur
-`brightness`) was removed in #81/#235 for the hard edge it drew along every
-antialiased boundary. Do not re-propose it.
+▶️ **OWED, and it is the other half of #613: the veil is not strong enough yet.**
+Measured 2026-09-21 on the live lock screen over the shipped default wallpaper, after
+the removal: the hero reads **2.27:1** behind the username and 2.88:1 behind the clock
+where the wallpaper is pale (6.0–10.7:1 where it is dark). AA needs a uniform veil of
+**0.32** on that wallpaper and **0.54** on a pure white one; the scrim's top stop is
+0.13 today. And it cannot simply be raised: un-blurred paint on these surfaces is
+capped by `ignore_alpha` (0.23) — above it the compositor blurs the veiled region and
+draws a hard edge where the gradient crosses. Three ways out, all design decisions for
+the owner: frost the whole wallpaper uniformly (a veil above the threshold, full
+screen — no edge because there is no gradient), give the hero a glass body of its own
+(it deliberately has none), or accept sub-AA hero text on pale wallpapers and say so.
 
-⚠️ **What is measured is the BACKDROP, not the file.** `applyBackdropTrim` runs the
-blur's colour matrix (`contrast 1.2 / vibrancy 0.4`, one definition, exported from
-`glass-capsule.ts` as `BACKDROP_TRIM`) over each band's mean, because that is what is
-behind the glass on both screens. It is not a refinement: on the shipped wallpapers it
-moves the verdict by up to 1.4 points, and it pushed the default wallpaper's dark-skin
-score from 5.16 to **4.56** — from comfortable to on the line. The blur half needs no
-modelling at all (a gaussian is a local mean, so a band's average already is its
-blurred value), and the trim half is exact rather than approximate, because contrast
-and saturation are affine and an affine map of a mean is the mean of the map.
+⚠️ **What the removal did NOT change.** The painted rim is still a specular and still
+does not flip. `--nidara-glass-border(-sm)` no longer has a light variant to flip to —
+tech-debt #87(b) (a translucent white ring on light glass) is moot on these two
+surfaces now. `BACKDROP_TRIM` stays exported from `glass-capsule.ts`: whatever next
+needs to model what a viewer actually sees through the glass must read those numbers
+rather than copy them.
 
-🔑 **Three bands vote, and the WORST one decides** (`TEXT_BANDS`, fractions measured
-off `lock-probe.js`'s printed boxes): the hero, the card, and the bottom row of bars.
-Max-min, not the mean of the means — a wallpaper dark behind the card and bright
-behind the power bar averages to a mid-grey that exists nowhere on the screen and
-describes neither half.
-
-⚠️ **The scrim flips with the skin, and forgetting it is the silent half-fix.** A
-scrim does not darken, it lifts the contrast under text that has none; under the light
-skin the ink is black and the wallpaper is bright, so a dark scrim would push the
-backdrop *toward* the ink and take contrast away from the one block on the screen with
-no glass to fall back on. Same for the hero's `text-shadow`. **Both keep their exact
-alphas** so the composite the `ignore_alpha` ceiling governs is unchanged — and
-`blur-threshold-check.mjs` now reads EVERY variant of those rules rather than the
-first, because a second branch that nothing measures is how the 0.28-vs-0.23 drift
-shipped the first time.
-
-⚠️ **The painted rim does NOT flip.** It is a specular — the colour of the light, not
-of the surface — which is why the shell's light mode keeps a white edge too, and a
-stronger one (0.50 against dark's 0.14). What flips is `--nidara-glass-border(-sm)`,
-the ordinary CSS borders: the avatar's ring, the popovers, the separator. That pair
-*is* tech-debt #87(b) — a translucent white ring on light glass over a pale wallpaper
-is invisible, which is exactly what was reported.
-
-**Looked at before shipping**, both skins over both kinds of wallpaper, with
-`SKIN=dark|light` on `lock-probe.js` (the flag reaches the PAINTER as well as the
-sheet — light type on a dark body is a specimen that exists nowhere and the most
-convincing kind of wrong answer).
-
-**What it decides on the wallpapers we ship**, greeter and lock, after the trim:
-
-| wallpaper | dark | light | picks |
-|---|---|---|---|
-| chroma | **2.50** | 13.71 | light |
-| wallpaper.jpg (the default) | 4.56 | 6.67 | light |
-| emerald / greeter / sunset / violet / midnight | 6.99…13.74 | 2.36…5.19 | dark |
-
-`chroma` is the point: it ships in the box and it fails AA today. The greeter's own
-default (`wallpaper-greeter.jpg`) stays dark, so the login screen a new install shows
-is unchanged; the LOCK follows the user's wallpaper and does flip on the default one.
-
-⚠️ **This is honest for these two surfaces and NOT yet for the desktop.** What sits
-behind the greeter and the lockscreen is always the wallpaper — nothing else can be
-there. Behind the bar a fullscreen or floating window can be, and none of this can see
-one. Extending the mechanism to `shellAppearance` is a separate decision with a real
-blind spot in it, not a follow-up chore.
+⚠️ **The shell was never part of this and still is not.** Extending any wallpaper-based
+choice to `shellAppearance` was always a separate decision with a real blind spot in it
+— behind the bar there can be a window, which no wallpaper measurement can see.
 
 ### Looking at these two surfaces: `scripts/dev/lock-probe.js`
 

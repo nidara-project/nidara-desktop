@@ -44,6 +44,25 @@ export interface InitAppearanceOpts extends AppearanceOpts {
    * one code path instead of "apply now, and also on change".
    */
   onChange?: (state: AppearanceState) => void
+
+  /**
+   * Pin this process's ink and material to the DARK ramp, whatever the session's
+   * light/dark says — for the login screens, and only for them.
+   *
+   * 🔑 Why an option and not a caller-side override. The ramp this file installs
+   * sits at `PRIORITY_USER + 20`, ABOVE the bundle's own sheet, so that the live
+   * session wins over whatever a sheet ships as its fallback. For the greeter and
+   * the lock that premise is wrong: their sheet is not a fallback, it is the
+   * palette of a surface whose only backdrop is a wallpaper, and the desktop being
+   * in light mode says nothing about what is legible over a photograph. Before
+   * this existed, a light-mode desktop painted every label on the login screen
+   * black over a dark wallpaper (#612) — and nothing in either bundle could
+   * out-specify a higher-priority provider.
+   *
+   * The accent, the opacities and every other value still follow the session.
+   * This pins exactly one axis.
+   */
+  fixedDarkInk?: boolean
 }
 
 export interface AppearanceHandle {
@@ -81,7 +100,7 @@ export function initAppearance(opts: InitAppearanceOpts = {}): AppearanceHandle 
 
   const apply = () => {
     try {
-      provider.load_from_string(generateTokensCss(state, state.isDark))
+      provider.load_from_string(generateTokensCss(state, opts.fixedDarkInk ? true : state.isDark))
     } catch (e) {
       // A ramp that fails to parse leaves the previous one in place, which is the
       // right failure: the surface keeps the last good appearance instead of
@@ -100,10 +119,11 @@ export function initAppearance(opts: InitAppearanceOpts = {}): AppearanceHandle 
   // pinned skin and the system mode can disagree on the same screen.
   setKitAppearance({
     accent: () => ACCENT_HEX[state.accent],
-    surfaceIsDark: () => state.isDark,
+    surfaceIsDark: () => opts.fixedDarkInk ? true : state.isDark,
     onChange: (cb) => { listeners.add(cb); return () => { listeners.delete(cb) } },
     overlayOpacity: () => state.overlayOpacity,
-    chromeIsDark: () => state.shellAppearance === "dark" ? true : state.shellAppearance === "light" ? false : state.isDark,
+    chromeIsDark: () => opts.fixedDarkInk ? true
+      : state.shellAppearance === "dark" ? true : state.shellAppearance === "light" ? false : state.isDark,
   })
 
   apply()
@@ -113,7 +133,8 @@ export function initAppearance(opts: InitAppearanceOpts = {}): AppearanceHandle 
   // "defaults" in a session means the portal did not answer, which no amount of
   // staring at the window would tell you.
   console.log(`[appearance] ${appearanceSource()} — accent ${state.accent}, `
-            + `${state.isDark ? "dark" : "light"}, window ${state.windowOpacity.toFixed(2)}`)
+            + `${opts.fixedDarkInk ? "dark (pinned)" : state.isDark ? "dark" : "light"}, `
+            + `window ${state.windowOpacity.toFixed(2)}`)
 
   const stop = watchAppearance(state, (next) => { state = next; apply() }, opts)
   return { current: () => state, stop }
