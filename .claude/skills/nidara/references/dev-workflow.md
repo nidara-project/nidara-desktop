@@ -3587,6 +3587,18 @@ so missing files don't break boot) but you'd lose real settings (e.g. `kb_layout
 until the user re-touches that Settings page, which regenerates the file. Don't tell
 users to delete them.
 
+⚠️ **`safe_require` treats ABSENT and BROKEN differently, and it has to.** Some of the
+files it loads are written by the SHELL, which starts *after* Hyprland has read this
+config — measured on a first boot: Hyprland up at 01:24:18, `nidara-workspaces.lua`
+written at 01:24:20 by `core/WorkspaceModes.ts`. So "not found" is the NORMAL state on
+the first login of every machine and on every boot of the live medium, and until
+2026-09-22 it threw a 22-line black panel (the message plus Lua's whole list of
+attempted paths) at the user for it. Now `package.searchpath` decides: no file → a
+`print()` and nothing on screen; a file that exists and fails → the notification, first
+line only. **A new generated file therefore needs no guard of its own** — the old
+`io.open` check around `nidara-gaming.lua` was exactly that, and it is gone, which is
+also why only one of the two shell-written files ever shouted at anybody.
+
 ### How the shared config actually loads (`-c` through `start-hyprland` — subtle)
 
 Session chain: `nidara` (launcher) → `uwsm start … hyprland.desktop` →
