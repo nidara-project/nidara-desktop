@@ -6,7 +6,6 @@ import { getPreferredUser } from "./lib/greeter-prefs"
 import { initProcessLocale } from "./lib/i18n"
 import { initAppearance } from "../lib/appearance-css"
 import { applyCrispFontRendering } from "../lib/font-rendering"
-import { chooseLoginSkin, applyLoginSkin } from "../lib/login-skin"
 import { useNoGtkTheme } from "../lib/gtk-theme"
 
 // No GTK theme at all — this sheet is the only CSS there is (commandment 11).
@@ -40,7 +39,13 @@ app.start({
     // surface outside any user session — the `greeter` system user, its own
     // compositor, no portal — so it reads the mirror the shell exports for it
     // (/var/tmp/nidara/appearance.json) instead. See the contract in ui/lib/appearance.ts.
-    initAppearance({ channel: "mirror" })
+    // `fixedDarkInk`: this screen's palette is NOT a fallback the session may
+    // override. Everything behind it is a wallpaper, so it is permanently dark
+    // glass with light ink — the desktop being in light mode says nothing about
+    // what is legible here. Without it the ramp emitted from `isDark: false`
+    // outranks this bundle's own sheet (it is installed at USER + 20) and paints
+    // every label black over the login wallpaper. See #612.
+    initAppearance({ channel: "mirror", fixedDarkInk: true })
 
     // Login UI on the primary monitor only. The other outputs already show the
     // generic wallpaper painted by awww in the compositor (it covers all
@@ -52,35 +57,6 @@ app.start({
       const monitor = monitors.get_item(0) as Gdk.Monitor
       const win = Greeter(monitor)
 
-      // Which skin does this wallpaper want? (tech-debt #82 — see ui/lib/backdrop-skin.ts.)
-      // Measured from the wallpaper this screen is about to be painted over, because
-      // that is the ONLY thing that can be behind it: no window can sit under the
-      // greeter. It is the one surface where the answer is not a guess.
-      //
-      // The monitor's own aspect, not the window's: the wallpaper is painted COVER-fit
-      // by awww across the whole output, and the parts cropped away are not on the
-      // screen to be read over.
-      //
-      // ⚠️ Its own try, INSIDE the one that already wraps the window. The catch below
-      // reports "failed on primary monitor", which is true of a greeter that never
-      // appeared and false — and alarming — for one that merely could not measure a
-      // JPEG. A legibility choice must not be able to look like a login screen that
-      // did not come up; it degrades to the skin this screen has always worn.
-      try {
-        const geo = monitor.get_geometry()
-        const { skin, worst, path } = chooseLoginSkin(
-          "greeter",
-          geo.height > 0 ? geo.width / geo.height : 16 / 9,
-          getPreferredUser().homeDir,
-        )
-        applyLoginSkin(win, skin)
-        // Logged, and this is the line to read when someone reports the login screen
-        // "changed colour": it names the wallpaper that decided and what the decision
-        // bought. A skin chosen silently is a skin nobody can argue with.
-        console.log(`[Greeter] skin=${skin} (worst text contrast ${worst.toFixed(2)}:1) from ${path ?? "no wallpaper"}`)
-      } catch (e) {
-        console.warn(`[Greeter] skin measurement failed, staying dark: ${e}`)
-      }
     } catch (e) {
       console.error("[Greeter] Failed on primary monitor:", e)
     }

@@ -6,8 +6,6 @@ import Gtk4SessionLock from "gi://Gtk4SessionLock"
 import { Lock, LockOverlay } from "./widget/Lock"
 import { initAppearance } from "../lib/appearance-css"
 import { applyCrispFontRendering } from "../lib/font-rendering"
-import { chooseLoginSkin, applyLoginSkin } from "../lib/login-skin"
-import type { Skin } from "../lib/backdrop-skin"
 import { useNoGtkTheme } from "../lib/gtk-theme"
 
 // No GTK theme at all — the greeter's sheet is the only CSS there is (commandment 11).
@@ -17,14 +15,6 @@ const cssPath = GLib.file_test("/usr/share/nidara/ui/greeter/style.css", GLib.Fi
   ? "/usr/share/nidara/ui/greeter/style.css"
   : "../greeter/style.css"
 
-// The skin both window paths dress themselves in — decided ONCE, for the whole lock.
-//
-// One screen, one skin: the alternative is per-monitor, and two monitors showing the
-// same lock in opposite tones is not "adaptive", it is broken. It is also what the
-// painter already assumes — `setGlassSkin` is process-global because there is one
-// painter — so a per-window decision would give the LAST window's answer to all of
-// them, which is worse than deciding on purpose.
-let lockSkin: Skin = "dark"
 
 function startFallback(display: Gdk.Display) {
   console.log("[Lock] Starting OVERLAY layer fallback")
@@ -32,7 +22,7 @@ function startFallback(display: Gdk.Display) {
   const n = monitors.get_n_items()
   for (let i = 0; i < n; i++) {
     try {
-      applyLoginSkin(LockOverlay(monitors.get_item(i) as Gdk.Monitor), lockSkin)
+      LockOverlay(monitors.get_item(i) as Gdk.Monitor)
     } catch (e) {
       console.error(`[Lock] Overlay fallback failed on monitor ${i}:`, e)
     }
@@ -56,34 +46,8 @@ app.start({
     // The token ramp, the kit's Cairo seam and the glass rim — read from the Settings
     // portal like any application: the lock runs inside the user's own session, so the
     // portal there answers for exactly the person it is locking. See ui/lib/appearance.ts.
-    initAppearance()
-
-    // Which skin does this wallpaper want? (tech-debt #82 — see ui/lib/backdrop-skin.ts.)
-    // Decided here, before any window exists, because both paths below create windows
-    // and the fallback creates one per monitor.
-    //
-    // ⚠️ The lock is the one surface that MUST measure the image rather than trust the
-    // compositor: under ext-session-lock-v1 nothing of the desktop is drawn behind it,
-    // so it paints its own copy of the wallpaper (glass-capsule's backdrop). What is
-    // behind the glass here is exactly the file this reads — no window, no blur it did
-    // not apply itself.
-    //
-    // ⚠️ AND IT CANNOT BE ALLOWED TO FAIL THE LOCK. This runs before `lock()`, so an
-    // exception here — a missing GdkPixbuf typelib, a wallpaper that is not an image —
-    // would propagate out of main() and the screen would simply NOT LOCK. A legibility
-    // choice must never hold a veto over the cerrojo. `chooseLoginSkin` already answers
-    // "dark" for anything it cannot read; this catches the class of failure it cannot,
-    // and lands on the same answer, which is the skin both screens have always worn.
-    try {
-      const primary: any = display.get_monitors().get_item(0)
-      const geo = primary?.get_geometry?.()
-      const aspect = geo && geo.height > 0 ? geo.width / geo.height : 16 / 9
-      const { skin, worst, path } = chooseLoginSkin("lockscreen", aspect)
-      lockSkin = skin
-      console.log(`[Lock] skin=${skin} (worst text contrast ${worst.toFixed(2)}:1) from ${path ?? "no wallpaper"}`)
-    } catch (e) {
-      console.warn(`[Lock] skin measurement failed, staying dark: ${e}`)
-    }
+    // See the greeter's app.ts for why the login screens pin their ink (#612).
+    initAppearance({ fixedDarkInk: true })
 
     try {
       const supported = Gtk4SessionLock.is_supported()
@@ -106,7 +70,6 @@ app.start({
         console.log("[Lock] monitor signal — assigning window")
         try {
           const win = Lock(lockInst, monitor)
-          applyLoginSkin(win, lockSkin)
           lockWindows.push(win)
           console.log("[Lock] Window assigned to monitor")
         } catch (e) {

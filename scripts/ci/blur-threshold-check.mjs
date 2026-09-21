@@ -110,13 +110,14 @@ const alphasIn = (block, what) => {
     return found
 }
 // ⚠️ EVERY block, not the first one — and that is not tidiness, it is the difference
-// between a gate and a gate-shaped comment. Since the login screens gained a LIGHT
-// skin (`window.skin-light …`, tech-debt #82) each of these rules exists twice: the
-// dark one and the light one, same alphas, opposite ink. `indexOf` would have found
-// the dark one, passed, and never looked at the other — so the new branch would be
-// the only un-audited paint on the two surfaces that have a CI gate precisely because
-// their paint is un-auditable by eye. A rule that stops being measured is exactly how
-// the 0.28-vs-0.23 drift shipped in the first place.
+// between a gate and a gate-shaped comment. It was written when each of these rules
+// existed TWICE, once per skin (tech-debt #82's login half, removed 2026-09-21 — see
+// #613), and `indexOf` would have measured the dark one, passed, and never looked at
+// the light one. The second copy is gone; the reason to scan every block is not. A
+// rule that stops being measured is exactly how the 0.28-vs-0.23 drift shipped in the
+// first place, and the next variant of one of these rules — a second scrim, a media
+// query, a per-monitor override — must be measured the day it lands, not the day
+// somebody remembers this file.
 const blocksFor = (marker, what) => {
     const out = []
     for (let i = scss.indexOf(marker); i >= 0; i = scss.indexOf(marker, i + 1)) {
@@ -126,7 +127,7 @@ const blocksFor = (marker, what) => {
     return out
 }
 
-// The scrim's gradient: its DARKEST stop is the one that decides — across both skins.
+// The scrim's gradient: its DARKEST stop is the one that decides.
 const scrimMax = Math.max(...blocksFor(".greeter-scrim {", "the scrim rule")
     .flatMap((b, i) => alphasIn(b, `.greeter-scrim #${i + 1}`)))
 
@@ -137,10 +138,10 @@ const shadowLines = blocksFor(".greeter-username {", "the hero text rule")
     .map(b => b.split("\n").find(l => l.includes("text-shadow")))
     .filter(Boolean)
 if (shadowLines.length === 0) { console.error("blur-threshold-check: no text-shadow in any .greeter-username rule"); process.exit(1) }
-// Position by position, the worst any skin declares.
-const perSkin = shadowLines.map((l, i) => alphasIn(l, `the hero text-shadow #${i + 1}`))
-const layers = Math.max(...perSkin.map(a => a.length))
-const heroAlphas = Array.from({ length: layers }, (_, i) => Math.max(...perSkin.map(a => a[i] ?? 0)))
+// Position by position, the worst any COPY of the rule declares.
+const perRule = shadowLines.map((l, i) => alphasIn(l, `the hero text-shadow #${i + 1}`))
+const layers = Math.max(...perRule.map(a => a.length))
+const heroAlphas = Array.from({ length: layers }, (_, i) => Math.max(...perRule.map(a => a[i] ?? 0)))
 
 // Alpha compositing, not addition: a_total = 1 − Π(1 − aᵢ)
 const composite = 1 - [scrimMax, ...heroAlphas].reduce((acc, a) => acc * (1 - a), 1)
@@ -160,9 +161,9 @@ const greeterThreshold = parseFloat(greeterRule[2])
 // scrim took that away and the circle went sharp — a body that stops being glass
 // because a DIFFERENT rule changed. Named explicitly here so the coupling cannot come
 // back silently: if a fill needs the layer to blur behind it, its own alpha says so.
-// Every skin's version of it, and the THINNEST wins the argument: this body has to
-// clear the threshold on its own, so the one closest to the line is the one that
-// decides whether the circle goes sharp.
+// Every copy of it, and the THINNEST wins the argument: this body has to clear the
+// threshold on its own, so the one closest to the line is the one that decides whether
+// the circle goes sharp.
 const avatarLines = blocksFor(".greeter-avatar-fallback {", "the avatar fallback rule")
     .map(b => b.split("\n").find(l => /background\s*:/.test(l)))
     .filter(Boolean)

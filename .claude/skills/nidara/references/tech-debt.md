@@ -3204,8 +3204,20 @@ backdrop 20% under every surface, so the same white wallpaper measured 1.76:1 at
 also a fail. The fix did not create the problem, it removed the thing that made it *slightly* less
 bad while nobody was looking at the number.
 
-✅ **ANSWERED AND SHIPPED FOR THE LOGIN SCREENS, 2026-08-25 — and the answer was a step earlier
-than this entry expected.** It said "give the text its own legibility (vibrancy, a shadow, a scrim)".
+⛔ **THE LOGIN ANSWER WAS WITHDRAWN BY THE OWNER, 2026-09-21 (#613).** The mechanism below shipped
+on 2026-08-25 and was removed four weeks later, so read the paragraph after this one as history,
+not as what the code does. Removed because it could be — and was — silently overridden by the
+appearance ramp (#612), because its decision was unreadable on every real machine (the greeter's
+log goes to `/dev/null`, #614), and because no comparable system analyses its backdrop to pick an
+ink. **The gap the numbers below describe is real and is now the VEIL's problem**: measured on the
+live lock screen the day it was removed, the hero reads 2.27:1 over the pale part of the shipped
+default wallpaper, and AA there needs a uniform veil of 0.32 against the 0.13 the scrim has —
+except that un-blurred paint is capped at `ignore_alpha` 0.23, so raising it means frosting the
+whole wallpaper, giving the hero a body of its own, or documenting a sub-AA case. That choice is
+open in #613 and it is the owner's. Do NOT answer it by thickening the glass: the table above
+shows that cannot work.
+
+*(History, 2026-08-25 — the mechanism that was removed:)* It said "give the text its own legibility (vibrancy, a shadow, a scrim)".
 What the measurement found is that the choice comes first: sweep the RGB cube (140,608 backdrops)
 and score both skins — white text on dark glass fails AA on **42.9 %** of them, black text on light
 glass on 14.9 %, and **the worst case for the BETTER of the two is 6.07:1**. No backdrop defeats
