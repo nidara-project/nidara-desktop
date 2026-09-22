@@ -110,7 +110,7 @@ export function SystemStep(): Step {
 
         if (turingGpu) {
           const pkgs = getNvidiaDriverPackages(draft.kernel).join(", ")
-          const desc = GLib.strdup_printf(t("systemNvidiaOpenDesc"), pkgs)
+          const desc = t("systemNvidiaOpenDesc").replace("%s", pkgs)
           const toggleRow = NidaraToggleRow(
             t("systemNvidiaOpenTitle"),
             desc,

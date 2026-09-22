@@ -258,7 +258,7 @@ export function SummaryStep(): Step {
         let gfxDesc = t("summaryGraphicsMesa")
         if (system?.installNvidiaOpen) {
           const driverPkg = getNvidiaDriverPackages(chosenKernel)[0]
-          gfxDesc = GLib.strdup_printf(t("summaryGraphicsOpenNvidia"), driverPkg)
+          gfxDesc = t("summaryGraphicsOpenNvidia").replace("%s", driverPkg)
         } else if (system?.detectedGpus.some(g => g.vendor === "nvidia")) {
           gfxDesc = t("summaryGraphicsNouveau")
         }

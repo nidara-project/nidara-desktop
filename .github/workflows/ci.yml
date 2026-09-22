@@ -7,7 +7,7 @@
 # Gates here:
 #   - styles: the SCSS stylesheet compiles (catches CSS syntax errors). Pure JS,
 #     no system libraries needed.
-#   - typecheck: `tsc --noEmit` over ui/shell. The GI typings it needs (@girs/,
+#   - typecheck: `tsc --noEmit` over ui/shell and ui/installer. The GI typings it needs (@girs/,
 #     ~58 MB generated, git-ignored) can't be produced on a runner —
 #     scripts/gen-types.sh reads the system's .gir files, which means a machine
 #     with the whole GI stack installed. Instead a maintainer publishes a ~4 MB
@@ -365,6 +365,18 @@ jobs:
         working-directory: .
         run: node scripts/ci/cairo-dispose-check.mjs
 
+      # The installer is typechecked in FULL, against the same snapshot: its
+      # tsconfig includes ../shell/@girs, and its gi.d.ts shims only `gi://cairo`
+      # (the one module ts-for-gir types wrongly — see that file). Until 2026-09-22
+      # it was in the names-only loop below with GLib declared `any`, and
+      # `GLib.strdup_printf` — varargs, so absent in GJS — threw on the System and
+      # Summary pages of every machine with a Turing-or-newer NVIDIA GPU. This is the
+      # bundle that erases a disk and is only ever run from a live medium, so the
+      # compiler is the cheapest reader it has.
+      - name: tsc --noEmit on the installer (must succeed)
+        working-directory: ui/installer
+        run: npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json
+
       # ── greeter + lockscreen: NAMES ONLY, and that is a deliberate ceiling ──
       # These two bundles cannot be fully typechecked yet. Their `gi.d.ts` declares
       # `Gtk`/`Gdk` as VALUES (`export const Gtk: any`), so every `Gtk.Widget` used
@@ -385,10 +397,10 @@ jobs:
       #
       # Both bundles are clean under this filter. Raise the ceiling by fixing the
       # typings, not by loosening the grep.
-      - name: No undefined identifiers in greeter / lockscreen / installer
+      - name: No undefined identifiers in greeter / lockscreen
         run: |
           fail=0
-          for b in greeter lockscreen installer; do
+          for b in greeter lockscreen; do
             out=$(cd "ui/$b" && npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json 2>&1 \
                   | grep -E 'TS2304|TS2552' || true)
             if [ -n "$out" ]; then
