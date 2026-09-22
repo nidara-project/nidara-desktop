@@ -1577,6 +1577,31 @@ PNGs when they differ — a dev box without `ttf-jetbrains-mono` renders a subst
 are honest about layout and nothing else. Same 0-sized-children timing trap as the other probes: it
 waits 1500 ms, and at 600 ms the window is already `mapped` while every child still measures 0×0.
 
+### What `custom_commands` print reaches nobody unless we keep it
+
+archinstall 4.4 runs each of base.json's `custom_commands` as
+`SysCommand(f'arch-chroot -S {target} bash {script}')` **without `peek_output`**
+(`run_custom_user_commands` in its `lib/installer.py`). The output is held in memory and dropped
+when the command succeeds: it never reaches archinstall's stdout (so never our run page), nor
+`cmd_output.txt`, nor `install.log`, which keeps only `Executing custom command "…"`. Measured on
+the clean install of 2026-09-22: five commands, the desktop's whole pacman transaction among them,
+and not one line of their output anywhere. A FAILING command is not silent — archinstall raises
+with its last 500 characters.
+
+So `assemblePlan` wraps every command (`lib/command-log.ts`, `wrapCommandForLog`) to append its
+output to `/var/log/nidara-install-commands.log` inside the target while still passing it through,
+and after archinstall `reportCommandLog` says where that file is and repeats the lines that warn or
+fail (`[WARN]`, `warning:`, `error:`) in our own log, before that log is copied into the target.
+The wrap is in the installer, not in base.json, so a command nidara-iso adds later is covered
+without anybody remembering to.
+
+Two details are load-bearing, and the probe (`account-rules-probe.ts`) checks both:
+`set -o pipefail` outside, or the pipeline answers with `tee`'s status and a failed install reads
+as a success; and `set +o pipefail` INSIDE the braces, because the group inherits it and base.json's
+`curl … | pacman-key --add -` would start answering with curl's status instead of pacman-key's —
+measured 0 → 7 on a refused connection. The wrap must not change what a command means. A CI control
+deletes the wrap and requires the probe to catch it.
+
 ### `base.json` is now READ BACK to the person (2026-09-03)
 
 The summary step reads the product config and prints what it decided — kernels, `gfx_driver`,

@@ -16,6 +16,7 @@ import { writeSwapFstabEntries } from "../lib/swap"
 import { copyNetworkConnections } from "../lib/network-connections"
 import { releaseTargetDisks } from "../lib/release-target"
 import { copyLogToTarget, openLiveLog, type LiveLog } from "../lib/install-log"
+import { reportCommandLog } from "../lib/command-log"
 import { stripAnsi } from "../lib/ansi"
 import { connectivity, isUsable } from "../lib/network"
 import { DOWNLOAD_DIRS, STALL_QUIET_MS, failedDownloading, looksStalled } from "../lib/stall"
@@ -613,6 +614,9 @@ export function RunStep(): Step {
             } catch (e: any) {
               appendLog(`[ERROR] Process exited with error: ${e.message || e}`)
             } finally {
+              // Success or not: what the setup commands printed, which archinstall
+              // does not show (lib/command-log.ts) — before the copy, so it is in it.
+              reportCommandLog(isArm, appendLog)
               // Success or not: a target that got as far as /var/log keeps the log.
               copyLogToTarget(isArm, liveLog.path, appendLog)
               // ⚠️ And then let go of the disk. archinstall unmounts nothing on exit,
