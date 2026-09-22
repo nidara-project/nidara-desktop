@@ -3625,25 +3625,6 @@ Also unresolved and smaller: `.nidara-selection-check` is applied by the kit and
 That is correct today (Cairo paints it, the class is for perception) but it looks like a missing
 rule to the next reader, and `token-contract-check` will not tell them either way.
 
-### 101. ⚠️ OPEN (the log half ✅ FIXED 2026-09-22) — the installer's progress is a pulse with no phase behind it (2026-08-31)
-
-> **Queue entry: nidara-iso#10.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
-
-✅ **The half this item was named for is fixed**, and the measurement that fixed it replaced the
-premise: the log did not stop "one command short of the end". **No** custom command's output was
-kept at all — archinstall 4.4 runs them without `peek_output` and drops a successful command's
-output (read in its source, confirmed on the clean install of 2026-09-22: five commands, zero lines).
-The old `cmd_output.txt` observation was from an earlier archinstall. The fix wraps each command to
-keep its output in `/var/log/nidara-install-commands.log` and repeats its warnings in our own log —
-see dev-workflow.md, "What `custom_commands` print reaches nobody unless we keep it". That is what
-makes nidara-setup's icon-theme `[WARN]` (v0.10.1) reach a person at last.
-
-✅ Also no longer true: "`nidara-setup` creates `.config/{hypr,kitty,nidara,uwsm}` as `1000:0`". Fixed
-by #376 (`chown "$REAL_USER:"`, trailing colon — see the note in `bin/nidara-setup`).
-
-**Still open from the same review:** the progress bar is a `pulse()` on an 80 ms timeout with no
-phase behind it, and the host name is asked for as the third field of the ACCOUNT card.
-
 ### 104. ⚠️ OPEN — `AppService.getAppInfo` answers for ids that are not apps (2026-09-13)
 
 Its last resort is a SUBSTRING match over desktop ids, so any string that happens to sit inside some
@@ -4061,13 +4042,14 @@ but 108 sites, and the payoff is the class of bug above.
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
-number is never accidentally reused. 56 items; the split itself was 2026-08-23.
+number is never accidentally reused. 57 items; the split itself was 2026-08-23.
 
 - **#7** — `pageHeader()` removed — RESOLVED → `tech-debt-resolved.md`
 - **#102** — ✅ RESOLVED 2026-08-31 — the shell's one door raises as well as focuses; the bench is a nested Hyprland → `tech-debt-resolved.md`
 - **#102** (the second one — ⚠️ the number was reused by a slip on 2026-09-04) — ✅ RESOLVED 2026-09-04 — manual mode's bootloader patching wrote to a hardcoded /mnt/boot → `tech-debt-resolved.md`
 - **#98** — ✅ RESOLVED 2026-08-31 — About declares `nidara-about`, and the window-rule seam became a CI gate → `tech-debt-resolved.md`
 - **#99** — ✅ RESOLVED (measured 2026-09-22) — the installer fits a 1366×768 screen, bar and dock included → `tech-debt-resolved.md`
+- **#101** — ✅ RESOLVED 2026-09-22 — what the setup commands print is kept (#625); the progress and hostname leftovers were already done → `tech-debt-resolved.md`
 - **#9** — The per-boot Adwaita-WARNING — ✅ RESOLVED 2026-08-18 (the host went) → `tech-debt-resolved.md`
 - **#11** — Idle GPU spin on bar/dock — RESOLVED (two distinct causes) → `tech-debt-resolved.md`
 - **#12** — Sporadic double-disconnect CRITICALs — RESOLVED (helper + sweep 2026-06-23; lifecycle half in 12b, 2026-08-02) → `tech-debt-resolved.md`
