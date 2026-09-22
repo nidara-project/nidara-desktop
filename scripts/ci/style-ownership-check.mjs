@@ -64,13 +64,14 @@ const CLASS_EXCEPTIONS = new Map([
     ["dragging", "a STATE marker the consuming surface styles (the dock's drag)"],
     ["nd-icon", "the interface-icon marker; symbolic icons follow CSS `color` and need no rule of their own since #587"],
     ["nidara-selection-check", "Cairo paints it (`nidara-kit/check.ts`); the class exists for perception (`queryUI`), not for paint"],
-    // ⚠️ These five carry no rule in ANY sheet today. They are listed rather than
+    // ⚠️ These six carry no rule in ANY sheet today. They are listed rather than
     // ignored so that the check SEES them: a silent "nothing styles this" bucket is
     // how a rule disappears without anyone noticing. Each says which it is.
     ["nidara-form-dialog", "a variant hook on a window already painted by `.nidara-alert-dialog`; no paint of its own"],
     ["nidara-list-group", "a grouping box; the paint is the rows and the `.nidara-list` around them"],
     ["nidara-sidebar-label", "the sidebar row's label, which inherits its colour from the row — a name for perception"],
-    ["nidara-table-row", "the base class; the paint lives on its `--warning`/`--error` variants and on the consuming bundle's selected state"],
+    ["nidara-table-row", "the base class; the paint lives on its `--warning` variant, on `.nidara-table-mark` and on the consuming bundle's selected state"],
+    ["nidara-table-row--error", "a STATE marker since 2026-09-22: an error row no longer changes its fill (it was the selected row's), it shows `.nidara-table-mark`, which IS painted; probes and perception read the class"],
     ["slider-fill-icon", "the fill tile's icon, drawn through `nd-icon`; this class only names it"],
 ])
 

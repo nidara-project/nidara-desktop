@@ -1,6 +1,6 @@
 # Nidara icon spec
 
-**Version 3.** How to make an icon theme that changes Nidara's interface icons — the bar,
+**Version 4.** How to make an icon theme that changes Nidara's interface icons — the bar,
 the menus, the Control Centre, Settings, the login and lock screens.
 
 Nidara's interface asks for its own icon names, all starting with `nd-`. Only a theme that
@@ -105,6 +105,7 @@ check your drawing in place; it is not part of the contract and may grow.
 | `nd-dark-mode` | Dark appearance | Dark-mode widget |
 | `nd-dialog-information` | Information / about | System menu, Settings → About, notifications without an icon |
 | `nd-dialog-password` | A password | Settings → Users |
+| `nd-dialog-warning` | Something here is wrong and holds the step (a caution triangle) | Installer → manual partitioning, a table row that fails a rule |
 | `nd-display-brightness` | Screen brightness, high | Brightness widget and slider |
 | `nd-display-brightness-low` | Screen brightness, low | Brightness slider |
 | `nd-dock` | The dock | Settings → Dock |
@@ -172,5 +173,7 @@ check your drawing in place; it is not part of the contract and may grow.
 
 ## Changes
 
+- **4** — add `nd-dialog-warning` (the installer's partition table marks a row that fails a rule).
+- **3** — add `nd-globe` (the installer's Region page, split from `nd-preferences-system-network`).
 - **2** — add `nd-clipboard-list` and `nd-rocket` (installer summary and run steps).
 - **1** — first version: 83 names.

@@ -23,6 +23,7 @@ import {
   type NidaraTableRow,
 } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
+import { ndIcon } from "../../lib/icons"
 import { PASSWORD_ADVISED_MIN } from "../lib/account-problems"
 import {
   getAnswers,
@@ -742,15 +743,18 @@ export function DiskStep(): Step {
         // that column's answer.
         { title: t("diskFormat"), align: Gtk.Align.CENTER },
         { title: t("diskFs") },
-      ])
+      ], [], { icon: ndIcon("nd-dialog-warning"), iconName: "dialog-warning-symbolic" })
       manualBox.append(table.box)
 
       // ⚠️ The MARK is not the message. #509 moved every fault that belongs to a
       // row out of the block above the table and onto the row itself, which was
       // right — "two partitions are mounted at /" with nothing marked made people
-      // hunt. But a table row has only `setValidationState`, a colour: the kit's
-      // per-field error LINE exists on `NidaraFieldRow` and has no table
-      // equivalent. So from #509 until 2026-09-22 a red row said nothing at all,
+      // hunt. But a table row had only `setValidationState`, a colour — and the
+      // SAME colour the selected row wears, so a failing row could not be told from
+      // the one just clicked (now a mark: `nd-dialog-warning` in front of the
+      // partition, see NidaraTableErrorMark). The kit's per-field error LINE exists
+      // on `NidaraFieldRow` and has no table equivalent. So from #509 until
+      // 2026-09-22 a marked row said nothing at all,
       // and the sentences written for the ESP, the swap row and the root — each
       // added after an install had already destroyed somebody's disk — were never
       // shown to anyone.
