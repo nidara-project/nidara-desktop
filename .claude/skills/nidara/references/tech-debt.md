@@ -3625,25 +3625,6 @@ Also unresolved and smaller: `.nidara-selection-check` is applied by the kit and
 That is correct today (Cairo paints it, the class is for perception) but it looks like a missing
 rule to the next reader, and `token-contract-check` will not tell them either way.
 
-### 99. ⚠️ OPEN — the installer cannot fit on a screen shorter than its own floor (2026-08-30)
-
-> **Queue entry: #312.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
-
-Found while chasing the installer's window rule, not caused by it.
-
-`ui/installer/widget/InstallerWindow.ts` sets `minWidth: 960, minHeight: 760` as well as the
-defaults, and a `set_size_request` is a floor GTK will not go under. On a 1366x768 laptop — the
-live medium boots on whatever hardware someone has — the usable height is 768 minus the bar (40)
-and the dock (100), i.e. 628. The window asks for 760, the clamp added in #299 tries to shrink it
-to 628, and GTK refuses; the excess goes out the top, which is the very shape #299 exists to
-prevent.
-
-Not measured on such a screen — derived from the numbers, and worth a VM at 1366x768 before
-deciding anything. The fix is not the rule: it is either a smaller floor (does the wizard's content
-survive a 1366x768 work area?) or a live-medium layout that gives the installer the screen. The
-window rule is not where this lives — see `dev-workflow.md` → "A window rule matches an IDENTIFIER,
-and a static rule only ever sees the one the window was BORN with".
-
 ### 101. ⚠️ OPEN (the log half ✅ FIXED 2026-09-22) — the installer's progress is a pulse with no phase behind it (2026-08-31)
 
 > **Queue entry: nidara-iso#10.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
@@ -4080,12 +4061,13 @@ but 108 sites, and the payoff is the class of bug above.
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
-number is never accidentally reused. 55 items; the split itself was 2026-08-23.
+number is never accidentally reused. 56 items; the split itself was 2026-08-23.
 
 - **#7** — `pageHeader()` removed — RESOLVED → `tech-debt-resolved.md`
 - **#102** — ✅ RESOLVED 2026-08-31 — the shell's one door raises as well as focuses; the bench is a nested Hyprland → `tech-debt-resolved.md`
 - **#102** (the second one — ⚠️ the number was reused by a slip on 2026-09-04) — ✅ RESOLVED 2026-09-04 — manual mode's bootloader patching wrote to a hardcoded /mnt/boot → `tech-debt-resolved.md`
 - **#98** — ✅ RESOLVED 2026-08-31 — About declares `nidara-about`, and the window-rule seam became a CI gate → `tech-debt-resolved.md`
+- **#99** — ✅ RESOLVED (measured 2026-09-22) — the installer fits a 1366×768 screen, bar and dock included → `tech-debt-resolved.md`
 - **#9** — The per-boot Adwaita-WARNING — ✅ RESOLVED 2026-08-18 (the host went) → `tech-debt-resolved.md`
 - **#11** — Idle GPU spin on bar/dock — RESOLVED (two distinct causes) → `tech-debt-resolved.md`
 - **#12** — Sporadic double-disconnect CRITICALs — RESOLVED (helper + sweep 2026-06-23; lifecycle half in 12b, 2026-08-02) → `tech-debt-resolved.md`

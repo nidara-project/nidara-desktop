@@ -511,10 +511,10 @@ hl.bind(mainMod .. " + CTRL + SHIFT + left",  hl.dsp.window.move({ workspace = "
 local FLOAT_MARGIN = GAPS_OUT + BORDER_SIZE
 
 -- What we last asked a window for, AND the size it had when we asked, keyed by
--- address. A client whose protocol min_size is larger than the usable area (a
--- 1366x768 screen and our installer's 960x760 floor, #99) legitimately REFUSES to
--- shrink, and without this the resize and the `window.update_rules` it fires would
--- chase each other forever.
+-- address. A client whose protocol min_size is larger than the usable area
+-- legitimately REFUSES to shrink (our installer's old 960x760 floor on a 1366x768
+-- screen was one, until #312 — #99), and without this the resize and the
+-- `window.update_rules` it fires would chase each other forever.
 --
 -- ⚠️ The size we saw is half the key on purpose. Keyed on the request alone, the
 -- guard also swallows the legitimate retry after something OTHER than the client
