@@ -6,7 +6,7 @@ import Pango from "gi://Pango"
 import Gio from "gi://Gio"
 import type { Step } from "../lib/flow"
 import { NidaraButton, NidaraScrolled, showNidaraAlert } from "../../lib/nidara-kit"
-import { t } from "../lib/i18n"
+import { t, getLocale } from "../lib/i18n"
 import { getAnswers } from "../lib/answers"
 import { assemblePlan, type AssembledPlan } from "../lib/plan"
 import { archinstallStamp, configureInstalledBootloader } from "../lib/bootloader"
@@ -16,13 +16,18 @@ import { writeSwapFstabEntries } from "../lib/swap"
 import { copyNetworkConnections } from "../lib/network-connections"
 import { releaseTargetDisks } from "../lib/release-target"
 import { copyLogToTarget, openLiveLog, type LiveLog } from "../lib/install-log"
-import { reportCommandLog } from "../lib/command-log"
+import { COMMAND_LOG, reportCommandLog } from "../lib/command-log"
 import { stripAnsi } from "../lib/ansi"
 import { connectivity, isUsable } from "../lib/network"
 import { DOWNLOAD_DIRS, STALL_QUIET_MS, failedDownloading, looksStalled } from "../lib/stall"
 import { measureMirrors, prepareLiveMirrorlist, restoreTargetMirrorlist } from "../lib/mirrors"
 import { isPreview, previewSkip } from "../lib/preview"
 import { heading, prose, formatDuration, formatLiveTimer } from "./common"
+import { PhaseMarker } from "../widget/PhaseMarker"
+import {
+  BaseProgress, RUN_PHASES, desktopProgress, isPlumbing, overallFraction, readDesktopLog,
+  type PackageProgress,
+} from "../lib/run-progress"
 
 export function RunStep(): Step {
   let _busy = false
@@ -60,71 +65,89 @@ export function RunStep(): Step {
         vexpand: true,
       })
 
-      const head = heading(t("runHeading"))
-      const desc = prose(t("runTitle"), "installer-prose--dim")
+      // ⚠️ No page heading while it runs. The window's own header already says
+      // "Installing Nidara" (this step's title), and the page used to open with
+      // "Installing system..." over a line that said "Installing Nidara" again —
+      // the same sentence twice on one screen (owner, 2026-09-23). The card below
+      // is what the page is about; the heading comes back at the end, when it has
+      // something of its own to say (installed, or failed).
+      const head = heading("")
+      const desc = prose("", "installer-prose--dim")
+      head.visible = false
+      desc.visible = false
       box.append(head)
       box.append(desc)
 
-      // ── Named phases, and the last line the work actually printed ──────────
+      // ── The card: what it is doing now, how far, and for how long ──────────
       //
-      // ⚠️ What was here was `GLib.timeout_add(80ms, () => progressBar.pulse())`:
-      // a bar that swept back and forth for twenty minutes and told nobody
-      // anything, with the real log folded shut behind a collapsed expander
-      // (#307). A pulse says "something is happening"; over a disk being erased
-      // that is not the question anyone has.
-      //
-      // The four phases are the ones this file actually has boundaries for. Inside
-      // archinstall there is no progress to read — so what is shown there is its
-      // LAST LINE, which is the honest answer to "what is it doing now".
-      const PHASES = ["runPhaseNetwork", "runPhaseDisk", "runPhaseBase", "runPhaseConfig"] as const
+      // ⚠️ What was here first was `GLib.timeout_add(80ms, () => progressBar.pulse())`
+      // — a bar that swept back and forth for twenty minutes and told nobody
+      // anything (#307). Then four named phases and a bar that moved in quarters,
+      // whose third phase hid the longest wait of the install. Now five phases
+      // that match what is really happening, and inside the two long ones a REAL
+      // count of packages (lib/run-progress.ts says where each number comes from).
+      // Where there is nothing to count, the line under the bar is the last thing
+      // the work printed, which is the honest answer to "what is it doing now".
+      const PHASE_TITLES = ["runPhaseNetwork", "runPhaseDisk", "runPhaseBase", "runPhaseDesktop", "runPhaseConfig"] as const
+      const PHASE_SHORT = ["runStepNetwork", "runStepDisk", "runStepBase", "runStepDesktop", "runStepConfig"] as const
       let phase = -1
 
-      const progressBar = new Gtk.ProgressBar({ hexpand: true, valign: Gtk.Align.CENTER })
+      const card = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 10,
+        css_classes: ["installer-run-card"],
+        hexpand: true,
+      })
+      const cardHead = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, hexpand: true })
+      const cardTitles = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true })
+      const stepOf = new Gtk.Label({ label: "", css_classes: ["installer-run-step-of"], xalign: 0 })
+      const phaseTitle = new Gtk.Label({
+        label: "", css_classes: ["installer-run-phase"], xalign: 0,
+        halign: Gtk.Align.FILL, hexpand: true, wrap: true,
+      })
+      cardTitles.append(stepOf)
+      cardTitles.append(phaseTitle)
+      const percent = new Gtk.Label({ label: "", css_classes: ["installer-run-percent"], valign: Gtk.Align.END })
+      cardHead.append(cardTitles)
+      cardHead.append(percent)
+      card.append(cardHead)
 
+      const progressBar = new Gtk.ProgressBar({ hexpand: true, css_classes: ["installer-run-bar"] })
+      card.append(progressBar)
+
+      const cardFoot = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, hexpand: true })
+      // Ellipsised rather than wrapped: it is a single moving line, and a wrapping
+      // one would make the card change height under the reader's eyes.
+      const detail = new Gtk.Label({
+        label: "", css_classes: ["installer-run-detail"],
+        halign: Gtk.Align.FILL, hexpand: true, xalign: 0,
+        ellipsize: Pango.EllipsizeMode.END, single_line_mode: true,
+      })
       const timerLabel = new Gtk.Label({
-        label: "00:00",
-        css_classes: ["installer-phase-timer"],
-        valign: Gtk.Align.CENTER,
-        halign: Gtk.Align.END,
+        label: "", css_classes: ["installer-run-timer"], halign: Gtk.Align.END,
       })
       timerLabel.update_property([Gtk.AccessibleProperty.LABEL], [t("runElapsedTime")])
-
-      const progressBox = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 12,
-        hexpand: true,
-        valign: Gtk.Align.CENTER,
-      })
-      progressBox.append(progressBar)
-      progressBox.append(timerLabel)
-      box.append(progressBox)
+      cardFoot.append(detail)
+      cardFoot.append(timerLabel)
+      card.append(cardFoot)
+      box.append(card)
 
       let timerSourceId = 0
       let startMonotonic = 0
 
-      const phaseRows: { row: Gtk.Box; marker: Gtk.Label; title: Gtk.Label }[] = []
-      const phaseBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, hexpand: true })
-      for (const key of PHASES) {
-        const marker = new Gtk.Label({ label: "○", css_classes: ["installer-phase-marker"] })
-        const title = new Gtk.Label({
-          label: t(key), css_classes: ["installer-phase-title"],
-          halign: Gtk.Align.FILL, hexpand: true, xalign: 0,
-        })
-        const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 10, hexpand: true })
-        row.append(marker); row.append(title)
-        phaseBox.append(row)
-        phaseRows.push({ row, marker, title })
-      }
-      box.append(phaseBox)
-
-      // The child's last line, under the phases. Ellipsised rather than wrapped:
-      // this is a single moving line, and a wrapping one would move the buttons.
-      const detail = new Gtk.Label({
-        label: "", css_classes: ["installer-phase-detail"],
-        halign: Gtk.Align.FILL, hexpand: true, xalign: 0,
-        ellipsize: Pango.EllipsizeMode.END, single_line_mode: true,
+      // The five phases in one quiet line under the card. Each marker is drawn
+      // (lib/phase-marker.ts): a check when done, a ring that fills with the
+      // phase's own progress while active, an empty ring while pending.
+      const stepRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 16, css_classes: ["installer-run-steps"] })
+      const steps = PHASE_SHORT.map(key => {
+        const marker = PhaseMarker()
+        const name = new Gtk.Label({ label: t(key), css_classes: ["installer-run-step"] })
+        const item = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6 })
+        item.append(marker.widget); item.append(name)
+        stepRow.append(item)
+        return { marker, item }
       })
-      box.append(detail)
+      box.append(stepRow)
 
       // Shown only while the install is waiting on a connection that has gone —
       // see lib/stall.ts for what counts, and for why nothing is killed.
@@ -157,18 +180,92 @@ export function RunStep(): Step {
       // one when the run ends. Ours are not in it.
       let childTail: string[] = []
 
-      const paintPhases = () => {
-        phaseRows.forEach((r, i) => {
-          const done = i < phase
-          r.marker.label = done ? "✓" : i === phase ? "●" : "○"
-          r.row[i === phase ? "add_css_class" : "remove_css_class"]("is-active")
-          r.row[done ? "add_css_class" : "remove_css_class"]("is-done")
+      // Progress inside the phase: the two package phases count, the other three
+      // take seconds and have nothing to count.
+      const baseProgress = new BaseProgress()
+      let desktop: PackageProgress = { fraction: 0, stage: null, done: 0, total: 0 }
+      let lastLine = ""
+      const phaseProgress = (): PackageProgress | null =>
+        phase === 2 ? baseProgress.progress : phase === 3 ? desktop : null
+
+      const percentFormat = new Intl.NumberFormat(getLocale(), { style: "percent", maximumFractionDigits: 0 })
+      const paint = () => {
+        const p = phaseProgress()
+        const within = phase >= RUN_PHASES.length ? 1 : (p?.fraction ?? 0)
+        const overall = phase < 0 ? 0 : overallFraction(Math.min(phase, RUN_PHASES.length - 1), phase >= RUN_PHASES.length ? 1 : within)
+        progressBar.fraction = overall
+        percent.label = percentFormat.format(Math.floor(overall * 100) / 100)
+        const shown = Math.min(Math.max(phase, 0), PHASE_TITLES.length - 1)
+        stepOf.label = t("runStepOf").replace("%1", String(shown + 1)).replace("%2", String(PHASE_TITLES.length))
+        phaseTitle.label = t(PHASE_TITLES[shown])
+        detail.label = p?.stage
+          ? t(p.stage === "download" ? "runPkgDownloading" : "runPkgInstalling")
+              .replace("%1", String(p.done)).replace("%2", String(p.total))
+          : lastLine
+        steps.forEach((s, i) => {
+          const state = i < phase ? "done" : i === phase ? "active" : "pending"
+          s.marker.set(state, i === phase ? within : 0)
+          for (const st of ["done", "active", "pending"]) s.item[st === state ? "add_css_class" : "remove_css_class"](`is-${st}`)
         })
-        progressBar.fraction = Math.max(0, phase) / PHASES.length
       }
 
-      const enterPhase = (i: number) => { phase = i; detail.label = ""; paintPhases() }
-      paintPhases()
+      const enterPhase = (i: number) => { phase = i; lastLine = ""; paint() }
+      paint()
+
+      // ── Counting the desktop pass ───────────────────────────────────────────
+      // Once a second from the base system on: whether the desktop has begun, then
+      // downloads from COMMAND_LOG, installs from how
+      // many packages the target's database has gained since the big transaction
+      // began (pacman writes no per-package line there without a tty). Only armed:
+      // a dry run has no /mnt to read.
+      let desktopPollId = 0
+      const baselines = new Map<number, number>()
+      const countInstalled = (): number => {
+        let n = 0
+        try {
+          const en = Gio.File.new_for_path("/mnt/var/lib/pacman/local")
+            .enumerate_children("standard::type", Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS, null)
+          let info: Gio.FileInfo | null
+          while ((info = en.next_file(null)) !== null) if (info.get_file_type() === Gio.FileType.DIRECTORY) n++
+          en.close(null)
+        } catch {}
+        return n
+      }
+      const pollDesktop = () => {
+        // ⚠️ The desktop begins when the first custom command creates OUR log in
+        // the target — not when archinstall says "Executing custom command". That
+        // line is real, but it came down the pipe only at the very END of the
+        // desktop install, all five at once (measured 2026-09-23): the first
+        // attempt waited for it and sat on "base system, 158 of 158" for the
+        // whole desktop. The file is ours, so it cannot arrive late.
+        if (phase === 2) {
+          if (!GLib.file_test(`/mnt${COMMAND_LOG}`, GLib.FileTest.EXISTS)) return GLib.SOURCE_CONTINUE
+          enterPhase(3)
+        }
+        if (phase !== 3) return GLib.SOURCE_CONTINUE
+        let text = ""
+        try {
+          const [ok, bytes] = GLib.file_get_contents(`/mnt${COMMAND_LOG}`)
+          if (ok) text = new TextDecoder().decode(bytes)
+        } catch {}
+        const st = readDesktopLog(text)
+        // ⚠️ The baseline is taken the first time the transaction is SEEN, which
+        // is while it downloads — pacman downloads everything before it installs
+        // anything, and this runs every second.
+        if (st.mainTx >= 0 && !baselines.has(st.mainTx)) baselines.set(st.mainTx, countInstalled())
+        const since = st.installing && !st.finished ? countInstalled() - (baselines.get(st.mainTx) ?? 0) : 0
+        desktop = desktopProgress(st, since)
+        if (!desktop.stage && st.lastLine) lastLine = st.lastLine.replace(/^>>\s*/, "")
+        paint()
+        return GLib.SOURCE_CONTINUE
+      }
+      function startDesktopPoll(arm: boolean) {
+        if (!arm || desktopPollId) return
+        desktopPollId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, pollDesktop)
+      }
+      function stopDesktopPoll() {
+        if (desktopPollId) { GLib.source_remove(desktopPollId); desktopPollId = 0 }
+      }
 
       const textBuffer = new Gtk.TextBuffer()
       const textView = new Gtk.TextView({
@@ -263,7 +360,15 @@ export function RunStep(): Step {
         // ⚠️ `quiet` is for the lines the page ALREADY says in its own words: the
         // network warning went into the log AND into this one line, so the same
         // sentence appeared twice, once elided to the column width.
-        if (line.trim() && !opts.quiet) detail.label = line.trim()
+        //
+        // Our own `[TAG] ` prefixes are for the log, not for a sentence under a
+        // bar, and archinstall's `Executing custom command "set -o pipefail; …`
+        // is our wrapper verbatim — the line that sat there for the whole desktop
+        // install and made the page read as broken.
+        if (line.trim() && !opts.quiet && !isPlumbing(line.trim())) {
+          lastLine = line.trim().replace(/^\[[A-Z]+\]\s*/, "")
+          paint()
+        }
         const adj = scrolled.vadjustment
         if (adj) adj.value = adj.upper - adj.page_size
       }
@@ -281,9 +386,13 @@ export function RunStep(): Step {
         // reads the outcome.
         _outcome = success ? "success" : "failure"
         setBusy(false)
-        if (success) { phase = PHASES.length; paintPhases() }
-        progressBox.visible = false
-        detail.visible = false
+        stopDesktopPoll()
+        if (success) { phase = RUN_PHASES.length; paint() }
+        // The card was the page while it worked; what is left is the outcome, in
+        // the heading, and the row of steps saying how far it got.
+        card.visible = false
+        head.visible = true
+        desc.visible = true
 
         if (success) {
           head.label = t("runSuccessHeading")
@@ -321,7 +430,7 @@ export function RunStep(): Step {
         // every so often the display jumped a second (…:41 → …:43).
         const updateTimer = () => {
           const elapsedUs = Math.max(0, GLib.get_monotonic_time() - startMonotonic)
-          timerLabel.label = formatLiveTimer(Math.floor(elapsedUs / 1_000_000))
+          timerLabel.label = t("runElapsedValue").replace("%s", formatLiveTimer(Math.floor(elapsedUs / 1_000_000)))
           const untilNextMs = Math.ceil((1_000_000 - (elapsedUs % 1_000_000)) / 1000) + 5
           timerSourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, untilNextMs, () => {
             updateTimer()
@@ -422,7 +531,7 @@ export function RunStep(): Step {
           appendLog("")
           appendLog("[PREVIEW] The plan that WOULD be handed to archinstall:")
           for (const line of JSON.stringify(plan.config, null, 2).split("\n")) appendLog(line)
-          enterPhase(3)
+          enterPhase(4)
           finishRun(true)
           return
         }
@@ -450,9 +559,16 @@ export function RunStep(): Step {
         }
 
         const isRoot = GLib.get_user_name() === "root"
+        // ⚠️ PYTHONUNBUFFERED, or archinstall's own lines reach this page late:
+        // Python block-buffers stdout into a pipe, and whatever it prints between
+        // two of pacstrap's (a pty, so those flush) waits in the buffer — its five
+        // "Executing custom command" lines arrived together, after the desktop
+        // install they announce (2026-09-23). The stall check reads the time of
+        // the last line, so it was reading a delayed clock as well.
+        const args = ["archinstall", "--config", configPath, "--creds", credsPath, "--silent"]
         const cmd = isRoot
-          ? ["archinstall", "--config", configPath, "--creds", credsPath, "--silent"]
-          : ["sudo", "-n", "archinstall", "--config", configPath, "--creds", credsPath, "--silent"]
+          ? ["env", "PYTHONUNBUFFERED=1", ...args]
+          : ["sudo", "-n", "env", "PYTHONUNBUFFERED=1", ...args]
 
         if (!isArm) {
           cmd.push("--dry-run")
@@ -529,7 +645,9 @@ export function RunStep(): Step {
                     if (awaitingBasePhase && line.includes("Installing packages:")) {
                       awaitingBasePhase = false
                       enterPhase(2)
+                      startDesktopPoll(isArm)
                     }
+                    if (phase === 2) baseProgress.feed(stripAnsi(line))
                     appendLog(line)
                     readLineAsync()
                   }
@@ -610,8 +728,9 @@ export function RunStep(): Step {
             try {
               _proc?.wait_finish(res)
               success = _proc?.get_successful() ?? false
+              stopDesktopPoll()
               if (success) {
-                enterPhase(3)
+                enterPhase(4)
                 applyRealName(isArm, answers, appendLog)
                 writeKeyboardConfig(isArm, answers, appendLog)
                 writeSwapFstabEntries(isArm, answers, appendLog)
@@ -646,6 +765,7 @@ export function RunStep(): Step {
       }
 
       box.connect("unmap", () => {
+        stopDesktopPoll()
         if (timerSourceId) {
           GLib.source_remove(timerSourceId)
           timerSourceId = 0

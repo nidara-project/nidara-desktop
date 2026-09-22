@@ -154,44 +154,69 @@ window.nidara-installer-window {
     font-weight: 600;
   }
 
-  // ── Install phases ────────────────────────────────────────────────────────
-  // A row per phase, and the marker carries the state. Deliberately NOT colour:
-  // the accent means active/selected everywhere in this desktop, and red is spent
-  // on recording and on failure. Weight and opacity carry it instead.
-  .installer-phase-marker {
-    // Named, never the `monospace` alias — that alias is what resolved to a CJK
-    // face on a machine with JetBrains Mono installed (#302). Same rule as the
-    // log view below.
+  // ── The run page: one card, and the steps under it ───────────────────────
+  // The owner picked this from four mockups (2026-09-23): what it is doing NOW,
+  // large; how far, as a number and a bar; the five steps as a quiet line.
+  // Colour follows the desktop's rule — the accent is spent on the one ACTIVE
+  // thing (the bar, the active step's ring) and nowhere else; done and pending
+  // are told apart by ink strength, and red stays for recording and failure.
+  .installer-run-card {
+    background-color: var(--nidara-surface);
+    border: 1px solid var(--nidara-border);
+    border-radius: var(--nidara-radius-md);
+    padding: 12px 14px;
+  }
+  .installer-run-step-of {
+    font-size: $fs-caption;
+    color: var(--nidara-text-dim);
+  }
+  .installer-run-phase {
+    font-size: $fs-title-2;
+    font-weight: 600;
+    color: var(--nidara-text);
+  }
+  .installer-run-percent {
+    font-size: $fs-title-1;
+    font-weight: 300;
+    color: var(--nidara-text);
+    font-feature-settings: "tnum";
+  }
+  // Scoped under the card so it outranks the generic `progressbar` rule below.
+  .installer-run-card progressbar.installer-run-bar {
+    min-height: 10px;
+    margin: 0;
+    trough, progress { min-height: 10px; }
+  }
+  .installer-run-detail {
+    font-size: $fs-small;
+    color: var(--nidara-text-secondary);
+  }
+  // Named, never the `monospace` alias — that alias is what resolved to a CJK
+  // face on a machine with JetBrains Mono installed (#302).
+  .installer-run-timer {
     font-family: "JetBrains Mono", monospace;
     font-size: $fs-small;
     color: var(--nidara-text-dim);
-    min-width: 14px;
+    font-feature-settings: "tnum";
   }
-  .installer-phase-title {
-    font-size: $fs-body;
+
+  .installer-run-steps { margin-top: 4px; }
+  .installer-run-step {
+    font-size: $fs-caption;
     color: var(--nidara-text-dim);
   }
-  .is-active {
-    .installer-phase-marker,
-    .installer-phase-title { color: var(--nidara-text); font-weight: 500; }
-  }
-  .is-done .installer-phase-title { color: var(--nidara-text-secondary); }
+  .is-done .installer-run-step   { color: var(--nidara-text-secondary); }
+  .is-active .installer-run-step { color: var(--nidara-text); font-weight: 600; }
+  // The marker's ink IS its `color` — the Cairo reads it (widget/PhaseMarker.ts).
+  .installer-run-marker            { color: var(--nidara-text-dim); }
+  .installer-run-marker.is-done    { color: var(--nidara-text-secondary); }
+  .installer-run-marker.is-active  { color: var(--nidara-accent); }
 
-  // The child's last line. Dim and small: it is evidence that work is happening,
-  // not something anybody has to read word by word.
+  // A small secondary line — the "log saved to …" note under the save button.
   .installer-phase-detail {
     font-family: "JetBrains Mono", monospace;
     font-size: $fs-small;
     color: var(--nidara-text-dim);
-    margin-left: 24px;
-  }
-
-  // Live elapsed timer displayed alongside progress.
-  .installer-phase-timer {
-    font-family: "JetBrains Mono", monospace;
-    font-size: $fs-small;
-    color: var(--nidara-text-dim);
-    font-variant-numeric: tabular-nums;
   }
 
   // ── A list that scrolls inside its own card ───────────────────────────────

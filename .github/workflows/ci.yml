@@ -870,6 +870,36 @@ jobs:
           ./scripts/bundle.sh --js scripts/dev/account-rules-probe.ts /tmp/account-probe.js
           gjs -m /tmp/account-probe.js
 
+      # The run page's numbers (lib/run-progress.ts), fed lines excerpted from a
+      # real install. The control removes the guard that keeps pacstrap's later,
+      # smaller passes (zram-generator 1/1…) from dragging the base count back to
+      # the start — a bar that ran to 100 % and fell to 5 % reads as the install
+      # starting over, and nothing but this probe would notice before a person did.
+      - name: The run-progress probe can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/run-progress.ts /tmp/run-progress.bak
+          sed -i 's|      if (of === this.total) { this.installed = n; this.downloaded = this.total }|      { this.installed = n; this.downloaded = this.total }|' \
+            ui/installer/lib/run-progress.ts
+          if ! git diff --quiet ui/installer/lib/run-progress.ts; then
+            echo "control: the first-transaction guard was removed"
+          else
+            echo "::error::the control patched nothing — the guard it deletes has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/run-progress-probe.ts /tmp/run-progress-defect.js
+          if gjs -m /tmp/run-progress-defect.js; then
+            echo "::error::the probe passed with the guard deleted — it is not checking what it prints"
+            cp /tmp/run-progress.bak ui/installer/lib/run-progress.ts
+            exit 1
+          fi
+          cp /tmp/run-progress.bak ui/installer/lib/run-progress.ts
+          git diff --quiet ui/installer/lib/run-progress.ts
+
+      - name: What the run page counts (must succeed)
+        run: |
+          ./scripts/bundle.sh --js scripts/dev/run-progress-probe.ts /tmp/run-progress.js
+          gjs -m /tmp/run-progress.js
+
       # Third of the same shape, and the one whose damage lands OUTSIDE the
       # machine we installed: an EFI system partition can be shared, and every
       # edit `lib/bootloader.ts` makes to it used to run over `*.conf` and over

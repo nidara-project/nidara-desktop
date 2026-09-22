@@ -1602,6 +1602,49 @@ as a success; and `set +o pipefail` INSIDE the braces, because the group inherit
 measured 0 → 7 on a refused connection. The wrap must not change what a command means. A CI control
 deletes the wrap and requires the probe to catch it.
 
+### The run page counts what it can, and says nothing it cannot (2026-09-23)
+
+The run page is one card — the phase now, large; a percentage and a bar; the elapsed time — over
+a line of five steps: connection, disk, **base system, desktop**, settings (the owner chose it from
+four rendered mockups). There is no page heading while it works: the window's header already says
+"Installing Nidara", and the page used to repeat it. The heading comes back at the end, with the
+outcome.
+
+The five are not arbitrary. Until this change there were four, and the third ("base system") hid
+the longest wait of the install: the DESKTOP is a custom command (`pacman -Sy nidara-desktop …`, 477
+packages, 855 MiB measured), whose output never reaches the pipe — so for most of the install the
+only moving line was our own wrapper, `Executing custom command "set -o pipefail; …`. The desktop
+phase starts when the first custom command creates OUR log in the target (every custom command is
+the Nidara layer), and it ends when archinstall exits.
+
+⚠️ **Not on archinstall's "Executing custom command" line.** The first build did, and sat on "base
+system, 158 of 158" for the whole desktop: Python block-buffers stdout into a pipe, and all five of
+those lines arrived together AFTER the install they announce (measured in the VM, 2026-09-23).
+archinstall is now started under `env PYTHONUNBUFFERED=1` so its lines are live — which the stall
+check needs too, since it reads the time of the last line — but the phase boundary stays on the
+file, which is ours and cannot arrive late.
+
+Where each number comes from — all in `lib/run-progress.ts`, pure, probed by
+`scripts/dev/run-progress-probe.ts` (in `installer-logic`, with a control):
+
+- **base**: archinstall runs pacstrap on a pty, so its stdout carries pacman's `Total (n/N)` and
+  `(n/N) installing`. Only the FIRST transaction's total is tracked — archinstall runs smaller
+  passes right after (zram-generator 1/1, efibootmgr, networkmanager), and following them would
+  drag a finished bar back to the start.
+- **desktop**: downloads are the ` … downloading...` lines after `Packages (N)` in the command log
+  (above). Without a tty pacman prints NO per-package line while installing, so installs are
+  counted where pacman keeps count: directories under the target's `/var/lib/pacman/local`, minus
+  their number when the big transaction was first seen (it always downloads everything first).
+  Polled once a second, armed runs only.
+- **the percentage** is the one estimate: each phase has a FIXED weight (`PHASE_WEIGHTS`) and only
+  the count inside a phase is real. Retune the weights from a real install over a real network, not
+  from a VM on a package cache (that one finishes in about two minutes).
+
+Where there is nothing to count, the line under the bar is the last line the work printed, minus
+our `[TAG] ` prefixes, and never the command wrapper (`isPlumbing`). The step markers are drawn
+(`widget/PhaseMarker.ts`) and take their ink from CSS through `get_color()`: the accent is spent on
+the active step and the bar, nothing else.
+
 ### `base.json` is now READ BACK to the person (2026-09-03)
 
 The summary step reads the product config and prints what it decided — kernels, `gfx_driver`,
