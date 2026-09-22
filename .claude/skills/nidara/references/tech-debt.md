@@ -4072,8 +4072,18 @@ and action both address by name.
 reading. That is how the installer shipped `GLib.strdup_printf` (varargs, so absent from the GIR
 and `undefined` in GJS): it threw on the System and Summary pages of every machine with a
 Turing-or-newer NVIDIA GPU. The installer lost those shims the same day and is now typechecked in
-full (its `gi.d.ts` keeps only `gi://cairo`, which ts-for-gir types from the cairo GIR instead of
-GJS's own cairo module). The shell has not.
+full, and so are the greeter and the lock screen (their one shim, `ui/lib/gi-cairo.d.ts`, covers
+`gi://cairo`, which ts-for-gir types from the cairo GIR instead of GJS's own cairo module). The
+shell has not.
+
+⚠️ A trap for whoever does this: when a shim and @girs both declare a module, the declaration tsc
+reads FIRST decides the default export — the other is silently dropped. The shell's shims work only
+because `**/*.ts` happens to precede `@girs/**/*` in its `include`. Measured with the cairo shim:
+listed after @girs it did nothing (4 errors); listed first, 0.
+
+A cheaper net meanwhile, run 2026-09-22: every `GLib.x` / `Gio.x` / `GObject.x` / `GdkPixbuf.x`
+the source names (132) was asked of GJS itself (`typeof … === "undefined"`), and all exist — the two
+hits were in comments. It sees top-level members only, not methods on instances.
 
 Measured, deleting the four shims from the shell: **108 errors, all one shape** — TS2345,
 `Argument of type '"…"' is not assignable to parameter of type 'keyof SignalSignatures'`. That is a

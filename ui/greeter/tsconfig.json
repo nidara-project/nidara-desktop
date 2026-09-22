@@ -11,8 +11,11 @@
     "target": "ES2020"
   },
   "include": [
+    "../lib/gi-cairo.d.ts",
     "**/*.ts",
-    "**/*.d.ts",
-    "gi.d.ts"
+    "../shell/@girs/**/*"
+  ],
+  "exclude": [
+    "build"
   ]
 }
