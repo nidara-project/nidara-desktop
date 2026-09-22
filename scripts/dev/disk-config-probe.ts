@@ -69,6 +69,7 @@ import { loaderRoot } from "../../ui/installer/lib/bootloader"
 import { swapFstabEntry, partitionAtStart } from "../../ui/installer/lib/swap"
 import { releaseCommands, targetDisks, type BlockNode } from "../../ui/installer/lib/release-target"
 import { ESP_MIN_BYTES, manualProblems } from "../../ui/installer/lib/manual-problems"
+import { archisoIdFrom, excludeLiveMedium, liveMediumDiskFrom } from "../../ui/installer/lib/live-medium"
 import { formatSize } from "../../ui/installer/lib/format-size"
 import { freeSpaceGaps } from "../../ui/installer/lib/free-space"
 import { t } from "../../ui/installer/lib/i18n"
@@ -951,6 +952,70 @@ const REFUSAL_CASES: RefusalCase[] = [
     ],
   },
   {
+    // The dropdown offers vfat on every row. A FAT root took the layout, took the
+    // repartitioning, and died on the first symbolic link pacstrap wrote.
+    name: "a root set to vfat — pacstrap cannot write a Linux system onto FAT",
+    uefi: true, want: ["diskErrFsNotLinux"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat" },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "vfat" },
+    ],
+  },
+  {
+    // The quieter half: this one INSTALLS. The home it produces has no owner and
+    // no permissions, which is a machine somebody has to be told to reinstall.
+    name: "/home set to vfat — it installs, and the home has no owner",
+    uefi: true, want: ["diskErrFsNotLinux"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat" },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+      { path: "/dev/sda3", mountpoint: "/home", format: true, filesystem: "vfat" },
+    ],
+  },
+  {
+    // A KEPT partition reports what it has, and NTFS is as unusable as FAT for a
+    // Linux home — this is the dual-boot layout where somebody points /home at
+    // their Windows data partition.
+    name: "a kept NTFS /home — the filesystem is a fact, and it is still not one Linux can live on",
+    uefi: true, want: ["diskErrFsNotLinux"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat" },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+      { path: "/dev/sda3", mountpoint: "/home", format: false, fsType: "ntfs" },
+    ],
+  },
+  {
+    name: "a kept /home with no filesystem at all — there is nothing to mount",
+    uefi: true, want: ["diskErrKeptNoFs"],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat" },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+      { path: "/dev/sda3", mountpoint: "/home", format: false, fsType: null },
+    ],
+  },
+  {
+    // The control for the rule above: ext2/ext3 are not in the Format dropdown,
+    // but a partition that already carries one is a perfectly good /home and must
+    // NOT be refused.
+    name: "a kept ext3 /home — not offered for formatting, still mountable",
+    uefi: true, want: [],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: false, fsType: "vfat" },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+      { path: "/dev/sda3", mountpoint: "/home", format: false, fsType: "ext3" },
+    ],
+  },
+  {
+    // …and the ESP itself must stay exempt from it: FAT is exactly what it has to
+    // be, so the two rules must not refuse each other's valid layout.
+    name: "the ESP is FAT and that is correct — the Linux-filesystem rule must not fire on it",
+    uefi: true, want: [],
+    mounts: [
+      { path: "/dev/sda1", mountpoint: "/boot", format: true, filesystem: "vfat" },
+      { path: "/dev/sda2", mountpoint: "/", format: true, filesystem: "btrfs" },
+    ],
+  },
+  {
     name: "the root is kept — pacstrap onto another distribution's /usr (#437)",
     uefi: true, want: ["diskErrRootNotFormatted"],
     mounts: [
@@ -1113,6 +1178,160 @@ const REFUSAL_CASES: RefusalCase[] = [
 ]
 
 print("")
+// ─── THE DISK WE ARE RUNNING FROM ────────────────────────────────────────────
+//
+// `listDisks()` used to filter `loop` and `zram` and nothing else, so the USB
+// stick the session booted from was offered as a target like any other disk.
+//
+// ⚠️ This is the one rule in this file that NO VM PASS could have found: the
+// harness boots the ISO as a CD-ROM, which lsblk calls `rom` and the type filter
+// already drops. On a real machine the same image is dd'd onto a stick and comes
+// back as `disk`. The instrument cannot produce the case, so the case is here.
+
+const LIVE_CASES: { name: string; json: string; cmdline?: string; want: string }[] = [
+  {
+    name: "a USB stick carrying the medium — the disk it is on, not the partition",
+    want: "/dev/sdb",
+    json: JSON.stringify({ blockdevices: [
+      { path: "/dev/sda", type: "disk", mountpoints: [null], children: [
+        { path: "/dev/sda1", type: "part", mountpoints: [null] }] },
+      { path: "/dev/sdb", type: "disk", mountpoints: [null], children: [
+        { path: "/dev/sdb1", type: "part", mountpoints: ["/run/archiso/bootmnt"] }] },
+    ] }),
+  },
+  {
+    name: "the cow space counts too — any /run/archiso mount names the medium",
+    want: "/dev/sdb",
+    json: JSON.stringify({ blockdevices: [
+      { path: "/dev/sdb", type: "disk", mountpoints: [null], children: [
+        { path: "/dev/sdb2", type: "part", mountpoints: ["/run/archiso/cowspace"] }] },
+    ] }),
+  },
+  {
+    // util-linux < 2.37 reports `mountpoint`, newer ones `mountpoints`. Reading
+    // only one of the two returns "" on a medium the code is standing on.
+    name: "the older lsblk column name",
+    want: "/dev/sdb",
+    json: JSON.stringify({ blockdevices: [
+      { path: "/dev/sdb", type: "disk", mountpoint: null, children: [
+        { path: "/dev/sdb1", type: "part", mountpoint: "/run/archiso/bootmnt" }] },
+    ] }),
+  },
+  {
+    name: "a machine that is not booted from our medium — nothing is excluded",
+    want: "",
+    json: JSON.stringify({ blockdevices: [
+      { path: "/dev/nvme0n1", type: "disk", mountpoints: [null], children: [
+        { path: "/dev/nvme0n1p1", type: "part", mountpoints: ["/boot"] },
+        { path: "/dev/nvme0n1p2", type: "part", mountpoints: ["/"] }] },
+    ] }),
+  },
+  {
+    // The control against a prefix match that is too eager: a target disk mounted
+    // somewhere else is a target, and excluding it would leave a page with no
+    // disks on it at all.
+    name: "a disk mounted at /mnt is a target, not the medium",
+    want: "",
+    json: JSON.stringify({ blockdevices: [
+      { path: "/dev/sda", type: "disk", mountpoints: [null], children: [
+        { path: "/dev/sda1", type: "part", mountpoints: ["/mnt"] }] },
+    ] }),
+  },
+  {
+    name: "lsblk output that is not JSON at all — the page is left as it was",
+    want: "",
+    json: "not json",
+  },
+  {
+    // 🔑 THE TREE THAT FOOLED THE FIRST VERSION, kept because nothing else here
+    // has its shape: the squashfs loop is mounted under /run/archiso and lsblk
+    // lists it FIRST, so a walk that answers "the first node carrying an archiso
+    // mount" answers `/dev/loop0` — a path no disk in the list has, so nothing
+    // is excluded and the stick stays on the page. Measured on a USB boot with
+    // every other part of the mechanism working.
+    name: "the airootfs loop comes first in the tree and is not a disk",
+    want: "/dev/sda",
+    cmdline: "archisobasedir=arch archisosearchuuid=2026-09-21-12-53-47-00",
+    json: JSON.stringify({ blockdevices: [
+      { path: "/dev/loop0", type: "loop", mountpoints: ["/run/archiso/airootfs"] },
+      { path: "/dev/sda", type: "disk", mountpoints: [], uuid: "2026-09-21-12-53-47-00", label: "NIDARA_202609", children: [
+        { path: "/dev/sda1", type: "part", mountpoints: [], uuid: "2026-09-21-12-53-47-00" }] },
+      { path: "/dev/vda", type: "disk", mountpoints: [] },
+    ] }),
+  },
+  {
+    // 🔑 MEASURED 2026-09-22, booting the ISO as a usb-storage device: archiso
+    // copies the image to RAM and UNMOUNTS the stick, so nothing in the tree is
+    // mounted under /run/archiso and the mount half of the answer says nothing.
+    // The kernel command line still names it.
+    name: "copytoram — the stick is mounted NOWHERE, and the cmdline still names it",
+    want: "/dev/sda",
+    cmdline: "initrd=initrd archisobasedir=arch archisosearchuuid=2026-09-21-12-53-47-00 quiet",
+    json: JSON.stringify({ blockdevices: [
+      { path: "/dev/sda", type: "disk", mountpoints: [], uuid: "2026-09-21-12-53-47-00", label: "NIDARA_202609", children: [
+        { path: "/dev/sda1", type: "part", mountpoints: [], uuid: "2026-09-21-12-53-47-00", label: "NIDARA_202609" },
+        { path: "/dev/sda2", type: "part", mountpoints: [], uuid: "6AB1-28DB", label: "ARCHISO_EFI" }] },
+      { path: "/dev/vda", type: "disk", mountpoints: [], children: [] },
+    ] }),
+  },
+  {
+    // The control for the rule above: the same tree, booted from something else.
+    // Without it, a check that returned the first disk would pass the case above.
+    name: "…and with no archiso on the command line, that same disk is a target",
+    want: "",
+    cmdline: "root=UUID=1234 rw quiet",
+    json: JSON.stringify({ blockdevices: [
+      { path: "/dev/sda", type: "disk", mountpoints: [], uuid: "2026-09-21-12-53-47-00", label: "NIDARA_202609", children: [] },
+    ] }),
+  },
+  {
+    name: "archisolabel instead of the uuid — archiso accepts either",
+    want: "/dev/sdb",
+    cmdline: "archisobasedir=arch archisolabel=NIDARA_202609",
+    json: JSON.stringify({ blockdevices: [
+      { path: "/dev/sda", type: "disk", mountpoints: [], children: [] },
+      { path: "/dev/sdb", type: "disk", mountpoints: [], label: "NIDARA_202609", children: [] },
+    ] }),
+  },
+]
+
+for (const [cmdline, want] of [
+  ["initrd=initrd archisobasedir=arch archisosearchuuid=2026-09-21-12-53-47-00 quiet", "2026-09-21-12-53-47-00"],
+  ["archisolabel=NIDARA_202609 quiet", "NIDARA_202609"],
+  ["root=UUID=1234 rw", ""],
+  // ⚠️ The word has to be a WHOLE parameter: a boot option that merely ends in
+  // it is not the medium's name.
+  ["notarchisolabel=SOMETHING", ""],
+] as const) {
+  const got = archisoIdFrom(cmdline)
+  if (got !== want) fail("archisoIdFrom", `${JSON.stringify(cmdline)} → ${JSON.stringify(got)}, expected ${JSON.stringify(want)}`)
+}
+
+print("")
+print("── the medium's own disk is not a target")
+for (const c of LIVE_CASES) {
+  const got = liveMediumDiskFrom(c.json, c.cmdline ?? "")
+  print(`   ${(got || "(none)").padEnd(14)} ${c.name}`)
+  if (got !== c.want) fail(c.name, `expected ${JSON.stringify(c.want)}, got ${JSON.stringify(got)}`)
+}
+
+{
+  const disks = [{ path: "/dev/sda" }, { path: "/dev/sdb" }]
+  const kept = excludeLiveMedium(disks, "/dev/sdb")
+  if (kept.length !== 1 || kept[0].path !== "/dev/sda") {
+    fail("the medium is excluded from the offered disks", JSON.stringify(kept))
+  } else {
+    print("   ok             the medium is excluded from the offered disks")
+  }
+  // …and an empty answer removes NOTHING, or a failed detection would hide every
+  // disk on the machine.
+  if (excludeLiveMedium(disks, "").length !== 2) {
+    fail("no medium detected leaves the list alone", "disks were dropped anyway")
+  } else {
+    print("   ok             no medium detected leaves the list alone")
+  }
+}
+
 for (const c of REFUSAL_CASES) {
   const got = manualProblems(c.mounts.map(row), c.uefi)
   // `diskErrDuplicateMount` ends in the offending mount points, so the expected

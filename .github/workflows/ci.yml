@@ -711,6 +711,50 @@ jobs:
           cp /tmp/manual-problems.bak ui/installer/lib/manual-problems.ts
           git diff --quiet ui/installer/lib/manual-problems.ts
 
+      # A mount point of the installed system has to hold a filesystem Linux can
+      # live on, and nothing said so until 2026-09-22: the dropdown offers vfat on
+      # every row, so a FAT `/` took the repartitioning and died inside pacstrap,
+      # and a FAT `/home` installed fine and handed somebody a home with no owner.
+      - name: The Linux-filesystem probe can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/manual-problems.ts /tmp/manual-problems.bak
+          sed -i 's|^    } else if (!LINUX_FILESYSTEMS.has(fs)) {$|    } else if (false) { // deliberately removed|' \
+            ui/installer/lib/manual-problems.ts
+          if git diff --quiet ui/installer/lib/manual-problems.ts; then
+            echo "::error::the control patched nothing — the Linux-filesystem rule has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/disk-config-probe.ts /tmp/probe-defect-fs.js
+          if gjs -m /tmp/probe-defect-fs.js; then
+            echo "::error::the probe passed with the Linux-filesystem rule deleted — a FAT root is installable again"
+            cp /tmp/manual-problems.bak ui/installer/lib/manual-problems.ts
+            exit 1
+          fi
+          cp /tmp/manual-problems.bak ui/installer/lib/manual-problems.ts
+          git diff --quiet ui/installer/lib/manual-problems.ts
+
+      # The medium's own disk must not be offered as a target. This rule is the
+      # one no VM run can check — the harness boots the ISO as a CD-ROM, which
+      # lsblk calls `rom`; on real hardware it is a `disk` — so the control is
+      # the only thing standing behind it.
+      - name: The live-medium probe can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/live-medium.ts /tmp/live-medium.bak
+          sed -i 's|^    if (carries(top) \&\& top.path) return top.path$|    if (false) return "" // deliberately removed|' \
+            ui/installer/lib/live-medium.ts
+          if git diff --quiet ui/installer/lib/live-medium.ts; then
+            echo "::error::the control patched nothing — the live-medium detection has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/disk-config-probe.ts /tmp/probe-defect-live.js
+          if gjs -m /tmp/probe-defect-live.js; then
+            echo "::error::the probe passed with the live-medium detection broken — the stick is installable again"
+            cp /tmp/live-medium.bak ui/installer/lib/live-medium.ts
+            exit 1
+          fi
+          cp /tmp/live-medium.bak ui/installer/lib/live-medium.ts
+          git diff --quiet ui/installer/lib/live-medium.ts
+
       # The retry release (lib/release-target.ts) runs swapoff/umount/cryptsetup
       # close as root on a live medium. Its worst possible defect is reaching past
       # the target disks — somebody's mounted USB stick — so that is the rule this

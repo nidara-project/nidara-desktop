@@ -771,6 +771,39 @@ partition with no filesystem at all, which has nothing to mount), a UEFI machine
 ESP must be FAT (#414/#421), a kept swap row must already be swap (#423), and no two rows may claim
 one mount point. ⚠️ Several swap rows are NOT a duplicate — `swapon` takes as many as it is given.
 
+Added 2026-09-22, and the mirror of the ESP rule: **every mount point that is NOT under `/boot` has
+to hold a filesystem Linux can live on** (`LINUX_FILESYSTEMS`: btrfs, ext2/3/4, f2fs, xfs). The
+dropdown offers `vfat` on every row, and nothing said no — a FAT `/` took the repartitioning and
+died on the first symbolic link pacstrap wrote, and a FAT (or kept NTFS) `/home` INSTALLED, handing
+somebody a home directory with no owner and no permissions. The effective filesystem is the chosen
+one when we format and what lsblk reports when we keep, so `""` is its own refusal: a kept partition
+with nothing on it has nothing to mount, and the fix is the Format tick rather than a filesystem.
+`/boot` and anything under it are exempt on purpose — FAT is what an ESP IS, and the two ESP rules
+above own that path.
+
+### The disk the medium is on is not a target, and no VM run can check it
+
+`lib/live-medium.ts` names the disk the session booted from and `listDisks()`/`listPartitions()`
+drop it. Before 2026-09-22 the USB stick was offered like any other disk (labelled "removable",
+which is not a warning), and erasing it repartitions the device the live session is reading from.
+
+⚠️ **The harness boots the ISO as a CD-ROM, which lsblk calls `rom`** — already dropped by the
+`type === "disk"` filter — so the case only exists on real hardware, or in a VM given
+`-device usb-storage`. That boot was made once, and it paid for itself twice:
+
+- **archiso copies the image to RAM and UNMOUNTS the medium** (`/run/archiso/copytoram`, a tmpfs).
+  A mount-based check returns "" on exactly the machine it protects. The second answer is the
+  kernel command line: every entry in the ISO's loader config carries
+  `archisosearchuuid=%ARCHISO_UUID%`, and that value is the iso9660 volume id `blkid` reports on
+  the stick and on its first partition. `archisolabel=` is the same question spelled the other way.
+- **`/dev/loop0` is mounted under `/run/archiso` and lsblk lists it FIRST**, so "the first node
+  carrying an archiso mount" answers the squashfs loop — a path no disk in the list has, so
+  nothing was excluded and the stick stayed on the page with the whole mechanism working. Only a
+  `type: "disk"` node can be the answer.
+
+Detection is deliberately NOT `rm`-based: an internal port can report a stick as fixed, and a
+removable disk is a perfectly good target.
+
 `scripts/dev/disk-config-probe.ts` now has a second half that runs layouts through it and asserts
 the message keys, and since 2026-09-05 it is the `installer-logic` CI job rather than something a
 human remembers to run. ⚠️ **Wiring it up needed a one-line fix first**: it printed `N FAILURE(S)`
