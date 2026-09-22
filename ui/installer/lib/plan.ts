@@ -8,6 +8,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { exec } from "../../lib/process"
 import { readBaseConfig, type BaseConfigResult, type BaseConfig } from "./base-config"
+import { wrapCommandForLog } from "./command-log"
 import { entireDiskConfig, manualDiskConfig } from "./disk-config"
 import { getNvidiaDriverPackages } from "./graphics"
 import type { Answers } from "./answers"
@@ -187,9 +188,11 @@ export function assemblePlan(
     ? (config.custom_commands as string[])
     : []
 
+  // …then wrap each one so what it prints is kept: archinstall throws a
+  // successful command's output away (lib/command-log.ts).
   config.custom_commands = originalCommands.map(cmd => {
     return cmd.replace(/\bSUDO_USER=[a-zA-Z0-9_-]+/, `SUDO_USER=${username}`)
-  })
+  }).map(wrapCommandForLog)
 
   // ── Who owns the disk, and it is no longer us ─────────────────────────────
   //

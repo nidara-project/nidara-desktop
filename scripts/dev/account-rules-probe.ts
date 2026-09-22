@@ -41,6 +41,7 @@
 
 import { accountProblems, deriveHostname, hostnameStillFollows, type AccountFields, HOSTNAME_REGEX } from "../../ui/installer/lib/account-problems"
 import { assemblePlan } from "../../ui/installer/lib/plan"
+import { COMMAND_LOG, wrapCommandForLog } from "../../ui/installer/lib/command-log"
 import type { Answers } from "../../ui/installer/lib/answers"
 import type { BaseConfigResult } from "../../ui/installer/lib/base-config"
 import { t } from "../../ui/installer/lib/i18n"
@@ -350,9 +351,35 @@ print("")
 for (const c of SUDO_USER_CASES) {
   const got = testPlanSudoUserRewrite(c.cmd, c.username)
   print(`   ${c.username.padEnd(12)} → ${got.padEnd(48)} ${c.why}`)
-  if (got !== c.want) {
-    fail(`assemblePlan SUDO_USER rewrite (${c.cmd} with ${c.username})`, `expected ${JSON.stringify(c.want)}, got ${JSON.stringify(got)}`)
+  // Every command also comes out WRAPPED, so what it prints is kept in the target
+  // (lib/command-log.ts). Compared whole: a rewrite that lost the wrap, or a wrap
+  // that lost the rewrite, both fail here.
+  const want = wrapCommandForLog(c.want)
+  if (got !== want) {
+    fail(`assemblePlan SUDO_USER rewrite + output wrap (${c.cmd} with ${c.username})`, `expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`)
   }
+}
+
+// ─── The output wrap itself (tech-debt #101) ─────────────────────────────────
+//
+// archinstall discards a successful custom command's output, so the wrap is the
+// only reason any of it survives. Its shape is load-bearing twice: `pipefail`, or
+// the pipeline answers with tee's exit status and a failed command reads as a
+// success; and no `;;`, which a command ending in `;` would otherwise produce
+// inside `{ …; }` — a syntax error that fails EVERY install.
+const WRAP_CASES: { cmd: string, why: string }[] = [
+  { cmd: "set -e; echo '>> nidara-setup'; SUDO_USER=nidara nidara-setup", why: "the stock last command" },
+  { cmd: "echo trailing;", why: "a command ending in ;" },
+  { cmd: "echo trailing ;  \n", why: "a command ending in ; and whitespace" },
+]
+print("")
+for (const c of WRAP_CASES) {
+  const w = wrapCommandForLog(c.cmd)
+  print(`   ${w.slice(0, 90)}  — ${c.why}`)
+  if (!w.startsWith("set -o pipefail; ")) fail(`wrap (${c.why})`, "no pipefail: a failed command would read as success")
+  if (!w.includes("{ set +o pipefail; ")) fail(`wrap (${c.why})`, "pipefail leaks into the command and changes what its own pipes answer")
+  if (!w.endsWith(`| tee -a ${COMMAND_LOG}`)) fail(`wrap (${c.why})`, `output is not appended to ${COMMAND_LOG}`)
+  if (/;\s*;/.test(w)) fail(`wrap (${c.why})`, "`;;` inside the braces is a bash syntax error")
 }
 
 print(failures === 0 ? "\nALL RULES HOLD" : `\n${failures} FAILURE(S)`)

@@ -842,6 +842,29 @@ jobs:
           cp /tmp/plan.bak ui/installer/lib/plan.ts
           git diff --quiet ui/installer/lib/plan.ts
 
+      # A fourth, for tech-debt #101: archinstall discards what a successful custom
+      # command prints, and the wrap in lib/command-log.ts is the only reason any of
+      # nidara-setup's warnings survive an install. Losing it is silent by nature —
+      # nothing fails, the output just goes back to going nowhere.
+      - name: The custom-command output wrap can fail (control, must be caught)
+        run: |
+          cp ui/installer/lib/plan.ts /tmp/plan.bak
+          sed -i 's|}).map(wrapCommandForLog)|}) // wrap deliberately removed|' ui/installer/lib/plan.ts
+          if ! git diff --quiet ui/installer/lib/plan.ts; then
+            echo "control: the output wrap was removed"
+          else
+            echo "::error::the control patched nothing — the wrap in plan.ts has moved or been reworded"
+            exit 1
+          fi
+          ./scripts/bundle.sh --js scripts/dev/account-rules-probe.ts /tmp/account-wrap-defect.js
+          if gjs -m /tmp/account-wrap-defect.js; then
+            echo "::error::the probe passed with the custom-command output wrap deleted"
+            cp /tmp/plan.bak ui/installer/lib/plan.ts
+            exit 1
+          fi
+          cp /tmp/plan.bak ui/installer/lib/plan.ts
+          git diff --quiet ui/installer/lib/plan.ts
+
       - name: What the account form accepts and refuses (must succeed)
         run: |
           ./scripts/bundle.sh --js scripts/dev/account-rules-probe.ts /tmp/account-probe.js

@@ -3644,39 +3644,24 @@ survive a 1366x768 work area?) or a live-medium layout that gives the installer 
 window rule is not where this lives — see `dev-workflow.md` → "A window rule matches an IDENTIFIER,
 and a static rule only ever sees the one the window was BORN with".
 
-### 101. ⚠️ OPEN — the installer's log stops one command short of the end (2026-08-31)
+### 101. ⚠️ OPEN (the log half ✅ FIXED 2026-09-22) — the installer's progress is a pulse with no phase behind it (2026-08-31)
 
 > **Queue entry: nidara-iso#10.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
 
-The log is legible now — `lib/ansi.ts` undresses the child's TTY escapes and the view names its
-font instead of asking fontconfig for one (see dev-workflow.md, "The installer's log is not a
-terminal"). What that did **not** fix is the third symptom found in the same place, because it is
-not in this repo's half of the pipe.
+✅ **The half this item was named for is fixed**, and the measurement that fixed it replaced the
+premise: the log did not stop "one command short of the end". **No** custom command's output was
+kept at all — archinstall 4.4 runs them without `peek_output` and drops a successful command's
+output (read in its source, confirmed on the clean install of 2026-09-22: five commands, zero lines).
+The old `cmd_output.txt` observation was from an earlier archinstall. The fix wraps each command to
+keep its output in `/var/log/nidara-install-commands.log` and repeats its warnings in our own log —
+see dev-workflow.md, "What `custom_commands` print reaches nobody unless we keep it". That is what
+makes nidara-setup's icon-theme `[WARN]` (v0.10.1) reach a person at last.
 
-Measured during a real install from the ISO: `nidara-setup` **ran and finished** — `install.log`
-records the call and `region.json` lands in the target — but its output appears nowhere.
-`/var/log/archinstall/cmd_output.txt` stops at the last pacman transaction, which is
-`custom_commands[3]` (`nidara-release`); `custom_commands[4]` is the `SUDO_USER=… nidara-setup`
-line, and it leaves no trace. The installer's own log view, which streams archinstall's stdout,
-shows the same cut.
+✅ Also no longer true: "`nidara-setup` creates `.config/{hypr,kitty,nidara,uwsm}` as `1000:0`". Fixed
+by #376 (`chown "$REAL_USER:"`, trailing colon — see the note in `bin/nidara-setup`).
 
-🔑 **Why this one matters more than a missing log line**: v0.10.1 put a new WARN inside
-`nidara-setup` — the check that the icon theme default was actually seeded. So the project's
-answer to "did the seeding work" is a message printed into a stream **nobody reads**. That is the
-same family as the message that lied (#295): a check whose result cannot reach anyone is not a
-check.
-
-Not diagnosed, and it cannot be diagnosed from here — it needs a real install, because the
-question is what archinstall does with the last entry of `custom_commands` and where that output
-goes. Do NOT guess at a fix: the two obvious ones (teeing inside the command, in nidara-iso's
-`base.json`; or reading `cmd_output.txt` from the installer) are both plausible and only one of
-them can be right, and which depends on the answer. The command itself lives in
-**nidara-iso**, not here.
-
-Sitting alongside it, from the same review and still open: the progress bar is a `pulse()` on an
-80 ms timeout with no phase behind it, the host name is asked for as the third field of the
-ACCOUNT card, and `nidara-setup` creates `.config/{hypr,kitty,nidara,uwsm}` as `1000:0` (an
-`install -d` with no `-g`) while its siblings come out `1000:1000`.
+**Still open from the same review:** the progress bar is a `pulse()` on an 80 ms timeout with no
+phase behind it, and the host name is asked for as the third field of the ACCOUNT card.
 
 ### 104. ⚠️ OPEN — `AppService.getAppInfo` answers for ids that are not apps (2026-09-13)
 
