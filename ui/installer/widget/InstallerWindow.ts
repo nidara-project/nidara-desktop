@@ -431,18 +431,23 @@ export function InstallerWindow(): Gtk.Window {
       position.visible = false
       back.visible = false
       next.visible = false
-      if (step.busy?.() === true) {
-        closeActionBtn.visible = false
-        restartActionBtn.visible = false
-      } else {
-        // Restart only after a success. After a failure the one thing to do is
-        // close and start again, so Close is the primary button there.
-        const failed = step.outcome?.() === "failure"
-        closeActionBtn.visible = true
-        restartActionBtn.visible = !failed
-        closeActionBtn[failed ? "add_css_class" : "remove_css_class"]("nidara-btn--primary")
-        closeActionBtn[failed ? "remove_css_class" : "add_css_class"]("nidara-btn--secondary")
-      }
+      // ⚠️ Both stay ON SCREEN for the whole run, insensitive while it works.
+      // They used to be hidden while busy, and a footer that empties itself for
+      // twenty minutes reads as the window breaking, not as "wait" (owner,
+      // 2026-09-22). The same goes for Restart after a failure: greyed, not gone.
+      //
+      // Restart only after a success. After a failure the one thing to do is
+      // close and start again, so Close is the primary button there.
+      const busy = step.busy?.() === true
+      const failed = step.outcome?.() === "failure"
+      closeActionBtn.visible = true
+      restartActionBtn.visible = true
+      closeActionBtn.sensitive = !busy
+      restartActionBtn.sensitive = !busy && !failed
+      closeActionBtn[failed ? "add_css_class" : "remove_css_class"]("nidara-btn--primary")
+      closeActionBtn[failed ? "remove_css_class" : "add_css_class"]("nidara-btn--secondary")
+      restartActionBtn[failed ? "add_css_class" : "remove_css_class"]("nidara-btn--secondary")
+      restartActionBtn[failed ? "remove_css_class" : "add_css_class"]("nidara-btn--primary")
     } else {
       position.visible = true
       closeActionBtn.visible = false
