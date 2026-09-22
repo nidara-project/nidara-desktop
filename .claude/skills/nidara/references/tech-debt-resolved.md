@@ -1981,6 +1981,42 @@ the window was BORN with".
 **Not resolved with it:** the second half reported alongside — focusing a window through the shell
 does not raise it — was never the same defect and is now item **#102**.
 
+### 99. ✅ RESOLVED (measured 2026-09-22) — the installer cannot fit on a screen shorter than its own floor (2026-08-30)
+
+> **Queue entry: #312.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
+
+Found while chasing the installer's window rule, not caused by it.
+
+`ui/installer/widget/InstallerWindow.ts` sets `minWidth: 960, minHeight: 760` as well as the
+defaults, and a `set_size_request` is a floor GTK will not go under. On a 1366x768 laptop — the
+live medium boots on whatever hardware someone has — the usable height is 768 minus the bar (40)
+and the dock (100), i.e. 628. The window asks for 760, the clamp added in #299 tries to shrink it
+to 628, and GTK refuses; the excess goes out the top, which is the very shape #299 exists to
+prevent.
+
+Not measured on such a screen — derived from the numbers, and worth a VM at 1366x768 before
+deciding anything. The fix is not the rule: it is either a smaller floor (does the wizard's content
+survive a 1366x768 work area?) or a live-medium layout that gives the installer the screen. The
+window rule is not where this lives — see `dev-workflow.md` → "A window rule matches an IDENTIFIER,
+and a static rule only ever sees the one the window was BORN with".
+
+✅ **Measured, and it fits** — on the live medium of `nidara-2026.09.21`, monitor set to
+1366×768 before the installer launched. Hyprland reserves 40 px (bar) and 100 px (dock), leaving
+628; the window opens at **[84,49] 1198×610** and stays that size on every page walked (Welcome,
+Region, Select disk in both modes, Create account), with the header, the footer and Continue on
+screen and nothing under the bar or the dock. What does not fit a page scrolls INSIDE it (the
+time-zone card, the LUKS row, the partition table).
+
+Two layers do it, and neither is the one this entry expected:
+- **#312** took the 960×760 floor out: the width comes from WINDOW_LAYOUT, the height is measured,
+  capped at 90 % of the smallest monitor, and the minimum is `WINDOW_LAYOUT.minHeight` (480).
+- **our own Hyprland config** (`clampFloating` in `hyprland.lua`, #511) fits every floating window
+  into the usable area minus `GAPS_OUT + BORDER_SIZE` per side: 628 − 2×9 = **610**, exactly
+  what was measured. The installer's own cap (768 × 0.9 = 691) is the looser of the two; the
+  compositor is what makes it fit, and it can because 480 < 610 — a client floor above the
+  usable area is the case `lastAsk` exists for, and it would be back.
+
+
 ### 102. ✅ RESOLVED — the shell's one door now raises as well as focuses (2026-08-31, same day)
 
 `HyprlandState.focusWindow()` dispatched `hl.dsp.focus({ window = … })` and stopped there, so
