@@ -34,6 +34,7 @@ import {
 import { ENTIRE_DISK_MIN_BYTES, entireDiskFits, espMount } from "../lib/disk-config"
 import { ESP_MOUNTS, manualProblems, type ManualProblem } from "../lib/manual-problems"
 import { freeSpaceGaps } from "../lib/free-space"
+import { excludeLiveMedium, liveMediumDisk } from "../lib/live-medium"
 import { isUefi } from "../lib/firmware"
 import { findBitlockerDevices, bitlockerWarnings } from "../lib/bitlocker"
 import { heading, prose, formatSize } from "./common"
@@ -61,7 +62,14 @@ function listDisks(): BlockDevice[] {
     const raw = exec(["lsblk", "-J", "-b", "-d", "-o", "NAME,PATH,SIZE,MODEL,TYPE,RM,LOG-SEC"])
     const parsed = JSON.parse(raw)
     const devices: RawBlockDevice[] = parsed.blockdevices ?? []
-    return devices
+    // ⚠️ And the disk we are RUNNING FROM is not a target (lib/live-medium.ts).
+    // It used to be offered like any other — a USB stick with the word
+    // "removable" under it — and choosing it repartitions the device the live
+    // session is reading from, mid-install. A VM can never show this: the ISO is
+    // a CD there, which lsblk calls `rom` and the `type` filter below already
+    // drops; on real hardware the same image is a `disk`.
+    const live = liveMediumDisk()
+    return excludeLiveMedium(devices
       .filter(d => d.type === "disk" && !d.name.startsWith("loop") && !d.name.startsWith("zram"))
       .map(d => ({
         name: d.name,
@@ -74,7 +82,7 @@ function listDisks(): BlockDevice[] {
         // arithmetic done in the wrong unit — so the default sits here, once, next
         // to the thing that can be missing, instead of in the caller.
         logicalSectorSize: Number(d["log-sec"]) || 512,
-      }))
+      })), live)
   } catch (e) {
     console.error("[Installer] Failed to list disks with lsblk:", e)
     return []
@@ -116,6 +124,10 @@ const LSBLK_SECTOR = 512
 
 function listPartitions(): DetectedPartition[] {
   try {
+    // The medium's own disk is not a target, so its partitions are not rows
+    // either — the same exclusion the disk list above makes, applied to the
+    // table that would otherwise offer half a USB stick as `/home`.
+    const live = liveMediumDisk()
     const raw = exec([
       "lsblk", "-J", "-b", "-o",
       "NAME,PATH,SIZE,FSTYPE,LABEL,PARTLABEL,MOUNTPOINT,TYPE,PKNAME,START,LOG-SEC",
@@ -131,7 +143,8 @@ function listPartitions(): DetectedPartition[] {
         if (item.type === "part") {
           // Exclude live session mounts
           const mp = item.mountpoint || ""
-          if (!mp.startsWith("/run/archiso") && !mp.startsWith("/run/user")) {
+          const onLiveMedium = !!live && (parent?.path === live || item.path === live)
+          if (!onLiveMedium && !mp.startsWith("/run/archiso") && !mp.startsWith("/run/user")) {
             results.push({
               name: item.name,
               path: item.path,
@@ -647,6 +660,12 @@ export function DiskStep(): Step {
       const problemLabel = prose("", "installer-prose--warning")
       manualBox.append(problemLabel)
 
+      // Declared here, appended UNDER the table further down: `refreshProblems`
+      // closes over it, and a `const` declared after that closure is written
+      // would be in its temporal dead zone the first time anything calls it.
+      const rowProblemLabel = prose("", "installer-prose--warning")
+      rowProblemLabel.visible = false
+
       // A partition editor that did not start, said where the rest of the page
       // says things. It goes through `refreshProblems` rather than into a label
       const tableRowMap = new Map<string, NidaraTableRow>()
@@ -674,6 +693,15 @@ export function DiskStep(): Step {
         const unassigned = problems.filter(p => !p.entry).map(p => p.message)
         problemLabel.label = unassigned.join("\n")
         problemLabel.visible = unassigned.length > 0
+
+        // …and the ones that DO have a row are said under it, each naming its own
+        // partition. A created row has no device node yet, so it is named the way
+        // the table names it: "Free space" and the disk it is on.
+        const named = problems
+          .filter(p => p.entry)
+          .map(p => `${p.entry!.create ? `${t("diskFreeSpace")} · ${p.entry!.device}` : p.entry!.path} — ${p.message}`)
+        rowProblemLabel.label = named.join("\n")
+        rowProblemLabel.visible = named.length > 0
       }
 
       // A BitLocker volume cannot be shrunk from Linux (#448). The notice is shown
@@ -704,6 +732,22 @@ export function DiskStep(): Step {
         { title: t("diskFs") },
       ])
       manualBox.append(table.box)
+
+      // ⚠️ The MARK is not the message. #509 moved every fault that belongs to a
+      // row out of the block above the table and onto the row itself, which was
+      // right — "two partitions are mounted at /" with nothing marked made people
+      // hunt. But a table row has only `setValidationState`, a colour: the kit's
+      // per-field error LINE exists on `NidaraFieldRow` and has no table
+      // equivalent. So from #509 until 2026-09-22 a red row said nothing at all,
+      // and the sentences written for the ESP, the swap row and the root — each
+      // added after an install had already destroyed somebody's disk — were never
+      // shown to anyone.
+      //
+      // The synthesis rather than the revert: the row stays marked, and its
+      // message is printed here, under the table, PREFIXED WITH THE PARTITION IT
+      // IS ABOUT — which is the one thing the old block was missing. The prefix is
+      // the same string the first column shows, so the eye lands on the right row.
+      manualBox.append(rowProblemLabel)
 
       const rowFocusMap = new Map<string, Gtk.Widget>()
       let selectedManualDiskPath = (selectedDisk ? selectedDisk.path : "")

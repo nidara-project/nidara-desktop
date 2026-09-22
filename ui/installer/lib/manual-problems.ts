@@ -60,6 +60,39 @@ export const ESP_MOUNTS = new Set(["/boot"])
 export const ESP_MIN_BYTES = 300 * 1024 * 1024
 
 /**
+ * The filesystems a Linux mount point can actually be.
+ *
+ * ⚠️ The dropdown offers all five of `FS_OPTIONS` on every row, including
+ * `vfat`, and until 2026-09-22 nothing said that `/` or `/home` may not be one.
+ * A layout with a FAT root passed every rule here, lit Continue, had the table
+ * rewritten — and then pacstrap died on the first symlink it tried to write,
+ * with the disk already gone. A FAT `/home` is worse in a quieter way: it
+ * installs, and the person's home has no owner, no permissions and no symlinks.
+ *
+ * It is the same shape as the two refusals above it: an answer the page accepted
+ * and the install could not keep. Measured with `disk-config-probe.ts`, which
+ * reported both layouts `installable` before this existed.
+ *
+ * The set is the filesystems, not the modes: `ext2`/`ext3` are here because a
+ * KEPT partition reports whatever it has, and both are perfectly mountable roots
+ * even though the Format dropdown does not offer them. Swap and the ESP are
+ * exempt — swap is not a place, and the ESP has its own FAT rule, the mirror of
+ * this one.
+ */
+const LINUX_FILESYSTEMS = new Set(["btrfs", "ext2", "ext3", "ext4", "f2fs", "xfs"])
+
+/**
+ * What will be on this partition when the install is done: the chosen filesystem
+ * when we are formatting it, what lsblk reports when we are not.
+ *
+ * `""` means neither — a kept partition with nothing on it, which has nothing to
+ * mount.
+ */
+function effectiveFilesystem(m: ManualPartitionMount): string {
+  return m.format || m.create ? m.filesystem : (m.fsType ?? "")
+}
+
+/**
  * Everything wrong with a manual layout right now, in the user's language.
  * Empty means installable — which is exactly what `ready()` asks.
  *
@@ -165,6 +198,35 @@ export function manualProblems(mounts: ManualPartitionMount[], uefi: boolean): M
   // is.
   if (root && root.size < MIN_ROOT_MIB * 1024 * 1024) {
     problems.push({ message: t("diskErrRootTooSmall") + formatSize(root.size) + ".", entry: root })
+  }
+
+  // ⚠️ And every OTHER mount point has to be a filesystem Linux can live on,
+  // which nothing asked. The ESP is exempt — the rule above is its version of
+  // this one, in the opposite direction — and so is swap, which is not a place.
+  // Two failures, both after the table is rewritten: a FAT `/` dies inside
+  // pacstrap on the first symbolic link, and a FAT `/home` installs fine and
+  // hands the person a home directory with no owner and no permissions.
+  //
+  // An empty answer is its own message: a partition kept as it is with no
+  // filesystem on it has nothing to mount, and "choose btrfs" is not the fix —
+  // ticking Format is. `/` already has that refusal above, so it is not repeated
+  // here.
+  for (const m of mounts) {
+    // Exempt: unassigned rows, swap (not a place), and anything under `/boot` —
+    // that is firmware territory and the two ESP rules above own it. FAT is what
+    // an EFI system partition IS, so a rule demanding a Linux filesystem must not
+    // reach it; `/boot/efi` is not a spelling this page offers any more (#430),
+    // and it is not this rule's job to have an opinion about it either.
+    if (m.mountpoint === "" || m.mountpoint === "swap"
+        || m.mountpoint === "/boot" || m.mountpoint.startsWith("/boot/")) continue
+    const fs = effectiveFilesystem(m)
+    if (!fs) {
+      if (m.mountpoint !== "/") {
+        problems.push({ message: t("diskErrKeptNoFs"), entry: m })
+      }
+    } else if (!LINUX_FILESYSTEMS.has(fs)) {
+      problems.push({ message: t("diskErrFsNotLinux") + fs + ".", entry: m })
+    }
   }
 
   const seen = new Set<string>()
