@@ -315,13 +315,21 @@ export function RunStep(): Step {
         setBusy(true)
 
         startMonotonic = GLib.get_monotonic_time()
+        // ⚠️ Re-armed at every tick for the next whole second SINCE START, not a
+        // repeating 1000 ms source: GLib schedules a repeating timeout from the
+        // previous dispatch, so each tick's lateness is carried into the next and
+        // every so often the display jumped a second (…:41 → …:43).
         const updateTimer = () => {
-          const elapsedSec = Math.max(0, Math.floor((GLib.get_monotonic_time() - startMonotonic) / 1_000_000))
-          timerLabel.label = formatLiveTimer(elapsedSec)
-          return GLib.SOURCE_CONTINUE
+          const elapsedUs = Math.max(0, GLib.get_monotonic_time() - startMonotonic)
+          timerLabel.label = formatLiveTimer(Math.floor(elapsedUs / 1_000_000))
+          const untilNextMs = Math.ceil((1_000_000 - (elapsedUs % 1_000_000)) / 1000) + 5
+          timerSourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, untilNextMs, () => {
+            updateTimer()
+            return GLib.SOURCE_REMOVE
+          })
+          return GLib.SOURCE_REMOVE
         }
         updateTimer()
-        timerSourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, updateTimer)
 
         enterPhase(0)
         const answers = getAnswers()
