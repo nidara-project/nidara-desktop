@@ -2017,6 +2017,28 @@ Two layers do it, and neither is the one this entry expected:
   usable area is the case `lastAsk` exists for, and it would be back.
 
 
+### 101. ✅ RESOLVED 2026-09-22 — nobody could read what the setup commands printed (2026-08-31)
+
+> **Queue entry: nidara-iso#10.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
+
+✅ **The half this item was named for is fixed**, and the measurement that fixed it replaced the
+premise: the log did not stop "one command short of the end". **No** custom command's output was
+kept at all — archinstall 4.4 runs them without `peek_output` and drops a successful command's
+output (read in its source, confirmed on the clean install of 2026-09-22: five commands, zero lines).
+The old `cmd_output.txt` observation was from an earlier archinstall. The fix wraps each command to
+keep its output in `/var/log/nidara-install-commands.log` and repeats its warnings in our own log —
+see dev-workflow.md, "What `custom_commands` print reaches nobody unless we keep it". That is what
+makes nidara-setup's icon-theme `[WARN]` (v0.10.1) reach a person at last.
+
+✅ Also no longer true: "`nidara-setup` creates `.config/{hypr,kitty,nidara,uwsm}` as `1000:0`". Fixed
+by #376 (`chown "$REAL_USER:"`, trailing colon — see the note in `bin/nidara-setup`).
+
+✅ **And the two leftovers from the same review were already settled** when this was re-read on
+2026-09-22: the progress bar has shown four NAMED phases since #307 (`PHASES` in `steps/run.ts` —
+network, disk, base system, configuration — plus the child's last line under them), and the
+hostname's place was researched and DECIDED on 2026-09-03 (the comment in `steps/account.ts`:
+Calamares and subiquity put it with the account, so it stays, with a line saying what it is for).
+
 ### 102. ✅ RESOLVED — the shell's one door now raises as well as focuses (2026-08-31, same day)
 
 `HyprlandState.focusWindow()` dispatched `hl.dsp.focus({ window = … })` and stopped there, so

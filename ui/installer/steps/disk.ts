@@ -23,6 +23,7 @@ import {
   type NidaraTableRow,
 } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
+import { PASSWORD_ADVISED_MIN } from "../lib/account-problems"
 import {
   getAnswers,
   setDiskAnswer,
@@ -580,13 +581,24 @@ export function DiskStep(): Step {
         let pwErr = ""
         let pw2Err = ""
 
+        // Advice, not a rule — the owner's call (2026-09-22), the same one taken for
+        // the account's password on 2026-09-14 and at the same threshold. It is said
+        // in stronger words here because the threat is different: a stolen disk is
+        // attacked offline, with no login delay and no lockout, so the only limit on
+        // guessing is the attacker's hardware. Silent on an empty box, like the account.
+        let pwWarning = ""
         if (encryptionDraft.enabled) {
+          if (pw.length > 0 && pw.length < PASSWORD_ADVISED_MIN) {
+            pwWarning = t("diskEncryptWarnPassShort")
+          }
           if (pw2.length > 0 && pw !== pw2) {
             pw2Err = t("accountErrPasswordMismatch")
           }
         }
 
-        pwField.setError(pwErr)
+        pwField.setError(pwErr || pwWarning)
+        // Drawn as a warning, not an error: it does not hold Continue.
+        if (!pwErr && pwWarning) pwField.setValidationState("warning")
         pw2Field.setError(pw2Err)
 
         syncAnswer()
