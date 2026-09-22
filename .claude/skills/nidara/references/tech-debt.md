@@ -4065,6 +4065,23 @@ somebody with the panels on screen.
 Related: #615 (the half that landed), and the computer-use surface in `dev-workflow.md` — perception
 and action both address by name.
 
+### 110. ⚠️ OPEN — the shell's typecheck cannot see GLib, Gio or GObject (2026-09-22)
+
+`ui/shell/gi.d.ts` declares `gi://GLib`, `gi://GObject`, `gi://Gio` and `gi://GdkPixbuf` as
+`any`, on top of the real `@girs/` typings — and a module declared `any` is a module `tsc` stops
+reading. That is how the installer shipped `GLib.strdup_printf` (varargs, so absent from the GIR
+and `undefined` in GJS): it threw on the System and Summary pages of every machine with a
+Turing-or-newer NVIDIA GPU. The installer lost those shims the same day and is now typechecked in
+full (its `gi.d.ts` keeps only `gi://cairo`, which ts-for-gir types from the cairo GIR instead of
+GJS's own cairo module). The shell has not.
+
+Measured, deleting the four shims from the shell: **108 errors, all one shape** — TS2345,
+`Argument of type '"…"' is not assignable to parameter of type 'keyof SignalSignatures'`. That is a
+`connect()` on a signal the typings do not declare (our own subclasses' signals, and a few real
+ones the snapshot lacks); none of the 108 is a call to something that does not exist. So the work
+is typing our signals (or a narrow cast at those call sites), then dropping the shims — mechanical,
+but 108 sites, and the payoff is the class of bug above.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a

@@ -12,7 +12,9 @@
   },
   "include": [
     "**/*.ts",
-    "**/*.d.ts",
-    "gi.d.ts"
+    "../shell/@girs/**/*"
+  ],
+  "exclude": [
+    "build"
   ]
 }
