@@ -2034,8 +2034,8 @@ makes nidara-setup's icon-theme `[WARN]` (v0.10.1) reach a person at last.
 by #376 (`chown "$REAL_USER:"`, trailing colon — see the note in `bin/nidara-setup`).
 
 ✅ **And the two leftovers from the same review were already settled** when this was re-read on
-2026-09-22: the progress bar has shown four NAMED phases since #307 (`PHASES` in `steps/run.ts` —
-network, disk, base system, configuration — plus the child's last line under them), and the
+2026-09-22: the progress bar has shown NAMED phases since #307 (four until 2026-09-23, five since,
+with real package counts — dev-workflow.md, "The run page counts what it can"), and the
 hostname's place was researched and DECIDED on 2026-09-03 (the comment in `steps/account.ts`:
 Calamares and subiquity put it with the account, so it stays, with a line saying what it is for).
 
