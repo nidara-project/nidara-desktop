@@ -42,9 +42,22 @@ export function wrapCommandForLog(cmd: string): string {
   return `set -o pipefail; { set +o pipefail; ${body}; } 2>&1 | tee -a ${COMMAND_LOG}`
 }
 
-/** The lines worth repeating in our own log: nidara-setup's `[WARN]`, pacman's `warning:`/`error:`. */
+/**
+ * The lines worth repeating in our own log: nidara-setup's `[WARN]`/`[ERROR]` and
+ * `WARNING:`, pacman's and pacman-key's `warning:`/`error:` at the start of a line,
+ * mkinitcpio's `==> ERROR:`.
+ *
+ * ⚠️ Anchored on those SHAPES, never on the bare word: pacman lists package names,
+ * and `perl-error` is one — `\bERROR\b` matched it three times in the first real
+ * install (the package list, "downloading", "installing"). mkinitcpio's
+ * `==> WARNING:` is left out on purpose: in a VM it is a page of "Possibly missing
+ * firmware" that says nothing about the install.
+ */
 export function isNoteworthy(line: string): boolean {
-  return /\b(WARN|WARNING|ERROR)\b/i.test(line)
+  return /\[(WARN|ERROR)\]/.test(line)
+    || (/\bWARNING:/.test(line) && !line.startsWith("==> "))
+    || /^\s*(warning|error):/i.test(line)
+    || /^==> ERROR:/.test(line)
 }
 
 /**

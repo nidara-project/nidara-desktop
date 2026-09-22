@@ -886,7 +886,16 @@ user_systemctl stop gnome-keyring-daemon.socket gnome-keyring-daemon.service 2>/
 # `--foreground --components=… --control-directory=…`; neither carries it. Anchoring the
 # pattern fixes the second bug. `pgrep -x` is NOT the alternative: comm is truncated to
 # `gnome-keyring-d` at 15 characters and pgrep refuses to match a longer name at all.
+#
+# ⚠️ And NOT inside a chroot, which is how the installer runs this. /proc there is the
+# LIVE medium's: `pgrep -u $REAL_USER` asks for uid 1000, which on the medium is the
+# `live` user, whose own D-Bus-activated daemon matches — so every install printed this
+# warning about a process that does not exist on the installed system. Unseen until
+# 2026-09-22, when the installer started keeping what this script prints (#101). An
+# account that has never logged in has no daemon to be stale, so there is nothing to
+# check. `--chroot` needs root; run as a user it fails, and the check runs as before.
 _stale_keyring=""
+systemd-detect-virt -q --chroot 2>/dev/null ||
 for _p in $(pgrep -u "$REAL_USER" -f '^(/usr/bin/)?gnome-keyring-daemon' 2>/dev/null); do
     tr '\0' ' ' < "/proc/$_p/cmdline" 2>/dev/null | grep -q -- "--login" || _stale_keyring="$_stale_keyring $_p"
 done

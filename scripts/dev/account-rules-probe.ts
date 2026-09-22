@@ -41,7 +41,7 @@
 
 import { accountProblems, deriveHostname, hostnameStillFollows, type AccountFields, HOSTNAME_REGEX } from "../../ui/installer/lib/account-problems"
 import { assemblePlan } from "../../ui/installer/lib/plan"
-import { COMMAND_LOG, wrapCommandForLog } from "../../ui/installer/lib/command-log"
+import { COMMAND_LOG, isNoteworthy, wrapCommandForLog } from "../../ui/installer/lib/command-log"
 import type { Answers } from "../../ui/installer/lib/answers"
 import type { BaseConfigResult } from "../../ui/installer/lib/base-config"
 import { t } from "../../ui/installer/lib/i18n"
@@ -381,6 +381,27 @@ for (const c of WRAP_CASES) {
   if (!w.endsWith(`| tee -a ${COMMAND_LOG}`)) fail(`wrap (${c.why})`, `output is not appended to ${COMMAND_LOG}`)
   if (/;\s*;/.test(w)) fail(`wrap (${c.why})`, "`;;` inside the braces is a bash syntax error")
 }
+
+// ─── Which command-output lines are repeated in our log ──────────────────────
+// Every case below is a line from the first real install that kept this output
+// (2026-09-22), plus the shapes nidara-setup and mkinitcpio print.
+const NOTEWORTHY: [string, boolean][] = [
+  ["  [WARN] the system icon-theme default is not in effect.", true],
+  ["  [GPU] WARNING: nvidia_drm modeset is OFF — Wayland needs it ON.", true],
+  ["warning: /etc/pacman.d/nidara-mirrorlist installed as /etc/pacman.d/nidara-mirrorlist.pacnew", true],
+  ["error: failed to commit transaction (conflicting files)", true],
+  ["==> ERROR: module not found: 'nvidia'", true],
+  ["perl-error-0.17030-3-any downloading...", false],
+  ["installing perl-error...", false],
+  ["Packages (477) aalib-1.4rc5-19  perl-error-0.17030-3  zlib-ng-2.3.3-1", false],
+  ["==> WARNING: Possibly missing firmware for module: 'qla2xxx'", false],
+  ["  [OK] Icon theme default → Papirus (system dconf database)", false],
+]
+print("")
+for (const [line, want] of NOTEWORTHY) {
+  if (isNoteworthy(line) !== want) fail(`isNoteworthy(${JSON.stringify(line.slice(0, 60))})`, `expected ${want}`)
+}
+print(`   ${NOTEWORTHY.length} command-output lines classified`)
 
 print(failures === 0 ? "\nALL RULES HOLD" : `\n${failures} FAILURE(S)`)
 imports.system.exit(failures === 0 ? 0 : 1)
