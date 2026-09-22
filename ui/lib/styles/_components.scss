@@ -423,14 +423,20 @@ checkbutton:disabled {
     }
 }
 
-.nidara-table-row--error,
+/* A FIELD row in error still lifts: its message is printed inside the row, under the
+   control, and a form has no selected row for the fill to be confused with. */
 .nidara-row--error {
     background-color: var(--nidara-surface-raised);
     &:hover { background-color: var(--nidara-surface-strong); }
-    .nidara-table-cell {
-        font-weight: $fw-medium;
-        color: var(--nidara-text);
-    }
+}
+
+/* A TABLE row in error does NOT change its fill (2026-09-22, the owner's call): in the
+   installer's partition table `--nidara-surface-raised` is also what the SELECTED row
+   wears, so a failing row and the clicked one looked identical. It shows the table's
+   error mark instead — `.nidara-table-mark`, an icon in the text's own ink, never red
+   (see "the red BUDGET" in design-system.md) — and the sentence stays under the table. */
+.nidara-table-mark {
+    color: var(--nidara-text);
 }
 
 /* Boxed list container — dense frosted card holding .nidara-row children. */

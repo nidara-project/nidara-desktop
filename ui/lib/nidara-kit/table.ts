@@ -7,9 +7,10 @@ export type { NidaraValidationState } from "./row"
 export interface NidaraTableRow extends Gtk.ListBoxRow {
     /**
      * Mark a row's validation state (#466).
-     * Applies `.nidara-table-row--warning` or `.nidara-table-row--error` in CSS,
-     * lifting the row background and strengthening dimmed cells to full-contrast ink.
-     * "none" clears both classes.
+     * Applies `.nidara-table-row--warning` or `.nidara-table-row--error` in CSS.
+     * A warning lifts the row background; an error shows the table's error MARK in
+     * front of the first cell (see NidaraTableErrorMark) and leaves the row's fill
+     * alone. "none" clears both.
      */
     setValidationState(state: NidaraValidationState): void
 }
@@ -53,6 +54,34 @@ export interface NidaraTableColumn {
      */
     reserveFromModel?: boolean
 }
+
+/**
+ * The mark a row in the `error` state wears in front of its first cell.
+ *
+ * Why a MARK and not the row's fill (2026-09-22, the owner's call). The error
+ * state used to be a background — `--nidara-surface-raised` — and in the
+ * installer's partition table that is exactly the fill the SELECTED row wears,
+ * so a row that failed a rule and the row you had clicked looked the same. A
+ * mark is the design system's second earned case ("it DISCRIMINATES between items
+ * that otherwise look identical", design-system.md): the rows of a table are that
+ * set. Not red — the red budget is a status dot or a destructive action — so it
+ * is an icon in the ink of the text beside it, and the sentence that explains it
+ * stays under the table, naming the row.
+ *
+ * The kit does not own an icon set (same rule as `NidaraCircleButton`), so the
+ * caller hands the icon in. Giving one reserves a narrow leading column in EVERY
+ * row and in the headings, empty unless the row is in `error` — so the names do
+ * not jump sideways when a row gains or loses its mark.
+ */
+export interface NidaraTableErrorMark {
+    /** A GIcon (lib/icons.ndIcon). Typed loosely — the GI typings don't export Gio.Icon. */
+    icon?: any
+    /** Theme icon name, used when `icon` is null (ndIcon returns null without the asset tree). */
+    iconName?: string
+}
+
+/** Width of the mark column: the icon's own size. */
+const MARK_SIZE = 16
 
 export interface NidaraTableResult {
     /** Column headings + the list card. Append this to the page. */
@@ -179,6 +208,7 @@ function getWidestItemInfo(
 export function NidaraTable(
     columns: NidaraTableColumn[],
     extraClasses: string[] = [],
+    errorMark: NidaraTableErrorMark | null = null,
 ): NidaraTableResult {
     // spacing:0 for the same reason NidaraList uses it — the heading↔card gap is
     // owned by `.nidara-table-heading`'s margin-bottom, so the headings bind to
@@ -195,6 +225,8 @@ export function NidaraTable(
         css_classes: ["nidara-table-header"],
         margin_start: HEADER_INSET, margin_end: HEADER_INSET,
     })
+    // The mark column's heading is empty: it is a column of marks, not of values.
+    if (errorMark) headerBox.append(new Gtk.Box({ width_request: MARK_SIZE }))
     columns.forEach((col, i) => {
         const cell = new Gtk.Label({
             label: col.title,
@@ -318,6 +350,20 @@ export function NidaraTable(
         }
 
         const line = new Gtk.Box({ spacing: CELL_SPACING })
+        let mark: Gtk.Image | null = null
+        if (errorMark) {
+            // The slot keeps its width when the mark is hidden, so every row's
+            // first cell starts at the same x whatever state its neighbours are in.
+            const slot = new Gtk.Box({ width_request: MARK_SIZE, valign: Gtk.Align.CENTER })
+            mark = new Gtk.Image({
+                pixel_size: MARK_SIZE,
+                css_classes: ["nidara-table-mark"],
+                visible: false,
+                ...(errorMark.icon ? { gicon: errorMark.icon } : { icon_name: errorMark.iconName ?? "dialog-warning-symbolic" }),
+            })
+            slot.append(mark)
+            line.append(slot)
+        }
         columns.forEach((col, i) => {
             const rawCell = cells[i] ?? ""
             const w = cellWidget(rawCell, col)
@@ -380,6 +426,7 @@ export function NidaraTable(
             } else if (state === "error") {
                 row.add_css_class("nidara-table-row--error")
             }
+            if (mark) mark.visible = state === "error"
         }
 
         row.set_child(line)

@@ -2,7 +2,7 @@
 Name=Nidara
 Comment=Nidara's own icons — the reference theme of the Nidara icon spec (SPEC.md)
 Inherits=hicolor
-X-Nidara-Icon-Spec=3
+X-Nidara-Icon-Spec=4
 Directories=16x16/actions,scalable/actions
 
 [16x16/actions]

@@ -293,10 +293,18 @@ Three things about it that are not obvious:
   full contrast because emptying to refill (e.g. Refresh) should read as an atomic rebuild rather
   than a vacant state.
 - **Row validation states (`setValidationState`).** Rows in `NidaraTable` can be marked with
-  `row.setValidationState("none" | "warning" | "error")` (#466). Classes `.nidara-table-row--warning`
-  and `.nidara-table-row--error` in `_components.scss` lift the row background (`--nidara-surface-hover`
-  and `--nidara-surface-raised`) and promote dimmed cells to full-contrast ink (`--nidara-text`) at
-  weight 500 (`$fw-medium`), mirroring the warning ink convention without spending red.
+  `row.setValidationState("none" | "warning" | "error")` (#466). `.nidara-table-row--warning` lifts
+  the row (`--nidara-surface-hover`) and promotes dimmed cells to full-contrast ink at weight 500.
+  ⚠️ **An ERROR row does not change its fill** (owner's call, 2026-09-22). It used to lift to
+  `--nidara-surface-raised`, which in the installer's partition table is also what the selected row
+  wears — a failing row and the clicked one were indistinguishable. It now shows the table's
+  **error mark**: pass `NidaraTable(columns, classes, { icon, iconName })` and every row and the
+  headings reserve a 16 px leading column, empty unless the row is in `error`, where
+  `.nidara-table-mark` (an icon in `--nidara-text`, never red) appears. That is the second earned
+  case for a mark (it *discriminates* items that otherwise look identical) and it stays inside the
+  red budget. The installer passes `nd-dialog-warning` (Lucide `triangle-alert`, spec v4). The
+  sentence that explains the fault still goes under the table, naming the row. A `NidaraFieldRow`
+  in error keeps its lift — its message is inside the row and a form has no selected row.
 
 The headings are **sentence case, not the uppercase micro-caps of `.nidara-list-title`**. That
 label is a GROUP header, said once over a card, where the extra weight is structure; six of
