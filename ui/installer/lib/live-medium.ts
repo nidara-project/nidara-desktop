@@ -14,18 +14,30 @@
 // stick and comes back as `type: "disk"`, i.e. exactly the case the instrument
 // cannot produce. See the skill's note on instruments sharing the blind spot.
 //
-// ─── HOW IT IS FOUND ─────────────────────────────────────────────────────────
+// ─── HOW IT IS FOUND, AND WHY IT TAKES TWO ANSWERS ───────────────────────────
 // Not by guessing at removability: an internal disk can be `rm: 0` and hold the
 // medium (a USB in a port the firmware reports as fixed), and a perfectly good
-// target can be `rm: 1`. The medium is the device the archiso mounts sit on, and
-// archiso mounts them at a path nobody else uses: `/run/archiso/bootmnt` for the
-// ISO filesystem, plus `/run/archiso/*` for its cow space.
+// target can be `rm: 1`.
 //
-// So the question asked here is "which DISK carries a partition mounted under
-// /run/archiso", and the answer is the top-level node of that branch — the same
-// parent-carried-down walk `listPartitions()` does, and for the same reason: a
-// partition's disk is the node it hangs from, never its name with the digits
-// stripped (`nvme0n1p2`).
+// The obvious answer is "the disk carrying a mount under /run/archiso", and it is
+// half the answer. 🔑 **Measured 2026-09-22, booting the ISO as a usb-storage
+// device rather than a CD:** archiso had already copied the image to RAM
+// (`/run/archiso/copytoram`, a tmpfs) and UNMOUNTED the stick, so `/dev/sda` —
+// 2.4 G, `type: "disk"`, iso9660 — was mounted nowhere at all. A mount-based
+// check returns "" on exactly the machine it exists to protect.
+//
+// So the second answer, and the one that survives copytoram: the kernel command
+// line names the medium. Every entry in the ISO's own loader config carries
+// `archisosearchuuid=%ARCHISO_UUID%` (and archiso also accepts `archisolabel=`),
+// and that UUID is the iso9660 volume id `blkid` reports on the stick AND on its
+// first partition — measured in the same run:
+//
+//     /proc/cmdline  … archisosearchuuid=2026-09-21-12-53-47-00 …
+//     /dev/sda       UUID="2026-09-21-12-53-47-00" LABEL="NIDARA_202609" TYPE="iso9660"
+//     /dev/sda1      UUID="2026-09-21-12-53-47-00" LABEL="NIDARA_202609"
+//
+// Either answer names the DISK, never the partition: what has to stay out of the
+// list is the whole device, since that is what an install erases.
 
 import { exec } from "../../lib/process"
 
@@ -33,6 +45,8 @@ interface LsblkNode {
   path?: string
   mountpoint?: string | null
   mountpoints?: (string | null)[]
+  uuid?: string | null
+  label?: string | null
   type?: string
   children?: LsblkNode[]
 }
@@ -48,14 +62,23 @@ function mountsOf(node: LsblkNode): string[] {
 }
 
 /**
- * The disk holding the running live medium, from an `lsblk -J` tree — or `""`
- * when nothing in the tree is mounted under `/run/archiso`, which is every
- * machine that is not booted from our ISO (a dev host, the probe runner).
+ * What the kernel command line says the medium is: the value of
+ * `archisosearchuuid=` or `archisolabel=`, or `""` when neither is there (every
+ * machine that is not booted from an archiso — a dev host, the probe runner).
+ */
+export function archisoIdFrom(cmdline: string): string {
+  const m = /(?:^|\s)archiso(?:searchuuid|label)=(\S+)/.exec(cmdline)
+  return m ? m[1] : ""
+}
+
+/**
+ * The disk holding the running live medium, from an `lsblk -J` tree and the
+ * kernel command line — or `""` when neither says anything about one.
  *
  * Pure, so the probe can put a USB-shaped tree through it on a machine that has
  * no USB and no medium.
  */
-export function liveMediumDiskFrom(lsblkJson: string): string {
+export function liveMediumDiskFrom(lsblkJson: string, cmdline = ""): string {
   let parsed: { blockdevices?: LsblkNode[] }
   try {
     parsed = JSON.parse(lsblkJson)
@@ -64,11 +87,25 @@ export function liveMediumDiskFrom(lsblkJson: string): string {
     return ""
   }
 
+  const id = archisoIdFrom(cmdline)
   const carries = (node: LsblkNode): boolean =>
     mountsOf(node).some(m => m === ARCHISO_PREFIX || m.startsWith(`${ARCHISO_PREFIX}/`))
+      // The copytoram case: nothing is mounted, and the volume id is the only
+      // thing left that says which device this session came off.
+      || (!!id && (node.uuid === id || node.label === id))
       || (node.children ?? []).some(carries)
 
   for (const top of parsed.blockdevices ?? []) {
+    // ⚠️ A DISK, and this line is the whole reason the first version of this
+    // function did nothing on the machine it was written for. `/dev/loop0` — the
+    // squashfs — is mounted at `/run/archiso/airootfs` and lsblk lists it FIRST,
+    // so the walk below answered "/dev/loop0", which is a path no disk in the
+    // list has: nothing was excluded and the stick stayed on the page. Measured
+    // on a USB boot, 2026-09-22, with the rest of the mechanism working.
+    //
+    // The question is which DISK to keep out of the list, so a loop, a zram or
+    // the `rom` a CD shows up as cannot be the answer — none of them is offered.
+    if (top.type !== "disk") continue
     // ⚠️ The TOP-LEVEL node, not the partition. What has to be kept out of the
     // list is the whole disk: erasing `/dev/sdb` is what takes the medium away,
     // and it is offered as `/dev/sdb` whichever of its partitions is mounted.
@@ -93,7 +130,14 @@ export function liveMediumDisk(): string {
   // change of language.
   if (_cached !== null) return _cached
   try {
-    _cached = liveMediumDiskFrom(exec(["lsblk", "-J", "-o", "PATH,MOUNTPOINTS,TYPE"]))
+    let cmdline = ""
+    try {
+      cmdline = exec(["cat", "/proc/cmdline"])
+    } catch {
+      // A machine with no /proc/cmdline to read is not one of ours; the mount
+      // half of the answer still applies.
+    }
+    _cached = liveMediumDiskFrom(exec(["lsblk", "-J", "-o", "PATH,MOUNTPOINTS,UUID,LABEL,TYPE"]), cmdline)
   } catch (e) {
     console.error("[Installer] Could not ask lsblk which disk the medium is on:", e)
     _cached = ""

@@ -69,7 +69,7 @@ import { loaderRoot } from "../../ui/installer/lib/bootloader"
 import { swapFstabEntry, partitionAtStart } from "../../ui/installer/lib/swap"
 import { releaseCommands, targetDisks, type BlockNode } from "../../ui/installer/lib/release-target"
 import { ESP_MIN_BYTES, manualProblems } from "../../ui/installer/lib/manual-problems"
-import { excludeLiveMedium, liveMediumDiskFrom } from "../../ui/installer/lib/live-medium"
+import { archisoIdFrom, excludeLiveMedium, liveMediumDiskFrom } from "../../ui/installer/lib/live-medium"
 import { formatSize } from "../../ui/installer/lib/format-size"
 import { freeSpaceGaps } from "../../ui/installer/lib/free-space"
 import { t } from "../../ui/installer/lib/i18n"
@@ -1188,7 +1188,7 @@ print("")
 // already drops. On a real machine the same image is dd'd onto a stick and comes
 // back as `disk`. The instrument cannot produce the case, so the case is here.
 
-const LIVE_CASES: { name: string; json: string; want: string }[] = [
+const LIVE_CASES: { name: string; json: string; cmdline?: string; want: string }[] = [
   {
     name: "a USB stick carrying the medium — the disk it is on, not the partition",
     want: "/dev/sdb",
@@ -1242,12 +1242,75 @@ const LIVE_CASES: { name: string; json: string; want: string }[] = [
     want: "",
     json: "not json",
   },
+  {
+    // 🔑 THE TREE THAT FOOLED THE FIRST VERSION, kept because nothing else here
+    // has its shape: the squashfs loop is mounted under /run/archiso and lsblk
+    // lists it FIRST, so a walk that answers "the first node carrying an archiso
+    // mount" answers `/dev/loop0` — a path no disk in the list has, so nothing
+    // is excluded and the stick stays on the page. Measured on a USB boot with
+    // every other part of the mechanism working.
+    name: "the airootfs loop comes first in the tree and is not a disk",
+    want: "/dev/sda",
+    cmdline: "archisobasedir=arch archisosearchuuid=2026-09-21-12-53-47-00",
+    json: JSON.stringify({ blockdevices: [
+      { path: "/dev/loop0", type: "loop", mountpoints: ["/run/archiso/airootfs"] },
+      { path: "/dev/sda", type: "disk", mountpoints: [], uuid: "2026-09-21-12-53-47-00", label: "NIDARA_202609", children: [
+        { path: "/dev/sda1", type: "part", mountpoints: [], uuid: "2026-09-21-12-53-47-00" }] },
+      { path: "/dev/vda", type: "disk", mountpoints: [] },
+    ] }),
+  },
+  {
+    // 🔑 MEASURED 2026-09-22, booting the ISO as a usb-storage device: archiso
+    // copies the image to RAM and UNMOUNTS the stick, so nothing in the tree is
+    // mounted under /run/archiso and the mount half of the answer says nothing.
+    // The kernel command line still names it.
+    name: "copytoram — the stick is mounted NOWHERE, and the cmdline still names it",
+    want: "/dev/sda",
+    cmdline: "initrd=initrd archisobasedir=arch archisosearchuuid=2026-09-21-12-53-47-00 quiet",
+    json: JSON.stringify({ blockdevices: [
+      { path: "/dev/sda", type: "disk", mountpoints: [], uuid: "2026-09-21-12-53-47-00", label: "NIDARA_202609", children: [
+        { path: "/dev/sda1", type: "part", mountpoints: [], uuid: "2026-09-21-12-53-47-00", label: "NIDARA_202609" },
+        { path: "/dev/sda2", type: "part", mountpoints: [], uuid: "6AB1-28DB", label: "ARCHISO_EFI" }] },
+      { path: "/dev/vda", type: "disk", mountpoints: [], children: [] },
+    ] }),
+  },
+  {
+    // The control for the rule above: the same tree, booted from something else.
+    // Without it, a check that returned the first disk would pass the case above.
+    name: "…and with no archiso on the command line, that same disk is a target",
+    want: "",
+    cmdline: "root=UUID=1234 rw quiet",
+    json: JSON.stringify({ blockdevices: [
+      { path: "/dev/sda", type: "disk", mountpoints: [], uuid: "2026-09-21-12-53-47-00", label: "NIDARA_202609", children: [] },
+    ] }),
+  },
+  {
+    name: "archisolabel instead of the uuid — archiso accepts either",
+    want: "/dev/sdb",
+    cmdline: "archisobasedir=arch archisolabel=NIDARA_202609",
+    json: JSON.stringify({ blockdevices: [
+      { path: "/dev/sda", type: "disk", mountpoints: [], children: [] },
+      { path: "/dev/sdb", type: "disk", mountpoints: [], label: "NIDARA_202609", children: [] },
+    ] }),
+  },
 ]
+
+for (const [cmdline, want] of [
+  ["initrd=initrd archisobasedir=arch archisosearchuuid=2026-09-21-12-53-47-00 quiet", "2026-09-21-12-53-47-00"],
+  ["archisolabel=NIDARA_202609 quiet", "NIDARA_202609"],
+  ["root=UUID=1234 rw", ""],
+  // ⚠️ The word has to be a WHOLE parameter: a boot option that merely ends in
+  // it is not the medium's name.
+  ["notarchisolabel=SOMETHING", ""],
+] as const) {
+  const got = archisoIdFrom(cmdline)
+  if (got !== want) fail("archisoIdFrom", `${JSON.stringify(cmdline)} → ${JSON.stringify(got)}, expected ${JSON.stringify(want)}`)
+}
 
 print("")
 print("── the medium's own disk is not a target")
 for (const c of LIVE_CASES) {
-  const got = liveMediumDiskFrom(c.json)
+  const got = liveMediumDiskFrom(c.json, c.cmdline ?? "")
   print(`   ${(got || "(none)").padEnd(14)} ${c.name}`)
   if (got !== c.want) fail(c.name, `expected ${JSON.stringify(c.want)}, got ${JSON.stringify(got)}`)
 }
