@@ -1,5 +1,11 @@
-// The installer is typechecked against the shell's real GI typings (tsconfig.json
-// includes ../shell/@girs). This file shims ONLY what those typings get wrong.
+// The installer, the greeter and the lock screen are typechecked against the
+// shell's real GI typings (each tsconfig.json includes ../shell/@girs and this
+// file). This file shims ONLY what those typings get wrong.
+//
+// ⚠️ It must come FIRST in each tsconfig's `include`. @girs declares
+// `gi://cairo` too, the two ambient declarations merge, and the one tsc reads
+// first decides the default export — listed after @girs, this file is silently
+// ignored (measured 2026-09-22: 4 LinearGradient errors in the installer).
 //
 // `gi://cairo`: ts-for-gir types it as the cairo-1.0 GIR — bare structs, no
 // `LinearGradient`, no `Context` methods — while GJS answers that import with its
