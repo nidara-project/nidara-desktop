@@ -1,5 +1,5 @@
 /* Nidara — Installer stylesheet
-   GTK_THEME=nidara loads a blank theme, so this is the ONLY CSS this process has.
+   No GTK theme is loaded (`useNoGtkTheme()`, GTK_THEME=Empty), so this is the ONLY CSS this process has.
    GTK4 CSS subset: no color-mix(), no rgba(var(), n), no filter. */
 
 // The type ramp, the spacing and the radius ladder are the shell's. A size that
@@ -13,7 +13,7 @@
 // bundle borrows, and they expect their classes to exist. Emitted BEFORE
 // everything below, so the rules in this file out-rank it at equal specificity.
 // The base layer: element selectors for the nodes GTK builds itself (#107 step 5).
-// Wired per THEMELESS bundle, never from the kit's shared sheet — see the note there.
+// Wired per bundle, never from the kit's shared sheet — see the note there.
 @use '../lib/styles/base-layer';
 @use '../lib/styles/components';
 

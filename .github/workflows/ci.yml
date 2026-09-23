@@ -252,11 +252,15 @@ jobs:
           # on passing, because `_control-center.scss` styles it too — so the control
           # reported "control C passed" and failed the build for the right reason:
           # it was not producing the defect it claimed to produce.
+          # ⚠️ And EVERY sheet includes `ui/lib/styles/`: since the shell went themeless
+          # (#107 step 5) the base layer draws `calendar` too, so a control that broke
+          # only the shell's half would leave the node drawn and pass for the wrong reason.
           cp -r ui/shell/styles /tmp/shell-styles.bak
+          cp -r ui/lib/styles /tmp/lib-styles.bak
           python3 - <<'PY'
           import pathlib, re
           hit = 0
-          for f in pathlib.Path("ui/shell/styles").glob("*.scss"):
+          for f in [*pathlib.Path("ui/shell/styles").glob("*.scss"), *pathlib.Path("ui/lib/styles").glob("*.scss")]:
               s = f.read_text()
               out = re.sub(r"(^|[\s,])calendar([\s,{])", r"\1cal-DELIBERATELY-BROKEN\2", s, flags=re.M)
               if out != s:
@@ -267,9 +271,11 @@ jobs:
           if node scripts/ci/style-ownership-check.mjs; then
             echo "::error::control C passed — a widget a bundle builds can go undrawn unnoticed"
             rm -rf ui/shell/styles && cp -r /tmp/shell-styles.bak ui/shell/styles
+            rm -rf ui/lib/styles && cp -r /tmp/lib-styles.bak ui/lib/styles
             exit 1
           fi
           rm -rf ui/shell/styles && cp -r /tmp/shell-styles.bak ui/shell/styles
+          rm -rf ui/lib/styles && cp -r /tmp/lib-styles.bak ui/lib/styles
 
           git diff --quiet ui/lib/styles/_components.scss ui/shell/styles/_components.scss ui/shell/styles/_reset.scss
 

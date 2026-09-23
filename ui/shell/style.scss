@@ -1,3 +1,7 @@
+// The base layer: element selectors for the nodes GTK builds itself (#107 step 5).
+// The shell runs themeless like the other bundles, so this is the ONLY thing under
+// a node none of our classes reach. First, so every rule below out-orders it.
+@use '../lib/styles/base-layer';
 @use 'styles/base';
 @use 'styles/reset';
 // The kit's own stylesheet — shared with the other bundles, imported FIRST so
