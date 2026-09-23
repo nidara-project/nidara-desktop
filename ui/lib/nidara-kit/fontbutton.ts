@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 import Gtk from "gi://Gtk?version=4.0"
 import Pango from "gi://Pango"
 import { NidaraButton } from "./button"

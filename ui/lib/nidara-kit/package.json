@@ -2,5 +2,5 @@
   "name": "nidara-kit",
   "version": "0.1.0",
   "description": "Nidara's platform library: GTK4 widgets, the application host, the appearance engine and the stylesheet every Nidara application wears",
-  "license": "GPL-3.0"
+  "license": "LGPL-3.0-or-later"
 }

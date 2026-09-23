@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 /**
  * Nidara UI — GTK4 primitive widget library for Nidara
  *

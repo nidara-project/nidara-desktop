@@ -2002,6 +2002,14 @@ every bundle in this tree can resolve a path the kit should not have reached for
 something that lives outside, it MOVES in, or the caller passes it in — the appearance seam is the
 model for the second.
 
+🔑 **The kit is LGPL-3.0-or-later; the rest of the repo is GPL-3.0-or-later** (owner's decision,
+2026-09-23). An app that loads the kit may carry any licence — the reason GTK and libadwaita are
+LGPL, and the reason a platform library under the GPL would keep outside authors away. Every file
+under `ui/lib/nidara-kit/` starts with `// SPDX-License-Identifier: LGPL-3.0-or-later`, and
+`kit-boundary-check.mjs` fails on one that does not: code MOVED into the kit changes licence, so
+moving GPL code in is a relicensing, which only its copyright holders may do (on 2026-09-23 every
+line was the owner's, checked in `git log`; with outside contributors that stops being free).
+
 ⚠️ `ui/lib/` outside the kit is NOT the platform: it is code shared by bundles in THIS repo (the
 greeter's cards, `process.ts`, `users.ts`…). Nothing in the kit may import it, and it is free to
 import the kit.

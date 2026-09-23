@@ -4074,9 +4074,8 @@ need their own release cadence.
 
 ⚠️ The INSTALLER keeps bundling its own copy until the ISO is published (it is the one program that
 cannot be fixed by an update); it moves to B after.
-⚠️ **Owner's decision, open: the kit's LICENCE.** It carries the repo's GPL-3.0 today, which binds
-any app that loads it to the GPL. GTK and libadwaita are LGPL precisely so that apps of any licence
-can link them. Decide before phase 4 publishes it.
+✅ **Licence decided 2026-09-23 (owner):** the kit is LGPL-3.0-or-later, the rest of the repo
+GPL-3.0-or-later (the PKGBUILD said `-only` while NOTICE said "or later"; now both say the latter).
 
 Related: #59 (the kit's stylesheet split, and the direction its verification did not check), #107
 (the theming decision this serves), #571 (Settings becoming its own process — the first consumer).

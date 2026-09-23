@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 // File helpers — what `ags/file` gave us, minus everything we never called.
 //
 // AGS's module also exported `readFileAsync`, `writeFileAsync` and `monitorFile`

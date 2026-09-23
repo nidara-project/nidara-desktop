@@ -10,6 +10,12 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
+The Nidara kit (ui/lib/nidara-kit/) — the platform library Nidara applications
+load — is licensed under the GNU Lesser General Public License, version 3 or (at
+your option) any later version: see ui/lib/nidara-kit/COPYING.LESSER, which
+adds its permissions to the GPL text in LICENSE. An application may use the kit
+under any licence; changes to the kit itself stay under the LGPL.
+
 ----------------------------------------------------------------------
 Trademarks
 ----------------------------------------------------------------------

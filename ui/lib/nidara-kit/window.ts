@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import { NidaraAppWindow, type NidaraCloseMode } from "./app-window"

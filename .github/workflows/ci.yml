@@ -464,14 +464,23 @@ jobs:
       # The kit is a package (tech-debt #108): an app outside this repo has
       # nidara-kit and nothing else of this tree, while the four bundles here can
       # always resolve a path the kit should not have reached for.
-      - name: nidara-kit imports nothing from outside itself
+      - name: nidara-kit imports nothing from outside itself, and every file is LGPL-headed
         run: node scripts/ci/kit-boundary-check.mjs
       - name: The kit boundary check can fail (control, must be caught)
         run: |
           cp ui/lib/nidara-kit/badge.ts /tmp/badge.bak
-          sed -i '1i import { execAsync } from "../process"' ui/lib/nidara-kit/badge.ts
+          # Line 2, not 1: line 1 is the licence line, and breaking it would make
+          # the check fail for the other rule.
+          sed -i '2i import { execAsync } from "../process"' ui/lib/nidara-kit/badge.ts
           if node scripts/ci/kit-boundary-check.mjs; then
             echo "::error::the check passed with the kit importing ui/lib/process — it is not checking what it prints"
+            cp /tmp/badge.bak ui/lib/nidara-kit/badge.ts
+            exit 1
+          fi
+          cp /tmp/badge.bak ui/lib/nidara-kit/badge.ts
+          sed -i '1d' ui/lib/nidara-kit/badge.ts
+          if node scripts/ci/kit-boundary-check.mjs; then
+            echo "::error::the check passed with a kit file that lost its LGPL line"
             cp /tmp/badge.bak ui/lib/nidara-kit/badge.ts
             exit 1
           fi

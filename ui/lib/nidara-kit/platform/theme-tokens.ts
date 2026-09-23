@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 /**
  * NIDARA TOKEN ENGINE — the whole `--nidara-*` ramp, for EVERY bundle
  * ==================================================================

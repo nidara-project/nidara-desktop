@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 // The application host — what `ags/gtk4/app` was, owned by us.
 //
 // This is the last piece of AGS that was not scaffolding. Its 328 lines were a

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 // gtk-theme — commandment 11, as one line every bundle calls before its first window.
 //
 // "We use GTK, with OUR styles. Nothing by default." (Owner, 2026-09-20 —

@@ -19,6 +19,12 @@
  *   - a Sass built-in (`sass:…`).
  * Anything else is a dependency the package does not carry.
  *
+ * And every file carries `SPDX-License-Identifier: LGPL-3.0-or-later` on its first
+ * line. The kit is LGPL and the repo around it GPL (owner's decision, 2026-09-23),
+ * so a file without the line reads as GPL to anyone who finds it alone — and a file
+ * MOVED in from the rest of the repo changes licence, which is a decision for its
+ * copyright holders, not a side effect of `git mv`.
+ *
  * Usage:  node scripts/ci/kit-boundary-check.mjs [kit-dir]
  * CI: the "Widget registry freshness" job, beside the widget boundary, with a
  * control that plants a forbidden import and requires this check to fail.
@@ -52,10 +58,13 @@ function importsOf(src, scss) {
 
 const inside = p => p === KIT || p.startsWith(KIT + sep)
 
+const SPDX = "SPDX-License-Identifier: LGPL-3.0-or-later"
 const errors = []
 let count = 0
 for (const file of walk(KIT)) {
     const scss = file.endsWith(".scss")
+    if (!readFileSync(file, "utf8").split("\n", 1)[0].includes(SPDX))
+        errors.push(`${relative(REPO, file)}: first line is not \`// ${SPDX}\` — the kit is LGPL, the repo around it GPL`)
     // Strip comments first: the kit's headers quote import lines as examples.
     const src = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1")
     for (const spec of importsOf(src, scss)) {
@@ -79,10 +88,10 @@ if (count === 0) {
     process.exit(1)
 }
 if (errors.length) {
-    console.error("kit-boundary-check: nidara-kit reaches outside itself\n")
+    console.error("kit-boundary-check: nidara-kit reaches outside itself, or a file lost its licence line\n")
     for (const e of errors) console.error("  " + e)
     console.error("\n  ↳ the kit is a package (tech-debt #108): what it needs moves INTO ui/lib/nidara-kit/,")
     console.error("    or the caller passes it in. An app outside this repo has the kit and nothing else.")
     process.exit(1)
 }
-console.log(`kit-boundary-check: ok — ${count} imports, all inside nidara-kit or the runtime`)
+console.log(`kit-boundary-check: ok — ${count} imports, all inside nidara-kit or the runtime; every file LGPL-headed`)
