@@ -328,6 +328,17 @@ jobs:
           echo "depends: ${#depends[@]}  makedepends: ${#makedepends[@]}"
           [ "${#depends[@]}" -ge 40 ] || { echo "::error::depends=() collapsed to ${#depends[@]}"; exit 1; }
           [ "${#makedepends[@]}" -ge 5 ] || { echo "::error::makedepends=() collapsed to ${#makedepends[@]}"; exit 1; }
+      # nidara-kit's API version lives twice (#108 phase 4): in its package.json,
+      # which is the kit's own statement, and as a literal in the PKGBUILD, because
+      # makepkg reads `provides` before anything runs. Drift would publish a kit
+      # whose `nidara-kit-api` says one version and whose files say another — and
+      # apps outside this repo resolve their dependency by the first.
+      - name: nidara-kit's API version matches in PKGBUILD and package.json
+        run: |
+          pk="$(sed -n 's/^_kitapi=//p' packaging/nidara/PKGBUILD)"
+          js="$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' ui/lib/nidara-kit/package.json)"
+          echo "PKGBUILD _kitapi=$pk  package.json version=$js"
+          [ -n "$pk" ] && [ "$pk" = "$js" ] || { echo "::error::nidara-kit API version: PKGBUILD says '$pk', package.json says '$js'"; exit 1; }
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
@@ -380,7 +391,7 @@ jobs:
 
       # The installer, the greeter and the lock screen are typechecked in FULL,
       # against the same snapshot: each tsconfig includes ../shell/@girs, and the
-      # only shim left is ui/lib/gi-cairo.d.ts (ts-for-gir types `gi://cairo` from
+      # only shim left is ui/lib/nidara-kit/gi-cairo.d.ts (ts-for-gir types `gi://cairo` from
       # the cairo GIR, not GJS's own module — see that file, and why it must be
       # listed first). Until 2026-09-22 these three were NAMES ONLY (TS2304/TS2552)
       # with GLib, Gio and GObject declared `any`, and `GLib.strdup_printf` —

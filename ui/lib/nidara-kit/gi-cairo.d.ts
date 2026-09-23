@@ -1,6 +1,11 @@
-// The installer, the greeter and the lock screen are typechecked against the
-// shell's real GI typings (each tsconfig.json includes ../shell/@girs and this
-// file). This file shims ONLY what those typings get wrong.
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// The kit's one type shim. The installer, the greeter and the lock screen are
+// typechecked against the shell's real GI typings (each tsconfig.json includes
+// ../shell/@girs and this file), and so is any app OUTSIDE this repo that
+// typechecks against the installed kit (/usr/share/nidara-kit/src/gi-cairo.d.ts —
+// see the kit's README). It lives in the kit because the kit is what paints with
+// cairo: an app importing the kit's sources gets those gradients whether it draws
+// one or not (#108 phase 4). This file shims ONLY what the typings get wrong.
 //
 // ⚠️ It must come FIRST in each tsconfig's `include`. @girs declares
 // `gi://cairo` too, the two ambient declarations merge, and the one tsc reads

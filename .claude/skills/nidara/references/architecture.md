@@ -1991,8 +1991,8 @@ must say which case an app is in rather than show switches that promise what the
 ### The kit is a package (tech-debt #108, 2026-09-23)
 
 `nidara-kit` is the platform library of every Nidara application — what libadwaita is to a GNOME
-app — and it is on its way to being INSTALLED once on the system and loaded by each app at start
-(the owner's option B), so that one update reaches every app. An app published outside this repo
+app — INSTALLED once on the system, as its own pacman package `nidara-kit`, and loaded by each app
+at start (the owner's option B), so that one update reaches every app. An app published outside this repo
 will have the kit and nothing else of this tree. So the directory is the package, and everything
 the package needs lives inside it:
 
@@ -2001,7 +2001,9 @@ the package needs lives inside it:
 | `nidara-kit/*.ts` | the widgets, and `index.ts`, the widget API |
 | `nidara-kit/platform/` | what the widgets and an app's start-up need: `host` (the `Gtk.Application`), `gtk-theme` (`useNoGtkTheme`), `appearance` + `appearance-css` + `theme-tokens` (the appearance engine), `font-rendering`, `icons`, `app-id`, and the drawing/token helpers (`tokens`, `accent`, `cairo-draw`, `glass-paint`, `glass-capsule`, `signals`, `file`, `status-colors`) |
 | `nidara-kit/styles/` | the kit's sheet: `_tokens`, `_mixins`, `_base-layer`, `_components` |
-| `nidara-kit/package.json` | the package's name and ITS version — separate from the desktop's `VERSION`, because consumers outside this repo will pin it |
+| `nidara-kit/package.json` | the package's name and ITS version — the kit's API version, separate from the desktop's `VERSION`, because consumers outside this repo pin it |
+| `nidara-kit/gi-cairo.d.ts` | the kit's one type shim (`gi://cairo`). It moved in from `ui/lib/` in phase 4: whoever typechecks the kit's sources needs it, and outside the repo that is every app |
+| `nidara-kit/README.md` | the guide for app authors OUTSIDE this repo — the public specifier, the minimal app, the tsconfig, the version rule |
 
 🔑 **The kit imports nothing from outside itself** — only its own modules, `gi://…`, GJS built-ins
 and `sass:…`. `scripts/ci/kit-boundary-check.mjs` enforces it (widgets-gen job, with a control that
@@ -2087,9 +2089,39 @@ and run against another resolves `file:///usr/share/nidara-kit/js/<module>.js` b
 removing a kit module, or an export, breaks already-built apps — which is exactly what the package's
 version (`package.json`) is for from phase 4 on.
 
-Still owed (phase 4, in `tech-debt.md`): the kit as its own package in the PKGBUILD, its types, and a
-guide for app authors — including the specifier an app OUTSIDE this repo imports the kit by. ⚠️ The INSTALLER keeps bundling its own copy until the ISO is published — changing how the
-one non-updatable program starts, before the ISO, is the risk this sequencing avoids.
+#### The kit's own package, and how an app outside the repo reaches it (#108 phase 4, 2026-09-23)
+
+`packaging/nidara/PKGBUILD` builds THREE packages: `nidara-desktop`, `nidara-kit` and
+`nidara-installer`. `nidara-kit` holds `/usr/share/nidara-kit/{js,kit.css,src,package.json}` plus
+its README and `COPYING.LESSER`; `nidara-desktop` depends on it pinned to the same build
+(`nidara-kit=$pkgver-$pkgrel` — its bundles were compiled against those exact module names).
+install.sh's local-package fallback installs both in ONE `pacman -U`, because files that change
+owner between packages only do so cleanly inside a single transaction.
+
+The public face, all of it in `ui/lib/nidara-kit/README.md` (which is the canonical text — do not
+copy it here):
+
+- **The specifier is the absolute URI** `file:///usr/share/nidara-kit/js/<module>.js`. Not a
+  stand-in: GJS resolves no bare names but its own built-ins, and a URI needs no bundler at all.
+- **The types are the sources** (`/usr/share/nidara-kit/src/`), mapped onto that URI with
+  tsconfig `paths`. No `.d.ts` generation: declaration emit needs the GI typings, which a package
+  build does not have, and a declaration built without them is `any` where it matters.
+- **Two versions.** pkgver is the release's (a split PKGBUILD cannot give one package its own);
+  the API version is `package.json`'s, provided as `nidara-kit-api=<x.y.z>`, and that is what an
+  outside app depends on. ⚠️ It is ALSO a literal (`_kitapi`) at the top of the PKGBUILD, because
+  makepkg reads `provides` before `package()` runs — computed inside it, `--printsrcinfo` fails
+  with `pkgver in provides cannot be empty` (measured). `package_nidara-kit()` refuses to build on
+  a mismatch and the CI `pkgbuild` job checks it. Bump both when the API changes.
+
+Measured, with an app written in the scratchpad and never inside this tree: `package_nidara-kit()`
+run into a scratch root; the app typechecked against that root's `src/` (0 errors; a control with
+a wrong `variant` caught as TS2322); bundled by plain esbuild, not ours; run under a headless
+`cage` with the scratch root bound onto `/usr/share/nidara-kit` — portal read, kit sheet found,
+window presented. Without the bind: `ImportError: Unable to load file from:
+file:///usr/share/nidara-kit/js/platform/host.js`.
+
+⚠️ The INSTALLER keeps bundling its own copy until the ISO is published — changing how the one
+non-updatable program starts, before the ISO, is the risk this sequencing avoids.
 
 ### The widgets
 

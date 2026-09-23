@@ -161,32 +161,38 @@ ensure_pkg_cache() {
 # the exact blind spot that hid a stale, crashing appmenu-glib-translator, which
 # is gone as of 2026-08-18). This
 # transition gives those paths to pacman; from here they upgrade/remove cleanly.
-# $2 (optional) NAMES the split package to build and install. It is not a
-# refinement: since 2026-08-25 packaging/nidara/PKGBUILD emits TWO packages —
-# `nidara` and `nidara-installer` — and this script must never hand somebody the
-# second one. It runs on an Arch that is already in use, where a program whose job
-# is to erase a disk has no business being installed, and the old
-# `ls -t | head -1` would have picked whichever file makepkg happened to write
-# last. `--pkg` also skips building the package we do not want.
+# $2… (optional) NAME the split packages to install. It is not a refinement:
+# packaging/nidara/PKGBUILD emits THREE packages — `nidara-desktop`, `nidara-kit`
+# (which the desktop depends on) and `nidara-installer` — and this script must
+# never hand somebody the third. It runs on an Arch that is already in use, where
+# a program whose job is to erase a disk has no business being installed, and the
+# old `ls -t | head -1` would have picked whichever file makepkg happened to write
+# last. All the named packages go to ONE `pacman -U`: files moved from the desktop
+# to the kit (#108 phase 4) only change owner cleanly inside a single transaction.
+# ⚠️ No `makepkg --pkg`: pacman 7.0 removed it and makepkg 7.1 answers
+# `invalid option '--pkg'`, so this path was dead until 2026-09-23. makepkg builds
+# every package; the names below pick which ones are installed.
 build_install_pkg() {
-    local dir="$1"
-    local want="${2:-}"
+    local dir="$1"; shift
     ensure_pkg_cache
     chown -R "$REAL_USER:" "$dir" 2>/dev/null || true
     # -f rebuild, --nodeps (install order is managed below), --skipinteg (git sources)
-    local pkgarg=""
-    [ -n "$want" ] && pkgarg="--pkg '$want'"
-    run_user bash -c "cd '$dir' && SRCDEST='$PKG_CACHE/src' makepkg -f --noconfirm --nodeps --skipinteg --noprogressbar $pkgarg"
-    local pkgfile
-    # Anchored to the requested name — `nidara-*` would also match
-    # `nidara-installer-*`, which is the exact mistake this guards.
-    if [ -n "$want" ]; then
-        pkgfile="$(ls -t "$dir/$want"-[0-9]*.pkg.tar.* 2>/dev/null | head -1)"
+    run_user bash -c "cd '$dir' && SRCDEST='$PKG_CACHE/src' makepkg -f --noconfirm --nodeps --skipinteg --noprogressbar"
+    local pkgfiles=() want f
+    if [ $# -gt 0 ]; then
+        for want in "$@"; do
+            # Anchored to the requested name — `nidara-*` would also match
+            # `nidara-installer-*`, which is the exact mistake this guards.
+            f="$(ls -t "$dir/$want"-[0-9]*.pkg.tar.* 2>/dev/null | head -1)"
+            [ -n "$f" ] || { echo "  [ERR] makepkg produced no $want package in $dir" >&2; exit 1; }
+            pkgfiles+=("$f")
+        done
     else
-        pkgfile="$(ls -t "$dir"/*.pkg.tar.* 2>/dev/null | head -1)"
+        f="$(ls -t "$dir"/*.pkg.tar.* 2>/dev/null | head -1)"
+        [ -n "$f" ] || { echo "  [ERR] makepkg produced no package in $dir" >&2; exit 1; }
+        pkgfiles+=("$f")
     fi
-    [ -n "$pkgfile" ] || { echo "  [ERR] makepkg produced no ${want:-} package in $dir" >&2; exit 1; }
-    sudo pacman -U --noconfirm --overwrite '*' "$pkgfile"
+    sudo pacman -U --noconfirm --overwrite '*' "${pkgfiles[@]}"
 }
 
 # Build the nidara package itself from THIS tree and install it (§6). Uses the
@@ -217,7 +223,7 @@ build_local_nidara_pkg() {
         --exclude='./packaging/nidara/src' --exclude='./packaging/nidara/pkg' \
         --exclude='./packaging/nidara/*.tar.*' \
         --transform "s|^\.|nidara-desktop-$pkgver|SH" .
-    build_install_pkg "$pdir" nidara-desktop
+    build_install_pkg "$pdir" nidara-desktop nidara-kit
 }
 
 echo ""
@@ -564,6 +570,13 @@ sudo install -Dm644 "$REPO_DIR/ui/lib/nidara-kit/kit.css" /usr/share/nidara-kit/
 # over the old directory would keep chunks nothing imports any more.
 sudo rm -rf /usr/share/nidara-kit/js
 sudo cp -r "$REPO_DIR/ui/lib/nidara-kit/build/js" /usr/share/nidara-kit/js
+# The rest of what the `nidara-kit` package ships (#108 phase 4): the API version
+# and the sources an app outside this repo typechecks against. Same layout as the
+# package's, so an app author's tsconfig works on either kind of install.
+sudo install -Dm644 "$REPO_DIR/ui/lib/nidara-kit/package.json" /usr/share/nidara-kit/package.json
+sudo rm -rf /usr/share/nidara-kit/src
+(cd "$REPO_DIR/ui/lib/nidara-kit" && find . -name '*.ts' -not -path './build/*' -print0 |
+    sudo xargs -0 -I{} install -Dm644 {} /usr/share/nidara-kit/src/{})
 sudo chmod -R a+rX /usr/share/nidara-kit
 
 # Greeter bundle + style
