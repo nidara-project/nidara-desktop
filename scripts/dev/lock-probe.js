@@ -20,7 +20,7 @@
  * painted glass; see the maintainer skill's vm-test harness.
  *
  * ⚠️ WHAT THIS DOES NOT SHOW. Neither surface's BLUR: the lockscreen's own
- * (ui/lib/glass-capsule.ts renders it from the wallpaper, because under
+ * (ui/lib/nidara-kit/platform/glass-capsule.ts renders it from the wallpaper, because under
  * ext-session-lock-v1 the compositor draws nothing behind the lock surface) is
  * skipped here unless BG points at a real image, and the greeter's comes from a
  * layer_rule that does not exist offscreen. Nor `:focus-visible`, which GTK only
@@ -47,11 +47,11 @@
  *   EXTRA_CSS=<path>  a second sheet loaded ABOVE the first — "what if we also
  *                said this?". How candidate treatments are compared without
  *                editing the real stylesheet for each one.
- *   PAINTER=<path>  a BUNDLED ui/lib/glass-capsule.js. Without it the capsules
+ *   PAINTER=<path>  a BUNDLED ui/lib/nidara-kit/platform/glass-capsule.js. Without it the capsules
  *                render as the CSS leaves them, which since 2026-08-09 is
  *                nothing at all — both bundles paint them. So pass it whenever
  *                the question is about the capsule rather than about type:
- *                  npx --yes esbuild ui/lib/glass-capsule.ts --bundle \
+ *                  npx --yes esbuild ui/lib/nidara-kit/platform/glass-capsule.ts --bundle \
  *                    --format=esm --external:'gi://*' --outfile=/tmp/glass.js
  *                (gjs cannot import TypeScript; the bundle is the whole reason
  *                for the indirection. `--external:'gi://*'` keeps the GI imports
@@ -119,7 +119,7 @@ const REPO = GLib.getenv("NIDARA_REPO") || GLib.get_current_dir()
 const CSS = GLib.getenv("CSS") || `${REPO}/ui/greeter/style.css`
 const BG = GLib.getenv("BG") || "#1b2430"
 const SCOPE = GLib.getenv("SCOPE") || "greeter"
-// Shipped Lucide glyphs, resolved exactly as ui/lib/icons.ts does at runtime.
+// Shipped Lucide glyphs, resolved exactly as ui/lib/nidara-kit/platform/icons.ts does at runtime.
 const ICON_DIR = `${GLib.getenv("NIDARA_SHELL_ROOT") ?? "/usr/share/nidara/ui/shell"}/assets/icons/nidara/scalable/actions`
 const W = parseInt(GLib.getenv("W") || "1280", 10)
 const H = parseInt(GLib.getenv("H") || "800", 10)
@@ -187,7 +187,7 @@ const t = (key) => {
  * ⚠️ It said `nidara` until 2026-09-20, naming a blank gtk.css we installed ourselves.
  * `Empty` renders identically (measured: 0 px of 495 000) and cannot be missing — which
  * the file on disk could be, and then GTK fell back to its FULL default theme in
- * silence. See ui/lib/gtk-theme.ts.
+ * silence. See ui/lib/nidara-kit/platform/gtk-theme.ts.
  *
  * What that cost, on 2026-08-24: all three of the greeter's dropdown chevrons draw
  * nothing on the real login screen, because an `arrow` is a builtin-icon node whose
@@ -371,7 +371,7 @@ if (SCOPE === "greeter") {
 }
 
 // Power bar — PowerBar.ts. The shipped Lucide glyphs are loaded the way
-// ui/lib/icons.ts does at runtime, which is the only way to see whether the
+// ui/lib/nidara-kit/platform/icons.ts does at runtime, which is the only way to see whether the
 // `nd-icon` invert actually lands (they render BLACK unloaded, so a missing invert
 // is invisible in the source and obvious here).
 //

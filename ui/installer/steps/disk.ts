@@ -23,7 +23,7 @@ import {
   type NidaraTableRow,
 } from "../../lib/nidara-kit"
 import { t } from "../lib/i18n"
-import { ndIcon } from "../../lib/icons"
+import { ndIcon } from "../../lib/nidara-kit/platform/icons"
 import { PASSWORD_ADVISED_MIN } from "../lib/account-problems"
 import {
   getAnswers,

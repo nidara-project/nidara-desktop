@@ -65,7 +65,7 @@
 //    inner node directly and beats what the class above it inherits.)
 
 // ── The base layer is NOT wired from here, and that was measured ────────────
-// `ui/lib/styles/_base-layer.scss` holds the element-selector rules that dress the
+// `ui/lib/nidara-kit/styles/_base-layer.scss` holds the element-selector rules that dress the
 // nodes GTK builds itself (tech-debt #107 step 5). It was `@use`d from this file
 // for exactly one afternoon, which put it in every bundle that compiles the kit —
 // including the SHELL, which on that day still wore the user's GTK theme.
@@ -84,8 +84,8 @@
 // a layer meant to replace a theme, added under a process that still has one, is
 // the two-substrate bug this repo already paid for.
 
-@use 'tokens' as *;
-@use 'mixins' as *;
+@use './tokens' as *;
+@use './mixins' as *;
 
 /* --- Base text input -------------------------------------------------------
    Every plain Gtk.Entry (and anything with .nidara-input) gets the nidara
@@ -446,7 +446,7 @@ checkbutton:disabled {
     @include material-card;
     /* ⚠️ Load-bearing: a row sits 5px inside this card (1px border + this 3px + 1px row
        margin), and radius-sm 10 is DERIVED from that inset against the card's radius-md
-       16. Change this 3 and `sm` has to be re-derived in ui/lib/tokens.ts. */
+       16. Change this 3 and `sm` has to be re-derived in ui/lib/nidara-kit/platform/tokens.ts. */
     padding: 3px;
     box-shadow: none;
 }

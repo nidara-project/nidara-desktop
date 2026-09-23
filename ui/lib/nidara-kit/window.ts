@@ -3,12 +3,12 @@ import Gio from "gi://Gio"
 import { NidaraAppWindow, type NidaraCloseMode } from "./app-window"
 import { NidaraScrolled } from "./scrolled"
 import { NidaraSplitView, type NidaraSplitViewResult } from "./split-view"
-import { RADIUS, WINDOW_LAYOUT, collapseAtFor, minWindowWidthFor } from "../tokens"
+import { RADIUS, WINDOW_LAYOUT, collapseAtFor, minWindowWidthFor } from "./platform/tokens"
 
 /**
  * Chrome radii, named for what they dress: the window is `glass(floating)` =
  * `RADIUS.lg`, the sidebar capsule is `material-card` = `RADIUS.md`. The numbers
- * themselves live in `lib/tokens.ts` (mirrored by `--nidara-radius-*`), which is
+ * themselves live in `lib/nidara-kit/platform/tokens.ts` (mirrored by `--nidara-radius-*`), which is
  * where the ladder is documented — these are aliases, not a second source.
  */
 export const NIDARA_WINDOW_RADIUS = RADIUS.lg
@@ -98,7 +98,7 @@ export interface NidaraWindowOpts {
     /**
      * The Wayland app-id this window declares for ITSELF, instead of inheriting
      * the process-wide one. A real application window is one the compositor should
-     * file as one — see `ui/lib/app-id.ts`.
+     * file as one — see `ui/lib/nidara-kit/platform/app-id.ts`.
      */
     appId?: string
     // No tooltip opt for the toggle ON PURPOSE — native GTK tooltips are

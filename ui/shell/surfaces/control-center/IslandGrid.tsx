@@ -12,13 +12,13 @@ import registry, { widgetAvailable, watchWidgetAvailability } from "../../widget
 import { uiIcon } from "../../core/Icons"
 import { t } from "../../core/i18n"
 import SquircleContainer, { Shape, resolveDrawParams, GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
-import { RADIUS, rowInsetFor } from "../../../lib/tokens"
+import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
 import { drawSquircle, hexToFloatRgb } from "../../common/DrawingUtils"
 import Theme from "../../core/ThemeManager"
-import { DANGER_HEX } from "../../../lib/status-colors"
+import { DANGER_HEX } from "../../../lib/nidara-kit/platform/status-colors"
 import IconButton from "../../common/IconButton"
 import { createCCContextMenu } from "./CCContextMenu"
-import { cairoDraw } from "../../../lib/cairo-draw"
+import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 
 const pixelX = (gx: number) => gx * (UNIT + GAP)
 const pixelY = (gy: number) => gy * (UNIT + GAP)

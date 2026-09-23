@@ -1,7 +1,7 @@
 import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
-import { RADIUS } from "../tokens"
-import { cairoDraw } from "../cairo-draw"
+import { RADIUS } from "./platform/tokens"
+import { cairoDraw } from "./platform/cairo-draw"
 
 /**
  * NidaraScrolled — the shell's scroll view. One component for overlay surfaces AND

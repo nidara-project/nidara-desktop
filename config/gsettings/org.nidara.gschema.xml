@@ -294,7 +294,7 @@
     own installer and lock screen) never read THIS schema: bin/nidara-portal serves
     it as the org.nidara.appearance portal namespace, under these same key names,
     and the shell writes the greeter's mirror from it. Ranges = GLASS_RANGE
-    (ui/lib/theme-tokens.ts).
+    (ui/lib/nidara-kit/platform/theme-tokens.ts).
   -->
   <schema id="org.nidara.appearance" path="/org/nidara/appearance/">
     <key name="bar-opacity" type="d">
@@ -333,7 +333,7 @@
       against. Empty means the drawings shipped with the shell, which is the
       default and what every install has today. Not served by the portal yet:
       the greeter and the lock screen still carry their own copies of these
-      icons (ui/lib/icons.ts), and they join when the migration reaches them.
+      icons (ui/lib/nidara-kit/platform/icons.ts), and they join when the migration reaches them.
     -->
     <key name="interface-icon-theme" type="s">
       <default>""</default>

@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
-import { setWindowAppId } from "../app-id"
+import { setWindowAppId } from "./platform/app-id"
 
 /**
  * NIDARA KIT — the base every Nidara application window is built from
@@ -42,7 +42,7 @@ export interface NidaraAppWindowHeader {
 }
 
 export interface NidaraAppWindowOpts {
-    /** The bundle's `Gtk.Application` (`ui/lib/host`). */
+    /** The bundle's `Gtk.Application` (`ui/lib/nidara-kit/platform/host`). */
     app: any
     title: string
     content: Gtk.Widget
@@ -88,7 +88,7 @@ export interface NidaraAppWindowOpts {
     name?: string
     /**
      * The Wayland app-id this window declares for ITSELF, instead of inheriting
-     * the process-wide one — see `ui/lib/app-id.ts`.
+     * the process-wide one — see `ui/lib/nidara-kit/platform/app-id.ts`.
      */
     appId?: string
 }

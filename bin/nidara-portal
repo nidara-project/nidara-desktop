@@ -12,7 +12,7 @@
 //    (accent-color, color-scheme, contrast, reduced-motion) and Nidara's own
 //    `org.nidara.appearance` extension.
 //
-//    🔑 THE CONTRACT (#534 — the full text is in ui/lib/appearance.ts): every
+//    🔑 THE CONTRACT (#534 — the full text is in ui/lib/nidara-kit/platform/appearance.ts): every
 //    setting has ONE home, and this daemon is how APPLICATIONS reach it. GTK 4.22
 //    reads color-scheme/contrast/reduced-motion from here by itself; libadwaita
 //    reads the accent; our own installer, lock screen and any Nidara app read BOTH
@@ -45,7 +45,7 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 
-// KEEP IN SYNC with ui/lib/accent.ts ACCENT_HEX (single source of truth for
+// KEEP IN SYNC with ui/lib/nidara-kit/platform/accent.ts ACCENT_HEX (single source of truth for
 // the palette). Duplicated here because this daemon is a standalone GJS
 // script with no access to the TS bundles.
 const ACCENT_HEX = {

@@ -1259,8 +1259,8 @@ does today, in a `dynamicAppearanceCss()` that emits ~12 of the ~60 tokens, and 
 wrong on the way (a hover token it never defined, a `DANGER_HEX` retyped as a literal).
 
 ✅ **DONE for the installer, 2026-08-26 — and this is now a two-bundle item, not a three.**
-The engine moved to `ui/lib/theme-tokens.ts` (`ui/shell/core/NidaraTheme.ts` re-exports it and
-keeps only `CHROME_SCOPE_WINDOWS`, which is genuinely shell knowledge), `ui/lib/appearance.ts`
+The engine moved to `ui/lib/nidara-kit/platform/theme-tokens.ts` (`ui/shell/core/NidaraTheme.ts` re-exports it and
+keeps only `CHROME_SCOPE_WINDOWS`, which is genuinely shell knowledge), `ui/lib/nidara-kit/platform/appearance.ts`
 is the one reader, and `installAppearance()` wires a bundle up in one call. The installer's
 `app.ts` went from 190 lines to 60 and its stylesheet lost both hand-typed ramps.
 
@@ -1278,7 +1278,7 @@ imports `ui/lib/{file,accent,status-colors,tokens}` and NOTHING from the shell. 
 by history, not by coupling. Moving it to `ui/lib/` plus one shared reader for `appearance.json`
 (three bundles have their own copy of `readAppearance()`) deletes `dynamicAppearanceCss()` AND
 both hand-written ramps in `style.scss` AND `accentCssFor()`'s six-token subset in
-`ui/lib/accent.ts`, and gives the greeter, the lock screen and the installer the user's live
+`ui/lib/nidara-kit/platform/accent.ts`, and gives the greeter, the lock screen and the installer the user's live
 accent and opacity for free — which is the actual complaint behind this item, not the
 duplication itself. The kit's appearance seam (`nidara-kit/appearance.ts`) grows the opacity at
 the same time, since Cairo widgets need it as a number and today it only carries the accent and
@@ -1400,14 +1400,14 @@ These were paid down; the *rule* remains:
   the `sudo busctl` recipe).
 - **Dock H/V** is deduplicated — fix dock logic in `DockCore.tsx` / `DockAxis.ts`, never the
   7-line wrappers.
-- **Accent colors** live only in `ui/lib/accent.ts` — add/change them there.
-- **Greeter ↔ lockscreen ↔ shell** share `ui/lib/accent.ts` + `ui/lib/users.ts` + `ui/lib/wallpaper.ts`
-  + `ui/lib/avatar.ts`, and since 2026-08-10 also **`ui/lib/styles/_components.scss`** — the kit's
+- **Accent colors** live only in `ui/lib/nidara-kit/platform/accent.ts` — add/change them there.
+- **Greeter ↔ lockscreen ↔ shell** share `ui/lib/nidara-kit/platform/accent.ts` + `ui/lib/users.ts` + `ui/lib/wallpaper.ts`
+  + `ui/lib/avatar.ts`, and since 2026-08-10 also **`ui/lib/nidara-kit/styles/_components.scss`** — the kit's
   own stylesheet, which the two login surfaces now `@use` (see "The greeter wears the kit" below)
-  — and since 2026-08-09 (see #57) **`ui/lib/styles/_tokens.scss`** (the
+  — and since 2026-08-09 (see #57) **`ui/lib/nidara-kit/styles/_tokens.scss`** (the
   design system's mode-independent half — type ramp, spacing, motion, radius ladder),
-  **`ui/lib/tokens.ts`**'s `LOCK_GLASS` (the numeric half of the glass mirror the lockscreen's
-  painter needs) and **`ui/lib/icons.ts`** (the shipped icon set, for the two bundles with no
+  **`ui/lib/nidara-kit/platform/tokens.ts`**'s `LOCK_GLASS` (the numeric half of the glass mirror the lockscreen's
+  painter needs) and **`ui/lib/nidara-kit/platform/icons.ts`** (the shipped icon set, for the two bundles with no
   `core/`). Reach for `ui/lib` before copying anything into a bundle
   (Settings → Users consumes `users.ts` too — don't reintroduce a per-surface passwd parser);
   `lib/i18n.ts` stays separate per bundle on purpose (different config paths / superset).
@@ -1697,7 +1697,7 @@ anonymous frames, which is a genuine defect in a desktop environment; and no nam
 try (`io.Astal.ags`, "Nidara Settings", "nidara") matches, which is why `query_app` on our own
 window returns zero — the wrong-door confusion documented in `state-and-ipc.md`.
 
-**MOSTLY FIXED 2026-08-18**, as a side effect of owning the application host. `ui/lib/host.ts`
+**MOSTLY FIXED 2026-08-18**, as a side effect of owning the application host. `ui/lib/nidara-kit/platform/host.ts`
 calls `GLib.set_prgname(applicationId)` and `GLib.set_application_name()`, and the blocker this
 item described dissolved on the way: the worry was that `prgname` was load-bearing for the Hyprland
 class, and it turned out **it is not** — measured three ways, an explicit `application-id` wins over
@@ -2393,7 +2393,7 @@ Raised by the user reviewing the scroll bar: *"parece que hemos puesto un valor 
 vez que hemos hecho algo"* — the specific catch was the bar-expansion capsule at radius **20**
 while windows are **24**. Correct.
 
-**✅ Radii — closed, TS/TSX *and* SCSS.** One ladder in `ui/lib/tokens.ts` mirrored by
+**✅ Radii — closed, TS/TSX *and* SCSS.** One ladder in `ui/lib/nidara-kit/platform/tokens.ts` mirrored by
 `--nidara-radius-*`; **zero radius literals in `ui/shell`** (`64 → 32` Workspace Overview,
 `20 → 24` bar expansion + CC context menu, `18 → md` app-grid tiles, `14 → md` popover,
 `12 → md` ws-strip tile, `8 → xs` calendar cell, new `xl: 32`). Two literals turned out to be
@@ -2508,8 +2508,8 @@ Every rule for it lived in `ui/shell/styles/_components.scss`, which only the sh
 so a greeter that imported `NidaraButton` would have rendered it as raw GTK. The code was
 shared and the appearance was not.
 
-**Done:** the kit's half is now `ui/lib/styles/_components.scss`, with the mixins it needs in
-`ui/lib/styles/_mixins.scss` and the relative `$fse-*` ramp in `_tokens.scss`. `_base.scss`
+**Done:** the kit's half is now `ui/lib/nidara-kit/styles/_components.scss`, with the mixins it needs in
+`ui/lib/nidara-kit/styles/_mixins.scss` and the relative `$fse-*` ramp in `_tokens.scss`. `_base.scss`
 `@forward`s both, so `@use 'base' as *` is unchanged. The split rule and the bundle-import
 caveat are in `design-system.md` ("The kit's stylesheet").
 
@@ -2807,7 +2807,7 @@ Raise it when the geometry scales too, and look again before you do.
 
 ### 63. Settings geometry: the law exists now; the pages have not been walked (2026-08-11)
 
-The window's geometry is a single rule — `WINDOW_LAYOUT` in `ui/lib/tokens.ts`, spelled out in
+The window's geometry is a single rule — `WINDOW_LAYOUT` in `ui/lib/nidara-kit/platform/tokens.ts`, spelled out in
 design-system.md ("The Settings window has ONE geometry law"). The content pane is a constant
 800 px, the sidebar's breakpoint is `sidebar + content` instead of the active page's natural
 width, the window has a floor, and `NidaraRow`'s title is one ellipsised line. Verified with
@@ -3343,7 +3343,7 @@ and a cached-surface replay would save **70–94 %** depending on the surface. T
 **What is already GSK, and stays that way** — this is not "Cairo everywhere":
 `common/WindowThumbnail.ts` (`vfunc_snapshot` + `append_texture` inside a `Gsk.RoundedClipNode`;
 `architecture.md` carries the rule that captures must NEVER go through a Cairo `draw_func`, which
-would download the texture off the GPU on every draw) and `ui/lib/glass-capsule.ts` (blur nodes +
+would download the texture off the GPU on every draw) and `ui/lib/nidara-kit/platform/glass-capsule.ts` (blur nodes +
 `Gsk.RoundedRect`). The split is: **GSK for textures, clips and blur; Cairo for shapes that are
 ours.**
 
@@ -3358,7 +3358,7 @@ different loads).
 
 > **Queue entry: #319.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
 
-The glass half is done: `ui/lib/glass-paint.ts` now holds the rim ramp, the silhouette and the
+The glass half is done: `ui/lib/nidara-kit/platform/glass-paint.ts` now holds the rim ramp, the silhouette and the
 shadow recipe, and the greeter/lockscreen capsule paints them (see `design-system.md`). Four things
 that audit found are NOT fixed, and one of them is about the instrument rather than the product.
 
@@ -3702,7 +3702,7 @@ vanishes, and the entry `placeholder`, which stops being dimmed.
 
 **1 · Our blank theme is gone; the theme is GTK's own `Empty`.** ✅ `ui/greeter/theme/gtk.css`, its
 `install.sh` step, its PKGBUILD line and the three `ThemeManager` guards against the name `nidara`
-are deleted; `ui/lib/gtk-theme.ts` is the one home for the decision and the greeter, the lock and
+are deleted; `ui/lib/nidara-kit/platform/gtk-theme.ts` is the one home for the decision and the greeter, the lock and
 the installer all call `useNoGtkTheme()`. install.sh now `rm -rf`s `/usr/share/themes/nidara` so an
 upgraded dev machine stops offering it. Measured: `Empty` is **0 pixels of 495 000** different from
 the blank theme it replaces.
@@ -3735,7 +3735,7 @@ file nobody reads is a fix that measures green and does nothing.
 because one name serves both toolkits: for GTK4 the two are interchangeable (measured through the
 real settings.ini path, `Adwaita` and `Default` render **0 differing pixels**, since an unresolvable
 name falls back to the built-in), and for GTK3 only `Adwaita` works. The per-file mapping is gone;
-`ui/lib/gtk-theme.ts` holds the reasoning and the numbers.
+`ui/lib/nidara-kit/platform/gtk-theme.ts` holds the reasoning and the numbers.
 
 ✅ **Verified on the owner's real screen, 2026-09-21** — the part that was still reasoning. A mode
 change repaints a RUNNING Chrome, browser chrome included and without restarting it: the window
@@ -3863,7 +3863,7 @@ So the shape is two layers, and we have only ever written the second:
 - The `spinner` still owed above stops being a separate "which drawing?" decision — it is one rule
   of the base layer like any other node.
 - ⚠️ **Build it by measuring, surface by surface, never in one sweep.** Bare-element rules are the
-  sharp edge and this repo has already paid for that once: `ui/lib/styles/_components.scss` records
+  sharp edge and this repo has already paid for that once: `ui/lib/nidara-kit/styles/_components.scss` records
   that when `entry` and `dropdown > button` arrived without a class, two properties reached
   controls nobody intended and only one was findable by reading the cascade. The A/B is
   `kit-gallery-probe` and `installer-pages-probe` (both now default to no theme, `PLATFORM_THEME=1`
@@ -3885,7 +3885,7 @@ precede step 5.
 
 #### ▶️ Step 5 STARTED 2026-09-20 — the base layer exists, three rules deep, and the controls are at zero
 
-`ui/lib/styles/_base-layer.scss`, `@use`d from the kit's `_components.scss` so every bundle that
+`ui/lib/nidara-kit/styles/_base-layer.scss`, `@use`d from the kit's `_components.scss` so every bundle that
 compiles the kit gets it. `scripts/dev/kit-gallery-probe.ts` grew `FONT_DIALOG=1`, which opens
 `Gtk.FontDialog` and shoots the toplevel GTK builds for it — the ruler this layer is measured with.
 
@@ -3927,7 +3927,7 @@ because the shift is cumulative.
 
 **So the layer is wired per BUNDLE, from the sheets of the ones that have no theme**
 (`ui/installer/style.scss`, `ui/greeter/style.scss` — the lock shares it), never from
-`ui/lib/styles/_components.scss`. Re-measured after the rewiring: shell back to **0 px** on all
+`ui/lib/nidara-kit/styles/_components.scss`. Re-measured after the rewiring: shell back to **0 px** on all
 three scopes, the font dialog still dressed (mean alpha 0.41), kit gallery and the installer pages
 still 0. The shell wires it the day step 5 flips it, and this probe is what makes that flip
 measurable button by button. 🔑 The principle underneath: **a layer meant to REPLACE a theme,
@@ -3960,7 +3960,7 @@ layer"). Two consequences land here:
   Nidara's own before that row is next touched.
 
 ⚠️ **Owed measurement, small and load-bearing for the sentence above.** GTK loads the user's own
-`~/.config/gtk-4.0/gtk.css` at USER level — the same 800 as `ui/lib/host.ts`, not below it — and a
+`~/.config/gtk-4.0/gtk.css` at USER level — the same 800 as `ui/lib/nidara-kit/platform/host.ts`, not below it — and a
 tie is settled by insertion order. Nothing of ours writes that file (`AppearanceSync` writes only
 `settings.ini`), so it is theoretical; but "the user's theme reaches none of our processes" is proven
 of `gtk-theme` and unproven of a hand-written `gtk.css`. Measure it before that claim is repeated.
@@ -4042,7 +4042,7 @@ its own project could not import the kit; it would have to copy it, and that cop
 the one that drifts where nobody is looking.
 
 So the decision that our apps carry their look as a dependency (see #107) has a precondition nobody
-has built: **the kit has to BE a dependency** — the widgets, its sheet (`ui/lib/styles/`), the
+has built: **the kit has to BE a dependency** — the widgets, its sheet (`ui/lib/nidara-kit/styles/`), the
 appearance seam (`nidara-kit/appearance.ts`) and the token engine, versioned and installed, with the
 four in-repo bundles consuming the same artefact as an external app would. That is also the only
 honest test that the seam works: a bundle in this tree can accidentally reach into `ui/shell/`, and an
@@ -4051,6 +4051,30 @@ external app cannot.
 ⚠️ Do NOT treat this as packaging polish. It is what makes #59's failure mode structural rather than
 lucky: a kit component whose rules stayed behind renders bare in whoever imported it, and
 `style-ownership-check` can only see the copies that live in this repo.
+
+**Decided 2026-09-23 — option B, by phases.** The kit is a PLATFORM library installed once and
+loaded by every app at start (like libadwaita), not a build-time dependency each app freezes a copy
+of: one update reaches every app. The cost accepted with it: the kit becomes a public API (versioned,
+never breaking a consumer silently), and GJS has to load it at runtime. Separate REPO: not yet — a
+package can ship from this repo; it moves out once its API stops moving, or when outside authors
+need their own release cadence.
+
+1. ✅ **The package is delimited (2026-09-23).** `ui/lib/nidara-kit/` holds the widgets, `platform/`
+   (host, gtk-theme, the appearance engine, icons, the token and drawing helpers) and `styles/`, with
+   its own `package.json` version; `kit-boundary-check.mjs` fails if it imports anything outside
+   itself. Layout and rule: `architecture.md` → "The kit is a package". Measured: the three sheets
+   compile byte-identical apart from comments, all four bundles typecheck and bundle.
+2. One kit sheet compiled once and loaded at runtime by every bundle (the end of the three copies:
+   ~47 KB each). Measure with the live A/B (`design-system.md`) plus the installer/greeter probes.
+3. The kit as installed ESM modules loaded at runtime (`bundle.sh` marks it external); the shell and
+   the greeter consume it the way an outside app would. Measure the start-up cost.
+4. `nidara-kit` in the PKGBUILD + its types + a guide for app authors.
+
+⚠️ The INSTALLER keeps bundling its own copy until the ISO is published (it is the one program that
+cannot be fixed by an update); it moves to B after.
+⚠️ **Owner's decision, open: the kit's LICENCE.** It carries the repo's GPL-3.0 today, which binds
+any app that loads it to the GPL. GTK and libadwaita are LGPL precisely so that apps of any licence
+can link them. Decide before phase 4 publishes it.
 
 Related: #59 (the kit's stylesheet split, and the direction its verification did not check), #107
 (the theming decision this serves), #571 (Settings becoming its own process — the first consumer).

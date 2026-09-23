@@ -23,7 +23,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Theme from "../core/ThemeManager"
-import { cairoDraw } from "../../lib/cairo-draw"
+import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 
 const FRAME_MS = 100
 const STEP = 0.45

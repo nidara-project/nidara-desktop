@@ -7,7 +7,7 @@ import { GLASS_INSET } from "../common/SquircleContainer"
 import { menuRow, menuSeparator } from "../common/MenuRow"
 import IconButton from "../common/IconButton"
 import { NidaraScrolled } from "../../lib/nidara-kit"
-import { RADIUS, rowInsetFor } from "../../lib/tokens"
+import { RADIUS, rowInsetFor } from "../../lib/nidara-kit/platform/tokens"
 import { AtomicWidget, ContentBudget, PANEL_W, WidgetSize, makeCapsuleTile } from "../common/widget-kit"
 
 import { t } from "../core/i18n"

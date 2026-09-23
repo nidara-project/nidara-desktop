@@ -8,8 +8,8 @@ import { GLASS_TINT, GLASS_SPECULAR } from "./tokens"
  * ⚠️ WHY THIS IS IN `ui/lib/` AND NOT IN THE SHELL. It used to live in
  * `ui/shell/common/DrawingUtils.ts`, and for as long as it did, the greeter and the
  * lockscreen could not reach it — `ui/lib/` may not import from `ui/shell/` (the same
- * constraint that moved `hexToFloatRgb` to `ui/lib/accent.ts`). So they had their own
- * painter, `ui/lib/glass-capsule.ts`, with a FLAT rim colour and no shadow at all.
+ * constraint that moved `hexToFloatRgb` to `ui/lib/nidara-kit/platform/accent.ts`). So they had their own
+ * painter, `ui/lib/nidara-kit/platform/glass-capsule.ts`, with a FLAT rim colour and no shadow at all.
  *
  * That was invisible until 2026-08-23, when the whole glass wave (#234–#248: one rim
  * ramp, one corner, the drop shadow) landed in the shell's painter and stopped at the

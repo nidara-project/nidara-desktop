@@ -15,7 +15,7 @@
 # color-scheme LIVE in gsettings).
 #
 # ⚠️ `gtk-theme` is for THIRD-PARTY applications — Nidara's own processes load no GTK
-# theme at all (commandment 11, ui/lib/gtk-theme.ts). Its seed is `Default`, the name
+# theme at all (commandment 11, ui/lib/nidara-kit/platform/gtk-theme.ts). Its seed is `Default`, the name
 # GTK's built-in answers to, and that is a FIX rather than a rename: it said `Adwaita`
 # until 2026-09-20 and a clean Arch has no /usr/share/themes/Adwaita, so GTK fell back
 # to the built-in anyway while Settings displayed a theme that was on no disk and in

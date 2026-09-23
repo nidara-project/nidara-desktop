@@ -1,12 +1,12 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { setWindowAppId } from "../../lib/app-id"
+import { setWindowAppId } from "../../lib/nidara-kit/platform/app-id"
 import Gdk from "gi://Gdk?version=4.0"
 import GdkPixbuf from "gi://GdkPixbuf"
 import Cairo from "gi://cairo"
 import { NidaraButton, makeHSlider } from "../../lib/nidara-kit"
 import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
-import { cairoDraw } from "../../lib/cairo-draw"
+import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 
 // Minimal circular avatar cropper: pan (drag) + zoom (slider) over a fixed square
 // canvas with a circular cutout, then renders the framed region to a square pixbuf
@@ -95,7 +95,7 @@ export function showAvatarCropper(
     // ── Dialog ────────────────────────────────────────────────────────────────────
     // Modal children of the Settings window, and Hyprland files them as clients of
     // their own — so they declare Settings' app-id too, exactly as they resolved
-    // to it under the old remap. See ui/lib/app-id.ts.
+    // to it under the old remap. See ui/lib/nidara-kit/platform/app-id.ts.
     const dialog = new Gtk.Window({
         title: t("settings.users.avatar.crop.title"),
         modal: true,

@@ -4,7 +4,7 @@
    NIDARA DESIGN SYSTEM — SHELL-SIDE SHARED COMPONENTS
    ========================================================================== */
 // The GLOBAL layer that is still the shell's own. The kit's half moved to
-// `ui/lib/styles/_components.scss` on 2026-08-10 so that more than one bundle
+// `ui/lib/nidara-kit/styles/_components.scss` on 2026-08-10 so that more than one bundle
 // can compile it — read that file's header for the rule that decided the split
 // (a rule goes there iff the widget wearing it is built in `ui/lib/`).
 //
@@ -33,14 +33,14 @@
 }
 
 
-/* `.nidara-menu` itself moved to ui/lib/styles/_components.scss on 2026-09-20 —
+/* `.nidara-menu` itself moved to ui/lib/nidara-kit/styles/_components.scss on 2026-09-20 —
    the kit builds that box (`nidara-kit/menu.ts`) and only the shell compiled its
    look, so any other bundle got the component with no rule at all (kit-style-check,
    tech-debt #59). What stays here is everything the SHELL builds around it. */
 
 .nidara-menu-row {
     // Text colour follows --nidara-text via the base layer's `button` rule
-    // (ui/lib/styles/_base-layer.scss) — no per-row override needed.
+    // (ui/lib/nidara-kit/styles/_base-layer.scss) — no per-row override needed.
     background: transparent;
     border: none;
     box-shadow: none;
@@ -120,7 +120,7 @@ separator {
 }
 
 /* The glass menu POPOVER (`.nidara-menu-popover`) moved to
-   ui/lib/styles/_components.scss on 2026-09-20 with `.nidara-menu` — both are built
+   ui/lib/nidara-kit/styles/_components.scss on 2026-09-20 with `.nidara-menu` — both are built
    by `nidara-kit/menu.ts`, so their rules belong to the kit's sheet. The rows below
    are the SHELL's: it builds them (renderMenuModel), the kit does not. */
 
@@ -128,10 +128,10 @@ separator {
    grow+fade with asymmetric easing) — there is no CSS overlay fade anymore. */
 
 /* --- Toggles (Switches) --- */
-/* MOVED to ui/lib/styles/_components.scss on 2026-09-20. The rules lived here,
+/* MOVED to ui/lib/nidara-kit/styles/_components.scss on 2026-09-20. The rules lived here,
    in the SHELL's half of the components, while `NidaraToggleRow` lives in the
    kit — so every other bundle got the component and none of its appearance. The
-   installer loads no GTK theme at all (commandment 11, ui/lib/gtk-theme.ts), so an
+   installer loads no GTK theme at all (commandment 11, ui/lib/nidara-kit/platform/gtk-theme.ts), so an
    unstyled switch is an INVISIBLE one: the installer's
    system page has had an NVIDIA toggle nobody could see since it was written,
    and it only appears on Turing-or-newer hardware, which is why it went
@@ -201,7 +201,7 @@ button.nidara-seg-btn {
     color: var(--nidara-text-dim);
 }
 
-// (.slider-value-label moved to ui/lib/styles/_components.scss 2026-08-16: the kit's
+// (.slider-value-label moved to ui/lib/nidara-kit/styles/_components.scss 2026-08-16: the kit's
 // NidaraSliderRow now builds one, so the rule has to be in the sheet the kit ships or
 // a non-shell window gets an unstyled readout. The shell's own six call sites keep it
 // — the shell compiles both sheets.)
@@ -300,7 +300,7 @@ button.settings-icon-btn {
 }
 
 
-// (.nidara-tooltip lives in the kit's sheet, ui/lib/styles/_components.scss — this
+// (.nidara-tooltip lives in the kit's sheet, ui/lib/nidara-kit/styles/_components.scss — this
 //  file had an identical second copy until tech-debt #107 step 6.)
 
 /* ── Cross-window pieces, moved out of _control-center.scss (2026-08-07) ──────
@@ -317,13 +317,13 @@ button.settings-icon-btn {
    suppress. Removed rather than promoted into the kit's sheet along with the slider
    row that carried it.) */
 
-/* (.slider-fill-value moved to ui/lib/styles/_components.scss 2026-08-15, with the
+/* (.slider-fill-value moved to ui/lib/nidara-kit/styles/_components.scss 2026-08-15, with the
    slider itself: makeVerticalFillTile builds that label, and the label's sheet goes
    where its builder goes. .slider-text-endpoint stays here — Settings' Accessibility
    page builds those two "A"s, not the component. .slider-value-label followed the
    slider ROW to the kit on 2026-08-16.) */
 
-/* (.nidara-circle-btn moved to ui/lib/styles/_components.scss on 2026-08-26,
+/* (.nidara-circle-btn moved to ui/lib/nidara-kit/styles/_components.scss on 2026-08-26,
    with its widget: common/IconButton.ts is now a thin wrapper over the kit's
    NidaraCircleButton, so by this sheet's own test the rule belongs to the kit.
    The installer needed the same button and copying it would have given one

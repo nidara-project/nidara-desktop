@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { cairoDraw } from "../cairo-draw"
+import { cairoDraw } from "./platform/cairo-draw"
 
 /**
  * NidaraSelectionCheck — universal checkmark widget for single-select option rows.

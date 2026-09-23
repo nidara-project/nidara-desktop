@@ -34,7 +34,7 @@ import System from "system"
 import { createSquirclePath, glassRimGradient } from "../../ui/shell/common/DrawingUtils"
 import { bubblePath, paintGlassBubble, ARROW_W, ARROW_H, BUF, type ArrowSide } from "../../ui/lib/nidara-kit/glass-bubble"
 import { GLASS_SHADOW } from "../../ui/shell/common/SquircleContainer"
-import { GLASS_TINT } from "../../ui/lib/tokens"
+import { GLASS_TINT } from "../../ui/lib/nidara-kit/platform/tokens"
 
 const out = System.programArgs[0] || "/tmp/bubble-probe"
 

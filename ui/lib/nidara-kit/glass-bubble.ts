@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Cairo from "gi://cairo"
-import { GLASS_TINT, GLASS_SPECULAR } from "../tokens"
-import { glassRimGradient, squircleCorner, drawShadowFromPath, GLASS_SHADOW } from "../glass-paint"
+import { GLASS_TINT, GLASS_SPECULAR } from "./platform/tokens"
+import { glassRimGradient, squircleCorner, drawShadowFromPath, GLASS_SHADOW } from "./platform/glass-paint"
 import { kitAppearance } from "./appearance"
 
 // The Nidara glass bubble: a rounded body with a pointer spliced into one side,

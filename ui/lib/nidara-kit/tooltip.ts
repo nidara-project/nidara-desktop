@@ -3,7 +3,7 @@ import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 import { ARROW_H, BUF, sideFor, paintGlassBubble, type ArrowSide } from "./glass-bubble"
 import { kitAppearance } from "./appearance"
-import { cairoDraw } from "../cairo-draw"
+import { cairoDraw } from "./platform/cairo-draw"
 
 export type NidaraTooltipText = string | (() => string)
 

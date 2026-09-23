@@ -34,11 +34,11 @@
 
 import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
-import app from "../../ui/lib/host"
-import { applyCrispFontRendering } from "../../ui/lib/font-rendering"
+import app from "../../ui/lib/nidara-kit/platform/host"
+import { applyCrispFontRendering } from "../../ui/lib/nidara-kit/platform/font-rendering"
 import { NidaraClamp, NidaraScrolled, NidaraWindow } from "../../ui/lib/nidara-kit"
-import { initAppearance } from "../../ui/lib/appearance-css"
-import { WINDOW_LAYOUT } from "../../ui/lib/tokens"
+import { initAppearance } from "../../ui/lib/nidara-kit/platform/appearance-css"
+import { WINDOW_LAYOUT } from "../../ui/lib/nidara-kit/platform/tokens"
 import { SummaryStep } from "../../ui/installer/steps/summary"
 import {
   setDiskAnswer, setAccountAnswer, setCountryAnswer, setLanguageAnswer,

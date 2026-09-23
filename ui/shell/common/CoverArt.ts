@@ -25,8 +25,8 @@ import { bindWhileRealized } from "../../lib/nidara-kit"
 import Theme from "../core/ThemeManager"
 import { safeDisconnect } from "../core/signals"
 import * as media from "../core/MediaService"
-import { INK } from "../../lib/tokens"
-import { cairoDraw } from "../../lib/cairo-draw"
+import { INK } from "../../lib/nidara-kit/platform/tokens"
+import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 
 /** The media detail panel's artwork box, and the radius that goes with it. The
  *  island's compact art derives its own radius from this pair so the morph's two

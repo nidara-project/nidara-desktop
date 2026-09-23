@@ -14,7 +14,7 @@
 #
 # ⚠️ WHAT IT NO LONGER PROVES (2026-08-18). It used to build the pinned
 # Astal/AGS stack from source, which doubled as proof that install.sh's source
-# path still worked. That stack is gone — the shell hosts itself (ui/lib/host.ts)
+# path still worked. That stack is gone — the shell hosts itself (ui/lib/nidara-kit/platform/host.ts)
 # and bundles itself (scripts/bundle.sh) — and the ONE package left,
 # libastal-auth, is the lockscreen's PAM wrapper, which this smoke does not
 # bundle or boot. So install.sh's from-source fallback is covered by the VM

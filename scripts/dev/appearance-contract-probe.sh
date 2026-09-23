@@ -9,9 +9,9 @@
 #                                              (org.nidara.appearance, #573)
 #   bin/nidara-portal (THIS checkout)        ← the impl backend
 #   /usr/lib/xdg-desktop-portal              ← the real frontend apps talk to
-#   ui/lib/appearance.ts                     ← the client, via appearance-contract-probe.ts
+#   ui/lib/nidara-kit/platform/appearance.ts                     ← the client, via appearance-contract-probe.ts
 #
-# What it shows (the contract lives in ui/lib/appearance.ts):
+# What it shows (the contract lives in ui/lib/nidara-kit/platform/appearance.ts):
 #   1. the client's first read comes from the portal, with the values from their homes;
 #   2. a leftover appearance.json is ignored — it is nobody's home any more;
 #   3. the Nidara namespace carries no `accent` / `is-dark` (one key, one name);

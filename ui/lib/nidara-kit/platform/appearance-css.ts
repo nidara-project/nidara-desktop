@@ -2,7 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import { ACCENT_HEX } from "./accent"
 import { setAccentRim } from "./glass-capsule"
-import { setKitAppearance } from "./nidara-kit/appearance"
+import { setKitAppearance } from "../appearance"
 import { generateTokensCss } from "./theme-tokens"
 import {
   appearanceSource,
@@ -21,7 +21,7 @@ import {
  * through the kit's appearance seam, the glass capsule's accent rim, and a live
  * subscription so all three follow the user changing their mind.
  *
- * WHERE the values come from is not decided here — `ui/lib/appearance.ts` holds the
+ * WHERE the values come from is not decided here — `ui/lib/nidara-kit/platform/appearance.ts` holds the
  * contract: an application reads the Settings portal and nothing else; the greeter,
  * which lives outside any session, reads the mirror and says so with
  * `{ channel: "mirror" }`.

@@ -17,10 +17,10 @@
 // shell with it — the bar, the dock and the island are gjs too.
 
 import GLib from "gi://GLib"
-import app from "../../ui/lib/host"
-import { applyCrispFontRendering } from "../../ui/lib/font-rendering"
+import app from "../../ui/lib/nidara-kit/platform/host"
+import { applyCrispFontRendering } from "../../ui/lib/nidara-kit/platform/font-rendering"
 import { NidaraWindow, NidaraList, NidaraDropDownRow } from "../../ui/lib/nidara-kit"
-import { initAppearance } from "../../ui/lib/appearance-css"
+import { initAppearance } from "../../ui/lib/nidara-kit/platform/appearance-css"
 import { allKeyboards, bridgedKeyboards, keyboardById } from "../../ui/lib/keyboards"
 
 const here = GLib.get_current_dir()

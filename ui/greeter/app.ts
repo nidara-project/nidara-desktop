@@ -1,12 +1,12 @@
-import app from "../lib/host"
+import app from "../lib/nidara-kit/platform/host"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 import Greeter from "./widget/Greeter"
 import { getPreferredUser } from "./lib/greeter-prefs"
 import { initProcessLocale } from "./lib/i18n"
-import { initAppearance } from "../lib/appearance-css"
-import { applyCrispFontRendering } from "../lib/font-rendering"
-import { useNoGtkTheme } from "../lib/gtk-theme"
+import { initAppearance } from "../lib/nidara-kit/platform/appearance-css"
+import { applyCrispFontRendering } from "../lib/nidara-kit/platform/font-rendering"
+import { useNoGtkTheme } from "../lib/nidara-kit/platform/gtk-theme"
 
 // No GTK theme at all — this sheet is the only CSS there is (commandment 11).
 useNoGtkTheme()
@@ -38,7 +38,7 @@ app.start({
     // The token ramp, the kit's Cairo seam and the glass rim. The greeter is the ONE
     // surface outside any user session — the `greeter` system user, its own
     // compositor, no portal — so it reads the mirror the shell exports for it
-    // (/var/tmp/nidara/appearance.json) instead. See the contract in ui/lib/appearance.ts.
+    // (/var/tmp/nidara/appearance.json) instead. See the contract in ui/lib/nidara-kit/platform/appearance.ts.
     // `fixedDarkInk`: this screen's palette is NOT a fallback the session may
     // override. Everything behind it is a wallpaper, so it is permanently dark
     // glass with light ink — the desktop being in light mode says nothing about

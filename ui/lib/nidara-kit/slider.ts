@@ -8,9 +8,9 @@ import Cairo from "gi://cairo"
 // its own source (the shell registers ThemeManager). See ./appearance.ts.
 import { kitAppearance } from "./appearance"
 import { bindWhileRealized } from "./lifetime"
-import { safeDisconnect } from "../signals"
-import { hexToFloatRgb } from "../accent"
-import { cairoDraw } from "../cairo-draw"
+import { safeDisconnect } from "./platform/signals"
+import { hexToFloatRgb } from "./platform/accent"
+import { cairoDraw } from "./platform/cairo-draw"
 
 const TRACK_H  = 6   // px — track thickness
 const THUMB_R  = 9   // px — thumb radius (visual)

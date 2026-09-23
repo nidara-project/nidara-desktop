@@ -10,7 +10,7 @@
  * 2026-09-15. Nothing about it is a compile error or a visible glitch.
  *
  * Two rules, over ui/ (every bundle):
- *   1. `set_draw_func(` takes `cairoDraw(…)` from ui/lib/cairo-draw.ts, which disposes the
+ *   1. `set_draw_func(` takes `cairoDraw(…)` from ui/lib/nidara-kit/platform/cairo-draw.ts, which disposes the
  *      context in a `finally`.
  *   2. A function that calls `snapshot.append_cairo(` also calls `.$dispose()` — a
  *      snapshot-appended context has no wrapper to go through, so the call is checked
@@ -44,7 +44,7 @@ for (const file of walk(UI)) {
         if (/set_draw_func\(/.test(line)) {
             drawFuncs++
             if (!/set_draw_func\(\s*cairoDraw\(/.test(line))
-                errors.push(`${rel}:${i + 1}  set_draw_func without cairoDraw(…)\n      ↳ wrap the callback: set_draw_func(cairoDraw((area, cr, w, h) => { … })) — ui/lib/cairo-draw.ts`)
+                errors.push(`${rel}:${i + 1}  set_draw_func without cairoDraw(…)\n      ↳ wrap the callback: set_draw_func(cairoDraw((area, cr, w, h) => { … })) — ui/lib/nidara-kit/platform/cairo-draw.ts`)
         }
         if (/\.append_cairo\(/.test(line)) {
             appends++
@@ -57,7 +57,7 @@ for (const file of walk(UI)) {
                 if (depth < 0) break
             }
             if (!found)
-                errors.push(`${rel}:${i + 1}  append_cairo without a later .$dispose() in the same block\n      ↳ call cr.$dispose() once the drawing is done — ui/lib/cairo-draw.ts explains why`)
+                errors.push(`${rel}:${i + 1}  append_cairo without a later .$dispose() in the same block\n      ↳ call cr.$dispose() once the drawing is done — ui/lib/nidara-kit/platform/cairo-draw.ts explains why`)
         }
     })
 }

@@ -1,6 +1,6 @@
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
-import { readFile, writeFile } from "../../lib/file"
+import { readFile, writeFile } from "../../lib/nidara-kit/platform/file"
 import { execAsync } from "../../lib/process"
 import { formatDatePart } from "../../lib/date-names"
 import { defineSettings } from "./configFile"

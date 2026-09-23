@@ -234,7 +234,7 @@ export const LOCK_GLASS = {
     /** 1px rim, primary controls. `--nidara-glass-border`. */
     rimStrong: { r: 1, g: 1, b: 1, a: 0.22 },
     /** 1px rim, everything else. The rim of light has ONE home now: this painter and
-     *  its mirror in `ui/lib/glass-paint.ts`. The CSS twin (`--nidara-edge`) was buried
+     *  its mirror in `ui/lib/nidara-kit/platform/glass-paint.ts`. The CSS twin (`--nidara-edge`) was buried
      *  on 2026-09-20 — tech-debt #106 — when its last reader, the window card, gave
      *  window chrome back to Hyprland. */
     rimSubtle: { r: 1, g: 1, b: 1, a: 0.14 },
@@ -332,7 +332,7 @@ export const rowInsetFor = (surfaceRadius: number, n: number = 3.2, rowRadius: n
  */
 /**
  * Row heights, as NUMBERS. `.nidara-row--single` / `--double` in
- * `ui/lib/styles/_components.scss` are where they are PAINTED; these are for the
+ * `ui/lib/nidara-kit/styles/_components.scss` are where they are PAINTED; these are for the
  * code that has to reason about them — a list that wants to show six whole rows
  * cannot ask CSS how tall a row is.
  *

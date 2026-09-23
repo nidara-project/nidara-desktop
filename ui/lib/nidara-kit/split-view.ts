@@ -64,7 +64,7 @@ export interface NidaraSplitViewResult {
  *   two carrying a 320px preview — collapsed it, so navigating between two pages
  *   made the sidebar appear and disappear and resized the content under the pointer.
  *   A breakpoint has to be a property of the WINDOW, not of what is currently
- *   inside it. See WINDOW_LAYOUT in `lib/tokens.ts` for the law and the numbers.
+ *   inside it. See WINDOW_LAYOUT in `lib/nidara-kit/platform/tokens.ts` for the law and the numbers.
  */
 export function NidaraSplitView(opts: {
     sidebar: Gtk.Widget

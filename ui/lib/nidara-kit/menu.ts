@@ -1,8 +1,8 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { RADIUS, rowInsetFor } from "../tokens"
+import { RADIUS, rowInsetFor } from "./platform/tokens"
 import { kitAppearance } from "./appearance"
 import { sideFor, paintGlassBubble, ARROW_H, BUF, type ArrowSide } from "./glass-bubble"
-import { cairoDraw } from "../cairo-draw"
+import { cairoDraw } from "./platform/cairo-draw"
 
 // Universal Cairo glass bubble menu popover. Shared by dock context menu,
 // launcher context menu, media widget, and any Nidara surface or app needing

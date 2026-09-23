@@ -1,14 +1,14 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
-import { RADIUS, INK } from "../../../lib/tokens"
+import { RADIUS, INK } from "../../../lib/nidara-kit/platform/tokens"
 import { PANEL_W } from "../../common/widget-kit"
 import { makeCoverArt, PANEL_ART, PANEL_ART_RADIUS } from "../../common/CoverArt"
 import { buildMediaDetailPanel } from "../../widgets/media"
 import * as media from "../../core/MediaService"
 import Theme from "../../core/ThemeManager"
 import { safeDisconnect } from "../../core/signals"
-import { cairoDraw } from "../../../lib/cairo-draw"
+import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 
 // The Activity Island's PLAYER mode — both halves of the media activity:
 //

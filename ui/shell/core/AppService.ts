@@ -3,7 +3,7 @@ import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
-import { readFile } from "../../lib/file"
+import { readFile } from "../../lib/nidara-kit/platform/file"
 import { rankApps } from "./app-search"
 import appFrequency from "./AppFrequency"
 
@@ -499,7 +499,7 @@ class AppService {
      * id, which no icon theme has art for — so this function translated it to
      * `nidara-settings` and every caller that forgot to ask paid for it. Since
      * the AGS host went, those windows declare `nidara-settings` themselves
-     * (`ui/lib/app-id.ts`), which is a real entry in the desktop registry, so
+     * (`ui/lib/nidara-kit/platform/app-id.ts`), which is a real entry in the desktop registry, so
      * there is nothing left to special-case. Keep going through this function
      * anyway: the case folding is still load-bearing, and the day some other
      * window needs translating this is where it goes.

@@ -74,7 +74,7 @@ export interface NidaraTableColumn {
  * not jump sideways when a row gains or loses its mark.
  */
 export interface NidaraTableErrorMark {
-    /** A GIcon (lib/icons.ndIcon). Typed loosely — the GI typings don't export Gio.Icon. */
+    /** A GIcon (lib/nidara-kit/platform/icons.ndIcon). Typed loosely — the GI typings don't export Gio.Icon. */
     icon?: any
     /** Theme icon name, used when `icon` is null (ndIcon returns null without the asset tree). */
     iconName?: string

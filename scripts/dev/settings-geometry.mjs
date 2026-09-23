@@ -8,7 +8,7 @@
  *
  * ── What law ─────────────────────────────────────────────────────────────────
  *
- * `WINDOW_LAYOUT` in `ui/lib/tokens.ts` — read from that file at run time, so this
+ * `WINDOW_LAYOUT` in `ui/lib/nidara-kit/platform/tokens.ts` — read from that file at run time, so this
  * script cannot drift from the law it checks. Three invariants:
  *
  *   1. At any window width, all pages render the pane at the SAME width.
@@ -42,7 +42,7 @@ import { dirname, join } from "node:path"
 // ── The law, read from its single source ─────────────────────────────────────
 // Parsed rather than duplicated: a checker carrying its own copy of the numbers
 // passes happily after someone changes them.
-const TOKENS = join(dirname(fileURLToPath(import.meta.url)), "../../ui/lib/tokens.ts")
+const TOKENS = join(dirname(fileURLToPath(import.meta.url)), "../../ui/lib/nidara-kit/platform/tokens.ts")
 const tokensSrc = readFileSync(TOKENS, "utf8")
 const token = (name) => {
     const m = tokensSrc.match(new RegExp(`\\n\\s*${name}:\\s*(\\d+)`))
@@ -85,7 +85,7 @@ const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 
 const settingsWindow = () => {
     const wins = JSON.parse(ipc("listWindows") || "[]")
     // The class is `nidara-settings` since 2026-08-18: the window declares its own
-    // app-id (ui/lib/app-id.ts). It used to be AGS's `io.Astal.ags`.
+    // app-id (ui/lib/nidara-kit/platform/app-id.ts). It used to be AGS's `io.Astal.ags`.
     return wins.find(w => w.class === "nidara-settings" && w.title === "Nidara Settings")
 }
 

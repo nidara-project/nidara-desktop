@@ -12,7 +12,7 @@
 // `kit-gallery-probe` prices the substrate for the KIT, and `installer-pages-probe`
 // for the installer. Both are bundles that already ran themeless. The SHELL was the
 // one still wearing the user's GTK theme (until 2026-09-23), the bundle Settings
-// lives in, and it had no probe at all — so the first three rules of `ui/lib/styles/_base-layer.scss`
+// lives in, and it had no probe at all — so the first three rules of `ui/lib/nidara-kit/styles/_base-layer.scss`
 // went in measured against everything EXCEPT the bundle they could hurt. Our sheets
 // load at PRIORITY_USER (800) and a theme at 200, so a bare `button` rule outranks
 // the theme for any shell button that does not declare that property itself. This is
@@ -37,10 +37,10 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gsk from "gi://Gsk"
 import GLib from "gi://GLib"
-import app from "../../ui/lib/host"
-import { applyCrispFontRendering } from "../../ui/lib/font-rendering"
-import { initAppearance } from "../../ui/lib/appearance-css"
-import { useNoGtkTheme } from "../../ui/lib/gtk-theme"
+import app from "../../ui/lib/nidara-kit/platform/host"
+import { applyCrispFontRendering } from "../../ui/lib/nidara-kit/platform/font-rendering"
+import { initAppearance } from "../../ui/lib/nidara-kit/platform/appearance-css"
+import { useNoGtkTheme } from "../../ui/lib/nidara-kit/platform/gtk-theme"
 
 // Same rule as the other two probes: the substrate is the POINT, so it is explicit.
 // The default here is NO theme — what step 5 is taking the shell TO — and

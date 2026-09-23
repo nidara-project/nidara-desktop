@@ -43,9 +43,9 @@
 
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
-import app from "../../ui/lib/host"
+import app from "../../ui/lib/nidara-kit/platform/host"
 import { NidaraWindow, NidaraDropDown } from "../../ui/lib/nidara-kit"
-import { initAppearance } from "../../ui/lib/appearance-css"
+import { initAppearance } from "../../ui/lib/nidara-kit/platform/appearance-css"
 
 GLib.setenv("GTK_THEME", "Empty", true)
 

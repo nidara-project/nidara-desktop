@@ -2,7 +2,7 @@
 // Copiar a scripts/dev/ del worktree, construir con ./scripts/bundle.sh y correr:
 //   env -u DISPLAY WLR_BACKENDS=headless cage -- /tmp/reserve-px
 import Gtk from "gi://Gtk?version=4.0"
-import app from "../../ui/lib/host"
+import app from "../../ui/lib/nidara-kit/platform/host"
 import { NidaraTable } from "../../ui/lib/nidara-kit"
 
 const CASES: Array<[string, string[], number]> = [

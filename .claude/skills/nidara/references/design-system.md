@@ -17,7 +17,7 @@ KEYBINDING themes (`gtk-3.0/gtk-keys.css`), not widget themes.
 
 🔑 **GTK also ships an EMPTY theme, and it is how we have none.** `theme/Empty/gtk.css` is in the
 same gresource, so `GTK_THEME=Empty` loads zero theme rules with no file of ours anywhere. That is
-what `ui/lib/gtk-theme.ts` selects, and every bundle but the shell calls it
+what `ui/lib/nidara-kit/platform/gtk-theme.ts` selects, and every bundle but the shell calls it
 (`useNoGtkTheme()`). Read that file before touching any of this — it holds the reasoning.
 
 ⚠️ **It said `nidara` until 2026-09-20**, naming a three-line `gtk.css` we installed into
@@ -46,7 +46,7 @@ theme row displayed a name that was not among its own options AND opened an empt
 seen from two ends (tech-debt #107).
 
 **3 · Provider priority — what actually decides.** Our CSS loads at
-`STYLE_PROVIDER_PRIORITY_USER` (`ui/lib/host.ts`) and `USER + 20` (`ui/lib/appearance-css.ts`),
+`STYLE_PROVIDER_PRIORITY_USER` (`ui/lib/nidara-kit/platform/host.ts`) and `USER + 20` (`ui/lib/nidara-kit/platform/appearance-css.ts`),
 both ABOVE the theme's priority. The constants, read from GTK 4.22 itself on 2026-09-20:
 **FALLBACK 1 · THEME 200 · SETTINGS 400 · APPLICATION 600 · USER 800** — so a theme sits at 200,
 our sheet at 800 and the token engine at 820. This is the number that settles what a user's theme
@@ -69,10 +69,10 @@ not one day earlier — a reset removed while its node is still undrawn takes th
 (tech-debt #107, the ordering rule). ✅ The shell stopped running on a theme on 2026-09-23 (step 5),
 so step 6 — deleting what only neutralised it — is now open, and still one reset at a time, measured.
 
-**5 · The bundle sheets — and, under them, the BASE LAYER.** `ui/lib/styles/` is the kit's and
+**5 · The bundle sheets — and, under them, the BASE LAYER.** `ui/lib/nidara-kit/styles/` is the kit's and
 every bundle compiles it; `ui/shell/styles/` is the shell's and only the shell does; then each
 bundle's own sheet. `style-ownership-check` gates the first against the second.
-🔑 **`ui/lib/styles/_base-layer.scss` (2026-09-20) is the layer beneath all of them**: bare element
+🔑 **`ui/lib/nidara-kit/styles/_base-layer.scss` (2026-09-20) is the layer beneath all of them**: bare element
 selectors, every one of them (0,0,1), for the nodes no class of ours can reach — the toplevels GTK
 builds itself. ⚠️ It is `@use`d **from each bundle's own sheet** (`ui/installer/style.scss`,
 `ui/greeter/style.scss`, and `ui/shell/style.scss` since 2026-09-23), deliberately NOT from the kit's
@@ -304,7 +304,7 @@ Three things about it that are not obvious:
 - **A table cannot be squeezed, so its pane is MEASURED from it.** The table is as wide as the
   sum of its widest cells; below that the columns compress one at a time. Any surface adopting
   one measures the table and sizes its pane from that number — `WINDOW_LAYOUT.wizardContent`
-  is derived that way, and the derivation is written out in `ui/lib/tokens.ts`. Sizing is stable
+  is derived that way, and the derivation is written out in `ui/lib/nidara-kit/platform/tokens.ts`. Sizing is stable
   by contract: `NidaraTable` reserves column widths from control models (`reserveFromModel`, default
   true for `Gtk.DropDown`), sizing the column to the model's widest item in pixels via Pango layout
   (`create_pango_layout` + `get_pixel_size()`) rather than jumping as options are selected (#464).
@@ -462,7 +462,7 @@ window-level `Gtk.EventControllerKey` (Escape-to-close) still fires, because key
 toplevel and only then look for a focus widget that is not there. **If typing does nothing but
 Escape still closes the window, look for `can-focus` on an ancestor, not at the entry.**
 
-## The Settings window has ONE geometry law — `WINDOW_LAYOUT` in `ui/lib/tokens.ts`
+## The Settings window has ONE geometry law — `WINDOW_LAYOUT` in `ui/lib/nidara-kit/platform/tokens.ts`
 
 **The content pane is a CONSTANT 800 px.** Not a maximum, not a band: the same width on all 18
 pages, in every locale, at every text scale. Widening the window adds empty margin; narrowing it
@@ -720,9 +720,9 @@ on screen. The same defect shaved the tops of flat glyphs (T E F H I L) everywhe
 "Text is only crisp when the line box lands on WHOLE PIXELS" (at the end of this file) for the
 fix and the measurements; tech-debt §29 for why the wrong diagnosis held for a month.
 
-## Radii — ONE ladder, in `ui/lib/tokens.ts` (audited 2026-08-03)
+## Radii — ONE ladder, in `ui/lib/nidara-kit/platform/tokens.ts` (audited 2026-08-03)
 
-`RADIUS` in `ui/lib/tokens.ts` is the source; `--nidara-radius-*` in `_base.scss` is a
+`RADIUS` in `ui/lib/nidara-kit/platform/tokens.ts` is the source; `--nidara-radius-*` in `_base.scss` is a
 **mirror**, and both files say so. The ladder governs **container corners**; rounding *art* is a
 separate job (a ratio of the bitmap's own size, painted by `squircleThumb()`), and those numbers
 are not rungs — see `tech-debt.md` #48 for the three that currently disagree. Cairo cannot read a CSS var — a corner that clips has
@@ -811,7 +811,7 @@ Swept 2026-08-03. Each step is +4, and horizontal is always +4 over vertical:
 | **Window row** | **12 / 16** | `NidaraRow` / `NidaraEmptyRow` — inside Settings that is now every row but the five documented opt-outs in tech-debt #65 |
 | **Island** | **16 / 20** | all five island modes |
 
-**That first row is not a tier — it is a formula, `rowInsetFor()` in `ui/lib/tokens.ts`.** A row's
+**That first row is not a tier — it is a formula, `rowInsetFor()` in `ui/lib/nidara-kit/platform/tokens.ts`.** A row's
 hover fill spans its container, so the container's padding IS the fill's margin, and the goal is
 ONE gap: the fill should stand as far from the corner's curve as it does from the straight edge.
 
@@ -1006,7 +1006,7 @@ out on purpose, the exception belongs beside the blanket.
 
 🔑 **Focus is not one affordance.** A control styled as an INPUT (the dropdown trigger, the text
 inputs) shows keyboard focus as its 2px border going accent — no ring. A BUTTON shows a ring
-(`nidara-focus-ring`, now in `ui/lib/styles/_tokens.scss` so all three bundles share it). One
+(`nidara-focus-ring`, now in `ui/lib/nidara-kit/styles/_tokens.scss` so all three bundles share it). One
 control must never show both.
 
 ⚠️ **`outline` follows the widget's OWN `border-radius`, so declare the radius on the BASE
@@ -1274,7 +1274,7 @@ How the flip works:
 - **Glass base color is unified via `GLASS_TINT` in `tokens.ts`**:
   All Cairo painters (`SquircleContainer`, `DockAxis`, `GlassBubble`, `NotificationCenter`, `ActivityIsland`)
   and CSS tokens (`--nidara-bg`, `--nidara-popover-bg`, `--nidara-material-*` in `NidaraTheme.ts`)
-  read from `GLASS_TINT` in `ui/lib/tokens.ts`. In dark mode, it is an Apple HIG / macOS Vibrancy-inspired
+  read from `GLASS_TINT` in `ui/lib/nidara-kit/platform/tokens.ts`. In dark mode, it is an Apple HIG / macOS Vibrancy-inspired
   **Deep Slate (`#161622` / RGB `22, 22, 34`)** rather than pure black `#000000` — providing material
   body and preventing muddy/dirty desaturation over warm/complex wallpapers while maintaining
   pixel-perfect coherence between windows and shell overlays.
@@ -1297,7 +1297,7 @@ shell text follows the pin automatically.
 ### Opacity — one master + Advanced, four surfaces, WYSIWYG
 
 ⚠️ **The glass sliders are the PANE. A neutral mark painted ON the glass takes its alpha from
-`INK` in `ui/lib/tokens.ts`, never from a slider and never from a literal.** Two different
+`INK` in `ui/lib/nidara-kit/platform/tokens.ts`, never from a slider and never from a literal.** Two different
 quantities that both get called "opacity": `SquircleContainer` fills a CC island at
 `Theme.overlayOpacity`, `GlassBubble` at `max(overlayOpacity, 0.38)`, the notification cards at
 `overlayOpacity * depth` — that is the material. The battery outline, the dock's running dot, a
@@ -1529,7 +1529,7 @@ older notes describing either one will mislead you.
 
 ### The corner: two cubic Béziers, not a chord loop
 
-`createSquirclePath` (`ui/lib/glass-paint.ts`) used to walk the superellipse and emit a run of
+`createSquirclePath` (`ui/lib/nidara-kit/platform/glass-paint.ts`) used to walk the superellipse and emit a run of
 straight `lineTo` chords. It now emits **two `curveTo` segments per corner**, meeting at the
 corner's 45° point:
 
@@ -1638,7 +1638,7 @@ about to remove the dark flank again, know that you are re-deciding this, and sa
 
 Three things about it that are easy to undo by accident:
 
-- **There is ONE copy of those stops: `glassRimGradient` in `ui/lib/glass-paint.ts`.** No mode
+- **There is ONE copy of those stops: `glassRimGradient` in `ui/lib/nidara-kit/platform/glass-paint.ts`.** No mode
   argument at all since 2026-08-23; `GlassBubble` makes the same call, and since 2026-08-24 so do
   the greeter and the lockscreen. #230 unified the *shape* and left copies of the *numbers*; every
   round of this has been a divergence found after the fact, never one anybody proposed. If you are
@@ -1648,7 +1648,7 @@ Three things about it that are easy to undo by accident:
   ratio of the tokens they already had, without a second table of stops.
 - ⚠️ **It lives in `ui/lib/`, not in the shell, and that is load-bearing.** It sat in
   `ui/shell/common/DrawingUtils.ts` until 2026-08-24, and `ui/lib/` may not import from `ui/shell/`
-  — so for as long as it did, `ui/lib/glass-capsule.ts` (the greeter's and the lockscreen's only
+  — so for as long as it did, `ui/lib/nidara-kit/platform/glass-capsule.ts` (the greeter's and the lockscreen's only
   capsule) *could not reach it* and painted a flat rim with no shadow instead. Nothing said so; the
   #234–#248 wave simply stopped at a directory boundary and the login screen kept the old glass.
   `DrawingUtils.ts` re-exports every name, so the shell's import paths are unchanged. **If you add
@@ -1702,7 +1702,7 @@ left. Three things about it are load-bearing:
   0 / 0.5 / 1 / 2. Round the corner arc it is the 60-90 degree band that dies. So keep `drop` near
   zero on tight shadows and only spend it once `spread` can spare it.
 
-**One recipe, `GLASS_SHADOW` in `ui/lib/glass-paint.ts`** — `{ spread: 2, alpha: 0.18, drop: 0 }`,
+**One recipe, `GLASS_SHADOW` in `ui/lib/nidara-kit/platform/glass-paint.ts`** — `{ spread: 2, alpha: 0.18, drop: 0 }`,
 chosen because `spread 2` is what `GLASS_INSET` already reserves, so no surface's glass shrinks and
 nothing moves. (It lived in `SquircleContainer.tsx` until 2026-08-24 and moved down with the
 primitives it parameterises, for the reason in the rim section above; that file re-exports it.) It
@@ -1796,7 +1796,7 @@ The **glass bubble** was the last one, and the only one whose shadow had to wrap
 could be written at all because `bubblePath` already knew how to grow its own outline: the `offset`
 argument the rim got in #242 offsets the body box AND the pointer's three corners, so the shadow is
 the same outline at six sizes. What that needed on the shadow's side was splitting the algorithm
-from the shape — **`drawShadowFromPath`** in `ui/lib/glass-paint.ts` now owns the nested fills and the
+from the shape — **`drawShadowFromPath`** in `ui/lib/nidara-kit/platform/glass-paint.ts` now owns the nested fills and the
 punch-out, and `drawGlassShadow` is a caller that happens to hand it a squircle. There is still one
 recipe and one falloff.
 
@@ -1873,7 +1873,7 @@ at any scale. Any widget painting a backdrop inside such a pill
 (`ui/lockscreen/widget/GlassBackdrop.ts`) must clip to the SAME radius, or its
 fill spills past the border at the caps.
 
-✅ **CLOSED 2026-08-09 — both surfaces PAINT their capsules** (`ui/lib/glass-capsule.ts`,
+✅ **CLOSED 2026-08-09 — both surfaces PAINT their capsules** (`ui/lib/nidara-kit/platform/glass-capsule.ts`,
 lifted out of the lockscreen bundle). Everything below is the record of why CSS could not do
 it, because the number was argued from both sides twice.
 
@@ -1903,7 +1903,7 @@ time. The tell was arithmetic: the date sat at **13px under an 88px clock**, a 1
 outside every system that ships a lock screen (macOS 1:4.8, iOS 1:4.4, Win11 1:3.7, GNOME
 1:3.4) — two numbers nobody had ever chosen together.
 
-**`ui/lib/styles/_tokens.scss` is now the mode-independent half of the system**, `@use`d by
+**`ui/lib/nidara-kit/styles/_tokens.scss` is now the mode-independent half of the system**, `@use`d by
 both `ui/shell/styles/_base.scss` (which `@forward`s it, so every `@use 'base' as *` keeps
 seeing the same names) and `ui/greeter/style.scss`. It holds the type ramp, the weights, the
 line heights, the spacing scale, the motion curves and the radius ladder — and since
@@ -1996,7 +1996,7 @@ a bug. **Grep a class before deleting it, then grep the fragments a template cou
 from** — and when the answer is "we don't want it", say so in the sheet instead of deleting the
 rule silently.
 
-**Its sibling `ui/lib/styles/_mixins.scss` (2026-08-10) holds the mixins the KIT needs** —
+**Its sibling `ui/lib/nidara-kit/styles/_mixins.scss` (2026-08-10) holds the mixins the KIT needs** —
 `nidara-reset`, `glass`, `material-card`, `nidara-row-states`, `nidara-tile-states` — for the
 same reason and with the same `@forward` from `_base.scss`. `material-control`,
 `material-popover` and the `material($level)` vibrancy ladder stayed in the shell on the
@@ -2025,7 +2025,7 @@ Three rules for extending it:
   shell calls `-dim` — which made secondary text a step darker on the one surface with no
   card behind it.
 - **A token with two representations gets labelled as a mirror, on both sides.** The glass
-  palette now lives as numbers in `ui/lib/tokens.ts` (`LOCK_GLASS`) because the lockscreen
+  palette now lives as numbers in `ui/lib/nidara-kit/platform/tokens.ts` (`LOCK_GLASS`) because the lockscreen
   PAINTS its capsules and Cairo/GSK cannot read a custom property — the same constraint that
   produced the radius ladder's double life. What was wrong before was not the duplication,
   it was that one half was three literals at the top of a painter with only a comment tying
@@ -2044,7 +2044,7 @@ username 20→`$fs-title-3`, both `$fw-semibold`).
 `system-reboot-symbolic` / `media-playback-pause-symbolic` — the same three actions the
 shell's system menu draws with `Icons.power` / `rotateCcw` / `moon`. On a clean Arch box that
 is Adwaita's art, so Nidara's own login and lock screens were the one place in the DE not
-using Nidara's icons (commandment 10). **`ui/lib/icons.ts`** resolves the shipped set for
+using Nidara's icons (commandment 10). **`ui/lib/nidara-kit/platform/icons.ts`** resolves the shipped set for
 bundles that have no `core/`, by the same route `avatar.ts` already used
 (`NIDARA_SHELL_ROOT ?? /usr/share/nidara/ui/shell`), and falls back to the theme name rather
 than throwing — a missing icon must cost an icon, never the login screen. They are Lucide
@@ -2075,7 +2075,7 @@ substitute it landed on was a CJK face at all (`noto-fonts-cjk` arrives by the s
 
 ### The capsule is PAINTED, on both surfaces — and the rim has to be a RING
 
-`ui/lib/glass-capsule.ts` (`withGlassCapsule`) is the one capsule of the greeter and the
+`ui/lib/nidara-kit/platform/glass-capsule.ts` (`withGlassCapsule`) is the one capsule of the greeter and the
 lockscreen. It draws the body inside a rounded clip at radius exactly `min(w,h)/2` — a true
 pill, which CSS cannot deliver (see the tangency section above: a dot at half, a flat run one
 under, no third setting) — and the rim as a **1px ring, filled through an even-odd Cairo path**,
@@ -2247,7 +2247,7 @@ button was measuring the wrong string. The rules those left:
   resolves against the ICON theme (a different thing from the blank GTK theme, and not ours —
   ~40 installed themes provide that name on one dev box), so it would make the login screen's
   chevron take whatever shape the `greeter` system user's icon theme happened to supply. Exactly
-  the defect `ui/lib/icons.ts` was written to end for the power glyphs. The path is relative so it
+  the defect `ui/lib/nidara-kit/platform/icons.ts` was written to end for the power glyphs. The path is relative so it
   holds both installed and from source; the `-gtk-icon-filter` beside it is not optional, because
   `-gtk-icon-source` loads the file as a plain image rather than looking it up as an icon. Whether
   that path honours the `-symbolic` suffix could not be measured off-screen (every harness rendered
@@ -2265,7 +2265,7 @@ button was measuring the wrong string. The rules those left:
 ## The greeter wears the kit (2026-08-10)
 
 `ui/greeter/style.scss` — the sheet both login surfaces compile — now `@use`s
-**`ui/lib/styles/_components.scss`**, so the kit's look reaches the greeter and the
+**`ui/lib/nidara-kit/styles/_components.scss`**, so the kit's look reaches the greeter and the
 lockscreen and not only the shell. The thing that earned it: the three selectors on those
 screens were raw `Gtk.DropDown`s and are now **`NidaraDropDown`**, so their popup is the
 shell's list rather than a frozen copy of the pre-#86 one (GTK's checkmark in every row,
@@ -2355,7 +2355,7 @@ only when someone boots a VM). The `styles` job now compiles it too.
   rely on Hyprland to frame and round the window.
   ⚠️ **There is no CSS rim token to reach for, and that is deliberate.** `--nidara-edge` — the rim
   of light — was buried on 2026-09-20 (tech-debt #106) together with the whole `material*` vocabulary
-  of `_base.scss`. The rim is a SPECULAR, it is painted in Cairo (`ui/lib/glass-paint.ts`, mirrored
+  of `_base.scss`. The rim is a SPECULAR, it is painted in Cairo (`ui/lib/nidara-kit/platform/glass-paint.ts`, mirrored
   as numbers in `LOCK_GLASS`), and the window card was the last CSS surface still painting it —
   which is exactly what #600 removed when it gave window chrome back to Hyprland. So: **window chrome
   is fixed in the window's own rules** (`glass(floating)`, `window.nidara-app-window`), never in a
@@ -2364,12 +2364,12 @@ only when someone boots a VM). The `styles` job now compiles it too.
   because by then nothing read it. If you find yourself adjusting a token to fix something you can
   see on one surface, that is the signal you are on the wrong lever.
 - **A kit COMPONENT whose rules live in the shell's sheet is a component with no clothes
-  anywhere else.** `ui/lib/styles/_components.scss` is the kit's half and every bundle compiles
+  anywhere else.** `ui/lib/nidara-kit/styles/_components.scss` is the kit's half and every bundle compiles
   it; `ui/shell/styles/_components.scss` is the shell's and only the shell does. So a widget
   exported from `ui/lib/nidara-kit/` whose appearance is written in the second one renders
   UNSTYLED in the installer, the greeter and the lock screen — and what that costs depends on
   which, which is worth getting right because the first version of this paragraph did not.
-  ⚠️ **Every bundle runs with no GTK theme** (`useNoGtkTheme()` — `ui/lib/gtk-theme.ts`); the
+  ⚠️ **Every bundle runs with no GTK theme** (`useNoGtkTheme()` — `ui/lib/nidara-kit/platform/gtk-theme.ts`); the
   shell was the last to stop wearing the user's gsettings theme, on 2026-09-23. So an unstyled
   widget is INVISIBLE everywhere, unless the base layer draws its node. `NidaraToggleRow` was in that state until 2026-09-20: the switch's rules were the
   shell's, so the installer's NVIDIA toggle drew nothing at all.
@@ -2463,7 +2463,7 @@ only when someone boots a VM). The `styles` job now compiles it too.
     `python3 scripts/dev/icon-theme-sheet.py a.tsv /tmp/sheet` draws every name in every spec theme
     beside ours — look at it.
   - **the THEME FALLBACK is the other half of `ndImageProps`, and it needs measuring too.**
-    `ndImageProps(name, themeFallback, size)` (`ui/lib/icons.ts`) draws the shipped `nd-` icon, or
+    `ndImageProps(name, themeFallback, size)` (`ui/lib/nidara-kit/platform/icons.ts`) draws the shipped `nd-` icon, or
     the freedesktop `themeFallback` when the asset tree is not found at all. Commandment 10 governs
     the PRIMARY ask, not this last resort — but a fallback naming something no theme draws is worse
     than none: the row goes blank and nothing is logged (icon failures never log). #603 shipped
@@ -2566,7 +2566,7 @@ only when someone boots a VM). The `styles` job now compiles it too.
   the other axis): a bounding box gives a 2560×100 panorama a 2px-tall thumb, and a synchronous
   decode of twenty screenshots visibly stalls the panel as it opens.
 - **Any Cairo draw call that needs a colour defined as a hex string elsewhere goes through
-  `hexToFloatRgb(hex)`** — since 2026-08-15 it is defined in **`lib/accent.ts`**, beside the
+  `hexToFloatRgb(hex)`** — since 2026-08-15 it is defined in **`lib/nidara-kit/platform/accent.ts`**, beside the
   palette it parses, so the kit's slider can reach it; `common/DrawingUtils.ts` re-exports it and
   the shell's painters keep their import path. `"#rrggbb"` → `{r,g,b}` as 0..1 floats,
   never a hand-rolled `parseInt(hex.slice(...), 16) / 255` triplet. Before this existed, that
@@ -2576,8 +2576,8 @@ only when someone boots a VM). The `styles` job now compiles it too.
   the slider's fill and battery's low/charging colors turned out to be silently duplicating (and
   in battery's case, duplicating the WRONG source — see below), not just visually similar by
   coincidence. **Two canonical hex sources, both plain string constants, no Gtk/Cairo import:**
-  `lib/accent.ts`'s `ACCENT_HEX` (9 user-selectable accent colors — decorative, changes with
-  Settings → Appearance) and `lib/status-colors.ts`'s `DANGER_HEX`/`SUCCESS_HEX` (fixed
+  `lib/nidara-kit/platform/accent.ts`'s `ACCENT_HEX` (9 user-selectable accent colors — decorative, changes with
+  Settings → Appearance) and `lib/nidara-kit/platform/status-colors.ts`'s `DANGER_HEX`/`SUCCESS_HEX` (fixed
   "needs attention"/"good" colors — used by the recording indicator, battery critical/charging;
   must NOT move with the user's accent choice, since accent has its own selectable "red"/"green"
   entries that mean something different). `battery.ts`'s old `RED`/`GREEN` were a comment lying
@@ -2758,7 +2758,7 @@ text someone is typing: reconcile a free-text entry only while it does not have 
 All action buttons go through **`NidaraButton`** (`ui/lib/nidara-kit/button.ts`) — never
 `new Gtk.Button({ css_classes: ["nidara-btn", …] })` by hand, and never per-surface classes
 (`settings-row-action` was a dead class that left its button rendering as raw Adwaita). CSS
-lives once under `button.nidara-btn` — in **`ui/lib/styles/_components.scss`** since
+lives once under `button.nidara-btn` — in **`ui/lib/nidara-kit/styles/_components.scss`** since
 2026-08-10, because `NidaraButton` is built in `ui/lib/` (see "The kit's stylesheet" below).
 
 Variants carry **intent**, applied consistently across pages (Network/Bluetooth were unified
@@ -3074,7 +3074,7 @@ of a `GLib.timeout_add` per built tile instance — cheaper and it's what let th
 capsule badge both go live for free, which they weren't before.
 
 **A FIXED (non-accent) fill colour is available as one more optional prop —
-`activeColorHex`, threaded the same way as `getActive`/`getFill` (`lib/status-colors.ts` holds the
+`activeColorHex`, threaded the same way as `getActive`/`getFill` (`lib/nidara-kit/platform/status-colors.ts` holds the
 seeds). NOTHING IN THE SHELL USES IT.** Screenrecord was its only consumer and lost it 2026-08-02:
 a tile that is on fills with the ACCENT like every other tile, and red belongs to the small status
 marks — see the red-budget rule above before reaching for this. `activeAlpha`
@@ -3659,7 +3659,7 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
    any `@keyframes` (not scopable in CSS at all).
 
    📄 **"The kit's stylesheet" — `_components.scss` exists twice since 2026-08-10.**
-   `ui/lib/styles/_components.scss` is the kit's own, written so more than one bundle can
+   `ui/lib/nidara-kit/styles/_components.scss` is the kit's own, written so more than one bundle can
    compile it; `ui/shell/styles/_components.scss` is the half that is still the shell's. **One
    mechanical test decides which, not a judgement call: a rule goes to `ui/lib/` iff the widget
    that wears it is built in `ui/lib/`.** Grep the class there and everyone gets the same
@@ -3736,7 +3736,7 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
    (#440): the sheet was the SHELL's, and the installer calls `showNidaraAlert` too.** Its quit
    dialog (#405) and its install confirmation (#436) both rendered as raw GTK — the response
    buttons plain text at 19px instead of 48px rows, and the destructive one not red. The block now
-   lives in `ui/lib/styles/_components.scss` under that file's mechanical test (a rule belongs
+   lives in `ui/lib/nidara-kit/styles/_components.scss` under that file's mechanical test (a rule belongs
    there iff `ui/lib/` builds the widget). 🔑 Two failures, two different questions, and the pair
    is the lesson: **which window the widget IS decides the SELECTOR; which bundles build it decide
    the SHEET.** Getting the first right in 2026-08 left the second one wrong for a month.
@@ -4013,7 +4013,7 @@ bar on their top row, so losing half its coverage is obvious, while round ones (
 three or four pixels up there and look fine. "In GTK the T is cut but the G isn't" is the
 signature of this bug, not of a clipping one.
 
-🔑 **The cure is ONE global switch, and it is not a font size.** `ui/lib/font-rendering.ts` →
+🔑 **The cure is ONE global switch, and it is not a font size.** `ui/lib/nidara-kit/platform/font-rendering.ts` →
 `applyCrispFontRendering()`, called once per bundle before any window exists (shell via
 `ThemeManager.syncFontMetrics`, greeter and lockscreen in their `main()`). It sets
 **`gtk-font-rendering = MANUAL`** *and* `gtk-hint-font-metrics = true`.

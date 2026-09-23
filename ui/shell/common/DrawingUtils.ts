@@ -3,26 +3,26 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 
 /** The single hex → Cairo-float conversion point. It now lives beside the accent
- *  palette in `ui/lib/accent.ts`, because the kit's slider paints the accent and a
+ *  palette in `ui/lib/nidara-kit/platform/accent.ts`, because the kit's slider paints the accent and a
  *  component in `ui/lib/` may not import from `ui/shell/`; re-exported here so the
  *  shell's five Cairo painters keep their import path. Always go through it, never
  *  re-derive r/g/b by hand — two call sites (Slider.ts, battery.ts) had drifted into
  *  hardcoding their OWN float copies of a color instead of parsing the real hex live. */
-export { hexToFloatRgb } from "../../lib/accent"
+export { hexToFloatRgb } from "../../lib/nidara-kit/platform/accent"
 
 /** The glass primitives — silhouette, Fresnel rim ramp, drop shadow — moved to
- *  `ui/lib/glass-paint.ts` on 2026-08-24 so the GREETER and the LOCKSCREEN can paint the
+ *  `ui/lib/nidara-kit/platform/glass-paint.ts` on 2026-08-24 so the GREETER and the LOCKSCREEN can paint the
  *  same glass. They could not before: `ui/lib/` may not import from `ui/shell/`, so
- *  `ui/lib/glass-capsule.ts` had a flat rim and no shadow, and the #234–#248 wave landed
+ *  `ui/lib/nidara-kit/platform/glass-capsule.ts` had a flat rim and no shadow, and the #234–#248 wave landed
  *  on two thirds of the desktop. Re-exported here so every shell painter's import path
  *  is unchanged; read that file's header before touching the numbers. */
 export {
     squircleCorner, createSquirclePath, glassRimGradient,
     drawGlassShadow, drawShadowFromPath,
-} from "../../lib/glass-paint"
+} from "../../lib/nidara-kit/platform/glass-paint"
 // `export … from` re-exports without binding locally, and `drawSquircle` /
 // `squircleThumb` below still CALL two of these — hence the second line.
-import { createSquirclePath, glassRimGradient } from "../../lib/glass-paint"
+import { createSquirclePath, glassRimGradient } from "../../lib/nidara-kit/platform/glass-paint"
 
 // Shared drawSquircle utility for consistent visual approach across Dock and CC
 export const drawSquircle = (
@@ -150,8 +150,8 @@ export function makeCoverFit() {
     }
 }
 
-import { RADIUS } from "../../lib/tokens"
-import { cairoDraw } from "../../lib/cairo-draw"
+import { RADIUS } from "../../lib/nidara-kit/platform/tokens"
+import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 
 /** Canonical squircle thumbnail corner ratio (25%, matching macOS icon proportion). */
 export const THUMB_RADIUS_RATIO = 0.25

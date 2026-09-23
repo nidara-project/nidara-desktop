@@ -8,7 +8,7 @@
 // and subscriber, i.e. by every process that built the store.
 
 import GLib from "gi://GLib"
-import { writeFile } from "../../lib/file"
+import { writeFile } from "../../lib/nidara-kit/platform/file"
 import regionConfig from "./RegionConfig"
 import { GREETER_MIRROR_DIR } from "./Paths"
 

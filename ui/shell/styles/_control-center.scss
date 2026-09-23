@@ -279,7 +279,7 @@
     .nc-calendar-island {
         calendar {
             // color binds to --nidara-text via the base layer's `calendar` rule
-            // (ui/lib/styles/_base-layer.scss) → day numbers AND the month/year header follow the pin.
+            // (ui/lib/nidara-kit/styles/_base-layer.scss) → day numbers AND the month/year header follow the pin.
             background: none;
             background-color: transparent;
             border: none;

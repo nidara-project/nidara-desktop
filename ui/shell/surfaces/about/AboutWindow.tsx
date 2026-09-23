@@ -1,4 +1,4 @@
-import app from "../../../lib/host"
+import app from "../../../lib/nidara-kit/platform/host"
 import Gtk from "gi://Gtk?version=4.0"
 import Pango from "gi://Pango"
 import Gio from "gi://Gio"

@@ -7,7 +7,7 @@ import Theme from "../../../core/ThemeManager"
 import { safeDisconnect } from "../../../core/signals"
 import { NidaraRow } from "../../../../lib/nidara-kit"
 import type { PageCtx, ItemBuilder } from "../PreferencePage"
-import { cairoDraw } from "../../../../lib/cairo-draw"
+import { cairoDraw } from "../../../../lib/nidara-kit/platform/cairo-draw"
 
 // Selection checkmark, Cairo-drawn. It was Cairo because `accent-icon`
 // (color: var(--nidara-accent)) on a Gtk.Image had NO effect: our icons were raw,

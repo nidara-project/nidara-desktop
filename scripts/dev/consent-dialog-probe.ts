@@ -6,12 +6,12 @@
 // "the app that is asking" — whose exported xdg-foreign handle it writes to ARGV[0], so
 // the driver can pass it to the portal backend as `parent_window`.
 
-import app from "../../ui/lib/host"
+import app from "../../ui/lib/nidara-kit/platform/host"
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import "gi://GdkWayland?version=4.0"
-import { initAppearance } from "../../ui/lib/appearance-css"
+import { initAppearance } from "../../ui/lib/nidara-kit/platform/appearance-css"
 import { exportConsentService } from "../../ui/shell/surfaces/consent/ConsentService"
 
 const argv: string[] = (globalThis as any).ARGV ?? []

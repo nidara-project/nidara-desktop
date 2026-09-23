@@ -6,7 +6,7 @@ import registry from "../../widgets/index"
 import { uiIcon } from "../../core/Icons"
 import { t } from "../../core/i18n"
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
-import { RADIUS, rowInsetFor } from "../../../lib/tokens"
+import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
 import { menuRow, menuSeparator } from "../../common/MenuRow"
 
 // Right-click context menu for CC tiles.

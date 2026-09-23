@@ -9,7 +9,7 @@
 //   gjs -m probe.js settings-with-sync   the same, but ALSO starts the sync: the
 //                              mistake the closure check forbids, used as the control
 import GLib from "gi://GLib"
-import app from "../../ui/lib/host"
+import app from "../../ui/lib/nidara-kit/platform/host"
 import Theme from "../../ui/shell/core/ThemeManager"
 import { startAppearanceSync } from "../../ui/shell/core/AppearanceSync"
 

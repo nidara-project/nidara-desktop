@@ -5,9 +5,9 @@ import Pango from "gi://Pango"
 import PangoCairo from "gi://PangoCairo"
 import { formatSize } from "../lib/format-size"
 import { t, getLocale } from "../lib/i18n"
-import { ndIcon } from "../../lib/icons"
+import { ndIcon } from "../../lib/nidara-kit/platform/icons"
 import { attachTooltip, type NidaraTooltipHandle } from "../../lib/nidara-kit"
-import { cairoDraw } from "../../lib/cairo-draw"
+import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 
 
 export interface PartitionBarSlice {

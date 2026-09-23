@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { ACCENT_HEX } from "../accent"
+import { ACCENT_HEX } from "./platform/accent"
 
 /**
  * NIDARA KIT — the appearance seam
@@ -26,7 +26,7 @@ import { ACCENT_HEX } from "../accent"
  *
  * ⚠️ An unregistered bundle does NOT fail — it renders a blue slider on a light
  * surface. That is the same silent-default trap the kit's token contract warns about
- * (`ui/lib/styles/_components.scss`), and the greeter/lock have no dev mode to notice
+ * (`ui/lib/nidara-kit/styles/_components.scss`), and the greeter/lock have no dev mode to notice
  * it in, so the fallback logs once, on first use, rather than staying quiet.
  */
 export interface KitAppearance {

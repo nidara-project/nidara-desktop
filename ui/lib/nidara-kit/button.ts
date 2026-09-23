@@ -63,7 +63,7 @@ export function NidaraButton(opts: NidaraButtonOpts = {}): Gtk.Button {
 export type NidaraCircleVariant = "danger" | "neutral"
 
 export interface NidaraCircleButtonOpts {
-    /** A GIcon (as produced by the shell's core/Icons or by lib/icons.ndIcon).
+    /** A GIcon (as produced by the shell's core/Icons or by lib/nidara-kit/platform/icons.ndIcon).
      *  Typed loosely — the GI typings don't export Gio.Icon. */
     icon?: any
     /** Theme icon name, used when `icon` is null (ndIcon returns null when the
@@ -129,7 +129,7 @@ export function NidaraCircleButton(opts: NidaraCircleButtonOpts): Gtk.Button {
 
     // `nd-icon` rides along only on the SHIPPED icon: a theme fallback is a
     // symbolic icon that already follows the CSS colour, and inverting it would
-    // paint it the wrong way round. Same rule as lib/icons.ndImage.
+    // paint it the wrong way round. Same rule as lib/nidara-kit/platform/icons.ndImage.
     const child = opts.icon
         ? new Gtk.Image({ gicon: opts.icon, pixel_size: iconSize, css_classes: ["nd-icon"] })
         : new Gtk.Image({ icon_name: opts.iconName ?? "window-close-symbolic", pixel_size: iconSize })

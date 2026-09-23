@@ -4,7 +4,7 @@ import GLib from "gi://GLib"
 import Pango from "gi://Pango"
 import { NidaraPickList, NidaraScrolled, NidaraSelectionCheck, NidaraEmptyRow } from "../../lib/nidara-kit"
 import { searchFold } from "../../lib/locale-names"
-import { ROW_HEIGHT, WIZARD_LAYOUT } from "../../lib/tokens"
+import { ROW_HEIGHT, WIZARD_LAYOUT } from "../../lib/nidara-kit/platform/tokens"
 import { t } from "../lib/i18n"
 
 // Moved to `lib/` so `manualProblems` can print a size in a refusal: `lib/` is the
@@ -200,7 +200,7 @@ export function searchableList<T>(opts: {
   //
   // ⚠️ And the CARD is outside the scroller, with the rows scrolling inside it.
   // `NidaraList` puts the card's material on the LISTBOX itself (`.nidara-list`
-  // in ui/lib/styles/_components.scss), so scrolling the listbox scrolls its own
+  // in ui/lib/nidara-kit/styles/_components.scss), so scrolling the listbox scrolls its own
   // rounded top and bottom out of view — the card appeared to be sliced off at
   // both ends, which is what it was. The frame has to stay still while the
   // content moves; that is the whole idea of a frame.

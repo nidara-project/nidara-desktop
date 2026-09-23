@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
-import { RADIUS } from "../../../lib/tokens"
+import { RADIUS } from "../../../lib/nidara-kit/platform/tokens"
 import { PANEL_W } from "../../common/widget-kit"
 import { makeBatteryGlyph, batteryFrac } from "../../common/BatteryGlyph"
 import { t } from "../../core/i18n"

@@ -7,9 +7,9 @@ import { captureWindow } from "../core/WindowCapture"
 import Wallpaper from "../core/WallpaperManager"
 import { makeCoverFit } from "./DrawingUtils"
 import { safeDisconnect } from "../core/signals"
-import { RADIUS } from "../../lib/tokens"
+import { RADIUS } from "../../lib/nidara-kit/platform/tokens"
 import { makeWindowThumbnail, type WindowThumbnail } from "./WindowThumbnail"
-import { cairoDraw } from "../../lib/cairo-draw"
+import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 
 export interface SchematicHandle {
     wrapper: Gtk.Widget

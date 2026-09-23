@@ -5,10 +5,10 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import { SlicedCairoArea } from "../../ui/lib/sliced-cairo"
-import { cairoDraw } from "../../ui/lib/cairo-draw"
-import { drawGlassShadow, GLASS_SHADOW } from "../../ui/lib/glass-paint"
+import { cairoDraw } from "../../ui/lib/nidara-kit/platform/cairo-draw"
+import { drawGlassShadow, GLASS_SHADOW } from "../../ui/lib/nidara-kit/platform/glass-paint"
 import { drawSquircle } from "../../ui/shell/common/DrawingUtils"
-import { GLASS_TINT } from "../../ui/lib/tokens"
+import { GLASS_TINT } from "../../ui/lib/nidara-kit/platform/tokens"
 
 const [mode = "still", arg = "640"] = (globalThis as any).ARGV ?? []
 const PAD = GLASS_SHADOW.spread, PILL = 72, H = PILL + PAD * 2

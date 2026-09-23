@@ -1,12 +1,12 @@
-import app from "../lib/host"
+import app from "../lib/nidara-kit/platform/host"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 // @ts-ignore
 import Gtk4SessionLock from "gi://Gtk4SessionLock"
 import { Lock, LockOverlay } from "./widget/Lock"
-import { initAppearance } from "../lib/appearance-css"
-import { applyCrispFontRendering } from "../lib/font-rendering"
-import { useNoGtkTheme } from "../lib/gtk-theme"
+import { initAppearance } from "../lib/nidara-kit/platform/appearance-css"
+import { applyCrispFontRendering } from "../lib/nidara-kit/platform/font-rendering"
+import { useNoGtkTheme } from "../lib/nidara-kit/platform/gtk-theme"
 
 // No GTK theme at all — the greeter's sheet is the only CSS there is (commandment 11).
 useNoGtkTheme()
@@ -45,7 +45,7 @@ app.start({
 
     // The token ramp, the kit's Cairo seam and the glass rim — read from the Settings
     // portal like any application: the lock runs inside the user's own session, so the
-    // portal there answers for exactly the person it is locking. See ui/lib/appearance.ts.
+    // portal there answers for exactly the person it is locking. See ui/lib/nidara-kit/platform/appearance.ts.
     // See the greeter's app.ts for why the login screens pin their ink (#612).
     initAppearance({ fixedDarkInk: true })
 

@@ -23,7 +23,7 @@
 // `--nidara-state-selected`…). A bundle that includes them without defining those
 // gets declarations that are silently dropped.
 
-@use 'tokens' as *;
+@use './tokens' as *;
 
 // Strips a node back to nothing — since no GTK theme is loaded (tech-debt #107), what it
 // fights is the BASE LAYER's paint (`_base-layer.scss`), e.g. a `button`'s surface fill.

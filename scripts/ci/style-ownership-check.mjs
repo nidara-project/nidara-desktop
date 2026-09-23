@@ -9,10 +9,10 @@
 //       work that does not exist yet: add a widget, and the check names it.
 //
 // WHY THIS EXISTS (2026-09-20, tech-debt #59). `ui/lib/nidara-kit/` is importable
-// from every bundle; `ui/lib/styles/_components.scss` is the stylesheet every bundle
+// from every bundle; `ui/lib/nidara-kit/styles/_components.scss` is the stylesheet every bundle
 // compiles. `ui/shell/styles/_components.scss` is the SHELL's, and only the shell
 // compiles it. So a kit component whose rules sit in the second file renders
-// unstyled everywhere else — and with no GTK theme underneath (`ui/lib/gtk-theme.ts`),
+// unstyled everywhere else — and with no GTK theme underneath (`ui/lib/nidara-kit/platform/gtk-theme.ts`),
 // unstyled means INVISIBLE rather than "GTK's default".
 //
 // That is not hypothetical. Every rule giving a `switch` its track and thumb stayed
@@ -34,7 +34,7 @@
 // whatever theme gsettings named, so a kit component missing its rules there wore
 // somebody else's clothes instead of disappearing. It no longer does — tech-debt #107
 // step 5 flipped it to `useNoGtkTheme()` like the other three, and the base layer
-// (`ui/lib/styles/_base-layer.scss`) is compiled into all four. So this check is no
+// (`ui/lib/nidara-kit/styles/_base-layer.scss`) is compiled into all four. So this check is no
 // longer stricter than the runtime for any bundle: nothing is underneath, anywhere.
 //
 // ⚠️ Why the 2026-08-10 verification could not catch it: it proved the SHELL's
@@ -48,7 +48,7 @@
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs"
 
 const KIT_SRC = "ui/lib/nidara-kit"
-const KIT_SHEETS = ["ui/lib/styles/_components.scss", "ui/lib/styles/_mixins.scss"]
+const KIT_SHEETS = ["ui/lib/nidara-kit/styles/_components.scss", "ui/lib/nidara-kit/styles/_mixins.scss"]
 const SHELL_SHEET = "ui/shell/styles/_components.scss"
 
 /**
@@ -315,7 +315,7 @@ const sheetText = (paths) => {
 
 let okBundles = 0
 for (const b of BUNDLES) {
-    const css = sheetText([...b.sheets, "ui/lib/styles"])
+    const css = sheetText([...b.sheets, "ui/lib/nidara-kit/styles"])
     const built = new Map()
     for (const dir of b.src) {
         if (!existsSync(dir)) continue

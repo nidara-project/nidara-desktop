@@ -15,7 +15,7 @@
 // not also write the compositor's file.
 
 import GLib from "gi://GLib"
-import { writeFile } from "../../lib/file"
+import { writeFile } from "../../lib/nidara-kit/platform/file"
 import Gaming from "./GamingManager"
 import hs from "./HyprlandState"
 import { luaGamingBlock } from "./hyprland-lua"
