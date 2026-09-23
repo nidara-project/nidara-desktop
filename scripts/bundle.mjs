@@ -31,10 +31,24 @@
 import { readdirSync, statSync, rmSync, existsSync } from "fs"
 import { join, dirname, resolve, relative } from "path"
 import { fileURLToPath } from "url"
+import { execSync } from "child_process"
 
-// The system esbuild's JS API (pacman `esbuild` ships it next to the binary).
-// ESBUILD_JS overrides, like ESBUILD does for bundle.sh.
-const esbuild = await import(process.env.ESBUILD_JS || "/usr/lib/node_modules/esbuild/lib/main.js")
+// esbuild's JS API. Where it is depends on who installed it: pacman's `esbuild`
+// ships it at /usr/lib/node_modules (the package build, install.sh, the smoke);
+// `npm install -g esbuild` puts it under `npm root -g` (the Ubuntu CI jobs).
+// ESBUILD_JS overrides both.
+function findEsbuild() {
+    const tried = []
+    const candidates = [process.env.ESBUILD_JS, "/usr/lib/node_modules/esbuild/lib/main.js"]
+    for (const c of candidates.filter(Boolean)) { tried.push(c); if (existsSync(c)) return c }
+    try {
+        const g = join(execSync("npm root -g", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(), "esbuild/lib/main.js")
+        tried.push(g); if (existsSync(g)) return g
+    } catch {}
+    console.error(`bundle.mjs: esbuild's JS API not found (tried ${tried.join(", ")}) — install it: sudo pacman -S esbuild`)
+    process.exit(1)
+}
+const esbuild = await import(findEsbuild())
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const KIT = join(REPO, "ui/lib/nidara-kit")

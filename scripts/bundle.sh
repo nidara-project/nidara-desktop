@@ -64,10 +64,6 @@ command -v node >/dev/null 2>&1 || {
     echo "bundle.sh: node not found — install it: sudo pacman -S nodejs" >&2
     exit 1
 }
-[ -f "${ESBUILD_JS:-/usr/lib/node_modules/esbuild/lib/main.js}" ] || {
-    echo "bundle.sh: esbuild's JS API not found — install it: sudo pacman -S esbuild" >&2
-    exit 1
-}
 
 entry_abs="$(realpath "$entry")"
 entry_dir="$(dirname "$entry_abs")"
