@@ -25,7 +25,8 @@
 
 @use 'tokens' as *;
 
-// Wipes the GTK/Adwaita defaults that we fight everywhere.
+// Strips a node back to nothing — since no GTK theme is loaded (tech-debt #107), what it
+// fights is the BASE LAYER's paint (`_base-layer.scss`), e.g. a `button`'s surface fill.
 // Use inside any scoped selector before declaring custom appearance.
 @mixin nidara-reset {
     background: none;
