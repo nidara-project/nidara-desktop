@@ -19,8 +19,11 @@
 # (ui/installer/) and everything that makes it look like Nidara — the kit, the
 # bundler, the SCSS pipeline — is reachable only from inside it.
 #
+# A THIRD since 2026-09-23: `nidara-kit`, the platform library (tech-debt #108) —
+# the desktop depends on it, and so can an app that is not in this repo.
+#
 # ⚠️ Anything that picks "the package makepkg just built" must now say WHICH:
-# install.sh limits itself with `makepkg --pkg nidara-desktop` (it installs the
+# install.sh installs `nidara-desktop` + `nidara-kit` by name (it installs the
 # desktop on an Arch somebody already runs, and must never hand them an installer),
 # and nidara-repo copies every produced package rather than the newest one.
 #
@@ -39,9 +42,16 @@
 # `gnome` is in Arch. ⚠️ Do NOT create it while the `replaces=(nidara)` below is
 # still doing its job: a package named `nidara` and a package replacing `nidara`
 # in the same repository is a resolution somebody's `-Syu` has to guess at.
-pkgname=(nidara-desktop nidara-installer)
+pkgname=(nidara-desktop nidara-kit nidara-installer)
 pkgver=0.12.1
 pkgrel=1
+# The kit's API version (tech-debt #108) — NOT the release's. It must equal
+# ui/lib/nidara-kit/package.json's "version": package_nidara-kit() refuses to
+# build otherwise, and CI's pkgbuild job checks it. A literal, not read from the
+# file, because makepkg reads `provides` BEFORE build() runs (--printsrcinfo,
+# the repo db) and a value computed inside package() is empty there — measured:
+# `ERROR: pkgver in provides cannot be empty`.
+_kitapi=0.1.0
 pkgdesc="Nidara — a fluid, glassmorphic desktop environment (Hyprland + GTK4/GJS)"
 arch=(x86_64)
 url="https://github.com/nidara-project/nidara-desktop"
@@ -277,6 +287,11 @@ package_nidara-desktop() {
   provides=(nidara)
   replaces=(nidara)
   conflicts=(nidara)
+  # The shell, greeter and lock import the kit from /usr/share/nidara-kit at
+  # runtime (tech-debt #108), so without it none of them starts. Pinned to THIS
+  # build: the three bundles were compiled against these module names and
+  # exports, and both packages come out of the same build() anyway.
+  depends+=("nidara-kit=$pkgver-$pkgrel")
 
   cd "$srcdir/nidara-desktop-$pkgver"
 
@@ -337,9 +352,8 @@ package_nidara-desktop() {
   ln -s /usr/share/nidara/ui/shell/assets/icons/nidara "$pkgdir/usr/share/icons/nidara"
   install -Dm755 ui/greeter/build/nidara-greeter "$pkgdir/usr/share/nidara/ui/greeter/build/nidara-greeter"
   install -Dm644 ui/greeter/style.css "$pkgdir/usr/share/nidara/ui/greeter/style.css"
-  # The kit's own file (tech-debt #108): moves to a `nidara-kit` package in phase 4.
-  install -Dm644 ui/lib/nidara-kit/kit.css "$pkgdir/usr/share/nidara-kit/kit.css"
-  cp -r ui/lib/nidara-kit/build/js "$pkgdir/usr/share/nidara-kit/js"
+  # The kit (kit.css + the modules the three bundles import) is NOT here: it is
+  # its own package, `nidara-kit` — see package_nidara-kit below.
   install -Dm755 ui/lockscreen/build/nidara-lock "$pkgdir/usr/share/nidara/ui/lockscreen/build/nidara-lock"
 
   # Shared Hyprland config (the session loads it via -c, see bin/nidara)
@@ -423,6 +437,51 @@ package_nidara-desktop() {
   install -d "$pkgdir/etc/fonts/conf.d"
   ln -s /usr/share/fontconfig/conf.avail/65-0-nidara-noto-cjk.conf \
     "$pkgdir/etc/fonts/conf.d/65-0-nidara-noto-cjk.conf"
+}
+
+# ── nidara-kit — the platform library every Nidara application wears ─────────
+#
+# What libadwaita is to a GNOME app (tech-debt #108, option B): installed ONCE and
+# loaded by every app at start, so a fix or a design change reaches all of them
+# with one update. Its own package so an app published OUTSIDE this repo can
+# depend on it without pulling in the desktop.
+#
+#   /usr/share/nidara-kit/js/       the modules apps import, by absolute URI:
+#                                   file:///usr/share/nidara-kit/js/<module>.js
+#   /usr/share/nidara-kit/kit.css   the sheet (withKitSheet / kitSheetPath)
+#   /usr/share/nidara-kit/src/      the TypeScript sources — the kit's TYPES: an
+#                                   app's tsconfig maps the URI above onto them
+#   /usr/share/nidara-kit/package.json  the kit's API version
+#
+# ⚠️ Two versions, and they answer different questions. pkgver is the BUILD's
+# (a split PKGBUILD cannot give one package its own pkgver): it says which release
+# these files came from. The API version is ui/lib/nidara-kit/package.json's, and
+# it is PROVIDED as `nidara-kit-api=<x.y.z>` (`_kitapi` at the top): that is
+# what an app outside this repo depends on (`nidara-kit-api>=0.1.0`), because it
+# only moves when what an app imports does. The guide for app authors is the
+# kit's README (ui/lib/nidara-kit/README.md, installed under /usr/share/doc).
+package_nidara-kit() {
+  pkgdesc="Nidara's platform library: GTK4 widgets, application host, appearance engine and stylesheet for Nidara apps"
+  license=(LGPL-3.0-or-later)
+  depends=(gjs gtk4)
+
+  cd "$srcdir/nidara-desktop-$pkgver"
+
+  provides=("nidara-kit-api=$_kitapi")
+  local kitver
+  kitver="$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' ui/lib/nidara-kit/package.json)"
+  [ "$kitver" = "$_kitapi" ] || {
+    echo "nidara-kit: _kitapi=$_kitapi but ui/lib/nidara-kit/package.json says '$kitver'" >&2; return 1; }
+
+  local d="$pkgdir/usr/share/nidara-kit"
+  install -Dm644 ui/lib/nidara-kit/kit.css "$d/kit.css"
+  install -Dm644 ui/lib/nidara-kit/package.json "$d/package.json"
+  cp -r ui/lib/nidara-kit/build/js "$d/js"
+  # The sources, as the types: every .ts, without the build output or the SCSS.
+  (cd ui/lib/nidara-kit && find . -name '*.ts' -not -path './build/*' -print0 |
+     xargs -0 -I{} install -Dm644 {} "$d/src/{}")
+  install -Dm644 ui/lib/nidara-kit/README.md "$pkgdir/usr/share/doc/nidara-kit/README.md"
+  install -Dm644 ui/lib/nidara-kit/COPYING.LESSER "$pkgdir/usr/share/licenses/nidara-kit/COPYING.LESSER"
 }
 
 # ── nidara-installer — the live medium's graphical installer ─────────────────

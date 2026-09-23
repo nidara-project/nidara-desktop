@@ -4030,7 +4030,7 @@ declares one.
 
 ---
 
-### 108. ⚠️ OPEN — the kit is not a package, so no app can be published outside this repo (2026-09-20)
+### 108. ⚠️ OPEN — the kit is a package now; only the installer still carries its own copy (2026-09-20, phases 1-4 done 2026-09-23)
 
 Raised by the owner while deciding the theming question above: *"si nuestras apps siempre van a tener
 nuestros estilos, tendríamos que tener esa hoja como dependencia de la app, cuando publiquemos apps
@@ -4076,7 +4076,14 @@ need their own release cadence.
    by absolute `file://` URI (`--kit-external`), dev from the checkout's `build/js`. Start-up cost:
    none measurable (~210 ms both ways); pixels identical. Mechanism: `architecture.md` → "The kit's
    CODE is loaded, not bundled".
-4. `nidara-kit` in the PKGBUILD + its types + a guide for app authors.
+4. ✅ **The kit is its own package (2026-09-23).** `nidara-kit` (split package; the desktop
+   depends on it) ships the modules, the sheet, its sources as its types and the API version,
+   provided as `nidara-kit-api`. An app outside the repo imports it by
+   `file:///usr/share/nidara-kit/js/<module>.js`; the guide is `ui/lib/nidara-kit/README.md`.
+   Proved with an app built outside the tree against a scratch install. Mechanism:
+   `architecture.md` → "The kit's own package".
+
+What is left of #108 is the installer, below — which is why this item stays open.
 
 ⚠️ The INSTALLER keeps bundling its own copy until the ISO is published (it is the one program that
 cannot be fixed by an update); it moves to B after.
@@ -4113,7 +4120,7 @@ and action both address by name.
 reading. That is how the installer shipped `GLib.strdup_printf` (varargs, so absent from the GIR
 and `undefined` in GJS): it threw on the System and Summary pages of every machine with a
 Turing-or-newer NVIDIA GPU. The installer lost those shims the same day and is now typechecked in
-full, and so are the greeter and the lock screen (their one shim, `ui/lib/gi-cairo.d.ts`, covers
+full, and so are the greeter and the lock screen (their one shim, `ui/lib/nidara-kit/gi-cairo.d.ts`, covers
 `gi://cairo`, which ts-for-gir types from the cairo GIR instead of GJS's own cairo module). The
 shell has not.
 

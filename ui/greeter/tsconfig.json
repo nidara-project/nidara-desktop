@@ -11,7 +11,7 @@
     "target": "ES2020"
   },
   "include": [
-    "../lib/gi-cairo.d.ts",
+    "../lib/nidara-kit/gi-cairo.d.ts",
     "**/*.ts",
     "../shell/@girs/**/*"
   ],
