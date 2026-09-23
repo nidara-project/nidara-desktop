@@ -195,6 +195,11 @@ build() {
   # both build-time-only — the bundler itself is the system `esbuild`.
   cd ui/shell
   npm install
+  # The kit's sheet, loaded at runtime by the shell, greeter and lock in the same
+  # provider as their own (tech-debt #108 phase 2). The installer still compiles
+  # its own copy in until the ISO is published.
+  npx sass --no-charset ../lib/nidara-kit/styles/kit.scss ../lib/nidara-kit/kit.css
+  sed -i '/@charset/d' ../lib/nidara-kit/kit.css
   npx sass --no-charset style.scss style.css
   sed -i '/@charset/d' style.css
   mkdir -p build
@@ -329,6 +334,8 @@ package_nidara-desktop() {
   ln -s /usr/share/nidara/ui/shell/assets/icons/nidara "$pkgdir/usr/share/icons/nidara"
   install -Dm755 ui/greeter/build/nidara-greeter "$pkgdir/usr/share/nidara/ui/greeter/build/nidara-greeter"
   install -Dm644 ui/greeter/style.css "$pkgdir/usr/share/nidara/ui/greeter/style.css"
+  # The kit's own file (tech-debt #108): moves to a `nidara-kit` package in phase 4.
+  install -Dm644 ui/lib/nidara-kit/kit.css "$pkgdir/usr/share/nidara-kit/kit.css"
   install -Dm755 ui/lockscreen/build/nidara-lock "$pkgdir/usr/share/nidara/ui/lockscreen/build/nidara-lock"
 
   # Shared Hyprland config (the session loads it via -c, see bin/nidara)

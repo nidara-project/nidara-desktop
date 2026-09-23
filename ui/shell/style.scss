@@ -1,12 +1,10 @@
-// The base layer: element selectors for the nodes GTK builds itself (#107 step 5).
-// The shell runs themeless like the other bundles, so this is the ONLY thing under
-// a node none of our classes reach. First, so every rule below out-orders it.
-@use '../lib/nidara-kit/styles/base-layer';
+// The kit's sheet — the base layer (#107 step 5) and the kit's components — is
+// NOT compiled in here any more (tech-debt #108 phase 2): it is `kit.css`, loaded
+// at runtime in the SAME provider, before this file (`withKitSheet()`, called by
+// core/ThemeManager.ts). So everything below still out-orders it at equal
+// specificity, as when Sass emitted it at the top of this file.
 @use 'styles/base';
 @use 'styles/reset';
-// The kit's own stylesheet — shared with the other bundles, imported FIRST so
-// the shell's half below can still out-order it (see ui/lib/nidara-kit/styles/_components.scss).
-@use '../lib/nidara-kit/styles/components' as kit;
 @use 'styles/components';
 @use 'styles/dock';
 @use 'styles/bar';

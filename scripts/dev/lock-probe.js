@@ -116,6 +116,12 @@ import system from "system"
 
 const OUT = ARGV[0] || "/tmp/nidara-lock-probe"
 const REPO = GLib.getenv("NIDARA_REPO") || GLib.get_current_dir()
+// The kit's sheet is no longer compiled into style.css (tech-debt #108 phase 2): the
+// apps load it FIRST, in the SAME provider (ui/lib/nidara-kit/platform/kit-css.ts —
+// two providers would not compare specificity). This is that, for a plain-JS probe.
+const KIT_CSS = `${GLib.getenv("NIDARA_KIT_DIR") || `${REPO}/ui/lib/nidara-kit`}/kit.css`
+const withKitSheet = (p) => [KIT_CSS, p]
+    .map(f => `@import url("${GLib.filename_to_uri(GLib.canonicalize_filename(f, null), null)}");`).join("\n")
 const CSS = GLib.getenv("CSS") || `${REPO}/ui/greeter/style.css`
 const BG = GLib.getenv("BG") || "#1b2430"
 const SCOPE = GLib.getenv("SCOPE") || "greeter"
@@ -212,7 +218,7 @@ if (!GLib.file_test(CSS, GLib.FileTest.EXISTS)) {
 // gives them no theme at all, so there is nothing below it to fight; USER+10 matches
 // what app.start({ css }) ends up at.
 const provider = new Gtk.CssProvider()
-provider.load_from_path(CSS)
+provider.load_from_string(withKitSheet(CSS))
 Gtk.StyleContext.add_provider_for_display(display, provider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 10)
 print(`[css]   ${CSS}`)
 

@@ -33,15 +33,13 @@
 // the bar (live here: the language list is 12 items, the only one that scrolls),
 // and a focus ring drawn twice.
 //
-// 🔑 SOURCE ORDER IS THE MECHANISM. Sass emits a module's CSS BEFORE the file
-// that loads it, so everything below out-ranks the kit at equal specificity.
-// That is deliberate and it is what makes the two bare-element collisions safe:
+// 🔑 SOURCE ORDER IS THE MECHANISM. The kit's sheet (`kit.css`: the base layer
+// and the components) is no longer compiled into this one (tech-debt #108 phase
+// 2); `withKitSheet()` loads it at runtime in the SAME provider, BEFORE this file
+// — so everything below still out-ranks the kit at equal specificity. That is
+// deliberate and it is what makes the two bare-element collisions safe:
 // `dropdown > button` and `dropdown popover` exist in both sheets with the same
 // specificity, and these screens keep their own. See the dropdown section.
-// The base layer: element selectors for the nodes GTK builds itself (#107 step 5).
-// Wired per bundle, never from the kit's shared sheet — see the note there.
-@use '../lib/nidara-kit/styles/base-layer';
-@use '../lib/nidara-kit/styles/components';
 
 // ── Palette ─────────────────────────────────────────────────────────────────
 // The one thing that is legitimately local. The shell rewrites its colour

@@ -24,6 +24,10 @@ mkdir -p "$work/runtime" "$work/config" "$work/data" "$work/home" "$work/mirror"
 # The schema from THIS checkout, not whatever is installed (#573's dev-mode skew trap).
 mkdir -p "$work/schemas" && cp "$repo"/config/gsettings/*.gschema.xml "$work/schemas/" && glib-compile-schemas "$work/schemas"
 "$repo/ui/shell/node_modules/.bin/sass" --no-charset "$repo/ui/shell/style.scss" "$work/style.css" 2>/dev/null
+# The kit's sheet is no longer inside style.css (tech-debt #108 phase 2): compile it
+# beside it and tell withKitSheet() where, or it would load the INSTALLED copy.
+"$repo/ui/shell/node_modules/.bin/sass" --no-charset "$repo/ui/lib/nidara-kit/styles/kit.scss" "$work/kit.css" 2>/dev/null
+export NIDARA_KIT_DIR="$work"
 "$repo/scripts/bundle.sh" --js "$repo/scripts/dev/widgets-page-probe.ts" "$work/probe.js" >/dev/null 2>&1
 
 cat > "$work/probe.lua" <<'LUA'

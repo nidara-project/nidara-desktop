@@ -64,8 +64,11 @@ for (const b of BUNDLES) {
         continue
     }
 
-    // What this bundle paints with: its own rules, plus the kit's if it compiles them.
+    // What this bundle paints with: its own rules, plus the kit's if it compiles them
+    // in (the installer) or loads kit.css ahead of them at runtime (`withKitSheet`,
+    // tech-debt #108 phase 2 — the greeter and the lock).
     const usesKit = /@use\s+['"][^'"]*styles\/components['"]/.test(sheet)
+        || /withKitSheet\s*\(/.test(read(`${b.code}/app.ts`))
     const used = referenced(sheet + (usesKit ? kitSheet : ""))
 
     // What it can satisfy them with.

@@ -4066,8 +4066,11 @@ need their own release cadence.
    its own `package.json` version; `kit-boundary-check.mjs` fails if it imports anything outside
    itself. Layout and rule: `architecture.md` → "The kit is a package". Measured: the three sheets
    compile byte-identical apart from comments, all four bundles typecheck and bundle.
-2. One kit sheet compiled once and loaded at runtime by every bundle (the end of the three copies:
-   ~47 KB each). Measure with the live A/B (`design-system.md`) plus the installer/greeter probes.
+2. ✅ **One kit sheet, loaded at runtime (2026-09-23).** `kit.css`, compiled once, loaded by the
+   shell, greeter and lock ahead of their own sheet IN THE SAME PROVIDER (`withKitSheet`; GTK does
+   not compare specificity across providers — measured). Off-screen A/B: 0 changed pixels on every
+   `shell-gallery-probe` scope, control 27 k–192 k; greeter rules identical in order. Mechanism:
+   `architecture.md` → "The kit's sheet is loaded, not compiled in". The installer keeps its copy.
 3. The kit as installed ESM modules loaded at runtime (`bundle.sh` marks it external); the shell and
    the greeter consume it the way an outside app would. Measure the start-up cost.
 4. `nidara-kit` in the PKGBUILD + its types + a guide for app authors.

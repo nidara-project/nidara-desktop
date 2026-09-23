@@ -118,6 +118,9 @@ phase_bundle() {
     log "npm install…"
     npm install
     log "sass…"
+    # The kit's sheet first: the shell loads it at runtime from the source tree
+    # (ui/lib/nidara-kit/kit.css, next to NIDARA_SHELL_ROOT) — tech-debt #108 phase 2.
+    npx sass --no-charset ../lib/nidara-kit/styles/kit.scss ../lib/nidara-kit/kit.css && sed -i '/@charset/d' ../lib/nidara-kit/kit.css
     npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
     log "bundle…"
     mkdir -p build

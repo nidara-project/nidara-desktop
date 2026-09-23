@@ -121,6 +121,13 @@ jobs:
         working-directory: ui/shell
         run: npx --yes sass@1.97.3 --no-charset style.scss /tmp/style.css
 
+      # The kit's ONE sheet (tech-debt #108 phase 2): the shell, greeter and lock
+      # load it at runtime ahead of their own, so it is no longer compiled as part
+      # of any of them — a break in it would otherwise reach nobody's compile.
+      - name: Compile the kit's sheet (must succeed)
+        working-directory: ui/shell
+        run: npx --yes sass@1.97.3 --no-charset ../lib/nidara-kit/styles/kit.scss /tmp/kit.css
+
       # The greeter/lockscreen sheet (one file, both bundles) was compiled by
       # nothing here until 2026-08-10, and it is the one that could least afford
       # it: those two surfaces have NO dev mode — they load a fixed

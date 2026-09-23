@@ -62,6 +62,12 @@ import system from "system"
 
 const OUT = ARGV[0] || "/tmp/nidara-probe"
 const REPO = GLib.getenv("NIDARA_REPO") || GLib.get_current_dir()
+// The kit's sheet is no longer compiled into style.css (tech-debt #108 phase 2): the
+// apps load it FIRST, in the SAME provider (ui/lib/nidara-kit/platform/kit-css.ts —
+// two providers would not compare specificity). This is that, for a plain-JS probe.
+const KIT_CSS = `${GLib.getenv("NIDARA_KIT_DIR") || `${REPO}/ui/lib/nidara-kit`}/kit.css`
+const withKitSheet = (p) => [KIT_CSS, p]
+    .map(f => `@import url("${GLib.filename_to_uri(GLib.canonicalize_filename(f, null), null)}");`).join("\n")
 // CSS=… points the probe at a DIFFERENT compiled sheet. Added 2026-08-10 with the
 // greeter's adoption of `NidaraDropDown`: that migration's whole payload is the
 // POPUP, which is the one thing neither eye nor `lock-probe.js` can look at (a
@@ -83,7 +89,7 @@ const load = (css, priority, fromPath = false) => {
 }
 const lowCss = GLib.getenv("LOW_CSS")
 if (lowCss) { load(lowCss, Gtk.STYLE_PROVIDER_PRIORITY_THEME); print(`[theme-priority] ${lowCss}`) }
-load(STYLE, Gtk.STYLE_PROVIDER_PRIORITY_USER + 10, true)
+load(withKitSheet(STYLE), Gtk.STYLE_PROVIDER_PRIORITY_USER + 10)
 const extraCss = GLib.getenv("EXTRA_CSS")
 if (extraCss) { load(extraCss, Gtk.STYLE_PROVIDER_PRIORITY_USER + 40); print(`[above style.css] ${extraCss}`) }
 

@@ -69,9 +69,14 @@ not one day earlier — a reset removed while its node is still undrawn takes th
 (tech-debt #107, the ordering rule). ✅ The shell stopped running on a theme on 2026-09-23 (step 5),
 so step 6 — deleting what only neutralised it — is now open, and still one reset at a time, measured.
 
-**5 · The bundle sheets — and, under them, the BASE LAYER.** `ui/lib/nidara-kit/styles/` is the kit's and
-every bundle compiles it; `ui/shell/styles/` is the shell's and only the shell does; then each
-bundle's own sheet. `style-ownership-check` gates the first against the second.
+**5 · The bundle sheets — and, under them, the BASE LAYER.** `ui/lib/nidara-kit/styles/` is the kit's;
+`ui/shell/styles/` is the shell's and only the shell compiles it; then each bundle's own sheet.
+`style-ownership-check` gates the first against the second. ⚠️ Since 2026-09-23 (tech-debt #108
+phase 2) the kit's sheet is compiled ONCE, to `ui/lib/nidara-kit/kit.css` (`styles/kit.scss` = the
+base layer + the components), and the shell, greeter and lock load it at RUNTIME ahead of their own
+sheet, in the SAME provider — `withKitSheet()`, `ui/lib/nidara-kit/platform/kit-css.ts`. Only the
+installer still compiles it in, until the ISO is published. Read "The kit's sheet is loaded, not
+compiled in" in `architecture.md` before touching how any app loads CSS.
 🔑 **`ui/lib/nidara-kit/styles/_base-layer.scss` (2026-09-20) is the layer beneath all of them**: bare element
 selectors, every one of them (0,0,1), for the nodes no class of ours can reach — the toplevels GTK
 builds itself. ⚠️ It is `@use`d **from each bundle's own sheet** (`ui/installer/style.scss`,
@@ -3670,7 +3675,9 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
    owns the class, the SHEET says which bundles compile it. Elsewhere in this document, a bare
    `_components.scss` means whichever half holds the rule being discussed.
 
-   ⚠️ **The greeter and the lockscreen DO import it, since 2026-08-10** — what earned the
+   ⚠️ **The greeter and the lockscreen DO wear it, since 2026-08-10** (compiled in until
+   2026-09-23; loaded at runtime as `kit.css`, ahead of their own sheet in the same provider,
+   since — same source order, so everything below about order still holds) — what earned the
    import was migrating their three raw `Gtk.DropDown`s to `NidaraDropDown` (PR #114, see "The
    greeter wears the kit" above). Two things stay sharp on that side. The file carries
    BARE-ELEMENT selectors (`entry`, `selection`, `dropdown > button`, `dropdown popover`) that

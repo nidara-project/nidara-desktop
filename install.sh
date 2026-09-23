@@ -435,6 +435,9 @@ sudo ldconfig
 echo "[3/5] Building Nidara UI..."
 cd "$REPO_DIR/ui/shell"
 npm install
+# The kit's sheet first: the shell, greeter and lock load it at runtime, in the
+# same provider as their own (tech-debt #108 phase 2, ui/lib/nidara-kit/platform/kit-css.ts).
+npx sass --no-charset ../lib/nidara-kit/styles/kit.scss ../lib/nidara-kit/kit.css && sed -i '/@charset/d' ../lib/nidara-kit/kit.css
 npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
 
 # Dev mode: generate the git-ignored @girs/ GI typings so typecheck + editor
@@ -548,6 +551,11 @@ sudo cp -r "$REPO_DIR/ui/shell/assets" /usr/share/nidara/ui/shell/
 sudo rm -rf /usr/share/icons/nidara-symbolic
 sudo rm -rf /usr/share/icons/nidara
 sudo ln -s /usr/share/nidara/ui/shell/assets/icons/nidara /usr/share/icons/nidara
+
+# The kit's compiled sheet, where every app that wears the kit finds it when it
+# is not running from a checkout. Its own directory, not under nidara/: it is the
+# kit package's file (tech-debt #108), and the greeter and lock always read it here.
+sudo install -Dm644 "$REPO_DIR/ui/lib/nidara-kit/kit.css" /usr/share/nidara-kit/kit.css
 
 # Greeter bundle + style
 sudo mkdir -p /usr/share/nidara/ui/greeter/build
