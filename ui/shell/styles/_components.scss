@@ -39,8 +39,8 @@
    tech-debt #59). What stays here is everything the SHELL builds around it. */
 
 .nidara-menu-row {
-    // Text colour follows --nidara-text via the global button neutralization in
-    // _reset.scss (no per-row override needed).
+    // Text colour follows --nidara-text via the base layer's `button` rule
+    // (ui/lib/styles/_base-layer.scss) — no per-row override needed.
     background: transparent;
     border: none;
     box-shadow: none;
@@ -300,38 +300,8 @@ button.settings-icon-btn {
 }
 
 
-// ── Tooltip (common/Tooltip.ts — attachTooltip) ───────────────────────────────
-// The one glass tooltip, used everywhere (dock, tray, app-grid, About) in place
-// of GTK's default system tooltip — which renders in its own surface, out of
-// reach of scoped CSS, so it can't be themed. The bubble (rounded body + pointer)
-// is painted in Cairo as a SINGLE continuous shape (one glass fill + one 1px
-// inner-edge stroke wrapping body AND arrow): a GTK popover arrow can't do that
-// on translucent glass — its base seam shows through. So here CSS only strips the
-// popover's own chrome to TRANSPARENT and lets the DrawingArea do the painting.
-// Being a separate surface, the popover still gets Hyprland's blur → real glass.
-.nidara-tooltip {
-    @include nidara-reset;          // strip the default popover chrome on the root
-
-    > contents {
-        @include nidara-reset;      // fully transparent — the bubble is Cairo-painted
-        padding: 0;
-        min-width: 0;
-        min-height: 0;
-    }
-
-    .nidara-tooltip-label {
-        color: var(--nidara-text);
-        font-size: $fs-small;       // fixed px ramp — chrome must NOT reflow with the font picker
-    }
-
-    &.dark .nidara-tooltip-label {
-        color: #ffffff;
-    }
-
-    &.light .nidara-tooltip-label {
-        color: #111116;
-    }
-}
+// (.nidara-tooltip lives in the kit's sheet, ui/lib/styles/_components.scss — this
+//  file had an identical second copy until tech-debt #107 step 6.)
 
 /* ── Cross-window pieces, moved out of _control-center.scss (2026-08-07) ──────
    These three lived there because that is where they were first needed, and they

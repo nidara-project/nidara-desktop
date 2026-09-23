@@ -1,7 +1,7 @@
 @use 'base' as *;
 
 /* ==========================================================================
-   NIDARA DESIGN SYSTEM - NEUTRALIZATION LAYER
+   NIDARA DESIGN SYSTEM - SHELL WINDOW BASE (was: the neutralization layer)
    ========================================================================== */
 
 /* Our interface glyphs (core/Icons.ts) are SYMBOLIC files, so GTK paints them
@@ -16,23 +16,14 @@
    not have the `image` rule. */
 .nd-icon { color: var(--nidara-text); }
 
-/* Adwaita is force-loaded in-process (AGS calls Adw.init(); we can't unload it —
-   tech-debt #9) and colours <button> and <calendar> labels by ELEMENT selector,
-   following the PROCESS dark/light (= app mode). When the shell skin is pinned to
-   the opposite mode (appearance.shellAppearance) those defaults are wrong (e.g.
-   white menu/calendar text on a light-pinned shell). Bind them to our token here,
-   ONCE: low specificity + our high provider priority means this beats Adwaita's
-   element rule but LOSES to our own classes (.nidara-btn--primary, .today,
-   .nidara-text-secondary, …), so variants/hierarchy keep their colours. This is
-   why we don't patch `color` per menu/button — add new shell text confidently. */
-button,
-calendar { color: var(--nidara-text); }
 
-/*
-   Targets explicit namespaced nidara components to ensure a clean slate
-   without breaking global GTK apps.
-*/
-
+/* The shell's own layer-shell windows. What used to be here was a NEUTRALIZATION
+   layer — borders, shadows, outlines, GTK's internal nodes (ripple, highlight,
+   focus-ring, decoration), the drop-target highlight, the scale's internals —
+   all of it declared against a GTK theme the shell no longer loads (tech-debt
+   #107 step 6). With no theme those nodes paint nothing, and the base layer
+   (`ui/lib/styles/_base-layer.scss`) is what shows under a node no class of ours
+   reaches. What stays is what is ours to say. */
 #nidara-dock,
 #nidara-bar,
 #nidara-island,
@@ -45,42 +36,9 @@ calendar { color: var(--nidara-text); }
        is anchored to this so em-less elements default to body, independent of
        the GNOME font size (which only governs family via ThemeManager). */
     font-size: $fs-body;
-    background-image: none;
-    box-shadow: none;
-    border: none;
-    outline: none;
 
     /* Ensure symbolic icons inherit the correct foreground color */
     image { color: var(--nidara-text); }
-
-    /* Neutralize intrusive GTK internal nodes */
-    & ripple,
-    & highlight,
-    & outline,
-    & focus-ring,
-    & decoration {
-        background-color: transparent;
-        background-image: none;
-        box-shadow: none;
-        border: none;
-    }
-
-    /* Suppress GTK4 drop-target highlight border */
-    &:drop(active),
-    *:drop(active) {
-        box-shadow: none;
-        border-color: transparent;
-        outline: none;
-    }
-
-    /* Suppress Adwaita decorations on scale internals */
-    & scale trough,
-    & scale highlight,
-    & scale slider {
-        border: none;
-        outline: none;
-        box-shadow: none;
-    }
 }
 
 /* ── Native GTK scrollbar fallback — scoped to shell components only ─────────
@@ -117,29 +75,12 @@ calendar { color: var(--nidara-text); }
 
         button { opacity: 0; min-width: 0; min-height: 0; padding: 0; }
     }
-
-    /* Overscroll indicators. GTK paints `scrolledwindow > overshoot.top` as a radial
-       gradient of #020202 (verified in the theme's own CSS, extracted from libgtk's
-       gresource) and `undershoot.*` as a fade at the edge that still has content. On an
-       opaque app window that reads as depth; on GLASS it is a black smear that appears
-       out of nowhere the moment a list is pulled past its end, and it does not even
-       reach the surface's edge, so it reads as a stray band rather than as an edge
-       effect. Nidara's own scroll bar already says where you are. User-caught in the
-       Settings dropdown 2026-08-03, but it was never specific to that popover — every
-       scrolled surface in the DE had it. */
-    scrolledwindow > overshoot,
-    scrolledwindow > undershoot {
-        background: none;
-        background-image: none;
-        box-shadow: none;
-        border: none;
-    }
 }
 
-/* Reset for Nidara Settings window (Gtk.Window, decorated: false) */
+/* Nidara Settings window (Gtk.Window, decorated: false). Transparent because the
+   base layer's `window` rule gives GTK's own toplevels a floating-surface fill,
+   and this window's glass lives on .nidara-window-glass (Hyprland handles border,
+   rounding and shadows). */
 window.nidara-settings-window {
     background: transparent;
-    box-shadow: none;
-    border: none;
-    // Glass surface fill lives on .nidara-window-glass (Hyprland handles border, rounding and shadows)
 }

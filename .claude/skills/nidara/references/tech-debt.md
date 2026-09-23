@@ -137,10 +137,12 @@ tombstone *comments* the extractor matches inside `/* … */` (`bar-ws-dot`/`cc-
 live class is named differently). **Next-run trap:** the extractor matches `.name` inside comments, so
 a tombstone comment reads as an orphan — check whether the only hit is a comment before acting.
 
-### 2. Anti-Adwaita resets still dense in two files
-`_control-center.scss` (~33 reset rules) and `_settings.scss` (~24). High reset counts signal
-these surfaces are fighting Adwaita widgets they shouldn't use. **Don't add more resets** —
-use `@mixin nidara-reset` or switch the widget to base GTK4 / `ui/lib/nidara-kit/`.
+### 2. Resets still dense in two files — and since 2026-09-23 they fight the BASE LAYER, not Adwaita
+`_control-center.scss` (~33 reset rules) and `_settings.scss` (~24). They were written against
+Adwaita; with no theme loaded (#107) most of them now strip the base layer's paint (a `button`'s
+`--nidara-surface` fill), which is live work, not dead weight — so they are NOT step-6 deletions.
+What they still signal is widgets built bare and then undressed. **Don't add more resets** —
+use `@mixin nidara-reset` or a kit component (`ui/lib/nidara-kit/`) that is born dressed.
 
 ### 3. CC row typography intentionally uses fixed px ramp ($fs-small) — NOT a bug (2026-06-09 → 2026-08-20)
 `_control-center.scss` sets `.nidara-row-title` / `.nidara-row-subtitle` to `$fs-small` **px**,
@@ -4004,11 +4006,25 @@ of `kit-gallery-probe`). So Settings' file chooser is drawn by `xdg-desktop-port
 process that follows the user's GTK theme like any third-party app. Half of what held step 5 up for
 three days was a dialog in somebody else's process.
 
-**Step 6 is now OPEN** — delete what only neutralised a theme, one reset at a time, each measured
-the same way. Known first candidates: `_reset.scss`'s `button, calendar { color }` (its comment still
-blames `Adw.init()`), the `scale trough/highlight/slider` suppression ("Adwaita decorations"), and
-`.nidara-tooltip`, which is defined twice, identically, in the kit's and the shell's `_components.scss`.
-Settings' "GTK theme" row now reaches third-party apps ONLY — its label should say so.
+**Step 6 — first pass DONE 2026-09-23.** Deleted, as a batch and then measured on the live shell
+against #631's state (CC, NC and every visible part of all 19 Settings pages at 0 px; Prism, app
+grid, overview, About unchanged by eye — the full-screen diffs are the user's windows behind):
+`_reset.scss`'s `button, calendar { color }` (the base layer declares the same value), the
+window-scope `border`/`box-shadow`/`outline`/`background-image`, the neutralisation of GTK's
+internal nodes (`ripple`, `highlight`, `outline`, `focus-ring`, `decoration`), the `:drop(active)`
+suppression, the `scale` internals, `scrolledwindow > overshoot/undershoot`, Prism's row focus-ring
+kill, and the shell's identical second copy of `.nidara-tooltip`.
+🔑 **The test for "dead" is not "it mentions Adwaita".** A reset is dead only if the thing it
+suppressed was painted by the THEME alone. One that strips a `button` now strips the base layer's
+fill and stays (see #2). Scripts' comments were re-pointed from "Adwaita" to the base layer.
+⚠️ Not measurable by a still screenshot, and deleted on the substrate argument (with no theme
+those nodes have no rule at all): the drop-target highlight and the overscroll smear.
+✅ Settings' "GTK theme" row, which now reaches third-party apps ONLY, is labelled so: "External
+app theme" / «Tema de aplicaciones externas», subtitle "Look of GTK apps that aren't Nidara's"
+(owner's wording, 2026-09-23, all 12 locales). And the app grid's window, which declared no
+background, took the base layer's `window` fill as a translucent box around the panel on the day
+the shell flipped — fixed in #631; the base layer's header no longer claims every window of ours
+declares one.
 
 ---
 

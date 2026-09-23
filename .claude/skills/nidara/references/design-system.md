@@ -56,11 +56,14 @@ the blank theme is not what makes our CSS win. Measured: with Adwaita underneath
 theme, three of the installer's six pages render PIXEL-IDENTICAL.
 
 **4 · Resets — a declaration whose only job is to have something to win with.** Priority decides a
-CONFLICT; where we say nothing there is no conflict and the theme simply speaks. That is the whole
-purpose of `ui/shell/styles/_reset.scss`: `button, calendar { color: var(--nidara-text) }` does not
-change what we draw, it stops the theme deciding a colour we never mentioned — at deliberately low
-specificity, so our own classes still win over it. ⚠️ That rule's comment justifies itself with
-"AGS calls `Adw.init()`", which has been false since 2026-08-18. **The resets were for the SHELL,
+CONFLICT; where we say nothing there is no conflict and whatever is underneath simply speaks.
+⚠️ **Since 2026-09-23 what is underneath is the BASE LAYER, not a theme**, and that changes which
+resets are alive: a `nidara-reset` that strips a `button`'s fill inside the CC is still doing work
+(it strips the base layer's `--nidara-surface`), while one that suppressed a node only a THEME
+painted — `ripple`, `focus-ring`, `decoration`, `:drop(active)`, `scrolledwindow > overshoot`, a
+theme's focus rectangle on list rows — is dead weight. `_reset.scss` lost all of the second kind in
+step 6 (it had `button, calendar { color }`, justified by an `Adw.init()` gone since 2026-08-18;
+the base layer now says exactly that). **The resets were for the SHELL,
 the last bundle that ran on a theme (until 2026-09-23)**; they become dead weight the day it stops, and
 not one day earlier — a reset removed while its node is still undrawn takes the pixel with it
 (tech-debt #107, the ordering rule). ✅ The shell stopped running on a theme on 2026-09-23 (step 5),

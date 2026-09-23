@@ -65,16 +65,6 @@
         background-color: var(--nidara-accent-10);
     }
 
-    /* Kill GTK's default focus rectangle on the list rows (it's the blue ring that
-       was bleeding onto section headers too). The keyboard-nav indicator is the
-       accent :selected background above — no ring needed on rows. */
-    .prism-results-list row:focus,
-    .prism-results-list row:focus-visible,
-    .prism-results-list row:focus-within {
-        outline: none;
-        box-shadow: none;
-    }
-
     /* (.prism-result-icon deleted — it only ever set border-radius on a Gtk.Image, which
        has no background of its own, and GTK4's border-radius does NOT clip a child's
        rendering. It rounded nothing. Rounding a bitmap is squircleThumb()'s job.) */
