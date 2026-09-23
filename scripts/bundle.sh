@@ -2,8 +2,12 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # scripts/bundle.sh — Nidara's bundler. Replaces `ags bundle` (2026-08-18).
 #
-#   scripts/bundle.sh <entry.ts> <outfile> [extra esbuild args…]
-#   scripts/bundle.sh --js <entry.ts> <out.js> [extra esbuild args…]
+#   scripts/bundle.sh <entry.ts> <outfile> [--kit-external=<dir>] [--alias:k=v …]
+#   scripts/bundle.sh --js <entry.ts> <out.js> [--kit-external=<dir>] [--alias:k=v …]
+#
+# `--kit-external=<dir>` (#108 phase 3): the app loads nidara-kit from <dir> at
+# runtime (compiled by `node scripts/bundle.mjs kit <dir>`) instead of carrying a
+# copy. See scripts/bundle.mjs.
 #
 # Default output is a SELF-CONTAINED EXECUTABLE: a bash wrapper carrying the
 # bundled JS base64-encoded, which decodes it to $XDG_RUNTIME_DIR and runs gjs
@@ -56,9 +60,8 @@ entry="$1"; outfile="$2"; shift 2
 
 [ -f "$entry" ] || { echo "bundle.sh: no such entry file: $entry" >&2; exit 1; }
 
-esbuild="${ESBUILD:-esbuild}"
-command -v "$esbuild" >/dev/null 2>&1 || {
-    echo "bundle.sh: esbuild not found — install it: sudo pacman -S esbuild" >&2
+command -v node >/dev/null 2>&1 || {
+    echo "bundle.sh: node not found — install it: sudo pacman -S nodejs" >&2
     exit 1
 }
 
@@ -67,36 +70,19 @@ entry_dir="$(dirname "$entry_abs")"
 out_abs="$(realpath -m "$outfile")"
 mkdir -p "$(dirname "$out_abs")"
 
-# esbuild finds tsconfig.json on its own, but ONLY next to the entry file; being
-# explicit means a probe bundled from scripts/dev/ gets the same one the app does.
-tsconfig="$entry_dir/tsconfig.json"
-tsconfig_args=()
-[ -f "$tsconfig" ] && tsconfig_args=(--tsconfig="$tsconfig")
-
 js_out="$out_abs"
 if [ "$JS_ONLY" = "no" ]; then
     js_out="$(mktemp -t nidara-bundle-XXXXXX.js)"
     trap 'rm -f "$js_out"' EXIT
 fi
 
-"$esbuild" "$entry_abs" \
-    --bundle \
-    --format=esm \
-    --platform=neutral \
-    --target=es2022,firefox115 \
-    --sourcemap=inline \
-    "${tsconfig_args[@]}" \
-    --loader:.css=text \
-    --define:SRC="\"$entry_dir\"" \
-    --external:'gi://*' \
-    --external:'file://*' \
-    --external:'resource://*' \
-    --external:system \
-    --external:console \
-    --external:cairo \
-    --external:gettext \
-    --outfile="$js_out" \
-    "$@"
+# The esbuild step lives in scripts/bundle.mjs (esbuild's JS API) since #108
+# phase 3: the flags are the same ones, listed there, and the output without
+# `--kit-external=<dir>` is byte-identical to the CLI's. It moved because leaving
+# the kit out of an app (loading the INSTALLED kit instead) takes a plugin, and
+# the CLI cannot take one. The tsconfig next to the entry is passed explicitly
+# there too, so a probe bundled from scripts/dev/ gets the same one the app does.
+node "$(dirname "$(realpath "$0")")/bundle.mjs" app "$entry_abs" "$js_out" "$@"
 
 [ "$JS_ONLY" = "yes" ] && exit 0
 

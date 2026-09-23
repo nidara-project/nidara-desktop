@@ -179,7 +179,7 @@ tail -f "$XDG_RUNTIME_DIR/nidara-ui.log"  # logs (per-user; falls back to /tmp)
 killall gjs                              # nuke stale GJS holding the old UI
 ./scripts/gen-types.sh                  # (re)generate @girs/ typings — see below
 cd ui/shell && npm run typecheck        # needs @girs/
-cd ui/shell && npm run build            # SCSS + scripts/bundle.sh (needs the `esbuild` package)
+cd ui/shell && npm run build            # SCSS + the kit's modules + scripts/bundle.sh --kit-external (needs the `esbuild` package)
 nidara-ipc toggleAppGrid                # send an IPC command
 ```
 
