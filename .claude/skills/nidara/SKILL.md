@@ -49,12 +49,14 @@ This is the single most important fact to internalize before touching anything:
 Each has its own `app.ts`, its own `package.json`, its own `scripts/bundle.sh` invocation. Code shared between the greeter and the lockscreen is currently duplicated (see `references/tech-debt.md`).
 
 ⚠️ **The fourth one does not ship with the desktop.** `packaging/nidara/PKGBUILD` is a SPLIT
-package (since 2026-08-25): it builds `nidara` and `nidara-installer`, and only nidara-iso's
-`packages.x86_64` ever names the second — a system somebody is using must not carry a program
-whose job is to erase a disk. Two consequences that bite silently:
+package (since 2026-08-25): it builds `nidara-desktop`, `nidara-kit` (the platform library the
+desktop depends on and outside apps can too — since 2026-09-23, `architecture.md` → "The kit's own
+package") and `nidara-installer`, and only nidara-iso's `packages.x86_64` ever names the last — a
+system somebody is using must not carry a program whose job is to erase a disk. Two consequences
+that bite silently:
 
-- anything picking "the package makepkg just built" has to say WHICH. `install.sh` passes
-  `makepkg --pkg nidara-desktop` and matches the file by name; nidara-repo's `build-repo.sh` copies
+- anything picking "the package makepkg just built" has to say WHICH. `install.sh` installs
+  `nidara-desktop` + `nidara-kit` by name, in one `pacman -U`; nidara-repo's `build-repo.sh` copies
   every package produced instead of the newest one. The old `ls -t … | head -1` would have
   installed an installer onto somebody's Arch.
 - `install=` and `backup=` live INSIDE `package_nidara-desktop()`. At the top level of a split PKGBUILD

@@ -222,9 +222,9 @@ build() {
   npx sass --no-charset ../greeter/style.scss ../greeter/style.css
   sed -i '/@charset/d' ../greeter/style.css
 
-  # Installer — same arrangement, its own sheet. Built here even when only
-  # `nidara` is being packaged (build() runs whole, `--pkg` only filters which
-  # package_*() functions run); it costs one sass call and one esbuild.
+  # Installer — same arrangement, its own sheet. Built on every build: makepkg
+  # runs every package_*() (pacman 7 has no `--pkg`), and install.sh picks the
+  # packages it installs by name; it costs one sass call and one esbuild.
   npx sass --no-charset ../installer/style.scss ../installer/style.css
   sed -i '/@charset/d' ../installer/style.css
   cd ../greeter

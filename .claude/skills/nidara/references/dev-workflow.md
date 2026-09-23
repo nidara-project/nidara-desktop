@@ -261,11 +261,14 @@ reasoning are below, under "The installer runs in a VM, or it does not run"; rea
 launch that binary, not after.
 
 What is different is where it GOES. `packaging/nidara/PKGBUILD` is a split package and emits
-`nidara-installer` beside `nidara`; only nidara-iso's `packages.x86_64` names it. So:
+`nidara-installer` beside `nidara-desktop` and `nidara-kit`; only nidara-iso's `packages.x86_64`
+names it. So:
 
-- **`makepkg --pkg nidara-desktop`** is how you build just the desktop from that PKGBUILD. `build()`
-  still runs whole (one extra sass + esbuild), but `package_nidara-installer()` does not, and
-  no installer package file is produced. `install.sh` does exactly this.
+- **makepkg builds all three; what you INSTALL is chosen by name.** ⚠️ `makepkg --pkg` no longer
+  exists — pacman 7.0 removed it and makepkg 7.1 answers `invalid option '--pkg'` — and install.sh
+  kept passing it until 2026-09-23, which left its local-package fallback dead. It now builds
+  everything and hands `nidara-desktop` + `nidara-kit` to ONE `pacman -U` (files moving between
+  the two only change owner cleanly inside a single transaction).
 - A file glob for "the package that was just built" must be **anchored**: `nidara-*` matches
   `nidara-installer-*` too — and since the rename it matches `nidara-desktop-*` as well, so the
   anchor is now load-bearing twice over. `install.sh` uses `"$dir/$want"-[0-9]*`, which pins the
