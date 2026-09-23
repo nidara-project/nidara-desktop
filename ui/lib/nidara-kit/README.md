@@ -11,6 +11,10 @@ bundles import the kit by relative path and `scripts/bundle.sh --kit-external` r
 imports to what is below; the mechanism is in the repo's skill (`architecture.md` → "The kit's
 CODE is loaded, not bundled").
 
+**Language: JavaScript or TypeScript, run by GJS.** The kit is ES modules, so an app in Python,
+Rust, C or Vala cannot import its widgets, its host or its appearance engine. A plain `.js` file
+works with no build step (`gjs -m app.js`); TypeScript is compiled to one.
+
 ## What is installed
 
 | path | what |
