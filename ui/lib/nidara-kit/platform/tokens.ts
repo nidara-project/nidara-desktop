@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 /**
  * Nidara — geometry tokens as NUMBERS (single source of truth for Cairo & layout)
  *

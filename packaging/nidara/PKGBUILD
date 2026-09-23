@@ -45,7 +45,7 @@ pkgrel=1
 pkgdesc="Nidara — a fluid, glassmorphic desktop environment (Hyprland + GTK4/GJS)"
 arch=(x86_64)
 url="https://github.com/nidara-project/nidara-desktop"
-license=(GPL-3.0-only)
+license=(GPL-3.0-or-later LGPL-3.0-or-later)
 # `install=` and `backup=` are set inside package_nidara-desktop(): at the top level they
 # would apply to BOTH packages, and nidara.install's greetd/setup work has nothing
 # to do with the installer.
@@ -252,7 +252,7 @@ package_nidara-desktop() {
   # only copy of the interface drawings) and is linked into /usr/share/icons below.
   # Its drawings are Lucide's — ISC, with MIT for the part inherited from Feather —
   # and its LICENSE travels inside the theme directory.
-  license=(GPL-3.0-only ISC MIT)
+  license=(GPL-3.0-or-later LGPL-3.0-or-later ISC MIT)
   backup=(etc/xdg-desktop-portal/hyprland-portals.conf
           etc/pam.d/nidara-lock)
   # The rename dance, and all three are load-bearing:

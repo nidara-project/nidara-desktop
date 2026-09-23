@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 // One window, one identity.
 //
 // A GApplication has a single `application-id`, and GTK4 hands that string to

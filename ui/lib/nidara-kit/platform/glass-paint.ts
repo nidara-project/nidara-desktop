@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 import Cairo from "gi://cairo"
 import { GLASS_TINT, GLASS_SPECULAR } from "./tokens"
 

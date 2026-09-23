@@ -485,8 +485,14 @@ and many more. Thank you.
 
 ## License
 
-Nidara is released under the **GNU General Public License v3.0** (GPL-3.0).
-See [`LICENSE`](LICENSE) for the full text.
+Nidara is released under the **GNU General Public License, version 3 or later**
+(GPL-3.0-or-later). See [`LICENSE`](LICENSE) for the full text.
+
+**The kit is the exception:** `ui/lib/nidara-kit/`, the platform library every Nidara
+application loads, is under the **GNU Lesser General Public License, version 3 or later**
+(LGPL-3.0-or-later; [`COPYING.LESSER`](ui/lib/nidara-kit/COPYING.LESSER)). An app built on
+the kit can carry any licence it likes; changes to the kit itself stay open. Same split as
+GTK and libadwaita under GNOME, or KDE Frameworks under Plasma.
 
 Copyright (C) 2026 The Nidara Authors.
 

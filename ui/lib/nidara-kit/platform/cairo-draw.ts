@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 /**
  * cairoDraw — every Gtk.DrawingArea draw function goes through this (#100).
  *

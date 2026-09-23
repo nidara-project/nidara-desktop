@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 import Gtk from "gi://Gtk?version=4.0"
 // ⚠️ Load-bearing import, same trap as ui/lib/nidara-kit/platform/app-id.ts: without the GdkWayland
 // typelib loaded, GJS sees the surface as a bare GdkSurface and
