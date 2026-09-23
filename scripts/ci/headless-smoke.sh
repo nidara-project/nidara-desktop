@@ -7,8 +7,8 @@
 #      (CI's other jobs don't bundle).
 #   2. The shipped config/hypr/hyprland.lua still parses and boots Hyprland.
 #   3. The shell bundle BOOTS on that Hyprland and stays alive.
-#   4. BOTH IPC doors respond and agree (`org.nidara.Shell` and the deprecated
-#      `io.Astal.ags` compatibility door).
+#   4. The IPC door responds (`org.nidara.Shell`; AGS's `io.Astal.ags`
+#      compatibility door was closed on 2026-09-23, tech-debt #76).
 #   5. Screenshots (grim) are captured for HUMAN review — deliberately NOT a
 #      pixel diff (fragile, rejected); a person glances at the artifact.
 #
@@ -267,46 +267,16 @@ phase_run() {
     jq -e '.shell.version' /tmp/smoke/dumpState.json >/dev/null || { log "FAIL: dumpState has no .shell.version"; exit 1; }
     log "IPC OK — shell version $(jq -r '.shell.version' /tmp/smoke/dumpState.json)"
 
-    # `nidara-ipc` falls back to AGS's name, so everything above would also pass on
-    # a shell that never published its own. Pin the name itself, with gdbus naming
-    # the destination so no fallback can rescue it. (gdbus, not busctl: glib2 is
+    # Pin the name itself, with gdbus naming the destination. (`nidara-ipc` used to
+    # fall back to AGS's name, so this was the only check that the shell published
+    # its own; the fallback is gone, and the pin stays as the direct statement.) (gdbus, not busctl: glib2 is
     # already a hard dependency here, systemd's CLI is not guaranteed in a minimal
     # container.)
     gdbus call --session --dest org.nidara.Shell --object-path /org/nidara/Shell \
         --method org.nidara.Shell.Request '["listActions"]' >/dev/null 2>&1 \
         || { log "FAIL: shell never published org.nidara.Shell"; exit 1; }
 
-    # The DEPRECATED COMPATIBILITY DOOR, and checking it is deliberate. Every
-    # caller moved to nidara-ipc, but `io.Astal.ags` must keep answering for at
-    # least a release: the keybinds in a user's own hyprland-user.lua still say
-    # `ags request`, and nothing else would notice if it broke. The name is ours
-    # now (app.ts's exportLegacyAgsBusName) — AGS itself is gone, so the door is
-    # knocked on with gdbus instead of the `ags` CLI, which is what the CLI did
-    # anyway. Delete this check when the compatibility window closes, not before.
-    #
-    # Compared on listActions, NOT dumpState. dumpState is a live snapshot and two
-    # calls a second apart legitimately differ while the shell is still settling:
-    # the first version of this check compared dumpState, passed twice locally and
-    # in CI, and then failed on a run where `islandBounds` was null in one and a
-    # real rect in the other — the Activity Island had simply not laid out yet.
-    # listActions is a pure function of the build, so a difference there means what
-    # this check is actually for: the two doors are not the same dispatcher.
-    gdbus call --session --dest io.Astal.ags --object-path /io/Astal/Application \
-        --method io.Astal.Application.Request '["listActions"]' \
-        >/tmp/smoke/listActions-legacy.raw \
-        || { log "FAIL: the deprecated io.Astal.ags door stopped answering"; exit 1; }
-    # gdbus prints the reply as a GVariant tuple whose single member is the JSON
-    # as a C-escaped string — ("{\n  \"toggleCC\"…",) — so the payload has to be
-    # unwrapped before it can be compared with nidara-ipc's raw stdout. Stripping
-    # the tuple leaves a JSON string literal, which `jq -r .` decodes; a shape jq
-    # cannot parse fails here loudly instead of quietly comparing garbage.
-    # (Verified against a live shell: the decoded bytes equal nidara-ipc's.)
-    sed -e 's/^(//' -e 's/,)$//' /tmp/smoke/listActions-legacy.raw | jq -r . \
-        >/tmp/smoke/listActions-legacy.json \
-        || { log "FAIL: could not parse the legacy door's reply"; exit 1; }
-    cmp -s /tmp/smoke/listActions.json /tmp/smoke/listActions-legacy.json \
-        || { log "FAIL: the two IPC doors disagree"; exit 1; }
-    log "IPC OK — org.nidara.Shell answers, and io.Astal.ags still matches it"
+    log "IPC OK — org.nidara.Shell answers"
 
     # ── 5. Screenshots for human review (NOT a gate beyond grim succeeding) ───
     sleep 4                                   # let the first frames render

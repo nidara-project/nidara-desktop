@@ -73,7 +73,7 @@ Nothing of AGS is installed any more. What the CLI actually was, and what replac
 | `ags bundle app.ts out` | `scripts/bundle.sh app.ts out` | esbuild + a bash wrapper carrying the JS |
 | `ags run app.ts` | `scripts/run.sh app.ts` | bundles to `$XDG_RUNTIME_DIR`, execs `gjs` |
 | `ags types -d .` | `scripts/gen-types.sh` | `npx @ts-for-gir/cli generate '*'` — literally what it wrapped |
-| `ags request <cmd>` | `nidara-ipc <cmd>` | gone since #185; the bus name lives on as a compat door |
+| `ags request <cmd>` | `nidara-ipc <cmd>` | gone since #185; its bus name was served as a compat door until 2026-09-23 (closed, users' keybinds migrated) |
 
 `bundle.sh` does not *approximate* `ags bundle` — it transcribes its options out of AGS v3.1.2
 (`cli/lib/esbuild.go`, `cli/cmd/bundle.go`) and the transcription was checked the only way that

@@ -55,42 +55,30 @@ user clicks bar pill
 
 This is the canonical pattern: **events go up through actions, state changes propagate down through `notify::` signals.**
 
-## IPC contract: `nidara-ipc` (and the deprecated `io.Astal.ags` door)
+## IPC contract: `nidara-ipc`
 
-**There are two doors and ONE dispatcher.** `dispatchRequest(argv, res)` in `app.ts` is the
-function; `exportShellBusName()` publishes our name and `exportLegacyAgsBusName()` publishes the
-compatibility one. Adding a command reaches both automatically — never wire a command to one door
-only.
-
-`ags request <cmd>` was never a protocol of AGS's invention. It is a D-Bus method call, and you
-can make it with no AGS in sight — which is how this was verified rather than assumed:
+**One door, one dispatcher.** `dispatchRequest(argv, res)` in `app.ts` is the function;
+`exportShellBusName()` publishes `org.nidara.Shell`. It is a plain D-Bus method call, so it can be
+made with no client at all:
 
 ```bash
 busctl --user call org.nidara.Shell /org/nidara/Shell \
-       org.nidara.Shell Request as 1 dumpState      # ours
-busctl --user call io.Astal.ags /io/Astal/Application \
-       io.Astal.Application Request as 1 dumpState  # the deprecated one, byte-identical
+       org.nidara.Shell Request as 1 dumpState
 ```
 
-⚠️ Since the AGS host went (2026-08-18) that second name is **served by us**, from
-`exportLegacyAgsBusName()` in `ui/shell/app.ts`, right beside `exportShellBusName()`. It used to
-come free with AGS's runtime. It carries `Request` and `Quit` only — AGS also offered
-`ToggleWindow` and `Inspector`, and neither has ever had a Nidara caller. Delete it, and the
-fallback in `bin/nidara-ipc.c`, together: the smoke test asserts both doors answer identically.
+**Use `nidara-ipc <cmd>`.** It is `bin/nidara-ipc.c`, a ~145-line C client compiled by install.sh
+§5 and the PKGBUILD (same idiom as `bin/nidara-input.c`). It skips one leading `--`, because
+`ags request -- <cmd>` needed one and people paste it.
 
-**Use `nidara-ipc <cmd>` in new code.** It is `bin/nidara-ipc.c`, a ~145-line C client compiled by
-install.sh §5 and the PKGBUILD (same idiom as `bin/nidara-input.c`), which tries `org.nidara.Shell`
-and **falls back to `io.Astal.ags`**, so it works against a shell from before this change and after
-it.
-
-**The migration is DONE (2026-08-18):** every caller in this repo says `nidara-ipc` — the seven
-keybinds in `hyprland.lua`, all the `bin/nidara-*` helpers, the dev scripts, and the two
-user-facing strings in all twelve locales. The old door is still asserted in the CI smoke, and that
-is deliberate: users' own `hyprland-user.lua` keybinds still call it, and without a test nothing
-would notice the day it broke. ⚠️ Since the `ags` CLI itself is gone (2026-08-18) that assertion
-knocks with **`gdbus`** — it unwraps the GVariant tuple with `jq -r .` and compares the payload
-against `nidara-ipc`'s stdout (verified: byte-identical). Delete the assertion and the client's
-fallback together when the compatibility window closes — not before.
+🪦 **The AGS door is CLOSED (owner, 2026-09-23 — tech-debt #76).** From the day the AGS host went
+(2026-08-18) the shell also served AGS's bus name `io.Astal.ags`, and `nidara-ipc` fell back to
+it, so that keybinds written as `ags request …` kept working while ~35 consumers migrated one at a
+time. All three pieces went together — the door (`exportLegacyAgsBusName`), the client's fallback,
+and the smoke test's assertion that both doors answered identically — and
+`migrations/2026-09-23-ags-request-to-nidara-ipc.sh` rewrote `ags request` → `nidara-ipc` once in
+the user's own `hyprland-user.lua` (current and legacy locations, symlinks followed, word-bounded
+so `bags request` is not a call). Do not reopen it: the `ags` CLI itself has not been installed
+since 2026-08-18.
 
 ⚠️ **C on purpose, and this is the one thing not to "clean up" into GJS.** Every other
 `nidara-*` helper is GJS; this one is on a KEYBIND — `hyprland.lua` binds Super+Space, Super+A and
@@ -104,15 +92,9 @@ invocation:
 The first version of this file WAS GJS and was rewritten the moment that number appeared: shipping
 it would have made every keybind ten times slower than the `ags request` it replaces. The other
 helpers stay GJS because an agent step already costs hundreds of milliseconds, so 27 ms is noise
-there and decisive here. That fallback is load-bearing, not politeness: it is what lets the ~35
-consumers migrate one at a time instead of in a flag day, and it must not be dropped until AGS's
-host is gone. The fallback fires only on `NameHasNoOwner`/`ServiceUnknown` — any other failure came
-from a shell that DID answer, and retrying the other door would run the command twice.
-
-⚠️ **`ags request` cannot simply be renamed away.** Two of its callers are outside our control:
-a user's own `~/.config/nidara/hyprland-user.lua` keybinds, and the string appears in **user-facing
-translated text in 12 locales**. Both need a release-long deprecation window; that is why the new
-name shipped first and the migration follows.
+there and decisive here. The client still walks a LIST of doors, and moves to the next only on
+`NameHasNoOwner`/`ServiceUnknown` — any other failure came from a shell that DID answer, and
+retrying would run the command twice. Keep that rule if a door is ever added.
 
 Why a bus name of our own, beyond the CLI — and this half is now **finished**: `AstalIO.Daemon`
 used to **overwrite** the `applicationId` passed to `app.start()` with `io.Astal.<instance>`, and
@@ -128,8 +110,8 @@ settled. And `Gio.DBusError` DOES work with `instanceof` in GJS (the opposite wa
 wrong); what actually bites is the error NAME — with `NO_AUTO_START` the bus answers a missing
 name with `NameHasNoOwner`, never `ServiceUnknown`.
 
-Hyprland keybinds call `hl.dsp.exec_cmd("nidara-ipc <cmd>")` since 2026-08-18. A user's OWN
-`hyprland-user.lua` may still say `ags request`, which is exactly why AGS's door stays open.
+Hyprland keybinds call `hl.dsp.exec_cmd("nidara-ipc <cmd>")` since 2026-08-18, and a user's own
+`hyprland-user.lua` was migrated to it on 2026-09-23.
 
 ### The IPC surface is self-describing
 

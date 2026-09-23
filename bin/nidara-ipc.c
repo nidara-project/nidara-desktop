@@ -32,13 +32,14 @@
 // The precedent for compiling a helper is bin/nidara-input.c, and the toolchain
 // is already a dependency of both install paths.
 //
-// ── The fallback is load-bearing, not politeness ─────────────────────────────
+// ── One door ─────────────────────────────────────────────────────────────────
 //
-// It tries `org.nidara.Shell` and falls back to AGS's `io.Astal.ags`. Both are
-// live: the shell publishes its own name AND keeps AGS's. That is what makes the
-// migration incremental — this client works against a shell from before the
-// change and after it, so consumers move one at a time instead of in a flag day.
-// Drop the fallback only once AGS's host is gone for good.
+// It asks `org.nidara.Shell`. Until 2026-09-23 it fell back to AGS's
+// `io.Astal.ags`, which the shell also served so that the ~35 consumers could
+// migrate one at a time instead of in a flag day; the owner closed that door
+// then (tech-debt #76), and a migration rewrote `ags request` in users' own
+// keybinds. The list below stays a list so a door can be added without
+// reshaping the loop.
 //
 // Exit codes: 0 on a reply, 1 when no shell answered, 2 on bad usage. The reply
 // goes to stdout VERBATIM — the shell returns JSON where it means JSON, so this
@@ -49,10 +50,9 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Doors in preference order. The second one goes when AGS's host does. */
+/* Doors in preference order. */
 static const struct { const char *name, *path, *iface; } DOORS[] = {
     { "org.nidara.Shell", "/org/nidara/Shell",      "org.nidara.Shell" },
-    { "io.Astal.ags",     "/io/Astal/Application",  "io.Astal.Application" },
 };
 
 /* Long enough for the slowest command (listWindows shells out to hyprctl,

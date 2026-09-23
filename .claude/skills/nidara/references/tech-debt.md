@@ -3095,7 +3095,9 @@ them the kind that go quiet:
   regenerated, never committed, and CI consumes a published snapshot instead — so a breaking release
   shows up as a failed local `gen-types.sh`, not as a red PR. Pin via `TS_FOR_GIR=` if that day
   comes.
-- **The compatibility door `io.Astal.ags` and `nidara-ipc`'s fallback to it are still alive**, and
+- ✅ **CLOSED 2026-09-23 (owner's call):** door, fallback and smoke assertion deleted together, and
+  `migrations/2026-09-23-ags-request-to-nidara-ipc.sh` rewrote `ags request` in users' own keybinds.
+  What this bullet said before: **the compatibility door `io.Astal.ags` and `nidara-ipc`'s fallback to it were still alive**, and
   the smoke still asserts the door answers (with `gdbus` now — the CLI that used to knock is gone).
   They exist for `hyprland-user.lua` files written before #184. Delete the three together — door,
   fallback, assertion — when the compatibility window closes.
