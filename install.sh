@@ -439,6 +439,9 @@ npm install
 # same provider as their own (tech-debt #108 phase 2, ui/lib/nidara-kit/platform/kit-css.ts).
 npx sass --no-charset ../lib/nidara-kit/styles/kit.scss ../lib/nidara-kit/kit.css && sed -i '/@charset/d' ../lib/nidara-kit/kit.css
 npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
+# The kit's modules (#108 phase 3): the shell, greeter and lock load them at
+# runtime from /usr/share/nidara-kit/js instead of carrying a copy each.
+node "$REPO_DIR/scripts/bundle.mjs" kit "$REPO_DIR/ui/lib/nidara-kit/build/js"
 
 # Dev mode: generate the git-ignored @girs/ GI typings so typecheck + editor
 # IntelliSense work straight after a clone — no manual step. Only if missing
@@ -451,7 +454,7 @@ fi
 if [ "$MODE" != "dev" ]; then
     echo "  Bundling shell UI..."
     mkdir -p build
-    "$REPO_DIR/scripts/bundle.sh" app.ts build/nidara
+    "$REPO_DIR/scripts/bundle.sh" app.ts build/nidara --kit-external=/usr/share/nidara-kit/js
     echo "  [OK] Bundle: $REPO_DIR/ui/shell/build/nidara"
 fi
 
@@ -461,13 +464,13 @@ cd "$REPO_DIR/ui/shell"
 npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@charset/d' ../greeter/style.css
 cd "$REPO_DIR/ui/greeter"
 mkdir -p build
-"$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-greeter
+"$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-greeter --kit-external=/usr/share/nidara-kit/js
 echo "  [OK] Greeter bundle: $REPO_DIR/ui/greeter/build/nidara-greeter"
 
 echo "  Building lockscreen..."
 cd "$REPO_DIR/ui/lockscreen"
 mkdir -p build
-"$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-lock
+"$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-lock --kit-external=/usr/share/nidara-kit/js
 echo "  [OK] Lockscreen bundle: $REPO_DIR/ui/lockscreen/build/nidara-lock"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -556,6 +559,12 @@ sudo ln -s /usr/share/nidara/ui/shell/assets/icons/nidara /usr/share/icons/nidar
 # is not running from a checkout. Its own directory, not under nidara/: it is the
 # kit package's file (tech-debt #108), and the greeter and lock always read it here.
 sudo install -Dm644 "$REPO_DIR/ui/lib/nidara-kit/kit.css" /usr/share/nidara-kit/kit.css
+# ...and its modules, which the greeter and lock (and the shell outside dev mode)
+# import at runtime. Replaced whole: chunk names are content hashes, so copying
+# over the old directory would keep chunks nothing imports any more.
+sudo rm -rf /usr/share/nidara-kit/js
+sudo cp -r "$REPO_DIR/ui/lib/nidara-kit/build/js" /usr/share/nidara-kit/js
+sudo chmod -R a+rX /usr/share/nidara-kit
 
 # Greeter bundle + style
 sudo mkdir -p /usr/share/nidara/ui/greeter/build

@@ -13,6 +13,9 @@
 # ⚠️ LD_PRELOAD is set HERE for the same reason bundle.sh writes it into the
 # wrapper: without libgtk4-layer-shell the shell boots with no bar and no dock,
 # and says nothing about why.
+# ⚠️ The kit is loaded at RUNTIME, as the release does (#108 phase 3): the kit's
+# modules are compiled into ui/lib/nidara-kit/build/js on every run and the
+# bundle imports them from there — the checkout's kit, never the installed one.
 # ⚠️ CWD is the entry file's directory, like `ags run`. core/Paths.ts falls back
 # to get_current_dir() when NIDARA_SHELL_ROOT is unset, so a different cwd here
 # silently moves where assets and style.css are looked up.
@@ -32,7 +35,9 @@ entry_dir="$(dirname "$entry_abs")"
 # without fighting over the path.
 out="${XDG_RUNTIME_DIR:-/tmp}/nidara-run-$(basename "${entry_abs%.*}").js"
 
-"$here/bundle.sh" --js "$entry_abs" "$out"
+kit_js="$(dirname "$here")/ui/lib/nidara-kit/build/js"
+node "$here/bundle.mjs" kit "$kit_js"
+"$here/bundle.sh" --js "$entry_abs" "$out" --kit-external="$kit_js"
 
 layer_shell="${NIDARA_GTK4_LAYER_SHELL:-}"
 if [ -z "$layer_shell" ]; then

@@ -115,6 +115,8 @@ ui/greeter/style.css.map
 ui/installer/style.css
 ui/installer/style.css.map
 ui/lib/nidara-kit/kit.css
+# The kit compiled as ES modules (scripts/bundle.mjs kit) — dev runs load it from here.
+ui/lib/nidara-kit/build/
 ui/lib/nidara-kit/kit.css.map
 # User configs — generated at runtime, personal to each installation
 # (root-level only; defaults/ folder is intentionally tracked)

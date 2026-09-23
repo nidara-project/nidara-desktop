@@ -4071,8 +4071,11 @@ need their own release cadence.
    not compare specificity across providers — measured). Off-screen A/B: 0 changed pixels on every
    `shell-gallery-probe` scope, control 27 k–192 k; greeter rules identical in order. Mechanism:
    `architecture.md` → "The kit's sheet is loaded, not compiled in". The installer keeps its copy.
-3. The kit as installed ESM modules loaded at runtime (`bundle.sh` marks it external); the shell and
-   the greeter consume it the way an outside app would. Measure the start-up cost.
+3. ✅ **The kit's code is loaded at runtime (2026-09-23).** Compiled as ES modules
+   (`bundle.mjs kit`), installed at `/usr/share/nidara-kit/js`; the shell, greeter and lock import it
+   by absolute `file://` URI (`--kit-external`), dev from the checkout's `build/js`. Start-up cost:
+   none measurable (~210 ms both ways); pixels identical. Mechanism: `architecture.md` → "The kit's
+   CODE is loaded, not bundled".
 4. `nidara-kit` in the PKGBUILD + its types + a guide for app authors.
 
 ⚠️ The INSTALLER keeps bundling its own copy until the ISO is published (it is the one program that

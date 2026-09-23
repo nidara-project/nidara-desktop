@@ -91,6 +91,14 @@ load-bearing in a way that would not be obvious from reading them:
 the dev loop). That is where the preload comes from — not `bin/nidara-ui`. A bundler that only emits
 JS produces a shell with no bar and no dock, and nothing in the log about why.
 
+⚠️ **Since 2026-09-23 (#108 phase 3) the esbuild step is `scripts/bundle.mjs`**, esbuild's JS API
+(shipped by the same pacman `esbuild` package at `/usr/lib/node_modules/esbuild`), called by
+`bundle.sh`. Same flags — listed there now — and without `--kit-external` the output was checked
+**byte-identical** to the CLI's on all four bundles and on a probe using `--alias:`. It moved only
+because leaving the kit out of an app takes an esbuild PLUGIN, which the CLI cannot load. Extra args
+`bundle.sh` passes through are parsed there: `--alias:`, `--define:`, `--external:` and
+`--kit-external=`; anything else is refused rather than silently dropped.
+
 The system `esbuild` package (Arch `extra`) is now a build dependency: `makedepends` in
 `packaging/nidara/PKGBUILD`, and the smoke's pacman list. `go` left at the same time — building
 AGS's Go CLI was the only thing that needed it.
@@ -2047,8 +2055,40 @@ gave **0 changed pixels** on all four scopes, and a control run with an empty `k
 compiled from a branch whose loading code differs from what the running shell executes breaks the
 shell on screen within a second — compile experiments into a scratch copy.
 
-Still owed (the phases of #108, in `tech-debt.md`): the kit as installed ESM modules the bundles load
-at runtime, and the package in the PKGBUILD. ⚠️ The INSTALLER keeps bundling its own copy until the ISO is published — changing how the
+#### The kit's CODE is loaded, not bundled (#108 phase 3, 2026-09-23)
+
+`node scripts/bundle.mjs kit <dir>` compiles the kit as ES modules — one per source module plus
+shared chunks (esbuild `splitting`), so a module's state (the host's `app`, the appearance seam, every
+registered GType) exists ONCE however many modules import it. `bundle.sh … --kit-external=<dir>`
+then turns every import that RESOLVES into `ui/lib/nidara-kit/` into
+`import … from "file://<dir>/<module>.js"` and copies none of the kit into the bundle.
+
+| who | kit from | where |
+|---|---|---|
+| shell (release), greeter, lock | `/usr/share/nidara-kit/js` | install.sh (both modes) and the PKGBUILD compile + install it; replaced WHOLE (chunk names are content hashes) |
+| shell in dev (`run.sh`) | `ui/lib/nidara-kit/build/js` (git-ignored) | rebuilt on every run — the checkout's kit, never the installed one |
+| headless smoke | the checkout's `build/js` | same modules a release installs |
+| **installer** | **bundled in, as before** | until the ISO is published: the one program no update can fix |
+| probes | bundled in | self-contained on purpose |
+
+🔑 An **absolute `file://` URI**, not a relative import: the bundle runs from `$XDG_RUNTIME_DIR`
+(bundle.sh's wrapper unpacks it there), so nothing relative to it would resolve. And a bare
+`nidara-kit/…` specifier is not an option: GJS resolves no bare names but its own built-ins.
+
+Measured: a gallery probe built both ways — same pixels, ~210 ms start-up both; the greeter under a
+headless `cage`, both ways — **0 changed pixels**, identical logs; a control pointing the external
+greeter at a missing dir fails with `ImportError: Unable to load file` (so the external build really
+loads the installed modules). No kit source is left in the external bundles (read out of their
+source maps): the shell imports 17 kit modules, the greeter 8, the lock 7. Bundle sizes (JS with
+inline source map): shell 8.2 → 7.4 MB, greeter 561 → 233 KB, lock 443 → 172 KB.
+
+⚠️ This makes the kit's module paths and exports a RUNTIME contract: an app built against one kit
+and run against another resolves `file:///usr/share/nidara-kit/js/<module>.js` by NAME. Renaming or
+removing a kit module, or an export, breaks already-built apps — which is exactly what the package's
+version (`package.json`) is for from phase 4 on.
+
+Still owed (phase 4, in `tech-debt.md`): the kit as its own package in the PKGBUILD, its types, and a
+guide for app authors — including the specifier an app OUTSIDE this repo imports the kit by. ⚠️ The INSTALLER keeps bundling its own copy until the ISO is published — changing how the
 one non-updatable program starts, before the ISO, is the risk this sequencing avoids.
 
 ### The widgets

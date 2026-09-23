@@ -124,7 +124,10 @@ phase_bundle() {
     npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
     log "bundle…"
     mkdir -p build
-    "$REPO/scripts/bundle.sh" app.ts build/nidara
+    # The kit is loaded at runtime (#108 phase 3), from the checkout here — the
+    # same modules a release installs at /usr/share/nidara-kit/js.
+    node "$REPO/scripts/bundle.mjs" kit "$REPO/ui/lib/nidara-kit/build/js"
+    "$REPO/scripts/bundle.sh" app.ts build/nidara --kit-external="$REPO/ui/lib/nidara-kit/build/js"
     log "bundle OK: $(du -h build/nidara | cut -f1)"
 }
 
