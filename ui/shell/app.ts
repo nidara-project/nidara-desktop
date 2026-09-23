@@ -873,32 +873,22 @@ const IPC_ALIASES: Record<string, string> = {}
 for (const [name, { aliases }] of Object.entries(IPC_COMMANDS))
   for (const alias of aliases ?? []) IPC_ALIASES[alias] = name
 
-// ─── The one dispatcher, and the two doors into it ──────────────────────────
+// ─── The one dispatcher, and its door ───────────────────────────────────────
 //
-// `nidara-ipc <cmd>` is not a protocol of AGS's own invention: it is a D-Bus
-// method call, `Request(as) → s` on `io.Astal.ags` at `/io/Astal/Application`.
-// You can make the exact same call with no AGS in sight:
+// `nidara-ipc <cmd>` is a D-Bus method call, `Request(as) → s` on
+// `org.nidara.Shell` at `/org/nidara/Shell`. You can make the same call with no
+// client at all:
 //
-//   busctl --user call io.Astal.ags /io/Astal/Application \
-//          io.Astal.Application Request as 1 dumpState
+//   busctl --user call org.nidara.Shell /org/nidara/Shell \
+//          org.nidara.Shell Request as 1 dumpState
 //
-// So the shell now ALSO answers on a name of its own, `org.nidara.Shell`, and
-// both doors run this same function. Nothing is removed: the two names coexist
-// deliberately, because the callers we do not control — a user's own
-// `~/.config/nidara/hyprland-user.lua` keybinds — say `nidara-ipc` today and
-// have to keep working for at least a release after the new name ships.
-//
-// The name mattered beyond the CLI, and that half is now DONE. `AstalIO.Daemon`
-// used to OVERWRITE the `applicationId` we pass to `app.start()` with
-// `io.Astal.<instance>`, and GTK hands the GApplication id to the compositor —
-// which is the whole reason Hyprland saw the Settings window as `io.Astal.ags`
-// and the dock had to remap it (the skill's seventh commandment). With the host
-// ours, the id is ours, and Settings names itself `nidara-settings` on top of
-// that (ui/lib/app-id.ts). Nothing remaps anything any more.
-//
-// What survives is the DOOR, below: `io.Astal.ags` as a bus name we serve
-// ourselves. It is not identity, it is compatibility — a `hyprland-user.lua`
-// written against 0.7.2 can still say `ags request …` for one release.
+// It started life as AGS's `ags request`, a call on `io.Astal.ags`. The shell
+// served that name too, as a compatibility door, from the day the AGS host went
+// (2026-08-18) until the owner closed it (2026-09-23, tech-debt #76); a one-time
+// migration rewrote `ags request` in users' own `hyprland-user.lua`
+// (migrations/2026-09-23-ags-request-to-nidara-ipc.sh). The application id was
+// the other half and was settled earlier: with the host ours, the id is ours
+// (`org.nidara.desktop`), and Settings names itself on top of it (ui/lib/app-id.ts).
 
 /** Runs one IPC command and hands the response to `res`. May answer async. */
 function dispatchRequest(argv: string[], res: (out: string) => void): void {
@@ -979,75 +969,10 @@ function exportShellBusName(): void {
   }
 }
 
-// ─── The deprecated door, served by us now ──────────────────────────────────
-//
-// Until the host went, this name came free: AGS owned `io.Astal.<instance>` and
-// exported `io.Astal.Application` on it. Users' own keybind files still call
-// `ags request <cmd>`, which is a method call on exactly that name — so dropping
-// it would break a config we do not control, silently, at the next update.
-//
-// Only `Request` and `Quit` are here. AGS also offered `ToggleWindow` and
-// `Inspector`; neither has ever had a Nidara caller (our windows are toggled
-// through `nidara-ipc` actions, and the GTK inspector is a dev-time env var), so
-// re-implementing them would be inventing compatibility with nothing.
-//
-// EXPIRY: remove this together with the fallback in `bin/nidara-ipc.c` one
-// release after the rename shipped. The smoke test asserts both doors answer
-// identically, so deleting one without the other turns CI red.
-const LEGACY_BUS_NAME = "io.Astal.ags"
-const LEGACY_BUS_PATH = "/io/Astal/Application"
-const LEGACY_BUS_IFACE = `
-<node>
-  <interface name="io.Astal.Application">
-    <method name="Request">
-      <arg type="as" name="argv" direction="in"/>
-      <arg type="s" name="response" direction="out"/>
-    </method>
-    <method name="Quit"/>
-  </interface>
-</node>`
-
-function exportLegacyAgsBusName(): void {
-  const impl = {
-    // Same `<Method>Async(params, invocation)` shape as the new door — that
-    // suffix is how GJS knows we answer the invocation ourselves rather than
-    // having it answered for us the moment we return.
-    RequestAsync([argv]: [string[]], invocation: any) {
-      try {
-        dispatchRequest(argv ?? [], out =>
-          invocation.return_value(new GLib.Variant("(s)", [out ?? "ok"])))
-      } catch (e) {
-        invocation.return_value(new GLib.Variant("(s)", [`error: ${e}`]))
-      }
-    },
-    Quit() { app.quit() },
-  }
-
-  try {
-    const exported = Gio.DBusExportedObject.wrapJSObject(LEGACY_BUS_IFACE, impl)
-    Gio.bus_own_name(
-      Gio.BusType.SESSION,
-      LEGACY_BUS_NAME,
-      Gio.BusNameOwnerFlags.NONE,
-      (conn: Gio.DBusConnection) => {
-        try {
-          exported.export(conn, LEGACY_BUS_PATH)
-        } catch (e) {
-          console.error(`[IPC] could not export ${LEGACY_BUS_PATH}:`, e)
-        }
-      },
-      () => console.log(`[IPC] also serving the deprecated ${LEGACY_BUS_NAME}`),
-      () => console.warn(`[IPC] lost ${LEGACY_BUS_NAME} — is an AGS instance running?`),
-    )
-  } catch (e) {
-    console.error("[IPC] could not claim the deprecated bus name:", e)
-  }
-}
-
 app.start({
   // The Wayland app-id of every regular window this process opens — except the
   // ones that name themselves (Settings, About). Under AGS this line was
-  // overwritten with `io.Astal.ags`; see ui/lib/host.ts.
+  // overwritten with AGS's own id; see ui/lib/host.ts.
   applicationId: "org.nidara.desktop",
   applicationName: "Nidara",
   logDomain: "nidara",
@@ -1092,10 +1017,9 @@ app.start({
     // import surfaces/ (the same reason `registerConfigEntries` lives outside it).
     setConfigLocations(configLocations())
 
-    // Both IPC doors. Registered here rather than at module scope so the
-    // commands they dispatch are wired first.
+    // The IPC door. Registered here rather than at module scope so the
+    // commands it dispatches are wired first.
     exportShellBusName()
-    exportLegacyAgsBusName()
     // The XDG portal's consent prompts (camera, microphone, location…), drawn here
     // on behalf of bin/nidara-portal. NOT an IPC command — see the file.
     exportConsentService()
