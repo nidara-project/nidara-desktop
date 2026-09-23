@@ -20,6 +20,7 @@ import {
 import { SHELL_ROOT } from "./Paths"
 import { defineSettings } from "./configFile"
 import { GTK_BUILTIN_THEME } from "../../lib/nidara-kit/platform/gtk-theme"
+import { withKitSheet } from "../../lib/nidara-kit/platform/kit-css"
 
 // ── WHERE APPEARANCE LIVES (#573) ────────────────────────────────────
 // Two homes, no file:
@@ -211,7 +212,7 @@ class ThemeManager extends GObject.Object {
                 // it would each load a file that is still being written.
                 if (event !== Gio.FileMonitorEvent.CHANGES_DONE_HINT) return
                 console.log(`[ThemeManager] Style Hot-Reload: ${stylePath}`)
-                this.mainProvider.load_from_path(stylePath)
+                this.mainProvider.load_from_string(withKitSheet(stylePath))
             })
         } catch (e) { console.error(`[ThemeManager] Failed to monitor ${stylePath}:`, e) }
     }
@@ -684,9 +685,12 @@ class ThemeManager extends GObject.Object {
 
                 // style.css resolves against SHELL_ROOT (source tree in dev,
                 // /usr/share in prod). install.sh ships style.css into both.
+                // The kit's sheet comes first IN THIS SAME PROVIDER (tech-debt #108
+                // phase 2) — two providers would not compare specificity across
+                // each other; see ui/lib/nidara-kit/platform/kit-css.ts.
                 const stylePath = `${SHELL_ROOT}/style.css`
                 if (GLib.file_test(stylePath, GLib.FileTest.EXISTS)) {
-                    this.mainProvider.load_from_path(stylePath)
+                    this.mainProvider.load_from_string(withKitSheet(stylePath))
                     console.log(`[ThemeManager] Static style.css loaded from: ${stylePath}`)
                 }
                 this.providersLinked = true

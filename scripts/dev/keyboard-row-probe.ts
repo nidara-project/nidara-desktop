@@ -21,6 +21,7 @@ import app from "../../ui/lib/nidara-kit/platform/host"
 import { applyCrispFontRendering } from "../../ui/lib/nidara-kit/platform/font-rendering"
 import { NidaraWindow, NidaraList, NidaraDropDownRow } from "../../ui/lib/nidara-kit"
 import { initAppearance } from "../../ui/lib/nidara-kit/platform/appearance-css"
+import { withKitSheet } from "../../ui/lib/nidara-kit/platform/kit-css"
 import { allKeyboards, bridgedKeyboards, keyboardById } from "../../ui/lib/keyboards"
 
 const here = GLib.get_current_dir()
@@ -31,7 +32,7 @@ app.start({
   applicationId: "org.nidara.keyboardrowprobe",
   applicationName: "Keyboard row probe",
   logDomain: "kbrow",
-  css,
+  css: css ? withKitSheet(css) : undefined,
 
   main() {
     applyCrispFontRendering()

@@ -114,6 +114,8 @@ ui/greeter/style.css
 ui/greeter/style.css.map
 ui/installer/style.css
 ui/installer/style.css.map
+ui/lib/nidara-kit/kit.css
+ui/lib/nidara-kit/kit.css.map
 # User configs — generated at runtime, personal to each installation
 # (root-level only; defaults/ folder is intentionally tracked)
 theme_settings.json

@@ -14,6 +14,7 @@ import app from "../../ui/lib/nidara-kit/platform/host"
 import { applyCrispFontRendering } from "../../ui/lib/nidara-kit/platform/font-rendering"
 import { NidaraWindow, NidaraClamp, NidaraScrolled, NIDARA_WINDOW_RADIUS } from "../../ui/lib/nidara-kit"
 import { initAppearance } from "../../ui/lib/nidara-kit/platform/appearance-css"
+import { withKitSheet } from "../../ui/lib/nidara-kit/platform/kit-css"
 import { WINDOW_LAYOUT } from "../../ui/lib/nidara-kit/platform/tokens"
 import appService from "../../ui/shell/core/AppService"
 import AppIconsPage, { buildAppIconDetailPage } from "../../ui/shell/surfaces/settings/pages/AppIcons"
@@ -26,7 +27,7 @@ const css = argv[1]
 app.start({
   applicationId: "org.nidara.AppPageProbe",
   logDomain: "app-page-probe",
-  css,
+  css: withKitSheet(css),
   main() {
     applyCrispFontRendering()
     initAppearance()

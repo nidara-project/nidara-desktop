@@ -12,6 +12,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import "gi://GdkWayland?version=4.0"
 import { initAppearance } from "../../ui/lib/nidara-kit/platform/appearance-css"
+import { withKitSheet } from "../../ui/lib/nidara-kit/platform/kit-css"
 import { exportConsentService } from "../../ui/shell/surfaces/consent/ConsentService"
 
 const argv: string[] = (globalThis as any).ARGV ?? []
@@ -21,7 +22,7 @@ const cssPath = argv[1]
 app.start({
   applicationId: "org.nidara.ConsentProbe",
   logDomain: "consent-probe",
-  css: cssPath,
+  css: withKitSheet(cssPath),
   main() {
     initAppearance()
     Gio.bus_own_name(Gio.BusType.SESSION, "org.nidara.Shell", Gio.BusNameOwnerFlags.NONE, null, null, null)

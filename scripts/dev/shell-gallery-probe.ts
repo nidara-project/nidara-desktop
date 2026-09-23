@@ -41,6 +41,7 @@ import app from "../../ui/lib/nidara-kit/platform/host"
 import { applyCrispFontRendering } from "../../ui/lib/nidara-kit/platform/font-rendering"
 import { initAppearance } from "../../ui/lib/nidara-kit/platform/appearance-css"
 import { useNoGtkTheme } from "../../ui/lib/nidara-kit/platform/gtk-theme"
+import { withKitSheet, kitSheetPath } from "../../ui/lib/nidara-kit/platform/kit-css"
 
 // Same rule as the other two probes: the substrate is the POINT, so it is explicit.
 // The default here is NO theme — what step 5 is taking the shell TO — and
@@ -145,16 +146,22 @@ app.start({
   applicationId: "org.nidara.shellgallery",
   applicationName: "Shell gallery probe",
   logDomain: "shell-gallery",
-  css: cssPath,
+  css: cssPath ? withKitSheet(cssPath) : undefined,
 
   main() {
     applyCrispFontRendering()
     initAppearance()
 
     if (!cssPath) { printerr("[shell-gallery] ui/shell/style.css not built — run sass first"); app.quit(); return }
-    const [ok, bytes] = GLib.file_get_contents(cssPath)
-    if (!ok) { printerr(`[shell-gallery] could not read ${cssPath}`); app.quit(); return }
-    const sheet = new TextDecoder().decode(bytes)
+    // Enumerate what the shell LOADS: the kit's sheet and its own (tech-debt #108
+    // phase 2 split them into two files, one provider). Reading only style.css
+    // would silently drop every mount the kit's rules name.
+    let sheet = ""
+    for (const path of [kitSheetPath(cssPath), cssPath]) {
+      const [ok, bytes] = GLib.file_get_contents(path)
+      if (!ok) { printerr(`[shell-gallery] could not read ${path}`); app.quit(); return }
+      sheet += new TextDecoder().decode(bytes) + "\n"
+    }
     const scopes = readSheet(sheet)
     print(`[shell-gallery] ${cssPath}: ${sheet.length} bytes, ${scopes.size} scope(s)`)
 

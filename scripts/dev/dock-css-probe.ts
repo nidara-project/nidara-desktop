@@ -12,12 +12,13 @@ import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { DockIcon } from "../../ui/shell/surfaces/dock/DockIcon"
+import { withKitSheet } from "../../ui/lib/nidara-kit/platform/kit-css"
 import { generateTokensCss, generateChromeTokenScope, DEFAULT_CONFIG } from "../../ui/shell/core/NidaraTheme"
 
 const [css, mode = "dark"] = (globalThis as any).ARGV ?? []
 Gtk.init()
 const provider = new Gtk.CssProvider()
-provider.load_from_path(css)
+provider.load_from_string(withKitSheet(css))
 Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default()!, provider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 10)
 // The --nidara-* tokens ThemeManager injects, dark, so `var()` rules resolve as in the shell.
 const tokens = new Gtk.CssProvider()

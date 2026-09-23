@@ -5,6 +5,7 @@ import Greeter from "./widget/Greeter"
 import { getPreferredUser } from "./lib/greeter-prefs"
 import { initProcessLocale } from "./lib/i18n"
 import { initAppearance } from "../lib/nidara-kit/platform/appearance-css"
+import { withKitSheet } from "../lib/nidara-kit/platform/kit-css"
 import { applyCrispFontRendering } from "../lib/nidara-kit/platform/font-rendering"
 import { useNoGtkTheme } from "../lib/nidara-kit/platform/gtk-theme"
 
@@ -19,7 +20,7 @@ app.start({
   applicationId: "org.nidara.greeter",
   applicationName: "Nidara Greeter",
   logDomain: "nidara-greeter",
-  css: cssPath,
+  css: withKitSheet(cssPath),
 
   main() {
     // First thing after GTK init (which resets the locale to "C" — empty

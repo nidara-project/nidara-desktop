@@ -15,6 +15,7 @@ import app from "../../ui/lib/nidara-kit/platform/host"
 import { applyCrispFontRendering } from "../../ui/lib/nidara-kit/platform/font-rendering"
 import { NidaraWindow, NidaraClamp, NidaraScrolled, NIDARA_WINDOW_RADIUS } from "../../ui/lib/nidara-kit"
 import { initAppearance } from "../../ui/lib/nidara-kit/platform/appearance-css"
+import { withKitSheet } from "../../ui/lib/nidara-kit/platform/kit-css"
 import { WINDOW_LAYOUT } from "../../ui/lib/nidara-kit/platform/tokens"
 import registry, { widgetAvailable } from "../../ui/shell/widgets/index"
 import widgetConfig from "../../ui/shell/core/WidgetConfig"
@@ -50,7 +51,7 @@ function current() {
 app.start({
     applicationId: "org.nidara.WidgetsPageProbe",
     logDomain: "widgets-page-probe",
-    css,
+    css: withKitSheet(css),
     main() {
         applyCrispFontRendering()
         initAppearance()

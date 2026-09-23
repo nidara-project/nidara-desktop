@@ -5,6 +5,7 @@ import GLib from "gi://GLib"
 import Gtk4SessionLock from "gi://Gtk4SessionLock"
 import { Lock, LockOverlay } from "./widget/Lock"
 import { initAppearance } from "../lib/nidara-kit/platform/appearance-css"
+import { withKitSheet } from "../lib/nidara-kit/platform/kit-css"
 import { applyCrispFontRendering } from "../lib/nidara-kit/platform/font-rendering"
 import { useNoGtkTheme } from "../lib/nidara-kit/platform/gtk-theme"
 
@@ -33,7 +34,7 @@ app.start({
   applicationId: "org.nidara.lock",
   applicationName: "Nidara Lock Screen",
   logDomain: "nidara-lock",
-  css: cssPath,
+  css: withKitSheet(cssPath),
 
   main() {
     // Before any window exists: put glyph baselines on the pixel grid. The lock

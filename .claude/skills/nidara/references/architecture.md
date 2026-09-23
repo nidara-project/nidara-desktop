@@ -2014,9 +2014,41 @@ line was the owner's, checked in `git log`; with outside contributors that stops
 greeter's cards, `process.ts`, `users.ts`…). Nothing in the kit may import it, and it is free to
 import the kit.
 
-Still owed (the phases of #108, in `tech-debt.md`): one compiled sheet loaded at runtime instead of
-three copies, the kit as installed ESM modules the bundles load at runtime, and the package in the
-PKGBUILD. ⚠️ The INSTALLER keeps bundling its own copy until the ISO is published — changing how the
+#### The kit's sheet is loaded, not compiled in (#108 phase 2, 2026-09-23)
+
+`styles/kit.scss` (the base layer, then the components) compiles once to `ui/lib/nidara-kit/kit.css`
+— git-ignored, built wherever `style.css` is built (`npm run build`/`dev` in `ui/shell`, install.sh,
+the PKGBUILD, the CI `styles` job, the headless smoke) and installed at `/usr/share/nidara-kit/kit.css`.
+An app's own sheet no longer contains it: the shell's lost ~47 KB (156 → 110 KB), the greeter's went
+from 54 KB to 7.
+
+🔑 **ONE provider, never two — measured.** GTK does NOT compare specificity across providers: a rule in
+a later (or higher-priority) provider beats a MORE specific rule in an earlier one (probe: `.a label
+{color:red}` in one provider lost to `label {color:blue}` added after it; in one sheet, red won). The
+kit and each app were one compiled sheet, where specificity decides, so they stay one provider:
+`withKitSheet(appCssPath)` returns two `@import url(...)` lines — kit first — and the app loads that
+string (`app.start({ css: withKitSheet(p) })`, or `load_from_string` in `ThemeManager`, whose hot
+reload re-reads both). Parse errors still name their file. A second `Gtk.CssProvider` for the kit
+would have changed which rule wins wherever the app's rule is the less specific one — silently.
+
+Where `kitSheetPath()` looks: `$NIDARA_KIT_DIR`, then a SOURCE TREE (`<repo>/ui/<app>/style.css` →
+`<repo>/ui/lib/nidara-kit/kit.css`; a checkout wins over the system copy, which may be a release
+behind), then `/usr/share/nidara-kit`. A probe that compiles its sheets into a temp dir must compile
+`kit.css` there too and export `NIDARA_KIT_DIR`, or it silently measures the INSTALLED kit.
+
+Measured, not assumed: the greeter's compiled rules are identical and in the same order (kit + own =
+the old sheet); the shell's are the same set with only `base`/`reset` now after the kit, and the one
+real tie that creates (`window.nidara-settings-window` vs `window.nidara-app-window`, background)
+sets `transparent` on both sides. `shell-gallery-probe` (which now enumerates `kit.css` + `style.css`)
+gave **0 changed pixels** on all four scopes, and a control run with an empty `kit.css` gave 27 158 /
+192 286 — the instrument sees the kit.
+
+⚠️ In dev, `ui/shell/style.css` is the LIVE shell's sheet (`ThemeManager` hot-reloads it). A sheet
+compiled from a branch whose loading code differs from what the running shell executes breaks the
+shell on screen within a second — compile experiments into a scratch copy.
+
+Still owed (the phases of #108, in `tech-debt.md`): the kit as installed ESM modules the bundles load
+at runtime, and the package in the PKGBUILD. ⚠️ The INSTALLER keeps bundling its own copy until the ISO is published — changing how the
 one non-updatable program starts, before the ISO, is the risk this sequencing avoids.
 
 ### The widgets

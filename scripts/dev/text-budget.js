@@ -73,6 +73,12 @@ import Gio from "gi://Gio"
 import system from "system"
 
 const REPO = GLib.getenv("NIDARA_REPO") || GLib.get_current_dir()
+// The kit's sheet is no longer compiled into style.css (tech-debt #108 phase 2): the
+// apps load it FIRST, in the SAME provider (ui/lib/nidara-kit/platform/kit-css.ts —
+// two providers would not compare specificity). This is that, for a plain-JS probe.
+const KIT_CSS = `${GLib.getenv("NIDARA_KIT_DIR") || `${REPO}/ui/lib/nidara-kit`}/kit.css`
+const withKitSheet = (p) => [KIT_CSS, p]
+    .map(f => `@import url("${GLib.filename_to_uri(GLib.canonicalize_filename(f, null), null)}");`).join("\n")
 const argv = ARGV
 const argOf = (flag, fallback) => {
     const i = argv.indexOf(flag)
@@ -411,7 +417,7 @@ if (!GLib.file_test(STYLE, GLib.FileTest.EXISTS)) {
 {
     // Same ladder as core/ThemeManager.ts: style.css at PRIORITY_USER + 10.
     const p = new Gtk.CssProvider()
-    p.load_from_path(STYLE)
+    p.load_from_string(withKitSheet(STYLE))
     Gtk.StyleContext.add_provider_for_display(display, p, Gtk.STYLE_PROVIDER_PRIORITY_USER + 10)
 }
 

@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// The kit's ONE sheet, compiled once to `ui/lib/nidara-kit/kit.css` and loaded
+// at runtime by every app that wears the kit (tech-debt #108 phase 2), through
+// `withKitSheet()` in `platform/kit-css.ts` — never compiled into an app's own
+// sheet, which is how there used to be three copies of it.
+//
+// Order is the base layer first, then the components: the components' classes
+// dress nodes the base layer already gave GTK's geometry. The app's own sheet
+// comes after BOTH, inside the same provider, so it out-orders the kit at equal
+// specificity exactly as it did when Sass emitted the kit at the top of it.
+//
+// ⚠️ The base layer assumes a process with NO GTK theme (`useNoGtkTheme()`):
+// it replaces the theme, it does not sit on one. Every app that loads this sheet
+// is themeless; one that is not must not load it (see `_components.scss`).
+@use './base-layer';
+@use './components';
