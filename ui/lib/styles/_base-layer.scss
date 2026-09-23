@@ -54,11 +54,14 @@
    reading came from a capture flattened onto white, which is the artefact
    `feedback_screenshot_masks_render_artifacts` warns about.)
 
-   Checked rather than assumed before writing it: every Nidara window is styled
-   through `window.nidara-…` (0,1,1) — installer, app window, settings, dock,
-   app grid, alert dialog — and every one of them declares `background:
-   transparent` explicitly, because the glass is painted by `.nidara-window-glass`
-   and the chrome by Hyprland. So this (0,0,1) rule cannot reach a window of ours.
+   ⚠️ This rule reaches EVERY toplevel that does not declare its own background —
+   ours included. "Every Nidara window declares `background: transparent`" was
+   written here as checked, and was not: the APP GRID's window declared nothing,
+   and the day the shell went themeless (#107 step 5) the whole monitor-sized
+   window took this fill, clipped by its input region into a translucent box
+   around the panel (owner-caught 2026-09-23). A new toplevel of ours declares
+   its background in its own sheet — the glass is painted by its content
+   (`.nidara-window-glass`, the panel, Cairo) and the chrome by Hyprland.
    It lands only on a toplevel carrying no class of ours, which is exactly the set
    GTK builds itself.
 
