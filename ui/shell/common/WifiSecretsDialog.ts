@@ -3,7 +3,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import NM from "gi://NM?version=1.0"
 import NMA from "gi://NMA4?version=1.0"
-import { setWindowAppId } from "../../lib/app-id"
+import { setWindowAppId } from "../../lib/nidara-kit/platform/app-id"
 import * as Net from "../core/NetworkService"
 
 // The Wi-Fi dialogs are libnma's (libnma-gtk4), the same library GNOME Settings

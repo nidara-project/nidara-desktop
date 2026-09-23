@@ -111,7 +111,7 @@ export interface AtomicWidget {
     // Override which colour getActive/getFill fills with — a hex string, live
     // theme accent if omitted. Set for a FIXED semantic colour that must not move
     // with the user's accent choice (screenrecord: DANGER_HEX, same red as every
-    // other "needs attention" indicator — see lib/status-colors.ts).
+    // other "needs attention" indicator — see lib/nidara-kit/platform/status-colors.ts).
     activeColorHex?: string
     // Static alpha, or a getter for a live-varying one (a pulsing indicator reads
     // it every redraw — pair with a watchActive that ticks a redraw timer while

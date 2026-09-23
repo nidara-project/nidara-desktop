@@ -7,7 +7,7 @@ import Gio from "gi://Gio"
 import appService, { AppData } from "../../core/AppService"
 import status from "../../core/Status"
 import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
-import { RADIUS } from "../../../lib/tokens"
+import { RADIUS } from "../../../lib/nidara-kit/platform/tokens"
 import { t } from "../../core/i18n"
 import { uiIcon } from "../../core/Icons"
 

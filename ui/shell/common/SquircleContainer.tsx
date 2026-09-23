@@ -1,8 +1,8 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { drawGlassShadow, drawSquircle, hexToFloatRgb } from "./DrawingUtils"
 import Theme from "../core/ThemeManager"
-import { RADIUS, GLASS_TINT } from "../../lib/tokens"
-import { cairoDraw } from "../../lib/cairo-draw"
+import { RADIUS, GLASS_TINT } from "../../lib/nidara-kit/platform/tokens"
+import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 
 export enum Shape {
     SQUIRCLE,
@@ -99,11 +99,11 @@ interface SquircleContainerProps {
  */
 export const GLASS_INSET = 2.0
 
-/** The one drop-shadow recipe, moved to `ui/lib/glass-paint.ts` on 2026-08-24 with the
+/** The one drop-shadow recipe, moved to `ui/lib/nidara-kit/platform/glass-paint.ts` on 2026-08-24 with the
  *  primitives it parameterises, so the greeter and the lockscreen float their glass on
  *  the SAME numbers instead of on none. Re-exported here: this is still where the shell
  *  reads it from, and the doc lives beside the algorithm it feeds. */
-export { GLASS_SHADOW } from "../../lib/glass-paint"
+export { GLASS_SHADOW } from "../../lib/nidara-kit/platform/glass-paint"
 
 /** Resolves a shape's actual paint params for an allocated size. CIRCLE/CAPSULE
  *  always collapse to a perfect arc sized to the smaller dimension (the curve

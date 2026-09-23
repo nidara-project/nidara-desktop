@@ -33,11 +33,11 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import Gsk from "gi://Gsk"
 import GLib from "gi://GLib"
-import app from "../../ui/lib/host"
-import { applyCrispFontRendering } from "../../ui/lib/font-rendering"
+import app from "../../ui/lib/nidara-kit/platform/host"
+import { applyCrispFontRendering } from "../../ui/lib/nidara-kit/platform/font-rendering"
 import { NidaraWindow, NidaraClamp, NidaraScrolled, NIDARA_WINDOW_RADIUS } from "../../ui/lib/nidara-kit"
-import { initAppearance } from "../../ui/lib/appearance-css"
-import { WINDOW_LAYOUT } from "../../ui/lib/tokens"
+import { initAppearance } from "../../ui/lib/nidara-kit/platform/appearance-css"
+import { WINDOW_LAYOUT } from "../../ui/lib/nidara-kit/platform/tokens"
 import type { Step } from "../../ui/installer/lib/flow"
 import { WelcomeStep } from "../../ui/installer/steps/welcome"
 import { RegionStep } from "../../ui/installer/steps/region"
@@ -50,7 +50,7 @@ import {
 } from "../../ui/installer/lib/answers"
 import { countries, defaultsFor } from "../../ui/installer/lib/region"
 import { languageName } from "../../ui/lib/locale-names"
-import { useNoGtkTheme } from "../../ui/lib/gtk-theme"
+import { useNoGtkTheme } from "../../ui/lib/nidara-kit/platform/gtk-theme"
 
 // ⚠️ The theme is a CHOICE here, and this probe has now got it wrong in BOTH
 // directions — which is worth the paragraph, because each mistake produced a
@@ -65,7 +65,7 @@ import { useNoGtkTheme } from "../../ui/lib/gtk-theme"
 // (#268), so the first finding was right and the correction was the false one.
 //
 // So: no theme is the DEFAULT, because no theme is what the installer runs on
-// (commandment 11, `ui/lib/gtk-theme.ts`). Anything that draws here is drawing from
+// (commandment 11, `ui/lib/nidara-kit/platform/gtk-theme.ts`). Anything that draws here is drawing from
 // OUR css. `PLATFORM_THEME=1` borrows the developer's GTK theme instead, and that is
 // only ever for the A/B that tells you whether something you are looking at is
 // theme-supplied — never for a screenshot anyone reasons about.

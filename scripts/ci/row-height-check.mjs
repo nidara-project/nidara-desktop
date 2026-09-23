@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
- * row-height-check — `ROW_HEIGHT` in ui/lib/tokens.ts must equal what
- * `.nidara-row--single` / `--double` are painted at in ui/lib/styles/_components.scss.
+ * row-height-check — `ROW_HEIGHT` in ui/lib/nidara-kit/platform/tokens.ts must equal what
+ * `.nidara-row--single` / `--double` are painted at in ui/lib/nidara-kit/styles/_components.scss.
  *
  * Two copies of one number, in two languages, neither of which can read the other: the
  * rows get their height from CSS, and the code that has to reason about them — a list
@@ -14,8 +14,8 @@
  */
 import { readFileSync } from "node:fs"
 
-const SHEET = "ui/lib/styles/_components.scss"
-const TOKENS = "ui/lib/tokens.ts"
+const SHEET = "ui/lib/nidara-kit/styles/_components.scss"
+const TOKENS = "ui/lib/nidara-kit/platform/tokens.ts"
 
 const sheet = readFileSync(SHEET, "utf8")
 const tokens = readFileSync(TOKENS, "utf8")

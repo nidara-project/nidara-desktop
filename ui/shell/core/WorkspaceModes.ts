@@ -1,6 +1,6 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
-import { writeFile } from "../../lib/file"
+import { writeFile } from "../../lib/nidara-kit/platform/file"
 import { defineSettings } from "./configFile"
 import hs from "./HyprlandState"
 import { luaWorkspaceModesBlock } from "./hyprland-lua"

@@ -1,12 +1,12 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
-import app from "../../lib/host"
+import app from "../../lib/nidara-kit/platform/host"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import LockCard from "./LockCard"
 import PowerBar from "./PowerBar"
 import Clock from "./Clock"
 import { resolveWallpaper } from "../../lib/wallpaper"
-import { setCapsuleBackdrop } from "../../lib/glass-capsule"
+import { setCapsuleBackdrop } from "../../lib/nidara-kit/platform/glass-capsule"
 import { playExit } from "../../lib/entrance"
 
 // Every monitor's fadeable UI, so the exit covers all of them at once.

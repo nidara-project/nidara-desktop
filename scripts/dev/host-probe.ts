@@ -1,7 +1,7 @@
-// host-probe.ts — exercises `ui/lib/host.ts` (the `ags/gtk4/app` replacement)
+// host-probe.ts — exercises `ui/lib/nidara-kit/platform/host.ts` (the `ags/gtk4/app` replacement)
 // against the live compositor, in a process of its own.
 //
-//   scripts/bundle.sh scripts/dev/host-probe.ts /tmp/host-probe --alias:@host=./ui/lib/host
+//   scripts/bundle.sh scripts/dev/host-probe.ts /tmp/host-probe --alias:@host=./ui/lib/nidara-kit/platform/host
 //   /tmp/host-probe
 //
 // (The wrapper sets LD_PRELOAD itself — see scripts/bundle.sh.)
@@ -41,7 +41,7 @@ import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import app from "@host"
-import { setWindowAppId } from "../../ui/lib/app-id"
+import { setWindowAppId } from "../../ui/lib/nidara-kit/platform/app-id"
 
 const APP_ID = "org.nidara.hostprobe"
 const APP_NAME = "Nidara Host Probe"

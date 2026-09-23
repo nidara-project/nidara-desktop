@@ -59,7 +59,7 @@ $fs-title-1:  28px;  // large titles (rare in shell UI)
 // the accessibility text scale can reach it through the dpi, and 11pt is 14.667px —
 // no set of ratios lands a fractional anchor on integers. It does not matter either.
 // Crisp text comes from `gtk-hint-font-metrics` rounding the ASCENT (see
-// ui/lib/font-rendering.ts), which works the same at a fractional size.
+// ui/lib/nidara-kit/platform/font-rendering.ts), which works the same at a fractional size.
 $fse-mini:     0.79em;
 $fse-caption:  0.86em;
 $fse-small:    0.93em;
@@ -115,7 +115,7 @@ $dur-slow: 260ms;  // popover/sheet open
 
 // =============================================================================
 // GEOMETRY — the radius ladder
-// MIRROR of `ui/lib/tokens.ts` RADIUS: Cairo cannot read a CSS var, so the
+// MIRROR of `ui/lib/nidara-kit/platform/tokens.ts` RADIUS: Cairo cannot read a CSS var, so the
 // ladder exists as numbers there and as custom properties here, and the two move
 // TOGETHER. That file carries the rationale (why the ladder is not on the 4px
 // spacing scale, and why `sm` is derived from the card inset rather than

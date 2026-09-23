@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { execAsync } from "./process"
-import { withGlassCapsule } from "./glass-capsule"
-import { ndImageProps } from "./icons"
+import { withGlassCapsule } from "./nidara-kit/platform/glass-capsule"
+import { ndImageProps } from "./nidara-kit/platform/icons"
 
 // Suspend / restart / shut down, for the greeter and the lockscreen.
 //
@@ -38,7 +38,7 @@ export interface PowerBarDeps {
 
 // The three actions the shell's system menu also offers, drawn with the SAME
 // shipped art it uses (icon("system-suspend") / rotateCcw / power) instead of whatever the
-// user's icon theme supplies — see ui/lib/icons.ts. The theme names stay as a
+// user's icon theme supplies — see ui/lib/nidara-kit/platform/icons.ts. The theme names stay as a
 // last resort for a tree with no shipped assets.
 const ACTION_ICONS = {
     suspend: { name: "nd-system-suspend", themeFallback: "media-playback-pause-symbolic" },

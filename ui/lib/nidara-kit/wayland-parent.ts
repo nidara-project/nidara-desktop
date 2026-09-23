@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-// ⚠️ Load-bearing import, same trap as ui/lib/app-id.ts: without the GdkWayland
+// ⚠️ Load-bearing import, same trap as ui/lib/nidara-kit/platform/app-id.ts: without the GdkWayland
 // typelib loaded, GJS sees the surface as a bare GdkSurface and
 // `set_transient_for_exported` does not exist on it.
 import "gi://GdkWayland?version=4.0"

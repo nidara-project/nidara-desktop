@@ -1,14 +1,14 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import app from "../../lib/host"
+import app from "../../lib/nidara-kit/platform/host"
 import {
   NidaraButton, NidaraCircleButton, NidaraClamp, NidaraWindow,
   NidaraScrolled, NidaraSidebar, NIDARA_WINDOW_RADIUS,
   showNidaraAlert,
   type NidaraWindowResult,
 } from "../../lib/nidara-kit"
-import { ndIcon } from "../../lib/icons"
+import { ndIcon } from "../../lib/nidara-kit/platform/icons"
 import { Flow, type Step } from "../lib/flow"
 import { WelcomeStep } from "../steps/welcome"
 import { RegionStep } from "../steps/region"
@@ -17,7 +17,7 @@ import { AccountStep } from "../steps/account"
 import { SystemStep } from "../steps/system"
 import { SummaryStep } from "../steps/summary"
 import { RunStep } from "../steps/run"
-import { WINDOW_LAYOUT, WIZARD_LAYOUT, ROW_HEIGHT, minWindowWidthFor } from "../../lib/tokens"
+import { WINDOW_LAYOUT, WIZARD_LAYOUT, ROW_HEIGHT, minWindowWidthFor } from "../../lib/nidara-kit/platform/tokens"
 import { t, onLocaleChange } from "../lib/i18n"
 import { isPreview } from "../lib/preview"
 import { initGeoIpLookup } from "../lib/geoip"

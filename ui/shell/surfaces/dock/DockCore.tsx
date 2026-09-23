@@ -9,7 +9,7 @@
  * wrappers that pass the matching adapter.
  */
 
-import app from "../../../lib/host"
+import app from "../../../lib/nidara-kit/platform/host"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import { execAsync } from "../../../lib/process"

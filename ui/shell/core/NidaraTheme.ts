@@ -1,16 +1,16 @@
 /**
  * The shell's view of the token engine.
  *
- * The engine itself is `ui/lib/theme-tokens.ts` since 2026-08-26 — it never
+ * The engine itself is `ui/lib/nidara-kit/platform/theme-tokens.ts` since 2026-08-26 — it never
  * depended on anything in `ui/shell/`, and keeping it here was what stopped the
  * greeter, the lockscreen and the installer from having the ramp at all. This
  * module re-exports it so the shell's existing importers do not care, and keeps
  * the one piece that genuinely IS shell knowledge: which windows wear the shell
  * skin.
  */
-export * from "../../lib/theme-tokens"
+export * from "../../lib/nidara-kit/platform/theme-tokens"
 
-import { nidaraVars, type NidaraThemeConfig } from "../../lib/theme-tokens"
+import { nidaraVars, type NidaraThemeConfig } from "../../lib/nidara-kit/platform/theme-tokens"
 
 export const CHROME_SCOPE_WINDOWS = [
   "nidara-bar",

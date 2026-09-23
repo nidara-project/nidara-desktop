@@ -17,11 +17,11 @@
 
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
-import app from "../../ui/lib/host"
-import { applyCrispFontRendering } from "../../ui/lib/font-rendering"
+import app from "../../ui/lib/nidara-kit/platform/host"
+import { applyCrispFontRendering } from "../../ui/lib/nidara-kit/platform/font-rendering"
 import { NidaraWindow, NidaraClamp, NidaraScrolled, NIDARA_WINDOW_RADIUS } from "../../ui/lib/nidara-kit"
-import { initAppearance } from "../../ui/lib/appearance-css"
-import { WINDOW_LAYOUT } from "../../ui/lib/tokens"
+import { initAppearance } from "../../ui/lib/nidara-kit/platform/appearance-css"
+import { WINDOW_LAYOUT } from "../../ui/lib/nidara-kit/platform/tokens"
 import { RegionStep } from "../../ui/installer/steps/region"
 import {
   getAnswers, setCountryAnswer, setTimezoneAnswer, setLanguageAnswer, setKeyboardAnswer,

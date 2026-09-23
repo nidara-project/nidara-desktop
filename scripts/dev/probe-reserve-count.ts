@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import app from "../../ui/lib/host"
+import app from "../../ui/lib/nidara-kit/platform/host"
 import { NidaraTable } from "../../ui/lib/nidara-kit"
 
 app.start({

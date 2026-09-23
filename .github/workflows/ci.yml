@@ -125,7 +125,7 @@ jobs:
       # nothing here until 2026-08-10, and it is the one that could least afford
       # it: those two surfaces have NO dev mode — they load a fixed
       # /usr/share path, so a break shows up only when someone boots a VM.
-      # It now `@use`s ui/lib/styles/, which the shell's compile above already
+      # It now `@use`s ui/lib/nidara-kit/styles/, which the shell's compile above already
       # gates for syntax, but not for what the GREETER needs from it (its own
       # `radius-vars`, its own token contract). Cheap, and it closes the gap the
       # kit import opened.
@@ -206,12 +206,12 @@ jobs:
       # half.
       - name: The style-ownership check can fail (controls, must be caught)
         run: |
-          cp ui/lib/styles/_components.scss /tmp/kit.bak
+          cp ui/lib/nidara-kit/styles/_components.scss /tmp/kit.bak
           cp ui/shell/styles/_components.scss /tmp/shell.bak
 
           python3 - <<'PY'
           import pathlib, re
-          p = pathlib.Path("ui/lib/styles/_components.scss")
+          p = pathlib.Path("ui/lib/nidara-kit/styles/_components.scss")
           s = p.read_text()
           out = re.sub(r"^\.nidara-menu \{", ".nidara-menu-DELIBERATELY-BROKEN {", s, count=1, flags=re.M)
           assert out != s, "control A patched nothing - the .nidara-menu rule moved or was reworded"
@@ -219,14 +219,14 @@ jobs:
           PY
           if node scripts/ci/style-ownership-check.mjs; then
             echo "::error::control A passed — a kit rule can be deleted from the kit's sheet unnoticed"
-            cp /tmp/kit.bak ui/lib/styles/_components.scss
+            cp /tmp/kit.bak ui/lib/nidara-kit/styles/_components.scss
             exit 1
           fi
-          cp /tmp/kit.bak ui/lib/styles/_components.scss
+          cp /tmp/kit.bak ui/lib/nidara-kit/styles/_components.scss
 
           python3 - <<'PY'
           import pathlib, re
-          k = pathlib.Path("ui/lib/styles/_components.scss")
+          k = pathlib.Path("ui/lib/nidara-kit/styles/_components.scss")
           s = k.read_text()
           m = re.search(r"^\.nidara-menu \{.*?^\}\n", s, flags=re.M | re.S)
           assert m, "control B patched nothing - the .nidara-menu rule moved or was reworded"
@@ -236,11 +236,11 @@ jobs:
           PY
           if node scripts/ci/style-ownership-check.mjs; then
             echo "::error::control B passed — a kit rule can live in the shell's half unnoticed"
-            cp /tmp/kit.bak ui/lib/styles/_components.scss
+            cp /tmp/kit.bak ui/lib/nidara-kit/styles/_components.scss
             cp /tmp/shell.bak ui/shell/styles/_components.scss
             exit 1
           fi
-          cp /tmp/kit.bak ui/lib/styles/_components.scss
+          cp /tmp/kit.bak ui/lib/nidara-kit/styles/_components.scss
           cp /tmp/shell.bak ui/shell/styles/_components.scss
 
           # Control C — the BUNDLE half, which is the one that binds for work that
@@ -252,15 +252,15 @@ jobs:
           # on passing, because `_control-center.scss` styles it too — so the control
           # reported "control C passed" and failed the build for the right reason:
           # it was not producing the defect it claimed to produce.
-          # ⚠️ And EVERY sheet includes `ui/lib/styles/`: since the shell went themeless
+          # ⚠️ And EVERY sheet includes `ui/lib/nidara-kit/styles/`: since the shell went themeless
           # (#107 step 5) the base layer draws `calendar` too, so a control that broke
           # only the shell's half would leave the node drawn and pass for the wrong reason.
           cp -r ui/shell/styles /tmp/shell-styles.bak
-          cp -r ui/lib/styles /tmp/lib-styles.bak
+          cp -r ui/lib/nidara-kit/styles /tmp/lib-styles.bak
           python3 - <<'PY'
           import pathlib, re
           hit = 0
-          for f in [*pathlib.Path("ui/shell/styles").glob("*.scss"), *pathlib.Path("ui/lib/styles").glob("*.scss")]:
+          for f in [*pathlib.Path("ui/shell/styles").glob("*.scss"), *pathlib.Path("ui/lib/nidara-kit/styles").glob("*.scss")]:
               s = f.read_text()
               out = re.sub(r"(^|[\s,])calendar([\s,{])", r"\1cal-DELIBERATELY-BROKEN\2", s, flags=re.M)
               if out != s:
@@ -271,13 +271,13 @@ jobs:
           if node scripts/ci/style-ownership-check.mjs; then
             echo "::error::control C passed — a widget a bundle builds can go undrawn unnoticed"
             rm -rf ui/shell/styles && cp -r /tmp/shell-styles.bak ui/shell/styles
-            rm -rf ui/lib/styles && cp -r /tmp/lib-styles.bak ui/lib/styles
+            rm -rf ui/lib/nidara-kit/styles && cp -r /tmp/lib-styles.bak ui/lib/nidara-kit/styles
             exit 1
           fi
           rm -rf ui/shell/styles && cp -r /tmp/shell-styles.bak ui/shell/styles
-          rm -rf ui/lib/styles && cp -r /tmp/lib-styles.bak ui/lib/styles
+          rm -rf ui/lib/nidara-kit/styles && cp -r /tmp/lib-styles.bak ui/lib/nidara-kit/styles
 
-          git diff --quiet ui/lib/styles/_components.scss ui/shell/styles/_components.scss ui/shell/styles/_reset.scss
+          git diff --quiet ui/lib/nidara-kit/styles/_components.scss ui/shell/styles/_components.scss ui/shell/styles/_reset.scss
 
       # A row's height lives in CSS, and the code that reasons about rows — a list
       # asking for six WHOLE rows, a window whose natural height follows from that —
@@ -461,6 +461,22 @@ jobs:
       # allowlist fails, and so does a listed one that is no longer reached.
       - name: Settings import closure (no shell surfaces, ratcheted)
         run: node scripts/ci/settings-closure-check.mjs
+      # The kit is a package (tech-debt #108): an app outside this repo has
+      # nidara-kit and nothing else of this tree, while the four bundles here can
+      # always resolve a path the kit should not have reached for.
+      - name: nidara-kit imports nothing from outside itself
+        run: node scripts/ci/kit-boundary-check.mjs
+      - name: The kit boundary check can fail (control, must be caught)
+        run: |
+          cp ui/lib/nidara-kit/badge.ts /tmp/badge.bak
+          sed -i '1i import { execAsync } from "../process"' ui/lib/nidara-kit/badge.ts
+          if node scripts/ci/kit-boundary-check.mjs; then
+            echo "::error::the check passed with the kit importing ui/lib/process — it is not checking what it prints"
+            cp /tmp/badge.bak ui/lib/nidara-kit/badge.ts
+            exit 1
+          fi
+          cp /tmp/badge.bak ui/lib/nidara-kit/badge.ts
+          git diff --quiet ui/lib/nidara-kit/badge.ts
 
   hypr-config:
     name: Hyprland config (parses + game mode)

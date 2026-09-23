@@ -5,7 +5,7 @@ import Pango from "gi://Pango"
 import Gdk from "gi://Gdk?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import { execAsync } from "../../lib/process"
-import { applyCrispFontRendering } from "../../lib/font-rendering"
+import { applyCrispFontRendering } from "../../lib/nidara-kit/platform/font-rendering"
 import {
     type NidaraThemeConfig,
     type AccentKey,
@@ -19,7 +19,7 @@ import {
 } from "./NidaraTheme"
 import { SHELL_ROOT } from "./Paths"
 import { defineSettings } from "./configFile"
-import { GTK_BUILTIN_THEME } from "../../lib/gtk-theme"
+import { GTK_BUILTIN_THEME } from "../../lib/nidara-kit/platform/gtk-theme"
 
 // ── WHERE APPEARANCE LIVES (#573) ────────────────────────────────────
 // Two homes, no file:
@@ -62,7 +62,7 @@ const NIDARA_KEYS = ["barOpacity", "overlayOpacity", "dockOpacity", "windowOpaci
 // Plain `Gtk.Settings`. This used to probe libadwaita first (loading its typelib
 // to ask `Adw.is_initialized()`), because AGS's host called `Adw.init()` and an
 // initialised libadwaita owns this property. Our host never does
-// (`ui/lib/host.ts`), so the probe could only ever answer "no" — at the price of
+// (`ui/lib/nidara-kit/platform/host.ts`), so the probe could only ever answer "no" — at the price of
 // mapping libadwaita into a process that uses none of it.
 // ⚠️ With no GTK theme loaded (tech-debt #107) this repaints nothing of ours —
 // our colours come from the token CSS. Kept as the process's honest statement of
@@ -134,7 +134,7 @@ class ThemeManager extends GObject.Object {
         this.loadSettings()
         
         // The accent and the mode LIVE in gsettings (the contract in
-        // ui/lib/appearance.ts), so a change made anywhere else — `gsettings set`, an
+        // ui/lib/nidara-kit/platform/appearance.ts), so a change made anywhere else — `gsettings set`, an
         // agent, another tool — is a change of the desktop, exactly as in GNOME. The
         // `!==` guards are what stop our own writes from echoing back as a loop:
         // the setters update the in-memory value BEFORE they write the key.
@@ -237,7 +237,7 @@ class ThemeManager extends GObject.Object {
      * either way and inherited whatever the default was.
      */
     private syncFontMetrics() {
-        // One lever, shared by all three bundles — see ui/lib/font-rendering.ts for
+        // One lever, shared by all three bundles — see ui/lib/nidara-kit/platform/font-rendering.ts for
         // why `gtk-hint-font-metrics` alone did nothing for months.
         applyCrispFontRendering()
     }
@@ -270,7 +270,7 @@ class ThemeManager extends GObject.Object {
 
     /**
      * The GTK theme for THIRD-PARTY applications — never for ours, which load none
-     * (commandment 11, `ui/lib/gtk-theme.ts`).
+     * (commandment 11, `ui/lib/nidara-kit/platform/gtk-theme.ts`).
      *
      * ⚠️ Rewritten 2026-09-20 (tech-debt #107). The old version listed
      * `/usr/share/themes` and subtracted three names, which on a clean Arch is the
@@ -287,7 +287,7 @@ class ThemeManager extends GObject.Object {
      *     disk — it lives in libgtk's gresource — so no directory scan can find it,
      *     and it is the value a fresh install is seeded with. ⚠️ That name is
      *     `Adwaita`, NOT GTK4's own `Default`, and the reason is GTK3: see
-     *     `ui/lib/gtk-theme.ts`, which holds the measurements. It also means a real
+     *     `ui/lib/nidara-kit/platform/gtk-theme.ts`, which holds the measurements. It also means a real
      *     `/usr/share/themes/Adwaita` is filtered out of the disk scan and re-added
      *     as the built-in — right, because under that name the two are the same
      *     offer to a GTK4 app (measured: 0 differing pixels).
@@ -509,7 +509,7 @@ class ThemeManager extends GObject.Object {
      * ⚠️ The px form was introduced to put the type ramp on whole pixels FOR CRISP
      * TEXT. That was the wrong lever, measured: at a fractional 14.667px,
      * `gtk-hint-font-metrics` already rounds the ascent to 15.0 and the T's crossbar
-     * lands on one row (see `syncFontMetrics` and ui/lib/font-rendering.ts).
+     * lands on one row (see `syncFontMetrics` and ui/lib/nidara-kit/platform/font-rendering.ts).
      * Crispness comes from the hint, not from the size — so points cost nothing.
      *
      * Whole points, because that is the granularity every font picker offers; the

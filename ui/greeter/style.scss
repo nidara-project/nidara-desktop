@@ -10,19 +10,19 @@
 // There are NO lock-only rules left. There used to be a
 // `window.nidara-lock-window { … }` block switching the CSS box off for the
 // three capsules, because only the lockscreen painted them. Both surfaces paint
-// them now (ui/lib/glass-capsule.ts), so the box is off for everyone and the
+// them now (ui/lib/nidara-kit/platform/glass-capsule.ts), so the box is off for everyone and the
 // difference between the two screens is down to one thing: where the pixels
 // behind the glass come from. The class is still set on the window — keep it,
 // it is the hook if a genuine divergence ever appears.
 //
 // ── Where the numbers come from ─────────────────────────────────────────────
 // The type ramp, the weights, the spacing scale, the motion curves and the
-// radius ladder are the SHELL'S, imported from `ui/lib/styles/_tokens.scss`.
+// radius ladder are the SHELL'S, imported from `ui/lib/nidara-kit/styles/_tokens.scss`.
 // They used to be re-typed here, which is how this surface silently fell a
 // generation behind the rest of the DE: the shell's ramp moved and nothing
 // forwarded the change (the date sat at 13px under an 88px clock, two numbers
 // nobody chose together). If a size here is not a `$fs-*`, it is a bug.
-@use '../lib/styles/tokens' as *;
+@use '../lib/nidara-kit/styles/tokens' as *;
 
 // ── The kit's stylesheet ────────────────────────────────────────────────────
 // `ui/lib/nidara-kit/` has been importable from here forever; its LOOK arrived
@@ -40,8 +40,8 @@
 // specificity, and these screens keep their own. See the dropdown section.
 // The base layer: element selectors for the nodes GTK builds itself (#107 step 5).
 // Wired per bundle, never from the kit's shared sheet — see the note there.
-@use '../lib/styles/base-layer';
-@use '../lib/styles/components';
+@use '../lib/nidara-kit/styles/base-layer';
+@use '../lib/nidara-kit/styles/components';
 
 // ── Palette ─────────────────────────────────────────────────────────────────
 // The one thing that is legitimately local. The shell rewrites its colour
@@ -55,7 +55,7 @@
 
   --nidara-accent:         #0088FF;
   // Pre-computed alpha variants — GTK4 CSS has no rgba(var(), n).
-  // LOCKSTEP with accentCssFor() in ui/lib/accent.ts, which overwrites this
+  // LOCKSTEP with accentCssFor() in ui/lib/nidara-kit/platform/accent.ts, which overwrites this
   // whole block at runtime once appearance.json is read: same names, same
   // alphas. What is written here is the pre-load fallback (default blue), so
   // the two lists must not drift apart.
@@ -86,7 +86,7 @@
   // buried on 2026-09-20 (tech-debt #106) once Cairo was the only thing painting
   // a rim anywhere.
   //
-  // ⚠️ MIRRORED as numbers in `ui/lib/tokens.ts` (LOCK_GLASS), because the
+  // ⚠️ MIRRORED as numbers in `ui/lib/nidara-kit/platform/tokens.ts` (LOCK_GLASS), because the
   // lockscreen paints these capsules itself (widget/GlassBackdrop.ts) and a
   // Cairo painter cannot read a CSS custom property. Same deal as the radius
   // ladder: two representations, one decision, they move together.
@@ -107,7 +107,7 @@
   // time with one: the kit's alert dialog.)
 
   // ── THE KIT'S TOKEN CONTRACT ──────────────────────────────────────────────
-  // The 16 custom properties `ui/lib/styles/_components.scss` reads and this
+  // The 16 custom properties `ui/lib/nidara-kit/styles/_components.scss` reads and this
   // sheet did not define. They are NOT optional decoration: an undefined custom
   // property does not warn — GTK drops the whole declaration — so importing the
   // kit without these fails SILENTLY, on the two surfaces that have no dev mode
@@ -180,7 +180,7 @@
 // ── Shipped icons ───────────────────────────────────────────────────────────
 // Same rule, same reason as the shell's _reset.scss: the icons we ship are
 // SYMBOLIC files (#587), so GTK paints them with the CSS `color` of their node
-// and the skin only has to move --nidara-text. Consumers: ui/lib/icons.ts (power
+// and the skin only has to move --nidara-text. Consumers: ui/lib/nidara-kit/platform/icons.ts (power
 // bar, keyboard glyph) and the avatar fallback in ui/lib/avatar.ts.
 // This was `-gtk-icon-filter: invert(1)` for as long as the drawings were
 // non-symbolic and rendered black, with a second rule turning the invert OFF
@@ -365,7 +365,7 @@ window > contents {
 // outer widget gets :focus-within, never :focus. Both are matched below.
 //
 // ── THE BOX IS PAINTED, NOT DRAWN HERE ───────────────────────────────────────
-// ui/lib/glass-capsule.ts paints the rim and the body on one rounded path, for
+// ui/lib/nidara-kit/platform/glass-capsule.ts paints the rim and the body on one rounded path, for
 // BOTH bundles, so this rule must not draw a box underneath: two stacked shapes
 // bring back the very seam the painter exists to remove.
 //
@@ -381,7 +381,7 @@ window > contents {
 // border primitive, not the number.
 //
 // FOCUS. An input shows focus as its own EDGE going accent, never as a ring
-// (see `nidara-focus-ring` in ui/lib/styles/_tokens.scss: one control must not
+// (see `nidara-focus-ring` in ui/lib/nidara-kit/styles/_tokens.scss: one control must not
 // show both). The edge is the painted rim, so the painter owns this state too —
 // `withGlassCapsule(entry, "subtle", followFocus: true)` in both bundles.
 .greeter-password {
@@ -714,7 +714,7 @@ dropdown > button {
     // themes provide it (Adwaita, Papirus — which install.sh installs — MacTahoe,
     // Colloid…). Using it would make the shape of the login screen's chevron depend on
     // whichever icon theme the `greeter` system user happens to have, which is exactly
-    // the defect `ui/lib/icons.ts` was written to end for the power glyphs:
+    // the defect `ui/lib/nidara-kit/platform/icons.ts` was written to end for the power glyphs:
     // "Nidara's own power bar was the one surface in the DE not using Nidara's icons.
     // Commandment 10." A chevron is no different.
     //
@@ -858,7 +858,7 @@ separator {
 // A row's hover fill spans its container, so the container's padding IS the
 // fill's margin — and the goal is ONE gap: the fill should stand as far from the
 // corner's curve as it does from the straight edge. For circular corners
-// `rowInsetFor()` (ui/lib/tokens.ts) collapses to plain concentricity,
+// `rowInsetFor()` (ui/lib/nidara-kit/platform/tokens.ts) collapses to plain concentricity,
 // `outer − inner`: the painted bar is a true pill at 32/2 = 16, the button's own
 // pill clamps to 22/2 = 11, so the inset is 5 — on all four sides.
 //
@@ -889,7 +889,7 @@ separator {
 //
 // FOCUS: the shell's ring, solid accent. It was a 35 %-alpha halo, which is what
 // the user meant by the focus on these buttons looking dull — see
-// `nidara-focus-ring` in ui/lib/styles/_tokens.scss.
+// `nidara-focus-ring` in ui/lib/nidara-kit/styles/_tokens.scss.
 .greeter-power-btn {
   background: transparent;
   border: none;

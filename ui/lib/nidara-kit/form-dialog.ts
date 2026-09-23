@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { dialogButtonRow } from "./dialog-buttons"
-import { setWindowAppId } from "../app-id"
+import { setWindowAppId } from "./platform/app-id"
 
 export interface FormResponse {
     id: string

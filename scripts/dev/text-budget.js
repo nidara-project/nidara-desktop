@@ -91,9 +91,9 @@ const read = (path) => {
 // layout passes happily after someone changes the layout.
 
 /** `WINDOW_LAYOUT.sidebar` — the fixed column, from the law itself. */
-const tokensSrc = read(`${REPO}/ui/lib/tokens.ts`)
+const tokensSrc = read(`${REPO}/ui/lib/nidara-kit/platform/tokens.ts`)
 const sidebarWidth = Number(tokensSrc.match(/\n\s*sidebar:\s*(\d+)/)?.[1])
-if (!sidebarWidth) { printerr("could not read WINDOW_LAYOUT.sidebar from ui/lib/tokens.ts"); system.exit(2) }
+if (!sidebarWidth) { printerr("could not read WINDOW_LAYOUT.sidebar from ui/lib/nidara-kit/platform/tokens.ts"); system.exit(2) }
 
 /**
  * The widget-side chrome around the label, read out of the component that builds

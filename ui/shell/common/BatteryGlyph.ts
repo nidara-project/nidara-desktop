@@ -29,9 +29,9 @@ import Gtk from "gi://Gtk?version=4.0"
 import Theme from "../core/ThemeManager"
 import * as Battery from "../core/BatteryService"
 import { hexToFloatRgb } from "./DrawingUtils"
-import { DANGER_HEX, SUCCESS_HEX } from "../../lib/status-colors"
-import { INK } from "../../lib/tokens"
-import { cairoDraw } from "../../lib/cairo-draw"
+import { DANGER_HEX, SUCCESS_HEX } from "../../lib/nidara-kit/platform/status-colors"
+import { INK } from "../../lib/nidara-kit/platform/tokens"
+import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 
 /** A real battery device is present (false on desktops, where the display
  *  device exists but reports is_present = false). */
@@ -84,7 +84,7 @@ export function makeBatteryGlyph(box: number, fill = false): Gtk.DrawingArea {
         const y0 = (h - box) / 2
 
         // `INK.solid`, not the 0.5 this carried while the glyph was oversized —
-        // the reasoning behind that number now lives with the token (lib/tokens.ts).
+        // the reasoning behind that number now lives with the token (lib/nidara-kit/platform/tokens.ts).
 
         // Body outline — rect 1,6 18.5×12 r2, stroke 2 straddling the path
         // (ink 0 → 20.5).

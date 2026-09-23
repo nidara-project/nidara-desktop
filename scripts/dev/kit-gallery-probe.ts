@@ -43,10 +43,10 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gsk from "gi://Gsk"
 import Pango from "gi://Pango"
 import GLib from "gi://GLib"
-import app from "../../ui/lib/host"
-import { applyCrispFontRendering } from "../../ui/lib/font-rendering"
-import { initAppearance } from "../../ui/lib/appearance-css"
-import { useNoGtkTheme } from "../../ui/lib/gtk-theme"
+import app from "../../ui/lib/nidara-kit/platform/host"
+import { applyCrispFontRendering } from "../../ui/lib/nidara-kit/platform/font-rendering"
+import { initAppearance } from "../../ui/lib/nidara-kit/platform/appearance-css"
+import { useNoGtkTheme } from "../../ui/lib/nidara-kit/platform/gtk-theme"
 import {
   NidaraWindow, NidaraList, NidaraRow, NidaraFieldRow, NidaraStackedRow,
   NidaraToggleRow, NidaraDropDownRow, NidaraButton, NidaraCircleButton, NidaraBadge,
@@ -63,7 +63,7 @@ else if (GLib.getenv("PLATFORM_THEME") !== "1") useNoGtkTheme()
 const shot = GLib.getenv("SHOT")
 const here = GLib.get_current_dir()
 // The kit's own sheet reaches this probe through the installer's compiled CSS, which
-// is the smallest bundle that compiles `ui/lib/styles/` and nothing shell-only.
+// is the smallest bundle that compiles `ui/lib/nidara-kit/styles/` and nothing shell-only.
 const css = [`${here}/ui/installer/style.css`, "./ui/installer/style.css"]
   .find(p => GLib.file_test(p, GLib.FileTest.EXISTS))
 

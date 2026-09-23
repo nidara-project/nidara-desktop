@@ -394,7 +394,7 @@ package_nidara-desktop() {
   # install.sh --dev uses, so a packaged and a dev install cannot start a fresh
   # account on different values. It carries icon-theme and, since #537, the accent
   # and the colour scheme: gsettings is their HOME (the appearance contract in
-  # ui/lib/appearance.ts), so this is what a new account and every app reading the
+  # ui/lib/nidara-kit/platform/appearance.ts), so this is what a new account and every app reading the
   # Settings portal get before the shell has run once.
   scripts/gen-dconf-defaults.sh defaults/appearance.json \
     | install -Dm644 /dev/stdin "$pkgdir/etc/dconf/db/local.d/00-nidara-appearance"

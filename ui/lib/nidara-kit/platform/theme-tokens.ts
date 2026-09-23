@@ -21,7 +21,7 @@
  * and keeps the one piece that IS shell knowledge, the chrome scope naming the
  * shell's four skin surfaces.
  *
- * Feed it from `ui/lib/appearance.ts`, which answers the "what did the user
+ * Feed it from `ui/lib/nidara-kit/platform/appearance.ts`, which answers the "what did the user
  * pick?" half from the portal or the mirror file, whichever this process can
  * reach.
  */
@@ -34,7 +34,7 @@ import { DANGER_HEX } from "./status-colors"
 import { GLASS_TINT } from "./tokens"
 
 // -- COLOR PALETTES ---------------------------------------------------
-// The accent palette is the single source of truth in ui/lib/accent.ts.
+// The accent palette is the single source of truth in ui/lib/nidara-kit/platform/accent.ts.
 // Here we reshape it to { color, name } for existing consumers (Settings, etc).
 
 export const ACCENT_PALETTE = Object.fromEntries(
@@ -221,7 +221,7 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
       }
   // ⚠️ `--nidara-edge` (the rim of light) is NOT emitted any more, and neither are
   // the four `--nidara-material-*` or `--nidara-shadow-popover`. Buried 2026-09-20,
-  // tech-debt #106: the rim is painted in Cairo (`ui/lib/glass-paint.ts`, mirrored
+  // tech-debt #106: the rim is painted in Cairo (`ui/lib/nidara-kit/platform/glass-paint.ts`, mirrored
   // as numbers in `LOCK_GLASS`), the CSS copy had one reader left — the window card
   // — and #600 correctly took that away by giving window chrome back to Hyprland.
   // A token nothing reads is a value that drifts from the one on screen.

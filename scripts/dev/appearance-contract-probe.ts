@@ -1,6 +1,6 @@
 // appearance-contract-probe — what an APPLICATION sees of the desktop's appearance.
 //
-// Drives `ui/lib/appearance.ts` exactly as a bundle does, without GTK and without a
+// Drives `ui/lib/nidara-kit/platform/appearance.ts` exactly as a bundle does, without GTK and without a
 // display: one `readAppearance()`, then `watchAppearance()` for a while, printing
 // every state it is handed. It is the client half of
 // `scripts/dev/appearance-contract-probe.sh`, which builds the rest of the chain
@@ -14,7 +14,7 @@
 //   CHANGE <n> <state-json>
 
 import GLib from "gi://GLib"
-import { readAppearance, watchAppearance, appearanceSource, type AppearanceChannel } from "../../ui/lib/appearance"
+import { readAppearance, watchAppearance, appearanceSource, type AppearanceChannel } from "../../ui/lib/nidara-kit/platform/appearance"
 
 const argv: string[] = (globalThis as any).ARGV ?? []
 const channel = (argv[0] === "mirror" ? "mirror" : "portal") as AppearanceChannel

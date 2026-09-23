@@ -8,7 +8,7 @@
 // Same trick as the kit's selection check.
 
 import Gtk from "gi://Gtk?version=4.0"
-import { cairoDraw } from "../../lib/cairo-draw"
+import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 
 export type PhaseState = "done" | "active" | "pending"
 

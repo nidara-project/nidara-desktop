@@ -28,7 +28,7 @@
 
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import { writeFile } from "../../lib/file"
+import { writeFile } from "../../lib/nidara-kit/platform/file"
 import Theme, { TEXT_SCALE_MAX } from "./ThemeManager"
 import hs from "./HyprlandState"
 import { ACCENT_PALETTE, type AccentKey } from "./NidaraTheme"
@@ -77,7 +77,7 @@ function writeSettingsIni(): void {
     // 🔑 One theme name for both files, and it must be one GTK3 can resolve — its
     // built-in is `Adwaita` and GTK4's is `Default`, and only the first has a dark
     // variant GTK3 can find. That is settled at the VALUE (`GTK_BUILTIN_THEME` in
-    // ui/lib/gtk-theme.ts, with the measurements), not here: the Settings portal
+    // ui/lib/nidara-kit/platform/gtk-theme.ts, with the measurements), not here: the Settings portal
     // serves `gtk-theme`, so a Wayland app reads gsettings directly and never sees
     // what we write into a per-toolkit file. Mapping the name here was the first
     // attempt and it changed nothing on screen.
@@ -174,7 +174,7 @@ function syncGroupbarAccent(): void {
 
 /**
  * The greeter's MIRROR — the one surface outside any session, with no portal to ask
- * (ui/lib/appearance.ts, rule 3). An export written from the two homes, never read back.
+ * (ui/lib/nidara-kit/platform/appearance.ts, rule 3). An export written from the two homes, never read back.
  * 0644, stated: the default of `writeFile` is 0600, and a mirror nobody else can read is
  * #488 — the login screen stuck on blue on every machine installed after 0.11.0.
  */

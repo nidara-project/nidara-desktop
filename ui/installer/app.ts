@@ -11,12 +11,12 @@
 // runs one process as root. Everything that can destroy data lives on the other
 // side of that seam, in Arch's own code.
 
-import app from "../lib/host"
+import app from "../lib/nidara-kit/platform/host"
 import GLib from "gi://GLib"
-import { initAppearance } from "../lib/appearance-css"
-import { applyCrispFontRendering } from "../lib/font-rendering"
+import { initAppearance } from "../lib/nidara-kit/platform/appearance-css"
+import { applyCrispFontRendering } from "../lib/nidara-kit/platform/font-rendering"
 import { InstallerWindow } from "./widget/InstallerWindow"
-import { useNoGtkTheme } from "../lib/gtk-theme"
+import { useNoGtkTheme } from "../lib/nidara-kit/platform/gtk-theme"
 
 // No GTK theme at all — this sheet is the only CSS there is (commandment 11).
 //
@@ -49,7 +49,7 @@ app.start({
     // desktop is what this window wears, and it follows them changing it with the
     // installer open. One call — the full token ramp, the kit's Cairo seam and the
     // glass rim — read from the Settings portal, exactly as a third-party app reads
-    // it. See the contract in ui/lib/appearance.ts.
+    // it. See the contract in ui/lib/nidara-kit/platform/appearance.ts.
     initAppearance()
 
     InstallerWindow().present()

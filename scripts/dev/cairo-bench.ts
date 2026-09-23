@@ -11,7 +11,7 @@
 import Cairo from "gi://cairo"
 import GLib from "gi://GLib"
 import { createSquirclePath, drawSquircle, glassRimGradient } from "../../ui/shell/common/DrawingUtils"
-import { GLASS_TINT } from "../../ui/lib/tokens"
+import { GLASS_TINT } from "../../ui/lib/nidara-kit/platform/tokens"
 
 const now = () => GLib.get_monotonic_time() / 1000  // ms
 

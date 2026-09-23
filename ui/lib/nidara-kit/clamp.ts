@@ -15,7 +15,7 @@ import Gtk from "gi://Gtk?version=4.0"
  * ⚠️ `minWidth` is not decoration — a clamp with only a ceiling has no width of
  * its own, it has a limit on someone else's. Settings ran that way and the page
  * followed the window all the way down to a 47px subtitle column, one word per
- * line (measured 2026-08-11; see WINDOW_LAYOUT in `lib/tokens.ts`). With both
+ * line (measured 2026-08-11; see WINDOW_LAYOUT in `lib/nidara-kit/platform/tokens.ts`). With both
  * sides equal the clamp IS the width, which is what a settings pane wants.
  *
  * Note: the ancestor NidaraSplitView uses a ZeroMinOverlay to break the

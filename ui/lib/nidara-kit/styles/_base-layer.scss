@@ -41,8 +41,8 @@
 // and must not move a pixel — if one does, the rule reached something of ours
 // that had been relying on saying nothing.
 
-@use 'tokens' as *;
-@use 'mixins' as *;
+@use './tokens' as *;
+@use './mixins' as *;
 
 /* ── The surface GTK's own toplevels have none of ────────────────────────────
    Measured 2026-09-20 through `FONT_DIALOG=1`: with no theme, the toplevel

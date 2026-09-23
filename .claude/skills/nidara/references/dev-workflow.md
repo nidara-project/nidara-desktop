@@ -44,7 +44,7 @@ Two modes:
 ### Upstream dependencies
 
 **Zero external Astal dependencies (since 2026-08-20).**
-All previous Astal services were absorbed into native TypeScript (`core/`), the application host and bundler are native (`ui/lib/host.ts`, `scripts/bundle.sh`), and PAM authentication is native C (`lib/nidara-auth/`, `gi://NidaraAuth`).
+All previous Astal services were absorbed into native TypeScript (`core/`), the application host and bundler are native (`ui/lib/nidara-kit/platform/host.ts`, `scripts/bundle.sh`), and PAM authentication is native C (`lib/nidara-auth/`, `gi://NidaraAuth`).
 
 ### Binary repo (`nidara-repo`) & packaging
 
@@ -118,7 +118,7 @@ other way round from the outside** (`pacman -U` into a scratch root under `faker
 
 - `/usr/bin/{nidara, nidara-ui, nidara-greeter, nidara-lock, nidara-game-mode, nidara-setup, nidara-update, …}`
 - `/usr/share/nidara/` — configs, bundles, `VERSION`, wallpaper, plus the setup payloads `defaults/` (minus wallpaper) and `config/greetd/` that `nidara-setup` reads — same layout whether shipped by the package or by install.sh §5
-- **No GTK theme is installed, and that is the point** (commandment 11, 2026-09-20). Our processes call `useNoGtkTheme()` — `GTK_THEME=Empty`, which GTK resolves out of its own gresource — so there is no file to ship and none to go missing. install.sh instead `rm -rf`s two artefacts it used to install: `/usr/share/themes/nidara` (our old blank theme, pixel-identical to `Empty` but offered by every theme chooser on the system) and the pre-rename `crystal-shell` orphan. ⚠️ Do not "fix" a missing theme by naming one: a `GTK_THEME` that resolves to nothing silently loads GTK's FULL built-in theme, which is how the old arrangement could be broken without any symptom. See `ui/lib/gtk-theme.ts`.
+- **No GTK theme is installed, and that is the point** (commandment 11, 2026-09-20). Our processes call `useNoGtkTheme()` — `GTK_THEME=Empty`, which GTK resolves out of its own gresource — so there is no file to ship and none to go missing. install.sh instead `rm -rf`s two artefacts it used to install: `/usr/share/themes/nidara` (our old blank theme, pixel-identical to `Empty` but offered by every theme chooser on the system) and the pre-rename `crystal-shell` orphan. ⚠️ Do not "fix" a missing theme by naming one: a `GTK_THEME` that resolves to nothing silently loads GTK's FULL built-in theme, which is how the old arrangement could be broken without any symptom. See `ui/lib/nidara-kit/platform/gtk-theme.ts`.
 - `/usr/share/wayland-sessions/nidara.desktop`
 - `/usr/share/applications/`
 - XDG portal config
@@ -559,7 +559,7 @@ Window-Rules, quoted):
 | **dynamic** — `opacity`, `rounding`, `no_blur`, `no_anim`, `opaque`, `border_size`, `idle_inhibit`, `immediate`, `decorate`… | "re-evaluated every time a property changes" | the CURRENT class and title |
 
 **And our windows change class after they open.** The shell, the greeter, the lockscreen and the
-installer all give a window its real identity through `setWindowAppId` (`ui/lib/app-id.ts`), which
+installer all give a window its real identity through `setWindowAppId` (`ui/lib/nidara-kit/platform/app-id.ts`), which
 lands at **MAP** — after the toplevel already exists carrying the PROCESS app-id GTK put on it at
 creation (`org.nidara.desktop` for the shell, `org.nidara.greeter`, `org.nidara.lock`,
 `org.nidara.installer`).
@@ -617,7 +617,7 @@ title, and the day someone translates it, CI says which rule they broke.
 - `resizable` is NOT the difference, and neither is `set_size_request` — both were arms above, both
   fine. Neither is the `maximized` flag on its own: every arm reported `maximized=true`, including
   the ones that came up correctly. (Related and already known: **Hyprland never clears the `tiled`
-  toplevel state** — see the note in `ui/lib/tokens.ts` — so `maximized`/`tiled` are useless as a
+  toplevel state** — see the note in `ui/lib/nidara-kit/platform/tokens.ts` — so `maximized`/`tiled` are useless as a
   signal for "someone else is sizing me".)
 - A `size` in the rule also fixes it, by overriding the adopted size after the fact. It works
   (verified), but it duplicates a number that already lives in the window's own source — and for a
@@ -2541,7 +2541,7 @@ install.sh>/lib/<lib>/src/…`.
 **`nidara-portal`** (installed to `/usr/bin`, D-Bus-activated as
 `org.freedesktop.impl.portal.desktop.nidara`) is Nidara's xdg-desktop-portal **Settings, Wallpaper, DynamicLauncher, Account, and Background
 backend**:
-1. **Settings**: serves the complete `org.freedesktop.appearance` namespace (`accent-color` as `(ddd)` RGB tuple, `color-scheme` as uint32 0=none/1=dark/2=light, `contrast` and `reduced-motion` as uint32) from gsettings, and `org.nidara.appearance` (the four opacities + `shell-appearance`, and NOTHING that already has a standard name) from `~/.config/nidara/appearance.json` — so GTK4, libadwaita/GNOME apps, Qt apps AND our own installer/lock screen follow the desktop under Hyprland. It is the application half of the appearance contract (architecture.md, "The appearance contract"); test changes with `scripts/dev/appearance-contract-probe.sh`. Other namespaces (font-name, cursor-theme) fall through to the gtk backend (`org.freedesktop.impl.portal.Settings=nidara;gtk` in `/etc/xdg-desktop-portal/hyprland-portals.conf`). Live updates: the daemon watches gsettings `accent-color` and `color-scheme` and emits `SettingChanged`. Its accent table is a deliberate copy of `ui/lib/accent.ts` `ACCENT_HEX` — keep them in sync.
+1. **Settings**: serves the complete `org.freedesktop.appearance` namespace (`accent-color` as `(ddd)` RGB tuple, `color-scheme` as uint32 0=none/1=dark/2=light, `contrast` and `reduced-motion` as uint32) from gsettings, and `org.nidara.appearance` (the four opacities + `shell-appearance`, and NOTHING that already has a standard name) from `~/.config/nidara/appearance.json` — so GTK4, libadwaita/GNOME apps, Qt apps AND our own installer/lock screen follow the desktop under Hyprland. It is the application half of the appearance contract (architecture.md, "The appearance contract"); test changes with `scripts/dev/appearance-contract-probe.sh`. Other namespaces (font-name, cursor-theme) fall through to the gtk backend (`org.freedesktop.impl.portal.Settings=nidara;gtk` in `/etc/xdg-desktop-portal/hyprland-portals.conf`). Live updates: the daemon watches gsettings `accent-color` and `color-scheme` and emits `SettingChanged`. Its accent table is a deliberate copy of `ui/lib/nidara-kit/platform/accent.ts` `ACCENT_HEX` — keep them in sync.
 1b. **Access** (routed since 2026-09-13, #535): consent prompts — camera, microphone, location… — forwarded to the shell's `org.nidara.Shell.Consent`, which draws them (architecture.md, "Consent prompts: the portal asks, the shell draws"). Never grants by default. Probes: `scripts/dev/consent-portal-probe.sh`, `scripts/dev/consent-dialog-probe.sh`.
 2. **Wallpaper**: implements `org.freedesktop.impl.portal.Wallpaper.SetWallpaperURI` — so "Set as Desktop Background" in browsers (Firefox, Chrome, Brave) and image viewers (Loupe, Eye of GNOME) automatically applies and persists the wallpaper via `nidara-ipc setWallpaper` (with automatic caching of temporary/sandboxed images to `~/.local/share/nidara/wallpapers/`).
 3. **DynamicLauncher**: implements `org.freedesktop.impl.portal.DynamicLauncher` (`PrepareInstall` and `RequestInstallToken`) — so web browsers (Google Chrome, Chromium, Brave, Edge, Firefox) and sandboxed apps can seamlessly install Progressive Web Apps (PWAs) and desktop shortcuts into `~/.local/share/applications/` and `~/.local/share/icons/`, automatically indexed live by Nidara's `AppService`.
@@ -2992,7 +2992,7 @@ python3 -c '...'   # image-data: raw pixels, decoded to ~/.cache/nidara/notifd/i
 cat ~/.cache/nidara/notifd/state.json | python3 -m json.tool
 ```
 
-### Exercising the application host (`ui/lib/host.ts` + `ui/lib/app-id.ts`)
+### Exercising the application host (`ui/lib/nidara-kit/platform/host.ts` + `ui/lib/nidara-kit/platform/app-id.ts`)
 
 The host is the last piece of AGS that was not scaffolding, and nearly everything
 it does is invisible when it stops happening: an app-id nobody reads back, an
@@ -3002,7 +3002,7 @@ It needs a **live graphical Hyprland session** — it opens real windows and ask
 compositor what class it filed them under.
 
 ```bash
-scripts/bundle.sh scripts/dev/host-probe.ts /tmp/host-probe --alias:@host=./ui/lib/host
+scripts/bundle.sh scripts/dev/host-probe.ts /tmp/host-probe --alias:@host=./ui/lib/nidara-kit/platform/host
 /tmp/host-probe                                                # → 14 checks
 ```
 

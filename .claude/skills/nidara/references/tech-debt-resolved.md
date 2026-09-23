@@ -29,7 +29,7 @@ and the installer defined, `token-contract-check` was satisfied by, and **no rul
 **How it got that way, which is the part worth keeping.** The CSS material vocabulary was written for
 full-window layer-shell surfaces, and then Cairo took that job: a bar or an overlay paints
 `background: transparent` (`ui/shell/styles/_bar.scss`) and the silhouette, the Fresnel rim ramp and
-the shadow all come from `ui/lib/glass-paint.ts`, with the numbers mirrored as TS constants
+the shadow all come from `ui/lib/nidara-kit/platform/glass-paint.ts`, with the numbers mirrored as TS constants
 (`LOCK_GLASS.rimSubtle` = white 0.14, "the shell's `--nidara-edge` colour exactly"). Two
 representations of one decision, and the CSS one quietly lost its call sites. What kept it alive on
 paper was that **one** CSS surface still painted the rim: the window card, `glass(floating)` →
@@ -41,10 +41,10 @@ beneath it.
 
 **What was deleted (2026-09-20, PR #605):** the three mixins; `--nidara-edge`,
 `--nidara-material-thin/regular/thick/chrome` and `--nidara-shadow-popover`, in both their static
-`_base.scss` fallbacks and the runtime emission in `ui/lib/theme-tokens.ts` (with the `matThin…
+`_base.scss` fallbacks and the runtime emission in `ui/lib/nidara-kit/platform/theme-tokens.ts` (with the `matThin…
 matChrome` ladder computation and the `sh.popover` shadow entry); and the greeter's two
 `--nidara-edge` definitions. `--nidara-popover-bg` and `--nidara-popover-border` were KEPT: they look
-like part of the same closure, but `ui/lib/styles/_components.scss` reads them through the
+like part of the same closure, but `ui/lib/nidara-kit/styles/_components.scss` reads them through the
 two-argument form `var(--token, fallback)`, which a `var(--token)` grep does not see.
 
 **The recipes, so that reviving is a lookup and not archaeology.** The ladder was anchored to our
@@ -145,7 +145,7 @@ glyphs), invisible to code search.
 ### 9. The per-boot Adwaita-WARNING — ✅ RESOLVED 2026-08-18 (the host went)
 **It was AGS's, and it left with AGS.** `/usr/share/ags/js/lib/gtk4/app.ts` called `Adw.init()`
 unconditionally (`catch`-guarded) whenever libadwaita existed on the system, with no way to opt
-out — so libadwaita was initialised in a process whose widget tree had none. `ui/lib/host.ts` does
+out — so libadwaita was initialised in a process whose widget tree had none. `ui/lib/nidara-kit/platform/host.ts` does
 not. Verified on the live shell: the `Adwaita-WARNING … gtk-application-prefer-dark-theme … is
 unsupported` line that fired at every boot is gone, and `Adw.is_initialized()` is false
 (`scripts/dev/host-probe.ts` asserts it, and its `--astal` control shows the warning and the `true`).
@@ -400,7 +400,7 @@ So on an NM device the cleanup call resolved to libnm's method with the handler 
 `GCancellable`. Found the moment `core/NetworkService.ts` started holding NM devices (#71): GJS
 rejected it on type — `Expected an object of type GCancellable for argument 'cancellable' but got type
 number` — surfacing as a failed cleanup instead of as a dropped network connection, which is a
-coin-flip we should not have been taking. Fix (one line, `ui/lib/signals.ts`):
+coin-flip we should not have been taking. Fix (one line, `ui/lib/nidara-kit/platform/signals.ts`):
 `GObject.signal_handler_disconnect(obj, id)`, which is unambiguous and cannot be shadowed. Benefits
 all 40 call sites. **When reaching for a GObject method that a GI class might also define
 (`disconnect`, `connect`, `emit`, `run`, `close`), prefer the `GObject.*` free function.** Checked at
@@ -1127,7 +1127,7 @@ as it was for #97.
    the lockscreen compiles that same file. No path existed. The real (and only preventive) risk is
    collision *between shell surfaces*.
    ⚠️ **Re-check this if you rely on it: since 2026-08-09 that sheet DOES `@use`** —
-   `ui/lib/styles/_tokens.scss` (see #57). The conclusion still holds, because that file emits
+   `ui/lib/nidara-kit/styles/_tokens.scss` (see #57). The conclusion still holds, because that file emits
    no CSS of its own (variables plus one mixin the consumer includes), but "standalone, no path
    exists" is no longer the reason. The reason is now that the shared file is output-free, which
    is an invariant somebody has to keep.
@@ -1170,11 +1170,11 @@ its own `* { }` re-typing the radii and the palette, plus eleven freehand `font-
 The mechanism and the rules now live in `design-system.md` → "The design system reaches the
 greeter and the lockscreen"; what belongs HERE is what it cost and what it left open.
 
-**Shape of the change:** `ui/lib/styles/_tokens.scss` holds the mode-independent half of the
+**Shape of the change:** `ui/lib/nidara-kit/styles/_tokens.scss` holds the mode-independent half of the
 system (type ramp, weights, line heights, spacing, motion, radius ladder).
 `ui/shell/styles/_base.scss` `@forward`s it — so every `@use 'base' as *` is untouched — and the
-greeter sheet `@use`s it. `ui/lib/tokens.ts` grew `LOCK_GLASS`, the numeric half of the glass
-mirror the lockscreen's painter needs. `ui/lib/icons.ts` gives the two `core/`-less bundles the
+greeter sheet `@use`s it. `ui/lib/nidara-kit/platform/tokens.ts` grew `LOCK_GLASS`, the numeric half of the glass
+mirror the lockscreen's painter needs. `ui/lib/nidara-kit/platform/icons.ts` gives the two `core/`-less bundles the
 shipped icon set. New instrument: `scripts/dev/lock-probe.js`.
 
 **Verified:** shell `style.css` diffed before/after → identical but for comments, zero
@@ -1200,7 +1200,7 @@ the system it is supposed to belong to.**
 
 **Left open (all pre-existing, now with evidence):**
 1. ~~**The greeter's capsules should be PAINTED.**~~ ✅ **DONE 2026-08-09** — the painter moved
-   to `ui/lib/glass-capsule.ts` with the backdrop OPTIONAL, and both bundles use it (entry,
+   to `ui/lib/nidara-kit/platform/glass-capsule.ts` with the backdrop OPTIONAL, and both bundles use it (entry,
    primary button, power bar, plus the greeter's locale bar). The `window.nidara-lock-window`
    CSS block is gone: there are no lock-only rules left. Doing it surfaced a real bug the lock
    could never have shown — see `design-system.md`, "the rim has to be a RING".
@@ -1223,7 +1223,7 @@ the system it is supposed to belong to.**
 
 ### 58. ✅ CLOSED — `GlassCapsule` stopped owning what it should never have owned (2026-08-09)
 
-`ui/lib/glass-capsule.ts` extended `Gtk.Widget` and parented its child by hand
+`ui/lib/nidara-kit/platform/glass-capsule.ts` extended `Gtk.Widget` and parented its child by hand
 (`child.set_parent(this)`), which in GTK4 obliges you to unparent it on disposal. Nothing did,
 so every capsule logged a line per surface teardown — six per greeter render:
 
@@ -1317,7 +1317,7 @@ device row would enter it only sometimes.
 
 ### 66. ✅ FIXED — The sidebar's rows opt out of theme padding (2026-08-11 → 2026-08-20)
 
-Fixed in `ui/lib/styles/_components.scss` (`.nidara-sidebar > row { padding: 0 }`), reclaiming the 4px
+Fixed in `ui/lib/nidara-kit/styles/_components.scss` (`.nidara-sidebar > row { padding: 0 }`), reclaiming the 4px
 across the sidebar column and raising the text budget from 170px to 174px (verified in `sidebar.ts` and
 `scripts/dev/text-budget.js`).
 
@@ -1610,7 +1610,7 @@ mode and the shell starts reporting a version from months ago.
 
 - **`ScaleRevealer` Height-for-Width Protection:** Added `Math.max(for_size, minW)` clamping in `vfunc_measure` and `vfunc_size_allocate` (`common/ScaleRevealer.ts`) so GTK4 never receives an undersized width constraint during vertical size allocation passes. In `NotificationCenter.tsx`, added `ellipsize: 3, lines: 1, max_width_chars: 24` to `GroupControlHeader`'s application name label, preventing notification cards from requesting widths beyond the notification column.
 - **BlueZ Pairing Agent Resilience:** In `core/BluetoothService.ts`, handled `org.bluez.Error.AlreadyExists` by calling `UnregisterAgent` on `/org/bluez` for `/org/nidara/bluetooth/agent` and retrying registration automatically. Chained `RequestDefaultAgent` sequentially after `RegisterAgent` succeeds to avoid race conditions upon UI restarts (`Super+Shift+R`).
-- **Build Cleanliness & Property Collisions:** Decoupled `ui/greeter` and `ui/lockscreen` build scripts from `../shell` directory hops, allowing each bundle to build and bundle cleanly in isolation. Renamed internal `GlassCapsule.hasFocus()` to `isFocused()` (`lib/glass-capsule.ts`) to avoid conflicting with `Gtk.Widget`/`Gtk.Box`'s `hasFocus` property accessor.
+- **Build Cleanliness & Property Collisions:** Decoupled `ui/greeter` and `ui/lockscreen` build scripts from `../shell` directory hops, allowing each bundle to build and bundle cleanly in isolation. Renamed internal `GlassCapsule.hasFocus()` to `isFocused()` (`lib/nidara-kit/platform/glass-capsule.ts`) to avoid conflicting with `Gtk.Widget`/`Gtk.Box`'s `hasFocus` property accessor.
 - **GTK4 CSS Syntax:** Removed invalid `margin: 0 auto;` declarations from `_settings.scss` (wallpaper preview and thumbnails box; centering is handled via `Gtk.CenterBox` and `halign`), keeping startup logs completely clean with 0 warnings.
 
 ### 79. ✅ RESOLVED — one rim ramp, and `GLASS_TINT.light` stopped disagreeing with itself (2026-08-23)
@@ -2120,7 +2120,7 @@ accent to whatever was typed, for every user who chose a different one.
 circling without naming. The light half cannot live in the stylesheet (a value typed under
 `window.skin-light *` PINS the selection for every user who chose another accent), so the emitter
 writes both selectors from the SAME accent: the bare `*` at 0.22 and `window.skin-light *` at 0.16,
-which are the shell's own two alphas from `ui/lib/theme-tokens.ts`. The sheet keeps the default blue
+which are the shell's own two alphas from `ui/lib/nidara-kit/platform/theme-tokens.ts`. The sheet keeps the default blue
 as the pre-load value, for the frame before the accent CSS lands and for a config with no accent.
 
 🔑 The generalisable half: **a skin that is a CLASS out-specifies a runtime emitter's bare `*`, so
@@ -2159,7 +2159,7 @@ which a draw function barely creates — so every frame's context (and the surfa
 cache: the second switch +0), mode/accent/night light/widget toggles 0 — and **30 s of pointer over
 the dock: +325, +309, +100 MB** (heap 140 → 874). Reproduced headless (ten 128 px icons repainted
 while their size animates): 5 → 647 MB in 40 s without `cr.$dispose()`, 5 → 14 MB with it. The fix is
-`ui/lib/cairo-draw.ts` (`set_draw_func(cairoDraw(…))`, dispose in a `finally`) on all 25 draw
+`ui/lib/nidara-kit/platform/cairo-draw.ts` (`set_draw_func(cairoDraw(…))`, dispose in a `finally`) on all 25 draw
 functions plus `$dispose()` after `MorphRevealer`'s `append_cairo`, enforced by
 `scripts/ci/cairo-dispose-check.mjs`. **Verified live on the fix, same protocol:** three 30 s dock passes, native heap 113 → 113 → 113 MB
 (RSS 271 → 273), against +325/+309/+100 MB before. The rule that binds: every `set_draw_func` goes

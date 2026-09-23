@@ -6,7 +6,7 @@ import status from "../../core/Status"
 import { uiIcon } from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
-import { RADIUS, rowInsetFor } from "../../../lib/tokens"
+import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
 import { t } from "../../core/i18n"
 
 // System menu dropdown (About / Settings / Lock / Suspend / Logout / Restart / Shutdown)

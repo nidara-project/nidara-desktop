@@ -1,11 +1,11 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
-import app from "../../../lib/host"
+import app from "../../../lib/nidara-kit/platform/host"
 import {
     NidaraClamp, NidaraScrolled, NidaraSidebar, NidaraWindow, NidaraRow,
     NIDARA_WINDOW_RADIUS as WINDOW_RADIUS,
 } from "../../../lib/nidara-kit"
-import { WINDOW_LAYOUT } from "../../../lib/tokens"
+import { WINDOW_LAYOUT } from "../../../lib/nidara-kit/platform/tokens"
 
 // Page Imports
 import DisplayPage from "./pages/Display"
@@ -483,7 +483,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         name: "nidara-settings-window",
         // What Hyprland files this window under. It matches `nidara-settings.desktop`,
         // so the dock, the app grid and the workspace overview all resolve it
-        // through the plain registry lookup — no remap. See ui/lib/app-id.ts.
+        // through the plain registry lookup — no remap. See ui/lib/nidara-kit/platform/app-id.ts.
         appId: "nidara-settings",
         cssClasses: ["nd-ignore", "nidara-settings-window"],
         content: contentArea,

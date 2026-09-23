@@ -1,6 +1,6 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
-import { writeFile } from "../../lib/file"
+import { writeFile } from "../../lib/nidara-kit/platform/file"
 import hs, { compositorOption } from "./HyprlandState"
 import { luaConfigExpr } from "./hyprland-lua"
 

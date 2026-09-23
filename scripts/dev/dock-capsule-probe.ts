@@ -29,7 +29,7 @@ import Cairo from "gi://cairo"
 import Gdk from "gi://Gdk?version=4.0"
 import { drawSquircle, drawGlassShadow } from "../../ui/shell/common/DrawingUtils"
 import { GLASS_SHADOW } from "../../ui/shell/common/SquircleContainer"
-import { GLASS_TINT } from "../../ui/lib/tokens"
+import { GLASS_TINT } from "../../ui/lib/nidara-kit/platform/tokens"
 
 const PAD = GLASS_SHADOW.spread
 // A real dock at the default 48px icon: PILL_PADDING = round(48*0.22) = 11,

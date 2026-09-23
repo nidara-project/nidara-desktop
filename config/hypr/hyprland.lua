@@ -986,7 +986,7 @@ hl.window_rule({
 --   ONCE, when the window opens, and matches it against `initialClass` /
 --   `initialTitle` — the values the toplevel was BORN with, whatever `class` and
 --   `title` say later. Our stamped app-ids do not exist yet at that moment (they
---   land at MAP, see ui/lib/app-id.ts), so a static rule naming one does not fire
+--   land at MAP, see ui/lib/nidara-kit/platform/app-id.ts), so a static rule naming one does not fire
 --   late: it NEVER FIRES.
 --
 --   The birth class is no help either, because it is the PROCESS app-id and the
@@ -1018,7 +1018,7 @@ hl.window_rule({
 -- 🔑 THE TWO CLASSES ARE ONE WINDOW, AND ONLY THE FIRST ONE DOES ANYTHING HERE.
 -- `org.nidara.installer` is the PROCESS app-id, the one GTK puts on the toplevel at
 -- creation (`ui/installer/app.ts`). `nidara-installer` is the per-toplevel override
--- `ui/lib/app-id.ts` stamps at MAP. `center` is a STATIC effect, and a static effect
+-- `ui/lib/nidara-kit/platform/app-id.ts` stamps at MAP. `center` is a STATIC effect, and a static effect
 -- is matched ONCE at open against `initialClass` — so the second name is INERT in this
 -- rule. It is kept because it is the same window's real identity and because a
 -- DYNAMIC effect added here later would need it.

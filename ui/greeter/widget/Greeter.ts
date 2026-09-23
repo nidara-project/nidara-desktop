@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
-import app from "../../lib/host"
+import app from "../../lib/nidara-kit/platform/host"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import LoginCard from "./LoginCard"
 import PowerBar from "./PowerBar"

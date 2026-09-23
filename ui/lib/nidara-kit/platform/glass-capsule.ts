@@ -91,7 +91,7 @@ const BLUR_RADIUS = BLUR_SIZE * Math.pow(2, BLUR_PASSES) * 2
 // class of problem — the same reason the shell paints its glass in Cairo
 // (common/GlassBubble.ts) instead of using CSS boxes.
 //
-// The glass palette comes from ui/lib/tokens.ts, which is the numeric half of
+// The glass palette comes from ui/lib/nidara-kit/platform/tokens.ts, which is the numeric half of
 // the mirror whose CSS half is --nidara-glass / --nidara-glass-border(-sm) in
 // ui/greeter/style.scss. These used to be three literals typed out right here,
 // tied to the stylesheet by nothing but a comment. The lock has no theme engine

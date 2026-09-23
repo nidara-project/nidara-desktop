@@ -22,7 +22,7 @@
    focus-ring, decoration), the drop-target highlight, the scale's internals —
    all of it declared against a GTK theme the shell no longer loads (tech-debt
    #107 step 6). With no theme those nodes paint nothing, and the base layer
-   (`ui/lib/styles/_base-layer.scss`) is what shows under a node no class of ours
+   (`ui/lib/nidara-kit/styles/_base-layer.scss`) is what shows under a node no class of ours
    reaches. What stays is what is ours to say. */
 #nidara-dock,
 #nidara-bar,

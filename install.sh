@@ -555,7 +555,7 @@ sudo cp "$REPO_DIR/ui/greeter/build/nidara-greeter" /usr/share/nidara/ui/greeter
 sudo cp "$REPO_DIR/ui/greeter/style.css" /usr/share/nidara/ui/greeter/
 
 # Nidara installs NO GTK theme (commandment 11, tech-debt #107). Our processes ask
-# for `Empty`, which GTK resolves out of its own gresource — see ui/lib/gtk-theme.ts
+# for `Empty`, which GTK resolves out of its own gresource — see ui/lib/nidara-kit/platform/gtk-theme.ts
 # for why a theme of ours on disk was worse than none. These two are the artefacts
 # that used to be installed here; remove them so a machine upgraded from an older
 # checkout stops offering them in every theme chooser on the system.

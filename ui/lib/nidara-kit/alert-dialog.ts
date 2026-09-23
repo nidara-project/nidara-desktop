@@ -2,7 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { setTransientForExported } from "./wayland-parent"
-import { setWindowAppId } from "../app-id"
+import { setWindowAppId } from "./platform/app-id"
 import { dialogButtonRow } from "./dialog-buttons"
 
 export interface AlertResponse {

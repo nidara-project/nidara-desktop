@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import { makeAvatar } from "./avatar"
-import { withGlassCapsule } from "./glass-capsule"
+import { withGlassCapsule } from "./nidara-kit/platform/glass-capsule"
 import { playEntrance } from "./entrance"
 
 // The identity-and-password column both login screens are built around: avatar,
@@ -247,7 +247,7 @@ export function buildAuthCard(opts: AuthCardOpts): AuthCard {
 
     col.append(avatar.widget)
     col.append(usernameLabel)
-    // Painted capsules (ui/lib/glass-capsule.ts). followFocus only on the ENTRY: an
+    // Painted capsules (ui/lib/nidara-kit/platform/glass-capsule.ts). followFocus only on the ENTRY: an
     // input shows focus as its edge going accent, a button shows a ring, and no
     // control shows both. Rim weights: the subtle one on the field, the stronger one
     // marking the primary button.

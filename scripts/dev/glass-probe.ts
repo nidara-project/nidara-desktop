@@ -4,7 +4,7 @@
 //   gjs -m /tmp/glass-probe.js /tmp/out          # → /tmp/out.png + /tmp/out.txt
 //
 // Why this exists. The glass tint and the Fresnel rim are NUMBERS — in
-// `ui/lib/tokens.ts` and `common/DrawingUtils.ts` — and every question about them
+// `ui/lib/nidara-kit/platform/tokens.ts` and `common/DrawingUtils.ts` — and every question about them
 // ("does this retint move anything?", "is the rim still the same ramp?") is really
 // a question about PIXELS. Answering it by reading the source is how debt #79
 // happened: `GLASS_TINT.light` shipped saying `#fafafa` in its strings while
@@ -31,7 +31,7 @@ import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 import System from "system"
 import { drawSquircle } from "../../ui/shell/common/DrawingUtils"
-import { GLASS_TINT } from "../../ui/lib/tokens"
+import { GLASS_TINT } from "../../ui/lib/nidara-kit/platform/tokens"
 
 const W = 220, H = 64, PAD = 16
 const BACKDROP = 0.5   // mid-grey: neither mode gets a flattering ground

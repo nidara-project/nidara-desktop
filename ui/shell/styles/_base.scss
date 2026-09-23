@@ -3,21 +3,21 @@
    ========================================================================== */
 
 // The mode-INDEPENDENT half of the system (type ramp, weights, spacing scale,
-// motion curves, radius ladder) lives in `ui/lib/styles/_tokens.scss` so the
+// motion curves, radius ladder) lives in `ui/lib/nidara-kit/styles/_tokens.scss` so the
 // greeter and lockscreen bundles consume the same decisions instead of their own
 // copies. It is forwarded from here, so every `@use 'base' as *` keeps seeing
 // `$fs-*`, `$space-*`, `$nidara-radius-*` … exactly as before.
 //
 // What stays in THIS file is what only the shell has: the colour tokens, which
 // NidaraTheme.ts rewrites at runtime per mode, and the Settings-only em ramp.
-@forward '../../lib/styles/tokens';
-@use '../../lib/styles/tokens' as *;
+@forward '../../lib/nidara-kit/styles/tokens';
+@use '../../lib/nidara-kit/styles/tokens' as *;
 // The mixins the KIT needs moved out with its stylesheet (2026-08-10) — they are
 // compiled by more than the shell now. Forwarded so `@use 'base' as *` keeps
 // seeing `nidara-reset`, `glass`, `material-card`, `nidara-row-states` and
 // `nidara-tile-states` under the same names. What stayed below is shell-only.
-@forward '../../lib/styles/mixins';
-@use '../../lib/styles/mixins' as *;
+@forward '../../lib/nidara-kit/styles/mixins';
+@use '../../lib/nidara-kit/styles/mixins' as *;
 
 * {
     /* --- Brand Colors (Dynamic) --- */
@@ -49,7 +49,7 @@
     --nidara-text-disabled: rgba(255, 255, 255, 0.3);
     --nidara-surface-strong: rgba(255, 255, 255, 0.3);
 
-    /* --- Geometry --- (the ladder + its rationale: ui/lib/styles/_tokens.scss) */
+    /* --- Geometry --- (the ladder + its rationale: ui/lib/nidara-kit/styles/_tokens.scss) */
     @include radius-vars;
 
     /* --- Semantic Colors --- */
@@ -82,9 +82,9 @@ $nidara-surface: var(--nidara-surface);
 $nidara-text: var(--nidara-text);
 $nidara-text-dim: var(--nidara-text-dim);
 /* ($nidara-radius-* and the whole $fs-/$fw-/$lh-/$space-/motion set are
-   forwarded from ui/lib/styles/_tokens.scss — same names, same values.) */
+   forwarded from ui/lib/nidara-kit/styles/_tokens.scss — same names, same values.) */
 
-/* (The relative $fse-* em ramp moved to ui/lib/styles/_tokens.scss on
+/* (The relative $fse-* em ramp moved to ui/lib/nidara-kit/styles/_tokens.scss on
    2026-08-10 — same names, same values, forwarded above. It was labelled
    "Settings-only" and was not: the kit's row typography and the alert dialog
    both use it, and the kit's sheet is compiled by more than the shell now.) */
@@ -95,7 +95,7 @@ $nidara-text-dim: var(--nidara-text-dim);
 
 // ⚠️ `nidara-reset`, `glass`, `material-card`, `nidara-row-states` and
 // `nidara-tile-states` are NOT here anymore — they moved to
-// `ui/lib/styles/_mixins.scss` with the kit's stylesheet on 2026-08-10 and are
+// `ui/lib/nidara-kit/styles/_mixins.scss` with the kit's stylesheet on 2026-08-10 and are
 // @forwarded at the top of this file, so `@use 'base' as *` still resolves them.
 //
 // ⚠️ There is NOTHING shell-only left here. The vibrancy vocabulary that used to
@@ -103,7 +103,7 @@ $nidara-text-dim: var(--nidara-text-dim);
 // and `material-popover` — was buried on 2026-09-20 (tech-debt #106) because Cairo
 // had taken the job these comments still gave to CSS: a bar or an overlay paints
 // `background: transparent` and the glass, the rim and the shadow come from
-// `ui/lib/glass-paint.ts`. The mixins had no call sites at all, and the tokens they
+// `ui/lib/nidara-kit/platform/glass-paint.ts`. The mixins had no call sites at all, and the tokens they
 // spent (`--nidara-material-*`, `--nidara-edge`, `--nidara-shadow-popover`) had no
 // reader but them. Do not reintroduce a CSS material for a layer-shell surface
 // without moving the PAINTER too — two vocabularies for one surface is how the last

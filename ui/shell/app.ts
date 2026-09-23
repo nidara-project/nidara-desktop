@@ -1,8 +1,8 @@
 // MUST be first: captures the asset root and moves the process CWD to $HOME
 // before anything else can spawn a child or read the CWD.
 import { SHELL_ROOT, readShellVersion } from "./core/Paths"
-import app from "../lib/host"
-import { useNoGtkTheme } from "../lib/gtk-theme"
+import app from "../lib/nidara-kit/platform/host"
+import { useNoGtkTheme } from "../lib/nidara-kit/platform/gtk-theme"
 import Gdk from "gi://Gdk?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
@@ -14,7 +14,7 @@ import { selectedPlayer } from "./core/MediaService"
 import shellActions from "./core/ShellActions"
 import { startNotifServer } from "./core/notifd"
 import { currentLocale } from "./core/i18n"
-import { readFile } from "../lib/file"
+import { readFile } from "../lib/nidara-kit/platform/file"
 import { exec, execAsync } from "../lib/process"
 import agentConfig from "./core/AgentConfig"
 import agentService from "./core/AgentService"
@@ -47,7 +47,7 @@ import type { Window } from "gi://Gtk?version=4.0"
 /**
  * THEME STRATEGY: no GTK theme in this process (tech-debt #107, commandment 11),
  * like the greeter, the lock screen and the installer. Everything our sheets do
- * not draw is drawn by the base layer (`ui/lib/styles/_base-layer.scss`), or by
+ * not draw is drawn by the base layer (`ui/lib/nidara-kit/styles/_base-layer.scss`), or by
  * nothing. The user's GTK theme is for third-party apps; ThemeManager writes it
  * to gsettings and nowhere else. It must run before the first window is built.
  * ThemeManager applies the persisted dark/light state right after boot;
@@ -888,7 +888,7 @@ for (const [name, { aliases }] of Object.entries(IPC_COMMANDS))
 // migration rewrote `ags request` in users' own `hyprland-user.lua`
 // (migrations/2026-09-23-ags-request-to-nidara-ipc.sh). The application id was
 // the other half and was settled earlier: with the host ours, the id is ours
-// (`org.nidara.desktop`), and Settings names itself on top of it (ui/lib/app-id.ts).
+// (`org.nidara.desktop`), and Settings names itself on top of it (ui/lib/nidara-kit/platform/app-id.ts).
 
 /** Runs one IPC command and hands the response to `res`. May answer async. */
 function dispatchRequest(argv: string[], res: (out: string) => void): void {
@@ -972,7 +972,7 @@ function exportShellBusName(): void {
 app.start({
   // The Wayland app-id of every regular window this process opens — except the
   // ones that name themselves (Settings, About). Under AGS this line was
-  // overwritten with AGS's own id; see ui/lib/host.ts.
+  // overwritten with AGS's own id; see ui/lib/nidara-kit/platform/host.ts.
   applicationId: "org.nidara.desktop",
   applicationName: "Nidara",
   logDomain: "nidara",
@@ -1175,7 +1175,7 @@ app.start({
     // after presenting we dispatch an explicit focus to the window — that switches
     // to its workspace, exactly like clicking any running app in the dock. The
     // window is a normal Hyprland client (class `nidara-settings`, which it
-    // declares for itself — see ui/lib/app-id.ts — and a title set by
+    // declares for itself — see ui/lib/nidara-kit/platform/app-id.ts — and a title set by
     // NidaraWindow); match both to disambiguate from the About window, which
     // deliberately shares the class so both carry Settings' registry icon.
     const raiseSettings = () => {

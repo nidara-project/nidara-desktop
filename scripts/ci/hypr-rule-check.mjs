@@ -21,7 +21,7 @@
 //           class and title.
 //
 // ⚠️ AND OUR WINDOWS CHANGE CLASS AFTER THEY OPEN. Every bundle gives its windows
-// their real identity through `setWindowAppId` (ui/lib/app-id.ts), and that lands at
+// their real identity through `setWindowAppId` (ui/lib/nidara-kit/platform/app-id.ts), and that lands at
 // MAP, after the toplevel already exists carrying the PROCESS app-id GTK put on it
 // at creation. So each kind of effect has its own trap, and they point OPPOSITE WAYS:
 //
@@ -49,7 +49,7 @@
 //
 // ── Why a gate and not a comment ───────────────────────────────────────────────
 //
-// Both traps were written down — in hyprland.lua's own comments, in ui/lib/app-id.ts
+// Both traps were written down — in hyprland.lua's own comments, in ui/lib/nidara-kit/platform/app-id.ts
 // and in the skill — and the prose still had the shell's birth class WRONG
 // (`org.nidara.shell`; it is `org.nidara.desktop`, ui/shell/app.ts). Anyone fixing a
 // rule by copying that sentence would have named a process that does not exist, and
@@ -109,7 +109,7 @@ for (const file of walk("ui")) {
     if (!/\.tsx?$/.test(file)) continue
     const src = readFileSync(file, "utf8")
     if (!/setWindowAppId|NidaraWindow/.test(src)) continue
-    if (file === "ui/lib/app-id.ts") continue   // the mechanism itself, not a caller
+    if (file === "ui/lib/nidara-kit/platform/app-id.ts") continue   // the mechanism itself, not a caller
     const bundle = file.startsWith("ui/lib/") ? "lib" : file.split("/")[1]
     for (const re of [/setWindowAppId\([^)]*?"([^"]+)"/g, /\bappId:\s*"([^"]+)"/g])
         for (const m of src.matchAll(re)) {

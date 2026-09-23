@@ -34,7 +34,7 @@
  * fades the cursor out anyway.
  */
 
-import app from "../../../lib/host"
+import app from "../../../lib/nidara-kit/platform/host"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
@@ -48,7 +48,7 @@ import hs from "../../core/HyprlandState"
 import agentConfig from "../../core/AgentConfig"
 import { t } from "../../core/i18n"
 import { hexToFloatRgb } from "../../common/DrawingUtils"
-import { cairoDraw } from "../../../lib/cairo-draw"
+import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 
 type Kind = "click" | "rightclick" | "move" | "scroll" | "drag"
 type Phase = "hidden" | "materialize" | "travel" | "landed" | "effect" | "dragGlide" | "idle" | "fadeout"

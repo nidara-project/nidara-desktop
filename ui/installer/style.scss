@@ -6,16 +6,16 @@
 // is not a `$fs-*` here is a bug — this is chrome, not Settings, so the FIXED px
 // ramp is the right one (a variable ramp re-flows a window whose width is a
 // constant by design).
-@use '../lib/styles/tokens' as *;
-@use '../lib/styles/mixins' as *;
+@use '../lib/nidara-kit/styles/tokens' as *;
+@use '../lib/nidara-kit/styles/mixins' as *;
 
 // The kit's stylesheet: NidaraButton and NidaraClamp are the two pieces this
 // bundle borrows, and they expect their classes to exist. Emitted BEFORE
 // everything below, so the rules in this file out-rank it at equal specificity.
 // The base layer: element selectors for the nodes GTK builds itself (#107 step 5).
 // Wired per bundle, never from the kit's shared sheet — see the note there.
-@use '../lib/styles/base-layer';
-@use '../lib/styles/components';
+@use '../lib/nidara-kit/styles/base-layer';
+@use '../lib/nidara-kit/styles/components';
 
 * {
   @include radius-vars;
@@ -57,7 +57,7 @@ window.nidara-installer-window {
 // `color` of their node and light mode needs no rule of its own — the token moves
 // with the mode and the glyph follows. This was `-gtk-icon-filter: invert(1)`,
 // with the `none` half emitted by the engine (`generateTokensCss`) for light mode;
-// both went when the drawings stopped rendering black. See ui/lib/icons.ts.
+// both went when the drawings stopped rendering black. See ui/lib/nidara-kit/platform/icons.ts.
 .nd-icon { color: var(--nidara-text); }
 
 // ── The frame ────────────────────────────────────────────────────────────────

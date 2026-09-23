@@ -2,7 +2,7 @@
 // somewhere that bundle actually compiles or loads.
 //
 // WHY THIS EXISTS (2026-08-26). `ui/lib/nidara-kit/` has been importable from any
-// bundle for a long time and its stylesheet (`ui/lib/styles/_components.scss`) has
+// bundle for a long time and its stylesheet (`ui/lib/nidara-kit/styles/_components.scss`) has
 // shipped with it since 2026-08-10 — so borrowing a kit widget is one import and
 // looks free. It is not free: the widget's rules reference `--nidara-*` tokens, and
 // a token is only a token in a process where something DEFINED it.
@@ -15,7 +15,7 @@
 //
 // Two ways a bundle can satisfy the contract, and this check accepts either:
 //   1. the token is declared in its own SCSS (or in a mixin it @includes), or
-//   2. the bundle calls `initAppearance()` (ui/lib/appearance-css.ts), which
+//   2. the bundle calls `initAppearance()` (ui/lib/nidara-kit/platform/appearance-css.ts), which
 //      loads the token ENGINE's output at runtime — the whole colour ramp, from
 //      the user's real accent and opacity.
 //
@@ -23,9 +23,9 @@
 // a value that does not exist.
 import { readFileSync, existsSync } from "node:fs"
 
-const KIT_SHEET = "ui/lib/styles/_components.scss"
-const MIXINS = "ui/lib/styles/_tokens.scss"
-const ENGINE = "ui/lib/theme-tokens.ts"
+const KIT_SHEET = "ui/lib/nidara-kit/styles/_components.scss"
+const MIXINS = "ui/lib/nidara-kit/styles/_tokens.scss"
+const ENGINE = "ui/lib/nidara-kit/platform/theme-tokens.ts"
 
 /** The bundles that compile a sheet of their own. The shell is deliberately absent:
  *  it OWNS the engine and its `styles/_base.scss` is where the static half lives. */
@@ -97,7 +97,7 @@ if (failed) {
     console.error("using it is silently dropped, so the control renders with no hover, no edge,")
     console.error("or no background and nothing is logged. Either declare the token in the")
     console.error("bundle's own sheet, or call initAppearance() from its app.ts to load the")
-    console.error("engine's full ramp (ui/lib/appearance-css.ts).")
+    console.error("engine's full ramp (ui/lib/nidara-kit/platform/appearance-css.ts).")
     process.exit(1)
 }
 

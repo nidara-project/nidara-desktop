@@ -73,7 +73,7 @@ export function hexToFloatRgb(hex: string): { r: number, g: number, b: number } 
  * from the same accent the rest of the screen uses is what keeps it following them.
  * (Until 2026-09-21 this block had a second half under `window.skin-light *`, for the
  * light skin's lighter 0.16 — the skin is gone, see #613.) The alpha is the shell's
- * own, from `ui/lib/theme-tokens.ts` ("Selection is the ONLY place accent enters").
+ * own, from `ui/lib/nidara-kit/platform/theme-tokens.ts` ("Selection is the ONLY place accent enters").
  */
 export function accentCssFor(accent: string | null | undefined): string {
   if (!accent || !(accent in ACCENT_HEX)) return ""

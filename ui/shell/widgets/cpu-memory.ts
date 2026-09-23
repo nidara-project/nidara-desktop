@@ -5,8 +5,8 @@ import { AtomicWidget, WidgetSize, ContentBudget } from "../common/widget-kit"
 import { pollWhileMapped } from "../common/poll"
 import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
-import { INK } from "../../lib/tokens"
-import { cairoDraw } from "../../lib/cairo-draw"
+import { INK } from "../../lib/nidara-kit/platform/tokens"
+import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 
 function readFile(path: string): string {
     try {
