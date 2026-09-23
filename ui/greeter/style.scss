@@ -1,5 +1,5 @@
 /* Nidara — Greeter / Lock stylesheet
-   GTK_THEME=nidara loads a blank theme, so this is the ONLY CSS.
+   No GTK theme is loaded (`useNoGtkTheme()`, GTK_THEME=Empty), so this is the ONLY CSS.
    No Adwaita to fight. No resets needed. Just define what we want.
    GTK4 CSS subset: no color-mix(), no rgba(var(), n), no filter. */
 
@@ -39,7 +39,7 @@
 // `dropdown > button` and `dropdown popover` exist in both sheets with the same
 // specificity, and these screens keep their own. See the dropdown section.
 // The base layer: element selectors for the nodes GTK builds itself (#107 step 5).
-// Wired per THEMELESS bundle, never from the kit's shared sheet — see the note there.
+// Wired per bundle, never from the kit's shared sheet — see the note there.
 @use '../lib/styles/base-layer';
 @use '../lib/styles/components';
 
@@ -660,6 +660,10 @@ dropdown > button {
   // than 4. Zeroed on purpose, not left to luck. These triggers are label +
   // arrow, never an icon, so the gap has nothing to separate.
   > box > label { margin-left: 0; }
+  // The base layer gives every dropdown's box GTK's 6px gap (#107 step 5); this
+  // screen spaces its chevron with the arrow's own `margin-left` below, so the
+  // two would stack to 11px. Zero here keeps the 5px that comment argues for.
+  > box { border-spacing: 0; }
   // 🔑 The second guard, and this one was NOT predicted — it was caught by
   // rendering the whole surface before and after and diffing the pixels. The
   // kit's trigger is `$fw-medium` (500) because in Settings it is a control on a
@@ -683,8 +687,8 @@ dropdown > button {
   // ⚠️ AND IT NEEDS ITS SOURCE SPELLED OUT HERE, which is the whole reason this line
   // has three properties instead of two. `arrow` is a BUILTIN-ICON node: it has no
   // content of its own and draws whatever `-gtk-icon-source` names. That normally
-  // comes from the platform theme — but `ui/greeter/app.ts` sets `GTK_THEME=nidara`,
-  // a theme that does not exist, deliberately, so that this sheet has nothing beneath
+  // comes from the platform theme — but `ui/greeter/app.ts` loads NO GTK theme
+  // (`useNoGtkTheme()`), deliberately, so that this sheet has nothing beneath
   // it to fight. No theme means no `-gtk-icon-source`, so until 2026-08-24 all THREE
   // chevrons on this screen (the session selector and the locale bar's two) kept
   // their 10px box and drew NOTHING.

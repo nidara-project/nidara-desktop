@@ -112,9 +112,12 @@ These are non-negotiable. Violating them produces bugs that are hard to debug be
     its gresource, selected through `useNoGtkTheme()` in `ui/lib/gtk-theme.ts` — so whatever our
     CSS does not draw is drawn by nothing. Never name a theme instead: one that resolves to nothing
     loads GTK's FULL built-in theme, silently (measured).
-    ⚠️ Three bundles are there; **the SHELL is not yet**, and what holds it is measured — the two
-    dialogs GTK builds itself inside Settings (`Gtk.FontDialog`, `Gtk.FileDialog`) carry none of
-    our classes. Read tech-debt #107 step 5 before touching the shell's substrate.
+    ✅ **All four bundles are there since 2026-09-23** — the shell was the last (tech-debt #107
+    step 5). What is under a node none of our classes reach is the **base layer**,
+    `ui/lib/styles/_base-layer.scss`: GTK's own GEOMETRY for each node (read out of libgtk's
+    gresource) with OUR paint. Copy GTK's box, never invent one — shell widgets that declare
+    colours but not padding had been taking their box from the theme, and a base `button` with
+    10px more padding truncated a Control Center label. Read the file's header before adding a rule.
     ⚠️ This is about OUR processes. Third-party applications keep following gsettings
     `gtk-theme`, a different lever entirely. **And the other half of the same decision, taken the
     same day: a Nidara APPLICATION is never reskinned by a foreign GTK theme either.** `nidara-kit`

@@ -30,15 +30,12 @@
 // never checked; the original reading was right, and an unstyled switch on the
 // installer's page was exactly as blank as it looked.
 //
-// What was true in it, and is still true, is the SHELL: it unsets `GTK_THEME` and
-// wears whatever theme gsettings names, so a kit component missing its rules there
-// wears somebody else's clothes instead of disappearing. That is the ONE bundle
-// commandment 11 has not reached yet, and it is held up by something measured
-// rather than feared — see tech-debt #107 step 5 and `GTK_OWN_DIALOGS` below.
-//
-// So this check is deliberately stricter than today's runtime for one of its four
-// bundles: it asks every bundle to own its widgets as if nothing were underneath,
-// because for three of them nothing is, and for the fourth that is the destination.
+// What was true in it until 2026-09-23 was the SHELL: it unset `GTK_THEME` and wore
+// whatever theme gsettings named, so a kit component missing its rules there wore
+// somebody else's clothes instead of disappearing. It no longer does — tech-debt #107
+// step 5 flipped it to `useNoGtkTheme()` like the other three, and the base layer
+// (`ui/lib/styles/_base-layer.scss`) is compiled into all four. So this check is no
+// longer stricter than the runtime for any bundle: nothing is underneath, anywhere.
 //
 // ⚠️ Why the 2026-08-10 verification could not catch it: it proved the SHELL's
 // compiled sheet still held the same 534 selector→body pairs — that nothing was
@@ -291,7 +288,10 @@ const BUNDLES = [
  * just delete the line.
  */
 const OWED = new Map([
-    ["spinner", "THE SHELL ONLY, now — tech-debt #107. A Gtk.Spinner renders NOTHING without a theme: GTK's own rule is an `-gtk-icon-source` plus a rotation, and it is the whole widget. It is DRAWN as of 2026-09-20, in `ui/lib/styles/_base-layer.scss`: a ring whose track is `--nidara-surface-raised` and whose head is the accent, turning once a second on `:checked`, in CSS so it needs no asset, no `nd-` name and no SPEC bump. That reaches the greeter and the lock (`ui/lib/auth-card.ts`, blank since 2026-08-24) and the installer, because the base layer is wired from the sheets of the bundles that have NO theme. The shell does not compile it — it still wears the user's theme, which draws its two spinners (`settings/pages/Bluetooth.tsx`, `widgets/vpn.ts`) meanwhile — so the node stays listed here until step 5 flips the shell and the layer goes in with it"],
+    // Empty since 2026-09-23. The last entry was `spinner`, owed by the SHELL alone
+    // because it still wore the user's theme; #107 step 5 made the shell themeless and
+    // wired the base layer into it, whose `spinner` rule now draws its two spinners
+    // (`settings/pages/Bluetooth.tsx`, `widgets/vpn.ts`) as it already drew the greeter's.
 ])
 
 const sheetText = (paths) => {

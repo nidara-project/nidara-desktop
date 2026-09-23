@@ -3696,7 +3696,7 @@ vanishes, and the entry `placeholder`, which stops being dimmed.
 
 ---
 
-#### ✅ Steps 1-4 landed 2026-09-20. What is left is step 5, and it is held up by something measured.
+#### ✅ Steps 1-4 landed 2026-09-20; ✅ step 5 landed 2026-09-23 (see the end of this entry). What is left is step 6.
 
 **1 · Our blank theme is gone; the theme is GTK's own `Empty`.** ✅ `ui/greeter/theme/gtk.css`, its
 `install.sh` step, its PKGBUILD line and the three `ThemeManager` guards against the name `nidara`
@@ -3962,6 +3962,53 @@ layer"). Two consequences land here:
 tie is settled by insertion order. Nothing of ours writes that file (`AppearanceSync` writes only
 `settings.ini`), so it is theoretical; but "the user's theme reaches none of our processes" is proven
 of `gtk-theme` and unproven of a hand-written `gtk.css`. Measure it before that claim is repeated.
+
+#### ✅ Step 5 DONE 2026-09-23 — the shell is themeless, and what it had been standing on is now written down
+
+`ui/shell/app.ts` calls `useNoGtkTheme()` where it used to `unsetenv("GTK_THEME")`;
+`ThemeManager.syncGtkTheme()` writes the user's theme to gsettings (for THIRD-PARTY apps, which the
+portal serves it to) and no longer onto our own `Gtk.Settings`; `ui/shell/style.scss` `@use`s the base
+layer first. `setPreferDark` lost its libadwaita probe — it `import`ed `gi://Adw` to ask
+`Adw.is_initialized()`, which only AGS's host could make true, so it mapped libadwaita into the shell
+to learn "no".
+
+**How it was verified — on the LIVE shell, not the probe.** `shell-gallery-probe` prints its own
+blind spot (220 bare-class selectors it cannot mount), so the gate was the real thing: reload the
+shell from source, open the desktop, CC, NC, Prism, the app grid, the overview, About and all 19
+Settings pages through `nidara-ipc`, `nidara-ipc screenshot` each, once on `main`'s CSS and once on
+the change, and diff each surface cropped to its own rect. Method in `design-system.md`.
+
+**What the theme had been giving the shell without anyone saying so — one regression each, each now
+a base-layer rule with GTK's geometry and our paint** (values read from libgtk's gresource,
+`theme/Default/Default-dark.css`):
+
+| node | symptom when the theme went | rule |
+|---|---|---|
+| `button` box | "Luz nocturna" → "Luz noctu…" on the CC tile: the base layer's `5px 14px` was 10px wider than the theme's box, on buttons that declare colours but not padding | `padding: 4px 9px; min-height: 24px; min-width: 16px` — GTK's |
+| `list > row` | Settings → Users: the avatar row lost 4px and "Change…" rose into the picture | `padding: 2px` — GTK's |
+| `calendar` | NC header shifted ~4px — not the arrows (the NC strips them) but GTK's TABULAR digits changing the width of "2026" | `font-feature-settings: "tnum"` + GTK's day padding, our accent |
+| `dropdown arrow` | every GtkDropDown lost its chevron — Settings → Display's four pickers, and **the installer's keyboard picker, which had none since it went themeless** (an ISO-visible bug nobody had seen) | OUR `nd-pan-down` by path, `-gtk-recolor(url(…))`, + GTK's 6px box gap. The ONE deliberate visual change: our chevron instead of the icon theme's triangle (commandment 10) |
+| `tooltip` | a widget's native `tooltip_text` (two shell buttons, and GTK's dialogs) would be bare text | GTK's `6px 10px`, our floating-surface paint |
+
+Result: bar and dock 0 px; CC and NC at noise (a CPU counter); every Settings page at the glass's
+background noise; installer pages and kit gallery 0 (account/welcome differ from THEMSELVES by the
+caret); the greeter unchanged — its one moved pixel is the harness's own titlebar, which a
+layer-shell greeter does not have.
+⚠️ The greeter needed one guard: it spaces its 10px chevron with the arrow's own margin, so the base
+6px gap was zeroed there (`dropdown > button > box`), and the base arrow rule sets NO min-size (the
+icon size already defaults to 16px, and a floor overrode the greeter's 10px).
+
+🔑 **`Gtk.FileDialog` was never ours.** On GTK 4.22 it goes through the portal by default: under a
+headless `cage` it never mapped in-process until `GDK_DEBUG=no-portals` (the new `FILE_DIALOG=1` arm
+of `kit-gallery-probe`). So Settings' file chooser is drawn by `xdg-desktop-portal-gtk`, another
+process that follows the user's GTK theme like any third-party app. Half of what held step 5 up for
+three days was a dialog in somebody else's process.
+
+**Step 6 is now OPEN** — delete what only neutralised a theme, one reset at a time, each measured
+the same way. Known first candidates: `_reset.scss`'s `button, calendar { color }` (its comment still
+blames `Adw.init()`), the `scale trough/highlight/slider` suppression ("Adwaita decorations"), and
+`.nidara-tooltip`, which is defined twice, identically, in the kit's and the shell's `_components.scss`.
+Settings' "GTK theme" row now reaches third-party apps ONLY — its label should say so.
 
 ---
 

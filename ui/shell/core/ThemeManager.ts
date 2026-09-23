@@ -58,27 +58,18 @@ const nidaraAppearance = defineSettings<NidaraAppearance>("appearance", {
 /** The fields of `NidaraThemeConfig` that live in `org.nidara.appearance`. */
 const NIDARA_KEYS = ["barOpacity", "overlayOpacity", "dockOpacity", "windowOpacity", "shellAppearance"] as const
 
-// ── DARK/LIGHT: the one allowed way to set it in-process ────────────────────
-// The shell is libadwaita-free, but AGS's own runtime (lib/gtk4/app.ts) calls
-// Adw.init() whenever libadwaita exists on the system — we can't opt out. An
-// initialized libadwaita OWNS GtkSettings:gtk-application-prefer-dark-theme:
-// writing it directly logs Adwaita-WARNING and risks being overridden. So:
-// route through AdwStyleManager when Adw is initialized, and fall back to plain
-// Gtk.Settings on systems without libadwaita (where AGS's init no-ops).
-let adwStyleManager: any | null | undefined // undefined = not probed yet
-let adwForceDark = 0
-let adwForceLight = 0
-async function probeAdwStyleManager(): Promise<any | null> {
-    if (adwStyleManager !== undefined) return adwStyleManager
-    try {
-        const Adw = (await import("gi://Adw?version=1")).default as any
-        adwStyleManager = Adw.is_initialized() ? Adw.StyleManager.get_default() : null
-        adwForceDark = Adw.ColorScheme.FORCE_DARK
-        adwForceLight = Adw.ColorScheme.FORCE_LIGHT
-    } catch {
-        adwStyleManager = null
-    }
-    return adwStyleManager
+// ── DARK/LIGHT in-process ────────────────────────────────────────────────────
+// Plain `Gtk.Settings`. This used to probe libadwaita first (loading its typelib
+// to ask `Adw.is_initialized()`), because AGS's host called `Adw.init()` and an
+// initialised libadwaita owns this property. Our host never does
+// (`ui/lib/host.ts`), so the probe could only ever answer "no" — at the price of
+// mapping libadwaita into a process that uses none of it.
+// ⚠️ With no GTK theme loaded (tech-debt #107) this repaints nothing of ours —
+// our colours come from the token CSS. Kept as the process's honest statement of
+// its mode; nothing of ours is known to depend on it any more (unmeasured).
+export function setPreferDark(dark: boolean) {
+    const gtkSettings = Gtk.Settings.get_default()
+    if (gtkSettings) gtkSettings.gtk_application_prefer_dark_theme = dark
 }
 
 /**
@@ -90,16 +81,6 @@ async function probeAdwStyleManager(): Promise<any | null> {
  */
 export const TEXT_SCALE_MIN = 0.75
 export const TEXT_SCALE_MAX = 1.5
-
-export async function setPreferDark(dark: boolean) {
-    const sm = await probeAdwStyleManager()
-    if (sm) {
-        sm.color_scheme = dark ? adwForceDark : adwForceLight
-    } else {
-        const gtkSettings = Gtk.Settings.get_default()
-        if (gtkSettings) gtkSettings.gtk_application_prefer_dark_theme = dark
-    }
-}
 
 /**
  * ThemeEngine State Interface
@@ -728,21 +709,19 @@ class ThemeManager extends GObject.Object {
         const theme = this.state.themeFamily
 
         this.applyTokens()
-        GLib.unsetenv("GTK_THEME")
 
         try {
+            // The user's GTK theme is for THIRD-PARTY applications only: it goes to
+            // gsettings (which the portal serves), never onto our own Gtk.Settings.
+            // This process runs on no theme at all — `useNoGtkTheme()` in app.ts,
+            // tech-debt #107 / commandment 11.
             if (theme) {
                 const current = this.interfaceSettings.get_string("gtk-theme")
                 if (current !== theme) {
                     await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", theme])
                 }
-                const settings = Gtk.Settings.get_default()
-                if (settings) settings.gtk_theme_name = theme
             }
-            
-            // Dark/light via setPreferDark — AdwStyleManager when AGS init'd
-            // libadwaita, plain Gtk.Settings otherwise (see helper above).
-            await setPreferDark(this.state.isDark)
+            setPreferDark(this.state.isDark)
         } catch (e) { }
     }
 

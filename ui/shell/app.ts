@@ -2,6 +2,7 @@
 // before anything else can spawn a child or read the CWD.
 import { SHELL_ROOT, readShellVersion } from "./core/Paths"
 import app from "../lib/host"
+import { useNoGtkTheme } from "../lib/gtk-theme"
 import Gdk from "gi://Gdk?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
@@ -44,16 +45,17 @@ import type { Monitor } from "gi://Gdk?version=4.0"
 import type { Window } from "gi://Gtk?version=4.0"
 
 /**
- *  THEME STRATEGY:
- * The shell uses no Adwaita widgets, but AGS's runtime calls Adw.init() when
- * libadwaita exists on the system — so dark/light goes through setPreferDark
- * (AdwStyleManager if initialized, plain Gtk.Settings otherwise).
+ * THEME STRATEGY: no GTK theme in this process (tech-debt #107, commandment 11),
+ * like the greeter, the lock screen and the installer. Everything our sheets do
+ * not draw is drawn by the base layer (`ui/lib/styles/_base-layer.scss`), or by
+ * nothing. The user's GTK theme is for third-party apps; ThemeManager writes it
+ * to gsettings and nowhere else. It must run before the first window is built.
  * ThemeManager applies the persisted dark/light state right after boot;
  * this just seeds the startup default.
  */
 try {
-  GLib.unsetenv("GTK_THEME")
-  void setPreferDark(true)
+  useNoGtkTheme()
+  setPreferDark(true)
 } catch (e) {
   console.warn("[App] Initialization failed:", e)
 }

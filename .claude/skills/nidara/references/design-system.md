@@ -60,27 +60,42 @@ CONFLICT; where we say nothing there is no conflict and the theme simply speaks.
 purpose of `ui/shell/styles/_reset.scss`: `button, calendar { color: var(--nidara-text) }` does not
 change what we draw, it stops the theme deciding a colour we never mentioned — at deliberately low
 specificity, so our own classes still win over it. ⚠️ That rule's comment justifies itself with
-"AGS calls `Adw.init()`", which has been false since 2026-08-18. **The resets are for the SHELL,
-which is the one bundle still running on a theme**; they become dead weight the day it stops, and
+"AGS calls `Adw.init()`", which has been false since 2026-08-18. **The resets were for the SHELL,
+the last bundle that ran on a theme (until 2026-09-23)**; they become dead weight the day it stops, and
 not one day earlier — a reset removed while its node is still undrawn takes the pixel with it
-(tech-debt #107, the ordering rule).
+(tech-debt #107, the ordering rule). ✅ The shell stopped running on a theme on 2026-09-23 (step 5),
+so step 6 — deleting what only neutralised it — is now open, and still one reset at a time, measured.
 
 **5 · The bundle sheets — and, under them, the BASE LAYER.** `ui/lib/styles/` is the kit's and
 every bundle compiles it; `ui/shell/styles/` is the shell's and only the shell does; then each
 bundle's own sheet. `style-ownership-check` gates the first against the second.
 🔑 **`ui/lib/styles/_base-layer.scss` (2026-09-20) is the layer beneath all of them**: bare element
 selectors, every one of them (0,0,1), for the nodes no class of ours can reach — the toplevels GTK
-builds itself. ⚠️ It is `@use`d **from each THEMELESS bundle's sheet** (`ui/installer/style.scss`,
-`ui/greeter/style.scss`), deliberately NOT from the kit's `_components.scss`: wiring it there put it
-in the shell, which still wears a theme, and cost 35 134 changed pixels on the bar alone — a layer
-meant to replace a theme, added under a process that still has one, is the two-substrate bug again.
-The shell wires it the day step 5 flips it. Read the file's header before adding a rule: it carries
-the A/B commands and the rule that a rule lands only after the node has been looked at.
+builds itself. ⚠️ It is `@use`d **from each bundle's own sheet** (`ui/installer/style.scss`,
+`ui/greeter/style.scss`, and `ui/shell/style.scss` since 2026-09-23), deliberately NOT from the kit's
+`_components.scss`: on 2026-09-20 wiring it there put it in the shell while the shell still wore a
+theme, and cost 35 134 changed pixels on the bar alone — a layer meant to replace a theme, added
+under a process that still has one, is the two-substrate bug again. Per-bundle wiring keeps the
+substrate and the layer moving in ONE change. Read the file's header before adding a rule: it
+carries the A/B commands and the rule that a rule lands only after the node has been looked at.
+🔑 **The base layer copies GTK's GEOMETRY and supplies OUR paint** — `button` is GTK's
+`4px 9px` / 24px min-height, `list > row` GTK's 2px, `calendar` GTK's `tnum` digits, a dropdown's
+box GTK's 6px gap. Found by the shell's flip, one regression each: a base rule that invents its
+own box moves every widget of ours that declared colours but trusted the theme for the box.
+The one deliberate visual change is the chevron: `dropdown arrow` is OUR `nd-pan-down` glyph by
+path (`-gtk-recolor(url(…))`), where the theme drew its icon theme's triangle — commandment 10.
 🔑 **The A/B has three instruments now**, one per substrate question: `kit-gallery-probe`
-(`FONT_DIALOG=1` shoots the toplevel GTK builds for `Gtk.FontDialog`), `installer-pages-probe`, and
-`shell-gallery-probe` — which enumerates the shell's compiled sheet rather than curating a list, and
-mounts each `<element>.<class>` inside a window carrying its scope, because a rule scoped to
-`#nidara-bar` applies nowhere else.
+(`FONT_DIALOG=1` / `FILE_DIALOG=1` shoot the toplevels GTK builds for its own dialogs),
+`installer-pages-probe`, and `shell-gallery-probe` — which enumerates the shell's compiled sheet
+rather than curating a list, and mounts each `<element>.<class>` inside a window carrying its scope,
+because a rule scoped to `#nidara-bar` applies nowhere else.
+⚠️ **`shell-gallery-probe` is not enough for the shell**, and says so: 220 of the shell's selectors
+are bare classes it cannot mount. The flip of 2026-09-23 was verified on the LIVE shell — reload,
+open every overlay and every Settings page through `nidara-ipc` (`toggleCC`, `settingsPage <id>`…),
+`nidara-ipc screenshot`, and diff against the same run on `main`'s CSS. Crop each diff to the
+surface's own rect (Settings: its `hyprctl clients` geometry) — third-party windows behind the
+glass change between runs and swamp a full-screen diff. And rebuild `ui/shell/style.css` for EACH
+arm: the shell reads the compiled file, so a baseline taken after compiling the change is the change.
 
 **6 · Tokens.** Static fallbacks in each sheet (the dark set, for the first frame) plus the runtime
 engine (`theme-tokens.ts` → `initAppearance()`), which emits the live ramp from the real accent,
@@ -122,7 +137,13 @@ button, the badge, entries, the list card — is identical.
 plus the password entry's peek icon, which stops being dimmed. Three of the six pages are
 pixel-identical either way.
 
-🔴 **What stops the SHELL, and it is not the widgets.** It is the two dialogs GTK builds ITSELF
+✅ **Resolved 2026-09-23 — the shell is themeless.** The two dialogs below turned out to be one:
+`Gtk.FileDialog` goes through the **portal** by default on GTK 4.22 (it only mapped in-process with
+`GDK_DEBUG=no-portals`), so the file chooser Settings opens is drawn by `xdg-desktop-portal-gtk` —
+another process, a third-party app for theming purposes, not ours to dress. The font dialog is
+dressed by the base layer. The paragraph below is the record of what held the flip up.
+
+🔴 **What stopped the SHELL, and it was not the widgets.** It is the two dialogs GTK builds ITSELF
 inside our process, both of which live in Settings: `Gtk.FontDialog` (the font picker) and
 `Gtk.FileDialog`. They are toplevels of GTK's own, carrying none of our classes, so the shell's
 scoped rules cannot reach them and `GTK_USE_PORTAL` is not set either. Captured 2026-09-20 under
@@ -2345,10 +2366,9 @@ only when someone boots a VM). The `styles` job now compiles it too.
   exported from `ui/lib/nidara-kit/` whose appearance is written in the second one renders
   UNSTYLED in the installer, the greeter and the lock screen — and what that costs depends on
   which, which is worth getting right because the first version of this paragraph did not.
-  ⚠️ **The greeter, the lock and the INSTALLER run with no GTK theme** (`useNoGtkTheme()` —
-  `ui/lib/gtk-theme.ts`); only the shell still wears the user's gsettings theme. So an unstyled
-  widget is INVISIBLE in three bundles out of four, and in the shell it is drawn by whatever the
-  user has. `NidaraToggleRow` was in that state until 2026-09-20: the switch's rules were the
+  ⚠️ **Every bundle runs with no GTK theme** (`useNoGtkTheme()` — `ui/lib/gtk-theme.ts`); the
+  shell was the last to stop wearing the user's gsettings theme, on 2026-09-23. So an unstyled
+  widget is INVISIBLE everywhere, unless the base layer draws its node. `NidaraToggleRow` was in that state until 2026-09-20: the switch's rules were the
   shell's, so the installer's NVIDIA toggle drew nothing at all.
   ⚠️ **Which bundle is which has now been got wrong twice on this page, in opposite directions,
   and the second time was written as a correction of the first.** The claim "the installer runs on

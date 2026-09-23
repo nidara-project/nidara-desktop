@@ -54,11 +54,14 @@
    reading came from a capture flattened onto white, which is the artefact
    `feedback_screenshot_masks_render_artifacts` warns about.)
 
-   Checked rather than assumed before writing it: every Nidara window is styled
-   through `window.nidara-…` (0,1,1) — installer, app window, settings, dock,
-   app grid, alert dialog — and every one of them declares `background:
-   transparent` explicitly, because the glass is painted by `.nidara-window-glass`
-   and the chrome by Hyprland. So this (0,0,1) rule cannot reach a window of ours.
+   ⚠️ This rule reaches EVERY toplevel that does not declare its own background —
+   ours included. "Every Nidara window declares `background: transparent`" was
+   written here as checked, and was not: the APP GRID's window declared nothing,
+   and the day the shell went themeless (#107 step 5) the whole monitor-sized
+   window took this fill, clipped by its input region into a translucent box
+   around the panel (owner-caught 2026-09-23). A new toplevel of ours declares
+   its background in its own sheet — the glass is painted by its content
+   (`.nidara-window-glass`, the panel, Cairo) and the chrome by Hyprland.
    It lands only on a toplevel carrying no class of ours, which is exactly the set
    GTK builds itself.
 
@@ -86,14 +89,24 @@ window {
    other button of ours carries a class too, so all of them outrank this (0,0,1)
    rule property by property. The kit's button additionally "wipes GTK defaults
    completely", so nothing here can reach it even where the values differ. The
-   control for that claim is the gallery + the six installer pages at 0 pixels. */
+   control for that claim is the gallery + the six installer pages at 0 pixels.
+
+   ⚠️ The GEOMETRY is GTK's own, on purpose — `min-height: 24px; min-width: 16px;
+   padding: 4px 9px; border: 1px` is the built-in theme's `button` rule, read out of
+   libgtk's gresource (theme/Default/Default-dark.css). It was `5px 14px` / 20px
+   until the shell went themeless (#107 step 5), and the live A/B caught what that
+   cost: shell buttons that declare colours but not padding — a CC tile among them —
+   had been taking their box from the theme, and 10px more padding truncated
+   "Luz nocturna" to "Luz noctu…". A base layer that REPLACES a theme must replace
+   its box too; only the paint is ours. */
 button {
     background-color: var(--nidara-surface);
     border: 1px solid var(--nidara-border);
     border-radius: $nidara-radius-sm;
     color: var(--nidara-text);
-    padding: 5px 14px;
-    min-height: 20px;
+    padding: 4px 9px;
+    min-height: 24px;
+    min-width: 16px;
     background-image: none;
     box-shadow: none;
 
@@ -101,6 +114,94 @@ button {
     &:active   { background-color: var(--nidara-surface-active); }
     &:disabled { opacity: 0.45; }
     &:focus-visible { @include nidara-focus-ring; }
+}
+
+/* ── `list > row`: GTK's 2px, which the shell was standing on ────────────────
+   The built-in theme pads every list row by 2px (`listview > row, list > row`).
+   Rows of ours that declare their own padding (`.nidara-row` sets 0 on purpose,
+   and says why) never saw it; the ones that do not had been using it without
+   saying so. The live A/B of #107 step 5 found one: Settings → Users, where the
+   avatar row lost 4px and the "Change…" button rose into the picture. Geometry
+   only — a row has no paint of its own in the base layer. */
+list > row,
+listview > row { padding: 2px; }
+
+/* ── `arrow`: the chevron the theme drew, now ours ───────────────────────────
+   `arrow` is a BUILTIN-ICON node: no content of its own, it draws whatever
+   `-gtk-icon-source` names, and that comes from the theme (`dropdown arrow {
+   -gtk-icon-source: -gtk-icontheme("pan-down-symbolic") }` in libgtk's
+   Default). With no theme every GtkDropDown lost its chevron — Settings'
+   resolution/refresh/scale/rotation pickers in the shell's live A/B, and the
+   installer's keyboard picker, which has had none since it went themeless.
+
+   OUR glyph, by PATH (commandment 10 — a chevron is an interface icon, and a
+   name would resolve against whatever icon theme the process has). The path is
+   relative to the COMPILED sheet, and `../shell/assets/…` holds from all three
+   (`ui/shell/`, `ui/installer/`, `ui/greeter/`), installed and from source — the
+   greeter and the installer expander already rely on it.
+   `-gtk-recolor()` so the symbolic glyph takes the node's `color`, in both
+   modes; the greeter's older rule uses an invert filter because it is always
+   dark, and keeps its own. No `min-width`/`min-height`, although GTK's theme
+   sets 16px: an arrow's box is its `-gtk-icon-size`, which defaults to 16px
+   anyway, and a floor here overrode the greeter's deliberate 10px chevron
+   (caught by shooting the greeter before and after). */
+// GTK's gap between a dropdown's label and its chevron — without it the glyph
+// sits flush against the last letter and reads as part of the word.
+dropdown > button > box { border-spacing: 6px; }
+
+dropdown arrow,
+menubutton arrow.down {
+    -gtk-icon-source: -gtk-recolor(url("../shell/assets/icons/nidara/scalable/actions/nd-pan-down-symbolic.svg"));
+}
+menubutton arrow.up    { -gtk-icon-source: -gtk-recolor(url("../shell/assets/icons/nidara/scalable/actions/nd-pan-up-symbolic.svg")); }
+menubutton arrow.left  { -gtk-icon-source: -gtk-recolor(url("../shell/assets/icons/nidara/scalable/actions/nd-pan-start-symbolic.svg")); }
+menubutton arrow.right { -gtk-icon-source: -gtk-recolor(url("../shell/assets/icons/nidara/scalable/actions/nd-pan-end-symbolic.svg")); }
+
+/* ── `tooltip`: GTK's native one ─────────────────────────────────────────────
+   Our own tooltips are `attachTooltip` (the kit's Cairo bubble). This is the
+   OTHER kind — a widget's `tooltip_text`, which GTK draws in its own popup
+   surface: two shell buttons still set one, and GTK's dialogs do. With no theme
+   it is bare text on nothing. GTK's geometry (6px 10px, 6px spacing), our
+   floating-surface paint — the same tokens a dialog uses above. */
+tooltip {
+    padding: 6px 10px;
+    border-radius: $nidara-radius-sm;
+    box-shadow: none;
+    background-color: var(--nidara-popover-bg);
+    border: 1px solid var(--nidara-border);
+    color: var(--nidara-text);
+
+    > box { border-spacing: 6px; }
+}
+
+/* ── `calendar`: GTK's structure, our paint ──────────────────────────────────
+   The Notification Center builds a `Gtk.Calendar` and styles its island, but the
+   header and the day grid took part of their box from the theme. With the shell
+   themeless (#107 step 5) the live A/B showed the header shifting ~4px, and the
+   cause was not the arrows (the NC strips their border itself) but
+   `font-feature-settings: "tnum"`: GTK's theme sets TABULAR digits on the
+   calendar, which changes the width of "2026". With it back: 65 px of 196 000,
+   noise. These are the built-in theme's calendar rules (libgtk gresource,
+   theme/Default), geometry kept, colours ours — `other-month` at 0.3 alpha of the
+   text, exactly GTK's ratio, and the selected day in the accent. */
+calendar {
+    color: var(--nidara-text);
+    font-feature-settings: "tnum";
+
+    > header > button {
+        border: none;
+        box-shadow: none;
+        background: none;
+        border-radius: 0;
+    }
+
+    > grid > label.day-number { padding: 4px; }
+    > grid > label.day-number:selected {
+        border-radius: $nidara-radius-sm;
+        background-color: var(--nidara-accent);
+        color: var(--nidara-accent-fg);
+    }
+    > grid > label.day-number.other-month { opacity: 0.3; }
 }
 
 /* ── `scale`: a slider with no trough is a number with a gap beside it ───────

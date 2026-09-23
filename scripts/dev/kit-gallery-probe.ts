@@ -8,6 +8,7 @@
 //
 //   FORCE_THEME=<name>  price one named theme instead of the developer's
 //   FONT_DIALOG=1       shoot GTK's OWN font dialog instead of the gallery page
+//   FILE_DIALOG=1       the same for GTK's own file chooser (maps under cage, not broadway)
 //
 // `FONT_DIALOG=1` is the base layer's first ruler (tech-debt #107 step 5). The dialog
 // `Gtk.FontDialog` opens is a `GtkFontChooserDialog` toplevel GTK builds ITSELF, in our
@@ -177,10 +178,19 @@ app.start({
     // Deliberately NOT a section of the page above: it is its own window, which is the
     // whole reason our scoped rules cannot reach it. Shot the same way — real paints,
     // never a timer — but of the dialog's own child and through the dialog's renderer.
-    if (GLib.getenv("FONT_DIALOG") === "1") {
-      const fd = new Gtk.FontDialog({ title: "Choose a font" })
-      fd.choose_font(shell.window, Pango.FontDescription.from_string("Inter 14"), null,
-        () => { /* the pick is irrelevant; we are measuring the dialog */ })
+    const fileDialog = GLib.getenv("FILE_DIALOG") === "1"
+    if (GLib.getenv("FONT_DIALOG") === "1" || fileDialog) {
+      if (fileDialog) {
+        // The same arm for the OTHER dialog GTK builds itself in our process — the one
+        // Settings opens five times (avatar, wallpaper, …). Under broadway it never
+        // mapped (tech-debt #107); under a headless `cage` it does.
+        new Gtk.FileDialog({ title: "Choose a file", modal: true }).open(shell.window, null,
+          () => { /* the pick is irrelevant; we are measuring the dialog */ })
+      } else {
+        const fd = new Gtk.FontDialog({ title: "Choose a font" })
+        fd.choose_font(shell.window, Pango.FontDescription.from_string("Inter 14"), null,
+          () => { /* the pick is irrelevant; we are measuring the dialog */ })
+      }
 
       // The dialog is GTK's, so we have no handle on it: find the toplevel that is not
       // ours. Polling rather than a signal because there is no signal to connect to.
@@ -190,7 +200,7 @@ app.start({
           .find(w => w !== shell.window && w.get_mapped() && w.get_width() > 0)
         if (!dialog) {
           if (++tries < 100) return GLib.SOURCE_CONTINUE
-          printerr("[shot] the font dialog never mapped in 10 s")
+          printerr(`[shot] the ${fileDialog ? "file" : "font"} dialog never mapped in 10 s`)
           app.quit()
           return GLib.SOURCE_REMOVE
         }
