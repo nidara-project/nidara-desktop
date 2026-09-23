@@ -213,7 +213,7 @@ export function registerConfigEntries() {
         },
     })
     registerConfig("appearance.gtkTheme", {
-        desc: "System GTK theme.",
+        desc: "GTK theme for THIRD-PARTY apps only — Nidara's own processes load no GTK theme (tech-debt #107).",
         type: "enum",
         enum: Theme.getAvailableGtkThemes(),
         get: () => Theme.themeFamily,

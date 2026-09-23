@@ -4019,8 +4019,12 @@ suppressed was painted by the THEME alone. One that strips a `button` now strips
 fill and stays (see #2). Scripts' comments were re-pointed from "Adwaita" to the base layer.
 ⚠️ Not measurable by a still screenshot, and deleted on the substrate argument (with no theme
 those nodes have no rule at all): the drop-target highlight and the overscroll smear.
-Still open under this step: Settings' "GTK theme" row now reaches third-party apps ONLY — its label
-should say so (owner's call on the wording).
+✅ Settings' "GTK theme" row, which now reaches third-party apps ONLY, is labelled so: "External
+app theme" / «Tema de aplicaciones externas», subtitle "Look of GTK apps that aren't Nidara's"
+(owner's wording, 2026-09-23, all 12 locales). And the app grid's window, which declared no
+background, took the base layer's `window` fill as a translucent box around the panel on the day
+the shell flipped — fixed in #631; the base layer's header no longer claims every window of ours
+declares one.
 
 ---
 
