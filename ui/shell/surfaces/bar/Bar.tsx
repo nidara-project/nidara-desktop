@@ -1126,19 +1126,20 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       const w = registry.get(id)
       if (!w?.buildBarContent) continue
       const hasExpand = !!w.buildBarExpanded
-      const hasCCDetail = !!w.buildCCDetail
       // cc_edit_mode (not cc_open): while editing the CC the pills stay inert;
       // with the CC merely open, a pill click switches to its surface directly
       // (the bar_expanded_id setter closes the exclusive overlays).
       // barClick gets first refusal on EVERY click (asked here, not cached at
       // build time) so a widget can act directly in a state where opening a panel
       // would only be in the way — screenrecord stops the capture. See Types.ts.
+      // A pill with no bar panel does NOT fall back to the CC detail: its content
+      // acts on its own (makeBarIcon's onAction — night light, Bluetooth, Focus
+      // toggle like dark mode), and the capsule's release fires after that press,
+      // so the fallback made one click toggle AND open the CC.
       const open = hasExpand
           ? () => { status.bar_expanded_id = status.bar_expanded_id === id ? "" : id }
-          : hasCCDetail
-              ? () => { status.cc_open = true; status.cc_detail_id = id }
-              : undefined
-      const onRelease = (hasExpand || hasCCDetail || w.barClick)
+          : undefined
+      const onRelease = (hasExpand || w.barClick)
           ? () => {
               if (status.cc_edit_mode) return
               if (w.barClick?.()) { status.bar_expanded_id = ""; return }
