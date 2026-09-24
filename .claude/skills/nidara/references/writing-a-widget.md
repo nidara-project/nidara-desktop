@@ -44,6 +44,11 @@ it fires and disposes on `unrealize`. Do not wire that by hand — nine widgets 
 `makeBarExpandable({ getIcon, getText, onAction?, autoHideMs? })` is one that slides a label out
 on click and hides it again.
 
+A pill opens a panel only if the widget has `buildBarExpanded`. **It never falls back to the CC
+detail** — until 2026-09-25 it did, and since a `makeBarIcon` acts on press and the capsule's
+release fires after it, one click on night light / Bluetooth / Focus toggled AND opened the CC.
+A widget with a CC detail but no bar panel acts from its pill, like dark mode.
+
 ### Deciding what a panel looks like
 
 A bar expansion (`buildBarExpanded`) and a Control-Centre detail (`buildCCDetail`) are both a
