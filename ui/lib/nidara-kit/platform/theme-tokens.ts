@@ -111,6 +111,27 @@ export const GLASS_RANGE = { min: 0.24, max: 0.80 } as const
 /** The one clamp. Every setter and every slider bound goes through it. */
 export const clampGlass = (v: number) => Math.max(GLASS_RANGE.min, Math.min(GLASS_RANGE.max, v))
 
+/**
+ * The `ignore_alpha` every shell layer runs under (`nidara-bar`, `nidara-island`,
+ * `nidara-dock`, `nidara-app-grid` in `config/hypr/hyprland.lua`). A pixel whose alpha
+ * is at or below it gets NO backdrop blur. `scripts/ci/blur-threshold-check.mjs`
+ * holds every one of those rules to this number — it is one decision in two languages.
+ */
+export const LAYER_IGNORE_ALPHA = 0.23
+
+/**
+ * The lowest whole-widget opacity at which glass painted at `glassAlpha` still clears
+ * `LAYER_IGNORE_ALPHA`, i.e. still has its blur. A fade that goes below it shows the
+ * panel UNBLURRED for its last frames — sharp wallpaper through a still-visible panel —
+ * so the overlay pop fades down to this and then hides in one step
+ * (`OVERLAY_POP.opacityFloor`, `ui/shell/common/ScaleRevealer.ts`). The 0.02 is headroom
+ * for the compositor's 8-bit alpha. At the thinnest glass (0.24) this is ~1: the fade
+ * goes away and only the scale moves, which is the honest consequence of glass that
+ * thin — any fade at all would unblur it.
+ */
+export const blurSafeOpacity = (glassAlpha: number) =>
+    glassAlpha > 0 ? Math.min(1, LAYER_IGNORE_ALPHA / glassAlpha + 0.02) : 0
+
 // A stored opacity from before the glass rescale (2026-08-23) is `0.2 + 0.8·α` in
 // today's model: glass at α over a backdrop the compositor dimmed to 80% covers as
 // much as `0.2 + 0.8·α` over an undimmed one. That conversion used to run in the

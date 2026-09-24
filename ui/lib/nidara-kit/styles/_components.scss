@@ -289,9 +289,9 @@ checkbutton:disabled {
 // applied it from code: it was never used, as opposed to used and then dropped.
 //
 // The reusable unit was always the `nidara-tile-states` MIXIN, which stays and
-// is adopted by `.app-grid-button`, `.cc-split-icon-btn`, `.cc-detail-back-btn`
+// is adopted by `.app-grid-button`, `.cc-split-icon-btn`
 // and `.bar-popover-icon-btn`. What could not be shared is the packaging: those
-// four take radius `md` / `sm` / `sm` / `xs` and their own padding, so absorbing
+// three take radius `md` / `sm` / `xs` and their own padding, so absorbing
 // them would need size variants. Rows universalised cleanly because they share
 // one geometry; tiles do not. Bring the class back WITH variants if that
 // migration is ever attempted — do not restore it bare.)

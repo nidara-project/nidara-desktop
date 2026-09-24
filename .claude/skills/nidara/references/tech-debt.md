@@ -105,8 +105,8 @@ CrystalMenu/CrystalWindow are **Increments 2-3**."* Every sibling in that plan s
 `.nidara-sidebar` 1). Only the tile migration never happened.
 
 The reusable part was never the problem: the **mixin** `nidara-tile-states` is well adopted, by
-`.app-grid-button`, `.cc-split-icon-btn`, `.cc-detail-back-btn` and `.bar-popover-icon-btn`. What
-stalled is visible in those four — they take **different radii (`md` / `sm` / `sm` / `xs`) and their
+`.app-grid-button`, `.cc-split-icon-btn` and `.bar-popover-icon-btn`. What
+stalled is visible in those three — they take **different radii (`md` / `sm` / `xs`) and their
 own padding**, so absorbing them needs size variants, which is a design decision. Rows all share one
 geometry and sailed through; tiles do not and did not.
 

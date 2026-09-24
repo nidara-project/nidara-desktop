@@ -179,6 +179,10 @@ export function attachTooltip(
             // network, 2026-09-14). `unmap` below cancels the timer; this is the
             // same check for a source that was already dispatching.
             if (!widget.get_mapped() || !widget.get_root()) return GLib.SOURCE_REMOVE
+            // Asked again at the END of the dwell, not only at its start: the menu a
+            // press opened (below) arrives inside the delay, and the check at motion
+            // time had already said yes.
+            if (suppress?.()) return GLib.SOURCE_REMOVE
             refresh()
             popover.popup()
             return GLib.SOURCE_REMOVE
@@ -186,6 +190,21 @@ export function attachTooltip(
     })
     motion.connect("leave", () => { cancelTimer(); popover.popdown() })
     widget.add_controller(motion)
+
+    // A press dismisses it, like GTK's own tooltip: a click is the moment the
+    // widget opens something of its own, and the bubble would sit on top of it.
+    // Where that something is a popover with a grab the pointer "leaves" anyway (the
+    // dock), but a menu drawn in the SAME surface — the bar's expansion panel under
+    // a tray icon — never produces a leave, so the tooltip stayed over the menu.
+    // CAPTURE phase and never handled: it runs before the widget's own click
+    // gesture claims the press, and passes the press on untouched.
+    const press = new Gtk.EventControllerLegacy()
+    press.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+    press.connect("event", (_c: any, ev: any) => {
+        if (ev.get_event_type() === Gdk.EventType.BUTTON_PRESS) { cancelTimer(); popover.popdown() }
+        return false
+    })
+    widget.add_controller(press)
     widget.connect("unmap", () => { cancelTimer(); popover.popdown() })
 
     let destroyed = false

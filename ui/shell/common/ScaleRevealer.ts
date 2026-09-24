@@ -3,6 +3,8 @@ import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import Graphene from "gi://Graphene"
 import { reduceMotion } from "../core/ReduceMotion"
+import Theme from "../core/ThemeManager"
+import { blurSafeOpacity } from "../core/NidaraTheme"
 
 // ScaleRevealer: shows/hides its child with a grow/shrink + fade animation.
 // Two modes, one engine:
@@ -34,8 +36,16 @@ export type ScalePivot = "top-right" | "top-left" | "top-center" | "center"
 // Shared preset for the big overlay panels (CC, NC, Prism, system menu,
 // overview, app grid, bar expansion): subtle pop, fast accelerating
 // exit, no layout animation. Pivot is per-surface (toward its visual anchor).
+//
+// `opacityFloor`: every one of these panels is glass at `overlayOpacity` on a layer
+// with `ignore_alpha`, so fading the whole widget toward 0 drops the glass under the
+// threshold while the panel is still clearly on screen — its last frames were drawn
+// with NO blur behind them. The fade therefore runs between 1 and the lowest opacity
+// that keeps the blur (`blurSafeOpacity`), and the panel appears / disappears in one
+// step at that end. Read per animation, so the opacity slider is followed live.
 export const OVERLAY_POP = {
     scaleFrom: 0.97, durationIn: 220, durationOut: 150, animateLayout: false,
+    opacityFloor: () => blurSafeOpacity(Theme.overlayOpacity),
 } as const
 
 // Declaration merging: `gi.d.ts` declares `gi://Gtk` as `any` in value position
@@ -57,6 +67,8 @@ export class ScaleRevealer extends Gtk.Widget {
     scaleFrom: number
     pivot: ScalePivot
     animateLayout: boolean
+    /** Opacity at progress→0 while the widget is still shown (see OVERLAY_POP). */
+    opacityFloor: (() => number) | null
     progress = 0          // 0 = hidden, 1 = fully revealed
     tickId: number | null = null
     swipeX = 0            // transient horizontal swipe offset (notification dismiss)
@@ -80,6 +92,7 @@ export class ScaleRevealer extends Gtk.Widget {
     constructor(child: Gtk.Widget, opts?: {
         duration?: number, durationIn?: number, durationOut?: number,
         scaleFrom?: number, pivot?: ScalePivot, animateLayout?: boolean,
+        opacityFloor?: () => number,
     }) {
         super({ overflow: Gtk.Overflow.HIDDEN })
         this.durationIn = opts?.durationIn ?? opts?.duration ?? 300
@@ -87,6 +100,7 @@ export class ScaleRevealer extends Gtk.Widget {
         this.scaleFrom = opts?.scaleFrom ?? 0.25
         this.pivot = opts?.pivot ?? "top-right"
         this.animateLayout = opts?.animateLayout ?? true
+        this.opacityFloor = opts?.opacityFloor ?? null
         this.child = child
         this.child.set_parent(this)
         this.opacity = 0
@@ -281,6 +295,8 @@ export class ScaleRevealer extends Gtk.Widget {
             return
         }
         const duration = open ? this.durationIn : this.durationOut
+        // Latched per reveal: the floor follows the glass slider, but not mid-flight.
+        const floor = this.opacityFloor?.() ?? 0
         let startUs: number | null = null
         this.tickId = this.add_tick_callback((_w, frameClock) => {
             const now = frameClock.get_frame_time()
@@ -289,7 +305,9 @@ export class ScaleRevealer extends Gtk.Widget {
             const eased = open ? 1 - Math.pow(1 - t, 3)   // ease-out cubic
                               : Math.pow(t, 3)            // ease-in cubic
             this.progress = from + (target - from) * eased
-            this.opacity = this.progress
+            // Never below `floor` while shown: the close ends by hiding the widget
+            // (set_visible below), not by fading it through the unblurred range.
+            this.opacity = this.progress <= 0 ? 0 : floor + (1 - floor) * this.progress
             if (this.animateLayout) this.queue_resize(); else this.queue_draw()
             if (t >= 1) {
                 this.tickId = null

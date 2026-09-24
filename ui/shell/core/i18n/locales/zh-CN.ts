@@ -691,6 +691,7 @@ export default {
     // Control Center — Island grid
     "cc.menu.size.small": "小",
     "cc.grid.done": "完成",
+    "cc.detail.back": "返回",
     "cc.grid.edit": "编辑",
     "cc.menu.size.medium": "中",
     "cc.menu.size.large": "大",

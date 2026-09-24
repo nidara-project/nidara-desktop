@@ -737,6 +737,7 @@
     "cc.focus.sub.on": "622f0eaa",
     "cc.menu.size.small": "c74fd971",
     "cc.grid.done": "e9b450d1",
+    "cc.detail.back": "b52b36b7",
     "cc.grid.edit": "5301648d",
     "cc.menu.size.medium": "d404968e",
     "cc.menu.size.large": "738fd1d2",
@@ -771,8 +772,8 @@
   },
   "locales": {
     "de": {
-      "translated": 729,
-      "of": 767,
+      "translated": 730,
+      "of": 768,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -816,14 +817,14 @@
       "stale": []
     },
     "es": {
-      "translated": 767,
-      "of": 767,
+      "translated": 768,
+      "of": 768,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 729,
-      "of": 767,
+      "translated": 730,
+      "of": 768,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -867,8 +868,8 @@
       "stale": []
     },
     "it": {
-      "translated": 729,
-      "of": 767,
+      "translated": 730,
+      "of": 768,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -912,8 +913,8 @@
       "stale": []
     },
     "ja": {
-      "translated": 729,
-      "of": 767,
+      "translated": 730,
+      "of": 768,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -957,8 +958,8 @@
       "stale": []
     },
     "nl": {
-      "translated": 729,
-      "of": 767,
+      "translated": 730,
+      "of": 768,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1002,8 +1003,8 @@
       "stale": []
     },
     "pl": {
-      "translated": 729,
-      "of": 767,
+      "translated": 730,
+      "of": 768,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1047,8 +1048,8 @@
       "stale": []
     },
     "pt-BR": {
-      "translated": 729,
-      "of": 767,
+      "translated": 730,
+      "of": 768,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1092,8 +1093,8 @@
       "stale": []
     },
     "pt-PT": {
-      "translated": 729,
-      "of": 767,
+      "translated": 730,
+      "of": 768,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1137,8 +1138,8 @@
       "stale": []
     },
     "ru": {
-      "translated": 729,
-      "of": 767,
+      "translated": 730,
+      "of": 768,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",
@@ -1182,8 +1183,8 @@
       "stale": []
     },
     "zh-CN": {
-      "translated": 729,
-      "of": 767,
+      "translated": 730,
+      "of": 768,
       "untranslated": [
         "bar.window-menu.workspace-mode",
         "settings.desktop.default-mode",

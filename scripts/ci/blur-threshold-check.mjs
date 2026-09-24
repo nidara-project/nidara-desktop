@@ -24,6 +24,14 @@ const m = theme.match(/GLASS_RANGE\s*=\s*\{\s*min:\s*([0-9.]+)\s*,\s*max:\s*([0-
 if (!m) { console.error("blur-threshold-check: could not read GLASS_RANGE from ui/lib/nidara-kit/platform/theme-tokens.ts"); process.exit(1) }
 const shellFloor = parseFloat(m[1])
 
+// The overlay pop fades to `LAYER_IGNORE_ALPHA / glass` and not below, so the panel
+// never shows unblurred (`blurSafeOpacity`). That number is the Lua rules' own, read
+// back from TypeScript — if a shell rule moves without it, the fade stops short of the
+// line (early pop) or crosses it (unblurred frames) and nothing says so.
+const la = theme.match(/LAYER_IGNORE_ALPHA\s*=\s*([0-9.]+)/)
+if (!la) { console.error("blur-threshold-check: could not read LAYER_IGNORE_ALPHA from theme-tokens.ts"); process.exit(1) }
+const layerIgnoreAlpha = parseFloat(la[1])
+
 // ⚠️ The login surfaces do NOT use GLASS_RANGE — they are separate bundles with a
 // FIXED glass (`LOCK_GLASS.fill.a`, mirrored into ui/greeter/style.scss), and there
 // is no opacity slider there to move it. Checking them against the shell's floor is
@@ -81,6 +89,10 @@ for (const [, ns, raw] of rules) {
     const f = FLOOR_FOR(ns)
     const ok = t < f.value
     if (!ok) bad++
+    if (ns !== "nidara-greeter" && t !== layerIgnoreAlpha) {
+        bad++
+        console.log(`  FAIL  ${ns.padEnd(16)} ignore_alpha ${t} ≠ LAYER_IGNORE_ALPHA ${layerIgnoreAlpha} — the overlay fade floor is computed from the TS one`)
+    }
     console.log(`  ${ok ? "ok  " : "FAIL"}  ${ns.padEnd(16)} ignore_alpha ${String(t).padEnd(5)} (${(t * 255).toFixed(1)}/255)  vs ${f.name}` +
                 (ok ? `  — ${(f.value * 255 - t * 255).toFixed(1)} levels under it`
                     : `  — AT OR ABOVE IT: this layer would stop blurring`))

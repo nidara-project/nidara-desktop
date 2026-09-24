@@ -112,8 +112,8 @@
 // nidara-row-states (deepen) so the text never washes out. Accent = selection.
 //
 // 🔑 The MIXIN is the reusable unit here, not a class. `.nidara-tile` was deleted
-// in #111 after never once being applied: its four would-be consumers
-// (`.app-grid-button`, `.cc-split-icon-btn`, `.cc-detail-back-btn`,
+// in #111 after never once being applied: its three would-be consumers
+// (`.app-grid-button`, `.cc-split-icon-btn`,
 // `.bar-popover-icon-btn`) take three different radii and their own padding, so
 // packaging them needs size variants. Rows universalised cleanly because they
 // share one geometry; tiles do not.

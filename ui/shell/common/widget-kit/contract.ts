@@ -66,6 +66,11 @@ export interface AtomicWidget {
     centerContent?: boolean             // center the WIDE (2×1) content instead of the
                                         // default left-anchored capsule layout (icon+label)
     buildBarContent?: () => Gtk.Widget                      // compact bar variant (icon only)
+    /** Optional state line for the bar pill's tooltip, which is the widget's `name` by
+     *  default and becomes "name · state" with this ("Wi-Fi · MyNetwork", "Battery ·
+     *  85 %, charging"). Read when the tooltip shows. Return "" or null for the name
+     *  alone. Keep it short and already translated. */
+    barTooltipState?: () => string | null
     buildBarExpanded?: (onClose: () => void) => Gtk.Widget  // bar inline expansion panel
     /** The expansion panel handles its OWN horizontal insets, so the bar drops the
      *  14px it normally gives every panel. For content that must reach the panel's
@@ -81,7 +86,7 @@ export interface AtomicWidget {
     // that state; anything needing a choice belongs in the panel.
     barClick?: () => boolean
     buildCCDetail?: (onClose: () => void) => Gtk.Widget     // CC full-panel detail (no inner scroll)
-    ccDetailRows?: number                                   // squircle height in grid rows (default 2)
+    ccDetailRows?: number                                   // detail MAX height in grid rows (default 2); shorter content shrinks the panel, longer scrolls
     // Per-widget settings page. When present, the Settings → Widgets card shows a
     // "Configure" row that pushes this as a subpage. Keep the widget's own options
     // co-located with the widget (the "mini-app" contract). Omit if it has none.
