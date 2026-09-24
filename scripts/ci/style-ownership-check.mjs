@@ -162,7 +162,7 @@ const IGNORED_WIDGETS = new Set([
     "Box", "CenterBox", "Grid", "Overlay", "Fixed", "WindowHandle",
     "Label", "Image", "DrawingArea",
     "Adjustment", "CssProvider", "DragSource", "EntryCompletion", "FileFilter",
-    "EventControllerFocus", "EventControllerKey", "EventControllerMotion",
+    "EventControllerFocus", "EventControllerKey", "EventControllerLegacy", "EventControllerMotion",
     "EventControllerScroll", "GestureClick", "GestureDrag", "GestureLongPress",
     "IconTheme", "ListStore", "SignalListItemFactory", "SizeGroup", "Snapshot",
     "StringList", "TextBuffer", "WidgetPaintable",
