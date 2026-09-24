@@ -11,10 +11,9 @@ import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
 
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
-import { attachTooltip } from "../../../lib/nidara-kit"
 import { menuRow } from "../../common/MenuRow"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
-import { CAPSULE_BORDER, barPanelOpen } from "./capsule"
+import { CAPSULE_BORDER, barTooltip } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import appService from "../../core/AppService"
 import status from "../../core/Status"
@@ -1159,10 +1158,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       }
       // Tooltip: the widget's name, or "Name · state" when the widget offers a state
       // line (`barTooltipState`). Read at show time, so it is the state of that moment.
-      attachTooltip(capsule, () => {
+      barTooltip(capsule, () => {
           const state = w.barTooltipState?.()
           return state ? `${w.name} · ${state}` : w.name
-      }, { position: Gtk.PositionType.BOTTOM, suppress: barPanelOpen })
+      })
       if (hasExpand) capsuleRefs.set(id, capsule)
       optWidgets.append(capsule)
     }
