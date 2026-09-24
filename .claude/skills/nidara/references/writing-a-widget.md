@@ -127,7 +127,7 @@ quick-settings convention), `getFill` (the gauge variant), `barClick` (intercept
 click; consulted on every click, so it can answer differently as state changes),
 `barTooltipState` (the pill's tooltip is the widget's `name` for free; return a short,
 translated state and it reads "name · state" — owner's call 2026-09-24: title by default, state
-opt-in. No tooltip shows while a bar panel is open, `barPanelOpen` in `surfaces/bar/capsule.ts`).
+opt-in. The pill gets it through `barTooltip` (`surfaces/bar/capsule.ts`): none shows while a bar panel is open, and one already up closes when a panel opens — by Status state, since a bar panel lives in the bar's own surface and the pointer never leaves the capsule).
 
 ## Never do host geometry
 
