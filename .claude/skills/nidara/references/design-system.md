@@ -3499,9 +3499,19 @@ goes through this one component. Two modes:
 **Asymmetric easing, on purpose:** ease-OUT opening, ease-IN closing. A decelerating exit
 leaves a long low-opacity tail where only high-contrast content (icons, images, 1px Cairo
 borders) stays perceptible — that tail is what made the old CSS fade look "non-uniform"
-("icons disappear later"). Related compositor knob: the `nidara-bar` layer rule runs
-`ignore_alpha = 0.01` (hyprland.lua) so the backdrop blur doesn't pop off mid-close — at
-0.05 the glass crossed the threshold while still clearly visible.
+("icons disappear later").
+
+**The fade stops at the blur line, not at 0** (`OVERLAY_POP.opacityFloor`, 2026-09-24).
+Every shell layer runs `ignore_alpha = LAYER_IGNORE_ALPHA` (0.23, `theme-tokens.ts`; the
+old note here said the bar ran 0.01 — it no longer does). Glass at `overlayOpacity` α
+fading as a whole widget drops under that line at opacity `0.23/α` — 0.42 at the default
+0.55 — while the panel is still plainly on screen, so its last frames were drawn with NO
+blur behind them. `reveal()` therefore maps progress onto `[blurSafeOpacity(α), 1]` and
+the close ends by hiding the widget from that floor in one step (the open starts there).
+At the thinnest glass (0.24) the floor is ~1: no fade, only the scale — any fade at all
+would unblur glass that thin. `blur-threshold-check.mjs` holds every shell rule to the TS
+constant, since the floor is computed from it. Only `OVERLAY_POP` panels carry the floor;
+notification banners and the island's `MorphRevealer` (a solid morph, not a fade) do not.
 
 - **Teardown:** call `dismantle()` right after removing it from its parent. It deliberately
   has no `vfunc_dispose` override — GJS blocks JS vfuncs during garbage collection, so a

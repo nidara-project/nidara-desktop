@@ -9,7 +9,7 @@ import status from "../../core/Status"
 import { safeDisconnect } from "../../core/signals"
 import { attachTooltip } from "../../../lib/nidara-kit"
 import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
-import { CAPSULE_BORDER } from "./capsule"
+import { CAPSULE_BORDER, barPanelOpen } from "./capsule"
 import hs from "../../core/HyprlandState"
 
 // openMenu: opens arbitrary content in the bar's shared expansion capsule, anchored
@@ -101,8 +101,13 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void) {
         // Glass tooltip (markup — SNI items expose tooltip_markup); read lazily so
         // it tracks the item's live title/tooltip without a subscription. Position
         // BOTTOM: the tray sits in the top bar, so the bubble drops below and its
-        // pointer aims up at the icon (and GTK won't auto-flip it).
-        attachTooltip(btn, () => item.tooltip_markup || item.title || id, { markup: true, position: Gtk.PositionType.BOTTOM })
+        // pointer aims up at the icon (and GTK won't auto-flip it). Never while a bar
+        // panel is open (`barPanelOpen`): the tray's menu IS such a panel, drawn right
+        // under this icon, and a bubble there covered its first row.
+        attachTooltip(btn, () => item.tooltip_markup || item.title || id, {
+            markup: true, position: Gtk.PositionType.BOTTOM,
+            suppress: barPanelOpen,
+        })
 
         // LAZY context menu — the item's dbusmenu layout is only fetched when the
         // user actually opens it, never at boot. That was originally a workaround:

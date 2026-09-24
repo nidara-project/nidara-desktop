@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
-import { NidaraScrolled } from "../../../lib/nidara-kit"
+import { NidaraScrolled, attachTooltip } from "../../../lib/nidara-kit"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import BaseIsland, { islandPadding, resolveIslandShape } from "./BaseIsland"
@@ -317,6 +317,17 @@ export default function IslandGrid() {
         })
     }
 
+    // The same reset with no crossfade, for when nobody is watching: the CC has
+    // finished closing. Doing the animated one on `cc-open` instead played the detail
+    // → grid crossfade INSIDE the closing panel — the grid showed up for the length
+    // of the close pop.
+    const resetDetailNow = () => {
+        if (!activeDetailId && !detailIsland) return
+        activeDetailId = ""
+        mainStack.set_visible_child_full("overview", Gtk.StackTransitionType.NONE)
+        if (detailIsland) { try { detailPage.remove(detailIsland) } catch {} ; detailIsland = null }
+    }
+
     const showDetail = (id: string) => {
         if (editMode) return
         const w = registry.get(id)
@@ -328,20 +339,37 @@ export default function IslandGrid() {
         activeDetailId = id
 
         const rows = w.ccDetailRows ?? 2
-        const cellH = rows * (UNIT + GAP) - GAP
+        const maxH = rows * (UNIT + GAP) - GAP
 
-        // Header: back button + title — lives inside the squircle for glass contrast
-        // The header is a row like the ones below it: its own fill keeps the same inset from
-        // the glass, and its content takes the same 12 the detail rows use, so the title
-        // and every row title share one left edge (they did not — 10 against 6).
-        const backBtnChild = new Gtk.Box({ spacing: 8, margin_start: 12, margin_end: 12, margin_top: 12, margin_bottom: 12 })
-        backBtnChild.append(new Gtk.Image({ gicon: uiIcon("nd-pan-start"), pixel_size: 14, css_classes: ["nd-icon"] }))
-        backBtnChild.append(new Gtk.Label({ label: w.name, css_classes: ["cc-detail-title"], halign: Gtk.Align.START }))
+        // Header: a round back button (the Settings window's back chevron, alone in its
+        // own circle instead of sharing the back/forward capsule) and the title beside
+        // it, as plain text. The title used to BE the button — a filled row with the
+        // chevron inside — which read as a list row rather than as navigation. The
+        // button keeps the same gap from the glass on top and on the left (below).
         const backBtn = new Gtk.Button({
-            child: backBtnChild, css_classes: ["cc-detail-back-btn"], halign: Gtk.Align.START,
-            margin_start: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_top: rowInsetFor(RADIUS.lg) + GLASS_INSET,
+            child: new Gtk.Image({ gicon: uiIcon("nd-pan-start"), pixel_size: 14, css_classes: ["nd-icon"] }),
+            css_classes: ["nidara-icon-btn", "cc-detail-back-btn"],
+            valign: Gtk.Align.CENTER,
         })
+        backBtn.update_property([Gtk.AccessibleProperty.LABEL], [t("cc.detail.back")])
+        attachTooltip(backBtn, t("cc.detail.back"), { chrome: true })
         backBtn.connect("clicked", hideDetail)
+        // Same gap from the glass on top and on the left: the button sits in the
+        // squircle's corner, and an uneven gap there reads as misplaced.
+        const headerGap = rowInsetFor(RADIUS.lg) + GLASS_INSET + 6
+        const header = new Gtk.Box({
+            spacing: 10,
+            margin_start: headerGap,
+            margin_end: rowInsetFor(RADIUS.lg) + GLASS_INSET,
+            margin_top: headerGap,
+            margin_bottom: 10,
+        })
+        header.append(backBtn)
+        header.append(new Gtk.Label({
+            label: w.name, css_classes: ["cc-detail-title"],
+            // No ellipsis: a widget name has to fit, not be cut ("Multime…" had room).
+            halign: Gtk.Align.START, valign: Gtk.Align.CENTER, hexpand: true,
+        }))
 
         // Content
         const panel = new Gtk.Box({
@@ -364,11 +392,18 @@ export default function IslandGrid() {
         // Reserving would ADD 12 to each side on top (the panel sat at 18 until this was
         // spotted). A detail row's trailing control clears the lane on its own: the row's
         // content margin is 12, so a switch's edge lands 18 in, past the 12px lane.
-        const { widget: scroll } = NidaraScrolled({ child: panel, reserveLane: false })
-        scroll.height_request = cellH
+        //
+        // Height: the CONTENT's, up to `ccDetailRows` grid rows and scrolling past that.
+        // It used to be exactly `ccDetailRows` rows, so a short detail (the player, the
+        // screenshot buttons) carried an empty band under it that its bar and island
+        // versions do not have.
+        const { widget: scroll } = NidaraScrolled({
+            child: panel, reserveLane: false,
+            propagateNaturalHeight: true, maxContentHeight: maxH,
+        })
 
         const inner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, width_request: GRID_WIDTH })
-        inner.append(backBtn)
+        inner.append(header)
         // Full-bleed, but flush to the GLASS: with no margin it spanned the widget rect,
         // i.e. 2px past the painted edge on each side (SquircleContainer draws GLASS_INSET
         // in). A hairline is exactly the kind of child that overhangs without anyone noticing.
@@ -670,11 +705,14 @@ export default function IslandGrid() {
     widgetConfig.connect("changed", syncCCLayout)
     watchWidgetAvailability(syncCCLayout)
 
-    // Reset edit mode + detail strip when CC is closed
+    // Reset edit mode + detail strip when CC is closed. The detail waits for the
+    // close pop to END: the CC's ScaleRevealer hides itself when its animation
+    // finishes, which unmaps this tree. Reopened mid-close = never unmapped, and the
+    // detail is simply still there, which is what the panel was showing.
+    outer.connect("unmap", () => { if (!status.cc_open) resetDetailNow() })
     status.connect("notify::cc-open", () => {
         if (!status.cc_open) {
             ctxMenu.close()
-            hideDetail()
             if (editMode) {
                 editMode = false
                 rebuild()

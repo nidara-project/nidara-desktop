@@ -691,6 +691,7 @@ export default {
     // Control Center — Island grid
     "cc.menu.size.small": "Piccolo",
     "cc.grid.done": "Fatto",
+    "cc.detail.back": "Indietro",
     "cc.grid.edit": "Modifica",
     "cc.menu.size.medium": "Medio",
     "cc.menu.size.large": "Grande",

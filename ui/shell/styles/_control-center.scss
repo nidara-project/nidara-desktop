@@ -416,16 +416,14 @@
 
 
     /* --- CC Detail Strip --- */
-    .cc-detail-back-btn {
-        background: transparent;
-        background-image: none;
-        border: none;
-        box-shadow: none;
-        border-radius: $nidara-radius-sm;
-        color: var(--nidara-text);
-        transition: background-color 0.15s ease, box-shadow 0.15s ease;
-
-        @include nidara-tile-states;
+    // The detail's back button: the Settings window's back chevron (kit
+    // `button.nidara-icon-btn`), given the navigation capsule's own fill and hairline
+    // so it reads as that capsule reduced to one circle.
+    button.nidara-icon-btn.cc-detail-back-btn {
+        background: var(--nidara-surface);
+        border: 1px solid var(--nidara-border);
+        &:hover  { background: var(--nidara-surface-hover); }
+        &:active { background: var(--nidara-surface-active); }
     }
 
     .cc-detail-sep {

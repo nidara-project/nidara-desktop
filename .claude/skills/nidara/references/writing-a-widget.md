@@ -124,7 +124,10 @@ and keep the page a thin set of rows over them, as `screenrecord` does), `isAvai
 (a hardware gate: without it the widget stops existing for the user rather than showing
 broken), `getActive`/`watchActive` (fills the whole island with the accent, the standard
 quick-settings convention), `getFill` (the gauge variant), `barClick` (intercept the pill's
-click; consulted on every click, so it can answer differently as state changes).
+click; consulted on every click, so it can answer differently as state changes),
+`barTooltipState` (the pill's tooltip is the widget's `name` for free; return a short,
+translated state and it reads "name · state" — owner's call 2026-09-24: title by default, state
+opt-in. No tooltip shows while a bar panel is open, `barPanelOpen` in `surfaces/bar/capsule.ts`).
 
 ## Never do host geometry
 
