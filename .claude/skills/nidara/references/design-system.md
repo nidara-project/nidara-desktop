@@ -3662,6 +3662,12 @@ The bar reserves a **40px** strip (`BAR_H`, the exclusive zone). Its capsules ar
 sit **4px** from the top of the screen; tiled windows start at 48 (`gaps_out` 8), so there are 8px
 between a capsule and the window under it. Between two capsules: **6px** (`BAR_GAP`). At the two ends:
 **8px** (`BAR_MARGIN` / `SIDE_GAP`).
+Inside a capsule, each side of its content: **18px** (`BAR_PILL_PAD`, `common/widget-kit/bar.ts` so
+widgets can reach it) — an icon-only pill is 18 + 16 + 18 = 52 wide. 16 until the same day: the owner
+moved the 2px taken from the gap to each side of the icon. Every bar capsule uses it (widgets, search,
+CC, `»`, clock, window title, tray, the island's compact forms); the distro icon is 18px so it takes
+PAD − 2. The CC's status dot is positioned from it (`PAD + 10`, derivation at the call site). Net
+effect on width: +2px per capsule versus the old 16/8, so slightly fewer widgets fit before `»`.
 
 - The capsule height is set by NOTHING directly: `.bar-centerbox` is `height_request: 40` and its CSS
   `margin-top` is taken out of that request, so height = 40 − margin. `BAR_CAPSULE_H` in

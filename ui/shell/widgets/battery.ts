@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { PANEL_W, AtomicWidget, WidgetSize, wrapCapsuleTile } from "../common/widget-kit"
+import { BAR_PILL_PAD, PANEL_W, AtomicWidget, WidgetSize, wrapCapsuleTile } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
 import * as Battery from "../core/BatteryService"
@@ -183,13 +183,13 @@ function buildPanel(_onClose: () => void): Gtk.Widget {
 // ── Bar icon (live glyph reflecting charge / charging / low) ───────────────────
 function buildBarContent(): Gtk.Widget {
     if (!present()) {
-        return new Gtk.Image({ gicon: uiIcon("nd-battery"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+        return new Gtk.Image({ gicon: uiIcon("nd-battery"), pixel_size: 16, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, css_classes: ["nd-icon"] })
     }
     // 16 = the pixel_size every other bar icon uses, so this capsule is exactly
     // as wide as theirs (a hand-tuned glyph box made it 9px wider — don't).
     const glyph = makeGlyph(16)
-    glyph.margin_start = 16
-    glyph.margin_end = 16
+    glyph.margin_start = BAR_PILL_PAD
+    glyph.margin_end = BAR_PILL_PAD
     bindSync(glyph, () => glyph.queue_draw())
     return glyph
 }

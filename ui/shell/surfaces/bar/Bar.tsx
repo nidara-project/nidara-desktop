@@ -42,9 +42,10 @@ import { uiIcon } from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import hs from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
+import { BAR_PILL_PAD } from "../../common/widget-kit"
 
 function SystemMenuIcon(): Gtk.Widget {
-  const img = new Gtk.Image({ pixel_size: 18, css_classes: ["bar-distro-icon"], margin_start: 14, margin_end: 14 })
+  const img = new Gtk.Image({ pixel_size: 18, css_classes: ["bar-distro-icon"], margin_start: BAR_PILL_PAD - 2, margin_end: BAR_PILL_PAD - 2 })   // 18px glyph: 2px less air keeps it as wide as a 16px pill
 
   const applyIcon = () => {
     // Fall back to the built-in mark for unknown presets (e.g. a stale "arch"
@@ -1065,7 +1066,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const rightSpacer = new Gtk.Box({ hexpand: true })
   right.append(rightSpacer)
 
-  const timeContent = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16 })
+  const timeContent = new Gtk.Box({ spacing: 12, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD })
   const timeLabel = new Gtk.Label({ label: "...", css_classes: ["bar-time-label"] })
   const updateClock = () => {
     const next = regionConfig.formatClock()
@@ -1091,7 +1092,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // leaves, the window title yielding if it has to (Status.bar_overflow_open).
   // Unfolded widgets are the same pills as the others, built by the same loop.
   // Built once and kept outside `optWidgets`, which rebuildBarWidgets empties.
-  const overflowIcon = new Gtk.Image({ gicon: uiIcon("nd-pan-end"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+  const overflowIcon = new Gtk.Image({ gicon: uiIcon("nd-pan-end"), pixel_size: 16, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, css_classes: ["nd-icon"] })
   const overflowCapsule = SquircleContainer({
       child: overflowIcon, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW,
       borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.bar_overflow_open), perfect: true,
@@ -1199,10 +1200,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // manages its own visibility (hidden while empty).
   const trayInner = Tray(openCustomExpansion, () => scheduleBarLayoutSync())
   right.append(trayInner)
-  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.prism_open), perfect: true })
+  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 16, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.prism_open), perfect: true })
   right.append(searchCapsule)
-  // CC capsule layout: [16px left pad][gear 16px][16px right-gap] = 48px (matches the
-  // search capsule). The status-indicator dot (recording / AI control) sits in that right
+  // CC capsule layout: [PAD][gear 16px][PAD right-gap] (matches the search capsule;
+  // BAR_PILL_PAD, 16 when the numbers below were measured, 18 since 2026-09-25). The status-indicator dot (recording / AI control) sits in that right
   // gap WITHOUT widening the capsule, centred between the icon's right edge and the capsule's
   // right edge. We overlay the dot on the whole content and centre it within a region that
   // starts `margin_start` from the left, so its centre lands at (margin_start / 2) + 24.
@@ -1211,17 +1212,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   //   48) and the icon's visible right edge ≈ 29 (not its box edge 32). Visible gap = [29, 45]
   //   → centre (29 + 45) / 2 = 37 → margin_start = 26 (verified: 5px air each side of the dot).
   //   (Centring on the allocation boxes gives 40, which looks pegged-right because both draw narrower.)
-  // The gap is a plain 16px spacer that just reserves the width (no shift when the dot shows/hides).
+  // The gap is a plain PAD-wide spacer that just reserves the width (no shift when the dot shows/hides).
   // Detail + Stop/kill-switch live in the CC banner. Badge can_target:false → clicks hit the capsule.
   // Two sliders, like macOS's Control Centre. The freedesktop spec has no name for
   // that; the one icon themes draw that way is GNOME Tweaks' (Colloid, MacTahoe, Qogir,
   // Tela — as two switches). `preferences-system` is a gear or tools everywhere (#587).
-  const ccGear = new Gtk.Image({ gicon: uiIcon("nd-control-center"), pixel_size: 16, margin_start: 16, css_classes: ["nd-icon"] })
+  const ccGear = new Gtk.Image({ gicon: uiIcon("nd-control-center"), pixel_size: 16, margin_start: BAR_PILL_PAD, css_classes: ["nd-icon"] })
   const ccInner = new Gtk.Box({ valign: Gtk.Align.CENTER })
   ccInner.append(ccGear)
-  ccInner.append(new Gtk.Box({ width_request: 16 }))   // reserve the right gap → capsule stays 48px
+  ccInner.append(new Gtk.Box({ width_request: BAR_PILL_PAD }))   // reserve the right gap → as wide as the search capsule
   const ccDot = ccBadge()
-  ccDot.set_margin_start(26)                            // dot centre = 37px — centred between the icon's and capsule's VISIBLE (drawn) right edges (5px air each side)
+  ccDot.set_margin_start(BAR_PILL_PAD + 10)             // = 26 at PAD 16 (derivation above, general form: margin = PAD + 10) — centred between the icon's and capsule's VISIBLE (drawn) right edges
   const ccOverlay = new Gtk.Overlay()
   ccOverlay.set_child(ccInner)
   ccOverlay.add_overlay(ccDot)

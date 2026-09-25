@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { PANEL_W, AtomicWidget, WidgetSize, makeHSliderTile } from "../common/widget-kit"
+import { BAR_PILL_PAD, PANEL_W, AtomicWidget, WidgetSize, makeHSliderTile } from "../common/widget-kit"
 import { makeVolumeSlider, makeVerticalFillTile, bindWhileRealized } from "../../lib/nidara-kit"
 import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
@@ -93,7 +93,7 @@ function buildBarContent(): Gtk.Widget {
     // — see the note on it above; the bar icon has the same stake as the CC tile.
     const getIcon = () => { const s = speaker(); return s ? AudioSvc.targetVolumeIcon(s) : uiIcon("nd-audio-volume-muted") }
 
-    const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+    const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, css_classes: ["nd-icon"] })
 
     // Re-read AND re-subscribed on every realize, and re-targeted when the default
     // endpoint changes: a bare unrealize-cleanup is a subscription that survives

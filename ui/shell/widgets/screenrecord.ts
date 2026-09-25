@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
-import { AtomicWidget, ContentBudget, PANEL_W, WidgetSize, makeIconTile, makeCapsuleInner, wrapCapsuleTile } from "../common/widget-kit"
+import { BAR_PILL_PAD, AtomicWidget, ContentBudget, PANEL_W, WidgetSize, makeIconTile, makeCapsuleInner, wrapCapsuleTile } from "../common/widget-kit"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 import { NidaraDropDown } from "../../lib/nidara-kit/scrolled"
 import { NidaraList, NidaraRow, NidaraToggleRow, NidaraDropDownRow } from "../../lib/nidara-kit"
@@ -198,7 +198,7 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
 // ── Bar icon (dynamic recording state indicator) ──────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    const image = new Gtk.Image({ gicon: uiIcon("nd-media-record"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+    const image = new Gtk.Image({ gicon: uiIcon("nd-media-record"), pixel_size: 16, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, css_classes: ["nd-icon"] })
     // The GLYPH is the whole signal: record ⇄ stop, matching what the click now
     // does. No colour class — `.rec-bar-active` had no rule anywhere and could
     // never have had one: `color:` does not recolour a Gtk.Image unless the icon
