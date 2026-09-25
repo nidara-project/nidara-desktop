@@ -155,6 +155,9 @@ The references are short and load-on-demand. Don't try to hold the whole project
 # ... edit TSX/SCSS in ui/shell/ ...
 # In a graphical session:
 Super+Shift+R                            # reload the UI (re-runs nidara-ui → scripts/run.sh)
+# ⚠️ run.sh re-bundles the TS but does NOT compile SCSS: after a .scss edit, first
+#    cd ui/shell && npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
+#    (else the reload paints the OLD style.css and the change "did nothing" — owner-caught 2026-09-25)
 tail -f "$XDG_RUNTIME_DIR/nidara-ui.log"  # logs (per-user; falls back to /tmp)
 killall gjs                              # nuke stuck old UI when reload misbehaves
 cd ui/shell && npm run typecheck        # local typecheck (needs the git-ignored @girs/)

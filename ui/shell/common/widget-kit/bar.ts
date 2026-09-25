@@ -19,9 +19,16 @@ function setIcon(img: Gtk.Image, icon: Gio.FileIcon | string) {
 
 const AUTO_HIDE_MS = 3000
 
+/** The air on each side of a bar capsule's content — an icon-only pill is
+ *  PAD + 16 + PAD = 48 wide. Every bar capsule uses it (the widgets' pills, search,
+ *  CC, the overflow arrow, the clock, the window title, the tray, the island's
+ *  compact forms), so they stay one family. On the 4px scale with the rest of the
+ *  bar's geometry (surfaces/bar/capsule.ts). */
+export const BAR_PILL_PAD = 16
+
 /**
  * Icon-only bar widget that expands to show a label on click, then auto-hides.
- * Uses the same structure as fixed bar pills: Gtk.Image + margin_start/end: 16.
+ * Uses the same structure as fixed bar pills: Gtk.Image + margin_start/end: BAR_PILL_PAD.
  * The Revealer slides in the label to the right of the icon.
  */
 export function makeBarExpandable(opts: {
@@ -33,7 +40,7 @@ export function makeBarExpandable(opts: {
     const { getIcon, getText, onAction, autoHideMs = AUTO_HIDE_MS } = opts
 
     // Identical to fixed bar pill structure — Gtk.Image as anchor
-    const icon = new Gtk.Image({ pixel_size: 16, margin_start: 16, css_classes: ["nd-icon"] })
+    const icon = new Gtk.Image({ pixel_size: 16, margin_start: BAR_PILL_PAD, css_classes: ["nd-icon"] })
     setIcon(icon, getIcon())
 
     const label = new Gtk.Label({
@@ -56,7 +63,7 @@ export function makeBarExpandable(opts: {
     box.append(revealer)
 
     // Right margin lives on the box so it adjusts with the revealer
-    box.margin_end = 16
+    box.margin_end = BAR_PILL_PAD
 
     let hideTimer: number | null = null
     let expanded = false
@@ -106,7 +113,7 @@ export function makeBarIcon(opts: {
 }): Gtk.Widget {
     const { getIcon, onAction, activeClass, getActive, subscribe } = opts
 
-    const image = new Gtk.Image({ pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+    const image = new Gtk.Image({ pixel_size: 16, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, css_classes: ["nd-icon"] })
     setIcon(image, getIcon())
 
     const syncState = () => {

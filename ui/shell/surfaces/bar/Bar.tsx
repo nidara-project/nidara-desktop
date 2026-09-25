@@ -12,7 +12,7 @@ import Gio from "gi://Gio"
 
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
-import { CAPSULE_BORDER, CUSTOM_EXPANSION_ID, barOpen, barTooltip, setBarCustomAnchor } from "./capsule"
+import { BAR_GAP, BAR_H, CAPSULE_BORDER, CUSTOM_EXPANSION_ID, barOpen, barTooltip, setBarCustomAnchor } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import { blurSafeOpacity } from "../../core/NidaraTheme"
 import appService from "../../core/AppService"
@@ -42,9 +42,10 @@ import { uiIcon } from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import hs from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
+import { BAR_PILL_PAD } from "../../common/widget-kit"
 
 function SystemMenuIcon(): Gtk.Widget {
-  const img = new Gtk.Image({ pixel_size: 18, css_classes: ["bar-distro-icon"], margin_start: 14, margin_end: 14 })
+  const img = new Gtk.Image({ pixel_size: 18, css_classes: ["bar-distro-icon"], margin_start: BAR_PILL_PAD - 2, margin_end: BAR_PILL_PAD - 2 })   // 18px glyph: 2px less air keeps it as wide as a 16px pill
 
   const applyIcon = () => {
     // Fall back to the built-in mark for unknown presets (e.g. a stale "arch"
@@ -87,7 +88,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   win.set_opacity(0)
 
   const masterOverlay = new Gtk.Overlay({ valign: Gtk.Align.FILL, vexpand: true })
-  const barBox = new Gtk.CenterBox({ css_classes: ["bar-centerbox"], height_request: 40, valign: Gtk.Align.START, margin_start: 8, margin_end: 8 })
+  const barBox = new Gtk.CenterBox({ css_classes: ["bar-centerbox"], height_request: BAR_H, valign: Gtk.Align.START, margin_start: 8, margin_end: 8 })
 
   // ── Inline expansion panel ─────────────────────────────────────────────────
   const OVERFLOW_ID = "__overflow"
@@ -118,7 +119,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // the wrapper is the variable, so all the existing alignment/margin/region
   // code below operates on it transparently (animateLayout:false = Gtk.Bin).
   // NOT `perfect: true`, deliberately. Every other `perfect` in this file is a bar
-  // CAPSULE — 40px tall, where it is what clamps the corner to min(w,h)/2 and makes the
+  // CAPSULE — BAR_CAPSULE_H tall, where it is what clamps the corner to min(w,h)/2 and makes the
   // stadium. This panel is the only large surface that had inherited it, and at radius lg
   // it bought nothing but a circular corner: a different shape from the system menu, the
   // CC context menu and the CC detail island, which are the same family (`lg` = "any
@@ -197,10 +198,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // bar grows one.
   //
   // On masterOverlay rather than barBox, because `.bar-centerbox` carries
-  // `margin-top: 8px` and a CSS margin lies OUTSIDE the allocation: the band between
+  // `margin-top: 4px` and a CSS margin lies OUTSIDE the allocation: the band between
   // the capsules and the screen edge is not barBox at all, it is the overlay behind
   // it. Measured on the live shell (`query_ui`): the window is 40px tall and barBox
-  // is y=8 h=32 x=8, so the same is true of the 8px at either end. All of it is
+  // was y=8 h=32 x=8 (measured with the old 8px margin), so the same is true of the 8px at either
+  // end. All of it is
   // inside the input region and all of it reads as bar.
   //
   // 🔑 It asks NO question about coordinates, deliberately. A `y < BAR_H` test would
@@ -268,7 +270,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // ── Panel geometry ──────────────────────────────────────────────────────
   // Derived from the bar height and the dock's actual footprint (dock size is
   // user-configurable) instead of hardcoded magic numbers.
-  const BAR_H = 40
 
   const PANEL_TOP = BAR_H + 8   // gap below the bar (8: same rhythm as the side gap)
   const SAFETY = 28
@@ -504,7 +505,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // closing is still visible until its final tick, and dropping its rect one
   // tick early would scissor away the tail of its own close animation.
   const paintedRects = (box: BlurRect): BlurRect[] | null => {
-      // The strip's own extent. Measured rather than hardcoded (the 8px top
+      // The strip's own extent. Measured rather than hardcoded (the 4px top
       // margin is CSS, `.bar-centerbox`), but floored at PANEL_TOP so this is
       // valid BEFORE the first layout pass too — that is what lets the very
       // first stamp declare a rect instead of giving up until an overlay opens.
@@ -902,7 +903,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   
   syncOverlays()
 
-  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: 8 })
+  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: BAR_GAP })
   const sysMenuWidget = SystemMenuIcon()
   const appTitle = AppTitle(geo().width, openCustomExpansion)
   const appTitleWidget = appTitle.widget
@@ -928,8 +929,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   center.append(island.indicatorRow) // live activities that are NOT fronting it
   // `center` is NOT put in the bar's CenterBox: the capsule paints on the
   // island's surface (see islandWin above). It goes into a row that reuses the
-  // SAME `.bar-centerbox` class the bar's own row does, so the 8px top margin
-  // and the 40px row height come from one CSS rule instead of a constant
+  // SAME `.bar-centerbox` class the bar's own row does, so the 4px top margin
+  // and the BAR_H row height come from one CSS rule instead of a constant
   // duplicated across two windows — the capsule lands pixel-identically where
   // the bar would have drawn it. `center` still exists and still holds the live
   // capsule, so `measureOverflow` can keep measuring its natural width.
@@ -1059,12 +1060,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     syncLeftBudget()
     scheduleBarLayoutSync()
   })
-  const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 8 })
+  const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: BAR_GAP })
   // Absorbs remaining space so actual capsules stay pinned to the right edge.
   const rightSpacer = new Gtk.Box({ hexpand: true })
   right.append(rightSpacer)
 
-  const timeContent = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16 })
+  const timeContent = new Gtk.Box({ spacing: 12, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD })
   const timeLabel = new Gtk.Label({ label: "...", css_classes: ["bar-time-label"] })
   const updateClock = () => {
     const next = regionConfig.formatClock()
@@ -1082,7 +1083,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   timeContent.append(bellIcon); timeContent.append(timeLabel)
 
   // Optional bar widgets (before Tray, reactive to config changes)
-  const optWidgets = new Gtk.Box({ css_classes: ["bar-optional-widgets"], spacing: 8 })
+  const optWidgets = new Gtk.Box({ css_classes: ["bar-optional-widgets"], spacing: BAR_GAP })
 
   // The overflow capsule: shown only while some widget does not fit. It is not a
   // menu — it unfolds the hidden widgets IN LINE, in the same bar (macOS 27's `»`):
@@ -1090,7 +1091,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // leaves, the window title yielding if it has to (Status.bar_overflow_open).
   // Unfolded widgets are the same pills as the others, built by the same loop.
   // Built once and kept outside `optWidgets`, which rebuildBarWidgets empties.
-  const overflowIcon = new Gtk.Image({ gicon: uiIcon("nd-pan-end"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+  const overflowIcon = new Gtk.Image({ gicon: uiIcon("nd-pan-end"), pixel_size: 16, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, css_classes: ["nd-icon"] })
   const overflowCapsule = SquircleContainer({
       child: overflowIcon, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW,
       borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.bar_overflow_open), perfect: true,
@@ -1198,10 +1199,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // manages its own visibility (hidden while empty).
   const trayInner = Tray(openCustomExpansion, () => scheduleBarLayoutSync())
   right.append(trayInner)
-  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.prism_open), perfect: true })
+  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 16, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.prism_open), perfect: true })
   right.append(searchCapsule)
-  // CC capsule layout: [16px left pad][gear 16px][16px right-gap] = 48px (matches the
-  // search capsule). The status-indicator dot (recording / AI control) sits in that right
+  // CC capsule layout: [PAD][gear 16px][PAD right-gap] (matches the search capsule;
+  // BAR_PILL_PAD, 16 when the numbers below were measured, 18 since 2026-09-25). The status-indicator dot (recording / AI control) sits in that right
   // gap WITHOUT widening the capsule, centred between the icon's right edge and the capsule's
   // right edge. We overlay the dot on the whole content and centre it within a region that
   // starts `margin_start` from the left, so its centre lands at (margin_start / 2) + 24.
@@ -1210,17 +1211,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   //   48) and the icon's visible right edge ≈ 29 (not its box edge 32). Visible gap = [29, 45]
   //   → centre (29 + 45) / 2 = 37 → margin_start = 26 (verified: 5px air each side of the dot).
   //   (Centring on the allocation boxes gives 40, which looks pegged-right because both draw narrower.)
-  // The gap is a plain 16px spacer that just reserves the width (no shift when the dot shows/hides).
+  // The gap is a plain PAD-wide spacer that just reserves the width (no shift when the dot shows/hides).
   // Detail + Stop/kill-switch live in the CC banner. Badge can_target:false → clicks hit the capsule.
   // Two sliders, like macOS's Control Centre. The freedesktop spec has no name for
   // that; the one icon themes draw that way is GNOME Tweaks' (Colloid, MacTahoe, Qogir,
   // Tela — as two switches). `preferences-system` is a gear or tools everywhere (#587).
-  const ccGear = new Gtk.Image({ gicon: uiIcon("nd-control-center"), pixel_size: 16, margin_start: 16, css_classes: ["nd-icon"] })
+  const ccGear = new Gtk.Image({ gicon: uiIcon("nd-control-center"), pixel_size: 16, margin_start: BAR_PILL_PAD, css_classes: ["nd-icon"] })
   const ccInner = new Gtk.Box({ valign: Gtk.Align.CENTER })
   ccInner.append(ccGear)
-  ccInner.append(new Gtk.Box({ width_request: 16 }))   // reserve the right gap → capsule stays 48px
+  ccInner.append(new Gtk.Box({ width_request: BAR_PILL_PAD }))   // reserve the right gap → as wide as the search capsule
   const ccDot = ccBadge()
-  ccDot.set_margin_start(26)                            // dot centre = 37px — centred between the icon's and capsule's VISIBLE (drawn) right edges (5px air each side)
+  ccDot.set_margin_start(BAR_PILL_PAD + 10)             // = 26 at PAD 16 (derivation above, general form: margin = PAD + 10) — centred between the icon's and capsule's VISIBLE (drawn) right edges
   const ccOverlay = new Gtk.Overlay()
   ccOverlay.set_child(ccInner)
   ccOverlay.add_overlay(ccDot)
@@ -1253,7 +1254,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // (the overflow unfolding), so the title cannot take its usual ~180ms to shrink.
   const syncLeftBudget = (immediate = false) => {
     const sysMenuW = sysMenuWidget.measure(Gtk.Orientation.HORIZONTAL, -1)[1] || 48
-    const spacing = 8
+    const spacing = BAR_GAP
     let appTitleBudget: number
     if (status.bar_overflow_open) {
       // No island in the middle: the title gets whatever the unfolded right group
@@ -1290,7 +1291,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     while (c) { iconWidths.push(natW(c)); c = c.get_next_sibling() }
     if (iconWidths.length === 0) return
 
-    const spacing = 8
+    const spacing = BAR_GAP
     const fixedCapsules: Gtk.Widget[] = [trayInner, searchCapsule, ccBtn, timeCapsule]
     const fixedW = fixedCapsules.reduce((s, w) => s + (w.get_visible() ? natW(w) + spacing : 0), 0)
     overflowCapsule.set_visible(true)
@@ -1345,7 +1346,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const monitorHeight = gdkmonitor.get_geometry().height
 
   // ── Top zone reservation ──────────────────────────────────────────────────
-  // The bar reserves its own 40 px top strip via exclusive_zone (set on `win`
+  // The bar reserves its own BAR_H top strip via exclusive_zone (set on `win`
   // below). The previous design used a SEPARATE invisible "nidara-bar-zone"
   // layer surface (exclusive_zone=40) plus exclusive_zone=-1 on the bar, so a
   // side dock's exclusive zone couldn't squish the bar's width. But that empty
@@ -1360,7 +1361,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // exclusive zone and start after it — WAS WRONG, and cost real time in 2026-07
   // because it reads plausibly. Layer-shell arranges a surface requesting
   // `exclusive_zone > 0` against the FULL output area; only surfaces asking for
-  // zone 0 get pushed into the remaining usable area. The bar asks for 40, so it
+  // zone 0 get pushed into the remaining usable area. The bar asks for BAR_H, so it
   // spans the whole monitor no matter what anyone else reserves. Measured:
   // `hyprctl monitors -j` reports reserved [0,40,0,100] with a bottom dock while
   // `hyprctl layers -j` still puts nidara-bar at 0 0 2560 1440. That is also why
@@ -1379,7 +1380,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     // for the life of the session: modality comes from the compositor focus grab
     // (syncKeyboardMode), and EXCLUSIVE would re-add us to m_exclusiveLSes for nothing.
     Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
-    // Reserve the 40 px top strip for tiled windows (replaces the old nidara-bar-zone
+    // Reserve the BAR_H top strip for tiled windows (replaces the old nidara-bar-zone
     // spacer surface — see "Top zone reservation" above). Independent of the surface's
     // own height; the bar surface stays full-height for the CC/NC overlays.
     Gtk4LayerShell.set_exclusive_zone(win, BAR_H)

@@ -26,6 +26,7 @@ import { dockSettings, dockSideState } from "./state"
 import type { AnimState } from "./state"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 import { SlicedCairoArea } from "../../../lib/sliced-cairo"
+import { BAR_H } from "../bar/capsule"
 
 type Rect = { x: number, y: number, width: number, height: number }
 
@@ -508,7 +509,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
     const monMain = gdkmonitor.get_geometry().height
     const dockMonitorWidth = gdkmonitor.get_geometry().width
     const WIN_W = dockMonitorWidth
-    const BAR_HEIGHT = 40
+    const BAR_HEIGHT = BAR_H   // the bar's exclusive zone (surfaces/bar/capsule.ts)
     const WIN_H = monMain - BAR_HEIGHT
 
     const getGtkCenter = (rh: number) => Math.round(rh / 2)

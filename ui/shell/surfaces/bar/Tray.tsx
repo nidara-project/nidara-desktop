@@ -8,8 +8,9 @@ import { renderMenuModel } from "../../common/NidaraMenu"
 import status from "../../core/Status"
 import { safeDisconnect } from "../../core/signals"
 import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
-import { CAPSULE_BORDER, barOpen, barTooltip, isBarCustomAnchor } from "./capsule"
+import { BAR_GAP, CAPSULE_BORDER, barOpen, barTooltip, isBarCustomAnchor } from "./capsule"
 import hs from "../../core/HyprlandState"
+import { BAR_PILL_PAD } from "../../common/widget-kit"
 
 // openMenu: opens arbitrary content in the bar's shared expansion capsule, anchored
 // under the given widget (same system as the bar widget popovers). Injected by Bar.
@@ -18,11 +19,11 @@ type OpenMenu = (anchor: Gtk.Widget, build: (onClose: () => void) => Gtk.Widget,
 export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void) {
     // Spacing container only — each tray item now carries its OWN glass capsule
     // (see createItem), so there's no outer grouping pill and no interior padding
-    // here. 8px matches the gap between the other right-side bar capsules.
+    // here. BAR_GAP matches the gap between the other right-side bar capsules.
     const box = new Gtk.Box({
         name: "bar-tray",
         css_classes: ["bar-tray"],
-        spacing: 8,
+        spacing: BAR_GAP,
     })
 
     // id → the item's top-level capsule (the child appended to `box`). We keep the
@@ -61,7 +62,7 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void) {
 
         // 16px air each side → the button (and thus its capsule) is 48px wide,
         // matching the search / CC / clock icon capsules exactly.
-        const img = new Gtk.Image({ pixel_size: 16, css_classes: ["bar-tray-icon"], margin_start: 16, margin_end: 16 })
+        const img = new Gtk.Image({ pixel_size: 16, css_classes: ["bar-tray-icon"], margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD })
 
         // Use icon_name when the active icon theme knows the icon (or its -symbolic
         // variant). CSS `-gtk-icon-style: symbolic` then makes GTK prefer the

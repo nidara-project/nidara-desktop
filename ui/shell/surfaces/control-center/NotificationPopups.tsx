@@ -30,7 +30,7 @@ export function NotificationPopupsWidget() {
 
     // Bar owns the layer-shell input region and only re-stamps it on overlay
     // open/close — so a banner appearing with no panel open sits OUTSIDE the
-    // region (just the 40px bar strip) and the pointer passes through it: no
+    // region (just the bar strip) and the pointer passes through it: no
     // close, no swipe, no actions. Bar wires (box as any).onStackChanged to its
     // updateInputRegion; we fire it whenever the stack settles at a new size.
     // Deferred a frame (and coalesced) so it reads the settled allocation, not

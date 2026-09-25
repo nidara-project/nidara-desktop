@@ -8,6 +8,7 @@ import hs from "../../core/HyprlandState"
 import status from "../../core/Status"
 import shellActions from "../../core/ShellActions"
 import buildWindowMenu from "./WindowMenu"
+import { BAR_PILL_PAD } from "../../common/widget-kit"
 
 // openMenu: opens arbitrary content in the bar's shared expansion capsule,
 // anchored under the given widget. Injected by Bar (same pattern as Tray).
@@ -68,8 +69,8 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
   const appName = new Gtk.Label({
     label: "—",
     css_classes: ["bar-app-name"],
-    margin_start: 16,
-    margin_end: 16,
+    margin_start: BAR_PILL_PAD,
+    margin_end: BAR_PILL_PAD,
   })
 
   const updateLabel = () => {

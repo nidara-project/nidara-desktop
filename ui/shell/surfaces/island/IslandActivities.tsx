@@ -14,6 +14,7 @@ import { makeBatteryGlyph, batteryPresent, batteryFrac } from "../../common/Batt
 import { makeWorkspaceDot, makeActiveDotGlyph, WS_COUNT } from "../../common/WorkspaceDot"
 import { uiIcon } from "../../core/Icons"
 import type { IslandActivity } from "./ActivityIsland"
+import { BAR_PILL_PAD } from "../../common/widget-kit"
 
 // ── Browser and Foreground Player Matching ──────────────────────────────────
 const BROWSER_CLASSES = new Set([
@@ -89,7 +90,7 @@ export const DOTS_ID = "dots"
 function dotsActivity(): IslandActivity {
     // spacing 10 (dots are small — the other activity forms use 8), 16px side
     // margins and halign CENTER: the bar capsule family standard.
-    const box = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
+    const box = new Gtk.Box({ spacing: 12, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, halign: Gtk.Align.CENTER })
     const dots: Gtk.Widget[] = []
     for (let i = 1; i <= WS_COUNT; i++) {
         const dot = makeWorkspaceDot(i)
@@ -226,7 +227,7 @@ function recActivity(): IslandActivity {
         // halign CENTER: symmetric pill resize mid-mutation (ActivityIsland).
         const box = opts.ghost
             ? new Gtk.Box({ spacing: 8 })
-            : new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
+            : new Gtk.Box({ spacing: 8, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, halign: Gtk.Align.CENTER })
         const dot = new Gtk.Box({ css_classes: ["island-rec-dot"], width_request: 8, height_request: 8, valign: Gtk.Align.CENTER })
         const time = new Gtk.Label({ css_classes: ["island-rec-time"], valign: Gtk.Align.CENTER, label: recordingElapsed() })
         labels.push(time)
@@ -287,7 +288,7 @@ function batteryActivity(): IslandActivity {
         // halign CENTER: symmetric pill resize mid-mutation (ActivityIsland).
         const box = opts.ghost
             ? new Gtk.Box({ spacing: 8 })
-            : new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
+            : new Gtk.Box({ spacing: 8, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, halign: Gtk.Align.CENTER })
         const glyph = makeBatteryGlyph(16)   // icon box, same as the bar's battery pill
         glyph.valign = Gtk.Align.CENTER
         if (opts.hideArt) glyph.opacity = 0

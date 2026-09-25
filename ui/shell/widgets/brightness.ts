@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { PANEL_W, AtomicWidget, WidgetSize, makeHSliderTile } from "../common/widget-kit"
+import { BAR_PILL_PAD, PANEL_W, AtomicWidget, WidgetSize, makeHSliderTile } from "../common/widget-kit"
 import GLib from "gi://GLib"
 import { execAsync } from "../../lib/process"
 import { makeHSlider, makeVerticalFillTile } from "../../lib/nidara-kit"
@@ -105,7 +105,7 @@ function buildHorizontal(): Gtk.Widget {
 // ── Bar widget (icon only) ────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    return new Gtk.Image({ gicon: uiIcon("nd-display-brightness"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+    return new Gtk.Image({ gicon: uiIcon("nd-display-brightness"), pixel_size: 16, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, css_classes: ["nd-icon"] })
 }
 
 // ── Bar expansion panel content ───────────────────────────────────────────────

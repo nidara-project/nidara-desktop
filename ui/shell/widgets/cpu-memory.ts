@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import Theme from "../core/ThemeManager"
-import { AtomicWidget, WidgetSize, ContentBudget } from "../common/widget-kit"
+import { BAR_PILL_PAD, AtomicWidget, WidgetSize, ContentBudget } from "../common/widget-kit"
 import { pollWhileMapped } from "../common/poll"
 import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
@@ -103,8 +103,8 @@ function buildBarContent(): Gtk.Widget {
         css_classes: ["bar-resources"],
         spacing: 12,
         valign: Gtk.Align.CENTER,
-        margin_start: 16,
-        margin_end: 16,
+        margin_start: BAR_PILL_PAD,
+        margin_end: BAR_PILL_PAD,
         margin_top: 4,
         margin_bottom: 4,
     })

@@ -44,8 +44,8 @@ import hyprlandState from "../../core/HyprlandState"
 // no bridge, no stacked blur, and `compute_bounds` just works.
 //
 // The bar still owns the capsule's GEOMETRY (Bar.tsx builds the row and hands it
-// over) — the row reuses `.bar-centerbox`/`.bar-center` so the 8px top margin and
-// 40px row height come from the same CSS the bar uses, not a duplicated constant.
+// over) — the row reuses `.bar-centerbox`/`.bar-center` so the 4px top margin and
+// BAR_H row height come from the same CSS the bar uses, not a duplicated constant.
 
 const NAMESPACE = "nidara-island"
 
@@ -638,7 +638,7 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     // top one. The bar's layer change reaches the compositor after our `present()`
     // in the same turn, so the bar lands above us. It then eats every click meant for
     // the capsule, because `Bar.tsx` unconditionally claims `{0,0,width,BAR_H}` of
-    // input and the capsule is painted at y=8..40, inside that strip. The symptom is
+    // input and the capsule is painted at y=4..40, inside that strip. The symptom is
     // an island that is fully visible and completely dead — and the input region is
     // perfectly stamped the whole time, which is what makes it so confusing to chase.
     // (It also inverts the blur: this surface is above the bar precisely so it can
