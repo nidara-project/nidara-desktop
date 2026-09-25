@@ -230,16 +230,15 @@ export default function SquircleContainer({
         const stateMix = getOpen?.() ? GLASS_STATE_MIX.open
             : (isHovered && hoverLift) ? GLASS_STATE_MIX.hover : null
         if (stateMix && fillFrac === undefined) {
-            const k = dark ? stateMix.dark : stateMix.light
-            const to = dark ? GLASS_SPECULAR : GLASS_TINT.dark
-            shareColor = {
-                r: shareColor.r + (to.r - shareColor.r) * k,
-                g: shareColor.g + (to.g - shareColor.g) * k,
-                b: shareColor.b + (to.b - shareColor.b) * k,
-            }
-            // A pane the user made nearly transparent has almost no tint to move;
-            // the same k on the alpha keeps the state visible at every opacity.
-            shareAlpha = Math.min(1, shareAlpha + k)
+            // The veil composited OVER the glass, folded into the one fill: the same
+            // pixels as painting it separately, without a second path.
+            const v = dark ? stateMix.dark : stateMix.light
+            const ink = dark ? GLASS_SPECULAR : GLASS_TINT.dark
+            const a0 = shareAlpha
+            const a = a0 + v * (1 - a0)
+            const mix = (c0: number, c1: number) => (c0 * a0 * (1 - v) + c1 * v) / a
+            shareColor = { r: mix(shareColor.r, ink.r), g: mix(shareColor.g, ink.g), b: mix(shareColor.b, ink.b) }
+            shareAlpha = a
         }
 
         // Gtk4 provides a clean surface; OVER is the standard blending mode.

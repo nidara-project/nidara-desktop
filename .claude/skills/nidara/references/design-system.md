@@ -3667,8 +3667,8 @@ down, and shows nothing on hover) turned that round.
 | state | paint | where |
 |---|---|---|
 | rest | glass + `CAPSULE_BORDER` | — |
-| hover | the tint moves `GLASS_STATE_MIX.hover` toward the light (dark glass) or toward `GLASS_TINT.dark` (light glass), alpha up by the same | `hoverLift: true` |
-| open | the same move, by `GLASS_STATE_MIX.open` — beats hover | `...barOpen(() => …)` from `surfaces/bar/capsule.ts` |
+| hover | a veil OVER the glass at `GLASS_STATE_MIX.hover` — `GLASS_SPECULAR` on dark glass, `GLASS_TINT.dark` on light glass. A FIXED alpha, not a fraction of the pane: the first version scaled with the bar opacity and all but vanished at its minimum | `hoverLift: true` |
+| open | the same veil at `GLASS_STATE_MIX.open` — beats hover | `...barOpen(() => …)` from `surfaces/bar/capsule.ts` |
 
 `barOpen(isOpen)` wires `getOpen`/`watchOpen` to every Status prop that opens a bar panel.
 A capsule that opens the SHARED custom expansion (a tray item's menu, the window menu) asks
