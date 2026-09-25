@@ -1,10 +1,12 @@
 import Gtk from "gi://Gtk?version=4.0"
 import status from "../../core/Status"
+import { safeDisconnect } from "../../core/signals"
 import { attachTooltip, type NidaraTooltipHandle, type NidaraTooltipOpts, type NidaraTooltipText } from "../../../lib/nidara-kit"
 
-// Shared bar-capsule edge: a faint white inner border at rest. On hover the
-// capsules pass hoverBorderAccent, which repaints this border with the current
-// accent at full opacity. Used by Bar, Workspaces and AppTitle.
+// Shared bar-capsule edge: a faint white inner border. It no longer changes on
+// hover: the capsules pass `hoverLift` (the glass lifts a little) and `barOpen`
+// (the glass shows the panel is open) — see GLASS_STATE_MIX. Used by Bar, Tray
+// and AppTitle.
 export const CAPSULE_BORDER = { r: 1, g: 1, b: 1, a: 0.2 }
 
 // Whether a panel that drops from the bar is open — its own expansion panel (a
@@ -19,6 +21,37 @@ export const barPanelOpen = () =>
 // icon and the tooltip closes on leave. A bar panel is drawn in the bar's own surface,
 // so the pointer never leaves the capsule it just clicked and the bubble stayed over
 // the panel. Here "a panel is open" is Status state, so that is what closes it.
+const PANEL_PROPS = ["bar-expanded-id", "cc-open", "nc-open", "system-menu-open", "prism-open"]
+
+// The widget that anchors the bar's shared "custom" expansion (a tray item's menu,
+// the window menu). Bar.tsx sets it; it counts only while that expansion is up.
+export const CUSTOM_EXPANSION_ID = "__custom"
+let customAnchor: Gtk.Widget | null = null
+const anchorListeners = new Set<() => void>()
+export function setBarCustomAnchor(anchor: Gtk.Widget | null) {
+    if (customAnchor === anchor) return
+    customAnchor = anchor
+    for (const cb of anchorListeners) cb()
+}
+export const isBarCustomAnchor = (w: Gtk.Widget) =>
+    status.bar_expanded_id === CUSTOM_EXPANSION_ID && customAnchor === w
+
+/** SquircleContainer props that paint a bar capsule OPEN while `isOpen()` holds —
+ *  the capsule stays marked for as long as the panel it opened is down. */
+export function barOpen(isOpen: () => boolean) {
+    return {
+        getOpen: isOpen,
+        watchOpen: (cb: () => void) => {
+            const ids = PANEL_PROPS.map(p => status.connect(`notify::${p}`, cb))
+            anchorListeners.add(cb)
+            return () => {
+                for (const id of ids) safeDisconnect(status, id)
+                anchorListeners.delete(cb)
+            }
+        },
+    }
+}
+
 const openTips = new Set<NidaraTooltipHandle>()
 const closeAll = () => { if (barPanelOpen()) for (const tip of openTips) tip.popover.popdown() }
 for (const prop of ["bar-expanded-id", "cc-open", "nc-open", "system-menu-open"])

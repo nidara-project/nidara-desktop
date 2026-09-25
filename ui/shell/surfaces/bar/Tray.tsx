@@ -8,7 +8,7 @@ import { renderMenuModel } from "../../common/NidaraMenu"
 import status from "../../core/Status"
 import { safeDisconnect } from "../../core/signals"
 import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
-import { CAPSULE_BORDER, barTooltip } from "./capsule"
+import { CAPSULE_BORDER, barOpen, barTooltip, isBarCustomAnchor } from "./capsule"
 import hs from "../../core/HyprlandState"
 
 // openMenu: opens arbitrary content in the bar's shared expansion capsule, anchored
@@ -231,10 +231,12 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void) {
         // search / CC / clock capsules, so tray icons read as first-class bar icons
         // rather than one grouped pill. The button fills the 48px capsule, so the
         // whole capsule left-clicks (activate) and right-clicks (menu); the
-        // SquircleContainer only paints the glass + hover-accent border.
+        // SquircleContainer only paints the glass: a hover lift, and the open state
+        // while this item's menu (anchored on `btn`) is down.
         const capsule = SquircleContainer({
             child: btn, gloss: true, useShellOpacity: true, chrome: true,
-            opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true,
+            opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true,
+            ...barOpen(() => isBarCustomAnchor(btn)), perfect: true,
         })
         items.set(id, capsule)
         box.append(capsule)

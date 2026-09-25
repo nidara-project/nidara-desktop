@@ -3651,10 +3651,30 @@ the mount point: it places the capsule, mounts the revealers, and on
 (`island.syncAnchor`) so the morph only inflates down/sideways — the capsule never
 travels. Known affordance trade-off: while open, the island's rect overlaps the
 bar-center strip, so re-clicking the capsule to close is off — Esc / outside click /
-selecting a workspace close it. Known cosmetic nit: the capsule's hover border (accent,
-via `hoverBorderAccent`) isn't replicated by the clone, so opening from hover snaps the
-1px border to its rest color on frame 0. A future island mode (player, agent) is a
+selecting a workspace close it. Known cosmetic nit: the capsule's hover lift (`hoverLift`)
+isn't replicated by the clone, so opening from hover snaps the glass to its rest tint on
+frame 0. A future island mode (player, agent) is a
 `registerMode` call plus a new id exported from `Status.ts` — not a new Status field.
+
+### Bar capsule states: rest, hover, open (2026-09-25)
+
+A bar capsule has three states and **none of them uses the accent** — the accent marks
+what is ON or SELECTED, and a capsule whose panel is down is neither. Until 2026-09-25 the
+hover painted the rim in the accent at 100 % and nothing marked the open capsule; the
+owner's review against macOS (where a menu bar item stays highlighted while its menu is
+down, and shows nothing on hover) turned that round.
+
+| state | paint | where |
+|---|---|---|
+| rest | glass + `CAPSULE_BORDER` | — |
+| hover | a veil OVER the glass at `GLASS_STATE_MIX.hover` — `GLASS_SPECULAR` on dark glass, `GLASS_TINT.dark` on light glass. A FIXED alpha, not a fraction of the pane: the first version scaled with the bar opacity and all but vanished at its minimum | `hoverLift: true` |
+| open | the same veil at `GLASS_STATE_MIX.open` — beats hover | `...barOpen(() => …)` from `surfaces/bar/capsule.ts` |
+
+`barOpen(isOpen)` wires `getOpen`/`watchOpen` to every Status prop that opens a bar panel.
+A capsule that opens the SHARED custom expansion (a tray item's menu, the window menu) asks
+`isBarCustomAnchor(w)` with the widget it passed as anchor — `Bar.openCustomExpansion`
+publishes it through `setBarCustomAnchor`. A new capsule that opens something gets both
+props, or it looks dead while its own panel is open.
 
 ## SCSS conventions and anti-patterns
 

@@ -185,7 +185,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         if (front?.expandMode) status.toggleIsland(front.expandMode)
         else front?.onExpand?.()
     }
-    const capsule = SquircleContainer({ child: compactStack, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => openFront() })
+    const capsule = SquircleContainer({ child: compactStack, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, perfect: true, onClick: () => openFront() })
     // See the chips' equivalent below — the capsule is permanent furniture, so it
     // is always "revealed" and its rect is the one that has never gone missing.
     ;(capsule as any).islandTargetId = "capsule"
@@ -331,7 +331,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
             chrome: true,
             opacityRole: "bar",
             borderColor: CAPSULE_BORDER,
-            hoverBorderAccent: true,
+            hoverLift: true,
             perfect: true,
             onClick: () => {
                 if (slotRef.currentActivity) promote(slotRef.currentActivity)

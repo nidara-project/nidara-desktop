@@ -146,6 +146,27 @@ export const GLASS_TINT = {
 export const GLASS_SPECULAR = { r: 1, g: 1, b: 1 } as const
 
 /**
+ * A clickable capsule while its panel is OPEN, and while the pointer is over it: a
+ * veil laid OVER the glass, at these alphas — `GLASS_SPECULAR` on dark glass (it
+ * lightens), `GLASS_TINT.dark` on light glass (it darkens). The gesture macOS makes
+ * behind a menu bar item whose menu is down.
+ *
+ * It is a fixed ink, NOT a fraction of the pane, for the reason `INK` (chrome ink) gives:
+ * the first version moved the glass tint by a fraction and nudged its alpha, and at
+ * the minimum bar opacity there was almost no tint left to move — the owner could
+ * barely see the open state (2026-09-25). A veil at a fixed alpha reads the same at
+ * every opacity setting.
+ *
+ * Neither state uses the accent: the accent marks what is ON or SELECTED, and a
+ * capsule with its panel open is neither. `hover` stays well under `open` — a hint,
+ * not a second open state.
+ */
+export const GLASS_STATE_MIX = {
+    open: { dark: 0.20, light: 0.14 },
+    hover: { dark: 0.08, light: 0.06 },
+} as const
+
+/**
  * CHROME INK — the alpha of a neutral mark painted ON the glass, as opposed to the
  * alpha OF the glass.
  *
