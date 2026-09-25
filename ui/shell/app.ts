@@ -806,6 +806,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             ccEditMode: status.cc_edit_mode,
             recording: status.recording,
             barExpandedId: status.bar_expanded_id,
+            barOverflowOpen: status.bar_overflow_open,
             ccDetailId: status.cc_detail_id,
             agentPointer: isAgentPointerActive(),
           },

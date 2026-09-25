@@ -21,7 +21,9 @@ export const barPanelOpen = () =>
 // icon and the tooltip closes on leave. A bar panel is drawn in the bar's own surface,
 // so the pointer never leaves the capsule it just clicked and the bubble stayed over
 // the panel. Here "a panel is open" is Status state, so that is what closes it.
-const PANEL_PROPS = ["bar-expanded-id", "cc-open", "nc-open", "system-menu-open", "prism-open"]
+// `bar-overflow-open` is here only so the `»` capsule repaints as OPEN; it does not
+// suppress tooltips (barPanelOpen), since the unfolded widgets are ordinary pills.
+const PANEL_PROPS = ["bar-expanded-id", "cc-open", "nc-open", "system-menu-open", "prism-open", "bar-overflow-open"]
 
 // The widget that anchors the bar's shared "custom" expansion (a tray item's menu,
 // the window menu). Bar.tsx sets it; it counts only while that expansion is up.

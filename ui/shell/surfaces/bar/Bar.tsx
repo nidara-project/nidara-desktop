@@ -11,10 +11,10 @@ import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
 
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
-import { menuRow } from "../../common/MenuRow"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
 import { CAPSULE_BORDER, CUSTOM_EXPANSION_ID, barOpen, barTooltip, setBarCustomAnchor } from "./capsule"
 import Theme from "../../core/ThemeManager"
+import { blurSafeOpacity } from "../../core/NidaraTheme"
 import appService from "../../core/AppService"
 import status from "../../core/Status"
 import inputYield from "../../core/InputYield"
@@ -38,7 +38,7 @@ import { execAsync } from "../../../lib/process"
 import { t } from "../../core/i18n"
 import { barSettings, onBarSettingsChanged, resolveLauncherIcon, LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "./barState"
 import { dockSideState, dockSettings, onDockSettingsChanged } from "../dock/state"
-import { uiIcon, currentUiIcon } from "../../core/Icons"
+import { uiIcon } from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import hs from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
@@ -101,9 +101,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Start-align is for left-side capsules (AppTitle) whose centered panel would
   // otherwise overflow the left screen edge.
   let customAlign: "center" | "start" = "center"
-  let overflowContentBuilder: ((onClose: () => void) => Gtk.Widget) | null = null
-  // Measurement cache — populated after first layout; used to cap visible icons
-  let cachedMaxIcons: number | null = null
+  // How many optional widgets fit, counted from the CLOCK side (see measureOverflow).
+  // `null` = not measured yet, show them all.
+  let fitFolded: number | null = null
+  let fitUnfolded: number | null = null
   const capsuleRefs = new Map<string, Gtk.Widget>()
   // The halo of the row hover fill, from the GLASS, all four sides (the horizontal is
   // re-applied per panel below, since a flush panel takes it over). Default `n` — this
@@ -167,7 +168,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const dismissOverlays = () => {
     if (status.cc_edit_mode) return   // don't close CC while in edit mode
     status.cc_open = false; status.nc_open = false; status.prism_open = false; status.system_menu_open = false
-    status.island_mode = ""; status.bar_expanded_id = ""
+    status.island_mode = ""; status.bar_expanded_id = ""; status.bar_overflow_open = false
     // The app grid too, and it is NOT decoration: this surface is a peer in the
     // grid's focus grab (so its capsules stay hoverable while the grid is open), and
     // a peer is precisely a surface the compositor will NOT dismiss on. Without this
@@ -661,7 +662,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   //    desktop interactive, and a grab would take that away.
   const barModal = () =>
     (status.cc_open || status.nc_open || status.prism_open || status.system_menu_open
-      || status.bar_expanded_id !== "") && !status.cc_edit_mode
+      || status.bar_expanded_id !== "" || status.bar_overflow_open) && !status.cc_edit_mode
   const barGrabbing = () => barModal()
   // ⚠️ ANY open island mode, not just the keyboard-driven ones. Under layer-shell
   // only an EXCLUSIVE mode took input, so this used to read `island.needsKeyboard()`
@@ -691,7 +692,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     if (!status.cc_edit_mode) {
       status.cc_open = false; status.nc_open = false
       status.prism_open = false; status.system_menu_open = false
-      status.bar_expanded_id = ""
+      status.bar_expanded_id = ""; status.bar_overflow_open = false
     }
     // dismissOverlays is a no-op in edit mode, and a closed overlay re-enters here
     // through its notify handler — but neither is guaranteed, so settle the region
@@ -824,9 +825,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (id === CUSTOM_ID) {
           if (!customContentBuilder) return
           content = customContentBuilder(onClose)
-      } else if (id === OVERFLOW_ID) {
-          if (!overflowContentBuilder) return
-          content = overflowContentBuilder(onClose)
       } else {
           const w = registry.get(id)
           if (!w?.buildBarExpanded) return
@@ -938,7 +936,20 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const islandRow = new Gtk.Box({ css_classes: ["bar-centerbox"], height_request: BAR_H, valign: Gtk.Align.START })
   islandRow.append(center)
   center.hexpand = true           // halign CENTER inside a full-width row
-  islandWin.mount(islandRow, island.hitTargets, island.revealers)
+  // The row RISES off the top of the screen while the bar's overflow is unfolded in
+  // line (Status.bar_overflow_open), and the surface is unmapped once it is out of
+  // sight (IslandWindow.setYielded). Paint-only, so the input and blur regions never
+  // chase it: the rise ends above the rect already stamped for the capsule.
+  const islandHost = new ScaleRevealer(islandRow, {
+    durationIn: 220, durationOut: 150, scaleFrom: 1, animateLayout: false, pivot: "top-center",
+    riseFrom: BAR_H + 8,
+    opacityFloor: () => blurSafeOpacity(Theme.barOpacity),
+  })
+  // ScaleRevealer clips to its box; the capsule's shadow spills below the row.
+  islandHost.set_overflow(Gtk.Overflow.VISIBLE)
+  islandHost.valign = Gtk.Align.START
+  islandHost.showInstant()
+  islandWin.mount(islandHost, island.hitTargets, island.revealers)
 
   const ISLAND_GAP = 16
   const BAR_MARGIN = 8
@@ -1073,40 +1084,33 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Optional bar widgets (before Tray, reactive to config changes)
   const optWidgets = new Gtk.Box({ css_classes: ["bar-optional-widgets"], spacing: 8 })
 
-  const getMaxIcons = (): number => cachedMaxIcons ?? Infinity
-
-  const buildOverflowList = (hiddenIds: string[]): Gtk.Widget => {
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
-    for (const id of hiddenIds) {
-      const w = registry.get(id)
-      if (!w) continue
-      const hasExpand = !!w.buildBarExpanded
-      const hasCCDetail = !!w.buildCCDetail
-      const btn = menuRow({
-        label: w.name,
-        icon: currentUiIcon(w.icon),
-        onClick: () => {
-          // Same first refusal as a visible pill (see rebuildBarWidgets) — an
-          // overflowed widget must not behave differently from a shown one.
-          if (w.barClick?.()) { status.bar_expanded_id = ""; return }
-          if (hasExpand) {
-            status.bar_expanded_id = id
-          } else if (hasCCDetail) {
-            status.bar_expanded_id = ""
-            status.cc_open = true
-            status.cc_detail_id = id
-          }
-        },
+  // The overflow capsule: shown only while some widget does not fit. It is not a
+  // menu — it unfolds the hidden widgets IN LINE, in the same bar (macOS 27's `»`):
+  // the island rises out of the way and the row grows leftwards over the room it
+  // leaves, the window title yielding if it has to (Status.bar_overflow_open).
+  // Unfolded widgets are the same pills as the others, built by the same loop.
+  // Built once and kept outside `optWidgets`, which rebuildBarWidgets empties.
+  const overflowIcon = new Gtk.Image({ gicon: uiIcon("nd-pan-end"), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+  const overflowCapsule = SquircleContainer({
+      child: overflowIcon, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW,
+      borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.bar_overflow_open), perfect: true,
+  })
+  overflowCapsule.set_visible(false)
+  {
+      const g = new Gtk.GestureClick()
+      g.connect("released", () => {
+          if (status.cc_edit_mode) return
+          status.toggleBarOverflow()
       })
-      box.append(btn)
-    }
-    return box
+      overflowCapsule.add_controller(g)
   }
 
   const rebuildBarWidgets = () => {
     if (status.bar_expanded_id) status.bar_expanded_id = ""
     capsuleRefs.clear()
-    overflowContentBuilder = null
+    // A widget's panel opened while its pill is hidden (IPC) hangs from the overflow
+    // capsule — see positionExpansion.
+    capsuleRefs.set(OVERFLOW_ID, overflowCapsule)
     let child = optWidgets.get_first_child()
     while (child) { const n = child.get_next_sibling(); optWidgets.remove(child); child = n }
 
@@ -1116,12 +1120,21 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
         const w = registry.get(id)
         return !!w && widgetAvailable(w)
     })
-    const maxIcons = getMaxIcons()
-    const needsOverflow = allIds.length > maxIcons
-    // Reserve 1 slot for the overflow capsule itself when overflow is needed
-    const visibleCount = needsOverflow ? Math.max(0, maxIcons - 1) : allIds.length
-    const visibleIds = allIds.slice(0, visibleCount)
-    const hiddenIds = allIds.slice(visibleCount)
+    // Hidden from the FAR end: the widgets nearest the clock stay, so the system
+    // category (last in the order, and the one people look for) is the last to go.
+    // Unfolded, the island's half of the bar is available too.
+    const unfolded = status.bar_overflow_open
+    const folded = fitFolded ?? Infinity
+    const fit = unfolded ? Math.max(folded, fitUnfolded ?? Infinity) : folded
+    const visibleIds = allIds.slice(allIds.length - Math.min(allIds.length, fit))
+    const anyHidden = allIds.length > folded
+    overflowCapsule.set_visible(anyHidden)
+    overflowIcon.gicon = uiIcon(unfolded ? "nd-pan-start" : "nd-pan-end")
+    // Nothing left to unfold (a widget removed, a wider monitor): fold. Deferred, as
+    // folding rebuilds through this very function. Only on a MEASURED answer: the
+    // measuring pass rebuilds with nothing cached, which reads as "everything fits".
+    if (unfolded && fitFolded !== null && !anyHidden)
+      GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { status.bar_overflow_open = false; return GLib.SOURCE_REMOVE })
 
     for (const id of visibleIds) {
       const w = registry.get(id)
@@ -1167,23 +1180,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (hasExpand) capsuleRefs.set(id, capsule)
       optWidgets.append(capsule)
     }
-
-    if (hiddenIds.length > 0) {
-      overflowContentBuilder = () => buildOverflowList(hiddenIds)
-      const overflowLabel = new Gtk.Label({ label: "···", css_classes: ["bar-overflow-label"], margin_start: 12, margin_end: 12 })
-      const overflowCapsule = SquircleContainer({
-          child: overflowLabel, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW,
-          borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.bar_expanded_id === OVERFLOW_ID), perfect: true,
-      })
-      const g = new Gtk.GestureClick()
-      g.connect("released", () => {
-          if (status.cc_edit_mode) return
-          status.bar_expanded_id = status.bar_expanded_id === OVERFLOW_ID ? "" : OVERFLOW_ID
-      })
-      overflowCapsule.add_controller(g)
-      capsuleRefs.set(OVERFLOW_ID, overflowCapsule)
-      optWidgets.append(overflowCapsule)
-    }
   }
   widgetConfig.connect("changed", () => {
       scheduleBarLayoutSync()
@@ -1194,6 +1190,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   })
   rebuildBarWidgets()
 
+  right.append(overflowCapsule)
   right.append(optWidgets)
 
   // Tray items each carry their own glass capsule (built in Tray.tsx), so there's
@@ -1245,21 +1242,45 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     return Math.max(0, (monW / 2) - (islandW / 2) - BAR_MARGIN - ISLAND_GAP)
   }
 
-  const syncLeftBudget = () => {
-    const flankW = getAvailableFlankWidth()
+  // Below this the window title is not worth its capsule: while the overflow is
+  // unfolded it steps aside entirely rather than showing an ellipsis.
+  const TITLE_MIN_W = 96
+  let titleYielded = false
+  let showTitle = barSettings.showAppTitle
+  const syncTitleVisible = () => appTitleWidget.set_visible(showTitle && !titleYielded)
+
+  // `immediate`: the right group is growing over the title in this same frame
+  // (the overflow unfolding), so the title cannot take its usual ~180ms to shrink.
+  const syncLeftBudget = (immediate = false) => {
     const sysMenuW = sysMenuWidget.measure(Gtk.Orientation.HORIZONTAL, -1)[1] || 48
     const spacing = 8
-    const appTitleBudget = Math.max(0, flankW - sysMenuW - spacing)
-    appTitle.setMaxWidth(appTitleBudget)
+    let appTitleBudget: number
+    if (status.bar_overflow_open) {
+      // No island in the middle: the title gets whatever the unfolded right group
+      // leaves, up to the same gap the island would have kept.
+      const rightW = right.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
+      appTitleBudget = Math.max(0, geo().width - 2 * BAR_MARGIN - rightW - sysMenuW - spacing - ISLAND_GAP)
+    } else {
+      appTitleBudget = Math.max(0, getAvailableFlankWidth() - sysMenuW - spacing)
+    }
+    const yielded = status.bar_overflow_open && appTitleBudget < TITLE_MIN_W
+    if (yielded !== titleYielded) { titleYielded = yielded; syncTitleVisible() }
+    appTitle.setMaxWidth(appTitleBudget, immediate)
   }
 
   hs.connect("changed", () => syncLeftBudget())
   hs.connect("title-changed", () => syncLeftBudget())
   syncLeftBudget()
 
-  // Measure actual available space and greedy-fill icons; rebuild if overflow needed.
+  // How many optional widgets fit, counted from the clock side, in both states:
+  //  · folded: the right flank only, between the island and the tray — and if they
+  //    do not all fit, the overflow capsule takes a place too;
+  //  · unfolded: the island is gone, so everything from the system menu (plus the
+  //    island's gap) to the tray, the window title yielding.
+  // Measured with every widget shown, then rebuilt to the folded/unfolded cut.
   const measureOverflow = () => {
-    cachedMaxIcons = null
+    fitFolded = null
+    fitUnfolded = null
     rebuildBarWidgets()
 
     const natW = (w: Gtk.Widget) => w.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
@@ -1272,23 +1293,35 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     const spacing = 8
     const fixedCapsules: Gtk.Widget[] = [trayInner, searchCapsule, ccBtn, timeCapsule]
     const fixedW = fixedCapsules.reduce((s, w) => s + (w.get_visible() ? natW(w) + spacing : 0), 0)
+    overflowCapsule.set_visible(true)
+    const overflowW = natW(overflowCapsule) + spacing
+    overflowCapsule.set_visible(false)
 
-    const flankW = getAvailableFlankWidth()
-    const budget = flankW - fixedW
-
-    let total = 0
-    let fitsCount = 0
-    for (let i = 0; i < iconWidths.length; i++) {
-      const cost = i === 0 ? iconWidths[i] : iconWidths[i] + spacing
-      if (total + cost > budget) break
-      total += cost
-      fitsCount++
+    const fitFromClock = (budget: number) => {
+      let total = 0, n = 0
+      for (let i = iconWidths.length - 1; i >= 0; i--) {
+        const cost = n === 0 ? iconWidths[i] : iconWidths[i] + spacing
+        if (total + cost > budget) break
+        total += cost
+        n++
+      }
+      return n
     }
 
-    cachedMaxIcons = fitsCount
-    if (widgetConfig.barWidgetIds().length > fitsCount) {
-      rebuildBarWidgets()
-    }
+    const foldedBudget = getAvailableFlankWidth() - fixedW
+    fitFolded = fitFromClock(foldedBudget) >= iconWidths.length
+      ? iconWidths.length
+      : fitFromClock(foldedBudget - overflowW)
+    const sysMenuW = natW(sysMenuWidget)
+    const unfoldedBudget = geo().width - 2 * BAR_MARGIN - sysMenuW - ISLAND_GAP - fixedW - overflowW
+    fitUnfolded = fitFromClock(unfoldedBudget)
+    // Only on an absurd widget count: the farthest ones stay out of reach even
+    // unfolded. Said once per measurement so it cannot be mistaken for a bug.
+    if (fitUnfolded < iconWidths.length)
+      console.warn(`[Bar] ${iconWidths.length - fitUnfolded} bar widget(s) do not fit even with the overflow unfolded`)
+
+    rebuildBarWidgets()
+    if (status.bar_overflow_open) syncLeftBudget(true)
   }
 
   let barLayoutSyncTimeout = 0
@@ -1304,7 +1337,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
 
   onBarSettingsChanged((s) => {
-    appTitleWidget.set_visible(s.showAppTitle)
+    showTitle = s.showAppTitle
+    syncTitleVisible()
     scheduleBarLayoutSync()
   })
 
@@ -1435,8 +1469,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               // The island is its own surface, and the CAPSULE lives on it — so
               // hiding the bar no longer hides it. Close any open mode and unmap
               // the surface, or the capsule floats alone over the fullscreen
-              // window (and keeps costing a blur pass).
+              // window (and keeps costing a blur pass). An unfolded overflow folds
+              // with the bar it lives in.
               status.island_mode = ""
+              status.bar_overflow_open = false
               islandWin.setShown(false)
           } else if (!active) {
               if (barOverlayActive) {
@@ -1493,6 +1529,34 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           }
       } catch (e) { console.error("[Bar] setBarOverlayMode failed:", e) }
   }
+  // ── The overflow, unfolded in line ────────────────────────────────────────
+  // Order matters on the way OUT: the row grows first and the title gives way in
+  // the same frame, then the island rises and only THEN leaves the compositor — so
+  // for the 150ms of the rise the new pills slide in under a capsule that is still
+  // on its way up. On the way back the surface is mapped first, or there would be
+  // nothing to slide down on.
+  //
+  // Folding is Status's job, not this handler's: any other surface opening closes
+  // it (closeExclusive), and a press outside clears the bar's focus grab, which
+  // `barModal` now holds for the overflow too (onBarGrabCleared / dismissOverlays).
+  // The one thing that does NOT fold it is a panel of an unfolded widget — its
+  // pill has to stay where the panel hangs from.
+  status.connect("notify::bar-overflow-open", () => {
+      const open = status.bar_overflow_open
+      rebuildBarWidgets()
+      syncLeftBudget(open)
+      syncOverlays()
+      if (open) {
+          islandHost.reveal(false, () => { if (status.bar_overflow_open) islandWin.setYielded(true) })
+      } else {
+          islandWin.setYielded(false)
+          // Mapping again re-appends the surface to its layer; if the bar sits on
+          // OVERLAY too (bar overlay mode) it has to be bounced back above it.
+          if (barOverlayActive) islandWin.raise()
+          islandHost.reveal(true, () => islandWin.updateInputRegion())
+      }
+  })
+
   ;(win as any).isBarOverlayActive = () => barOverlayActive
   ;(win as any).isBarFullscreenMode = () => barFullscreenMode
   // The island's surface is created here but is a sibling toplevel — app.ts

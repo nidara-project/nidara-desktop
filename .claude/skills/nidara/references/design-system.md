@@ -3676,6 +3676,35 @@ A capsule that opens the SHARED custom expansion (a tray item's menu, the window
 publishes it through `setBarCustomAnchor`. A new capsule that opens something gets both
 props, or it looks dead while its own panel is open.
 
+### The bar's overflow: unfolded in line, not a menu (2026-09-25)
+
+When the optional widgets do not fit, the bar shows ONE extra capsule, `nd-pan-end`, at the
+LEFT of the widget group — macOS 27's `»`. Clicking it sets `status.bar_overflow_open`: the
+island RISES off the top of the screen and the hidden widgets unfold in line, the row growing
+leftwards over the room the island left; the capsule flips to `nd-pan-start`. It replaced a
+`···` capsule that opened a panel of menu rows (#646, the owner's decision).
+
+- **Hidden from the FAR end.** `measureOverflow` counts from the clock side, so the widgets
+  nearest the clock stay. The order ends with the system category, and the old cut from the end
+  hid Wi-Fi and volume while CPU and the clipboard stayed on screen.
+- **Two measured cuts**, `fitFolded` (the right flank, minus the `»` capsule when it is needed)
+  and `fitUnfolded` (from the system menu plus `ISLAND_GAP` to the tray). The window title yields
+  with `setMaxWidth(px, immediate = true)` in the frame the row grows, and steps aside entirely
+  below `TITLE_MIN_W` rather than showing an ellipsis.
+- **The island rises with a paint-only transform, and the surface is then UNMAPPED**
+  (`IslandWindow.setYielded`, ANDed with `setShown`). The rise is `ScaleRevealer`'s `riseFrom`
+  on a host around the island row; it ends above the blur rect already stamped for the capsule,
+  so neither region is re-stamped per frame and the layer-shell margin never moves. Unmapped
+  rather than transparent: a surface with nothing measurable hands the compositor the WHOLE
+  monitor to blur (`VisibleRegion` — `null` means "I don't know").
+- **Folding is Status's.** Any other surface folds it; a press outside folds it through the bar's
+  focus grab; a panel of an unfolded widget does NOT (it hangs from that pill). Fullscreen folds
+  it with the bar. A `bar_expanded_id` for a widget still hidden (IPC) anchors on the `»`
+  capsule (`capsuleRefs[OVERFLOW_ID]`).
+- ⚠️ `rebuildBarWidgets` folds on its own when nothing is hidden any more, but only on a
+  MEASURED answer: the measuring pass rebuilds with nothing cached, which reads as "everything
+  fits", and folding there closed the overflow on every layout sync.
+
 ## SCSS conventions and anti-patterns
 
 These are the patterns that bite. Most "the styles look wrong" bugs in this codebase are violations of one of these.
