@@ -69,6 +69,11 @@ export class ScaleRevealer extends Gtk.Widget {
     animateLayout: boolean
     /** Opacity at progress→0 while the widget is still shown (see OVERLAY_POP). */
     opacityFloor: (() => number) | null
+    /** Upward travel in px at progress→0 (0 = none). Paint-only, like the scale:
+     *  the child slides UP out of its box while hiding and back down while
+     *  showing. The island's capsule uses it to rise off the top of the screen
+     *  while the bar's overflow is unfolded in line (see Bar.tsx). */
+    riseFrom: number
     progress = 0          // 0 = hidden, 1 = fully revealed
     tickId: number | null = null
     swipeX = 0            // transient horizontal swipe offset (notification dismiss)
@@ -92,7 +97,7 @@ export class ScaleRevealer extends Gtk.Widget {
     constructor(child: Gtk.Widget, opts?: {
         duration?: number, durationIn?: number, durationOut?: number,
         scaleFrom?: number, pivot?: ScalePivot, animateLayout?: boolean,
-        opacityFloor?: () => number,
+        opacityFloor?: () => number, riseFrom?: number,
     }) {
         super({ overflow: Gtk.Overflow.HIDDEN })
         this.durationIn = opts?.durationIn ?? opts?.duration ?? 300
@@ -101,6 +106,7 @@ export class ScaleRevealer extends Gtk.Widget {
         this.pivot = opts?.pivot ?? "top-right"
         this.animateLayout = opts?.animateLayout ?? true
         this.opacityFloor = opts?.opacityFloor ?? null
+        this.riseFrom = opts?.riseFrom ?? 0
         this.child = child
         this.child.set_parent(this)
         this.opacity = 0
@@ -362,11 +368,12 @@ export class ScaleRevealer extends Gtk.Widget {
 
     vfunc_snapshot(snapshot: Gtk.Snapshot) {
         const s = this.currentScale()
-        if (s >= 1 && this.swipeX === 0) { this.snapshot_child(this.child, snapshot); return }
+        const rise = this.riseFrom * (1 - this.progress)
+        if (s >= 1 && this.swipeX === 0 && rise === 0) { this.snapshot_child(this.child, snapshot); return }
         snapshot.save()
-        if (this.swipeX !== 0) {
+        if (this.swipeX !== 0 || rise !== 0) {
             const off = new Graphene.Point()
-            off.init(this.swipeX, 0)
+            off.init(this.swipeX, -rise)
             snapshot.translate(off)
         }
         if (s < 1) {

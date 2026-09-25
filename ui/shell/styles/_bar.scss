@@ -180,13 +180,6 @@ window#nidara-bar-zone {
         &.is-active { opacity: 1; }
     }
 
-    .bar-overflow-label {
-        font-size: $fs-small;
-        font-weight: $fw-bold;
-        color: var(--nidara-text);
-        letter-spacing: 0.04em;
-    }
-
     /* Clock/Date capsule label — tabular numbers prevent jitter as digits tick */
     .bar-time-label {
         font-variant-numeric: tabular-nums;

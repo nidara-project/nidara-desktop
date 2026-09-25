@@ -21,7 +21,9 @@ export interface AppTitleHandle {
   /** Re-derive the label's cap after a resolution change. */
   setMonitorWidth: (px: number) => void
   /** Dynamically constrain the label's maximum allocated width in pixels so it never collides with the island. */
-  setMaxWidth: (px: number) => void
+  /** `immediate` skips the ~180ms approach: for when something else is about to
+   *  take the space in the same frame (the bar's overflow unfolding in line). */
+  setMaxWidth: (px: number, immediate?: boolean) => void
 }
 
 const PAD_PX = 32 // 16px margin_start + 16px margin_end
@@ -171,7 +173,12 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
   return {
     widget: capsule,
     setMonitorWidth: (px) => { startBudgetAnimation(Math.max(100, (px / 2) - 200)) },
-    setMaxWidth: (px) => { startBudgetAnimation(px) },
+    setMaxWidth: (px, immediate = false) => {
+      if (!immediate) { startBudgetAnimation(px); return }
+      if (animTickId !== null) { capsule.remove_tick_callback(animTickId); animTickId = null }
+      targetBudgetPx = currentBudgetPx = px
+      updateLabel()
+    },
   }
 }
 

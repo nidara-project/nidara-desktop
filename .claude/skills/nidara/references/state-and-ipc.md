@@ -26,7 +26,7 @@ The exclusion is implemented by the private `closeExclusive(keep, opts)` helper 
 2. **`isAnyOverlayOpen`.** It is not the convenience getter it looks like: it is the FIRST line of the bar's empty-strip dismissal handler (`barStripClick` in `Bar.tsx`), so an overlay missing from it silently stops being dismissable from a pixel that dismisses every other one. It is also what stops `AgentService` popping the Assistant island over something the user opened.
 3. **`dismissOverlays()` in `Bar.tsx`** — required as soon as the new surface whitelists the BAR in its focus grab, because a grab peer is by definition a surface the compositor will not dismiss on. Skip it and the empty bar strip becomes the one press on screen that does nothing.
 
-None of the three produces an error, a warning or a failed build when missed. Two string-valued members are special-cased: `island_mode` is cleared explicitly inside `closeExclusive` (it can't live in the boolean `EXCLUSIVE` map), and `bar_expanded_id` (the pill expansion capsule) is a **one-way member**: setting it non-empty closes the overlays, and the overlay setters clear it via `opts.barExpanded`. New island MODES are NOT new Status fields — they're new ids for `island_mode`, registered in `ActivityIsland` (mode ids are exported from `Status.ts` so core/IPC/surfaces share one vocabulary).
+None of the three produces an error, a warning or a failed build when missed. Two string-valued members are special-cased: `island_mode` is cleared explicitly inside `closeExclusive` (it can't live in the boolean `EXCLUSIVE` map), and `bar_expanded_id` (the pill expansion capsule) is a **one-way member**: setting it non-empty closes the overlays, and the overlay setters clear it via `opts.barExpanded`. `bar_overflow_open` (2026-09-25, the bar's `»` unfolded in line) rides the same `opts.barExpanded`, so every overlay folds it — but `bar_expanded_id` does NOT, on purpose: the panel of an unfolded widget hangs from a pill that exists only while the overflow is unfolded. It is in `isAnyOverlayOpen`, `dismissOverlays`, `onBarGrabCleared` and the bar's `barModal` (a press outside folds it through the bar's focus grab). New island MODES are NOT new Status fields — they're new ids for `island_mode`, registered in `ActivityIsland` (mode ids are exported from `Status.ts` so core/IPC/surfaces share one vocabulary).
 
 ### Other tracked props
 
@@ -35,6 +35,7 @@ None of the three produces an error, a warning or a failed build when missed. Tw
 - `recording`
 - `cc_edit_mode`
 - `bar_expanded_id` — which Bar pill is currently expanded.
+- `bar_overflow_open` — the bar's widgets that did not fit are unfolded in line (`toggleBarOverflow()`; `dumpState.flags.barOverflowOpen`). See design-system.md → "The bar's overflow".
 - `cc_detail_id` — which CC detail panel is active.
 
 ### Toggles

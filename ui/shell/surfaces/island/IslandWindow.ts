@@ -84,6 +84,13 @@ export interface IslandWindowHandle {
     /** Follow the bar in and out of sight (fullscreen hide, lock). Unmapping
      *  also drops the surface's blur pass entirely. */
     setShown: (shown: boolean) => void
+    /** Get out of the bar's way: unmapped while the bar's overflow is unfolded in
+     *  line, whatever `setShown` says — the two are ANDed, so the fullscreen and
+     *  overlay paths keep calling `setShown` without knowing about the overflow.
+     *  Unmapped rather than merely transparent: an empty painted region would read
+     *  as "unmeasurable" and hand the compositor the whole monitor to blur. The
+     *  caller animates the capsule out BEFORE yielding and back in AFTER. */
+    setYielded: (yielded: boolean) => void
     /** Re-assert our layer level. Hyprland appends a surface to its layer list
      *  when the level is (re)set, so whenever the BAR moves to OVERLAY too (bar
      *  overlay mode) it would land after us and cover the island. */
@@ -336,6 +343,10 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     }
 
     const updateInputRegion = () => {
+        // Unmapped (fullscreen, or yielded to the bar's overflow): nothing to cut, and
+        // measuring a capsule that is not mapped would read as a torn region and climb
+        // the retry ladder for nothing. Mapping again stamps (`applyShown`, row `map`).
+        if (!win.get_visible()) return
         const surface = win.get_native()?.get_surface()
         if (!surface?.set_input_region) return
         const region = new Cairo.Region()
@@ -683,6 +694,17 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         })
     }
 
+    // What `setShown` asked for, and whether the bar's unfolded overflow asked us
+    // out of the way (`setYielded`). Mapped only when both agree.
+    let shownWanted = true
+    let yielded = false
+    const applyShown = () => {
+        const want = shownWanted && !yielded
+        if (want === win.get_visible()) return
+        if (want) { win.present(); updateInputRegion() }
+        else win.set_visible(false)
+    }
+
     return {
         win,
         root: () => root,
@@ -715,6 +737,7 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             // settled layout, and the region stamped after it so the capsule is
             // clickable from the start.
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => {
+                if (!shownWanted || yielded) return GLib.SOURCE_REMOVE
                 win.present()
                 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 120, () => {
                     updateInputRegion(); return GLib.SOURCE_REMOVE
@@ -751,8 +774,12 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         },
         updateInputRegion,
         setShown: (shown) => {
-            if (shown) { win.present(); updateInputRegion() }
-            else win.set_visible(false)
+            shownWanted = shown
+            applyShown()
+        },
+        setYielded: (y) => {
+            yielded = y
+            applyShown()
         },
         raise: raiseAboveSiblings,
         setTopOffset: (px) => {

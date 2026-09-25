@@ -22,6 +22,7 @@ export class UIStatus extends GObject.Object {
                 "about-open": GObject.ParamSpec.boolean("about-open", "About Open", "About window visibility", GObject.ParamFlags.READWRITE, false),
                 "recording": GObject.ParamSpec.boolean("recording", "Recording", "Screen recording active", GObject.ParamFlags.READWRITE, false),
                 "bar-expanded-id": GObject.ParamSpec.string("bar-expanded-id", "Bar Expanded ID", "ID of the expanded bar widget, empty = none", GObject.ParamFlags.READWRITE, ""),
+                "bar-overflow-open": GObject.ParamSpec.boolean("bar-overflow-open", "Bar Overflow Open", "Bar widgets hidden for lack of room are unfolded in line", GObject.ParamFlags.READWRITE, false),
                 "cc-detail-id": GObject.ParamSpec.string("cc-detail-id", "CC Detail ID", "Widget ID to open in CC detail view, empty = none", GObject.ParamFlags.READWRITE, ""),
             },
         }, this)
@@ -40,6 +41,7 @@ export class UIStatus extends GObject.Object {
     private _recording_started_at = 0
     private _bar_expanded_id = ""
     private _cc_detail_id = ""
+    private _bar_overflow_open = false
 
     // The boolean mutually-exclusive overlays. Opening one closes the rest —
     // plus the Activity Island, whose state is a mode STRING (island_mode),
@@ -78,6 +80,14 @@ export class UIStatus extends GObject.Object {
         if (opts.barExpanded && this._bar_expanded_id !== "") {
             this._bar_expanded_id = ""
             this.notify("bar-expanded-id")
+        }
+        // The unfolded overflow folds for every OTHER surface — the island above all,
+        // which it pushed out of the way. Its one survivor is a bar panel, which never
+        // comes through here with `barExpanded` (see bar_expanded_id and
+        // bar_overflow_open).
+        if (opts.barExpanded && this._bar_overflow_open) {
+            this._bar_overflow_open = false
+            this.notify("bar-overflow-open")
         }
     }
 
@@ -162,7 +172,7 @@ export class UIStatus extends GObject.Object {
     // which used it to avoid popping the island over something the user opened —
     // and had been popping it over an open app grid all along.
     public get isAnyOverlayOpen(): boolean {
-        return this._cc_open || this._nc_open || this._prism_open || this._app_grid_open || this._system_menu_open || this._island_mode !== "" || this._bar_expanded_id !== ""
+        return this._cc_open || this._nc_open || this._prism_open || this._app_grid_open || this._system_menu_open || this._island_mode !== "" || this._bar_expanded_id !== "" || this._bar_overflow_open
     }
 
     public get about_open() { return this._about_open }
@@ -202,6 +212,19 @@ export class UIStatus extends GObject.Object {
         this.notify("bar-expanded-id")
     }
 
+    // The bar's widgets that did not fit, unfolded IN LINE (the `»` capsule): the
+    // island rises out of the way and the row grows leftwards. Opening it closes
+    // everything else; everything else closes it EXCEPT a bar panel, because the
+    // panel of an unfolded widget hangs from an icon that only exists while this is
+    // true — folding under it would leave the panel pointing at nothing.
+    public get bar_overflow_open() { return this._bar_overflow_open }
+    public set bar_overflow_open(v: boolean) {
+        if (this._bar_overflow_open === v) return
+        if (v) this.closeExclusive("", { barExpanded: true })
+        this._bar_overflow_open = v
+        this.notify("bar-overflow-open")
+    }
+
     public get cc_detail_id() { return this._cc_detail_id }
     public set cc_detail_id(v: string) {
         if (this._cc_detail_id === v) return
@@ -224,6 +247,7 @@ export class UIStatus extends GObject.Object {
     toggleSystemMenu() { this.system_menu_open = !this.system_menu_open }
     toggleIsland(id: string) { this.island_mode = this.island_mode === id ? "" : id }
     toggleOverview() { this.toggleIsland(ISLAND_OVERVIEW) }
+    toggleBarOverflow() { this.bar_overflow_open = !this.bar_overflow_open }
     toggleAbout() { this.about_open = !this.about_open }
 }
 
