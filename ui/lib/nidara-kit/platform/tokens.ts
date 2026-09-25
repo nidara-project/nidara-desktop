@@ -146,6 +146,22 @@ export const GLASS_TINT = {
 export const GLASS_SPECULAR = { r: 1, g: 1, b: 1 } as const
 
 /**
+ * The glass of a clickable capsule while its panel is OPEN, and while the pointer
+ * is over it — how far the tint moves, 0..1: toward `GLASS_SPECULAR` on dark glass
+ * (it lightens), toward `GLASS_TINT.dark` on light glass (it darkens). Both are the
+ * same gesture, the one macOS makes behind a menu bar item whose menu is open.
+ *
+ * Neither state uses the accent: the accent marks what is ON or SELECTED, and a
+ * capsule with its panel open is neither. Until 2026-09-25 the bar's hover painted
+ * the rim in the accent at full opacity, and nothing marked the open capsule at all.
+ * `hover` is deliberately a fraction of `open` — a hint, not a second open state.
+ */
+export const GLASS_STATE_MIX = {
+    open: { dark: 0.22, light: 0.10 },
+    hover: { dark: 0.09, light: 0.04 },
+} as const
+
+/**
  * CHROME INK — the alpha of a neutral mark painted ON the glass, as opposed to the
  * alpha OF the glass.
  *

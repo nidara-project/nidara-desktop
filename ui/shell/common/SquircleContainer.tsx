@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { drawGlassShadow, drawSquircle, hexToFloatRgb } from "./DrawingUtils"
 import Theme from "../core/ThemeManager"
-import { RADIUS, GLASS_TINT } from "../../lib/nidara-kit/platform/tokens"
+import { RADIUS, GLASS_TINT, GLASS_SPECULAR, GLASS_STATE_MIX } from "../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 
 export enum Shape {
@@ -38,8 +38,14 @@ interface SquircleContainerProps {
     perfect?: boolean
     borderColor?: { r: number, g: number, b: number, a: number }
     hoverBorderColor?: { r: number, g: number, b: number, a: number }
-    /** On hover, paint the border with the current accent at full opacity. */
-    hoverBorderAccent?: boolean
+    /** On hover, lift the glass a little (`GLASS_STATE_MIX.hover`) — a hint that it
+     *  is clickable. No accent: see `GLASS_STATE_MIX`. */
+    hoverLift?: boolean
+    /** While this returns true the capsule's panel is OPEN, and the glass shows it
+     *  (`GLASS_STATE_MIX.open`), the way a menu bar item stays highlighted while its
+     *  menu is down. Read inside the draw call; `watchOpen` says when to redraw. */
+    getOpen?: () => boolean
+    watchOpen?: (cb: () => void) => (() => void)
     n?: number
     shape?: Shape
     borderWidth?: number
@@ -139,7 +145,9 @@ export default function SquircleContainer({
     perfect = false,
     borderColor,
     hoverBorderColor,
-    hoverBorderAccent = false,
+    hoverLift = false,
+    getOpen,
+    watchOpen,
     n = 3.2,
     shape = Shape.SQUIRCLE,
     borderWidth = 1.0,
@@ -215,10 +223,23 @@ export default function SquircleContainer({
             if (hoverColor) shareColor = hoverColor
             if (hoverAlpha !== undefined) shareAlpha = hoverAlpha
             if (hoverBorderColor) shareBorder = hoverBorderColor
-            if (hoverBorderAccent) {
-                // Read the accent live so the outline tracks accent changes.
-                shareBorder = { ...hexToFloatRgb(Theme.accentPalette[Theme.accentColor].color), a: 1 }
+        }
+
+        // Open beats hover: the pointer is usually still on the capsule it just
+        // opened, and the open state is the one that has to read.
+        const stateMix = getOpen?.() ? GLASS_STATE_MIX.open
+            : (isHovered && hoverLift) ? GLASS_STATE_MIX.hover : null
+        if (stateMix && fillFrac === undefined) {
+            const k = dark ? stateMix.dark : stateMix.light
+            const to = dark ? GLASS_SPECULAR : GLASS_TINT.dark
+            shareColor = {
+                r: shareColor.r + (to.r - shareColor.r) * k,
+                g: shareColor.g + (to.g - shareColor.g) * k,
+                b: shareColor.b + (to.b - shareColor.b) * k,
             }
+            // A pane the user made nearly transparent has almost no tint to move;
+            // the same k on the alpha keeps the state visible at every opacity.
+            shareAlpha = Math.min(1, shareAlpha + k)
         }
 
         // Gtk4 provides a clean surface; OVER is the standard blending mode.
@@ -268,7 +289,7 @@ export default function SquircleContainer({
     // Content second (top)
     grid.attach(child, 0, 0, 1, 1)
 
-    if (hoverColor || hoverAlpha !== undefined || hoverBorderColor || hoverBorderAccent || onClick) {
+    if (hoverColor || hoverAlpha !== undefined || hoverBorderColor || hoverLift || onClick) {
         const motion = new Gtk.EventControllerMotion()
         motion.connect("enter", () => { isHovered = true; da.queue_draw() })
         motion.connect("leave", () => { isHovered = false; da.queue_draw() })
@@ -286,6 +307,10 @@ export default function SquircleContainer({
 
     if (watchActive) {
         const cleanup = watchActive(() => { if (da.get_mapped()) da.queue_draw() })
+        grid.connect("unrealize", cleanup)
+    }
+    if (watchOpen) {
+        const cleanup = watchOpen(() => { if (da.get_mapped()) da.queue_draw() })
         grid.connect("unrealize", cleanup)
     }
 

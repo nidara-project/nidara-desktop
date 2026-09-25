@@ -13,7 +13,7 @@ import Gio from "gi://Gio"
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { menuRow } from "../../common/MenuRow"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
-import { CAPSULE_BORDER, barTooltip } from "./capsule"
+import { CAPSULE_BORDER, CUSTOM_EXPANSION_ID, barOpen, barTooltip, setBarCustomAnchor } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import appService from "../../core/AppService"
 import status from "../../core/Status"
@@ -57,7 +57,7 @@ function SystemMenuIcon(): Gtk.Widget {
   applyIcon()
   onBarSettingsChanged(applyIcon)
 
-  return SquircleContainer({ child: img, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => status.toggleSystemMenu() })
+  return SquircleContainer({ child: img, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.system_menu_open), perfect: true, onClick: () => status.toggleSystemMenu() })
 }
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
@@ -93,7 +93,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const OVERFLOW_ID = "__overflow"
   // Transient expansion (tray context menus etc.): arbitrary content anchored to
   // an arbitrary bar widget, reusing the exact same capsule/fade/positioning.
-  const CUSTOM_ID = "__custom"
+  const CUSTOM_ID = CUSTOM_EXPANSION_ID
   let customContentBuilder: ((onClose: () => void) => Gtk.Widget) | null = null
   let customAnchor: Gtk.Widget | null = null
   // Horizontal anchoring of a custom expansion: "center" under the anchor (tray,
@@ -883,6 +883,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // the widget popovers — so it's consistent and free of Gtk.Popover quirks.
   const openCustomExpansion = (anchor: Gtk.Widget, builder: (onClose: () => void) => Gtk.Widget, align: "center" | "start" = "center") => {
       customAnchor = anchor
+      setBarCustomAnchor(anchor)
       customContentBuilder = builder
       customAlign = align
       if (status.bar_expanded_id === CUSTOM_ID) showExpansion(CUSTOM_ID)  // refresh anchor + content
@@ -1148,7 +1149,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           : undefined
       const capsule = SquircleContainer({
           child: w.buildBarContent(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW,
-          borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true,
+          borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.bar_expanded_id === id), perfect: true,
       })
       if (onRelease) {
           // BUBBLE + released: child buttons claim on press → deny this gesture → released
@@ -1172,7 +1173,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       const overflowLabel = new Gtk.Label({ label: "···", css_classes: ["bar-overflow-label"], margin_start: 12, margin_end: 12 })
       const overflowCapsule = SquircleContainer({
           child: overflowLabel, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW,
-          borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true,
+          borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.bar_expanded_id === OVERFLOW_ID), perfect: true,
       })
       const g = new Gtk.GestureClick()
       g.connect("released", () => {
@@ -1200,7 +1201,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // manages its own visibility (hidden while empty).
   const trayInner = Tray(openCustomExpansion, () => scheduleBarLayoutSync())
   right.append(trayInner)
-  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.prism_open), perfect: true })
   right.append(searchCapsule)
   // CC capsule layout: [16px left pad][gear 16px][16px right-gap] = 48px (matches the
   // search capsule). The status-indicator dot (recording / AI control) sits in that right
@@ -1226,9 +1227,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const ccOverlay = new Gtk.Overlay()
   ccOverlay.set_child(ccInner)
   ccOverlay.add_overlay(ccDot)
-  const ccBtn = SquircleContainer({ child: ccOverlay, onClick: () => status.toggleCC(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  const ccBtn = SquircleContainer({ child: ccOverlay, onClick: () => status.toggleCC(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.cc_open), perfect: true })
   right.append(ccBtn)
-  const timeCapsule = SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  const timeCapsule = SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.nc_open), perfect: true })
   right.append(timeCapsule)
 
   // No center widget: the capsule that used to sit there paints on the island's

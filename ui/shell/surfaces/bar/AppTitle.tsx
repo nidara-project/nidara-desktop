@@ -3,7 +3,7 @@ import Pango from "gi://Pango"
 import GLib from "gi://GLib"
 import { getWordmark } from "../../utils"
 import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
-import { CAPSULE_BORDER } from "./capsule"
+import { CAPSULE_BORDER, barOpen, isBarCustomAnchor } from "./capsule"
 import hs from "../../core/HyprlandState"
 import status from "../../core/Status"
 import shellActions from "../../core/ShellActions"
@@ -76,7 +76,8 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
     if (appName.label !== fitted) appName.label = fitted
   }
 
-  const capsule = SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  // Open while the window menu it anchors is down (the capsule IS the anchor).
+  const capsule: Gtk.Widget = SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => isBarCustomAnchor(capsule)), perfect: true })
 
   const startBudgetAnimation = (targetPx: number) => {
     targetBudgetPx = targetPx
