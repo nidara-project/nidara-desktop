@@ -9,6 +9,23 @@ import { attachTooltip, type NidaraTooltipHandle, type NidaraTooltipOpts, type N
 // and AppTitle.
 export const CAPSULE_BORDER = { r: 1, g: 1, b: 1, a: 0.2 }
 
+// A bar capsule's height. NOT set anywhere as a size: the row is BAR_H (40) tall and
+// `.bar-centerbox` gives it `margin-top: 4px`, which GTK takes out of the row's own
+// height_request — so what is left for the capsule is 36. It lives here for the ones
+// that must MATCH it: the island's indicator chips are this wide so that `perfect`'s
+// h/2 radius makes them circles. Change the CSS margin and this together.
+// (32 until 2026-09-25, with an 8px margin: always visible, unlike macOS's
+// hover-only highlights, the capsules read short with that much air above them.)
+export const BAR_CAPSULE_H = 36
+
+// The gap between two bar capsules — every row of them (left, right, the widgets,
+// the tray, the island's chips) and the arithmetic that decides what fits. The two
+// ENDS stay at 8 (Bar.tsx BAR_MARGIN): that is Hyprland's gaps_out, so the system
+// menu lines up with the windows' left edge. Tighter than the ends on purpose, so the
+// row reads as one framed group. (8 until 2026-09-25; 4 lets neighbouring shadows
+// fuse into one dark seam.)
+export const BAR_GAP = 6
+
 // Whether a panel that drops from the bar is open — its own expansion panel (a
 // widget's, a tray menu), or the CC / NC / system menu, which all sit under the
 // bar's right and left ends.

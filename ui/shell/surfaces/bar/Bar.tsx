@@ -12,7 +12,7 @@ import Gio from "gi://Gio"
 
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
-import { CAPSULE_BORDER, CUSTOM_EXPANSION_ID, barOpen, barTooltip, setBarCustomAnchor } from "./capsule"
+import { BAR_GAP, CAPSULE_BORDER, CUSTOM_EXPANSION_ID, barOpen, barTooltip, setBarCustomAnchor } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import { blurSafeOpacity } from "../../core/NidaraTheme"
 import appService from "../../core/AppService"
@@ -118,7 +118,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // the wrapper is the variable, so all the existing alignment/margin/region
   // code below operates on it transparently (animateLayout:false = Gtk.Bin).
   // NOT `perfect: true`, deliberately. Every other `perfect` in this file is a bar
-  // CAPSULE — 40px tall, where it is what clamps the corner to min(w,h)/2 and makes the
+  // CAPSULE — 36px tall (a 40px row), where it is what clamps the corner to min(w,h)/2 and makes the
   // stadium. This panel is the only large surface that had inherited it, and at radius lg
   // it bought nothing but a circular corner: a different shape from the system menu, the
   // CC context menu and the CC detail island, which are the same family (`lg` = "any
@@ -197,10 +197,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // bar grows one.
   //
   // On masterOverlay rather than barBox, because `.bar-centerbox` carries
-  // `margin-top: 8px` and a CSS margin lies OUTSIDE the allocation: the band between
+  // `margin-top: 4px` and a CSS margin lies OUTSIDE the allocation: the band between
   // the capsules and the screen edge is not barBox at all, it is the overlay behind
   // it. Measured on the live shell (`query_ui`): the window is 40px tall and barBox
-  // is y=8 h=32 x=8, so the same is true of the 8px at either end. All of it is
+  // was y=8 h=32 x=8 (measured with the old 8px margin), so the same is true of the 8px at either
+  // end. All of it is
   // inside the input region and all of it reads as bar.
   //
   // 🔑 It asks NO question about coordinates, deliberately. A `y < BAR_H` test would
@@ -504,7 +505,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // closing is still visible until its final tick, and dropping its rect one
   // tick early would scissor away the tail of its own close animation.
   const paintedRects = (box: BlurRect): BlurRect[] | null => {
-      // The strip's own extent. Measured rather than hardcoded (the 8px top
+      // The strip's own extent. Measured rather than hardcoded (the 4px top
       // margin is CSS, `.bar-centerbox`), but floored at PANEL_TOP so this is
       // valid BEFORE the first layout pass too — that is what lets the very
       // first stamp declare a rect instead of giving up until an overlay opens.
@@ -902,7 +903,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   
   syncOverlays()
 
-  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: 8 })
+  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: BAR_GAP })
   const sysMenuWidget = SystemMenuIcon()
   const appTitle = AppTitle(geo().width, openCustomExpansion)
   const appTitleWidget = appTitle.widget
@@ -928,7 +929,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   center.append(island.indicatorRow) // live activities that are NOT fronting it
   // `center` is NOT put in the bar's CenterBox: the capsule paints on the
   // island's surface (see islandWin above). It goes into a row that reuses the
-  // SAME `.bar-centerbox` class the bar's own row does, so the 8px top margin
+  // SAME `.bar-centerbox` class the bar's own row does, so the 4px top margin
   // and the 40px row height come from one CSS rule instead of a constant
   // duplicated across two windows — the capsule lands pixel-identically where
   // the bar would have drawn it. `center` still exists and still holds the live
@@ -1059,7 +1060,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     syncLeftBudget()
     scheduleBarLayoutSync()
   })
-  const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 8 })
+  const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: BAR_GAP })
   // Absorbs remaining space so actual capsules stay pinned to the right edge.
   const rightSpacer = new Gtk.Box({ hexpand: true })
   right.append(rightSpacer)
@@ -1082,7 +1083,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   timeContent.append(bellIcon); timeContent.append(timeLabel)
 
   // Optional bar widgets (before Tray, reactive to config changes)
-  const optWidgets = new Gtk.Box({ css_classes: ["bar-optional-widgets"], spacing: 8 })
+  const optWidgets = new Gtk.Box({ css_classes: ["bar-optional-widgets"], spacing: BAR_GAP })
 
   // The overflow capsule: shown only while some widget does not fit. It is not a
   // menu — it unfolds the hidden widgets IN LINE, in the same bar (macOS 27's `»`):
@@ -1253,7 +1254,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // (the overflow unfolding), so the title cannot take its usual ~180ms to shrink.
   const syncLeftBudget = (immediate = false) => {
     const sysMenuW = sysMenuWidget.measure(Gtk.Orientation.HORIZONTAL, -1)[1] || 48
-    const spacing = 8
+    const spacing = BAR_GAP
     let appTitleBudget: number
     if (status.bar_overflow_open) {
       // No island in the middle: the title gets whatever the unfolded right group
@@ -1290,7 +1291,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     while (c) { iconWidths.push(natW(c)); c = c.get_next_sibling() }
     if (iconWidths.length === 0) return
 
-    const spacing = 8
+    const spacing = BAR_GAP
     const fixedCapsules: Gtk.Widget[] = [trayInner, searchCapsule, ccBtn, timeCapsule]
     const fixedW = fixedCapsules.reduce((s, w) => s + (w.get_visible() ? natW(w) + spacing : 0), 0)
     overflowCapsule.set_visible(true)

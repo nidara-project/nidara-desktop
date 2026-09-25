@@ -840,7 +840,7 @@ the `n` the surface is actually painted with: `SquircleContainer` defaults to **
 (default 2 for the tooltip, 3.2 for the menus — see the bubble section below).
 
 **`perfect: true` belongs to CAPSULES, not to panels — and that is why every popup now lands on the
-same 6.** In `Bar.tsx` every other `perfect` is a 40px-tall bar capsule, where it is what clamps the
+same 6.** In `Bar.tsx` every other `perfect` is a bar capsule (36px tall, in a 40px row), where it is what clamps the
 corner to `min(w,h)/2` and produces the stadium. The bar expansion panel had inherited it from the
 file it shares with them, and at `lg` it bought nothing but a *circular* corner — a different shape
 from the system menu, the CC context menu and the CC detail island, which are the same family
@@ -3655,6 +3655,31 @@ selecting a workspace close it. Known cosmetic nit: the capsule's hover lift (`h
 isn't replicated by the clone, so opening from hover snaps the glass to its rest tint on
 frame 0. A future island mode (player, agent) is a
 `registerMode` call plus a new id exported from `Status.ts` — not a new Status field.
+
+### Bar capsule geometry: height and gaps (2026-09-25)
+
+The bar reserves a **40px** strip (`BAR_H`, the exclusive zone). Its capsules are **36px** tall and
+sit **4px** from the top of the screen; tiled windows start at 48 (`gaps_out` 8), so there are 8px
+between a capsule and the window under it. Between two capsules: **6px** (`BAR_GAP`). At the two ends:
+**8px** (`BAR_MARGIN` / `SIDE_GAP`).
+
+- The capsule height is set by NOTHING directly: `.bar-centerbox` is `height_request: 40` and its CSS
+  `margin-top` is taken out of that request, so height = 40 − margin. `BAR_CAPSULE_H` in
+  `surfaces/bar/capsule.ts` states the result for what has to MATCH it — the island's indicator chips
+  are that wide so `perfect` makes them circles. Changing the margin without it turns them into pills.
+- Growing the capsule UPWARDS (the margin, 8→4) moves nothing else: the bottom edge stays at 40, so
+  the exclusive zone, `PANEL_TOP` and every window keep their place. Growing it downwards would need
+  all three.
+- The ends stay at 8 because that is Hyprland's `gaps_out`: the system menu's left edge lines up with
+  the windows' and the dock's. The inner gap is smaller than the ends on purpose — the row reads as
+  one framed group.
+- `BAR_GAP` is one constant for every row (left, right, the widgets, the tray, the island's chips)
+  AND for the arithmetic that decides what fits before the `»` appears — the arithmetic used to repeat
+  its own `8`, twice.
+- Why (owner, 2026-09-25): macOS highlights a status item only on hover, filling nearly the whole bar
+  height. Ours are always visible, so they need a gap macOS does not — but with 8px of air above them
+  they read short. 4px between capsules was not tried: the expectation is that neighbouring
+  `GLASS_SHADOW`s fuse into one dark seam. None of this was measured live when written.
 
 ### Bar capsule states: rest, hover, open (2026-09-25)
 

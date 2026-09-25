@@ -4,7 +4,7 @@ import GLib from "gi://GLib"
 import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { MorphRevealer, MorphGlass, MorphPair } from "../../common/MorphRevealer"
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
-import { CAPSULE_BORDER } from "../bar/capsule"
+import { BAR_CAPSULE_H, BAR_GAP, CAPSULE_BORDER } from "../bar/capsule"
 import { GLASS_TINT } from "../../../lib/nidara-kit/platform/tokens"
 import Theme from "../../core/ThemeManager"
 import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT, ISLAND_RECORDING } from "../../core/Status"
@@ -129,15 +129,15 @@ export interface IslandActivity {
 const INDICATOR_MAX = 3
 
 /** A chip's width. Its HEIGHT is whatever the bar row gives it — the chips sit
- *  in the same box as the capsule, so they match it by construction instead of
- *  by a duplicated constant. 32 is that height, which is what turns `perfect`'s
- *  h/2 radius into a circle rather than a pill. */
-const CHIP_W = 32
+ *  in the same box as the capsule, so they match it by construction. The width
+ *  has to equal that height, which is what turns `perfect`'s h/2 radius into a
+ *  circle rather than a pill — hence BAR_CAPSULE_H, not a number of its own. */
+const CHIP_W = BAR_CAPSULE_H
 
 /** Gap before each chip — the bar's rhythm between capsules. It lives on the
  *  chip's margin rather than the box's spacing so it collapses with the chip;
  *  see the row's comment. */
-const CHIP_GAP = 8
+const CHIP_GAP = BAR_GAP
 
 /** `gdkmonitor` is the monitor this bar (and therefore this island) lives on.
  *  Only the overview needs it today — its cards are sized as a fraction of the
