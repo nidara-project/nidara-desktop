@@ -45,7 +45,7 @@ import hyprlandState from "../../core/HyprlandState"
 //
 // The bar still owns the capsule's GEOMETRY (Bar.tsx builds the row and hands it
 // over) — the row reuses `.bar-centerbox`/`.bar-center` so the 4px top margin and
-// 40px row height come from the same CSS the bar uses, not a duplicated constant.
+// BAR_H row height come from the same CSS the bar uses, not a duplicated constant.
 
 const NAMESPACE = "nidara-island"
 

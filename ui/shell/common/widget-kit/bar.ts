@@ -20,12 +20,11 @@ function setIcon(img: Gtk.Image, icon: Gio.FileIcon | string) {
 const AUTO_HIDE_MS = 3000
 
 /** The air on each side of a bar capsule's content — an icon-only pill is
- *  PAD + 16 + PAD wide. Every bar capsule uses it (the widgets' pills, search, CC,
- *  the overflow arrow, the clock, the window title, the tray, the island's compact
- *  forms), so they stay one family. 16 until 2026-09-25: the capsules grew to 36px
- *  tall and the gap between them went 8 → 6 (surfaces/bar/capsule.ts); the owner
- *  moved those 2px inside, to each side of the icon. */
-export const BAR_PILL_PAD = 18
+ *  PAD + 16 + PAD = 48 wide. Every bar capsule uses it (the widgets' pills, search,
+ *  CC, the overflow arrow, the clock, the window title, the tray, the island's
+ *  compact forms), so they stay one family. On the 4px scale with the rest of the
+ *  bar's geometry (surfaces/bar/capsule.ts). */
+export const BAR_PILL_PAD = 16
 
 /**
  * Icon-only bar widget that expands to show a label on click, then auto-hides.

@@ -840,7 +840,7 @@ the `n` the surface is actually painted with: `SquircleContainer` defaults to **
 (default 2 for the tooltip, 3.2 for the menus — see the bubble section below).
 
 **`perfect: true` belongs to CAPSULES, not to panels — and that is why every popup now lands on the
-same 6.** In `Bar.tsx` every other `perfect` is a bar capsule (36px tall, in a 40px row), where it is what clamps the
+same 6.** In `Bar.tsx` every other `perfect` is a bar capsule (32px tall, in a 36px strip), where it is what clamps the
 corner to `min(w,h)/2` and produces the stadium. The bar expansion panel had inherited it from the
 file it shares with them, and at `lg` it bought nothing but a *circular* corner — a different shape
 from the system menu, the CC context menu and the CC detail island, which are the same family
@@ -3658,34 +3658,39 @@ frame 0. A future island mode (player, agent) is a
 
 ### Bar capsule geometry: height and gaps (2026-09-25)
 
-The bar reserves a **40px** strip (`BAR_H`, the exclusive zone). Its capsules are **36px** tall and
-sit **4px** from the top of the screen; tiled windows start at 48 (`gaps_out` 8), so there are 8px
-between a capsule and the window under it. Between two capsules: **6px** (`BAR_GAP`). At the two ends:
-**8px** (`BAR_MARGIN` / `SIDE_GAP`).
-Inside a capsule, each side of its content: **18px** (`BAR_PILL_PAD`, `common/widget-kit/bar.ts` so
-widgets can reach it) — an icon-only pill is 18 + 16 + 18 = 52 wide. 16 until the same day: the owner
-moved the 2px taken from the gap to each side of the icon. Every bar capsule uses it (widgets, search,
-CC, `»`, clock, window title, tray, the island's compact forms); the distro icon is 18px so it takes
-PAD − 2. The CC's status dot is positioned from it (`PAD + 10`, derivation at the call site). Net
-effect on width: +2px per capsule versus the old 16/8, so slightly fewer widgets fit before `»`.
+Every number is on the design system's **4px scale** (`$space-*`), by the owner's rule:
 
-- The capsule height is set by NOTHING directly: `.bar-centerbox` is `height_request: 40` and its CSS
-  `margin-top` is taken out of that request, so height = 40 − margin. `BAR_CAPSULE_H` in
-  `surfaces/bar/capsule.ts` states the result for what has to MATCH it — the island's indicator chips
-  are that wide so `perfect` makes them circles. Changing the margin without it turns them into pills.
-- Growing the capsule UPWARDS (the margin, 8→4) moves nothing else: the bottom edge stays at 40, so
-  the exclusive zone, `PANEL_TOP` and every window keep their place. Growing it downwards would need
-  all three.
-- The ends stay at 8 because that is Hyprland's `gaps_out`: the system menu's left edge lines up with
-  the windows' and the dock's. The inner gap is smaller than the ends on purpose — the row reads as
-  one framed group.
+| | px | where |
+|---|---|---|
+| above a capsule (screen edge) | 4 | `.bar-centerbox` `margin-top` |
+| capsule height | 32 = 8 + 16 icon + 8 | `BAR_CAPSULE_H` (derived, see below) |
+| strip the bar reserves | 36 | `BAR_H` (exclusive zone) |
+| capsule → windows below | 8 | Hyprland `gaps_out` |
+| between two capsules | 4 | `BAR_GAP` |
+| each side of a capsule's content | 16 | `BAR_PILL_PAD` → icon-only pill 48 wide |
+| the two ends (system menu, clock) | 8 | `BAR_MARGIN` / `SIDE_GAP` = `gaps_out` |
+
+`BAR_H`, `BAR_CAPSULE_H`, `BAR_GAP` live in `surfaces/bar/capsule.ts`; `BAR_PILL_PAD` in
+`common/widget-kit/bar.ts` so widgets can reach it.
+
+- The capsule height is set by NOTHING directly: `.bar-centerbox` is `height_request: BAR_H` and its
+  CSS `margin-top` is taken out of that request, so height = `BAR_H` − margin. `BAR_CAPSULE_H` states
+  the result for what has to MATCH it — the island's indicator chips are that wide so `perfect`
+  makes them circles. Change `BAR_H`, the margin and it together, or the chips turn into pills.
+- `BAR_H` is also the side dock's window height (monitor − `BAR_H`, `DockAxis.ts`) and the base of
+  `PANEL_TOP`: that is why it is exported and not local to `Bar.tsx`.
+- The ends stay at 8 because that is `gaps_out`: the system menu's left edge lines up with the
+  windows' and the dock's.
 - `BAR_GAP` is one constant for every row (left, right, the widgets, the tray, the island's chips)
-  AND for the arithmetic that decides what fits before the `»` appears — the arithmetic used to repeat
-  its own `8`, twice.
-- Why (owner, 2026-09-25): macOS highlights a status item only on hover, filling nearly the whole bar
-  height. Ours are always visible, so they need a gap macOS does not — but with 8px of air above them
-  they read short. 4px between capsules was not tried: the expectation is that neighbouring
-  `GLASS_SHADOW`s fuse into one dark seam. None of this was measured live when written.
+  AND for the arithmetic that decides what fits before the `»` — which used to repeat its own `8`.
+- `BAR_PILL_PAD` is every bar capsule's side air (widgets, search, CC, `»`, clock, window title,
+  tray, the island's compact forms). The distro icon is 18px, so it takes PAD − 2; the CC's status
+  dot is placed at PAD + 10 (derivation at the call site).
+- How it got here, same day (owner): first 36 tall / 6 gap / 18 sides — liked live, but 36, 18, 6
+  and 10 are off the 4px scale, and 8 + 16 + 8 is the capsule. So the capsule went back to 32 and
+  the gain moved OUT of the strip instead: 4px from the screen edge instead of 8, with the strip
+  (and every window) 4px higher. ⚠️ Not measured live when written; the 4px gap between glass
+  capsules was the owner's call to try, the worry being neighbouring `GLASS_SHADOW`s fusing.
 
 ### Bar capsule states: rest, hover, open (2026-09-25)
 

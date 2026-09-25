@@ -12,7 +12,7 @@ import Gio from "gi://Gio"
 
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
-import { BAR_GAP, CAPSULE_BORDER, CUSTOM_EXPANSION_ID, barOpen, barTooltip, setBarCustomAnchor } from "./capsule"
+import { BAR_GAP, BAR_H, CAPSULE_BORDER, CUSTOM_EXPANSION_ID, barOpen, barTooltip, setBarCustomAnchor } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import { blurSafeOpacity } from "../../core/NidaraTheme"
 import appService from "../../core/AppService"
@@ -88,7 +88,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   win.set_opacity(0)
 
   const masterOverlay = new Gtk.Overlay({ valign: Gtk.Align.FILL, vexpand: true })
-  const barBox = new Gtk.CenterBox({ css_classes: ["bar-centerbox"], height_request: 40, valign: Gtk.Align.START, margin_start: 8, margin_end: 8 })
+  const barBox = new Gtk.CenterBox({ css_classes: ["bar-centerbox"], height_request: BAR_H, valign: Gtk.Align.START, margin_start: 8, margin_end: 8 })
 
   // ── Inline expansion panel ─────────────────────────────────────────────────
   const OVERFLOW_ID = "__overflow"
@@ -119,7 +119,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // the wrapper is the variable, so all the existing alignment/margin/region
   // code below operates on it transparently (animateLayout:false = Gtk.Bin).
   // NOT `perfect: true`, deliberately. Every other `perfect` in this file is a bar
-  // CAPSULE — 36px tall (a 40px row), where it is what clamps the corner to min(w,h)/2 and makes the
+  // CAPSULE — BAR_CAPSULE_H tall, where it is what clamps the corner to min(w,h)/2 and makes the
   // stadium. This panel is the only large surface that had inherited it, and at radius lg
   // it bought nothing but a circular corner: a different shape from the system menu, the
   // CC context menu and the CC detail island, which are the same family (`lg` = "any
@@ -270,7 +270,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // ── Panel geometry ──────────────────────────────────────────────────────
   // Derived from the bar height and the dock's actual footprint (dock size is
   // user-configurable) instead of hardcoded magic numbers.
-  const BAR_H = 40
 
   const PANEL_TOP = BAR_H + 8   // gap below the bar (8: same rhythm as the side gap)
   const SAFETY = 28
@@ -931,7 +930,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // `center` is NOT put in the bar's CenterBox: the capsule paints on the
   // island's surface (see islandWin above). It goes into a row that reuses the
   // SAME `.bar-centerbox` class the bar's own row does, so the 4px top margin
-  // and the 40px row height come from one CSS rule instead of a constant
+  // and the BAR_H row height come from one CSS rule instead of a constant
   // duplicated across two windows — the capsule lands pixel-identically where
   // the bar would have drawn it. `center` still exists and still holds the live
   // capsule, so `measureOverflow` can keep measuring its natural width.
@@ -1347,7 +1346,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const monitorHeight = gdkmonitor.get_geometry().height
 
   // ── Top zone reservation ──────────────────────────────────────────────────
-  // The bar reserves its own 40 px top strip via exclusive_zone (set on `win`
+  // The bar reserves its own BAR_H top strip via exclusive_zone (set on `win`
   // below). The previous design used a SEPARATE invisible "nidara-bar-zone"
   // layer surface (exclusive_zone=40) plus exclusive_zone=-1 on the bar, so a
   // side dock's exclusive zone couldn't squish the bar's width. But that empty
@@ -1362,7 +1361,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // exclusive zone and start after it — WAS WRONG, and cost real time in 2026-07
   // because it reads plausibly. Layer-shell arranges a surface requesting
   // `exclusive_zone > 0` against the FULL output area; only surfaces asking for
-  // zone 0 get pushed into the remaining usable area. The bar asks for 40, so it
+  // zone 0 get pushed into the remaining usable area. The bar asks for BAR_H, so it
   // spans the whole monitor no matter what anyone else reserves. Measured:
   // `hyprctl monitors -j` reports reserved [0,40,0,100] with a bottom dock while
   // `hyprctl layers -j` still puts nidara-bar at 0 0 2560 1440. That is also why
@@ -1381,7 +1380,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     // for the life of the session: modality comes from the compositor focus grab
     // (syncKeyboardMode), and EXCLUSIVE would re-add us to m_exclusiveLSes for nothing.
     Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
-    // Reserve the 40 px top strip for tiled windows (replaces the old nidara-bar-zone
+    // Reserve the BAR_H top strip for tiled windows (replaces the old nidara-bar-zone
     // spacer surface — see "Top zone reservation" above). Independent of the surface's
     // own height; the bar surface stays full-height for the CC/NC overlays.
     Gtk4LayerShell.set_exclusive_zone(win, BAR_H)

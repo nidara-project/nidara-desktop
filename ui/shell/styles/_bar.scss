@@ -49,7 +49,7 @@ window#nidara-bar-zone {
    The capsule row and the three flank groups. `.bar-left`/`.bar-right` only ever
    exist in the bar and `.bar-center` only in the island, but they are ONE rule
    because that is the point: `islandRow` reuses `.bar-centerbox` so the 4px top
-   margin and the 40px row height come from the same CSS the bar uses instead of
+   margin and the BAR_H row height come from the same CSS the bar uses instead of
    a constant duplicated across two windows (Bar.tsx says so at the mount site).
    Splitting them would be the first step toward that duplication.
    ========================================================================== */
@@ -62,7 +62,7 @@ window#nidara-bar-zone {
     .bar-centerbox {
         background-color: transparent;
         border: none;
-        margin-top: 4px;   // ⚠️ capsule height = 40 − this; keep BAR_CAPSULE_H (capsule.ts) in step
+        margin-top: 4px;   // ⚠️ capsule height = BAR_H − this; keep BAR_H/BAR_CAPSULE_H (capsule.ts) in step
     }
 
     /* --- Widget labels ---

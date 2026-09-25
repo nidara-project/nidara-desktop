@@ -395,10 +395,10 @@ class HyprlandStateClass extends GObject.Object {
      *
      *  Exists so the Activity Island can FOLLOW the bar instead of guessing where
      *  it is. The two surfaces answer to different rules on purpose: the bar asks
-     *  for `exclusive_zone = 40` (it reserves space, and a surface with zone >= 0
+     *  for `exclusive_zone = BAR_H` (it reserves space, and a surface with zone >= 0
      *  also RESPECTS everyone else's reservations), while the island asks for `-1`
      *  so nothing displaces it — if it respected reservations, the first one it
-     *  would respect is the bar's own 40px and the capsule would leave the bar row.
+     *  would respect is the bar's own strip and the capsule would leave the bar row.
      *  Both choices are right alone and wrong together: let anything reserve space
      *  ABOVE the bar — Hyprland's own config-error bar is the case in the wild —
      *  and the bar slides down while the island stays, so the capsule floats above
