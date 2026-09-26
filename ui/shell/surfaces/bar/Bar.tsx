@@ -12,7 +12,7 @@ import Gio from "gi://Gio"
 
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
-import { BAR_GAP, BAR_H, CAPSULE_BORDER, CUSTOM_EXPANSION_ID, barOpen, barTooltip, setBarCustomAnchor } from "./capsule"
+import { BAR_GROUP_PAD, BAR_H, CUSTOM_EXPANSION_ID, barGroup, barItem, barOpen, barTooltip, setBarCustomAnchor } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import { blurSafeOpacity } from "../../core/NidaraTheme"
 import appService from "../../core/AppService"
@@ -20,7 +20,7 @@ import status from "../../core/Status"
 import inputYield from "../../core/InputYield"
 import widgetConfig from "../../core/WidgetConfig"
 import regionConfig from "../../core/RegionConfig"
-import { notifications, watchNotified, watchResolved } from "../../core/NotifService"
+import { notifications } from "../../core/NotifService"
 import registry, { widgetAvailable, watchWidgetAvailability } from "../../widgets/index"
 import Tray from "./Tray"
 import { SystemMenuOverlay } from "./SystemMenu"
@@ -43,10 +43,10 @@ import { uiIcon } from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import hs from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
-import { BAR_PILL_PAD } from "../../common/widget-kit"
+import { BAR_ITEM_PAD } from "../../common/widget-kit"
 
 function SystemMenuIcon(): Gtk.Widget {
-  const img = new Gtk.Image({ pixel_size: 18, css_classes: ["bar-distro-icon"], margin_start: BAR_PILL_PAD - 2, margin_end: BAR_PILL_PAD - 2 })   // 18px glyph: 2px less air keeps it as wide as a 16px pill
+  const img = new Gtk.Image({ pixel_size: 18, css_classes: ["bar-distro-icon"], margin_start: BAR_ITEM_PAD - 1, margin_end: BAR_ITEM_PAD - 1 })   // 18px glyph: 1px less air a side keeps the item as wide as a 16px one
 
   const applyIcon = () => {
     // Fall back to the built-in mark for unknown presets (e.g. a stale "arch"
@@ -59,9 +59,9 @@ function SystemMenuIcon(): Gtk.Widget {
   applyIcon()
   onBarSettingsChanged(applyIcon)
 
-  const capsule = SquircleContainer({ child: img, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.system_menu_open), perfect: true, onClick: () => status.toggleSystemMenu() })
-  barTooltip(capsule, () => t("bar.tooltip.system-menu"))
-  return capsule
+  const item = barItem({ child: img, ...barOpen(() => status.system_menu_open), onClick: () => status.toggleSystemMenu() })
+  barTooltip(item, () => t("bar.tooltip.system-menu"))
+  return item
 }
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
@@ -906,7 +906,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   
   syncOverlays()
 
-  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: BAR_GAP })
+  // The LEFT group: one piece of glass holding the system menu and the window title
+  // (barGroup, capsule.ts). `left` is only the flank that carries the `.bar-left` rules.
+  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false })
+  const leftGroup = barGroup()
+  left.append(leftGroup.widget)
   const sysMenuWidget = SystemMenuIcon()
   const appTitle = AppTitle(geo().width, openCustomExpansion)
   const appTitleWidget = appTitle.widget
@@ -917,8 +921,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // makes the same call (macOS/GNOME/Windows never let you remove it). The
   // island's centre box below is permanent for the sibling reason — see barState.
   appTitleWidget.set_visible(barSettings.showAppTitle)
-  left.append(sysMenuWidget)
-  left.append(appTitleWidget)
+  leftGroup.box.append(sysMenuWidget)
+  leftGroup.box.append(appTitleWidget)
   // NO spacing — the gap lives on each chip's own margin (see ActivityIsland).
   // A Gtk.Box reserves its spacing between every VISIBLE child, and a collapsed
   // Gtk.Revealer is still visible (it just measures 0), so spacing here would
@@ -1063,12 +1067,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     syncLeftBudget()
     scheduleBarLayoutSync()
   })
-  const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: BAR_GAP })
-  // Absorbs remaining space so actual capsules stay pinned to the right edge.
+  const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END })
+  // Absorbs remaining space so the group stays pinned to the right edge.
   const rightSpacer = new Gtk.Box({ hexpand: true })
   right.append(rightSpacer)
+  // The RIGHT group: ONE piece of glass for the `»`, the widgets, the tray, search,
+  // the CC and the clock, in that order (barGroup, capsule.ts; owner, 2026-09-26).
+  const rightGroup = barGroup()
+  right.append(rightGroup.widget)
 
-  const timeContent = new Gtk.Box({ spacing: 12, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD })
+  const timeContent = new Gtk.Box({ margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD })
   const timeLabel = new Gtk.Label({ label: "...", css_classes: ["bar-time-label"] })
   const updateClock = () => {
     const next = regionConfig.formatClock()
@@ -1078,36 +1086,30 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   timeLabel.connect("unrealize", () => { try { GLib.source_remove(clockTimer) } catch {} })
   regionConfig.connect("changed", updateClock)
   updateClock()
-  const bellIcon = new Gtk.Image({ gicon: uiIcon("nd-notifications"), pixel_size: 16, visible: false , css_classes: ["nd-icon"] })
-  const syncBell = () => { bellIcon.set_visible(notifications().length > 0) }
-  watchNotified(syncBell)
-  watchResolved(syncBell)
-  syncBell()
-  timeContent.append(bellIcon); timeContent.append(timeLabel)
+  // No bell beside the date (owner, 2026-09-26): inside one group with the widgets it
+  // read as another widget's icon. The pending count lives in the clock's tooltip.
+  timeContent.append(timeLabel)
 
   // Optional bar widgets (before Tray, reactive to config changes)
-  const optWidgets = new Gtk.Box({ css_classes: ["bar-optional-widgets"], spacing: BAR_GAP })
+  const optWidgets = new Gtk.Box({ css_classes: ["bar-optional-widgets"] })
 
   // The overflow capsule: shown only while some widget does not fit. It is not a
   // menu — it unfolds the hidden widgets IN LINE, in the same bar (macOS 27's `»`):
   // the island rises out of the way and the row grows leftwards over the room it
   // leaves, the window title yielding if it has to (Status.bar_overflow_open).
-  // Unfolded widgets are the same pills as the others, built by the same loop.
+  // Unfolded widgets are the same items as the others, built by the same loop.
   // Built once and kept outside `optWidgets`, which rebuildBarWidgets empties.
-  const overflowIcon = new Gtk.Image({ gicon: uiIcon("nd-pan-end"), pixel_size: 16, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, css_classes: ["nd-icon"] })
-  const overflowCapsule = SquircleContainer({
-      child: overflowIcon, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW,
-      borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.bar_overflow_open), perfect: true,
-  })
-  overflowCapsule.set_visible(false)
-  barTooltip(overflowCapsule, () => t(status.bar_overflow_open ? "bar.tooltip.overflow.hide" : "bar.tooltip.overflow.show"))
+  const overflowIcon = new Gtk.Image({ gicon: uiIcon("nd-pan-end"), pixel_size: 16, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
+  const overflowItem = barItem({ child: overflowIcon, ...barOpen(() => status.bar_overflow_open) })
+  overflowItem.set_visible(false)
+  barTooltip(overflowItem, () => t(status.bar_overflow_open ? "bar.tooltip.overflow.hide" : "bar.tooltip.overflow.show"))
   {
       const g = new Gtk.GestureClick()
       g.connect("released", () => {
           if (status.cc_edit_mode) return
           status.toggleBarOverflow()
       })
-      overflowCapsule.add_controller(g)
+      overflowItem.add_controller(g)
   }
 
   const rebuildBarWidgets = () => {
@@ -1115,7 +1117,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     capsuleRefs.clear()
     // A widget's panel opened while its pill is hidden (IPC) hangs from the overflow
     // capsule — see positionExpansion.
-    capsuleRefs.set(OVERFLOW_ID, overflowCapsule)
+    capsuleRefs.set(OVERFLOW_ID, overflowItem)
     let child = optWidgets.get_first_child()
     while (child) { const n = child.get_next_sibling(); optWidgets.remove(child); child = n }
 
@@ -1133,7 +1135,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     const fit = unfolded ? Math.max(folded, fitUnfolded ?? Infinity) : folded
     const visibleIds = allIds.slice(allIds.length - Math.min(allIds.length, fit))
     const anyHidden = allIds.length > folded
-    overflowCapsule.set_visible(anyHidden)
+    overflowItem.set_visible(anyHidden)
     overflowIcon.gicon = uiIcon(unfolded ? "nd-pan-start" : "nd-pan-end")
     // Nothing left to unfold (a widget removed, a wider monitor): fold. Deferred, as
     // folding rebuilds through this very function. Only on a MEASURED answer: the
@@ -1165,25 +1167,22 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               open?.()
           }
           : undefined
-      const capsule = SquircleContainer({
-          child: w.buildBarContent(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW,
-          borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.bar_expanded_id === id), perfect: true,
-      })
+      const item = barItem({ child: w.buildBarContent(), ...barOpen(() => status.bar_expanded_id === id) })
       if (onRelease) {
           // BUBBLE + released: child buttons claim on press → deny this gesture → released
           // never fires when a button is clicked; fires only for neutral-area taps.
           const g = new Gtk.GestureClick()
           g.connect("released", onRelease)
-          capsule.add_controller(g)
+          item.add_controller(g)
       }
       // Tooltip: the widget's name, or "Name · state" when the widget offers a state
       // line (`barTooltipState`). Read at show time, so it is the state of that moment.
-      barTooltip(capsule, () => {
+      barTooltip(item, () => {
           const state = w.barTooltipState?.()
           return state ? `${w.name} · ${state}` : w.name
       })
-      if (hasExpand) capsuleRefs.set(id, capsule)
-      optWidgets.append(capsule)
+      if (hasExpand) capsuleRefs.set(id, item)
+      optWidgets.append(item)
     }
   }
   widgetConfig.connect("changed", () => {
@@ -1195,55 +1194,52 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   })
   rebuildBarWidgets()
 
-  right.append(overflowCapsule)
-  right.append(optWidgets)
+  rightGroup.box.append(overflowItem)
+  rightGroup.box.append(optWidgets)
 
-  // Tray items each carry their own glass capsule (built in Tray.tsx), so there's
-  // no outer grouping capsule here — the tray is a plain spacing container that
-  // manages its own visibility (hidden while empty).
+  // Tray items are items of this same group (built in Tray.tsx); the tray itself is
+  // a plain container that manages its own visibility (hidden while empty).
   const trayInner = Tray(openCustomExpansion, () => scheduleBarLayoutSync())
-  right.append(trayInner)
-  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 16, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.prism_open), perfect: true })
-  barTooltip(searchCapsule, () => t("bar.tooltip.search"))
-  right.append(searchCapsule)
-  // CC capsule layout: [PAD][gear 16px][PAD right-gap] (matches the search capsule;
-  // BAR_PILL_PAD, 16 when the numbers below were measured, 18 since 2026-09-25). The status-indicator dot (recording / AI control) sits in that right
-  // gap WITHOUT widening the capsule, centred between the icon's right edge and the capsule's
-  // right edge. We overlay the dot on the whole content and centre it within a region that
-  // starts `margin_start` from the left, so its centre lands at (margin_start / 2) + 24.
-  //   Centre in the DRAWN geometry, not GTK's allocation: both the squircle and the glyph draw
-  //   ~3px INSIDE their boxes (measured). So the capsule's visible right edge ≈ alloc-x 45 (not
-  //   48) and the icon's visible right edge ≈ 29 (not its box edge 32). Visible gap = [29, 45]
-  //   → centre (29 + 45) / 2 = 37 → margin_start = 26 (verified: 5px air each side of the dot).
-  //   (Centring on the allocation boxes gives 40, which looks pegged-right because both draw narrower.)
-  // The gap is a plain PAD-wide spacer that just reserves the width (no shift when the dot shows/hides).
-  // Detail + Stop/kill-switch live in the CC banner. Badge can_target:false → clicks hit the capsule.
+  rightGroup.box.append(trayInner)
+  const searchItem = barItem({ child: new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 16, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), ...barOpen(() => status.prism_open) })
+  barTooltip(searchItem, () => t("bar.tooltip.search"))
+  rightGroup.box.append(searchItem)
+  // CC item layout: [PAD][gear 16px][DOT_GAP] — 36 wide, 4 more than an icon item, so
+  // the status-indicator dot (recording / AI control) has a lane of its own to the
+  // right of the gear and never shifts anything when it shows or hides.
+  // The dot is overlaid on the whole content and centred in the region that starts at
+  // `margin_start`; setting that to the gear's VISIBLE right edge centres it between
+  // the glyph and the item's edge (= the hover pill's edge). A 16px glyph draws ~3px
+  // inside its box (measured 2026-08, when this was a capsule), so its visible right
+  // edge is PAD + 13 = 21 → the dot's centre lands at (21 + 36) / 2 ≈ 28.5.
+  // Detail + Stop/kill-switch live in the CC banner. Badge can_target:false → clicks hit the item.
   // Two sliders, like macOS's Control Centre. The freedesktop spec has no name for
   // that; the one icon themes draw that way is GNOME Tweaks' (Colloid, MacTahoe, Qogir,
   // Tela — as two switches). `preferences-system` is a gear or tools everywhere (#587).
-  const ccGear = new Gtk.Image({ gicon: uiIcon("nd-control-center"), pixel_size: 16, margin_start: BAR_PILL_PAD, css_classes: ["nd-icon"] })
+  const CC_DOT_GAP = 12
+  const ccGear = new Gtk.Image({ gicon: uiIcon("nd-control-center"), pixel_size: 16, margin_start: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
   const ccInner = new Gtk.Box({ valign: Gtk.Align.CENTER })
   ccInner.append(ccGear)
-  ccInner.append(new Gtk.Box({ width_request: BAR_PILL_PAD }))   // reserve the right gap → as wide as the search capsule
+  ccInner.append(new Gtk.Box({ width_request: CC_DOT_GAP }))   // the dot's lane, reserved whether or not it shows
   const ccDot = ccBadge()
-  ccDot.set_margin_start(BAR_PILL_PAD + 10)             // = 26 at PAD 16 (derivation above, general form: margin = PAD + 10) — centred between the icon's and capsule's VISIBLE (drawn) right edges
+  ccDot.set_margin_start(BAR_ITEM_PAD + 13)             // the gear's visible right edge (derivation above)
   const ccOverlay = new Gtk.Overlay()
   ccOverlay.set_child(ccInner)
   ccOverlay.add_overlay(ccDot)
-  const ccBtn = SquircleContainer({ child: ccOverlay, onClick: () => status.toggleCC(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.cc_open), perfect: true })
-  barTooltip(ccBtn, () => t("bar.tooltip.control-center"))
-  right.append(ccBtn)
-  const timeCapsule = SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.nc_open), perfect: true })
+  const ccItem = barItem({ child: ccOverlay, onClick: () => status.toggleCC(), ...barOpen(() => status.cc_open) })
+  barTooltip(ccItem, () => t("bar.tooltip.control-center"))
+  rightGroup.box.append(ccItem)
+  const clockItem = barItem({ child: timeContent, onClick: () => status.toggleNC(), ...barOpen(() => status.nc_open) })
   // The clock's tooltip is the whole date, year included, whatever date format the
-  // clock itself shows; the state line is the count the bell only hints at.
-  barTooltip(timeCapsule, () => {
+  // clock itself shows; the state line is the count of pending notifications.
+  barTooltip(clockItem, () => {
     const date = formatFullDate(GLib.DateTime.new_now_local())
     const n = notifications().length
     if (n === 0) return date
     const count = n === 1 ? t("bar.tooltip.notifications.one") : t("bar.tooltip.notifications.other").replace("%d", String(n))
     return `${date} · ${count}`
   })
-  right.append(timeCapsule)
+  rightGroup.box.append(clockItem)
 
   // No center widget: the capsule that used to sit there paints on the island's
   // surface now. CenterBox places left at START and right at END.
@@ -1268,16 +1264,18 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // `immediate`: the right group is growing over the title in this same frame
   // (the overflow unfolding), so the title cannot take its usual ~180ms to shrink.
   const syncLeftBudget = (immediate = false) => {
-    const sysMenuW = sysMenuWidget.measure(Gtk.Orientation.HORIZONTAL, -1)[1] || 48
-    const spacing = BAR_GAP
+    const sysMenuW = sysMenuWidget.measure(Gtk.Orientation.HORIZONTAL, -1)[1] || 32
+    // The title shares the left group's glass with the system menu: what it costs
+    // besides the menu item is the group's own padding at both ends.
+    const groupPad = 2 * BAR_GROUP_PAD
     let appTitleBudget: number
     if (status.bar_overflow_open) {
       // No island in the middle: the title gets whatever the unfolded right group
       // leaves, up to the same gap the island would have kept.
       const rightW = right.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
-      appTitleBudget = Math.max(0, geo().width - 2 * BAR_MARGIN - rightW - sysMenuW - spacing - ISLAND_GAP)
+      appTitleBudget = Math.max(0, geo().width - 2 * BAR_MARGIN - rightW - sysMenuW - groupPad - ISLAND_GAP)
     } else {
-      appTitleBudget = Math.max(0, getAvailableFlankWidth() - sysMenuW - spacing)
+      appTitleBudget = Math.max(0, getAvailableFlankWidth() - sysMenuW - groupPad)
     }
     const yielded = status.bar_overflow_open && appTitleBudget < TITLE_MIN_W
     if (yielded !== titleYielded) { titleYielded = yielded; syncTitleVisible() }
@@ -1306,17 +1304,18 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     while (c) { iconWidths.push(natW(c)); c = c.get_next_sibling() }
     if (iconWidths.length === 0) return
 
-    const spacing = BAR_GAP
-    const fixedCapsules: Gtk.Widget[] = [trayInner, searchCapsule, ccBtn, timeCapsule]
-    const fixedW = fixedCapsules.reduce((s, w) => s + (w.get_visible() ? natW(w) + spacing : 0), 0)
-    overflowCapsule.set_visible(true)
-    const overflowW = natW(overflowCapsule) + spacing
-    overflowCapsule.set_visible(false)
+    // Items touch inside the group: an item costs its own width and nothing else, and
+    // the group's glass costs its padding once, charged with the fixed items.
+    const fixedItems: Gtk.Widget[] = [trayInner, searchItem, ccItem, clockItem]
+    const fixedW = 2 * BAR_GROUP_PAD + fixedItems.reduce((s, w) => s + (w.get_visible() ? natW(w) : 0), 0)
+    overflowItem.set_visible(true)
+    const overflowW = natW(overflowItem)
+    overflowItem.set_visible(false)
 
     const fitFromClock = (budget: number) => {
       let total = 0, n = 0
       for (let i = iconWidths.length - 1; i >= 0; i--) {
-        const cost = n === 0 ? iconWidths[i] : iconWidths[i] + spacing
+        const cost = iconWidths[i]
         if (total + cost > budget) break
         total += cost
         n++
@@ -1329,7 +1328,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       ? iconWidths.length
       : fitFromClock(foldedBudget - overflowW)
     const sysMenuW = natW(sysMenuWidget)
-    const unfoldedBudget = geo().width - 2 * BAR_MARGIN - sysMenuW - ISLAND_GAP - fixedW - overflowW
+    const unfoldedBudget = geo().width - 2 * BAR_MARGIN - (sysMenuW + 2 * BAR_GROUP_PAD) - ISLAND_GAP - fixedW - overflowW
     fitUnfolded = fitFromClock(unfoldedBudget)
     // Only on an absurd widget count: the farthest ones stay out of reach even
     // unfolded. Said once per measurement so it cannot be mistaken for a bug.

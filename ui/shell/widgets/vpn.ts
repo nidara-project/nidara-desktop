@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { BAR_PILL_PAD, AtomicWidget, ContentBudget, PANEL_W, WidgetSize, makeIconTile, makeCapsuleTile } from "../common/widget-kit"
+import { BAR_ITEM_PAD, AtomicWidget, ContentBudget, PANEL_W, WidgetSize, makeIconTile, makeCapsuleTile } from "../common/widget-kit"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 import GLib from "gi://GLib"
 import { execAsync } from "../../lib/process"
@@ -143,7 +143,7 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
 // ── Bar icon ──────────────────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    const image = new Gtk.Image({ gicon: uiIcon("nd-network-vpn-disconnected"), pixel_size: 16, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, css_classes: ["nd-icon"] })
+    const image = new Gtk.Image({ gicon: uiIcon("nd-network-vpn-disconnected"), pixel_size: 16, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
     activeVpnName().then(name => { image.gicon = name ? uiIcon("nd-network-vpn") : uiIcon("nd-network-vpn-disconnected") })
     return image
 }

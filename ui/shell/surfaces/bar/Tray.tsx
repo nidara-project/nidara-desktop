@@ -7,27 +7,24 @@ import { getServiceSafe } from "../../utils"
 import { renderMenuModel } from "../../common/NidaraMenu"
 import status from "../../core/Status"
 import { safeDisconnect } from "../../core/signals"
-import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
-import { BAR_GAP, CAPSULE_BORDER, barOpen, barTooltip, isBarCustomAnchor } from "./capsule"
+import { barItem, barOpen, barTooltip, isBarCustomAnchor } from "./capsule"
 import hs from "../../core/HyprlandState"
-import { BAR_PILL_PAD } from "../../common/widget-kit"
+import { BAR_ITEM_PAD } from "../../common/widget-kit"
 
 // openMenu: opens arbitrary content in the bar's shared expansion capsule, anchored
 // under the given widget (same system as the bar widget popovers). Injected by Bar.
 type OpenMenu = (anchor: Gtk.Widget, build: (onClose: () => void) => Gtk.Widget, align?: "center" | "start") => void
 
 export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void) {
-    // Spacing container only — each tray item now carries its OWN glass capsule
-    // (see createItem), so there's no outer grouping pill and no interior padding
-    // here. BAR_GAP matches the gap between the other right-side bar capsules.
+    // Plain container — each tray item is an item of the bar's right group (see
+    // createItem), touching its neighbours like every other item there.
     const box = new Gtk.Box({
         name: "bar-tray",
         css_classes: ["bar-tray"],
-        spacing: BAR_GAP,
     })
 
-    // id → the item's top-level capsule (the child appended to `box`). We keep the
-    // capsule (not the raw button) so removeItem detaches the whole thing.
+    // id → the item's top-level widget (the child appended to `box`). We keep the
+    // item (not the raw button) so removeItem detaches the whole thing.
     const items = new Map<string, Gtk.Widget>()
     // Per-item teardown: drop EVERY subscription we took on the (churny) TrayItem
     // when the item goes away. Antigravity re-registers its tray item periodically.
@@ -60,9 +57,9 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void) {
             } catch (_) {}
         }
 
-        // 16px air each side → the button (and thus its capsule) is 48px wide,
-        // matching the search / CC / clock icon capsules exactly.
-        const img = new Gtk.Image({ pixel_size: 16, css_classes: ["bar-tray-icon"], margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD })
+        // BAR_ITEM_PAD each side → the button (and thus its item) is 32px wide,
+        // matching the search / widget icon items exactly.
+        const img = new Gtk.Image({ pixel_size: 16, css_classes: ["bar-tray-icon"], margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD })
 
         // Use icon_name when the active icon theme knows the icon (or its -symbolic
         // variant). CSS `-gtk-icon-style: symbolic` then makes GTK prefer the
@@ -228,17 +225,11 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void) {
             for (const off of unsubs) { try { off() } catch (e) { } }
             if (menuChangedId) safeDisconnect(item.menu_model, menuChangedId)
         })
-        // Wrap each item in its own glass capsule — identical construction to the
-        // search / CC / clock capsules, so tray icons read as first-class bar icons
-        // rather than one grouped pill. The button fills the 48px capsule, so the
-        // whole capsule left-clicks (activate) and right-clicks (menu); the
-        // SquircleContainer only paints the glass: a hover lift, and the open state
-        // while this item's menu (anchored on `btn`) is down.
-        const capsule = SquircleContainer({
-            child: btn, gloss: true, useShellOpacity: true, chrome: true,
-            opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true,
-            ...barOpen(() => isBarCustomAnchor(btn)), perfect: true,
-        })
+        // An item of the bar's right group, like search and the widgets: the button
+        // fills it, so the whole item left-clicks (activate) and right-clicks (menu);
+        // barItem only paints the pill — on hover, and while this item's menu
+        // (anchored on `btn`) is down.
+        const capsule = barItem({ child: btn, ...barOpen(() => isBarCustomAnchor(btn)) })
         items.set(id, capsule)
         box.append(capsule)
     }
