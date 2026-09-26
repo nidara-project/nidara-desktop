@@ -2,19 +2,18 @@ import Gtk from "gi://Gtk?version=4.0"
 import Pango from "gi://Pango"
 import GLib from "gi://GLib"
 import { getWordmark } from "../../utils"
-import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
-import { CAPSULE_BORDER, barOpen, barTooltip, isBarCustomAnchor } from "./capsule"
+import { barItem, barOpen, barTooltip, isBarCustomAnchor } from "./capsule"
 import hs from "../../core/HyprlandState"
 import status from "../../core/Status"
 import shellActions from "../../core/ShellActions"
 import buildWindowMenu from "./WindowMenu"
-import { BAR_PILL_PAD } from "../../common/widget-kit"
+import { BAR_ITEM_PAD } from "../../common/widget-kit"
 
 // openMenu: opens arbitrary content in the bar's shared expansion capsule,
 // anchored under the given widget. Injected by Bar (same pattern as Tray).
 type OpenMenu = (anchor: Gtk.Widget, build: (onClose: () => void) => Gtk.Widget, align?: "center" | "start") => void
 
-// Bar-left capsule showing the focused window's app name (wordmark), kept in
+// Bar-left item (the left group, beside the system menu) showing the focused window's app name (wordmark), kept in
 // sync with Hyprland's focused client and its title changes. Clicking it (any
 // button) opens the window-options menu (WindowMenu.ts).
 export interface AppTitleHandle {
@@ -27,7 +26,7 @@ export interface AppTitleHandle {
   setMaxWidth: (px: number, immediate?: boolean) => void
 }
 
-const PAD_PX = 32 // 16px margin_start + 16px margin_end
+const PAD_PX = 2 * BAR_ITEM_PAD // margin_start + margin_end
 
 /**
  * Uses Pango layout to measure the exact rendered width in pixels of the text,
@@ -69,8 +68,8 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
   const appName = new Gtk.Label({
     label: "—",
     css_classes: ["bar-app-name"],
-    margin_start: BAR_PILL_PAD,
-    margin_end: BAR_PILL_PAD,
+    margin_start: BAR_ITEM_PAD,
+    margin_end: BAR_ITEM_PAD,
   })
 
   const updateLabel = () => {
@@ -79,8 +78,8 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
     if (appName.label !== fitted) appName.label = fitted
   }
 
-  // Open while the window menu it anchors is down (the capsule IS the anchor).
-  const capsule: Gtk.Widget = SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => isBarCustomAnchor(capsule)), perfect: true })
+  // Open while the window menu it anchors is down (the item IS the anchor).
+  const capsule: Gtk.Widget = barItem({ child: appName, ...barOpen(() => isBarCustomAnchor(capsule)) })
 
   // Tooltip: the window's WHOLE title — the label is a wordmark (an app name, or a
   // title cut to fit the flank), so this is the one place the full title can be read.

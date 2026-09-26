@@ -3681,12 +3681,48 @@ Every number is on the design system's **4px scale** (`$space-*`), by the owner'
 | capsule height | 32 = 8 + 16 icon + 8 | `BAR_CAPSULE_H` (derived, see below) |
 | strip the bar reserves | 36 | `BAR_H` (exclusive zone) |
 | capsule → windows below | 8 | Hyprland `gaps_out` |
-| between two capsules | 4 | `BAR_GAP` |
-| each side of a capsule's content | 16 | `BAR_PILL_PAD` → icon-only pill 48 wide |
+| between two capsules (only the island and its chips, since the groups) | 4 | `BAR_GAP` |
+| group allocation → its first/last item | 4 | `BAR_GROUP_PAD` |
+| each side of an item's content | 8 | `BAR_ITEM_PAD` → icon-only item 32 wide |
+| hover/open pill ↔ item top and bottom | 4 | `BAR_VEIL_INSET` → pill 24 tall, radius 12 |
+| each side of a STANDALONE capsule's content (the island's compact forms) | 16 | `BAR_PILL_PAD` |
 | the two ends (system menu, clock) | 8 | `BAR_MARGIN` / `SIDE_GAP` = `gaps_out` |
 
-`BAR_H`, `BAR_CAPSULE_H`, `BAR_GAP` live in `surfaces/bar/capsule.ts`; `BAR_PILL_PAD` in
-`common/widget-kit/bar.ts` so widgets can reach it.
+`BAR_H`, `BAR_CAPSULE_H`, `BAR_GAP`, `BAR_GROUP_PAD`, `BAR_VEIL_INSET` live in
+`surfaces/bar/capsule.ts`; `BAR_ITEM_PAD` and `BAR_PILL_PAD` in `common/widget-kit/bar.ts` so
+widgets can reach them.
+
+### Bar groups: three pieces of glass, a pill inside (2026-09-26)
+
+The bar is THREE pieces of glass, not one per icon (owner): the **left group** (system menu +
+window title), the **island** (its own surface — its chips stay separate circles), and the
+**right group** (`»`, the widgets, the tray, search, the CC, the clock — in that order, no
+separators). `barGroup()` builds the glass (`SquircleContainer` with the bar params, NO
+`hoverLift`); `barItem({child, onClick?, ...barOpen(…)})` builds an item: its content over a
+Cairo pill painted ONLY on hover or while its panel is open. The group's glass never changes.
+
+- **The widget owns its air, the group owns none.** Items touch; each content carries
+  `BAR_ITEM_PAD` a side, and the pill is the item's WHOLE width. A widget's `buildBarContent`
+  that forgets the pad gets a pill hugging its glyph.
+- **Concentric by construction.** The glass is painted `GLASS_INSET` (2) in from its allocation,
+  so a 32 row shows 28 of glass (radius 14); the pill sits 4 in from the allocation on all
+  sides that face the glass (`BAR_VEIL_INSET` top/bottom, `BAR_GROUP_PAD` at the ends) → 2px
+  from the visible edge, radius 12. A segmented control's thumb, which is the prior art.
+- **The veil is the capsule's old one, moved.** Same ink (`GLASS_SPECULAR` / `GLASS_TINT.dark`)
+  at the same `GLASS_STATE_MIX` alphas, painted OVER the group's glass instead of folded into a
+  capsule's own fill — the same pixels.
+- **The whole 32px column is the hit target**, not just the 24px pill.
+- **Width arithmetic** (`measureOverflow`, `syncLeftBudget`): an item costs its own width and
+  nothing else; each group costs `2 × BAR_GROUP_PAD` once. There is no gap to multiply any more.
+- **The CC item is 36, not 32**: its status dot has a 12px lane right of the gear, so showing it
+  moves nothing (derivation at the call site in `Bar.tsx`).
+- `barItem` subscribes (open state, Theme) on `map`, not at build time: the widget items are
+  rebuilt on every layout pass, and a subscription dropped on `unrealize` is never retaken.
+- ⚠️ `barItem`'s veil EXPANDS and its Grid sets `hexpand`/`vexpand` FALSE explicitly — both are
+  load-bearing. A `Gtk.Grid` gives spare room only to expanding rows/columns, so without the veil's
+  expand the cell stays at the content's natural height at the TOP of the item (the icons sat above
+  the glass, caught live 2026-09-26). And an unset expand on the item is computed from that child,
+  so every item — and the group — would fill the flank. `SquircleContainer` has the same pair.
 
 - The capsule height is set by NOTHING directly: `.bar-centerbox` is `height_request: BAR_H` and its
   CSS `margin-top` is taken out of that request, so height = `BAR_H` − margin. `BAR_CAPSULE_H` states
@@ -3696,11 +3732,11 @@ Every number is on the design system's **4px scale** (`$space-*`), by the owner'
   `PANEL_TOP`: that is why it is exported and not local to `Bar.tsx`.
 - The ends stay at 8 because that is `gaps_out`: the system menu's left edge lines up with the
   windows' and the dock's.
-- `BAR_GAP` is one constant for every row (left, right, the widgets, the tray, the island's chips)
-  AND for the arithmetic that decides what fits before the `»` — which used to repeat its own `8`.
-- `BAR_PILL_PAD` is every bar capsule's side air (widgets, search, CC, `»`, clock, window title,
-  tray, the island's compact forms). The distro icon is 18px, so it takes PAD − 2; the CC's status
-  dot is placed at PAD + 10 (derivation at the call site).
+- `BAR_GAP` was one constant for every row until the groups (2026-09-26); now only the island's
+  capsule and chips stand side by side as separate glass, so it is theirs (`CHIP_GAP`).
+- `BAR_PILL_PAD` is the side air of a STANDALONE capsule — only the island's compact forms since
+  the groups. Every item in a group takes `BAR_ITEM_PAD` (8); the distro icon is 18px, so it
+  takes ITEM_PAD − 1.
 - How it got here, same day (owner): first 36 tall / 6 gap / 18 sides — liked live, but 36, 18, 6
   and 10 are off the 4px scale, and 8 + 16 + 8 is the capsule. So the capsule went back to 32 and
   the gain moved OUT of the strip instead: 4px from the screen edge instead of 8, with the strip
@@ -3718,7 +3754,7 @@ down, and shows nothing on hover) turned that round.
 | state | paint | where |
 |---|---|---|
 | rest | glass + `CAPSULE_BORDER` | — |
-| hover | a veil OVER the glass at `GLASS_STATE_MIX.hover` — `GLASS_SPECULAR` on dark glass, `GLASS_TINT.dark` on light glass. A FIXED alpha, not a fraction of the pane: the first version scaled with the bar opacity and all but vanished at its minimum | `hoverLift: true` |
+| hover | a veil OVER the glass at `GLASS_STATE_MIX.hover` — `GLASS_SPECULAR` on dark glass, `GLASS_TINT.dark` on light glass. A FIXED alpha, not a fraction of the pane: the first version scaled with the bar opacity and all but vanished at its minimum. Since 2026-09-26 it is painted as a PILL inside the group, under the one item (`barItem`, see "Bar groups" above); the island's compact capsule keeps it on its whole glass | `barItem` (the island: `hoverLift: true`) |
 | open | the same veil at `GLASS_STATE_MIX.open` — beats hover | `...barOpen(() => …)` from `surfaces/bar/capsule.ts` |
 
 `barOpen(isOpen)` wires `getOpen`/`watchOpen` to every Status prop that opens a bar panel.

@@ -121,6 +121,11 @@ export default darkModeWidget
 Everything in it is a getter plus a `subscribe`, and nothing in it is a value read once. That is
 the shape: the widget never pushes, the host pulls when the subscribe fires.
 
+**Bar content carries its own side air.** In the bar a widget is an ITEM of the right-hand group,
+touching its neighbours, and the hover/open pill is drawn round whatever the content measures
+(design-system.md → "Bar groups"). `makeBarIcon`/`makeBarExpandable` already put `BAR_ITEM_PAD`
+(8) on each side; a hand-built `buildBarContent` must do the same, or its pill hugs the glyph.
+
 Everything else on `AtomicWidget` is optional and documented at its field in
 `common/widget-kit/contract.ts`: `buildBarExpanded`, `buildCCDetail`, `buildSettings` (a
 Configure subpage — keep a widget's own options with the widget; ⚠️ it is the one field Settings

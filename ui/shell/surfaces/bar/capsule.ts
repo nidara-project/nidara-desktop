@@ -1,7 +1,11 @@
 import Gtk from "gi://Gtk?version=4.0"
 import status from "../../core/Status"
+import Theme from "../../core/ThemeManager"
 import { safeDisconnect } from "../../core/signals"
+import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { attachTooltip, type NidaraTooltipHandle, type NidaraTooltipOpts, type NidaraTooltipText } from "../../../lib/nidara-kit"
+import { GLASS_SPECULAR, GLASS_TINT, GLASS_STATE_MIX } from "../../../lib/nidara-kit/platform/tokens"
+import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 
 // Shared bar-capsule edge: a faint white inner border. It no longer changes on
 // hover: the capsules pass `hoverLift` (the glass lifts a little) and `barOpen`
@@ -11,8 +15,10 @@ export const CAPSULE_BORDER = { r: 1, g: 1, b: 1, a: 0.2 }
 
 // The bar's geometry, on the design system's 4px scale (owner, 2026-09-25):
 //   4 above a capsule · 32 capsule (8 + a 16px icon + 8) · 8 to the windows below
-//   (Hyprland's gaps_out) · 4 between capsules · 16 each side of the content
-//   (BAR_PILL_PAD, common/widget-kit/bar.ts) · 8 at the two ends (Bar.tsx BAR_MARGIN).
+//   (Hyprland's gaps_out) · 4 between capsules · 8 at the two ends (Bar.tsx BAR_MARGIN).
+// Inside a GROUP (barGroup below, 2026-09-26): 4 from the glass allocation to the
+// first item · each item its content + 8 a side (BAR_ITEM_PAD, common/widget-kit/bar.ts),
+// items touching · the hover pill 4 in from the top and bottom (BAR_VEIL_INSET).
 
 // The strip the bar reserves (its exclusive zone): the capsule plus the 4px above it.
 // The side dock's window height is the monitor minus this, so it lives here and not
@@ -26,11 +32,114 @@ export const BAR_H = 36
 // h/2 radius makes them circles. Change BAR_H, the CSS margin and this together.
 export const BAR_CAPSULE_H = 32
 
-// The gap between two bar capsules — every row of them (left, right, the widgets,
-// the tray, the island's chips) and the arithmetic that decides what fits. The two
+// The gap between two pieces of bar glass that sit side by side — since the groups
+// (2026-09-26) that is only the island's row: its capsule and its chips. Inside a
+// group items touch, and nothing else stands next to another capsule. The two
 // ENDS stay at 8 (Bar.tsx BAR_MARGIN): that is Hyprland's gaps_out, so the system
 // menu lines up with the windows' left edge. (8 until 2026-09-25.)
 export const BAR_GAP = 4
+
+// ── Groups and items (owner, 2026-09-26) ────────────────────────────────────
+// The bar is THREE pieces of glass, not one per icon: the left group (system menu +
+// window title), the island (its own surface, its chips still apart), and the right
+// group (the `»`, the widgets, the tray, search, the CC, the clock). The group's glass
+// never changes; what marks hover and open is a pill INSIDE it, under the one item —
+// the way macOS's menu bar, GNOME's top bar and a segmented control all do it.
+
+// From the group's allocation to its first/last item. The glass itself is painted
+// GLASS_INSET (2) in from the allocation, so the end items' pills sit 2px inside the
+// visible edge — the same 2px they keep from the top and bottom (BAR_VEIL_INSET).
+export const BAR_GROUP_PAD = 4
+
+// The hover/open pill's distance from the item's top and bottom: 32 − 2×4 = 24 tall,
+// radius 12 — concentric with the glass, which is 28 visible (radius 14) at 2px in.
+export const BAR_VEIL_INSET = 4
+
+/** One piece of bar glass holding a row of items. Append items to `box`. */
+export function barGroup(): { widget: Gtk.Widget, box: Gtk.Box } {
+    const box = new Gtk.Box({ margin_start: BAR_GROUP_PAD, margin_end: BAR_GROUP_PAD })
+    const widget = SquircleContainer({
+        child: box, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar",
+        shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, perfect: true,
+    })
+    return { widget, box }
+}
+
+export interface BarItemOpts {
+    child: Gtk.Widget
+    /** On PRESS, like the capsules were. Widgets that decide on release add their own gesture. */
+    onClick?: () => void
+    /** From `barOpen(…)`: the item's pill stays up while its panel is down. */
+    getOpen?: () => boolean
+    watchOpen?: (cb: () => void) => (() => void)
+}
+
+/** An item in a bar group: its content over a Cairo pill that shows only on hover
+ *  (`GLASS_STATE_MIX.hover`) or while its panel is open (`.open`, which wins). The
+ *  pill is the item's whole width — content + BAR_ITEM_PAD a side — and 24 tall; the
+ *  whole 32px column is the hit target. Same ink and alphas the capsule's veil used,
+ *  painted over the group's glass instead of folded into a capsule's own fill: the
+ *  same pixels. */
+export function barItem({ child, onClick, getOpen, watchOpen }: BarItemOpts): Gtk.Widget {
+    // The veil EXPANDS and the item does NOT, both on purpose. A Gtk.Grid hands its
+    // spare room only to rows and columns that expand: without the veil's expand the
+    // cell stays at the content's natural 16px, at the TOP of the 32px item, and the
+    // icons sit above the glass (caught live 2026-09-26). And an unset expand on the
+    // item would be computed from that child, so every item — and the group — would
+    // fill the flank: hence the item's explicit false.
+    const item = new Gtk.Grid({ css_classes: ["bar-item"], hexpand: false, vexpand: false })
+    const veil = new Gtk.DrawingArea({ hexpand: true, vexpand: true, can_target: false })
+    let hovered = false
+
+    veil.set_draw_func(cairoDraw((_, cr, w, h) => {
+        const mix = getOpen?.() ? GLASS_STATE_MIX.open : hovered ? GLASS_STATE_MIX.hover : null
+        const vh = h - 2 * BAR_VEIL_INSET
+        if (!mix || w <= 0 || vh <= 0) return
+        const dark = Theme.chromeIsDark
+        const ink = dark ? GLASS_SPECULAR : GLASS_TINT.dark
+        const r = Math.min(vh, w) / 2
+        const top = BAR_VEIL_INSET, bottom = BAR_VEIL_INSET + vh
+        cr.newSubPath()
+        cr.arc(w - r, top + r, r, -Math.PI / 2, 0)
+        cr.arc(w - r, bottom - r, r, 0, Math.PI / 2)
+        cr.arc(r, bottom - r, r, Math.PI / 2, Math.PI)
+        cr.arc(r, top + r, r, Math.PI, 1.5 * Math.PI)
+        cr.closePath()
+        cr.setSourceRGBA(ink.r, ink.g, ink.b, dark ? mix.dark : mix.light)
+        cr.fill()
+    }))
+    item.attach(veil, 0, 0, 1, 1)
+    item.attach(child, 0, 0, 1, 1)
+
+    const motion = new Gtk.EventControllerMotion()
+    motion.connect("enter", () => { hovered = true; veil.queue_draw() })
+    motion.connect("leave", () => { hovered = false; veil.queue_draw() })
+    item.add_controller(motion)
+
+    if (onClick) {
+        const click = new Gtk.GestureClick()
+        click.connect("pressed", () => onClick())
+        item.add_controller(click)
+    }
+
+    // Subscriptions live while MAPPED, not from construction: the widget pills are
+    // rebuilt on every layout pass, and a handler taken at build time and dropped on
+    // `unrealize` (the capsule's way) is never taken again after a re-realize.
+    let unwatch: (() => void) | null = null
+    let themeId = 0
+    item.connect("map", () => {
+        const redraw = () => veil.queue_draw()
+        unwatch = watchOpen?.(redraw) ?? null
+        themeId = Theme.connect("changed", redraw)
+        veil.queue_draw()
+    })
+    item.connect("unmap", () => {
+        unwatch?.(); unwatch = null
+        if (themeId) { safeDisconnect(Theme, themeId); themeId = 0 }
+        hovered = false
+    })
+    return item
+}
 
 // Whether a panel that drops from the bar is open — its own expansion panel (a
 // widget's, a tray menu), or the CC / NC / system menu, which all sit under the
