@@ -4140,6 +4140,24 @@ ones the snapshot lacks); none of the 108 is a call to something that does not e
 is typing our signals (or a narrow cast at those call sites), then dropping the shims — mechanical,
 but 108 sites, and the payoff is the class of bug above.
 
+### 111. ⚠️ OPEN — the dock has no width limit: too many icons, or a high scale, and it runs off the screen (2026-09-26)
+
+Owner-caught 2026-09-26, at every scale: nothing bounds the dock's length. Its geometry is derived
+ONCE from `dockSettings.iconSize` (`DockPhysics.deriveConstants`, applied by rebuilding the dock),
+and no step compares the result with the monitor. More pinned + running apps than fit, or a scale
+that shrinks the logical screen (2560 at scale 2 is 1280), and both ends leave the screen. macOS
+shrinks the icons proportionally so the dock always fits.
+
+Why it is NOT a one-liner — decide before coding:
+- The fitted size depends on the ITEM COUNT, which changes when an app opens or closes. Today the
+  constants only change by rebuilding the dock; re-deriving them per launch means a rebuild (or a
+  live re-derive the physics does not support yet) on the frame an app appears.
+- `EXCLUSIVE_ZONE` comes from the same `iconSize`. A dock that shrinks to fit would also shrink the
+  strip it reserves, so tiled windows would RESIZE when an app opens. Options: fit the icons but
+  keep the zone of the configured size; or only shrink the icons along the main axis (spacing and
+  size) while the cross-axis height stays.
+- Magnification must stay inside the screen too (the bulge at the ends).
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a

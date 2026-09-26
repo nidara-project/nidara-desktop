@@ -415,8 +415,8 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 if (rect) region.unionRectangle(rect)
                 surface.set_input_region(region)
             }
-            // The dock's silhouette in BUFFER coordinates, which is what the blur
-            // region speaks. Height tracks the current shape (pill at rest, pill+bulge
+            // The dock's silhouette in SURFACE (logical) coordinates, which is what the blur
+            // region takes (setVisibleRects converts to buffer pixels). Height tracks the current shape (pill at rest, pill+bulge
             // on hover) so the bulged top of a magnified icon stays inside. Pin the
             // outer edge (screen bottom) to WIN_H exactly with integers — fractional
             // geometry truncated by Cairo otherwise loses the last pixel row at the wall.
@@ -857,8 +857,8 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 if (rect) region.unionRectangle(rect)
                 surface.set_input_region(region)
             }
-            // The dock's silhouette in BUFFER coordinates, which is what the blur region
-            // speaks. Computed before the branches so each of them can hand it over
+            // The dock's silhouette in SURFACE (logical) coordinates, which is what the blur region
+            // takes (setVisibleRects converts to buffer pixels). Computed before the branches so each of them can hand it over
             // instead of giving up.
             //
             // Width tracks the dock's current silhouette (pill at rest, pill+bulge on

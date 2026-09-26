@@ -46,6 +46,7 @@ export class WindowThumbnail extends Gtk.Widget {
 
     private texture: Gdk.Texture | null = null
     private radius = 0
+    private frame: ThumbnailFrame | null = null
 
     /** Swaps the painted texture. `null` clears it back to the placeholder. */
     setTexture(texture: Gdk.Texture | null) {
@@ -66,6 +67,18 @@ export class WindowThumbnail extends Gtk.Widget {
         this.queue_draw()
     }
 
+    /** The preview this thumbnail sits in, as a rounded rect in THIS widget's
+     *  coordinates. A window hanging off the screen is cut by the preview's edge
+     *  (the overlay's rectangular clip), and without this its corner poked a few
+     *  square pixels past the backdrop's rounded one (owner-seen 2026-09-26). */
+    setFrame(frame: ThumbnailFrame | null) {
+        const f = this.frame
+        if (f === frame || (f && frame && f.x === frame.x && f.y === frame.y && f.width === frame.width
+            && f.height === frame.height && f.radius === frame.radius)) return
+        this.frame = frame
+        this.queue_draw()
+    }
+
     vfunc_snapshot(snapshot: Gtk.Snapshot) {
         const texture = this.texture
         if (!texture) return
@@ -82,6 +95,14 @@ export class WindowThumbnail extends Gtk.Widget {
         const r = Math.min(this.radius, w / 2, h / 2)
         const rounded = ROUNDED_CLIP_OK && r > 0
 
+        const f = ROUNDED_CLIP_OK ? this.frame : null
+        if (f) {
+            const frameRect = new Graphene.Rect()
+            frameRect.init(f.x, f.y, f.width, f.height)
+            const frameClip = new Gsk.RoundedRect()
+            frameClip.init_from_rect(frameRect, Math.max(0, f.radius))
+            snapshot.push_rounded_clip(frameClip)
+        }
         if (rounded) {
             const clip = new Gsk.RoundedRect()
             clip.init_from_rect(bounds, r)
@@ -89,8 +110,11 @@ export class WindowThumbnail extends Gtk.Widget {
         }
         snapshot.append_texture(texture, bounds)
         if (rounded) snapshot.pop()
+        if (f) snapshot.pop()
     }
 }
+
+export interface ThumbnailFrame { x: number; y: number; width: number; height: number; radius: number }
 
 /** Constructed through a helper so callers never touch GObject registration. */
 export function makeWindowThumbnail(): WindowThumbnail {

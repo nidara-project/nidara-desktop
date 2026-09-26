@@ -662,6 +662,15 @@ export default {
     "bar.system-menu.confirm.action.restart": "Reiniciar",
     "bar.system-menu.confirm.action.shutdown": "Apagar",
 
+    // Bar tooltips (every capsule has one; widgets and tray items bring their own)
+    "bar.tooltip.system-menu": "Menú del sistema",
+    "bar.tooltip.search": "Buscar",
+    "bar.tooltip.control-center": "Centro de control",
+    "bar.tooltip.overflow.show": "Mostrar iconos ocultos",
+    "bar.tooltip.overflow.hide": "Volver a ocultar iconos",
+    "bar.tooltip.notifications.one": "1 notificación",
+    "bar.tooltip.notifications.other": "%d notificaciones",
+
     // Window menu (AppTitle)
     "bar.window-menu.float": "Flotante",
     "bar.window-menu.pseudo": "Pseudomosaico",

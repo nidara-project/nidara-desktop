@@ -64,6 +64,17 @@ refreshDateFormat()
 
 const two = (n: number) => String(n).padStart(2, "0")
 
+/** The whole date, weekday to year — "long" plus the year, in the same locale order.
+ *  Not a `DateFormat`: nobody picks it for the clock, it is what the clock's tooltip
+ *  says whatever the clock itself shows. */
+export function formatFullDate(dt: GLib.DateTime): string {
+    const d = dt.get_day_of_month()
+    const y = dt.get_year()
+    const wA = (dt.format("%A") ?? "").trim(), mB = (dt.format("%B") ?? "").trim()
+    if (YEAR_FIRST) return `${y}${ymdYearSep}${mB}${d}${ymdDaySuffix} ${wA}`
+    return DAY_FIRST ? `${wA}, ${d} ${mB} ${y}` : `${wA}, ${mB} ${d}, ${y}`
+}
+
 /** Format the DATE portion (no time) for the given format, localized via LC_TIME. */
 export function formatDatePart(fmt: DateFormat, dt: GLib.DateTime): string {
     const d = dt.get_day_of_month()

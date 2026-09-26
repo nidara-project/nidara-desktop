@@ -192,6 +192,14 @@ the typelib on the **default** girepository path, so all three bundles just `imp
 - ⚠️ **Anything outside a declared region is not drawn at all** (hard GL scissor; an empty
   intersection cancels the element). The failure mode is "the surface vanished". `visible_region_
   clear()` is the escape hatch.
+- 🔑 **The region is in BUFFER pixels, not surface (logical) ones** — "specified in buffer-local
+  coordinates" (hyprland-surface-v1), and Hyprland intersects it with the buffer size. Identical at
+  scale 1, which is why every surface declared logical rects for months; at 1.25 each rect covered
+  the top-left 80 % of what it meant and the dock, the bar's right end and part of the island were
+  not drawn (owner-caught 2026-09-26). `setVisibleRects` converts ONCE for every caller: ×
+  `Gdk.Surface.get_scale()` (fractional), rounded outward, re-sent on `notify::scale`. Callers keep
+  speaking logical coordinates — never pre-multiply. The INPUT region stays logical (wl_surface
+  semantics).
 
 **From the shell, do not import the shim directly** — go through `common/VisibleRegion.ts`, which
 owns three decisions:
@@ -312,7 +320,8 @@ dock answers `null` with its menu open, the app grid unmaps, the bar seals sever
 **input region**, which is the same numbers through a different call with the opposite safe state.
 
 - ⚠️ **The dock stays on the raw `setVisibleRect`, on purpose.** Its blur rect is fused into the
-  same key/apply cycle as its input region so the two cannot drift, it speaks buffer coordinates,
+  same key/apply cycle as its input region so the two cannot drift, it speaks its own surface
+  coordinates (`WIN_W`/`WIN_H`, converted to buffer pixels by `setVisibleRects` like everyone's),
   and `app.ts` already rebuilds the whole window on `notify::geometry`.
 - 🔑 **The dedupe is keyed on the SURFACE, not just the rects.** A window that is unmapped and
   presented again is realized onto a new `Gdk.Surface` with no region at all, and a key carried
@@ -396,8 +405,17 @@ post-process, and the radius is passed per-sync because the schematic's is *deri
 the resolution changes, and the mismatch shows as tile colour at the corners.
 
 **The consumer today is the Workspace Overview**, via `common/WorkspaceSchematic.ts` — which already
-owned the per-window geometry, so thumbnails were an insertion, not a rewrite. Two rules that are
+owned the per-window geometry, so thumbnails were an insertion, not a rewrite. Three rules that are
 easy to get wrong there:
+
+- **The thumbnails are clipped by the OVERLAY (`overflow: HIDDEN`), not by the `Gtk.Fixed` that
+  holds them.** A Fixed's minimum size is its children's extent and GTK allocates an overlay child
+  at least its minimum, so a floating window hanging off the screen grows the Fixed — and a clip on
+  the Fixed grows with it. Owner-caught 2026-09-26 at scale 2: floating windows' captures spilled out
+  of the bottom of the card. The overlay is sized by the canvas alone. That clip is RECTANGULAR, so
+  each thumbnail also clips itself to the backdrop's ROUNDED corner (`WindowThumbnail.setFrame`, the
+  preview's rect in the thumbnail's own coordinates, radius from the same `backdropRadius` the
+  canvas paints with) — else a window at a corner poked a few square pixels past it.
 
 - **Capture on OPEN, never on a timer or on `changed`.** MEASURED 2026-08-10 rather than assumed: an
   open overview holding real thumbnails costs **0.0 %** on an idle desktop, the captures show up only

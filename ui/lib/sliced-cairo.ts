@@ -3,6 +3,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import Gsk from "gi://Gsk?version=4.0"
 import Graphene from "gi://Graphene"
+import { appendScaledTextureDevicePx, surfaceScale } from "./device-texture"
 
 /**
  * SlicedCairoArea — a Cairo painting that only ever changes LENGTH, drawn as three GPU
@@ -23,7 +24,13 @@ import Graphene from "gi://Graphene"
  *     same, so stretching it is exact, not an approximation);
  *   - the end cap, 1:1.
  * The textures are rebuilt only when `key()` changes (theme, opacity) or the thickness or
- * scale factor does. `queue_draw()` is enough to make it re-check.
+ * scale does. `queue_draw()` is enough to make it re-check.
+ *
+ * 🔑 Built and drawn in DEVICE pixels, at the surface's FRACTIONAL scale. Drawn in logical
+ * units, GTK renders a scaled texture through a scale-1 offscreen whenever the screen is not
+ * at scale 1 — the capsule came out at half resolution on a scale-2 screen
+ * (ui/lib/device-texture.ts, 2026-09-26). The caps are whole device pixels (`ceil`), so
+ * at a fractional scale an end may sit up to a pixel from where a DrawingArea would put it.
  *
  * ⚠️ The painter must honour the contract, or the slices lie:
  *   - along the stretch axis, nothing may vary between the caps — no gradient, no pattern,
@@ -63,13 +70,17 @@ export const SlicedCairoArea = GObject.registerClass({
         return r
     }
 
-    private _build(height: number, sf: number): boolean {
+    // The caps' length and the thickness, in DEVICE pixels.
+    private _capPx = 0
+    private _thickPx = 0
+
+    private _build(height: number, scale: number): boolean {
         const renderer = this.get_native()?.get_renderer()
         if (!renderer || !this._opts) return false
         const cap = Math.ceil(this._opts.capLength(height))
         const refW = cap * 2 + 4
         const snap = new Gtk.Snapshot()
-        snap.scale(sf, sf)
+        snap.scale(scale, scale)
         const cr = snap.append_cairo(this._rect(0, 0, refW, height))
         try {
             this._opts.paint(cr, refW, height)
@@ -78,11 +89,16 @@ export const SlicedCairoArea = GObject.registerClass({
         }
         const node = snap.to_node()
         if (!node) return false
-        const H = height * sf
-        this._start = renderer.render_texture(node, this._rect(0, 0, cap * sf, H))
-        this._middle = renderer.render_texture(node, this._rect((cap + 1) * sf, 0, sf, H))
-        this._end = renderer.render_texture(node, this._rect((refW - cap) * sf, 0, cap * sf, H))
+        const capPx = Math.ceil(cap * scale)
+        const H = Math.ceil(height * scale)
+        const refPx = Math.ceil(refW * scale)
+        this._start = renderer.render_texture(node, this._rect(0, 0, capPx, H))
+        // One device column from the uniform middle (past the start cap).
+        this._middle = renderer.render_texture(node, this._rect(capPx + 1, 0, 1, H))
+        this._end = renderer.render_texture(node, this._rect(refPx - capPx, 0, capPx, H))
         this._cap = cap
+        this._capPx = capPx
+        this._thickPx = H
         return !!(this._start && this._middle && this._end)
     }
 
@@ -90,10 +106,10 @@ export const SlicedCairoArea = GObject.registerClass({
         if (!this._opts) return
         const w = this.get_width(), h = this.get_height()
         if (w <= 0 || h <= 0) return
-        const sf = this.get_scale_factor()
-        const key = `${this._opts.key()}|${h}|${sf}`
+        const scale = surfaceScale(this)
+        const key = `${this._opts.key()}|${h}|${scale}`
         if (key !== this._cacheKey) {
-            if (!this._build(h, sf)) return
+            if (!this._build(h, scale)) return
             this._cacheKey = key
         }
         const cap = this._cap
@@ -103,9 +119,12 @@ export const SlicedCairoArea = GObject.registerClass({
             try { this._opts.paint(cr, w, h) } finally { cr.$dispose() }
             return
         }
-        snapshot.append_scaled_texture(this._start!, Gsk.ScalingFilter.NEAREST, this._rect(0, 0, cap, h))
-        snapshot.append_scaled_texture(this._middle!, Gsk.ScalingFilter.NEAREST, this._rect(cap, 0, w - cap * 2, h))
-        snapshot.append_scaled_texture(this._end!, Gsk.ScalingFilter.NEAREST, this._rect(w - cap, 0, cap, h))
+        const capPx = this._capPx, H = this._thickPx
+        const W = Math.ceil(w * scale)
+        const N = Gsk.ScalingFilter.NEAREST
+        appendScaledTextureDevicePx(snapshot, scale, this._start!, N, 0, 0, capPx, H)
+        appendScaledTextureDevicePx(snapshot, scale, this._middle!, N, capPx, 0, W - capPx * 2, H)
+        appendScaledTextureDevicePx(snapshot, scale, this._end!, N, W - capPx, 0, capPx, H)
     }
 })
 
