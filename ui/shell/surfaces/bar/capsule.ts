@@ -82,8 +82,17 @@ const closeAll = () => { if (barPanelOpen()) for (const tip of openTips) tip.pop
 for (const prop of ["bar-expanded-id", "cc-open", "nc-open", "system-menu-open"])
     status.connect(`notify::${prop}`, closeAll)
 
+// The bar's dwell before a tooltip shows: twice the kit's 500, counted from when the
+// pointer STOPS on the capsule (`restToShow`), not from when it arrives. Every capsule
+// has one (owner, 2026-09-26), and the bar is a row you cross on the way to the capsule
+// you want — at 500 from arrival the bubbles popped up over everything the pointer
+// merely passed (owner, same day: "in the dock it is fine, in the bar it is too
+// little"; then: "better if it only shows when the mouse stays still for a second").
+// The dock keeps the kit's default.
+export const BAR_TOOLTIP_DELAY = 1000
+
 export function barTooltip(widget: Gtk.Widget, text: NidaraTooltipText, opts: NidaraTooltipOpts = {}) {
-    const tip = attachTooltip(widget, text, { position: Gtk.PositionType.BOTTOM, ...opts, suppress: barPanelOpen })
+    const tip = attachTooltip(widget, text, { position: Gtk.PositionType.BOTTOM, delay: BAR_TOOLTIP_DELAY, restToShow: true, ...opts, suppress: barPanelOpen })
     openTips.add(tip)
     widget.connect("destroy", () => openTips.delete(tip))
     return tip

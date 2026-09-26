@@ -86,6 +86,11 @@ export interface SchematicOptions {
     thumbnails?: boolean
 }
 
+// The backdrop's corner: concentric with `.wo-item` (radius sm), and proportional so
+// the app grid's 80px strip does not get lozenge corners. One function because the
+// thumbnails clip to the same corner the canvas paints (WindowThumbnail.setFrame).
+const backdropRadius = (w: number, h: number) => Math.min(RADIUS.sm, w * 0.06, h * 0.06)
+
 export function createSchematicMap(wsId: number, initialWidth: number, options: SchematicOptions = {}): SchematicHandle {
     const wantThumbnails = options.thumbnails ?? false
     // Not a constant: the caller solves it from the monitor and re-solves it when
@@ -124,6 +129,16 @@ export function createSchematicMap(wsId: number, initialWidth: number, options: 
     })
     overlay.set_child(canvas)
     overlay.add_overlay(iconFixed)
+    // The clip that holds is HERE, not on `iconFixed`. A Gtk.Fixed's minimum size is
+    // the extent of its children, and an overlay child is allocated at least its
+    // minimum (gtk_overlay_get_child_position: MAX(min, …)) — so a floating window
+    // hanging off the bottom of the screen GREW the Fixed past the preview, and the
+    // Fixed's own overflow clip grew with it: its thumbnail spilled below the card
+    // (owner-caught 2026-09-26 at scale 2, where a floating window easily outgrows
+    // a 720 px-tall logical screen). The overlay is sized by the canvas alone, so
+    // it is the box that does not move. Rectangular: the backdrop's own rounding
+    // (≤ RADIUS.sm) is drawn by the canvas.
+    overlay.set_overflow(Gtk.Overflow.HIDDEN)
 
     const HYPR_ROUNDING = 24
 
@@ -142,7 +157,7 @@ export function createSchematicMap(wsId: number, initialWidth: number, options: 
         // into square corners inside a 24px-rounded card reads as a rendering
         // bug. Concentric with `.wo-item` (radius lg, 16px of padding), and
         // proportional so the app grid's 80px strip does not get lozenge corners.
-        const bgRadius = Math.min(RADIUS.sm, areaW * 0.06, areaH * 0.06)
+        const bgRadius = backdropRadius(areaW, areaH)
         cr.save()
         roundedRect(cr, 0, 0, areaW, areaH, bgRadius)
         cr.clip()
@@ -368,6 +383,8 @@ export function createSchematicMap(wsId: number, initialWidth: number, options: 
             // Same radius the Cairo tile beneath is using, clamped by this tile's
             // own box so narrow slivers do not round into lozenges.
             widget.thumb.setRadius(currentRadius)
+            // …and the preview's own rounded corner, in the thumbnail's coordinates.
+            widget.thumb.setFrame({ x: -x, y: -y, width, height: drawH, radius: backdropRadius(width, drawH) })
             requestThumb(c.address, widget, w, h, force)
 
             // Identity FIRST, icon second. Feeding `c.class` straight to the icon

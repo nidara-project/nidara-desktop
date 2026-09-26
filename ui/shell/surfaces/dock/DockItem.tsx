@@ -121,6 +121,26 @@ interface DockItemProps {
     cleanId?: string;
 }
 
+/**
+ * The size the dock loads its icons at, in DEVICE pixels: the largest a magnified icon
+ * can be drawn (128 logical, `maxIconSize`'s ceiling) times the highest monitor scale.
+ * It was a flat 128, which is exactly right at scale 1 and nowhere else: at scale 2 a
+ * magnified icon covers 256 device pixels, so the GPU stretched a 128 px texture 2×
+ * and the dock went soft while the app grid — `Gtk.Image`, rendered by GTK at the
+ * device size — stayed sharp (owner-caught 2026-09-26). An SVG loaded at this size is
+ * as sharp as the screen; a PNG theme is still limited by the largest size it ships.
+ * A scale change rebuilds the dock (app.ts, `notify::geometry`), so this is re-read.
+ */
+function iconSourceSize(): number {
+    let scale = 1
+    const monitors = Gdk.Display.get_default()?.get_monitors()
+    for (let i = 0; monitors && i < monitors.get_n_items(); i++) {
+        const m = monitors.get_item(i) as Gdk.Monitor | null
+        if (m) scale = Math.max(scale, m.get_scale?.() ?? m.get_scale_factor())
+    }
+    return Math.ceil(128 * scale)
+}
+
 export function DockItem(
     props: DockItemProps,
     referenceWidget?: Gtk.Widget
@@ -251,7 +271,7 @@ export function DockItem(
     // V132: Custom DrawingArea for Pixel-Perfect Scaling (Zero Popping / Zero Layout Shift)
     let pixbuf: any = null
     let resolvedPath = res.path || ""
-    const sourceSize = 128 // Load high-res once
+    const sourceSize = iconSourceSize() // Load high-res once
 
     try {
         if (res.path) {
@@ -304,7 +324,7 @@ export function DockItem(
         // GPU textures, not a Cairo repaint per frame — see DockIcon.ts for the measurements.
         const icon = new DockIcon({ valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER, css_classes: ["cd-icon"] })
         icon.restSize = () => DOCK_CONSTANTS.ICON_SIZE
-        icon.setPixbuf(pixbuf, isSymbolicFile(resolvedPath))
+        icon.setPixbuf(pixbuf, isSymbolicFile(resolvedPath), resolvedPath)
         child = icon
     } else {
         // Fallback for system icons
@@ -344,7 +364,7 @@ export function DockItem(
                     const next = (GdkPixbuf as any).Pixbuf.new_from_file_at_scale(path, sourceSize, sourceSize, true)
                     if (next) {
                         pixbuf = next
-                        if (child instanceof DockIcon) (child as DockIcon).setPixbuf(next, isSymbolicFile(path))
+                        if (child instanceof DockIcon) (child as DockIcon).setPixbuf(next, isSymbolicFile(path), path)
                     }
                 }
             } catch (e) { console.error("[Dock] trash icon swap failed:", e) }

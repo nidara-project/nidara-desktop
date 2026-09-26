@@ -2600,7 +2600,7 @@ This is the table that decides almost every "which widget should I use?" questio
 
 | Surface | Use | Why |
 |---|---|---|
-| Dock, Bar, workspace dots, resource circles, schematic | **Pure GTK4 + Cairo** (`Gtk.DrawingArea` / `Gtk.Snapshot`) — ⚠️ always `set_draw_func(cairoDraw(…))`, and `cr.$dispose()` after `snapshot.append_cairo` (#100: an undisposed context per frame took the shell's native heap 140 → 874 MB in 90 s of dock hover; CI `cairo-dispose-check`). ⚠️ **An IMAGE that animates its size is not Cairo's job**: dock app icons are `surfaces/dock/DockIcon.ts` — GPU textures (`append_scaled_texture`; a HYPER-prescaled copy drawn 1:1 at rest, the 128 px source TRILINEAR in motion). As a `DrawingArea` each frame re-converted the pixbuf and convolution-scaled it on the CPU: 34 % of the shell's main thread in `perf`, 23.1 % → 1.7 % of a core in `scripts/dev/dock-icon-probe.ts`. ⚠️ **A Cairo SHAPE that animates only its LENGTH is not repainted either**: `ui/lib/sliced-cairo.ts` (`SlicedCairoArea`) paints it once with the same painter and composes start cap + a 1 px middle stretched NEAREST + end cap as GPU textures — the horizontal dock capsule, 5.9 % → 1.5 % of a core, pixel-identical (`scripts/dev/sliced-capsule-probe.ts`). Contract: nothing may vary along the stretch axis between the caps, which is why the VERTICAL dock stays a DrawingArea (its rim gradient runs along it) | Adwaita adds nothing here; painting direct = zero defensive CSS. |
+| Dock, Bar, workspace dots, resource circles, schematic | **Pure GTK4 + Cairo** (`Gtk.DrawingArea` / `Gtk.Snapshot`) — ⚠️ always `set_draw_func(cairoDraw(…))`, and `cr.$dispose()` after `snapshot.append_cairo` (#100: an undisposed context per frame took the shell's native heap 140 → 874 MB in 90 s of dock hover; CI `cairo-dispose-check`). ⚠️ **An IMAGE that animates its size is not Cairo's job**: dock app icons are `surfaces/dock/DockIcon.ts` — GPU textures (`append_scaled_texture`; a HYPER-prescaled copy drawn 1:1 at rest, the 128 px source TRILINEAR in motion). As a `DrawingArea` each frame re-converted the pixbuf and convolution-scaled it on the CPU: 34 % of the shell's main thread in `perf`, 23.1 % → 1.7 % of a core in `scripts/dev/dock-icon-probe.ts`. ⚠️ **A Cairo SHAPE that animates only its LENGTH is not repainted either**: `ui/lib/sliced-cairo.ts` (`SlicedCairoArea`) paints it once with the same painter and composes start cap + a 1 px middle stretched NEAREST + end cap as GPU textures — the horizontal dock capsule, 5.9 % → 1.5 % of a core, pixel-identical (`scripts/dev/sliced-capsule-probe.ts`). Contract: nothing may vary along the stretch axis between the caps, which is why the VERTICAL dock stays a DrawingArea (its rim gradient runs along it). 🔑 **Never `append_scaled_texture` in logical coordinates — use `ui/lib/device-texture.ts`.** GTK's GPU renderer draws a texture-SCALE node through an offscreen created at scale 1 whenever the screen is not at scale 1 (`gsk_gpu_node_processor_add_texture_scale_node`), so on a scale-2 screen both of the above came out at half resolution — the whole dock soft, at rest and magnified, next to a sharp Gtk.Image (owner-caught 2026-09-26, A/B'd live). The helper undoes the surface scale on the snapshot and gives the rect in device pixels; `surfaceScale()` is the FRACTIONAL scale (`get_scale_factor()` rounds 1.25 to 2). A plain `append_texture` is not affected | Adwaita adds nothing here; painting direct = zero defensive CSS. |
 | Floating overlays (CC, NotifCenter, Prism (search), SystemMenu, Overview) | **`Gtk.Box` + gtk4-layer-shell + custom CSS** | Adwaita would only add chrome you'd have to undo. |
 | Toggles / switches / buttons inside overlays | **`Gtk.Switch`, `Gtk.Button`** (NOT `Adw.*Row`) | Base widgets style cleanly; `Adw.*Row` brings padding/focus-ring/separators that have to be killed one by one. |
 | Sliders (any) | **`makeSlider`** from `nidara-kit/slider.ts` (NOT `Gtk.Scale`) | See "Sliders" below — one Cairo component for the whole shell. |
@@ -3389,6 +3389,21 @@ context menu paints the same shape (see "The glass bubble" below); the tooltip o
   callers attach the tooltip to the returned widget instead. `.nidara-tooltip` CSS in
   `_components.scss` only resets the popover chrome to transparent (the bubble is Cairo) + sets the
   label colour/size.
+- **In the bar, EVERY capsule has one** (owner, 2026-09-26) — "name, optional state": widgets
+  (`barTooltipState`), tray items (their own SNI text), the system menu, the window title (the
+  WHOLE title: the label is a wordmark cut to fit the flank), the `»` (show / hide again), search,
+  the CC (just "Control Center" — owner's words), and the clock (the FULL date with the year,
+  `formatFullDate` in `ui/lib/date-names.ts`, whatever the clock's own date format, plus the
+  pending-notification count when there is one). All go through `barTooltip`
+  (`surfaces/bar/capsule.ts`), never `attachTooltip` directly: that is where the panel rule lives
+  and where the dwell is set. The island's compact capsule has none yet.
+- **The bar's dwell is `BAR_TOOLTIP_DELAY` = 1000 ms counted from REST, the kit's default is 500
+  counted from arrival** (dock, app grid, Settings). Same 500 from arrival in both until 2026-09-26,
+  and the owner found the bar's "too little" and the dock's fine: the bar is a row the pointer
+  CROSSES on its way to something, so bubbles popped over capsules merely passed. `restToShow`
+  (kit option) restarts the dwell on any movement beyond `REST_TOLERANCE` (3 px — a hand is never
+  perfectly still; with zero a trackpad tremor keeps it from ever showing). Once a bubble is up,
+  movement inside the capsule does not hide it. Change these in `barTooltip`, not per call.
 
 ## The glass bubble — `common/GlassBubble.ts` (tooltip + context menus)
 

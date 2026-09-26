@@ -3,7 +3,7 @@ import Pango from "gi://Pango"
 import GLib from "gi://GLib"
 import { getWordmark } from "../../utils"
 import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
-import { CAPSULE_BORDER, barOpen, isBarCustomAnchor } from "./capsule"
+import { CAPSULE_BORDER, barOpen, barTooltip, isBarCustomAnchor } from "./capsule"
 import hs from "../../core/HyprlandState"
 import status from "../../core/Status"
 import shellActions from "../../core/ShellActions"
@@ -81,6 +81,11 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
 
   // Open while the window menu it anchors is down (the capsule IS the anchor).
   const capsule: Gtk.Widget = SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => isBarCustomAnchor(capsule)), perfect: true })
+
+  // Tooltip: the window's WHOLE title — the label is a wordmark (an app name, or a
+  // title cut to fit the flank), so this is the one place the full title can be read.
+  // No window focused: the workspace name the label already shows.
+  barTooltip(capsule, () => hs.focusedClient?.title || rawTitle)
 
   const startBudgetAnimation = (targetPx: number) => {
     targetBudgetPx = targetPx

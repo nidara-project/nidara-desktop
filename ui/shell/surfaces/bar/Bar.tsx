@@ -36,6 +36,7 @@ import { ActivityIsland } from "../island/ActivityIsland"
 import { IslandWindow } from "../island/IslandWindow"
 import { execAsync } from "../../../lib/process"
 import { t } from "../../core/i18n"
+import { formatFullDate } from "../../../lib/date-names"
 import { barSettings, onBarSettingsChanged, resolveLauncherIcon, LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "./barState"
 import { dockSideState, dockSettings, onDockSettingsChanged } from "../dock/state"
 import { uiIcon } from "../../core/Icons"
@@ -58,7 +59,9 @@ function SystemMenuIcon(): Gtk.Widget {
   applyIcon()
   onBarSettingsChanged(applyIcon)
 
-  return SquircleContainer({ child: img, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.system_menu_open), perfect: true, onClick: () => status.toggleSystemMenu() })
+  const capsule = SquircleContainer({ child: img, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.system_menu_open), perfect: true, onClick: () => status.toggleSystemMenu() })
+  barTooltip(capsule, () => t("bar.tooltip.system-menu"))
+  return capsule
 }
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
@@ -1097,6 +1100,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.bar_overflow_open), perfect: true,
   })
   overflowCapsule.set_visible(false)
+  barTooltip(overflowCapsule, () => t(status.bar_overflow_open ? "bar.tooltip.overflow.hide" : "bar.tooltip.overflow.show"))
   {
       const g = new Gtk.GestureClick()
       g.connect("released", () => {
@@ -1200,6 +1204,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const trayInner = Tray(openCustomExpansion, () => scheduleBarLayoutSync())
   right.append(trayInner)
   const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 16, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.prism_open), perfect: true })
+  barTooltip(searchCapsule, () => t("bar.tooltip.search"))
   right.append(searchCapsule)
   // CC capsule layout: [PAD][gear 16px][PAD right-gap] (matches the search capsule;
   // BAR_PILL_PAD, 16 when the numbers below were measured, 18 since 2026-09-25). The status-indicator dot (recording / AI control) sits in that right
@@ -1226,8 +1231,18 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   ccOverlay.set_child(ccInner)
   ccOverlay.add_overlay(ccDot)
   const ccBtn = SquircleContainer({ child: ccOverlay, onClick: () => status.toggleCC(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.cc_open), perfect: true })
+  barTooltip(ccBtn, () => t("bar.tooltip.control-center"))
   right.append(ccBtn)
   const timeCapsule = SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, ...barOpen(() => status.nc_open), perfect: true })
+  // The clock's tooltip is the whole date, year included, whatever date format the
+  // clock itself shows; the state line is the count the bell only hints at.
+  barTooltip(timeCapsule, () => {
+    const date = formatFullDate(GLib.DateTime.new_now_local())
+    const n = notifications().length
+    if (n === 0) return date
+    const count = n === 1 ? t("bar.tooltip.notifications.one") : t("bar.tooltip.notifications.other").replace("%d", String(n))
+    return `${date} · ${count}`
+  })
   right.append(timeCapsule)
 
   // No center widget: the capsule that used to sit there paints on the island's

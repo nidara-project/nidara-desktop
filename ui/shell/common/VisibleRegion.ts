@@ -21,6 +21,18 @@ import type Gdk from "gi://Gdk?version=4.0"
  *  - The region only lands on the next real wl_surface.commit. Call this from a
  *    path that repaints; queue_draw() alone is not enough (GTK skips the frame
  *    when the render node is identical).
+ *
+ * 🔑 Callers speak SURFACE (logical) coordinates, the protocol speaks BUFFER
+ * pixels — "The visible region is specified in buffer-local coordinates"
+ * (hyprland-surface-v1), and Hyprland intersects it with the buffer's size
+ * (SurfacePassElement::visibleRegion). At scale 1 the two are the same number,
+ * which is how every surface shipped declaring logical rects: at 1.25 each rect
+ * covered only the top-left 80 % of what it meant, and the dock (bottom), the
+ * bar's right end and part of the island were simply not drawn (owner-caught
+ * 2026-09-26, `hyprctl keyword monitor ,preferred,auto,1.25`). The conversion
+ * lives here, once, so no caller can forget it: × `Gdk.Surface.get_scale()`
+ * (fractional — the scale GTK renders the buffer at), rounded OUTWARD, and
+ * re-sent on `notify::scale`, because the scale can arrive after the first stamp.
  */
 
 type Shim = {
@@ -102,12 +114,40 @@ export function setVisibleRects(surface: Gdk.Surface | null, rects: VisibleRect[
     if (!shim || !surface) return
     const solid = rects?.filter(r => r.width > 0 && r.height > 0) ?? []
     if (solid.length === 0) {
+        declared.delete(surface)
         shim.visible_region_clear(surface)
         return
     }
-    shim.visible_region_begin(surface)
-    for (const r of solid) shim.visible_region_add_rect(surface, r.x, r.y, r.width, r.height)
-    shim.visible_region_commit(surface)
+    declared.set(surface, solid)
+    watchScale(surface)
+    sendRects(shim, surface, solid)
+}
+
+// The last LOGICAL rects each surface declared, so a scale change can re-send them
+// in the new buffer pixels without asking the surface to re-measure.
+const declared = new WeakMap<Gdk.Surface, VisibleRect[]>()
+const scaleWatched = new WeakSet<Gdk.Surface>()
+
+function watchScale(surface: Gdk.Surface) {
+    if (scaleWatched.has(surface)) return
+    scaleWatched.add(surface)
+    surface.connect("notify::scale", () => {
+        const rects = declared.get(surface)
+        // The new buffer is committed by GTK's own redraw at the new scale.
+        if (shim && rects) sendRects(shim, surface, rects)
+    })
+}
+
+function sendRects(wl: Shim, surface: Gdk.Surface, rects: VisibleRect[]) {
+    const s = surface.get_scale() || 1
+    wl.visible_region_begin(surface)
+    for (const r of rects) {
+        // Outward: a rect one buffer pixel short is a column of the surface NOT DRAWN.
+        const x0 = Math.floor(r.x * s), y0 = Math.floor(r.y * s)
+        const x1 = Math.ceil((r.x + r.width) * s), y1 = Math.ceil((r.y + r.height) * s)
+        wl.visible_region_add_rect(surface, x0, y0, x1 - x0, y1 - y0)
+    }
+    wl.visible_region_commit(surface)
 }
 
 /** Single-rect convenience over `setVisibleRects` — same contract. */
@@ -157,7 +197,8 @@ export function setVisibleRect(surface: Gdk.Surface | null, rect: VisibleRect | 
 // from `WIN_W`/`WIN_H`/`monMain` captured at build time, and `app.ts` REBUILDS
 // the whole dock window on `notify::geometry` for exactly that reason. Splitting
 // its two regions apart to route one of them through here would trade a real
-// coupling for a cosmetic one.
+// coupling for a cosmetic one. ("Buffer coordinates" there means the surface's own
+// logical ones: `setVisibleRects` converts to buffer pixels for every caller.)
 
 export type RegionBox = { x: number, y: number, width: number, height: number }
 

@@ -16,6 +16,11 @@ export interface NidaraTooltipOpts {
     position?: Gtk.PositionType
     /** Hover dwell before it appears, ms (default: 500 — GTK's default feel). */
     delay?: number
+    /** Count the dwell from when the pointer STOPS, not from when it arrives: any
+     *  movement beyond a few px restarts it (default: false). For a row the pointer
+     *  crosses on its way somewhere — the bar — where passing over a widget is not
+     *  pointing at it. */
+    restToShow?: boolean
     /** Treat the text as Pango markup instead of a plain string (default: false). */
     markup?: boolean
     /** Return true to suppress showing it (e.g. while a context menu is open). */
@@ -33,6 +38,9 @@ export interface NidaraTooltipHandle {
     /** Tear down: cancel timers, hide, unparent, drop the theme subscription. */
     destroy(): void
 }
+
+// How far the pointer may drift and still count as resting (restToShow), px.
+const REST_TOLERANCE = 3
 
 // Text padding inside the body.
 const PAD_X = 11     // text padding inside the body (horizontal)
@@ -55,7 +63,7 @@ export function attachTooltip(
     text: NidaraTooltipText,
     opts: NidaraTooltipOpts = {},
 ): NidaraTooltipHandle {
-    const { position = Gtk.PositionType.TOP, delay = 500, markup = false, suppress, chrome = true } = opts
+    const { position = Gtk.PositionType.TOP, delay = 500, restToShow = false, markup = false, suppress, chrome = true } = opts
     const requestedSide = sideFor(position)
     let side: ArrowSide = requestedSide
     let arrowOffset = 0
@@ -166,10 +174,19 @@ export function attachTooltip(
     let timer: number | null = null
     const cancelTimer = () => { if (timer !== null) { GLib.source_remove(timer); timer = null } }
 
+    // Where the pointer was when the running dwell started (restToShow only).
+    let restX = 0, restY = 0
     const motion = new Gtk.EventControllerMotion()
-    motion.connect("motion", () => {
+    motion.connect("motion", (_c: Gtk.EventControllerMotion, x: number, y: number) => {
         if (suppress?.()) return
-        if (popover.visible || timer !== null) return
+        if (popover.visible) return
+        if (timer !== null) {
+            // A tolerance, not zero: a hand on a mouse or a trackpad is never
+            // perfectly still, and a dwell that restarts on a 1 px tremor never ends.
+            if (!restToShow || Math.hypot(x - restX, y - restY) <= REST_TOLERANCE) return
+            cancelTimer()
+        }
+        restX = x; restY = y
         timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
             timer = null
             // The widget can leave its window inside the delay without being
