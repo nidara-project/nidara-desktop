@@ -138,7 +138,7 @@ function makeIslandWidget(
         activeColorHex: def.activeColorHex, activeAlpha: def.activeAlpha,
         // A keyboard stop when the TILE does something: open its detail (the target
         // is the tile-level gesture below, which no key reaches) or carry a fill slider.
-        focusRing: !editMode && (hasDetail || !!fillKeys),
+        keyboardStop: !editMode && (hasDetail || !!fillKeys),
     })
 
     const overlay = new Gtk.Overlay()

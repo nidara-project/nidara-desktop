@@ -124,13 +124,20 @@ window#nidara-bar-zone {
 #nidara-bar,
 .nidara-bar-window {
 
-    /* --- Focus Kill --- */
-    /* Focus reset for bar items only */
+    /* --- Keyboard ring (Super+Ctrl+B walks the bar) ---
+       GTK's own ring on the focused item — or on a tray icon's button, which fills its
+       item and is the stop there. Offset −2px: the item spans the group's full height,
+       so an outline on or outside its box would sit on the group's glass edge; 2px in
+       it wraps the slot instead. Pill radius on the BASE rule (an outline follows it).
+       This used to be a "focus kill" (outline 0 on the tray buttons), from when
+       nothing in the bar was meant to take the keyboard. */
+    .bar-item,
     .bar-tray-btn {
-        outline-width: 0;
-        outline-color: transparent;
+        border-radius: $nidara-radius-pill;
         box-shadow: none;
     }
+    .bar-item:focus-visible,
+    .bar-tray-btn:focus-visible { @include nidara-focus-ring(-2px); }
 
     /* --- Distro icon: color follows theme via currentColor in the SVG --- */
     .bar-distro-icon {

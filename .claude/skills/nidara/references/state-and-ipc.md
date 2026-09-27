@@ -1808,8 +1808,9 @@ VS Code, JetBrains and LibreOffice all bind Ctrl+F2, and a compositor bind would
 item; ←/→/Tab move along `barBox`, wrapping; Enter/Space/↓ run the item's action (`barItem`'s
 `onKey` → `onClick` → the kit icon's `barKeyAction`; `setBarItemKey` for an action that exists
 only after the item is built — AppTitle's window menu). An item with nothing to do is not a stop
-(the CPU/memory rings). The ring is drawn INSIDE the item's hover pill, which already spans the
-item's full width. Two rules that are easy to get backwards:
+(the CPU/memory rings). The ring is GTK's (`.bar-item:focus-visible`, `.bar-tray-btn:focus-visible`
+in `_bar.scss`, pill radius, offset −2px so it wraps the slot instead of sitting on the group's glass
+edge). Two rules that are easy to get backwards:
 - **Only an Esc returns to the walk.** `escPending` is set in the window's CAPTURE phase and
   cleared at idle; a panel that closes WITHOUT it (Prism launched an app, a CC row opened
   Settings) ENDS the walk, or the grab stays on the bar and the window that just opened gets
@@ -1842,7 +1843,7 @@ while nothing in the dock held the focus, and the keys went to the window the ow
 Check that the surface also has a focus widget (`dumpState.keyboardFocus[<window>].focusWidget`).
 
 In the CC grid a tile whose tap opens a detail is itself a keyboard stop
-(`SquircleContainer({ focusRing: true })`, see design-system.md → the Cairo focus ring): Enter/
+(`SquircleContainer({ keyboardStop: true })` + GTK's CSS ring, see design-system.md): Enter/
 Space opens the detail, the Menu key or Shift+F10 opens the tile's context menu, focus moves into
 the detail and Esc there returns to the grid with the focus back on the tile. A FILL tile (volume,
 brightness: `makeVerticalFillTile`) is a stop for the same reason even with no detail — its slider
@@ -1851,7 +1852,8 @@ through `sliderKeyHandler` (the slider itself is `focusable: false`). 🔴 A sli
 arrows ALONG its axis: taking all four made it a trap — in the CC nothing but Tab could leave it,
 and Esc (which closes the whole panel) looked like the only way out (owner-caught 2026-09-27). A
 thumb slider shows focus as a 2px accent ring on its thumb, painted in Cairo — a DrawingArea gets
-no ring from CSS, so its focus was real and invisible. GTK orders Tab by
+no ring from CSS, so its focus was real and invisible. Buttons INSIDE a tile had the same blind
+spot: `.cc-island button { nidara-reset }` clears `outline`; the rule now re-declares the ring. GTK orders Tab by
 GEOMETRY (it sorts children by position, not by insertion order), so reordering the layout list
 does not change it.
 
