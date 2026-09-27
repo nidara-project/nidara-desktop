@@ -1,5 +1,6 @@
 import registry, { widgetAvailable } from "../widgets/index"
 import widgetConfig from "./WidgetConfig"
+import status from "./Status"
 import ccLayout from "../surfaces/control-center/CCLayoutManager"
 import type { WidgetCatalog } from "./WidgetCatalog"
 
@@ -22,12 +23,15 @@ export const widgetCatalogSource: WidgetCatalog = {
             canCc,
             available: widgetAvailable(w),
             bar: placement.bar,
+            barMode: widgetConfig.barMode(w.id),
             cc: placement.cc,
             ccFits: canCc && (placement.cc || ccLayout.canAdd(w.id)),
             buildSettings: w.buildSettings,
         }
     }),
     setBar: (id, on) => widgetConfig.setBar(id, on),
+    setBarMode: (id, mode) => widgetConfig.setBarMode(id, mode),
+    editBarOrder: () => { status.bar_edit_mode = true },
     setCc: (id, on) => {
         widgetConfig.setCC(id, on)
         if (on) ccLayout.add(id)

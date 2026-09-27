@@ -23,6 +23,7 @@ export class UIStatus extends GObject.Object {
                 "recording": GObject.ParamSpec.boolean("recording", "Recording", "Screen recording active", GObject.ParamFlags.READWRITE, false),
                 "bar-expanded-id": GObject.ParamSpec.string("bar-expanded-id", "Bar Expanded ID", "ID of the expanded bar widget, empty = none", GObject.ParamFlags.READWRITE, ""),
                 "bar-overflow-open": GObject.ParamSpec.boolean("bar-overflow-open", "Bar Overflow Open", "Bar widgets hidden for lack of room are unfolded in line", GObject.ParamFlags.READWRITE, false),
+                "bar-edit-mode": GObject.ParamSpec.boolean("bar-edit-mode", "Bar Edit Mode", "The bar's right group is being reordered in place", GObject.ParamFlags.READWRITE, false),
                 "cc-detail-id": GObject.ParamSpec.string("cc-detail-id", "CC Detail ID", "Widget ID to open in CC detail view, empty = none", GObject.ParamFlags.READWRITE, ""),
             },
         }, this)
@@ -42,6 +43,7 @@ export class UIStatus extends GObject.Object {
     private _bar_expanded_id = ""
     private _cc_detail_id = ""
     private _bar_overflow_open = false
+    private _bar_edit_mode = false
 
     // The boolean mutually-exclusive overlays. Opening one closes the rest —
     // plus the Activity Island, whose state is a mode STRING (island_mode),
@@ -53,6 +55,7 @@ export class UIStatus extends GObject.Object {
         _prism_open: "prism-open",
         _app_grid_open: "app-grid-open",
         _system_menu_open: "system-menu-open",
+        _bar_edit_mode: "bar-edit-mode",
     }
 
     /**
@@ -172,7 +175,7 @@ export class UIStatus extends GObject.Object {
     // which used it to avoid popping the island over something the user opened —
     // and had been popping it over an open app grid all along.
     public get isAnyOverlayOpen(): boolean {
-        return this._cc_open || this._nc_open || this._prism_open || this._app_grid_open || this._system_menu_open || this._island_mode !== "" || this._bar_expanded_id !== "" || this._bar_overflow_open
+        return this._cc_open || this._nc_open || this._prism_open || this._app_grid_open || this._system_menu_open || this._island_mode !== "" || this._bar_expanded_id !== "" || this._bar_overflow_open || this._bar_edit_mode
     }
 
     public get about_open() { return this._about_open }
@@ -220,9 +223,23 @@ export class UIStatus extends GObject.Object {
     public get bar_overflow_open() { return this._bar_overflow_open }
     public set bar_overflow_open(v: boolean) {
         if (this._bar_overflow_open === v) return
-        if (v) this.closeExclusive("", { barExpanded: true })
+        // Kept: the bar's edit mode, which unfolds the overflow itself so every item
+        // can be placed.
+        if (v) this.closeExclusive("_bar_edit_mode", { barExpanded: true })
         this._bar_overflow_open = v
         this.notify("bar-overflow-open")
+    }
+
+    // The bar's right group being REORDERED in place (core/BarOrder.ts): items drag,
+    // arrows move the selected one, Esc / Enter / "Done" / a click outside end it.
+    // Exclusive like an overlay — opening it closes the rest, and anything else
+    // opening ends it.
+    public get bar_edit_mode() { return this._bar_edit_mode }
+    public set bar_edit_mode(v: boolean) {
+        if (this._bar_edit_mode === v) return
+        if (v) this.closeExclusive("_bar_edit_mode", { barExpanded: true })
+        this._bar_edit_mode = v
+        this.notify("bar-edit-mode")
     }
 
     public get cc_detail_id() { return this._cc_detail_id }

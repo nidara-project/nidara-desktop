@@ -40,15 +40,6 @@ function buildWidgetRow(nav: SettingsNav, w: WidgetCatalogEntry): Gtk.ListBoxRow
 
     const controls = new Gtk.Box({ spacing: 20, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
 
-    // Bar switch — only for widgets that can actually render in the bar.
-    if (w.canBar) {
-        controls.append(controlGroup(
-            t("settings.widgets.col.bar"), available && w.bar, available,
-            available ? "" : noHw,
-            (v) => widgetCatalog().setBar(w.id, v),
-        ))
-    }
-
     // Control Center switch — disabled (with a tooltip) when the hardware is
     // missing, or when the grid is full and the widget isn't already in it.
     if (w.canCc) {
@@ -118,7 +109,10 @@ export default function WidgetsPage(nav: SettingsNav): Gtk.Widget {
     // Which categories actually render depends on what the machine has, so the
     // groups are resolved before the loop — the reorder note rides as the LAST
     // one's footer.
-    const all = widgetCatalog().list()
+    // The Control Center only: which widgets are in it. Where each one shows in the BAR
+    // is the Top bar page's (custom/bar.ts, 2026-09-27) — it used to be a second switch
+    // on every row here, beside the Top bar page that had almost nothing.
+    const all = widgetCatalog().list().filter(w => w.canCc)
     const groups = CATEGORY_ORDER
         .map(cat => ({
             cat,

@@ -468,6 +468,14 @@ const screenrecordWidget: AtomicWidget = {
         const sigId = status.connect("notify::recording", cb)
         return () => safeDisconnect(status, sigId)
     },
+    // Active = capturing: by default the bar shows the one-click Stop only then.
+    defaultInBar: true,
+    barActive: () => status.recording,
+    watchBarActive: (cb) => {
+        const sigId = status.connect("notify::recording", cb)
+        return () => safeDisconnect(status, sigId)
+    },
+    defaultBarMode: "active",
 }
 
 export default screenrecordWidget

@@ -36,6 +36,7 @@ None of the three produces an error, a warning or a failed build when missed. Tw
 - `cc_edit_mode`
 - `bar_expanded_id` — which Bar pill is currently expanded.
 - `bar_overflow_open` — the bar's widgets that did not fit are unfolded in line (`toggleBarOverflow()`; `dumpState.flags.barOverflowOpen`). See design-system.md → "The bar's overflow".
+- `bar_edit_mode` — the bar's right group is being reordered in place. In the boolean `EXCLUSIVE` map (opening it closes the rest, anything else opening ends it); `bar_overflow_open`'s setter KEEPS it, because edit mode unfolds the overflow itself. In `barModal` and `onBarGrabCleared` (a click outside = Done). See design-system.md → "The right group's order".
 - `cc_detail_id` — which CC detail panel is active.
 
 ### Toggles

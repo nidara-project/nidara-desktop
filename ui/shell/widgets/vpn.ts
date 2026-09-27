@@ -172,6 +172,11 @@ const vpnWidget: AtomicWidget = {
     buildCCDetail: buildBarExpanded,
     ccDetailRows: 3,
     getActive: () => !!vpnActiveName,
+    // Active = a VPN connected.
+    defaultInBar: true,
+    barActive: () => !!vpnActiveName,
+    watchBarActive: watchVpnActive,
+    defaultBarMode: "active",
     watchActive: watchVpnActive,
 }
 

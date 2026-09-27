@@ -335,7 +335,7 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         // time this component was unified (caught on screen, 2026-08-26).
         defaultHeight: defaultHeight ?? 760,
         minWidth: minWidth ?? minFloorWidth,
-        minHeight: minHeight ?? WINDOW_LAYOUT.minHeight,
+        minHeight: minHeight ?? WINDOW_LAYOUT.heightFloor,
         cssClasses, glassClasses, name, appId,
     })
     base.glass.set_name("nidara-window-glass")

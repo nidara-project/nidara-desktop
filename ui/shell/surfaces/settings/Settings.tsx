@@ -18,7 +18,7 @@ import BluetoothPage from "./pages/Bluetooth"
 import UsersPage from "./pages/Users"
 import { manifest, type PageDecl } from "./manifest"
 import { buildPreferencePage } from "./PreferencePage"
-import { beginPage, endPage, clearSearchIndex, getSearchIndex, indexPage, indexPreferencePage, runPageRefreshers, type SettingsNav } from "./SettingsHelpers"
+import { beginPage, endPage, clearSearchIndex, getSearchIndex, indexPage, indexPreferencePage, pageBox, runPageRefreshers, type SettingsNav } from "./SettingsHelpers"
 import { t } from "../../core/i18n"
 import { uiIcon, currentUiIcon } from "../../core/Icons"
 import IconButton from "../../common/IconButton"
@@ -147,8 +147,20 @@ export default function Settings(monitor: Gdk.Monitor) {
         runPageRefreshers(id)
     }
 
-    // Every page (and dynamically-pushed subpage) is a clamped, scrollable box.
-    const wrapPage = (widget: Gtk.Widget): Gtk.Widget => {
+    // Every page (and dynamically-pushed subpage) is a clamped, scrollable box — and
+    // gets the PAGE FRAME (`pageBox`: `.settings-page`'s padding) from HERE when it did
+    // not bring its own. The frame is the host's, not the content's: a widget's
+    // Configure page is built by the widget (screen recording's is a plain box, since a
+    // widget may not import Settings' helpers), and before this it came out with no
+    // side padding — a different width from every other page — and its first card
+    // pressed against the header (owner-caught 2026-09-27).
+    const wrapPage = (content: Gtk.Widget): Gtk.Widget => {
+        let widget = content
+        if (!content.has_css_class("settings-page")) {
+            const frame = pageBox()
+            frame.append(content)
+            widget = frame
+        }
         // NidaraScrolled everywhere, windows included — one scroll behaviour for the
         // whole DE. The clamp already centres the content inside a much wider
         // viewport, so there is nothing at the right edge to reserve a lane against.
@@ -245,7 +257,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         try {
             if (cat.pageDecl.kind === "preference") {
                 indexPreferencePage(cat.pageDecl, cat.label)
-                pageWidget = buildPreferencePage(cat.id)
+                pageWidget = buildPreferencePage(cat.id, nav)
             } else {
                 beginPage(cat.id, cat.label)
                 const component = PAGE_COMPONENTS[cat.pageDecl.builder as keyof typeof PAGE_COMPONENTS]

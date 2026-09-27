@@ -49,7 +49,7 @@ export { NidaraFontButton } from "./fontbutton"
 // a row/list is built; used by Settings, Control Center and any future surface)
 export { NidaraRow, NidaraStackedRow, NidaraFieldRow, NidaraEmptyRow, ROW_H_SINGLE, ROW_H_DOUBLE } from "./row"
 export type { NidaraRowResult, NidaraFieldRowResult, NidaraValidationState } from "./row"
-export { NidaraList, NidaraPickList } from "./list"
+export { NidaraList, NidaraPickList, NidaraListActions } from "./list"
 export type { NidaraListResult } from "./list"
 
 // NidaraTable — the same card and the same rows, in aligned columns under

@@ -60,6 +60,11 @@ const focusWidget: AtomicWidget = {
     ccDetailRows: 2,
     getActive: dontDisturb,
     watchActive: watchDnd,
+    // Active = Do Not Disturb on.
+    defaultInBar: true,
+    barActive: dontDisturb,
+    watchBarActive: watchDnd,
+    defaultBarMode: "active",
 }
 
 export default focusWidget

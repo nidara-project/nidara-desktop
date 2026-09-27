@@ -128,6 +128,11 @@ const btWidget: AtomicWidget = {
     icon: uiIcon("nd-bluetooth-active"),
     locations: ["bar", "cc"],
     isAvailable: () => BT.hasAdapter(),
+    // Active = an adapter, powered. A USB dongle plugged in later appears by itself.
+    defaultInBar: true,
+    barActive: () => BT.hasAdapter() && BT.isPowered(),
+    watchBarActive: (cb) => { BT.watchPower(cb); BT.watchAdapter(cb) },
+    defaultBarMode: "active",
     watchAvailable: (cb) => { BT.watchAdapter(cb) },
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],

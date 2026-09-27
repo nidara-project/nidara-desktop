@@ -452,6 +452,25 @@ checkbutton:disabled {
     box-shadow: none;
 }
 
+/* Actions at the foot of a list card (NidaraListActions): inside the card, under a
+   divider that stops at the rows' text inset, the buttons on the right. Inert — no
+   hover or press fill, only its buttons take input. */
+.nidara-list > row.nidara-list-actions {
+    @include nidara-reset;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    &:hover, &:active, &:selected { background: transparent; }
+}
+.nidara-list-actions-divider {
+    min-height: 1px;
+    background: var(--nidara-border);
+    margin: $space-1 $space-3 0;
+}
+.nidara-list-actions-bar {
+    padding: $space-2 $space-3;
+}
+
 /* Navigation sidebar list (icon+label rows, single-select → accent). */
 .nidara-sidebar {
     background: transparent;

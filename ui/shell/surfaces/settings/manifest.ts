@@ -165,31 +165,12 @@ export const manifest = [
         label: "settings.bar.title",
         icon: "nd-bar",
         groups: [
-            {
-                i18n: "settings.bar.group.layout",
-                // The only layout toggle left, and the only one of the original three that
-                // was ever a preference rather than a footgun: the system-menu capsule and
-                // the Activity Island are both permanent now, each because hiding it removed
-                // the sole route to a capability. Reasoning lives in `bar/barState.ts`.
-                note: "The only layout toggle left, and the only one of the original three that was ever a preference rather than a footgun: the system-menu capsule and the Activity Island are both permanent now, each because hiding it removed the sole route to a capability. Reasoning lives in bar/barState.ts.",
-                items: [
-                    "bar.appTitle",
-                ],
-            },
-            {
-                i18n: "settings.bar.group.icon",
-                items: [
-                    {
-                        custom: "launcherIcon",
-                        i18n: "settings.bar.icon-custom",
-                        // A launcherIcon is 'custom' only when it points at an image file that
-                        // still exists. A preset key ('nidara') — or a stale value from before the
-                        // rebrand ('arch') — is treated as the default: the bar falls back to the
-                        // built-in mark, so the page must show the same, not the raw string.
-                        note: "A launcherIcon is 'custom' only when it points at an image file that still exists. A preset key ('nidara') — or a stale value from before the rebrand ('arch') — is treated as the default: the bar falls back to the built-in mark, so the page must show the same, not the raw string.",
-                    },
-                ],
-            },
+            // One list of what the bar holds, right to left, after macOS's Menu Bar pane
+            // (custom/bar.ts, 2026-09-27): checks, "Always / When active", the window title
+            // and the system menu's icon all in the same row format — then the apps' icons.
+            // The order itself is edited in the bar (Status.bar_edit_mode), not here.
+            { i18n: "settings.bar.group.items", custom: "barItems" },
+            { i18n: "settings.bar.group.apps", custom: "barApps" },
         ],
     },
     {

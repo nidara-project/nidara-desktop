@@ -498,8 +498,21 @@ export const WINDOW_LAYOUT = {
      */
     glassRim: 1,
     /** Window minimum height. Two cards and a header have to fit, or the scroll
-     *  view is taller than its own first row. */
+     *  view is taller than its own first row. The installer's floor (it caps it by the
+     *  monitor); a kit window asks for `heightFloor` instead — see there. */
     minHeight: 480,
+    /**
+     * The HEIGHT a kit window asks the compositor for: the distress height, like
+     * `contentFloor` is the distress width, and for the same reason (window.ts, "The
+     * floor is the DISTRESS width"). A size request is a REQUEST: Hyprland tiled Settings
+     * at 378 high with the floor at 480, GTK laid the window out at 480 anyway and the
+     * compositor cut the difference — the last 102px of every page were unreachable,
+     * scrolled or not (measured 2026-09-27 with `queryUI`: the page scroller ended at
+     * y=480 inside a 378px window). Everything below the header SCROLLS, so the only
+     * height a window truly needs is the header plus a row or two of page; below that a
+     * compositor may still force it, and then it is cut, but no tile layout does.
+     */
+    heightFloor: 240,
     /**
      * How much wider than the breakpoint a window OPENS — half of it on each side
      * of the content pane.

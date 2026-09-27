@@ -422,9 +422,8 @@ export function registerConfigEntries() {
             apply(barConfig.get("showAppTitle"))
             return barConfig.subscribe("showAppTitle", apply)
         },
-        ui: {
-            i18n: "settings.bar.app-title",
-        },
+        // No `ui`: its row is one of the Top bar list's (custom/bar.ts), in the same
+        // check-icon-name format as every other item there.
     })
 
     // ── Input: Mouse ──────────────────────────────────────────────────────

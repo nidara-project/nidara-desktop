@@ -50,6 +50,9 @@ export interface ContentBudget {
     pitch: number
 }
 
+/** How a widget in the bar is shown: always, or only while `barActive()` holds. */
+export type BarMode = "always" | "active"
+
 export interface AtomicWidget {
     id: string
     name: string
@@ -58,6 +61,19 @@ export interface AtomicWidget {
     barOrder?: number                   // optional intra-category fine-tune (lower = further left). Default 0.
     locations?: WidgetLocation[]        // where this widget can appear
     defaultInBar?: boolean              // shown in the bar by default (default false)
+    /** When the widget can say it is ACTIVE (a Wi-Fi radio on, a VPN connected, a
+     *  capture running), the bar can show it only then: Settings → Top bar offers
+     *  "Always" / "When active" for exactly the widgets that declare this (owner,
+     *  2026-09-27, after macOS's Menu Bar pane). Not the CC's `getActive`, which is
+     *  "paint the tile in the accent" — dark mode is on in that sense, and hiding its
+     *  own switch while it is off would leave no way to turn it back on from the bar. */
+    barActive?: () => boolean
+    watchBarActive?: (cb: () => void) => (() => void) | void
+    /** The first-run choice between the two, when `barActive` exists. A widget whose
+     *  HARDWARE may come and go (Bluetooth, Wi-Fi) defaults to "active": without the
+     *  hardware it is never active, so it stays out of the way, and a USB dongle
+     *  plugged in later makes it appear with no trip to Settings. Default "always". */
+    defaultBarMode?: BarMode
     defaultInCc?: boolean               // seeded into the CC by default (default = "cc" in locations)
     defaultSize: WidgetSize
     supportedSizes: WidgetSize[]

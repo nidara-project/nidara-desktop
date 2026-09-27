@@ -161,6 +161,9 @@ const nightLightWidget: AtomicWidget = {
     ccDetailRows: 4,
     getActive: () => nightLight.enabled,
     watchActive: subscribe,
+    // Active = on. Default "always": the bar icon is also how it gets turned on.
+    barActive: () => nightLight.enabled,
+    watchBarActive: subscribe,
 }
 
 export default nightLightWidget

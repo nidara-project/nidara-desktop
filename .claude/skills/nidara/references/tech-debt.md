@@ -249,8 +249,11 @@ one day went with it (no consumer left). The boundary that settled it: **the CC 
 (permissions, and the kill switch), the island says what is RUNNING.** A privacy indicator with no
 island activity behind it (mic, camera) gets a full entry here; anything the island already shows
 live gets none.
-Also deferred by product decision: **drag-reorder of bar widgets** (bar order is category-derived via
-`barOrder`; the CC has its own Edit-mode reorder). The AI "active" signal depends on the tools pinging
+**Bar reorder** was deferred here by product decision until 2026-09-26; the owner then asked for it:
+one ordered list for widgets + tray icons + search (`core/BarOrder.ts`), edited in the bar itself
+(`Status.bar_edit_mode`, drag or ← →), and Settings → Top bar rebuilt after macOS's Menu Bar pane.
+Still owed: the same row format for the Activity Island (owner, 2026-09-27: "later"), and a
+right-click entry into edit mode from the bar itself (today only from Settings). The AI "active" signal depends on the tools pinging
 `notifyComputerAction` — an action path that bypasses `nidara-act/type/click` would stay "armed", not
 "active"; fine today (those are the only action tools), re-check if a new path is added.
 
@@ -2821,6 +2824,19 @@ at the pane's 802 and Settings in a 673px tile, GTK laid out at 802 and the comp
 129px, taking a row's trailing button. And the floor cannot be made conditional on being tiled —
 **Hyprland never clears the `tiled` toplevel state**, so a window it had just floated and resized to
 600×800 still carried `tiled-top/left/right/bottom` and `maximized`.
+
+⚠️ **The HEIGHT had the same bug and nobody had looked (fixed 2026-09-27).** The kit window asked
+for `minHeight` 480; Hyprland tiled Settings at 378 and GTK laid it out at 480 anyway, so the last
+102px of EVERY page were cut — "I cannot scroll to the bottom" (owner). Measured with `queryUI`:
+the page scroller ended at y=480 inside a 378px window. A kit window now asks for
+`WINDOW_LAYOUT.heightFloor` (240, the distress height: everything under the header scrolls), and
+`minHeight` 480 stays only for the installer, which caps it itself. 🔑 The law for BOTH axes: a
+window must be correct at any size a compositor imposes; a size request only stops a user's drag.
+
+**And the page FRAME belongs to the host** (same day): `wrapPage` in Settings.tsx gives any page
+that did not bring `.settings-page` (a widget's Configure page — widgets may not import Settings'
+`pageBox`) the frame itself. Screen recording's came out with no side padding, a different width
+from every other page, its first card against the header.
 
 ⚠️ **This overlaps #62 and settles one of its bullets.** That entry lists "the auto-collapse
 breakpoint is derived from `sidebarWidth + content.naturalWidth + collapseMargin`, so a large

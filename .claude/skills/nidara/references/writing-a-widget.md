@@ -121,6 +121,13 @@ export default darkModeWidget
 Everything in it is a getter plus a `subscribe`, and nothing in it is a value read once. That is
 the shape: the widget never pushes, the host pulls when the subscribe fires.
 
+**"When active" in the bar is opt-in.** Declare `barActive` + `watchBarActive` (and
+`defaultBarMode`) and Settings → Top bar offers "Always / When active" for the widget; the bar then
+paints it only while it is active if the person picks that. It is NOT the CC's `getActive` (the
+tile's accent fill): dark mode is "on" in that sense, and hiding its own switch while it is off
+would leave the bar no way to turn it back on. A widget whose hardware can come and go defaults to
+`"active"` (Bluetooth, Wi-Fi, Ethernet): without the hardware it simply never shows.
+
 **Bar content carries its own side air.** In the bar a widget is an ITEM of the right-hand group,
 touching its neighbours, and the hover/open pill is drawn round whatever the content measures
 (design-system.md → "Bar groups"). `makeBarIcon`/`makeBarExpandable` already put `BAR_ITEM_PAD`

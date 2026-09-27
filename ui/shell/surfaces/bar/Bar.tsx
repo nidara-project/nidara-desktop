@@ -3,6 +3,7 @@ import Gdk from "gi://Gdk?version=4.0"
 import app from "../../../lib/nidara-kit/platform/host"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
+import GObject from "gi://GObject"
 import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
 import { MorphRevealer } from "../../common/MorphRevealer"
 import { createRegionStamper } from "../../common/VisibleRegion"
@@ -12,7 +13,7 @@ import Gio from "gi://Gio"
 
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
-import { BAR_GROUP_PAD, BAR_H, CUSTOM_EXPANSION_ID, barGroup, barItem, barOpen, barTooltip, setBarCustomAnchor } from "./capsule"
+import { BAR_GROUP_PAD, BAR_H, CUSTOM_EXPANSION_ID, barEditSelected, barGroup, barItem, barOpen, barTooltip, setBarCustomAnchor, setBarEditSelected } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import { blurSafeOpacity } from "../../core/NidaraTheme"
 import appService from "../../core/AppService"
@@ -23,6 +24,7 @@ import regionConfig from "../../core/RegionConfig"
 import { notifications } from "../../core/NotifService"
 import registry, { widgetAvailable, watchWidgetAvailability } from "../../widgets/index"
 import Tray from "./Tray"
+import { SEARCH_KEY, defaultOrder, isBarHidden, knownTrayItems, moveBefore, parseBarKey, resolveOrder, savedBarOrder, setSavedBarOrder, trayKey, watchBarOrder, widgetKey } from "../../core/BarOrder"
 import { SystemMenuOverlay } from "./SystemMenu"
 import { AppTitle } from "./AppTitle"
 import { ccBadge } from "./StatusIndicators"
@@ -105,7 +107,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Start-align is for left-side capsules (AppTitle) whose centered panel would
   // otherwise overflow the left screen edge.
   let customAlign: "center" | "start" = "center"
-  // How many optional widgets fit, counted from the CLOCK side (see measureOverflow).
+  // How many ordered items fit, counted from the CLOCK side (see measureOverflow).
   // `null` = not measured yet, show them all.
   let fitFolded: number | null = null
   let fitUnfolded: number | null = null
@@ -666,7 +668,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   //    desktop interactive, and a grab would take that away.
   const barModal = () =>
     (status.cc_open || status.nc_open || status.prism_open || status.system_menu_open
-      || status.bar_expanded_id !== "" || status.bar_overflow_open) && !status.cc_edit_mode
+      || status.bar_expanded_id !== "" || status.bar_overflow_open || status.bar_edit_mode) && !status.cc_edit_mode
   const barGrabbing = () => barModal()
   // ⚠️ ANY open island mode, not just the keyboard-driven ones. Under layer-shell
   // only an EXCLUSIVE mode took input, so this used to read `island.needsKeyboard()`
@@ -697,6 +699,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       status.cc_open = false; status.nc_open = false
       status.prism_open = false; status.system_menu_open = false
       status.bar_expanded_id = ""; status.bar_overflow_open = false
+      status.bar_edit_mode = false   // a click outside is "Done"
     }
     // dismissOverlays is a no-op in edit mode, and a closed overlay re-enters here
     // through its notify handler — but neither is guaranteed, so settle the region
@@ -1090,15 +1093,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // read as another widget's icon. The pending count lives in the clock's tooltip.
   timeContent.append(timeLabel)
 
-  // Optional bar widgets (before Tray, reactive to config changes)
-  const optWidgets = new Gtk.Box({ css_classes: ["bar-optional-widgets"] })
+  // Everything in the right group that has a place in the ORDER (core/BarOrder.ts): the
+  // widgets, the apps' tray icons and search, in one row the person arranges. Only the
+  // `»` before it and the CC and clock after it stay put.
+  const orderedItems = new Gtk.Box({ css_classes: ["bar-optional-widgets"] })
 
-  // The overflow capsule: shown only while some widget does not fit. It is not a
-  // menu — it unfolds the hidden widgets IN LINE, in the same bar (macOS 27's `»`):
+  // The overflow capsule: shown only while some item does not fit. It is not a
+  // menu — it unfolds the hidden items IN LINE, in the same bar (macOS 27's `»`):
   // the island rises out of the way and the row grows leftwards over the room it
   // leaves, the window title yielding if it has to (Status.bar_overflow_open).
-  // Unfolded widgets are the same items as the others, built by the same loop.
-  // Built once and kept outside `optWidgets`, which rebuildBarWidgets empties.
+  // Unfolded items are the same as the others, placed by the same loop.
+  // Built once and kept outside `orderedItems`, which rebuildBarWidgets empties.
   const overflowIcon = new Gtk.Image({ gicon: uiIcon("nd-pan-end"), pixel_size: 16, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
   const overflowItem = barItem({ child: overflowIcon, ...barOpen(() => status.bar_overflow_open) })
   overflowItem.set_visible(false)
@@ -1112,40 +1117,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       overflowItem.add_controller(g)
   }
 
-  const rebuildBarWidgets = () => {
-    if (status.bar_expanded_id) status.bar_expanded_id = ""
-    capsuleRefs.clear()
-    // A widget's panel opened while its pill is hidden (IPC) hangs from the overflow
-    // capsule — see positionExpansion.
-    capsuleRefs.set(OVERFLOW_ID, overflowItem)
-    let child = optWidgets.get_first_child()
-    while (child) { const n = child.get_next_sibling(); optWidgets.remove(child); child = n }
+  // The two kinds of ordered item that are built ONCE and re-parented on every rebuild
+  // (a widget item is rebuilt instead): the tray's icons, which hold an app's menu and
+  // subscriptions, and search.
+  const tray = Tray(openCustomExpansion, () => scheduleBarLayoutSync())
+  const searchItem = barItem({ child: new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 16, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), ...barOpen(() => status.prism_open) })
+  barTooltip(searchItem, () => t("bar.tooltip.search"))
 
-    // Hardware gate: widgets without their hardware don't render or take a slot,
-    // regardless of the user's saved placement (which stays untouched).
-    const allIds = widgetConfig.barWidgetIds().filter(id => {
-        const w = registry.get(id)
-        return !!w && widgetAvailable(w)
-    })
-    // Hidden from the FAR end: the widgets nearest the clock stay, so the system
-    // category (last in the order, and the one people look for) is the last to go.
-    // Unfolded, the island's half of the bar is available too.
-    const unfolded = status.bar_overflow_open
-    const folded = fitFolded ?? Infinity
-    const fit = unfolded ? Math.max(folded, fitUnfolded ?? Infinity) : folded
-    const visibleIds = allIds.slice(allIds.length - Math.min(allIds.length, fit))
-    const anyHidden = allIds.length > folded
-    overflowItem.set_visible(anyHidden)
-    overflowIcon.gicon = uiIcon(unfolded ? "nd-pan-start" : "nd-pan-end")
-    // Nothing left to unfold (a widget removed, a wider monitor): fold. Deferred, as
-    // folding rebuilds through this very function. Only on a MEASURED answer: the
-    // measuring pass rebuilds with nothing cached, which reads as "everything fits".
-    if (unfolded && fitFolded !== null && !anyHidden)
-      GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { status.bar_overflow_open = false; return GLib.SOURCE_REMOVE })
-
-    for (const id of visibleIds) {
+  const buildWidgetItem = (id: string): Gtk.Widget | null => {
       const w = registry.get(id)
-      if (!w?.buildBarContent) continue
+      if (!w?.buildBarContent) return null
       const hasExpand = !!w.buildBarExpanded
       // cc_edit_mode (not cc_open): while editing the CC the pills stay inert;
       // with the CC merely open, a pill click switches to its surface directly
@@ -1182,28 +1163,242 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           return state ? `${w.name} · ${state}` : w.name
       })
       if (hasExpand) capsuleRefs.set(id, item)
-      optWidgets.append(item)
-    }
+      return item
   }
+
+  // The order's FULL list — every item that has a place, shown or not: enabled widgets
+  // (active or not), tray icons seen and not hidden (running or not), search. What is
+  // painted is a subset of it; what is saved after a move is all of it, so an icon that
+  // is only absent right now (a VPN off, an app closed) keeps its place and does not
+  // come back at the left end as if it were new.
+  let fullKeys: string[] = []
+  const keyOfItem = new Map<Gtk.Widget, string>()
+
+  // "Done", in the `»`'s place while the bar is being edited.
+  const doneItem = barItem({
+      child: new Gtk.Label({ label: t("bar.edit.done"), css_classes: ["bar-app-name"], margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD }),
+  })
+  doneItem.set_visible(false)
+  { const g = new Gtk.GestureClick(); g.connect("released", () => { status.bar_edit_mode = false }); doneItem.add_controller(g) }
+  barTooltip(doneItem, () => t("bar.edit.hint"))
+
+  const widgetShown = (id: string) => {
+      const mode = widgetConfig.barMode(id)
+      return mode !== "active" || status.bar_edit_mode || (registry.get(id)?.barActive?.() ?? true)
+  }
+
+  const rebuildBarWidgets = () => {
+    if (status.bar_expanded_id) status.bar_expanded_id = ""
+    capsuleRefs.clear()
+    keyOfItem.clear()
+    // A widget's panel opened while its pill is hidden (IPC) hangs from the overflow
+    // capsule — see positionExpansion.
+    capsuleRefs.set(OVERFLOW_ID, overflowItem)
+    // remove(), not destroy: the tray icons and search are re-appended below.
+    let child = orderedItems.get_first_child()
+    while (child) {
+        const n = child.get_next_sibling()
+        orderedItems.remove(child)
+        child.set_opacity(1)
+        child = n
+    }
+
+    // Every item with a place, in its DEFAULT order, then the person's order on top.
+    // Hardware gate: widgets without their hardware don't render or take a slot,
+    // regardless of the user's saved placement (which stays untouched).
+    const widgetKeys = widgetConfig.barWidgetIds()
+        .filter(id => { const w = registry.get(id); return !!w?.buildBarContent && widgetAvailable(w) })
+        .map(widgetKey)
+    // Tray icons in the order they were FIRST SEEN (`tray-known`), not the order they
+    // arrived this session: that is the order Settings lists them in, and the page must
+    // show the bar's own order. One not recorded yet (a second instance's `#2`) goes last.
+    const known = knownTrayItems().map(k => trayKey(k.id))
+    const seen = new Map(known.map((k, i) => [k, i]))
+    const trayKeys = [...new Set([...known, ...tray.keys()])]
+        .filter(k => !isBarHidden(k))
+        .sort((a, b) => (seen.get(a) ?? Infinity) - (seen.get(b) ?? Infinity))
+    fullKeys = resolveOrder(savedBarOrder(), defaultOrder(widgetKeys, trayKeys))
+    // What can be painted now: a widget in "When active" mode only while active (all of
+    // them while editing, so each can be placed), a tray icon only while its app runs.
+    const all = fullKeys.filter(key => {
+        const p = parseBarKey(key)
+        if (!p) return false
+        if (p.kind === "widget") return widgetShown(p.id)
+        if (p.kind === "tray") return !!tray.widget(key)
+        return key === SEARCH_KEY && !isBarHidden(SEARCH_KEY)
+    })
+    // Hidden from the LEFT end: the order is the priority, so what the person put
+    // nearest the clock is the last to go (by default the system widgets, the tray
+    // and search). Unfolded, the island's half of the bar is available too.
+    const unfolded = status.bar_overflow_open
+    const folded = fitFolded ?? Infinity
+    const fit = unfolded ? Math.max(folded, fitUnfolded ?? Infinity) : folded
+    const visible = all.slice(all.length - Math.min(all.length, fit))
+    const anyHidden = all.length > folded
+    overflowItem.set_visible(anyHidden && !status.bar_edit_mode)
+    doneItem.set_visible(status.bar_edit_mode)
+    overflowIcon.gicon = uiIcon(unfolded ? "nd-pan-start" : "nd-pan-end")
+    // Editing needs every item on screen: unfold when something does not fit.
+    if (status.bar_edit_mode && anyHidden && !unfolded)
+      GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { if (status.bar_edit_mode) status.bar_overflow_open = true; return GLib.SOURCE_REMOVE })
+    // Nothing left to unfold (an item removed, a wider monitor): fold. Deferred, as
+    // folding rebuilds through this very function. Only on a MEASURED answer: the
+    // measuring pass rebuilds with nothing cached, which reads as "everything fits".
+    if (unfolded && fitFolded !== null && !anyHidden && !status.bar_edit_mode)
+      GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { status.bar_overflow_open = false; return GLib.SOURCE_REMOVE })
+
+    for (const key of visible) {
+      const parsed = parseBarKey(key)
+      const item = !parsed ? null
+          : parsed.kind === "widget" ? buildWidgetItem(parsed.id)
+          : parsed.kind === "tray" ? tray.widget(key)
+          : key === SEARCH_KEY ? searchItem : null
+      if (!item) continue
+      keyOfItem.set(item, key)
+      // While editing, an item's CONTENT takes no input (a tray button, a widget's own
+      // toggle), so a press is a selection and a drag a move; an inactive "When active"
+      // widget is shown dimmed — it is here only to be placed.
+      const content = item.get_last_child()
+      content?.set_can_target(!status.bar_edit_mode)
+      const inactive = parsed?.kind === "widget" && status.bar_edit_mode
+          && widgetConfig.barMode(parsed.id) === "active" && !(registry.get(parsed.id)?.barActive?.() ?? true)
+      item.set_opacity(inactive ? 0.5 : 1)
+      orderedItems.append(item)
+    }
+    reselect()
+  }
+
+  // ── Reordering in place (Status.bar_edit_mode) ─────────────────────────────
+  // One drag source, one drop target and one click on the ROW, not on each item: the
+  // tray icons and search are re-parented on every rebuild and would collect a
+  // controller per rebuild otherwise. The item under the pointer is the row's direct
+  // child that contains the picked widget.
+  const itemAt = (x: number, y: number): Gtk.Widget | null => {
+      let w: Gtk.Widget | null = orderedItems.pick(x, y, Gtk.PickFlags.INSENSITIVE | Gtk.PickFlags.NON_TARGETABLE)
+      while (w && w.get_parent() !== orderedItems) w = w.get_parent()
+      return w && keyOfItem.has(w) ? w : null
+  }
+  // The shown key a drop at `x` goes in front of (null = after the last shown one).
+  const shownKeyAt = (x: number): string | null => {
+      for (let c = orderedItems.get_first_child(); c; c = c.get_next_sibling()) {
+          const a = c.get_allocation()
+          if (x < a.x + a.width / 2) return keyOfItem.get(c) ?? null
+      }
+      return null
+  }
+  // Saves the FULL order with `key` moved to just before `before` among the shown
+  // items; `before` null = right after the last shown one.
+  const moveInBar = (key: string, before: string | null) => {
+      if (before === key) return
+      let target = before
+      if (target === null) {
+          const shown = [...keyOfItem.values()]
+          const last = shown[shown.length - 1]
+          const i = fullKeys.indexOf(last)
+          target = i >= 0 ? (fullKeys[i + 1] ?? null) : null
+          if (target === key) return
+      }
+      setSavedBarOrder(moveBefore(fullKeys, key, target))   // → watchBarOrder → rebuild
+  }
+
+  // The selection survives the rebuild a move causes: it is remembered by KEY and
+  // re-picked after every rebuild (reselect).
+  let selectedKey: string | null = null
+  const selectItem = (w: Gtk.Widget | null) => {
+      setBarEditSelected(w)
+      selectedKey = w ? keyOfItem.get(w) ?? null : null
+  }
+  const reselect = () => {
+      if (!status.bar_edit_mode || !selectedKey) return
+      for (const [w, k] of keyOfItem) if (k === selectedKey) { setBarEditSelected(w); return }
+  }
+
+  const editPress = new Gtk.GestureClick()
+  editPress.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+  editPress.connect("pressed", (_g: any, _n: number, x: number, y: number) => {
+      if (!status.bar_edit_mode) return
+      selectItem(itemAt(x, y))
+  })
+  orderedItems.add_controller(editPress)
+
+  let draggingKey: string | null = null
+  const editDrag = new Gtk.DragSource({ actions: Gdk.DragAction.MOVE })
+  editDrag.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+  editDrag.connect("prepare", (_s: any, x: number, y: number) => {
+      if (!status.bar_edit_mode) return null
+      const item = itemAt(x, y)
+      const key = item ? keyOfItem.get(item) : undefined
+      if (!item || !key) return null
+      draggingKey = key
+      selectItem(item)
+      const val = new GObject.Value()
+      val.init(GObject.TYPE_STRING)
+      val.set_string(key)
+      return Gdk.ContentProvider.new_for_value(val)
+  })
+  editDrag.connect("drag-begin", (_s: any, drag: any) => {
+      const item = barEditSelected()
+      if (!item) return
+      try { Gtk.DragIcon.set_from_paintable(drag, new Gtk.WidgetPaintable({ widget: item }), item.get_width() / 2, item.get_height() / 2) } catch {}
+      item.set_opacity(0.3)
+  })
+  editDrag.connect("drag-end", () => { draggingKey = null; scheduleBarLayoutSync(0) })
+  orderedItems.add_controller(editDrag)
+
+  const editDrop = Gtk.DropTarget.new(GObject.TYPE_STRING, Gdk.DragAction.MOVE)
+  editDrop.connect("drop", (_t: any, _v: any, x: number) => {
+      if (!status.bar_edit_mode || !draggingKey) return false
+      moveInBar(draggingKey, shownKeyAt(x))
+      return true
+  })
+  orderedItems.add_controller(editDrop)
+
+  // Keyboard, through the bar's focus grab (barModal counts edit mode): ← → move the
+  // selected item one place, Esc / Enter finish.
+  const editKeys = new Gtk.EventControllerKey()
+  editKeys.connect("key-pressed", (_c: any, keyval: number) => {
+      if (!status.bar_edit_mode) return false
+      if (keyval === Gdk.KEY_Escape || keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
+          status.bar_edit_mode = false
+          return true
+      }
+      if (keyval !== Gdk.KEY_Left && keyval !== Gdk.KEY_Right) return false
+      const shown = [...keyOfItem.entries()]
+      if (shown.length === 0) return true
+      const selected = barEditSelected()
+      const i = shown.findIndex(([w]) => w === selected)
+      if (i < 0) { selectItem(keyval === Gdk.KEY_Left ? shown[shown.length - 1][0] : shown[0][0]); return true }
+      const key = shown[i][1]
+      if (keyval === Gdk.KEY_Left && i > 0) moveInBar(key, shown[i - 1][1])
+      if (keyval === Gdk.KEY_Right && i < shown.length - 1) moveInBar(key, shown[i + 2]?.[1] ?? null)
+      return true
+  })
+  win.add_controller(editKeys)
+
+  status.connect("notify::bar-edit-mode", () => {
+      if (!status.bar_edit_mode) {
+          selectedKey = null
+          if (status.bar_overflow_open) status.bar_overflow_open = false
+      }
+      rebuildBarWidgets()
+      syncOverlays()
+  })
   widgetConfig.connect("changed", () => {
       scheduleBarLayoutSync()
   })
+  // The order, a tray icon hidden or shown — from Settings, another process later (#571).
+  watchBarOrder(() => scheduleBarLayoutSync())
   // Hardware appearing/disappearing (BT dongle, wifi device…) re-runs the same path.
   watchWidgetAvailability(() => {
       scheduleBarLayoutSync()
   })
+  // A "When active" widget turning on or off (Wi-Fi radio, VPN, a capture).
+  for (const w of registry.all()) w.watchBarActive?.(() => scheduleBarLayoutSync())
   rebuildBarWidgets()
 
+  rightGroup.box.append(doneItem)
   rightGroup.box.append(overflowItem)
-  rightGroup.box.append(optWidgets)
-
-  // Tray items are items of this same group (built in Tray.tsx); the tray itself is
-  // a plain container that manages its own visibility (hidden while empty).
-  const trayInner = Tray(openCustomExpansion, () => scheduleBarLayoutSync())
-  rightGroup.box.append(trayInner)
-  const searchItem = barItem({ child: new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 16, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), ...barOpen(() => status.prism_open) })
-  barTooltip(searchItem, () => t("bar.tooltip.search"))
-  rightGroup.box.append(searchItem)
+  rightGroup.box.append(orderedItems)
   // CC item layout: [PAD][gear 16px][DOT_GAP] — 36 wide, 4 more than an icon item, so
   // the status-indicator dot (recording / AI control) has a lane of its own to the
   // right of the gear and never shifts anything when it shows or hides.
@@ -1286,12 +1481,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   hs.connect("title-changed", () => syncLeftBudget())
   syncLeftBudget()
 
-  // How many optional widgets fit, counted from the clock side, in both states:
-  //  · folded: the right flank only, between the island and the tray — and if they
+  // How many ordered items (widgets, tray icons, search) fit, counted from the clock
+  // side, in both states:
+  //  · folded: the right flank only, between the island and the CC — and if they
   //    do not all fit, the overflow capsule takes a place too;
-  //  · unfolded: the island is gone, so everything from the system menu (plus the
-  //    island's gap) to the tray, the window title yielding.
-  // Measured with every widget shown, then rebuilt to the folded/unfolded cut.
+  //  · unfolded: the island is gone, so everything from the left group (plus the
+  //    island's gap) to the CC, the window title yielding.
+  // Measured with every item shown, then rebuilt to the folded/unfolded cut.
   const measureOverflow = () => {
     fitFolded = null
     fitUnfolded = null
@@ -1300,13 +1496,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     const natW = (w: Gtk.Widget) => w.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
 
     const iconWidths: number[] = []
-    let c: Gtk.Widget | null = optWidgets.get_first_child()
+    let c: Gtk.Widget | null = orderedItems.get_first_child()
     while (c) { iconWidths.push(natW(c)); c = c.get_next_sibling() }
     if (iconWidths.length === 0) return
 
     // Items touch inside the group: an item costs its own width and nothing else, and
     // the group's glass costs its padding once, charged with the fixed items.
-    const fixedItems: Gtk.Widget[] = [trayInner, searchItem, ccItem, clockItem]
+    const fixedItems: Gtk.Widget[] = [ccItem, clockItem]
     const fixedW = 2 * BAR_GROUP_PAD + fixedItems.reduce((s, w) => s + (w.get_visible() ? natW(w) : 0), 0)
     overflowItem.set_visible(true)
     const overflowW = natW(overflowItem)

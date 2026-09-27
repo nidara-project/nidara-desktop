@@ -137,9 +137,16 @@ listview > row { padding: 2px; }
 
    OUR glyph, by PATH (commandment 10 — a chevron is an interface icon, and a
    name would resolve against whatever icon theme the process has). The path is
-   relative to the COMPILED sheet, and `../shell/assets/…` holds from all three
-   (`ui/shell/`, `ui/installer/`, `ui/greeter/`), installed and from source — the
-   greeter and the installer expander already rely on it.
+   relative to the COMPILED sheet, so it is `$chevron-dir`: the KIT's own copies
+   (`ui/lib/nidara-kit/assets/`, installed to `/usr/share/nidara-kit/assets/`)
+   next to `kit.css`, by default. ⚠️ It was `../shell/assets/…`, which held while
+   each app compiled this layer into its own sheet — and broke without a sound
+   when #108 phase 2 (#636) moved it into `kit.css`, one folder over: from there
+   it named `ui/lib/shell/assets`, which does not exist, so no dropdown or menu
+   button had a chevron and GTK logged ~16 CRITICALs (a null texture) each time
+   one was drawn — 2821 in one day's log (found 2026-09-27). The kit is a
+   package of its own; it ships what it draws. The installer, which still
+   compiles this layer into its own sheet, passes its own `$chevron-dir`.
    `-gtk-recolor()` so the symbolic glyph takes the node's `color`, in both
    modes; the greeter's older rule uses an invert filter because it is always
    dark, and keeps its own. No `min-width`/`min-height`, although GTK's theme
@@ -150,13 +157,15 @@ listview > row { padding: 2px; }
 // sits flush against the last letter and reads as part of the word.
 dropdown > button > box { border-spacing: 6px; }
 
+$chevron-dir: "assets/" !default;
+
 dropdown arrow,
 menubutton arrow.down {
-    -gtk-icon-source: -gtk-recolor(url("../shell/assets/icons/nidara/scalable/actions/nd-pan-down-symbolic.svg"));
+    -gtk-icon-source: -gtk-recolor(url("#{$chevron-dir}nd-pan-down-symbolic.svg"));
 }
-menubutton arrow.up    { -gtk-icon-source: -gtk-recolor(url("../shell/assets/icons/nidara/scalable/actions/nd-pan-up-symbolic.svg")); }
-menubutton arrow.left  { -gtk-icon-source: -gtk-recolor(url("../shell/assets/icons/nidara/scalable/actions/nd-pan-start-symbolic.svg")); }
-menubutton arrow.right { -gtk-icon-source: -gtk-recolor(url("../shell/assets/icons/nidara/scalable/actions/nd-pan-end-symbolic.svg")); }
+menubutton arrow.up    { -gtk-icon-source: -gtk-recolor(url("#{$chevron-dir}nd-pan-up-symbolic.svg")); }
+menubutton arrow.left  { -gtk-icon-source: -gtk-recolor(url("#{$chevron-dir}nd-pan-start-symbolic.svg")); }
+menubutton arrow.right { -gtk-icon-source: -gtk-recolor(url("#{$chevron-dir}nd-pan-end-symbolic.svg")); }
 
 /* ── `tooltip`: GTK's native one ─────────────────────────────────────────────
    Our own tooltips are `attachTooltip` (the kit's Cairo bubble). This is the

@@ -139,3 +139,30 @@ export function NidaraList(
 
     return { box, listBox, titleLabel, footerLabel }
 }
+
+/**
+ * ACTIONS at the foot of a list — a row INSIDE the card, under a divider, the buttons
+ * at its right: "Reorder in the bar" under the Top bar's controls.
+ *
+ * Why the kit has it (owner, 2026-09-27): the first version put that button under the
+ * card, loose on the page, because there was no other place to put it — and a control
+ * outside a card reads as the page's, not the list's. A list whose rows are acted on as
+ * a whole ends with its actions in the same card, the way macOS's grouped lists do.
+ *
+ * The row is inert (not activatable, not selectable, no hover fill): only its buttons
+ * take input. A caller that rebuilds its rows re-appends this same row last.
+ */
+export function NidaraListActions(listBox: Gtk.ListBox, ...actions: Gtk.Widget[]): Gtk.ListBoxRow {
+    const row = new Gtk.ListBoxRow({
+        activatable: false, selectable: false, focusable: false,
+        css_classes: ["nidara-list-actions"],
+    })
+    const column = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+    column.append(new Gtk.Box({ css_classes: ["nidara-list-actions-divider"] }))
+    const bar = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, css_classes: ["nidara-list-actions-bar"] })
+    for (const a of actions) bar.append(a)
+    column.append(bar)
+    row.set_child(column)
+    listBox.append(row)
+    return row
+}
