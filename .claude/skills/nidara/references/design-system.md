@@ -3735,19 +3735,30 @@ Every number is on the design system's **4px scale** (`$space-*`), by the owner'
 | | px | where |
 |---|---|---|
 | above a capsule (screen edge) | 4 | `.bar-centerbox` `margin-top` |
-| capsule height | 32 = 8 + 16 icon + 8 | `BAR_CAPSULE_H` (derived, see below) |
+| capsule height | 32 (28 of it visible glass) | `BAR_CAPSULE_H` (derived, see below) |
 | strip the bar reserves | 36 | `BAR_H` (exclusive zone) |
 | capsule → windows below | 8 | Hyprland `gaps_out` |
 | between two capsules (only the island and its chips, since the groups) | 4 | `BAR_GAP` |
 | group allocation → its first/last item | 4 | `BAR_GROUP_PAD` |
-| each side of an item's content | 8 | `BAR_ITEM_PAD` → icon-only item 32 wide |
+| every icon in the bar | 18 | `BAR_ICON_SIZE` (the launcher's mark +2) |
+| each side of an item's content | 8 | `BAR_ITEM_PAD` → icon-only item 34 wide |
 | hover/open pill ↔ item top and bottom | 4 | `BAR_VEIL_INSET` → pill 24 tall, radius 12 |
 | each side of a STANDALONE capsule's content (the island's compact forms) | 16 | `BAR_PILL_PAD` |
 | the two ends (system menu, clock) | 8 | `BAR_MARGIN` / `SIDE_GAP` = `gaps_out` |
 
 `BAR_H`, `BAR_CAPSULE_H`, `BAR_GAP`, `BAR_GROUP_PAD`, `BAR_VEIL_INSET` live in
-`surfaces/bar/capsule.ts`; `BAR_ITEM_PAD` and `BAR_PILL_PAD` in `common/widget-kit/bar.ts` so
-widgets can reach them.
+`surfaces/bar/capsule.ts`; `BAR_ITEM_PAD`, `BAR_ICON_SIZE` and `BAR_PILL_PAD` in
+`common/widget-kit/bar.ts` so widgets can reach them.
+
+**Why the icons are 18 (2026-09-27, owner: "slightly small" at 16).** The reference is macOS with
+OUR CAPSULE as its whole bar — the air above the capsule has no counterpart there. macOS draws
+16 pt icons in a 24 pt bar; our visible glass is 28, and 16 × 28/24 ≈ 18.7. The hover pill gives
+the same answer: Apple's 16 in a ~22 highlight is 73 %, and 73 % of our 24 px pill is 17.5. The
+bar's height does not move (18 in the 24 pill leaves 3 above and below); each icon item is 2 px
+wider. The island's compact forms keep 16 — they are laid out on `BAR_PILL_PAD`, not on this.
+Text already sits at the matching size: macOS's 13 pt is ~15 px here, and the clock inherits the
+system font (Inter 11 pt ≈ 14.7 px) — which also means it is NOT on the fixed `$fs-*` ramp, a
+small debt of its own.
 
 ### Bar groups: three pieces of glass, a pill inside (2026-09-26)
 

@@ -33,12 +33,23 @@ export const barKeyAction = (w: Gtk.Widget): (() => void) | undefined => keyActi
 export const BAR_PILL_PAD = 16
 
 /** The air on each side of a bar ITEM's content — an icon-only item is
- *  8 + 16 + 8 = 32 wide, and its hover/open pill is exactly that wide. Every widget's
+ *  8 + 18 + 8 = 34 wide, and its hover/open pill is exactly that wide. Every widget's
  *  bar content carries it (and so do search, the CC, the `»`, the clock, the window
  *  title, the tray), because the item draws its pill round whatever the content
  *  measures: the widget owns its air, the group owns none. The bar's groups:
  *  surfaces/bar/capsule.ts (barGroup / barItem). */
 export const BAR_ITEM_PAD = 8
+
+/** The size of every icon IN THE BAR — the widgets' bar content, search, the CC,
+ *  the `»`, the tray. 18, not the 16 it was until 2026-09-27: the owner found them
+ *  slightly small, and the reference agreed on is macOS with our CAPSULE as
+ *  its whole bar (the air above the capsule is ours alone). macOS draws 16 pt
+ *  icons in a 24 pt bar; our visible glass is 28 px (BAR_CAPSULE_H 32 minus the
+ *  2 px edge each side), and 16 × 28/24 ≈ 18.7. Against the hover pill it comes
+ *  out the same: Apple's 16 in ~22 is 73 %, and 73 % of our 24 px pill is 17.5.
+ *  The bar's HEIGHT does not move with this — an 18 px icon sits in the 24 px pill
+ *  with 3 px above and below; each icon item gets 2 px wider (PAD + 18 + PAD). */
+export const BAR_ICON_SIZE = 18
 
 /**
  * Icon-only bar widget that expands to show a label on click, then auto-hides.
@@ -54,7 +65,7 @@ export function makeBarExpandable(opts: {
     const { getIcon, getText, onAction, autoHideMs = AUTO_HIDE_MS } = opts
 
     // Identical to fixed bar pill structure — Gtk.Image as anchor
-    const icon = new Gtk.Image({ pixel_size: 16, margin_start: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
+    const icon = new Gtk.Image({ pixel_size: BAR_ICON_SIZE, margin_start: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
     setIcon(icon, getIcon())
 
     const label = new Gtk.Label({
@@ -129,7 +140,7 @@ export function makeBarIcon(opts: {
 }): Gtk.Widget {
     const { getIcon, onAction, activeClass, getActive, subscribe } = opts
 
-    const image = new Gtk.Image({ pixel_size: 16, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
+    const image = new Gtk.Image({ pixel_size: BAR_ICON_SIZE, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
     setIcon(image, getIcon())
 
     const syncState = () => {

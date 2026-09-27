@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { BAR_ITEM_PAD, AtomicWidget, ContentBudget, WidgetSize, makeIconTile, makeCapsuleTile, panelRow, panelInfoRow, panelSeparator, panelSwitch } from "../common/widget-kit"
+import { BAR_ICON_SIZE, BAR_ITEM_PAD, AtomicWidget, ContentBudget, WidgetSize, makeIconTile, makeCapsuleTile, panelRow, panelInfoRow, panelSeparator, panelSwitch } from "../common/widget-kit"
 import { menuRow } from "../common/MenuRow"
 import { joinNetwork, joinOtherNetwork } from "../common/WifiSecretsDialog"
 import shellActions from "../core/ShellActions"
@@ -36,7 +36,7 @@ function getIcon() {
 }
 
 function buildBarContent(): Gtk.Widget {
-    const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
+    const image = new Gtk.Image({ gicon: getIcon(), pixel_size: BAR_ICON_SIZE, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
     // watchWifiLink fires on every strength change a scan produces. Both writes are
     // guarded: re-assigning an identical gicon still clears and redraws the image, and
     // in the bar a redraw is a full re-blur — the reason this icon once watched the
