@@ -1808,8 +1808,9 @@ VS Code, JetBrains and LibreOffice all bind Ctrl+F2, and a compositor bind would
 item; ←/→/Tab move along `barBox`, wrapping; Enter/Space/↓ run the item's action (`barItem`'s
 `onKey` → `onClick` → the kit icon's `barKeyAction`; `setBarItemKey` for an action that exists
 only after the item is built — AppTitle's window menu). An item with nothing to do is not a stop
-(the CPU/memory rings). The ring is drawn INSIDE the item's hover pill, which already spans the
-item's full width. Two rules that are easy to get backwards:
+(the CPU/memory rings). The ring is GTK's (`.bar-item:focus-visible`, `.bar-tray-btn:focus-visible`
+in `_bar.scss`, pill radius, offset −2px so it wraps the slot instead of sitting on the group's glass
+edge). Two rules that are easy to get backwards:
 - **Only an Esc returns to the walk.** `escPending` is set in the window's CAPTURE phase and
   cleared at idle; a panel that closes WITHOUT it (Prism launched an app, a CC row opened
   Settings) ENDS the walk, or the grab stays on the bar and the window that just opened gets

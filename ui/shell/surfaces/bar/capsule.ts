@@ -7,7 +7,6 @@ import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { attachTooltip, type NidaraTooltipHandle, type NidaraTooltipOpts, type NidaraTooltipText } from "../../../lib/nidara-kit"
 import { GLASS_SPECULAR, GLASS_TINT, GLASS_STATE_MIX } from "../../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
-import { hexToFloatRgb } from "../../../lib/nidara-kit/platform/accent"
 import { barKeyAction } from "../../common/widget-kit"
 
 // Shared bar-capsule edge: a faint white inner border. It no longer changes on
@@ -124,18 +123,10 @@ export function barItem({ child, onClick, getOpen, watchOpen, onKey }: BarItemOp
     const veil = new Gtk.DrawingArea({ hexpand: true, vexpand: true, can_target: false })
     let hovered = false
 
-    // Keyboard focus shows on the PILL: the item itself, or its content when that is
-    // the whole item (a tray icon's button). A control nested deeper (a player's
-    // play button) draws its own ring, and ringing the whole pill for it would not
-    // say which of its controls has the keys.
-    const keyFocused = () =>
-        (item.is_focus() || child.is_focus()) && !!(item.get_root() as Gtk.Window | null)?.get_focus_visible()
-
     veil.set_draw_func(cairoDraw((_, cr, w, h) => {
-        const ring = keyFocused()
         const mix = status.bar_edit_mode
             ? (editSelected === item ? GLASS_STATE_MIX.open : GLASS_STATE_MIX.hover)
-            : getOpen?.() ? GLASS_STATE_MIX.open : (hovered || ring) ? GLASS_STATE_MIX.hover : null
+            : getOpen?.() ? GLASS_STATE_MIX.open : hovered ? GLASS_STATE_MIX.hover : null
         const vh = h - 2 * BAR_VEIL_INSET
         if (!mix || w <= 0 || vh <= 0) return
         const dark = Theme.chromeIsDark
@@ -150,20 +141,6 @@ export function barItem({ child, onClick, getOpen, watchOpen, onKey }: BarItemOp
         cr.closePath()
         cr.setSourceRGBA(ink.r, ink.g, ink.b, dark ? mix.dark : mix.light)
         cr.fill()
-        if (!ring) return
-        // `nidara-focus-ring`'s 2px accent, INSIDE the pill's edge: the pill already
-        // spans the item's full width, so outside it there is no room to draw in.
-        const accent = hexToFloatRgb(Theme.accentPalette[Theme.accentColor].color)
-        const ri = r - 1
-        cr.newSubPath()
-        cr.arc(w - r, top + r, ri, -Math.PI / 2, 0)
-        cr.arc(w - r, bottom - r, ri, 0, Math.PI / 2)
-        cr.arc(r, bottom - r, ri, Math.PI / 2, Math.PI)
-        cr.arc(r, top + r, ri, Math.PI, 1.5 * Math.PI)
-        cr.closePath()
-        cr.setSourceRGBA(accent.r, accent.g, accent.b, 1)
-        cr.setLineWidth(2)
-        cr.stroke()
     }))
     item.attach(veil, 0, 0, 1, 1)
     item.attach(child, 0, 0, 1, 1)
@@ -181,10 +158,6 @@ export function barItem({ child, onClick, getOpen, watchOpen, onKey }: BarItemOp
         return true
     })
     item.add_controller(keys)
-    // The child too: a tray icon's focus lives on its button, and when the pointer
-    // turns focus-visible off only the focused widget's flags change.
-    item.connect("state-flags-changed", () => veil.queue_draw())
-    child.connect("state-flags-changed", () => veil.queue_draw())
 
     const motion = new Gtk.EventControllerMotion()
     motion.connect("enter", () => { hovered = true; veil.queue_draw() })
