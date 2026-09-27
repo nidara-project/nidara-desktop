@@ -1,6 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
+import GioUnix from "gi://GioUnix"
 import { listGroup, createRow, bindWhileRealized, pickImageFile, type SettingsNav } from "../SettingsHelpers"
 import { NidaraButton, NidaraDropDown, NidaraListActions } from "../../../../lib/nidara-kit"
 import { barSettings, updateBarSettings, onBarSettingsChanged, resolveLauncherIcon, LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "../../bar/barState"
@@ -51,7 +52,7 @@ const trayGicon = (icon: string): any =>
  *  icon no installed app could be matched to is listed — nothing says it is gone. */
 const installed = (k: KnownTrayItem) => {
     if (!k.appId) return true
-    try { return Gio.DesktopAppInfo.new(`${k.appId}.desktop`) !== null } catch { return false }
+    try { return GioUnix.DesktopAppInfo.new(`${k.appId}.desktop`) !== null } catch { return false }
 }
 
 /** The leading slot: the check (or, for a fixed row, an invisible one holding its

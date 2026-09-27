@@ -460,9 +460,15 @@ class HyprlandStateClass extends GObject.Object {
     }
 
     /** Run a Lua-parser eval — the ONLY way to change Hyprland config live (the Lua
-     *  parser rejects `hyprctl keyword`). Failures are logged with the offending call. */
+     *  parser rejects `hyprctl keyword`). Failures are logged with the offending call.
+     *
+     *  ⚠️ The `--` is load-bearing: hyprctl reads an argument that starts with `-` as ITS
+     *  flag, prints its usage and exits 1. A generated block opening with a Lua comment
+     *  (`-- NIDARA GAME MODE`, GamingSync) failed that way on every start and every
+     *  change from #576 (2026-09-14) on, logged as a bare "Error". Verified: `hyprctl eval -- '<lua>'`
+     *  runs the code (a global set through it reads back with `hyprctl repl`). */
     evalLua(luaCall: string) {
-        return execAsync(["hyprctl", "eval", luaCall])
+        return execAsync(["hyprctl", "eval", "--", luaCall])
             .catch(e => console.error("[HyprlandState] evalLua:", luaCall, e))
     }
 

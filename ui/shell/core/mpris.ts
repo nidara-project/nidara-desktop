@@ -81,12 +81,16 @@ function vStr(v: any): string {
     return ""
 }
 
+// 64-bit integers are read through their TEXT, not get_int64()/get_uint64(): a
+// value past 2^53 cannot be a JS number, and GJS warns on every such conversion
+// ("Value 9223372036854775807 cannot be safely stored…" — 552 of them in one
+// log, 2026-09-27). Number() of the string rounds the same, silently.
 function vNum(v: any): number {
     if (!v) return 0
     const t = v.get_type_string()
     switch (t) {
-        case "x": return Number(v.get_int64())
-        case "t": return Number(v.get_uint64())
+        case "x":
+        case "t": return Number(v.print(false))
         case "i": return v.get_int32()
         case "u": return v.get_uint32()
         case "n": return v.get_int16()
@@ -319,7 +323,12 @@ export class MprisPlayer extends GObject.Object {
         this.artist = vStr(meta(m, "xesam:artist"))
         this.album = vStr(meta(m, "xesam:album"))
         this.art_url = vStr(meta(m, "mpris:artUrl"))
-        this.length = vNum(meta(m, "mpris:length")) / 1e6
+        // A live stream has no end, and Chromium says so with the largest int64
+        // (9223372036854775807 µs = 292 000 years) — shown as a total time until
+        // 2026-09-27. Anything past 2^53 µs is that sentinel, never a real length:
+        // 0 = unknown, which the media widget already draws as "--:--", unseekable.
+        const lengthUs = vNum(meta(m, "mpris:length"))
+        this.length = lengthUs > Number.MAX_SAFE_INTEGER ? 0 : lengthUs / 1e6
 
         const rate = vNum(p.get_cached_property("Rate"))
         this._rate = rate > 0 ? rate : 1

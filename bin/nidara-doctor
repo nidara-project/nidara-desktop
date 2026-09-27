@@ -17,6 +17,9 @@
 # of aborting, so the report is useful even on a half-broken setup.
 #
 # Usage:  nidara-doctor            # full report to stdout
+#         nidara-doctor --log [file]  # only the shell log's warnings since the last
+#                                     # start, grouped and counted (also what CI's
+#                                     # smoke job prints)
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
@@ -33,6 +36,42 @@ codeblock() {
         printf '_n/a (`%s` failed or empty)_\n' "$*"
     fi
 }
+
+# The shell log's CRITICAL/WARNING lines since the shell last started, grouped:
+# one line per kind, most frequent first. A raw tail shows whichever message
+# happened to fire last; a count shows what is actually broken. The log carries
+# every run since login, so it starts at the LAST start marker nidara-ui wrote.
+# Numbers and addresses are masked to decide what counts as one kind, and the
+# FIRST real message of each kind is what gets printed.
+# Measured 2026-09-27: 2821 texture CRITICALs a day (chevrons broken for days)
+# and a game-mode push failing on every start — both invisible in a tail of 40.
+log_summary() {
+    local file="${1:-$LOG}"
+    [ -r "$file" ] || { echo "n/a (no log at $file)"; return 1; }
+    awk '
+        /nidara-ui: (DEV mode|bundle)/ { split("", n); split("", shown); k = 0; since = $1 }
+        /(CRITICAL|WARNING) \*\*/ {
+            line = $0
+            sub(/^\([^)]*\): /, "", line)
+            sub(/ [0-9][0-9]:[0-9][0-9]:[0-9][0-9]\.[0-9]+:/, "", line)
+            key = line
+            gsub(/0x[0-9a-f]+/, "0x", key); gsub(/[0-9]+/, "N", key)
+            key = substr(key, 1, 160)
+            if (!(key in n)) { keys[++k] = key; shown[key] = substr(line, 1, 200) }
+            n[key]++
+        }
+        END {
+            printf "since %s — %d kind(s)\n", (since ? since : "the start of the log"), k
+            for (i = 1; i <= k; i++) for (j = i + 1; j <= k; j++)
+                if (n[keys[j]] > n[keys[i]]) { t = keys[i]; keys[i] = keys[j]; keys[j] = t }
+            for (i = 1; i <= k; i++) printf "%6d  %s\n", n[keys[i]], shown[keys[i]]
+        }' "$file"
+}
+
+if [ "${1:-}" = "--log" ]; then
+    log_summary "${2:-$LOG}"
+    exit $?
+fi
 
 echo "# Nidara — diagnostic report ($(date -u '+%Y-%m-%d %H:%M UTC'))"
 
@@ -84,6 +123,9 @@ section "Idle wakeups (main thread, 4 s sample — healthy ≈ 0/s when idle)"
         printf '_n/a (shell process not found)_\n'
     fi
 }
+
+section "Shell log since the last start: warnings by kind"
+codeblock log_summary
 
 section "Recent log errors (last 40 matching lines of $LOG)"
 codeblock sh -c "grep -iE 'error|critical|warning|failed|exception' '$LOG' 2>/dev/null | tail -40"
