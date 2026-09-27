@@ -152,9 +152,10 @@ export const build = (ctx: PageCtx) => {
                 }
                 const w = byId.get(key.slice("widget:".length))
                 if (!w) continue
-                // One trailing control: Configure beats the mode menu (the control keeps
-                // its default mode — screen recording shows its Stop only while
-                // capturing); the menu follows the check.
+                // One trailing control: Configure beats the mode menu, so a widget with
+                // a settings page must not declare `barActive` — its mode could never be
+                // changed here (screen recording did, and its icon never showed); the
+                // menu follows the check.
                 const trailing = new Gtk.Box({ valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
                 let menu: Gtk.DropDown | null = null
                 if (w.buildSettings && ctx.nav) {

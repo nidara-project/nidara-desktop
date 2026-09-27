@@ -468,14 +468,12 @@ const screenrecordWidget: AtomicWidget = {
         const sigId = status.connect("notify::recording", cb)
         return () => safeDisconnect(status, sigId)
     },
-    // Active = capturing: by default the bar shows the one-click Stop only then.
+    // NO `barActive`: the bar item is where a capture STARTS (and, while one runs,
+    // its one-click Stop), so a "when active" mode would hide the only way to begin
+    // one from the bar. It shipped that way in #651 as the default, and Settings
+    // offers Configure instead of the mode menu for this row — so the icon never
+    // showed and nothing could bring it back (owner, 2026-09-27). Checked = shown.
     defaultInBar: true,
-    barActive: () => status.recording,
-    watchBarActive: (cb) => {
-        const sigId = status.connect("notify::recording", cb)
-        return () => safeDisconnect(status, sigId)
-    },
-    defaultBarMode: "active",
 }
 
 export default screenrecordWidget

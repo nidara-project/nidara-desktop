@@ -133,6 +133,11 @@ paints it only while it is active if the person picks that. It is NOT the CC's `
 tile's accent fill): dark mode is "on" in that sense, and hiding its own switch while it is off
 would leave the bar no way to turn it back on. A widget whose hardware can come and go defaults to
 `"active"` (Bluetooth, Wi-Fi, Ethernet): without the hardware it simply never shows.
+⚠️ **Not with `buildSettings`.** Settings → Top bar gives a row ONE trailing control, and Configure
+beats the mode menu — so a widget with a settings page AND `barActive` has a mode nobody can change.
+Screen recording shipped that way in #651, defaulted to "When active": its icon (where a capture
+STARTS) never appeared, checked or not (owner, 2026-09-27). And ask the dark-mode question first:
+if the bar item is how the thing is turned ON, "when active" hides the only way in.
 
 **Bar content carries its own side air.** In the bar a widget is an ITEM of the right-hand group,
 touching its neighbours, and the hover/open pill is drawn round whatever the content measures
