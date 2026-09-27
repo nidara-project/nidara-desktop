@@ -1,4 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
@@ -223,6 +224,11 @@ function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh:
         halign: Gtk.Align.CENTER,
     })
 
+    // A row deleted from the KEYBOARD hands its focus to whatever row takes its place
+    // (the next one, or the last if it was the last) once the list is rebuilt —
+    // otherwise the focus dies with the row and the next ↓ starts from nowhere.
+    let refocusIndex: number | null = null
+
     const refresh = () => {
         let child = entriesBox.get_first_child()
         while (child) { entriesBox.remove(child); child = entriesBox.get_first_child() }
@@ -230,6 +236,7 @@ function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh:
         listEntries().then(entries => {
             if (entries.length === 0) {
                 entriesBox.append(emptyLabel)
+                refocusIndex = null
                 return
             }
             for (const entry of entries) {
@@ -270,6 +277,11 @@ function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh:
                     },
                 })
                 del.opacity = 0; del.can_target = false
+                // Never a keyboard stop: hidden at rest, it still took the focus, so every
+                // ↓ through the list stopped twice — once on the row, once on an invisible
+                // ✕ (owner-caught 2026-09-27). The keyboard deletes with Delete on the row,
+                // and the ✕ shows while the row has the focus, to say so.
+                del.focusable = false
 
                 const rowBox = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8, hexpand: true })
                 rowBox.append(child)
@@ -280,15 +292,39 @@ function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh:
                     hexpand: true, halign: Gtk.Align.FILL,
                     child: rowBox,
                 })
+                let hovered = false
+                const showDel = () => {
+                    const on = hovered || btn.is_focus()
+                    del.opacity = on ? 1 : 0; del.can_target = hovered
+                }
                 const hover = new Gtk.EventControllerMotion()
-                hover.connect("enter", () => { del.opacity = 1; del.can_target = true })
-                hover.connect("leave", () => { del.opacity = 0; del.can_target = false })
+                hover.connect("enter", () => { hovered = true; showDel() })
+                hover.connect("leave", () => { hovered = false; showDel() })
                 btn.add_controller(hover)
+                btn.connect("state-flags-changed", showDel)
+                const keys = new Gtk.EventControllerKey()
+                keys.connect("key-pressed", (_c: any, keyval: number) => {
+                    if (keyval !== Gdk.KEY_Delete && keyval !== Gdk.KEY_KP_Delete) return false
+                    let i = 0
+                    for (let r = entriesBox.get_first_child(); r && r !== btn; r = r.get_next_sibling()) i++
+                    refocusIndex = i
+                    deleteEntry(entry)
+                        .then(refresh)
+                        .catch(e => console.error("[Clipboard] delete failed:", e))
+                    return true
+                })
+                btn.add_controller(keys)
                 btn.connect("clicked", () => {
                     onClose()
                     copyEntry(entry).catch(e => console.error("[Clipboard] copy failed:", e))
                 })
                 entriesBox.append(btn)
+            }
+            if (refocusIndex !== null) {
+                let row = entriesBox.get_first_child()
+                for (let i = 0; row?.get_next_sibling() && i < refocusIndex; i++) row = row.get_next_sibling()
+                row?.grab_focus()
+                refocusIndex = null
             }
         })
     }
