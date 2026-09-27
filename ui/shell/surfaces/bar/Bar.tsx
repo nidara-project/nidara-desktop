@@ -45,10 +45,10 @@ import { uiIcon } from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import hs from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
-import { BAR_ITEM_PAD } from "../../common/widget-kit"
+import { BAR_ICON_SIZE, BAR_ITEM_PAD } from "../../common/widget-kit"
 
 function SystemMenuIcon(): Gtk.Widget {
-  const img = new Gtk.Image({ pixel_size: 18, css_classes: ["bar-distro-icon"], margin_start: BAR_ITEM_PAD - 1, margin_end: BAR_ITEM_PAD - 1 })   // 18px glyph: 1px less air a side keeps the item as wide as a 16px one
+  const img = new Gtk.Image({ pixel_size: BAR_ICON_SIZE + 2, css_classes: ["bar-distro-icon"], margin_start: BAR_ITEM_PAD - 1, margin_end: BAR_ITEM_PAD - 1 })   // the mark 2px larger than the other icons: 1px less air a side keeps the item as wide as theirs
 
   const applyIcon = () => {
     // Fall back to the built-in mark for unknown presets (e.g. a stale "arch"
@@ -1271,7 +1271,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // leaves, the window title yielding if it has to (Status.bar_overflow_open).
   // Unfolded items are the same as the others, placed by the same loop.
   // Built once and kept outside `orderedItems`, which rebuildBarWidgets empties.
-  const overflowIcon = new Gtk.Image({ gicon: uiIcon("nd-pan-end"), pixel_size: 16, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
+  const overflowIcon = new Gtk.Image({ gicon: uiIcon("nd-pan-end"), pixel_size: BAR_ICON_SIZE, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
   const overflowItem = barItem({ child: overflowIcon, ...barOpen(() => status.bar_overflow_open), onKey: () => status.toggleBarOverflow() })
   overflowItem.set_visible(false)
   barTooltip(overflowItem, () => t(status.bar_overflow_open ? "bar.tooltip.overflow.hide" : "bar.tooltip.overflow.show"))
@@ -1288,7 +1288,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // (a widget item is rebuilt instead): the tray's icons, which hold an app's menu and
   // subscriptions, and search.
   const tray = Tray(openCustomExpansion, () => scheduleBarLayoutSync())
-  const searchItem = barItem({ child: new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 16, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), ...barOpen(() => status.prism_open) })
+  const searchItem = barItem({ child: new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: BAR_ICON_SIZE, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), ...barOpen(() => status.prism_open) })
   barTooltip(searchItem, () => t("bar.tooltip.search"))
 
   const buildWidgetItem = (id: string): Gtk.Widget | null => {
@@ -1574,7 +1574,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Until 2026-09-27 it also carried a red dot in a lane of its own for AI control
   // (StatusIndicators.tsx); the owner took the dot out: that notice lives only in
   // the CC's banner until what the bar should show for it is decided.
-  const ccIcon = statefulIcon("nd-control-center", { pixelSize: 16, cssClasses: ["nd-icon"] })
+  const ccIcon = statefulIcon("nd-control-center", { pixelSize: BAR_ICON_SIZE, cssClasses: ["nd-icon"] })
   ccIcon.widget.margin_start = BAR_ITEM_PAD
   ccIcon.widget.margin_end = BAR_ITEM_PAD
   const syncCCIcon = () => ccIcon.setState(status.cc_open ? "open" : "closed")

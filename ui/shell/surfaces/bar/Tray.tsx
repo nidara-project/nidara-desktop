@@ -9,7 +9,7 @@ import status from "../../core/Status"
 import { safeDisconnect } from "../../core/signals"
 import { barItem, barOpen, barTooltip, isBarCustomAnchor } from "./capsule"
 import hs from "../../core/HyprlandState"
-import { BAR_ITEM_PAD } from "../../common/widget-kit"
+import { BAR_ICON_SIZE, BAR_ITEM_PAD } from "../../common/widget-kit"
 import { rememberTrayItem, trayKey } from "../../core/BarOrder"
 import appService from "../../core/AppService"
 
@@ -150,9 +150,9 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void): 
             } catch (_) {}
         }
 
-        // BAR_ITEM_PAD each side → the button (and thus its item) is 32px wide,
-        // matching the search / widget icon items exactly.
-        const img = new Gtk.Image({ pixel_size: 16, css_classes: ["bar-tray-icon"], margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD })
+        // BAR_ITEM_PAD each side of a BAR_ICON_SIZE icon → the button (and thus its
+        // item) is exactly as wide as the search / widget icon items.
+        const img = new Gtk.Image({ pixel_size: BAR_ICON_SIZE, css_classes: ["bar-tray-icon"], margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD })
 
         // Use icon_name when the active icon theme knows the icon (or its -symbolic
         // variant). CSS `-gtk-icon-style: symbolic` then makes GTK prefer the

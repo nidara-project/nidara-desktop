@@ -9,7 +9,7 @@ import { menuRow, menuSeparator } from "../common/MenuRow"
 import IconButton from "../common/IconButton"
 import { NidaraScrolled } from "../../lib/nidara-kit"
 import { RADIUS, rowInsetFor } from "../../lib/nidara-kit/platform/tokens"
-import { BAR_ITEM_PAD, AtomicWidget, ContentBudget, PANEL_W, WidgetSize, makeCapsuleTile } from "../common/widget-kit"
+import { BAR_ICON_SIZE, BAR_ITEM_PAD, AtomicWidget, ContentBudget, PANEL_W, WidgetSize, makeCapsuleTile } from "../common/widget-kit"
 
 import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
@@ -424,7 +424,7 @@ function buildClipboardContent(onClose: () => void): Gtk.Widget {
 // ── Bar content ───────────────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    return new Gtk.Image({ gicon: uiIcon("nd-clipboard"), pixel_size: 16, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
+    return new Gtk.Image({ gicon: uiIcon("nd-clipboard"), pixel_size: BAR_ICON_SIZE, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
 }
 
 function buildBarExpanded(onClose: () => void): Gtk.Widget {
