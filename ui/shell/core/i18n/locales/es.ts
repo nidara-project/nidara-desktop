@@ -867,4 +867,9 @@ export default {
     // the frontend normally supplies its own, already translated.
     "consent.allow": "Permitir",
     "consent.deny": "Denegar",
+
+    // Development mode: CRITICALs in the shell log (core/DevLogWatch.ts)
+    "dev.log.critical.one": "Un CRITICAL en el log",
+    "dev.log.critical.other": "%d tipos de CRITICAL en el log",
+    "dev.log.critical.hint": "Modo desarrollo · detalle: nidara-doctor --log",
 }

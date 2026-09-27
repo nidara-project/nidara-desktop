@@ -346,6 +346,23 @@ phase_run() {
         exit 1
     fi
 
+    # ── 7a. A toolkit CRITICAL is a hard failure too ──────────────────────────
+    # GTK/GDK/GSK/GLib/GJS CRITICALs are failed assertions: our code handed the
+    # toolkit something invalid, and the toolkit skipped the call and carried on.
+    # Nothing breaks visibly at the moment it happens — which is how 2821 texture
+    # CRITICALs a day (dropdown chevrons broken since #636) went unread until
+    # 2026-09-27. The whole summary is printed either way, so a WARNING that is
+    # new here is at least on the page. Only an absent accessibility bus is
+    # exempt: that is the container, not the shell.
+    "$REPO/bin/nidara-doctor" --log "$shell_log" > /tmp/smoke/log-summary.txt || true
+    cat /tmp/smoke/log-summary.txt
+    if grep -nE "(Gtk|Gdk|Gsk|GLib|GLib-GObject|GLib-GIO|Gjs|Pango)-CRITICAL" "$shell_log" \
+        | grep -v "Unable to connect to the accessibility bus" > /tmp/smoke/toolkit-criticals.txt; then
+        log "FAIL: toolkit CRITICALs during boot:"
+        cat /tmp/smoke/toolkit-criticals.txt
+        exit 1
+    fi
+
     # ── 7b. Every settings store agrees with its installed schema ─────────────
     # `defineSettings` never throws on a missing schema, a missing key or a default
     # that differs from the code — the desktop has to start — so it only logs.

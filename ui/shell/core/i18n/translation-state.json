@@ -786,12 +786,15 @@
     "settings.gaming.performance-profile.desc": "d6ed983d",
     "settings.gaming.dialog.wallpaper": "4842be93",
     "consent.allow": "3ad0e369",
-    "consent.deny": "53577bb5"
+    "consent.deny": "53577bb5",
+    "dev.log.critical.one": "97233ee1",
+    "dev.log.critical.other": "67e63d3f",
+    "dev.log.critical.hint": "8fbf5bdf"
   },
   "locales": {
     "de": {
       "translated": 730,
-      "of": 786,
+      "of": 789,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -803,6 +806,9 @@
         "bar.tooltip.search",
         "bar.tooltip.system-menu",
         "bar.window-menu.workspace-mode",
+        "dev.log.critical.hint",
+        "dev.log.critical.one",
+        "dev.log.critical.other",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -853,14 +859,14 @@
       "stale": []
     },
     "es": {
-      "translated": 786,
-      "of": 786,
+      "translated": 789,
+      "of": 789,
       "untranslated": [],
       "stale": []
     },
     "fr": {
       "translated": 730,
-      "of": 786,
+      "of": 789,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -872,6 +878,9 @@
         "bar.tooltip.search",
         "bar.tooltip.system-menu",
         "bar.window-menu.workspace-mode",
+        "dev.log.critical.hint",
+        "dev.log.critical.one",
+        "dev.log.critical.other",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -923,7 +932,7 @@
     },
     "it": {
       "translated": 730,
-      "of": 786,
+      "of": 789,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -935,6 +944,9 @@
         "bar.tooltip.search",
         "bar.tooltip.system-menu",
         "bar.window-menu.workspace-mode",
+        "dev.log.critical.hint",
+        "dev.log.critical.one",
+        "dev.log.critical.other",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -986,7 +998,7 @@
     },
     "ja": {
       "translated": 730,
-      "of": 786,
+      "of": 789,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -998,6 +1010,9 @@
         "bar.tooltip.search",
         "bar.tooltip.system-menu",
         "bar.window-menu.workspace-mode",
+        "dev.log.critical.hint",
+        "dev.log.critical.one",
+        "dev.log.critical.other",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -1049,7 +1064,7 @@
     },
     "nl": {
       "translated": 730,
-      "of": 786,
+      "of": 789,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1061,6 +1076,9 @@
         "bar.tooltip.search",
         "bar.tooltip.system-menu",
         "bar.window-menu.workspace-mode",
+        "dev.log.critical.hint",
+        "dev.log.critical.one",
+        "dev.log.critical.other",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -1112,7 +1130,7 @@
     },
     "pl": {
       "translated": 730,
-      "of": 786,
+      "of": 789,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1124,6 +1142,9 @@
         "bar.tooltip.search",
         "bar.tooltip.system-menu",
         "bar.window-menu.workspace-mode",
+        "dev.log.critical.hint",
+        "dev.log.critical.one",
+        "dev.log.critical.other",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -1175,7 +1196,7 @@
     },
     "pt-BR": {
       "translated": 730,
-      "of": 786,
+      "of": 789,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1187,6 +1208,9 @@
         "bar.tooltip.search",
         "bar.tooltip.system-menu",
         "bar.window-menu.workspace-mode",
+        "dev.log.critical.hint",
+        "dev.log.critical.one",
+        "dev.log.critical.other",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -1238,7 +1262,7 @@
     },
     "pt-PT": {
       "translated": 730,
-      "of": 786,
+      "of": 789,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1250,6 +1274,9 @@
         "bar.tooltip.search",
         "bar.tooltip.system-menu",
         "bar.window-menu.workspace-mode",
+        "dev.log.critical.hint",
+        "dev.log.critical.one",
+        "dev.log.critical.other",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -1301,7 +1328,7 @@
     },
     "ru": {
       "translated": 730,
-      "of": 786,
+      "of": 789,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1313,6 +1340,9 @@
         "bar.tooltip.search",
         "bar.tooltip.system-menu",
         "bar.window-menu.workspace-mode",
+        "dev.log.critical.hint",
+        "dev.log.critical.one",
+        "dev.log.critical.other",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -1364,7 +1394,7 @@
     },
     "zh-CN": {
       "translated": 730,
-      "of": 786,
+      "of": 789,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1376,6 +1406,9 @@
         "bar.tooltip.search",
         "bar.tooltip.system-menu",
         "bar.window-menu.workspace-mode",
+        "dev.log.critical.hint",
+        "dev.log.critical.one",
+        "dev.log.critical.other",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",

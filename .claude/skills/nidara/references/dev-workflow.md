@@ -3605,6 +3605,23 @@ recording, ai, gaming, appearance, widgets, control-center, region). Architectur
   private bus whose activated dconf inherits the scratch dir, env set BEFORE the bus starts:
   `env -u DBUS_SESSION_BUS_ADDRESS XDG_CONFIG_HOME=<scratch> XDG_RUNTIME_DIR=<short scratch> dbus-run-session -- <test>`.
   Or use `GSETTINGS_BACKEND=keyfile`, which is what CI does.
+- 🔴 **A private bus WITHOUT a private `XDG_RUNTIME_DIR` kills the session's accessibility bus —
+  for the rest of the session.** Anything GTK on that bus asks for `org.a11y.Bus`, the private
+  `dbus-daemon` activates a second `at-spi-bus-launcher`, and that one unlinks and recreates
+  `$XDG_RUNTIME_DIR/at-spi/bus_0` — the SAME path the real one listens on. The probe exits, its
+  socket file stays, and every process started afterwards gets `Gtk-CRITICAL: Unable to connect
+  to the accessibility bus … Conexión rehusada` at start: no AT-SPI, so `query_app` and every
+  computer-use helper go blind. The real broker keeps running (on an unlinked inode), so
+  `systemctl --user status at-spi-dbus-bus` says all is well; the tell is `bus_0`'s mtime being
+  newer than the service's start. Measured 2026-09-27: one ad-hoc `dbus-run-session -- env
+  GDK_BACKEND=broadway …` on 09-23 00:42 left the owner's session like that for four days.
+  Reproduced in one line (`dbus-run-session -- gdbus call … org.a11y.Bus.GetAddress` changes
+  `bus_0`'s inode). **Every `scripts/dev/*-probe.sh` already passes a scratch
+  `XDG_RUNTIME_DIR` and is safe** — the rule is for anything written by hand. If a probe cannot
+  move the runtime dir, `env GTK_A11Y=none NO_AT_BRIDGE=1 dbus-run-session -- …` (BEFORE the bus:
+  `xdg-desktop-portal-gtk`, which the bus activates on its own, is GTK3 and asks too — measured,
+  `GTK_A11Y=none` alone still clobbers). Repair: `systemctl --user restart at-spi-dbus-bus`; apps
+  already running stay without a11y until restarted.
 - **The migration only runs from `/usr/share/nidara/migrations`**, i.e. after `install.sh`; a dev
   checkout reloaded without it reads defaults until then, and nothing is lost — the JSON files stay
   until the migration takes them.

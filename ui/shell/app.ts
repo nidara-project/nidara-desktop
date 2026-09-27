@@ -34,6 +34,7 @@ import queryUI from "./core/UITree"
 import Wallpaper from "./core/WallpaperManager"
 import workspaceModes, { type WorkspaceMode } from "./core/WorkspaceModes"
 import { startGamingSync } from "./core/GamingSync"
+import { startDevLogWatch } from "./core/DevLogWatch"
 import { startNightLightSync } from "./core/NightLightSync"
 import { startAppearanceHooks } from "./core/AppearanceHooks"
 import { startAppearanceSync } from "./core/AppearanceSync"
@@ -984,6 +985,9 @@ app.start({
     // deleting or reordering it would have quietly stopped the desktop receiving
     // notifications at all, with no error anywhere.
     startNotifServer()
+    // Development mode only: a CRITICAL in this shell's log becomes a critical
+    // notification (the server above has to exist first). See core/DevLogWatch.ts.
+    startDevLogWatch()
 
     // Game mode's settings, handed to the compositor (hyprland.lua cannot read
     // GSettings). Here and nowhere else — see core/GamingSync.ts.
