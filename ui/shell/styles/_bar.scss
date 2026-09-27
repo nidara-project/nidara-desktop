@@ -125,19 +125,15 @@ window#nidara-bar-zone {
 .nidara-bar-window {
 
     /* --- Keyboard ring (Super+Ctrl+B walks the bar) ---
-       GTK's own ring on the focused item — or on a tray icon's button, which fills its
-       item and is the stop there. Offset −2px: the item spans the group's full height,
-       so an outline on or outside its box would sit on the group's glass edge; 2px in
-       it wraps the slot instead. Pill radius on the BASE rule (an outline follows it).
-       This used to be a "focus kill" (outline 0 on the tray buttons), from when
-       nothing in the bar was meant to take the keyboard. */
-    .bar-item,
-    .bar-tray-btn {
-        border-radius: $nidara-radius-pill;
-        box-shadow: none;
-    }
-    .bar-item:focus-visible,
-    .bar-tray-btn:focus-visible { @include nidara-focus-ring(-2px); }
+       GTK's own ring, following the item's HOVER PILL: `.bar-item-veil` is the Cairo
+       layer that paints that pill, and its box IS the pill (capsule.ts), so an outline
+       round it with a pill radius is the pill's shape. Offset 0: the pill sits 4px
+       inside the item top and bottom, which leaves the ring's 2px inside the item; at
+       the sides it spills 2px over the neighbour's edge, which is its padding (nothing drawn there). The item is the stop
+       (a tray icon too — its button is not focusable). This replaced a "focus kill"
+       (outline 0 on the tray buttons), from when nothing in the bar took the keyboard. */
+    .bar-item-veil { border-radius: $nidara-radius-pill; }
+    .bar-item:focus-visible > .bar-item-veil { @include nidara-focus-ring(0); }
 
     /* --- Distro icon: color follows theme via currentColor in the SVG --- */
     .bar-distro-icon {
