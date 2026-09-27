@@ -715,6 +715,10 @@ sudo cp "$REPO_DIR/config/wayland-sessions/nidara.desktop" /usr/share/wayland-se
 # uwsm env fragment: a system-wide $BROWSER must not contradict Settings → Default
 # Apps. Shared file (config/uwsm/), also shipped by the pacman package.
 sudo install -Dm644 "$REPO_DIR/config/uwsm/nidara-browser" /usr/share/uwsm/env-hyprland.d/nidara-browser
+# Default terminal for Terminal=true entries (config/xdg-terminal-exec/, also shipped by
+# the pacman package): a system default, so a user's own xdg-terminals.list still wins.
+sudo install -Dm644 "$REPO_DIR/config/xdg-terminal-exec/Hyprland-xdg-terminals.list" \
+    /usr/share/xdg-terminal-exec/Hyprland-xdg-terminals.list
 
 # Application entries
 sudo mkdir -p /usr/share/applications
