@@ -1818,7 +1818,7 @@ item's full width. Two rules that are easy to get backwards:
 `dumpState.overlays.barKeyboard` reports it — check it before sending each synthetic key.
 
 In the CC grid a tile whose tap opens a detail is itself a keyboard stop
-(`SquircleContainer({ focusRing: true })`, see design-system.md → the Cairo focus ring): Enter/
+(`SquircleContainer({ keyboardStop: true })` + GTK's CSS ring, see design-system.md): Enter/
 Space opens the detail, the Menu key or Shift+F10 opens the tile's context menu, focus moves into
 the detail and Esc there returns to the grid with the focus back on the tile. A FILL tile (volume,
 brightness: `makeVerticalFillTile`) is a stop for the same reason even with no detail — its slider
@@ -1827,7 +1827,8 @@ through `sliderKeyHandler` (the slider itself is `focusable: false`). 🔴 A sli
 arrows ALONG its axis: taking all four made it a trap — in the CC nothing but Tab could leave it,
 and Esc (which closes the whole panel) looked like the only way out (owner-caught 2026-09-27). A
 thumb slider shows focus as a 2px accent ring on its thumb, painted in Cairo — a DrawingArea gets
-no ring from CSS, so its focus was real and invisible. GTK orders Tab by
+no ring from CSS, so its focus was real and invisible. Buttons INSIDE a tile had the same blind
+spot: `.cc-island button { nidara-reset }` clears `outline`; the rule now re-declares the ring. GTK orders Tab by
 GEOMETRY (it sorts children by position, not by insertion order), so reordering the layout list
 does not change it.
 

@@ -1,9 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { createSquirclePath, drawGlassShadow, drawSquircle, hexToFloatRgb } from "./DrawingUtils"
-
-// `nidara-focus-ring` (ui/lib/nidara-kit/styles/_tokens.scss): 2px solid accent, 2px offset.
-const FOCUS_RING_WIDTH = 2
-const FOCUS_RING_GAP = 2
+import { drawGlassShadow, drawSquircle, hexToFloatRgb } from "./DrawingUtils"
 import Theme from "../core/ThemeManager"
 import { RADIUS, GLASS_TINT, GLASS_SPECULAR, GLASS_STATE_MIX } from "../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
@@ -50,13 +46,13 @@ interface SquircleContainerProps {
      *  menu is down. Read inside the draw call; `watchOpen` says when to redraw. */
     getOpen?: () => boolean
     watchOpen?: (cb: () => void) => (() => void)
-    /** The capsule is itself a keyboard stop: it becomes focusable and, while it
-     *  holds a VISIBLE focus (reached by keys, not by the pointer), paints the
-     *  design system's focus ring — 2px accent, 2px outside the glass — along its
-     *  OWN silhouette. A CSS `outline` cannot do that: it follows the widget's
-     *  border-radius, i.e. a rounded rectangle around a squircle or a circle.
+    /** The capsule is itself a keyboard stop (focusable). Its ring is GTK's own —
+     *  the caller's CSS gives the container `:focus-visible` + a border-radius that
+     *  matches the glass (see `.cc-island` in _control-center.scss) — because a CSS
+     *  outline can be drawn OUTSIDE the widget, with the design system's 2px gap,
+     *  where a ring painted here could not: a DrawingArea is clipped to its box.
      *  What the key DOES is the caller's (see IslandGrid's tiles). */
-    focusRing?: boolean
+    keyboardStop?: boolean
     n?: number
     shape?: Shape
     borderWidth?: number
@@ -159,7 +155,7 @@ export default function SquircleContainer({
     hoverLift = false,
     getOpen,
     watchOpen,
-    focusRing = false,
+    keyboardStop = false,
     n = 3.2,
     shape = Shape.SQUIRCLE,
     borderWidth = 1.0,
@@ -275,28 +271,6 @@ export default function SquircleContainer({
             drawN, borderWidth, techInset,
             undefined, fillFrac, baseColor, baseAlpha,
         )
-
-        // `nidara-focus-ring` in Cairo: the same 2px accent, following the glass
-        // outward. It can only live in the room the inset leaves around the glass —
-        // a DrawingArea's cairo node is clipped to its allocation — so the 2px GAP
-        // shrinks to what fits and the WIDTH never does: a CC tile has 2px of inset
-        // (GLASS_SHADOW's spread), which puts the ring flush against its edge.
-        const flags = grid.get_state_flags()
-        if (focusRing && (flags & Gtk.StateFlags.FOCUSED) && (flags & Gtk.StateFlags.FOCUS_VISIBLE)) {
-            const gap = Math.max(0, Math.min(FOCUS_RING_GAP, techInset - FOCUS_RING_WIDTH))
-            const out = gap + FOCUS_RING_WIDTH / 2
-            const accent = hexToFloatRgb(Theme.accentPalette[Theme.accentColor].color)
-            const rx = techInset - out, rw = w - 2 * rx, rh = h - 2 * rx
-            cr.save()
-            // Clamped like drawSquircle clamps the glass: a circle's radius is half
-            // the WIDGET, not half this rect.
-            createSquirclePath(cr, rx, rx, rw, rh,
-                Math.min(drawRadius + out, Math.min(rw, rh) / 2), drawN, drawPerfect, 0)
-            cr.setSourceRGBA(accent.r, accent.g, accent.b, 1)
-            cr.setLineWidth(FOCUS_RING_WIDTH)
-            cr.stroke()
-            cr.restore()
-        }
     }))
 
     const grid = new Gtk.Grid({
@@ -338,10 +312,7 @@ export default function SquircleContainer({
         grid.add_controller(click)
     }
 
-    if (focusRing) {
-        grid.focusable = true
-        grid.connect("state-flags-changed", () => { if (da.get_mapped()) da.queue_draw() })
-    }
+    if (keyboardStop) grid.focusable = true
 
     if (watchActive) {
         const cleanup = watchActive(() => { if (da.get_mapped()) da.queue_draw() })
