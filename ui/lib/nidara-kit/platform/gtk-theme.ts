@@ -7,9 +7,14 @@
 // only arrangement in which "does our CSS own this widget?" has an answer you can
 // see rather than infer.
 //
-// ⚠️ This is about OUR processes only. `GTK_THEME` is an environment variable and
-// reaches nothing else; third-party applications keep following gsettings
-// `org.gnome.desktop.interface gtk-theme`, a different lever entirely.
+// ⚠️ This is about OUR processes only; third-party applications follow gsettings
+// `org.gnome.desktop.interface gtk-theme`, a different lever entirely. But
+// `GTK_THEME` is an environment variable, and a CHILD inherits it: until
+// 2026-09-27 every app the shell launched came up with no theme at all. It cannot
+// be unset once GTK is up — GTK re-reads it at every theme update (measured: unset,
+// flip dark mode, and the process loads Adwaita) — so our children start through
+// `spawn()` in `ui/lib/process.ts`, which leaves it behind
+// (`scripts/ci/child-env-check.mjs`).
 //
 // ── Why `Empty` and not a blank theme of our own ────────────────────────────
 // Until 2026-09-20 this was `GTK_THEME=nidara`, naming a three-line gtk.css we

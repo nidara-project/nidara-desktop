@@ -11,16 +11,17 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import NightLight, { isInSchedule } from "./NightLightManager"
+import { spawn } from "../../lib/process"
 
 let started = false
 let proc: Gio.Subprocess | null = null
 let respawnDebounce = 0
 let scheduleTimer = 0
 
-function spawn(): void {
+function startHyprsunset(): void {
     kill()
     try {
-        proc = Gio.Subprocess.new(["hyprsunset", "-t", String(NightLight.temperature)], Gio.SubprocessFlags.NONE)
+        proc = spawn(["hyprsunset", "-t", String(NightLight.temperature)], Gio.SubprocessFlags.NONE)
     } catch (e) {
         console.error("[NightLight] Failed to start hyprsunset:", e)
         proc = null
@@ -60,14 +61,14 @@ export function startNightLightSync(): void {
     if (started) return
     started = true
 
-    NightLight.subscribe("enabled", () => { if (NightLight.enabled) spawn(); else kill() })
+    NightLight.subscribe("enabled", () => { if (NightLight.enabled) startHyprsunset(); else kill() })
     // A slider drag writes many temperatures; restart hyprsunset once it settles.
     NightLight.subscribe("temperature", () => {
         if (!NightLight.enabled) return
         if (respawnDebounce > 0) GLib.source_remove(respawnDebounce)
         respawnDebounce = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
             respawnDebounce = 0
-            spawn()
+            startHyprsunset()
             return GLib.SOURCE_REMOVE
         })
     })
@@ -78,5 +79,5 @@ export function startNightLightSync(): void {
     // Start: with a schedule, the clock decides — the saved `enabled` describes whichever
     // half of the schedule we were in when the shell last ran. Then run what it says.
     syncScheduleTimer()
-    if (NightLight.enabled && !proc) spawn()
+    if (NightLight.enabled && !proc) startHyprsunset()
 }

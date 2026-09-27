@@ -3,7 +3,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import GdkPixbuf from "gi://GdkPixbuf"
-import { execAsync } from "../../../../lib/process"
+import { execAsync, spawn } from "../../../../lib/process"
 import { showNidaraAlert, showNidaraFormDialog, NidaraButton, NidaraRow, NidaraEmptyRow, ROW_H_SINGLE, attachTooltip } from "../../../../lib/nidara-kit"
 import { getUsers, getCurrentUser, type User } from "../../../../lib/users"
 import { listGroup, createRow, createStackedRow, fieldWithActions, pageBox, onPageShown } from "../SettingsHelpers"
@@ -180,7 +180,7 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
                 statusLabel.visible = false
 
                 const setPassword = () => {
-                    const proc = Gio.Subprocess.new(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
+                    const proc = spawn(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
                     proc.communicate_utf8_async(`${uname}:${pw}\n`, null, (_: any, res: any) => {
                         // finish() only throws on IO errors — a non-zero exit (e.g. the
                         // pkexec prompt was cancelled) must be read from get_successful().
@@ -286,7 +286,7 @@ function showChangePasswordDialog(user: User, parentWin: Gtk.Window | null) {
                 h.setResponseSensitive("apply", false)
                 statusLabel.visible = false
 
-                const proc = Gio.Subprocess.new(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
+                const proc = spawn(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
                 proc.communicate_utf8_async(`${user.username}:${pw}\n`, null, (_: any, res: any) => {
                     // finish() only throws on IO errors — a non-zero exit (e.g. the
                     // pkexec prompt was cancelled) must be read from get_successful().

@@ -1,6 +1,7 @@
 import GLib from "gi://GLib"
 import { providerById } from "./AgentProviders"
 import { defineSettings } from "./configFile"
+import { spawnCommandLine } from "../../lib/process"
 
 // Governance for the agent-facing surface (Settings → AI). This gates the
 // OFFICIAL door (`nidara-ipc setConfig`, future MCP server) — it is a consent
@@ -147,7 +148,7 @@ config.subscribeAll(_notify)
  *  flipped back off on disable (other assistive tech may want it). */
 function enableToolkitAccessibility() {
     try {
-        GLib.spawn_command_line_async(
+        spawnCommandLine(
             "gsettings set org.gnome.desktop.interface toolkit-accessibility true",
         )
     } catch (e) {
