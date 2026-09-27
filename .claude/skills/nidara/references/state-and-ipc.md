@@ -1817,7 +1817,10 @@ no ring from CSS, so its focus was real and invisible.
 three did, on the grid's edges (owner-caught 2026-09-27): the `ScaleRevealer` (now
 `unclipAtRest: true` for the CC — it clips only while animating), the `Gtk.ScrolledWindow` that
 clamps the grid's WIDTH and its `Gtk.Viewport` (the clip was a side effect; both `overflow:
-VISIBLE`), and the `Gtk.Stack` (crossfade only — no clip needed). The bar's visible region already
+VISIBLE`), the `Gtk.Stack` (crossfade only — no clip needed) — and the one that was missed on the
+first pass, the tiles' own `Gtk.Fixed`: **GtkFixed clips by default**. Don't guess the chain: walk
+the ring's widget up to the window logging `get_overflow()` for each ancestor, with the panel AT REST
+(a ScaleRevealer mid-animation reports HIDDEN on purpose) — that is how the Fixed was found. The bar's visible region already
 pads each panel by `PANEL_PAD`, so what paints past a box is shown. A new panel whose controls reach
 its edges needs the same audit.
 
