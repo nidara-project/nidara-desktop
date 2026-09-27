@@ -838,7 +838,8 @@ dedicated tools are the read/introspection verbs and the computer-use verbs.)
 **App listing / launching** (`listApps` / `launchApp <id>` IPC, `list_apps` / `launch_app` MCP
 tools) is a first-class **shell capability**, not computer-use: it reuses `AppService`
 (`getAllApps()` for the list, `getLaunchArgv()` for launch — the SAME argv as a dock click:
-`sh -c 'cd "$HOME" && exec uwsm app -- <id>.desktop'`). It only *opens* an installed app; it
+`sh -c 'cd "$HOME" && exec uwsm app -t service -- <id>.desktop'` — a systemd service, so the app gets
+the session's environment, not the shell's; `architecture.md` → "Launching an app"). It only *opens* an installed app; it
 does not drive it (that's the gated computer-use layer). **Ungated** by design (parity with a dock
 click; bounded to the installed set) — opening a window is low-risk, unlike driving one.
 

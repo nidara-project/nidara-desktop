@@ -1911,12 +1911,31 @@ the owner of its bus name.
 ### Launching an app: the scope IS the app's identity to the portal (2026-09-13)
 
 Every launch path — dock click and menu, app grid, Prism, `launchApp` — goes through ONE argv,
-`AppService.getLaunchArgv(id)` = `sh -c 'cd "$HOME" && exec uwsm app -- <id>.desktop'`. Do not build
-a launch command anywhere else.
+`AppService.getLaunchArgv(id)` = `sh -c 'cd "$HOME" && exec uwsm app -t service -- <id>.desktop'`. Do
+not build a launch command anywhere else (the Super+E / Super+T binds in `hyprland.lua` use the same
+`uwsm app -t service -- <id>.desktop`).
+
+🔑 **A SERVICE, not uwsm's default scope (2026-09-27, #654).** "Service" is systemd's word for "a unit
+systemd started", not "a daemon": a scope runs the app IN PLACE, so it was the shell's child, got the
+shell's environment and handed its stdout/stderr back to the launcher. Measured, all of it:
+
+| | scope (until 2026-09-27) | service |
+|---|---|---|
+| launch latency (10 runs, request → process runs) | 88 ms | 92 ms |
+| environment | the shell's — `GTK_THEME=Empty` (every app unthemed, #653), the shell's own `INVOCATION_ID`/`MEMORY_PRESSURE_WATCH`, `GDK_BACKEND=wayland` | the SESSION's (systemd manager) + uwsm's session-specific vars |
+| stdout/stderr | pipes to the shell's `execAsync`, which ACCUMULATES them in the shell's memory until the app exits | the journal |
+| parent | `gjs` | `systemd --user` |
+| portal app id | from `…-<rand>.scope` | from `app-Hyprland-<id>@<rand>.service`, same id (probe backend, anonymous control `''`) |
+
+uwsm makes it `Type=exec` + `ExitType=cgroup`: the unit lives while ANY process of the app does
+(fork-and-exit wrappers are safe) and ends with the app. Checked live: a D-Bus-activatable entry
+(Calendar) lands in its own `app-Hyprland-org.gnome.Calendar@….service`; a Flatpak (Clocks) makes
+its own `app-flatpak-…scope`, as Flatpak always does; a `Terminal=true` entry opens in the terminal
+`~/.config/xdg-terminals.list` names (uwsm's choice, same in both modes).
 
 🔑 **Why it matters beyond "the window opens":** the XDG portal does not ask an unsandboxed app who it
-is. It reads the systemd unit the process lives in, accepts `app-<launcher>-<id>-<random>.scope`
-(or `…@<random>.service`), and only when `<id>.desktop` exists; anything else is the anonymous app
+is. It reads the systemd unit the process lives in, accepts `app-<launcher>-<id>@<random>.service`
+or `app-<launcher>-<id>-<random>.scope`, and only when `<id>.desktop` exists; anything else is the anonymous app
 `''`. Per-app portal decisions are keyed by that id — permissions, Background, and GlobalShortcuts,
 which refuses an empty id outright. Measured with a probe impl backend on a private bus:
 
@@ -1928,8 +1947,9 @@ which refuses an empty id outright. Measured with a probe impl backend on a priv
 | `app-Hyprland-nonexistent.app.Id-…scope` (control, no .desktop) | `''` |
 | `dbus-:1.1-org.gnome.Nautilus@….service` — D-Bus activation | `''` |
 
-`uwsm app -- <id>.desktop` names the scope after the entry AND runs `Exec=` itself, ignoring
-`DBusActivatable=true` (measured: Text Editor lands in `app-Hyprland-org.gnome.TextEditor-….scope`).
+`uwsm app -- <id>.desktop` names the unit after the entry AND runs `Exec=` itself, ignoring
+`DBusActivatable=true` (measured as a scope on 2026-09-13: Text Editor landed in
+`app-Hyprland-org.gnome.TextEditor-….scope`; as a service on 2026-09-27: Calendar in `…@….service`).
 `gtk-launch` D-Bus-activated those entries (12 on the maintainer's machine, Nautilus included), which
 put them in a `dbus-:1.1-…` unit — anonymous again, whatever the outer scope was called. The same
 property sidesteps the Flatpak activation trap described on `getLaunchCommand`. The keybinds in

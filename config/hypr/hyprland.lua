@@ -397,8 +397,10 @@ end)
 
 -- ── Programs ──────────────────────────────────────────────────────────────────
 -- DESKTOP ENTRY ids, not executables: `uwsm app -- <id>.desktop` launches the entry and
--- names the systemd scope after it, and the XDG portal identifies an unsandboxed app by
--- that scope name (see AppService.portalAppId). `uwsm app -- nautilus` gave the portal
+-- names the systemd unit after it, and the XDG portal identifies an unsandboxed app by
+-- that unit name (see AppService.portalAppId). `-t service`, like every launch from the
+-- shell (AppService.getLaunchArgv): the app gets the SESSION's environment and systemd as
+-- its parent, instead of inheriting Hyprland's. `uwsm app -- nautilus` gave the portal
 -- `nautilus`, which has no .desktop file — i.e. an anonymous app.
 local terminal    = "kitty.desktop"
 local fileManager = "org.gnome.Nautilus.desktop"
@@ -416,8 +418,8 @@ hl.bind(mainMod .. " + A",   hl.dsp.exec_cmd("nidara-ipc toggleAgent"))
 hl.bind(mainMod .. " + B",          hl.dsp.exec_cmd("nidara-ipc toggleBarOverlay"))
 hl.bind(mainMod .. " + SHIFT + G", hl.dsp.exec_cmd("nidara-game-mode toggle"))
 hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd("nidara-ipc disableComputerControl")) -- kill switch: revoke AI computer-control instantly
-hl.bind(mainMod .. " + E",   hl.dsp.exec_cmd("uwsm app -- " .. fileManager))
-hl.bind(mainMod .. " + T",   hl.dsp.exec_cmd("uwsm app -- " .. terminal))
+hl.bind(mainMod .. " + E",   hl.dsp.exec_cmd("uwsm app -t service -- " .. fileManager))
+hl.bind(mainMod .. " + T",   hl.dsp.exec_cmd("uwsm app -t service -- " .. terminal))
 hl.bind(mainMod .. " + Q",   hl.dsp.window.close())
 hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("nidara-ipc togglePrism"))
 hl.bind(mainMod .. " + W",     hl.dsp.exec_cmd("nidara-ipc toggleOverview")) -- Workspace Overview (keyboard-navigable: ←/→ move, Enter switch, Esc close)
