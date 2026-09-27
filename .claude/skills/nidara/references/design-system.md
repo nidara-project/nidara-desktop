@@ -3881,7 +3881,7 @@ column), the right group's widgets and search, the window title, the system menu
 The user-facing word is **controls** (macOS's; a volume slider is not a "widget"): the group is
 "Top bar controls". Each row: a check, the icon, the name, and at most ONE control on the right —
 "Change icon" for the system menu, "Configure" for a control with its own settings (it beats the
-mode menu: screen recording keeps its default "When active"), else "Always / When active" for one
+mode menu, so such a control must not declare `barActive` — see writing-a-widget.md), else "Always / When active" for one
 that declares `barActive` (see writing-a-widget.md). Below: "App icons", a switch per INSTALLED
 app. No explanatory footers (owner: "only installed apps" raised more questions than it
 answered). The "Reorder in the bar" action sits INSIDE the list, at its foot —
