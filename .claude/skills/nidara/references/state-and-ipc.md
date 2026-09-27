@@ -1811,7 +1811,20 @@ through `sliderKeyHandler` (the slider itself is `focusable: false`). 🔴 A sli
 arrows ALONG its axis: taking all four made it a trap — in the CC nothing but Tab could leave it,
 and Esc (which closes the whole panel) looked like the only way out (owner-caught 2026-09-27). A
 thumb slider shows focus as a 2px accent ring on its thumb, painted in Cairo — a DrawingArea gets
-no ring from CSS, so its focus was real and invisible. Buttons INSIDE a tile had the same blind
+no ring from CSS, so its focus was real and invisible.
+
+🔴 **GTK's ring is drawn OUTSIDE the widget, so every ancestor that clips can cut it.** In the CC
+three did, on the grid's edges (owner-caught 2026-09-27): the `ScaleRevealer` (now
+`unclipAtRest: true` for the CC — it clips only while animating), the `Gtk.ScrolledWindow` that
+clamps the grid's WIDTH and its `Gtk.Viewport` (the clip was a side effect; both `overflow:
+VISIBLE`), and the `Gtk.Stack` (crossfade only — no clip needed). The bar's visible region already
+pads each panel by `PANEL_PAD`, so what paints past a box is shown. A new panel whose controls reach
+its edges needs the same audit.
+
+🔴 **A control revealed on hover is never a keyboard stop.** The clipboard's per-row ✕ sat at
+opacity 0 but stayed focusable, so every ↓ through the list stopped twice, once on an invisible
+button. It is `focusable: false`; the row takes Delete, shows the ✕ while it has the focus, and a
+keyboard delete hands the focus to the row that takes its place. Buttons INSIDE a tile had the same blind
 spot: `.cc-island button { nidara-reset }` clears `outline`; the rule now re-declares the ring. GTK orders Tab by
 GEOMETRY (it sorts children by position, not by insertion order), so reordering the layout list
 does not change it.

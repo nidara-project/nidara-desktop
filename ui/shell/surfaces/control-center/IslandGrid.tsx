@@ -313,6 +313,12 @@ export default function IslandGrid() {
         css_classes: ["cc-grid-clamp"],
     })
     gridClamp.set_child(gridLayers)
+    // The clamp is for WIDTH, not for paint: a ScrolledWindow (and the Viewport it
+    // wraps the grid in) also clips to its box, which cut the keyboard ring of every
+    // tile on the grid's edges — GTK's ring is an outline OUTSIDE the tile. Width is
+    // still pinned by width_request + propagate_natural_width above; only the clip goes.
+    gridClamp.set_overflow(Gtk.Overflow.VISIBLE)
+    gridClamp.get_child()?.set_overflow(Gtk.Overflow.VISIBLE)
 
     // Context menu (size picker + remove) floats in an overlay over the grid so
     // it isn't clipped by tiles; its coordinates match the Fixed's space — see
@@ -350,6 +356,9 @@ export default function IslandGrid() {
     })
     // detailIsland is appended/removed dynamically
 
+    // Same reason: a GtkStack clips to its box, and its only transition here is a
+    // crossfade, which does not need it.
+    mainStack.set_overflow(Gtk.Overflow.VISIBLE)
     mainStack.add_named(overviewPage, "overview")
     mainStack.add_named(detailPage, "detail")
     mainStack.set_visible_child_name("overview")

@@ -142,7 +142,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // margin_top set below to PANEL_TOP so the gap matches CC/NC exactly.
   expansionCapsule.visible = false
 
-  const cc = new ScaleRevealer(ControlCenterWidget(gdkmonitor), { ...OVERLAY_POP, pivot: "top-right" })
+  // unclipAtRest: the CC's tiles reach its edges, and their keyboard ring (GTK's,
+  // an outline outside the tile) was cut there.
+  const cc = new ScaleRevealer(ControlCenterWidget(gdkmonitor), { ...OVERLAY_POP, pivot: "top-right", unclipAtRest: true })
   const ncWidget = NotificationCenter()
   const nc = new ScaleRevealer(ncWidget, { ...OVERLAY_POP, pivot: "top-right" })
   const prism = Prism()
