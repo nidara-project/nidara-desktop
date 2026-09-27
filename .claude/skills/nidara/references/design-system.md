@@ -3771,8 +3771,9 @@ Cairo pill painted ONLY on hover or while its panel is open. The group's glass n
 - **The whole 32px column is the hit target**, not just the 24px pill.
 - **Width arithmetic** (`measureOverflow`, `syncLeftBudget`): an item costs its own width and
   nothing else; each group costs `2 × BAR_GROUP_PAD` once. There is no gap to multiply any more.
-- **The CC item is 36, not 32**: its status dot has a 12px lane right of the gear, so showing it
-  moves nothing (derivation at the call site in `Bar.tsx`).
+- **The CC item is an ordinary icon item** since 2026-09-27. It was 36 while a 12px lane held the
+  AI-control dot; the dot left the bar and the lane with it. The privacy mark planned for that
+  button (state-and-ipc.md) brings a second icon back — size it then, not now.
 - `barItem` subscribes (open state, Theme) on `map`, not at build time: the widget items are
   rebuilt on every layout pass, and a subscription dropped on `unrealize` is never retaken.
 - ⚠️ `barItem`'s veil EXPANDS and its Grid sets `hexpand`/`vexpand` FALSE explicitly — both are
