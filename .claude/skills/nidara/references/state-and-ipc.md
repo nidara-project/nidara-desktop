@@ -1499,8 +1499,8 @@ Phase 2a — **action, deterministic only (built)**:
   `AgentConfig.setAllowComputerControl`) also enables `allowComputerUse` — you can't drive what
   you can't see. The effective check is `allowComputerControl && allowComputerUse`, re-read live
   by `nidara-act` and the `do_app_action` MCP tool.
-- **CC badge + banner**: the model + both consumers live in
-  `surfaces/bar/StatusIndicators.tsx` (`ccBadge`, `ccStatusBanner`). Since 2026-08-02 the registry
+- **CC banner** (the bar badge is GONE, see below): the model + its consumer live in
+  `surfaces/bar/StatusIndicators.tsx` (`ccStatusBanner`). Since 2026-08-02 the registry
   holds **AI control only** — it is the home of PERMISSIONS THE CC HOLDS THE SWITCH FOR (mic,
   camera, screen-share when they get source detection), not of activities. Recording left in two
   steps and both are the same lesson: **the badge means "the Control Center has something for
@@ -1509,9 +1509,12 @@ Phase 2a — **action, deterministic only (built)**:
   is the screenrecord tile, which is opt-in (`defaultInCc: false`) and can live in the BAR ONLY —
   the badge was pointing at a panel that might say nothing, and it even brightened armed→active
   when a capture started, promising an escalation with nothing behind it.
-  While control is granted, a small **badge** on the bar's Control-Center button signals it —
-  **subtle** when armed (granted, idle), **full** when active (for ~`ACTING_DECAY_MS` after a real
-  action); neither state animates, see design-system.md. The banner card is a **Cairo
+  Until 2026-09-27 a small red **badge** on the bar's Control-Center button signalled it (subtle
+  armed, full active). The owner removed it: AI control is told ONLY by the CC banner until what
+  the bar should show is decided — no platform has prior art for it. The CC button is to gain a
+  small second icon for PRIVACY instead (sensors, location), macOS-style: ONE mark beside the
+  Control Centre, camera > system audio > mic by priority, an arrow for location, the detail at
+  the top of the CC (Apple Support, "Use Control Centre on Mac"). The banner card is a **Cairo
   SquircleContainer** (`Shape.CAPSULE`, BaseIsland's padding/border/inset numbers, `GRID_WIDTH`
   size request on the CAPSULE and `halign END` to share the grid's right edge), NOT a CSS card, and
   it is deliberately not given `.cc-island` — that class carries
@@ -1522,8 +1525,9 @@ Phase 2a — **action, deterministic only (built)**:
   transient `computerActing` flag (auto-decays). Opening the CC shows a **status banner above the
   widgets** (`ControlCenter.tsx`) with a row per active indicator + a **Stop** button — **that is the
   kill switch**. Mouse-revoke is **2 clicks** (open CC → Stop) by design; the one-key kill switch is
-  `Super+Shift+Esc` (`config/hypr/hyprland.lua` → `nidara-ipc disableComputerControl`). The badge
-  staying visible while armed means the user is never unaware the agent may act.
+  `Super+Shift+Esc` (`config/hypr/hyprland.lua` → `nidara-ipc disableComputerControl`). ⚠️ With
+  the badge gone, nothing OUTSIDE the CC says the agent may act while control is granted — a known
+  gap the owner accepted on 2026-09-27 while the bar's mark for it is undecided (tech-debt #17).
 Phase 2b-i — **synthetic keyboard (built)**, for controls AT-SPI can't reach (Qt text fields;
 Qt buttons that only expose `SetFocus` → focus then press Enter/Space):
 

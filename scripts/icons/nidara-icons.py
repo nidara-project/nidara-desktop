@@ -51,6 +51,7 @@ import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SVG_NS = "http://www.w3.org/2000/svg"
+GPA_NS = "https://www.gtk.org/grappa"
 
 # 16/24. The scalable drawings are 24 units; the small variant is 16.
 SCALE = 16.0 / 24.0
@@ -250,7 +251,12 @@ def convert(src_path, size):
         tag = child.tag.split("}")[-1]
         if tag not in SHAPES:
             continue
-        attrs = dict(child.attrib)
+        # GTK's state/animation attributes (`gpa:`) stay in the scalable drawing,
+        # which is the one `common/StatefulIcon.ts` plays. The small variant is the
+        # STATIC drawing of the initial state: the `<animate>` elements are not
+        # shapes and are already left out above, and a `gpa:` attribute left on a
+        # shape would come out under an `ns0:` prefix ElementTree invents.
+        attrs = {k: v for k, v in child.attrib.items() if not k.startswith(f"{{{GPA_NS}}}")}
         existing = attrs.pop("class", "")
         classes = (existing if SYMBOLIC_CLASSES & set(existing.split())
                    else symbolic_classes(attrs, root_fill, root_stroke))

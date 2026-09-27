@@ -66,6 +66,17 @@ thing, and a theme made for it draws that thing.
    `transform` on a file without one, and the icon then draws nothing. Nidara renders every
    icon before using it and falls back when it comes out empty, but your icon is lost.
 
+6. **States are optional.** A few names are shown by Nidara in more than one state, and
+   the *States* note in their row lists them. Such an icon may carry GTK's own states and
+   transitions (`gpa:state-names`, `gpa:states`, `<animate begin="gpa:states(N).begin">` —
+   GTK 4.22's [icon format](https://docs.gtk.org/gtk4/icon-format.html), editable with
+   `gtk4-icon-editor`), using exactly those state names. Nidara switches the state and GTK
+   plays the change. Everywhere else the icon is drawn as a still picture in its **initial**
+   state, so that state must be a complete drawing on its own. An icon without states is
+   valid too: it just does not change. Keep animations to the change itself — a few hundred
+   milliseconds, never a loop — and do not name a state `none` or `all` (GTK reserves both,
+   and refuses the whole list).
+
 You do not need every name. **Any icon your theme lacks, or that draws nothing, falls back to
 Nidara's own drawing** — a theme that redraws ten icons is a valid theme. A theme made for an
 earlier version of this spec keeps working; the names added since fall back the same way.
@@ -99,7 +110,7 @@ check your drawing in place; it is not part of the contract and may grow.
 | `nd-clipboard` | The clipboard history | Clipboard widget |
 | `nd-clipboard-list` | Summary of settings (checklist on a clipboard) | Installer |
 | `nd-contact-new` | Add a user | Settings → Users |
-| `nd-control-center` | The Control Centre | Bar button |
+| `nd-control-center` | The Control Centre. *States:* `closed` (initial), `open` — Nidara's own drawing is two switches that flip | Bar button |
 | `nd-conversation-reset` | Start the conversation over | Assistant |
 | `nd-cpu` | The processor / system resources | CPU widget, installer |
 | `nd-dark-mode` | Dark appearance | Dark-mode widget |

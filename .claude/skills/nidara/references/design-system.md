@@ -1155,7 +1155,7 @@ belongs to a small dedicated element next to the neutral text, or to a filled ba
 | Tool call rejected (`.agent-tool-fail`) | the 6px dot | `--nidara-text-dim` |
 | Turn ended abnormally (`.agent-error-row`) | the 6px dot | `--nidara-text-dim` |
 | Battery critical | the battery glyph's fill | plain white `%` |
-| Recording active (island compact, CC badge) | the 8px dot | `--nidara-text` |
+| Recording active (island compact) | the 8px dot | `--nidara-text` |
 
 Rejected four times now (battery `%` 2026-07-20, assistant errors 2026-07-21, the capture card's
 and detail page's clock 2026-08-02, the greeter's caps warning 2026-08-09 — all four caught by the
@@ -1165,9 +1165,10 @@ user's eye), which is why it is a rule and not a preference.
 there are exactly two ways.** Settled with the user 2026-08-09, after a warning dot on the
 greeter's caps message shipped for an hour and was removed:
 
-1. **It SUBSTITUTES for text there is no room for.** `.island-rec-dot` and `.bar-cc-badge`:
-   a compact island capsule cannot say "recording", a bar icon button cannot say "the AI has
-   permissions". The dot is the only thing that fits, so it carries the whole message.
+1. **It SUBSTITUTES for text there is no room for.** `.island-rec-dot`: a compact island
+   capsule cannot say "recording". The dot is the only thing that fits, so it carries the whole
+   message. (`.bar-cc-badge` was the second example — a bar icon button cannot say "the AI has
+   permissions" — until the owner removed it on 2026-09-27; see state-and-ipc.md.)
 2. **It DISCRIMINATES between items that otherwise look identical.** `.agent-tool-dot` /
    `.agent-error-dot`: the assistant's transcript is a list of steps rendered the same way, and
    the dot is what separates the ones that failed from the ones that worked. Remove it and you
@@ -1225,7 +1226,7 @@ Passing the mark-not-copy test does not earn a colour the right to be red. Red i
 things:
 
 1. **A status MARK** — a small dot saying "this is happening whether or not you are looking"
-   (`.island-rec-dot`, `.bar-cc-badge`, the tool-failure dots). Small, steady, never a whole shape.
+   (`.island-rec-dot`, the tool-failure dots). Small, steady, never a whole shape.
 2. **The destructive edge of an ACTION** — deletion, and revocation like the AI kill switch.
 
 Everything else that is merely *on* uses the ordinary accent-fill vocabulary, because that is what
@@ -3122,12 +3123,39 @@ Two reasons, and the second is the one that generalises:
   means re-blurring the surfaces above it. So the question to ask about a new effect is
   **"continuous or punctual?"**, never "is this one expensive?" — the second question has no
   useful answer, and asking it is how a 1px detail gets waved through.
-The three marks are `.bar-cc-badge` (CC capsule, opacity 0.6 armed / 1.0 active — the STEP is what
-distinguishes them, no keyframe), `.island-rec-dot` (island compact + its indicator chip), and the
-screenrecord tile's steady `DANGER_HEX` fill. The one surviving `@keyframes rec-pulse` user is
+The marks are `.island-rec-dot` (island compact + its indicator chip) and the screenrecord tile's
+steady `DANGER_HEX` fill (`.bar-cc-badge`, the CC button's AI dot, left on 2026-09-27). The one surviving `@keyframes rec-pulse` user is
 `.cc-status-dot.is-active` (`_control-center.scss`, where the keyframe now lives): a few seconds of
 "the agent just acted", inside a surface that only paints while open — momentary, and invisible
 when the CC is closed.
+
+**Icons with STATES — `common/StatefulIcon.ts` (2026-09-27).** An interface icon can change, and
+animate the change, when what it shows changes: the Control Centre's two switches flip while the CC
+is open. It is GTK's own mechanism, not ours — GTK ≥ 4.22 renders SVG itself (`Gtk.Svg`) and
+understands an extension of it (`xmlns:gpa="https://www.gtk.org/grappa"`): `gpa:state-names` on the
+root, `gpa:states` / `gpa:transition-type` (`fade`, `animate` = the stroke draws itself, `morph`) on
+a shape, and plain SVG `<animate>` with `begin="gpa:states(N).begin"` (offsets allowed:
+`… .begin +60ms`). Symbolic colours are `foreground`/`accent`/`success`/`warning`/`error`, and
+`-gtk-icon-palette: success var(--x)` takes our tokens. `gtk4-icon-editor` edits the format; the
+reference is https://docs.gtk.org/gtk4/icon-format.html. It is SF Symbols' animation set (replace,
+draw on/off, variable colour) without its licence, which is Apple-platforms-only.
+Measured, and each one cost a try:
+- `uiIcon()`'s `Gio.FileIcon` draws the file in its INITIAL state and exposes no state: a stateful
+  icon is loaded into a `Gtk.Svg` and set as the image's `paintable` (what `statefulIcon()` does).
+  Everything else asking for the same name keeps the still drawing, so the initial state must be a
+  complete picture — and it must draw right under GTK's TRADITIONAL symbolic path too, which is
+  NOT the same renderer: a `mask="url(#…)"` there came out as a flat grey block. Cut holes with
+  `fill-rule="evenodd"` in one path and animate its `d` instead; that works in both.
+- no `set_frame_clock` + `play()` → a transition never leaves its first frame;
+- an animation tied to the state the file STARTS in never runs — only a change starts one;
+- `none`/`all` are `gpa:states` keywords: as state names they void the whole list;
+- `Gtk.SvgFeatures.ANIMATIONS` off does NOT stop a state-change animation (same frame 150 ms in,
+  on and off). Reduce motion is honoured by not changing state at all — fine for decoration (the
+  open CC is marked by its pill anyway); an icon whose state carries meaning needs another answer;
+- at rest a stateful icon costs NOTHING: 0 `invalidate-contents` in 2 s, against 127 for a looping
+  control. Keep it that way — transitions, never loops (the rule above).
+`scripts/icons/nidara-icons.py sync` drops `<animate>` and `gpa:` attributes from the 16-unit
+variant: that file is the still drawing of the initial state. SPEC.md point 6 tells theme authors.
 
 **The "something is happening" pulse — `common/PulseDots.ts`.** The shell's one working
 indicator: `makePulseDots()` (the three-dot typing idiom, Cairo) and `pulseOpacity(widget)`

@@ -12,7 +12,7 @@
    which is the only thing CSS sees:
 
      · shared      — the capsule row's geometry, built by the bar, mounted in both
-     · bar only    — left/right flanks, tray, CC badge, window menu, popovers
+     · bar only    — left/right flanks, tray, window menu, popovers
      · island only — `.bar-center` (the capsule group), workspace dots, activities
 
    A rule filed under the wrong one stays in the sheet, stops matching and
@@ -165,24 +165,6 @@ window#nidara-bar-zone {
     /* The system menu uses the universal .nidara-menu component (_components.scss).
        Its inline confirm pair (.nidara-confirm-*) is universal too and lives there. */
 
-    // ── Status-indicator badge (recording, AI control, …) ─────────────────────
-    // A small dot inside the Control-Center capsule, right of its icon — the
-    // always-visible signal that the CC has something for you (detail/Stop live in
-    // the CC itself: the .cc-status-* banner, or the widget tile).
-    //   armed  — present but idle (AI granted, not acting): subtle.
-    //   active — happening now (recording / agent acting): full.
-    // NO animation in either state. A blink here re-blurs the whole 2560×1440 bar
-    // surface every frame for as long as the condition lasts (a capture is minutes,
-    // not a moment), and it read as an alarm; the opacity step already separates the
-    // two states. Keep it that way — see design-system.md on continuous animation.
-    .bar-cc-badge {
-        border-radius: var(--nidara-radius-pill);
-        background: var(--nidara-danger);
-        opacity: 0.6;
-
-        &.is-active { opacity: 1; }
-    }
-
     /* Clock/Date capsule label — tabular numbers prevent jitter as digits tick */
     .bar-time-label {
         font-variant-numeric: tabular-nums;
@@ -307,9 +289,10 @@ window#nidara-bar-zone {
     // ── Activity Island: compact activity forms ───────────────────────────────
     // The capsule's mutated content while an activity is live (media rides the
     // player compact's own Cairo painters; these are the REC and battery forms).
-    // Steady, not pulsing — same reasoning as .bar-cc-badge, and the island is the
-    // worse offender (its own OVERLAY surface, blurred over the bar). What proves
-    // the capture is alive is the clock next to it, which is already ticking.
+    // Steady, not pulsing: a blink re-blurs its surface every frame for as long as
+    // the capture lasts (minutes, not a moment), and the island is the worst place
+    // for one (its own OVERLAY surface, blurred over the bar). What proves the
+    // capture is alive is the clock next to it, which is already ticking.
     .island-rec-dot {
         border-radius: var(--nidara-radius-pill);
         background: var(--nidara-danger);
