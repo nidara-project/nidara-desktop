@@ -13,6 +13,7 @@ import { DOCK_CONSTANTS } from "./DockPhysics"
 import hs from "../../core/HyprlandState"
 
 import { dragBus, pointerBus, dockSettings, changeMenuCount, menuState } from "./state"
+import status from "../../core/Status"
 import Theme from "../../core/ThemeManager"
 import { iconAssetPath } from "../../core/Icons"
 import { t } from "../../core/i18n"
@@ -186,7 +187,10 @@ export function DockItem(
         margin_top:    isVertical ? DOCK_CONSTANTS.ICON_MARGIN : 0,
         margin_bottom: isVertical ? DOCK_CONSTANTS.ICON_MARGIN : 0,
         overflow: Gtk.Overflow.VISIBLE,
-        can_focus: false,
+        // Focus may ENTER (the icon below is the keyboard stop, Super+Ctrl+D) but the
+        // item itself is not one. `can_focus: false` here used to shut the whole
+        // subtree out of the keyboard — the dock's menus included (#657).
+        can_focus: true,
         focusable: false,
         has_tooltip: false,
     })
@@ -214,8 +218,9 @@ export function DockItem(
         height_request: isVertical ? DOCK_CONSTANTS.ICON_SIZE : -1,
         margin_bottom: 0,
         has_tooltip: false,
-        can_focus: false,
-        focusable: false
+        // Focus may enter: the icon inside is the keyboard stop (see below).
+        can_focus: true,
+        focusable: false,
     })
 
     const getIcon = (): { name?: string, path?: string, gicon?: any } => {
@@ -405,6 +410,14 @@ export function DockItem(
     // (isAntigravity moved up)
 
     child.set_name("cd-icon-image-" + appId)
+    // The keyboard stop of the dock walk (Super+Ctrl+D) is the ICON, not iconBox:
+    // 🔴 a focusable Gtk.Box is reachable by grab_focus() but NEVER by Tab or the
+    // arrows — GtkBox's focus vfunc only hands focus on to its children, so
+    // child_focus() on it returns false (measured on GTK 4.22, 2026-09-27: the walk
+    // found nothing to land on). Never by a click (focus_on_click: false), which must
+    // not leave a focused icon behind. Keys bubble from here to iconBox's controller.
+    iconToDisplay.focusable = true
+    iconToDisplay.focus_on_click = false
     iconBox.append(iconToDisplay)
 
     const DOT_SIZE = 5
@@ -616,8 +629,7 @@ export function DockItem(
         }
     }
 
-    const rightClick = new Gtk.GestureClick({ button: 3 })
-    rightClick.connect("released", () => {
+    const toggleMenu = () => {
         if (popupIdleId !== null) { GLib.source_remove(popupIdleId); popupIdleId = null }
         if (bubbleMenu && bubbleMenu.popover.visible) { bubbleMenu.popdown(); return }
         ensurePopover()
@@ -627,7 +639,9 @@ export function DockItem(
             if (bubbleMenu) bubbleMenu.popup()
             return GLib.SOURCE_REMOVE
         })
-    })
+    }
+    const rightClick = new Gtk.GestureClick({ button: 3 })
+    rightClick.connect("released", toggleMenu)
     iconBox.add_controller(rightClick)
 
     // DRAG — long-press to enter drag mode, then move to reorder.
@@ -670,9 +684,7 @@ export function DockItem(
 
     // CLICK (Focus/Launch)
     let bounceTimerId: number | null = null
-    const leftClick = new Gtk.GestureClick({ button: 1 })
-    leftClick.connect("released", () => {
-        if (gestureIsDragging) return  // Button release after a drag — not a click
+    const primaryAction = () => {
         if (addresses.length > 0) {
             const focusedAddr = hypr.focusedClient?.address
             const idx = addresses.indexOf(focusedAddr || "")
@@ -750,8 +762,37 @@ export function DockItem(
                 console.error(fallbackError)
             }
         }
+    }
+    const leftClick = new Gtk.GestureClick({ button: 1 })
+    leftClick.connect("released", () => {
+        if (gestureIsDragging) return  // Button release after a drag — not a click
+        primaryAction()
     })
     iconBox.add_controller(leftClick)
+
+    // The keyboard's click and right-click (Super+Ctrl+D walk). Enter/Space act like
+    // the click and END the walk: what they start is a window that needs the keys the
+    // dock's grab is holding. The menu opens on the Menu key, Shift+F10, or the arrow
+    // pointing AWAY from the screen edge (↑ on a bottom dock) — the other arrows walk.
+    const menuArrows = isVertical
+        ? [dockSettings.position === 'right' ? Gdk.KEY_Left : Gdk.KEY_Right]
+        : [Gdk.KEY_Up]
+    const keys = new Gtk.EventControllerKey()
+    keys.connect("key-pressed", (_c: any, keyval: number, _code: number, state: Gdk.ModifierType) => {
+        if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter
+            || keyval === Gdk.KEY_space || keyval === Gdk.KEY_KP_Space) {
+            status.dock_keyboard = false
+            primaryAction()
+            return true
+        }
+        if (keyval === Gdk.KEY_Menu || menuArrows.includes(keyval)
+            || (keyval === Gdk.KEY_F10 && (state & Gdk.ModifierType.SHIFT_MASK))) {
+            toggleMenu()
+            return true
+        }
+        return false
+    })
+    iconBox.add_controller(keys)
 
     // V540: REDUNDANT DROP TARGET REMOVED. Consolidated in global handler.
     // SYNC LOGIC

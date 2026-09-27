@@ -262,6 +262,10 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     desc: "Walk the bar's items with the keyboard (Super+Ctrl+B): ←/→ move, Enter/Space/↓ open, Esc leaves",
     run: () => { status.bar_keyboard = !status.bar_keyboard },
   },
+  focusDock: {
+    desc: "Walk the dock's icons with the keyboard (Super+Ctrl+D): arrows move, Enter/Space open, ↑/Menu the app menu, Esc leaves",
+    run: () => { status.dock_keyboard = !status.dock_keyboard },
+  },
   togglePrism: {
     desc: "Toggle search (apps and recent files)",
     aliases: ["toggleSearch"],
@@ -791,6 +795,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             controlCenter: status.cc_open,
             // The bar's keyboard walk (Super+Ctrl+B): true = the bar holds the keys.
             barKeyboard: status.bar_keyboard,
+            dockKeyboard: status.dock_keyboard,
             notificationCenter: status.nc_open,
             prism: status.prism_open,
             appGrid: status.app_grid_open,

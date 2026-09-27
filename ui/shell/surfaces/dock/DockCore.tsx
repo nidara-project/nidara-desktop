@@ -35,6 +35,8 @@ import { t } from "../../core/i18n"
 import shellActions from "../../core/ShellActions"
 import { iconAssetPath } from "../../core/Icons"
 import { safeDisconnect } from "../../core/signals"
+import inputYield from "../../core/InputYield"
+import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import type { AxisAdapter, RevealState } from "./DockAxis"
 
 export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
@@ -112,6 +114,8 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     let lockedStart = 0
     let isDndEnding = false
     let cursorInDock = false
+    // This dock is being walked with the keyboard (see the walk section near the end).
+    let walking = false
     let lastMousePos = -1000
 
     // Declared early so revealState() never hits a TDZ; assigned in its section.
@@ -195,7 +199,9 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         css_classes: ["nidara-dock-window", "nd-ignore"],
         application: app,
         focusable: false,
-        can_focus: false,
+        // Focus may enter for the keyboard walk (Super+Ctrl+D); it only ever does while
+        // the walk holds the focus grab, so the dock still never takes a key otherwise.
+        can_focus: true,
         can_target: true,
         resizable: false,
         default_height: WIN_H,
@@ -244,7 +250,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
     const setRevealed = (reveal: boolean) => {
         if (isRevealed === reveal) return
-        if (!reveal && dndActive) return
+        if (!reveal && (dndActive || walking)) return
         isRevealed = reveal
         slideTarget = reveal ? 0 : axis.hideDistance
         if (layerShellReady) {
@@ -1299,6 +1305,83 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     const checkFullscreen = () => {
         setFullscreenMode(hs.isRealFullscreen(hs.focusedClient ?? null))
     }
+
+    // ── The keyboard walk (Super+Ctrl+D, Status.dock_keyboard) ─────────────────
+    // macOS's Ctrl+F3. The dock on the FOCUSED monitor comes up (an auto-hidden one
+    // slides in and stays while walked), takes the keyboard through a focus grab —
+    // the surface stays KeyboardMode.NONE, see common/FocusGrab.ts — and puts the
+    // focus on its first icon. Arrows along the dock and Tab move, wrapping; the icon
+    // itself handles Enter/Space and its menu keys (DockItem). Esc, an icon's Enter,
+    // an outside click or a lost grab end it.
+    let walkToken = 0
+    const endWalk = () => {
+        if (!walking) return
+        walking = false
+        if (walkToken) { releaseFocusGrab(walkToken); walkToken = 0 }
+        win.set_focus(null)
+        if (dockSettings.autoHide && !cursorInDock && menuState.openCount === 0) {
+            setRevealed(false)
+            axis.buildInputRegion(win, smoothedBarMain, revealState())
+        }
+    }
+    const startWalk = () => {
+        if (walking || fullscreenMode) { if (fullscreenMode) status.dock_keyboard = false; return }
+        const mon = hs.focusedMonitor?.name
+        if (mon && mon !== gdkmonitor.get_connector()) return   // another monitor's dock
+        walking = true
+        if (dockSettings.autoHide && !isRevealed) {
+            setRevealed(true)
+            axis.buildInputRegion(win, smoothedBarMain, revealState())
+        }
+        walkToken = acquireFocusGrab([win], () => {
+            walkToken = 0
+            status.dock_keyboard = false
+        })
+        if (!walkToken) {
+            console.error("[Dock] focus grab REFUSED — the dock cannot be walked with the keyboard.")
+            walking = false
+            status.dock_keyboard = false
+            return
+        }
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            if (!walking) return GLib.SOURCE_REMOVE
+            win.set_focus(null)
+            bar.child_focus(Gtk.DirectionType.TAB_FORWARD)
+            win.set_focus_visible(true)   // the Super+Ctrl+D went to Hyprland, not to us
+            return GLib.SOURCE_REMOVE
+        })
+    }
+    const walkConn = status.connect("notify::dock-keyboard", () => {
+        if (status.dock_keyboard) startWalk()
+        else endWalk()
+    })
+    const isVerticalDock = dockSettings.position === 'left' || dockSettings.position === 'right'
+    const walkKeys = new Gtk.EventControllerKey()
+    walkKeys.connect("key-pressed", (_c: any, keyval: number, _code: number, state: Gdk.ModifierType) => {
+        if (!walking) return false
+        if (keyval === Gdk.KEY_Escape) { status.dock_keyboard = false; return true }
+        const fwd = isVerticalDock ? Gdk.KEY_Down : Gdk.KEY_Right
+        const back = isVerticalDock ? Gdk.KEY_Up : Gdk.KEY_Left
+        const tab = keyval === Gdk.KEY_Tab || keyval === Gdk.KEY_KP_Tab || keyval === Gdk.KEY_ISO_Left_Tab
+        if (keyval !== fwd && keyval !== back && !tab) return false
+        const backward = keyval === back || keyval === Gdk.KEY_ISO_Left_Tab
+            || (tab && (state & Gdk.ModifierType.SHIFT_MASK) !== 0)
+        const dir = backward ? Gtk.DirectionType.TAB_BACKWARD : Gtk.DirectionType.TAB_FORWARD
+        win.set_focus_visible(true)
+        if (!bar.child_focus(dir)) { win.set_focus(null); bar.child_focus(dir) }   // wrap
+        return true
+    })
+    win.add_controller(walkKeys)
+    // Step aside for computer-use like every other grab holder (core/InputYield):
+    // the walk simply ends — it is a moment of keyboard use, not a state to restore.
+    inputYield.registerHolder(() => walking)
+    const yieldConn = inputYield.connect("notify::active", () => {
+        if (inputYield.active && walking) status.dock_keyboard = false
+    })
+    win.connect("destroy", () => {
+        safeDisconnect(status, walkConn); safeDisconnect(inputYield, yieldConn)
+        if (walkToken) { releaseFocusGrab(walkToken); walkToken = 0 }
+    })
 
     const fsConn = hs.connect("changed", checkFullscreen)
     // Own destroy hook (the main one above predates this section): the dock is

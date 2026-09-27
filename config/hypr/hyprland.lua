@@ -431,6 +431,9 @@ hl.bind(mainMod .. " + N",     hl.dsp.exec_cmd("nidara-ipc toggleNC keyboard"))
 -- Ctrl is the APPS' modifier — VS Code, JetBrains, LibreOffice all bind Ctrl+F2).
 -- ←/→ move, Enter/Space/↓ open, Esc goes back, a second Esc leaves.
 hl.bind(mainMod .. " + CTRL + B", hl.dsp.exec_cmd("nidara-ipc focusBar"))
+-- The dock's icons, by keyboard: macOS's Ctrl+F3, same reason for Super. Arrows move,
+-- Enter/Space open, ↑ (the arrow away from the screen edge) or Menu the app menu, Esc leaves.
+hl.bind(mainMod .. " + CTRL + D", hl.dsp.exec_cmd("nidara-ipc focusDock"))
 hl.bind(mainMod .. " + W",     hl.dsp.exec_cmd("nidara-ipc toggleOverview")) -- Workspace Overview (keyboard-navigable: ←/→ move, Enter switch, Esc close)
 -- No exit-session bind on purpose (upstream ships SUPER+M = exit): one accidental
 -- chord must never kill the whole session. Log out via the System Menu instead.

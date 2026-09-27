@@ -3872,6 +3872,7 @@ PAM can, so restarting the daemon by hand never fixes either.
 | `Super+C` | Control Center, focus on its first control (Tab/arrows move, Enter/Space activate, Esc closes; see state-and-ipc.md → "Keyboard INSIDE the bar's panels") |
 | `Super+N` | Notification Center, same keys |
 | `Super+Ctrl+B` | Walk the bar's items (←/→ move, Enter/Space/↓ open, Esc back, Esc again leaves) |
+| `Super+Ctrl+D` | Walk the dock's icons (arrows along it move, Enter/Space open, ↑ or Menu the app menu, Esc leaves) |
 | `Super+T` | Kitty |
 | `Super+E` | Nautilus |
 | `Super+L` | Lock |
