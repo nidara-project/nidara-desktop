@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
-import { NidaraScrolled, attachTooltip } from "../../../lib/nidara-kit"
+import { NidaraScrolled, attachTooltip, sliderKeyHandler } from "../../../lib/nidara-kit"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import BaseIsland, { islandPadding, resolveIslandShape } from "./BaseIsland"
@@ -116,15 +116,29 @@ function makeIslandWidget(
         height: height - 2 * pad,
         pitch: UNIT + GAP,
     })
+    // A fill tile (volume, brightness) hands its keys to the TILE: the fill is the
+    // tile, so the tile is the stop and ↑/↓ reach the slider through it (see
+    // sliderKeyHandler). Found anywhere in the content — a widget may wrap it.
+    const fillKeys = (() => {
+        const walk = (w: Gtk.Widget | null): ((k: number) => boolean) | undefined => {
+            for (; w; w = w.get_next_sibling()) {
+                const own = sliderKeyHandler(w) ?? walk(w.get_first_child())
+                if (own) return own
+            }
+            return undefined
+        }
+        return sliderKeyHandler(content) ?? walk(content.get_first_child())
+    })()
+    const hasDetail = !!def.buildCCDetail && !!showDetail
+
     const island  = BaseIsland({
         name: def.id, child: content, width, height, size: effectiveSize, centerContent: def.centerContent,
         getActive: def.getActive, watchActive: def.watchActive,
         getFill: def.getFill ? () => def.getFill!(effectiveSize) : undefined,
         activeColorHex: def.activeColorHex, activeAlpha: def.activeAlpha,
-        // A tile whose tap opens a detail is a keyboard stop: nothing inside it is
-        // the "open the detail" target, the tile-level gesture below is — and a
-        // gesture is unreachable from the keyboard.
-        focusRing: !editMode && !!def.buildCCDetail && !!showDetail,
+        // A keyboard stop when the TILE does something: open its detail (the target
+        // is the tile-level gesture below, which no key reaches) or carry a fill slider.
+        focusRing: !editMode && (hasDetail || !!fillKeys),
     })
 
     const overlay = new Gtk.Overlay()
@@ -161,18 +175,22 @@ function makeIslandWidget(
                 showDetail(id)
             })
             overlay.add_controller(hold)
-
-            // The keyboard's click: Enter/Space on the TILE (not on a control inside
-            // it, which handles those keys itself and never lets them bubble here).
+        }
+        if (hasDetail || fillKeys) {
+            // The keyboard on the TILE (a control inside it handles its own keys and
+            // never lets them bubble here): Enter/Space = the tap, and a fill tile's
+            // arrows along its gauge move it. The others fall through to move the focus.
             const keys = new Gtk.EventControllerKey()
             keys.connect("key-pressed", (_c: any, keyval: number) => {
                 // is_focus(), never has_focus(): in GJS `has_focus` is the GTK4 PROPERTY `has-focus`
                 // (a boolean), which shadows the method — calling it threw on every key.
                 if (!island.is_focus()) return false
-                if (keyval !== Gdk.KEY_Return && keyval !== Gdk.KEY_KP_Enter
-                    && keyval !== Gdk.KEY_space && keyval !== Gdk.KEY_KP_Space) return false
-                showDetail(id)
-                return true
+                if (hasDetail && (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter
+                    || keyval === Gdk.KEY_space || keyval === Gdk.KEY_KP_Space)) {
+                    showDetail!(id)
+                    return true
+                }
+                return fillKeys?.(keyval) ?? false
             })
             overlay.add_controller(keys)
             ;(overlay as any).focusTarget = island
