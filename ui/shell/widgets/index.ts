@@ -4,6 +4,7 @@ import { AtomicWidget, WidgetSize, WidgetCategory, CATEGORY_ORDER } from "../com
 // dropping a file in widgets/ that default-exports an AtomicWidget is ALL it
 // takes to register a widget (see scripts/gen-widget-index.mjs).
 import { ALL_WIDGETS } from "./widgets.gen"
+import { sortWidgetsForBar } from "../core/BarOrder"
 
 const _map = new Map<string, AtomicWidget>(ALL_WIDGETS.map(w => [w.id, w]))
 
@@ -66,6 +67,13 @@ export const DEFAULT_PLACEMENT: Record<string, { bar: boolean; cc: boolean }> = 
     }])
 )
 
+// How each widget that can say it is ACTIVE shows in the bar before the person picks:
+// its own `defaultBarMode`, else "always". A widget without `barActive` is absent — it
+// has no mode, it is simply shown or not (core/WidgetConfig.ts barMode).
+export const DEFAULT_BAR_MODE: Record<string, "always" | "active"> = Object.fromEntries(
+    ALL_WIDGETS.filter(w => w.barActive).map(w => [w.id, w.defaultBarMode ?? "always"])
+)
+
 // Declared in the contract (Settings reads it without importing a widget); re-exported for the bar.
 export { CATEGORY_ORDER }
 
@@ -73,14 +81,11 @@ export { CATEGORY_ORDER }
 // no hand-maintained list. Adding a widget places it in its category automatically.
 // Sort: category index, then barOrder (lower = further left), then registration
 // order as a stable tie-break. Any bar-capable widget is included.
-export const BAR_ORDER: string[] = ALL_WIDGETS
-    .filter(w => w.locations?.includes("bar"))
-    .map((w, i) => ({ w, i }))
-    .sort((a, b) =>
-        (CATEGORY_ORDER.indexOf(a.w.category) - CATEGORY_ORDER.indexOf(b.w.category)) ||
-        ((a.w.barOrder ?? 0) - (b.w.barOrder ?? 0)) ||
-        (a.i - b.i))
-    .map(({ w }) => w.id)
+// The sort itself is core/BarOrder.ts's, shared with Settings so the page shows the
+// default the bar paints. This is only the DEFAULT: the person's own order, and where
+// tray icons and search go, is resolved on top of it (BarOrder.resolveOrder).
+export const BAR_ORDER: string[] = sortWidgetsForBar(ALL_WIDGETS.filter(w => w.locations?.includes("bar")))
+    .map(w => w.id)
 
 // CC initial seed order — UNIVERSAL widgets only (always available, no hardware gate).
 // Hardware-gated default widgets (wifi, bt, brightness — defaultInCc true but isAvailable

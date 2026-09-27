@@ -1,6 +1,6 @@
 import Gio from "gi://Gio"
 import Gtk from "gi://Gtk?version=4.0"
-import type { WidgetCategory } from "../common/widget-kit/contract"
+import type { BarMode, WidgetCategory } from "../common/widget-kit/contract"
 
 /**
  * The widget catalogue seam — Settings → Widgets as DATA, not as widget modules (#571).
@@ -39,6 +39,9 @@ export interface WidgetCatalogEntry {
     /** The hardware it needs is present. Placement is kept either way. */
     available: boolean
     bar: boolean
+    /** "Always" / "When active" in the bar, or null for a widget that cannot say it is
+     *  active (it is only shown or not). Settings → Top bar offers the choice by this. */
+    barMode: BarMode | null
     cc: boolean
     /** Placing it in the CC now would find a free cell (true when already placed). */
     ccFits: boolean
@@ -55,6 +58,10 @@ export interface WidgetCatalogEntry {
 export interface WidgetCatalog {
     list(): WidgetCatalogEntry[]
     setBar(id: string, on: boolean): void
+    setBarMode(id: string, mode: BarMode): void
+    /** Put the bar in its edit mode, where the right group is reordered in place — the
+     *  order is edited there, not in Settings (Settings → Top bar's "Reorder" button). */
+    editBarOrder(): void
     /** Place in / remove from the Control Centre — placement flag AND grid cell. */
     setCc(id: string, on: boolean): void
 }
@@ -74,5 +81,5 @@ export function widgetCatalog(): WidgetCatalog {
         console.warn("[WidgetCatalog] no catalogue registered — Settings → Widgets is empty. "
                    + "The bundle that owns the widgets calls setWidgetCatalog() in its app.ts.")
     }
-    return { list: () => [], setBar: () => {}, setCc: () => {} }
+    return { list: () => [], setBar: () => {}, setBarMode: () => {}, editBarOrder: () => {}, setCc: () => {} }
 }

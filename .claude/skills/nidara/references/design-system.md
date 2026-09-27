@@ -3763,6 +3763,88 @@ A capsule that opens the SHARED custom expansion (a tray item's menu, the window
 publishes it through `setBarCustomAnchor`. A new capsule that opens something gets both
 props, or it looks dead while its own panel is open.
 
+### The right group's order: one list, the person's (2026-09-26)
+
+Everything in the right group between the `»` and the CC is ONE ordered list —
+`core/BarOrder.ts`, GSettings `org.nidara.widgets bar-order` — of keys `widget:<id>`,
+`tray:<StatusNotifierItem Id>` and `shell:search`. The CC and the clock are not in it: they stay
+at the right end (the CC and NC panels hang from that edge; macOS pins the same two). A plugin
+(#640) is a widget, so it is not a fourth kind. The owner's rules, all in that module's header:
+
+- **Empty = derived.** Widgets by category (`sortWidgetsForBar`, shared with `BAR_ORDER` and
+  Settings), then tray icons in the order FIRST SEEN (`tray-known`, not this session's D-Bus
+  arrival — Settings lists them that way and must show the bar's own order), then search. Nothing
+  is written until the person reorders.
+- **Personalised: what the list does not name goes to the LEFT end** (`resolveOrder`) — a new
+  tray app, a widget just switched on. It is the first to fold and never pushes aside what the
+  person arranged.
+- **The FULL list is what is saved, the SHOWN list is what is painted.** `fullKeys` in `Bar.tsx`
+  holds every item with a place — enabled widgets active or not, tray icons seen and not hidden,
+  running or not, search — and a move saves all of it. Saving only what was on screen would drop
+  a VPN that is off or an app that is closed, and each would come back at the left end as "new".
+- **Tray icons are keyed by the SNI `Id`**, never the D-Bus name, which changes each launch. Two
+  live instances of one Id get `#2`, `#3`… ⚠️ **Electron apps name themselves badly**: Chromium
+  registers `<app>_status_icon_<n>` with an EMPTY title, and `<app>` is `chrome` when the app sets
+  no name (measured 2026-09-26: ChatGPT desktop = `chrome_status_icon_1`, no title, no icon name —
+  the owner read it as Chrome). So when an item has no title or that generic Id, `Tray.tsx` asks
+  the OWNING PROCESS (PID from the bus name `…StatusNotifierItem-<pid>-<n>`, else
+  `GetConnectionUnixProcessID`; its exe's basename, matched against the installed apps' id / Exec
+  / WM class / name) for the name and icon — and, for the generic Id, the key (`tray:chatgpt`). That
+  lookup runs for EVERY icon: the shell records each Id in `tray-known` as (title, icon, desktop app
+  id), and Settings lists an app's icon only while `Gio.DesktopAppInfo` still finds that app — the
+  owner's rule, instead of a "forget" button (an icon no app matched is listed: nothing says it is
+  gone). The icon recorded is the one the BAR paints (`recordedTrayIcon`): Electron apps send only
+  pixels, so the pixbuf is written to `~/.cache/nidara/tray-icons/` — not the config dir, a read
+  root of the assistant's file layer. A hidden tray icon, and a hidden search, are in `bar-hidden`
+  (by order key); a widget's own switch is its `placement`.
+- **Tray icons are a SOURCE, not a box** (`Tray.tsx` → `TraySource`): the bar re-parents each
+  icon's widget wherever the order puts it. Widget items are rebuilt on every pass; tray icons and
+  search are built once (they hold an app's menu, PID and subscriptions).
+- **The order is edited IN THE BAR** (`Status.bar_edit_mode`, 2026-09-27, the owner's choice after
+  macOS — Settings lists visibility in two lists, widgets and app icons, which could not express how
+  the two mix). Entered from Settings → Top bar's "Reorder in the bar" (through the catalog seam,
+  `WidgetCatalog.editBarOrder`, since Settings may not import Status). While on: "Done" takes the
+  `»`'s place, the overflow unfolds if anything is hidden, every item shows its pill (hover alpha,
+  the selected one open alpha — `setBarEditSelected` in `capsule.ts`), an item's CONTENT stops
+  taking input, and inactive "When active" widgets show dimmed so they can be placed. ONE drag
+  source, drop target and press gesture sit on the row (`orderedItems`), not on each item — tray
+  icons and search are re-parented on every rebuild and would pile up controllers. ← → move the
+  selected item, Esc / Enter / "Done" / a click outside finish: edit mode counts in `barModal`, so
+  the bar's focus grab gives it the keyboard and an outside press clears it (`onBarGrabCleared`).
+  The selection is remembered by KEY and re-picked after the rebuild a move causes. ⚠️ Not
+  Super+drag: Hyprland binds it to moving windows (`hyprland.lua` l.439).
+
+### Settings → Top bar: the bar's own list, right to left (2026-09-27)
+
+After macOS's Menu Bar pane (`surfaces/settings/custom/bar.ts`, two custom GROUPS on a preference
+page — a new exempt page would break `settings-config-contract`'s shrink-only count). One list in
+the bar's order READ RIGHT TO LEFT: Clock and Control Center (fixed: an invisible check holds the
+column), the right group's widgets and search, the window title, the system menu ("Change icon").
+The user-facing word is **controls** (macOS's; a volume slider is not a "widget"): the group is
+"Top bar controls". Each row: a check, the icon, the name, and at most ONE control on the right —
+"Change icon" for the system menu, "Configure" for a control with its own settings (it beats the
+mode menu: screen recording keeps its default "When active"), else "Always / When active" for one
+that declares `barActive` (see writing-a-widget.md). Below: "App icons", a switch per INSTALLED
+app. No explanatory footers (owner: "only installed apps" raised more questions than it
+answered). The "Reorder in the bar" action sits INSIDE the list, at its foot —
+`NidaraListActions` in the kit, made for this: a button under a card, outside it, read as the
+page's. The Control Center page lists only the CC now. Rules from the owner's first live pass:
+
+- **A checked control has an icon in the bar.** A control whose hardware is missing shows its check
+  OFF and disabled (with the CC page's "no compatible hardware" line), the saved choice kept for
+  when the hardware appears. Such a control is listed only if it has `barActive` (it can wait for a
+  dongle); battery and brightness only exist where the machine has them. "When active" is the one
+  checked-without-icon case, and that is what its words say.
+- **Toggling a row must not move the page.** The list is rebuilt only when the set of rows or their
+  order changes (a `signature` of both); a check or a menu updates its own row. Rebuilding on every
+  toggle threw the scroll back to the top.
+
+- **"When active"** (`WidgetConfig.barMode`, GSettings `bar-mode` — only values that differ from
+  the widget's `defaultBarMode`): the bar paints the widget only while `barActive()` holds, and
+  every widget's `watchBarActive` schedules a layout pass. Hardware widgets default to it, so a
+  machine without Bluetooth never shows the icon and a USB dongle makes it appear with no trip to
+  Settings. An icon appearing moves the others and may fold one behind the `»`, like any other.
+
 ### The bar's overflow: unfolded in line, not a menu (2026-09-25)
 
 When the optional widgets do not fit, the bar shows ONE extra capsule, `nd-pan-end`, at the
@@ -3771,9 +3853,11 @@ island RISES off the top of the screen and the hidden widgets unfold in line, th
 leftwards over the room the island left; the capsule flips to `nd-pan-start`. It replaced a
 `···` capsule that opened a panel of menu rows (#646, the owner's decision).
 
-- **Hidden from the FAR end.** `measureOverflow` counts from the clock side, so the widgets
-  nearest the clock stay. The order ends with the system category, and the old cut from the end
-  hid Wi-Fi and volume while CPU and the clipboard stayed on screen.
+- **Hidden from the LEFT end.** `measureOverflow` counts from the clock side, so the items
+  nearest the clock stay. Since 2026-09-26 that is every ORDERED item — widgets, tray icons and
+  search, in the person's order (next section) — so the order IS the priority. The default order
+  ends with the system widgets, the tray and search; the old cut from the other end hid Wi-Fi and
+  volume while CPU and the clipboard stayed on screen.
 - **Two measured cuts**, `fitFolded` (the right flank, minus the `»` capsule when it is needed)
   and `fitUnfolded` (from the system menu plus `ISLAND_GAP` to the tray). The window title yields
   with `setMaxWidth(px, immediate = true)` in the frame the row grows, and steps aside entirely

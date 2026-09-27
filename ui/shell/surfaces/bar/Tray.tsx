@@ -10,22 +10,115 @@ import { safeDisconnect } from "../../core/signals"
 import { barItem, barOpen, barTooltip, isBarCustomAnchor } from "./capsule"
 import hs from "../../core/HyprlandState"
 import { BAR_ITEM_PAD } from "../../common/widget-kit"
+import { rememberTrayItem, trayKey } from "../../core/BarOrder"
+import appService from "../../core/AppService"
+
+// ── Which APP owns a tray icon ────────────────────────────────────────────────
+// An SNI item names itself with `Id` and `Title`, and Electron apps do it badly:
+// Chromium registers `<app>_status_icon_<n>` with an EMPTY title — and when the app
+// sets no name, `<app>` is `chrome`. Measured 2026-09-26: the ChatGPT desktop app is
+// `chrome_status_icon_1`, title "", no icon name; Claude Desktop `Claude_status_icon_1`,
+// title "". Shown raw, Settings listed "chrome_status_icon_1" and the owner took it for
+// Chrome (which puts no icon in the tray at all without background apps). And as a KEY
+// it is not an identity: any other nameless Electron app registers the same Id.
+//
+// So when the item does not say who it is, ask the process that owns it: its
+// executable, matched against the installed apps, gives the name and icon a person
+// knows it by — and, for the generic Chromium Id, the key.
+const GENERIC_SNI_ID = /^chrome_status_icon_\d+$/
+const norm = (s: string | null | undefined) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "")
+
+/** The PID that owns an SNI bus name. Chromium and KDE put it IN the well-known name
+ *  (`org.freedesktop.StatusNotifierItem-<pid>-<n>`); otherwise ask the bus, once. */
+function ownerPid(busName: string): number {
+    const m = /StatusNotifierItem-(\d+)-\d+$/.exec(busName)
+    if (m) return Number(m[1])
+    if (!busName.startsWith(":")) return 0
+    try {
+        const r = Gio.DBus.session.call_sync(
+            "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+            "GetConnectionUnixProcessID", new GLib.Variant("(s)", [busName]),
+            new GLib.VariantType("(u)"), Gio.DBusCallFlags.NONE, 500, null)
+        return r.deep_unpack()[0] as number
+    } catch { return 0 }
+}
+
+/** The executable's name (`ChatGPT`, `claude-desktop`): the exe link's basename, or
+ *  `comm` (15 chars at most) when the link cannot be read. */
+function processName(pid: number): string {
+    if (pid <= 0) return ""
+    try { return GLib.path_get_basename(GLib.file_read_link(`/proc/${pid}/exe`)) } catch {}
+    try {
+        const [ok, bytes] = GLib.file_get_contents(`/proc/${pid}/comm`)
+        if (ok) return new TextDecoder().decode(bytes).trim()
+    } catch {}
+    return ""
+}
+
+/** What Settings should show for a tray icon: the SAME image the bar paints (see
+ *  syncIcon), recorded in `tray-known` as an icon name or a file path. An app that sends
+ *  only PIXELS (every Electron app) has neither, so its pixbuf is written once to
+ *  `~/.cache/nidara/tray-icons/` — the cache, not the config dir: that one is a read root
+ *  of the assistant's file layer, the same reason notifd keeps its images there. Before
+ *  this, Settings fell back to the APP's icon and showed the dock's glyph for an icon
+ *  the bar draws differently (owner-caught 2026-09-26, Claude and Antigravity). */
+function recordedTrayIcon(item: any, theme: Gtk.IconTheme | null, sniId: string): string {
+    const name: string = item.icon_name || ""
+    if (name && theme) {
+        const sym = name.endsWith("-symbolic") ? name : name + "-symbolic"
+        if (theme.has_icon(sym)) return sym
+    }
+    const g = item.gicon
+    try {
+        if (g instanceof Gio.ThemedIcon) return g.get_names()[0] ?? name
+        if (g instanceof Gio.FileIcon) return g.get_file().get_path() ?? name
+        if (g && typeof g.savev === "function") {   // a GdkPixbuf from the item's pixmaps
+            const dir = GLib.build_filenamev([GLib.get_user_cache_dir(), "nidara", "tray-icons"])
+            GLib.mkdir_with_parents(dir, 0o700)
+            const path = GLib.build_filenamev([dir, `${sniId.replace(/[^A-Za-z0-9._-]/g, "_")}.png`])
+            g.savev(path, "png", [], [])
+            return path
+        }
+    } catch (e) { console.warn(`[Tray] could not record the icon of ${sniId}:`, e) }
+    return name
+}
+
+/** The installed app a process name belongs to, compared letters-and-digits only
+ *  against the app's id, its Exec's command, its WM class and its name
+ *  (`ChatGPT` ↔ Exec `…/bin/chatgpt`; `claude-desktop` ↔ Exec `…/bin/claude-desktop`). */
+function appForProcess(proc: string): { id: string, name: string, icon: string } | null {
+    const want = norm(proc)
+    if (want.length < 3) return null
+    for (const a of appService.getAllApps()) {
+        const cmd = GLib.path_get_basename(String(a.exec ?? "").trim().split(/\s+/)[0] ?? "")
+        // `a.id` is ALREADY the desktop id without its `.desktop` — and a name may end in
+        // ".desktop" itself: Telegram's file is `org.telegram.desktop.desktop`, and
+        // stripping the suffix here once recorded `org.telegram`, which no app answers
+        // to, so Settings dropped Telegram as uninstalled (caught live 2026-09-27).
+        if ([a.id, cmd, a.wmClass, a.name].some(c => norm(c) === want))
+            return { id: a.id, name: a.name, icon: a.rawIcon || a.icon || "" }
+    }
+    return null
+}
 
 // openMenu: opens arbitrary content in the bar's shared expansion capsule, anchored
 // under the given widget (same system as the bar widget popovers). Injected by Bar.
 type OpenMenu = (anchor: Gtk.Widget, build: (onClose: () => void) => Gtk.Widget, align?: "center" | "start") => void
 
-export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void) {
-    // Plain container — each tray item is an item of the bar's right group (see
-    // createItem), touching its neighbours like every other item there.
-    const box = new Gtk.Box({
-        name: "bar-tray",
-        css_classes: ["bar-tray"],
-    })
+/** The tray as a SOURCE of bar items, not a box of its own (2026-09-26): the bar places
+ *  each icon wherever the right group's order puts it (core/BarOrder.ts), in between the
+ *  widgets. An item's widget lives as long as the app's icon does and is re-parented on
+ *  every bar rebuild, never rebuilt — it holds the menu, the PID and the subscriptions. */
+export interface TraySource {
+    /** The live icons' bar keys (`tray:<SNI Id>`), in the order they arrived. */
+    keys(): string[]
+    widget(key: string): Gtk.Widget | null
+}
 
-    // id → the item's top-level widget (the child appended to `box`). We keep the
-    // item (not the raw button) so removeItem detaches the whole thing.
-    const items = new Map<string, Gtk.Widget>()
+export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void): TraySource {
+    // item_id (bus name + path) → the item's bar widget and its bar key. The key is the
+    // SNI Id, which survives the app restarting; the item_id does not.
+    const items = new Map<string, { widget: Gtk.Widget, key: string }>()
     // Per-item teardown: drop EVERY subscription we took on the (churny) TrayItem
     // when the item goes away. Antigravity re-registers its tray item periodically.
     // Under AstalTray these were `notify::` closures on a GObject the library was
@@ -230,8 +323,20 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void) {
         // barItem only paints the pill — on hover, and while this item's menu
         // (anchored on `btn`) is down.
         const capsule = barItem({ child: btn, ...barOpen(() => isBarCustomAnchor(btn)) })
-        items.set(id, capsule)
-        box.append(capsule)
+        // Which installed app this is (see appForProcess above) — asked for every icon:
+        // it names the ones that do not say (no title, Chromium's nameless Id), and
+        // Settings lists an app's icon only while that app is still installed.
+        const generic = !item.id || GENERIC_SNI_ID.test(item.id)
+        const app = appForProcess(processName(ownerPid(busName)))
+        const sniId = (generic && app?.id) || item.id || item.title || id
+        // Two live icons with the same key (two instances of one app) get `#2`, `#3`…
+        // so each still has a place of its own; the first keeps the plain key.
+        const taken = new Set([...items.values()].map(v => v.key))
+        let key = trayKey(sniId)
+        for (let n = 2; taken.has(key); n++) key = trayKey(`${sniId}#${n}`)
+        items.set(id, { widget: capsule, key })
+        rememberTrayItem(sniId, app?.name || item.title || sniId,
+            recordedTrayIcon(item, displayTheme, sniId) || app?.icon || "", app?.id ?? "")
     }
 
     const removeItem = (id: string) => {
@@ -240,10 +345,11 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void) {
         const clean = cleanups.get(id)
         if (clean) { clean(); cleanups.delete(id) }
 
-        const capsule = items.get(id)
-        if (capsule) {
+        const entry = items.get(id)
+        if (entry) {
             try {
-                if (capsule.get_parent() === box) box.remove(capsule)
+                const parent = entry.widget.get_parent() as Gtk.Box | null
+                parent?.remove(entry.widget)
             } catch (e) { }
             items.delete(id)
         }
@@ -253,19 +359,15 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void) {
     getServiceSafe(() => getTray(), "Tray").then(tray => {
         if (!tray) return;
 
-        const syncVisibility = () => box.set_visible(items.size > 0)
-
         const addItem = (id: string) => {
             if (!id || items.has(id)) return
             createItem(tray, id)
-            syncVisibility()
             onItemsChanged?.()
         }
 
         const delItem = (id: string) => {
             if (!id) return
             removeItem(id)
-            syncVisibility()
             onItemsChanged?.()
         }
 
@@ -280,12 +382,13 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void) {
         // still arriving asynchronously — the subscriptions above catch those.
         GLib.idle_add(GLib.PRIORITY_LOW, () => {
             for (const item of tray.items) addItem(item.item_id)
-            syncVisibility()
             onItemsChanged?.()
             return GLib.SOURCE_REMOVE
         })
     })
 
-    box.set_visible(false) // Start hidden
-    return box
+    return {
+        keys: () => [...items.values()].map(v => v.key),
+        widget: (key) => [...items.values()].find(v => v.key === key)?.widget ?? null,
+    }
 }

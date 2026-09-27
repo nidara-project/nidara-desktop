@@ -1,6 +1,7 @@
 import GObject from "gi://GObject"
 import { defineSettings } from "./configFile"
-import { DEFAULT_PLACEMENT as DEFAULTS, BAR_ORDER } from "../widgets/index"
+import { DEFAULT_PLACEMENT as DEFAULTS, DEFAULT_BAR_MODE, BAR_ORDER } from "../widgets/index"
+import type { BarMode } from "../common/widget-kit/contract"
 
 export interface WidgetPlacement {
     bar: boolean
@@ -15,7 +16,12 @@ export interface WidgetPlacement {
 // so a widget added to the registry later gets its first-run placement for everybody.
 // widgets.json was imported once by migrations/2026-09-14d-widgets-pinned-region.sh.
 type StoredPlacement = Record<string, [boolean, boolean]>
-const store = defineSettings<{ placement: StoredPlacement }>("widgets", { placement: {} })
+// `bar-mode`: widget id → "always" | "active", only where it differs from the widget's
+// own default and only for widgets that declare `barActive` (2026-09-27).
+const store = defineSettings<{ placement: StoredPlacement, barMode: Record<string, string> }>(
+    "widgets", { placement: {}, barMode: {} },
+    { barMode: v => Object.values(v).every(m => m === "always" || m === "active") },
+)
 
 class WidgetConfigManager extends GObject.Object {
     static {
@@ -39,6 +45,7 @@ class WidgetConfigManager extends GObject.Object {
             this._config = next
             this.emit("changed")
         })
+        store.subscribe("barMode", () => this.emit("changed"))
     }
 
     private load(): Record<string, WidgetPlacement> {
@@ -70,6 +77,23 @@ class WidgetConfigManager extends GObject.Object {
         this._config[id].bar = enabled
         this.save()
         this.emit("changed")
+    }
+
+    /** How the widget shows in the bar, or null for one that cannot say it is active
+     *  (it is simply shown or not). */
+    barMode(id: string): BarMode | null {
+        const def = DEFAULT_BAR_MODE[id]
+        if (!def) return null
+        const stored = store.get("barMode")[id]
+        return stored === "always" || stored === "active" ? stored : def
+    }
+
+    setBarMode(id: string, mode: BarMode) {
+        if (!DEFAULT_BAR_MODE[id] || this.barMode(id) === mode) return
+        const next = { ...store.get("barMode") }
+        if (mode === DEFAULT_BAR_MODE[id]) delete next[id]
+        else next[id] = mode
+        store.set("barMode", next)   // → subscribe above → "changed"
     }
 
     setCC(id: string, enabled: boolean) {

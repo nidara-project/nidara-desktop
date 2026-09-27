@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { manifest, type PageDecl, type WhenDecl, type ItemDecl } from "./manifest"
-import { listGroup, createRow, settingRow, pageBox, bindWhileRealized, setPageRefresherScope, clearPageRefresherScope } from "./SettingsHelpers"
+import { listGroup, createRow, settingRow, pageBox, bindWhileRealized, setPageRefresherScope, clearPageRefresherScope, type SettingsNav } from "./SettingsHelpers"
 import { getConfigEntry } from "../../core/ConfigRegistry"
 import { t } from "../../core/i18n"
 import { uiIcon } from "../../core/Icons"
@@ -14,6 +14,8 @@ import { build as buildAi } from "./custom/ai"
 export interface PageCtx {
     page: Gtk.Widget
     pageId: string
+    /** For a custom group that pushes a subpage (Top bar → a widget's Configure). */
+    nav?: SettingsNav
 }
 
 /** What a builder is told about the slot it fills. `title` and `subtitle` arrive
@@ -132,7 +134,7 @@ function bindSensitivity(widget: Gtk.Widget, page: Gtk.Widget, when: WhenDecl) {
     })
 }
 
-export function buildPreferencePage(pageId: string): Gtk.Widget {
+export function buildPreferencePage(pageId: string, nav?: SettingsNav): Gtk.Widget {
     const pageDecl: PageDecl | undefined = (manifest as readonly PageDecl[]).find((p) => p.id === pageId)
     if (!pageDecl) {
         throw new Error(`[buildPreferencePage] Unknown preference page id: "${pageId}" in manifest`)
@@ -141,7 +143,7 @@ export function buildPreferencePage(pageId: string): Gtk.Widget {
     setPageRefresherScope(pageId)
     try {
         const page = pageBox(`${pageId}-page`)
-        const ctx: PageCtx = { page, pageId }
+        const ctx: PageCtx = { page, pageId, nav }
 
         const builderFactory = PAGE_BUILDERS[pageId as keyof typeof PAGE_BUILDERS]
         const builders: Record<string, ItemBuilder> = builderFactory ? builderFactory(ctx) : {}

@@ -475,6 +475,9 @@ package_nidara-kit() {
 
   local d="$pkgdir/usr/share/nidara-kit"
   install -Dm644 ui/lib/nidara-kit/kit.css "$d/kit.css"
+  # What kit.css draws by path (the dropdown/menu chevrons), next to it — the sheet
+  # names them relative to itself (`$chevron-dir` in _base-layer.scss).
+  install -Dm644 -t "$d/assets" ui/lib/nidara-kit/assets/*.svg
   install -Dm644 ui/lib/nidara-kit/package.json "$d/package.json"
   cp -r ui/lib/nidara-kit/build/js "$d/js"
   # The sources, as the types: every .ts, without the build output or the SCSS.

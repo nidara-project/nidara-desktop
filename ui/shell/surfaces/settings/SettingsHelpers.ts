@@ -495,6 +495,25 @@ export const fieldWithActions = (field: Gtk.Widget, ...actions: Gtk.Widget[]): G
  * filters. Only "what the image IS" and "what picking one does" ever differed,
  * which is exactly what the callbacks carry.
  */
+/** The SVG/PNG file dialog every "choose an image" control opens, parented on the
+ *  window `from` lives in. `onPath` runs with the chosen path; cancelling runs nothing. */
+export function pickImageFile(from: Gtk.Widget, onPath: (path: string) => void) {
+    const fd = new Gtk.FileDialog({ title: t("settings.apps.dialog.select-icon"), modal: true })
+    const filter = new Gtk.FileFilter()
+    filter.add_mime_type("image/svg+xml")
+    filter.add_mime_type("image/png")
+    filter.set_name(t("settings.apps.filter.images"))
+    const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
+    filters.append(filter)
+    fd.set_filters(filters)
+    fd.open(from.get_root() as Gtk.Window | null, null, (_: any, res: any) => {
+        try {
+            const path = fd.open_finish(res)?.get_path()
+            if (path) onPath(path)
+        } catch { /* cancelled */ }
+    })
+}
+
 export const imagePickerRow = (
     label: string,
     subtitle: string,
@@ -534,24 +553,10 @@ export const imagePickerRow = (
         label: t("settings.apps.choose-image"), variant: "primary", pill: true,
         valign: Gtk.Align.CENTER,
     })
-    chooseBtn.connect("clicked", () => {
-        const fd = new Gtk.FileDialog({ title: t("settings.apps.dialog.select-icon"), modal: true })
-        const filter = new Gtk.FileFilter()
-        filter.add_mime_type("image/svg+xml")
-        filter.add_mime_type("image/png")
-        filter.set_name(t("settings.apps.filter.images"))
-        const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
-        filters.append(filter)
-        fd.set_filters(filters)
-        fd.open(chooseBtn.get_root() as Gtk.Window | null, null, (_: any, res: any) => {
-            try {
-                const path = fd.open_finish(res)?.get_path()
-                if (!path) return               // cancelled
-                if (onPick(path) === false) return
-                refresh()
-            } catch { /* cancelled */ }
-        })
-    })
+    chooseBtn.connect("clicked", () => pickImageFile(chooseBtn, (path) => {
+        if (onPick(path) === false) return
+        refresh()
+    }))
 
     // Trailing slot holds ONLY the buttons now — the preview leads the row.
     const buttons = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })

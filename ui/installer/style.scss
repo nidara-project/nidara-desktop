@@ -14,7 +14,9 @@
 // everything below, so the rules in this file out-rank it at equal specificity.
 // The base layer: element selectors for the nodes GTK builds itself (#107 step 5).
 // Wired per bundle, never from the kit's shared sheet — see the note there.
-@use '../lib/nidara-kit/styles/base-layer';
+// Its chevrons from the path this sheet has always used (the kit's own sheet reads
+// the kit's copies instead — see `$chevron-dir` in the base layer).
+@use '../lib/nidara-kit/styles/base-layer' with ($chevron-dir: "../shell/assets/icons/nidara/scalable/actions/");
 @use '../lib/nidara-kit/styles/components';
 
 * {

@@ -351,6 +351,27 @@
       <default>{}</default>
       <summary>Widget id to (shown in the bar, shown in the Control Centre)</summary>
     </key>
+    <key name="bar-mode" type="a{ss}">
+      <default>{}</default>
+      <summary>Widget id to how it shows in the bar: "always", or "active" (only while it is active)</summary>
+      <description>Only for widgets that can say they are active. A widget not named here uses its own default.</description>
+    </key>
+    <!-- The bar's right group, left to right (core/BarOrder.ts). Empty = the default order. -->
+    <key name="bar-order" type="as">
+      <default>[]</default>
+      <summary>The order of the bar's right group: "widget:ID", "tray:ID" (the app's StatusNotifierItem Id) and "shell:search"</summary>
+      <description>Left to right, the Control Centre and the clock excluded (they are fixed at the end). Empty means the default order. An item this list does not name appears at its left end.</description>
+    </key>
+    <key name="bar-hidden" type="as">
+      <default>[]</default>
+      <summary>Items kept out of the bar's right group, by their order key ("tray:ID", "shell:search")</summary>
+      <description>A widget is shown or not through "placement"; this holds the rest.</description>
+    </key>
+    <key name="tray-known" type="a{s(sss)}">
+      <default>{}</default>
+      <summary>Tray icons seen so far: StatusNotifierItem Id to (title, icon, desktop app id)</summary>
+      <description>Written by the shell when an app shows a tray icon, so Settings can list it while the app is closed — only while the app it belongs to is still installed. The icon is a theme name or a file path; the app id is empty when no installed app could be matched.</description>
+    </key>
   </schema>
 
   <!-- The Control Centre grid. Empty = the default layout (CC_DEFAULT_ORDER). -->

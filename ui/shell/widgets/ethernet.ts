@@ -61,6 +61,11 @@ const ethernetWidget: AtomicWidget = {
     locations: ["bar", "cc"],
     defaultInCc: false,   // off by default — Wi-Fi covers the common case; available to add
     isAvailable: () => !!Net.wired(),
+    // Active = a cable is connected.
+    defaultInBar: true,
+    barActive: () => Net.wiredConnected(),
+    watchBarActive: (cb) => Net.watchWired(cb),
+    defaultBarMode: "active",
     watchAvailable: (cb) => { Net.watchDevices(cb) },
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],

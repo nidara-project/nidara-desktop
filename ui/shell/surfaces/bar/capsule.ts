@@ -74,6 +74,23 @@ export interface BarItemOpts {
     watchOpen?: (cb: () => void) => (() => void)
 }
 
+// ── Edit mode (Status.bar_edit_mode) ────────────────────────────────────────
+// While the right group is being reordered every item shows its pill at the hover
+// alpha — "these can move" — and the SELECTED one (the last pressed; the arrow keys
+// move it) at the open alpha. An item's own click does nothing meanwhile.
+let editSelected: Gtk.Widget | null = null
+const editListeners = new Set<() => void>()
+export function setBarEditSelected(w: Gtk.Widget | null) {
+    if (editSelected === w) return
+    editSelected = w
+    for (const cb of editListeners) cb()
+}
+export const barEditSelected = () => editSelected
+status.connect("notify::bar-edit-mode", () => {
+    if (!status.bar_edit_mode) editSelected = null
+    for (const cb of editListeners) cb()
+})
+
 /** An item in a bar group: its content over a Cairo pill that shows only on hover
  *  (`GLASS_STATE_MIX.hover`) or while its panel is open (`.open`, which wins). The
  *  pill is the item's whole width — content + BAR_ITEM_PAD a side — and 24 tall; the
@@ -92,7 +109,9 @@ export function barItem({ child, onClick, getOpen, watchOpen }: BarItemOpts): Gt
     let hovered = false
 
     veil.set_draw_func(cairoDraw((_, cr, w, h) => {
-        const mix = getOpen?.() ? GLASS_STATE_MIX.open : hovered ? GLASS_STATE_MIX.hover : null
+        const mix = status.bar_edit_mode
+            ? (editSelected === item ? GLASS_STATE_MIX.open : GLASS_STATE_MIX.hover)
+            : getOpen?.() ? GLASS_STATE_MIX.open : hovered ? GLASS_STATE_MIX.hover : null
         const vh = h - 2 * BAR_VEIL_INSET
         if (!mix || w <= 0 || vh <= 0) return
         const dark = Theme.chromeIsDark
@@ -118,7 +137,7 @@ export function barItem({ child, onClick, getOpen, watchOpen }: BarItemOpts): Gt
 
     if (onClick) {
         const click = new Gtk.GestureClick()
-        click.connect("pressed", () => onClick())
+        click.connect("pressed", () => { if (!status.bar_edit_mode) onClick() })
         item.add_controller(click)
     }
 
@@ -129,7 +148,9 @@ export function barItem({ child, onClick, getOpen, watchOpen }: BarItemOpts): Gt
     let themeId = 0
     item.connect("map", () => {
         const redraw = () => veil.queue_draw()
-        unwatch = watchOpen?.(redraw) ?? null
+        const offOpen = watchOpen?.(redraw)
+        editListeners.add(redraw)
+        unwatch = () => { offOpen?.(); editListeners.delete(redraw) }
         themeId = Theme.connect("changed", redraw)
         veil.queue_draw()
     })
