@@ -3224,7 +3224,7 @@ would render, because both draw from the same two resolvers BaseIsland itself us
 also grew an optional trailing `dash?: number[]` param (only the ghost passes it) so the border
 keeps its dashed "phantom" look without a CSS-only dashed-stroke escape hatch.
 
-## The bar launcher mark — flattened path, no SVG filter
+## The bar launcher mark — plain geometry, no SVG filter
 
 The bar launcher (system-menu) icon is the **Nidara mark**, `assets/nidara/assets/nidara-symbolic.svg`,
 loaded as a `Gio.FileIcon`. It adapts to dark/light because (a) the filename ends in `-symbolic`,
@@ -3232,17 +3232,28 @@ so GTK4 recolours it, and (b) `.bar-distro-icon { color: var(--nidara-text) }` d
 The SVG must use `fill="currentColor"` — **never a hardcoded colour** (commandment #10), or it
 goes invisible on the opposite theme.
 
+**The mark is the "Ni"** (since 2026-09-27; it was a goo "N" before). Two files, one geometry:
+`nidara-logo.svg` is the design **source** — tight viewBox, exactly as the designer delivered it —
+and `nidara-symbolic.svg` is the ICON: the same path + the dot of the i in a **square** viewBox where
+the mark takes 79 % of the width. That number is not arbitrary: it is the footprint the previous
+"N" had (measured by trimming both renders: 16×14 at 18 px, 58×51 at 72 px), so swapping the mark
+moved no layout in the bar, About or the installer. An icon slot is square; a non-square SVG gets
+fitted to its width and silently changes the optical size. Replacing the mark again = replace the
+path in BOTH files and keep the symbolic's box at the same footprint — and regenerate the two
+copies that live in nidara-repo's `nidara-system` (Plymouth `watermark.png`, 192 px from the
+symbolic; fastfetch `nidara.txt`, 24 half-block columns from the source), which is the product
+layer, not this repo.
+
 Non-obvious gotcha (cost a wrong first attempt, verified live): **GTK's symbolic recolour does NOT
-render SVG `<filter>`s.** The brand "N" in `nidara-logo.svg` gets its soft round terminals from a
-goo/metaball `feGaussianBlur`; loaded as a symbolic icon that filter is dropped, so only the bare
-rounded rects render and at 18px their tiny `rx` reads as **square terminals**. So the mark must be
-a **single filled path with the metaball outline baked into geometry** (no filter) — that's what
-`nidara-symbolic.svg` is (traced from a high-res render of the goo). Don't "simplify" it back to the
-filtered SVG. The same `nidara-symbolic.svg` is reused at **72px** in the About window header
-(`AboutWindow.tsx`, recoloured via `.about-logo`) — it replaced a `distributor-logo-<os-id>` theme
+render SVG `<filter>`s.** The old "N" got its round terminals from a goo/metaball `feGaussianBlur`;
+loaded as a symbolic icon the filter was dropped and at 18px the bare rects read as **square
+terminals**. So the mark must be **plain geometry, no filter** — the "Ni" was delivered that way,
+and any future mark drawn with a filter has to be flattened into a path before it ships. The same
+`nidara-symbolic.svg` is reused at **72px** in the About window header
+(`AboutWindow.tsx`, recoloured via `.about-logo`) and at **64px** on the installer's welcome page
+(`nidaraLogoIcon()` in the kit) — it replaced a `distributor-logo-<os-id>` theme
 icon that rendered **broken on a clean machine** (no distro logo in the icon pack); our own mark
-always resolves and is mode-aware. `nidara-logo.svg` (the filtered version) is the design **source**
-/ for any always-dark surface that doesn't need recolour. (Two SVG hygiene gotchas, both real: a `--`
+always resolves and is mode-aware. (Two SVG hygiene gotchas, both real: a `--`
 anywhere in an XML comment — e.g. writing a `var(--token)` name — makes strict librsvg reject the
 file even though GTK tolerates it; and `fill="currentColor"` is mandatory, never a hardcoded colour,
 commandment #10.) The bar icon is configurable (`barSettings.launcherIcon`: preset key or absolute

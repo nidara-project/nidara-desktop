@@ -131,7 +131,7 @@ export default function AboutWindow(): Gtk.Window | null {
     // whatever icon pack is installed and renders broken on a clean machine (e.g.
     // the VM has no Arch distributor logo). Our own mark always resolves and is
     // mode-aware (recoloured to --nidara-text via .about-logo). 72px is a big
-    // surface so the flattened-but-faithful symbolic mark looks identical to the goo.
+    // surface; the symbolic mark is plain geometry, so it is the design itself at any size.
     const markPath = `${SHELL_ROOT}/assets/nidara/assets/nidara-symbolic.svg`
     const headerBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4, halign: Gtk.Align.CENTER, margin_bottom: 16 })
     headerBox.append(new Gtk.Image({ gicon: Gio.FileIcon.new(Gio.File.new_for_path(markPath)), pixel_size: 72, css_classes: ["about-logo"], halign: Gtk.Align.CENTER }))
