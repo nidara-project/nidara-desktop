@@ -752,7 +752,7 @@ class AppService {
      *
      * `uwsm app -- <id>.desktop` does three things the old
      * `uwsm app -- sh -c "gtk-launch <id>"` did not:
-     *  - names the scope after the ENTRY (`app-Hyprland-<id>-<rand>.scope`), so the
+     *  - names the unit after the ENTRY (`app-Hyprland-<id>@<rand>.service`), so the
      *    portal identifies the app (see `portalAppId`) — through `sh` it was anonymous;
      *  - runs `Exec=` itself inside that scope and ignores `DBusActivatable=true`
      *    (measured: `app-Hyprland-org.gnome.TextEditor-f94d831e.scope`). gtk-launch
@@ -762,16 +762,27 @@ class AppService {
      *  - for that same reason sidesteps the Flatpak trap `getLaunchCommand` documents
      *    (a DBusActivatable flatpak entry whose activation dies silently), because
      *    the entry's own `Exec=flatpak run …` is executed, not activated.
-     * `cd $HOME` so the app does not inherit the shell's CWD (ui/shell); the outer
-     * `sh` is not in the app's scope — it `exec`s uwsm, which creates the scope.
+     * `cd $HOME` so the app does not inherit the shell's CWD (ui/shell).
+     *
+     * 🔑 `-t service`, not uwsm's default scope (2026-09-27, #654). A scope runs the
+     * app IN PLACE: its parent was the shell, its environment the shell's (that is
+     * how `GTK_THEME=Empty` left every app unthemed, and how the shell's own
+     * `INVOCATION_ID`/`MEMORY_PRESSURE_WATCH`/`GDK_BACKEND=wayland` still reached
+     * them), and its stdout/stderr came back to the `execAsync` that launched it —
+     * which ACCUMULATES them in the shell's memory until the app exits. A service
+     * is started by systemd: the session's environment, the journal for output,
+     * systemd as parent, and `uwsm app` returns as soon as the app is running.
+     * Measured: +4 ms per launch (88 → 92), and the portal still gets the app id
+     * from `app-Hyprland-<id>@<rand>.service`. uwsm makes it `Type=exec` +
+     * `ExitType=cgroup`, so the unit lives while ANY process of the app does.
      *
      * An id with no desktop entry (a bare command) keeps the old path.
      */
     getLaunchArgv(lid: string): string[] {
         const entry = this.getAppInfo(lid)?.get_id?.() ?? ""
         const inner = entry.endsWith(".desktop")
-            ? `uwsm app -- ${GLib.shell_quote(entry)}`
-            : `uwsm app -- ${this.getLaunchCommand(lid)}`
+            ? `uwsm app -t service -- ${GLib.shell_quote(entry)}`
+            : `uwsm app -t service -- ${this.getLaunchCommand(lid)}`
         return ["sh", "-c", `cd "$HOME" && exec ${inner}`]
     }
 
@@ -826,10 +837,11 @@ class AppService {
                 let command = freshInfo?.get_commandline() || data?.exec || launchId
                 // Absolute Isolation Sanitization
                 command = command.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
-                // `-a`: the scope is what the XDG portal identifies the app by — see portalAppId.
+                // `-a`: the unit name is what the XDG portal identifies the app by — see portalAppId;
+                // `-t service`: see getLaunchArgv.
                 const scopeId = (freshInfo?.get_id?.() ?? "").replace(/\.desktop$/, "")
                 const nameArg = scopeId ? `-a ${GLib.shell_quote(scopeId)} ` : ""
-                spawnCommandLine(`uwsm app ${nameArg}-- sh -c ${GLib.shell_quote(command)}`)
+                spawnCommandLine(`uwsm app -t service ${nameArg}-- sh -c ${GLib.shell_quote(command)}`)
             }
         }
     }
