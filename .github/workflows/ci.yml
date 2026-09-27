@@ -504,6 +504,22 @@ jobs:
           fi
           cp /tmp/badge.bak ui/lib/nidara-kit/badge.ts
           git diff --quiet ui/lib/nidara-kit/badge.ts
+      # Our processes carry GTK_THEME=Empty (commandment 11) and a child inherits it:
+      # every app the dock launched came up with no GTK theme (2026-09-27). One door
+      # for child processes, spawn() in ui/lib/process.ts, which leaves it behind.
+      - name: Child processes start through spawn() (no GTK_THEME=Empty for apps)
+        run: node scripts/ci/child-env-check.mjs
+      - name: The child-env check can fail (control, must be caught)
+        run: |
+          cp ui/shell/widgets/clipboard.ts /tmp/clipboard.bak
+          sed -i '1a const _probe = Gio.Subprocess.new(["true"], 0)' ui/shell/widgets/clipboard.ts
+          if node scripts/ci/child-env-check.mjs; then
+            echo "::error::the check passed with a Gio.Subprocess.new in the shell — it is not checking what it prints"
+            cp /tmp/clipboard.bak ui/shell/widgets/clipboard.ts
+            exit 1
+          fi
+          cp /tmp/clipboard.bak ui/shell/widgets/clipboard.ts
+          git diff --quiet ui/shell/widgets/clipboard.ts
 
   hypr-config:
     name: Hyprland config (parses + game mode)

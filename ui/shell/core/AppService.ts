@@ -6,6 +6,7 @@ import Gdk from "gi://Gdk?version=4.0"
 import { readFile } from "../../lib/nidara-kit/platform/file"
 import { rankApps } from "./app-search"
 import appFrequency from "./AppFrequency"
+import { spawnCommandLine } from "../../lib/process"
 
 export interface AppData {
     id: string
@@ -828,7 +829,7 @@ class AppService {
                 // `-a`: the scope is what the XDG portal identifies the app by — see portalAppId.
                 const scopeId = (freshInfo?.get_id?.() ?? "").replace(/\.desktop$/, "")
                 const nameArg = scopeId ? `-a ${GLib.shell_quote(scopeId)} ` : ""
-                GLib.spawn_command_line_async(`uwsm app ${nameArg}-- sh -c ${GLib.shell_quote(command)}`)
+                spawnCommandLine(`uwsm app ${nameArg}-- sh -c ${GLib.shell_quote(command)}`)
             }
         }
     }

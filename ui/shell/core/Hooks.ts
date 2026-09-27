@@ -25,6 +25,7 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import * as battery from "./BatteryService"
+import { spawn } from "../../lib/process"
 
 let runnerMissingReported = false
 
@@ -39,7 +40,7 @@ export function fireHook(event: string, ...args: string[]): void {
         // Flags.NONE: the hook's stdout/stderr are ours, so `console.log` in a
         // user's script lands in the shell log next to everything else. That is
         // the only debugging channel a hook author has.
-        const proc = Gio.Subprocess.new(["nidara-hook", event, ...args], Gio.SubprocessFlags.NONE)
+        const proc = spawn(["nidara-hook", event, ...args], Gio.SubprocessFlags.NONE)
         // Reaped by GSubprocess's own child watch; asked for explicitly so the
         // object stays referenced until the child is gone.
         proc.wait_async(null, null)

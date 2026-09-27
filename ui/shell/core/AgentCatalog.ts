@@ -2,6 +2,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import Secret from "gi://Secret"
 import { AgentProvider } from "./AgentProviders"
+import { spawn } from "../../lib/process"
 
 // Model CATALOG — asks the provider which models it actually offers, so the model
 // field can be picked from a list instead of typed from memory.
@@ -114,7 +115,7 @@ export function fetchModels(
 
         let proc: Gio.Subprocess
         try {
-            proc = Gio.Subprocess.new(argv, Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE)
+            proc = spawn(argv, Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE)
         } catch (e) {
             done({ models: [], error: String(e) })
             return

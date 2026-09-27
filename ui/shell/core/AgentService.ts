@@ -4,6 +4,7 @@ import status, { ISLAND_AGENT } from "./Status"
 import { SHELL_ROOT } from "./Paths"
 import agentConfig from "./AgentConfig"
 import { t } from "./i18n"
+import { spawn } from "../../lib/process"
 
 // Facade over `bin/nidara-agent` — the built-in Assistant's brain (a BYOK LLM
 // tool-use loop, see the daemon's header). This owns the subprocess and the
@@ -229,7 +230,7 @@ function ensureDaemon(): boolean {
         return false
     }
     try {
-        proc = Gio.Subprocess.new(argv, Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE)
+        proc = spawn(argv, Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE)
         log(`spawn: ${argv.join(" ")}`)
         stdin = new Gio.DataOutputStream({ base_stream: proc.get_stdin_pipe()! })
         readLoop(new Gio.DataInputStream({ base_stream: proc.get_stdout_pipe()! }))

@@ -44,7 +44,7 @@ consume was ~810 lines across four imports, and all four have in-repo replacemen
 |---|---|---|
 | `ags/gtk4` (125 imports) | `gi://Gtk?version=4.0` / `gi://Gdk?version=4.0`, directly | — |
 | `ags/gtk4/app` | **`ui/lib/nidara-kit/platform/host.ts`** — a `Gtk.Application` subclass with `start`/`apply_css`/`reset_css`/`quit` | ~170 |
-| `ags/process` | `ui/lib/process.ts` — `exec` + `execAsync`, the only two ever imported | ~65 |
+| `ags/process` | `ui/lib/process.ts` — `exec` + `execAsync`, plus `spawn()`: THE door for every child process of the desktop bundles, which starts it without our `GTK_THEME=Empty` (SKILL.md commandment 11; `child-env-check.mjs`) | ~100 |
 | `ags/file` | `ui/lib/nidara-kit/platform/file.ts` — `readFile` + `writeFile`, likewise | ~50 |
 
 `Astal` was imported in four files and **used in none**; those imports went with the barrel.

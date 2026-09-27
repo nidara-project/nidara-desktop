@@ -12,6 +12,7 @@ import { BAR_ITEM_PAD, AtomicWidget, ContentBudget, PANEL_W, WidgetSize, makeCap
 
 import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
+import { spawn } from "../../lib/process"
 
 // ── cliphist helpers ──────────────────────────────────────────────────────────
 
@@ -38,7 +39,7 @@ function readList(): Promise<string> {
     return new Promise((resolve, reject) => {
         let proc: Gio.Subprocess
         try {
-            proc = Gio.Subprocess.new(["cliphist", "list"], Gio.SubprocessFlags.STDOUT_PIPE)
+            proc = spawn(["cliphist", "list"], Gio.SubprocessFlags.STDOUT_PIPE)
         } catch (e) { reject(e); return }
         proc.communicate_async(null, null, (_s: any, res: any) => {
             try {
@@ -112,7 +113,7 @@ function runBytes(argv: string[], input: Uint8Array | null, wantStdout: boolean)
         let proc: Gio.Subprocess
         const flags = Gio.SubprocessFlags.STDIN_PIPE
             | (wantStdout ? Gio.SubprocessFlags.STDOUT_PIPE : Gio.SubprocessFlags.NONE)
-        try { proc = Gio.Subprocess.new(argv, flags) }
+        try { proc = spawn(argv, flags) }
         catch (e) { reject(e); return }
         proc.communicate_async(input ? new GLib.Bytes(input) : null, null, (_s: any, res: any) => {
             try {

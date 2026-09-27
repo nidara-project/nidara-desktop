@@ -20,9 +20,40 @@
 // contain NUL must read the BYTES itself (`communicate_async` +
 // `Gio.Bytes.get_data()`), which is what `widgets/clipboard.ts` does after one
 // UTF-16 clip made 49 KB of history arrive as six characters.
+//
+// 🔑 **Every child process of ours starts through `spawn()`** — `exec` and
+// `execAsync` included — because a child inherits our ENVIRONMENT, and ours
+// carries one variable that must never leave: `GTK_THEME=Empty` (commandment 11,
+// `nidara-kit/platform/gtk-theme.ts`). It is how our process draws with no GTK
+// theme, and GTK keeps re-reading it at every theme update, so it cannot be unset
+// after start-up (measured 2026-09-27: unset it, flip dark mode, and the shell
+// loads Adwaita). Inherited, it did the same to every app the dock, the app grid
+// or Prism launched: they came up with NO theme at all — owner-caught the same
+// day, measured on a Calculator started through `launchApp`. Our own programs
+// (Settings, the installer…) set it again for themselves; nobody else should
+// ever see it. `scripts/ci/child-env-check.mjs` keeps every other way of starting
+// a process out of the desktop bundles.
 
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
+
+/** Variables of OUR process that a child must not inherit. */
+const PRIVATE_ENV = ["GTK_THEME"]
+
+/**
+ * Start a child process — the only door to one in the desktop bundles. Same
+ * contract as `Gio.Subprocess.new`, minus our private environment.
+ */
+export function spawn(argv: string[], flags: Gio.SubprocessFlags = Gio.SubprocessFlags.NONE): Gio.Subprocess {
+  const launcher = new Gio.SubprocessLauncher({ flags })
+  for (const name of PRIVATE_ENV) launcher.unsetenv(name)
+  return launcher.spawnv(argv)
+}
+
+/** Fire-and-forget a command line (`GLib.spawn_command_line_async`'s job). */
+export function spawnCommandLine(cmd: string): void {
+  spawn(toArgv(cmd))
+}
 
 function toArgv(cmd: string | string[]): string[] {
   if (Array.isArray(cmd)) return cmd
@@ -38,7 +69,7 @@ function toArgv(cmd: string | string[]): string[] {
  * @returns trimmed stdout
  */
 export function exec(cmd: string | string[]): string {
-  const proc = Gio.Subprocess.new(
+  const proc = spawn(
     toArgv(cmd),
     Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
   )
@@ -54,7 +85,7 @@ export function exec(cmd: string | string[]): string {
  * @returns trimmed stdout
  */
 export function execAsync(cmd: string | string[]): Promise<string> {
-  const proc = Gio.Subprocess.new(
+  const proc = spawn(
     toArgv(cmd),
     Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
   )

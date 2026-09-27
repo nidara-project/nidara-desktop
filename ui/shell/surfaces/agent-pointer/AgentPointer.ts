@@ -49,6 +49,7 @@ import agentConfig from "../../core/AgentConfig"
 import { t } from "../../core/i18n"
 import { hexToFloatRgb } from "../../common/DrawingUtils"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
+import { spawn } from "../../../lib/process"
 
 type Kind = "click" | "rightclick" | "move" | "scroll" | "drag"
 type Phase = "hidden" | "materialize" | "travel" | "landed" | "effect" | "dragGlide" | "idle" | "fadeout"
@@ -210,7 +211,7 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
     // failure (no hyprctl, parse miss) just skips the check, never breaks the visual.
     const checkStray = () => {
         try {
-            const proc = Gio.Subprocess.new(["hyprctl", "cursorpos"],
+            const proc = spawn(["hyprctl", "cursorpos"],
                 Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE)
             proc.communicate_utf8_async(null, null, (_p, res) => {
                 strayBusy = false
