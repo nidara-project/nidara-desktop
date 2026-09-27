@@ -194,6 +194,11 @@
 
     /* --- Edit Mode Controls --- */
     .cc-edit-pill {
+        // Keyboard ring: GTK's, round the pill's box (the glass is inset 2px in it,
+        // so offset 0 is the 2px gap), pill radius on the base rule.
+        border-radius: $nidara-radius-pill;
+        &:focus-visible { @include nidara-focus-ring(0); }
+
         label {
             font-size: $fs-small;
             font-weight: $fw-bold;
