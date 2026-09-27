@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
-import { NidaraScrolled, attachTooltip } from "../../../lib/nidara-kit"
+import { NidaraScrolled, attachTooltip, sliderKeyHandler } from "../../../lib/nidara-kit"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import BaseIsland, { islandPadding, resolveIslandShape } from "./BaseIsland"
@@ -116,11 +116,29 @@ function makeIslandWidget(
         height: height - 2 * pad,
         pitch: UNIT + GAP,
     })
+    // A fill tile (volume, brightness) hands its keys to the TILE: the fill is the
+    // tile, so the tile is the stop and ↑/↓ reach the slider through it (see
+    // sliderKeyHandler). Found anywhere in the content — a widget may wrap it.
+    const fillKeys = (() => {
+        const walk = (w: Gtk.Widget | null): ((k: number) => boolean) | undefined => {
+            for (; w; w = w.get_next_sibling()) {
+                const own = sliderKeyHandler(w) ?? walk(w.get_first_child())
+                if (own) return own
+            }
+            return undefined
+        }
+        return sliderKeyHandler(content) ?? walk(content.get_first_child())
+    })()
+    const hasDetail = !!def.buildCCDetail && !!showDetail
+
     const island  = BaseIsland({
         name: def.id, child: content, width, height, size: effectiveSize, centerContent: def.centerContent,
         getActive: def.getActive, watchActive: def.watchActive,
         getFill: def.getFill ? () => def.getFill!(effectiveSize) : undefined,
         activeColorHex: def.activeColorHex, activeAlpha: def.activeAlpha,
+        // A keyboard stop when the TILE does something: open its detail (the target
+        // is the tile-level gesture below, which no key reaches) or carry a fill slider.
+        keyboardStop: !editMode && (hasDetail || !!fillKeys),
     })
 
     const overlay = new Gtk.Overlay()
@@ -158,6 +176,36 @@ function makeIslandWidget(
             })
             overlay.add_controller(hold)
         }
+        if (hasDetail || fillKeys) {
+            // The keyboard on the TILE (a control inside it handles its own keys and
+            // never lets them bubble here): Enter/Space = the tap, and a fill tile's
+            // arrows along its gauge move it. The others fall through to move the focus.
+            const keys = new Gtk.EventControllerKey()
+            keys.connect("key-pressed", (_c: any, keyval: number) => {
+                // is_focus(), never has_focus(): in GJS `has_focus` is the GTK4 PROPERTY `has-focus`
+                // (a boolean), which shadows the method — calling it threw on every key.
+                if (!island.is_focus()) return false
+                if (hasDetail && (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter
+                    || keyval === Gdk.KEY_space || keyval === Gdk.KEY_KP_Space)) {
+                    showDetail!(id)
+                    return true
+                }
+                return fillKeys?.(keyval) ?? false
+            })
+            overlay.add_controller(keys)
+            ;(overlay as any).focusTarget = island
+        }
+        // The keyboard's secondary click, on the tile or anything in it: the Menu key
+        // or Shift+F10, as everywhere else in GTK. Anchored at the tile's centre.
+        const menuKeys = new Gtk.EventControllerKey()
+        menuKeys.connect("key-pressed", (_c: any, keyval: number, _code: number, state: Gdk.ModifierType) => {
+            const menu = keyval === Gdk.KEY_Menu
+                || (keyval === Gdk.KEY_F10 && (state & Gdk.ModifierType.SHIFT_MASK) !== 0)
+            if (!menu) return false
+            openMenu(id, pixelX(entry.x) + width / 2, pixelY(entry.y) + height / 2)
+            return true
+        })
+        overlay.add_controller(menuKeys)
         return overlay
     }
 
@@ -232,6 +280,12 @@ export default function IslandGrid() {
         width_request: GRID_WIDTH,
         height_request: GRID_HEIGHT,
     })
+    // GtkFixed clips to its box by default, and the tiles on the grid's sides reach
+    // it — so their keyboard ring (GTK's outline, drawn OUTSIDE the tile) was cut at
+    // the grid's edge. Found by walking a tile's ancestors for `overflow: HIDDEN`
+    // after unclipping the three above it had not been enough (2026-09-27). Nothing
+    // here needs the clip: tiles are placed inside the grid, even mid-reflow.
+    fixed.set_overflow(Gtk.Overflow.VISIBLE)
 
     // Empty-slot placeholders live on their OWN layer *below* the tiles. Tiles are
     // translucent glass, so a placeholder behind an occupied cell would bleed
@@ -265,6 +319,12 @@ export default function IslandGrid() {
         css_classes: ["cc-grid-clamp"],
     })
     gridClamp.set_child(gridLayers)
+    // The clamp is for WIDTH, not for paint: a ScrolledWindow (and the Viewport it
+    // wraps the grid in) also clips to its box, which cut the keyboard ring of every
+    // tile on the grid's edges — GTK's ring is an outline OUTSIDE the tile. Width is
+    // still pinned by width_request + propagate_natural_width above; only the clip goes.
+    gridClamp.set_overflow(Gtk.Overflow.VISIBLE)
+    gridClamp.get_child()?.set_overflow(Gtk.Overflow.VISIBLE)
 
     // Context menu (size picker + remove) floats in an overlay over the grid so
     // it isn't clipped by tiles; its coordinates match the Fixed's space — see
@@ -302,15 +362,28 @@ export default function IslandGrid() {
     })
     // detailIsland is appended/removed dynamically
 
+    // Same reason: a GtkStack clips to its box, and its only transition here is a
+    // crossfade, which does not need it.
+    mainStack.set_overflow(Gtk.Overflow.VISIBLE)
     mainStack.add_named(overviewPage, "overview")
     mainStack.add_named(detailPage, "detail")
     mainStack.set_visible_child_name("overview")
 
     let detailIsland: Gtk.Widget | null = null
 
+    // Keyboard in and out of a detail: the focus follows the page. Into the detail's
+    // first control on open (its back button when the content has none); back onto
+    // the TILE that opened it on close — otherwise the focus is left on a page that
+    // is fading out, and the next Tab restarts from the top of the grid. Idle,
+    // because a widget only takes focus once the stack has mapped its page.
+    const focusSoon = (focus: () => void) =>
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { focus(); return GLib.SOURCE_REMOVE })
+
     const hideDetail = () => {
+        const from = activeDetailId
         activeDetailId = ""
         mainStack.set_visible_child_name("overview")
+        focusSoon(() => { (widgetRefs.get(from) as any)?.focusTarget?.grab_focus() })
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 220, () => {
             if (detailIsland) { try { detailPage.remove(detailIsland) } catch {} ; detailIsland = null }
             return GLib.SOURCE_REMOVE
@@ -425,7 +498,18 @@ export default function IslandGrid() {
         })
         detailPage.append(detailIsland)
         mainStack.set_visible_child_name("detail")
+        focusSoon(() => { if (!panel.child_focus(Gtk.DirectionType.TAB_FORWARD)) backBtn.grab_focus() })
     }
+
+    // Esc inside a detail goes back to the grid instead of closing the whole CC (the
+    // bar's own Esc, on the window, is only reached when this lets the key through).
+    const detailKeys = new Gtk.EventControllerKey()
+    detailKeys.connect("key-pressed", (_c: any, keyval: number) => {
+        if (keyval !== Gdk.KEY_Escape || !activeDetailId) return false
+        hideDetail()
+        return true
+    })
+    mainStack.add_controller(detailKeys)
 
     // Per-instance reflow state
     const widgetRefs = new Map<string, Gtk.Widget>()
@@ -626,7 +710,7 @@ export default function IslandGrid() {
     fixed.add_controller(dropTarget)
 
     const editLabel = new Gtk.Label({ label: t("cc.grid.edit"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 })
-    const editBtn = SquircleContainer({ child: editLabel, shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, css_classes: ["cc-edit-pill"], shadow: GLASS_SHADOW })
+    const editBtn = SquircleContainer({ child: editLabel, shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, css_classes: ["cc-edit-pill"], shadow: GLASS_SHADOW, keyboardStop: true })
     const editBtnWrapper = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, margin_top: 24, margin_bottom: 12 })
     editBtnWrapper.append(editBtn)
 
@@ -676,17 +760,41 @@ export default function IslandGrid() {
         editLabel.label = editMode ? t("cc.grid.done") : t("cc.grid.edit")
     }
 
-    const gestureClick = new Gtk.GestureClick()
-    gestureClick.connect("released", () => {
+    const toggleEdit = (fromKeyboard = false) => {
         editMode = !editMode
         if (editMode) hideDetail()
         rebuild()
+        // Before cc_edit_mode, whose notify is what re-decides the bar's grab.
+        status.ccEditFromKeyboard = editMode && fromKeyboard
         // AFTER rebuild, deliberately: the bar's notify::cc-edit-mode handler
         // stamps the window input region via measure(), which must already see
         // the resized grid (allocation lags a layout pass; measure doesn't).
         status.cc_edit_mode = editMode
-    })
+    }
+    const gestureClick = new Gtk.GestureClick()
+    gestureClick.connect("released", () => toggleEdit())
     editBtn.add_controller(gestureClick)
+    // The keyboard's click (owner-caught 2026-09-27: the pill was a gesture, so no key
+    // ever reached it). The pill outlives rebuild(), so the focus stays on it across
+    // the toggle — Enter again is "Done".
+    const editKeys = new Gtk.EventControllerKey()
+    editKeys.connect("key-pressed", (_c: any, keyval: number) => {
+        if (keyval !== Gdk.KEY_Return && keyval !== Gdk.KEY_KP_Enter
+            && keyval !== Gdk.KEY_space && keyval !== Gdk.KEY_KP_Space) return false
+        toggleEdit(true)
+        return true
+    })
+    editBtn.add_controller(editKeys)
+    // Esc in edit mode is "Done", as in the bar's edit mode — not "close the CC"
+    // (the bar's Esc stands aside in edit mode). The focus goes back to the pill.
+    const editEsc = new Gtk.EventControllerKey()
+    editEsc.connect("key-pressed", (_c: any, keyval: number) => {
+        if (keyval !== Gdk.KEY_Escape || !editMode) return false
+        toggleEdit()
+        editBtn.grab_focus()
+        return true
+    })
+    overviewPage.add_controller(editEsc)
     ccLayout.connect("changed", () => rebuild())
 
     // Sync CC layout with widget placement config. Hardware gate at the layout

@@ -124,13 +124,16 @@ window#nidara-bar-zone {
 #nidara-bar,
 .nidara-bar-window {
 
-    /* --- Focus Kill --- */
-    /* Focus reset for bar items only */
-    .bar-tray-btn {
-        outline-width: 0;
-        outline-color: transparent;
-        box-shadow: none;
-    }
+    /* --- Keyboard ring (Super+Ctrl+B walks the bar) ---
+       GTK's own ring, following the item's HOVER PILL: `.bar-item-veil` is the Cairo
+       layer that paints that pill, and its box IS the pill (capsule.ts), so an outline
+       round it with a pill radius is the pill's shape. Offset 0: the pill sits 4px
+       inside the item top and bottom, which leaves the ring's 2px inside the item; at
+       the sides it spills 2px over the neighbour's edge, which is its padding (nothing drawn there). The item is the stop
+       (a tray icon too — its button is not focusable). This replaced a "focus kill"
+       (outline 0 on the tray buttons), from when nothing in the bar took the keyboard. */
+    .bar-item-veil { border-radius: $nidara-radius-pill; }
+    .bar-item:focus-visible > .bar-item-veil { @include nidara-focus-ring(0); }
 
     /* --- Distro icon: color follows theme via currentColor in the SVG --- */
     .bar-distro-icon {

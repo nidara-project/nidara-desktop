@@ -94,12 +94,21 @@ export class ScaleRevealer extends Gtk.Widget {
      *  deferred timeout hoping layout has happened. */
     onAllocated: (() => void) | null = null
 
+    /** Clip only while animating; at rest (fully revealed, nothing moving) let the
+     *  content paint past the box. For a panel whose content reaches its own edges
+     *  and draws a focus ring there — GTK's ring is an outline OUTSIDE the widget,
+     *  and the CC's edge tiles lost theirs to this clip (2026-09-27). The unroll
+     *  still clips as designed; the band past the box is inside the bar's visible
+     *  region (PANEL_PAD), so what paints there is shown. */
+    unclipAtRest: boolean
+
     constructor(child: Gtk.Widget, opts?: {
         duration?: number, durationIn?: number, durationOut?: number,
         scaleFrom?: number, pivot?: ScalePivot, animateLayout?: boolean,
-        opacityFloor?: () => number, riseFrom?: number,
+        opacityFloor?: () => number, riseFrom?: number, unclipAtRest?: boolean,
     }) {
         super({ overflow: Gtk.Overflow.HIDDEN })
+        this.unclipAtRest = opts?.unclipAtRest ?? false
         this.durationIn = opts?.durationIn ?? opts?.duration ?? 300
         this.durationOut = opts?.durationOut ?? opts?.duration ?? 300
         this.scaleFrom = opts?.scaleFrom ?? 0.25
@@ -140,6 +149,7 @@ export class ScaleRevealer extends Gtk.Widget {
         this.morphFrom = h0
         this.morphEased = 0
         let startUs: number | null = null
+        this.overflow = Gtk.Overflow.HIDDEN
         this.morphTickId = this.add_tick_callback((_w, frameClock) => {
             const now = frameClock.get_frame_time()
             if (startUs === null) startUs = now
@@ -149,10 +159,18 @@ export class ScaleRevealer extends Gtk.Widget {
             if (t >= 1) {
                 this.morphTickId = null
                 this.morphFrom = null
+                this.syncRestClip()
                 return GLib.SOURCE_REMOVE
             }
             return GLib.SOURCE_CONTINUE
         })
+    }
+
+    // See `unclipAtRest`. Called wherever an animation starts or ends.
+    syncRestClip() {
+        if (!this.unclipAtRest) return
+        const atRest = this.progress === 1 && this.tickId === null && this.morphTickId === null && this.swipeX === 0
+        this.overflow = atRest ? Gtk.Overflow.VISIBLE : Gtk.Overflow.HIDDEN
     }
 
     currentScale(): number {
@@ -297,9 +315,11 @@ export class ScaleRevealer extends Gtk.Widget {
             this.opacity = target
             if (this.animateLayout) this.queue_resize(); else this.queue_draw()
             if (!open) this.set_visible(false)
+            this.syncRestClip()
             onDone?.()
             return
         }
+        if (this.unclipAtRest) this.overflow = Gtk.Overflow.HIDDEN
         const duration = open ? this.durationIn : this.durationOut
         // Latched per reveal: the floor follows the glass slider, but not mid-flight.
         const floor = this.opacityFloor?.() ?? 0
@@ -318,6 +338,7 @@ export class ScaleRevealer extends Gtk.Widget {
             if (t >= 1) {
                 this.tickId = null
                 if (!open) this.set_visible(false)
+                this.syncRestClip()
                 onDone?.()
                 return GLib.SOURCE_REMOVE
             }
@@ -405,6 +426,7 @@ export class ScaleRevealer extends Gtk.Widget {
         this.progress = 0
         this.opacity = 0
         this.set_visible(false)
+        this.syncRestClip()
     }
 
     // Jump straight to the fully-revealed rest state (scale 1, opaque, visible),
@@ -416,6 +438,7 @@ export class ScaleRevealer extends Gtk.Widget {
         this.progress = 1
         this.opacity = 1
         this.set_visible(true)
+        this.syncRestClip()
     }
 
     // Explicit teardown — call right after removing this widget from its parent.

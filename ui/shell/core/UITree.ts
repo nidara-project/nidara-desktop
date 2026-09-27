@@ -31,6 +31,10 @@ interface UINode {
     text: string | null
     /** On/off for widgets that HAVE a state (switch, toggle, check); absent otherwise. */
     active?: boolean
+    /** Present (and true) only on its window's focus widget (where that window's next key goes) —
+     *  how a keyboard-navigation check asserts WHERE Tab/arrows landed. Omitted
+     *  everywhere else, like `active`. */
+    focused?: true
     visible: boolean
     mapped: boolean
     bounds: { x?: number; y?: number; w: number; h: number }
@@ -100,6 +104,10 @@ function nodeOf(w: any, toplevel: any, windowLabel: string, path: string): UINod
         // Omitted, not `false`, for everything that has no state: a missing field
         // reads as "not applicable", a `false` reads as "off".
         ...(active === undefined ? {} : { active }),
+        // The window's focus widget, asked of the WINDOW: in GJS `w.has_focus` is the
+        // GTK4 property `has-focus` (a boolean) shadowing the method, so calling it
+        // throws — and `safe` turned that into "nothing is focused, anywhere".
+        ...(safe(() => toplevel.get_focus() === w, false) ? { focused: true as const } : {}),
         visible: safe(() => w.get_visible(), true),
         mapped: safe(() => w.get_mapped(), false),
         bounds: boundsOf(w, toplevel),
@@ -108,7 +116,7 @@ function nodeOf(w: any, toplevel: any, windowLabel: string, path: string): UINod
 }
 
 function isInteresting(n: UINode): boolean {
-    return !!(n.id || n.cssClasses.length || n.text || INTERACTIVE.has(n.type))
+    return !!(n.id || n.cssClasses.length || n.text || n.focused || INTERACTIVE.has(n.type))
 }
 
 function walk(w: any, toplevel: any, windowLabel: string, path: string, out: UINode[]): void {

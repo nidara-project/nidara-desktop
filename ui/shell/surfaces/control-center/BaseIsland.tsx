@@ -57,6 +57,8 @@ interface BaseIslandProps {
     getFill?: () => number
     activeColorHex?: string
     activeAlpha?: number | (() => number)
+    /** A keyboard stop of its own (see SquircleContainer.keyboardStop). */
+    keyboardStop?: boolean
 }
 
 export default function BaseIsland({
@@ -73,6 +75,7 @@ export default function BaseIsland({
     getFill,
     activeColorHex,
     activeAlpha,
+    keyboardStop = false,
 }: BaseIslandProps): Gtk.Widget {
 
     //  GEOMETRIC RULES:
@@ -107,7 +110,8 @@ export default function BaseIsland({
         alpha,
         useShellOpacity: alpha === undefined,
         shape,
-        css_classes: ["cc-island", `cc-${name}-island`],
+        // cc-size-*: the tile's shape, which its keyboard ring (CSS) has to follow.
+        css_classes: ["cc-island", `cc-${name}-island`, `cc-size-${size}`],
         inset: 2.0,
         // The CC has no panel — these islands ARE its outer glass, which is why they
         // carry the shadow while a control inside a panel must not. One recipe for the
@@ -119,6 +123,7 @@ export default function BaseIsland({
         getFill,
         activeColorHex,
         activeAlpha,
+        keyboardStop,
     })
 
     island.set_size_request(width, height)

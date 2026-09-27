@@ -46,6 +46,13 @@ interface SquircleContainerProps {
      *  menu is down. Read inside the draw call; `watchOpen` says when to redraw. */
     getOpen?: () => boolean
     watchOpen?: (cb: () => void) => (() => void)
+    /** The capsule is itself a keyboard stop (focusable). Its ring is GTK's own —
+     *  the caller's CSS gives the container `:focus-visible` + a border-radius that
+     *  matches the glass (see `.cc-island` in _control-center.scss) — because a CSS
+     *  outline can be drawn OUTSIDE the widget, with the design system's 2px gap,
+     *  where a ring painted here could not: a DrawingArea is clipped to its box.
+     *  What the key DOES is the caller's (see IslandGrid's tiles). */
+    keyboardStop?: boolean
     n?: number
     shape?: Shape
     borderWidth?: number
@@ -148,6 +155,7 @@ export default function SquircleContainer({
     hoverLift = false,
     getOpen,
     watchOpen,
+    keyboardStop = false,
     n = 3.2,
     shape = Shape.SQUIRCLE,
     borderWidth = 1.0,
@@ -303,6 +311,8 @@ export default function SquircleContainer({
         click.connect(clickOnRelease ? "released" : "pressed", () => onClick())
         grid.add_controller(click)
     }
+
+    if (keyboardStop) grid.focusable = true
 
     if (watchActive) {
         const cleanup = watchActive(() => { if (da.get_mapped()) da.queue_draw() })

@@ -13,11 +13,9 @@
        CONTROL CENTER - CLEAN GTK4 ARCHITECTURE
        ========================================================================== */
 
-    /* NOTE: no keyboard focus rings here on purpose. The CC is mouse/touch-only by
-       design: it has no focusable widget to land on, so it never takes keyboard focus
-       even though the bar's focus grab carries the keyboard for any open panel.
-       Adding :focus-visible rules here would be dead code. See the design-tokens
-       rationale. */
+    /* Keyboard: the CC is driven by keys since 2026-09-27 (Super+C, Tab/arrows,
+       Enter/Space, Esc). Every ring here is GTK's own `:focus-visible` outline —
+       the tiles' and their buttons', in `.cc-island` below. */
 
     /* --- Status banner (AI control) above the widgets --- */
     /* One .cc-status-row per active indicator (dot + text + a Stop button).
@@ -65,7 +63,25 @@
         background-color: transparent;
 
         // Strip the base layer's button paint inside CC islands — the tiles paint themselves
-        button { @include nidara-reset; }
+        button {
+            @include nidara-reset;
+            // …but not the keyboard ring: the reset clears `outline` too, which left a
+            // focused toggle inside a tile with no sign of it (2026-09-27).
+            &:focus-visible { @include nidara-focus-ring; }
+        }
+
+        // The tile as a keyboard stop (IslandGrid → SquircleContainer.keyboardStop):
+        // GTK's own ring, round the tile's BOX. The glass is inset 2px inside that box
+        // (GLASS_SHADOW's spread), so offset 0 is already the design system's 2px gap —
+        // drawn outside the tile, where the Cairo ring this replaced could not reach
+        // (it sat on the glass edge and melted into the volume tile's fill).
+        // The radius has to be the SHAPE's, on the base rule (an outline follows it):
+        // a pill is exact for the circle (1×1) and the capsules (2×1, 1×2, the 4×1
+        // dock-profile pill); the 2×2 squircle gets its radius plus the 2px inset — a
+        // rounded rectangle a hair off a superellipse, the one shape CSS cannot draw.
+        border-radius: $nidara-radius-pill;
+        &.cc-size-2x2 { border-radius: calc(var(--nidara-radius-xl) + 2px); }
+        &:focus-visible { @include nidara-focus-ring(0); }
     }
 
     .nidara-atomic-slider-box-horizontal {
@@ -178,6 +194,11 @@
 
     /* --- Edit Mode Controls --- */
     .cc-edit-pill {
+        // Keyboard ring: GTK's, round the pill's box (the glass is inset 2px in it,
+        // so offset 0 is the 2px gap), pill radius on the base rule.
+        border-radius: $nidara-radius-pill;
+        &:focus-visible { @include nidara-focus-ring(0); }
+
         label {
             font-size: $fs-small;
             font-weight: $fw-bold;

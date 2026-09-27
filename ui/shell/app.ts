@@ -249,14 +249,22 @@ async function focusLaunched(target: AppData, before: Set<string>): Promise<stri
 
 const IPC_COMMANDS: Record<string, IpcCommand> = {
   toggleCC: {
-    desc: "Toggle the Control Center overlay",
+    desc: "Toggle the Control Center overlay (`toggleCC keyboard` = opened from a key bind: focus lands on its first control, ring shown)",
     aliases: ["toggleControlCenter"],
-    run: () => status.toggleCC(),
+    run: args => status.toggleCC(args[0] === "keyboard"),
   },
   toggleNC: {
-    desc: "Toggle the Notification Center overlay",
+    desc: "Toggle the Notification Center overlay (`toggleNC keyboard` = opened from a key bind, as toggleCC)",
     aliases: ["toggleNotificationCenter"],
-    run: () => status.toggleNC(),
+    run: args => status.toggleNC(args[0] === "keyboard"),
+  },
+  focusBar: {
+    desc: "Walk the bar's items with the keyboard (Super+Ctrl+B): ←/→ move, Enter/Space/↓ open, Esc leaves",
+    run: () => { status.bar_keyboard = !status.bar_keyboard },
+  },
+  focusDock: {
+    desc: "Walk the dock's icons with the keyboard (Super+Ctrl+D): arrows move, Enter/Space open, ↑/Menu the app menu, Esc leaves",
+    run: () => { status.dock_keyboard = !status.dock_keyboard },
   },
   togglePrism: {
     desc: "Toggle search (apps and recent files)",
@@ -785,6 +793,9 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
           },
           overlays: {
             controlCenter: status.cc_open,
+            // The bar's keyboard walk (Super+Ctrl+B): true = the bar holds the keys.
+            barKeyboard: status.bar_keyboard,
+            dockKeyboard: status.dock_keyboard,
             notificationCenter: status.nc_open,
             prism: status.prism_open,
             appGrid: status.app_grid_open,

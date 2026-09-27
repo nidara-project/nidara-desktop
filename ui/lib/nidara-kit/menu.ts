@@ -124,7 +124,8 @@ export class GlassBubbleMenu {
         // itself on show, and when no child can take it, `gtk_popover_focus` hands the
         // root's focus — NULL — to `gtk_widget_is_ancestor` unchecked: a Gtk-CRITICAL on
         // every open. No child can take it whenever an ANCESTOR of the popover has
-        // `can_focus: false`, which the dock's icons do. In that case focus could not
+        // `can_focus: false` — the dock's icons did, until the dock became keyboard-walkable
+        // (Super+Ctrl+D, 2026-09-27); the guard stays for any other such tree. In that case focus could not
         // enter anyway, so the popover is told not to try; where it can, nothing changes
         // (measured in a headless cage: blocked → 3 CRITICALs in 3 opens, now 0; allowed
         // → focus still lands on the first row).

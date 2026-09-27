@@ -52,6 +52,18 @@ window.nidara-dock-window,
         opacity: 0.3;
     }
 
+    /* --- Keyboard walk (Super+Ctrl+D) ---
+       The ICON is the stop (DockItem says why it is not its box). App icons have no
+       common silhouette — each is the app's own drawing — so the ring is the design
+       system's, on a radius-md box round the icon. The radius sits on the BASE rule:
+       `outline` follows it, and on the state alone it would come out square
+       (design-system.md → focus). */
+    .cd-icon-container > .cd-icon,
+    .cd-icon-container > image {
+        border-radius: $nidara-radius-md;
+        &:focus-visible { @include nidara-focus-ring; }
+    }
+
     /* --- Separator - dark hairline --- */
     .cd-separator {
         min-width: 1px;
