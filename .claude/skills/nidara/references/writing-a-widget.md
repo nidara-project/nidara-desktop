@@ -49,6 +49,12 @@ detail** — until 2026-09-25 it did, and since a `makeBarIcon` acts on press an
 release fires after it, one click on night light / Bluetooth / Focus toggled AND opened the CC.
 A widget with a CC detail but no bar panel acts from its pill, like dark mode.
 
+**The pill is also reachable by keyboard** (Super+Ctrl+B walks the bar, Enter/Space/↓ acts —
+since 2026-09-27). Both makers register their action with `barKeyAction`, so they get this for
+free. A hand-built `buildBarContent` that takes its click through a `GestureClick` is NOT
+reachable: a gesture has no key. Either use a `Gtk.Button` (a keyboard stop on its own) or have
+`buildBarExpanded`/`barClick`, which the bar runs on the key as it does on the click.
+
 ### Deciding what a panel looks like
 
 A bar expansion (`buildBarExpanded`) and a Control-Centre detail (`buildCCDetail`) are both a

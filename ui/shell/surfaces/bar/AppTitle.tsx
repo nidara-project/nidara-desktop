@@ -2,7 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Pango from "gi://Pango"
 import GLib from "gi://GLib"
 import { getWordmark } from "../../utils"
-import { barItem, barOpen, barTooltip, isBarCustomAnchor } from "./capsule"
+import { barItem, barOpen, barTooltip, isBarCustomAnchor, setBarItemKey } from "./capsule"
 import hs from "../../core/HyprlandState"
 import status from "../../core/Status"
 import shellActions from "../../core/ShellActions"
@@ -173,6 +173,7 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
     // without a synthetic click, then assert with `queryUI .nidara-menu-label`.
     // Last bar wins on multi-monitor — fine, the menu is global (focused window).
     shellActions.openWindowMenu = openWindowMenu
+    setBarItemKey(capsule, openWindowMenu)
   }
 
   return {

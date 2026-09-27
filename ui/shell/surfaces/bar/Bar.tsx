@@ -670,6 +670,78 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
   keepFocusIn(cc); keepFocusIn(nc); keepFocusIn(systemMenu); keepFocusIn(expansionCapsule)
 
+  // ── The keyboard walk of the bar (Super+Ctrl+B, Status.bar_keyboard) ───────────
+  // macOS's Ctrl+F2: the focus lands on the bar's first item, ←/→ and Tab move along
+  // it (wrapping), Enter/Space/↓ open the item's panel (barItem), Esc closes that panel
+  // and returns to the item, a second Esc leaves. The grab that carries the keys is
+  // barModal's, which counts the walk. Not in edit mode: its ←/→ MOVE an item.
+  const barKeys = new Gtk.EventControllerKey()
+  barKeys.connect("key-pressed", (_c: any, keyval: number, _code: number, state: Gdk.ModifierType) => {
+    if (!status.bar_keyboard || status.bar_edit_mode) return false
+    let dir = FOCUS_KEYS[keyval]
+    if (dir === undefined || dir === Gtk.DirectionType.UP || dir === Gtk.DirectionType.DOWN) return false
+    if (dir === Gtk.DirectionType.TAB_FORWARD && (state & Gdk.ModifierType.SHIFT_MASK)) dir = Gtk.DirectionType.TAB_BACKWARD
+    win.set_focus_visible(true)
+    if (barBox.child_focus(dir)) return true
+    // Past either end: wrap, like a menu bar. A ← at the first item goes to the last.
+    win.set_focus(null)
+    const back = dir === Gtk.DirectionType.LEFT || dir === Gtk.DirectionType.TAB_BACKWARD
+    barBox.child_focus(back ? Gtk.DirectionType.TAB_BACKWARD : Gtk.DirectionType.TAB_FORWARD)
+    return true
+  })
+  barBox.add_controller(barKeys)
+
+  // The item the walk was on when a panel took the focus — where Esc brings it back.
+  // Tracked off the window's focus rather than at each activation: search opens Prism,
+  // a widget opens its expansion, the logo the system menu, and each would need a hook.
+  let walkItem: Gtk.Widget | null = null
+  win.connect("notify::focus-widget", () => {
+    const f = win.get_focus()
+    if (status.bar_keyboard && f && (f === barBox || f.is_ancestor(barBox))) walkItem = f
+  })
+  const anyBarPanel = () => status.cc_open || status.nc_open || status.system_menu_open
+    || status.prism_open || status.bar_expanded_id !== ""
+  // Only an Esc goes BACK to the walk. A panel that closed because something was
+  // done in it (Prism launched an app, a CC row opened Settings) ends the walk, as a
+  // macOS menu does once an item is chosen: otherwise the grab stays on the bar and
+  // the window that just opened gets none of the keys. `escPending` is set in the
+  // CAPTURE phase — before any Esc handler closes a panel, whichever panel's it is —
+  // and cleared once the turn is over.
+  let escPending = false
+  const escWatch = new Gtk.EventControllerKey()
+  escWatch.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+  escWatch.connect("key-pressed", (_c: any, keyval: number) => {
+    if (keyval !== Gdk.KEY_Escape) return false
+    escPending = true
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { escPending = false; return GLib.SOURCE_REMOVE })
+    return false
+  })
+  win.add_controller(escWatch)
+  const backToWalk = () => {
+    if (!status.bar_keyboard || anyBarPanel()) return
+    if (!escPending) { status.bar_keyboard = false; return }
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      if (status.bar_keyboard && walkItem?.get_mapped()) walkItem.grab_focus()
+      return GLib.SOURCE_REMOVE
+    })
+  }
+  for (const prop of ["cc-open", "nc-open", "system-menu-open", "prism-open", "bar-expanded-id"])
+    status.connect(`notify::${prop}`, backToWalk)
+
+  status.connect("notify::bar-keyboard", () => {
+    syncKeyboardMode()
+    updateInputRegion()
+    if (!status.bar_keyboard) { walkItem = null; if (!barModal()) win.set_focus(null); return }
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      if (!status.bar_keyboard) return GLib.SOURCE_REMOVE
+      win.set_focus(null)
+      barBox.child_focus(Gtk.DirectionType.TAB_FORWARD)
+      // The Super+Ctrl+B went to Hyprland, not to us (see Status.keyboardEntry).
+      win.set_focus_visible(true)
+      return GLib.SOURCE_REMOVE
+    })
+  })
+
   status.connect("notify::cc-open", () => { if (status.cc_open) focusPanel(cc) })
   status.connect("notify::nc-open", () => { if (status.nc_open) focusPanel(nc) })
   status.connect("notify::system-menu-open", () => { if (status.system_menu_open) focusPanel(systemMenu) })
@@ -682,7 +754,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   panelKeys.connect("key-pressed", (_c: any, keyval: number) => {
     if (keyval !== Gdk.KEY_Escape || status.bar_edit_mode || status.cc_edit_mode) return false
     if (!(status.cc_open || status.nc_open || status.system_menu_open
-          || status.bar_expanded_id !== "" || status.bar_overflow_open)) return false
+          || status.bar_expanded_id !== "" || status.bar_overflow_open)) {
+      // No panel: an Esc in the keyboard walk leaves it (the SECOND Esc, after the one
+      // that closed the item's panel and put the focus back on the item).
+      if (!status.bar_keyboard) return false
+      status.bar_keyboard = false
+      return true
+    }
     status.cc_open = false; status.nc_open = false; status.system_menu_open = false
     status.bar_expanded_id = ""; status.bar_overflow_open = false
     return true
@@ -744,7 +822,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   //    desktop interactive, and a grab would take that away.
   const barModal = () =>
     (status.cc_open || status.nc_open || status.prism_open || status.system_menu_open
-      || status.bar_expanded_id !== "" || status.bar_overflow_open || status.bar_edit_mode) && !status.cc_edit_mode
+      || status.bar_expanded_id !== "" || status.bar_overflow_open || status.bar_edit_mode || status.bar_keyboard) && !status.cc_edit_mode
   const barGrabbing = () => barModal()
   // ⚠️ ANY open island mode, not just the keyboard-driven ones. Under layer-shell
   // only an EXCLUSIVE mode took input, so this used to read `island.needsKeyboard()`
@@ -766,6 +844,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // a dismissal (see common/FocusGrab.ts and DockCore).
   const onBarGrabCleared = () => {
     barGrabToken = 0
+    // The keyboard walk had the keys through this grab; without it keys go elsewhere.
+    status.bar_keyboard = false
     // Close ONLY what this window owns — deliberately NOT dismissOverlays(), which
     // also clears island_mode. An eviction can come from the ISLAND taking the
     // single slot for a mode the user just opened, and reaching that far would close
@@ -1187,7 +1267,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Unfolded items are the same as the others, placed by the same loop.
   // Built once and kept outside `orderedItems`, which rebuildBarWidgets empties.
   const overflowIcon = new Gtk.Image({ gicon: uiIcon("nd-pan-end"), pixel_size: 16, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
-  const overflowItem = barItem({ child: overflowIcon, ...barOpen(() => status.bar_overflow_open) })
+  const overflowItem = barItem({ child: overflowIcon, ...barOpen(() => status.bar_overflow_open), onKey: () => status.toggleBarOverflow() })
   overflowItem.set_visible(false)
   barTooltip(overflowItem, () => t(status.bar_overflow_open ? "bar.tooltip.overflow.hide" : "bar.tooltip.overflow.show"))
   {
@@ -1230,7 +1310,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               open?.()
           }
           : undefined
-      const item = barItem({ child: w.buildBarContent(), ...barOpen(() => status.bar_expanded_id === id) })
+      const item = barItem({ child: w.buildBarContent(), ...barOpen(() => status.bar_expanded_id === id), onKey: onRelease })
       if (onRelease) {
           // BUBBLE + released: child buttons claim on press → deny this gesture → released
           // never fires when a button is clicked; fires only for neutral-area taps.

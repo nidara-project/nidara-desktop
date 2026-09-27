@@ -1,4 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
 import status from "../../core/Status"
 import Theme from "../../core/ThemeManager"
 import { safeDisconnect } from "../../core/signals"
@@ -6,6 +7,8 @@ import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { attachTooltip, type NidaraTooltipHandle, type NidaraTooltipOpts, type NidaraTooltipText } from "../../../lib/nidara-kit"
 import { GLASS_SPECULAR, GLASS_TINT, GLASS_STATE_MIX } from "../../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
+import { hexToFloatRgb } from "../../../lib/nidara-kit/platform/accent"
+import { barKeyAction } from "../../common/widget-kit"
 
 // Shared bar-capsule edge: a faint white inner border. It no longer changes on
 // hover: the capsules pass `hoverLift` (the glass lifts a little) and `barOpen`
@@ -72,6 +75,11 @@ export interface BarItemOpts {
     /** From `barOpen(…)`: the item's pill stays up while its panel is down. */
     getOpen?: () => boolean
     watchOpen?: (cb: () => void) => (() => void)
+    /** What Enter/Space/↓ does when the item holds the keyboard focus (Super+Ctrl+B).
+     *  Defaults to `onClick`, then to the kit icon's own action (`barKeyAction`); an
+     *  item with none of the three is not a keyboard stop — its content is, if it is
+     *  a button (a tray icon), or nothing is. */
+    onKey?: () => void
 }
 
 // ── Edit mode (Status.bar_edit_mode) ────────────────────────────────────────
@@ -97,7 +105,15 @@ status.connect("notify::bar-edit-mode", () => {
  *  whole 32px column is the hit target. Same ink and alphas the capsule's veil used,
  *  painted over the group's glass instead of folded into a capsule's own fill: the
  *  same pixels. */
-export function barItem({ child, onClick, getOpen, watchOpen }: BarItemOpts): Gtk.Widget {
+const itemKeys = new WeakMap<Gtk.Widget, () => void>()
+/** Make a bar item a keyboard stop whose Enter/Space/↓ runs `run` — for an item whose
+ *  action only exists after it is built (AppTitle's window menu). */
+export function setBarItemKey(item: Gtk.Widget, run: () => void) {
+    itemKeys.set(item, run)
+    item.focusable = true
+}
+
+export function barItem({ child, onClick, getOpen, watchOpen, onKey }: BarItemOpts): Gtk.Widget {
     // The veil EXPANDS and the item does NOT, both on purpose. A Gtk.Grid hands its
     // spare room only to rows and columns that expand: without the veil's expand the
     // cell stays at the content's natural 16px, at the TOP of the 32px item, and the
@@ -108,10 +124,18 @@ export function barItem({ child, onClick, getOpen, watchOpen }: BarItemOpts): Gt
     const veil = new Gtk.DrawingArea({ hexpand: true, vexpand: true, can_target: false })
     let hovered = false
 
+    // Keyboard focus shows on the PILL: the item itself, or its content when that is
+    // the whole item (a tray icon's button). A control nested deeper (a player's
+    // play button) draws its own ring, and ringing the whole pill for it would not
+    // say which of its controls has the keys.
+    const keyFocused = () =>
+        (item.is_focus() || child.is_focus()) && !!(item.get_root() as Gtk.Window | null)?.get_focus_visible()
+
     veil.set_draw_func(cairoDraw((_, cr, w, h) => {
+        const ring = keyFocused()
         const mix = status.bar_edit_mode
             ? (editSelected === item ? GLASS_STATE_MIX.open : GLASS_STATE_MIX.hover)
-            : getOpen?.() ? GLASS_STATE_MIX.open : hovered ? GLASS_STATE_MIX.hover : null
+            : getOpen?.() ? GLASS_STATE_MIX.open : (hovered || ring) ? GLASS_STATE_MIX.hover : null
         const vh = h - 2 * BAR_VEIL_INSET
         if (!mix || w <= 0 || vh <= 0) return
         const dark = Theme.chromeIsDark
@@ -126,9 +150,41 @@ export function barItem({ child, onClick, getOpen, watchOpen }: BarItemOpts): Gt
         cr.closePath()
         cr.setSourceRGBA(ink.r, ink.g, ink.b, dark ? mix.dark : mix.light)
         cr.fill()
+        if (!ring) return
+        // `nidara-focus-ring`'s 2px accent, INSIDE the pill's edge: the pill already
+        // spans the item's full width, so outside it there is no room to draw in.
+        const accent = hexToFloatRgb(Theme.accentPalette[Theme.accentColor].color)
+        const ri = r - 1
+        cr.newSubPath()
+        cr.arc(w - r, top + r, ri, -Math.PI / 2, 0)
+        cr.arc(w - r, bottom - r, ri, 0, Math.PI / 2)
+        cr.arc(r, bottom - r, ri, Math.PI / 2, Math.PI)
+        cr.arc(r, top + r, ri, Math.PI, 1.5 * Math.PI)
+        cr.closePath()
+        cr.setSourceRGBA(accent.r, accent.g, accent.b, 1)
+        cr.setLineWidth(2)
+        cr.stroke()
     }))
     item.attach(veil, 0, 0, 1, 1)
     item.attach(child, 0, 0, 1, 1)
+
+    // Super+Ctrl+B: the item is a keyboard stop when it has something to DO.
+    const act = onKey ?? onClick ?? barKeyAction(child)
+    if (act) setBarItemKey(item, act)
+    const keys = new Gtk.EventControllerKey()
+    keys.connect("key-pressed", (_c: any, keyval: number) => {
+        const run = itemKeys.get(item)
+        if (!run || !item.is_focus() || status.bar_edit_mode) return false
+        if (keyval !== Gdk.KEY_Return && keyval !== Gdk.KEY_KP_Enter && keyval !== Gdk.KEY_space
+            && keyval !== Gdk.KEY_KP_Space && keyval !== Gdk.KEY_Down) return false
+        run()
+        return true
+    })
+    item.add_controller(keys)
+    // The child too: a tray icon's focus lives on its button, and when the pointer
+    // turns focus-visible off only the focused widget's flags change.
+    item.connect("state-flags-changed", () => veil.queue_draw())
+    child.connect("state-flags-changed", () => veil.queue_draw())
 
     const motion = new Gtk.EventControllerMotion()
     motion.connect("enter", () => { hovered = true; veil.queue_draw() })

@@ -258,6 +258,10 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     aliases: ["toggleNotificationCenter"],
     run: args => status.toggleNC(args[0] === "keyboard"),
   },
+  focusBar: {
+    desc: "Walk the bar's items with the keyboard (Super+Ctrl+B): ←/→ move, Enter/Space/↓ open, Esc leaves",
+    run: () => { status.bar_keyboard = !status.bar_keyboard },
+  },
   togglePrism: {
     desc: "Toggle search (apps and recent files)",
     aliases: ["toggleSearch"],
@@ -785,6 +789,8 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
           },
           overlays: {
             controlCenter: status.cc_open,
+            // The bar's keyboard walk (Super+Ctrl+B): true = the bar holds the keys.
+            barKeyboard: status.bar_keyboard,
             notificationCenter: status.nc_open,
             prism: status.prism_open,
             appGrid: status.app_grid_open,

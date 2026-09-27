@@ -19,6 +19,13 @@ function setIcon(img: Gtk.Image, icon: Gio.FileIcon | string) {
 
 const AUTO_HIDE_MS = 3000
 
+/** What a bar icon DOES, for the keyboard. The icons below take their click through a
+ *  GestureClick on an image or a box — nothing a key can reach — so each registers
+ *  the same action here, and the bar's item (surfaces/bar/capsule.ts) runs it on
+ *  Enter/Space/↓. A WeakMap, not a property: the widget goes, its entry goes. */
+const keyActions = new WeakMap<Gtk.Widget, () => void>()
+export const barKeyAction = (w: Gtk.Widget): (() => void) | undefined => keyActions.get(w)
+
 /** The air on each side of a STANDALONE bar capsule's content — an icon-only pill
  *  is PAD + 16 + PAD = 48 wide. Since 2026-09-26 that is only the island's compact
  *  forms: everything else in the bar is an ITEM inside a group (BAR_ITEM_PAD). On the
@@ -80,8 +87,7 @@ export function makeBarExpandable(opts: {
         revealer.reveal_child = false
     }
 
-    const gesture = new Gtk.GestureClick()
-    gesture.connect("pressed", () => {
+    const act = () => {
         if (hideTimer) { GLib.source_remove(hideTimer); hideTimer = null }
         if (expanded) {
             collapse()
@@ -97,8 +103,11 @@ export function makeBarExpandable(opts: {
             })
         }
         onAction?.()
-    })
+    }
+    const gesture = new Gtk.GestureClick()
+    gesture.connect("pressed", act)
     box.add_controller(gesture)
+    keyActions.set(box, act)
 
     box.connect("unrealize", () => {
         if (hideTimer) { GLib.source_remove(hideTimer); hideTimer = null }
@@ -131,9 +140,11 @@ export function makeBarIcon(opts: {
         }
     }
 
+    const act = () => { onAction(); syncState() }
     const gesture = new Gtk.GestureClick()
-    gesture.connect("pressed", () => { onAction(); syncState() })
+    gesture.connect("pressed", act)
     image.add_controller(gesture)
+    keyActions.set(image, act)
 
     if (subscribe) {
         const cleanup = subscribe(syncState)
