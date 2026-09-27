@@ -821,10 +821,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   //    KEYBOARD, but every one of them wants MODALITY — "clicking outside closes
   //    me" — which was the catcher's whole job.
   //  · NOT `cc_edit_mode`: it is the one open state that deliberately leaves the
-  //    desktop interactive, and a grab would take that away.
+  //    desktop interactive, and a grab would take that away — UNLESS it was entered
+  //    from the keyboard (Status.ccEditFromKeyboard), when releasing the grab would
+  //    take the keyboard away from the person using it.
   const barModal = () =>
     (status.cc_open || status.nc_open || status.prism_open || status.system_menu_open
-      || status.bar_expanded_id !== "" || status.bar_overflow_open || status.bar_edit_mode || status.bar_keyboard) && !status.cc_edit_mode
+      || status.bar_expanded_id !== "" || status.bar_overflow_open || status.bar_edit_mode || status.bar_keyboard)
+      && (!status.cc_edit_mode || status.ccEditFromKeyboard)
   const barGrabbing = () => barModal()
   // ⚠️ ANY open island mode, not just the keyboard-driven ones. Under layer-shell
   // only an EXCLUSIVE mode took input, so this used to read `island.needsKeyboard()`

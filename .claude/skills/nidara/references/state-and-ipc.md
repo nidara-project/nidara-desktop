@@ -1793,6 +1793,10 @@ new bar panel joins by being passed to the same two helpers:
   because it swallows the key GTK would have used to turn the ring on.
 - One window-level Esc closes whichever panel is open (bubble: an inner control, a CC detail,
   the two edit modes each keep their own Esc first).
+- **CC edit mode entered from the KEYBOARD keeps the grab** (`Status.ccEditFromKeyboard`, set by
+  IslandGrid's Edit pill on Enter/Space). Edit mode deliberately releases the grab so the desktop
+  stays usable while tiles are dragged — right for the pointer, but a keyboard user lost the keyboard
+  on the spot (measured: focus → nothing). Esc in edit mode is "Done" (IslandGrid), not "close".
 - On grab release `win.set_focus(null)`: a closing panel hands GTK's focus to the next focusable
   widget, which is a bar icon, and with the window still focus-visible it kept the ring.
 - **Opened from a key bind** (`nidara-ipc toggleCC keyboard`, Super+C / Super+N): the Super+…
