@@ -280,6 +280,12 @@ export default function IslandGrid() {
         width_request: GRID_WIDTH,
         height_request: GRID_HEIGHT,
     })
+    // GtkFixed clips to its box by default, and the tiles on the grid's sides reach
+    // it — so their keyboard ring (GTK's outline, drawn OUTSIDE the tile) was cut at
+    // the grid's edge. Found by walking a tile's ancestors for `overflow: HIDDEN`
+    // after unclipping the three above it had not been enough (2026-09-27). Nothing
+    // here needs the clip: tiles are placed inside the grid, even mid-reflow.
+    fixed.set_overflow(Gtk.Overflow.VISIBLE)
 
     // Empty-slot placeholders live on their OWN layer *below* the tiles. Tiles are
     // translucent glass, so a placeholder behind an occupied cell would bleed
