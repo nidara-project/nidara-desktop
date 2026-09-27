@@ -1931,7 +1931,18 @@ uwsm makes it `Type=exec` + `ExitType=cgroup`: the unit lives while ANY process 
 (fork-and-exit wrappers are safe) and ends with the app. Checked live: a D-Bus-activatable entry
 (Calendar) lands in its own `app-Hyprland-org.gnome.Calendar@….service`; a Flatpak (Clocks) makes
 its own `app-flatpak-…scope`, as Flatpak always does; a `Terminal=true` entry opens in the terminal
-`~/.config/xdg-terminals.list` names (uwsm's choice, same in both modes).
+uwsm's lookup picks (same in both modes).
+
+**That terminal is kitty by default**, through a SYSTEM list the package ships:
+`config/xdg-terminal-exec/Hyprland-xdg-terminals.list` → `/usr/share/xdg-terminal-exec/` (PKGBUILD +
+install.sh). A user's own `~/.config/xdg-terminals.list` still wins — which is why it is a packaged
+default and not something `nidara-setup` writes into every home. Measured against uwsm's own
+`find_terminal_entry()` (2026-09-27): with no list at all it picked
+`org.gnome.Terminal.Preferences.desktop` — GNOME Terminal's PREFERENCES app — on a machine that had
+GNOME Terminal installed. Two traps a probe falls into: the desktop prefix is `XDG_CURRENT_DESKTOP`
+verbatim (`Hyprland-…`; a lowercase `hyprland-xdg-terminals.list` is never read), and uwsm SKIPS any
+data dir under `$HOME` — so testing with the repo's `config/` on `XDG_DATA_DIRS` silently tests
+nothing; copy the file somewhere outside home.
 
 🔑 **Why it matters beyond "the window opens":** the XDG portal does not ask an unsandboxed app who it
 is. It reads the systemd unit the process lives in, accepts `app-<launcher>-<id>@<random>.service`

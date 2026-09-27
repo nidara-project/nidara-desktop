@@ -1,0 +1,11 @@
+# Nidara's default terminal for "open in a terminal" (Terminal=true desktop entries,
+# `uwsm app -T`), read by uwsm's terminal lookup (xdg-terminal-exec spec).
+#
+# A SYSTEM default, the lowest-priority place uwsm looks: a user's own
+# ~/.config/xdg-terminals.list (or Hyprland-xdg-terminals.list) always wins.
+# Without any list, uwsm picked org.gnome.Terminal.Preferences.desktop on a machine
+# with GNOME Terminal installed — measured 2026-09-27.
+#
+# ⚠️ The desktop prefix is XDG_CURRENT_DESKTOP verbatim: "Hyprland-", capital H.
+# A "hyprland-xdg-terminals.list" is never read (measured).
+kitty.desktop
