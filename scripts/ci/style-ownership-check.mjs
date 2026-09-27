@@ -166,6 +166,9 @@ const IGNORED_WIDGETS = new Set([
     "EventControllerScroll", "GestureClick", "GestureDrag", "GestureLongPress",
     "IconTheme", "ListStore", "SignalListItemFactory", "SizeGroup", "Snapshot",
     "StringList", "TextBuffer", "WidgetPaintable",
+    // A paintable, not a widget: it has no CSS node. The Gtk.Image showing it
+    // does, and is already here (common/StatefulIcon.ts).
+    "Svg",
 ])
 
 const read = (p) => readFileSync(p, "utf8")

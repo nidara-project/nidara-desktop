@@ -27,7 +27,7 @@ import Tray from "./Tray"
 import { SEARCH_KEY, defaultOrder, isBarHidden, knownTrayItems, moveBefore, parseBarKey, resolveOrder, savedBarOrder, setSavedBarOrder, trayKey, watchBarOrder, widgetKey } from "../../core/BarOrder"
 import { SystemMenuOverlay } from "./SystemMenu"
 import { AppTitle } from "./AppTitle"
-import { ccBadge } from "./StatusIndicators"
+import { statefulIcon } from "../../common/StatefulIcon"
 
 // Overlay panels mounted on the bar window (avoids separate layer-shell surfaces)
 import { ControlCenterWidget } from "../control-center/ControlCenter"
@@ -1566,29 +1566,21 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   rightGroup.box.append(doneItem)
   rightGroup.box.append(overflowItem)
   rightGroup.box.append(orderedItems)
-  // CC item layout: [PAD][gear 16px][DOT_GAP] — 36 wide, 4 more than an icon item, so
-  // the status-indicator dot (recording / AI control) has a lane of its own to the
-  // right of the gear and never shifts anything when it shows or hides.
-  // The dot is overlaid on the whole content and centred in the region that starts at
-  // `margin_start`; setting that to the gear's VISIBLE right edge centres it between
-  // the glyph and the item's edge (= the hover pill's edge). A 16px glyph draws ~3px
-  // inside its box (measured 2026-08, when this was a capsule), so its visible right
-  // edge is PAD + 13 = 21 → the dot's centre lands at (21 + 36) / 2 ≈ 28.5.
-  // Detail + Stop/kill-switch live in the CC banner. Badge can_target:false → clicks hit the item.
-  // Two sliders, like macOS's Control Centre. The freedesktop spec has no name for
-  // that; the one icon themes draw that way is GNOME Tweaks' (Colloid, MacTahoe, Qogir,
-  // Tela — as two switches). `preferences-system` is a gear or tools everywhere (#587).
-  const CC_DOT_GAP = 12
-  const ccGear = new Gtk.Image({ gicon: uiIcon("nd-control-center"), pixel_size: 16, margin_start: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
-  const ccInner = new Gtk.Box({ valign: Gtk.Align.CENTER })
-  ccInner.append(ccGear)
-  ccInner.append(new Gtk.Box({ width_request: CC_DOT_GAP }))   // the dot's lane, reserved whether or not it shows
-  const ccDot = ccBadge()
-  ccDot.set_margin_start(BAR_ITEM_PAD + 13)             // the gear's visible right edge (derivation above)
-  const ccOverlay = new Gtk.Overlay()
-  ccOverlay.set_child(ccInner)
-  ccOverlay.add_overlay(ccDot)
-  const ccItem = barItem({ child: ccOverlay, onClick: () => status.toggleCC(), ...barOpen(() => status.cc_open) })
+  // The Control Centre's button is an ordinary icon item. Its drawing is two
+  // switches, like macOS's Control Centre (the freedesktop spec has no name for
+  // that; `preferences-system` is a gear or tools everywhere, #587), and the
+  // switches FLIP while the CC is open — a state of the icon, played by GTK
+  // (common/StatefulIcon.ts), not a CSS transform on a clickable.
+  // Until 2026-09-27 it also carried a red dot in a lane of its own for AI control
+  // (StatusIndicators.tsx); the owner took the dot out: that notice lives only in
+  // the CC's banner until what the bar should show for it is decided.
+  const ccIcon = statefulIcon("nd-control-center", { pixelSize: 16, cssClasses: ["nd-icon"] })
+  ccIcon.widget.margin_start = BAR_ITEM_PAD
+  ccIcon.widget.margin_end = BAR_ITEM_PAD
+  const syncCCIcon = () => ccIcon.setState(status.cc_open ? "open" : "closed")
+  status.connect("notify::cc-open", syncCCIcon)
+  syncCCIcon()
+  const ccItem = barItem({ child: ccIcon.widget, onClick: () => status.toggleCC(), ...barOpen(() => status.cc_open) })
   barTooltip(ccItem, () => t("bar.tooltip.control-center"))
   rightGroup.box.append(ccItem)
   const clockItem = barItem({ child: timeContent, onClick: () => status.toggleNC(), ...barOpen(() => status.nc_open) })

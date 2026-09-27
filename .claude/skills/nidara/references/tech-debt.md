@@ -229,9 +229,11 @@ the crash happens below us, during Wayland event dispatch.
 
 ### 17. Status-indicator subsystem: extension points deliberately not wired (2026-06-19)
 `surfaces/bar/StatusIndicators.tsx` is a declarative registry (`INDICATORS`, three states
-hidden/armed/active) rendered as a small **badge on the bar's Control-Center button**
-(`ccBadge`) + a **status banner inside the CC** above the widgets (`ccStatusBanner`, where the
-Stop/kill-switch lives). It currently hosts only recording + AI-control but is the intended home for
+hidden/armed/active) rendered as a **status banner inside the CC** above the widgets
+(`ccStatusBanner`, where the Stop/kill-switch lives). The small red **badge on the bar's
+Control-Center button** (`ccBadge`) was removed by the owner on 2026-09-27 — still OWED: what the
+bar shows while AI control is granted (no prior art; nothing does until decided), and the CC
+button's small second icon for privacy (one mark, macOS-style — state-and-ipc.md). It currently hosts only recording + AI-control but is the intended home for
 **privacy/activity indicators** (mic, camera, screen-share, location). Those are **not wired** (no
 source detection yet); adding one = a new `INDICATORS` entry with `state()` + `subscribe()` + `onClick`.
 The banner is a **Cairo island** since 2026-08-02 (user call), not a CSS `material-card`: same

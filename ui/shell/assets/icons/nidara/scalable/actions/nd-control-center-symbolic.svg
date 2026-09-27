@@ -1,6 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M14 17H5" class="foreground-stroke transparent-fill" />
-  <path d="M19 7h-9" class="foreground-stroke transparent-fill" />
-  <circle cx="17" cy="17" r="3" class="foreground-stroke transparent-fill" />
-  <circle cx="7" cy="7" r="3" class="foreground-stroke transparent-fill" />
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:gpa="https://www.gtk.org/grappa" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" gpa:version="1" gpa:state-names="closed open" gpa:state="closed">
+  <!-- Two switches with the proportions of the kit's own (44×24, thumb 3/4 of the
+       height). ON = the track filled with the thumb as a hole (even-odd), OFF = the
+       outline with a solid thumb. The hole stops at the outline's inner edge (r 2.75):
+       any larger and the outline, drawn under the fill, shows through it on three
+       sides but not the fourth, and the hole reads lopsided. Initial state `closed`: top on, bottom off. -->
+  <rect x="4" y="2" width="16" height="7.5" rx="3.75" class="foreground-stroke transparent-fill" gpa:stroke="foreground" />
+  <rect x="4" y="14.5" width="16" height="7.5" rx="3.75" class="foreground-stroke transparent-fill" gpa:stroke="foreground" />
+  <path id="fill-top" d="M 7.75 1 H 16.25 A 4.75 4.75 0 0 1 16.25 10.5 H 7.75 A 4.75 4.75 0 0 1 7.75 1 Z M 13.5 5.75 A 2.75 2.75 0 1 0 19 5.75 A 2.75 2.75 0 1 0 13.5 5.75 Z" fill="currentColor" fill-rule="evenodd" stroke="none" class="foreground-fill" gpa:fill="foreground" />
+  <path id="fill-bottom" d="M 7.75 13.5 H 16.25 A 4.75 4.75 0 0 1 16.25 23 H 7.75 A 4.75 4.75 0 0 1 7.75 13.5 Z M 5 18.25 A 2.75 2.75 0 1 0 10.5 18.25 A 2.75 2.75 0 1 0 5 18.25 Z" fill="currentColor" fill-rule="evenodd" stroke="none" opacity="0" class="foreground-fill" gpa:fill="foreground" />
+  <circle id="thumb-top" cx="16.25" cy="5.75" r="2" fill="currentColor" stroke="none" opacity="0" class="foreground-fill" gpa:fill="foreground" />
+  <circle id="thumb-bottom" cx="7.75" cy="18.25" r="2" fill="currentColor" stroke="none" class="foreground-fill" gpa:fill="foreground" />
+  <!-- closed → open: the top switch turns off, the bottom one on, 60 ms behind -->
+  <animate href="#fill-top" attributeName="d" begin="gpa:states(1).begin" dur="280ms" fill="freeze" to="M 7.75 1 H 16.25 A 4.75 4.75 0 0 1 16.25 10.5 H 7.75 A 4.75 4.75 0 0 1 7.75 1 Z M 5 5.75 A 2.75 2.75 0 1 0 10.5 5.75 A 2.75 2.75 0 1 0 5 5.75 Z" calcMode="spline" keyTimes="0;1" keySplines="0.3 0 0.2 1" />
+  <animate href="#thumb-top" attributeName="cx" begin="gpa:states(1).begin" dur="280ms" fill="freeze" to="7.75" calcMode="spline" keyTimes="0;1" keySplines="0.3 0 0.2 1" />
+  <animate href="#fill-top" attributeName="opacity" begin="gpa:states(1).begin" dur="200ms" fill="freeze" to="0" />
+  <animate href="#thumb-top" attributeName="opacity" begin="gpa:states(1).begin" dur="200ms" fill="freeze" to="1" />
+  <animate href="#fill-bottom" attributeName="d" begin="gpa:states(1).begin +60ms" dur="280ms" fill="freeze" to="M 7.75 13.5 H 16.25 A 4.75 4.75 0 0 1 16.25 23 H 7.75 A 4.75 4.75 0 0 1 7.75 13.5 Z M 13.5 18.25 A 2.75 2.75 0 1 0 19 18.25 A 2.75 2.75 0 1 0 13.5 18.25 Z" calcMode="spline" keyTimes="0;1" keySplines="0.3 0 0.2 1" />
+  <animate href="#thumb-bottom" attributeName="cx" begin="gpa:states(1).begin +60ms" dur="280ms" fill="freeze" to="16.25" calcMode="spline" keyTimes="0;1" keySplines="0.3 0 0.2 1" />
+  <animate href="#fill-bottom" attributeName="opacity" begin="gpa:states(1).begin +60ms" dur="200ms" fill="freeze" to="1" />
+  <animate href="#thumb-bottom" attributeName="opacity" begin="gpa:states(1).begin +60ms" dur="200ms" fill="freeze" to="0" />
+  <!-- open → closed -->
+  <animate href="#fill-top" attributeName="d" begin="gpa:states(0).begin" dur="280ms" fill="freeze" to="M 7.75 1 H 16.25 A 4.75 4.75 0 0 1 16.25 10.5 H 7.75 A 4.75 4.75 0 0 1 7.75 1 Z M 13.5 5.75 A 2.75 2.75 0 1 0 19 5.75 A 2.75 2.75 0 1 0 13.5 5.75 Z" calcMode="spline" keyTimes="0;1" keySplines="0.3 0 0.2 1" />
+  <animate href="#thumb-top" attributeName="cx" begin="gpa:states(0).begin" dur="280ms" fill="freeze" to="16.25" calcMode="spline" keyTimes="0;1" keySplines="0.3 0 0.2 1" />
+  <animate href="#fill-top" attributeName="opacity" begin="gpa:states(0).begin" dur="200ms" fill="freeze" to="1" />
+  <animate href="#thumb-top" attributeName="opacity" begin="gpa:states(0).begin" dur="200ms" fill="freeze" to="0" />
+  <animate href="#fill-bottom" attributeName="d" begin="gpa:states(0).begin +60ms" dur="280ms" fill="freeze" to="M 7.75 13.5 H 16.25 A 4.75 4.75 0 0 1 16.25 23 H 7.75 A 4.75 4.75 0 0 1 7.75 13.5 Z M 5 18.25 A 2.75 2.75 0 1 0 10.5 18.25 A 2.75 2.75 0 1 0 5 18.25 Z" calcMode="spline" keyTimes="0;1" keySplines="0.3 0 0.2 1" />
+  <animate href="#thumb-bottom" attributeName="cx" begin="gpa:states(0).begin +60ms" dur="280ms" fill="freeze" to="7.75" calcMode="spline" keyTimes="0;1" keySplines="0.3 0 0.2 1" />
+  <animate href="#fill-bottom" attributeName="opacity" begin="gpa:states(0).begin +60ms" dur="200ms" fill="freeze" to="0" />
+  <animate href="#thumb-bottom" attributeName="opacity" begin="gpa:states(0).begin +60ms" dur="200ms" fill="freeze" to="1" />
 </svg>

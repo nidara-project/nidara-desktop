@@ -9,18 +9,20 @@ import { t } from "../../core/i18n"
 // ─────────────────────────────────────────────────────────────────────────────
 // Status indicators — a PERMISSION the Control Center holds the switch for
 // (AI control today; mic/camera/screen-share when they get source detection).
-// Pattern: a small ALWAYS-VISIBLE badge on the bar's Control-Center button, with
-// the detail + the switch inside the Control Center (a banner above the widgets).
-// Adding one is a new INDICATORS entry.
+// Pattern: the detail + the switch inside the Control Center (a banner above the
+// widgets). Adding one is a new INDICATORS entry.
 //
-// The badge means exactly ONE thing: "the Control Center has something for you."
-// An indicator whose story is told in full somewhere else, or whose CC surface
-// might not exist, does not belong here — that is why recording left (below).
+// ⚠️ There is NO mark on the bar for these any more (owner, 2026-09-27). Until then a
+// red dot sat in a lane of its own on the CC button, meaning "the Control Center
+// has something for you"; the owner took it out, and what the bar should show for
+// AI control is undecided — no platform has prior art for it. The CC button is to
+// gain a small second icon for PRIVACY (sensors in use, location), macOS-style:
+// one mark beside the Control Centre, the detail at the top of it.
 //
 // Three states per indicator:
 //   hidden — not happening.
-//   armed  — relevant but idle (AI control granted but not acting): subtle.
-//   active — happening now (the agent just acted): full.
+//   armed  — relevant but idle (AI control granted but not acting).
+//   active — happening now (the agent just acted): the banner's dot pulses.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type IndicatorState = "hidden" | "armed" | "active"
@@ -31,7 +33,7 @@ interface BarIndicator {
     detail: () => string         // banner row subtitle (state description)
     state: () => IndicatorState
     // Register cb to run whenever state() may have changed. Shell-lifetime — the
-    // badge/banner live as long as the bar, so subscriptions are never torn down.
+    // banner lives as long as the CC, so subscriptions are never torn down.
     subscribe: (cb: () => void) => void
     // Stop/revoke, surfaced as the banner's action button.
     onClick: () => void
@@ -52,7 +54,7 @@ const INDICATORS: BarIndicator[] = [
     // switch for. `status.recording` is deliberately no longer read here.
     {
         // Computer-use awareness + kill switch. "armed" while control is GRANTED but
-        // idle (so the badge is always visible while permitted), "active" for a few
+        // idle (so the banner is always there while permitted), "active" for a few
         // seconds after a real action fires (agentConfig.pulseComputerAction).
         id: "ai-control",
         label: () => t("cc.status.ai.label"),
@@ -68,42 +70,6 @@ const INDICATORS: BarIndicator[] = [
 // Subscribe a callback to every indicator's change signal.
 function subscribeAll(cb: () => void) {
     for (const ind of INDICATORS) ind.subscribe(cb)
-}
-
-// Aggregate state for the single bar badge: active if any is active, else armed if
-// any is armed, else hidden.
-function barState(): IndicatorState {
-    let armed = false
-    for (const ind of INDICATORS) {
-        const s = ind.state()
-        if (s === "active") return "active"
-        if (s === "armed") armed = true
-    }
-    return armed ? "armed" : "hidden"
-}
-
-// ── Bar badge ─────────────────────────────────────────────────────────────────
-// A small dot CENTRED on the Control-Center capsule's right-gap overlay (Bar.tsx packs
-// the gear, then a 16px spacer with this dot overlaid). halign/valign CENTER → the
-// Overlay centres it between the icon and the capsule's right edge (a Box would pack it
-// left against the icon). Purely a signal — `can_target: false` so clicks reach the capsule.
-export function ccBadge(): Gtk.Widget {
-    const dot = new Gtk.Box({
-        css_classes: ["bar-cc-badge"],
-        width_request: 6, height_request: 6,
-        halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.CENTER,
-        can_target: false,
-    })
-    const sync = () => {
-        const s = barState()
-        dot.set_visible(s !== "hidden")
-        if (s === "active") dot.add_css_class("is-active")
-        else dot.remove_css_class("is-active")
-    }
-    subscribeAll(sync)
-    sync()
-    return dot
 }
 
 // ── Control-Center banner ─────────────────────────────────────────────────────

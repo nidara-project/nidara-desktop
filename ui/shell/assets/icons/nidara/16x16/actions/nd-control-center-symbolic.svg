@@ -1,6 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M 9.3333 11.3333 H 3.3333" class="foreground-stroke transparent-fill" />
-  <path d="M 12.6667 4.6667 h -6" class="foreground-stroke transparent-fill" />
-  <circle cx="11.3333" cy="11.3333" r="2" class="foreground-stroke transparent-fill" />
-  <circle cx="4.6667" cy="4.6667" r="2" class="foreground-stroke transparent-fill" />
+  <rect x="2.6667" y="1.3333" width="10.6667" height="5" rx="2.5" class="foreground-stroke transparent-fill" />
+  <rect x="2.6667" y="9.6667" width="10.6667" height="5" rx="2.5" class="foreground-stroke transparent-fill" />
+  <path id="fill-top" d="M 5.1667 0.6667 H 10.8333 A 3.1667 3.1667 0 0 1 10.8333 7 H 5.1667 A 3.1667 3.1667 0 0 1 5.1667 0.6667 Z M 9 3.8333 A 1.8333 1.8333 0 1 0 12.6667 3.8333 A 1.8333 1.8333 0 1 0 9 3.8333 Z" fill="currentColor" fill-rule="evenodd" stroke="none" class="foreground-fill" />
+  <path id="fill-bottom" d="M 5.1667 9 H 10.8333 A 3.1667 3.1667 0 0 1 10.8333 15.3333 H 5.1667 A 3.1667 3.1667 0 0 1 5.1667 9 Z M 3.3333 12.1667 A 1.8333 1.8333 0 1 0 7 12.1667 A 1.8333 1.8333 0 1 0 3.3333 12.1667 Z" fill="currentColor" fill-rule="evenodd" stroke="none" opacity="0" class="foreground-fill" />
+  <circle id="thumb-top" cx="10.8333" cy="3.8333" r="1.3333" fill="currentColor" stroke="none" opacity="0" class="foreground-fill" />
+  <circle id="thumb-bottom" cx="5.1667" cy="12.1667" r="1.3333" fill="currentColor" stroke="none" class="foreground-fill" />
 </svg>
