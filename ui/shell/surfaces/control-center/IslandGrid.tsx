@@ -710,7 +710,7 @@ export default function IslandGrid() {
     fixed.add_controller(dropTarget)
 
     const editLabel = new Gtk.Label({ label: t("cc.grid.edit"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 })
-    const editBtn = SquircleContainer({ child: editLabel, shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, css_classes: ["cc-edit-pill"], shadow: GLASS_SHADOW })
+    const editBtn = SquircleContainer({ child: editLabel, shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, css_classes: ["cc-edit-pill"], shadow: GLASS_SHADOW, keyboardStop: true })
     const editBtnWrapper = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, margin_top: 24, margin_bottom: 12 })
     editBtnWrapper.append(editBtn)
 
@@ -760,8 +760,7 @@ export default function IslandGrid() {
         editLabel.label = editMode ? t("cc.grid.done") : t("cc.grid.edit")
     }
 
-    const gestureClick = new Gtk.GestureClick()
-    gestureClick.connect("released", () => {
+    const toggleEdit = () => {
         editMode = !editMode
         if (editMode) hideDetail()
         rebuild()
@@ -769,8 +768,21 @@ export default function IslandGrid() {
         // stamps the window input region via measure(), which must already see
         // the resized grid (allocation lags a layout pass; measure doesn't).
         status.cc_edit_mode = editMode
-    })
+    }
+    const gestureClick = new Gtk.GestureClick()
+    gestureClick.connect("released", toggleEdit)
     editBtn.add_controller(gestureClick)
+    // The keyboard's click (owner-caught 2026-09-27: the pill was a gesture, so no key
+    // ever reached it). The pill outlives rebuild(), so the focus stays on it across
+    // the toggle — Enter again is "Done".
+    const editKeys = new Gtk.EventControllerKey()
+    editKeys.connect("key-pressed", (_c: any, keyval: number) => {
+        if (keyval !== Gdk.KEY_Return && keyval !== Gdk.KEY_KP_Enter
+            && keyval !== Gdk.KEY_space && keyval !== Gdk.KEY_KP_Space) return false
+        toggleEdit()
+        return true
+    })
+    editBtn.add_controller(editKeys)
     ccLayout.connect("changed", () => rebuild())
 
     // Sync CC layout with widget placement config. Hardware gate at the layout
