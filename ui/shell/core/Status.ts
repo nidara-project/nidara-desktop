@@ -272,6 +272,15 @@ export class UIStatus extends GObject.Object {
      */
     keyboardEntry = false
 
+    /**
+     * The CC's edit mode was entered FROM THE KEYBOARD. Plain field, set by IslandGrid
+     * with `cc_edit_mode`. Edit mode deliberately releases the bar's focus grab, so
+     * the desktop stays usable while tiles are dragged — but a keyboard user who
+     * entered it that way would lose the keyboard the moment they did (measured
+     * 2026-09-27: the focus went to nothing). While this is true, the bar keeps it.
+     */
+    ccEditFromKeyboard = false
+
     toggleCC(fromKeyboard = false) { this.keyboardEntry = fromKeyboard && !this.cc_open; this.cc_open = !this.cc_open }
     toggleNC(fromKeyboard = false) { this.keyboardEntry = fromKeyboard && !this.nc_open; this.nc_open = !this.nc_open }
     togglePrism() { this.prism_open = !this.prism_open }

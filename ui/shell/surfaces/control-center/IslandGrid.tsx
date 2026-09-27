@@ -760,17 +760,19 @@ export default function IslandGrid() {
         editLabel.label = editMode ? t("cc.grid.done") : t("cc.grid.edit")
     }
 
-    const toggleEdit = () => {
+    const toggleEdit = (fromKeyboard = false) => {
         editMode = !editMode
         if (editMode) hideDetail()
         rebuild()
+        // Before cc_edit_mode, whose notify is what re-decides the bar's grab.
+        status.ccEditFromKeyboard = editMode && fromKeyboard
         // AFTER rebuild, deliberately: the bar's notify::cc-edit-mode handler
         // stamps the window input region via measure(), which must already see
         // the resized grid (allocation lags a layout pass; measure doesn't).
         status.cc_edit_mode = editMode
     }
     const gestureClick = new Gtk.GestureClick()
-    gestureClick.connect("released", toggleEdit)
+    gestureClick.connect("released", () => toggleEdit())
     editBtn.add_controller(gestureClick)
     // The keyboard's click (owner-caught 2026-09-27: the pill was a gesture, so no key
     // ever reached it). The pill outlives rebuild(), so the focus stays on it across
@@ -779,10 +781,20 @@ export default function IslandGrid() {
     editKeys.connect("key-pressed", (_c: any, keyval: number) => {
         if (keyval !== Gdk.KEY_Return && keyval !== Gdk.KEY_KP_Enter
             && keyval !== Gdk.KEY_space && keyval !== Gdk.KEY_KP_Space) return false
-        toggleEdit()
+        toggleEdit(true)
         return true
     })
     editBtn.add_controller(editKeys)
+    // Esc in edit mode is "Done", as in the bar's edit mode — not "close the CC"
+    // (the bar's Esc stands aside in edit mode). The focus goes back to the pill.
+    const editEsc = new Gtk.EventControllerKey()
+    editEsc.connect("key-pressed", (_c: any, keyval: number) => {
+        if (keyval !== Gdk.KEY_Escape || !editMode) return false
+        toggleEdit()
+        editBtn.grab_focus()
+        return true
+    })
+    overviewPage.add_controller(editEsc)
     ccLayout.connect("changed", () => rebuild())
 
     // Sync CC layout with widget placement config. Hardware gate at the layout
