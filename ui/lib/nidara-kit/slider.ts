@@ -211,8 +211,20 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
             const cy = horiz ? cc : tMain
             cr.setSourceRGBA(0, 0, 0, 0.25); cr.newPath(); cr.arc(cx, cy + 1, tr, 0, 2 * Math.PI); cr.fill()
             cr.setSourceRGBA(1, 1, 1, pressed ? 0.55 : 0.95); cr.newPath(); cr.arc(cx, cy, tr, 0, 2 * Math.PI); cr.fill()
+            // Keyboard focus: `nidara-focus-ring`'s 2px accent on the thumb's own edge.
+            // A DrawingArea gets no ring from CSS (no rule reaches it, and our processes
+            // run on no GTK theme), so without this the focus was THERE and invisible.
+            // On the edge, not outside it: the widget is exactly the thumb's diameter
+            // across, and outside it nothing would be drawn.
+            const flags = da.get_state_flags()
+            if ((flags & Gtk.StateFlags.FOCUSED) && (flags & Gtk.StateFlags.FOCUS_VISIBLE)) {
+                const { r: ar, g: ag, b: ab } = hexToFloatRgb(kitAppearance().accent())
+                cr.setSourceRGBA(ar, ag, ab, 1); cr.setLineWidth(2)
+                cr.newPath(); cr.arc(cx, cy, tr - 1, 0, 2 * Math.PI); cr.stroke()
+            }
         }
     }))
+    da.connect("state-flags-changed", () => da.queue_draw())
 
     // ── Commit machinery ────────────────────────────────────────────────────────
     let pendingId = 0
@@ -287,19 +299,25 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
     })
     da.add_controller(scroll)
 
-    // Keyboard (accessibility).
-    const keys = new Gtk.EventControllerKey()
-    keys.connect("key-pressed", (_c: any, keyval: number) => {
+    // Keyboard. Only the arrows ALONG the slider move it; the two across it are left
+    // to move the focus. Taking all four (as this did) made a slider a trap: in the
+    // CC grid nothing but Tab could leave it, and the owner found Esc — which closes
+    // the whole panel — to be the only way out (2026-09-27).
+    const onKey = (keyval: number): boolean => {
         let nf = frac
         const s = step / range
-        if (keyval === 0xff51 || keyval === 0xff54) nf = frac - s          // Left / Down
-        else if (keyval === 0xff53 || keyval === 0xff52) nf = frac + s     // Right / Up
+        const down = horiz ? 0xff51 : 0xff54, up = horiz ? 0xff53 : 0xff52   // Left/Right · Down/Up
+        if (keyval === down) nf = frac - s
+        else if (keyval === up) nf = frac + s
         else if (keyval === 0xff50) nf = 0                                  // Home
         else if (keyval === 0xff57) nf = 1                                  // End
         else return false
         applyFrac(nf); commit()
         return true
-    })
+    }
+    sliderKeys.set(da, onKey)
+    const keys = new Gtk.EventControllerKey()
+    keys.connect("key-pressed", (_c: any, keyval: number) => onKey(keyval))
     da.add_controller(keys)
 
     // Accent / mode change → redraw.
@@ -348,6 +366,13 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
  * between this overlay and the tile's real edge) − 14 (half the 28px glyph) = 22.
  * `icon` accepts a getter + subscribe so a level-dependent icon (volume) stays live.
  */
+/** The slider's key handling, for a HOST that is the keyboard stop instead of the
+ *  slider: a fill tile draws nothing of its own (its host tile paints the gauge), so
+ *  the ring and the stop belong to the tile, which passes its keys here. Registered
+ *  for every slider and for a fill tile's root; `undefined` for anything else. */
+const sliderKeys = new WeakMap<Gtk.Widget, (keyval: number) => boolean>()
+export const sliderKeyHandler = (w: Gtk.Widget): ((keyval: number) => boolean) | undefined => sliderKeys.get(w)
+
 export function makeVerticalFillTile(
     icon: Gio.FileIcon | (() => Gio.FileIcon),
     opts: SliderOpts,
@@ -404,11 +429,18 @@ export function makeVerticalFillTile(
     })
     slider.hexpand = true
     slider.vexpand = true
+    // Not a stop of its own: the fill IS the tile, so the tile is the stop, wears the
+    // ring along its own shape and hands ↑/↓ here (see sliderKeyHandler). Two stops at
+    // one spot — the tile, then an invisible hit-region inside it — was what trapped
+    // the CC's volume tile.
+    slider.focusable = false
 
     const overlay = new Gtk.Overlay({ hexpand: true, vexpand: true })
     overlay.set_child(slider)
     overlay.add_overlay(valueLabel)
     overlay.add_overlay(iconImg)
+    const keysOf = sliderKeys.get(slider)
+    if (keysOf) sliderKeys.set(overlay, keysOf)
     return overlay
 }
 

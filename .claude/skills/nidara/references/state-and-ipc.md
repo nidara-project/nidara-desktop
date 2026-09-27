@@ -1820,7 +1820,14 @@ item's full width. Two rules that are easy to get backwards:
 In the CC grid a tile whose tap opens a detail is itself a keyboard stop
 (`SquircleContainer({ focusRing: true })`, see design-system.md → the Cairo focus ring): Enter/
 Space opens the detail, the Menu key or Shift+F10 opens the tile's context menu, focus moves into
-the detail and Esc there returns to the grid with the focus back on the tile. GTK orders Tab by
+the detail and Esc there returns to the grid with the focus back on the tile. A FILL tile (volume,
+brightness: `makeVerticalFillTile`) is a stop for the same reason even with no detail — its slider
+is an invisible hit-region, so the TILE is the stop, wears the ring and hands ↑/↓ to the slider
+through `sliderKeyHandler` (the slider itself is `focusable: false`). 🔴 A slider takes only the
+arrows ALONG its axis: taking all four made it a trap — in the CC nothing but Tab could leave it,
+and Esc (which closes the whole panel) looked like the only way out (owner-caught 2026-09-27). A
+thumb slider shows focus as a 2px accent ring on its thumb, painted in Cairo — a DrawingArea gets
+no ring from CSS, so its focus was real and invisible. GTK orders Tab by
 GEOMETRY (it sorts children by position, not by insertion order), so reordering the layout list
 does not change it.
 

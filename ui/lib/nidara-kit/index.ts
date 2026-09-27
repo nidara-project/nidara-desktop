@@ -77,7 +77,7 @@ export type { NidaraCloseMode } from "./app-window"
 // anywhere in Nidara). makeHSlider is the horizontal wrapper, makeVolumeSlider binds
 // one to an audio endpoint, makeVerticalFillTile is the 1×2 CC gauge tile.
 export type { SliderOpts, SliderOrientation } from "./slider"
-export { makeSlider, makeHSlider, makeVerticalFillTile, makeVolumeSlider } from "./slider"
+export { makeSlider, makeHSlider, makeVerticalFillTile, makeVolumeSlider, sliderKeyHandler } from "./slider"
 
 // The appearance seam the slider paints through — every BUNDLE registers its own
 // source once, in app.ts. Cairo cannot read CSS tokens, so the accent and the
