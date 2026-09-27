@@ -23,6 +23,8 @@ export class UIStatus extends GObject.Object {
                 "recording": GObject.ParamSpec.boolean("recording", "Recording", "Screen recording active", GObject.ParamFlags.READWRITE, false),
                 "bar-expanded-id": GObject.ParamSpec.string("bar-expanded-id", "Bar Expanded ID", "ID of the expanded bar widget, empty = none", GObject.ParamFlags.READWRITE, ""),
                 "bar-overflow-open": GObject.ParamSpec.boolean("bar-overflow-open", "Bar Overflow Open", "Bar widgets hidden for lack of room are unfolded in line", GObject.ParamFlags.READWRITE, false),
+                "dock-keyboard": GObject.ParamSpec.boolean("dock-keyboard", "Dock Keyboard", "The dock's icons are being walked with the keyboard (Super+Ctrl+D)", GObject.ParamFlags.READWRITE, false),
+                "bar-keyboard": GObject.ParamSpec.boolean("bar-keyboard", "Bar Keyboard", "The bar's items are being walked with the keyboard (Super+Ctrl+B)", GObject.ParamFlags.READWRITE, false),
                 "bar-edit-mode": GObject.ParamSpec.boolean("bar-edit-mode", "Bar Edit Mode", "The bar's right group is being reordered in place", GObject.ParamFlags.READWRITE, false),
                 "cc-detail-id": GObject.ParamSpec.string("cc-detail-id", "CC Detail ID", "Widget ID to open in CC detail view, empty = none", GObject.ParamFlags.READWRITE, ""),
             },
@@ -44,6 +46,8 @@ export class UIStatus extends GObject.Object {
     private _cc_detail_id = ""
     private _bar_overflow_open = false
     private _bar_edit_mode = false
+    private _bar_keyboard = false
+    private _dock_keyboard = false
 
     // The boolean mutually-exclusive overlays. Opening one closes the rest —
     // plus the Activity Island, whose state is a mode STRING (island_mode),
@@ -230,6 +234,28 @@ export class UIStatus extends GObject.Object {
         this.notify("bar-overflow-open")
     }
 
+    // The bar's items walked with the KEYBOARD (Super+Ctrl+B — macOS's Ctrl+F2 with the
+    // desktop's modifier: in Linux Ctrl belongs to the apps). Not exclusive: the panel an
+    // item opens is part of the walk, and closing it hands the focus back to its item.
+    // Ends on Esc with no panel open, or when the bar loses its focus grab.
+    public get bar_keyboard() { return this._bar_keyboard }
+    public set bar_keyboard(v: boolean) {
+        if (this._bar_keyboard === v) return
+        this._bar_keyboard = v
+        this.notify("bar-keyboard")
+    }
+
+    // The dock's icons walked with the KEYBOARD (Super+Ctrl+D — macOS's Ctrl+F3, same
+    // reason for Super as bar_keyboard). The dock on the FOCUSED monitor answers it.
+    // Ends on Esc, on an icon's Enter (what it starts needs the keys), or when the
+    // dock loses its focus grab.
+    public get dock_keyboard() { return this._dock_keyboard }
+    public set dock_keyboard(v: boolean) {
+        if (this._dock_keyboard === v) return
+        this._dock_keyboard = v
+        this.notify("dock-keyboard")
+    }
+
     // The bar's right group being REORDERED in place (core/BarOrder.ts): items drag,
     // arrows move the selected one, Esc / Enter / "Done" / a click outside end it.
     // Exclusive like an overlay — opening it closes the rest, and anything else
@@ -256,7 +282,7 @@ export class UIStatus extends GObject.Object {
      * keystroke: the Wi-Fi password dialog opened from the Control Centre swallowed
      * the whole password that way (2026-09-14).
      */
-    closeOverlays() { this.closeExclusive("", { notif: true, barExpanded: true }) }
+    closeOverlays() { this.closeExclusive("", { notif: true, barExpanded: true }); this.bar_keyboard = false; this.dock_keyboard = false }
 
     /**
      * Set just before a panel is opened FROM THE KEYBOARD (a Super+… bind), read and

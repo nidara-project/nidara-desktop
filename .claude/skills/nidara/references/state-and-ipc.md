@@ -1805,6 +1805,49 @@ new bar panel joins by being passed to the same two helpers:
   property) carries "this open came from the keyboard" for one turn; `focusPanel` reads it,
   clears it and sets `focus_visible`.
 
+**The bar itself — Super+Ctrl+B (`nidara-ipc focusBar`, `Status.bar_keyboard`).** A walk of the
+bar's items, macOS's Ctrl+F2 with the desktop's modifier (Ctrl is the APPS' modifier in Linux:
+VS Code, JetBrains and LibreOffice all bind Ctrl+F2, and a compositor bind would swallow it).
+`barModal()` counts the walk, so the same grab carries its keys. The focus lands on the first
+item; ←/→/Tab move along `barBox`, wrapping; Enter/Space/↓ run the item's action (`barItem`'s
+`onKey` → `onClick` → the kit icon's `barKeyAction`; `setBarItemKey` for an action that exists
+only after the item is built — AppTitle's window menu). An item with nothing to do is not a stop
+(the CPU/memory rings). The ring is GTK's, round the item's HOVER PILL: `.bar-item-veil` (the Cairo
+layer painting that pill) has the pill as its BOX — `BAR_VEIL_INSET` margins, full width — so
+`.bar-item:focus-visible > .bar-item-veil` with a pill radius follows the hover shape. An outline on
+the item itself came out a circle round the 32px square (owner-caught). A tray icon's stop is its
+ITEM too (`btn.focusable = false`, `onKey` emits the click). Two rules that are easy to get backwards:
+- **Only an Esc returns to the walk.** `escPending` is set in the window's CAPTURE phase and
+  cleared at idle; a panel that closes WITHOUT it (Prism launched an app, a CC row opened
+  Settings) ENDS the walk, or the grab stays on the bar and the window that just opened gets
+  none of the keys — the 2026-09-14 Wi-Fi password bug again. `closeOverlays()` ends it too.
+- The walk ends on Esc with no panel open, and on ANY loss of the grab (`onBarGrabCleared`).
+`dumpState.overlays.barKeyboard` reports it — check it before sending each synthetic key.
+
+**The dock — Super+Ctrl+D (`nidara-ipc focusDock`, `Status.dock_keyboard`).** macOS's Ctrl+F3.
+The dock on the FOCUSED monitor answers; an auto-hidden one slides in and `setRevealed(false)`
+refuses while `walking`. It takes its OWN focus grab (`acquireFocusGrab([win])`, the surface stays
+`NONE`) and registers with InputYield (a yield simply ends the walk). The arrows ALONG the dock and
+Tab move, wrapping; the icon's controller (DockItem) runs the click on Enter/Space — and ENDS the
+walk first, because what it starts is a window that needs the keys — and opens the app menu on
+the Menu key, Shift+F10 or the arrow pointing away from the screen edge (↑ on a bottom dock). The
+menu takes the focus on its first row; Esc there closes it and the focus is back on the icon; a
+second Esc leaves. `dumpState.overlays.dockKeyboard` reports it.
+Until this date the dock set `can_focus: false` on its window, every item and every icon box —
+which shut the whole subtree out of the keyboard, menus included (the #657 CRITICAL). They now
+let the focus ENTER; `focus_on_click: false` on the icon keeps a click from leaving one focused.
+
+🔴 **A focusable `Gtk.Box` is NOT a keyboard stop.** `grab_focus()` on it works, but GtkBox's
+focus vfunc only hands the focus on to its children, so `child_focus()` — i.e. Tab, the arrows, a
+panel's `focusPanel` — returns false on it and moves past (measured on GTK 4.22: the dock walk found
+nothing to land on with `iconBox` focusable, while `iconBox.grab_focus()` returned true). Put the
+stop on a leaf or on a `Gtk.Grid` (the bar items and CC tiles are Grids, and they work). A probe that
+calls `grab_focus()` to "check it is focusable" will pass and prove nothing.
+
+🔴 **Checking before a synthetic key: the STATE is not the grab.** `dockKeyboard: true` was reported
+while nothing in the dock held the focus, and the keys went to the window the owner had focused.
+Check that the surface also has a focus widget (`dumpState.keyboardFocus[<window>].focusWidget`).
+
 In the CC grid a tile whose tap opens a detail is itself a keyboard stop
 (`SquircleContainer({ keyboardStop: true })` + GTK's CSS ring, see design-system.md): Enter/
 Space opens the detail, the Menu key or Shift+F10 opens the tile's context menu, focus moves into
