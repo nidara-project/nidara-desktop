@@ -120,19 +120,26 @@ export function barItem({ child, onClick, getOpen, watchOpen, onKey }: BarItemOp
     // item would be computed from that child, so every item — and the group — would
     // fill the flank: hence the item's explicit false.
     const item = new Gtk.Grid({ css_classes: ["bar-item"], hexpand: false, vexpand: false })
-    const veil = new Gtk.DrawingArea({ hexpand: true, vexpand: true, can_target: false })
+    // The veil's BOX is the pill (BAR_VEIL_INSET above and below, the item's full
+    // width), not the whole item: the keyboard ring is GTK's outline round this box
+    // (`.bar-item:focus-visible > .bar-item-veil`, _bar.scss), so the box has to be
+    // the shape the ring should follow — the hover pill, not the 32px square.
+    const veil = new Gtk.DrawingArea({
+        hexpand: true, vexpand: true, can_target: false, css_classes: ["bar-item-veil"],
+        margin_top: BAR_VEIL_INSET, margin_bottom: BAR_VEIL_INSET,
+    })
     let hovered = false
 
     veil.set_draw_func(cairoDraw((_, cr, w, h) => {
         const mix = status.bar_edit_mode
             ? (editSelected === item ? GLASS_STATE_MIX.open : GLASS_STATE_MIX.hover)
             : getOpen?.() ? GLASS_STATE_MIX.open : hovered ? GLASS_STATE_MIX.hover : null
-        const vh = h - 2 * BAR_VEIL_INSET
+        const vh = h
         if (!mix || w <= 0 || vh <= 0) return
         const dark = Theme.chromeIsDark
         const ink = dark ? GLASS_SPECULAR : GLASS_TINT.dark
         const r = Math.min(vh, w) / 2
-        const top = BAR_VEIL_INSET, bottom = BAR_VEIL_INSET + vh
+        const top = 0, bottom = vh
         cr.newSubPath()
         cr.arc(w - r, top + r, r, -Math.PI / 2, 0)
         cr.arc(w - r, bottom - r, r, 0, Math.PI / 2)

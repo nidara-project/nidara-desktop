@@ -1808,9 +1808,11 @@ VS Code, JetBrains and LibreOffice all bind Ctrl+F2, and a compositor bind would
 item; ←/→/Tab move along `barBox`, wrapping; Enter/Space/↓ run the item's action (`barItem`'s
 `onKey` → `onClick` → the kit icon's `barKeyAction`; `setBarItemKey` for an action that exists
 only after the item is built — AppTitle's window menu). An item with nothing to do is not a stop
-(the CPU/memory rings). The ring is GTK's (`.bar-item:focus-visible`, `.bar-tray-btn:focus-visible`
-in `_bar.scss`, pill radius, offset −2px so it wraps the slot instead of sitting on the group's glass
-edge). Two rules that are easy to get backwards:
+(the CPU/memory rings). The ring is GTK's, round the item's HOVER PILL: `.bar-item-veil` (the Cairo
+layer painting that pill) has the pill as its BOX — `BAR_VEIL_INSET` margins, full width — so
+`.bar-item:focus-visible > .bar-item-veil` with a pill radius follows the hover shape. An outline on
+the item itself came out a circle round the 32px square (owner-caught). A tray icon's stop is its
+ITEM too (`btn.focusable = false`, `onKey` emits the click). Two rules that are easy to get backwards:
 - **Only an Esc returns to the walk.** `escPending` is set in the window's CAPTURE phase and
   cleared at idle; a panel that closes WITHOUT it (Prism launched an app, a CC row opened
   Settings) ENDS the walk, or the grab stays on the bar and the window that just opened gets
@@ -1852,7 +1854,20 @@ through `sliderKeyHandler` (the slider itself is `focusable: false`). 🔴 A sli
 arrows ALONG its axis: taking all four made it a trap — in the CC nothing but Tab could leave it,
 and Esc (which closes the whole panel) looked like the only way out (owner-caught 2026-09-27). A
 thumb slider shows focus as a 2px accent ring on its thumb, painted in Cairo — a DrawingArea gets
-no ring from CSS, so its focus was real and invisible. Buttons INSIDE a tile had the same blind
+no ring from CSS, so its focus was real and invisible.
+
+🔴 **GTK's ring is drawn OUTSIDE the widget, so every ancestor that clips can cut it.** In the CC
+three did, on the grid's edges (owner-caught 2026-09-27): the `ScaleRevealer` (now
+`unclipAtRest: true` for the CC — it clips only while animating), the `Gtk.ScrolledWindow` that
+clamps the grid's WIDTH and its `Gtk.Viewport` (the clip was a side effect; both `overflow:
+VISIBLE`), and the `Gtk.Stack` (crossfade only — no clip needed). The bar's visible region already
+pads each panel by `PANEL_PAD`, so what paints past a box is shown. A new panel whose controls reach
+its edges needs the same audit.
+
+🔴 **A control revealed on hover is never a keyboard stop.** The clipboard's per-row ✕ sat at
+opacity 0 but stayed focusable, so every ↓ through the list stopped twice, once on an invisible
+button. It is `focusable: false`; the row takes Delete, shows the ✕ while it has the focus, and a
+keyboard delete hands the focus to the row that takes its place. Buttons INSIDE a tile had the same blind
 spot: `.cc-island button { nidara-reset }` clears `outline`; the rule now re-declares the ring. GTK orders Tab by
 GEOMETRY (it sorts children by position, not by insertion order), so reordering the layout list
 does not change it.

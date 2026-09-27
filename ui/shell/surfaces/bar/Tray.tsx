@@ -322,7 +322,10 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void): 
         // fills it, so the whole item left-clicks (activate) and right-clicks (menu);
         // barItem only paints the pill — on hover, and while this item's menu
         // (anchored on `btn`) is down.
-        const capsule = barItem({ child: btn, ...barOpen(() => isBarCustomAnchor(btn)) })
+        // The keyboard stop is the ITEM, like every other bar item (its ring follows the
+        // item's hover pill); the button keeps the pointer and runs its click on the key.
+        btn.focusable = false
+        const capsule = barItem({ child: btn, ...barOpen(() => isBarCustomAnchor(btn)), onKey: () => btn.emit("clicked") })
         // Which installed app this is (see appForProcess above) — asked for every icon:
         // it names the ones that do not say (no title, Chromium's nameless Id), and
         // Settings lists an app's icon only while that app is still installed.
