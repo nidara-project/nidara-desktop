@@ -182,6 +182,10 @@ button.nidara-seg-btn {
 
         &:hover  { background: rgba(var(--nidara-accent-rgb), 0.82); color: var(--nidara-accent-fg); }
         &:active { background: rgba(var(--nidara-accent-rgb), 0.65); }
+        // nidara-reset clears `outline` too, and the SELECTED segment is where the
+        // focus lands when its panel opens — it took the ring away from exactly the
+        // control holding the keyboard (measured in the CC's capture detail, 2026-09-27).
+        &:focus-visible { @include nidara-focus-ring; }
     }
 }
 

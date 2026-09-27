@@ -121,6 +121,10 @@ function makeIslandWidget(
         getActive: def.getActive, watchActive: def.watchActive,
         getFill: def.getFill ? () => def.getFill!(effectiveSize) : undefined,
         activeColorHex: def.activeColorHex, activeAlpha: def.activeAlpha,
+        // A tile whose tap opens a detail is a keyboard stop: nothing inside it is
+        // the "open the detail" target, the tile-level gesture below is — and a
+        // gesture is unreachable from the keyboard.
+        focusRing: !editMode && !!def.buildCCDetail && !!showDetail,
     })
 
     const overlay = new Gtk.Overlay()
@@ -157,7 +161,33 @@ function makeIslandWidget(
                 showDetail(id)
             })
             overlay.add_controller(hold)
+
+            // The keyboard's click: Enter/Space on the TILE (not on a control inside
+            // it, which handles those keys itself and never lets them bubble here).
+            const keys = new Gtk.EventControllerKey()
+            keys.connect("key-pressed", (_c: any, keyval: number) => {
+                // is_focus(), never has_focus(): in GJS `has_focus` is the GTK4 PROPERTY `has-focus`
+                // (a boolean), which shadows the method — calling it threw on every key.
+                if (!island.is_focus()) return false
+                if (keyval !== Gdk.KEY_Return && keyval !== Gdk.KEY_KP_Enter
+                    && keyval !== Gdk.KEY_space && keyval !== Gdk.KEY_KP_Space) return false
+                showDetail(id)
+                return true
+            })
+            overlay.add_controller(keys)
+            ;(overlay as any).focusTarget = island
         }
+        // The keyboard's secondary click, on the tile or anything in it: the Menu key
+        // or Shift+F10, as everywhere else in GTK. Anchored at the tile's centre.
+        const menuKeys = new Gtk.EventControllerKey()
+        menuKeys.connect("key-pressed", (_c: any, keyval: number, _code: number, state: Gdk.ModifierType) => {
+            const menu = keyval === Gdk.KEY_Menu
+                || (keyval === Gdk.KEY_F10 && (state & Gdk.ModifierType.SHIFT_MASK) !== 0)
+            if (!menu) return false
+            openMenu(id, pixelX(entry.x) + width / 2, pixelY(entry.y) + height / 2)
+            return true
+        })
+        overlay.add_controller(menuKeys)
         return overlay
     }
 
@@ -308,9 +338,19 @@ export default function IslandGrid() {
 
     let detailIsland: Gtk.Widget | null = null
 
+    // Keyboard in and out of a detail: the focus follows the page. Into the detail's
+    // first control on open (its back button when the content has none); back onto
+    // the TILE that opened it on close — otherwise the focus is left on a page that
+    // is fading out, and the next Tab restarts from the top of the grid. Idle,
+    // because a widget only takes focus once the stack has mapped its page.
+    const focusSoon = (focus: () => void) =>
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { focus(); return GLib.SOURCE_REMOVE })
+
     const hideDetail = () => {
+        const from = activeDetailId
         activeDetailId = ""
         mainStack.set_visible_child_name("overview")
+        focusSoon(() => { (widgetRefs.get(from) as any)?.focusTarget?.grab_focus() })
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 220, () => {
             if (detailIsland) { try { detailPage.remove(detailIsland) } catch {} ; detailIsland = null }
             return GLib.SOURCE_REMOVE
@@ -425,7 +465,18 @@ export default function IslandGrid() {
         })
         detailPage.append(detailIsland)
         mainStack.set_visible_child_name("detail")
+        focusSoon(() => { if (!panel.child_focus(Gtk.DirectionType.TAB_FORWARD)) backBtn.grab_focus() })
     }
+
+    // Esc inside a detail goes back to the grid instead of closing the whole CC (the
+    // bar's own Esc, on the window, is only reached when this lets the key through).
+    const detailKeys = new Gtk.EventControllerKey()
+    detailKeys.connect("key-pressed", (_c: any, keyval: number) => {
+        if (keyval !== Gdk.KEY_Escape || !activeDetailId) return false
+        hideDetail()
+        return true
+    })
+    mainStack.add_controller(detailKeys)
 
     // Per-instance reflow state
     const widgetRefs = new Map<string, Gtk.Widget>()

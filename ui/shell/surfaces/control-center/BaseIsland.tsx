@@ -57,6 +57,8 @@ interface BaseIslandProps {
     getFill?: () => number
     activeColorHex?: string
     activeAlpha?: number | (() => number)
+    /** A keyboard stop of its own (see SquircleContainer.focusRing). */
+    focusRing?: boolean
 }
 
 export default function BaseIsland({
@@ -73,6 +75,7 @@ export default function BaseIsland({
     getFill,
     activeColorHex,
     activeAlpha,
+    focusRing = false,
 }: BaseIslandProps): Gtk.Widget {
 
     //  GEOMETRIC RULES:
@@ -119,6 +122,7 @@ export default function BaseIsland({
         getFill,
         activeColorHex,
         activeAlpha,
+        focusRing,
     })
 
     island.set_size_request(width, height)

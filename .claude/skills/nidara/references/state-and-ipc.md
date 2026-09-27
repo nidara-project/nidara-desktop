@@ -201,6 +201,20 @@ plus the schema and reported one of the eight as off while it was on. A permissi
 worst place to leave someone guessing. The field is **omitted, not `false`**, for everything
 that has no state — a missing field reads as "not applicable", a `false` reads as "off". Only
 `active`: there is no `value` to report because Nidara has no `Gtk.Scale` (sliders are Cairo).
+
+**The node holding its window's keyboard focus reports `focused: true`** (added 2026-09-27, same
+omit-don't-false rule) — how a keyboard-navigation check asserts WHERE a Tab or an arrow
+landed: open a panel with `toggleCC keyboard`, send one key, `queryUI`, read the one node with
+`focused`. It asks the WINDOW (`toplevel.get_focus() === w`), never `w.has_focus()`: 🔴 **in GJS
+`has_focus` is the GTK4 PROPERTY `has-focus` (a boolean) shadowing the method**, so calling it
+throws — inside `safe()` that read as "nothing focused anywhere", and inside a key handler it was
+13 CRITICALs and an Enter that did nothing. Use `is_focus()` on a widget. `dumpState.keyboardFocus`
+(below) answers the other question — which WINDOW has the keys.
+
+🔴 **Driving keys by hand: a synthetic key with no shell grab lands in the focused WINDOW — the
+terminal your agent runs in.** A stray Esc interrupts the agent itself (it happened, 2026-09-27),
+a stray Return submits. One key per call, each preceded by `dumpState` confirming the overlay is
+still open; never chain Esc/Return blind.
 Beyond that, tier 1 is structure+text; the remaining semantic state (dock-item
 running/active) is a deferred opt-in tier the widgets would cooperate on, sharing
 the same node model the AT-SPI2 backend now fills for third-party apps (see "computer-use"
@@ -1762,6 +1776,37 @@ It joined the state machine on the way out: `status.app_grid_open` is a normal m
 If you add another state change that both resizes an overlay and relies on per-widget region rects, follow the same recipe.
 
 **Keyboard focus for a keyboard-driven overlay → a FOCUS GRAB. Never `EXCLUSIVE`, never `ON_DEMAND`.** ⚠️ This section used to instruct the opposite; the layer-shell keyboard path was replaced wholesale by `hyprland-focus-grab-v1` (2026-08-06, `common/FocusGrab.ts`). **Every shell surface now rests AND opens in `KeyboardMode.NONE`** — bar, island, dock, app grid, agent-pointer — and takes the keyboard by acquiring a grab instead. Wiring an `EXCLUSIVE↔NONE` toggle into a new overlay does not merely duplicate a mechanism: `EXCLUSIVE` re-adds the surface to `m_exclusiveLSes`, and that list makes Hyprland **refuse to move window focus at all**, handing back the exact bug the migration removed (`tech-debt.md` §53).
+
+**Keyboard INSIDE the bar's panels (CC, NC, system menu, the pill expansions) — 2026-09-27.**
+The grab only hands the WINDOW the keys; a widget still has to receive them, and until this date
+none did — the panels could only be driven with the pointer. What `Bar.tsx` now does, and what a
+new bar panel joins by being passed to the same two helpers:
+
+- `focusPanel(panel)` on open: `win.set_focus(null)` then `panel.child_focus(TAB_FORWARD)`, in an
+  idle (a widget takes focus only once mapped). The null first matters: `child_focus` CONTINUES
+  from the current focus, so a control left focused in a closed panel shifts the start.
+- `keepFocusIn(panel)`: a BUBBLE-phase key controller on the panel for Tab/Shift+Tab/arrows.
+  Tab wraps inside the panel, an arrow with nowhere to go stops. Without it GTK walks on through
+  the whole window — measured: past the CC's last control Tab landed on the TRAY icons, behind a
+  panel still open. Bubble so a slider or an entry keeps its own arrows; still ahead of the
+  window's move-focus binding, which is the one that escapes. It sets `focus_visible` itself,
+  because it swallows the key GTK would have used to turn the ring on.
+- One window-level Esc closes whichever panel is open (bubble: an inner control, a CC detail,
+  the two edit modes each keep their own Esc first).
+- On grab release `win.set_focus(null)`: a closing panel hands GTK's focus to the next focusable
+  widget, which is a bar icon, and with the window still focus-visible it kept the ring.
+- **Opened from a key bind** (`nidara-ipc toggleCC keyboard`, Super+C / Super+N): the Super+…
+  went to Hyprland and never reached GTK, so the window is not focus-visible and the first
+  control would hold the focus with no ring. `status.keyboardEntry` (a plain field, not a
+  property) carries "this open came from the keyboard" for one turn; `focusPanel` reads it,
+  clears it and sets `focus_visible`.
+
+In the CC grid a tile whose tap opens a detail is itself a keyboard stop
+(`SquircleContainer({ focusRing: true })`, see design-system.md → the Cairo focus ring): Enter/
+Space opens the detail, the Menu key or Shift+F10 opens the tile's context menu, focus moves into
+the detail and Esc there returns to the grid with the focus back on the tile. GTK orders Tab by
+GEOMETRY (it sorts children by position, not by insertion order), so reordering the layout list
+does not change it.
 
 So, for a new keyboard-driven overlay: leave `set_keyboard_mode` at `NONE` and call `acquireFocusGrab([win, …peers], onCleared)` when it opens, `releaseFocusGrab(token)` when it closes. The grab grants keyboard focus the instant it takes, which is what a text caret needs (a widget-side `entry.grab_focus()` alone is not enough — the toplevel must be compositor-active for the caret to render), and it brings outside-click dismissal with it. `Bar.tsx` does this in `syncKeyboardMode()` for everything it owns (`barModal()`), `IslandWindow` for every open island mode, `AppGridWindow` for the grid (it was `DockCore` until the grid got its own surface on 2026-08-09).
 

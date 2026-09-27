@@ -258,8 +258,22 @@ export class UIStatus extends GObject.Object {
      */
     closeOverlays() { this.closeExclusive("", { notif: true, barExpanded: true }) }
 
-    toggleCC() { this.cc_open = !this.cc_open }
-    toggleNC() { this.nc_open = !this.nc_open }
+    /**
+     * Set just before a panel is opened FROM THE KEYBOARD (a Super+… bind), read and
+     * cleared by the surface that shows it. It is not a property on purpose: nothing
+     * should re-render when it flips, and it is only ever true for the one turn
+     * between the IPC call and the panel's open handler.
+     *
+     * Why a surface needs to know at all: GTK draws the focus ring only while the
+     * window is "focus-visible", and it turns that on from a KEY it receives. The
+     * Super+C that opened the panel went to Hyprland, never to us, so without this the
+     * first control would hold the focus with no ring — the user would press Tab once
+     * just to find out where they are.
+     */
+    keyboardEntry = false
+
+    toggleCC(fromKeyboard = false) { this.keyboardEntry = fromKeyboard && !this.cc_open; this.cc_open = !this.cc_open }
+    toggleNC(fromKeyboard = false) { this.keyboardEntry = fromKeyboard && !this.nc_open; this.nc_open = !this.nc_open }
     togglePrism() { this.prism_open = !this.prism_open }
     toggleSystemMenu() { this.system_menu_open = !this.system_menu_open }
     toggleIsland(id: string) { this.island_mode = this.island_mode === id ? "" : id }

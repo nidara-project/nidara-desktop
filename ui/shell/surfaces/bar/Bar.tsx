@@ -613,6 +613,82 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const setSystemMenuVisible = popToggle(systemMenu)
   const setPrismVisible = popToggle(prism)
 
+  // ── Keyboard inside the panels ─────────────────────────────────────────────
+  // The grab already hands this window the keyboard for any open panel (barModal);
+  // what was missing is a widget to receive it. Without one a key goes nowhere, and
+  // the panel can only be driven with the pointer. So an opening panel moves focus
+  // onto its first control — also when the pointer opened it: GTK shows no ring
+  // for that (focus-visible is off after a click), yet Tab now starts from inside
+  // the panel instead of from nothing.
+  //
+  // Idle, not immediate: reveal() makes the panel visible in this turn, but a
+  // widget is only focusable once it is MAPPED, which is the next main-loop pass.
+  // `set_focus(null)` first, because child_focus(TAB_FORWARD) CONTINUES from the
+  // current focus — a control left focused in a panel that closed would make the
+  // new one start after it instead of at its top.
+  const focusPanel = (panel: Gtk.Widget) => {
+    const fromKeyboard = status.keyboardEntry
+    status.keyboardEntry = false
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      if (!panel.get_mapped()) return GLib.SOURCE_REMOVE
+      win.set_focus(null)
+      panel.child_focus(Gtk.DirectionType.TAB_FORWARD)
+      // See Status.keyboardEntry: the Super+… that opened us never reached GTK.
+      if (fromKeyboard) win.set_focus_visible(true)
+      return GLib.SOURCE_REMOVE
+    })
+  }
+  // Tab and the arrows stay INSIDE an open panel. GTK moves focus across the whole
+  // window, and this window is the bar: past a panel's last control Tab walked on
+  // into the tray icons (measured 2026-09-27), behind a panel that was still open
+  // and still holding the keyboard. Tab/Shift+Tab wrap around; an arrow with nowhere
+  // left to go stops. BUBBLE, so a control that uses an arrow itself (a slider, an
+  // entry's caret) has it first and this only sees the keys it let through — and
+  // still before the window's own move-focus binding, which is the one that escapes.
+  const FOCUS_KEYS: Record<number, Gtk.DirectionType> = {
+    [Gdk.KEY_Tab]: Gtk.DirectionType.TAB_FORWARD, [Gdk.KEY_KP_Tab]: Gtk.DirectionType.TAB_FORWARD,
+    [Gdk.KEY_ISO_Left_Tab]: Gtk.DirectionType.TAB_BACKWARD,
+    [Gdk.KEY_Up]: Gtk.DirectionType.UP, [Gdk.KEY_Down]: Gtk.DirectionType.DOWN,
+    [Gdk.KEY_Left]: Gtk.DirectionType.LEFT, [Gdk.KEY_Right]: Gtk.DirectionType.RIGHT,
+  }
+  const keepFocusIn = (panel: Gtk.Widget) => {
+    const keys = new Gtk.EventControllerKey()
+    keys.connect("key-pressed", (_c: any, keyval: number, _code: number, state: Gdk.ModifierType) => {
+      let dir = FOCUS_KEYS[keyval]
+      if (dir === undefined) return false
+      if (dir === Gtk.DirectionType.TAB_FORWARD && (state & Gdk.ModifierType.SHIFT_MASK)) dir = Gtk.DirectionType.TAB_BACKWARD
+      // We swallow the key GTK would have used to turn the ring on — do it here.
+      win.set_focus_visible(true)
+      if (panel.child_focus(dir)) return true
+      if (dir === Gtk.DirectionType.TAB_FORWARD || dir === Gtk.DirectionType.TAB_BACKWARD) {
+        win.set_focus(null)
+        panel.child_focus(dir)
+      }
+      return true
+    })
+    panel.add_controller(keys)
+  }
+  keepFocusIn(cc); keepFocusIn(nc); keepFocusIn(systemMenu); keepFocusIn(expansionCapsule)
+
+  status.connect("notify::cc-open", () => { if (status.cc_open) focusPanel(cc) })
+  status.connect("notify::nc-open", () => { if (status.nc_open) focusPanel(nc) })
+  status.connect("notify::system-menu-open", () => { if (status.system_menu_open) focusPanel(systemMenu) })
+
+  // Esc closes whichever of these panels is open. BUBBLE phase, so a focused control
+  // that has its own use for Esc (an entry clearing itself, a dropdown closing) is
+  // asked first. Prism, the bar's edit mode and the CC's edit mode each keep their
+  // own Esc — edit mode's, in particular, means "Done", not "close the panel".
+  const panelKeys = new Gtk.EventControllerKey()
+  panelKeys.connect("key-pressed", (_c: any, keyval: number) => {
+    if (keyval !== Gdk.KEY_Escape || status.bar_edit_mode || status.cc_edit_mode) return false
+    if (!(status.cc_open || status.nc_open || status.system_menu_open
+          || status.bar_expanded_id !== "" || status.bar_overflow_open)) return false
+    status.cc_open = false; status.nc_open = false; status.system_menu_open = false
+    status.bar_expanded_id = ""; status.bar_overflow_open = false
+    return true
+  })
+  win.add_controller(panelKeys)
+
   const syncOverlays = () => {
     // Before the visibility/region work below, because the region is computed from
     // whether the grab took (see syncKeyboardMode). It no-ops until layer-shell is
@@ -732,6 +808,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     } else if (!want && barGrabToken) {
       releaseFocusGrab(barGrabToken)
       barGrabToken = 0
+      // A closing panel hands GTK's focus to the next focusable widget in the window,
+      // which is the bar: measured on a tray icon after Esc closed the CC. With the
+      // window still focus-visible that icon would be left wearing the ring, on a bar
+      // that no longer has the keyboard. Nothing here should hold focus now.
+      win.set_focus(null)
     }
   }
   // The island is modal for ANY open mode, not just the keyboard-driven ones —
@@ -871,6 +952,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           positionExpansion(id)
           expansionCapsule.reveal(true)   // fresh pop (snapClosed above on a switch)
           updateInputRegion()
+          focusPanel(expansionInner)
           return GLib.SOURCE_REMOVE
       })
   }

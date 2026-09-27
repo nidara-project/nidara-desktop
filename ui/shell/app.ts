@@ -249,14 +249,14 @@ async function focusLaunched(target: AppData, before: Set<string>): Promise<stri
 
 const IPC_COMMANDS: Record<string, IpcCommand> = {
   toggleCC: {
-    desc: "Toggle the Control Center overlay",
+    desc: "Toggle the Control Center overlay (`toggleCC keyboard` = opened from a key bind: focus lands on its first control, ring shown)",
     aliases: ["toggleControlCenter"],
-    run: () => status.toggleCC(),
+    run: args => status.toggleCC(args[0] === "keyboard"),
   },
   toggleNC: {
-    desc: "Toggle the Notification Center overlay",
+    desc: "Toggle the Notification Center overlay (`toggleNC keyboard` = opened from a key bind, as toggleCC)",
     aliases: ["toggleNotificationCenter"],
-    run: () => status.toggleNC(),
+    run: args => status.toggleNC(args[0] === "keyboard"),
   },
   togglePrism: {
     desc: "Toggle search (apps and recent files)",

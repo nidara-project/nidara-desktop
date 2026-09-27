@@ -422,6 +422,11 @@ hl.bind(mainMod .. " + E",   hl.dsp.exec_cmd("uwsm app -t service -- " .. fileMa
 hl.bind(mainMod .. " + T",   hl.dsp.exec_cmd("uwsm app -t service -- " .. terminal))
 hl.bind(mainMod .. " + Q",   hl.dsp.window.close())
 hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("nidara-ipc togglePrism"))
+-- `keyboard`: the panel opens with focus on its first control and the ring showing
+-- (the key went to Hyprland, not to the shell — see Status.keyboardEntry). Tab /
+-- arrows move, Enter/Space activate, Esc closes.
+hl.bind(mainMod .. " + C",     hl.dsp.exec_cmd("nidara-ipc toggleCC keyboard"))
+hl.bind(mainMod .. " + N",     hl.dsp.exec_cmd("nidara-ipc toggleNC keyboard"))
 hl.bind(mainMod .. " + W",     hl.dsp.exec_cmd("nidara-ipc toggleOverview")) -- Workspace Overview (keyboard-navigable: ←/→ move, Enter switch, Esc close)
 -- No exit-session bind on purpose (upstream ships SUPER+M = exit): one accidental
 -- chord must never kill the whole session. Log out via the System Menu instead.

@@ -1023,6 +1023,20 @@ offscreen). **The hover fill and the focus ring are two consumers of one number.
 sweeping, the check is: every `@include nidara-focus-ring` consumer must have a
 `border-radius` outside its state blocks.
 
+🔑 **A painted (Cairo) control draws its ring in Cairo: `SquircleContainer({ focusRing: true })`.**
+A CSS `outline` follows the widget's `border-radius`, i.e. a rounded rectangle around a circle,
+a capsule or a squircle. With `focusRing` the container becomes focusable and, while it is
+FOCUSED + FOCUS_VISIBLE, strokes the same 2px accent along its OWN silhouette. The ring can only
+live inside the room the inset leaves around the glass (a DrawingArea's cairo node is clipped to
+its allocation), so the 2px GAP shrinks to what fits and the width never does: a CC tile has 2px
+of inset (`GLASS_SHADOW.spread`), which puts its ring flush against the glass. First consumer:
+the CC tiles that open a detail (2026-09-27).
+
+⚠️ **`@include nidara-reset` clears `outline` too.** A state that resets and then paints its own
+fill (`button.nidara-seg-btn.suggested-action`) loses the focus ring unless it declares
+`&:focus-visible` again after the reset — and the SELECTED segment is exactly where the focus
+lands when its panel opens.
+
 ⚠️ **A focusable control with NO focus rule does not get "no ring" — it gets GTK's own.**
 GTK4's built-in fallback CSS draws a blue `outline`, which ignores the user's accent entirely.
 That is why the greeter/lock sheet says `outline: none` on every control before declaring its
