@@ -20,6 +20,15 @@
 //     notification, not 2821.
 //   - ⚠️ This module's own failures go to console.warn, NEVER console.error: that
 //     would be a CRITICAL in the log it watches, and it would wake itself forever.
+//   - A toolkit CRITICAL names the C function that refused (`gtk_widget_is_ancestor:
+//     assertion … failed`), never OUR line that led there — which is why one like
+//     that sat unexplained in the log for days. `traceToolkitCriticals()` hooks
+//     GLib's log handler for the toolkit domains: GLib's own line is written
+//     unchanged (the doctor groups by it), then a `[DevLogWatch] … ← <frame>`
+//     warning with the JS stack at that moment. Measured 2026-09-27: a bad
+//     `Box.append` from JS reports the calling function and line; a CRITICAL that
+//     GTK raises from its own event or frame processing has no JS on the stack,
+//     and says so — that is a clue too (look at what was destroyed just before).
 //
 // ⚠️ SHELL ONLY, started once from app.ts after the notification server.
 
@@ -56,6 +65,26 @@ function sizeOf(file: Gio.File): number {
     catch { return 0 }
 }
 
+/** GLib log domains whose CRITICALs are failed toolkit assertions. */
+const TOOLKIT_DOMAINS = ["Gtk", "Gdk", "Gsk", "GLib", "GLib-GObject", "GLib-GIO", "Pango"]
+const MAX_FRAMES = 12
+
+/** See the header. The handler must never throw: an exception inside a GLib log
+ *  handler logs a CRITICAL from inside the handler, which GLib reports as recursion. */
+function traceToolkitCriticals(): void {
+    for (const domain of TOOLKIT_DOMAINS) {
+        GLib.log_set_handler(domain, GLib.LogLevelFlags.LEVEL_CRITICAL, (d, level, msg) => {
+            try {
+                GLib.log_default_handler(d, level, msg, null)
+                const frames = (new Error().stack ?? "").split("\n").slice(1).filter(Boolean)
+                const where = frames[0] ?? "no JS on the stack (GTK's own event/frame processing)"
+                const rest = frames.slice(1, MAX_FRAMES).map(f => `\n    ${f}`).join("")
+                console.warn(`[DevLogWatch] ${msg} ← ${where}${rest}`)
+            } catch { /* see above: never throw from here */ }
+        })
+    }
+}
+
 /** Idempotent: a second call does nothing. */
 export function startDevLogWatch(): void {
     if (started) return
@@ -63,6 +92,7 @@ export function startDevLogWatch(): void {
     const repo = devRepo()
     const logPath = stderrFile()
     if (!repo || !logPath) return
+    traceToolkitCriticals()
 
     const file = Gio.File.new_for_path(logPath)
     let offset = sizeOf(file)

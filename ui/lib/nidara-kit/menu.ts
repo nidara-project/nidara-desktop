@@ -29,6 +29,13 @@ export interface GlassBubbleMenuOpts {
     cssClasses?: string[]
 }
 
+/** False when some ancestor of `w` (or `w` itself) refuses focus — GTK4's
+ *  `can-focus` is "may the focus enter this widget or any of its children". */
+function focusCanEnter(w: Gtk.Widget | null): boolean {
+    for (; w; w = w.get_parent()) if (!w.can_focus) return false
+    return true
+}
+
 export class GlassBubbleMenu {
     readonly popover: Gtk.Popover
     readonly rows: Gtk.Box
@@ -113,6 +120,15 @@ export class GlassBubbleMenu {
     }
 
     popup() {
+        // GTK 4.22 (and main, checked 2026-09-27): an autohide popover moves focus into
+        // itself on show, and when no child can take it, `gtk_popover_focus` hands the
+        // root's focus — NULL — to `gtk_widget_is_ancestor` unchecked: a Gtk-CRITICAL on
+        // every open. No child can take it whenever an ANCESTOR of the popover has
+        // `can_focus: false`, which the dock's icons do. In that case focus could not
+        // enter anyway, so the popover is told not to try; where it can, nothing changes
+        // (measured in a headless cage: blocked → 3 CRITICALs in 3 opens, now 0; allowed
+        // → focus still lands on the first row).
+        this.popover.can_focus = focusCanEnter(this.popover.get_parent())
         this.popover.popup()
     }
 
