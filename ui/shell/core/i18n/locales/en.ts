@@ -30,7 +30,7 @@ export default {
 
     "settings.region.time.group": "Time",
     "settings.region.time.format": "Time format",
-    "settings.region.time.format.desc": "How time is displayed in the bar",
+    "settings.region.time.format.desc": "In the bar, on the lock screen and at login",
     "settings.region.time.24h": "24 hours",
     "settings.region.time.12h": "12 hours (AM/PM)",
     "settings.region.time.seconds": "Show seconds",

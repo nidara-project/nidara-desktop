@@ -141,7 +141,6 @@ const screenshotWidget: AtomicWidget = {
     name: t("widget.screenshot.name"),
     icon: uiIcon("nd-screenshot"),
     locations: ["bar", "cc"],
-    defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,

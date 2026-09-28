@@ -197,7 +197,7 @@ try {
         "cc_layout.json": { positions: { media: { x: 0, y: 0 }, volume: { x: 2, y: 1 } }, sizes: { volume: "1x2" } },
         // Order is the dock's order; the dock strips these prefixes; duplicates go.
         "dock_pinned.json": ["zed", "pinned-firefox", "kitty", "zed", "/abs/path.desktop"],
-        "region.json": { timeFormat: "12h", dateFormat: "long", timezone: "Europe/Madrid", regionalLocale: "es_ES.UTF-8", showSeconds: false },
+        "region.json": { timeFormat: "12h", dateFormat: "short", timezone: "Europe/Madrid", regionalLocale: "es_ES.UTF-8", showSeconds: false },
     })
     const kf = out["<gsettings keyfile>"] ?? ""
     const expect = [

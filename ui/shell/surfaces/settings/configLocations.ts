@@ -36,6 +36,8 @@ export function configLocations(): Record<string, ConfigLocation> {
         for (const g of page.groups ?? []) {
             // A headerless group has no name to give; the page is the whole answer.
             walk(g.items, page.id, g.i18n || undefined)
+            // Drawn in a subpage the group pushes (the clock's Configure): still THIS page.
+            walk(g.reaches, page.id, g.i18n || undefined)
         }
     }
     return out

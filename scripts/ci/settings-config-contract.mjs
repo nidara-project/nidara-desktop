@@ -316,6 +316,17 @@ for (const page of manifest) {
                 validateItem(item, page.id)
             }
         }
+        // Keys a custom group draws in a subpage it pushes: declared here, like items.
+        if (group.reaches) {
+            if (!group.custom) {
+                errors.push(`  FAIL  manifest.ts: page "${page.id}" group declares reaches without custom (only a custom body can push a subpage).`)
+            }
+            for (const key of group.reaches) {
+                if (typeof key !== "string") {
+                    errors.push(`  FAIL  manifest.ts: page "${page.id}" group reaches must list config keys (strings).`)
+                } else validateItem(key, page.id)
+            }
+        }
     }
 }
 

@@ -17,11 +17,17 @@ import { playEntrance } from "./entrance"
 //
 // Everything else — the format strings, both timers, the classes, the column —
 // was identical, and is now written once.
+//
+// The DATE is not read at all: both screens show the long one, whatever the bar's
+// date format says (owner, 2026-09-28). macOS's Lock Screen keeps its own clock —
+// its settings are a large clock and a 24-hour switch, never a date format — and a
+// short bar date ("Mon, 28 Sep") is too small a line under the hero clock. The time
+// format still follows the person's choice.
+const DATE_FORMAT: DateFormat = "long"
 
 export interface RegionSettings {
     timeFormat: "24h" | "12h"
     showSeconds: boolean
-    dateFormat: DateFormat
 }
 
 export interface ClockDeps {
@@ -40,7 +46,7 @@ export function NidaraClock(deps: ClockDeps): Gtk.Widget {
         : (region.showSeconds ? "%H:%M:%S" : "%H:%M")
 
     const formatTime = () => GLib.DateTime.new_now_local().format(timeFmt) ?? ""
-    const formatDate = () => formatDatePart(region.dateFormat, GLib.DateTime.new_now_local())
+    const formatDate = () => formatDatePart(DATE_FORMAT, GLib.DateTime.new_now_local())
 
     const dateLabel = new Gtk.Label({
         label: formatDate(),

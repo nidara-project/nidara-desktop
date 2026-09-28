@@ -1,7 +1,7 @@
 import GObject from "gi://GObject"
 import { defineSettings } from "../../core/configFile"
 import { WidgetSize } from "../../common/widget-kit"
-import { WIDGET_META, CC_DEFAULT_ORDER } from "../../widgets/index"
+import { WIDGET_META, CC_DEFAULT_LAYOUT } from "../../widgets/index"
 
 // CC grid geometry — one cell is UNIT px, cells separated by GAP px. It lives HERE,
 // with the surface that draws the grid, and no widget may read it: a widget receives
@@ -51,7 +51,8 @@ export interface LayoutEntry {
 }
 
 // Stored in GSettings, `org.nidara.control-center` (#573): positions as id → (x, y),
-// sizes as id → "WxH". Empty positions = the default layout. cc_layout.json was
+// sizes as id → "WxH". Empty positions = the default layout, which is never stored:
+// see "Two modes" on the class. cc_layout.json was
 // imported once by migrations/2026-09-14d-widgets-pinned-region.sh, which also
 // converted the oldest array format; the `order` format (before 2026-06-09) needed
 // a flow-pack only this class can do, so such a file resets to the default layout.
@@ -71,6 +72,21 @@ type PosMap = Map<string, Cell>
 // yield, each sliding to the nearest free space (downward-biased, so a tile with a
 // gap below it drops into it). Untouched widgets never move — minimal, legible
 // displacement. flow-pack survives only to migrate a legacy order array.
+//
+// ── Two modes (2026-09-28) ──
+// DEFAULT — nothing stored. The grid is flow-packed from CC_DEFAULT_LAYOUT (then any
+// other member, in the order it arrived) every time the set of members changes, and
+// nothing is saved. Members come and go with `add`/`remove` — the hardware gate in
+// IslandGrid.syncCCLayout, or a widget turned on or off in Settings — so a tile whose
+// hardware is missing leaves no hole: the tiles after it move up.
+// PERSONAL — the person moved or resized a tile: from then on every cell is stored and
+// only a layout change moves anything, by the owner's rules of 2026-09-28:
+//   · a GROWING tile keeps its place and pushes what it covers, exactly as a drop does
+//     (it used to jump by itself to the first free cell — usually the bottom);
+//   · a tile that LEAVES or SHRINKS frees cells, and what sits below them in those
+//     columns falls up into them if it fits (`liftInto`) — nothing ever moves sideways,
+//     and a gap nothing fits in stays, as iOS's Control Center allows gaps.
+// Clearing `positions` goes back to DEFAULT.
 class CCLayoutManager extends GObject.Object {
     static {
         GObject.registerClass({
@@ -81,6 +97,12 @@ class CCLayoutManager extends GObject.Object {
 
     private _pos: Record<string, Cell> = {}
     private _sizes: Record<string, WidgetSize> = {}
+    /** DEFAULT mode (nothing stored): the grid is derived, never saved. */
+    private _derived = true
+    /** DEFAULT mode: the ids that are in the CC, in arrival order — what it packs from.
+     *  null at start-up = every default tile, until the hardware gate's first pass
+     *  removes the absent ones. PERSONAL mode keeps no list: its cells are the truth. */
+    private _members: string[] | null = null
 
     constructor() {
         super()
@@ -95,6 +117,11 @@ class CCLayoutManager extends GObject.Object {
     }
 
     private load() {
+        // Going back to DEFAULT while the shell runs (positions reset): the members are
+        // the tiles the CC HAS. Starting from the factory list instead brought back a
+        // backlight tile on a desktop with none — the hardware gate had nothing to
+        // remove, having never added it (owner-caught 2026-09-29).
+        const had = this._derived ? null : Object.keys(this._pos)
         const positions = store.get("positions")
         const sizes = store.get("sizes")
         this._pos = {}; this._sizes = {}
@@ -102,9 +129,29 @@ class CCLayoutManager extends GObject.Object {
             if (WIDGET_META[id] && Array.isArray(cell)) this._pos[id] = { x: cell[0] | 0, y: cell[1] | 0 }
         for (const [id, size] of Object.entries(sizes))
             if (WIDGET_META[id]) this._sizes[id] = size as WidgetSize
-        if (Object.keys(this._pos).length > 0) { this.normalize(); return }
-        this._sizes = {}
-        this.seedFromOrder([...CC_DEFAULT_ORDER])
+        this._derived = Object.keys(this._pos).length === 0
+        if (!this._derived) { this._members = null; this.normalize(); return }
+        if (had) this._members = had
+        this.derive()
+    }
+
+    /** DEFAULT mode: pack the members from CC_DEFAULT_LAYOUT, at its sizes. A tile that
+     *  does not fit is left out, as `add` does. */
+    private derive() {
+        const members = this._members ?? CC_DEFAULT_LAYOUT.map(e => e.id)
+        const inCC = new Set(members)
+        const listed = CC_DEFAULT_LAYOUT.filter(e => inCC.has(e.id) && WIDGET_META[e.id])
+        const listedIds = new Set(listed.map(e => e.id))
+        const order = [...listed.map(e => e.id), ...members.filter(id => !listedIds.has(id) && WIDGET_META[id])]
+        this._sizes = Object.fromEntries(listed.map(e => [e.id, e.size]))
+        this.seedFromOrder(order)
+    }
+
+    /** A layout edit by the person: DEFAULT mode ends here, and the cells are stored. */
+    private personalise() {
+        this._derived = false
+        this._members = null
+        this.save()
     }
 
     private save() {
@@ -304,7 +351,7 @@ class CCLayoutManager extends GObject.Object {
         const next: Record<string, Cell> = {}
         for (const [id, c] of resolved) next[id] = { x: c.x, y: c.y }
         this._pos = next
-        this.save()
+        this.personalise()
         this.emit("changed")
         return true
     }
@@ -321,41 +368,89 @@ class CCLayoutManager extends GObject.Object {
         return !!this.findFreeCell(id)
     }
 
-    canResize(id: string, newSize: WidgetSize): boolean {
+    /** The whole layout after `id` takes `newSize` where it stands (pulled left or up
+     *  only as far as the grid needs), pushing what it covers like a drop. null = the
+     *  pushed tiles find no room. */
+    private resizePlacement(id: string, newSize: WidgetSize): PosMap | null {
         const cur = this._pos[id]
-        if (!cur) return false
+        if (!cur) return null
         const { w, h } = SIZE_MAP[newSize]
-        if (this.cellsFree(this.occupiedSet(id), cur.x, cur.y, w, h)) return true
-        return !!this.findFreeCell(id, newSize)
+        const tx = Math.min(cur.x, GRID_COLS - w), ty = Math.min(cur.y, GRID_ROWS - h)
+        const prev = this._sizes[id]
+        this._sizes[id] = newSize
+        try { return this.resolvePlacement(id, tx, ty) }
+        finally { if (prev === undefined) delete this._sizes[id]; else this._sizes[id] = prev }
+    }
+
+    canResize(id: string, newSize: WidgetSize): boolean {
+        return !!this.resizePlacement(id, newSize)
     }
 
     resize(id: string, newSize: WidgetSize): boolean {
-        const cur = this._pos[id]
-        if (!cur) return false
-        const { w, h } = SIZE_MAP[newSize]
-        if (this.cellsFree(this.occupiedSet(id), cur.x, cur.y, w, h)) {
-            this._sizes[id] = newSize
-        } else {
-            const cell = this.findFreeCell(id, newSize)
-            if (!cell) return false
-            this._sizes[id] = newSize
-            this._pos[id] = cell
-        }
-        this.save()
+        const before = this._pos[id] && { ...this._pos[id], ...this.footprint(id) }
+        const resolved = this.resizePlacement(id, newSize)
+        if (!before || !resolved) return false
+        this._sizes[id] = newSize
+        for (const [k, c] of resolved) this._pos[k] = { x: c.x, y: c.y }
+        // What the tile gave up (shrinking, or moving left at the grid's edge) is freed.
+        this.liftInto(before)
+        this.personalise()
         this.emit("changed")
         return true
     }
 
+    /** Gravity after cells are freed: every tile below `freed`, in its columns, rises as
+     *  far as the free cells above it allow — never above `freed`'s top row, so a gap the
+     *  person left higher up stays theirs — and one that rises frees its own cells for
+     *  the tiles under it. Nothing moves sideways. */
+    private liftInto(freed: { x: number; y: number; w: number; h: number }) {
+        let cols = new Set<number>()
+        for (let dx = 0; dx < freed.w; dx++) cols.add(freed.x + dx)
+        const ids = Object.keys(this._pos).sort((a, b) =>
+            (this._pos[a].y - this._pos[b].y) || (this._pos[a].x - this._pos[b].x))
+        for (const id of ids) {
+            const p = this._pos[id]
+            const { w, h } = this.footprint(id)
+            if (p.y <= freed.y) continue
+            let inCols = false
+            for (let dx = 0; dx < w; dx++) if (cols.has(p.x + dx)) inCols = true
+            if (!inCols) continue
+            const occ = this.occupiedSet(id)
+            let y = p.y
+            while (y - 1 >= freed.y && this.cellsFree(occ, p.x, y - 1, w, h)) y--
+            if (y === p.y) continue
+            this._pos[id] = { x: p.x, y }
+            cols = new Set([...cols, ...Array.from({ length: w }, (_, dx) => p.x + dx)])
+        }
+    }
+
     remove(id: string) {
+        if (this._derived) {
+            this._members = (this._members ?? CC_DEFAULT_LAYOUT.map(e => e.id)).filter(m => m !== id)
+            if (!this._pos[id]) return
+            this.derive(); this.emit("changed"); return
+        }
+        if (!this._pos[id]) return
+        const freed = { ...this._pos[id], ...this.footprint(id) }
         delete this._pos[id]
         delete this._sizes[id]
+        this.liftInto(freed)
         this.save()
         this.emit("changed")
     }
 
     add(id: string) {
-        if (this._pos[id]) return
         if (!WIDGET_META[id]) return
+        if (this._derived) {
+            const members = this._members ?? CC_DEFAULT_LAYOUT.map(e => e.id)
+            this._members = members.includes(id) ? members : [...members, id]
+        }
+        if (this._pos[id]) return
+        if (this._derived) {
+            this.derive()
+            if (this._pos[id]) this.emit("changed")
+            return
+        }
         const cell = this.findFreeCell(id)
         if (!cell) return
         this._pos[id] = cell

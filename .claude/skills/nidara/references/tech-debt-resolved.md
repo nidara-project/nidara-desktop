@@ -673,6 +673,12 @@ both in `widgets/index.ts`), which are version-controlled, reviewable and **hard
   does NOT reflow, so a tile removed on a hardware-less box would leave a hole (see the comment on
   `CC_DEFAULT_ORDER`). Off-by-default-but-addable (`defaultInCc: false`): ethernet, vpn, clipboard,
   screenshot, screenrecord, night-light.
+⚠️ **Superseded 2026-09-28 — the "load-bearing rule" above no longer holds.** `CC_DEFAULT_ORDER`
+became `CC_DEFAULT_LAYOUT` (ids + sizes), and the default grid is no longer saved on first run: it
+is re-packed from that list whenever the CC's members change, until the person moves or resizes a
+tile (`CCLayoutManager` "Two modes"). A missing hardware tile is skipped, so it leaves no hole and
+hardware tiles may be listed anywhere — Wi-Fi now opens the grid. Defaults also changed that day:
+Bluetooth and screen recording off the bar; screenshot and recording in the CC; CPU/memory out.
 The runtime `~/.config/nidara/{widgets,cc_layout}.json` are still written by the managers once the user
 customizes; only the shipped seeds are gone. NB `defaults/region.json` is NOT seeded from the repo
 (install.sh derives it from the system locale), so it was never part of this.

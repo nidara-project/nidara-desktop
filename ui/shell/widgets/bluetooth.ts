@@ -127,8 +127,9 @@ const btWidget: AtomicWidget = {
     isAvailable: () => BT.hasAdapter(),
     // A plain on/off control: shown or not, and the icon says which (contract.ts
     // `barActive`). Without an adapter it does not exist; a USB dongle plugged in
-    // later brings it back by itself.
-    defaultInBar: true,
+    // later brings it back by itself. Not in the bar out of the box (owner, 2026-09-28):
+    // it is always in the CC, and macOS does not put it in the menu bar either.
+    defaultInBar: false,
     ccFixed: true,
     watchAvailable: (cb) => { BT.watchAdapter(cb) },
     defaultSize: WidgetSize.SINGLE,

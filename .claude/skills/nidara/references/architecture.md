@@ -1167,7 +1167,15 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     left→right, system nearest the tray — no hand-maintained list). That is only the
     DEFAULT: since 2026-09-26 the person orders widgets, tray icons and search as one
     list (`core/BarOrder.ts`; design-system.md → "The right group's order").
-    `CC_DEFAULT_ORDER` stays editorial. `CCWidgetSpec` (= `Omit<AtomicWidget,
+    `CC_DEFAULT_LAYOUT` stays editorial, and it is PACKED, not stored, until the person
+    moves or resizes a tile (`CCLayoutManager` "Two modes", 2026-09-28): a tile whose
+    hardware is missing is skipped and the rest move up, so hardware tiles can sit
+    anywhere in it — Wi-Fi is at the top. A PERSONALISED grid moves tiles only by the
+    owner's rules (same day): a growing tile keeps its place and pushes what it covers,
+    like a drop (it used to jump alone to the first free cell); a tile that leaves or
+    shrinks lets what is below it, in its columns, fall up (`liftInto`) — never sideways,
+    never above the freed row — and a gap nothing fits stays, as iOS allows gaps.
+    Mixed sizes mean NO rule closes every hole: do not promise one. `CCWidgetSpec` (= `Omit<AtomicWidget,
     "category">`) is what a spec factory returns — it builds content, not registry
     metadata, so it carries no category; `tile.ts`'s `roundToggleSpec` is the only
     one left. ⚠️ A spec's own `defaultSize`/`supportedSizes` are advisory and mostly
@@ -1232,7 +1240,7 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     GOTCHA: every module in widget-kit/ MUST stay a leaf — importing
     `CCLayoutManager` from one closes the cycle CCLayoutManager → widgets/index →
     widget → widget-kit → CCLayoutManager and **crashes the shell at boot**
-    (CC_DEFAULT_ORDER undefined mid-cycle; typecheck does NOT catch module
+    (CC_DEFAULT_LAYOUT undefined mid-cycle; typecheck does NOT catch module
     cycles — only a runtime boot does). That cycle is also why UNIT/GAP were
     parked in the shared leaf: the fix was to stop widgets needing them at all.
     **Bar-pill click**: the pill opens `buildBarExpanded` (or, with none, the CC

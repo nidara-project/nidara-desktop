@@ -365,7 +365,26 @@ async function run() {
     assert(pinChanges === 2, `…and notifies once more (${pinChanges})`)
     unsubPins()
 
-    // CC layout: positions as (x, y), reloaded on an external change.
+    // CC layout, DEFAULT mode (2026-09-28): packed from CC_DEFAULT_LAYOUT, never stored,
+    // and re-packed when a member goes — a missing hardware tile leaves no hole.
+    const cells = () => ccLayout.layout.map(e => `${e.id}@${e.x},${e.y}`).join(" ")
+    const storedPositions = () => gsettingsGet("org.nidara.control-center", "positions")
+    assert(cells() === "media@0,0 wifi@2,0 bt@2,1 brightness@0,2 volume@0,3 screenshot@0,4 screenrecord@1,4 dark_mode@2,4 night_light@0,5 focus@2,5",
+        `the default layout is the owner's, brightness above volume (${cells()})`)
+    for (const id of ["wifi", "bt", "brightness"]) ccLayout.remove(id)
+    assert(cells() === "media@0,0 screenshot@2,0 screenrecord@3,0 dark_mode@2,1 volume@0,2 night_light@0,3 focus@2,3",
+        `without Wi-Fi, Bluetooth and a backlight the rest move up, no hole (${cells()})`)
+    ccLayout.add("bt")
+    assert(cells().startsWith("media@0,0 bt@2,0 "), `a tile coming back takes its default place (${cells()})`)
+    assert(storedPositions() === "@a{s(ii)} {}", `…and the default layout is never stored (${storedPositions()})`)
+    ccLayout.add("clipboard")
+    assert(ccLayout.layout.some(e => e.id === "clipboard") && storedPositions() === "@a{s(ii)} {}",
+        "a widget outside the default list packs after it, still not stored")
+    assert(ccLayout.resize("media", "2x1" as any), "a tile can be resized")
+    assert(storedPositions().includes("'media': (0, 0)") && storedPositions().includes("'clipboard'"),
+        `a resize personalises: every cell is stored (${storedPositions()})`)
+
+    // CC layout, PERSONAL mode: positions as (x, y), reloaded on an external change.
     const tile = ccLayout.layout[0]?.id
     assert(!!tile, "the CC layout has a default tile to move")
     ccLayout.remove(tile)
@@ -375,6 +394,31 @@ async function run() {
     gsettingsSetExternally(`set org.nidara.control-center positions "{'${tile}': (0, 0)}"`, () => ccLayout.layout.some(e => e.id === tile))
     assert(ccLayout.layout.length === 1 && ccLayout.layout[0].id === tile, "an external positions change reloads the layout")
     assert(layoutChanges === 1, `…and emits "changed" once (${layoutChanges})`)
+
+    // CC layout, PERSONAL mode, the owner's rules of 2026-09-28, on his own grid:
+    //   MMWW / MMBB / VVVV / CROO / NNFF
+    gsettingsSetExternally(`set org.nidara.control-center sizes "{'volume': '4x1', 'dark_mode': '2x1', 'night_light': '2x1', 'focus': '2x1', 'screenshot': '1x1', 'screenrecord': '1x1', 'bt': '2x1'}"`,
+        () => ccLayout.effectiveSize("bt") === "2x1")
+    gsettingsSetExternally(`set org.nidara.control-center positions "{'media': (0, 0), 'wifi': (2, 0), 'bt': (2, 1), 'volume': (0, 2), 'screenshot': (0, 3), 'screenrecord': (1, 3), 'dark_mode': (2, 3), 'night_light': (0, 4), 'focus': (2, 4)}"`,
+        () => ccLayout.layout.length === 9)
+    ccLayout.remove("volume")
+    assert(cells() === "media@0,0 wifi@2,0 bt@2,1 screenshot@0,2 screenrecord@1,2 dark_mode@2,2 night_light@0,3 focus@2,3",
+        `a tile that leaves: what is below it falls up, nothing moves sideways (${cells()})`)
+    assert(ccLayout.resize("screenshot", "2x1" as any), "a tile with a neighbour can still grow")
+    const shot = ccLayout.layout.find(e => e.id === "screenshot")!
+    assert(shot.x === 0 && shot.y === 2, `…in its own place, not jumping to a free cell (${cells()})`)
+    assert(ccLayout.layout.find(e => e.id === "screenrecord")!.y > 2, `…and the neighbour it covers is pushed away (${cells()})`)
+    assert(ccLayout.resize("screenshot", "1x1" as any) && ccLayout.layout.find(e => e.id === "screenshot")!.x === 0,
+        `a tile that shrinks keeps its place (${cells()})`)
+    assert(!ccLayout.layout.some(e => e.x === 1 && e.y === 2),
+        `…and a gap nothing below can fall into stays a gap (${cells()})`)
+    // Back to the factory layout WHILE the shell runs (owner, 2026-09-29: the backlight
+    // tile appeared on a desktop with none): the members are the tiles the CC had, not
+    // the factory list — hardware that is absent stays out.
+    const personal = cells()
+    gsettingsSetExternally(`reset org.nidara.control-center positions`, () => cells() !== personal)
+    assert(cells() === "media@0,0 wifi@2,0 bt@2,1 screenshot@0,2 screenrecord@1,2 dark_mode@2,2 night_light@0,3 focus@2,3",
+        `a reset packs the tiles the CC HAD — no backlight tile it never had (${cells()})`)
 
     // Region: the clock format is stored; the mirror follows; timezone is the system's.
     // The mirror is the SHELL's to write (core/RegionSync.ts, #571): the store alone writes

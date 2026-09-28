@@ -436,7 +436,6 @@ const screenrecordWidget: AtomicWidget = {
     name: t("widget.screenrecord.name"),
     icon: uiIcon("nd-media-record"),
     locations: ["bar", "cc"],
-    defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,
@@ -473,7 +472,8 @@ const screenrecordWidget: AtomicWidget = {
     // one from the bar. It shipped that way in #651 as the default, and Settings
     // offers Configure instead of the mode menu for this row — so the icon never
     // showed and nothing could bring it back (owner, 2026-09-27). Checked = shown.
-    defaultInBar: true,
+    // Out of the box it is in the CC, beside Screenshot, not in the bar (owner, 2026-09-28).
+    defaultInBar: false,
 }
 
 export default screenrecordWidget

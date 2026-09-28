@@ -17,7 +17,7 @@
  *    No module in it may import from `surfaces/` or `widgets/`. Importing
  *    `CCLayoutManager` from the kit closes the cycle
  *      CCLayoutManager → widgets/index → a widget → widget-kit → CCLayoutManager
- *    and CRASHES THE SHELL AT BOOT (`CC_DEFAULT_ORDER` undefined while
+ *    and CRASHES THE SHELL AT BOOT (`CC_DEFAULT_LAYOUT` undefined while
  *    CCLayoutManager's singleton evaluates mid-cycle). `tsc` does not see module
  *    cycles; only a real boot does, which is a long way from the edit that caused it.
  *

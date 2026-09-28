@@ -1896,8 +1896,8 @@ Commit `widgets.gen.ts` **together with** the new widget file — the CI job
 `widgets-gen` fails the PR if the committed file is stale. No registry edit is
 needed beyond the widget's required `category` (`"media"`|`"utilities"`|`"system"`,
 which auto-places it in the bar) + optional `barOrder` (intra-category fine-tune);
-`CC_DEFAULT_ORDER` in `widgets/index.ts` stays editorial (unlisted ids fall to the
-end). The codegen hard-errors
+`CC_DEFAULT_LAYOUT` in `widgets/index.ts` stays editorial (an unlisted id packs after the
+listed ones). The codegen hard-errors
 on non-widget files in `widgets/` (helpers go in `common/`) and on
 duplicate ids — fix what it says and re-run.
 

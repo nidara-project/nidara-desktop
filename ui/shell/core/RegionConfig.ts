@@ -34,13 +34,13 @@ const REGIONAL_LC_VARS = [
 //    reads at login, which is what actually decides the regional format.
 // region.json was imported once by migrations/2026-09-14d-widgets-pinned-region.sh.
 //
-// `dateFormat` defaults to "long": what nidara-setup seeded into every fresh
-// install's region.json, and what the greeter and lock screen fall back to. The old
-// code default ("short") only ever showed on a machine that skipped nidara-setup.
+// `dateFormat` defaults to "short" (owner, 2026-09-28; it was "long", what nidara-setup
+// used to seed). It is the BAR's date only: the lock screen and the greeter always
+// show the long one (ui/lib/clock.ts), as macOS's Lock Screen keeps its own clock.
 const DATE_FORMATS: readonly DateFormat[] = ["none", "short", "short-year", "long", "numeric", "iso"]
 const clock = defineSettings<{ timeFormat: TimeFormat; dateFormat: DateFormat; showSeconds: boolean }>("region", {
     timeFormat: "24h",
-    dateFormat: "long",
+    dateFormat: "short",
     showSeconds: false,
 }, {
     timeFormat: v => v === "24h" || v === "12h",

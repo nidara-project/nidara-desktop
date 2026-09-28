@@ -18,9 +18,9 @@ function writeMirror(): void {
     try {
         if (!GLib.file_test(GREETER_MIRROR_DIR, GLib.FileTest.EXISTS))
             GLib.mkdir_with_parents(GREETER_MIRROR_DIR, 0o755)
+        // No date format: the greeter always shows the long date (ui/lib/clock.ts).
         const json = JSON.stringify({
             timeFormat: regionConfig.timeFormat,
-            dateFormat: regionConfig.dateFormat,
             showSeconds: regionConfig.showSeconds,
         }, null, 2)
         // 0644: the greeter (another user) reads it. See writeFile's mode note.
