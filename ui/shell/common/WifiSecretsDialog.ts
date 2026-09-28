@@ -5,6 +5,7 @@ import NM from "gi://NM?version=1.0"
 import NMA from "gi://NMA4?version=1.0"
 import { setWindowAppId } from "../../lib/nidara-kit/platform/app-id"
 import * as Net from "../core/NetworkService"
+import { uiIcon } from "../core/Icons"
 
 // The Wi-Fi dialogs are libnma's (libnma-gtk4), the same library GNOME Settings
 // builds its connection editor on: personal and enterprise (802.1X, certificates),
@@ -56,6 +57,28 @@ function entries(w: Gtk.Widget | null, out: Gtk.Entry[] = []): Gtk.Entry[] {
     return out
 }
 
+/** The first image in `w`'s tree. */
+function firstImage(w: Gtk.Widget | null): Gtk.Image | null {
+    for (let c = w?.get_first_child() ?? null; c; c = c.get_next_sibling()) {
+        if (c instanceof Gtk.Image) return c
+        const inner = firstImage(c)
+        if (inner) return inner
+    }
+    return null
+}
+
+/**
+ * Our window for the dialog to sit on. Unparented, Hyprland centres it on the MONITOR —
+ * measured 2026-09-28: Connect pressed in Settings (on the right), the password form
+ * came up in the middle of the screen over another app, went unseen, and NetworkManager
+ * gave up two minutes later. Settings when it is the window in front — the join came from
+ * there; nothing otherwise (from the CC: a layer surface cannot be a toplevel's parent).
+ */
+function dialogParent(): Gtk.Window | null {
+    const tops = Gtk.Window.list_toplevels() as Gtk.Window[]
+    return tops.find(w => w.is_active && w.get_mapped() && w.has_css_class("nidara-settings-window")) ?? null
+}
+
 /**
  * Present `dialog` and resolve with its connection on OK, null on anything else.
  * `beforePresent` runs right before the dialog shows — the shell passes
@@ -67,6 +90,14 @@ export function runWifiDialog(dialog: NMA.WifiDialog, beforePresent?: () => void
     // A window that owns the desktop's name: without it Hyprland and the dock file the
     // dialog under the shell PROCESS id and it shows up as an unknown app.
     setWindowAppId(dialog, "nidara-settings")
+    const parent = dialogParent()
+    if (parent) dialog.set_transient_for(parent)
+    // libnma's GTK 4 form still asks for GTK 3's icon size 6 (GTK_ICON_SIZE_DIALOG) and a
+    // freedesktop name: GtkBuilder logs a CRITICAL while BUILDING it (upstream, libnma
+    // 1.10.6 wifi.ui — not preventable from here) and the image drew as a broken glyph.
+    // Ours, at GTK 4's large size.
+    const image = firstImage(dialog)
+    if (image) { image.gicon = uiIcon("nd-network-wireless"); image.icon_size = Gtk.IconSize.LARGE }
     return new Promise(resolve => {
         // libnma leaves focus wherever GtkDialog puts it — on a check box, so the first
         // keystrokes went nowhere and Enter toggled "Show password". Start in the field.

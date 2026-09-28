@@ -51,6 +51,13 @@ const FLAG_ALLOW_INTERACTION = 0x1
 const FLAG_REQUEST_NEW = 0x2
 
 const WIFI_SETTINGS = new Set(["802-11-wireless-security", "802-1x"])
+// How long NetworkManager waits for an agent's GetSecrets before it gives up on its own
+// ("No agents were available for this request") — measured 2026-09-28: request at
+// 05:56:21.96, give-up at 05:58:21.96. NM does NOT call CancelGetSecrets when it does,
+// so without this the request stayed `pending` for good: its dialog open on a dead
+// call, and every later request refused "another dialog is open" — joining any Wi-Fi
+// network impossible until that forgotten dialog was closed by hand.
+const NM_GET_SECRETS_TIMEOUT_MS = 120_000
 
 const AGENT_IFACE = `<node>
   <interface name="org.freedesktop.NetworkManager.SecretAgent">
@@ -170,8 +177,21 @@ function getSecrets(params: any[], inv: any): void {
 
         const key = `${path}:${settingName}`
         pending = { key, inv }
+        // NM's own timeout: past it the call is dead, so the question is withdrawn here too
+        // and its dialog closes (the form would otherwise hand a password to nobody).
+        let timer: number | null = GLib.timeout_add(GLib.PRIORITY_DEFAULT, NM_GET_SECRETS_TIMEOUT_MS, () => {
+            timer = null
+            if (pending?.inv === inv) {
+                pending = null
+                try { inv.return_dbus_error(`${ERR}.UserCanceled`, "timed out") } catch {}
+                try { handler?.cancel() } catch {}
+            }
+            return GLib.SOURCE_REMOVE
+        })
+        const stopTimer = () => { if (timer !== null) { GLib.source_remove(timer); timer = null } }
         handler.prompt({ connection: conn, settingName, retry }).then(
             secrets => {
+                stopTimer()
                 if (pending?.inv !== inv) return   // withdrawn meanwhile
                 pending = null
                 // try: NM may have timed the call out while the user was typing.
@@ -194,6 +214,7 @@ function getSecrets(params: any[], inv: any): void {
                 } catch (e) { console.error("[NetworkAgent] reply:", e) }
             },
             e => {
+                stopTimer()
                 if (pending?.inv === inv) pending = null
                 try { inv.return_dbus_error(`${ERR}.UserCanceled`, String(e)) } catch {}
             },
