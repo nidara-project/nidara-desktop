@@ -338,6 +338,7 @@ export default {
 
     // Control Center
     "settings.widgets.tooltip.no-space": "Not enough space — remove a control first",
+    "settings.widgets.tooltip.cc-fixed": "Always in the Control Center — it can be moved and resized, not removed",
     "settings.widgets.tooltip.no-hardware": "No compatible hardware detected on this device",
 
     // Display

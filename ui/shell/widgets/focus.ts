@@ -60,8 +60,10 @@ const focusWidget: AtomicWidget = {
     ccDetailRows: 2,
     getActive: dontDisturb,
     watchActive: watchDnd,
-    // Active = Do Not Disturb on.
+    // Active = Do Not Disturb on. Fixed in the CC, so "When active" can be offered:
+    // the CC tile is where it is turned back on (contract.ts `barActive`).
     defaultInBar: true,
+    ccFixed: true,
     barActive: dontDisturb,
     watchBarActive: watchDnd,
     defaultBarMode: "active",

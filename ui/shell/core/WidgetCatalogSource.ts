@@ -23,8 +23,9 @@ export const widgetCatalogSource: WidgetCatalog = {
             canCc,
             available: widgetAvailable(w),
             bar: placement.bar,
-            barMode: widgetConfig.barMode(w.id),
+            barMode: widgetConfig.barModeChoosable(w.id) ? widgetConfig.barMode(w.id) : null,
             cc: placement.cc,
+            ccFixed: canCc && widgetConfig.ccFixed(w.id),
             ccFits: canCc && (placement.cc || ccLayout.canAdd(w.id)),
             buildSettings: w.buildSettings,
         }

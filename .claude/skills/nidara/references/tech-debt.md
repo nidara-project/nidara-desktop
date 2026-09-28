@@ -4176,6 +4176,17 @@ Why it is NOT a one-liner — decide before coding:
   size) while the cross-axis height stays.
 - Magnification must stay inside the screen too (the bulge at the ends).
 
+### 112. ⚠️ OPEN — a fixed CC widget has no reserved cell: a full grid leaves it out (2026-09-28)
+
+`ccFixed` (writing-a-widget.md) guarantees the PLACEMENT, not a cell. The CC grid is 4×8 and
+optional tiles take cells first-come: fill it, then plug in a Bluetooth dongle, and `syncCCLayout`
+finds no free cell for the Bluetooth tile — `CCLayoutManager.add` returns silently. The tile comes
+back as soon as a cell frees. Unlikely with today's catalogue (the defaults use 21 of 32 cells), and
+a fixed widget that is already placed never loses its cell. Fixing it properly means `canAdd` for
+an OPTIONAL widget keeps room for every fixed widget that is available and unplaced — deciding
+whether room is also kept for fixed widgets whose hardware is absent (a desktop would then lose
+cells to a Wi-Fi it will never have).
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a

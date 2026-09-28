@@ -338,6 +338,7 @@ export default {
 
     // Control Center
     "settings.widgets.tooltip.no-space": "Nicht genug Platz — entfernen Sie zuerst ein Steuerelement",
+    "settings.widgets.tooltip.cc-fixed": "Immer im Kontrollzentrum — verschieben und Größe ändern ja, entfernen nicht",
     "settings.widgets.tooltip.no-hardware": "Keine kompatible Hardware auf diesem Gerät erkannt",
 
     // Display

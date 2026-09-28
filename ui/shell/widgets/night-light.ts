@@ -152,7 +152,6 @@ const nightLightWidget: AtomicWidget = {
     name: t("widget.night-light.name"),
     icon: uiIcon("nd-night-light"),
     locations: ["bar", "cc"],
-    defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,
@@ -161,7 +160,10 @@ const nightLightWidget: AtomicWidget = {
     ccDetailRows: 4,
     getActive: () => nightLight.enabled,
     watchActive: subscribe,
-    // Active = on. Default "always": the bar icon is also how it gets turned on.
+    // Active = on (by hand or by its schedule). Default "always": the bar icon is also
+    // how it gets turned on. Fixed in the CC — Apple's Night Shift has its own control
+    // there too — which is what lets the bar offer "When active" (contract.ts).
+    ccFixed: true,
     barActive: () => nightLight.enabled,
     watchBarActive: subscribe,
 }

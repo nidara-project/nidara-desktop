@@ -3892,27 +3892,28 @@ column), the right group's widgets and search, the window title, the system menu
 The user-facing word is **controls** (macOS's; a volume slider is not a "widget"): the group is
 "Top bar controls". Each row: a check, the icon, the name, and at most ONE control on the right —
 "Change icon" for the system menu, "Configure" for a control with its own settings (it beats the
-mode menu, so such a control must not declare `barActive` — see writing-a-widget.md), else "Always / When active" for one
-that declares `barActive` (see writing-a-widget.md). Below: "App icons", a switch per INSTALLED
+mode menu, so such a control must not have a choosable mode — see writing-a-widget.md), else "Always / When active" for one
+whose mode is choosable (`ccFixed` + `barActive` — the three kinds are in writing-a-widget.md). Below: "App icons", a switch per INSTALLED
 app. No explanatory footers (owner: "only installed apps" raised more questions than it
 answered). The "Reorder in the bar" action sits INSIDE the list, at its foot —
 `NidaraListActions` in the kit, made for this: a button under a card, outside it, read as the
 page's. The Control Center page lists only the CC now. Rules from the owner's first live pass:
 
-- **A checked control has an icon in the bar.** A control whose hardware is missing shows its check
-  OFF and disabled (with the CC page's "no compatible hardware" line), the saved choice kept for
-  when the hardware appears. Such a control is listed only if it has `barActive` (it can wait for a
-  dongle); battery and brightness only exist where the machine has them. "When active" is the one
-  checked-without-icon case, and that is what its words say.
+- **A checked control has an icon in the bar.** A control whose hardware is missing is not listed
+  at all — Wi-Fi on a machine without a radio no more than a battery on a desktop (2026-09-28;
+  until then Wi-Fi, Bluetooth and Ethernet were listed disabled because their "When active" could
+  wait for a dongle). The saved choice is kept, and plugging the hardware in brings the row back.
+  "When active" and a presence indicator are the checked-without-icon cases.
 - **Toggling a row must not move the page.** The list is rebuilt only when the set of rows or their
   order changes (a `signature` of both); a check or a menu updates its own row. Rebuilding on every
   toggle threw the scroll back to the top.
 
 - **"When active"** (`WidgetConfig.barMode`, GSettings `bar-mode` — only values that differ from
-  the widget's `defaultBarMode`): the bar paints the widget only while `barActive()` holds, and
-  every widget's `watchBarActive` schedules a layout pass. Hardware widgets default to it, so a
-  machine without Bluetooth never shows the icon and a USB dongle makes it appear with no trip to
-  Settings. An icon appearing moves the others and may fold one behind the `»`, like any other.
+  the widget's `defaultBarMode`, and only for a choosable widget): the bar paints the widget only
+  while `barActive()` holds, and every widget's `watchBarActive` schedules a layout pass. Offered
+  only for widgets fixed in the CC (Do Not Disturb, night light); Wi-Fi, Bluetooth and VPN are
+  plain on/off controls, as in Apple's pane (writing-a-widget.md). An icon appearing moves the
+  others and may fold one behind the `»`, like any other.
 
 ### The bar's overflow: unfolded in line, not a menu (2026-09-25)
 

@@ -61,20 +61,29 @@ export interface AtomicWidget {
     barOrder?: number                   // optional intra-category fine-tune (lower = further left). Default 0.
     locations?: WidgetLocation[]        // where this widget can appear
     defaultInBar?: boolean              // shown in the bar by default (default false)
-    /** When the widget can say it is ACTIVE (a Wi-Fi radio on, a VPN connected, a
-     *  capture running), the bar can show it only then: Settings → Top bar offers
-     *  "Always" / "When active" for exactly the widgets that declare this (owner,
-     *  2026-09-27, after macOS's Menu Bar pane). Not the CC's `getActive`, which is
-     *  "paint the tile in the accent" — dark mode is on in that sense, and hiding its
-     *  own switch while it is off would leave no way to turn it back on from the bar. */
+    /** When the widget is a state that COMES AND GOES (Do Not Disturb on, night light
+     *  on, a cable plugged in), the bar can show it only while that holds. Not the CC's
+     *  `getActive`, which is "paint the tile in the accent" — dark mode is on in that
+     *  sense, and hiding its own switch while it is off would leave no way back.
+     *  Who gets to CHOOSE (owner, 2026-09-28, after Apple's Menu Bar pane):
+     *   · `ccFixed` + `barActive` → Settings → Top bar offers "Always" / "When active".
+     *     The CC is where it is turned on again, and a fixed tile cannot be removed from
+     *     it — Apple offers "Show When Active" only for modules its CC always shows.
+     *   · `barActive` alone → a PRESENCE indicator, always "when active", no choice: it
+     *     is there while there is something to show (Ethernet: a cable). Only for an item
+     *     whose bar icon is not how the thing is turned on.
+     *  A plain on/off control (Wi-Fi, Bluetooth, VPN) declares neither: it is shown or
+     *  not, and its icon says on or off. That is Apple's Wi-Fi/Bluetooth/VPN too. */
     barActive?: () => boolean
     watchBarActive?: (cb: () => void) => (() => void) | void
-    /** The first-run choice between the two, when `barActive` exists. A widget whose
-     *  HARDWARE may come and go (Bluetooth, Wi-Fi) defaults to "active": without the
-     *  hardware it is never active, so it stays out of the way, and a USB dongle
-     *  plugged in later makes it appear with no trip to Settings. Default "always". */
+    /** The first-run choice for a `ccFixed` widget with `barActive`. Default "always". */
     defaultBarMode?: BarMode
     defaultInCc?: boolean               // seeded into the CC by default (default = "cc" in locations)
+    /** Always in the Control Centre while its hardware is present: it can be moved and
+     *  resized, never removed — so a CC can never be emptied, and a control hidden from the
+     *  bar "when active" always has a way back on. Apple's fixed modules (Wi-Fi, Bluetooth,
+     *  Focus, Display, Sound, Now Playing); ours are decided by the owner (2026-09-28). */
+    ccFixed?: boolean
     defaultSize: WidgetSize
     supportedSizes: WidgetSize[]
     // Widgets that don't size anything can keep a one-arg signature.

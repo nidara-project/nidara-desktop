@@ -338,6 +338,7 @@ export default {
 
     // Control Center
     "settings.widgets.tooltip.no-space": "空间不足 — 请先移除一个控件",
+    "settings.widgets.tooltip.cc-fixed": "始终在控制中心中 — 可以移动和调整大小，但不能移除",
     "settings.widgets.tooltip.no-hardware": "此设备未检测到兼容硬件",
 
     // Display

@@ -345,6 +345,7 @@ export default {
 
     // Control Center
     "settings.widgets.tooltip.no-space": "Недостаточно места — сначала удалите элемент",
+    "settings.widgets.tooltip.cc-fixed": "Всегда в Центре управления — можно перемещать и менять размер, но не удалять",
     "settings.widgets.tooltip.no-hardware": "На этом устройстве не обнаружено совместимого оборудования",
 
     // Display

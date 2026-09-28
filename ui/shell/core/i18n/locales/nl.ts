@@ -338,6 +338,7 @@ export default {
 
     // Control Center
     "settings.widgets.tooltip.no-space": "Onvoldoende ruimte — verwijder eerst een element",
+    "settings.widgets.tooltip.cc-fixed": "Altijd in het Bedieningspaneel — verplaatsen en van grootte veranderen kan, verwijderen niet",
     "settings.widgets.tooltip.no-hardware": "Geen compatibele hardware gedetecteerd op dit apparaat",
 
     // Display
