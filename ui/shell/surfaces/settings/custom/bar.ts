@@ -13,6 +13,7 @@ import {
 import { uiIcon, currentUiIcon } from "../../../core/Icons"
 import { t } from "../../../core/i18n"
 import type { PageCtx, ItemBuilder } from "../PreferencePage"
+import { buildClockOptions } from "./clock"
 
 // ── Settings → Top bar (owner, 2026-09-27) ────────────────────────────────────
 // After macOS's Menu Bar pane. ONE list of the bar's CONTROLS (macOS's word, and the
@@ -20,7 +21,7 @@ import type { PageCtx, ItemBuilder } from "../PreferencePage"
 // them — Clock, Control Center, then the right group's items in the bar's current order,
 // then the window title and the system menu. Each row: a check on the left (none for the
 // fixed ones), the icon, the name, and at most ONE control on the right — "Change icon"
-// for the system menu, "Configure" for a control with settings, else "Always / When
+// for the system menu, "Configure" for the clock and for a control with settings, else "Always / When
 // active" for one that can say it is active. Below, the apps' tray icons with a switch.
 //
 // Rules the owner set on the first live pass:
@@ -139,8 +140,18 @@ export const build = (ctx: PageCtx) => {
             const add = (row: Gtk.Widget) => listBox.append(row)
             const byId = new Map(entries.map(w => [w.id, w]))
 
-            // Fixed at the right end: no check.
-            add(createRow(t("settings.bar.item.clock"), "", new Gtk.Box(), undefined, leading(null, rowIcon(uiIcon("nd-preferences-system-time")))))
+            // Fixed at the right end: no check. The clock's Configure is macOS's "Clock
+            // Options" — the date and the seconds (custom/clock.ts).
+            const clockTrailing = new Gtk.Box({ valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
+            if (ctx.nav) {
+                const nav = ctx.nav
+                const btn = NidaraButton({ label: t("settings.widgets.configure"), variant: "secondary", pill: true, valign: Gtk.Align.CENTER })
+                btn.connect("clicked", () => nav.pushSubpage({
+                    id: "bar/clock", title: t("settings.bar.item.clock"), parentId: "bar", build: buildClockOptions,
+                }))
+                clockTrailing.append(btn)
+            }
+            add(createRow(t("settings.bar.item.clock"), "", clockTrailing, undefined, leading(null, rowIcon(uiIcon("nd-preferences-system-time")))))
             add(createRow(t("settings.bar.item.control-center"), "", new Gtk.Box(), undefined, leading(null, rowIcon(uiIcon("nd-control-center")))))
 
             for (const key of order) {

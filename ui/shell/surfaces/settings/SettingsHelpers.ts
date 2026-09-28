@@ -133,6 +133,7 @@ export const indexPreferencePage = (page: PageDecl, pageLabel: string) => {
         for (const item of (group.items ?? [])) {
             indexItem(item)
         }
+        for (const key of (group.reaches ?? [])) indexItem(key)
     }
 }
 

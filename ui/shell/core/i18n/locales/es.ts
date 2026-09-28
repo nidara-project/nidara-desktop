@@ -30,7 +30,7 @@ export default {
     
     "settings.region.time.group": "Hora",
     "settings.region.time.format": "Formato de hora",
-    "settings.region.time.format.desc": "Cómo se muestra la hora en la barra",
+    "settings.region.time.format.desc": "En la barra, la pantalla de bloqueo y el inicio de sesión",
     "settings.region.time.24h": "24 horas",
     "settings.region.time.12h": "12 horas (AM/PM)",
     "settings.region.time.seconds": "Mostrar segundos",

@@ -3893,7 +3893,9 @@ the bar's order READ RIGHT TO LEFT: Clock and Control Center (fixed: an invisibl
 column), the right group's widgets and search, the window title, the system menu ("Change icon").
 The user-facing word is **controls** (macOS's; a volume slider is not a "widget"): the group is
 "Top bar controls". Each row: a check, the icon, the name, and at most ONE control on the right —
-"Change icon" for the system menu, "Configure" for a control with its own settings (it beats the
+"Change icon" for the system menu, "Configure" for the clock (macOS's "Clock Options": the date
+format and the seconds, `custom/clock.ts`; the 24/12-hour format stays in Language & Region,
+because the lock and login screens follow it too — 2026-09-28) and for a control with its own settings (it beats the
 mode menu, so such a control must not have a choosable mode — see writing-a-widget.md), else "Always / When active" for one
 whose mode is choosable (`ccFixed` + `barActive` — the three kinds are in writing-a-widget.md). Below: "App icons", a switch per INSTALLED
 app. No explanatory footers (owner: "only installed apps" raised more questions than it

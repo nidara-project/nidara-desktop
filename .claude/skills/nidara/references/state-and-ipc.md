@@ -701,6 +701,10 @@ registered in `config-entries.ts`):
     Settings draws. ⚠️ It is NOT the key's prefix: `nightlight.*` and `wallpaper.transition`
     live on **appearance**, and guessing from the prefix is exactly the plausible lie this
     field replaces.
+  - A key drawn in a SUBPAGE (the clock's Configure under Top bar) is declared on the page that
+    pushes it, in its custom group's `reaches` (`manifest.ts`): that gives it its `page`, puts it
+    in the Settings search (which never walks a subpage) and counts it for
+    `settings-config-contract`, which otherwise fails a key with `ui:` that no page declares.
   - A key with **no** `page` is one no page draws (`recording.*`, `ai.brainBackend`). The field
     is absent rather than invented — 55 of the 62 keys carry one.
 - `nidara-ipc getConfig dock.iconSize` (one key) / `nidara-ipc getConfig` (all values).

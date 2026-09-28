@@ -25,6 +25,9 @@ export interface GroupDecl {
     footerWhen?: WhenDecl
     items?: readonly ItemDecl[]      // exclusivo con `custom`
     custom?: string                  // el CUERPO del grupo lo construye un builder (Power)
+    reaches?: readonly string[]      // claves de ajuste que el grupo `custom` dibuja en una SUBPÁGINA
+                                     // («Configurar»): cuentan como declaradas aquí, se ubican en esta
+                                     // página y entran en la búsqueda, que no recorre subpáginas
 }
 
 export type PageKind = "preference" | "browser" | "info"
@@ -169,7 +172,12 @@ export const manifest = [
             // (custom/bar.ts, 2026-09-27): checks, "Always / When active", the window title
             // and the system menu's icon all in the same row format — then the apps' icons.
             // The order itself is edited in the bar (Status.bar_edit_mode), not here.
-            { i18n: "settings.bar.group.items", custom: "barItems" },
+            // `reaches`: the clock's Configure subpage (custom/clock.ts). A subpage is not
+            // indexed, so a search for "date format" lands here, on the row that opens it.
+            {
+                i18n: "settings.bar.group.items", custom: "barItems",
+                reaches: ["region.dateFormat", "region.showSeconds"],
+            },
             { i18n: "settings.bar.group.apps", custom: "barApps" },
         ],
     },
@@ -387,22 +395,13 @@ export const manifest = [
         kind: "preference",
         label: "settings.region.title",
         icon: "nd-preferences-system-time",
-        header: {
-            custom: "clockPreview",
-            note: "Live clock preview before the first group. 1s tick armed in bindWhileRealized on pageBox.",
-        },
         groups: [
+            // The 24/12-hour format only: it is the lock screen's and the login screen's
+            // too. The bar's date and seconds are Top bar → Clock → Configure (2026-09-28).
             {
                 i18n: "settings.region.time.group",
                 items: [
                     { custom: "timeFormat", i18n: "settings.region.time.format" },
-                    "region.showSeconds",
-                ],
-            },
-            {
-                i18n: "settings.region.date.group",
-                items: [
-                    { custom: "dateFormat", i18n: "settings.region.date.format" },
                 ],
             },
             {

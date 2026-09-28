@@ -3,7 +3,7 @@ import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import { execAsync } from "../../../../lib/process"
 import { createRow, staticLabel, bindWhileRealized } from "../SettingsHelpers"
-import regionConfig, { TimeFormat, DateFormat } from "../../../core/RegionConfig"
+import regionConfig, { TimeFormat } from "../../../core/RegionConfig"
 import { t } from "../../../core/i18n"
 import { safeDisconnect } from "../../../core/signals"
 import { NidaraButton, NidaraDropDown } from "../../../../lib/nidara-kit"
@@ -14,51 +14,7 @@ const TIME_FORMAT_LABELS = (): Record<TimeFormat, string> => ({
     "12h": t("settings.region.time.12h"),
 })
 
-const DATE_FORMAT_LABELS = (): Record<DateFormat, string> => ({
-    "none":       t("settings.region.date.none"),
-    "short":      t("settings.region.date.short"),
-    "short-year": t("settings.region.date.short-year"),
-    "long":       t("settings.region.date.long"),
-    "numeric":    t("settings.region.date.numeric"),
-    "iso":        t("settings.region.date.iso"),
-})
-
-function clockPreviewText(): string {
-    try {
-        return regionConfig.formatClock()
-    } catch {
-        return "—"
-    }
-}
-
 export const build = (ctx: PageCtx) => {
-    // ── Live Clock Preview ─────────────────────────────────────────────────────
-    const clockLabel = new Gtk.Label({
-        label: clockPreviewText(),
-        css_classes: ["region-clock-preview"],
-        halign: Gtk.Align.CENTER,
-    })
-
-    const clockSubLabel = new Gtk.Label({
-        label: t("settings.region.preview"),
-        css_classes: ["nidara-row-subtitle"],
-        halign: Gtk.Align.CENTER,
-    })
-
-    const previewBox = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 8,
-        halign: Gtk.Align.CENTER,
-        css_classes: ["region-preview-box"],
-        margin_bottom: 8,
-    })
-    previewBox.append(clockLabel)
-    previewBox.append(clockSubLabel)
-
-    // The 1s tick is armed in bindWhileRealized at the bottom of the page, so it
-    // really does run only "while the page is visible" — and, crucially, is armed
-    // AGAIN when the user comes back. Created here it survived exactly one visit.
-
     // ── Time format dropdown ──────────────────────────────────────────────────
     const tFmtsDict = TIME_FORMAT_LABELS()
     const timeFmts = Object.keys(tFmtsDict) as TimeFormat[]
@@ -69,18 +25,6 @@ export const build = (ctx: PageCtx) => {
     timeDrp.connect("notify::selected", () => {
         const v = timeFmts[timeDrp.selected]
         if (v) regionConfig.setTimeFormat(v)
-    })
-
-    // ── Date format dropdown ──────────────────────────────────────────────────
-    const dFmtsDict = DATE_FORMAT_LABELS()
-    const dateFmts = Object.keys(dFmtsDict) as DateFormat[]
-    const dateLabels = dateFmts.map(k => dFmtsDict[k])
-    const dateModel = new Gtk.StringList({ strings: dateLabels })
-    const dateDrp = NidaraDropDown({ model: dateModel, valign: Gtk.Align.CENTER })
-    dateDrp.selected = Math.max(0, dateFmts.indexOf(regionConfig.dateFormat))
-    dateDrp.connect("notify::selected", () => {
-        const v = dateFmts[dateDrp.selected]
-        if (v) regionConfig.setDateFormat(v)
     })
 
     // ── Timezone active & change ──────────────────────────────────────────────
@@ -300,25 +244,18 @@ export const build = (ctx: PageCtx) => {
     applyLangBtn.connect("clicked", applyLang)
 
     const syncFromConfig = () => {
-        clockLabel.label = clockPreviewText()
         // `selected`, not `active` — `active` is Gtk.ComboBox's property and setting it
-        // on a Gtk.DropDown did nothing at all, so an external change to the time or
-        // date format never moved these two. Found by the typechecker on the way past.
+        // on a Gtk.DropDown did nothing at all, so an external change to the time
+        // format never moved it. Found by the typechecker on the way past.
         timeDrp.selected = Math.max(0, timeFmts.indexOf(regionConfig.timeFormat))
-        dateDrp.selected = Math.max(0, dateFmts.indexOf(regionConfig.dateFormat))
     }
 
     // Armed on ctx.page so it re-runs on every visit — created in the builder
     // closure without bindWhileRealized it would survive exactly one visit.
     bindWhileRealized(ctx.page, () => {
-        syncFromConfig()   // the formats may have changed while the page was away
-        const clockTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
-            clockLabel.label = clockPreviewText()
-            return GLib.SOURCE_CONTINUE
-        })
+        syncFromConfig()   // the format may have changed while the page was away
         const regionSigId = regionConfig.connect("changed", syncFromConfig)
         return () => {
-            GLib.source_remove(clockTimerId)
             // Transient "✓ / ✗" button reset; it also self-clears (SOURCE_REMOVE),
             // so null it here or leaving twice removes an id that is already gone.
             if (tzStatusTimerId) { GLib.source_remove(tzStatusTimerId); tzStatusTimerId = 0 }
@@ -327,9 +264,7 @@ export const build = (ctx: PageCtx) => {
     })
 
     return {
-        clockPreview: () => previewBox,
         timeFormat: (slot) => createRow(slot.title, slot.subtitle, timeDrp),
-        dateFormat: (slot) => createRow(slot.title, slot.subtitle, dateDrp),
         timezoneActive: (slot) => createRow(slot.title, slot.subtitle, tzCurrentLabel),
         timezoneChange: (slot) => createRow(slot.title, slot.subtitle, tzEntryRow),
         systemLanguage: (slot) => createRow(slot.title, slot.subtitle, langRow),
