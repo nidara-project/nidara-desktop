@@ -6,11 +6,11 @@ import { t } from "../../../core/i18n"
 import { safeDisconnect } from "../../../core/signals"
 
 // ── Settings → Top bar → Clock → Configure (owner, 2026-09-28) ───────────────
-// macOS's "Clock Options": how the BAR's clock reads — the date beside it and the
-// seconds. They used to sit in Language & Region, and they live here now, once:
-// what stays there is the 24/12-hour format, which is not the bar's alone (the lock
-// screen and the login screen follow it too; they show the long date whatever the
-// bar's is — ui/lib/clock.ts).
+// Everything about how the clock reads, in one place (owner, 2026-09-29): 24/12 hours
+// — which the lock screen and the login screen follow too — the date beside the bar's
+// clock, and the seconds. It used to sit in Language & Region, which now holds only
+// language, region and formats. The lock and login screens show the long date whatever
+// the bar's is (ui/lib/clock.ts).
 //
 // A subpage is rebuilt on every push and is not indexed by the search, so the page
 // that pushes it declares both keys (manifest `reaches`): for the search, for the
@@ -38,6 +38,7 @@ export function buildClockOptions(): Gtk.Widget {
     page.append(date.box)
 
     const time = listGroup(t("settings.region.time.group"))
+    time.listBox.append(settingRow("region.timeFormat"))
     time.listBox.append(settingRow("region.showSeconds"))
     page.append(time.box)
 

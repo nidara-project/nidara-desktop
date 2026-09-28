@@ -25,7 +25,7 @@ import Gaming, { WALLPAPER_MODES, type WallpaperMode } from "./core/GamingManage
 import agentConfig from "./core/AgentConfig"
 import { dockSettings, updateDockSettings, onDockSettingChanged, type DockPosition } from "./surfaces/dock/state"
 import { barConfig } from "./surfaces/bar/barState"
-import regionConfig, { type DateFormat } from "./core/RegionConfig"
+import regionConfig, { type DateFormat, type TimeFormat } from "./core/RegionConfig"
 import { getIdleConfig, updateIdleConfig, onHypridleChanged } from "./core/PowerConfig"
 import inputConfig from "./core/InputConfig"
 import { allKeyboards, keyboardById, keyboardId, parseKeyboardId } from "../lib/keyboards"
@@ -733,6 +733,22 @@ export function registerConfigEntries() {
     })
 
     // ── Region ────────────────────────────────────────────────────────────
+    registerConfig("region.timeFormat", {
+        desc: "24- or 12-hour clock: the bar's, the lock screen's and the login screen's.",
+        type: "enum",
+        enum: ["24h", "12h"],
+        get: () => regionConfig.timeFormat,
+        set: v => regionConfig.setTimeFormat(v as TimeFormat),
+        subscribe: (apply) => {
+            apply(regionConfig.timeFormat)
+            const id = regionConfig.connect("changed", () => apply(regionConfig.timeFormat))
+            return () => safeDisconnect(regionConfig, id)
+        },
+        ui: {
+            i18n: "settings.region.time.format",
+            optI18n: k => t(`settings.region.time.${k}` as any),
+        },
+    })
     registerConfig("region.dateFormat", {
         desc: "The date beside the bar's clock: 'none', 'short' (Mon, Apr 6), 'short-year', 'long' (Monday, April 6), 'numeric' or 'iso'. Names and field order follow the regional format. The bar's only: the lock screen and the login screen always show the long date.",
         type: "enum",

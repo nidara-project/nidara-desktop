@@ -176,7 +176,7 @@ export const manifest = [
             // indexed, so a search for "date format" lands here, on the row that opens it.
             {
                 i18n: "settings.bar.group.items", custom: "barItems",
-                reaches: ["region.dateFormat", "region.showSeconds"],
+                reaches: ["region.timeFormat", "region.dateFormat", "region.showSeconds"],
             },
             { i18n: "settings.bar.group.apps", custom: "barApps" },
         ],
@@ -396,14 +396,8 @@ export const manifest = [
         label: "settings.region.title",
         icon: "nd-preferences-system-time",
         groups: [
-            // The 24/12-hour format only: it is the lock screen's and the login screen's
-            // too. The bar's date and seconds are Top bar → Clock → Configure (2026-09-28).
-            {
-                i18n: "settings.region.time.group",
-                items: [
-                    { custom: "timeFormat", i18n: "settings.region.time.format" },
-                ],
-            },
+            // Language, region and formats. Everything about how the clock reads (24/12
+            // hours, the date, seconds) is Top bar → Clock → Configure (owner, 2026-09-29).
             {
                 i18n: "settings.region.tz.group",
                 items: [

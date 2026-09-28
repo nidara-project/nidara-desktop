@@ -3,30 +3,13 @@ import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import { execAsync } from "../../../../lib/process"
 import { createRow, staticLabel, bindWhileRealized } from "../SettingsHelpers"
-import regionConfig, { TimeFormat } from "../../../core/RegionConfig"
+import regionConfig from "../../../core/RegionConfig"
 import { t } from "../../../core/i18n"
 import { safeDisconnect } from "../../../core/signals"
 import { NidaraButton, NidaraDropDown } from "../../../../lib/nidara-kit"
 import type { PageCtx, ItemBuilder } from "../PreferencePage"
 
-const TIME_FORMAT_LABELS = (): Record<TimeFormat, string> => ({
-    "24h": t("settings.region.time.24h"),
-    "12h": t("settings.region.time.12h"),
-})
-
 export const build = (ctx: PageCtx) => {
-    // ── Time format dropdown ──────────────────────────────────────────────────
-    const tFmtsDict = TIME_FORMAT_LABELS()
-    const timeFmts = Object.keys(tFmtsDict) as TimeFormat[]
-    const timeLabels = timeFmts.map(k => tFmtsDict[k])
-    const timeModel = new Gtk.StringList({ strings: timeLabels })
-    const timeDrp = NidaraDropDown({ model: timeModel, valign: Gtk.Align.CENTER })
-    timeDrp.selected = Math.max(0, timeFmts.indexOf(regionConfig.timeFormat))
-    timeDrp.connect("notify::selected", () => {
-        const v = timeFmts[timeDrp.selected]
-        if (v) regionConfig.setTimeFormat(v)
-    })
-
     // ── Timezone active & change ──────────────────────────────────────────────
     const tzDetected = regionConfig.timezone || regionConfig.detectTimezone() || "UTC"
     const tzCurrentLabel = staticLabel(tzDetected)
@@ -243,28 +226,17 @@ export const build = (ctx: PageCtx) => {
 
     applyLangBtn.connect("clicked", applyLang)
 
-    const syncFromConfig = () => {
-        // `selected`, not `active` — `active` is Gtk.ComboBox's property and setting it
-        // on a Gtk.DropDown did nothing at all, so an external change to the time
-        // format never moved it. Found by the typechecker on the way past.
-        timeDrp.selected = Math.max(0, timeFmts.indexOf(regionConfig.timeFormat))
-    }
-
     // Armed on ctx.page so it re-runs on every visit — created in the builder
     // closure without bindWhileRealized it would survive exactly one visit.
     bindWhileRealized(ctx.page, () => {
-        syncFromConfig()   // the format may have changed while the page was away
-        const regionSigId = regionConfig.connect("changed", syncFromConfig)
         return () => {
             // Transient "✓ / ✗" button reset; it also self-clears (SOURCE_REMOVE),
             // so null it here or leaving twice removes an id that is already gone.
             if (tzStatusTimerId) { GLib.source_remove(tzStatusTimerId); tzStatusTimerId = 0 }
-            safeDisconnect(regionConfig, regionSigId)
         }
     })
 
     return {
-        timeFormat: (slot) => createRow(slot.title, slot.subtitle, timeDrp),
         timezoneActive: (slot) => createRow(slot.title, slot.subtitle, tzCurrentLabel),
         timezoneChange: (slot) => createRow(slot.title, slot.subtitle, tzEntryRow),
         systemLanguage: (slot) => createRow(slot.title, slot.subtitle, langRow),
