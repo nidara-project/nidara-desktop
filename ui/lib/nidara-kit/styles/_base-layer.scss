@@ -156,16 +156,50 @@ listview > row { padding: 2px; }
 // GTK's gap between a dropdown's label and its chevron — without it the glyph
 // sits flush against the last letter and reads as part of the word.
 dropdown > button > box { border-spacing: 6px; }
+// GtkComboBox — deprecated, but libnma's Wi-Fi forms are built of it (security, the
+// hidden network's form). Its button drew as a bare field with NO chevron, so nothing
+// said it opens (owner, 2026-09-28). Same gap and glyph as a dropdown's.
+combobox button > box { border-spacing: 6px; }
 
 $chevron-dir: "assets/" !default;
 
 dropdown arrow,
+combobox arrow,
 menubutton arrow.down {
     -gtk-icon-source: -gtk-recolor(url("#{$chevron-dir}nd-pan-down-symbolic.svg"));
 }
 menubutton arrow.up    { -gtk-icon-source: -gtk-recolor(url("#{$chevron-dir}nd-pan-up-symbolic.svg")); }
 menubutton arrow.left  { -gtk-icon-source: -gtk-recolor(url("#{$chevron-dir}nd-pan-start-symbolic.svg")); }
 menubutton arrow.right { -gtk-icon-source: -gtk-recolor(url("#{$chevron-dir}nd-pan-end-symbolic.svg")); }
+
+/* ── `combobox > popover`: the list a GtkComboBox opens ───────────────────────
+   libnma's forms are built of GtkComboBox (Wi-Fi security, the hidden network's
+   form), and with no theme its list opened as bare words on nothing, overlapping
+   the dialog's buttons (seen live, 2026-09-28). GTK's geometry (theme/Default:
+   `popover.menu > contents` 5px, `popover.menu modelbutton` 30px tall, a combo's
+   rows 9px aside, 5px radius), our floating-surface paint and row states.
+   Scoped to `combobox`, not to every `popover`: our own menus ARE popovers
+   (the kit's menu, tooltip, split view), and none of them is a combo's — nothing
+   of ours builds a GtkComboBox, so this reaches only lists GTK builds itself. */
+combobox > popover {
+    background-color: transparent;
+}
+combobox > popover > contents {
+    padding: 5px;
+    border-radius: $nidara-radius-sm;
+    background-color: var(--nidara-popover-bg);
+    border: 1px solid var(--nidara-popover-border);
+    box-shadow: var(--nidara-shadow-md);
+    color: var(--nidara-text);
+}
+combobox > popover modelbutton {
+    min-height: 30px;
+    min-width: 40px;
+    padding: 0 9px;
+    border-radius: 5px;
+}
+combobox > popover modelbutton:selected        { background-color: var(--nidara-surface-hover); }
+combobox > popover modelbutton:selected:active { background-color: var(--nidara-surface-active); }
 
 /* ── `tooltip`: GTK's native one ─────────────────────────────────────────────
    Our own tooltips are `attachTooltip` (the kit's Cairo bubble). This is the
