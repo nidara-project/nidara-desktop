@@ -412,6 +412,13 @@ async function run() {
         `a tile that shrinks keeps its place (${cells()})`)
     assert(!ccLayout.layout.some(e => e.x === 1 && e.y === 2),
         `…and a gap nothing below can fall into stays a gap (${cells()})`)
+    // Back to the factory layout WHILE the shell runs (owner, 2026-09-29: the backlight
+    // tile appeared on a desktop with none): the members are the tiles the CC had, not
+    // the factory list — hardware that is absent stays out.
+    const personal = cells()
+    gsettingsSetExternally(`reset org.nidara.control-center positions`, () => cells() !== personal)
+    assert(cells() === "media@0,0 wifi@2,0 bt@2,1 screenshot@0,2 screenrecord@1,2 dark_mode@2,2 night_light@0,3 focus@2,3",
+        `a reset packs the tiles the CC HAD — no backlight tile it never had (${cells()})`)
 
     // Region: the clock format is stored; the mirror follows; timezone is the system's.
     // The mirror is the SHELL's to write (core/RegionSync.ts, #571): the store alone writes

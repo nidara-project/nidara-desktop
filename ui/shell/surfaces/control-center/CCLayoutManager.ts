@@ -99,8 +99,9 @@ class CCLayoutManager extends GObject.Object {
     private _sizes: Record<string, WidgetSize> = {}
     /** DEFAULT mode (nothing stored): the grid is derived, never saved. */
     private _derived = true
-    /** The ids that are in the CC, in arrival order — what DEFAULT mode packs from.
-     *  null until the first `add`/`remove`: then every default tile is assumed. */
+    /** DEFAULT mode: the ids that are in the CC, in arrival order — what it packs from.
+     *  null at start-up = every default tile, until the hardware gate's first pass
+     *  removes the absent ones. PERSONAL mode keeps no list: its cells are the truth. */
     private _members: string[] | null = null
 
     constructor() {
@@ -116,6 +117,11 @@ class CCLayoutManager extends GObject.Object {
     }
 
     private load() {
+        // Going back to DEFAULT while the shell runs (positions reset): the members are
+        // the tiles the CC HAS. Starting from the factory list instead brought back a
+        // backlight tile on a desktop with none — the hardware gate had nothing to
+        // remove, having never added it (owner-caught 2026-09-29).
+        const had = this._derived ? null : Object.keys(this._pos)
         const positions = store.get("positions")
         const sizes = store.get("sizes")
         this._pos = {}; this._sizes = {}
@@ -124,7 +130,8 @@ class CCLayoutManager extends GObject.Object {
         for (const [id, size] of Object.entries(sizes))
             if (WIDGET_META[id]) this._sizes[id] = size as WidgetSize
         this._derived = Object.keys(this._pos).length === 0
-        if (!this._derived) { this.normalize(); return }
+        if (!this._derived) { this._members = null; this.normalize(); return }
+        if (had) this._members = had
         this.derive()
     }
 
@@ -143,6 +150,7 @@ class CCLayoutManager extends GObject.Object {
     /** A layout edit by the person: DEFAULT mode ends here, and the cells are stored. */
     private personalise() {
         this._derived = false
+        this._members = null
         this.save()
     }
 
@@ -417,10 +425,12 @@ class CCLayoutManager extends GObject.Object {
     }
 
     remove(id: string) {
-        const members = this._members ?? CC_DEFAULT_LAYOUT.map(e => e.id)
-        this._members = members.filter(m => m !== id)
+        if (this._derived) {
+            this._members = (this._members ?? CC_DEFAULT_LAYOUT.map(e => e.id)).filter(m => m !== id)
+            if (!this._pos[id]) return
+            this.derive(); this.emit("changed"); return
+        }
         if (!this._pos[id]) return
-        if (this._derived) { this.derive(); this.emit("changed"); return }
         const freed = { ...this._pos[id], ...this.footprint(id) }
         delete this._pos[id]
         delete this._sizes[id]
@@ -431,9 +441,10 @@ class CCLayoutManager extends GObject.Object {
 
     add(id: string) {
         if (!WIDGET_META[id]) return
-        const members = this._members ?? CC_DEFAULT_LAYOUT.map(e => e.id)
-        if (!members.includes(id)) this._members = [...members, id]
-        else this._members = members
+        if (this._derived) {
+            const members = this._members ?? CC_DEFAULT_LAYOUT.map(e => e.id)
+            this._members = members.includes(id) ? members : [...members, id]
+        }
         if (this._pos[id]) return
         if (this._derived) {
             this.derive()
