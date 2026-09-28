@@ -127,17 +127,38 @@ export default darkModeWidget
 Everything in it is a getter plus a `subscribe`, and nothing in it is a value read once. That is
 the shape: the widget never pushes, the host pulls when the subscribe fires.
 
-**"When active" in the bar is opt-in.** Declare `barActive` + `watchBarActive` (and
-`defaultBarMode`) and Settings → Top bar offers "Always / When active" for the widget; the bar then
-paints it only while it is active if the person picks that. It is NOT the CC's `getActive` (the
-tile's accent fill): dark mode is "on" in that sense, and hiding its own switch while it is off
-would leave the bar no way to turn it back on. A widget whose hardware can come and go defaults to
-`"active"` (Bluetooth, Wi-Fi, Ethernet): without the hardware it simply never shows.
+**How a control shows in the bar — one rule for every widget** (owner, 2026-09-28, taken from
+Apple's Menu Bar pane after #651 had put "When active" on the wrong ones). A widget is one of three:
+
+| kind | declares | in Settings → Top bar | examples |
+|---|---|---|---|
+| plain | neither | a check: shown or not; its ICON says on/off | Wi-Fi, Bluetooth, VPN, volume |
+| choosable | `ccFixed` + `barActive` (+ `defaultBarMode`) | a check + "Always / When active" | Do Not Disturb, night light |
+| presence | `barActive` alone | a check; there only while `barActive()` holds | Ethernet (a cable) |
+
+"When active" is for a state that COMES AND GOES — Apple offers it for Focus, Sound, Display,
+Screen Mirroring and Now Playing, never for Wi-Fi, Bluetooth or VPN. And only for a widget the CC
+always has (`ccFixed`): hidden from the bar while off, the CC tile is how it gets turned on again,
+and a fixed tile cannot be removed. `widgets/index.ts` derives `DEFAULT_BAR_MODE` (choosable) and
+`BAR_PRESENCE` from these declarations; `WidgetConfig.barMode` answers "active" for a presence
+widget and ignores a stored choice for anything not choosable. A presence indicator must not be
+the way the thing is turned on — that is the trap the rule exists for.
+`barActive` is NOT the CC's `getActive` (the tile's accent fill): dark mode is "on" in that sense,
+and hiding its own switch while it is off would leave no way back.
+A missing adapter is not a mode: `isAvailable` false = the control does not exist on this machine
+(not in the bar, not listed in Settings → Top bar), and a dongle plugged in later brings it back.
 ⚠️ **Not with `buildSettings`.** Settings → Top bar gives a row ONE trailing control, and Configure
-beats the mode menu — so a widget with a settings page AND `barActive` has a mode nobody can change.
-Screen recording shipped that way in #651, defaulted to "When active": its icon (where a capture
-STARTS) never appeared, checked or not (owner, 2026-09-27). And ask the dark-mode question first:
-if the bar item is how the thing is turned ON, "when active" hides the only way in.
+beats the mode menu — so a widget with a settings page AND a choosable mode has a mode nobody can
+change. Screen recording shipped that way in #651, defaulted to "When active": its icon (where a
+capture STARTS) never appeared, checked or not (owner, 2026-09-27).
+
+**Fixed in the Control Centre: `ccFixed`.** Wi-Fi, Bluetooth, Do Not Disturb, night light, volume,
+brightness and media — Apple's fixed modules, adapted to hardware that may not be there. A fixed
+widget is in the CC whenever it is available: `WidgetConfig` forces its placement (a stored
+`false` included) and refuses `setCC(false)`; the CC's edit mode has no ✕ and its context menu no
+Remove for it (it still moves and resizes); Settings → Widgets shows its Center switch on and
+insensitive. So a CC can never be emptied. Known limit: a fixed widget whose hardware appears
+while the grid is full has no cell and stays out until one frees up (tech-debt.md).
 
 **Bar content carries its own side air.** In the bar a widget is an ITEM of the right-hand group,
 touching its neighbours, and the hover/open pill is drawn round whatever the content measures

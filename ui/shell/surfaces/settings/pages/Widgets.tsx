@@ -41,11 +41,14 @@ function buildWidgetRow(nav: SettingsNav, w: WidgetCatalogEntry): Gtk.ListBoxRow
     const controls = new Gtk.Box({ spacing: 20, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
 
     // Control Center switch — disabled (with a tooltip) when the hardware is
-    // missing, or when the grid is full and the widget isn't already in it.
+    // missing, when the grid is full and the widget isn't already in it, or when
+    // the widget is one the CC always has (on, and it stays on).
     if (w.canCc) {
         controls.append(controlGroup(
-            t("settings.widgets.col.cc"), available && w.cc, available && w.ccFits,
-            !available ? noHw : w.ccFits ? "" : t("settings.widgets.tooltip.no-space"),
+            t("settings.widgets.col.cc"), available && w.cc, available && w.ccFits && !w.ccFixed,
+            !available ? noHw
+                : w.ccFixed ? t("settings.widgets.tooltip.cc-fixed")
+                : w.ccFits ? "" : t("settings.widgets.tooltip.no-space"),
             (v) => widgetCatalog().setCc(w.id, v),
         ))
     }

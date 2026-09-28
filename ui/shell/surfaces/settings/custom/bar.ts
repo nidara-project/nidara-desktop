@@ -122,10 +122,10 @@ export const build = (ctx: PageCtx) => {
         let signature = ""
         const refresh = () => {
             // The right group, right to left, in the bar's own order. A control whose
-            // hardware is missing is listed only if it can wait for it (it has "When
-            // active": Wi-Fi, Ethernet, Bluetooth); battery and brightness only exist
-            // where the machine has them.
-            const entries = widgetCatalog().list().filter(w => w.canBar && (w.available || w.barMode !== null))
+            // hardware is missing is not listed — Wi-Fi on a machine without a radio no
+            // more than a battery on a desktop; plugging the hardware in brings its row
+            // (the signature below includes `available`).
+            const entries = widgetCatalog().list().filter(w => w.canBar && w.available)
             const tray = knownTrayItems().filter(installed)
             const order = resolveOrder(savedBarOrder(), defaultOrder(
                 sortWidgetsForBar(entries).map(w => widgetKey(w.id)), tray.map(k => trayKey(k.id))))
@@ -159,20 +159,17 @@ export const build = (ctx: PageCtx) => {
                 const trailing = new Gtk.Box({ valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
                 let menu: Gtk.DropDown | null = null
                 if (w.buildSettings && ctx.nav) {
-                    const cfg = configureButton(ctx.nav, w)
-                    cfg.sensitive = w.available
-                    trailing.append(cfg)
+                    trailing.append(configureButton(ctx.nav, w))
                 } else if (w.barMode !== null) {
                     menu = modeDropDown(w.name, w.barMode, m => widgetCatalog().setBarMode(w.id, m))
-                    menu.sensitive = w.available && w.bar
+                    menu.sensitive = w.bar
                     trailing.append(menu)
                 }
-                const subtitle = w.available ? "" : t("settings.widgets.tooltip.no-hardware")
-                const c = check(w.available && w.bar, w.available, w.name, on => {
+                const c = check(w.bar, true, w.name, on => {
                     widgetCatalog().setBar(w.id, on)
                     if (menu) menu.sensitive = on
                 })
-                add(createRow(w.name, subtitle, trailing, undefined,
+                add(createRow(w.name, "", trailing, undefined,
                     leading(c, rowIcon(currentUiIcon(w.icon) ?? uiIcon("nd-window-floating")))))
             }
 

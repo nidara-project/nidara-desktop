@@ -61,11 +61,12 @@ const ethernetWidget: AtomicWidget = {
     locations: ["bar", "cc"],
     defaultInCc: false,   // off by default — Wi-Fi covers the common case; available to add
     isAvailable: () => !!Net.wired(),
-    // Active = a cable is connected.
-    defaultInBar: true,
+    // A presence indicator (contract.ts `barActive`): there while a cable is connected,
+    // nothing to show without one. Off in the bar by default — there is nothing to DO
+    // from a wired icon, which is why Apple has none (owner, 2026-09-28: optional).
+    defaultInBar: false,
     barActive: () => Net.wiredConnected(),
     watchBarActive: (cb) => Net.watchWired(cb),
-    defaultBarMode: "active",
     watchAvailable: (cb) => { Net.watchDevices(cb) },
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],

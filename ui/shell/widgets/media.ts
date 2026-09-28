@@ -474,6 +474,7 @@ const mediaWidget: AtomicWidget = {
     name: t("cc.media.name"),
     icon: uiIcon("nd-media-playback-start"),
     locations: ["cc"],
+    ccFixed: true,         // always in the CC (contract.ts), like Apple's Sound/Display/Now Playing
     defaultSize: WidgetSize.SQUARE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent: (size, _budget) => buildCCContent(size),

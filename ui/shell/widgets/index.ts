@@ -59,20 +59,30 @@ export const WIDGET_META: Record<string, WidgetMeta> = Object.fromEntries(
         }])
 )
 
+// The widgets that are always in the CC while their hardware is present (AtomicWidget.ccFixed).
+export const CC_FIXED: ReadonlySet<string> = new Set(
+    ALL_WIDGETS.filter(w => w.ccFixed && w.locations?.includes("cc")).map(w => w.id))
+
 // Default first-run placement: cc default = widget is cc-capable; bar default = defaultInBar flag.
+// A fixed widget is in the CC whatever the defaults say (core/WidgetConfig.ts enforces it).
 export const DEFAULT_PLACEMENT: Record<string, { bar: boolean; cc: boolean }> = Object.fromEntries(
     ALL_WIDGETS.map(w => [w.id, {
         bar: w.defaultInBar ?? false,
-        cc: w.defaultInCc ?? (w.locations?.includes("cc") ?? false),
+        cc: CC_FIXED.has(w.id) || (w.defaultInCc ?? (w.locations?.includes("cc") ?? false)),
     }])
 )
 
-// How each widget that can say it is ACTIVE shows in the bar before the person picks:
-// its own `defaultBarMode`, else "always". A widget without `barActive` is absent — it
-// has no mode, it is simply shown or not (core/WidgetConfig.ts barMode).
+// How a widget that can say it is ACTIVE shows in the bar before the person picks — and
+// only a FIXED one gets to pick (contract.ts `barActive`): its own `defaultBarMode`, else
+// "always". A widget without `barActive` is absent — it has no mode, it is simply shown or
+// not; one with `barActive` but not fixed is in BAR_PRESENCE (core/WidgetConfig.ts barMode).
 export const DEFAULT_BAR_MODE: Record<string, "always" | "active"> = Object.fromEntries(
-    ALL_WIDGETS.filter(w => w.barActive).map(w => [w.id, w.defaultBarMode ?? "always"])
+    ALL_WIDGETS.filter(w => w.barActive && CC_FIXED.has(w.id)).map(w => [w.id, w.defaultBarMode ?? "always"])
 )
+
+// Presence indicators: in the bar only while `barActive()` holds, with no choice offered.
+export const BAR_PRESENCE: ReadonlySet<string> = new Set(
+    ALL_WIDGETS.filter(w => w.barActive && !CC_FIXED.has(w.id)).map(w => w.id))
 
 // Declared in the contract (Settings reads it without importing a widget); re-exported for the bar.
 export { CATEGORY_ORDER }
@@ -98,6 +108,7 @@ export const CC_DEFAULT_ORDER: string[] = [
     "media",
     "dark_mode",
     "focus",
+    "night_light",
     "volume",
     "cpu_memory",
 ]

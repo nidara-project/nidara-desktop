@@ -165,6 +165,7 @@ const brightnessWidget: AtomicWidget = {
     name: t("widget.brightness.name"),
     icon: uiIcon("nd-display-brightness"),
     locations: ["bar", "cc"],
+    ccFixed: true,         // always in the CC (contract.ts), like Apple's Sound/Display/Now Playing
     isAvailable: hasBacklight,
     defaultSize: WidgetSize.FULL_WIDTH,
     // Slider tier mapping: Small=icon, Medium=1×2 vertical, Large=4×1 wide.

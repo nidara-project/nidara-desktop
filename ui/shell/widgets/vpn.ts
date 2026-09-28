@@ -142,9 +142,14 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
 
 // ── Bar icon ──────────────────────────────────────────────────────────────────
 
+// Subscribed like the CC tile: it used to read the state ONCE, at build, so connecting
+// or dropping a VPN never reached the icon — invisible while the bar showed it only
+// when connected, a wrong glyph as soon as it could show "disconnected" (2026-09-28).
 function buildBarContent(): Gtk.Widget {
-    const image = new Gtk.Image({ gicon: uiIcon("nd-network-vpn-disconnected"), pixel_size: BAR_ICON_SIZE, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
-    activeVpnName().then(name => { image.gicon = name ? uiIcon("nd-network-vpn") : uiIcon("nd-network-vpn-disconnected") })
+    const image = new Gtk.Image({ gicon: getIcon(), pixel_size: BAR_ICON_SIZE, margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD, css_classes: ["nd-icon"] })
+    const sync = () => { const ic = getIcon(); if (image.gicon !== ic) image.gicon = ic }
+    const dispose = watchVpnActive(sync)
+    image.connect("unrealize", dispose)
     return image
 }
 
@@ -172,11 +177,10 @@ const vpnWidget: AtomicWidget = {
     buildCCDetail: buildBarExpanded,
     ccDetailRows: 3,
     getActive: () => !!vpnActiveName,
-    // Active = a VPN connected.
-    defaultInBar: true,
-    barActive: () => !!vpnActiveName,
-    watchBarActive: watchVpnActive,
-    defaultBarMode: "active",
+    // A plain on/off control, as Apple's VPN item: shown or not, and the icon says
+    // connected or not (contract.ts `barActive`). Off in the bar by default — most
+    // machines have no VPN to show.
+    defaultInBar: false,
     watchActive: watchVpnActive,
 }
 

@@ -583,6 +583,16 @@ switch,
     &:hover slider {
         box-shadow: var(--nidara-shadow-md);
     }
+
+    // A switch that cannot be flipped says so — the kit's 0.45, as a disabled
+    // checkbutton or button. Without it (we run on no GTK theme) an insensitive
+    // switch looked exactly like a live one: a fixed CC control's Center switch
+    // (always on) was indistinguishable from the others (2026-09-28).
+    &:disabled {
+        opacity: 0.45;
+        box-shadow: none;
+    }
+    &:disabled slider { box-shadow: none; }
 }
 
 /* ── Window shell (NidaraWindow) ──────────────────────────────────────────────

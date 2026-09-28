@@ -338,6 +338,7 @@ export default {
 
     // Control Center
     "settings.widgets.tooltip.no-space": "スペースが不足しています — 先に項目を削除してください",
+    "settings.widgets.tooltip.cc-fixed": "常にコントロールセンターに表示されます — 移動とサイズ変更はできますが、削除はできません",
     "settings.widgets.tooltip.no-hardware": "このデバイスには対応ハードウェアが検出されません",
 
     // Display

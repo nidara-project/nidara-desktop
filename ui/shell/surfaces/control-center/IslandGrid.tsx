@@ -223,13 +223,16 @@ function makeIslandWidget(
 
     // Clear the placement flag too (not just the layout), or syncCCLayout re-adds
     // the widget on next load — the CC layout and widgetConfig must agree.
-    const removeBtn = IconButton({
-        icon: uiIcon("nd-window-close"), iconSize: 13, variant: "danger",
-        halign: Gtk.Align.END, valign: Gtk.Align.START,
-        onClick: () => { widgetConfig.setCC(id, false); ccLayout.remove(id) },
-    })
-    removeBtn.set_margin_top(4); removeBtn.set_margin_end(4)
-    overlay.add_overlay(removeBtn)
+    // A fixed widget has no ×: it moves and resizes, it never leaves (contract.ts ccFixed).
+    if (!widgetConfig.ccFixed(id)) {
+        const removeBtn = IconButton({
+            icon: uiIcon("nd-window-close"), iconSize: 13, variant: "danger",
+            halign: Gtk.Align.END, valign: Gtk.Align.START,
+            onClick: () => { widgetConfig.setCC(id, false); ccLayout.remove(id) },
+        })
+        removeBtn.set_margin_top(4); removeBtn.set_margin_end(4)
+        overlay.add_overlay(removeBtn)
+    }
 
     const dragSrc = new Gtk.DragSource({ actions: Gdk.DragAction.MOVE })
 

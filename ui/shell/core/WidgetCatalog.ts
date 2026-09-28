@@ -39,10 +39,13 @@ export interface WidgetCatalogEntry {
     /** The hardware it needs is present. Placement is kept either way. */
     available: boolean
     bar: boolean
-    /** "Always" / "When active" in the bar, or null for a widget that cannot say it is
-     *  active (it is only shown or not). Settings → Top bar offers the choice by this. */
+    /** "Always" / "When active" in the bar, or null where there is no choice to offer —
+     *  a widget that is only shown or not, or a presence indicator (contract.ts
+     *  `barActive`). Settings → Top bar offers the choice by this. */
     barMode: BarMode | null
     cc: boolean
+    /** Always in the Control Centre: its Center switch is on and cannot be turned off. */
+    ccFixed: boolean
     /** Placing it in the CC now would find a free cell (true when already placed). */
     ccFits: boolean
     /**

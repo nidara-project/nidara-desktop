@@ -326,6 +326,7 @@ export default {
     "settings.bluetooth.pairing.enter-pin": "Introduce el PIN del dispositivo:",
     "settings.bluetooth.pairing.authorize": "Este dispositivo quiere conectarse a este equipo.",
     "settings.widgets.tooltip.no-space": "Sin espacio suficiente — quita un control primero",
+    "settings.widgets.tooltip.cc-fixed": "Siempre en el Centro de control — se puede mover y cambiar de tamaño, no quitar",
     "settings.display.error.no-monitors": "No se detectaron monitores.",
     "settings.display.title": "Pantalla",
     "settings.display.group.all": "Todas las pantallas",

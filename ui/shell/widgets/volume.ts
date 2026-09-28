@@ -307,6 +307,7 @@ const volumeWidget: AtomicWidget = {
     name: t("cc.volume.name"),
     icon: uiIcon("nd-audio-volume-high"),
     locations: ["bar", "cc"],
+    ccFixed: true,         // always in the CC (contract.ts), like Apple's Sound/Display/Now Playing
     defaultInBar: true,
     defaultSize: WidgetSize.FULL_WIDTH,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.TALL, WidgetSize.FULL_WIDTH],

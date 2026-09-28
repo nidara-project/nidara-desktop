@@ -225,10 +225,9 @@ const wifiWidget: AtomicWidget = {
     locations: ["bar", "cc"],
     defaultInBar: true,
     isAvailable: () => !!Net.wifi(),
-    // Active = the radio is on. Default "active": a machine without Wi-Fi never shows it.
-    barActive: () => Net.wifiEnabled(),
-    watchBarActive: (cb) => Net.watchWifiEnabled(cb),
-    defaultBarMode: "active",
+    // A plain on/off control: shown or not, and the icon says radio off (contract.ts
+    // `barActive`). A machine without Wi-Fi never shows it — it is not available.
+    ccFixed: true,
     watchAvailable: (cb) => { Net.watchDevices(cb) },
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],

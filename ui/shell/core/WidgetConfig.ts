@@ -1,6 +1,6 @@
 import GObject from "gi://GObject"
 import { defineSettings } from "./configFile"
-import { DEFAULT_PLACEMENT as DEFAULTS, DEFAULT_BAR_MODE, BAR_ORDER } from "../widgets/index"
+import { DEFAULT_PLACEMENT as DEFAULTS, DEFAULT_BAR_MODE, BAR_PRESENCE, BAR_ORDER, CC_FIXED } from "../widgets/index"
 import type { BarMode } from "../common/widget-kit/contract"
 
 export interface WidgetPlacement {
@@ -58,6 +58,9 @@ class WidgetConfigManager extends GObject.Object {
         for (const [id, pair] of Object.entries(store.get("placement"))) {
             if (Array.isArray(pair) && pair.length === 2) out[id] = { bar: pair[0] === true, cc: pair[1] === true }
         }
+        // A fixed widget is in the CC whatever was stored — including a `false` saved
+        // before it became fixed (2026-09-28), or written by `gsettings set`.
+        for (const id of CC_FIXED) if (out[id]) out[id].cc = true
         return out
     }
 
@@ -80,8 +83,9 @@ class WidgetConfigManager extends GObject.Object {
     }
 
     /** How the widget shows in the bar, or null for one that cannot say it is active
-     *  (it is simply shown or not). */
+     *  (it is simply shown or not). A presence indicator is always "active". */
     barMode(id: string): BarMode | null {
+        if (BAR_PRESENCE.has(id)) return "active"
         const def = DEFAULT_BAR_MODE[id]
         if (!def) return null
         const stored = store.get("barMode")[id]
@@ -96,7 +100,18 @@ class WidgetConfigManager extends GObject.Object {
         store.set("barMode", next)   // → subscribe above → "changed"
     }
 
+    /** The person may pick "Always" / "When active" (contract.ts `barActive`). */
+    barModeChoosable(id: string): boolean {
+        return id in DEFAULT_BAR_MODE
+    }
+
+    /** Always in the CC: moved and resized, never removed (contract.ts `ccFixed`). */
+    ccFixed(id: string): boolean {
+        return CC_FIXED.has(id)
+    }
+
     setCC(id: string, enabled: boolean) {
+        if (!enabled && CC_FIXED.has(id)) return
         if (!this._config[id]) this._config[id] = { bar: false, cc: false }
         if (this._config[id].cc === enabled) return
         this._config[id].cc = enabled

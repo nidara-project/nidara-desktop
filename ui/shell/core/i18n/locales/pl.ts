@@ -338,6 +338,7 @@ export default {
 
     // Control Center
     "settings.widgets.tooltip.no-space": "Za mało miejsca — najpierw usuń jakiś element",
+    "settings.widgets.tooltip.cc-fixed": "Zawsze w Centrum sterowania — można go przesuwać i zmieniać rozmiar, ale nie usunąć",
     "settings.widgets.tooltip.no-hardware": "Nie wykryto zgodnego sprzętu na tym urządzeniu",
 
     // Display

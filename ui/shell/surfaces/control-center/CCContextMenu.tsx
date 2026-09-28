@@ -136,7 +136,9 @@ export function createCCContextMenu(opts: CCContextMenuOpts = {}): CCContextMenu
         }
 
         // Only offer sizes when there's an actual choice (>1 tier). A single-size
-        // widget shows just Remove — no lone disabled row.
+        // widget shows just Remove — no lone disabled row. A FIXED widget has no Remove
+        // (contract.ts ccFixed), so no separator is owed after its sizes either.
+        const removable = !widgetConfig.ccFixed(id)
         if (tiers.length > 1) {
             for (const { tier, size } of tiers) {
                 const isCurrent = size === cur
@@ -151,24 +153,29 @@ export function createCCContextMenu(opts: CCContextMenuOpts = {}): CCContextMenu
                     onClick: () => { ccLayout.resize(id, size); close() },
                 }))
             }
-            rows.append(menuSeparator())
+            if (removable) rows.append(menuSeparator())
         }
 
         // Clear the authoritative placement flag too, else syncCCLayout re-adds the
         // widget on next load (the CC layout and widgetConfig must agree).
-        rows.append(menuRow({
+        if (removable) rows.append(menuRow({
             label: t("cc.menu.remove"),
             icon: uiIcon("nd-user-trash"),
             danger: true,
             onClick: () => { widgetConfig.setCC(id, false); ccLayout.remove(id); close() },
         }))
+        // "Show details" and nothing after it (a fixed, single-size widget): no trailing rule.
+        const last = rows.get_last_child()
+        if (last instanceof Gtk.Separator) rows.remove(last)
     }
 
     const doOpen = (id: string, anchorX: number, anchorY: number, gridHeight: number) => {
         populate(id)
+        // A fixed, single-size widget without details has nothing to offer: no empty menu.
+        if (!rows.get_first_child()) return
         // Estimate height to clamp inside the grid (details + size rows when >1 + remove + padding).
         const nTiers = tierSizes(id).length
-        const nRows = (hasDetailRow(id) ? 1 : 0) + (nTiers > 1 ? nTiers : 0) + 1
+        const nRows = (hasDetailRow(id) ? 1 : 0) + (nTiers > 1 ? nTiers : 0) + (widgetConfig.ccFixed(id) ? 0 : 1)
         const estH = nRows * ROW_H + 28
         const x = Math.max(0, Math.min(anchorX, GRID_WIDTH - MENU_W))
         const y = Math.max(0, Math.min(anchorY, Math.max(0, gridHeight - estH)))
