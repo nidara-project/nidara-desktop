@@ -2749,6 +2749,23 @@ Non-obvious traps this setup exposes, all of which bit real code:
   session to polkit ("Not authorized"). To drive the real flow, click Connect in Settings; to
   run a probe that registers its own agent or activates a connection, start it from Hyprland:
   `hyprctl dispatch 'hl.dsp.exec_cmd("gjs -m /tmp/probe.js > /tmp/probe.log 2>&1")'`.
+- **NetworkManager gives an agent 120 s, then drops the request WITHOUT `CancelGetSecrets`.**
+  Measured twice on 2026-09-28 ("No agents were available for this request" exactly 120 s
+  after `need-auth`). Until then a dialog nobody answered stayed `pending` in
+  `core/NetworkAgent.ts` for good, and every later request was refused "another dialog is
+  open" in 4 ms: Connect did nothing until that forgotten dialog was closed by hand. The agent
+  now withdraws its own request at `NM_GET_SECRETS_TIMEOUT_MS` and the dialog closes. Test it
+  without clicking: `nmcli device wifi connect NidaraTest ifname wlan0` (no password, no
+  `--ask`, so NM asks OUR agent), leave the dialog alone for two minutes, then run it again —
+  the dialog must come back. `nmcli device disconnect wlan0` exercises the normal withdrawal.
+- **An unparented dialog is centred on the MONITOR, not on Settings.** Hyprland places a
+  floating toplevel with no transient parent in the middle of the screen, over whatever app is
+  there; the owner never saw the password form (2026-09-28). `runWifiDialog` parents it to
+  Settings when Settings is the active window (the join came from there).
+- **libnma's GTK 4 form logs a `GtkIconSize` CRITICAL on every build** — upstream (1.10.6's
+  `wifi.ui` still says `icon_size 6`, GTK 3's DIALOG), raised by GtkBuilder inside the
+  constructor, so not preventable from here; in dev it also raises DevLogWatch's notification.
+  The image it left as a broken glyph is replaced with ours after construction.
 - **Changing the AP's passphrase is the router-password-changed test.** Stop the AP, start it
   again with another `wpa_passphrase`: NM drops the link, autoconnect retries, and the prompt
   must appear on its own with the "couldn't connect" wording (REQUEST_NEW). Before the agent
