@@ -633,10 +633,9 @@ export default {
     "widget.ethernet.row.speed": "Prędkość",
 
     // Wi-Fi bar popover rows
-    "widget.wifi.row.network": "Sieć",
-    "widget.wifi.row.status": "Stan",
-    "widget.wifi.row.disabled": "Wyłączone",
     "widget.wifi.no-networks": "Brak sieci w zasięgu",
+    "widget.wifi.known": "Znane sieci",
+    "widget.wifi.others": "Inne sieci",
     "widget.wifi.settings": "Ustawienia sieci…",
 
     // Battery widget
@@ -680,7 +679,6 @@ export default {
     // Control Center — Wi-Fi toggle
     "cc.wifi.name": "Wi-Fi",
     "cc.wifi.sub.off": "Wyłączone",
-    "cc.wifi.sub.connected": "Połączono",
     "cc.wifi.sub.disconnected": "Nie połączono",
 
     // Control Center — Focus/DnD toggle

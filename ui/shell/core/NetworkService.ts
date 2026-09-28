@@ -27,7 +27,7 @@
 
 import { execAsync } from "../../lib/process"
 import NM from "gi://NM?version=1.0"
-import { t } from "./i18n"
+import { t, currentLocale } from "./i18n"
 import { takeUserCancel } from "./NetworkCancels"
 import { safeDisconnect } from "./signals"
 
@@ -303,10 +303,10 @@ export function securityLabel(ap: any): string {
     return parts.join(" / ")
 }
 
+/** "2,4 GHz" in Spanish, "2.4 GHz" in English — the decimal is the locale's. */
 export function freqBand(freq: number): string {
-    if (freq >= 5925) return "6 GHz"
-    if (freq >= 4900) return "5 GHz"
-    return "2.4 GHz"
+    const ghz = freq >= 5925 ? 6 : freq >= 4900 ? 5 : 2.4
+    return `${new Intl.NumberFormat(currentLocale()).format(ghz)} GHz`
 }
 
 export function freqChannel(freq: number): number {
@@ -415,6 +415,33 @@ export function savedWifiSsids(): Set<string> {
     return set
 }
 
+/** A saved profile's SSID as text ("" when it has none). */
+export function profileSsid(rc: NM.Connection | null): string {
+    const data = rc ? ssidBytesOf(rc) : null
+    try { return data ? NM.utils_ssid_to_utf8(data) : "" } catch { return "" }
+}
+
+/** The profile carries a security setting (what a lock means for a network not in range). */
+export function profileSecured(rc: NM.Connection): boolean {
+    return !!rc.get_setting_wireless_security()
+}
+
+/**
+ * Saved HIDDEN networks that the scan does not show by name — a hidden network announces
+ * none, so without this it could never appear in a list, and rejoining it meant retyping
+ * its name in "Other network…". libnma's form answered that with a "Connection" menu of
+ * EVERY saved Wi-Fi profile, visible ones included (owner, 2026-09-28: "what is the sense
+ * of adding a hidden one and picking a saved connection?"); the panel lists these instead.
+ * Most recently used first.
+ */
+export function savedHiddenNetworks(): NM.RemoteConnection[] {
+    const visible = new Set((_wifiDevice?.get_access_points() ?? []).map(apSsid).filter(Boolean))
+    return (client()?.get_connections() ?? [])
+        .filter(c => c.get_connection_type() === "802-11-wireless" && !!c.get_setting_wireless()?.get_hidden())
+        .filter(c => { const ssid = profileSsid(c); return !!ssid && !visible.has(ssid) })
+        .sort((a, b) => Number(b.get_setting_connection()?.get_timestamp() ?? 0) - Number(a.get_setting_connection()?.get_timestamp() ?? 0))
+}
+
 /** The objects libnma's Wi-Fi dialogs are built from. Only common/WifiSecretsDialog may use
  *  them — every other surface asks this module in its own vocabulary. */
 export function nmObjects(): { client: NM.Client; device: NM.DeviceWifi } | null {
@@ -478,7 +505,14 @@ export function connectAp(ap: NM.AccessPoint | null, connection: NM.Connection |
         }
 
         try {
-            if (saved && ap) {
+            // A SAVED profile named directly (a hidden network from the panel's Known
+            // list): activate it as it is — add_and_activate would save a second copy.
+            if (!ap && connection instanceof NM.RemoteConnection) {
+                c.activate_connection_async(connection, dev, null, null, (o: any, r: any) => {
+                    try { follow(o.activate_connection_finish(r), false) }
+                    catch (e) { console.error("[Network] activate saved:", e); reject(new ConnectError("failed")) }
+                })
+            } else if (saved && ap) {
                 c.activate_connection_async(saved, dev, ap.get_path(), null, (o: any, r: any) => {
                     try { follow(o.activate_connection_finish(r), false) }
                     catch (e) { console.error("[Network] activate:", e); reject(new ConnectError("failed")) }
@@ -508,6 +542,27 @@ export function disconnectWifi(): Promise<void> {
             try { o.disconnect_finish(r); resolve() } catch (e) { reject(e) }
         })
     })
+}
+
+/** What the Wi-Fi panel shows under the network the adapter is on (Apple's Option-click
+ *  details, shown behind a visible chevron instead). Null unless connected. The IP and
+ *  gateway arrive with DHCP, after the SSID — watch `watchWifi`, not `watchWifiLink`. */
+export interface WifiConnectionDetails { ip: string; gateway: string; band: string; channel: number; security: string }
+
+export function wifiConnectionDetails(): WifiConnectionDetails | null {
+    const dev = _wifiDevice
+    if (!dev || dev.get_state() !== NM.DeviceState.ACTIVATED) return null
+    const ap = dev.get_active_access_point()
+    if (!ap) return null
+    let gateway = "—"
+    try { gateway = dev.get_ip4_config()?.get_gateway() || "—" } catch {}
+    return {
+        ip: getIp(wifi()),
+        gateway,
+        band: freqBand(ap.frequency),
+        channel: freqChannel(ap.frequency),
+        security: securityLabel(ap),
+    }
 }
 
 /** Delete every saved profile for `ap`'s network. */

@@ -329,6 +329,8 @@ export function roundToggleSpec(
     onClick: () => void,
     wideSubtitle?: () => string,
     subscribe?: SubscribeFn,
+    /** The capsule's title when it is not the widget's name (Do Not Disturb's). */
+    wideTitle?: () => string,
 ): CCWidgetSpec {
     const getActive = typeof active === "function" ? active : () => active
     const getIcon   = typeof iconName === "function" ? iconName : () => iconName
@@ -337,7 +339,7 @@ export function roundToggleSpec(
     const buildContent = (size: WidgetSize, budget: ContentBudget): Gtk.Widget => {
         if (size === WidgetSize.SINGLE)
             return makeRoundTile(getIcon, getActive, onClick, subscribe)
-        return makeButtonCapsuleTile(getIcon, () => name, getSub, onClick, getActive, subscribe, budget)
+        return makeButtonCapsuleTile(getIcon, wideTitle ?? (() => name), getSub, onClick, getActive, subscribe, budget)
     }
 
     return {

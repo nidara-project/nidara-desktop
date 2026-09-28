@@ -112,6 +112,11 @@ export interface AtomicWidget {
     barClick?: () => boolean
     buildCCDetail?: (onClose: () => void) => Gtk.Widget     // CC full-panel detail (no inner scroll)
     ccDetailRows?: number                                   // detail MAX height in grid rows (default 2); shorter content shrinks the panel, longer scrolls
+    /** The widget's master switch, placed by the CC at the right of the detail's TITLE —
+     *  so a detail never reads "Wi-Fi" and then "Wi-Fi [switch]" under it (owner,
+     *  2026-09-28). `buildCCDetail` then leaves its own switch row out. A widget whose
+     *  detail would be nothing but that switch has no detail at all (Do Not Disturb). */
+    ccDetailSwitch?: () => Gtk.Widget
     // Per-widget settings page. When present, the Settings → Widgets card shows a
     // "Configure" row that pushes this as a subpage. Keep the widget's own options
     // co-located with the widget (the "mini-app" contract). Omit if it has none.

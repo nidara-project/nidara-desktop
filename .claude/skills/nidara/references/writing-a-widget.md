@@ -160,6 +160,28 @@ Remove for it (it still moves and resizes); Settings → Widgets shows its Cente
 insensitive. So a CC can never be emptied. Known limit: a fixed widget whose hardware appears
 while the grid is full has no cell and stays out until one frees up (tech-debt.md).
 
+**The master switch goes on the CC detail's title line: `ccDetailSwitch`.** A detail used to
+open on its title ("Wi-Fi") and then a row "Wi-Fi [switch]" under it (owner, 2026-09-28). A
+widget with an on/off now hands the switch to the CC (`ccDetailSwitch: () => Gtk.Widget`), which
+puts it right of the title and names it after the widget for accessibility, and its
+`buildCCDetail` leaves that row out: Wi-Fi, Bluetooth, night light. The BAR panel keeps its
+switch row — there it IS the title. A widget whose detail would be nothing but that switch has
+no detail: Do Not Disturb's tile is the toggle at every size (`roundToggleSpec`, whose optional
+`wideTitle` keeps a capsule title that is not the widget's name).
+
+**A panel that rebuilds its rows owes the keyboard focus back.** Removing the focused row
+lets GTK move the focus wherever it likes — in the Wi-Fi panel that was the current network's
+leave button, so Enter to open its details and Enter again to close them would have
+disconnected (measured by keyboard, 2026-09-28). Two rules, both in `widgets/wifi.ts`: a
+disclosure (details, a folded section) shows and hides what it opens IN PLACE, never by
+rebuilding; and a rebuild forced by data (a scan, the link changing) records the focused row by
+what it IS (a key, not a widget) and grabs the new row with that key, else a harmless one.
+And a destructive one-click target is not a Tab stop where a panel opens: a CC detail opened by
+keyboard focuses its FIRST stop, which was that same leave badge — Enter on arrival would have
+disconnected. The badge is pointer-only (Apple's); the keyboard gets a visible "Disconnect" in
+the details. ⚠️ GTK sets `:focus-visible` along the whole focus CHAIN, so a box that carries row
+states draws the ring around a focused child too — the current-network box turns it off.
+
 **Bar content carries its own side air.** In the bar a widget is an ITEM of the right-hand group,
 touching its neighbours, and the hover/open pill is drawn round whatever the content measures
 (design-system.md → "Bar groups"). `makeBarIcon`/`makeBarExpandable` already put `BAR_ITEM_PAD`

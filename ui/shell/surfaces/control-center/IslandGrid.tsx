@@ -446,6 +446,14 @@ export default function IslandGrid() {
             // No ellipsis: a widget name has to fit, not be cut ("Multime…" had room).
             halign: Gtk.Align.START, valign: Gtk.Align.CENTER, hexpand: true,
         }))
+        // The master switch shares the title's line (contract.ts `ccDetailSwitch`).
+        if (w.ccDetailSwitch) {
+            const sw = w.ccDetailSwitch()
+            sw.valign = Gtk.Align.CENTER
+            // Named like the kit's toggle row (#615): the title beside it is not its label.
+            sw.update_property([Gtk.AccessibleProperty.LABEL], [w.name])
+            header.append(sw)
+        }
 
         // Content
         const panel = new Gtk.Box({

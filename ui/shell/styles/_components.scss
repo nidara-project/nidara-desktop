@@ -239,6 +239,56 @@ label.accent-label {
 // so its vocabulary cannot belong to a surface's sheet. `-value` and `-icon-btn`
 // joined their siblings here on 2026-08-10; they had been sitting unscoped in
 // _bar.scss, which is what made the family look like two different things.
+// The Wi-Fi panel (widgets/wifi.ts), in the bar AND the CC. A network row is fixed
+// columns — [badge] name … status [lock] [chevron] — so nothing moves between rows
+// (owner's review, 2026-09-28). The row is a button, except the CURRENT network's: that
+// one is a box holding two (the badge leaves, the rest opens the details), and the hover
+// is the box's, so it still reads as one row.
+.wifi-net {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 5px 12px;
+    border-radius: $nidara-radius-sm;
+    @include nidara-row-states;
+}
+// GTK marks the focus-visible state along the whole focus CHAIN, so the current row's
+// box drew the row ring around the badge's focus too: the ring is its children's.
+.wifi-net.is-current:focus-visible { outline: none; }
+.wifi-current-main,
+.wifi-leave {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    min-width: 0;
+    min-height: 0;
+    &:hover, &:active { background: none; }
+    &:focus-visible { @include nidara-focus-ring(-2px); }
+}
+.wifi-leave { border-radius: $nidara-radius-pill; }
+.wifi-current-main { padding-left: 4px; border-radius: $nidara-radius-sm; }
+.wifi-badge {
+    min-width: 24px;
+    min-height: 24px;
+    border-radius: $nidara-radius-pill;
+    background-color: var(--nidara-surface);
+    transition: background-color 0.12s ease;
+    // The network you are on: filled with the accent — the "connected" mark itself.
+    &.is-on {
+        background-color: var(--nidara-accent);
+        color: var(--nidara-accent-fg);
+    }
+}
+// The badge that LEAVES says so under the pointer: it darkens as a button does.
+.wifi-leave:hover .wifi-badge { background-color: var(--nidara-surface-active); }
+.wifi-leave:hover .wifi-badge.is-on { background-color: rgba(var(--nidara-accent-rgb), 0.8); }
+.wifi-dim { opacity: 0.5; }
+// Under the name: 12 (row padding) + 24 (badge) + 10 (gap) = 46.
+.wifi-details {
+    margin: 2px 12px 8px 46px;
+}
+
 .bar-popover-key {
     font-size: $fs-small;
     color: var(--nidara-text-dim);

@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { NidaraButton } from "../../lib/nidara-kit/button"
-import { AtomicWidget, ContentBudget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSeparator, panelSwitch, makeBarIcon } from "../common/widget-kit"
+import { AtomicWidget, ContentBudget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelSwitch, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
 import * as BT from "../core/BluetoothService"
@@ -94,16 +94,13 @@ function buildDeviceList(): { box: Gtk.ListBox; refresh: () => void } {
     return { box: listBox, refresh }
 }
 
-function buildDetailPanel(_onClose: () => void): Gtk.Widget {
-    const sw = panelSwitch(() => BT.isPowered(), (on) => BT.setPowered(on), BT.watchPower)
+// The power switch lives on the CC detail's title line (contract.ts `ccDetailSwitch`).
+const buildPowerSwitch = (): Gtk.Widget => panelSwitch(() => BT.isPowered(), (on) => BT.setPowered(on), BT.watchPower)
 
-    const switchRow = panelRow(t("widget.bluetooth.name"), sw)
-    switchRow.margin_bottom = 4      // air before the separator
+function buildDetailPanel(_onClose: () => void): Gtk.Widget {
     const { box: listBox, refresh } = buildDeviceList()
 
     const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })
-    outer.append(switchRow)
-    outer.append(panelSeparator())
     outer.append(listBox)
 
     const applyPowered = () => {
@@ -139,6 +136,7 @@ const btWidget: AtomicWidget = {
     buildContent,
     buildBarContent,
     buildCCDetail: buildDetailPanel,
+    ccDetailSwitch: buildPowerSwitch,
     ccDetailRows: 4,
     getActive: () => BT.isPowered(),
     watchActive: BT.watchPower,

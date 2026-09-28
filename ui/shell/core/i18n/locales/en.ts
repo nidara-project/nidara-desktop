@@ -748,10 +748,9 @@ export default {
     "widget.ethernet.row.speed": "Speed",
 
     // Wi-Fi bar popover rows
-    "widget.wifi.row.network": "Network",
-    "widget.wifi.row.status": "Status",
-    "widget.wifi.row.disabled": "Disabled",
     "widget.wifi.no-networks": "No networks in range",
+    "widget.wifi.known": "Known Networks",
+    "widget.wifi.others": "Other Networks",
     "widget.wifi.settings": "Network Settings…",
 
     // Activity Island — live screen capture
@@ -840,7 +839,6 @@ export default {
     // Control Center — Wi-Fi toggle
     "cc.wifi.name": "Wi-Fi",
     "cc.wifi.sub.off": "Off",
-    "cc.wifi.sub.connected": "Connected",
     "cc.wifi.sub.disconnected": "Not connected",
 
     // Control Center — Focus/DnD toggle

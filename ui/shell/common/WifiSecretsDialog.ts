@@ -166,12 +166,42 @@ export function setupNetwork(ap: NM.AccessPoint, beforePresent?: () => void): Pr
     }
 }
 
+/**
+ * libnma's hidden-network form opens with a "Connection" menu listing EVERY saved Wi-Fi
+ * profile (visible networks included) beside "New…" — its way back to a hidden network
+ * saved before. The panel lists saved hidden networks under Known Networks instead
+ * (Net.savedHiddenNetworks), so the form only ever makes a NEW one: the row goes.
+ * libnma names none of its widgets to us, so the row is found by the shape of 1.10.6's
+ * `wifi.ui` — the grid whose column 1 holds a combo on rows 1 AND 3 (connection,
+ * security) — and nothing is touched when that shape is not there.
+ */
+function hideSavedConnectionRow(w: Gtk.Widget | null): boolean {
+    for (let c = w?.get_first_child() ?? null; c; c = c.get_next_sibling()) {
+        if (c instanceof Gtk.Grid) {
+            const cells = new Map<string, Gtk.Widget>()
+            for (let k = c.get_first_child(); k; k = k.get_next_sibling()) {
+                const [col, row] = (c as any).query_child(k) as number[]
+                cells.set(`${col},${row}`, k)
+            }
+            if (cells.get("1,1") instanceof Gtk.ComboBox && cells.get("1,3") instanceof Gtk.ComboBox) {
+                cells.get("0,1")!.visible = false
+                cells.get("1,1")!.visible = false
+                return true
+            }
+        }
+        if (hideSavedConnectionRow(c)) return true
+    }
+    return false
+}
+
 /** "Other network…": name + security for a hidden SSID, then the connection to join. */
 export function joinHiddenNetwork(beforePresent?: () => void): Promise<NM.Connection | null> {
     const nm = Net.nmObjects()
     if (!nm) return Promise.resolve(null)
     try {
-        return runWifiDialog(NMA.WifiDialog.new_for_other(nm.client), beforePresent).then(r => r?.[0] ?? null)
+        const dialog = NMA.WifiDialog.new_for_other(nm.client)
+        if (!hideSavedConnectionRow(dialog)) console.warn("[WifiSecrets] libnma's form changed shape: the saved-connection row is still shown")
+        return runWifiDialog(dialog, beforePresent).then(r => r?.[0] ?? null)
     } catch (e) {
         console.error("[WifiSecrets] could not build the hidden-network dialog:", e)
         return Promise.resolve(null)

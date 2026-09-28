@@ -42,19 +42,23 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
 // Quick-access mirror of Settings → Appearance's Night Light group (same keys,
 // same NightLightManager) — no new backend, just a compact echo for the CC.
 
+const onChanged = (sync: () => void) => {
+    const id = nightLight.connect("changed", sync)
+    return () => safeDisconnect(nightLight, id)
+}
+
+// The master switch, on the CC detail's title line (contract.ts `ccDetailSwitch`).
+// Insensitive while a schedule drives the light — it follows its own `changed`.
+function buildMasterSwitch(): Gtk.Widget {
+    const sw = panelSwitch(() => nightLight.enabled, (on) => nightLight.setEnabled(on), onChanged)
+    const sync = () => { sw.sensitive = !nightLight.scheduleEnabled }
+    sync()
+    sw.connect("unrealize", onChanged(sync))
+    return sw
+}
+
 function buildDetailPanel(_onClose: () => void): Gtk.Widget {
     const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })
-
-    const onChanged = (sync: () => void) => {
-        const id = nightLight.connect("changed", sync)
-        return () => safeDisconnect(nightLight, id)
-    }
-    const sw = panelSwitch(() => nightLight.enabled, (on) => nightLight.setEnabled(on), onChanged)
-    sw.sensitive = !nightLight.scheduleEnabled
-    const switchRow = panelRow(t("widget.night-light.name"), sw)
-    switchRow.margin_bottom = 4      // air before the separator
-    outer.append(switchRow)
-    outer.append(panelSeparator())
 
     const tempValueLabel = new Gtk.Label({ label: `${nightLight.temperature}K`, css_classes: ["slider-value-label"], width_chars: 5, xalign: 1.0 })
     const tempSlider = makeHSlider({
@@ -77,7 +81,6 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
 
     const schedSwitch = panelSwitch(() => nightLight.scheduleEnabled, (on) => {
         nightLight.setScheduleEnabled(on)
-        sw.sensitive = !on
         timeRow.visible = on
     }, onChanged)
     const schedRow = panelRow(t("settings.appearance.night-light-schedule"), schedSwitch)
@@ -135,7 +138,6 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
     outer.append(timeRow)
 
     const syncId = nightLight.connect("changed", () => {
-        sw.sensitive = !nightLight.scheduleEnabled
         timeRow.visible = nightLight.scheduleEnabled
         from.sync(nightLight.scheduleFrom)
         to.sync(nightLight.scheduleTo)
@@ -157,6 +159,7 @@ const nightLightWidget: AtomicWidget = {
     buildContent,
     buildBarContent,
     buildCCDetail: buildDetailPanel,
+    ccDetailSwitch: buildMasterSwitch,
     ccDetailRows: 4,
     getActive: () => nightLight.enabled,
     watchActive: subscribe,

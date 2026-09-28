@@ -1,8 +1,8 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { AtomicWidget, ContentBudget, WidgetSize, makeRoundTile, makeSplitCapsuleTile, panelRow, panelSwitch, makeBarIcon } from "../common/widget-kit"
+import { AtomicWidget, ContentBudget, WidgetSize, roundToggleSpec, makeBarIcon } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
-import { dontDisturb, toggleDontDisturb, setDontDisturb, watchDnd } from "../core/NotifService"
+import { dontDisturb, toggleDontDisturb, watchDnd } from "../core/NotifService"
 
 function buildBarContent() {
     return makeBarIcon({
@@ -17,33 +17,15 @@ const getIcon = () => dontDisturb() ? uiIcon("nd-notifications-disabled") : uiIc
 const getTitle = () => dontDisturb() ? t("cc.focus.title.on") : t("cc.focus.title.off")
 const getSub = () => dontDisturb() ? t("cc.focus.sub.on") : ""
 
-// SINGLE keeps the toggle (every platform's compact quick-toggle stays a
-// toggle — "open detail" is always a separate affordance, never a fallback on
-// the same tap target, and there's no room for a second hit-region at 1×1).
-// WIDE/SQUARE split: icon badge toggles, the rest of the capsule opens the
-// detail panel — see [[project_cc_capsule_alignment]].
-function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
-    if (size === WidgetSize.SINGLE)
-        return makeRoundTile(getIcon, dontDisturb, toggleDontDisturb, watchDnd)
-    return makeSplitCapsuleTile(getIcon, getTitle, getSub, toggleDontDisturb, watchDnd, budget)
-}
-
-// ── CC detail panel: just the switch. Matches GNOME's Do Not Disturb quick
-// toggle exactly — timed duration presets (1h / until evening / custom) were
-// considered and deliberately left out: they need a new backend (a persisted
-// "until" timestamp + auto re-enable timer), a bigger feature than a detail
-// page, revisit only if the plain toggle turns out to not be enough. ──
-
-function buildDetailPanel(_onClose: () => void): Gtk.Widget {
-    const sw = panelSwitch(dontDisturb, setDontDisturb, watchDnd)
-
-    const switchRow = panelRow(t("widget.focus.name"), sw)
-
-    const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
-    outer.append(switchRow)
-
-    return outer
-}
+// No detail panel: all it ever held was the switch, the same one-tap the tile is, and
+// once the CC put a detail's master switch on its title line (contract.ts
+// `ccDetailSwitch`) it would have been a title and nothing under it. So the whole tile
+// is the toggle, at every size, as Appearance's. Timed presets (1 h / until evening)
+// were considered and left out: they need a persisted "until" and a timer — revisit if
+// the plain toggle is not enough; they are what would bring a detail back.
+const buildContent = (size: WidgetSize, budget: ContentBudget): Gtk.Widget => roundToggleSpec(
+    "focus", t("widget.focus.name"), getIcon, dontDisturb, toggleDontDisturb, getSub, watchDnd, getTitle,
+).buildContent(size, budget)
 
 const focusWidget: AtomicWidget = {
     id: "focus",
@@ -56,8 +38,6 @@ const focusWidget: AtomicWidget = {
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,
     buildBarContent,
-    buildCCDetail: buildDetailPanel,
-    ccDetailRows: 2,
     getActive: dontDisturb,
     watchActive: watchDnd,
     // Active = Do Not Disturb on. Fixed in the CC, so "When active" can be offered:
