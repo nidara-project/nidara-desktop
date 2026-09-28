@@ -266,7 +266,7 @@ chown "$REAL_USER:" "${REAL_HOME}/.config" "$CONFIG_DIR"
 # database below, and Nidara's own from the org.nidara.appearance schema. A file
 # copied here would be read by nothing — and, created after the migration marker, it
 # would sit there forever. Bar/CC widget placement + CC tile layout come from the
-# shell's code defaults (DEFAULT_PLACEMENT + CC_DEFAULT_ORDER in widgets/index.ts).
+# shell's code defaults (DEFAULT_PLACEMENT + CC_DEFAULT_LAYOUT in widgets/index.ts).
 
 # The icon theme has to be in gsettings BEFORE the shell's first frame, not after.
 # GTK reads that value while it builds the first window, while ThemeManager only
@@ -418,8 +418,8 @@ chown "$REAL_USER:" "$CONFIG_DIR/.mcp.json"
 echo "  [Init] $CONFIG_DIR/.mcp.json (agent interface manifest)"
 
 # No region.json any more (#573): the clock format lives in GSettings
-# org.nidara.region (default "long", which is what this block used to seed), and the
-# timezone is the system's — never a copy.
+# org.nidara.region (default "short" since 2026-09-28; this block used to seed "long"),
+# and the timezone is the system's — never a copy.
 
 # Hyprland user overrides (created once, never overwritten)
 if [ ! -f "$CONFIG_DIR/hyprland-user.lua" ]; then

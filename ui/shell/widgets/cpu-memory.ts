@@ -215,6 +215,7 @@ const cpuMemoryWidget: AtomicWidget = {
     name: t("widget.cpu-memory.name"),
     icon: uiIcon("nd-cpu"),
     locations: ["bar", "cc"],
+    defaultInCc: false,   // a monitor, not a control: available to add, not in the CC out of the box
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     centerContent: true,

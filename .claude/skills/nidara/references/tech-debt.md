@@ -4181,11 +4181,14 @@ Why it is NOT a one-liner — decide before coding:
 `ccFixed` (writing-a-widget.md) guarantees the PLACEMENT, not a cell. The CC grid is 4×8 and
 optional tiles take cells first-come: fill it, then plug in a Bluetooth dongle, and `syncCCLayout`
 finds no free cell for the Bluetooth tile — `CCLayoutManager.add` returns silently. The tile comes
-back as soon as a cell frees. Unlikely with today's catalogue (the defaults use 21 of 32 cells), and
+back as soon as a cell frees. Unlikely with today's catalogue (the defaults use 22 of 32 cells), and
 a fixed widget that is already placed never loses its cell. Fixing it properly means `canAdd` for
 an OPTIONAL widget keeps room for every fixed widget that is available and unplaced — deciding
 whether room is also kept for fixed widgets whose hardware is absent (a desktop would then lose
-cells to a Wi-Fi it will never have).
+cells to a Wi-Fi it will never have). Only a PERSONALISED grid can get there: the default one is
+re-packed whenever its members change (`CCLayoutManager` "Two modes", 2026-09-28). The same goes
+for holes — a tile removed from a personalised grid leaves its cells empty; the default grid closes
+them.
 
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 

@@ -97,18 +97,23 @@ export { CATEGORY_ORDER }
 export const BAR_ORDER: string[] = sortWidgetsForBar(ALL_WIDGETS.filter(w => w.locations?.includes("bar")))
     .map(w => w.id)
 
-// CC initial seed order — UNIVERSAL widgets only (always available, no hardware gate).
-// Hardware-gated default widgets (wifi, bt, brightness — defaultInCc true but isAvailable
-// hardware-dependent) are deliberately NOT seeded here: IslandGrid's syncCCLayout adds them
-// to a free cell only when their hardware is present. This is load-bearing — seeding a
-// hardware-gated tile here would have it removed on hardware-less machines (e.g. a desktop
-// without a backlight), and CCLayoutManager.remove() does NOT reflow, so it would leave a
-// hole. Keep this list to widgets that are always available; let the adaptive ones append.
-export const CC_DEFAULT_ORDER: string[] = [
-    "media",
-    "dark_mode",
-    "focus",
-    "night_light",
-    "volume",
-    "cpu_memory",
+// The CC's default layout, in reading order, each tile at its default footprint here
+// (owner, 2026-09-28: his own arrangement, with Display above Sound as macOS has them).
+// Until the person moves or resizes a tile, the grid is PACKED from this list at every
+// change (CCLayoutManager's default mode): a tile whose hardware is missing is simply
+// skipped and the ones after it move up, so a desktop without Wi-Fi, Bluetooth or a
+// backlight gets no hole. That is what lets Wi-Fi sit at the top — before, hardware
+// tiles were appended at the END so that their absence could not leave a hole.
+// A widget the person adds to the CC that is not listed here packs after these.
+export const CC_DEFAULT_LAYOUT: ReadonlyArray<{ id: string; size: WidgetSize }> = [
+    { id: "media",        size: WidgetSize.SQUARE },
+    { id: "wifi",         size: WidgetSize.WIDE },
+    { id: "bt",           size: WidgetSize.WIDE },
+    { id: "brightness",   size: WidgetSize.FULL_WIDTH },
+    { id: "volume",       size: WidgetSize.FULL_WIDTH },
+    { id: "screenshot",   size: WidgetSize.SINGLE },
+    { id: "screenrecord", size: WidgetSize.SINGLE },
+    { id: "dark_mode",    size: WidgetSize.WIDE },
+    { id: "night_light",  size: WidgetSize.WIDE },
+    { id: "focus",        size: WidgetSize.WIDE },
 ]

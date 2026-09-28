@@ -3840,10 +3840,12 @@ Everything in the right group between the `»` and the CC is ONE ordered list �
 at the right end (the CC and NC panels hang from that edge; macOS pins the same two). A plugin
 (#640) is a widget, so it is not a fourth kind. The owner's rules, all in that module's header:
 
-- **Empty = derived.** Widgets by category (`sortWidgetsForBar`, shared with `BAR_ORDER` and
-  Settings), then tray icons in the order FIRST SEEN (`tray-known`, not this session's D-Bus
-  arrival — Settings lists them that way and must show the bar's own order), then search. Nothing
-  is written until the person reorders.
+- **Empty = derived.** Tray icons in the order FIRST SEEN (`tray-known`, not this session's D-Bus
+  arrival — Settings lists them that way and must show the bar's own order), then widgets by
+  category (`sortWidgetsForBar`, shared with `BAR_ORDER` and Settings), then search. The apps sit
+  LEFT of the system's controls as on macOS, the same side a new icon arrives on once the order
+  is personalised (owner, 2026-09-28; until then the tray came after the widgets). Nothing is
+  written until the person reorders.
 - **Personalised: what the list does not name goes to the LEFT end** (`resolveOrder`) — a new
   tray app, a widget just switched on. It is the first to fold and never pushes aside what the
   person arranged.

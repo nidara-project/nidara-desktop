@@ -215,7 +215,7 @@ number from `UNIT + GAP` by hand.
 
 - **`common/widget-kit/` must stay a leaf.** Importing `CCLayoutManager` from it closes the
   cycle `CCLayoutManager → widgets/index → a widget → widget-kit → CCLayoutManager` and
-  **crashes the shell at boot** (`CC_DEFAULT_ORDER` undefined mid-cycle). `tsc` does not see
+  **crashes the shell at boot** (`CC_DEFAULT_LAYOUT` undefined mid-cycle). `tsc` does not see
   module cycles; only a real boot does. The boundary check does too, now.
 - **A widget must not depend on another widget at module scope.** Import order is alphabetical.
 

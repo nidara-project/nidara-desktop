@@ -1,7 +1,7 @@
 import GObject from "gi://GObject"
 import { defineSettings } from "../../core/configFile"
 import { WidgetSize } from "../../common/widget-kit"
-import { WIDGET_META, CC_DEFAULT_ORDER } from "../../widgets/index"
+import { WIDGET_META, CC_DEFAULT_LAYOUT } from "../../widgets/index"
 
 // CC grid geometry — one cell is UNIT px, cells separated by GAP px. It lives HERE,
 // with the surface that draws the grid, and no widget may read it: a widget receives
@@ -51,7 +51,8 @@ export interface LayoutEntry {
 }
 
 // Stored in GSettings, `org.nidara.control-center` (#573): positions as id → (x, y),
-// sizes as id → "WxH". Empty positions = the default layout. cc_layout.json was
+// sizes as id → "WxH". Empty positions = the default layout, which is never stored:
+// see "Two modes" on the class. cc_layout.json was
 // imported once by migrations/2026-09-14d-widgets-pinned-region.sh, which also
 // converted the oldest array format; the `order` format (before 2026-06-09) needed
 // a flow-pack only this class can do, so such a file resets to the default layout.
@@ -71,6 +72,16 @@ type PosMap = Map<string, Cell>
 // yield, each sliding to the nearest free space (downward-biased, so a tile with a
 // gap below it drops into it). Untouched widgets never move — minimal, legible
 // displacement. flow-pack survives only to migrate a legacy order array.
+//
+// ── Two modes (2026-09-28) ──
+// DEFAULT — nothing stored. The grid is flow-packed from CC_DEFAULT_LAYOUT (then any
+// other member, in the order it arrived) every time the set of members changes, and
+// nothing is saved. Members come and go with `add`/`remove` — the hardware gate in
+// IslandGrid.syncCCLayout, or a widget turned on or off in Settings — so a tile whose
+// hardware is missing leaves no hole: the tiles after it move up.
+// PERSONAL — the person moved or resized a tile: from then on every cell is stored and
+// only a drop displaces anything. A tile removed here leaves its cells free (#112 is the
+// other half of that). Clearing `positions` goes back to DEFAULT.
 class CCLayoutManager extends GObject.Object {
     static {
         GObject.registerClass({
@@ -81,6 +92,11 @@ class CCLayoutManager extends GObject.Object {
 
     private _pos: Record<string, Cell> = {}
     private _sizes: Record<string, WidgetSize> = {}
+    /** DEFAULT mode (nothing stored): the grid is derived, never saved. */
+    private _derived = true
+    /** The ids that are in the CC, in arrival order — what DEFAULT mode packs from.
+     *  null until the first `add`/`remove`: then every default tile is assumed. */
+    private _members: string[] | null = null
 
     constructor() {
         super()
@@ -102,9 +118,27 @@ class CCLayoutManager extends GObject.Object {
             if (WIDGET_META[id] && Array.isArray(cell)) this._pos[id] = { x: cell[0] | 0, y: cell[1] | 0 }
         for (const [id, size] of Object.entries(sizes))
             if (WIDGET_META[id]) this._sizes[id] = size as WidgetSize
-        if (Object.keys(this._pos).length > 0) { this.normalize(); return }
-        this._sizes = {}
-        this.seedFromOrder([...CC_DEFAULT_ORDER])
+        this._derived = Object.keys(this._pos).length === 0
+        if (!this._derived) { this.normalize(); return }
+        this.derive()
+    }
+
+    /** DEFAULT mode: pack the members from CC_DEFAULT_LAYOUT, at its sizes. A tile that
+     *  does not fit is left out, as `add` does. */
+    private derive() {
+        const members = this._members ?? CC_DEFAULT_LAYOUT.map(e => e.id)
+        const inCC = new Set(members)
+        const listed = CC_DEFAULT_LAYOUT.filter(e => inCC.has(e.id) && WIDGET_META[e.id])
+        const listedIds = new Set(listed.map(e => e.id))
+        const order = [...listed.map(e => e.id), ...members.filter(id => !listedIds.has(id) && WIDGET_META[id])]
+        this._sizes = Object.fromEntries(listed.map(e => [e.id, e.size]))
+        this.seedFromOrder(order)
+    }
+
+    /** A layout edit by the person: DEFAULT mode ends here, and the cells are stored. */
+    private personalise() {
+        this._derived = false
+        this.save()
     }
 
     private save() {
@@ -304,7 +338,7 @@ class CCLayoutManager extends GObject.Object {
         const next: Record<string, Cell> = {}
         for (const [id, c] of resolved) next[id] = { x: c.x, y: c.y }
         this._pos = next
-        this.save()
+        this.personalise()
         this.emit("changed")
         return true
     }
@@ -341,12 +375,16 @@ class CCLayoutManager extends GObject.Object {
             this._sizes[id] = newSize
             this._pos[id] = cell
         }
-        this.save()
+        this.personalise()
         this.emit("changed")
         return true
     }
 
     remove(id: string) {
+        const members = this._members ?? CC_DEFAULT_LAYOUT.map(e => e.id)
+        this._members = members.filter(m => m !== id)
+        if (!this._pos[id]) return
+        if (this._derived) { this.derive(); this.emit("changed"); return }
         delete this._pos[id]
         delete this._sizes[id]
         this.save()
@@ -354,8 +392,16 @@ class CCLayoutManager extends GObject.Object {
     }
 
     add(id: string) {
-        if (this._pos[id]) return
         if (!WIDGET_META[id]) return
+        const members = this._members ?? CC_DEFAULT_LAYOUT.map(e => e.id)
+        if (!members.includes(id)) this._members = [...members, id]
+        else this._members = members
+        if (this._pos[id]) return
+        if (this._derived) {
+            this.derive()
+            if (this._pos[id]) this.emit("changed")
+            return
+        }
         const cell = this.findFreeCell(id)
         if (!cell) return
         this._pos[id] = cell

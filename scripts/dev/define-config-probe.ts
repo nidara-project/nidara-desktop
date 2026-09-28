@@ -365,7 +365,26 @@ async function run() {
     assert(pinChanges === 2, `…and notifies once more (${pinChanges})`)
     unsubPins()
 
-    // CC layout: positions as (x, y), reloaded on an external change.
+    // CC layout, DEFAULT mode (2026-09-28): packed from CC_DEFAULT_LAYOUT, never stored,
+    // and re-packed when a member goes — a missing hardware tile leaves no hole.
+    const cells = () => ccLayout.layout.map(e => `${e.id}@${e.x},${e.y}`).join(" ")
+    const storedPositions = () => gsettingsGet("org.nidara.control-center", "positions")
+    assert(cells() === "media@0,0 wifi@2,0 bt@2,1 brightness@0,2 volume@0,3 screenshot@0,4 screenrecord@1,4 dark_mode@2,4 night_light@0,5 focus@2,5",
+        `the default layout is the owner's, brightness above volume (${cells()})`)
+    for (const id of ["wifi", "bt", "brightness"]) ccLayout.remove(id)
+    assert(cells() === "media@0,0 screenshot@2,0 screenrecord@3,0 dark_mode@2,1 volume@0,2 night_light@0,3 focus@2,3",
+        `without Wi-Fi, Bluetooth and a backlight the rest move up, no hole (${cells()})`)
+    ccLayout.add("bt")
+    assert(cells().startsWith("media@0,0 bt@2,0 "), `a tile coming back takes its default place (${cells()})`)
+    assert(storedPositions() === "@a{s(ii)} {}", `…and the default layout is never stored (${storedPositions()})`)
+    ccLayout.add("clipboard")
+    assert(ccLayout.layout.some(e => e.id === "clipboard") && storedPositions() === "@a{s(ii)} {}",
+        "a widget outside the default list packs after it, still not stored")
+    assert(ccLayout.resize("media", "2x1" as any), "a tile can be resized")
+    assert(storedPositions().includes("'media': (0, 0)") && storedPositions().includes("'clipboard'"),
+        `a resize personalises: every cell is stored (${storedPositions()})`)
+
+    // CC layout, PERSONAL mode: positions as (x, y), reloaded on an external change.
     const tile = ccLayout.layout[0]?.id
     assert(!!tile, "the CC layout has a default tile to move")
     ccLayout.remove(tile)

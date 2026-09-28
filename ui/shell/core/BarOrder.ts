@@ -16,10 +16,11 @@ import { CATEGORY_ORDER, type WidgetCategory } from "../common/widget-kit/contra
  * CC and notification panels hang from that edge (and macOS pins the same two).
  *
  * The rules, each an owner's decision of 2026-09-26:
- *  - **Not personalised = derived.** An empty `bar-order` means the default order: widgets
- *    by category (`sortWidgetsForBar`), then tray icons in the order they arrived, then
- *    search. Nothing is written until the person reorders, so a default can still improve
- *    with an update.
+ *  - **Not personalised = derived.** An empty `bar-order` means the default order: tray
+ *    icons in the order they arrived, then widgets by category (`sortWidgetsForBar`), then
+ *    search (tray first since 2026-09-28: apps left of the system's controls, as macOS).
+ *    Nothing is written until the person reorders, so a default can still improve with an
+ *    update.
  *  - **Personalised, an item the list does not name goes to the LEFT end** — a new tray
  *    app, a widget just switched on. It is the first to fold behind the `»` and it never
  *    pushes aside what the person arranged (macOS does the same).
@@ -73,9 +74,11 @@ export function sortWidgetsForBar<T extends { category: WidgetCategory, barOrder
         ((a.barOrder ?? 0) - (b.barOrder ?? 0)))
 }
 
-/** The default order of a set of items, each list already in its own default order. */
+/** The default order of a set of items, each list already in its own default order:
+ *  the apps' icons first, left of the system's controls, as macOS has them — and the
+ *  same side a new icon arrives on once the order is personalised (`resolveOrder`). */
 export function defaultOrder(widgetKeys: string[], trayKeys: string[]): string[] {
-    return [...widgetKeys, ...trayKeys, SEARCH_KEY]
+    return [...trayKeys, ...widgetKeys, SEARCH_KEY]
 }
 
 /** The order the bar paints `present` in (`present` = the items that exist and are shown,

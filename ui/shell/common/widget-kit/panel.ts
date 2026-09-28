@@ -12,7 +12,7 @@ import Gtk from "gi://Gtk?version=4.0"
 // EVERY module in common/widget-kit/ MUST stay a leaf (no shell imports): widgets
 // import the kit, and CCLayoutManager imports widgets/index — importing
 // CCLayoutManager from here closes a module cycle that crashes the shell at boot
-// (CC_DEFAULT_ORDER undefined while CCLayoutManager's singleton evaluates
+// (CC_DEFAULT_LAYOUT undefined while CCLayoutManager's singleton evaluates
 // mid-cycle). Typecheck does not catch it; only a boot does.
 export const PANEL_W = {
     /** single-control panels — volume/brightness slider, screenrecord options */
