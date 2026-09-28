@@ -26,6 +26,7 @@
 // must not import `gi://NM` — they ask this module, like they already did.
 
 import { execAsync } from "../../lib/process"
+import GLib from "gi://GLib"
 import NM from "gi://NM?version=1.0"
 import { t, currentLocale } from "./i18n"
 import { takeUserCancel } from "./NetworkCancels"
@@ -663,6 +664,416 @@ export function toggleWifi(): Promise<string> {
     return setWifiEnabled(!wifiEnabled())
 }
 
+// ── Saving a profile ────────────────────────────────────────────────────────
+//
+// Every edit below goes the same way: clone the saved profile, change the clone,
+// `verify()` it, and hand it to NM with `update2(TO_DISK)`. The RemoteConnection
+// itself is never touched, so a refused edit leaves nothing half-changed in the
+// client's cache. A remote profile carries no secrets and NM keeps the stored ones
+// when the update has none — measured 2026-09-28 on a WPA-PSK profile: the key read
+// back identical after an IP/DNS edit.
+
+const newestFirst = (a: NM.Connection, b: NM.Connection) =>
+    Number(b.get_setting_connection()?.get_timestamp() ?? 0) - Number(a.get_setting_connection()?.get_timestamp() ?? 0)
+
+function saveProfile(rc: NM.RemoteConnection, edit: (conn: NM.Connection) => void): Promise<NM.Connection> {
+    return new Promise((resolve, reject) => {
+        const clone = NM.SimpleConnection.new_clone(rc)
+        try { edit(clone); clone.verify() } catch (e) { return reject(e) }
+        rc.update2(clone.to_dbus(NM.ConnectionSerializationFlags.ALL), NM.SettingsUpdate2Flags.TO_DISK, null, null, (o: any, r: any) => {
+            try { o.update2_finish(r); resolve(clone) } catch (e) { reject(e) }
+        })
+    })
+}
+
+/** Our own mark on a profile: NM's `user` setting, free-form key/values NM stores and ignores. */
+function userMark(conn: NM.Connection, key: string): string | null {
+    return (conn.get_setting_by_name("user") as NM.SettingUser | null)?.get_data(key) ?? null
+}
+
+function setUserMark(conn: NM.Connection, key: string, value: string | null): void {
+    let u = conn.get_setting_by_name("user") as NM.SettingUser | null
+    if (!u) {
+        if (value === null) return
+        u = new NM.SettingUser()
+        conn.add_setting(u)
+    }
+    u.set_data(key, value)
+    if (u.get_keys().length === 0) conn.remove_setting(NM.SettingUser.$gtype)
+}
+
+function activate(rc: NM.Connection | null, dev: NM.Device): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const c = client()
+        if (!c) return reject(new Error("NetworkManager is unavailable"))
+        c.activate_connection_async(rc, dev, null, null, (o: any, r: any) => {
+            try { o.activate_connection_finish(r); resolve() } catch (e) { reject(e) }
+        })
+    })
+}
+
+// ── Ethernet: the switch ────────────────────────────────────────────────────
+//
+// macOS's "Make Inactive", GNOME's Wired toggle (owner, 2026-09-28: a switch, as
+// GNOME). GNOME's is `nm_device_disconnect` alone, and NM keeps that block in /run:
+// a cable switched off came back on at the next boot. Ours holds, like the Wi-Fi
+// radio: switching off also clears `autoconnect` on each profile that had it and
+// MARKS the ones it cleared, so switching on restores exactly those — a profile the
+// user had set not to connect by itself stays that way.
+
+const WIRED_OFF_MARK = "org.nidara.wired-off"
+
+/**
+ * The saved profiles NM could bring up on the wired adapter, most recently used first.
+ *
+ * ⚠️ Asked profile by profile (`connection_compatible`), never through
+ * `nm_device_filter_connections`: GJS marshals that call's GPtrArray wrongly — it
+ * answers twice, then throws "Unhandled GType (null)" and leaves the client's own
+ * profile objects finalized under JS (measured 2026-09-28: a reproduction of three
+ * calls; in the VM it broke Settings → Network and the CC tile once the cable was off,
+ * the only time this path runs). 200 rounds of the per-profile check, GC included,
+ * stay clean.
+ */
+function wiredProfiles(): NM.RemoteConnection[] {
+    const c = client()
+    const dev = wired()?.device
+    if (!c || !dev) return []
+    return c.get_connections()
+        .filter(rc => {
+            if (rc.get_connection_type() !== "802-3-ethernet") return false
+            try { return dev.connection_compatible(rc) } catch { return false }
+        })
+        .sort(newestFirst)
+}
+
+const autoconnects = (conn: NM.Connection) => conn.get_setting_connection()?.get_autoconnect() ?? true
+
+/**
+ * The switch. On while a connection is up or coming up; otherwise, on when NM would
+ * bring one up by itself — the device is not blocked (`nmcli device disconnect` blocks
+ * it too) and a profile autoconnects, or there is no profile yet and NM will make its
+ * default one when a cable arrives.
+ */
+export function wiredEnabled(): boolean {
+    const dev = wired()?.device
+    if (!dev) return false
+    if (dev.get_active_connection()) return true
+    if (!dev.get_autoconnect()) return false
+    const profiles = wiredProfiles()
+    return profiles.length === 0 || profiles.some(autoconnects)
+}
+
+/** Where the cable stands, in the words every Ethernet surface uses. */
+export type WiredState = "absent" | "off" | "unplugged" | "disconnected" | "connecting" | "connected"
+
+export function wiredState(): WiredState {
+    const dev = wired()?.device
+    if (!dev) return "absent"
+    const st = dev.get_state()
+    if (st === NM.DeviceState.ACTIVATED) return "connected"
+    if (st >= NM.DeviceState.PREPARE && st < NM.DeviceState.ACTIVATED) return "connecting"
+    if (!wiredEnabled()) return "off"
+    if (!dev.get_carrier()) return "unplugged"
+    return "disconnected"
+}
+
+/** Told when a profile or the switch changed by OUR hand — a change NM's device
+ *  signals do not always carry (switching on with no cable changes profiles only). */
+const wiredConfigListeners = new Set<() => void>()
+const tellWiredConfig = () => { for (const cb of [...wiredConfigListeners]) { try { cb() } catch (e) { console.error("[Network] wired listener failed:", e) } } }
+
+export async function setWiredEnabled(on: boolean): Promise<void> {
+    const c = client()
+    const dev = wired()?.device
+    if (!c || !dev) return
+    const profiles = wiredProfiles()
+    try {
+        if (!on) {
+            for (const rc of profiles.filter(autoconnects))
+                await saveProfile(rc, conn => {
+                    conn.get_setting_connection().autoconnect = false
+                    setUserMark(conn, WIRED_OFF_MARK, "1")
+                })
+            if (dev.get_active_connection())
+                await new Promise<void>((resolve, reject) => dev.disconnect_async(null, (o: any, r: any) => {
+                    try { o.disconnect_finish(r); resolve() } catch (e) { reject(e) }
+                }))
+            return
+        }
+        // What the switch turned off comes back; failing that (switched off elsewhere,
+        // or every profile set not to autoconnect), the one used last.
+        const marked = profiles.filter(rc => userMark(rc, WIRED_OFF_MARK))
+        const restore = marked.length > 0 ? marked : profiles.some(autoconnects) ? [] : profiles.slice(0, 1)
+        for (const rc of restore)
+            await saveProfile(rc, conn => {
+                conn.get_setting_connection().autoconnect = true
+                setUserMark(conn, WIRED_OFF_MARK, null)
+            })
+        // Unblock the device (`nmcli device disconnect` blocks it too), or a cable plugged
+        // in later would not be brought up. With a callback: GJS does not promisify this
+        // one — called without, it throws. And ⚠️ the D-Bus path is NMObject's: NMDevice
+        // has a `get_path()` of its own, the udev ID_PATH ("pci-0000:2a:00.0"), which
+        // shadows it — handed to D-Bus, GLib asserts and the callback never runs, so the
+        // switch hung forever (measured 2026-09-28).
+        if (!dev.get_autoconnect())
+            await new Promise<void>((resolve, reject) => c.dbus_set_property(NM.Object.prototype.get_path.call(dev),
+                "org.freedesktop.NetworkManager.Device", "Autoconnect", new GLib.Variant("b", true), -1, null,
+                (o: any, r: any) => { try { o.dbus_set_property_finish(r); resolve() } catch (e) { reject(e) } }))
+        // Without a cable there is nothing to bring up: NM will, when one arrives.
+        if (dev.get_carrier() && !dev.get_active_connection())
+            await activate(restore[0] ?? profiles.find(autoconnects) ?? null, dev)
+    } finally {
+        tellWiredConfig()
+    }
+}
+
+/** The cable's state in words, the same in the bar panel, the CC and Settings. */
+export function wiredStateText(state: WiredState = wiredState()): string {
+    switch (state) {
+        case "connected": {
+            const speed = linkSpeed(wired()?.speed ?? 0)
+            return speed ? `${t("cc.ethernet.sub.connected")} · ${speed}` : t("cc.ethernet.sub.connected")
+        }
+        case "connecting":   return t("cc.ethernet.sub.connecting")
+        case "off":          return t("cc.ethernet.sub.off")
+        case "unplugged":    return t("cc.ethernet.sub.no-cable")
+        case "disconnected": return t("cc.ethernet.sub.disconnected")
+        default:             return "—"
+    }
+}
+
+/** Negotiated link speed, in the locale's numbers: "100 Mb/s", "2,5 Gb/s". "" when unknown. */
+export function linkSpeed(mbps: number): string {
+    if (!mbps || mbps <= 0) return ""
+    const nf = new Intl.NumberFormat(currentLocale(), { maximumFractionDigits: 1 })
+    return mbps >= 1000 ? `${nf.format(mbps / 1000)} Gb/s` : `${nf.format(mbps)} Mb/s`
+}
+
+// ── IP and DNS of a profile (Ethernet, and every saved Wi-Fi network) ───────
+//
+// macOS's TCP/IP and DNS tabs, which Apple gives Ethernet and Wi-Fi alike (owner,
+// 2026-09-28: complete, and our own form — not nm-connection-editor). What a surface
+// edits is an `IpTarget`: the profile, and the device it is live on right now, if any.
+// NM does the work; this is the vocabulary between it and the form.
+
+const AF_INET = 2
+const AF_INET6 = 10
+
+export const isIPv4 = (s: string) => NM.utils_ipaddr_valid(AF_INET, s)
+export const isIPv6 = (s: string) => NM.utils_ipaddr_valid(AF_INET6, s)
+
+/** "255.255.255.0" for 24. */
+export function maskOfPrefix(prefix: number): string {
+    const bits = prefix <= 0 ? 0 : (0xffffffff << (32 - Math.min(prefix, 32))) >>> 0
+    return [24, 16, 8, 0].map(s => (bits >>> s) & 0xff).join(".")
+}
+
+/** A subnet mask as a prefix length: "255.255.255.0" or "24" → 24. Null when it is not a
+ *  mask at all (a non-contiguous one included, which no router accepts). */
+export function prefixOfMask(s: string): number | null {
+    const v = s.trim()
+    if (/^\d{1,2}$/.test(v)) { const n = Number(v); return n >= 1 && n <= 32 ? n : null }
+    if (!isIPv4(v)) return null
+    const bits = v.split(".").reduce((acc, o) => ((acc << 8) | Number(o)) >>> 0, 0)
+    const ones = bits.toString(2).replace(/0+$/, "")
+    return bits !== 0 && !ones.includes("0") ? ones.length : null
+}
+
+export interface IpFamilyForm { method: string; address: string; prefix: string; gateway: string }
+/** What the form holds: v4's prefix as a mask ("255.255.255.0"), v6's as a length;
+ *  DNS servers of both families and search domains as the text the user types. */
+export interface IpForm { v4: IpFamilyForm; v6: IpFamilyForm; dns: string; search: string }
+/** What the device is actually using right now — DHCP's answers in automatic mode. */
+export interface IpLive {
+    v4: { address: string; mask: string; gateway: string } | null
+    v6: { address: string; prefix: string; gateway: string } | null
+    dns: string[]
+    search: string[]
+}
+
+export interface IpTarget {
+    /** The profile the form edits. Null = nothing saved yet (a cable never plugged in): applying makes one. */
+    profile(): NM.RemoteConnection | null
+    /** The device this profile is up on right now, or null. */
+    liveDevice(): NM.Device | null
+    /** Fires when the profile, its device's addresses or its state change. */
+    watch(cb: () => void): Dispose
+    /** For a profile that does not exist yet: the adapter it is for. */
+    readonly iface: () => string
+}
+
+export function wiredIpTarget(): IpTarget {
+    const dev = () => wired()?.device ?? null
+    return {
+        profile: () => (dev()?.get_active_connection()?.get_connection() as NM.RemoteConnection | null) ?? wiredProfiles()[0] ?? null,
+        liveDevice: () => { const d = dev(); return d && d.get_state() === NM.DeviceState.ACTIVATED ? d : null },
+        watch: watchWired,
+        iface: () => dev()?.get_iface() ?? "",
+    }
+}
+
+/** The saved profile for `ap`'s network. Null for a network not joined yet — there is nothing to edit. */
+export function wifiIpTarget(ap: NM.AccessPoint): IpTarget {
+    const profile = () => savedProfilesFor(ap)[0] ?? null
+    return {
+        profile,
+        liveDevice: () => {
+            const d = _wifiDevice
+            const rc = profile()
+            if (!d || !rc || d.get_state() !== NM.DeviceState.ACTIVATED) return null
+            return d.get_active_connection()?.get_uuid() === rc.get_uuid() ? d : null
+        },
+        watch: (cb) => {
+            const offWifi = watchWifi(cb)
+            const c = client()
+            const ids = c ? [c.connect("connection-added", cb), c.connect("connection-removed", cb)] : []
+            return () => { offWifi(); if (c) ids.forEach(id => safeDisconnect(c, id)) }
+        },
+        iface: () => _wifiDevice?.get_iface() ?? "",
+    }
+}
+
+function familyForm(s: NM.SettingIPConfig | null, v6: boolean): IpFamilyForm {
+    const method = s?.get_method() || "auto"
+    const a = s && s.get_num_addresses() > 0 ? s.get_address(0) : null
+    return {
+        method,
+        address: a?.get_address() ?? "",
+        prefix: a ? (v6 ? String(a.get_prefix()) : maskOfPrefix(a.get_prefix())) : (v6 ? "64" : ""),
+        gateway: s?.get_gateway() ?? "",
+    }
+}
+
+function listOf(n: number, get: (i: number) => string): string[] {
+    const out: string[] = []
+    for (let i = 0; i < n; i++) out.push(get(i))
+    return out
+}
+
+/** The form's values as the profile has them saved. */
+export function ipForm(target: IpTarget): IpForm {
+    const rc = target.profile()
+    const s4 = rc?.get_setting_ip4_config() ?? null
+    const s6 = rc?.get_setting_ip6_config() ?? null
+    const dns = [s4, s6].flatMap(s => s ? listOf(s.get_num_dns(), i => s.get_dns(i)) : [])
+    const search = [s4, s6].flatMap(s => s ? listOf(s.get_num_dns_searches(), i => s.get_dns_search(i)) : [])
+    return { v4: familyForm(s4, false), v6: familyForm(s6, true), dns: dns.join(", "), search: [...new Set(search)].join(", ") }
+}
+
+/** What the device is using right now. Every field empty while the profile is not up. */
+export function ipLive(target: IpTarget): IpLive {
+    const dev = target.liveDevice()
+    const empty: IpLive = { v4: null, v6: null, dns: [], search: [] }
+    if (!dev) return empty
+    const c4 = dev.get_ip4_config()
+    const c6 = dev.get_ip6_config()
+    const a4 = c4?.get_addresses()?.[0] ?? null
+    // A global address before the link-local one every interface has.
+    const a6s = c6?.get_addresses() ?? []
+    const a6 = a6s.find(a => !a.get_address().toLowerCase().startsWith("fe80")) ?? a6s[0] ?? null
+    return {
+        v4: a4 ? { address: a4.get_address(), mask: maskOfPrefix(a4.get_prefix()), gateway: c4?.get_gateway() ?? "" } : null,
+        v6: a6 ? { address: a6.get_address(), prefix: String(a6.get_prefix()), gateway: c6?.get_gateway() ?? "" } : null,
+        dns: [...(c4?.get_nameservers() ?? []), ...(c6?.get_nameservers() ?? [])],
+        search: [...new Set([...(c4?.get_searches() ?? []), ...(c6?.get_searches() ?? [])])],
+    }
+}
+
+/** The DNS servers and search domains the form holds, as NM wants them. */
+export function splitList(text: string): string[] {
+    return text.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean)
+}
+
+function writeFamily(s: NM.SettingIPConfig, f: IpFamilyForm, v6: boolean): void {
+    s.method = f.method
+    // A manual profile keeps any further addresses it had (nmcli can add several; the
+    // form shows the first). Any other method holds none of its own.
+    const rest: NM.IPAddress[] = []
+    if (f.method === "manual") for (let i = 1; i < s.get_num_addresses(); i++) rest.push(s.get_address(i))
+    s.clear_addresses()
+    if (f.method === "manual") {
+        const prefix = v6 ? Number(f.prefix) : prefixOfMask(f.prefix) ?? 0
+        s.add_address(NM.IPAddress.new(v6 ? AF_INET6 : AF_INET, f.address.trim(), prefix))
+        rest.forEach(a => s.add_address(a))
+        s.gateway = f.gateway.trim() || null
+    } else {
+        s.gateway = null
+    }
+}
+
+/**
+ * Save the form into the profile, and put it into force at once when the profile is up
+ * (NM's Reapply: no drop when only addresses change; a re-activation when Reapply
+ * refuses). With no profile yet — a wired adapter that never had a cable — one is made.
+ */
+export async function applyIp(target: IpTarget, form: IpForm): Promise<void> {
+    const c = client()
+    if (!c) throw new Error("NetworkManager is unavailable")
+    const dns = splitList(form.dns)
+    const search = splitList(form.search)
+    const edit = (conn: NM.Connection) => {
+        let s4 = conn.get_setting_ip4_config()
+        if (!s4) { s4 = new NM.SettingIP4Config(); conn.add_setting(s4) }
+        let s6 = conn.get_setting_ip6_config()
+        if (!s6) { s6 = new NM.SettingIP6Config(); conn.add_setting(s6) }
+        writeFamily(s4, form.v4, false)
+        writeFamily(s6, form.v6, true)
+        for (const [s, isFamily] of [[s4, isIPv4], [s6, isIPv6]] as const) {
+            s.clear_dns()
+            dns.filter(isFamily).forEach(d => s.add_dns(d))
+            // Servers of your own REPLACE the network's, as on macOS — not add to them.
+            s.ignore_auto_dns = dns.length > 0
+            s.clear_dns_searches()
+        }
+        search.forEach(d => s4!.add_dns_search(d))
+    }
+
+    let rc = target.profile()
+    let saved: NM.Connection
+    try {
+        if (rc) {
+            saved = await saveProfile(rc, edit)
+        } else {
+            const conn = NM.SimpleConnection.new()
+            const sc = new NM.SettingConnection()
+            sc.id = "Ethernet"
+            sc.uuid = NM.utils_uuid_generate()
+            sc.type = "802-3-ethernet"
+            sc.interface_name = target.iface() || null
+            sc.autoconnect = true
+            conn.add_setting(sc)
+            conn.add_setting(new NM.SettingWired())
+            edit(conn)
+            conn.verify()
+            rc = await new Promise<NM.RemoteConnection>((resolve, reject) =>
+                c.add_connection_async(conn, true, null, (o: any, r: any) => {
+                    try { resolve(o.add_connection_finish(r)) } catch (e) { reject(e) }
+                }))
+            saved = conn
+        }
+    } finally {
+        tellWiredConfig()
+    }
+
+    const dev = target.liveDevice()
+    if (!dev) return
+    try {
+        await new Promise<void>((resolve, reject) => dev.reapply_async(saved, 0, 0, null, (o: any, r: any) => {
+            try { o.reapply_finish(r); resolve() } catch (e) { reject(e) }
+        }))
+    } catch (e) {
+        console.warn("[Network] reapply refused, re-activating:", e)
+        await activate(rc, dev)
+    }
+}
+
+/** macOS's "Renew DHCP Lease". NM has no call for it: bringing the profile up again asks anew. */
+export function renewDhcp(target: IpTarget): Promise<void> {
+    const dev = target.liveDevice()
+    const rc = target.profile()
+    return dev && rc ? activate(rc, dev) : Promise.resolve()
+}
+
 // ── VPN ─────────────────────────────────────────────────────────────────────
 
 export interface VpnProfile { name: string; type: string; active: boolean }
@@ -809,16 +1220,24 @@ export function watchAccessPoints(cb: () => void): Dispose {
     }, cb)
 }
 
-/** Everything the Ethernet surfaces read: link state, IP, negotiated speed. */
+/** Everything the Ethernet surfaces read: link state, the switch, the cable, IP, speed —
+ *  and the saved profiles, whose `autoconnect` IS the switch while nothing is up. */
 export function watchWired(cb: () => void): Dispose {
     return rebindable(() => {
         const w = wired()
         const b = bag()
+        wiredConfigListeners.add(cb)
+        b.add(() => { wiredConfigListeners.delete(cb) })
+        b.on(client(), "connection-added", cb)
+        b.on(client(), "connection-removed", cb)
         if (!w) return b.dispose
 
         b.on(w.device, "notify::state", cb)
         b.on(w.device, "notify::ip4-config", cb)
+        b.on(w.device, "notify::ip6-config", cb)
         b.on(w.device, "notify::speed", cb)
+        b.on(w.device, "notify::carrier", cb)
+        b.on(w.device, "notify::autoconnect", cb)
         b.add(onActiveConnection(w.device, cb))
         return b.dispose
     }, cb)

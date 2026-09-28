@@ -117,6 +117,18 @@ button {
     &:focus-visible { @include nidara-focus-ring; }
 }
 
+/* ── `placeholder`: a hint that read as a value ──────────────────────────────
+   The label GtkText shows in an empty field. GTK's built-in theme dims it
+   (`entry > text > placeholder { opacity: 0.55 }`, Default-dark.css); with no
+   theme it is drawn in the text's own ink, so an EMPTY field looked filled in.
+   Found 2026-09-28 on Settings → Network → Ethernet: the DNS field, empty on
+   purpose ("the network's own"), showed the network's servers as its hint and
+   read as servers typed in by hand. `--nidara-text-dim` is the same 55%. Only
+   GtkText builds this node, so the element selector reaches nothing else. */
+placeholder {
+    color: var(--nidara-text-dim);
+}
+
 /* ── `list > row`: GTK's 2px, which the shell was standing on ────────────────
    The built-in theme pads every list row by 2px (`listview > row, list > row`).
    Rows of ours that declare their own padding (`.nidara-row` sets 0 on purpose,
