@@ -160,6 +160,14 @@ Remove for it (it still moves and resizes); Settings → Widgets shows its Cente
 insensitive. So a CC can never be emptied. Known limit: a fixed widget whose hardware appears
 while the grid is full has no cell and stays out until one frees up (tech-debt.md).
 
+**A panel that rebuilds its rows owes the keyboard focus back.** Removing the focused row
+lets GTK move the focus wherever it likes — in the Wi-Fi panel that was the current network's
+leave button, so Enter to open its details and Enter again to close them would have
+disconnected (measured by keyboard, 2026-09-28). Two rules, both in `widgets/wifi.ts`: a
+disclosure (details, a folded section) shows and hides what it opens IN PLACE, never by
+rebuilding; and a rebuild forced by data (a scan, the link changing) records the focused row by
+what it IS (a key, not a widget) and grabs the new row with that key, else a harmless one.
+
 **Bar content carries its own side air.** In the bar a widget is an ITEM of the right-hand group,
 touching its neighbours, and the hover/open pill is drawn round whatever the content measures
 (design-system.md → "Bar groups"). `makeBarIcon`/`makeBarExpandable` already put `BAR_ITEM_PAD`

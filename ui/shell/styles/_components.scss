@@ -239,6 +239,21 @@ label.accent-label {
 // so its vocabulary cannot belong to a surface's sheet. `-value` and `-icon-btn`
 // joined their siblings here on 2026-08-10; they had been sitting unscoped in
 // _bar.scss, which is what made the family look like two different things.
+// The Wi-Fi panel's current network (widgets/wifi.ts), in the bar AND the CC: its
+// signal icon is a button of its own (it LEAVES the network, as Apple's), and the rest
+// of the row opens the details. Split so the SSID stays on every row's text axis —
+// 12 (row padding) + 15 (icon) + 12 (gap) = 39: the icon button carries the row's
+// left padding and the gap, the row after it none.
+.nidara-menu-row.wifi-leave {
+    padding: 7px 12px;
+}
+.nidara-menu-row.wifi-current {
+    padding-left: 0;
+}
+.wifi-details {
+    margin: 2px 12px 8px 39px;
+}
+
 .bar-popover-key {
     font-size: $fs-small;
     color: var(--nidara-text-dim);

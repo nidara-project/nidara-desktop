@@ -669,10 +669,9 @@
     "widget.ethernet.row.interface": "7b4db7ef",
     "widget.ethernet.row.status": "bae7d5be",
     "widget.ethernet.row.speed": "2d2cb022",
-    "widget.wifi.row.network": "53ebc572",
-    "widget.wifi.row.status": "bae7d5be",
-    "widget.wifi.row.disabled": "f4f4473d",
     "widget.wifi.no-networks": "2b117041",
+    "widget.wifi.known": "72490825",
+    "widget.wifi.others": "4dedfecc",
     "widget.wifi.settings": "03b52f5a",
     "island.recording.title": "79a677af",
     "island.battery.critical": "df98178b",
@@ -748,7 +747,6 @@
     "cc.ethernet.sub.connected": "c2f9b7b4",
     "cc.wifi.name": "780ff71c",
     "cc.wifi.sub.off": "e3de5ab0",
-    "cc.wifi.sub.connected": "c2f9b7b4",
     "cc.wifi.sub.disconnected": "8b02f3de",
     "cc.focus.name": "fe7f55b8",
     "cc.focus.title.on": "fe7f55b8",
@@ -794,8 +792,8 @@
   },
   "locales": {
     "de": {
-      "translated": 731,
-      "of": 790,
+      "translated": 729,
+      "of": 788,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -860,14 +858,14 @@
       "stale": []
     },
     "es": {
-      "translated": 790,
-      "of": 790,
+      "translated": 788,
+      "of": 788,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 731,
-      "of": 790,
+      "translated": 729,
+      "of": 788,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -932,8 +930,8 @@
       "stale": []
     },
     "it": {
-      "translated": 731,
-      "of": 790,
+      "translated": 729,
+      "of": 788,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -998,8 +996,8 @@
       "stale": []
     },
     "ja": {
-      "translated": 731,
-      "of": 790,
+      "translated": 729,
+      "of": 788,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1064,8 +1062,8 @@
       "stale": []
     },
     "nl": {
-      "translated": 731,
-      "of": 790,
+      "translated": 729,
+      "of": 788,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1130,8 +1128,8 @@
       "stale": []
     },
     "pl": {
-      "translated": 731,
-      "of": 790,
+      "translated": 729,
+      "of": 788,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1196,8 +1194,8 @@
       "stale": []
     },
     "pt-BR": {
-      "translated": 731,
-      "of": 790,
+      "translated": 729,
+      "of": 788,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1262,8 +1260,8 @@
       "stale": []
     },
     "pt-PT": {
-      "translated": 731,
-      "of": 790,
+      "translated": 729,
+      "of": 788,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1328,8 +1326,8 @@
       "stale": []
     },
     "ru": {
-      "translated": 731,
-      "of": 790,
+      "translated": 729,
+      "of": 788,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1394,8 +1392,8 @@
       "stale": []
     },
     "zh-CN": {
-      "translated": 731,
-      "of": 790,
+      "translated": 729,
+      "of": 788,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",

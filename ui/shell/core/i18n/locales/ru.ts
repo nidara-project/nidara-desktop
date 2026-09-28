@@ -640,10 +640,9 @@ export default {
     "widget.ethernet.row.speed": "Скорость",
 
     // Wi-Fi bar popover rows
-    "widget.wifi.row.network": "Сеть",
-    "widget.wifi.row.status": "Статус",
-    "widget.wifi.row.disabled": "Отключено",
     "widget.wifi.no-networks": "Нет сетей поблизости",
+    "widget.wifi.known": "Известные сети",
+    "widget.wifi.others": "Другие сети",
     "widget.wifi.settings": "Настройки сети…",
 
     // Battery widget
@@ -687,7 +686,6 @@ export default {
     // Control Center — Wi-Fi toggle
     "cc.wifi.name": "Wi-Fi",
     "cc.wifi.sub.off": "Выключен",
-    "cc.wifi.sub.connected": "Подключено",
     "cc.wifi.sub.disconnected": "Не подключено",
 
     // Control Center — Focus/DnD toggle

@@ -510,6 +510,27 @@ export function disconnectWifi(): Promise<void> {
     })
 }
 
+/** What the Wi-Fi panel shows under the network the adapter is on (Apple's Option-click
+ *  details, shown behind a visible chevron instead). Null unless connected. The IP and
+ *  gateway arrive with DHCP, after the SSID — watch `watchWifi`, not `watchWifiLink`. */
+export interface WifiConnectionDetails { ip: string; gateway: string; band: string; channel: number; security: string }
+
+export function wifiConnectionDetails(): WifiConnectionDetails | null {
+    const dev = _wifiDevice
+    if (!dev || dev.get_state() !== NM.DeviceState.ACTIVATED) return null
+    const ap = dev.get_active_access_point()
+    if (!ap) return null
+    let gateway = "—"
+    try { gateway = dev.get_ip4_config()?.get_gateway() || "—" } catch {}
+    return {
+        ip: getIp(wifi()),
+        gateway,
+        band: freqBand(ap.frequency),
+        channel: freqChannel(ap.frequency),
+        security: securityLabel(ap),
+    }
+}
+
 /** Delete every saved profile for `ap`'s network. */
 export function forgetNetwork(ap: NM.AccessPoint): Promise<void> {
     return Promise.all(savedProfilesFor(ap).map(rc => new Promise<void>((resolve, reject) => {

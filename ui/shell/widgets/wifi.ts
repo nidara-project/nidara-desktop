@@ -1,6 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { BAR_ICON_SIZE, BAR_ITEM_PAD, AtomicWidget, ContentBudget, WidgetSize, makeIconTile, makeCapsuleTile, panelRow, panelInfoRow, panelSeparator, panelSwitch } from "../common/widget-kit"
-import { menuRow } from "../common/MenuRow"
+import NM from "gi://NM?version=1.0"
+import { BAR_ICON_SIZE, BAR_ITEM_PAD, PANEL_W, AtomicWidget, ContentBudget, WidgetSize, makeIconTile, makeCapsuleTile, panelRow, panelInfoRow, panelSeparator, panelSwitch } from "../common/widget-kit"
+import { menuRow, menuHeader } from "../common/MenuRow"
 import { joinNetwork, joinOtherNetwork } from "../common/WifiSecretsDialog"
 import shellActions from "../core/ShellActions"
 import status from "../core/Status"
@@ -73,99 +74,176 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     return makeCapsuleTile(getIcon, () => t("cc.wifi.name"), getSub, Net.watchWifiLink, budget)
 }
 
-function buildInfoPanel(): Gtk.Widget {
-    const ssid  = panelInfoRow(t("widget.wifi.row.network"), () => Net.wifi()?.ssid || "—")
-    const state = panelInfoRow(t("widget.wifi.row.status"), () => {
-        // "Disabled" means the radio is OFF, which is only sayable when there IS a
-        // radio — with no adapter this stays "Disconnected", as it always did.
-        const w = Net.wifi()
-        if (w && !w.enabled) return t("widget.wifi.row.disabled")
-        return w?.ssid ? t("cc.wifi.sub.connected") : t("cc.wifi.sub.disconnected")
-    })
-    const ip = panelInfoRow("IP", () => Net.getIp(Net.wifi()))
+// ── The Wi-Fi panel: ONE, for the bar and the CC ──────────────────────────────
+//
+// Apple's Wi-Fi status menu, read in its user guide (owner's reference, 2026-09-28):
+// the menu bar and Control Center open the SAME menu — the radio, the network you are
+// on, Known Networks, Other Networks folded with "Other…" at its end for a hidden one.
+// Clicking a network joins it; clicking the Wi-Fi ICON left of the connected network
+// leaves it (the icon, not the row: a mis-tap in a list that reorders by strength must
+// not drop the connection). Its details — IP, router, band, security — are Apple's
+// Option-click, a gesture nothing on screen announces; here they sit behind a visible
+// chevron on that row instead (owner). Until then the bar showed three read-only lines.
+//
+// Joining goes through the SAME path as Settings (common/WifiSecretsDialog.joinNetwork),
+// so a password, an enterprise form or a refused key look identical from everywhere.
+// Forgetting a network stays in Settings, as in Apple's.
 
-    const updateAll = () => { ssid.update(); state.update(); ip.update() }
-    updateAll()
+const MAX_KNOWN = 5
+const MAX_OTHERS = 8
 
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, hexpand: true, margin_top: 4 })
-    box.append(ssid.row)
-    box.append(state.row)
-    box.append(ip.row)
-
-    // This one DOES show the IP, so it takes the wider watch (ip4-config lands
-    // after DHCP, well after the SSID is known).
-    const dispose = Net.watchWifi(updateAll)
-    box.connect("unrealize", dispose)
-
-    return box
+// A disclosure: flipping it shows/hides what it opens IN PLACE — never a rebuild. A
+// rebuild destroys the focused row, and GTK then moved the keyboard focus to the
+// current network's leave button (measured driving it by keyboard, 2026-09-28): Enter
+// opened the details, and the next Enter — meant to close them — would disconnect.
+function disclosure(isOpen: () => boolean, closedIcon: "nd-pan-down" | "nd-pan-end"): { image: Gtk.Image; sync: () => void } {
+    const image = new Gtk.Image({ pixel_size: 12, opacity: 0.6, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER })
+    const sync = () => { image.gicon = uiIcon(isOpen() ? "nd-pan-up" : closedIcon) }
+    sync()
+    return { image, sync }
 }
 
-// ── CC detail: the radio switch, the networks in range, and the two ways out ──
-//
-// Joining a network used to mean Settings → Network. Now the list is here, as on every
-// desktop that has a quick-settings panel: one row per network (strongest AP of each
-// SSID), a tick on the one the adapter is on, a lock on the secured ones. A click joins
-// through the SAME path as Settings (common/WifiSecretsDialog.joinNetwork), so a
-// password, an enterprise form or a refused key look identical from both.
-//
-// Clicking the network you are on does nothing — leaving it is the switch or Settings.
-// A mis-tap in a list that reorders by signal strength should not drop the connection.
+function lockIcon(): Gtk.Image {
+    return new Gtk.Image({ gicon: uiIcon("nd-system-lock-screen"), pixel_size: 12, opacity: 0.5, css_classes: ["nd-icon"] })
+}
 
-function buildNetworkList(): { box: Gtk.Box; refresh: () => void } {
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })
+function buildWifiPanel(): Gtk.Widget {
     /** SSIDs whose last attempt from this panel failed — the one thing NM cannot tell us back. */
     const failed = new Set<string>()
+    let detailsOpen = false
+    let othersOpen = false
 
-    const refresh = () => {
-        let child = box.get_first_child()
-        while (child) { box.remove(child); child = box.get_first_child() }
-
-        const networks = Net.visibleNetworks(10)
-        if (networks.length === 0) {
-            box.append(new Gtk.Label({
-                label: t("widget.wifi.no-networks"),
-                css_classes: ["nidara-row-subtitle"],
-                halign: Gtk.Align.START,
-                margin_top: 8, margin_bottom: 8, margin_start: 12, margin_end: 12,
-            }))
-            return
-        }
-
-        const saved = Net.savedWifiSsids()
-        for (const ap of networks) {
-            const ssid = Net.apSsid(ap)
-            const link = Net.apLinkState(ap)
-
-            const trailing = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER })
-            const note = link === "connecting" ? t("settings.network.ap.connecting")
-                : link === "idle" && failed.has(ssid) ? t("settings.network.ap.failed")
-                : ""
-            if (note) trailing.append(new Gtk.Label({ label: note, css_classes: ["nidara-row-subtitle"] }))
-            if (Net.isSecured(ap))
-                trailing.append(new Gtk.Image({ gicon: uiIcon("nd-system-lock-screen"), pixel_size: 12, opacity: 0.5, css_classes: ["nd-icon"] }))
-
-            box.append(menuRow({
-                label: ssid,
-                icon: LEVEL_ICONS[Net.signalLevel(ap.strength)],
-                ellipsize: true,
-                trailing,
-                checked: link === "connected",
-                onClick: () => {
-                    if (link !== "idle") return
-                    failed.delete(ssid)
-                    joinNetwork(ap, saved.has(ssid), closeOverlays).catch((e: any) => {
-                        if (e?.reason !== "cancelled") failed.add(ssid)
-                        refresh()
-                    })
-                },
-            }))
-        }
+    const join = (ap: NM.AccessPoint, saved: boolean) => {
+        const ssid = Net.apSsid(ap)
+        failed.delete(ssid)
+        joinNetwork(ap, saved, closeOverlays).catch((e: any) => {
+            if (e?.reason !== "cancelled") failed.add(ssid)
+            refresh()
+        })
     }
 
-    return { box, refresh }
-}
+    const networkRow = (ap: NM.AccessPoint, saved: boolean): Gtk.Widget => {
+        const ssid = Net.apSsid(ap)
+        const trailing = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER })
+        if (failed.has(ssid))
+            trailing.append(new Gtk.Label({ label: t("settings.network.ap.failed"), css_classes: ["nidara-row-subtitle"] }))
+        if (Net.isSecured(ap)) trailing.append(lockIcon())
+        return keep(`net:${ssid}`, menuRow({
+            label: ssid, icon: LEVEL_ICONS[Net.signalLevel(ap.strength)], ellipsize: true, trailing,
+            onClick: () => join(ap, saved),
+        }))
+    }
 
-function buildDetailPanel(_onClose: () => void): Gtk.Widget {
+    // The network the adapter is on or joining: its icon leaves it, the rest of the
+    // row opens its details.
+    const detailValues: { update: () => void }[] = []
+    const currentRow = (ap: NM.AccessPoint, link: "connected" | "connecting"): Gtk.Widget => {
+        const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
+        const line = new Gtk.Box({ hexpand: true })
+
+        const leave = new Gtk.Button({
+            child: new Gtk.Image({ gicon: LEVEL_ICONS[Net.signalLevel(ap.strength)], pixel_size: 15, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }),
+            css_classes: ["nidara-menu-row", "wifi-leave"],
+            tooltip_text: t("settings.network.ap.disconnect"),
+        })
+        leave.update_property([Gtk.AccessibleProperty.LABEL], [t("settings.network.ap.disconnect")])
+        leave.connect("clicked", () => { Net.disconnectWifi().catch(() => {}) })
+        line.append(keep("leave", leave))
+
+        const trailing = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER })
+        if (link === "connecting")
+            trailing.append(new Gtk.Label({ label: t("settings.network.ap.connecting"), css_classes: ["nidara-row-subtitle"] }))
+        if (Net.isSecured(ap)) trailing.append(lockIcon())
+        const arrow = disclosure(() => detailsOpen, "nd-pan-down")
+        if (link === "connected") trailing.append(arrow.image)
+        let details: Gtk.Widget | null = null
+        const main = menuRow({
+            label: Net.apSsid(ap), ellipsize: true, trailing, checked: link === "connected",
+            sensitive: link === "connected",
+            onClick: () => {
+                detailsOpen = !detailsOpen
+                arrow.sync()
+                if (details) details.visible = detailsOpen
+            },
+        })
+        main.add_css_class("wifi-current")
+        keep("current", main)
+        if (link === "connected")
+            main.update_property([Gtk.AccessibleProperty.DESCRIPTION], [t("settings.network.ap.details")])
+        line.append(main)
+        box.append(line)
+
+        if (link === "connected") {
+            const d = () => Net.wifiConnectionDetails()
+            const rows = [
+                panelInfoRow("IP", () => d()?.ip ?? "—"),
+                panelInfoRow(t("settings.network.detail.gateway"), () => d()?.gateway ?? "—"),
+                panelInfoRow(t("settings.network.detail.band"), () => {
+                    const x = d(); return x ? `${x.band} · ${t("settings.network.detail.channel")} ${x.channel}` : "—"
+                }),
+                panelInfoRow(t("settings.network.detail.security"), () => d()?.security ?? "—"),
+            ]
+            const box2 = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, css_classes: ["wifi-details"], visible: detailsOpen })
+            for (const r of rows) { box2.append(r.row); detailValues.push(r) }
+            box.append(box2)
+            details = box2
+        }
+        return box
+    }
+
+    const body = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })
+    // Each focusable row by what it IS, so a rebuild (a scan, the link changing) hands
+    // the keyboard focus back to the same row — or to "Other Networks", never to
+    // whatever GTK picks next, which could be the leave button (see disclosure()).
+    let keyed = new Map<string, Gtk.Widget>()
+    const keep = <W extends Gtk.Widget>(key: string, w: W): W => { keyed.set(key, w); return w }
+
+    const refresh = () => {
+        const focus = (body.get_root() as Gtk.Window | null)?.get_focus?.() ?? null
+        let focusKey: string | null = null
+        for (const [k, w] of keyed) if (focus && (focus === w || focus.is_ancestor(w))) focusKey = k
+        keyed = new Map()
+        detailValues.length = 0
+        let child = body.get_first_child()
+        while (child) { body.remove(child); child = body.get_first_child() }
+        rebuild()
+        if (focusKey !== null) (keyed.get(focusKey) ?? keyed.get("others"))?.grab_focus()
+    }
+
+    const rebuild = () => {
+        const saved = Net.savedWifiSsids()
+        const networks = Net.visibleNetworks(MAX_KNOWN + MAX_OTHERS + 1)
+        const current = networks.find(ap => Net.apLinkState(ap) !== "idle") ?? null
+        const rest = networks.filter(ap => ap !== current)
+        const known = rest.filter(ap => saved.has(Net.apSsid(ap))).slice(0, MAX_KNOWN)
+        const others = rest.filter(ap => !saved.has(Net.apSsid(ap))).slice(0, MAX_OTHERS)
+
+        if (current) body.append(currentRow(current, Net.apLinkState(current) as "connected" | "connecting"))
+        if (known.length > 0) {
+            body.append(menuHeader(t("widget.wifi.known")))
+            for (const ap of known) body.append(networkRow(ap, true))
+        }
+        if (!current && known.length === 0 && others.length === 0) {
+            body.append(new Gtk.Label({
+                label: t("widget.wifi.no-networks"), css_classes: ["nidara-row-subtitle"],
+                halign: Gtk.Align.START, margin_top: 8, margin_bottom: 8, margin_start: 12, margin_end: 12,
+            }))
+        }
+        // Other Networks: folded, as Apple's; "Other network…" (a hidden SSID) at its end.
+        const othersBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, visible: othersOpen })
+        const arrow = disclosure(() => othersOpen, "nd-pan-end")
+        body.append(keep("others", menuRow({
+            label: t("widget.wifi.others"), trailing: arrow.image,
+            onClick: () => { othersOpen = !othersOpen; arrow.sync(); othersBox.visible = othersOpen },
+        })))
+        for (const ap of others) othersBox.append(networkRow(ap, false))
+        othersBox.append(keep("hidden", menuRow({
+            label: t("settings.network.ap.other"),
+            onClick: () => { joinOtherNetwork(closeOverlays).catch(() => {}) },
+        })))
+        body.append(othersBox)
+    }
+
     const sw = panelSwitch(() => Net.wifiEnabled(), (on) => { Net.setWifiEnabled(on) }, Net.watchWifiEnabled)
     const switchRow = panelRow(t("cc.wifi.name"), sw)
     switchRow.margin_bottom = 4      // air before the separator
@@ -174,46 +252,46 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
     switchRow.margin_start = 12
     switchRow.margin_end = 12
 
-    const { box: list, refresh } = buildNetworkList()
-
-    const footer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })
-    footer.append(menuRow({
-        label: t("settings.network.ap.other"),
-        onClick: () => { joinOtherNetwork(closeOverlays).catch(() => {}) },
-    }))
-    footer.append(menuRow({
+    const bodySep = panelSeparator()
+    const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })
+    outer.append(switchRow)
+    outer.append(bodySep)
+    outer.append(body)
+    outer.append(panelSeparator())
+    outer.append(menuRow({
         label: t("widget.wifi.settings"),
         onClick: () => {
-            status.cc_open = false
+            status.closeOverlays()
             shellActions.openSettingsPage?.("network")
         },
     }))
 
-    const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })
-    outer.append(switchRow)
-    outer.append(panelSeparator())
-    outer.append(list)
-    outer.append(panelSeparator())
-    outer.append(footer)
-
     const apply = () => {
         const on = Net.wifiEnabled()
-        list.visible = on
+        body.visible = on
+        bodySep.visible = on
         if (on) refresh()
     }
-    // The access-point list, the device state and saved profiles — not strength, so a
-    // scan does not rebuild rows under the pointer. A scan is asked for on open: NM's
-    // own cadence is minutes when connected, and a stale list is the one thing this
-    // panel exists to avoid.
-    const dispose = Net.watchAccessPoints(apply)
-    outer.connect("unrealize", dispose)
+    // The access-point list, the device state and saved profiles rebuild the rows — not
+    // strength, so a scan does not rebuild them under the pointer. The details take the
+    // wider watch: the IP lands with DHCP, after the SSID. A scan is asked for on open:
+    // NM's own cadence is minutes when connected.
+    const disposeAps = Net.watchAccessPoints(apply)
+    const disposeIp = Net.watchWifi(() => detailValues.forEach(r => r.update()))
+    outer.connect("unrealize", () => { disposeAps(); disposeIp() })
     apply()
     Net.rescan()
     return outer
 }
 
+function buildDetailPanel(_onClose: () => void): Gtk.Widget {
+    return buildWifiPanel()
+}
+
 function buildBarExpanded(_onClose: () => void): Gtk.Widget {
-    return buildInfoPanel()
+    const panel = buildWifiPanel()
+    panel.width_request = PANEL_W.xl
+    return panel
 }
 
 const wifiWidget: AtomicWidget = {
@@ -235,7 +313,7 @@ const wifiWidget: AtomicWidget = {
     buildBarContent,
     buildBarExpanded,
     buildCCDetail: buildDetailPanel,
-    ccDetailRows: 4,
+    ccDetailRows: 6,
 }
 
 export default wifiWidget
