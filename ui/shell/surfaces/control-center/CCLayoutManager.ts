@@ -80,8 +80,13 @@ type PosMap = Map<string, Cell>
 // IslandGrid.syncCCLayout, or a widget turned on or off in Settings — so a tile whose
 // hardware is missing leaves no hole: the tiles after it move up.
 // PERSONAL — the person moved or resized a tile: from then on every cell is stored and
-// only a drop displaces anything. A tile removed here leaves its cells free (#112 is the
-// other half of that). Clearing `positions` goes back to DEFAULT.
+// only a layout change moves anything, by the owner's rules of 2026-09-28:
+//   · a GROWING tile keeps its place and pushes what it covers, exactly as a drop does
+//     (it used to jump by itself to the first free cell — usually the bottom);
+//   · a tile that LEAVES or SHRINKS frees cells, and what sits below them in those
+//     columns falls up into them if it fits (`liftInto`) — nothing ever moves sideways,
+//     and a gap nothing fits in stays, as iOS's Control Center allows gaps.
+// Clearing `positions` goes back to DEFAULT.
 class CCLayoutManager extends GObject.Object {
     static {
         GObject.registerClass({
@@ -355,29 +360,60 @@ class CCLayoutManager extends GObject.Object {
         return !!this.findFreeCell(id)
     }
 
-    canResize(id: string, newSize: WidgetSize): boolean {
+    /** The whole layout after `id` takes `newSize` where it stands (pulled left or up
+     *  only as far as the grid needs), pushing what it covers like a drop. null = the
+     *  pushed tiles find no room. */
+    private resizePlacement(id: string, newSize: WidgetSize): PosMap | null {
         const cur = this._pos[id]
-        if (!cur) return false
+        if (!cur) return null
         const { w, h } = SIZE_MAP[newSize]
-        if (this.cellsFree(this.occupiedSet(id), cur.x, cur.y, w, h)) return true
-        return !!this.findFreeCell(id, newSize)
+        const tx = Math.min(cur.x, GRID_COLS - w), ty = Math.min(cur.y, GRID_ROWS - h)
+        const prev = this._sizes[id]
+        this._sizes[id] = newSize
+        try { return this.resolvePlacement(id, tx, ty) }
+        finally { if (prev === undefined) delete this._sizes[id]; else this._sizes[id] = prev }
+    }
+
+    canResize(id: string, newSize: WidgetSize): boolean {
+        return !!this.resizePlacement(id, newSize)
     }
 
     resize(id: string, newSize: WidgetSize): boolean {
-        const cur = this._pos[id]
-        if (!cur) return false
-        const { w, h } = SIZE_MAP[newSize]
-        if (this.cellsFree(this.occupiedSet(id), cur.x, cur.y, w, h)) {
-            this._sizes[id] = newSize
-        } else {
-            const cell = this.findFreeCell(id, newSize)
-            if (!cell) return false
-            this._sizes[id] = newSize
-            this._pos[id] = cell
-        }
+        const before = this._pos[id] && { ...this._pos[id], ...this.footprint(id) }
+        const resolved = this.resizePlacement(id, newSize)
+        if (!before || !resolved) return false
+        this._sizes[id] = newSize
+        for (const [k, c] of resolved) this._pos[k] = { x: c.x, y: c.y }
+        // What the tile gave up (shrinking, or moving left at the grid's edge) is freed.
+        this.liftInto(before)
         this.personalise()
         this.emit("changed")
         return true
+    }
+
+    /** Gravity after cells are freed: every tile below `freed`, in its columns, rises as
+     *  far as the free cells above it allow — never above `freed`'s top row, so a gap the
+     *  person left higher up stays theirs — and one that rises frees its own cells for
+     *  the tiles under it. Nothing moves sideways. */
+    private liftInto(freed: { x: number; y: number; w: number; h: number }) {
+        let cols = new Set<number>()
+        for (let dx = 0; dx < freed.w; dx++) cols.add(freed.x + dx)
+        const ids = Object.keys(this._pos).sort((a, b) =>
+            (this._pos[a].y - this._pos[b].y) || (this._pos[a].x - this._pos[b].x))
+        for (const id of ids) {
+            const p = this._pos[id]
+            const { w, h } = this.footprint(id)
+            if (p.y <= freed.y) continue
+            let inCols = false
+            for (let dx = 0; dx < w; dx++) if (cols.has(p.x + dx)) inCols = true
+            if (!inCols) continue
+            const occ = this.occupiedSet(id)
+            let y = p.y
+            while (y - 1 >= freed.y && this.cellsFree(occ, p.x, y - 1, w, h)) y--
+            if (y === p.y) continue
+            this._pos[id] = { x: p.x, y }
+            cols = new Set([...cols, ...Array.from({ length: w }, (_, dx) => p.x + dx)])
+        }
     }
 
     remove(id: string) {
@@ -385,8 +421,10 @@ class CCLayoutManager extends GObject.Object {
         this._members = members.filter(m => m !== id)
         if (!this._pos[id]) return
         if (this._derived) { this.derive(); this.emit("changed"); return }
+        const freed = { ...this._pos[id], ...this.footprint(id) }
         delete this._pos[id]
         delete this._sizes[id]
+        this.liftInto(freed)
         this.save()
         this.emit("changed")
     }

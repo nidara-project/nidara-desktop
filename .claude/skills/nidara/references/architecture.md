@@ -1170,7 +1170,12 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     `CC_DEFAULT_LAYOUT` stays editorial, and it is PACKED, not stored, until the person
     moves or resizes a tile (`CCLayoutManager` "Two modes", 2026-09-28): a tile whose
     hardware is missing is skipped and the rest move up, so hardware tiles can sit
-    anywhere in it — Wi-Fi is at the top. `CCWidgetSpec` (= `Omit<AtomicWidget,
+    anywhere in it — Wi-Fi is at the top. A PERSONALISED grid moves tiles only by the
+    owner's rules (same day): a growing tile keeps its place and pushes what it covers,
+    like a drop (it used to jump alone to the first free cell); a tile that leaves or
+    shrinks lets what is below it, in its columns, fall up (`liftInto`) — never sideways,
+    never above the freed row — and a gap nothing fits stays, as iOS allows gaps.
+    Mixed sizes mean NO rule closes every hole: do not promise one. `CCWidgetSpec` (= `Omit<AtomicWidget,
     "category">`) is what a spec factory returns — it builds content, not registry
     metadata, so it carries no category; `tile.ts`'s `roundToggleSpec` is the only
     one left. ⚠️ A spec's own `defaultSize`/`supportedSizes` are advisory and mostly

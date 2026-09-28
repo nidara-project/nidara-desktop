@@ -395,6 +395,24 @@ async function run() {
     assert(ccLayout.layout.length === 1 && ccLayout.layout[0].id === tile, "an external positions change reloads the layout")
     assert(layoutChanges === 1, `…and emits "changed" once (${layoutChanges})`)
 
+    // CC layout, PERSONAL mode, the owner's rules of 2026-09-28, on his own grid:
+    //   MMWW / MMBB / VVVV / CROO / NNFF
+    gsettingsSetExternally(`set org.nidara.control-center sizes "{'volume': '4x1', 'dark_mode': '2x1', 'night_light': '2x1', 'focus': '2x1', 'screenshot': '1x1', 'screenrecord': '1x1', 'bt': '2x1'}"`,
+        () => ccLayout.effectiveSize("bt") === "2x1")
+    gsettingsSetExternally(`set org.nidara.control-center positions "{'media': (0, 0), 'wifi': (2, 0), 'bt': (2, 1), 'volume': (0, 2), 'screenshot': (0, 3), 'screenrecord': (1, 3), 'dark_mode': (2, 3), 'night_light': (0, 4), 'focus': (2, 4)}"`,
+        () => ccLayout.layout.length === 9)
+    ccLayout.remove("volume")
+    assert(cells() === "media@0,0 wifi@2,0 bt@2,1 screenshot@0,2 screenrecord@1,2 dark_mode@2,2 night_light@0,3 focus@2,3",
+        `a tile that leaves: what is below it falls up, nothing moves sideways (${cells()})`)
+    assert(ccLayout.resize("screenshot", "2x1" as any), "a tile with a neighbour can still grow")
+    const shot = ccLayout.layout.find(e => e.id === "screenshot")!
+    assert(shot.x === 0 && shot.y === 2, `…in its own place, not jumping to a free cell (${cells()})`)
+    assert(ccLayout.layout.find(e => e.id === "screenrecord")!.y > 2, `…and the neighbour it covers is pushed away (${cells()})`)
+    assert(ccLayout.resize("screenshot", "1x1" as any) && ccLayout.layout.find(e => e.id === "screenshot")!.x === 0,
+        `a tile that shrinks keeps its place (${cells()})`)
+    assert(!ccLayout.layout.some(e => e.x === 1 && e.y === 2),
+        `…and a gap nothing below can fall into stays a gap (${cells()})`)
+
     // Region: the clock format is stored; the mirror follows; timezone is the system's.
     // The mirror is the SHELL's to write (core/RegionSync.ts, #571): the store alone writes
     // nothing — a Settings process that builds it must not — and this probe, playing the
