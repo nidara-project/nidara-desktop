@@ -134,7 +134,7 @@ Apple's Menu Bar pane after #651 had put "When active" on the wrong ones). A wid
 |---|---|---|---|
 | plain | neither | a check: shown or not; its ICON says on/off | Wi-Fi, Bluetooth, VPN, volume |
 | choosable | `ccFixed` + `barActive` (+ `defaultBarMode`) | a check + "Always / When active" | Do Not Disturb, night light |
-| presence | `barActive` alone | a check; there only while `barActive()` holds | Ethernet (a cable) |
+| presence | `barActive` alone | a check; there only while `barActive()` holds | Ethernet (a cable — turned off from its CC tile or Settings, never from the icon that then disappears) |
 
 "When active" is for a state that COMES AND GOES — Apple offers it for Focus, Sound, Display,
 Screen Mirroring and Now Playing, never for Wi-Fi, Bluetooth or VPN. And only for a widget the CC
@@ -164,7 +164,7 @@ while the grid is full has no cell and stays out until one frees up (tech-debt.m
 open on its title ("Wi-Fi") and then a row "Wi-Fi [switch]" under it (owner, 2026-09-28). A
 widget with an on/off now hands the switch to the CC (`ccDetailSwitch: () => Gtk.Widget`), which
 puts it right of the title and names it after the widget for accessibility, and its
-`buildCCDetail` leaves that row out: Wi-Fi, Bluetooth, night light. The BAR panel keeps its
+`buildCCDetail` leaves that row out: Wi-Fi, Bluetooth, night light, Ethernet. The BAR panel keeps its
 switch row — there it IS the title. A widget whose detail would be nothing but that switch has
 no detail: Do Not Disturb's tile is the toggle at every size (`roundToggleSpec`, whose optional
 `wideTitle` keeps a capsule title that is not the widget's name).

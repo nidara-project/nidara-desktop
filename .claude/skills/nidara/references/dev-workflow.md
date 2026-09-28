@@ -2789,6 +2789,36 @@ Non-obvious traps this setup exposes, all of which bit real code:
   exists, so anything showing an IP must also watch the device's `ip4-config` (that is the
   difference between `watchWifiNetwork` and the wider `watchWifi`).
 
+### Testing Ethernet: the IP form on the host, the switch only in a VM
+
+**The IP/DNS form writes to real profiles, so test it where a mistake costs nothing.** On a
+dev box the cable is the internet (and the agent's own connection). The form is SHARED with
+every saved Wi-Fi network, so the fake AP of the section above is the bench: its default route
+sits at metric ~20600 behind the cable's 100, and a manual address on it breaks nothing. A
+throwaway wired profile bound to a missing interface (`nmcli connection add type ethernet
+ifname nd-none autoconnect no`) is the bench for the write path alone. The service can be
+driven without the UI — a probe bundled with `scripts/bundle.sh` that imports
+`core/NetworkService` and calls `wifiIpTarget(ap)`/`applyIp` (2026-09-28: manual → reapply →
+auto, the key of the WPA profile intact after both).
+
+**The switch cannot be tested over SSH in a VM, because SSH IS the cable.** QEMU's user
+network forwards the harness port to the guest's DHCP address, so switching the cable off —
+or giving it another address — drops the only channel. What worked (2026-09-28, the daily bed
+booted with `-snapshot`, which also survives a guest REBOOT inside the same QEMU process):
+a script left running in the guest (`setsid nohup`) that switches off from Settings, logs
+`nmcli` + the profiles' `autoconnect`/mark (a `gjs -c` one-liner; `nmcli` cannot show the
+`user` setting), photographs, enables a user unit and reboots; the unit logs the state after
+boot and switches back on. When the guest stays unreachable, QMP is the way in: `screendump`
+to see it, `input-send-event` (abs 0..32767) to click, `send-key` to open a terminal and type
+`nmcli device connect <iface>`. That is how the `filter_connections` crash was found: the path
+only runs with NO active connection, i.e. only ever with the cable off.
+
+⚠️ Driving Settings for it: a `GtkSwitch` exposes the AT-SPI action **`toggle`**, not `click`;
+a `GtkDropDown`'s items take no action — open it with `click` on its toggle button, then
+`nidara-type key … Down/Up` + `Return`, and read back that the button's name changed before the
+next step. And `nidara-click at` takes WINDOW coordinates, which are `queryUI`'s bounds, not
+`nidara-a11y`'s (off by the header, ~40 px, on Settings).
+
 ### Testing Bluetooth without a Bluetooth adapter
 
 `AstalBluetooth` talks to **BlueZ over the system D-Bus**, so (unlike Wi-Fi's real

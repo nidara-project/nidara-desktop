@@ -7,6 +7,7 @@ import type { VpnProfile } from "../../../core/NetworkService"
 import { NidaraButton, NidaraEmptyRow, attachTooltip } from "../../../../lib/nidara-kit"
 import { safeDisconnect } from "../../../core/signals"
 import { joinNetwork, joinOtherNetwork } from "../../../common/WifiSecretsDialog"
+import { buildIpSettings } from "./network-ip"
 
 function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow {
     let active = profile.active
@@ -91,6 +92,9 @@ function buildApRow(ap: any, isSaved: boolean, onRefresh: () => void, onDetails?
     if (onDetails) {
         const infoBtn = NidaraButton({ variant: "secondary", pill: true, icon: true })
         attachTooltip(infoBtn, t("settings.network.ap.details"), { chrome: false })
+        // An icon button's tooltip is not its name: without this a screen reader (and the
+        // agent's AT-SPI tools) met a bare "button" beside every network.
+        infoBtn.update_property([Gtk.AccessibleProperty.LABEL], [`${t("settings.network.ap.details")} · ${ssid}`])
         infoBtn.set_child(new Gtk.Image({ gicon: uiIcon("nd-network-wireless-configure"), pixel_size: 16, css_classes: ["nd-icon"] }))
         infoBtn.connect("clicked", onDetails)
         rightBox.append(infoBtn)
@@ -104,6 +108,7 @@ function buildApRow(ap: any, isSaved: boolean, onRefresh: () => void, onDetails?
             icon: true,
         })
         attachTooltip(forgetBtn, t("settings.network.ap.forget"), { chrome: false })
+        forgetBtn.update_property([Gtk.AccessibleProperty.LABEL], [`${t("settings.network.ap.forget")} · ${ssid}`])
         forgetBtn.set_child(new Gtk.Image({ gicon: uiIcon("nd-user-trash"), pixel_size: 16, css_classes: ["nd-icon"] }))
         forgetBtn.connect("clicked", () => {
             forgetBtn.sensitive = false
@@ -173,61 +178,82 @@ function buildApDetailPage(ap: any): Gtk.Widget {
     infoList.append(createRow(t("settings.network.detail.max-rate"),  t("settings.network.detail.max-rate.desc"),  staticLabel(maxRate)))
     page.append(infoBox)
 
-    // IPv4 details — only meaningful while this AP is the active connection, and the
-    // values arrive after DHCP. Build the group once and live-update it (visible only
-    // while active) instead of snapshotting at open time. A hidden Box child takes no
-    // space, so there's no phantom gap when this AP isn't the active one.
+    // MAC and link speed are the adapter's, and only mean something while this is the
+    // network it is on. IP and DNS are the form below, which shows the live values too.
     const { box: connBox, listBox: connList } = listGroup(t("settings.network.detail.group.ipv4"))
-    const ipLabel    = staticLabel("---")
-    const gwLabel    = staticLabel("---")
-    const dnsLabel   = staticLabel("---")
     const macLabel   = staticLabel("---")
     const speedLabel = staticLabel("---")
-    connList.append(createRow(t("settings.network.ipv4"),           t("settings.network.detail.ipv4.desc"),    ipLabel))
-    connList.append(createRow(t("settings.network.detail.gateway"), t("settings.network.detail.gateway.desc"), gwLabel))
-    connList.append(createRow(t("settings.network.detail.dns"),     t("settings.network.detail.dns.desc"),     dnsLabel))
     connList.append(createRow(t("settings.network.detail.mac"),     t("settings.network.detail.mac.desc"),     macLabel))
     connList.append(createRow(t("settings.network.speed"),          t("settings.network.detail.speed.desc"),   speedLabel))
     page.append(connBox)
 
-    const isActive = () => {
-        const b = Net.wifi()?.active_access_point?.bssid
-        return !!b && b === ap.bssid
+    // IP and DNS of the SAVED profile — a network never joined has nothing to edit yet.
+    // Joining or forgetting it with this page open adds or removes the form.
+    const target = Net.wifiIpTarget(ap)
+    const ipHolder = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+    page.append(ipHolder)
+    let hasForm = false
+    const syncForm = () => {
+        const has = !!target.profile()
+        if (has === hasForm) return
+        hasForm = has
+        let child = ipHolder.get_first_child()
+        while (child) { ipHolder.remove(child); child = ipHolder.get_first_child() }
+        if (has) ipHolder.append(buildIpSettings(target))
     }
 
     const update = () => {
         signalLabel.label = `${ap.strength}%`
-        const active = isActive()
-        connBox.visible = active
-        if (!active) return
-
-        const dev = Net.wifi()?.device as any
-        let ip = "---", gw = "---", dns = "---", mac = "---", speed = "---"
-        try {
-            const cfg   = dev?.get_ip4_config?.()
-            const addrs = cfg?.get_addresses?.()
-            if (addrs?.length > 0) ip = `${addrs[0].get_address()}/${addrs[0].get_prefix()}`
-            gw = cfg?.get_gateway?.() || "---"
-            const ns = cfg?.get_nameservers?.()
-            if (ns?.length > 0) dns = ns.join(", ")
-        } catch {}
-        try { mac = dev?.get_hw_address?.() || "---" } catch {}
-        try { const kbps = dev?.bitrate || 0; if (kbps > 0) speed = `${Math.round(kbps / 1000)} Mbps` } catch {}
-
-        ipLabel.label = ip; gwLabel.label = gw; dnsLabel.label = dns
-        macLabel.label = mac; speedLabel.label = speed
+        const dev = target.liveDevice() as any
+        connBox.visible = !!dev
+        if (!dev) return
+        macLabel.label = dev.get_hw_address?.() || "---"
+        const kbps = dev.bitrate || 0
+        speedLabel.label = kbps > 0 ? `${Math.round(kbps / 1000)} Mbps` : "---"
     }
 
-    // The signal lives on the AP object itself; IP/speed/active-state live on the
-    // wifi + device (covered by watchWifi). Both refresh the page in place.
-    const apStrengthId = ap.connect?.("notify::strength", update) ?? 0
-    const disposeWifi  = Net.watchWifi(update)
-    page.connect("unrealize", () => {
-        if (apStrengthId) safeDisconnect(ap, apStrengthId)
-        disposeWifi()
+    // The signal lives on the AP object itself; the rest on the wifi device and the
+    // saved profiles. All of it refreshes the page in place.
+    bindWhileRealized(page, () => {
+        const apStrengthId = ap.connect?.("notify::strength", update) ?? 0
+        const disposers = [Net.watchWifi(update), Net.watchAccessPoints(syncForm)]
+        update(); syncForm()
+        return () => {
+            if (apStrengthId) safeDisconnect(ap, apStrengthId)
+            disposers.forEach(d => d())
+        }
     })
-    update()
 
+    return page
+}
+
+// ── Ethernet detail subpage ───────────────────────────────────────────────────
+
+function buildEthernetDetailPage(): Gtk.Widget {
+    const page = pageBox("network-ethernet-detail-page")
+
+    const { box: infoBox, listBox: infoList } = listGroup(t("settings.network.detail.group.info"))
+    const stateLabel = staticLabel("---")
+    const ifaceLabel = staticLabel("---")
+    const macLabel   = staticLabel("---")
+    const speedLabel = staticLabel("---")
+    infoList.append(createRow(t("widget.ethernet.row.status"), t("settings.network.ethernet.status.desc"), stateLabel))
+    infoList.append(createRow(t("settings.network.interface"), t("settings.network.kernel-device.desc"),   ifaceLabel))
+    infoList.append(createRow(t("settings.network.detail.mac"), t("settings.network.detail.mac.desc"),     macLabel))
+    infoList.append(createRow(t("settings.network.speed"),     t("settings.network.detail.speed.desc"),    speedLabel))
+    page.append(infoBox)
+
+    // Always there: with no profile yet (a cable never plugged in), Apply makes one.
+    page.append(buildIpSettings(Net.wiredIpTarget()))
+
+    const update = () => {
+        const w = Net.wired()
+        stateLabel.label = Net.wiredStateText()
+        ifaceLabel.label = w?.device.get_iface() || "---"
+        macLabel.label   = w?.device.get_hw_address() || "---"
+        speedLabel.label = Net.wiredState() === "connected" ? Net.linkSpeed(w?.speed ?? 0) || "---" : "---"
+    }
+    bindWhileRealized(page, () => { const off = Net.watchWired(update); update(); return off })
     return page
 }
 
@@ -251,24 +277,41 @@ export default function NetworkPage(nav?: SettingsNav) {
     // for its no-adapter banner. Do not put a device behind an `if` here again.
 
     // ── Ethernet ──────────────────────────────────────────────────────────────
+    // The switch (macOS's Make Inactive, GNOME's Wired toggle — it holds across a
+    // restart, see Net.setWiredEnabled), the state in words, and the details: the
+    // adapter's facts and the IP/DNS form.
     const { box: ethBox, listBox: ethList } = listGroup(t("settings.network.group.ethernet"))
 
+    const ethSwitch = new Gtk.Switch({ active: Net.wiredEnabled(), valign: Gtk.Align.CENTER })
+    ethSwitch.update_property([Gtk.AccessibleProperty.LABEL], [t("cc.ethernet.name")])
+    // Same guard as the Wi-Fi switch below: GtkSwitch emits state-set for a
+    // programmatic `active` too, and the write-back must not re-issue the command.
+    let ethSyncing = false
+    ethSwitch.connect("state-set", (_sw, on) => {
+        if (!ethSyncing) Net.setWiredEnabled(on).catch(e => console.error("[Network] Ethernet switch:", e))
+        return false
+    })
+    ethList.append(createRow(t("cc.ethernet.name"), t("settings.network.ethernet.switch.desc"), ethSwitch))
+
     const wiredStatus = staticLabel("---")
-    const wiredIface  = staticLabel("---")
-    const wiredIp     = staticLabel("---")
+    const ethDetails = NidaraButton({ label: t("settings.network.ethernet.details"), variant: "secondary", pill: true, valign: Gtk.Align.CENTER })
+    ethDetails.visible = !!nav
+    ethDetails.connect("clicked", () => nav?.pushSubpage({
+        id: "network/ethernet",
+        title: t("cc.ethernet.name"),
+        parentId: "network",
+        build: buildEthernetDetailPage,
+    }))
+    const statusBox = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
+    statusBox.append(wiredStatus)
+    statusBox.append(ethDetails)
+    ethList.append(createRow(t("widget.ethernet.row.status"), t("settings.network.ethernet.status.desc"), statusBox))
 
     const updateWired = () => {
-        const w = Net.wired()
-        wiredStatus.label = Net.wiredConnected(w)
-            ? t("settings.network.status.connected")
-            : t("settings.network.status.disconnected")
-        wiredIface.label = w?.device.get_iface() || "---"
-        wiredIp.label    = ipOf(w)
+        const on = Net.wiredEnabled()
+        if (ethSwitch.active !== on) { ethSyncing = true; ethSwitch.active = on; ethSyncing = false }
+        wiredStatus.label = Net.wiredStateText()
     }
-
-    ethList.append(createRow(t("settings.network.ethernet"),  t("settings.network.hw-status.desc"),         wiredStatus))
-    ethList.append(createRow(t("settings.network.interface"), t("settings.network.kernel-device.desc"),     wiredIface))
-    ethList.append(createRow(t("settings.network.ipv4"),      t("settings.network.ip.desc"),                wiredIp))
     page.append(ethBox)
 
     // ── Wi-Fi ─────────────────────────────────────────────────────────────────

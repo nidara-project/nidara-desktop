@@ -13,7 +13,7 @@ exempt-pages:8 # network, bluetooth, display, audio, widgets, apps, users, about
 # Legitimate per-object switches (not scalar settings - see #341)
 Autostart.tsx:gtk-switch:1 # per-app autostart toggle
 Bluetooth.tsx:gtk-switch:1 # adapter power toggle
-Network.tsx:gtk-switch:1 # wifi adapter toggle
+Network.tsx:gtk-switch:2 # wifi adapter toggle, ethernet switch
 Users.tsx:gtk-switch:2 # user admin toggles (create dialog + user edit row)
 Widgets.tsx:gtk-switch:1 # per-widget placement toggle
 
