@@ -27,6 +27,7 @@ import { safeDisconnect } from "../core/signals"
 import * as media from "../core/MediaService"
 import { INK } from "../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
+import { chromeIsDarkFor } from "./AdaptiveGlass"
 
 /** The media detail panel's artwork box, and the radius that goes with it. The
  *  island's compact art derives its own radius from this pair so the morph's two
@@ -111,7 +112,7 @@ export function makeCoverArt(opts: CoverArtOpts): Gtk.DrawingArea {
             // Shell chrome, so the empty slot follows the appearance PIN rather than
             // the system mode — the same rule every other Cairo painter in common/
             // obeys (BatteryGlyph, PulseDots, SquircleContainer).
-            const c = Theme.chromeIsDark ? 1 : 0
+            const c = chromeIsDarkFor(da) ? 1 : 0
             cr.setSourceRGBA(c, c, c, INK.wash)
             cr.fill()
         }

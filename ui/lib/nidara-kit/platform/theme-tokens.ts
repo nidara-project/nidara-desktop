@@ -33,6 +33,7 @@ import { readFile, writeFile } from "./file"
 import { ACCENT_HEX, ACCENT_NAMES, hexToRgb, type AccentKey } from "./accent"
 import { DANGER_HEX } from "./status-colors"
 import { GLASS_TINT } from "./tokens"
+import { TEXT_INK } from "./glass-legibility"
 
 // -- COLOR PALETTES ---------------------------------------------------
 // The accent palette is the single source of truth in ui/lib/nidara-kit/platform/accent.ts.
@@ -222,6 +223,7 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
   const popoverBorder = isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.10)"
 
   const whiteOrBlack = isDark ? "#ffffff" : "#000000"
+  const ink = TEXT_INK[isDark ? "dark" : "light"]
   const r = parseInt(accent.slice(1, 3), 16)
   const g = parseInt(accent.slice(3, 5), 16)
   const b = parseInt(accent.slice(5, 7), 16)
@@ -270,12 +272,11 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
     `  --nidara-surface-raised: rgba(${fg}, 0.20);`,
     `  --nidara-surface-strong: rgba(${fg}, 0.30);`,   // one step above raised, for hover on raised fills
     `  --nidara-text: ${whiteOrBlack};`,
-    // Secondary/dim are nudged UP in light mode: black ink over translucent light
-    // glass (which sits on an arbitrary wallpaper) reads washed-out at the dark-mode
-    // alphas, so the light ramp gets more ink. White on dark needs less (more
-    // perceptual punch), so dark keeps 0.8/0.6.
-    `  --nidara-text-secondary: rgba(${fg}, ${isDark ? "0.8" : "0.85"});`,
-    `  --nidara-text-dim: rgba(${fg}, ${isDark ? "0.6" : "0.72"});`,
+    // The ramp's alphas live in `TEXT_INK` (glass-legibility.ts), which is also what
+    // the adaptive glass checks for contrast — so the tiers it holds to a target are
+    // the tiers on screen by construction, not a copy that can drift.
+    `  --nidara-text-secondary: rgba(${fg}, ${ink.secondary});`,
+    `  --nidara-text-dim: rgba(${fg}, ${ink.dim});`,
     `  --nidara-text-disabled: rgba(${fg}, 0.3);`,
     // The switch thumb. WHITE in both modes, deliberately: it is the moving part
     // of a control whose track goes accent when on, and it has to stay legible

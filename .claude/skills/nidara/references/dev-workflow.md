@@ -2232,6 +2232,28 @@ instrument you have never seen react is not evidence.
   backdrop: the same rim measures ~97 on a straight run and ~126 on the corner. That is dilution,
   not a lighter rim. On curves, trust the render (and the eye) over a point sample.
 
+### Verifying the adaptive glass (`NIDARA_BACKDROP_DEBUG`, `glassRemeasure`)
+
+The rule is checked without a screen (`scripts/dev/glass-legibility-probe.ts`, CI `styles` job).
+The MEASUREMENT can only be checked on a live session, and a wrong one is silent — it just picks
+the wrong glass. Three tools:
+
+- `nidara-ipc dumpState` → `glass`, and `nidara-ipc glassRemeasure` (state-and-ipc.md).
+- `systemctl --user set-environment NIDARA_BACKDROP_DEBUG=<dir>` + restart the shell: every probe
+  writes `<surface>-<n>-screen.png` (the capture), `-ours.png` (our offscreen render) and
+  `-backdrop.png` (what was recovered; transparent = pixels not used), and logs why a probe gave
+  nothing and what it cost. **Look at the backdrop image first**: text or icon outlines in it mean
+  the capture and the render did not describe the same frame. `unset-environment` it afterwards.
+- To judge the recovered numbers rather than eyeball them, compare them with the forward model
+  (wallpaper → Hyprland's `gain`/`blur1` shaders → tint) at the same pixels; the 2026-09-29 check
+  agreed to a median of 2/255. A systematic offset (all channels brighter) is a layer caught
+  mid-fade, not a model error.
+
+To force a bright backdrop, set a white wallpaper with `nidara-ipc setWallpaper <white.png> simple`,
+wait out awww's transition (~3 s), `glassRemeasure`, and restore the old path — then restore
+`~/.config/nidara/wallpaper` from a copy too, because `setWallpaper` writes the transition you
+passed into it.
+
 ### What the icon theme SAYS vs what it PAINTS (`scripts/dev/icon-theme-probe.js`)
 
 For any "the icons are wrong" report. Run it inside a session, as the session user:

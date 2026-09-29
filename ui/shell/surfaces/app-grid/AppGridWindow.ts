@@ -10,6 +10,7 @@ import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import status from "../../core/Status"
 import inputYield from "../../core/InputYield"
 import hs from "../../core/HyprlandState"
+import { registerGlassSurface } from "../../common/AdaptiveGlass"
 
 // The app grid's OWN layer surface — the SECOND exception to "overlays live
 // inside the Bar's window" (skill commandment #5), after the Activity Island.
@@ -139,6 +140,16 @@ export function AppGridWindow(
     panel.widget.halign = Gtk.Align.CENTER
     panel.widget.valign = Gtk.Align.CENTER
     root.add_overlay(panel.widget)
+
+    // Adaptive glass (#673): the grid's labels over whatever is behind it. Measured
+    // from `map` (AdaptiveGlass waits past this layer's own fade-in), and only once
+    // the pop has landed — mid-pop the capture and the render are different frames.
+    const pop = panel.widget as unknown as { tickId: number | null, progress: number }
+    const glass = registerGlassSurface({
+        id: "app-grid", root: panel.widget, role: "overlay",
+        settled: () => pop.tickId === null && pop.progress >= 1,
+    })
+    win.connect("destroy", () => glass.dispose())
 
     // ── Regions ───────────────────────────────────────────────────────────────
     //

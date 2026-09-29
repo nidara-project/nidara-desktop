@@ -8,6 +8,7 @@ import { attachTooltip, type NidaraTooltipHandle, type NidaraTooltipOpts, type N
 import { GLASS_SPECULAR, GLASS_TINT, GLASS_STATE_MIX } from "../../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 import { barKeyAction } from "../../common/widget-kit"
+import { chromeIsDarkFor } from "../../common/AdaptiveGlass"
 
 // Shared bar-capsule edge: a faint white inner border. It no longer changes on
 // hover: the capsules pass `hoverLift` (the glass lifts a little) and `barOpen`
@@ -136,7 +137,7 @@ export function barItem({ child, onClick, getOpen, watchOpen, onKey }: BarItemOp
             : getOpen?.() ? GLASS_STATE_MIX.open : hovered ? GLASS_STATE_MIX.hover : null
         const vh = h
         if (!mix || w <= 0 || vh <= 0) return
-        const dark = Theme.chromeIsDark
+        const dark = chromeIsDarkFor(veil)
         const ink = dark ? GLASS_SPECULAR : GLASS_TINT.dark
         const r = Math.min(vh, w) / 2
         const top = 0, bottom = vh

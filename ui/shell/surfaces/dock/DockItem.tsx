@@ -24,6 +24,7 @@ import { renderMenuModel } from "../../common/NidaraMenu"
 import { INK } from "../../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 import { DockIcon } from "./DockIcon"
+import { chromeIsDarkFor } from "../../common/AdaptiveGlass"
 
 /** A `*-symbolic` icon is a mask meant to take the text colour (see DockIcon). */
 const isSymbolicFile = (path: string | null | undefined) => !!path && /-symbolic\.(svg|png)$/.test(path)
@@ -434,7 +435,7 @@ export function DockItem(
         if (w <= 0 || h <= 0) return
         const r = Math.min(w, h) / 2
         cr.arc(w / 2, h / 2, r, 0, 2 * Math.PI)
-        const c = Theme.chromeIsDark ? 1 : 0   // dock running-dot — follows the pinned chrome appearance
+        const c = chromeIsDarkFor(dot) ? 1 : 0   // dock running-dot — follows the chrome skin
         cr.setSourceRGBA(c, c, c, INK.solid)
         cr.fill()
     }))

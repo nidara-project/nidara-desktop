@@ -103,6 +103,10 @@ export interface IslandWindowHandle {
      *  (`HyprlandState.layerTop`, which documents the full mechanism). 0 in the
      *  normal case, so this changes nothing until something pushes the bar. */
     setTopOffset: (px: number) => void
+    /** Where this surface starts on its monitor, vertically — the offset above.
+     *  Root-relative bounds plus this are monitor-relative; the adaptive glass needs
+     *  that to capture the right rectangle behind a mode (common/BackdropProbe.ts). */
+    topOffset: () => number
 }
 
 export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
@@ -708,6 +712,7 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     return {
         win,
         root: () => root,
+        topOffset: () => topOffset,
         mount: (row, targets, mounted) => {
             hitTargets = targets
             revealers = mounted

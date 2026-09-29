@@ -36,6 +36,7 @@ PROTOCOLS=(
   "$HYPR_PROTO_DIR/hyprland-surface-v1.xml"
   "$HYPR_PROTO_DIR/hyprland-toplevel-mapping-v1.xml"
   "$WLR_PROTO_DIR/wlr-foreign-toplevel-management-unstable-v1.xml"
+  "$WLR_PROTO_DIR/wlr-screencopy-unstable-v1.xml"
 )
 
 rm -rf "$OUT_DIR"

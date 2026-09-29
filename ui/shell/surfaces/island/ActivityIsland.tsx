@@ -6,7 +6,6 @@ import { MorphRevealer, MorphGlass, MorphPair } from "../../common/MorphRevealer
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
 import { BAR_CAPSULE_H, BAR_GAP, CAPSULE_BORDER } from "../bar/capsule"
 import { GLASS_TINT } from "../../../lib/nidara-kit/platform/tokens"
-import Theme from "../../core/ThemeManager"
 import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT, ISLAND_RECORDING } from "../../core/Status"
 import WorkspaceOverview, { WO_GLASS } from "../overview/WorkspaceOverview"
 import PlayerIsland, { PLAYER_GLASS } from "./PlayerIsland"
@@ -14,6 +13,7 @@ import BatteryIsland, { BATTERY_GLASS } from "./BatteryIsland"
 import RecordingIsland, { RECORDING_GLASS } from "./RecordingIsland"
 import AgentIsland, { AGENT_GLASS } from "./AgentIsland"
 import { buildActivities, DOTS_ID } from "./IslandActivities"
+import { chromeIsDarkFor, glassAlphaFor } from "../../common/AdaptiveGlass"
 
 // The Activity Island — the bar-center capsule as a MULTI-PURPOSE morphing
 // surface. The capsule is the island's COMPACT state; each thing it can host
@@ -388,11 +388,13 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
 
     // Both morph endpoints paint chrome glass (SquircleContainer chrome:true):
     // tint pinned by shellAppearance, alpha from the bar/overlay opacity axes.
-    const chromeGlassColor = () => Theme.chromeIsDark
+    // Asked through the capsule: it is inside the island's surface, so these follow
+    // the adaptive glass (#673) when it thickens or flips the island.
+    const chromeGlassColor = () => chromeIsDarkFor(capsule)
         ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
         : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
     // Pill of the compact capsule (perfect pill ≡ n=2, radius null = h/2).
-    const compactGlass = (): MorphGlass => ({ alpha: Theme.barOpacity, color: chromeGlassColor(), border: CAPSULE_BORDER, n: 2.0, radius: null })
+    const compactGlass = (): MorphGlass => ({ alpha: glassAlphaFor(capsule, "bar"), color: chromeGlassColor(), border: CAPSULE_BORDER, n: 2.0, radius: null })
 
     // ── Mode registry ────────────────────────────────────────────────────────
     const modes = new Map<string, { mode: IslandMode, revealer: MorphRevealer }>()
@@ -462,7 +464,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     registerMode({
         id: ISLAND_OVERVIEW,
         widget: WorkspaceOverview(gdkmonitor),
-        glass: () => ({ alpha: Theme.overlayOpacity, color: chromeGlassColor(), border: WO_GLASS.border, n: WO_GLASS.n, radius: WO_GLASS.radius }),
+        glass: () => ({ alpha: glassAlphaFor(capsule, "overlay"), color: chromeGlassColor(), border: WO_GLASS.border, n: WO_GLASS.n, radius: WO_GLASS.radius }),
         needsKeyboard: true,
     })
     // No keyboard grab: the player panel is ambient — media keys and app focus
@@ -470,21 +472,21 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     registerMode({
         id: ISLAND_PLAYER,
         widget: PlayerIsland(),
-        glass: () => ({ alpha: Theme.overlayOpacity, color: chromeGlassColor(), border: PLAYER_GLASS.border, n: PLAYER_GLASS.n, radius: PLAYER_GLASS.radius }),
+        glass: () => ({ alpha: glassAlphaFor(capsule, "overlay"), color: chromeGlassColor(), border: PLAYER_GLASS.border, n: PLAYER_GLASS.n, radius: PLAYER_GLASS.radius }),
     })
     // No keyboard grab either: the battery alert is dismissed by outside click
     // / Esc-less design, same ambient contract as the player.
     registerMode({
         id: ISLAND_BATTERY,
         widget: BatteryIsland(),
-        glass: () => ({ alpha: Theme.overlayOpacity, color: chromeGlassColor(), border: BATTERY_GLASS.border, n: BATTERY_GLASS.n, radius: BATTERY_GLASS.radius }),
+        glass: () => ({ alpha: glassAlphaFor(capsule, "overlay"), color: chromeGlassColor(), border: BATTERY_GLASS.border, n: BATTERY_GLASS.n, radius: BATTERY_GLASS.radius }),
     })
     // No keyboard grab: the capture card is a statement + Stop, dismissed by
     // outside click / capsule click like the player and the battery alert.
     registerMode({
         id: ISLAND_RECORDING,
         widget: RecordingIsland(),
-        glass: () => ({ alpha: Theme.overlayOpacity, color: chromeGlassColor(), border: RECORDING_GLASS.border, n: RECORDING_GLASS.n, radius: RECORDING_GLASS.radius }),
+        glass: () => ({ alpha: glassAlphaFor(capsule, "overlay"), color: chromeGlassColor(), border: RECORDING_GLASS.border, n: RECORDING_GLASS.n, radius: RECORDING_GLASS.radius }),
     })
     // Keyboard grab: the assistant has a text entry (like the overview cursor
     // needs keys, this needs the entry to receive them — the bar grants EXCLUSIVE
@@ -492,7 +494,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     registerMode({
         id: ISLAND_AGENT,
         widget: AgentIsland(),
-        glass: () => ({ alpha: Theme.overlayOpacity, color: chromeGlassColor(), border: AGENT_GLASS.border, n: AGENT_GLASS.n, radius: AGENT_GLASS.radius }),
+        glass: () => ({ alpha: glassAlphaFor(capsule, "overlay"), color: chromeGlassColor(), border: AGENT_GLASS.border, n: AGENT_GLASS.n, radius: AGENT_GLASS.radius }),
         needsKeyboard: true,
     })
 

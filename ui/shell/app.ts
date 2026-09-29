@@ -77,6 +77,7 @@ import { setWidgetCatalog } from "./core/WidgetCatalog"
 // Last on purpose: by the time it evaluates, the registry and the CC grid already have
 // (through Settings and the bar), so adding the seam did not reorder the shell's boot.
 import { widgetCatalogSource } from "./core/WidgetCatalogSource"
+import { startAdaptiveGlass, adaptiveGlassState, remeasureAllGlass } from "./common/AdaptiveGlass"
 
 // ── The kit's appearance seam ────────────────────────────────────────────────
 // `nidara-kit/slider.ts` paints in Cairo, and Cairo cannot read a CSS token: it
@@ -730,6 +731,10 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       return JSON.stringify(out, null, 2)
     },
   },
+  glassRemeasure: {
+    desc: "Measure what is behind every visible shell surface NOW and let the adaptive glass (#673) re-decide (thicker glass, or the other skin). It normally runs by itself on events — a window opening, moving or going fullscreen, a workspace or wallpaper change, a panel settling open. Read the result from dumpState `glass` about a second later. Returns how many surfaces were queued.",
+    run: () => `${remeasureAllGlass()} surface(s) queued — read dumpState glass in ~1 s`,
+  },
   dumpState: {
     desc: "Dump live shell state as JSON (version, theme, locale, monitors incl. resolution/refresh/scale, overlays, effective Hyprland config)",
     run: () => {
@@ -814,6 +819,10 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             settings: hyprlandState.clients.some(isSettingsClient),
             about: status.about_open,
           },
+          // The adaptive glass (#673), per surface: the slider (floor), what it wears
+          // now (alpha, skin, flipped) and the backdrop it was measured against.
+          // `alpha: null` = never measured, i.e. exactly the user's glass.
+          glass: adaptiveGlassState(),
           flags: {
             ccEditMode: status.cc_edit_mode,
             recording: status.recording,
@@ -1177,6 +1186,9 @@ app.start({
     // closure flag inside the dock window when it got a surface of its own
     // (surfaces/app-grid/AppGridWindow.ts). dumpState reads the same property.
     const toggleAppGrid = () => { status.app_grid_open = !status.app_grid_open }
+    // Adaptive glass (#673): every surface is registered by now (Bar.tsx), so the
+    // events that can change what is behind them start counting from here.
+    startAdaptiveGlass()
     // Same idiom for the island's covered rect (see islandRect's declaration).
     islandRect = () => {
       let r: Rect | null = null

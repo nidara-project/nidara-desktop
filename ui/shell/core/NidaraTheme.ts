@@ -37,3 +37,22 @@ export function generateChromeTokenScope(
   return `${sel} {\n${body}\n}`
 }
 
+
+/**
+ * The token sets a surface wears when the ADAPTIVE GLASS flips its skin (#673,
+ * `common/AdaptiveGlass.ts`): a full `--nidara-*` set for each skin, scoped to a class
+ * the surface's root carries only while flipped. Always emitted — toggling the class
+ * is the whole switch, no stylesheet reload per flip.
+ *
+ * `window#<w> .nidara-skin-light *` is (1,1,1) and beats both the global `*` and the
+ * pin's `window#<w> *` (1,0,1), so a flipped surface wins over the pin too — which is
+ * the point: the pin is a preference, legibility over a white backdrop is not.
+ */
+export function generateSkinFlipScope(config: NidaraThemeConfig): string {
+  const block = (isDark: boolean) => {
+    const cls = isDark ? "nidara-skin-dark" : "nidara-skin-light"
+    const sel = CHROME_SCOPE_WINDOWS.map((w) => `window#${w} .${cls}, window#${w} .${cls} *`).join(", ")
+    return `${sel} {\n${nidaraVars(config, isDark).join("\n")}\n}`
+  }
+  return `${block(true)}\n${block(false)}`
+}

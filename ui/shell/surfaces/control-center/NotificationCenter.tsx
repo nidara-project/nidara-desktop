@@ -21,6 +21,7 @@ import { uiIcon } from "../../core/Icons"
 import { safeDisconnect } from "../../core/signals"
 import { type Notification, notifications as allNotifications, watchNotified, watchResolved } from "../../core/NotifService"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
+import { chromeIsDarkFor, glassAlphaFor } from "../../common/AdaptiveGlass"
 
 export function createIconWidget(n: Notification, size: number) {
     const entry = n.desktop_entry || n.app_name || ""
@@ -395,7 +396,7 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
     const da = new Gtk.DrawingArea({ height_request: stripH })
     da.set_draw_func(cairoDraw((_da: any, cr: any, w: number, _h: number) => {
         if (w <= 0 || _h <= 0) return
-        const color = Theme.chromeIsDark
+        const color = chromeIsDarkFor(da)
             ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
             : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }   // shell skin — follows appearance pin
         for (let i = layers - 1; i >= 0; i--) {
@@ -413,7 +414,7 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
             cr.clip()
             cr.translate(inset, bottomY - CARD_H)
             // inset 0 so the squircle's bottom edge lands exactly at bottomY (no gap between bands).
-            drawSquircle(cr, w - inset * 2, CARD_H, undefined, Theme.overlayOpacity * depth, false, color, CARD_R, false, { r: 1, g: 1, b: 1, a: 0.07 * depth }, 3.2, 1.0, 0)
+            drawSquircle(cr, w - inset * 2, CARD_H, undefined, glassAlphaFor(da, "overlay") * depth, false, color, CARD_R, false, { r: 1, g: 1, b: 1, a: 0.07 * depth }, 3.2, 1.0, 0)
             cr.restore()
         }
     }))

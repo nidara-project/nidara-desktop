@@ -15,6 +15,7 @@ import {
     ACCENT_PALETTE,
     generateTokensCss,
     generateChromeTokenScope,
+    generateSkinFlipScope,
     CHROME_SCOPE_WINDOWS,
 } from "./NidaraTheme"
 import { SHELL_ROOT } from "./Paths"
@@ -703,6 +704,7 @@ class ThemeManager extends GObject.Object {
         this.ensureProvidersLinked()
         const tokens = generateTokensCss(this.fcConfig, this.state.isDark)
             + "\n" + generateChromeTokenScope(this.fcConfig, this.chromeIsDark, this.state.isDark)
+            + "\n" + generateSkinFlipScope(this.fcConfig)
         if (this._lastTokensCss !== tokens) {
             this.themeProvider.load_from_string(tokens)
             this._lastTokensCss = tokens

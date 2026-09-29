@@ -162,6 +162,7 @@ is why one library carries all of them — the packaging cost is paid once:
 | Capability | Protocol | What it unlocks |
 |---|---|---|
 | `capture_window()` → `GdkTexture` | `ext-image-copy-capture` + `ext-foreign-toplevel-image-capture-source` + `hyprland-toplevel-mapping` | Real window thumbnails (Overview, window switcher) |
+| `capture_region()` → `GdkTexture` | `zwlr_screencopy_v1` v3 (`capture_output_region`) | What the screen shows behind a surface — the adaptive glass (#673) |
 | `visible_region_*()` | `hyprland-surface-v1` **v2** | The layer-blur cost in `tech-debt.md` §46 |
 | `focus_grab_*()` | `hyprland-focus-grab-v1` | Keyboard without layer-shell EXCLUSIVE + compositor-side outside-click dismissal |
 
@@ -200,6 +201,21 @@ the typelib on the **default** girepository path, so all three bundles just `imp
   `Gdk.Surface.get_scale()` (fractional), rounded outward, re-sent on `notify::scale`. Callers keep
   speaking logical coordinates — never pre-multiply. The INPUT region stays logical (wl_surface
   semantics).
+
+- **A region capture is the compositor's FINAL frame, our own layers included** (Hyprland
+  0.56.2, `ScreenshareFrame.cpp`, `SHARE_REGION`: a blit of the monitor's mirror texture). There
+  is no way to capture the screen WITHOUT a layer: the `no_screen_share` layer rule paints a black
+  box over it instead. The adaptive glass does not need one — it subtracts its own paint
+  (`common/BackdropProbe.ts`, design-system.md → "Adaptive glass"). The region is in LOGICAL
+  coordinates and comes back at buffer resolution; the output is named by its connector (a
+  `wl_output` v4 `name`, the same string `Gdk.Monitor.get_connector()` gives). ~3–20 ms, most of
+  it waiting for the next frame, on a worker thread with its own connection like
+  `capture_window()`.
+- ⚠️ **Every capture of either kind starts and stops a Hyprland screencast session**, and its
+  `screencast` / `screencastv2` IPC events do NOT name the client that asked (for a region the
+  name is the monitor's; for a window, its title). A privacy indicator built on those events (#646)
+  must discount the captures the shell itself makes — the overview's thumbnails and the adaptive
+  glass — or it lights up for them.
 
 **From the shell, do not import the shim directly** — go through `common/VisibleRegion.ts`, which
 owns three decisions:

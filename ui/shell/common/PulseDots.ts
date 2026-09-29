@@ -22,8 +22,8 @@
 
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
-import Theme from "../core/ThemeManager"
 import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
+import { chromeIsDarkFor } from "./AdaptiveGlass"
 
 const FRAME_MS = 100
 const STEP = 0.45
@@ -104,7 +104,7 @@ export function makePulseDots(opts: { ghost?: boolean } = {}): PulseHandle & { w
 
     da.set_draw_func(cairoDraw((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
-        const c = Theme.chromeIsDark ? 1 : 0
+        const c = chromeIsDarkFor(da) ? 1 : 0
         const cy = h / 2
         for (let i = 0; i < DOTS; i++) {
             // At rest this is a static row of dim dots — the indicator must look

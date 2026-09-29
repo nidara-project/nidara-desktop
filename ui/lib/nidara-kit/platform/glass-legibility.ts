@@ -1,0 +1,252 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// No GI imports, here or in `./tokens`: the probe runs this under plain node.
+import { GLASS_TINT } from "./tokens"
+
+/**
+ * NIDARA — is the text on a piece of glass legible, and what must the glass do if not
+ * ===================================================================================
+ *
+ * Pure arithmetic, no GTK: the rule the adaptive glass (#673) applies, kept where a
+ * probe can hold it to its numbers (`scripts/dev/glass-legibility-probe.ts`, run in
+ * CI with a control that must be caught).
+ *
+ * ── WHAT IS BEING MODELLED ───────────────────────────────────────────────────
+ *
+ * A shell surface is our layer composited by Hyprland over the BLURRED backdrop:
+ *
+ *     screen = ours_premultiplied + backdrop · (1 − ours_alpha)
+ *
+ * and the glass body is `GLASS_TINT` at the surface's opacity. `uncomposite()` runs
+ * that equation backwards on a captured pixel whose `ours` is known — which is how
+ * `core/BackdropProbe.ts` learns what the text really sits on: the backdrop as
+ * Hyprland processed it (blur, contrast, vibrancy), whatever put it there — wallpaper,
+ * a fullscreen video, another client's layer.
+ *
+ * Measured 2026-09-29 before any of this was written: the forward model reproduces
+ * the bar's glass in a live screenshot to 1–2/255 per channel. The numbers it gives
+ * (dark skin, glass 0.48, 140,608 backdrops): primary text fails 4.5:1 on 22 % of
+ * them, secondary on 36 %, dim on 67 %; worst case pure white, 3.21 / 2.64 / 2.13.
+ * No global floor fixes that (tech-debt #82) — hence a per-surface answer.
+ *
+ * ── THE RULE (owner, 2026-09-29: "A+B") ──────────────────────────────────────
+ *
+ * A. **Thicken** the surface's tint, from the user's glass slider up to
+ *    `GLASS_ADAPT_CEILING` — never below the slider: the slider is a floor now.
+ * B. If the ceiling is not enough, **flip the skin** (dark glass + white ink ↔
+ *    light glass + black ink) for that surface.
+ *
+ * The unit is the SURFACE (the whole bar, the open panel, the island, the app grid),
+ * never one capsule of it: capsules of one bar at different tints read as a bug.
+ */
+
+/** A colour as sRGB-encoded floats, 0..1. */
+export interface Rgb { r: number; g: number; b: number }
+
+/** One pixel of OUR layer, as the renderer produced it: PREMULTIPLIED rgb, 0..1. */
+export interface PremulRgba { r: number; g: number; b: number; a: number }
+
+/**
+ * The text ramp: the ink alpha of each tier, per skin. THE source — the token engine
+ * (`theme-tokens.ts`) emits `--nidara-text-*` from these, so the tiers this module
+ * checks are the tiers on screen by construction.
+ *
+ * Light gets more ink than dark on purpose: black ink over translucent light glass
+ * reads washed-out at the dark alphas (the note that used to sit in the token engine).
+ * Disabled (0.3) is not here: it is exempt from contrast minimums, as in WCAG.
+ */
+export const TEXT_INK = {
+    dark:  { primary: 1, secondary: 0.8,  dim: 0.6 },
+    light: { primary: 1, secondary: 0.85, dim: 0.72 },
+} as const
+
+export type TextTier = keyof typeof TEXT_INK.dark
+
+/**
+ * The minimum contrast each tier must reach against the glass it sits on.
+ * Primary and secondary are body text → WCAG AA (4.5:1). Dim is metadata → the
+ * large-text / UI-component minimum (3:1).
+ */
+export const LEGIBILITY_TARGET: Record<TextTier, number> = {
+    primary: 4.5,
+    secondary: 4.5,
+    dim: 3.0,
+}
+
+/**
+ * How far A may thicken before B takes over. 0.60 because tech-debt #82 measured
+ * that past ~0.59 the material stops reading as glass, and because it is the same
+ * body the CC container's shadow reaches at its most (0.48 glass + 0.22 shadow ≈
+ * 0.594). A slider set above it is left alone: the floor wins.
+ */
+export const GLASS_ADAPT_CEILING = 0.60
+
+/**
+ * Hysteresis for the way BACK to the user's own skin: a flipped surface returns
+ * only when its own skin clears every target by this factor at the ceiling. Without
+ * it a backdrop sitting on the threshold flips the surface back and forth.
+ */
+export const FLIP_BACK_MARGIN = 1.1
+
+/** An alpha change smaller than this, downwards, is not worth a repaint. */
+export const ALPHA_DEADBAND = 0.03
+
+const DARK_TINT: Rgb = { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
+const LIGHT_TINT: Rgb = { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
+const WHITE: Rgb = { r: 1, g: 1, b: 1 }
+const BLACK: Rgb = { r: 0, g: 0, b: 0 }
+
+const over = (dst: Rgb, src: Rgb, a: number): Rgb => ({
+    r: dst.r * (1 - a) + src.r * a,
+    g: dst.g * (1 - a) + src.g * a,
+    b: dst.b * (1 - a) + src.b * a,
+})
+
+const toLinear = (v: number) => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+
+/** WCAG relative luminance of an sRGB colour. */
+export function luminance(c: Rgb): number {
+    return 0.2126 * toLinear(c.r) + 0.7152 * toLinear(c.g) + 0.0722 * toLinear(c.b)
+}
+
+/** WCAG contrast ratio, ≥ 1. */
+export function contrastRatio(a: Rgb, b: Rgb): number {
+    const x = luminance(a), y = luminance(b)
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
+}
+
+/** The glass as it reaches the eye: its tint at `alpha` over the (blurred) backdrop. */
+export function glassOver(backdrop: Rgb, isDark: boolean, alpha: number): Rgb {
+    return over(backdrop, isDark ? DARK_TINT : LIGHT_TINT, alpha)
+}
+
+/** The contrast of one tier of text on that glass. */
+export function tierContrast(backdrop: Rgb, isDark: boolean, alpha: number, tier: TextTier): number {
+    const glass = glassOver(backdrop, isDark, alpha)
+    const ink = over(glass, isDark ? WHITE : BLACK, TEXT_INK[isDark ? "dark" : "light"][tier])
+    return contrastRatio(ink, glass)
+}
+
+/**
+ * The WORST tier's contrast as a fraction of its own target: ≥ 1 means every tier
+ * passes. One number, so "does it pass" and "which choice passes better" are the
+ * same comparison.
+ */
+export function legibilityMargin(backdrop: Rgb, isDark: boolean, alpha: number): number {
+    let worst = Infinity
+    for (const tier of Object.keys(LEGIBILITY_TARGET) as TextTier[])
+        worst = Math.min(worst, tierContrast(backdrop, isDark, alpha, tier) / LEGIBILITY_TARGET[tier])
+    return worst
+}
+
+/**
+ * The backdrop under a captured pixel, given what WE painted there.
+ * `screen` is the captured pixel; `ours` is our layer's pixel, premultiplied.
+ * Null where our paint is too opaque to see through with any precision — text,
+ * icons — or too transparent to have been blurred (below the layer's `ignore_alpha`
+ * the compositor shows the backdrop RAW, which is not what text on glass sits on).
+ */
+export function uncomposite(screen: Rgb, ours: PremulRgba, minAlpha: number, maxAlpha: number): Rgb | null {
+    if (ours.a < minAlpha || ours.a > maxAlpha) return null
+    const k = 1 / (1 - ours.a)
+    const clamp = (v: number) => v < 0 ? 0 : v > 1 ? 1 : v
+    return {
+        r: clamp((screen.r - ours.r) * k),
+        g: clamp((screen.g - ours.g) * k),
+        b: clamp((screen.b - ours.b) * k),
+    }
+}
+
+/**
+ * What a surface has behind it, reduced to the two backdrops that decide: the
+ * BRIGHTEST (the worst case for dark glass and white ink) and the DARKEST (the worst
+ * for light glass and black ink). High and low percentiles, not max and min, so a
+ * handful of stray pixels — a cursor, an antialiased edge the renderer and the
+ * compositor rounded differently — cannot move a whole surface.
+ */
+export interface BackdropStats {
+    brightest: Rgb
+    darkest: Rgb
+    samples: number
+}
+
+/** Percentile used for both ends of `BackdropStats`. */
+export const BACKDROP_PERCENTILE = 0.95
+
+/** Reduce uncomposited backdrop pixels to their `BackdropStats`. Null if there are
+ *  too few to mean anything. */
+export function backdropStats(pixels: Rgb[], minSamples = 64): BackdropStats | null {
+    if (pixels.length < minSamples) return null
+    const ranked = pixels.map(p => ({ p, l: luminance(p) })).sort((x, y) => x.l - y.l)
+    const at = (q: number) => ranked[Math.min(ranked.length - 1, Math.max(0, Math.round(q * (ranked.length - 1))))].p
+    return {
+        brightest: at(BACKDROP_PERCENTILE),
+        darkest: at(1 - BACKDROP_PERCENTILE),
+        samples: pixels.length,
+    }
+}
+
+/** What a surface wears: its tint's opacity and its skin. */
+export interface GlassDecision {
+    alpha: number
+    isDark: boolean
+}
+
+const ALPHA_STEP = 0.01
+
+/** The least alpha in [floor, top] at which `isDark` glass reaches `margin` over
+ *  `backdrop`, or null if even `top` does not. */
+function leastAlpha(backdrop: Rgb, isDark: boolean, floor: number, top: number, margin: number): number | null {
+    for (let a = floor; a <= top + 1e-9; a += ALPHA_STEP) {
+        if (legibilityMargin(backdrop, isDark, a) >= margin) return Math.round(a * 100) / 100
+    }
+    return null
+}
+
+/**
+ * The rule. `preferDark` is the skin the user chose (the system mode, or the shell
+ * pin); `floor` is their glass slider for this surface; `current` is what the surface
+ * wears now, for hysteresis (omit for a surface with no history).
+ */
+export function decideGlass(
+    stats: BackdropStats,
+    preferDark: boolean,
+    floor: number,
+    current?: GlassDecision,
+): GlassDecision {
+    const top = Math.max(floor, GLASS_ADAPT_CEILING)
+    const worst = (isDark: boolean) => isDark ? stats.brightest : stats.darkest
+    const settle = (d: GlassDecision): GlassDecision => {
+        // Deadband, downwards only: a surface that needs MORE body gets it now; one
+        // that could shed a sliver keeps what it has.
+        if (current && current.isDark === d.isDark && d.alpha < current.alpha
+            && current.alpha - d.alpha < ALPHA_DEADBAND)
+            return { isDark: d.isDark, alpha: current.alpha }
+        return d
+    }
+
+    const flipped = current !== undefined && current.isDark !== preferDark
+
+    // A flipped surface goes home only with room to spare.
+    if (flipped) {
+        const home = leastAlpha(worst(preferDark), preferDark, floor, top, FLIP_BACK_MARGIN)
+        if (home !== null) {
+            return { isDark: preferDark, alpha: leastAlpha(worst(preferDark), preferDark, floor, top, 1) ?? home }
+        }
+    } else {
+        // A: thicken the user's own skin.
+        const a = leastAlpha(worst(preferDark), preferDark, floor, top, 1)
+        if (a !== null) return settle({ isDark: preferDark, alpha: a })
+    }
+
+    // B: the other skin.
+    const b = leastAlpha(worst(!preferDark), !preferDark, floor, top, 1)
+    if (b !== null) return settle({ isDark: !preferDark, alpha: b })
+
+    // Neither reaches every target even at the ceiling (a backdrop that is bright
+    // AND dark at once — a high-contrast photo under a tall panel). Take the skin
+    // that comes closest, at full body.
+    const mine = legibilityMargin(worst(preferDark), preferDark, top)
+    const theirs = legibilityMargin(worst(!preferDark), !preferDark, top)
+    if (flipped && theirs >= mine / FLIP_BACK_MARGIN) return { isDark: !preferDark, alpha: top }
+    return { isDark: mine >= theirs ? preferDark : !preferDark, alpha: top }
+}

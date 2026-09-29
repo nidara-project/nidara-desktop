@@ -1280,7 +1280,10 @@ How the flip works:
     don't inherit reliably and the global `* { --nidara-* }` matches every node directly, so a
     bare `window#nidara-bar { --nidara-* }` only overrides the container. An id-qualified
     universal beats `*` on specificity. It mirrors the `.nd-icon` `-gtk-icon-filter` too.
-- **Cairo side:** shell painters read `Theme.chromeIsDark` (not `Theme.isDark`):
+- **Cairo side:** shell painters read the chrome skin — `chromeIsDarkFor(widget)` from
+  `common/AdaptiveGlass.ts`, asked with the painter's OWN widget, which is `Theme.chromeIsDark`
+  unless the surface it sits in has been flipped by the adaptive glass (see "Adaptive glass"
+  below). Never `Theme.isDark`:
   `SquircleContainer` (**`chrome` defaults to `true`** = shell skin; pass `chrome: false` ONLY
   for app-mode windows like About), the dock (`DockAxis`/`DockItem`), the bar CPU/RAM ring +
   battery glyph, and the CC/NC/app-grid Cairo. Non-shell (Settings/About) keep `Theme.isDark`.
@@ -1309,8 +1312,14 @@ How the flip works:
   won: it is what the CSS half had always shipped, and light vibrancy is off-white in the prior art
   we follow. Measure a retint with `scripts/dev/glass-probe.ts` rather than reasoning about it.
 - **Light-mode text ramp is nudged up:** `--nidara-text-secondary`/`-dim` are `rgba(fg, 0.85/0.72)`
-  in light vs `0.8/0.6` in dark (`nidaraVars`). Black ink over translucent light glass (on an
-  arbitrary wallpaper) reads washed-out at the dark-mode alphas; white-on-dark needs less ink.
+  in light vs `0.8/0.6` in dark. Black ink over translucent light glass (on an arbitrary
+  wallpaper) reads washed-out at the dark-mode alphas; white-on-dark needs less ink. The alphas
+  live in **`TEXT_INK`** (`ui/lib/nidara-kit/platform/glass-legibility.ts`), which `nidaraVars`
+  emits from — the adaptive glass holds exactly those tiers to a contrast target, so they are one
+  value, not two copies. The ramp is ALPHA on purpose, and that was measured, not assumed
+  (2026-09-29, #673): a solid grey equal to `dim` over black measures 1.19:1 over a white backdrop
+  against 2.13:1 for the alpha ink, because alpha ink always lands brighter than what it sits on
+  and a fixed grey sinks into a bright backdrop. Apple's `secondaryLabelColor` & co. are alpha too.
 
 **Adwaita colour leak (tech-debt #9):** libadwaita is force-loaded in-process and colours
 `button` / `calendar` labels by the PROCESS mode — wrong for a pinned shell. Fixed ONCE in
@@ -1327,8 +1336,9 @@ quantities that both get called "opacity": `SquircleContainer` fills a CC island
 `overlayOpacity * depth` — that is the material. The battery outline, the dock's running dot, a
 resource ring, the cover art's empty slot are drawn on top of it, and they must NOT scale with it:
 the two would compound, so the more transparent a user made a surface the harder its own contents
-would be to read. Three tones, all painted as `Theme.chromeIsDark ? 1 : 0` (a painter that hardcodes
-a colour is a painter that vanishes in one appearance):
+would be to read. Three tones, all painted as `chromeIsDarkFor(area) ? 1 : 0` (a painter that hardcodes
+a colour is a painter that vanishes in one appearance, and one that reads the global
+`Theme.chromeIsDark` is one that stays white on a surface the adaptive glass has flipped):
 
 | token | for |
 |---|---|
@@ -1345,8 +1355,12 @@ anywhere, and a single-use number in a shared file advertises a sharing that doe
 and both are already named where they are used.
 
 
-Glass opacity is **WYSIWYG with the slider** — what you set is what is painted, and no code pins it
-higher (an old light-mode 0.40 floor was removed for exactly that reason). But the RANGE itself now
+Glass opacity is **the slider, or more — never less** (since 2026-09-29, #673). Over a backdrop the
+slider's glass can carry, what you set is what is painted. Where it cannot — text on it would fall
+below its contrast target — the ADAPTIVE GLASS thickens that one surface (up to
+`GLASS_ADAPT_CEILING`) or flips its skin; see "Adaptive glass" below. So the slider is a floor, not
+the value. (What was removed for good is a FIXED floor: an old light-mode 0.40 pinned every
+surface over every wallpaper, which is the opposite trade.) But the RANGE itself now
 has a floor, and the range lives in ONE place: **`GLASS_RANGE` in `core/NidaraTheme.ts`**, imported
 by `clampOpacity` and by all five sliders. Do not retype the bounds; that was six literals until
 2026-08-23, i.e. five chances for a slider to offer a value the clamp then silently refuses.
@@ -1366,9 +1380,10 @@ answer. ⚠️ **The answer it turned out to have is not the one this paragraph 
 It said "give the TEXT its own contrast (vibrancy / shadow / a scrim)" — the login screens got the
 real one on 2026-08-25 and it is a step earlier than that: choose which SKIN the glass wears, from
 what is behind it, because no backdrop defeats both. See "The login screens choose their skin from
-the wallpaper" below for the sweep and the prior art. **For the SHELL this is still open**, and for
-a reason that does not apply to the login screens: a shell surface can have a window behind it, not
-only the wallpaper.
+the wallpaper" below for the sweep and the prior art. **For the SHELL it is answered by the adaptive
+glass (#673)**, which is the reason it had stayed open answered: a shell surface can have a window
+behind it, not only the wallpaper, so it MEASURES what is really behind it instead of reading the
+wallpaper file. See "Adaptive glass" below.
 
 ⚠️ **ONE floor for all four surfaces, and that is load-bearing** (see the master below): a
 per-surface floor makes the master go mixed — and grey itself out — across the whole part of its
@@ -1419,6 +1434,102 @@ supply); making it coherent is a policy decision, deferred — see tech-debt #24
 `SquircleContainer` params to the search/CC/clock capsules), NOT one grouped pill — so tray
 icons match every other bar icon. The click→window-focus wiring (PID-first match, `is_menu`,
 `activate` fallback) lives in architecture.md under `bar/Tray.tsx`.
+
+## Adaptive glass — each surface keeps its own text legible (#673, 2026-09-29)
+
+Every shell surface with text on glass — the bar, each bar panel (CC, NC, system menu, search, bar
+expansion), the notification banners, the Activity Island, the app grid — measures what is behind
+it and adapts, by itself, on events. The dock is not in the list: it carries no text of its own.
+
+**The rule** (owner's call: "A+B"), pure arithmetic in `ui/lib/nidara-kit/platform/glass-legibility.ts`:
+
+- Targets, per `TEXT_INK` tier: primary and secondary ≥ 4.5:1, dim ≥ 3:1, disabled exempt.
+- **A.** Thicken the surface's tint from the user's slider up to `GLASS_ADAPT_CEILING` (0.60 —
+  past ~0.59 it stops reading as glass, #82).
+- **B.** If the ceiling is not enough, flip the surface's SKIN (dark glass + white ink ↔ light glass
+  + black ink), at the slider's own body.
+- Hysteresis: a flipped surface goes home only when its own skin clears every target by
+  `FLIP_BACK_MARGIN` (1.1); a thinning of less than `ALPHA_DEADBAND` is not worth a repaint.
+- Held to its numbers by `scripts/dev/glass-legibility-probe.ts` in the `styles` CI job, with a
+  control that deletes rule B and must be caught. ⚠️ The first control run was NOT caught: the
+  last-resort branch also flips pure white, so "did it flip" is not a test of B. The probe now also
+  checks that B arrives at the slider's body, not at the ceiling.
+
+**The unit is the SURFACE, never a capsule** — and "surface" is what reads as one piece, not what is
+one GTK window. The island's compact capsule sits in the bar's row, so while it is compact it joins
+the bar's GROUP (`group: () => "bar-row"`): one decision from both backdrops together. Without that,
+a pale stretch under the bar's left end flipped the bar to light and left the island's capsule dark
+in the middle of it. Open, the island is a panel of its own.
+
+**How a surface measures itself** — `common/BackdropProbe.ts`:
+
+1. `nidara_wl_capture_region` (zwlr_screencopy region) copies the rectangle the widget covers from
+   the compositor's FINAL frame: our layer over the backdrop Hyprland blurred.
+2. The same widget is rendered offscreen (`Gtk.WidgetPaintable` → the window's own renderer →
+   `render_texture`) at the surface's scale: exactly what we handed the compositor.
+3. `uncomposite()`: `screen = ours + backdrop·(1 − ours.a)` solved for `backdrop`, per pixel.
+   That is the backdrop AS THE TEXT SEES IT — wallpaper, a fullscreen video, another client's
+   layer, with Hyprland's blur, contrast and vibrancy already applied. Nothing to model.
+4. `backdropStats`: the 95th / 5th luminance percentiles — the brightest backdrop decides for dark
+   glass, the darkest for light.
+
+Verified live: the recovered backdrop matched the independently validated forward model (wallpaper →
+Hyprland's shaders, transcribed from v0.56.2 → tint) to a median of 2/255, p90 3.5.
+
+Why not the other ways (checked in Hyprland 0.56.2, `ScreenshareFrame.cpp`): there is no capture of
+the screen WITHOUT our layer — region/output capture copies the monitor's final texture, and the
+`no_screen_share` layer rule paints a BLACK BOX where the layer was instead of leaving it out. And
+rebuilding the backdrop from window captures + the wallpaper misses other clients' layers and would
+have to reimplement the blur.
+
+⚠️ **Four ways the measurement lied before it was right — each is a rule in the code now:**
+
+- **Only the glass BODY can be subtracted.** The offscreen render and the compositor do not
+  antialias a glyph's edge to the same byte, and dividing by `1 − alpha` amplifies the difference
+  (×10 at 0.9): every letter came back outlined in white. `isFlatGlass` keeps only pixels whose
+  paint is uniform 2 px around. The backdrop behind is blurred and smooth, so this costs nothing.
+- **Never measure a layer that is fading in.** Hyprland fades layers in (`layersIn`, ~300–400 ms)
+  and slides workspaces (600 ms); a surface composited THINNER than it is reads as a brighter
+  backdrop. The bar's first probe, taken inside its own fade, recovered +17/+32 per channel and
+  flipped a bar that needed nothing. Hence `MAP_SETTLE_MS` 1000 and `DEBOUNCE_MS` 800.
+- **Never measure right after a change of your own.** A flip restyles the CSS on the next frame
+  and repaints the Cairo on the next draw — not always the same one — and the offscreen render can
+  hand back a DrawingArea's previous node: a capture with light glass and white text against a
+  render with dark glass. `QUIET_AFTER_CHANGE_MS` after every change.
+- **The wallpaper's "changed" is its START.** `WallpaperManager` emits it when `awww img` returns,
+  and the daemon runs its transition for its default 3 s after that: half old image, half new.
+  `WALLPAPER_TRANSITION_MS` 3500.
+
+**How a painter finds out** — it asks with its OWN widget: `glassAlphaFor(widget, role)` for the
+body, `chromeIsDarkFor(widget)` for the skin. Both walk up to the registered surface that contains
+the widget (so a popover parented inside one follows it for free) and fall back to the slider and
+`Theme.chromeIsDark` outside any surface. CSS follows through a class on the surface's root,
+`nidara-skin-dark` / `nidara-skin-light`, present only while flipped, which
+`generateSkinFlipScope` (NidaraTheme.ts) gives a full `--nidara-*` set at
+`window#<w> .nidara-skin-* *` — (1,1,1), so it beats both the global `*` and the pin's
+`window#<w> *`. That is deliberate: the pin is a preference, legibility over a white backdrop is not.
+
+🔑 **A new Cairo painter on shell chrome MUST ask `chromeIsDarkFor(itsArea)` / `glassAlphaFor(itsArea,
+role)`**, not `Theme.chromeIsDark` / `Theme.overlayOpacity`. Reading the global is exactly the bug the
+flip exposes: a ring that stays white on a surface that went light. (The dock and the agent pointer
+still read the global: neither is a registered surface.)
+
+**When it measures — events only, never a timer** (the animation rule): a panel's reveal settling
+open (`popToggle`'s `onDone`), a banner stack settling, `map`, HyprlandState "changed" filtered to
+what can change the pixels behind (geometry, workspace, fullscreen, focus only onto a FLOATING
+window, which raises it), a wallpaper change, a theme change. What changes behind a surface without
+an event — a video, a scrolling page — is caught at the next event, not live. Cost, measured: the
+capture 3–20 ms on a worker thread; the offscreen render + read-back + pixel loop 5–15 ms on the
+main thread, once per event burst.
+
+Verify with `nidara-ipc dumpState` → `glass` (per surface: floor, alpha, skin, flipped, group, the
+two backdrops and how long ago), and `nidara-ipc glassRemeasure`. `NIDARA_BACKDROP_DEBUG=<dir>`
+writes each probe's capture, render and recovered backdrop as PNGs (dev-workflow.md), and
+`NIDARA_BACKDROP_PROBE=0` turns the whole thing off — the glass is then exactly the slider.
+
+Not done here, on purpose: the explicit accessibility modes (Reduce transparency, Increase
+contrast) are #674, and the CC's container/shadow is a visual element the owner reviews on screen
+first (#673 comment).
 
 ## Accent palette (9 colors)
 
