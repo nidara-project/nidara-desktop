@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import { BAR_ICON_SIZE, BAR_ITEM_PAD, PANEL_W, AtomicWidget, WidgetSize, wrapCapsuleTile } from "../common/widget-kit"
+import { BAR_ICON_SIZE, BAR_ITEM_PAD, CAPSULE_ICON_GAP, CAPSULE_ICON_SIZE, PANEL_W, AtomicWidget, WidgetSize, wrapCapsuleTile } from "../common/widget-kit"
 import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
 import * as Battery from "../core/BatteryService"
@@ -81,7 +81,9 @@ function buildSingle(): Gtk.Widget {
 // ── 2×1 (Medium): capsule — glyph in the icon plate + percentage / state text ──
 function buildWide(): Gtk.Widget {
     const box = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL, spacing: 12,
+        // The capsule's own numbers, from the kit — this tile builds its capsule by hand
+        // (a Cairo glyph, not an icon) and must still line up with every other one.
+        orientation: Gtk.Orientation.HORIZONTAL, spacing: CAPSULE_ICON_GAP,
         halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER,
         hexpand: true, vexpand: true, margin_start: 4,
     })
@@ -89,9 +91,9 @@ function buildWide(): Gtk.Widget {
     const iconBox = new Gtk.Box({
         css_classes: ["nidara-atomic-icon-circle-bg"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        width_request: 48, height_request: 48,
+        width_request: CAPSULE_ICON_SIZE, height_request: CAPSULE_ICON_SIZE,
     })
-    const glyph = makeGlyph(28, true)   // pixel_size 28 like every other tile icon; draw_func centres it in the 48px circle
+    const glyph = makeGlyph(28, true)   // pixel_size 28 like every other tile icon; draw_func centres it in the circle
     iconBox.append(glyph)
 
     const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })

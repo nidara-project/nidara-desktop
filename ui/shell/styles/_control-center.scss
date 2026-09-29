@@ -114,11 +114,19 @@
         .cc-split-icon-btn {
             border-radius: var(--nidara-radius-pill);
             color: var(--nidara-text);
+            // No box of its own: it FILLS the circle it sits in. With the base layer's
+            // button padding (9px a side) a 28px icon asked for 46px, which was hidden
+            // while the circle was 48 and widened it to 46×44 — an oval — the moment the
+            // circle went to 44 (2026-09-30, CAPSULE_ICON_SIZE).
+            padding: 0;
+            min-width: 0;
+            min-height: 0;
             @include nidara-tile-states;
         }
     }
 
-    /* 48x48 Circular Badge inside capsules (no override needed, is a box not a button) */
+    /* The circular badge inside capsules (CAPSULE_ICON_SIZE, widget-kit/tile.ts; no
+       override needed, it is a box not a button) */
     .nidara-atomic-icon-circle-bg {
         background-color: var(--nidara-surface);
         border-radius: var(--nidara-radius-pill);
@@ -126,12 +134,13 @@
     }
 
     /* --- Typographical Utilities for Toggles --- */
-    // A tile's title — 13, and NOT 14 without widening its column first (tried
-    // 2026-09-30: macOS 27's module titles scaled like the rest of our shell come to ~14,
-    // but a 2×1 capsule's text column is 88px and "Luz nocturna" is 91 at 14 bold, 83 at
-    // 13 — it was cut to "Luz noctur…"). The NC's card summaries share the class.
+    // A tile's title — 14 since 2026-09-30 (13 before): macOS 27's module titles scaled
+    // like the rest of our shell. ⚠️ Only because the 2×1 capsule's text column went
+    // 88 → 96 in the same change (widget-kit/tile.ts, CAPSULE_ICON_SIZE/GAP): at 88,
+    // "Luz nocturna" (91px at 14 bold) was cut to "Luz noctur…". The NC's card summaries
+    // share the class.
     .nidara-atomic-label-bold {
-        font-size: $fs-small;
+        font-size: $fs-body;
         font-weight: $fw-bold;
         color: var(--nidara-text);
     }

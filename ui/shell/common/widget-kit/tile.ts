@@ -98,16 +98,23 @@ export function makeRoundTile(
 
 // ── The capsule ───────────────────────────────────────────────────────────────
 
-// Single source of truth for the 2×1 (WIDE) capsule inner layout: a 48px icon
-// circle + title/subtitle stack. Every capsule form below is built on it, so every
-// 2×1 widget is spaced and aligned identically. Keep this the *only* place these
-// dimensions live.
+// Single source of truth for the 2×1 (WIDE) capsule inner layout: an icon circle +
+// title/subtitle stack. Every capsule form below is built on it, so every 2×1 widget
+// is spaced and aligned identically. Keep this the *only* place these dimensions live
+// (the battery's own capsule reads them from here).
+//
+// 44 and 8 since 2026-09-30 (48 and 12 before), macOS 27's proportions at our scale:
+// its module's icon circle is ~56 % of the tile's height (ours was 60 %) and its gap to
+// the text is ~8. What that buys is the title's column — 88 → 96px — which is what let
+// the title go 13 → 14 (owner's call) without cutting "Luz nocturna" (91px at 14 bold).
+export const CAPSULE_ICON_SIZE = 44
+export const CAPSULE_ICON_GAP = 8
 // The chrome this file puts between the tile's inner edge and the title: the inner
-// box's `margin_start`, the 48px icon circle and the 12px spacing between them. It
-// lives here because this file OWNS those three numbers — the host hands over the
-// room (ContentBudget.width, the tile span minus the island's padding) and never
-// knows what a capsule does with it.
-const CAPSULE_CHROME = 4 + 48 + 12
+// box's `margin_start`, the icon circle and the gap between them. It lives here
+// because this file OWNS those numbers — the host hands over the room
+// (ContentBudget.width, the tile span minus the island's padding) and never knows
+// what a capsule does with it.
+const CAPSULE_CHROME = 4 + CAPSULE_ICON_SIZE + CAPSULE_ICON_GAP
 
 /** The width the title really gets, or 0 when the caller handed over no budget. */
 function textColumnOf(budget?: ContentBudget): number {
@@ -141,7 +148,7 @@ export function makeCapsuleInner(
     // ethernet, …) or nested inside a cc-capsule-btn.
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 12,
+        spacing: CAPSULE_ICON_GAP,
         halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER,
         hexpand: true, vexpand: true,
         margin_start: 4,
@@ -150,7 +157,7 @@ export function makeCapsuleInner(
     const iconBox = new Gtk.Box({
         css_classes: ["nidara-atomic-icon-circle-bg"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        width_request: 48, height_request: 48,
+        width_request: CAPSULE_ICON_SIZE, height_request: CAPSULE_ICON_SIZE,
     })
     const icon = new Gtk.Image({ pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] })
     setIcon(icon, getIcon())

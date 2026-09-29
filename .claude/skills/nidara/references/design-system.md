@@ -1568,8 +1568,8 @@ each tile was a separate thin sheet with the page showing through and between th
   scroll indicator's lane (`LANE`, 8) lives inside the panel's right margin rather than past it.
   Measured live: NC panel 400 wide at (2156, 40), calendar 368×272 at y 56. The other bar panels
   (system menu, bar expansion, search) keep `PANEL_TOP` (8 below the bar) until they get a margin
-  of their own. A tile's title stays 13: 14 (macOS's scaled) cut "Luz nocturna" in the 88px text
-  column of a 2×1 capsule — see the note on `.nidara-atomic-label-bold`.
+  of their own. A tile's title is 14 (macOS's, scaled), which needed the 2×1 capsule's text column
+  widened first (88 → 96, icon circle 44 and gap 8): at 88 it cut "Luz nocturna".
 - **Why GAP is 16** (owner asked where 12 came from: nowhere on record, it arrived with the first CC
   of 2026-04-05). Apple's official macOS 27 Figma kit has no Control Center, but its notification
   stack is 16 from the panel's edge, 16 between cards and 16 from the screen's edge; a macOS 27 CC
@@ -3353,10 +3353,13 @@ wide reads on one line and ellipsizes, the way every other desktop's quick toggl
 branch was written for ("Screen Recording" reading in full) is untouched: a name that breaks at a
 space still gets its two lines.
 
-The column is **88px** — the 2×1 span (2·UNIT + GAP = 176) minus the island's padding (2·12) minus
-the capsule's own chrome (`CAPSULE_CHROME` = margin 4 + icon circle 48 + spacing 12). It was 84 with
-the old 12px gap (span 172), confirmed then against a live session, not derived on paper: `queryUI`
-put the island at x=2380 w=172, the icon at x=2396 w=48 and the label at x=2456.
+The column is **96px** — the 2×1 span (2·UNIT + GAP = 176) minus the island's padding (2·12) minus
+the capsule's own chrome (`CAPSULE_CHROME` = margin 4 + `CAPSULE_ICON_SIZE` 44 + `CAPSULE_ICON_GAP`
+8; macOS 27's proportions, 2026-09-30 — it was 48 + 12). It was 84 with the old 12px gap and 48/12
+chrome, confirmed then against a live session, not derived on paper: `queryUI` put the island at
+x=2380 w=172, the icon at x=2396 w=48 and the label at x=2456. The column is what the title's size
+is held to: 14px bold (since 2026-09-30) fits every title measured at 96 — "Luz nocturna" 91, "Luce
+notturna" 96 — but pl "Oszczędzanie" is 97, one pixel over.
 
 🔑 **A tile learns that number the only legal way — it is HANDED the `ContentBudget`.** The capsule
 makers take it as a trailing optional argument and the widget forwards what `buildContent(size,

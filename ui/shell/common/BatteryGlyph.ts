@@ -61,7 +61,7 @@ function roundRect(cr: any, x: number, y: number, w: number, h: number, r: numbe
  *  and the capsule around it comes out the same width. The drawing is scaled
  *  from battery.svg's 24-unit grid (ink = 24×14 of those units, already centred
  *  in the viewBox), never stretched to the allocation.
- *  fill=true lets the DrawingArea fill its parent (e.g. the 48px icon circle) so the
+ *  fill=true lets the DrawingArea fill its parent (e.g. the capsule's icon circle) so the
  *  glyph is centred by the draw_func in the full allocation — robust against box quirks. */
 export function makeBatteryGlyph(box: number, fill = false): Gtk.DrawingArea {
     const da = new Gtk.DrawingArea(fill
