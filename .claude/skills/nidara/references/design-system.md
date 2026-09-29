@@ -1629,6 +1629,15 @@ the global: it is not a registered surface.) ⚠️ `redrawSubtree` repaints `Gt
 `SlicedCairoArea` (the dock's horizontal capsule, which is not a DrawingArea); a painter of a third
 kind must be added there, or it keeps its old tint until something else redraws it.
 
+🔑 **A mode change re-decides at once, from the backdrop already measured** — the backdrop does not
+depend on our skin, so no capture is needed. Before, every mode-following surface kept the OLD
+skin for about a second (its stored decision read as "flipped" against the new mode), and whatever
+asked in that second kept the wrong answer: the dock's tooltips came up black-on-dark
+(owner-caught 2026-09-29). The bar row is skipped (its skin is the backdrop's), and the
+measurement still follows. ⚠️ And a consumer that CACHES the answer must re-ask when it shows:
+the adaptive glass re-decides on its own events and notifies nobody. The tooltip's `dark`/`light`
+label class is recomputed right before `popup()` for that reason.
+
 **When it measures — events only, never a timer** (the animation rule): a panel's reveal settling
 open (`popToggle`'s `onDone`), a banner stack settling, `map`, HyprlandState "changed" filtered to
 what can change the pixels behind (geometry, workspace, fullscreen, focus only onto a FLOATING
@@ -3653,6 +3662,17 @@ context menu paints the same shape (see "The glass bubble" below); the tooltip o
   This is the same reason `NidaraTheme` floors `--nidara-popover-bg` at `Math.max(bgAlpha, 0.38)` — any
   popup glass must clear the popup threshold. `chrome:false` (About) is a normal window with no blur →
   near-opaque fill. Rim is white on dark glass, a subtle dark line on light. Repaints on `Theme "changed"`.
+  🔑 **A TOOLTIP floors higher, at `TOOLTIP_GLASS_FLOOR` (0.59 dark / 0.47 light, owner 2026-09-29)**
+  — the least glass at which its one line of primary text reads 4.5:1 over pure white / pure black,
+  i.e. over any backdrop (at 0.38 it was 2.41:1 over white). A tooltip is NOT measured by the
+  adaptive glass: it is its own popup over whatever is below it (a bar tooltip hangs over the
+  windows, not over the bar's strip), and measuring it would mean changing it while it is read. The
+  constant lives in `glass-legibility.ts` and the probe holds it to "passes, and is the least that
+  does". The dock MENU still floors at 0.38 — only tooltips were decided.
+  ⚠️ The bubble's top bloom follows the SILHOUETTE (the shape minus itself moved down, in 4
+  stacked bands), not a rectangle along the body's top edge: that rectangle ran straight across the
+  base of a pointer on the "top" side and read as a line there (the bar's tooltips, owner-caught
+  2026-09-29).
   Geometry consts (`ARROW_W/H`, `PAD_*`, radius clamp so the arrow base fits the straight edge) are at the top.
 - **Text** is `string | (() => string)`. A getter is resolved **lazily, right before show** — so
   live values (a window title) stay fresh WITHOUT subscribing (a subscription forces a dock redraw +

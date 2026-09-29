@@ -221,18 +221,26 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
     const cx = bx + bw * 0.5
     const { r: lr, g: lg, b: lb } = GLASS_SPECULAR
 
-    // A) Top inner bevel bloom
+    // A) Top inner bevel bloom — a band that follows the silhouette's TOP edge, pointer
+    // included: the shape minus itself moved down by `d`. It was a rectangle laid along
+    // the BODY's top edge, which is also where a pointer on the "top" side meets the body
+    // — the band ran straight across the pointer's base and read as the body's edge
+    // showing through (owner-caught 2026-09-29, the bar's tooltips; the dock's point down
+    // and never showed it). Stacked in STEPS bands of growing depth, so a pixel `t` below
+    // the edge gets 0.06·(1 − t/topBloomH): the old linear gradient, now along any edge.
+    const topBloomH = Math.min(3.5, Math.max(2.0, bh * 0.12))
+    const STEPS = 4
     cr.save()
     cr.setAntialias(2)
     bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n)
     cr.clip()
-    const topBloomH = Math.min(3.5, Math.max(2.0, bh * 0.12))
-    const topBloom = new Cairo.LinearGradient(cx, by, cx, by + topBloomH)
-    topBloom.addColorStopRGBA(0.0, lr, lg, lb, 0.06)
-    topBloom.addColorStopRGBA(1.0, lr, lg, lb, 0.0)
-    cr.rectangle(bx, by, bw, topBloomH)
-    cr.setSource(topBloom)
-    cr.fill()
+    cr.setFillRule(Cairo.FillRule.EVEN_ODD)
+    cr.setSourceRGBA(lr, lg, lb, 0.06 / STEPS)
+    for (let i = 1; i <= STEPS; i++) {
+        bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n)
+        bubblePath(cr, bx, by + topBloomH * i / STEPS, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n)
+        cr.fill()
+    }
     cr.restore()
 
     // B) 1px continuous rim gradient

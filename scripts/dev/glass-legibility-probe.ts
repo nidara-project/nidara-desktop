@@ -9,7 +9,7 @@
 
 import {
     uncomposite, glassOver, tierContrast, markContrast, legibilityMargin, MARK_TARGET, decideGlass, decideGlassByBackdrop, mergeBackdropStats, backdropStats, hyprlandPrepare, hyprlandVibrancy, NIDARA_BLUR,
-    GLASS_ADAPT_CEILING, TEXT_INK, type Rgb, type BackdropStats,
+    GLASS_ADAPT_CEILING, TEXT_INK, TOOLTIP_GLASS_FLOOR, type Rgb, type BackdropStats,
 } from "../../ui/lib/nidara-kit/platform/glass-legibility"
 import { GLASS_TINT } from "../../ui/lib/nidara-kit/platform/tokens"
 
@@ -126,6 +126,22 @@ const floor = 0.48
     const white = decideGlass(flat(grey(1)), true, floor, undefined, "marks")
     check(!decideGlass(flat(grey(1)), true, floor).isDark && white.isDark && white.alpha <= GLASS_ADAPT_CEILING,
           `marks: pure white flips text to the light skin, but only thickens the dock (${white.alpha})`)
+}
+
+// ── 4c. Tooltips: a fixed floor that reads over ANY backdrop ─────────────────
+// One line of primary text, not measured: its floor must carry it over the worst case
+// for each skin, and be the LEAST that does (more would be solid for nothing).
+{
+    const d = TOOLTIP_GLASS_FLOOR.dark, l = TOOLTIP_GLASS_FLOOR.light
+    check(tierContrast(grey(1), true, d, "primary") >= 4.5 && tierContrast(grey(1), true, d - 0.01, "primary") < 4.5,
+          `tooltip, dark: ${d} is the least glass whose text reads 4.5:1 over pure white`)
+    check(tierContrast(grey(0), false, l, "primary") >= 4.5 && tierContrast(grey(0), false, l - 0.01, "primary") < 4.5,
+          `tooltip, light: ${l} is the least glass whose text reads 4.5:1 over pure black`)
+    let worst = Infinity
+    for (let v = 0; v <= 1.0001; v += 0.01)
+        worst = Math.min(worst, tierContrast(grey(v), true, d, "primary"), tierContrast(grey(v), false, l, "primary"))
+    check(worst >= 4.5, `tooltip: no grey backdrop defeats either floor (worst ${worst.toFixed(2)})`)
+    check(d <= GLASS_ADAPT_CEILING && l <= GLASS_ADAPT_CEILING, "tooltip: both floors sit under the adaptive ceiling")
 }
 
 // ── 5. Hysteresis ────────────────────────────────────────────────────────────

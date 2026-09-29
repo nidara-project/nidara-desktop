@@ -102,6 +102,18 @@ export const MARK_TARGET = 3.0
 export const GLASS_ADAPT_CEILING = 0.60
 
 /**
+ * The least glass a TOOLTIP wears, per skin: what its one line of primary text needs to
+ * reach 4.5:1 over the worst backdrop there is — pure white under dark glass, pure black
+ * under light (owner, 2026-09-29). A tooltip is not measured: it is its own popup over
+ * whatever is below it (a bar tooltip hangs over the windows, not over the bar's strip),
+ * and measuring it would mean changing it while it is being read. It carries only the
+ * primary tier, so it never needs rule B, and both values sit under the ceiling. Held to
+ * these numbers — they are the LEAST that passes — by `glass-legibility-probe.ts`.
+ * More solid than the rest of the glass, on purpose: macOS's tooltips are near-opaque.
+ */
+export const TOOLTIP_GLASS_FLOOR = { dark: 0.59, light: 0.47 } as const
+
+/**
  * Hysteresis for the way BACK to the user's own skin: a flipped surface returns
  * only when its own skin clears every target by this factor at the ceiling. Without
  * it a backdrop sitting on the threshold flips the surface back and forth.

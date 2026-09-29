@@ -482,10 +482,27 @@ export function startAdaptiveGlass(): void {
     // transition — measured 2026-09-29: the probe right after it saw the old and the
     // new image half and half, and flipped on that.
     Wallpaper.connect("changed", () => scheduleAll(WALLPAPER_TRANSITION_MS))
-    // The theme: a mode change moves `chromeIsDark` (so a flipped surface may now be
-    // wearing the user's own skin), and a slider move moves the floor.
+    // The theme: a mode change moves `chromeIsDark`, and a slider move moves the floor.
+    // Every surface that follows the mode re-decides NOW from the backdrop it last
+    // measured — the backdrop does not depend on our skin, so no capture is needed.
+    // Waiting for the measurement instead left each surface in the OLD skin for a second
+    // after a mode switch (its stored decision read as "flipped" against the new mode),
+    // and anything that asked in that second kept the wrong answer: the dock's tooltips
+    // came up with black text on dark glass (2026-09-29). The measurement still follows.
+    let lastMode = Theme.chromeIsDark
     Theme.connect("changed", () => {
-        for (const s of surfaces.values()) applySkinClass(s)
+        const modeChanged = Theme.chromeIsDark !== lastMode
+        lastMode = Theme.chromeIsDark
+        for (const s of surfaces.values()) {
+            // The bar row reads its skin from its backdrop, not the mode: its group
+            // re-decides on the measurement, as before.
+            if (s.lastStats && !s.skinFromBackdrop && !s.group?.()) {
+                // A fresh decision across a mode change: the old one's skin was chosen
+                // against the OTHER mode, and passing it would read as a flip to keep.
+                apply(s, decideGlass(s.lastStats, Theme.chromeIsDark, floorOf(roleOf(s)),
+                    modeChanged ? undefined : s.decision ?? undefined, s.content))
+            } else applySkinClass(s)
+        }
         scheduleAll()
     })
 }
