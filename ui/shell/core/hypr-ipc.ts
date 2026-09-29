@@ -195,11 +195,19 @@ export function subscribeEvents(onEvent: EventHandler): void {
     }
 
     let retryDelayS = 1
+    // The CONNECTION, held for as long as we read from it. Only its input stream used to
+    // be kept (inside `dis`), and a GIOStream closes its streams when it is disposed —
+    // so the first garbage collection that reaped the JS wrapper of `conn` closed the
+    // socket under the pending read: "[HyprIPC] event read failed: … the stream is
+    // already closed", 4 s after a shell start (2026-09-30), and the shell deaf to
+    // Hyprland until the retry a second later. Whether it happens depends on when GC
+    // runs, which is why it had not shown before.
+    let conn: any = null
 
     const connect = () => {
         let dis: any
         try {
-            const conn = new Gio.SocketClient().connect(
+            conn = new Gio.SocketClient().connect(
                 Gio.UnixSocketAddress.new(`${dir}/.socket2.sock`), null)
             dis = new Gio.DataInputStream({ base_stream: conn.get_input_stream() })
         } catch (e) {

@@ -1563,8 +1563,13 @@ each tile was a separate thin sheet with the page showing through and between th
   edge-to-tile reads like tile-to-tile. Inside: the privacy notice 4 above the grid (it belongs to
   the content, as macOS 27's does; was 24), the Edit pill 16 under the grid with only the panel's
   margin below it (was 24 + 12). Measured live at GAP 12: panel 388×577 at (2168, 40), content at
-  y 56 and 20 px from the right edge. The other bar panels keep `PANEL_TOP` (8 below the bar) until
-  they get a margin of their own.
+  y 56 and 20 px from the right edge. **The NC is the same panel** (same `CC_PANEL_PAD`, same place,
+  cards `GAP` apart, the clear-all pill 16 under the last card), so the two columns line up; its
+  scroll indicator's lane (`LANE`, 8) lives inside the panel's right margin rather than past it.
+  Measured live: NC panel 400 wide at (2156, 40), calendar 368×272 at y 56. The other bar panels
+  (system menu, bar expansion, search) keep `PANEL_TOP` (8 below the bar) until they get a margin
+  of their own. A tile's title stays 13: 14 (macOS's scaled) cut "Luz nocturna" in the 88px text
+  column of a 2×1 capsule — see the note on `.nidara-atomic-label-bold`.
 - **Why GAP is 16** (owner asked where 12 came from: nowhere on record, it arrived with the first CC
   of 2026-04-05). Apple's official macOS 27 Figma kit has no Control Center, but its notification
   stack is 16 from the panel's edge, 16 between cards and 16 from the screen's edge; a macOS 27 CC

@@ -16,6 +16,7 @@ import appService from "../../core/AppService"
 import status from "../../core/Status"
 import { dockSideState } from "../dock/state"
 import { UNIT, GAP, GRID_WIDTH } from "./CCLayoutManager"
+import { CC_PANEL_PAD } from "./ControlCenter"
 import { t } from "../../core/i18n"
 import { uiIcon } from "../../core/Icons"
 import { safeDisconnect } from "../../core/signals"
@@ -434,13 +435,21 @@ export default function NotificationCenter() {
     const toggleItem = (nid: number) => { if (expandedItems.has(nid)) expandedItems.delete(nid); else expandedItems.add(nid); hoverSeed = nid; updateNotifs(); hoverSeed = null }
     const groupCache = new Map<string, { container: Gtk.Box, headerBox: Gtk.Box, revealer: any, subBox: Gtk.Box, sig: string, timeLabels: { label: Gtk.Label, time: number }[], expanded: boolean, subClearTimer: number | null }>()
 
+    // The NC is a PANEL like the CC (ControlCenter.tsx, CC_PANEL_PAD — the same margin, so
+    // the two columns line up): its cards sit 16 in from every edge and 16 apart, as the
+    // notification stack in Apple's macOS 27 kit does (owner, 2026-09-30; 12 apart and
+    // flush with an 8px side gap until then).
     // The content keeps its full width (GRID_WIDTH); LANE is extra space ADDED on the right
-    // to host the scrollbar. The overlay scrollbar floats in that lane only when there's
-    // overflow — so it never reflows the cards. 8 (not 14) so the cards can sit flush at
-    // the 8px side gap (Bar pulls the panel right by LANE; must match NC_LANE in Bar.tsx
-    // and the .nc-content-box padding-right).
+    // to host the scrollbar, and it lives INSIDE the panel's right margin (so that margin
+    // is PAD − LANE of box + the lane). The overlay scrollbar floats in that lane only when
+    // there's overflow — so it never reflows the cards. Must match the .nc-content-box
+    // padding-right.
     const LANE = 8
-    const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, width_request: GRID_WIDTH + LANE, css_classes: ["nc-outer"] })
+    const PAD = CC_PANEL_PAD
+    const outer = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL, spacing: GAP, width_request: GRID_WIDTH + LANE, css_classes: ["nc-outer"],
+        margin_top: PAD, margin_bottom: PAD, margin_start: PAD, margin_end: PAD - LANE,
+    })
 
     // propagate_natural_height: the panel hugs its visible content (calendar +
     // cards) instead of filling the bar→dock gap — empty column space would go
@@ -451,7 +460,7 @@ export default function NotificationCenter() {
     // The scroll forces its child to the full viewport width (GRID_WIDTH + LANE). A
     // padding-right of LANE (in .nc-content-box) keeps the cards at GRID_WIDTH and leaves
     // the lane free on the right for the indicator — no reflow, no overlap.
-    const listContainer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["nc-content-box"], margin_top: 0, margin_bottom: 0 })
+    const listContainer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: GAP, css_classes: ["nc-content-box"], margin_top: 0, margin_bottom: 0 })
     // NidaraScrolled retires tech-debt #15: GTK's overlay slider grew on pointer
     // PROXIMITY (it sets .hovering itself, Adwaita's rule beat every override) and ate
     // the right edge of each card's close ✕. The replacement indicator is can_target
@@ -480,13 +489,14 @@ export default function NotificationCenter() {
     calendarIsland.set_halign(Gtk.Align.START)
     // The empty state rides the same glass capsule as the clear-all pill — bare text sat
     // straight on the wallpaper and washed out on light backgrounds.
-    const emptyBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 24, margin_bottom: 12, visible: false })
+    // 16 above, like the CC's Edit pill, and nothing below: the panel's margin closes it.
+    const emptyBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 16, margin_bottom: 0, visible: false })
     emptyBox.append(SquircleContainer({ child: new Gtk.Label({ label: t("nc.empty"), css_classes: ["nc-empty"], margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, shadow: GLASS_SHADOW }))
-    const pillBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 24, margin_bottom: 12, visible: false })
+    const pillBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 16, margin_bottom: 0, visible: false })
     const clearAllBtn = SquircleContainer({ child: new Gtk.Label({ label: t("nc.clear-all"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, onClick: () => clearAllAnimated(), css_classes: ["nc-clear-all-pill"], shadow: GLASS_SHADOW })
     pillBox.append(clearAllBtn)
 
-    const notificationItemsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, hexpand: true })
+    const notificationItemsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: GAP, hexpand: true })
     listContainer.append(emptyBox)
     listContainer.append(notificationItemsBox)
     listContainer.append(pillBox)
@@ -698,7 +708,8 @@ export default function NotificationCenter() {
     // here; the scroller absorbs it as its cap — see the note on `scroll`.
     // Attached to the returned widget like WorkspaceOverview's onOpen.
     ;(outer as any).setMaxHeight = (px: number) => {
-        scroll.max_content_height = Math.max(UNIT, Math.round(px - CAL_H - 12))   // 12 = outer spacing
+        // Minus the calendar, the gap under it and the panel's own margin above and below.
+        scroll.max_content_height = Math.max(UNIT, Math.round(px - CAL_H - GAP - PAD * 2))
     }
     return outer
 }

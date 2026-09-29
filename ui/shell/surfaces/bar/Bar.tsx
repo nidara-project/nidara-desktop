@@ -140,7 +140,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }), { ...OVERLAY_POP, pivot: "top-center" })   // grows down from its bar capsule
   expansionCapsule.valign = Gtk.Align.START
   expansionCapsule.halign = Gtk.Align.END
-  // margin_top set below to PANEL_TOP so the gap matches CC/NC exactly.
+  // margin_top set below to PANEL_TOP.
   expansionCapsule.visible = false
 
   // unclipAtRest: the CC's tiles reach its edges, and their keyboard ring (GTK's,
@@ -294,23 +294,23 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // edge) instead of the old 16 — the capsule alignment is a stronger visual
   // reference than the tiling grid underneath (which is the same number anyway).
   const SIDE_GAP = BAR_MARGIN
-  const NC_LANE = 8   // must match LANE in NotificationCenter.tsx
 
-  // The CC is a panel with its own margin (ControlCenter.tsx, CC_PANEL_PAD): the PANEL
-  // hangs `BAR_MARGIN` below the bar, as a window does, and its content lands where the
-  // margin puts it. The other panels have no margin of their own yet, so they keep 8.
+  // The CC and the NC are panels with their own margin (ControlCenter.tsx, CC_PANEL_PAD):
+  // the PANEL hangs `BAR_MARGIN` below the bar, as a window does, and its content lands
+  // where the margin puts it. The other panels have no margin of their own yet, so
+  // they keep 8.
   cc.margin_top = BAR_H + BAR_MARGIN
-  nc.margin_top = PANEL_TOP
-  expansionCapsule.margin_top = PANEL_TOP   // same gap below the bar as CC/NC
+  nc.margin_top = BAR_H + BAR_MARGIN
+  expansionCapsule.margin_top = PANEL_TOP   // 8 below the bar: its glass starts there, it has no panel margin
   systemMenu.margin_top = PANEL_TOP         // Bar owns the menu geometry (see syncPanelMargins)
   const syncPanelMargins = () => {
     const end = SIDE_GAP + (dockSideState.position === 'right' ? dockSideState.width : 0)
     cc.margin_end = end
     popups.margin_end = end
-    // NC reserves a scrollbar lane on its right (LANE in NotificationCenter).
-    // Pull the panel right by that much so its CONTENT edge still aligns with the
-    // CC/clock capsule, with the lane living in the gap toward the screen edge.
-    nc.margin_end = Math.max(0, end - NC_LANE)
+    // The NC's scrollbar lane lives inside its own right margin now (NotificationCenter,
+    // LANE), so it hangs where the CC does and their cards line up. (Until 2026-09-30 it
+    // was pulled right by the lane to reach the capsule's edge.)
+    nc.margin_end = end
     // Mirror on the left for the system menu: the dock window stacks ABOVE the
     // bar window, so without this shift a left dock covers the menu.
     systemMenu.margin_start = SIDE_GAP + (dockSideState.position === 'left' ? dockSideState.width : 0)

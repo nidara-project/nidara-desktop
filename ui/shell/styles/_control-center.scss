@@ -126,6 +126,10 @@
     }
 
     /* --- Typographical Utilities for Toggles --- */
+    // A tile's title — 13, and NOT 14 without widening its column first (tried
+    // 2026-09-30: macOS 27's module titles scaled like the rest of our shell come to ~14,
+    // but a 2×1 capsule's text column is 88px and "Luz nocturna" is 91 at 14 bold, 83 at
+    // 13 — it was cut to "Luz noctur…"). The NC's card summaries share the class.
     .nidara-atomic-label-bold {
         font-size: $fs-small;
         font-weight: $fw-bold;
