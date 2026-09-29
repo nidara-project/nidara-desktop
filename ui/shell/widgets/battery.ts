@@ -98,7 +98,7 @@ function buildWide(): Gtk.Widget {
 
     const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
     const label = new Gtk.Label({ css_classes: ["nidara-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
-    const subLabel = new Gtk.Label({ css_classes: ["nidara-atomic-label-dim"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
+    const subLabel = new Gtk.Label({ css_classes: ["nidara-atomic-label-sub"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
     textStack.append(label)
     textStack.append(subLabel)
 
@@ -119,7 +119,7 @@ function buildWide(): Gtk.Widget {
 function buildSquare(): Gtk.Widget {
     const glyph = makeGlyph(56)
     const pct = new Gtk.Label({ css_classes: ["nidara-atomic-label-bold"], halign: Gtk.Align.CENTER })
-    const state = new Gtk.Label({ css_classes: ["nidara-atomic-label-dim"], halign: Gtk.Align.CENTER })
+    const state = new Gtk.Label({ css_classes: ["nidara-atomic-label-sub"], halign: Gtk.Align.CENTER })
 
     const group = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, halign: Gtk.Align.CENTER })
     group.append(glyph)

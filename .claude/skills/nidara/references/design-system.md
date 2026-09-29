@@ -3360,6 +3360,12 @@ chrome, confirmed then against a live session, not derived on paper: `queryUI` p
 x=2380 w=172, the icon at x=2396 w=48 and the label at x=2456. The column is what the title's size
 is held to: 14px bold (since 2026-09-30) fits every title measured at 96 — "Luz nocturna" 91, "Luce
 notturna" 96 — but pl "Oszczędzanie" is 97, one pixel over.
+The SUBTITLE under it (a tile's state: "Activo", "Sin conexión") is `.nidara-atomic-label-sub`: the
+title's size (14), regular weight, and the SECONDARY ink tier (80 %, held to 4.5:1 by the adaptive
+glass) — owner, 2026-09-30, over 12 px / 400 / dim, which read "very thin next to the title". It is
+information, not metadata, so it is not `dim`. `.nidara-atomic-label-dim` (12, 400, dim) is kept for
+real metadata — the CC context menu's "full row" note. It shares the 96 px column: "NidaraTest" is
+71 px, so a network name of ~13 letters reads whole and a longer one ellipsizes.
 
 🔑 **A tile learns that number the only legal way — it is HANDED the `ContentBudget`.** The capsule
 makers take it as a trailing optional argument and the widget forwards what `buildContent(size,

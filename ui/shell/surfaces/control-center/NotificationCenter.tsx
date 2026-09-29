@@ -436,9 +436,8 @@ export default function NotificationCenter() {
     const groupCache = new Map<string, { container: Gtk.Box, headerBox: Gtk.Box, revealer: any, subBox: Gtk.Box, sig: string, timeLabels: { label: Gtk.Label, time: number }[], expanded: boolean, subClearTimer: number | null }>()
 
     // The NC is a PANEL like the CC (ControlCenter.tsx, CC_PANEL_PAD — the same margin, so
-    // the two columns line up): its cards sit 16 in from every edge and 16 apart, as the
-    // notification stack in Apple's macOS 27 kit does (owner, 2026-09-30; 12 apart and
-    // flush with an 8px side gap until then).
+    // the two columns line up): its cards sit 16 in from every edge and 16 apart (owner,
+    // 2026-09-30; 12 apart and flush with an 8px side gap until then).
     // The content keeps its full width (GRID_WIDTH); LANE is extra space ADDED on the right
     // to host the scrollbar, and it lives INSIDE the panel's right margin (so that margin
     // is PAD − LANE of box + the lane). The overlay scrollbar floats in that lane only when

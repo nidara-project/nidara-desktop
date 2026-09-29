@@ -8,7 +8,7 @@ import { GlassHalo } from "../../common/GlassHalo"
 import { BAR_MARGIN } from "../bar/capsule"
 
 /**
- * The CC is a PANEL (owner, 2026-09-30, after macOS 27's): its content sits inside a
+ * The CC is a PANEL (owner, 2026-09-30): its content sits inside a
  * margin, as it would in a window, though nothing draws the panel today — under
  * Increase contrast it will be (#674), and its spacing has to be a panel's already.
  * The margin is 16 on every side (owner, 2026-09-30: "if the container were solid it

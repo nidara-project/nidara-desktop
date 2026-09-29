@@ -12,9 +12,9 @@ import { chromeIsDarkFor, haloAlphaFor } from "./AdaptiveGlass"
  * ── WHAT IT IS FOR ───────────────────────────────────────────────────────────
  *
  * The CC has no panel: its tiles ARE the outer glass, and over a busy backdrop each one
- * is a separate thin sheet with the page showing through it and between them. macOS
- * draws a large soft shadow when its Control Center opens (owner's observation). This is
- * that shadow, and it is also the FIRST step of the adaptive glass for the surface: it
+ * is a separate thin sheet with the page showing through it and between them. A large
+ * soft shadow under the whole panel ties them together (owner's call). This is that
+ * shadow, and it is also the FIRST step of the adaptive glass for the surface: it
  * sits in the same layer as the tiles, so everything painted under them adds to their
  * tint. Glass of alpha `a` over a halo of alpha `c`, both the skin's `GLASS_TINT`, is
  * exactly glass of alpha `1 − (1−a)(1−c)` — one number the legibility rule already knows

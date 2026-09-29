@@ -19,8 +19,7 @@
 
     /* --- Status notices (AI control) above the widgets --- */
     /* One PILL per active indicator (dot + name + a compact Stop button), centred,
-       as wide as its content (StatusIndicators.tsx; macOS 27's privacy notice, owner
-       2026-09-30). Collapsed to nothing by the widget when no indicator is active.
+       as wide as its content (StatusIndicators.tsx; owner, 2026-09-30). Collapsed to nothing by the widget when no indicator is active.
 
        THE PILL ITSELF IS CAIRO — a SquircleContainer, exactly like the tiles below it.
        No border and no padding here: both belong to the painter, and the background
@@ -28,8 +27,7 @@
        deliberately NOT given `.cc-island` (that class resets Adwaita defaults on any
        descendant button and would flatten the NidaraButton — see the note there).
 
-       MARGIN 4: the notice sits right on the content it belongs to, as macOS 27's does
-       (owner, 2026-09-30). 24 until then ("12 inside a block, 24 between blocks"). The
+       MARGIN 4: the notice sits right on the content it belongs to (owner, 2026-09-30). 24 until then ("12 inside a block, 24 between blocks"). The
        Edit pill below the grid is 16 away (IslandGrid.tsx), and the panel's own margin
        is 16 (ControlCenter.tsx, CC_PANEL_PAD). */
     .cc-status-notices {
@@ -134,8 +132,8 @@
     }
 
     /* --- Typographical Utilities for Toggles --- */
-    // A tile's title — 14 since 2026-09-30 (13 before): macOS 27's module titles scaled
-    // like the rest of our shell. ⚠️ Only because the 2×1 capsule's text column went
+    // A tile's title — 14 since 2026-09-30 (13 before), the reference proportions at our
+    // scale (design-system.md, "The Control Center is a PANEL"). ⚠️ Only because the 2×1 capsule's text column went
     // 88 → 96 in the same change (widget-kit/tile.ts, CAPSULE_ICON_SIZE/GAP): at 88,
     // "Luz nocturna" (91px at 14 bold) was cut to "Luz noctur…". The NC's card summaries
     // share the class.
@@ -145,6 +143,17 @@
         color: var(--nidara-text);
     }
 
+    // A tile's SUBTITLE — its state ("Activo", "Sin conexión"): information, so the
+    // SECONDARY ink tier (80 %, held to 4.5:1 by the adaptive glass), not the dim one.
+    // Same size as the title and only lighter in weight and ink (owner, 2026-09-30, over 12px / 400 / dim, which read "very thin next to the
+    // title"). It shares the title's 96px column (widget-kit/tile.ts), so a long
+    // network name ellipsizes sooner than it did at 12.
+    .nidara-atomic-label-sub {
+        font-size: $fs-body;
+        font-weight: $fw-regular;   // pinned, like the one below and for the same reason
+        color: var(--nidara-text-secondary);
+    }
+    // Metadata beside a control (the CC context menu's "full row" note).
     .nidara-atomic-label-dim {
         font-size: $fs-caption;
         // Pin the weight: without it the label inherits its parent's, so capsules

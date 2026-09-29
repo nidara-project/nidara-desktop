@@ -11,11 +11,10 @@ import { WIDGET_META, CC_DEFAULT_LAYOUT } from "../../widgets/index"
 // cpu-memory came to compute the host's cell pitch by hand.
 //
 // GAP is 16 since 2026-09-30 (12 before, with no reason on record since the first CC
-// of 2026-04-05). Checked against Apple's own numbers rather than taste: macOS 27's
-// official Figma kit spaces its floating cards 16 apart and 16 from the panel's edge
-// (the notification stack), and a macOS 27 Control Center screenshot, scaled by its
-// menu bar, gives ~17 for the gap between modules at our scale. The tile (UNIT) was
-// already proportional. It also equals the CC panel's margin (ControlCenter.tsx,
+// of 2026-04-05). Checked against measured reference numbers rather than taste — floating
+// cards 16 apart and 16 from their panel's edge, ~17 between modules at our scale; the
+// tile (UNIT) was already proportional. The measurements and their sources are in
+// design-system.md, "The Control Center is a PANEL". It also equals the CC panel's margin (ControlCenter.tsx,
 // CC_PANEL_PAD): edge-to-tile reads like tile-to-tile.
 export const UNIT = 80
 export const GAP = 16

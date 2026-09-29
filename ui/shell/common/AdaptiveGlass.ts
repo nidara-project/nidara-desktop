@@ -176,7 +176,7 @@ const floorOf = (role: GlassRole) =>
 // (owner, 2026-09-29): it is always there at `HALO_REST`, it is what thickens first, up
 // to `HALO_MAX`, and only past that do the tiles gain body.
 
-/** The halo at rest — always there, as macOS's Control Center shadow. */
+/** The halo at rest — always there: the panel opens with its shadow, whatever is behind. */
 export const HALO_REST = 0.12
 /** …and at most: under the layer's `ignore_alpha`, so Hyprland never blurs behind it
  *  and it stays a shadow, not a panel. */

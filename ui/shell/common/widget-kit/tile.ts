@@ -103,9 +103,9 @@ export function makeRoundTile(
 // is spaced and aligned identically. Keep this the *only* place these dimensions live
 // (the battery's own capsule reads them from here).
 //
-// 44 and 8 since 2026-09-30 (48 and 12 before), macOS 27's proportions at our scale:
-// its module's icon circle is ~56 % of the tile's height (ours was 60 %) and its gap to
-// the text is ~8. What that buys is the title's column — 88 → 96px — which is what let
+// 44 and 8 since 2026-09-30 (48 and 12 before): the reference proportions at our scale
+// (design-system.md, "The Control Center is a PANEL") put the icon circle at ~56 % of
+// the tile's height (ours was 60 %) and its gap to the text at ~8. What that buys is the title's column — 88 → 96px — which is what let
 // the title go 13 → 14 (owner's call) without cutting "Luz nocturna" (91px at 14 bold).
 export const CAPSULE_ICON_SIZE = 44
 export const CAPSULE_ICON_GAP = 8
@@ -165,7 +165,7 @@ export function makeCapsuleInner(
 
     const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
     const label = new Gtk.Label({ label: getTitle(), css_classes: ["nidara-atomic-label-bold"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 14 })
-    const subLabel = new Gtk.Label({ css_classes: ["nidara-atomic-label-dim"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 14 })
+    const subLabel = new Gtk.Label({ css_classes: ["nidara-atomic-label-sub"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 14 })
 
     // Stateful vs stateless tile. A widget with an on/off-style status (wifi,
     // bluetooth, focus…) shows a single-line title + its state subtitle. An action

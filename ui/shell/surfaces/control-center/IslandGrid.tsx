@@ -724,7 +724,7 @@ export default function IslandGrid() {
     const editBtn = SquircleContainer({ child: editLabel, shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, css_classes: ["cc-edit-pill"], shadow: GLASS_SHADOW, keyboardStop: true })
     // 16 above it, and nothing below: the CC's panel margin (ControlCenter.tsx,
     // CC_PANEL_PAD) closes the panel under it. It was 24 + 12 until 2026-09-30, when the
-    // CC became a panel (owner, after macOS 27's).
+    // CC became a panel (owner's call).
     const editBtnWrapper = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, margin_top: 16, margin_bottom: 0 })
     editBtnWrapper.append(editBtn)
 

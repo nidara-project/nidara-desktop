@@ -77,12 +77,11 @@ function subscribeAll(cb: () => void) {
 // dot + name + a Stop button. The kill switch lives HERE. Nothing at all when no
 // indicator is active.
 //
-// ⚠️ A pill, not the full-width card it was until 2026-09-30 (owner, after macOS 27's
-// Control Center, whose privacy notice is a centred capsule as wide as its content
-// above the modules). What changed with it: the second line ("With permission to
+// ⚠️ A pill, not the full-width card it was until 2026-09-30 (owner's call: a centred
+// capsule as wide as its content, sitting on the tiles). What changed with it: the second line ("With permission to
 // control your applications") is gone from the pill — it is the tooltip now; the pill
-// says WHAT is on, the tooltip what that means. And the Stop button stayed INSIDE it,
-// where macOS opens a detail instead (owner's call): this is the kill switch, and it
+// says WHAT is on, the tooltip what that means. And the Stop button stays INSIDE it
+// rather than behind a detail page (owner's call): this is the kill switch, and it
 // stays one click away.
 //
 // It is a real CC island — a Cairo-painted capsule from SquircleContainer, the
