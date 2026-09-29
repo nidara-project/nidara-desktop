@@ -170,14 +170,20 @@ export interface BackdropStats {
      *  its backdrop reads its skin from (`decideGlassByBackdrop`). */
     median: Rgb
     samples: number
+    /** How much of the surface those samples stand for, in pixels. NOT `samples`: a
+     *  large surface is sampled sparsely and a small one densely, so combining two by
+     *  sample count let the island's small capsule outvote the whole bar four to one
+     *  (2026-09-29 — the bar went black-on-light over a mostly purple strip). */
+    area: number
 }
 
 /** Percentile used for both ends of `BackdropStats`. */
 export const BACKDROP_PERCENTILE = 0.95
 
 /** Reduce uncomposited backdrop pixels to their `BackdropStats`. Null if there are
- *  too few to mean anything. */
-export function backdropStats(pixels: Rgb[], minSamples = 64): BackdropStats | null {
+ *  too few to mean anything. `pixelArea` = how many screen pixels each sample stands
+ *  for (the sampling step squared). */
+export function backdropStats(pixels: Rgb[], minSamples = 64, pixelArea = 1): BackdropStats | null {
     if (pixels.length < minSamples) return null
     const ranked = pixels.map(p => ({ p, l: luminance(p) })).sort((x, y) => x.l - y.l)
     const at = (q: number) => ranked[Math.min(ranked.length - 1, Math.max(0, Math.round(q * (ranked.length - 1))))].p
@@ -186,7 +192,27 @@ export function backdropStats(pixels: Rgb[], minSamples = 64): BackdropStats | n
         darkest: at(1 - BACKDROP_PERCENTILE),
         median: at(0.5),
         samples: pixels.length,
+        area: pixels.length * pixelArea,
     }
+}
+
+/**
+ * Several surfaces that decide as one (the bar and the island's capsule): the worst
+ * of their extremes, and their TYPICAL backdrop as the median of their medians
+ * weighted by how much of the screen each covers (`area`, never `samples`).
+ */
+export function mergeBackdropStats(all: BackdropStats[]): BackdropStats {
+    let brightest = all[0].brightest, darkest = all[0].darkest, samples = 0, area = 0
+    for (const st of all) {
+        if (luminance(st.brightest) > luminance(brightest)) brightest = st.brightest
+        if (luminance(st.darkest) < luminance(darkest)) darkest = st.darkest
+        samples += st.samples
+        area += st.area
+    }
+    const ranked = [...all].sort((a, b) => luminance(a.median) - luminance(b.median))
+    let acc = 0, median = ranked[0].median
+    for (const st of ranked) { acc += st.area; median = st.median; if (acc >= area / 2) break }
+    return { brightest, darkest, median, samples, area }
 }
 
 /** What a surface wears: its tint's opacity and its skin. */

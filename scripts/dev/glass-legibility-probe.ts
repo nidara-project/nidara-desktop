@@ -8,7 +8,7 @@
 // only ever printed "ok" has been run, not tested.
 
 import {
-    uncomposite, glassOver, tierContrast, legibilityMargin, decideGlass, decideGlassByBackdrop, backdropStats,
+    uncomposite, glassOver, tierContrast, legibilityMargin, decideGlass, decideGlassByBackdrop, mergeBackdropStats, backdropStats,
     GLASS_ADAPT_CEILING, TEXT_INK, type Rgb, type BackdropStats,
 } from "../../ui/lib/nidara-kit/platform/glass-legibility"
 import { GLASS_TINT } from "../../ui/lib/nidara-kit/platform/tokens"
@@ -20,7 +20,7 @@ const check = (ok: boolean, what: string) => {
 }
 const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol
 const grey = (v: number): Rgb => ({ r: v, g: v, b: v })
-const flat = (c: Rgb): BackdropStats => ({ brightest: c, darkest: c, median: c, samples: 1000 })
+const flat = (c: Rgb): BackdropStats => ({ brightest: c, darkest: c, median: c, samples: 1000, area: 1000 })
 
 // ── 1. The forward model is the one that was validated ───────────────────────
 // tech-debt #82's table (GLASS_TINT.dark, white ink): 1.69 over pure white and 5.71
@@ -151,9 +151,21 @@ const floor = 0.48
 {
     // The TYPICAL backdrop decides, not the extremes: a mostly dark bar with a pale
     // stretch keeps dark glass (and thickens it), as macOS's menu bar keeps white ink.
-    const mixed: BackdropStats = { brightest: grey(0.8), darkest: grey(0.05), median: grey(0.2), samples: 1000 }
+    const mixed: BackdropStats = { brightest: grey(0.8), darkest: grey(0.05), median: grey(0.2), samples: 1000, area: 1000 }
     const d = decideGlassByBackdrop(mixed, floor)
     check(d.isDark && d.alpha > floor, `by backdrop: a mostly dark backdrop with a pale stretch keeps dark glass, thickened (${d.alpha})`)
+}
+
+{
+    // A group decides by AREA: the bar's strip (large, sampled sparsely) against the
+    // island's capsule (small, sampled densely). The case that shipped wrong on
+    // 2026-09-29: the capsule's 2600 samples outvoted the strip's 681 and a bar over a
+    // mostly purple strip went black-on-light.
+    const strip: BackdropStats = { brightest: grey(0.7), darkest: grey(0.1), median: grey(0.15), samples: 681, area: 81000 }
+    const capsule: BackdropStats = { brightest: grey(0.6), darkest: grey(0.4), median: grey(0.55), samples: 2600, area: 9500 }
+    const m = mergeBackdropStats([strip, capsule])
+    check(m.median.r === 0.15 && m.area === 90500, "merge: the typical backdrop is the one covering the most SCREEN, not the most samples")
+    check(decideGlassByBackdrop(m, floor).isDark, "merge: so the bar row over a mostly dark strip keeps white ink")
 }
 
 // ── 7. The ramp the token engine emits is the ramp checked here ──────────────

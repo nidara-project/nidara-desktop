@@ -5,7 +5,7 @@ import hyprlandState from "../core/HyprlandState"
 import Wallpaper from "../core/WallpaperManager"
 import { probeBackdrop, type MonitorRect } from "./BackdropProbe"
 import {
-    decideGlass, decideGlassByBackdrop, luminance, type GlassDecision, type BackdropStats,
+    decideGlass, decideGlassByBackdrop, mergeBackdropStats, type GlassDecision, type BackdropStats,
 } from "../../lib/nidara-kit/platform/glass-legibility"
 
 /**
@@ -252,29 +252,12 @@ async function measure(s: Surface) {
     // One decision for the whole group, from the worst of every member's backdrop.
     // A member not measured yet contributes nothing, and is simply told the answer.
     const members = [...surfaces.values()].filter(m => m.root.get_mapped() && m.group?.() === group)
-    const merged = mergeStats(members.map(m => m.lastStats).filter((x): x is BackdropStats => x !== null))
+    const merged = mergeBackdropStats(members.map(m => m.lastStats).filter((x): x is BackdropStats => x !== null))
     const floor = Math.max(...members.map(m => floorOf(roleOf(m))))
     const next = members.some(m => m.skinFromBackdrop)
         ? decideGlassByBackdrop(merged, floor, s.decision ?? undefined)
         : decideGlass(merged, Theme.chromeIsDark, floor, s.decision ?? undefined)
     for (const m of members) apply(m, next)
-}
-
-/** The worst of several backdrops: the brightest of the brights, the darkest of the
- *  darks. */
-function mergeStats(all: BackdropStats[]): BackdropStats {
-    let brightest = all[0].brightest, darkest = all[0].darkest, samples = 0
-    for (const st of all) {
-        if (luminance(st.brightest) > luminance(brightest)) brightest = st.brightest
-        if (luminance(st.darkest) < luminance(darkest)) darkest = st.darkest
-        samples += st.samples
-    }
-    // The typical backdrop of the whole group: the member medians, weighted by how
-    // much of the group each one covers — the bar's strip outweighs the capsule.
-    const ranked = [...all].sort((a, b) => luminance(a.median) - luminance(b.median))
-    let acc = 0, median = ranked[0].median
-    for (const st of ranked) { acc += st.samples; median = st.median; if (acc >= samples / 2) break }
-    return { brightest, darkest, median, samples }
 }
 
 const pending = new Map<Surface, number>()
@@ -346,7 +329,7 @@ export function adaptiveGlassState() {
         skin: s.decision ? (s.decision.isDark ? "dark" : "light") : null,
         flipped: s.decision ? s.decision.isDark !== Theme.chromeIsDark : false,
         skinFrom: s.skinFromBackdrop ? "backdrop" : "mode",
-        backdrop: s.lastStats ? { brightest: rgb(s.lastStats.brightest), median: rgb(s.lastStats.median), darkest: rgb(s.lastStats.darkest), samples: s.lastStats.samples } : null,
+        backdrop: s.lastStats ? { brightest: rgb(s.lastStats.brightest), median: rgb(s.lastStats.median), darkest: rgb(s.lastStats.darkest), samples: s.lastStats.samples, area: s.lastStats.area } : null,
         measuredMsAgo: s.lastProbeUs ? Math.round((GLib.get_monotonic_time() - s.lastProbeUs) / 1000) : null,
     }))
 }

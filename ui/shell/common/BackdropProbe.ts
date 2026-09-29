@@ -305,7 +305,7 @@ export async function probeBackdrop(req: ProbeRequest): Promise<BackdropStats | 
         }
     }
     if (dbg) debugSave(req.tag ?? "probe", captured, ours, dbg, W, H)
-    const stats = backdropStats(out)
+    const stats = backdropStats(out, 64, step * step)
     if (DEBUG_DIR) console.log(`[BackdropProbe] ${req.tag ?? "probe"}: ${W}x${H}, capture ${((tCaptured - t0) / 1000).toFixed(1)} ms (off the main thread), render + ${out.length} samples ${((GLib.get_monotonic_time() - tCaptured) / 1000).toFixed(1)} ms (main thread)`)
     if (!stats) return why(`${out.length} glass pixels in ${W}x${H} — too few`)
     return stats
