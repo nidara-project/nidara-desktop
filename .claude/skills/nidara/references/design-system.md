@@ -1564,8 +1564,17 @@ open (`popToggle`'s `onDone`), a banner stack settling, `map`, HyprlandState "ch
 what can change the pixels behind (geometry, workspace, fullscreen, focus only onto a FLOATING
 window, which raises it), a wallpaper change, a theme change. What changes behind a surface without
 an event — a video, a scrolling page — is caught at the next event, not live. Cost, measured: the
-capture 3–20 ms on a worker thread; the offscreen render + read-back + pixel loop 5–15 ms on the
-main thread, once per event burst.
+capture 3–8 ms on a worker thread. Main thread, measured 2026-09-29 with
+`NIDARA_BACKDROP_TIMING=1` (median / p95): the bar 1.9 / 2.4 ms, the island 1.9 / 2.5, the CC
+7.4 / 9.3 — almost all of it the offscreen render + read-back (the pixel loop is < 1 ms). The CC is
+the one over a 144 Hz frame (6.9 ms): it is measured once as it settles open, when nothing of ours
+is animating, so it can cost a frame only if something else animates in that instant. If that is
+ever seen, the fix is to reuse the render while the panel does not change (with a real
+invalidation — a stale render beside new text is the white-outline bug again). ⚠️ An earlier
+figure of "5–15 ms" timed the debug images' PNG writes too; time with `NIDARA_BACKDROP_TIMING`,
+never with `NIDARA_BACKDROP_DEBUG`. GPU, measured with `scripts/dev/blur-arm.sh` (idle desktop,
+CC open, arms A,B,B,A): one forced measurement per second of bar + island + CC costs ≈ +0.25 points
+(0.9/1.0 % → 1.2/1.2 %); real use measures far less often than that.
 
 Verify with `nidara-ipc dumpState` → `glass` (per surface: floor, alpha, skin, flipped, group, the
 two backdrops and how long ago), and `nidara-ipc glassRemeasure`. `NIDARA_BACKDROP_DEBUG=<dir>`

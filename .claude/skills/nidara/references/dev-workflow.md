@@ -2244,6 +2244,9 @@ the wrong glass. Three tools:
   `-backdrop.png` (what was recovered; transparent = pixels not used), and logs why a probe gave
   nothing and what it cost. **Look at the backdrop image first**: text or icon outlines in it mean
   the capture and the render did not describe the same frame. `unset-environment` it afterwards.
+- `NIDARA_BACKDROP_TIMING=1`: log each probe's cost (capture on the worker; render + read-back and
+  the pixel loop on the main thread), nothing else. Time with THIS — the debug images are written on
+  the main thread and inflated the first figure quoted to 5–15 ms.
 - To judge the recovered numbers rather than eyeball them, compare them with the forward model
   (wallpaper → Hyprland's `gain`/`blur1` shaders → tint) at the same pixels; the 2026-09-29 check
   agreed to a median of 2/255. A systematic offset (all channels brighter) is a layer caught

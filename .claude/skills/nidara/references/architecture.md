@@ -220,7 +220,8 @@ the typelib on the **default** girepository path, so all three bundles just `imp
   glass (`isFlatGlass`), which is always declared; halos sit under `ignore_alpha` and are excluded
   by alpha. A surface that starts measuring something that can leave its stamped rect has to
   re-check this. Merging the two buys nothing: the region costs ~0, the capture runs off the main
-  thread, and the only main-thread cost is the offscreen render (5–15 ms per measurement).
+  thread, and the only main-thread cost is the offscreen render (≈2 ms for the bar, ≈7 ms for the CC;
+  design-system.md → "Adaptive glass" has the measurements).
 - ⚠️ **Every capture of either kind starts and stops a Hyprland screencast session**, and its
   `screencast` / `screencastv2` IPC events do NOT name the client that asked (for a region the
   name is the monitor's; for a window, its title). A privacy indicator built on those events (#646)

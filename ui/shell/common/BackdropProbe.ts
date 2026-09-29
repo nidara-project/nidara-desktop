@@ -64,6 +64,9 @@ const DISABLED = GLib.getenv("NIDARA_BACKDROP_PROBE") === "0"
  *  one way to SEE whether the two line up: a misregistration shows as text edges
  *  in the recovered backdrop. */
 const DEBUG_DIR = GLib.getenv("NIDARA_BACKDROP_DEBUG")
+/** Dev aid: log what each probe cost, and nothing else — no images, so the numbers are
+ *  the probe's own (the debug images are written on the main thread and would count). */
+const TIMING = GLib.getenv("NIDARA_BACKDROP_TIMING") === "1" || !!DEBUG_DIR
 
 /** Pixels actually inspected per probe, at most. The backdrop behind a panel is
  *  blurred, so a sparse grid over it loses nothing a percentile could see. */
@@ -274,6 +277,7 @@ export async function probeBackdrop(req: ProbeRequest): Promise<BackdropStats | 
 
     const screenPx = pixelsOf(captured)
     const oursPx = pixelsOf(ours)
+    const tRendered = GLib.get_monotonic_time()
     const exclude = (req.exclude ?? []).map(e => ({
         x0: (e.x - region.x) * scale, y0: (e.y - region.y) * scale,
         x1: (e.x + e.width - region.x) * scale, y1: (e.y + e.height - region.y) * scale,
@@ -304,9 +308,11 @@ export async function probeBackdrop(req: ProbeRequest): Promise<BackdropStats | 
             }
         }
     }
+    const tLooped = GLib.get_monotonic_time()
     if (dbg) debugSave(req.tag ?? "probe", captured, ours, dbg, W, H)
     const stats = backdropStats(out, 64, step * step)
-    if (DEBUG_DIR) console.log(`[BackdropProbe] ${req.tag ?? "probe"}: ${W}x${H}, capture ${((tCaptured - t0) / 1000).toFixed(1)} ms (off the main thread), render + ${out.length} samples ${((GLib.get_monotonic_time() - tCaptured) / 1000).toFixed(1)} ms (main thread)`)
+    if (TIMING) console.log(`[BackdropProbe] ${req.tag ?? "probe"}: ${W}x${H}, capture ${((tCaptured - t0) / 1000).toFixed(1)} ms (worker), `
+        + `main thread ${((tLooped - tCaptured) / 1000).toFixed(1)} ms = render+readback ${((tRendered - tCaptured) / 1000).toFixed(1)} + ${out.length} samples ${((tLooped - tRendered) / 1000).toFixed(1)}`)
     if (!stats) return why(`${out.length} glass pixels in ${W}x${H} — too few`)
     return stats
 }
