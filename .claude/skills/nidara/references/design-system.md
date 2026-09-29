@@ -1447,9 +1447,12 @@ A common misconception (it bit a past explanation): system-tray icons are NOT un
   on light glass. `isTemplatePixbuf` (every visible pixel the same colour, ±24) routes it to
   `templateIcon()`, a DrawingArea that paints the pixmap as a MASK in the bar's ink
   (`chromeIsDarkFor`), repainted by the adaptive glass like every Cairo mark. A second colour
-  anywhere (a red badge, a two-tone keyboard label, a logo) → shown untouched. Grey icons with
-  inner detail (Chrome's) are NOT templates and still follow the app's own mode choice — whether to
-  invert them against the bar is an open owner decision.
+  anywhere (a red badge, a two-tone keyboard label, a logo) → shown untouched, and that is the
+  decision, not a gap (owner, 2026-09-29): a two-colour icon carries its own contrast — ChatGPT's
+  black logo on a white tile, Fcitx's white label with a black outline — and reads on any bar, like
+  the dock's full-colour icons. Do not add an "invert grey icons" pass.
+  🔑 An SNI Id of `chrome_status_icon_N` is NOT Chrome: it is what Chromium names every tray
+  icon, so every Electron app has one (it was ChatGPT). Resolve the process before naming the app.
   ⛔ "Make the APP believe it is in the other mode" does not work: the portal's colour scheme is
   one answer per app, and Electron uses the same value for its windows.
 - **The symbolic palette keeps its meaning:** `-gtk-icon-palette: success var(--nidara-text),
