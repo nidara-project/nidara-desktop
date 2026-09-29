@@ -211,6 +211,16 @@ the typelib on the **default** girepository path, so all three bundles just `imp
   `wl_output` v4 `name`, the same string `Gdk.Monitor.get_connector()` gives). ~3–20 ms, most of
   it waiting for the next frame, on a worker thread with its own connection like
   `capture_window()`.
+- 🔑 **A region capture and the visible region (`visible_region_*`) are opposite directions over
+  the same geometry**: the region tells Hyprland which parts of our surface it may draw and blur,
+  the capture reads back what it drew. They meet in one invariant — **only pixels INSIDE the
+  declared visible region can be subtracted**: outside it Hyprland draws nothing of ours, so an
+  offscreen render that paints there (a shadow's halo, a panel spilling past its stamped rect)
+  would recover a false backdrop. `BackdropProbe` holds this by using only the flat BODY of the
+  glass (`isFlatGlass`), which is always declared; halos sit under `ignore_alpha` and are excluded
+  by alpha. A surface that starts measuring something that can leave its stamped rect has to
+  re-check this. Merging the two buys nothing: the region costs ~0, the capture runs off the main
+  thread, and the only main-thread cost is the offscreen render (5–15 ms per measurement).
 - ⚠️ **Every capture of either kind starts and stops a Hyprland screencast session**, and its
   `screencast` / `screencastv2` IPC events do NOT name the client that asked (for a region the
   name is the monitor's; for a window, its title). A privacy indicator built on those events (#646)
