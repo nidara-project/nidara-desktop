@@ -166,6 +166,9 @@ export function uncomposite(screen: Rgb, ours: PremulRgba, minAlpha: number, max
 export interface BackdropStats {
     brightest: Rgb
     darkest: Rgb
+    /** The TYPICAL backdrop (median luminance): what a surface whose skin comes from
+     *  its backdrop reads its skin from (`decideGlassByBackdrop`). */
+    median: Rgb
     samples: number
 }
 
@@ -181,6 +184,7 @@ export function backdropStats(pixels: Rgb[], minSamples = 64): BackdropStats | n
     return {
         brightest: at(BACKDROP_PERCENTILE),
         darkest: at(1 - BACKDROP_PERCENTILE),
+        median: at(0.5),
         samples: pixels.length,
     }
 }
@@ -249,4 +253,37 @@ export function decideGlass(
     const theirs = legibilityMargin(worst(!preferDark), !preferDark, top)
     if (flipped && theirs >= mine / FLIP_BACK_MARGIN) return { isDark: !preferDark, alpha: top }
     return { isDark: mine >= theirs ? preferDark : !preferDark, alpha: top }
+}
+
+/**
+ * The rule for a surface whose skin comes from its BACKDROP rather than from the mode
+ * — the bar row (#676), as macOS's menu bar: white ink over a dark top edge, black
+ * over a light one, whatever the system mode.
+ *
+ * It takes the skin that reads BEST over the TYPICAL backdrop — the median, not the
+ * extremes: macOS picks the menu bar's ink from the brightness of the wallpaper up
+ * there, which is why it reads "almost always white" over the usual dark-topped
+ * wallpapers. Deciding from the worst cases instead turned a bar over a pink-to-purple
+ * wallpaper light because of its pale left end (2026-09-29). Legibility at the
+ * extremes is then `decideGlass`'s job: it thickens the chosen skin, and its B can
+ * still take the other one if a backdrop is bright and dark at once.
+ *
+ * Hysteresis: a surface keeps the skin it wears unless the other one reads better by
+ * `FLIP_BACK_MARGIN` — a backdrop in the middle would otherwise flip it on every
+ * measurement.
+ */
+export function decideGlassByBackdrop(
+    stats: BackdropStats,
+    floor: number,
+    current?: GlassDecision,
+): GlassDecision {
+    const onDark = legibilityMargin(stats.median, true, floor)
+    const onLight = legibilityMargin(stats.median, false, floor)
+    let isDark = onDark >= onLight
+    if (current && current.isDark !== isDark) {
+        const mine = current.isDark ? onDark : onLight
+        const theirs = current.isDark ? onLight : onDark
+        if (theirs < mine * FLIP_BACK_MARGIN && mine >= 1) isDark = current.isDark
+    }
+    return decideGlass(stats, isDark, floor, current && current.isDark === isDark ? current : undefined)
 }

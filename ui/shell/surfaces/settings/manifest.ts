@@ -77,7 +77,6 @@ export const manifest = [
                 i18n: "settings.appearance.group.base-style",
                 items: [
                     "appearance.darkMode",
-                    "appearance.shellAppearance",
                 ],
             },
             {

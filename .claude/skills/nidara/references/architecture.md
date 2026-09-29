@@ -1829,7 +1829,7 @@ channel, and the second channel is where the bugs lived.
 | high contrast | gsettings `org.gnome.desktop.a11y.interface high-contrast` | `org.freedesktop.appearance contrast` |
 | reduced motion | gsettings `…interface enable-animations` (inverted) | `org.freedesktop.appearance reduced-motion` |
 | fonts, icon theme, cursor | gsettings `…interface` | `org.gnome.desktop.interface` (served by the gtk backend) |
-| window / bar / overlay / dock opacity, shell-appearance | gsettings `org.nidara.appearance` (#573) | `org.nidara.appearance` (same kebab-case names), served ONLY there |
+| window / bar / overlay / dock opacity | gsettings `org.nidara.appearance` (#573) | `org.nidara.appearance` (same kebab-case names), served ONLY there |
 
 Every key in this table is read by `ThemeManager` FROM its home and followed through `changed::`, so
 `gsettings set … accent-color pink`, `… icon-theme Adwaita` or `org.nidara.appearance bar-opacity
@@ -2277,7 +2277,7 @@ them on every push.
 decides whether coming back re-reads: one that connects and returns a disposer is armed and blind — it
 learns nothing that happened while the widget was away, which is exactly the interval it exists to
 cover. **Prime it: `apply(read())` BEFORE connecting.** Settings → Appearance had five controls on this
-shape (measured 2026-08-16: `setConfig appearance.shellAppearance dark` moved the bar and the dock
+shape (measured 2026-08-16: `setConfig appearance.shellAppearance dark` — the shell pin, removed since, #676 — moved the bar and the dock
 while the dropdown two inches away still read "Follow system", for the rest of the session; the four
 advanced glass sliders live in a Revealer that starts closed, so they are unrealized until it opens and
 came back showing the value they were BUILT with, contradicting the master right above them). The

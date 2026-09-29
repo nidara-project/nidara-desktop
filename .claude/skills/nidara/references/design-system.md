@@ -1237,26 +1237,36 @@ clocks are `--nidara-text`, and **Stop is `suggested-action`**: stopping a captu
 purpose is how the flow FINISHES (it writes the file), not something that destroys work. Reserve
 `destructive-action` for a click the user could regret.
 
-## Shell-skin appearance & opacity (`appearance.shellAppearance` + the glass sliders)
+## Shell skin & opacity (the mode, the adaptive glass, the glass sliders)
 
-### Appearance pin — the WHOLE shell skin, not just bar/dock
+### Which skin each shell surface wears (2026-09-29 — the pin is gone, #676)
 
-Text colour is mode-bound (`--nidara-text` = `#fff` dark / `#000` light) but shell glass is
-translucent over the wallpaper. In dark mode white text forgives almost any wallpaper; in
-**light mode black text fails on a dark wallpaper** when the glass is too transparent. The fix
-is the appearance pin (NOT an opacity floor — see below).
+The shell follows the model macOS settled on:
 
-**`appearance.shellAppearance`** (`system | dark | light`, default `system`) pins the **entire
-shell skin** — bar, dock, AND every overlay (CC/NC/Prism/system menu/overview/app grid) — to
-dark/light independent of the app/global mode, so the shell stays legible over any wallpaper
-while apps follow their own mode. **App-mode windows are EXCLUDED**: Settings
-(`nidara-settings-window`) and About (`nidara-about`) follow the system mode like any app. It
-flips the **whole token family** (text AND surfaces/edges/shadows), never just `--nidara-text`.
-`Theme.chromeIsDark` resolves it ("chrome" now means the whole shell skin).
+| surface | its skin comes from |
+|---|---|
+| **the bar row** (bar + the island's compact capsule, one decision) | its **backdrop**, as macOS's menu bar: white ink over a dark top edge, black over a light one, whatever the mode (`skinFromBackdrop`, `decideGlassByBackdrop`) |
+| **the dock, every panel, the banners, the island's modes, the app grid** | the **system mode**, as macOS's Dock, Control Center and menus |
+| **Settings, About** | the system mode, like any app (they are not shell skin) |
 
-How the flip works:
-- **CSS side:** `NidaraTheme.generateChromeTokenScope()` re-emits the full `--nidara-*` block
-  (factored into `nidaraVars()`) under a scoped selector when the shell differs from the system.
+Every shell surface also has the adaptive glass as its safety net: thicken, then flip, when its text
+would fall below its target (see "Adaptive glass" below). `Theme.chromeIsDark` is now simply the mode;
+a painter asks `chromeIsDarkFor(widget)` to get its surface's skin.
+
+⛔ **There is no appearance PIN any more — do not bring it back as a legibility fix.**
+`appearance.shellAppearance` (`system | dark | light`) pinned the whole shell skin against the mode
+from 2026-06 to 2026-09-29. It existed for LEGIBILITY: black text of the light skin failed over dark
+wallpapers. The adaptive glass guarantees legibility per surface by measuring what is really behind
+it, and the bar reads its skin from its backdrop, so the pin had nothing left to do but disagree
+with both. Removed: the Settings row, the config key, the `org.nidara.appearance shell-appearance`
+schema key (a stored value is simply unread; the 2026-09-14c migration no longer imports it — it
+would now fail on the missing key), the portal's copy, and `generateChromeTokenScope`.
+
+What the pin's machinery taught, and what still uses it:
+- **CSS side:** `NidaraTheme.generateSkinFlipScope()` re-emits the full `--nidara-*` block
+  (factored into `nidaraVars()`) under a scoped selector — per SKIN now, keyed by a class the
+  adaptive glass puts on a flipped surface's root. (The pin's `generateChromeTokenScope` did the
+  same per WINDOW; the lessons below were learnt on it.)
   - **Scope = every toplevel in `CHROME_SCOPE_WINDOWS`** (each window + its descendants):
     `nidara-bar`, `nidara-dock`, `nidara-island`, `nidara-app-grid`. The bar window's
     `Gtk.Overlay` still hosts CC/NC/Prism/system menu/overview, so scoping that window covers
@@ -1294,6 +1304,11 @@ How the flip works:
     disagree about which mode a surface is in. It used to hardcode `nidara-bar`/`nidara-dock`
     and went stale with the pin, for the same reason.
     The slider uses it for the neutral track colour. Use this for any future shared painter.
+    🔑 Since the adaptive glass (#673) the kit's hook is wired in `app.ts` as
+    `Theme.isChromeSurface(w) ? chromeIsDarkFor(w) : Theme.isDark` — a slider, tooltip or menu
+    inside a surface whose skin was flipped must follow that surface, which a per-WINDOW answer
+    cannot. The kit's `chromeIsDark(widget?)` takes the widget for the same reason (`paintGlassBubble`
+    passes it as `opts.widget`).
     ⚠️ Since the slider moved to the kit (2026-08-15) it reaches that method through
     **`kitAppearance().surfaceIsDark(widget)`**, not by importing `Theme` — a kit component may
     not import from `ui/shell/`. Same method, injected. A shared painter that stays in
@@ -1455,6 +1470,13 @@ it and adapts, by itself, on events. The dock is not in the list: it carries no 
   last-resort branch also flips pure white, so "did it flip" is not a test of B. The probe now also
   checks that B arrives at the slider's body, not at the ceiling.
 
+**The bar row's SKIN comes from its backdrop, not from the mode** (#676, as macOS's menu bar):
+`decideGlassByBackdrop` takes the skin that reads best over the TYPICAL backdrop — the median
+luminance, not the extremes (deciding from the extremes turned a bar over a pink-to-purple wallpaper
+light because of its pale left end; macOS reads "almost always white" because most wallpapers are
+dark up there) — keeps it unless the other reads better by `FLIP_BACK_MARGIN`, and then lets
+`decideGlass` thicken it for the extremes. Everything else starts from the mode.
+
 **The unit is the SURFACE, never a capsule** — and "surface" is what reads as one piece, not what is
 one GTK window. The island's compact capsule sits in the bar's row, so while it is compact it joins
 the bar's GROUP (`group: () => "bar-row"`): one decision from both backdrops together. Without that,
@@ -1506,8 +1528,7 @@ the widget (so a popover parented inside one follows it for free) and fall back 
 `Theme.chromeIsDark` outside any surface. CSS follows through a class on the surface's root,
 `nidara-skin-dark` / `nidara-skin-light`, present only while flipped, which
 `generateSkinFlipScope` (NidaraTheme.ts) gives a full `--nidara-*` set at
-`window#<w> .nidara-skin-* *` — (1,1,1), so it beats both the global `*` and the pin's
-`window#<w> *`. That is deliberate: the pin is a preference, legibility over a white backdrop is not.
+`window#<w> .nidara-skin-* *` — (1,1,1), so it beats the global `*` block everywhere inside it.
 
 🔑 **A new Cairo painter on shell chrome MUST ask `chromeIsDarkFor(itsArea)` / `glassAlphaFor(itsArea,
 role)`**, not `Theme.chromeIsDark` / `Theme.overlayOpacity`. Reading the global is exactly the bug the
@@ -2333,9 +2354,10 @@ surfaces now. `BACKDROP_TRIM` stays exported from `glass-capsule.ts`: whatever n
 needs to model what a viewer actually sees through the glass must read those numbers
 rather than copy them.
 
-⚠️ **The shell was never part of this and still is not.** Extending any wallpaper-based
-choice to `shellAppearance` was always a separate decision with a real blind spot in it
-— behind the bar there can be a window, which no wallpaper measurement can see.
+⚠️ **The shell was never part of this.** A wallpaper-based choice had a real blind spot there —
+behind the bar there can be a window, which no wallpaper measurement can see. The shell's answer
+came later and differently: the adaptive glass MEASURES the screen behind each surface (#673), and
+the bar row picks its skin from that (#676) — see "Adaptive glass".
 
 ### Looking at these two surfaces: `scripts/dev/lock-probe.js`
 

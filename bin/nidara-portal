@@ -106,7 +106,9 @@ const NIDARA_NS = "org.nidara.appearance"
  * reaching every GTK3, Qt and Chromium application on the desktop.
  */
 const GNOME_NS = "org.gnome.desktop.interface"
-const NIDARA_KEYS = ["window-opacity", "bar-opacity", "overlay-opacity", "dock-opacity", "shell-appearance"]
+// `shell-appearance` is gone (#676): the shell pin it carried was replaced by the
+// adaptive glass (#673), and a key the schema no longer has cannot be read.
+const NIDARA_KEYS = ["window-opacity", "bar-opacity", "overlay-opacity", "dock-opacity"]
 const BUS_NAME = "org.freedesktop.impl.portal.desktop.nidara"
 const OBJECT_PATH = "/org/freedesktop/portal/desktop"
 
@@ -328,7 +330,6 @@ const NIDARA_DEFAULTS = {
     "bar-opacity": new GLib.Variant("d", 0.48),
     "overlay-opacity": new GLib.Variant("d", 0.48),
     "dock-opacity": new GLib.Variant("d", 0.24),
-    "shell-appearance": new GLib.Variant("s", "system"),
 }
 
 /**

@@ -1160,7 +1160,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   ] as const) {
     glassHandles.set(pop, registerGlassSurface({ id, root: pop, role: "overlay", settled: atRest(pop), exclude: underIsland }))
   }
-  glassHandles.set(barBox, registerGlassSurface({ id: "bar", root: barBox, role: "bar", exclude: underIsland, group: () => "bar-row" }))
+  glassHandles.set(barBox, registerGlassSurface({
+    id: "bar", root: barBox, role: "bar", exclude: underIsland, group: () => "bar-row",
+    // As macOS's menu bar: the row's ink comes from what is behind it, not the mode (#676).
+    skinFromBackdrop: true,
+  }))
   glassHandles.set(popups, registerGlassSurface({ id: "notification-banners", root: popups, role: "overlay", exclude: underIsland }))
   // The island's surface is the whole monitor; what it paints is the capsule, or the
   // open mode — measure that one. Its glass is a bar capsule at rest and a panel open.

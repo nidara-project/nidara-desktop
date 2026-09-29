@@ -12,7 +12,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import { registerConfig } from "./core/ConfigRegistry"
 import { AGENT_PROVIDERS } from "./core/AgentProviders"
 import Theme, { TEXT_SCALE_MIN, TEXT_SCALE_MAX } from "./core/ThemeManager"
-import { ACCENT_PALETTE, GLASS_RANGE, type AccentKey, type ShellAppearance } from "./core/NidaraTheme"
+import { ACCENT_PALETTE, GLASS_RANGE, type AccentKey } from "./core/NidaraTheme"
 import NightLight from "./core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, TRANSITIONS, type TransitionType } from "./core/WallpaperManager"
 import notifConfig from "./core/NotifConfig"
@@ -147,18 +147,6 @@ export function registerConfigEntries() {
         enum: Object.keys(ACCENT_PALETTE),
         get: () => Theme.accentColor,
         set: v => void Theme.setAccentColor(v as AccentKey),
-    })
-    registerConfig("appearance.shellAppearance", {
-        desc: "Whole shell-skin appearance (bar, dock, and overlays), independent of the system/app mode: 'system' follows dark/light, 'dark'/'light' pin the shell so its text/icons stay legible over any wallpaper. Settings & About are excluded (they follow the app mode).",
-        type: "enum",
-        enum: ["system", "dark", "light"],
-        get: () => Theme.shellAppearance,
-        set: v => void Theme.setShellAppearance(v as ShellAppearance),
-        subscribe: onThemeCfg(() => Theme.shellAppearance),
-        ui: {
-            i18n: "settings.appearance.shell-appearance",
-            optI18n: k => t(`settings.appearance.shell-appearance.${k}` as any),
-        },
     })
     registerConfig("appearance.barOpacity", {
         desc: "Bar glass opacity (0.24 to 0.80).",

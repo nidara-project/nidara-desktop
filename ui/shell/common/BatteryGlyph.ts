@@ -23,7 +23,7 @@
 //
 // Fill ∝ exact charge; green while charging, danger-red at/below the low
 // threshold (semantic status colors, NOT the theme accent — accent is
-// reserved for selection). Chrome color follows the shell appearance pin.
+// reserved for selection). Chrome color follows its surface's skin (AdaptiveGlass).
 
 import Gtk from "gi://Gtk?version=4.0"
 import * as Battery from "../core/BatteryService"

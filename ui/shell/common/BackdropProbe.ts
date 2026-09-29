@@ -72,7 +72,12 @@ const MAX_SAMPLES = 6000
 /** Our paint between these alphas is treated as see-through glass. Below: the
  *  compositor did not blur the backdrop there (`ignore_alpha`), so it is not what
  *  text on glass sits on. Above: text and icons, too opaque to invert precisely. */
-const MIN_ALPHA = LAYER_IGNORE_ALPHA + 0.02
+// ⚠️ Just above the threshold, NOT with a comfortable margin: the thinnest glass the
+// slider allows (`GLASS_RANGE.min`, 0.24 — 61/255) is only one step above it, and a
+// margin of 0.02 (the first version) discarded EVERY pixel of it — the one setting
+// that needs adapting most measured nothing at all (2026-09-29). A pixel at or below
+// the threshold is not blurred and is excluded; AA edges near it fail `isFlatGlass`.
+const MIN_ALPHA = LAYER_IGNORE_ALPHA + 0.004
 const MAX_ALPHA = 0.9
 
 let shim: Shim | null = null

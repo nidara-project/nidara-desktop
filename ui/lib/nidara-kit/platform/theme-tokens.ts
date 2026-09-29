@@ -47,16 +47,10 @@ export type { AccentKey }
 
 // ── TYPES & INTERFACES ──────────────────────────────────────────────
 
-/**
- * Shell-skin appearance, independent of the system dark/light (app) mode.
- * - "system": the shell follows the global app mode (default).
- * - "dark" / "light": the shell is pinned, so text + glass stay legible over any
- *   wallpaper regardless of the rest of the desktop's mode.
- * Covers the WHOLE shell skin — bar, dock, AND the overlays (CC/NC/Prism/system
- * menu/overview/app grid). App-mode windows (Settings, About) are excluded: they
- * follow the system mode like any third-party app.
- */
-export type ShellAppearance = "system" | "dark" | "light"
+// There is no shell-skin PIN any more (`shellAppearance`, removed 2026-09-29, #676).
+// It existed to keep the shell legible over any wallpaper; the adaptive glass (#673)
+// does that per surface, measuring what is really behind it, so the shell follows the
+// system mode and the bar row reads its skin from its backdrop, as macOS's menu bar.
 
 export interface NidaraThemeConfig {
   accent: AccentKey
@@ -66,7 +60,6 @@ export interface NidaraThemeConfig {
   overlayOpacity: number  // Overlays CC/NC/Prism/… (Cairo)           — range [0.05, 0.80]
   dockOpacity: number     // Dock (Cairo)                             — range [0.05, 0.80]
   windowOpacity: number   // Settings + About windows (CSS tokens)    — range [0.05, 0.80]
-  shellAppearance: ShellAppearance  // Whole shell-skin dark/light, independent of app mode
 }
 
 /**
@@ -168,7 +161,6 @@ export const DEFAULT_CONFIG: NidaraThemeConfig = {
   overlayOpacity: GLASS_DEFAULT,
   dockOpacity: GLASS_RANGE.min,
   windowOpacity: GLASS_DEFAULT,
-  shellAppearance: "system",
 }
 
 // ── LOGIC ────────────────────────────────────────────────────────────
@@ -298,9 +290,10 @@ export function generateTokensCss(config: NidaraThemeConfig, isDark: boolean): s
 }
 
 /**
- * Scoped token override that pins the WHOLE shell skin to `chromeIsDark`,
- * independent of the system mode (appearance.shellAppearance). Returns empty
- * when it already matches the system (the global `* {}` block covers it).
+ * Scoped token sets — `generateSkinFlipScope` in `ui/shell/core/NidaraTheme.ts`, the
+ * full `--nidara-*` family a surface wears while the adaptive glass (#673) has flipped
+ * its skin. (Until 2026-09-29 the shell PIN used the same scope, `generateChromeTokenScope`;
+ * the pin is gone, #676, and the lessons below are why the scope is shaped as it is.)
  *
  * Scope = every toplevel of the shell skin, listed in `CHROME_SCOPE_WINDOWS`.
  * `window#nidara-bar` hosts the bar content AND the floating overlays that are

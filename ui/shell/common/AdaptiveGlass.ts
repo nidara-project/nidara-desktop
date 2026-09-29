@@ -5,7 +5,7 @@ import hyprlandState from "../core/HyprlandState"
 import Wallpaper from "../core/WallpaperManager"
 import { probeBackdrop, type MonitorRect } from "./BackdropProbe"
 import {
-    decideGlass, luminance, type GlassDecision, type BackdropStats,
+    decideGlass, decideGlassByBackdrop, luminance, type GlassDecision, type BackdropStats,
 } from "../../lib/nidara-kit/platform/glass-legibility"
 
 /**
@@ -103,6 +103,10 @@ export interface GlassSurfaceOpts {
      *  wallpaper under the bar's left end flipped the bar to light and left the
      *  island's capsule dark in the middle of it (2026-09-29). */
     group?: () => string | null
+    /** The skin comes from the BACKDROP, not from the mode — the bar row, as macOS's
+     *  menu bar (#676): white ink over a dark top edge, black over a light one. In a
+     *  group, one member saying so is enough (the bar speaks for the island's capsule). */
+    skinFromBackdrop?: boolean
 }
 
 interface Surface extends GlassSurfaceOpts {
@@ -240,7 +244,9 @@ async function measure(s: Surface) {
     s.lastStats = stats
     const group = s.group?.() ?? null
     if (!group) {
-        apply(s, decideGlass(stats, Theme.chromeIsDark, floorOf(roleOf(s)), s.decision ?? undefined))
+        apply(s, s.skinFromBackdrop
+            ? decideGlassByBackdrop(stats, floorOf(roleOf(s)), s.decision ?? undefined)
+            : decideGlass(stats, Theme.chromeIsDark, floorOf(roleOf(s)), s.decision ?? undefined))
         return
     }
     // One decision for the whole group, from the worst of every member's backdrop.
@@ -248,7 +254,9 @@ async function measure(s: Surface) {
     const members = [...surfaces.values()].filter(m => m.root.get_mapped() && m.group?.() === group)
     const merged = mergeStats(members.map(m => m.lastStats).filter((x): x is BackdropStats => x !== null))
     const floor = Math.max(...members.map(m => floorOf(roleOf(m))))
-    const next = decideGlass(merged, Theme.chromeIsDark, floor, s.decision ?? undefined)
+    const next = members.some(m => m.skinFromBackdrop)
+        ? decideGlassByBackdrop(merged, floor, s.decision ?? undefined)
+        : decideGlass(merged, Theme.chromeIsDark, floor, s.decision ?? undefined)
     for (const m of members) apply(m, next)
 }
 
@@ -261,7 +269,12 @@ function mergeStats(all: BackdropStats[]): BackdropStats {
         if (luminance(st.darkest) < luminance(darkest)) darkest = st.darkest
         samples += st.samples
     }
-    return { brightest, darkest, samples }
+    // The typical backdrop of the whole group: the member medians, weighted by how
+    // much of the group each one covers — the bar's strip outweighs the capsule.
+    const ranked = [...all].sort((a, b) => luminance(a.median) - luminance(b.median))
+    let acc = 0, median = ranked[0].median
+    for (const st of ranked) { acc += st.samples; median = st.median; if (acc >= samples / 2) break }
+    return { brightest, darkest, median, samples }
 }
 
 const pending = new Map<Surface, number>()
@@ -332,7 +345,8 @@ export function adaptiveGlassState() {
         alpha: s.shownAlpha === null ? null : round(s.shownAlpha),
         skin: s.decision ? (s.decision.isDark ? "dark" : "light") : null,
         flipped: s.decision ? s.decision.isDark !== Theme.chromeIsDark : false,
-        backdrop: s.lastStats ? { brightest: rgb(s.lastStats.brightest), darkest: rgb(s.lastStats.darkest), samples: s.lastStats.samples } : null,
+        skinFrom: s.skinFromBackdrop ? "backdrop" : "mode",
+        backdrop: s.lastStats ? { brightest: rgb(s.lastStats.brightest), median: rgb(s.lastStats.median), darkest: rgb(s.lastStats.darkest), samples: s.lastStats.samples } : null,
         measuredMsAgo: s.lastProbeUs ? Math.round((GLib.get_monotonic_time() - s.lastProbeUs) / 1000) : null,
     }))
 }

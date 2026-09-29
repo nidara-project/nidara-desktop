@@ -8,7 +8,7 @@
 // only ever printed "ok" has been run, not tested.
 
 import {
-    uncomposite, glassOver, tierContrast, legibilityMargin, decideGlass, backdropStats,
+    uncomposite, glassOver, tierContrast, legibilityMargin, decideGlass, decideGlassByBackdrop, backdropStats,
     GLASS_ADAPT_CEILING, TEXT_INK, type Rgb, type BackdropStats,
 } from "../../ui/lib/nidara-kit/platform/glass-legibility"
 import { GLASS_TINT } from "../../ui/lib/nidara-kit/platform/tokens"
@@ -20,7 +20,7 @@ const check = (ok: boolean, what: string) => {
 }
 const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol
 const grey = (v: number): Rgb => ({ r: v, g: v, b: v })
-const flat = (c: Rgb): BackdropStats => ({ brightest: c, darkest: c, samples: 1000 })
+const flat = (c: Rgb): BackdropStats => ({ brightest: c, darkest: c, median: c, samples: 1000 })
 
 // ── 1. The forward model is the one that was validated ───────────────────────
 // tech-debt #82's table (GLASS_TINT.dark, white ink): 1.69 over pure white and 5.71
@@ -128,7 +128,35 @@ const floor = 0.48
     check(shed.alpha === need, "deadband: 0.05 of spare body is shed")
 }
 
-// ── 6. The ramp the token engine emits is the ramp checked here ──────────────
+// ── 6. The bar row: its skin comes from the backdrop, not from the mode (#676) ─
+{
+    // As macOS's menu bar: dark backdrop → white ink, light backdrop → black ink.
+    check(decideGlassByBackdrop(flat(grey(0.1)), floor).isDark, "by backdrop: a dark backdrop gets dark glass + white ink")
+    check(!decideGlassByBackdrop(flat(grey(0.95)), floor).isDark, "by backdrop: a light backdrop gets light glass + black ink")
+    // …whatever skin it wore before, when the other is CLEARLY better.
+    check(decideGlassByBackdrop(flat(grey(0.1)), floor, { isDark: false, alpha: floor }).isDark,
+          "by backdrop: light glass over a dark backdrop goes dark (not only when illegible)")
+    // Hysteresis: find a grey where the two skins read within 10 % of each other.
+    let g = 0
+    for (let v = 0.2; v <= 0.9; v += 0.002) {
+        const d = legibilityMargin(grey(v), true, floor), l = legibilityMargin(grey(v), false, floor)
+        if (d >= 1 && l >= 1 && Math.max(d, l) / Math.min(d, l) < 1.05) { g = v; break }
+    }
+    check(g > 0, "there is a backdrop where both skins read about as well (the test below is not vacuous)")
+    check(decideGlassByBackdrop(flat(grey(g)), floor, { isDark: true, alpha: floor }).isDark
+          && !decideGlassByBackdrop(flat(grey(g)), floor, { isDark: false, alpha: floor }).isDark,
+          `by backdrop: in the middle (grey ${g.toFixed(3)}) a surface keeps the skin it wears`)
+}
+
+{
+    // The TYPICAL backdrop decides, not the extremes: a mostly dark bar with a pale
+    // stretch keeps dark glass (and thickens it), as macOS's menu bar keeps white ink.
+    const mixed: BackdropStats = { brightest: grey(0.8), darkest: grey(0.05), median: grey(0.2), samples: 1000 }
+    const d = decideGlassByBackdrop(mixed, floor)
+    check(d.isDark && d.alpha > floor, `by backdrop: a mostly dark backdrop with a pale stretch keeps dark glass, thickened (${d.alpha})`)
+}
+
+// ── 7. The ramp the token engine emits is the ramp checked here ──────────────
 check(TEXT_INK.dark.secondary === 0.8 && TEXT_INK.dark.dim === 0.6
       && TEXT_INK.light.secondary === 0.85 && TEXT_INK.light.dim === 0.72,
       "TEXT_INK holds the shipped ramp (a change here is a design change: re-measure #673)")

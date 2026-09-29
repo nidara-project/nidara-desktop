@@ -66,7 +66,7 @@ export class GlassBubbleMenu {
             halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
         })
         this.drawingArea.set_draw_func(cairoDraw((_da, cr, w, h) =>
-            paintGlassBubble(cr, w, h, this._side, { radiusMax: this._radiusMax, n: this._n })
+            paintGlassBubble(cr, w, h, this._side, { radiusMax: this._radiusMax, n: this._n, widget: this.popover })
         ))
         grid.attach(this.drawingArea, 0, 0, 1, 1)
 

@@ -25,7 +25,7 @@ export interface NidaraTooltipOpts {
     markup?: boolean
     /** Return true to suppress showing it (e.g. while a context menu is open). */
     suppress?: () => boolean
-    /** Shell skin (glass follows the pinned appearance — legible over any wallpaper)
+    /** Shell skin (glass follows the shell's skin — the mode, or its surface's if the adaptive glass flipped it)
      *  vs app-mode (follows the system mode, e.g. the About window). Default true. */
     chrome?: boolean
 }
@@ -86,7 +86,7 @@ export function attachTooltip(
         const dark = opts.chrome === false
             ? kitAppearance().surfaceIsDark(widget)
             : undefined
-        paintGlassBubble(cr, w, h, side, { chrome, arrowOffset, dark })
+        paintGlassBubble(cr, w, h, side, { chrome, arrowOffset, dark, widget })
     }))
     grid.attach(da, 0, 0, 1, 1)
 
@@ -103,7 +103,7 @@ export function attachTooltip(
     const syncDarkClass = () => {
         const dark = opts.chrome === false
             ? kitAppearance().surfaceIsDark(widget)
-            : (kitAppearance().chromeIsDark?.() ?? kitAppearance().surfaceIsDark(widget))
+            : (kitAppearance().chromeIsDark?.(widget) ?? kitAppearance().surfaceIsDark(widget))
         if (dark) {
             popover.remove_css_class("light")
             popover.add_css_class("dark")

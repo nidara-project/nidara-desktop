@@ -9,7 +9,9 @@
 #    import does not report them as retired settings — they are not retired, they
 #    have lived somewhere else all along.
 #
-#  - the four glass opacities and shellAppearance go to org.nidara.appearance, with
+#  - the four glass opacities go to org.nidara.appearance (shellAppearance went too
+#    until 2026-09-29; its schema key is gone, #676, so it is now DROPPED here — an
+#    install upgrading from before 2026-09-14 would otherwise fail this migration), with
 #    the two conversions the shell's reader applied on every load until today, so
 #    what lands is exactly what the desktop was showing:
 #      1. a file without barOpacity/overlayOpacity seeded both from the old single
@@ -34,7 +36,7 @@ json_edit "$CONFIG_DIR/appearance.json" '
       if (.[$k] | type) == "number" then
         .[$k] = ((if $stale then 0.2 + 0.8 * .[$k] else .[$k] end) | clamp)
       else . end)
-  | del(.glassModel, .shellOpacity, .themeFamily, .iconTheme, .cursorTheme, .isDark, .accent)
+  | del(.glassModel, .shellOpacity, .themeFamily, .iconTheme, .cursorTheme, .isDark, .accent, .shellAppearance)
 ' || return 1
 
 settings_import appearance.json appearance || return 1

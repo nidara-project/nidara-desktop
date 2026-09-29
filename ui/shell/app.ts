@@ -77,7 +77,7 @@ import { setWidgetCatalog } from "./core/WidgetCatalog"
 // Last on purpose: by the time it evaluates, the registry and the CC grid already have
 // (through Settings and the bar), so adding the seam did not reorder the shell's boot.
 import { widgetCatalogSource } from "./core/WidgetCatalogSource"
-import { startAdaptiveGlass, adaptiveGlassState, remeasureAllGlass } from "./common/AdaptiveGlass"
+import { startAdaptiveGlass, adaptiveGlassState, remeasureAllGlass, chromeIsDarkFor } from "./common/AdaptiveGlass"
 
 // ── The kit's appearance seam ────────────────────────────────────────────────
 // `nidara-kit/slider.ts` paints in Cairo, and Cairo cannot read a CSS token: it
@@ -89,13 +89,15 @@ import { startAdaptiveGlass, adaptiveGlassState, remeasureAllGlass } from "./com
 // `ui/lib/nidara-kit/appearance.ts`.
 setKitAppearance({
   accent:         () => Theme.accentPalette[Theme.accentColor].color,
-  surfaceIsDark:  (widget) => Theme.surfaceIsDark(widget),
+  // A shell surface answers through the adaptive glass (#673): a slider, tooltip or
+  // menu inside a panel whose skin was flipped wears that skin, not the mode's.
+  surfaceIsDark:  (widget) => Theme.isChromeSurface(widget) ? chromeIsDarkFor(widget) : Theme.isDark,
   onChange:       (cb) => {
     const id = Theme.connect("changed", cb)
     return () => safeDisconnect(Theme, id)
   },
   overlayOpacity: () => Theme.overlayOpacity,
-  chromeIsDark:   () => Theme.chromeIsDark,
+  chromeIsDark:   (widget) => widget ? chromeIsDarkFor(widget) : Theme.chromeIsDark,
 })
 
 // The Settings window as Hyprland sees it. Class AND title: the About window shares the

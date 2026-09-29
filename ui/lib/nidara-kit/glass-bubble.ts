@@ -136,7 +136,7 @@ export const bubblePath = (
 }
 
 export interface GlassBubbleOpts {
-    /** Shell skin (glass follows the pinned appearance — legible over any wallpaper)
+    /** Shell skin (glass follows the shell's skin — the mode, or its surface's if the adaptive glass flipped it)
      *  vs app-mode (follows the system mode, e.g. the About window). Default true. */
     chrome?: boolean
     /** Max corner radius (clamped further so the arrow base fits the straight edge).
@@ -156,6 +156,9 @@ export interface GlassBubbleOpts {
     dark?: boolean
     /** Explicit glass opacity override. If omitted, resolved through kitAppearance(). */
     alpha?: number
+    /** The widget being painted, so the shell can answer for the surface it sits in
+     *  (a tooltip or menu inside a panel the adaptive glass flipped wears that skin). */
+    widget?: Gtk.Widget | null
 }
 
 export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide, opts: GlassBubbleOpts = {}) => {
@@ -164,7 +167,7 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
     if (w <= 0 || h <= 0) return
 
     const app = kitAppearance()
-    const dark = opts.dark ?? (chrome ? (app.chromeIsDark?.() ?? app.surfaceIsDark(null as any)) : app.surfaceIsDark(null as any))
+    const dark = opts.dark ?? (chrome ? (app.chromeIsDark?.(opts.widget) ?? app.surfaceIsDark(null as any)) : app.surfaceIsDark(null as any))
     const tint = dark
         ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
         : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }

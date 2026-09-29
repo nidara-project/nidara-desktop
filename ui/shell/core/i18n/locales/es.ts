@@ -226,11 +226,6 @@ export default {
     "settings.appearance.interface-font.desc": "Fuente usada en el shell y apps GTK",
     "settings.appearance.mono-font": "Fuente monoespaciada",
     "settings.appearance.mono-font.desc": "Fuente para terminales y editores de código",
-    "settings.appearance.shell-appearance": "Apariencia de barra y dock",
-    "settings.appearance.shell-appearance.desc": "Sigue el tema del sistema, o fija la barra y el dock en oscuro o claro",
-    "settings.appearance.shell-appearance.system": "Seguir al sistema",
-    "settings.appearance.shell-appearance.dark": "Siempre oscuro",
-    "settings.appearance.shell-appearance.light": "Siempre claro",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "Aleatoria",

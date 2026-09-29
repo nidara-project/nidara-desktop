@@ -23,7 +23,7 @@ export interface IconButtonProps {
     /** Shown as the Nidara glass tooltip (attachTooltip), NOT GTK's native one —
      *  same bubble as the dock/tray/app-grid. */
     tooltip?: string
-    /** Tooltip skin: true (default) = shell chrome (pinned appearance — bar/dock/
+    /** Tooltip skin: true (default) = shell chrome (the shell's skin — bar/dock/
      *  overlay contexts); false = app-mode (follows the system mode — pass this
      *  from real windows like Settings/About). Same convention as
      *  SquircleContainer's `chrome`. */

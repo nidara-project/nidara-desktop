@@ -698,6 +698,8 @@ never noticed one appearing later. Correctly guessed at the time ("init-time dev
 in **#71**, which carries the diagnosis, the fix and the verification. Read that one.
 
 ### 23. `appearance.shellAppearance` covers the WHOLE shell skin — RESOLVED (2026-06-23)
+
+> ⛔ **Superseded 2026-09-29 (#676): the pin itself is removed.** The adaptive glass (#673) keeps every surface legible and the bar row reads its skin from its backdrop, so the pin's reason — legibility — is gone. Read what follows as history; design-system.md → "Which skin each shell surface wears" is the current model.
 The pin now applies to **bar + dock + every overlay** (CC/NC/Prism/system menu/overview/app grid), not just
 bar/dock. App-mode windows (Settings `nidara-settings-window`, About `nidara-about`) are **excluded** — they
 follow the system/app mode like any app. Mechanism: `generateChromeTokenScope` scopes

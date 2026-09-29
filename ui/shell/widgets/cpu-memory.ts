@@ -80,7 +80,7 @@ function makeArc(
     overlay.add_overlay(icon)
 
     pollWhileMapped(overlay, interval, () => poll(v => { if (v !== pct) { pct = v; canvas.queue_draw() } }))
-    // Repaint on dark/light or shell-appearance change (the poll only redraws on a
+    // Repaint on a dark/light change (the poll only redraws on a
     // value change, so without this the ring colour lagged a theme toggle).
     Theme.connect("changed", () => { if (canvas.get_mapped()) canvas.queue_draw() })
 

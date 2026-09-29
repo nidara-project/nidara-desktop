@@ -6,7 +6,6 @@ import {
   DEFAULT_CONFIG,
   clampGlass,
   type NidaraThemeConfig,
-  type ShellAppearance,
 } from "./theme-tokens"
 
 /**
@@ -22,7 +21,7 @@ import {
  *    names live where GNOME keeps them — `accent-color` and `color-scheme` in
  *    `org.gnome.desktop.interface`, `high-contrast` in `…a11y.interface`,
  *    `enable-animations` for reduced motion, and the GTK / icon / cursor theme. The
- *    keys only Nidara has (the four glass opacities, `shell-appearance`) live in
+ *    keys only Nidara has (the four glass opacities) live in
  *    GSettings `org.nidara.appearance` (#573). Anybody with `gsettings` can write
  *    either; `ThemeManager` (the shell) follows both live.
  *
@@ -53,8 +52,9 @@ import {
 
 /** The user's appearance, complete — the token engine's config plus the mode. */
 export interface AppearanceState extends NidaraThemeConfig {
-  /** The system's dark/light mode. NOT the same as `shellAppearance`, which can pin
-   *  the shell's own skin against it. */
+  /** The system's dark/light mode — the skin every Nidara surface prefers. (The shell
+   *  pin that could override it is gone, #676; the adaptive glass flips a single surface
+   *  when its text needs it, and that is the shell's business, not an app's.) */
   isDark: boolean
 }
 
@@ -83,10 +83,6 @@ const FALLBACK: AppearanceState = { ...DEFAULT_CONFIG, isDark: false }
 
 function asAccent(v: unknown): AccentKey {
   return typeof v === "string" && v in ACCENT_HEX ? (v as AccentKey) : FALLBACK.accent
-}
-
-function asShellAppearance(v: unknown): ShellAppearance {
-  return v === "dark" || v === "light" || v === "system" ? v : FALLBACK.shellAppearance
 }
 
 function asGlass(v: unknown, dflt: number): number {
@@ -123,7 +119,6 @@ function applyPortalKey(state: AppearanceState, ns: string, key: string, raw: un
     else if (key === "bar-opacity") state.barOpacity = asGlass(v, FALLBACK.barOpacity)
     else if (key === "overlay-opacity") state.overlayOpacity = asGlass(v, FALLBACK.overlayOpacity)
     else if (key === "dock-opacity") state.dockOpacity = asGlass(v, FALLBACK.dockOpacity)
-    else if (key === "shell-appearance") state.shellAppearance = asShellAppearance(v)
   }
   return JSON.stringify(state) !== before
 }
@@ -183,7 +178,6 @@ function readMirrorState(): AppearanceState | null {
       barOpacity: asGlass(raw.barOpacity, FALLBACK.barOpacity),
       overlayOpacity: asGlass(raw.overlayOpacity, FALLBACK.overlayOpacity),
       dockOpacity: asGlass(raw.dockOpacity, FALLBACK.dockOpacity),
-      shellAppearance: asShellAppearance(raw.shellAppearance),
     }
   } catch (e) {
     // Not silent: an unreadable mirror is how #488 hid for a release (written 0600).

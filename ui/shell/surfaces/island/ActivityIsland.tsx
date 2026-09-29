@@ -387,7 +387,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     syncIndicators()
 
     // Both morph endpoints paint chrome glass (SquircleContainer chrome:true):
-    // tint pinned by shellAppearance, alpha from the bar/overlay opacity axes.
+    // tint from the island's skin, alpha from the bar/overlay opacity axes.
     // Asked through the capsule: it is inside the island's surface, so these follow
     // the adaptive glass (#673) when it thickens or flips the island.
     const chromeGlassColor = () => chromeIsDarkFor(capsule)
