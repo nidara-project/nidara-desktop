@@ -1512,6 +1512,14 @@ one GTK window. The island's capsule row sits in the bar's row, so it is in the 
 (`group: () => "bar-row"`): one decision from both backdrops together. Without that, a pale stretch
 under the bar's left end flipped the bar to light and left the island's capsule dark in the middle
 of it. Each island MODE is a panel of its own (below).
+⚠️ **A group does not decide until the member that gives it its skin has been measured.** The
+bar's first probe at every shell start finds it not yet painted; when the island's succeeded
+first, the row decided from the island's capsule alone — a pinkish patch that reads LIGHT — and
+the whole bar went light until the bar's retry 1.6 s later (owner-caught 2026-09-29 as "the bar
+goes light on workspace 3 for nothing"; the order is a race, so it came and went). Every skin
+change — and a first decision against the mode — is logged as `[AdaptiveGlass] <id>: skin a → b
+(why, probe <tag>, ws N) median … brightest … samples …`, the probe tag matching
+`NIDARA_BACKDROP_DEBUG`'s images: an intermittent flip is answered from the log, not re-staged.
 
 **The dock** (2026-09-29, owner: "mide también el dock") is one surface per monitor,
 `dock-<connector>`, role `dock` (floor = `dockOpacity`), content `marks`, root = the axis's `layout`.

@@ -200,8 +200,21 @@ function applySkinClass(s: Surface) {
     if (flipped) s.root.add_css_class(s.decision!.isDark ? "nidara-skin-dark" : "nidara-skin-light")
 }
 
-function apply(s: Surface, next: GlassDecision) {
+/** One log line per SKIN change — never per measurement: a flip is rare and visible,
+ *  and "why did the bar go light over nothing" (owner, 2026-09-29, intermittent, not
+ *  reproduced on demand) can only be answered by what it saw at that moment. With
+ *  `NIDARA_BACKDROP_DEBUG` the probe's images carry the same tag. */
+function logFlip(s: Surface, prev: GlassDecision | null, next: GlassDecision, why: string, stats: BackdropStats | null) {
+    // A change of skin — or a FIRST decision against the mode, which is a flip too.
+    if (prev ? prev.isDark === next.isDark : next.isDark === Theme.chromeIsDark) return
+    const rgb = (c: { r: number; g: number; b: number }) => [c.r, c.g, c.b].map(v => Math.round(v * 255)).join(",")
+    const st = stats ? ` median ${rgb(stats.median)} brightest ${rgb(stats.brightest)} darkest ${rgb(stats.darkest)} samples ${stats.samples}` : ""
+    console.log(`[AdaptiveGlass] ${s.id}: skin ${prev ? (prev.isDark ? "dark" : "light") : "(none)"} → ${next.isDark ? "dark" : "light"} (${why}, probe ${s.id}-${s.seq}, ws ${hyprlandState.focusedWorkspaceId})${st}`)
+}
+
+function apply(s: Surface, next: GlassDecision, why = "measured", stats: BackdropStats | null = s.lastStats) {
     const prev = s.decision
+    logFlip(s, prev, next, why, stats)
     s.decision = next
     if (!prev || prev.isDark !== next.isDark || Math.abs((s.shownAlpha ?? 0) - next.alpha) >= 0.005)
         s.quietUntilUs = GLib.get_monotonic_time() + (TRANSITION_MS + QUIET_AFTER_CHANGE_MS) * 1000
@@ -299,6 +312,7 @@ async function measureClosed(s: Surface) {
         : decideGlass(stats, Theme.chromeIsDark, floorOf(roleOf(s)), s.decision ?? undefined, s.content)
     // Nothing on screen to animate: it simply opens like this.
     if (s.animId !== null) { GLib.source_remove(s.animId); s.animId = null }
+    logFlip(s, s.decision, next, "measured closed", stats)
     s.decision = next
     s.shownAlpha = next.alpha
     applySkinClass(s)
@@ -353,14 +367,21 @@ async function measure(s: Surface) {
         return
     }
     // One decision for the whole group, from the worst of every member's backdrop.
-    // A member not measured yet contributes nothing, and is simply told the answer.
+    // A member not measured yet contributes nothing, and is simply told the answer —
+    // EXCEPT the one whose backdrop gives the group its skin (`skinFromBackdrop`, the
+    // bar): until it has been measured, the group does not decide. Measured 2026-09-29,
+    // at every shell start: the bar's first probe finds it not yet painted, the island's
+    // succeeds, and the row decided from the island's capsule alone — a pinkish patch
+    // that reads LIGHT — and the whole bar went light for the 1.6 s until the bar's
+    // retry landed (owner-caught as "the bar goes light on workspace 3, for nothing").
     const members = [...surfaces.values()].filter(m => m.root.get_mapped() && m.group?.() === group)
+    if (members.some(m => m.skinFromBackdrop && !m.lastStats)) return
     const merged = mergeBackdropStats(members.map(m => m.lastStats).filter((x): x is BackdropStats => x !== null))
     const floor = Math.max(...members.map(m => floorOf(roleOf(m))))
     const next = members.some(m => m.skinFromBackdrop)
         ? decideGlassByBackdrop(merged, floor, s.decision ?? undefined)
         : decideGlass(merged, Theme.chromeIsDark, floor, s.decision ?? undefined, s.content)
-    for (const m of members) apply(m, next)
+    for (const m of members) apply(m, next, `group ${group} [${members.map(m => m.id).join("+")}]`, merged)
 }
 
 const pending = new Map<Surface, number>()
@@ -500,7 +521,7 @@ export function startAdaptiveGlass(): void {
                 // A fresh decision across a mode change: the old one's skin was chosen
                 // against the OTHER mode, and passing it would read as a flip to keep.
                 apply(s, decideGlass(s.lastStats, Theme.chromeIsDark, floorOf(roleOf(s)),
-                    modeChanged ? undefined : s.decision ?? undefined, s.content))
+                    modeChanged ? undefined : s.decision ?? undefined, s.content), "theme changed")
             } else applySkinClass(s)
         }
         scheduleAll()
