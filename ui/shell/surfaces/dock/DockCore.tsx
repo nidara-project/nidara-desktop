@@ -1394,11 +1394,10 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     // MARKS, not text, so it is held to 3:1 (glass-legibility.ts → GlassContent), and
     // its skin is the mode's, as macOS's Dock. The glass is the capsule, not the
     // monitor-sized layout; the layout is what gets rendered over it, icons included.
-    const dockOrigin = () => {
+    const dockOrigin = (off = Math.round(slideCurrent)) => {
         // Every axis anchors BOTTOM (the vertical one also TOP, under the bar's zone);
         // the slide is a negative margin on the edge the dock hides behind.
         const g = gdkmonitor.get_geometry()
-        const off = Math.round(slideCurrent)
         const y = g.height - win.get_height()
         if (!axis.vertical) return { x: 0, y: y + off }
         return dockSettings.position === 'right' ? { x: g.width - win.get_width() + off, y } : { x: -off, y }
@@ -1412,12 +1411,43 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         windowOrigin: dockOrigin,
         // At rest, in place, with nothing of ours over it: magnifying, sliding, a menu
         // (its own surface, over the capsule) or a drag would each put a frame in the
-        // capture that the offscreen render does not have.
-        settled: () => tickId === null && isRevealed && slideCurrent === 0 && !cursorInDock
+        // capture that the offscreen render does not have. The pointer resting on it is
+        // fine — magnified icons at rest are rendered and subtracted like any others, and
+        // the tooltip sits above the capsule — and it has to be: auto-hidden, the dock is
+        // on screen ONLY under the pointer, and would never be measured shown otherwise.
+        settled: () => tickId === null && isRevealed && slideCurrent === 0
             && !dndActive && menuState.openCount === 0,
         // Slid away by auto-hide or a fullscreen window: measured where it last stood,
         // so it slides back in already wearing the right glass.
         hidden: () => !isRevealed && slideCurrent === slideTarget,
+        // ⚠️ Hidden, its rest rect shows the TILED windows — and they will not be there
+        // when it shows: revealing claims the exclusive zone, and they shrink out of the
+        // way (setRevealed). Measured 2026-09-29: hidden, it read a terminal and a browser
+        // it never sits on. So those windows are left out; what is left — wallpaper,
+        // floating windows, other layers — is what it will have behind it. Covered
+        // entirely, nothing is measured and it keeps its last decision.
+        exclude: () => {
+            if (isRevealed) return []
+            const mon = hs.monitors.find(m => m.name === gdkmonitor.get_connector())
+            if (!mon) return []
+            return hs.clients
+                .filter(c => c.workspace?.id === mon.activeWorkspace?.id && !c.floating && !c.hidden && c.mapped !== false)
+                .map(c => ({ x: c.x - mon.x, y: c.y - mon.y, width: c.width, height: c.height }))
+        },
+        // Where it will stand: the capsule with no slide. Auto-hidden, the dock is on
+        // screen only under the pointer — never `settled` — so it is measured here.
+        restsAt: () => {
+            const c = axis.capsuleRect()
+            const [ok, b] = layout.compute_bounds(win)
+            if (!c || !ok) return null
+            const o = dockOrigin(0)
+            const x = b.get_x() + o.x + c.x, y = b.get_y() + o.y + c.y
+            const rect = {
+                x: Math.floor(x), y: Math.floor(y),
+                width: Math.ceil(x + c.width) - Math.floor(x), height: Math.ceil(y + c.height) - Math.floor(y),
+            }
+            return { monitor: gdkmonitor, rect }
+        },
     })
     win.connect("destroy", () => { glass?.dispose(); glass = null })
 

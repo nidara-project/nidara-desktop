@@ -102,6 +102,11 @@ export interface GlassSurfaceOpts {
     /** Mapped, but nowhere on screen (the dock slid away by auto-hide): measured like a
      *  CLOSED panel, where it last was, so it comes back already right. */
     hidden?: () => boolean
+    /** Where it stands when shown, known while it is hidden — so it can be measured
+     *  there without ever having been measured open. The auto-hidden dock needs it: it
+     *  is on screen only while the pointer is on it, which is never `settled`, so it
+     *  would never learn a `lastRect` from an open measurement. */
+    restsAt?: () => { monitor: Gdk.Monitor; rect: MonitorRect } | null
     /** What has to stay readable on it (`GlassContent`). Default `text`; the dock
      *  carries only marks. */
     content?: GlassContent
@@ -268,6 +273,8 @@ function boundsOf(s: Surface): MonitorRect | null {
  * word (it sees the panel's real size and our real paint).
  */
 async function measureClosed(s: Surface) {
+    const rest = s.restsAt?.()
+    if (rest) { s.lastRect = rest.rect; s.lastMonitor = rest.monitor }
     if (!s.lastRect || !s.lastMonitor) return
     const seq = ++s.seq
     const exclude: MonitorRect[] = [...(s.exclude?.() ?? [])]

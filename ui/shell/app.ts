@@ -1140,9 +1140,17 @@ app.start({
               const newDock = Dock(monitor)
               windows.add(newDock)
               // Now it is safe to close the old dock.
+              // ⚠️ close() alone does NOT destroy it: in GTK4 it only drops GTK's own
+              // reference, and "destroy" is emitted at dispose — which never comes,
+              // because the dock's own subscriptions (HyprlandState, Theme, the adaptive
+              // glass…) hold the window, and they are released only ON "destroy".
+              // Measured 2026-09-29: every rebuild left the old dock unmapped but alive,
+              // still listening, and still registered as a glass surface. run_dispose()
+              // is what gtk_widget_destroy() did in GTK3: it runs the teardown now.
               for (const w of oldDocks) {
                 windows.delete(w)
                 w.close()
+                w.run_dispose()
               }
             } catch (e) { console.error("[DockRebuild] Dock rebuild failed:", e) }
             return GLib.SOURCE_REMOVE

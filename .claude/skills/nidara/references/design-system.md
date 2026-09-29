@@ -1523,12 +1523,24 @@ Three things set it apart, each an option any surface can use:
   unsubtracted and read as backdrop. The probe captures the area and renders the WHOLE layout over
   it (`ProbeRequest.area`). Verified with `NIDARA_BACKDROP_DEBUG`: capture and render line up to the
   pixel, and the icons come out as holes in the recovered backdrop, not as backdrop.
-- **`hidden`: mapped but off screen.** Auto-hidden (or out of a fullscreen window's way), it is
-  measured like a closed panel, where it last stood, and slides back in already right.
+- **`hidden` + `restsAt`: mapped but off screen.** Auto-hidden (or out of a fullscreen window's
+  way), it is measured like a closed panel at the rect it WILL stand at (`restsAt`: the capsule
+  with no slide) — not where it last stood, because auto-hidden it may never have been measured
+  shown.
+  ⚠️ **And without the tiled windows.** Revealing claims the exclusive zone, so tiled windows
+  shrink out of the way: hidden, its rest rect shows windows it will never sit on (measured
+  2026-09-29: a terminal and a browser, while shown it sat on the wallpaper). While hidden the
+  dock's `exclude` lists the tiled windows of its monitor's active workspace; what is left —
+  wallpaper, floating windows, layers — is its real backdrop. Covered entirely (7 blocks of 805
+  left, under two tiled windows) it measures nothing and keeps its last decision. Verified on an
+  empty workspace: predicted hidden (0,202,244 / 0,186,230), measured shown (1,202,244 /
+  1,186,233), same decision, and no second measurement on reveal.
 - **`settle()`: it moves on its own.** `settled` is false while it magnifies, slides, holds a menu
-  (its own surface, over the capsule), drags, or has the pointer on it; an event arriving then is
-  remembered (`missed`) and measured when the springs stop (DockCore's tick calls `settle()`).
-  A panel does not need this — its reveal's `onDone` already asks.
+  (its own surface, over the capsule) or drags; an event arriving then is remembered (`missed`)
+  and measured when the springs stop (DockCore's tick calls `settle()`). A panel does not need
+  this — its reveal's `onDone` already asks. The pointer RESTING on it does not unsettle it:
+  magnified icons at rest are rendered and subtracted like any others and the tooltip sits above
+  the capsule — and auto-hidden, the dock is shown ONLY under the pointer.
 
 The windowOrigin comes from the anchors (every axis anchors BOTTOM; the slide is a negative margin
 on the hiding edge). Cost, measured at 2560×1440, scale 1: a 1390×92 capture, 2.8–4.2 ms of main
