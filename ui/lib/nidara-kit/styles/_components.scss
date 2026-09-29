@@ -530,7 +530,7 @@ checkbutton:disabled {
     color: var(--nidara-text);
     // Semantic parts of a symbolic icon keep their meaning, and anything else follows the
     // ink — never a fixed white, which vanished on a light menu (see _bar.scss, #676).
-    -gtk-icon-palette: success var(--nidara-text), warning var(--nidara-danger), error var(--nidara-danger);
+    -gtk-icon-palette: success var(--nidara-text), warning var(--nidara-warning), error var(--nidara-danger);
 }
 
 /* Glass menu popover — the Gtk.Popover surface that hosts a Cairo glass bubble

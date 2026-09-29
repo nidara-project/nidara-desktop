@@ -1456,9 +1456,14 @@ A common misconception (it bit a past explanation): system-tray icons are NOT un
   ⛔ "Make the APP believe it is in the other mode" does not work: the portal's colour scheme is
   one answer per app, and Electron uses the same value for its windows.
 - **The symbolic palette keeps its meaning:** `-gtk-icon-palette: success var(--nidara-text),
-  warning var(--nidara-danger), error var(--nidara-danger)` on the bar's images and on `.nidara-menu`.
-  It was `… white` for all three from when the bar was always dark: Telegram's unread dot (class
-  `warning` in Papirus; red in its own pixmap) stayed white on light glass.
+  warning var(--nidara-warning), error var(--nidara-danger)` on the bar's images and on
+  `.nidara-menu` — orange warning, red error, as GNOME and macOS (owner, 2026-09-29: a warning in
+  red reads as a failure); success follows the ink because the bar is monochrome and colour is for
+  what asks for attention. `--nidara-warning` = `WARNING_HEX` (status-colors.ts), new that day. It
+  was `… white` for all three from when the bar was always dark: Telegram's unread dot stayed white
+  on light glass. That dot is `warning` only because Papirus classed it so (`ColorScheme-Highlight
+  warning` — KDE's convention and GTK's in one element); Telegram itself asks for no colour, it
+  swaps its IconName to `…-attention-symbolic` rather than using SNI's NeedsAttention status.
 
 Consequence: a single bar can show some tray icons themed and others full-colour, depending
 purely on what the icon theme provides. That's inherent to SNI (apps supply what they

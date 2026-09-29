@@ -55,6 +55,7 @@
     /* --- Semantic Colors --- */
     --nidara-danger: #ff3b30;
     --nidara-danger-rgb: 255, 59, 48;
+    --nidara-warning: #ff9500;   /* WARNING_HEX (status-colors.ts); NidaraTheme overrides at runtime */
 
     /* --- Borders & Shadows ---
        Recalibrated to a subtle "whisper" range (small blur, low alpha).

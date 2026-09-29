@@ -31,7 +31,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { readFile, writeFile } from "./file"
 import { ACCENT_HEX, ACCENT_NAMES, hexToRgb, type AccentKey } from "./accent"
-import { DANGER_HEX } from "./status-colors"
+import { DANGER_HEX, WARNING_HEX } from "./status-colors"
 import { GLASS_TINT } from "./tokens"
 import { TEXT_INK } from "./glass-legibility"
 
@@ -278,6 +278,7 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
     `  --nidara-thumb: #ffffff;`,
     `  --nidara-danger: ${DANGER_HEX};`,
     `  --nidara-danger-rgb: ${hexToRgb(DANGER_HEX)};`,
+    `  --nidara-warning: ${WARNING_HEX};`,
     `  --nidara-popover-bg: rgba(${pbR}, ${pbG}, ${pbB}, ${popoverAlpha});`,
     `  --nidara-popover-border: ${popoverBorder};`,
     `  --nidara-shadow-sm: ${sh.sm};`,
