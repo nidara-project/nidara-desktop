@@ -47,6 +47,7 @@ import hs from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
 import { BAR_ICON_SIZE, BAR_ITEM_PAD } from "../../common/widget-kit"
 import { registerGlassSurface, type GlassSurfaceHandle } from "../../common/AdaptiveGlass"
+import { HALO_OUTSET } from "../../common/GlassHalo"
 
 function SystemMenuIcon(): Gtk.Widget {
   const img = new Gtk.Image({ pixel_size: BAR_ICON_SIZE + 2, css_classes: ["bar-distro-icon"], margin_start: BAR_ITEM_PAD - 1, margin_end: BAR_ITEM_PAD - 1 })   // the mark 2px larger than the other icons: 1px less air a side keeps the item as wide as theirs
@@ -562,10 +563,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               const [, natH] = cc.measure(Gtk.Orientation.VERTICAL, Math.round(b.get_width()))
               height = Math.max(height, natH)
           }
+          // The CC's halo paints past its box (`HALO_OUTSET`): outside this rect the
+          // compositor does not draw at all, so its pad is the halo's where that is wider.
+          const o = c === cc ? HALO_OUTSET : null
+          const pl = Math.max(PANEL_PAD, o?.left ?? 0), pr = Math.max(PANEL_PAD, o?.right ?? 0)
+          const pt = Math.max(PANEL_PAD, o?.top ?? 0), pb = Math.max(PANEL_PAD, o?.bottom ?? 0)
           rects.push(fullWidth
               ? { x: 0, y: Math.round(b.get_y()) - PANEL_PAD, width: box.width, height: Math.round(height) + PANEL_PAD * 2 }
-              : { x: Math.round(b.get_x()) - PANEL_PAD, y: Math.round(b.get_y()) - PANEL_PAD,
-                  width: Math.round(b.get_width()) + PANEL_PAD * 2, height: Math.round(height) + PANEL_PAD * 2 })
+              : { x: Math.round(b.get_x()) - pl, y: Math.round(b.get_y()) - pt,
+                  width: Math.round(b.get_width()) + pl + pr, height: Math.round(height) + pt + pb })
       }
       return rects
   }
@@ -1160,7 +1166,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     ["control-center", cc], ["notification-center", nc], ["system-menu", systemMenu],
     ["search", prism], ["bar-expansion", expansionCapsule],
   ] as const) {
-    glassHandles.set(pop, registerGlassSurface({ id, root: pop, role: "overlay", settled: atRest(pop), exclude: underIsland }))
+    // The CC carries a halo (`common/GlassHalo.ts`): its tiles are the outer glass, with
+    // nothing between them, so its first step of thickening is the container under them.
+    glassHandles.set(pop, registerGlassSurface({ id, root: pop, role: "overlay", settled: atRest(pop), exclude: underIsland, halo: pop === cc }))
   }
   glassHandles.set(barBox, registerGlassSurface({
     id: "bar", root: barBox, role: "bar", exclude: underIsland, group: () => "bar-row",

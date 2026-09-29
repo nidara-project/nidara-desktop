@@ -4,6 +4,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import status from "../../core/Status"
 import IslandGrid from "./IslandGrid"
 import { ccStatusBanner } from "../bar/StatusIndicators"
+import { GlassHalo } from "../../common/GlassHalo"
 
 export function ControlCenterWidget(monitor: Gdk.Monitor) {
     const layout = new Gtk.Box({
@@ -23,5 +24,7 @@ export function ControlCenterWidget(monitor: Gdk.Monitor) {
     layout.append(ccStatusBanner())
     layout.append(IslandGrid())
 
-    return layout
+    // The container under the tiles (#673): a soft shadow that is also the surface's
+    // first step of thickening — `common/GlassHalo.ts`.
+    return new GlassHalo(layout)
 }

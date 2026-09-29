@@ -1551,6 +1551,36 @@ measurement decides alone and would leave a stale backdrop in `lastStats` for th
 and a group member comes back where it was, over what it had. Verified live: X toggled fullscreen
 and back, no measurement while hidden, one on return, no skin change.
 
+**The Control Center wears a HALO under its tiles** (`common/GlassHalo.ts`, owner's calls of
+2026-09-29: one halo, always there, tiles thicken past it). The CC has no panel — its tiles are the
+outer glass — so over a busy page each tile was a separate thin sheet with the page showing through
+and between them. The halo is one rounded rectangle behind the whole panel, at full alpha under
+every tile, falling off OUTSIDE its box (raised cosine; `HALO_OUTSET` 8 above — the bar is 8 px up —
+24 at the sides, 32 below), in the skin's own `GLASS_TINT`: a shadow on dark glass, a haze on light
+glass (a dark shadow under black ink would LOWER its contrast).
+- **It is the surface's first step of A.** Same tint, same layer, so tile alpha `a` over halo `c`
+  is exactly one glass of `e = 1 − (1−a)(1−c)`. A surface registered with `halo: true` is decided
+  as that `e` (its floor is the slider over the halo at rest), and `AdaptiveGlass` splits it:
+  `haloAlphaFor` takes the first share, from `HALO_REST` (0.12, always) to `HALO_MAX`
+  (`LAYER_IGNORE_ALPHA − 0.01`), and `glassAlphaFor` gives the tiles the rest. `dumpState.glass`
+  shows `alpha` (effective), `halo` and `tiles`.
+- ⛔ **Never above the layer's `ignore_alpha`.** Under it Hyprland does not blur behind the halo,
+  so it reads as a shadow over the sharp backdrop. Over it, it would turn into a frosted PANEL with
+  a blur edge wherever the falloff crosses the threshold — a visible jump the owner declined; the
+  solid panel is Reduce transparency's (#674).
+- **It paints outside its box, which two things clip by default.** The revealer: `ScaleRevealer`
+  now clips only an UNROLLING reveal (`animateLayout`) — a scale-only pop cannot push its child
+  past the box, so the clip could only cut what paints outside on purpose (the halo appeared as a
+  second step, after the pop). And the bar's visible region, a hard GL scissor: `paintedRects`
+  pads the CC's rect by `HALO_OUTSET` where that is wider than `PANEL_PAD`.
+- **Cost:** the shape is painted once per size and skin into a cached render node at full
+  strength; its alpha is an opacity node on top, so the adaptive animation and the reveal's fade
+  never repaint it (`redrawSubtree` only queues the draw that re-reads the alpha). Not a hit
+  target: the input region is still the panel's box.
+- Verified live over the wallpaper (dark skin, rest): the gap between tiles 2/255 darker than the
+  bare wallpaper at lum 40, a smooth falloff with no banding. ⚠️ NOT yet seen live: the light skin's
+  haze, and the halo thickening over a bright backdrop — needs a light window behind the CC.
+
 **The dock** (2026-09-29, owner: "mide también el dock") is one surface per monitor,
 `dock-<connector>`, role `dock` (floor = `dockOpacity`), content `marks`, root = the axis's `layout`.
 Three things set it apart, each an option any surface can use:
