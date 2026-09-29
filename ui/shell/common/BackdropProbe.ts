@@ -330,6 +330,12 @@ export async function probeBackdrop(req: ProbeRequest): Promise<BackdropStats | 
  *  far smaller than the blur would count sharp detail the text never sees. */
 const CLOSED_BLOCK = 12
 
+/** Blocks a closed probe averages, at most. A full-width island mode is ~6700 blocks of
+ *  12 px — 12.8 ms on the main thread, measured — so a large rect takes an even
+ *  subset of its blocks instead: each block is still a blur-sized average, only fewer
+ *  of them, so the percentiles do not drift the way coarser blocks would make them. */
+const CLOSED_MAX_BLOCKS = 1500
+
 /**
  * What a CLOSED panel would have behind it where it last opened — so it can open
  * already wearing the right glass instead of correcting itself in front of the user
@@ -376,8 +382,12 @@ export async function probeClosedBackdrop(req: {
         x1: (e.x + e.width - req.rect.x) * scale, y1: (e.y + e.height - req.rect.y) * scale,
     }))
     const out: Rgb[] = []
+    const total = Math.floor(W / block) * Math.floor(H / block)
+    const every = Math.max(1, Math.ceil(total / CLOSED_MAX_BLOCKS))
+    let k = 0
     for (let by = 0; by + block <= H; by += block) {
         for (let bx = 0; bx + block <= W; bx += block) {
+            if (k++ % every !== 0) continue
             const cx = bx + block / 2, cy = by + block / 2
             if (exclude.some(e => cx >= e.x0 && cx < e.x1 && cy >= e.y0 && cy < e.y1)) continue
             let r = 0, g = 0, b = 0, n = 0

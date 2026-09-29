@@ -798,7 +798,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const syncIslandModes = () => {
     island.sync((r, open) => r.reveal(open, () => {
       if (!open) islandWin.updateInputRegion()
-      glassHandles.get(islandWin.root())?.remeasure()
+      // The mode that just landed is measured on its own; a closing mode hands the
+      // capsule back, and the bar row re-decides with it.
+      glassHandles.get(open ? r : islandHost)?.remeasure()
     }))
     islandWin.updateInputRegion()
   }
@@ -1166,19 +1168,32 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     skinFromBackdrop: true,
   }))
   glassHandles.set(popups, registerGlassSurface({ id: "notification-banners", root: popups, role: "overlay", exclude: underIsland }))
-  // The island's surface is the whole monitor; what it paints is the capsule, or the
-  // open mode — measure that one. Its glass is a bar capsule at rest and a panel open.
-  const openIslandMode = () => island.revealers.find(r => r.get_visible() && r.progress > 0) ?? null
-  glassHandles.set(islandWin.root(), registerGlassSurface({
+  // The island is TWO kinds of surface for the glass. Its row (the capsule and the
+  // indicator chips) is part of the bar's row and decides with it. Each MODE is a panel
+  // of its own — measured where it last opened, also while closed, so it opens already
+  // right; the morph travels from the capsule's glass to the mode's. (One decision for
+  // the whole island, switching between the two, could not be measured in advance: a
+  // mode's rect is only known while it is open.)
+  const islandOrigin = () => ({ x: 0, y: islandWin.topOffset() })
+  glassHandles.set(islandHost, registerGlassSurface({
     id: "island",
-    root: islandWin.root(),
-    role: () => status.island_mode ? "overlay" : "bar",
-    probe: () => openIslandMode() ?? island.capsule,
-    windowOrigin: () => ({ x: 0, y: islandWin.topOffset() }),
-    settled: () => island.revealers.every(r => r.tickId === null),
-    // At rest the capsule is part of the bar's row, and wears what the bar wears.
-    group: () => status.island_mode ? null : "bar-row",
+    root: islandHost,
+    role: "bar",
+    probe: () => island.capsule,
+    windowOrigin: islandOrigin,
+    // While a mode is open the capsule is switched off (opacity 0): nothing to measure.
+    settled: () => !status.island_mode && islandHost.tickId === null,
+    group: () => "bar-row",
   }))
+  for (const { id, revealer } of island.modeRevealers) {
+    glassHandles.set(revealer, registerGlassSurface({
+      id: `island-${id}`,
+      root: revealer,
+      role: "overlay",
+      windowOrigin: islandOrigin,
+      settled: atRest(revealer),
+    }))
+  }
   win.connect("destroy", () => { for (const h of glassHandles.values()) h.dispose(); glassHandles.clear() })
 
   const ISLAND_GAP = 16

@@ -395,6 +395,17 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
     // Pill of the compact capsule (perfect pill ≡ n=2, radius null = h/2).
     const compactGlass = (): MorphGlass => ({ alpha: glassAlphaFor(capsule, "bar"), color: chromeGlassColor(), border: CAPSULE_BORDER, n: 2.0, radius: null })
+    // A mode's end of the morph is asked through the MODE's own widget: each mode is a
+    // surface of its own for the adaptive glass (Bar.tsx), measured where it last
+    // opened — so the morph travels from the capsule's glass to the mode's, and a mode
+    // can open already wearing the skin its backdrop needs.
+    const modeGlass = (w: Gtk.Widget, g: { border: MorphGlass["border"], n: number, radius: MorphGlass["radius"] }) => (): MorphGlass => ({
+        alpha: glassAlphaFor(w, "overlay"),
+        color: chromeIsDarkFor(w)
+            ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
+            : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b },
+        border: g.border, n: g.n, radius: g.radius,
+    })
 
     // ── Mode registry ────────────────────────────────────────────────────────
     const modes = new Map<string, { mode: IslandMode, revealer: MorphRevealer }>()
@@ -461,40 +472,45 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         modes.set(mode.id, { mode, revealer })
     }
 
+    const overviewModeWidget = WorkspaceOverview(gdkmonitor)
     registerMode({
         id: ISLAND_OVERVIEW,
-        widget: WorkspaceOverview(gdkmonitor),
-        glass: () => ({ alpha: glassAlphaFor(capsule, "overlay"), color: chromeGlassColor(), border: WO_GLASS.border, n: WO_GLASS.n, radius: WO_GLASS.radius }),
+        widget: overviewModeWidget,
+        glass: modeGlass(overviewModeWidget, WO_GLASS),
         needsKeyboard: true,
     })
     // No keyboard grab: the player panel is ambient — media keys and app focus
     // keep working; it closes on outside click / capsule click like CC.
+    const playerModeWidget = PlayerIsland()
     registerMode({
         id: ISLAND_PLAYER,
-        widget: PlayerIsland(),
-        glass: () => ({ alpha: glassAlphaFor(capsule, "overlay"), color: chromeGlassColor(), border: PLAYER_GLASS.border, n: PLAYER_GLASS.n, radius: PLAYER_GLASS.radius }),
+        widget: playerModeWidget,
+        glass: modeGlass(playerModeWidget, PLAYER_GLASS),
     })
     // No keyboard grab either: the battery alert is dismissed by outside click
     // / Esc-less design, same ambient contract as the player.
+    const batteryModeWidget = BatteryIsland()
     registerMode({
         id: ISLAND_BATTERY,
-        widget: BatteryIsland(),
-        glass: () => ({ alpha: glassAlphaFor(capsule, "overlay"), color: chromeGlassColor(), border: BATTERY_GLASS.border, n: BATTERY_GLASS.n, radius: BATTERY_GLASS.radius }),
+        widget: batteryModeWidget,
+        glass: modeGlass(batteryModeWidget, BATTERY_GLASS),
     })
     // No keyboard grab: the capture card is a statement + Stop, dismissed by
     // outside click / capsule click like the player and the battery alert.
+    const recordingModeWidget = RecordingIsland()
     registerMode({
         id: ISLAND_RECORDING,
-        widget: RecordingIsland(),
-        glass: () => ({ alpha: glassAlphaFor(capsule, "overlay"), color: chromeGlassColor(), border: RECORDING_GLASS.border, n: RECORDING_GLASS.n, radius: RECORDING_GLASS.radius }),
+        widget: recordingModeWidget,
+        glass: modeGlass(recordingModeWidget, RECORDING_GLASS),
     })
     // Keyboard grab: the assistant has a text entry (like the overview cursor
     // needs keys, this needs the entry to receive them — the bar grants EXCLUSIVE
     // while needsKeyboard). handleKey only claims Escape; the rest reaches the entry.
+    const agentModeWidget = AgentIsland()
     registerMode({
         id: ISLAND_AGENT,
-        widget: AgentIsland(),
-        glass: () => ({ alpha: glassAlphaFor(capsule, "overlay"), color: chromeGlassColor(), border: AGENT_GLASS.border, n: AGENT_GLASS.n, radius: AGENT_GLASS.radius }),
+        widget: agentModeWidget,
+        glass: modeGlass(agentModeWidget, AGENT_GLASS),
         needsKeyboard: true,
     })
 
@@ -537,6 +553,9 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         /** All mode revealers — the bar mounts each on its master overlay and
          *  includes them in its input-region pass (visibility-gated there). */
         revealers: [...modes.values()].map(rt => rt.revealer),
+        /** The same revealers with their mode ids — each is a surface of its own for
+         *  the adaptive glass (Bar.tsx), so it can be measured where it last opened. */
+        modeRevealers: [...modes.entries()].map(([id, rt]) => ({ id, revealer: rt.revealer })),
         /** Reveal/hide every mode against status.island_mode. The bar passes
          *  its popToggle-equivalent so close keeps the input-region refresh. */
         sync: (reveal: (r: MorphRevealer, open: boolean) => void) => {

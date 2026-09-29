@@ -124,6 +124,8 @@ interface Surface extends GlassSurfaceOpts {
      *  `measureClosed`). Null until it has been open once. */
     lastRect: MonitorRect | null
     lastMonitor: Gdk.Monitor | null
+    /** When the last CLOSED measurement landed (µs). */
+    closedAtUs: number
 }
 
 const surfaces = new Map<Gtk.Widget, Surface>()
@@ -264,6 +266,7 @@ async function measureClosed(s: Surface) {
     // Opened meanwhile: the open measurement owns it now.
     if (seq !== s.seq || !surfaces.has(s.root) || s.root.get_mapped() || !stats) return
     s.lastProbeUs = GLib.get_monotonic_time()
+    s.closedAtUs = s.lastProbeUs
     s.lastStats = stats
     const next = s.skinFromBackdrop
         ? decideGlassByBackdrop(stats, floorOf(roleOf(s)), s.decision ?? undefined)
@@ -285,6 +288,11 @@ async function measure(s: Surface) {
     if (quietMs > 0) { schedule(s, Math.ceil(quietMs)); return }
     const target = s.probe ? s.probe() : s.root
     if (!target || !target.get_mapped()) return
+    // Already known: measured CLOSED since the last thing that could change the backdrop,
+    // and opened where it was measured. The open measurement is the expensive one (the
+    // offscreen render: 12 ms for the full-width overview, measured) and would only
+    // confirm what the closed one — the same model to 2/255 — already decided.
+    if (s.closedAtUs > lastEventUs && s.lastRect && sameRect(boundsOf(s), s.lastRect)) return
     const seq = ++s.seq
     let stats: BackdropStats | null = null
     try {
@@ -340,7 +348,17 @@ function schedule(s: Surface, delayMs = DEBOUNCE_MS) {
     }))
 }
 
+/** When something last happened that can change what is behind a surface (µs). */
+let lastEventUs = 0
+
+/** The same place, give or take the rounding a capture region gets. */
+function sameRect(a: MonitorRect | null, b: MonitorRect): boolean {
+    return !!a && Math.abs(a.x - b.x) <= 2 && Math.abs(a.y - b.y) <= 2
+        && Math.abs(a.width - b.width) <= 2 && Math.abs(a.height - b.height) <= 2
+}
+
 function scheduleAll(delayMs = DEBOUNCE_MS) {
+    lastEventUs = GLib.get_monotonic_time()
     // Closed panels too, where they last opened (`measureClosed`).
     for (const s of surfaces.values()) if (s.root.get_mapped() || s.lastRect) schedule(s, delayMs)
 }
@@ -357,7 +375,7 @@ export interface GlassSurfaceHandle {
 
 export function registerGlassSurface(opts: GlassSurfaceOpts): GlassSurfaceHandle {
     const s: Surface = {
-        ...opts, decision: null, shownAlpha: null, lastStats: null, lastProbeUs: 0, seq: 0, animId: null, retries: 0, quietUntilUs: 0, lastRect: null, lastMonitor: null,
+        ...opts, decision: null, shownAlpha: null, lastStats: null, lastProbeUs: 0, seq: 0, animId: null, retries: 0, quietUntilUs: 0, lastRect: null, lastMonitor: null, closedAtUs: 0,
     }
     surfaces.set(opts.root, s)
     // A surface that is hidden keeps its last decision: the next time it opens over
@@ -378,6 +396,7 @@ export function registerGlassSurface(opts: GlassSurfaceOpts): GlassSurfaceHandle
 /** Measure every mapped surface now (after the usual settle) — `nidara-ipc
  *  glassRemeasure`, for verifying and for an agent that just changed what is behind. */
 export function remeasureAllGlass(): number {
+    lastEventUs = GLib.get_monotonic_time()   // asked for: nothing counts as already known
     let n = 0
     for (const s of surfaces.values()) if (s.root.get_mapped() || s.lastRect) { schedule(s, 0); n++ }
     return n

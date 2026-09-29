@@ -1502,10 +1502,10 @@ dark up there) — keeps it unless the other reads better by `FLIP_BACK_MARGIN`,
 `decideGlass` thicken it for the extremes. Everything else starts from the mode.
 
 **The unit is the SURFACE, never a capsule** — and "surface" is what reads as one piece, not what is
-one GTK window. The island's compact capsule sits in the bar's row, so while it is compact it joins
-the bar's GROUP (`group: () => "bar-row"`): one decision from both backdrops together. Without that,
-a pale stretch under the bar's left end flipped the bar to light and left the island's capsule dark
-in the middle of it. Open, the island is a panel of its own.
+one GTK window. The island's capsule row sits in the bar's row, so it is in the bar's GROUP
+(`group: () => "bar-row"`): one decision from both backdrops together. Without that, a pale stretch
+under the bar's left end flipped the bar to light and left the island's capsule dark in the middle
+of it. Each island MODE is a panel of its own (below).
 
 **How a surface measures itself** — `common/BackdropProbe.ts`:
 
@@ -1557,11 +1557,23 @@ the same events as everything else. What is on screen of OURS in that rectangle 
 panel) is excluded. The open measurement still runs once the panel settles and has the last word.
 Verified: an empty workspace, the CC measured once, closed, a white wallpaper set behind it — it
 decided light while closed and opened light, and its own measurement agreed. Cost, measured: the capture on
-the worker plus 0.8–3.2 ms of main thread for a CC-sized panel (12 px blocks; 8 px blocks were ~5 ms,
-and a per-pixel `pow` before the lookup table 17.5 ms) — cheaper than the open measurement, which
-needs the offscreen render. ⚠️ Island MODES are not pre-measured (the island's one decision
-switches between the bar-row group and the open mode, and a mode's rect is known only while open):
-they still settle after they open.
+the worker plus 1–3.5 ms of main thread for the CC and 5.7 ms for the full-width overview (12 px
+blocks, at most `CLOSED_MAX_BLOCKS` of them, an even subset beyond that — coarser blocks would smooth
+the percentiles; a per-pixel `pow` before the lookup table was 17.5 ms).
+
+🔑 **And then the open measurement is SKIPPED** when the closed one is newer than the last event
+that could change the backdrop and the panel opened where it was measured (`closedAtUs >
+lastEventUs`, `sameRect`). The open one is the expensive one — 12 ms for the overview, the
+offscreen render — and would only confirm the same model to 2/255. Anything that happens while the
+panel is open is measured the normal way. Verified: CC and overview, measured closed over a white
+wallpaper, opened light and did not measure again.
+
+**Island modes are panels of their own** for this: `island-<mode>` surfaces (root = each mode's
+MorphRevealer), measured closed where they last opened like the rest; the island's ROW (capsule +
+chips, root `islandHost`) is the `bar-row` member. A mode's morph goes from the capsule's glass to
+the mode's (`modeGlass` asks through the mode's own widget). The first version had ONE island
+surface switching between the two, which could not be measured in advance — a mode's rect is only
+known while it is open.
 
 **How a painter finds out** — it asks with its OWN widget: `glassAlphaFor(widget, role)` for the
 body, `chromeIsDarkFor(widget)` for the skin. Both walk up to the registered surface that contains
