@@ -1441,6 +1441,22 @@ A common misconception (it bit a past explanation): system-tray icons are NOT un
   app-specific code).
 - Otherwise → fall back to the app's composited `gicon` **pixmap**, which **can't** recolour.
 
+- **A one-colour pixmap is a TEMPLATE** (2026-09-29, macOS's term and its answer): an app that
+  sends only pixels picks their colour from the SYSTEM mode (Claude Desktop: white in dark, black in
+  light) and cannot know that the bar reads its skin from its backdrop (#676) — so a white icon sat
+  on light glass. `isTemplatePixbuf` (every visible pixel the same colour, ±24) routes it to
+  `templateIcon()`, a DrawingArea that paints the pixmap as a MASK in the bar's ink
+  (`chromeIsDarkFor`), repainted by the adaptive glass like every Cairo mark. A second colour
+  anywhere (a red badge, a two-tone keyboard label, a logo) → shown untouched. Grey icons with
+  inner detail (Chrome's) are NOT templates and still follow the app's own mode choice — whether to
+  invert them against the bar is an open owner decision.
+  ⛔ "Make the APP believe it is in the other mode" does not work: the portal's colour scheme is
+  one answer per app, and Electron uses the same value for its windows.
+- **The symbolic palette keeps its meaning:** `-gtk-icon-palette: success var(--nidara-text),
+  warning var(--nidara-danger), error var(--nidara-danger)` on the bar's images and on `.nidara-menu`.
+  It was `… white` for all three from when the bar was always dark: Telegram's unread dot (class
+  `warning` in Papirus; red in its own pixmap) stayed white on light glass.
+
 Consequence: a single bar can show some tray icons themed and others full-colour, depending
 purely on what the icon theme provides. That's inherent to SNI (apps supply what they
 supply); making it coherent is a policy decision, deferred — see tech-debt #24.

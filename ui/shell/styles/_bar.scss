@@ -109,11 +109,16 @@ window#nidara-bar-zone {
         min-height: 0;
     }
 
-    /* Ensure all symbolic icons in the bar use adaptive text color */
+    /* Symbolic icons in the bar take the bar's ink — and their semantic parts keep
+       their MEANING. The palette was `success white, warning white, error white` from
+       the days the bar was always dark, so a symbolic icon's marked part (Telegram's
+       unread dot is `warning`; its own pixmap draws it red) stayed WHITE on the light
+       glass the bar can now wear (#676) — owner-caught 2026-09-29. Warning and error
+       are the danger red; success has no token of its own and follows the ink. */
     .bar-right image,
     .bar-left image,
     .bar-center image {
-        -gtk-icon-palette: success white, warning white, error white;
+        -gtk-icon-palette: success var(--nidara-text), warning var(--nidara-danger), error var(--nidara-danger);
         color: var(--nidara-text);
     }
 }
