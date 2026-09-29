@@ -491,8 +491,9 @@ keeps the original placement rather than walking the window off the area; we do 
 
 The step is `max(rounding + gaps_out, min(availW, availH) / 48)` — KWin scales its offset with the
 area (`area.width()/48`), mutter uses a flat 50 (`CASCADE_INTERVAL`), and the floor is ours: below
-`rounding` (24) plus `gaps_out` (8) the covered window's corner stops reading as a corner. On a
-2560x1440 monitor with our bar and dock that is 32.
+`rounding` (24) plus `gaps_out` (8 when this was written, 4 since 2026-09-29) the covered window's
+corner stops reading as a corner. On a 2560x1440 monitor with our bar and dock that was 32; it is 28
+now.
 
 ⚠️ **One divergence, deliberate**: KWin walks the stacking order and skips a window already buried
 under others. Lua gets no z-order, so every mapped window on the workspace is tested. The cost is a

@@ -28,15 +28,17 @@ import { chromeIsDarkFor, haloAlphaFor } from "./AdaptiveGlass"
  * thicken instead (owner, 2026-09-29: a switch from shadow to panel would be a visible
  * jump; the solid panel belongs to Reduce transparency, #674).
  *
- * ── SHAPE (owner, 2026-09-29: one halo, always there) ────────────────────────
+ * ── SHAPE (owner, 2026-09-29/30: one halo, always there, and its shape never shows) ──
  *
- * One rounded rectangle behind the whole panel, at full alpha under every piece of glass
- * (so the contrast it buys is the same everywhere a label can be), falling off OUTSIDE
- * the box with a raised-cosine profile: little above (8 px — the bar is 8 px up, and a
- * halo reaching over its capsules would darken them), 24 at the sides, 32 below — a light
- * from above, without moving the core off the tiles. In the skin's own tint: a shadow on
- * dark glass, a frosted haze on light glass (a dark shadow under black ink would LOWER its
- * contrast).
+ * The box it wraps is a PANEL — the CC's content plus a margin (`inset`) — that is
+ * never drawn as such (under Increase contrast it will be, #674, which is why the
+ * margins must already be a panel's). The halo is a cloud over that panel: at full
+ * alpha only under the CONTENT (where the labels are, and so where the contrast is
+ * needed), then falling off with a raised-cosine profile ACROSS the margin and on past
+ * the box by `outset` — no plateau reaching the panel's edge, so no rectangle to see
+ * (the first version was flat to the tiles' edge and fell off only outside; the owner
+ * wanted the panel's shape not to show). In the skin's own tint: a shadow on dark glass,
+ * a frosted haze on light glass (a dark shadow under black ink would LOWER its contrast).
  *
  * ── COST ─────────────────────────────────────────────────────────────────────
  *
@@ -44,12 +46,17 @@ import { chromeIsDarkFor, haloAlphaFor } from "./AdaptiveGlass"
  * strength; its alpha is an opacity node on top, so the adaptive animation and the
  * reveal's fade never repaint it. It paints outside its box: the revealer around it must
  * not clip it (`ScaleRevealer` clips only an unrolling reveal), and the bar's visible
- * region must cover it (`HALO_OUTSET`, read in `Bar.tsx`'s `paintedRects`) — outside the
- * region the compositor does not draw at all.
+ * region must cover it (the caller's `outset`, read in `Bar.tsx`'s `paintedRects`) —
+ * outside the region the compositor does not draw at all.
  */
 
-/** How far the halo reaches past the panel's box, per side, in logical px. */
-export const HALO_OUTSET = { top: 8, right: 24, bottom: 32, left: 24 } as const
+export interface HaloSides { top: number; right: number; bottom: number; left: number }
+export interface GlassHaloOpts {
+    /** From the box (the panel) in to the content — where the halo is at full alpha. */
+    inset: number
+    /** From the box out to where the halo has faded to nothing, per side. */
+    outset: HaloSides
+}
 
 export interface GlassHalo extends Gtk.Widget {}
 export class GlassHalo extends Gtk.Widget {
@@ -63,13 +70,15 @@ export class GlassHalo extends Gtk.Widget {
     private _node: any = null
     private _key = ""
     private _themeId: number
+    private _opts: GlassHaloOpts
 
-    constructor(child: Gtk.Widget) {
+    constructor(child: Gtk.Widget, opts: GlassHaloOpts) {
         super({ overflow: Gtk.Overflow.VISIBLE })
+        this._opts = opts
         this.child = child
         child.set_parent(this)
         // A skin change without a measurement (the mode, with nothing measured yet).
-        this._themeId = Theme.connect("changed", () => this.queue_draw())
+        this._themeId = Theme.connect("changed", () => { if (this.get_mapped()) this.queue_draw() })
     }
 
     vfunc_get_request_mode(): Gtk.SizeRequestMode {
@@ -92,7 +101,7 @@ export class GlassHalo extends Gtk.Widget {
             const dark = chromeIsDarkFor(this)
             const key = `${w}x${h}|${dark}`
             if (key !== this._key || !this._node) {
-                this._node = buildHalo(w, h, dark)
+                this._node = buildHalo(w, h, dark, this._opts)
                 this._key = key
             }
             if (this._node) {
@@ -104,11 +113,13 @@ export class GlassHalo extends Gtk.Widget {
         this.snapshot_child(this.child, snapshot)
     }
 
-    vfunc_dispose() {
+    // Explicit teardown, as `ScaleRevealer.dismantle()` and for the same reason: NOT a
+    // vfunc_dispose override — GJS blocks JS vfuncs during GC finalization, so one would
+    // never fire there and the child would leak ("still has children left").
+    dismantle() {
         if (this._themeId) { Theme.disconnect(this._themeId); this._themeId = 0 }
         this._node = null
         this.child?.unparent()
-        super.vfunc_dispose()
     }
 }
 
@@ -116,21 +127,24 @@ export class GlassHalo extends Gtk.Widget {
  *  core nor the outside shows a line. */
 const profile = (t: number) => 0.5 * (1 + Math.cos(Math.PI * Math.min(1, Math.max(0, t))))
 
-/** The halo at full strength (alpha 1 at the core), as a render node. */
-function buildHalo(w: number, h: number, dark: boolean): any {
-    const o = HALO_OUTSET
+/** The halo at full strength (alpha 1 over the content), as a render node. */
+function buildHalo(w: number, h: number, dark: boolean, opts: GlassHaloOpts): any {
+    const { inset: i, outset: o } = opts
+    // How far it falls off on each side: across the panel's margin, then past its box.
+    const f = { top: i + o.top, right: i + o.right, bottom: i + o.bottom, left: i + o.left }
     const tint = dark ? GLASS_TINT.dark : GLASS_TINT.light
     const bounds = new Graphene.Rect()
     bounds.init(-o.left, -o.top, w + o.left + o.right, h + o.top + o.bottom)
     const snap = new Gtk.Snapshot()
     const cr = snap.append_cairo(bounds)
     try {
-        // The core's corners follow the tiles' (`RADIUS.xl`), and grow with the halo.
+        // The core is the content's box; its corners follow the tiles' (`RADIUS.xl`)
+        // and grow with the halo.
         const r0 = RADIUS.xl
         const path = (t: number) => {
-            const x0 = -o.left * t, y0 = -o.top * t
-            const x1 = w + o.right * t, y1 = h + o.bottom * t
-            const r = Math.min(r0 + ((o.left + o.right + o.top + o.bottom) / 4) * t, (x1 - x0) / 2, (y1 - y0) / 2)
+            const x0 = i - f.left * t, y0 = i - f.top * t
+            const x1 = w - i + f.right * t, y1 = h - i + f.bottom * t
+            const r = Math.min(r0 + ((f.left + f.right + f.top + f.bottom) / 4) * t, (x1 - x0) / 2, (y1 - y0) / 2)
             cr.newPath()
             cr.arc(x1 - r, y0 + r, r, -Math.PI / 2, 0)
             cr.arc(x1 - r, y1 - r, r, 0, Math.PI / 2)
@@ -141,7 +155,7 @@ function buildHalo(w: number, h: number, dark: boolean): any {
         // Nested fills from the outside in, each REPLACING what is under it (SOURCE):
         // every band ends up at exactly its profile value — no accumulation, and no
         // antialiased seam between abutting rings (`drawShadowFromPath` explains both).
-        const steps = Math.max(o.top, o.right, o.bottom, o.left)
+        const steps = Math.max(f.top, f.right, f.bottom, f.left)
         cr.pushGroup()
         cr.setOperator(1)   // SOURCE
         for (let i = steps; i >= 0; i--) {

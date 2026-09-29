@@ -1551,13 +1551,36 @@ measurement decides alone and would leave a stale backdrop in `lastStats` for th
 and a group member comes back where it was, over what it had. Verified live: X toggled fullscreen
 and back, no measurement while hidden, one on return, no skin change.
 
-**The Control Center wears a HALO under its tiles** (`common/GlassHalo.ts`, owner's calls of
-2026-09-29: one halo, always there, tiles thicken past it). The CC has no panel — its tiles are the
-outer glass — so over a busy page each tile was a separate thin sheet with the page showing through
-and between them. The halo is one rounded rectangle behind the whole panel, at full alpha under
-every tile, falling off OUTSIDE its box (raised cosine; `HALO_OUTSET` 8 above — the bar is 8 px up —
-24 at the sides, 32 below), in the skin's own `GLASS_TINT`: a shadow on dark glass, a haze on light
-glass (a dark shadow under black ink would LOWER its contrast).
+**The Control Center is a PANEL, and wears a HALO under it** (`common/GlassHalo.ts`,
+`control-center/ControlCenter.tsx`; owner's calls of 2026-09-29/30, the second after macOS 27's
+Control Center). The CC has no painted panel — its tiles are the outer glass — so over a busy page
+each tile was a separate thin sheet with the page showing through and between them.
+- **The panel is geometry, drawn by nothing (yet).** The CC's content sits inside a margin,
+  `CC_PANEL_PAD` = 16 on every side (owner: "a panel cannot have its content stuck to its top
+  edge"), and the panel hangs `BAR_MARGIN` (= `gaps_out`, 4) below the bar and from the screen edge,
+  as a window does — so under Increase contrast (#674) it can be drawn and its spacing is already a
+  panel's. The gap between tiles is 16 too (`GAP`, 12 until 2026-09-30 — see below), so
+  edge-to-tile reads like tile-to-tile. Inside: the privacy notice 4 above the grid (it belongs to
+  the content, as macOS 27's does; was 24), the Edit pill 16 under the grid with only the panel's
+  margin below it (was 24 + 12). Measured live at GAP 12: panel 388×577 at (2168, 40), content at
+  y 56 and 20 px from the right edge. The other bar panels keep `PANEL_TOP` (8 below the bar) until
+  they get a margin of their own.
+- **Why GAP is 16** (owner asked where 12 came from: nowhere on record, it arrived with the first CC
+  of 2026-04-05). Apple's official macOS 27 Figma kit has no Control Center, but its notification
+  stack is 16 from the panel's edge, 16 between cards and 16 from the screen's edge; a macOS 27 CC
+  screenshot scaled by its menu bar gives ~17 between modules at our scale, and the tile itself
+  (~79 against our `UNIT` 80) was already right. The same kit's menu-bar item highlight is 24 pt —
+  exactly our hover pill — so our bar is ~1:1 with macOS points; our tiles are therefore a little
+  larger than Apple's in absolute terms, deliberately, like our 18px bar icons. `PANEL_W.full`
+  restates the grid width (the widget kit is a leaf and may not import it); `CCLayoutManager`
+  logs a CRITICAL at boot if the two disagree.
+- **The halo is a cloud over the panel, and the panel's shape never shows.** Full alpha only under
+  the CONTENT (where the labels are), then a raised-cosine falloff ACROSS the margin and on past the
+  box by `CC_HALO_OUTSET` — up only to the bar (`BAR_MARGIN`: it must not darken the bar's capsules),
+  24 at the sides, 32 below. No plateau reaches the panel's edge, so no rectangle is drawn (the
+  first version was flat to the tiles' edge; owner: "the container's shape should not show"). In the
+  skin's own `GLASS_TINT`: a shadow on dark glass, a haze on light glass (a dark shadow under black
+  ink would LOWER its contrast).
 - **It is the surface's first step of A.** Same tint, same layer, so tile alpha `a` over halo `c`
   is exactly one glass of `e = 1 − (1−a)(1−c)`. A surface registered with `halo: true` is decided
   as that `e` (its floor is the slider over the halo at rest), and `AdaptiveGlass` splits it:
@@ -1572,7 +1595,7 @@ glass (a dark shadow under black ink would LOWER its contrast).
   now clips only an UNROLLING reveal (`animateLayout`) — a scale-only pop cannot push its child
   past the box, so the clip could only cut what paints outside on purpose (the halo appeared as a
   second step, after the pop). And the bar's visible region, a hard GL scissor: `paintedRects`
-  pads the CC's rect by `HALO_OUTSET` where that is wider than `PANEL_PAD`.
+  pads the CC's rect by `CC_HALO_OUTSET` where that is wider than `PANEL_PAD`.
 - **Cost:** the shape is painted once per size and skin into a cached render node at full
   strength; its alpha is an opacity node on top, so the adaptive animation and the reveal's fade
   never repaint it (`redrawSubtree` only queues the draw that re-reads the alpha). Not a hit
@@ -3325,10 +3348,10 @@ wide reads on one line and ellipsizes, the way every other desktop's quick toggl
 branch was written for ("Screen Recording" reading in full) is untouched: a name that breaks at a
 space still gets its two lines.
 
-The column is **84px** — the 2×1 span (2·UNIT + GAP = 172) minus the island's padding (2·12) minus
-the capsule's own chrome (`CAPSULE_CHROME` = margin 4 + icon circle 48 + spacing 12). Confirmed
-against a live session, not derived on paper: `queryUI` puts the island at x=2380 w=172, the icon at
-x=2396 w=48 and the label at x=2456.
+The column is **88px** — the 2×1 span (2·UNIT + GAP = 176) minus the island's padding (2·12) minus
+the capsule's own chrome (`CAPSULE_CHROME` = margin 4 + icon circle 48 + spacing 12). It was 84 with
+the old 12px gap (span 172), confirmed then against a live session, not derived on paper: `queryUI`
+put the island at x=2380 w=172, the icon at x=2396 w=48 and the label at x=2456.
 
 🔑 **A tile learns that number the only legal way — it is HANDED the `ContentBudget`.** The capsule
 makers take it as a trailing optional argument and the widget forwards what `buildContent(size,
@@ -4061,14 +4084,14 @@ Every number is on the design system's **4px scale** (`$space-*`), by the owner'
 | above a capsule (screen edge) | 4 | `.bar-centerbox` `margin-top` |
 | capsule height | 32 (28 of it visible glass) | `BAR_CAPSULE_H` (derived, see below) |
 | strip the bar reserves | 36 | `BAR_H` (exclusive zone) |
-| capsule → windows below | 8 | Hyprland `gaps_out` |
+| capsule → windows below | 4 | Hyprland `gaps_out` (8 until 2026-09-29) |
 | between two capsules (only the island and its chips, since the groups) | 4 | `BAR_GAP` |
 | group allocation → its first/last item | 4 | `BAR_GROUP_PAD` |
 | every icon in the bar | 18 | `BAR_ICON_SIZE` (the launcher's mark +2) |
 | each side of an item's content | 8 | `BAR_ITEM_PAD` → icon-only item 34 wide |
 | hover/open pill ↔ item top and bottom | 4 | `BAR_VEIL_INSET` → pill 24 tall, radius 12 |
 | each side of a STANDALONE capsule's content (the island's compact forms) | 16 | `BAR_PILL_PAD` |
-| the two ends (system menu, clock) | 8 | `BAR_MARGIN` / `SIDE_GAP` = `gaps_out` |
+| the two ends (system menu, clock) | 4 | `BAR_MARGIN` (`capsule.ts`) = `SIDE_GAP` = `gaps_out` (8 until 2026-09-29) |
 
 `BAR_H`, `BAR_CAPSULE_H`, `BAR_GAP`, `BAR_GROUP_PAD`, `BAR_VEIL_INSET` live in
 `surfaces/bar/capsule.ts`; `BAR_ITEM_PAD`, `BAR_ICON_SIZE` and `BAR_PILL_PAD` in
@@ -4123,8 +4146,12 @@ Cairo pill painted ONLY on hover or while its panel is open. The group's glass n
   makes them circles. Change `BAR_H`, the margin and it together, or the chips turn into pills.
 - `BAR_H` is also the side dock's window height (monitor − `BAR_H`, `DockAxis.ts`) and the base of
   `PANEL_TOP`: that is why it is exported and not local to `Bar.tsx`.
-- The ends stay at 8 because that is `gaps_out`: the system menu's left edge lines up with the
-  windows' and the dock's.
+- The ends are `gaps_out`, as ONE number in two files — `BAR_MARGIN` in `capsule.ts` and
+  `GAPS_OUT` in `hyprland.lua`, each naming the other: the system menu's left edge lines up with the
+  windows' and the dock's, and the panels hang at the same distance (`SIDE_GAP = BAR_MARGIN`). 8
+  until 2026-09-29, when the owner tried the whole desktop tighter: `gaps_out` 4, `gaps_in` 2 (was
+  4) — verified live: bar row at x 4, a tiled window at `[5,41]` (gap + border), 6 px between two
+  tiled windows (2 + 2 + their borders).
 - `BAR_GAP` was one constant for every row until the groups (2026-09-26); now only the island's
   capsule and chips stand side by side as separate glass, so it is theirs (`CHIP_GAP`).
 - `BAR_PILL_PAD` is the side air of a STANDALONE capsule — only the island's compact forms since

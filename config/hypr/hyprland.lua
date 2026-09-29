@@ -102,13 +102,13 @@ hl.monitor({ output = "Virtual1",  mode = "1920x1080@60", position = "auto", sca
 -- its own copy of the gap or forgets the border: the border is reserved OUTSIDE
 -- the geometry Hyprland reports, so a clamp that ignores it sits one pixel into
 -- the margin on every side and the window reads as 2px wider than its tiled self.
-local GAPS_OUT    = 8
+local GAPS_OUT    = 4   -- = BAR_MARGIN (ui/shell/surfaces/bar/capsule.ts): the bar's ends line up with the windows. 8 until 2026-09-29.
 local BORDER_SIZE = 1
 local ROUNDING    = 24
 
 hl.config({
     general = {
-        gaps_in  = 4,
+        gaps_in  = 2,   -- 4 until 2026-09-29 (owner: the whole desktop tighter)
         gaps_out = GAPS_OUT,
         -- 🔑 The gap for FLOATING windows, and it defaults to 0 — which is how the
         -- same Super+M produced two different windows: `calculateFullscreenBox`

@@ -69,7 +69,7 @@ vertical column of rows:
   ~14×/s until the panel closed (2026-09-14), and nothing in `tsc` or a single click shows it.
 - `panelInfoRow(label, getValue)` — label + a live value, and an `update()` that re-reads it.
 - `panelSeparator()` — a rule carrying 2px of its own air.
-- `PANEL_W` — the width tiers, `sm` 200 / `md` 220 / `lg` 240 / `xl` 280 / `full` 356. **Never a
+- `PANEL_W` — the width tiers, `sm` 200 / `md` 220 / `lg` 240 / `xl` 280 / `full` 368 (the CC grid; 356 until its gap went 12 → 16 on 2026-09-30). **Never a
   hardcoded px width**: the scale belongs to the shell and gets re-tuned globally.
 
 The **column** is deliberately not a word: a bar expansion sizes itself (`spacing: 12` + a

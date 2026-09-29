@@ -1249,7 +1249,7 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     `CCLayoutManager` now and are unreachable from `widgets/`; a widget's own
     intrinsic sizes (icon circles, buttons, its caption height) are fine. Panel
     widths (bar expansions / CC details) come from the **`PANEL_W` tier
-    vocabulary** (sm 200 / md 220 / lg 240 / xl 280 / full 356), never hardcoded px,
+    vocabulary** (sm 200 / md 220 / lg 240 / xl 280 / full 368), never hardcoded px,
     and the rows inside them from the three words beside it in `widget-kit/panel.ts`:
     **`panelRow`** (label + a control — a switch, a button; was written out five times
     across bluetooth, wifi, focus and night light twice), **`panelInfoRow`** (label +

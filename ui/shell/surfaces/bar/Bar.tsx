@@ -13,7 +13,7 @@ import Gio from "gi://Gio"
 
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
-import { BAR_GROUP_PAD, BAR_H, CUSTOM_EXPANSION_ID, barEditSelected, barGroup, barItem, barOpen, barTooltip, setBarCustomAnchor, setBarEditSelected } from "./capsule"
+import { BAR_GROUP_PAD, BAR_H, BAR_MARGIN, CUSTOM_EXPANSION_ID, barEditSelected, barGroup, barItem, barOpen, barTooltip, setBarCustomAnchor, setBarEditSelected } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import { blurSafeOpacity } from "../../core/NidaraTheme"
 import appService from "../../core/AppService"
@@ -30,7 +30,7 @@ import { AppTitle } from "./AppTitle"
 import { statefulIcon } from "../../common/StatefulIcon"
 
 // Overlay panels mounted on the bar window (avoids separate layer-shell surfaces)
-import { ControlCenterWidget } from "../control-center/ControlCenter"
+import { ControlCenterWidget, CC_HALO_OUTSET } from "../control-center/ControlCenter"
 import NotificationCenter from "../control-center/NotificationCenter"
 import Prism from "../prism/Prism"
 import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
@@ -47,7 +47,6 @@ import hs from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
 import { BAR_ICON_SIZE, BAR_ITEM_PAD } from "../../common/widget-kit"
 import { registerGlassSurface, type GlassSurfaceHandle } from "../../common/AdaptiveGlass"
-import { HALO_OUTSET } from "../../common/GlassHalo"
 
 function SystemMenuIcon(): Gtk.Widget {
   const img = new Gtk.Image({ pixel_size: BAR_ICON_SIZE + 2, css_classes: ["bar-distro-icon"], margin_start: BAR_ITEM_PAD - 1, margin_end: BAR_ITEM_PAD - 1 })   // the mark 2px larger than the other icons: 1px less air a side keeps the item as wide as theirs
@@ -95,7 +94,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   win.set_opacity(0)
 
   const masterOverlay = new Gtk.Overlay({ valign: Gtk.Align.FILL, vexpand: true })
-  const barBox = new Gtk.CenterBox({ css_classes: ["bar-centerbox"], height_request: BAR_H, valign: Gtk.Align.START, margin_start: 8, margin_end: 8 })
+  const barBox = new Gtk.CenterBox({ css_classes: ["bar-centerbox"], height_request: BAR_H, valign: Gtk.Align.START, margin_start: BAR_MARGIN, margin_end: BAR_MARGIN })
 
   // ── Inline expansion panel ─────────────────────────────────────────────────
   const OVERFLOW_ID = "__overflow"
@@ -291,13 +290,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       ? dockSettings.iconSize + dockSettings.screenGap + DOCK_VPAD
       : 0
 
-  // 8px side gap: panels sit flush with the bar capsules (which live 8px from
-  // the screen edge) instead of the old 16 — the capsule alignment is a stronger
-  // visual reference than the tiling gaps_out grid underneath.
-  const SIDE_GAP = 8
+  // Side gap: panels sit flush with the bar capsules (BAR_MARGIN from the screen
+  // edge) instead of the old 16 — the capsule alignment is a stronger visual
+  // reference than the tiling grid underneath (which is the same number anyway).
+  const SIDE_GAP = BAR_MARGIN
   const NC_LANE = 8   // must match LANE in NotificationCenter.tsx
 
-  cc.margin_top = PANEL_TOP
+  // The CC is a panel with its own margin (ControlCenter.tsx, CC_PANEL_PAD): the PANEL
+  // hangs `BAR_MARGIN` below the bar, as a window does, and its content lands where the
+  // margin puts it. The other panels have no margin of their own yet, so they keep 8.
+  cc.margin_top = BAR_H + BAR_MARGIN
   nc.margin_top = PANEL_TOP
   expansionCapsule.margin_top = PANEL_TOP   // same gap below the bar as CC/NC
   systemMenu.margin_top = PANEL_TOP         // Bar owns the menu geometry (see syncPanelMargins)
@@ -563,9 +565,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               const [, natH] = cc.measure(Gtk.Orientation.VERTICAL, Math.round(b.get_width()))
               height = Math.max(height, natH)
           }
-          // The CC's halo paints past its box (`HALO_OUTSET`): outside this rect the
+          // The CC's halo paints past its box (`CC_HALO_OUTSET`): outside this rect the
           // compositor does not draw at all, so its pad is the halo's where that is wider.
-          const o = c === cc ? HALO_OUTSET : null
+          const o = c === cc ? CC_HALO_OUTSET : null
           const pl = Math.max(PANEL_PAD, o?.left ?? 0), pr = Math.max(PANEL_PAD, o?.right ?? 0)
           const pt = Math.max(PANEL_PAD, o?.top ?? 0), pb = Math.max(PANEL_PAD, o?.bottom ?? 0)
           rects.push(fullWidth
@@ -1211,7 +1213,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   win.connect("destroy", () => { for (const h of glassHandles.values()) h.dispose(); glassHandles.clear() })
 
   const ISLAND_GAP = 16
-  const BAR_MARGIN = 8
 
   // Forward declaration for layout sync across the left/right flanks and Activity Island
   let scheduleBarLayoutSync: (delayMs?: number) => void = () => {}
