@@ -1501,11 +1501,31 @@ it and adapts, by itself, on events. So does the dock, held to its MARKS instead
   checks that B arrives at the slider's body, not at the ceiling.
 
 **The bar row's SKIN comes from its backdrop, not from the mode** (#676, as macOS's menu bar):
-`decideGlassByBackdrop` takes the skin that reads best over the TYPICAL backdrop — the median
-luminance, not the extremes (deciding from the extremes turned a bar over a pink-to-purple wallpaper
-light because of its pale left end; macOS reads "almost always white" because most wallpapers are
-dark up there) — keeps it unless the other reads better by `FLIP_BACK_MARGIN`, and then lets
-`decideGlass` thicken it for the extremes. Everything else starts from the mode.
+`decideGlassByBackdrop` takes the skin that reads best over the TYPICAL backdrop
+(`BackdropStats.mean`), not the extremes (deciding from the extremes turned a bar over a
+pink-to-purple wallpaper light because of its pale left end; macOS reads "almost always white"
+because most wallpapers are dark up there) — keeps it unless the other reads better by
+`FLIP_BACK_MARGIN`, and then lets `decideGlass` thicken it for the extremes. Everything else starts
+from the mode.
+🔑 **The typical backdrop is the MEAN of the WHOLE STRIP** — not the median, and not only what is
+under the capsules (owner-caught 2026-09-29: "same wallpaper, the bar changes colour on some
+workspaces, or when a new icon shows up"). Both halves were measured before they were changed:
+- *Only under the capsules* made the skin depend on how far the glass reaches, and the capsules
+  grow and shrink with their content — the window title on the left, the tray on the right. On the
+  default wallpaper (pale pink left, deep purple right) workspace 4's long YouTube title stretched
+  the left capsule over the pink and the row went light; workspaces 3 and 5, shorter titles, dark.
+  A surface with `skinFromBackdrop` now probes with `ProbeRequest.seeThrough`: where we paint
+  nothing (a whole blur-sized block at ≤ 2/255, clear of every excluded rect, clipped at the
+  capture's edge), the raw capture goes through Hyprland's colour pipeline like a closed probe and
+  counts toward the mean and the area — never toward the extremes, since no text sits there.
+- *The median* of a two-colour strip is whichever colour covers more than half, so it JUMPS when a
+  few percent of the samples change side. A mean moves by as much as they moved, and the hysteresis
+  absorbs that. `glass-legibility-probe.ts` holds it: 2 % of a two-colour strip changing side must
+  not flip the row (it fails with the median — checked).
+Verified live across five workspaces: glass samples 541–937, mean 175–185 red, one skin, one alpha.
+Consequence worth knowing: over the default wallpaper the full strip is ~60 % pink, so the row is
+LIGHT (black ink) everywhere — it used to be dark on most workspaces only because its capsules
+happened to sit mostly on the purple.
 
 **The unit is the SURFACE, never a capsule** — and "surface" is what reads as one piece, not what is
 one GTK window. The island's capsule row sits in the bar's row, so it is in the bar's GROUP
@@ -1518,8 +1538,18 @@ first, the row decided from the island's capsule alone — a pinkish patch that 
 the whole bar went light until the bar's retry 1.6 s later (owner-caught 2026-09-29 as "the bar
 goes light on workspace 3 for nothing"; the order is a race, so it came and went). Every skin
 change — and a first decision against the mode — is logged as `[AdaptiveGlass] <id>: skin a → b
-(why, probe <tag>, ws N) median … brightest … samples …`, the probe tag matching
+(why, probe <tag>, ws N) mean … brightest … samples …`, the probe tag matching
 `NIDARA_BACKDROP_DEBUG`'s images: an intermittent flip is answered from the log, not re-staged.
+⚠️ **A group is measured only ON SCREEN, and never while hidden for a fullscreen window.** The
+bar hides for fullscreen with opacity 0 and stays MAPPED, so it looked measurable — and what it
+found behind it was the fullscreen window (X's black page, white text): the row flipped and came
+back from fullscreen in that skin (2026-09-29, in the log as `group bar-row [bar]` flips on ws 5).
+The bar's `settled` is false while hidden, and `setBarFullscreenMode`/`setBarOverlayMode` call
+`settle()` when it shows again. The island's capsule, UNmapped for fullscreen, took the closed-panel
+path and measured the same window; a surface with a `group` now skips `measureClosed` — a closed
+measurement decides alone and would leave a stale backdrop in `lastStats` for the group to merge,
+and a group member comes back where it was, over what it had. Verified live: X toggled fullscreen
+and back, no measurement while hidden, one on return, no skin change.
 
 **The dock** (2026-09-29, owner: "mide también el dock") is one surface per monitor,
 `dock-<connector>`, role `dock` (floor = `dockOpacity`), content `marks`, root = the axis's `layout`.

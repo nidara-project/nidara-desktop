@@ -123,7 +123,10 @@ export interface GlassSurfaceOpts {
     group?: () => string | null
     /** The skin comes from the BACKDROP, not from the mode — the bar row, as macOS's
      *  menu bar (#676): white ink over a dark top edge, black over a light one. In a
-     *  group, one member saying so is enough (the bar speaks for the island's capsule). */
+     *  group, one member saying so is enough (the bar speaks for the island's capsule).
+     *  Such a surface reads its typical backdrop over its WHOLE box, the gaps it leaves
+     *  see-through included (`ProbeRequest.seeThrough`): its skin must not depend on how
+     *  far its glass happens to reach. */
     skinFromBackdrop?: boolean
 }
 
@@ -208,7 +211,7 @@ function logFlip(s: Surface, prev: GlassDecision | null, next: GlassDecision, wh
     // A change of skin — or a FIRST decision against the mode, which is a flip too.
     if (prev ? prev.isDark === next.isDark : next.isDark === Theme.chromeIsDark) return
     const rgb = (c: { r: number; g: number; b: number }) => [c.r, c.g, c.b].map(v => Math.round(v * 255)).join(",")
-    const st = stats ? ` median ${rgb(stats.median)} brightest ${rgb(stats.brightest)} darkest ${rgb(stats.darkest)} samples ${stats.samples}` : ""
+    const st = stats ? ` mean ${rgb(stats.mean)} brightest ${rgb(stats.brightest)} darkest ${rgb(stats.darkest)} samples ${stats.samples}` : ""
     console.log(`[AdaptiveGlass] ${s.id}: skin ${prev ? (prev.isDark ? "dark" : "light") : "(none)"} → ${next.isDark ? "dark" : "light"} (${why}, probe ${s.id}-${s.seq}, ws ${hyprlandState.focusedWorkspaceId})${st}`)
 }
 
@@ -319,7 +322,16 @@ async function measureClosed(s: Surface) {
 }
 
 async function measure(s: Surface) {
-    if (!shown(s)) { await measureClosed(s); return }
+    if (!shown(s)) {
+        // A GROUP is measured only on screen. Its members decide together, from what is
+        // behind each of them now; a closed measurement decides alone (there is no group
+        // step in it) and leaves a backdrop in `lastStats` that the group then merges.
+        // The island's capsule, hidden under a fullscreen window, measured that WINDOW,
+        // and the bar row came back from fullscreen in its skin (2026-09-29, ws 5). A
+        // group member comes back where it was, over what it had: nothing to predict.
+        if (!s.group?.()) await measureClosed(s)
+        return
+    }
     if (s.settled && !s.settled()) { s.missed = true; return }
     // Our own tint mid-animation, or a change not yet on screen everywhere: the
     // capture and the render would describe different surfaces.
@@ -341,6 +353,7 @@ async function measure(s: Surface) {
             windowOrigin: s.windowOrigin?.(),
             exclude: s.exclude?.() ?? [],
             area: s.probeArea?.() ?? undefined,
+            seeThrough: s.skinFromBackdrop ? blur : undefined,
             tag: `${s.id}-${seq}`,
             onRegion: (r, m) => { s.lastRect = r; s.lastMonitor = m },
         })
@@ -366,7 +379,8 @@ async function measure(s: Surface) {
             : decideGlass(stats, Theme.chromeIsDark, floorOf(roleOf(s)), s.decision ?? undefined, s.content))
         return
     }
-    // One decision for the whole group, from the worst of every member's backdrop.
+    // One decision for the whole group: its skin from the mean of everything its members
+    // cover, its body from the worst of every member's backdrop.
     // A member not measured yet contributes nothing, and is simply told the answer —
     // EXCEPT the one whose backdrop gives the group its skin (`skinFromBackdrop`, the
     // bar): until it has been measured, the group does not decide. Measured 2026-09-29,
@@ -471,7 +485,7 @@ export function adaptiveGlassState() {
         skin: s.decision ? (s.decision.isDark ? "dark" : "light") : null,
         flipped: s.decision ? s.decision.isDark !== Theme.chromeIsDark : false,
         skinFrom: s.skinFromBackdrop ? "backdrop" : "mode",
-        backdrop: s.lastStats ? { brightest: rgb(s.lastStats.brightest), median: rgb(s.lastStats.median), darkest: rgb(s.lastStats.darkest), samples: s.lastStats.samples, area: s.lastStats.area } : null,
+        backdrop: s.lastStats ? { brightest: rgb(s.lastStats.brightest), mean: rgb(s.lastStats.mean), darkest: rgb(s.lastStats.darkest), samples: s.lastStats.samples, area: s.lastStats.area } : null,
         measuredMsAgo: s.lastProbeUs ? Math.round((GLib.get_monotonic_time() - s.lastProbeUs) / 1000) : null,
     }))
 }

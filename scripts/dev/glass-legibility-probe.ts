@@ -20,7 +20,7 @@ const check = (ok: boolean, what: string) => {
 }
 const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol
 const grey = (v: number): Rgb => ({ r: v, g: v, b: v })
-const flat = (c: Rgb): BackdropStats => ({ brightest: c, darkest: c, median: c, samples: 1000, area: 1000 })
+const flat = (c: Rgb): BackdropStats => ({ brightest: c, darkest: c, mean: c, samples: 1000, area: 1000 })
 
 // ── 1. The forward model is the one that was validated ───────────────────────
 // tech-debt #82's table (GLASS_TINT.dark, white ink): 1.69 over pure white and 5.71
@@ -52,6 +52,17 @@ check(near(tierContrast(grey(1), true, 0.48, "dim"), 2.13, 0.01), "dark 0.48 ove
     const s = backdropStats(px)!
     check(near(s.brightest.r, 0.4, 1e-9), "2 % of stray white pixels do not decide the brightest backdrop")
     check(backdropStats(px.slice(0, 10)) === null, "too few samples → no statistics")
+}
+{
+    // What a surface leaves SEE-THROUGH (the gaps between the bar's capsules) counts
+    // toward its typical backdrop, never toward its extremes: no text sits there.
+    const glass: Rgb[] = [], gaps: Rgb[] = []
+    for (let i = 0; i < 100; i++) glass.push(grey(0.2))
+    for (let i = 0; i < 300; i++) gaps.push(grey(0.9))
+    const s = backdropStats(glass, 64, 9, gaps)!
+    check(near(s.mean.r, 0.725, 1e-9) && s.area === 3600, "see-through: the gaps count toward the mean and the area")
+    check(s.brightest.r === 0.2 && s.darkest.r === 0.2 && s.samples === 100, "see-through: the extremes are the glass's alone")
+    check(backdropStats(glass.slice(0, 10), 64, 9, gaps) === null, "see-through: gaps alone do not make a measurement")
 }
 
 // ── 4. The rule: A, then B ───────────────────────────────────────────────────
@@ -197,7 +208,7 @@ const floor = 0.48
 {
     // The TYPICAL backdrop decides, not the extremes: a mostly dark bar with a pale
     // stretch keeps dark glass (and thickens it), as macOS's menu bar keeps white ink.
-    const mixed: BackdropStats = { brightest: grey(0.8), darkest: grey(0.05), median: grey(0.2), samples: 1000, area: 1000 }
+    const mixed: BackdropStats = { brightest: grey(0.8), darkest: grey(0.05), mean: grey(0.2), samples: 1000, area: 1000 }
     const d = decideGlassByBackdrop(mixed, floor)
     check(d.isDark && d.alpha > floor, `by backdrop: a mostly dark backdrop with a pale stretch keeps dark glass, thickened (${d.alpha})`)
 }
@@ -207,11 +218,30 @@ const floor = 0.48
     // island's capsule (small, sampled densely). The case that shipped wrong on
     // 2026-09-29: the capsule's 2600 samples outvoted the strip's 681 and a bar over a
     // mostly purple strip went black-on-light.
-    const strip: BackdropStats = { brightest: grey(0.7), darkest: grey(0.1), median: grey(0.15), samples: 681, area: 81000 }
-    const capsule: BackdropStats = { brightest: grey(0.6), darkest: grey(0.4), median: grey(0.55), samples: 2600, area: 9500 }
+    const strip: BackdropStats = { brightest: grey(0.7), darkest: grey(0.1), mean: grey(0.15), samples: 681, area: 81000 }
+    const capsule: BackdropStats = { brightest: grey(0.6), darkest: grey(0.4), mean: grey(0.55), samples: 2600, area: 9500 }
     const m = mergeBackdropStats([strip, capsule])
-    check(m.median.r === 0.15 && m.area === 90500, "merge: the typical backdrop is the one covering the most SCREEN, not the most samples")
+    check(near(m.mean.r, (0.15 * 81000 + 0.55 * 9500) / 90500, 1e-9) && m.area === 90500,
+          "merge: the typical backdrop is weighted by SCREEN covered, not by samples")
     check(decideGlassByBackdrop(m, floor).isDark, "merge: so the bar row over a mostly dark strip keeps white ink")
+}
+
+{
+    // A strip of TWO colours — the default wallpaper under the bar: pale pink one side,
+    // deep purple the other. A few percent of it changing side (a longer window title, a
+    // new tray icon: the capsules grow over it) must not flip the row. With the median it
+    // did (owner-caught 2026-09-29, same wallpaper, different workspaces): the median is
+    // whichever colour covers more than half, and it jumped from one to the other.
+    const strip = (lightShare: number) => {
+        const px: Rgb[] = []
+        for (let i = 0; i < 1000; i++) px.push(i < lightShare * 1000 ? { r: 0.87, g: 0.6, b: 0.84 } : { r: 0.3, g: 0.05, b: 0.7 })
+        return backdropStats(px)!
+    }
+    const at51 = decideGlassByBackdrop(strip(0.51), floor)
+    const at49 = decideGlassByBackdrop(strip(0.49), floor)
+    check(decideGlassByBackdrop(strip(0.49), floor, at51).isDark === at51.isDark
+          && decideGlassByBackdrop(strip(0.51), floor, at49).isDark === at49.isDark,
+          "two-colour strip: 2 % of it changing side does not flip the row's skin")
 }
 
 // ── 7. Hyprland's colour pipeline, for a panel measured while CLOSED ─────────

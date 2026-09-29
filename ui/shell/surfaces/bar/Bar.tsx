@@ -1166,6 +1166,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     id: "bar", root: barBox, role: "bar", exclude: underIsland, group: () => "bar-row",
     // As macOS's menu bar: the row's ink comes from what is behind it, not the mode (#676).
     skinFromBackdrop: true,
+    // Hidden for a fullscreen window the bar stays MAPPED (opacity 0), so it looked
+    // measurable — and what it found behind it was the fullscreen window: X's black page
+    // and white text, which flipped the row and brought it back from fullscreen in that
+    // skin (2026-09-29). Not settled while hidden; an event missed then is measured when
+    // it shows again (`settle()` in setBarFullscreenMode / setBarOverlayMode).
+    settled: () => !barFullscreenMode || barOverlayActive,
   }))
   glassHandles.set(popups, registerGlassSurface({ id: "notification-banners", root: popups, role: "overlay", exclude: underIsland }))
   // The island is TWO kinds of surface for the glass. Its row (the capsule and the
@@ -1919,6 +1925,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               }
               Gtk4LayerShell.set_exclusive_zone(win, BAR_H) // restore top reservation
               win.set_opacity(1)
+              glassHandles.get(barBox)?.settle()
               // Bring the capsule back with the bar, and re-assert our level:
               // present() re-adds the surface to Hyprland's overlay list, and the
               // bar may have moved layers in between.
@@ -1946,6 +1953,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               Gtk4LayerShell.set_exclusive_zone(win, 0) // release top reservation
               win.set_opacity(1)
               win.present()
+              glassHandles.get(barBox)?.settle()
               // The capsule comes back with the bar (fullscreen may have unmapped
               // it). Then re-assert our level: the bar just joined OVERLAY, which
               // appends it AFTER the island in Hyprland's list for that level, so

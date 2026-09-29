@@ -206,14 +206,25 @@ export function uncomposite(screen: Rgb, ours: PremulRgba, minAlpha: number, max
 export interface BackdropStats {
     brightest: Rgb
     darkest: Rgb
-    /** The TYPICAL backdrop (median luminance): what a surface whose skin comes from
-     *  its backdrop reads its skin from (`decideGlassByBackdrop`). */
-    median: Rgb
+    /** The TYPICAL backdrop: the MEAN colour of everything the surface covers — what a
+     *  surface whose skin comes from its backdrop reads its skin from
+     *  (`decideGlassByBackdrop`). For such a surface it spans its whole box, the parts it
+     *  leaves see-through included (`backdropStats`'s `around`), not only its glass.
+     *
+     *  🔑 A mean, not the median — measured, 2026-09-29. Over a two-colour strip (the
+     *  default wallpaper: pale pink left, deep purple right) the median is whichever
+     *  colour covers more than half, so it JUMPS from one to the other when a few
+     *  percent of the samples change side — and they did, every time the bar's capsules
+     *  changed width: a longer window title on one workspace, a new tray icon. The bar
+     *  changed skin over the same wallpaper (owner-caught). A mean moves by as much as
+     *  the samples moved, and the hysteresis absorbs that. */
+    mean: Rgb
     samples: number
-    /** How much of the surface those samples stand for, in pixels. NOT `samples`: a
-     *  large surface is sampled sparsely and a small one densely, so combining two by
-     *  sample count let the island's small capsule outvote the whole bar four to one
-     *  (2026-09-29 — the bar went black-on-light over a mostly purple strip). */
+    /** How much of the surface the samples behind `mean` stand for, in pixels. NOT
+     *  `samples`: a large surface is sampled sparsely and a small one densely, so
+     *  combining two by sample count let the island's small capsule outvote the whole
+     *  bar four to one (2026-09-29 — the bar went black-on-light over a mostly purple
+     *  strip). */
     area: number
 }
 
@@ -222,24 +233,30 @@ export const BACKDROP_PERCENTILE = 0.95
 
 /** Reduce uncomposited backdrop pixels to their `BackdropStats`. Null if there are
  *  too few to mean anything. `pixelArea` = how many screen pixels each sample stands
- *  for (the sampling step squared). */
-export function backdropStats(pixels: Rgb[], minSamples = 64, pixelArea = 1): BackdropStats | null {
+ *  for (the sampling step squared). `around` = backdrop the surface covers WITHOUT
+ *  glass (the gaps between the bar's capsules), sampled on the same grid: it counts
+ *  toward the typical backdrop, never toward the extremes — no text sits on it. */
+export function backdropStats(pixels: Rgb[], minSamples = 64, pixelArea = 1, around: Rgb[] = []): BackdropStats | null {
     if (pixels.length < minSamples) return null
     const ranked = pixels.map(p => ({ p, l: luminance(p) })).sort((x, y) => x.l - y.l)
     const at = (q: number) => ranked[Math.min(ranked.length - 1, Math.max(0, Math.round(q * (ranked.length - 1))))].p
+    const all = pixels.length + around.length
+    const mean = { r: 0, g: 0, b: 0 }
+    for (const list of [pixels, around]) for (const p of list) { mean.r += p.r / all; mean.g += p.g / all; mean.b += p.b / all }
     return {
         brightest: at(BACKDROP_PERCENTILE),
         darkest: at(1 - BACKDROP_PERCENTILE),
-        median: at(0.5),
+        mean,
         samples: pixels.length,
-        area: pixels.length * pixelArea,
+        area: all * pixelArea,
     }
 }
 
 /**
  * Several surfaces that decide as one (the bar and the island's capsule): the worst
- * of their extremes, and their TYPICAL backdrop as the median of their medians
- * weighted by how much of the screen each covers (`area`, never `samples`).
+ * of their extremes, and their TYPICAL backdrop as the mean of their means weighted
+ * by how much of the screen each covers (`area`, never `samples`) — i.e. the mean of
+ * everything they cover, as if they had been measured as one.
  */
 export function mergeBackdropStats(all: BackdropStats[]): BackdropStats {
     let brightest = all[0].brightest, darkest = all[0].darkest, samples = 0, area = 0
@@ -249,10 +266,12 @@ export function mergeBackdropStats(all: BackdropStats[]): BackdropStats {
         samples += st.samples
         area += st.area
     }
-    const ranked = [...all].sort((a, b) => luminance(a.median) - luminance(b.median))
-    let acc = 0, median = ranked[0].median
-    for (const st of ranked) { acc += st.area; median = st.median; if (acc >= area / 2) break }
-    return { brightest, darkest, median, samples, area }
+    const mean = { r: 0, g: 0, b: 0 }
+    for (const st of all) {
+        const w = area > 0 ? st.area / area : 1 / all.length
+        mean.r += st.mean.r * w; mean.g += st.mean.g * w; mean.b += st.mean.b * w
+    }
+    return { brightest, darkest, mean, samples, area }
 }
 
 /** What a surface wears: its tint's opacity and its skin. */
@@ -328,7 +347,8 @@ export function decideGlass(
  * — the bar row (#676), as macOS's menu bar: white ink over a dark top edge, black
  * over a light one, whatever the system mode.
  *
- * It takes the skin that reads BEST over the TYPICAL backdrop — the median, not the
+ * It takes the skin that reads BEST over the TYPICAL backdrop — the mean of the whole
+ * row (`BackdropStats.mean`: why a mean, and why the whole row), not the
  * extremes: macOS picks the menu bar's ink from the brightness of the wallpaper up
  * there, which is why it reads "almost always white" over the usual dark-topped
  * wallpapers. Deciding from the worst cases instead turned a bar over a pink-to-purple
@@ -345,8 +365,8 @@ export function decideGlassByBackdrop(
     floor: number,
     current?: GlassDecision,
 ): GlassDecision {
-    const onDark = legibilityMargin(stats.median, true, floor)
-    const onLight = legibilityMargin(stats.median, false, floor)
+    const onDark = legibilityMargin(stats.mean, true, floor)
+    const onLight = legibilityMargin(stats.mean, false, floor)
     let isDark = onDark >= onLight
     if (current && current.isDark !== isDark) {
         const mine = current.isDark ? onDark : onLight

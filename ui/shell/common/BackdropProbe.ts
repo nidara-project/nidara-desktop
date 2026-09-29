@@ -233,12 +233,86 @@ export interface ProbeRequest {
      *  bar), in monitor coordinates: pixels there are not our paint over a backdrop,
      *  and would read as backdrop if they were subtracted. */
     exclude?: MonitorRect[]
+    /** Also count the parts of the region we leave SEE-THROUGH — the gaps between the
+     *  bar's capsules — toward the typical backdrop (`BackdropStats.mean`), put through
+     *  Hyprland's colour pipeline (these blur settings) the way the closed probe does.
+     *  For a surface whose skin comes from its backdrop: the bar row reads its skin from
+     *  the whole strip, not from wherever its capsules happen to reach — they grow and
+     *  shrink with a window title or a tray icon, and the skin followed them
+     *  (owner-caught 2026-09-29). Never toward the extremes: no text sits there. */
+    seeThrough?: HyprlandBlurParams
     /** Names the images `NIDARA_BACKDROP_DEBUG` writes. */
     tag?: string
     /** Told the rectangle that was measured, in monitor coordinates, and its monitor —
      *  what `probeClosedBackdrop` needs to measure the same place while the surface is
      *  closed. */
     onRegion?: (region: MonitorRect, monitor: Gdk.Monitor) => void
+}
+
+/**
+ * Hyprland's colour pipeline over a RAW, unblurred patch of a capture — what glass laid
+ * there would sit on: the gain per pixel, an average standing in for the blur, then the
+ * vibrancy (the order of its shaders; `glass-legibility.ts`). Returns the patch whose
+ * top-left corner is (bx, by), `block` pixels a side — or `w`×`h`, for one clipped by
+ * the edge of the capture.
+ */
+function rawBackdrop(px: { data: Uint8Array; stride: number }, block: number, blur: HyprlandBlurParams) {
+    // A handful of taps per block is an average of a blurred field; every pixel of it
+    // was 17.5 ms on the main thread for a CC-sized panel (measured) — this is ~1/8 the work.
+    const inner = Math.max(1, Math.floor(block / 2))
+    // Hyprland's `blurprepare` is per channel and per 8-bit value: one table, not a
+    // pow() per pixel.
+    const prep = new Float64Array(256)
+    for (let v = 0; v < 256; v++) prep[v] = hyprlandPrepare({ r: v / 255, g: 0, b: 0 }, blur).r
+    return (bx: number, by: number, w = block, h = block): Rgb => {
+        let r = 0, g = 0, b = 0, n = 0
+        for (let y = by; y < by + h; y += Math.min(inner, h)) {
+            for (let x = bx; x < bx + w; x += Math.min(inner, w)) {
+                const i = y * px.stride + x * 4
+                r += prep[px.data[i]]; g += prep[px.data[i + 1]]; b += prep[px.data[i + 2]]; n++
+            }
+        }
+        return hyprlandVibrancy({ r: r / n, g: g / n, b: b / n }, blur)
+    }
+}
+
+/** Our paint at or below this (of 255) counts as nothing painted: a see-through pixel. */
+const SEE_THROUGH_MAX_ALPHA = 2
+
+/**
+ * The backdrop at (x, y) of an OPEN probe where we paint nothing (`ProbeRequest.
+ * seeThrough`): the raw capture there, through Hyprland's pipeline, averaged over the
+ * blur-sized block (`CLOSED_BLOCK`) that contains the point — clipped at the capture's
+ * edge, or the bar (32 px, blocks of 12) would lose its bottom quarter to a block that
+ * does not fit. Null unless that whole block is see-through and clear of every excluded rect — a block that touches a
+ * capsule's shadow or rim, or another surface, is not raw backdrop. Blocks are cached:
+ * every sample point inside one gets the same value, so each counts for its area.
+ */
+function seeThroughSampler(
+    screenPx: { data: Uint8Array; stride: number }, oursPx: { data: Uint8Array; stride: number },
+    W: number, H: number, scale: number,
+    exclude: { x0: number; y0: number; x1: number; y1: number }[],
+    blur: HyprlandBlurParams,
+) {
+    const block = Math.max(2, Math.round(CLOSED_BLOCK * scale))
+    const raw = rawBackdrop(screenPx, block, blur)
+    const cols = Math.ceil(W / block)
+    const cache = new Map<number, Rgb | null>()
+    const compute = (bx: number, by: number): Rgb | null => {
+        const w = Math.min(block, W - bx), h = Math.min(block, H - by)
+        if (exclude.some(e => bx < e.x1 && bx + w > e.x0 && by < e.y1 && by + h > e.y0)) return null
+        for (let y = by; y < by + h; y++)
+            for (let x = bx; x < bx + w; x++)
+                if (oursPx.data[y * oursPx.stride + x * 4 + 3] > SEE_THROUGH_MAX_ALPHA) return null
+        return raw(bx, by, w, h)
+    }
+    return (x: number, y: number): Rgb | null => {
+        const bx = Math.floor(x / block) * block, by = Math.floor(y / block) * block
+        const key = (by / block) * cols + bx / block
+        let v = cache.get(key)
+        if (v === undefined) { v = compute(bx, by); cache.set(key, v) }
+        return v
+    }
 }
 
 /**
@@ -301,12 +375,25 @@ export async function probeBackdrop(req: ProbeRequest): Promise<BackdropStats | 
 
     const step = Math.max(1, Math.floor(Math.sqrt((W * H) / MAX_SAMPLES)))
     const out: Rgb[] = []
+    const around: Rgb[] = []
     const dbg = DEBUG_DIR ? new Uint8Array(W * H * 4) : null
+    const seeThrough = req.seeThrough ? seeThroughSampler(screenPx, oursPx, W, H, scale, exclude, req.seeThrough) : null
     for (let y = 0; y < H; y += step) {
         for (let x = 0; x < W; x += step) {
             if (exclude.some(e => x >= e.x0 && x < e.x1 && y >= e.y0 && y < e.y1)) continue
             const o = y * oursPx.stride + x * 4
             const oa = oursPx.data[o + 3] / 255
+            if (oa < MIN_ALPHA && seeThrough) {
+                const b = seeThrough(x, y)
+                if (b) {
+                    around.push(b)
+                    if (dbg) {
+                        const d = (y * W + x) * 4
+                        dbg[d] = b.r * 255; dbg[d + 1] = b.g * 255; dbg[d + 2] = b.b * 255; dbg[d + 3] = 255
+                    }
+                }
+                continue
+            }
             if (oa < MIN_ALPHA || oa > MAX_ALPHA) continue
             if (!isFlatGlass(oursPx, x, y, W, H)) continue
             const s = y * screenPx.stride + x * 4
@@ -326,9 +413,9 @@ export async function probeBackdrop(req: ProbeRequest): Promise<BackdropStats | 
     }
     const tLooped = GLib.get_monotonic_time()
     if (dbg) debugSave(req.tag ?? "probe", captured, ours, dbg, W, H)
-    const stats = backdropStats(out, 64, (step / scale) ** 2)   // logical px, like the closed probe
+    const stats = backdropStats(out, 64, (step / scale) ** 2, around)   // logical px, like the closed probe
     if (TIMING) console.log(`[BackdropProbe] ${req.tag ?? "probe"}: ${W}x${H}, capture ${((tCaptured - t0) / 1000).toFixed(1)} ms (worker), `
-        + `main thread ${((tLooped - tCaptured) / 1000).toFixed(1)} ms = render+readback ${((tRendered - tCaptured) / 1000).toFixed(1)} + ${out.length} samples ${((tLooped - tRendered) / 1000).toFixed(1)}`)
+        + `main thread ${((tLooped - tCaptured) / 1000).toFixed(1)} ms = render+readback ${((tRendered - tCaptured) / 1000).toFixed(1)} + ${out.length} samples${seeThrough ? ` + ${around.length} see-through` : ""} ${((tLooped - tRendered) / 1000).toFixed(1)}`)
     if (!stats) return why(`${out.length} glass pixels in ${W}x${H} — too few`)
     return stats
 }
@@ -380,13 +467,7 @@ export async function probeClosedBackdrop(req: {
     const scale = W / req.rect.width
     const px = pixelsOf(captured)
     const block = Math.max(2, Math.round(CLOSED_BLOCK * scale))
-    // A handful of taps per block is an average of a blurred field; every pixel of it
-    // was 17.5 ms on the main thread for a CC-sized panel (measured) — this is ~1/8 the work.
-    const inner = Math.max(1, Math.floor(block / 2))
-    // Hyprland's `blurprepare` is per channel and per 8-bit value: one table, not a
-    // pow() per pixel.
-    const prep = new Float64Array(256)
-    for (let v = 0; v < 256; v++) prep[v] = hyprlandPrepare({ r: v / 255, g: 0, b: 0 }, req.blur).r
+    const raw = rawBackdrop(px, block, req.blur)
     const exclude = (req.exclude ?? []).map(e => ({
         x0: (e.x - req.rect.x) * scale, y0: (e.y - req.rect.y) * scale,
         x1: (e.x + e.width - req.rect.x) * scale, y1: (e.y + e.height - req.rect.y) * scale,
@@ -400,14 +481,7 @@ export async function probeClosedBackdrop(req: {
             if (k++ % every !== 0) continue
             const cx = bx + block / 2, cy = by + block / 2
             if (exclude.some(e => cx >= e.x0 && cx < e.x1 && cy >= e.y0 && cy < e.y1)) continue
-            let r = 0, g = 0, b = 0, n = 0
-            for (let y = by; y < by + block; y += inner) {
-                for (let x = bx; x < bx + block; x += inner) {
-                    const i = y * px.stride + x * 4
-                    r += prep[px.data[i]]; g += prep[px.data[i + 1]]; b += prep[px.data[i + 2]]; n++
-                }
-            }
-            out.push(hyprlandVibrancy({ r: r / n, g: g / n, b: b / n }, req.blur))
+            out.push(raw(bx, by))
         }
     }
     const stats = backdropStats(out, 16, (block / scale) ** 2)
