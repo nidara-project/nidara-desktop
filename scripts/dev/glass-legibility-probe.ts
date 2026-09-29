@@ -8,7 +8,7 @@
 // only ever printed "ok" has been run, not tested.
 
 import {
-    uncomposite, glassOver, tierContrast, legibilityMargin, decideGlass, decideGlassByBackdrop, mergeBackdropStats, backdropStats, hyprlandPrepare, hyprlandVibrancy, NIDARA_BLUR,
+    uncomposite, glassOver, tierContrast, markContrast, legibilityMargin, MARK_TARGET, decideGlass, decideGlassByBackdrop, mergeBackdropStats, backdropStats, hyprlandPrepare, hyprlandVibrancy, NIDARA_BLUR,
     GLASS_ADAPT_CEILING, TEXT_INK, type Rgb, type BackdropStats,
 } from "../../ui/lib/nidara-kit/platform/glass-legibility"
 import { GLASS_TINT } from "../../ui/lib/nidara-kit/platform/tokens"
@@ -96,6 +96,36 @@ const floor = 0.48
 {
     const d = decideGlass(flat(grey(1)), true, 0.8)
     check(d.isDark && d.alpha === 0.8, "a slider above the ceiling: nothing to adapt, no flip")
+}
+
+// ── 4b. A surface that carries marks, not text: the dock ─────────────────────
+// Its running dot (INK.solid) at 3:1, not the text ramp at 4.5:1 — the dock would
+// otherwise thicken for words it does not have.
+{
+    let g = 0
+    for (let v = 0.3; v <= 1; v += 0.005)
+        if (legibilityMargin(grey(v), true, floor) < 1 && legibilityMargin(grey(v), true, floor, "marks") >= 1) { g = v; break }
+    check(g > 0, "marks: there is a backdrop where text needs more glass and the dot does not (the test below is not vacuous)")
+    const text = decideGlass(flat(grey(g)), true, floor)
+    const marks = decideGlass(flat(grey(g)), true, floor, undefined, "marks")
+    check(text.alpha > floor && marks.isDark && marks.alpha === floor,
+          `marks: over grey ${g.toFixed(3)} text thickens (${text.alpha}), the dock stays at its slider`)
+}
+{
+    // …but a backdrop the dot cannot be seen on still moves the dock: A, then B.
+    let g = 0
+    for (let v = 0.3; v <= 1; v += 0.005)
+        if (legibilityMargin(grey(v), true, floor, "marks") < 1 && legibilityMargin(grey(v), true, GLASS_ADAPT_CEILING, "marks") >= 1) { g = v; break }
+    check(g > 0, "marks: there is a backdrop only thickening fixes for the dot")
+    const d = decideGlass(flat(grey(g)), true, floor, undefined, "marks")
+    check(d.isDark && d.alpha > floor && markContrast(grey(g), true, d.alpha) >= MARK_TARGET
+          && markContrast(grey(g), true, d.alpha - 0.01) < MARK_TARGET,
+          `marks A: grey ${g.toFixed(3)} thickens the dock to the least glass its dot reads on (${d.alpha})`)
+    // Where text needs B, the dot does not: it reads on dark glass over pure white by
+    // thickening alone (0.50), so the dock keeps the mode's skin — as macOS's Dock.
+    const white = decideGlass(flat(grey(1)), true, floor, undefined, "marks")
+    check(!decideGlass(flat(grey(1)), true, floor).isDark && white.isDark && white.alpha <= GLASS_ADAPT_CEILING,
+          `marks: pure white flips text to the light skin, but only thickens the dock (${white.alpha})`)
 }
 
 // ── 5. Hysteresis ────────────────────────────────────────────────────────────

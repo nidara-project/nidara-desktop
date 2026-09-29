@@ -20,7 +20,7 @@ import { drawSquircle, drawGlassShadow } from "../../common/DrawingUtils"
 import { setVisibleRect } from "../../common/VisibleRegion"
 import { GLASS_TINT } from "../../../lib/nidara-kit/platform/tokens"
 import { GLASS_SHADOW } from "../../common/SquircleContainer"
-import Theme from "../../core/ThemeManager"
+import { chromeIsDarkFor, glassAlphaFor } from "../../common/AdaptiveGlass"
 import inputYield from "../../core/InputYield"
 import { dockSettings, dockSideState } from "./state"
 import type { AnimState } from "./state"
@@ -121,6 +121,10 @@ export interface AxisAdapter {
 
     // settings changed: reset axis widget sizes/margins for the new constants
     onSettingsResize(): void
+
+    // Where the glass capsule is, in `layout`'s coordinates — what the adaptive glass
+    // captures (common/AdaptiveGlass.ts). Null before the first allocation.
+    capsuleRect(): Rect | null
 }
 
 // Shared flat (rest-state) target assignment — used when the pointer is away.
@@ -211,14 +215,17 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 can_focus: false,
             })
             gloss.configure({
-                key: () => `${Theme.chromeIsDark}|${Theme.dockOpacity}`,
+                // The adaptive glass's answer for the dock, not the global mode and slider:
+                // it thickens the tint (or flips the skin) over a backdrop the running
+                // dot would vanish on (common/AdaptiveGlass.ts).
+                key: () => `${chromeIsDarkFor(gloss)}|${glassAlphaFor(gloss, "dock")}`,
                 // The squircle's corner spans its radius (half the pill) from the inset edge;
                 // one more pixel keeps the rim's antialiasing inside the cap.
                 capLength: (h) => DOCK_SHADOW_PAD + (h - DOCK_SHADOW_PAD * 2) / 2 + 1,
                 paint: (cr, w, _h) => {
                     if (w <= 0 || _h <= 0) return
-                    const dark = Theme.chromeIsDark   // dock = chrome → follows the mode, as macOS's Dock (no text: not an adaptive surface)
-                    const dockAlpha = Theme.dockOpacity
+                    const dark = chromeIsDarkFor(gloss)   // the mode's skin, as macOS's Dock — unless its surface flipped
+                    const dockAlpha = glassAlphaFor(gloss, "dock")
                     const dockColor = dark
                         ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
                         : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
@@ -475,6 +482,16 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             da.margin_bottom = Math.max(0, dockSettings.screenGap - DOCK_SHADOW_PAD)
             shim.margin_bottom = dockSettings.screenGap
         },
+
+        capsuleRect() {
+            // `da` is the capsule plus the shadow's ring around it (DOCK_SHADOW_PAD).
+            const [ok, b] = da.compute_bounds(layout)
+            if (!ok || b.get_width() <= DOCK_SHADOW_PAD * 2 || b.get_height() <= DOCK_SHADOW_PAD * 2) return null
+            return {
+                x: b.get_x() + DOCK_SHADOW_PAD, y: b.get_y() + DOCK_SHADOW_PAD,
+                width: b.get_width() - DOCK_SHADOW_PAD * 2, height: b.get_height() - DOCK_SHADOW_PAD * 2,
+            }
+        },
     }
 }
 
@@ -523,6 +540,18 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
     let lastRenderedHeight = -1
     let lastRenderedShimTop = -1
     let lastExclZone = -999
+
+    // The capsule inside `da` (w×h), which spans the surface: one place for the painter
+    // and for the adaptive glass, which captures exactly this.
+    const capsuleIn = (w: number, h: number): Rect => {
+        const width = DOCK_CONSTANTS.PILL_HEIGHT
+        const height = smoothedBarMain + DOCK_CONSTANTS.BASE_MARGIN * 2
+        return {
+            x: position === 'right' ? w - DOCK_CONSTANTS.EXCLUSIVE_ZONE : dockSettings.screenGap,
+            y: Math.max(0, Math.round(getGtkCenter(h) - height / 2)),
+            width, height,
+        }
+    }
 
     // Cross-axis (thickness) tracking. The dock window is full-width but only a strip
     // on the edge should be interactive — and that strip must match the dock's CURRENT
@@ -599,18 +628,13 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                         shim.margin_top = shimTop
                     }
                 }
-                const dark = Theme.chromeIsDark   // dock = chrome → follows the mode, as macOS's Dock (no text: not an adaptive surface)
-                const dockAlpha = Theme.dockOpacity
+                const dark = chromeIsDarkFor(da)   // the mode's skin, as macOS's Dock — unless its surface flipped
+                const dockAlpha = glassAlphaFor(da, "dock")
                 const dockColor = dark
                     ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
                     : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
                 const borderCol = dark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
-                const pw = DOCK_CONSTANTS.PILL_HEIGHT
-                const ph = smoothedBarMain + DOCK_CONSTANTS.BASE_MARGIN * 2
-                const py = Math.max(0, Math.round(getGtkCenter(_h) - ph / 2))
-                const px = position === 'right'
-                    ? _w - DOCK_CONSTANTS.EXCLUSIVE_ZONE
-                    : dockSettings.screenGap
+                const { x: px, y: py, width: pw, height: ph } = capsuleIn(_w, _h)
                 // No layout change on this axis: `da` spans the surface and the capsule is
                 // placed by this translate, so the pad is absorbed here. Cairo clips a shadow
                 // that runs past the screen wall, which is where it would be invisible anyway.
@@ -930,6 +954,13 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             // stale position until the next forced redraw. Repaint it explicitly so the
             // background tracks the icons' shim margin on the same settings callback.
             da.queue_draw()
+        },
+
+        capsuleRect() {
+            const [ok, b] = da.compute_bounds(layout)
+            if (!ok || b.get_width() <= 0 || b.get_height() <= 0) return null
+            const c = capsuleIn(b.get_width(), b.get_height())
+            return { x: b.get_x() + c.x, y: b.get_y() + c.y, width: c.width, height: c.height }
         },
     }
 }

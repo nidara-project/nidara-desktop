@@ -222,6 +222,13 @@ export interface ProbeRequest {
      *  and the other full-monitor layers start at 0,0; a layer anchored with a margin
      *  does not, and GTK cannot tell us where it is. */
     windowOrigin?: { x: number; y: number }
+    /** The part of the widget's box to capture, in the widget's own coordinates, when
+     *  that is not the whole box. The widget is still rendered WHOLE over it, so
+     *  everything of ours that paints there is subtracted. The dock: its layout spans
+     *  the monitor, and what is glass is the capsule — the icons painted over it are
+     *  a sibling of the glass, so the capsule's own widget alone would leave them
+     *  unsubtracted and read them as backdrop. */
+    area?: MonitorRect
     /** Parts of the region some OTHER surface covers (the Activity Island over the
      *  bar), in monitor coordinates: pixels there are not our paint over a backdrop,
      *  and would read as backdrop if they were subtracted. */
@@ -260,12 +267,15 @@ export async function probeBackdrop(req: ProbeRequest): Promise<BackdropStats | 
     const origin = req.windowOrigin ?? { x: 0, y: 0 }
     const at = { x: bounds.get_x() + origin.x, y: bounds.get_y() + origin.y }
     const box = { width: bounds.get_width(), height: bounds.get_height() }
+    const area = req.area ?? { x: 0, y: 0, width: box.width, height: box.height }
+    if (area.width < 4 || area.height < 4) return why(`area ${area.width}x${area.height}`)
 
     // The capture is in whole logical pixels; the widget's box need not be.
+    const x0 = at.x + area.x, y0 = at.y + area.y
     const region: MonitorRect = {
-        x: Math.floor(at.x), y: Math.floor(at.y),
-        width: Math.ceil(at.x + box.width) - Math.floor(at.x),
-        height: Math.ceil(at.y + box.height) - Math.floor(at.y),
+        x: Math.floor(x0), y: Math.floor(y0),
+        width: Math.ceil(x0 + area.width) - Math.floor(x0),
+        height: Math.ceil(y0 + area.height) - Math.floor(y0),
     }
 
     const t0 = GLib.get_monotonic_time()

@@ -5,16 +5,17 @@ import hyprlandState from "../core/HyprlandState"
 import Wallpaper from "../core/WallpaperManager"
 import Gdk from "gi://Gdk?version=4.0"
 import { probeBackdrop, probeClosedBackdrop, type MonitorRect } from "./BackdropProbe"
+import { SlicedCairoArea } from "../../lib/sliced-cairo"
 import {
     decideGlass, decideGlassByBackdrop, mergeBackdropStats, NIDARA_BLUR,
-    type GlassDecision, type BackdropStats, type HyprlandBlurParams,
+    type GlassDecision, type BackdropStats, type HyprlandBlurParams, type GlassContent,
 } from "../../lib/nidara-kit/platform/glass-legibility"
 
 /**
  * ADAPTIVE GLASS (#673) — each shell surface keeps its text legible over whatever is
  * behind it, by itself.
  *
- * A surface (the bar, the open panel, the island, the app grid) is REGISTERED here
+ * A surface (the bar, the open panel, the island, the app grid, the dock) is REGISTERED here
  * with its root widget and the glass slider that is its floor. On the events that can
  * change what is behind it — it settles open, a window opens/closes/moves/goes
  * fullscreen, the workspace or the wallpaper changes, the theme changes — it is
@@ -44,7 +45,7 @@ import {
  *   capture and the offscreen render would describe different frames.
  */
 
-export type GlassRole = "bar" | "overlay"
+export type GlassRole = "bar" | "overlay" | "dock"
 
 /** After an event, before measuring. Longer than the compositor's own animations
  *  on purpose (workspaces slide for 600 ms, layers fade in for 300–400 ms): a
@@ -89,11 +90,21 @@ export interface GlassSurfaceOpts {
      *  whole monitor, and what it paints is the capsule or the open mode. Null =
      *  nothing to measure right now. */
     probe?: () => Gtk.Widget | null
+    /** The part of the probed widget that is glass, in its own coordinates, when that
+     *  is not its whole box (see `ProbeRequest.area`). The dock: its layout spans the
+     *  monitor and the glass is the capsule. */
+    probeArea?: () => MonitorRect | null
     /** Where the root's window starts on its monitor (see `ProbeRequest`). */
     windowOrigin?: () => { x: number; y: number }
     /** False while the surface should not be measured even though it is mapped
      *  (mid-animation). Defaults to "mapped". */
     settled?: () => boolean
+    /** Mapped, but nowhere on screen (the dock slid away by auto-hide): measured like a
+     *  CLOSED panel, where it last was, so it comes back already right. */
+    hidden?: () => boolean
+    /** What has to stay readable on it (`GlassContent`). Default `text`; the dock
+     *  carries only marks. */
+    content?: GlassContent
     /** Areas another layer covers ABOVE this surface (the Activity Island over the
      *  bar and its panels), in monitor coordinates: subtracting our paint there
      *  would read the other layer as backdrop. */
@@ -126,6 +137,8 @@ interface Surface extends GlassSurfaceOpts {
     lastMonitor: Gdk.Monitor | null
     /** When the last CLOSED measurement landed (µs). */
     closedAtUs: number
+    /** A measurement was due while it was not `settled`: owed once it comes to rest. */
+    missed: boolean
 }
 
 const surfaces = new Map<Gtk.Widget, Surface>()
@@ -140,7 +153,10 @@ function surfaceOf(widget: Gtk.Widget | null): Surface | null {
     return null
 }
 
-const floorOf = (role: GlassRole) => role === "bar" ? Theme.barOpacity : Theme.overlayOpacity
+const floorOf = (role: GlassRole) =>
+    role === "bar" ? Theme.barOpacity : role === "dock" ? Theme.dockOpacity : Theme.overlayOpacity
+/** On screen: mapped, and not slid away. */
+const shown = (s: Surface) => s.root.get_mapped() && !s.hidden?.()
 const roleOf = (s: Surface): GlassRole => typeof s.role === "function" ? s.role() : s.role
 
 /**
@@ -166,7 +182,9 @@ export function chromeIsDarkFor(widget: Gtk.Widget | null): boolean {
 /** Cairo painters do not repaint when an ancestor is queued — each DrawingArea
  *  has to be asked. The subtrees are panels, a few hundred widgets at most. */
 function redrawSubtree(w: Gtk.Widget) {
-    if (w instanceof Gtk.DrawingArea) w.queue_draw()
+    // A SlicedCairoArea (the dock's capsule) is no DrawingArea, and re-checks its
+    // cached textures on queue_draw the same way.
+    if (w instanceof Gtk.DrawingArea || w instanceof SlicedCairoArea) w.queue_draw()
     for (let c = w.get_first_child(); c; c = c.get_next_sibling()) redrawSubtree(c)
 }
 
@@ -234,11 +252,12 @@ function readBlur() {
 function boundsOf(s: Surface): MonitorRect | null {
     const w = s.probe ? s.probe() : s.root
     const native = w?.get_native()
-    if (!w || !native || !w.get_mapped()) return null
+    if (!w || !native || !w.get_mapped() || s.hidden?.()) return null
     const [ok, b] = w.compute_bounds(native as unknown as Gtk.Widget)
     if (!ok) return null
     const o = s.windowOrigin?.() ?? { x: 0, y: 0 }
-    return { x: b.get_x() + o.x, y: b.get_y() + o.y, width: b.get_width(), height: b.get_height() }
+    const a = s.probeArea?.() ?? { x: 0, y: 0, width: b.get_width(), height: b.get_height() }
+    return { x: b.get_x() + o.x + a.x, y: b.get_y() + o.y + a.y, width: a.width, height: a.height }
 }
 
 /**
@@ -264,13 +283,13 @@ async function measureClosed(s: Surface) {
         console.warn(`[AdaptiveGlass] ${s.id}: closed probe failed: ${e}`)
     }
     // Opened meanwhile: the open measurement owns it now.
-    if (seq !== s.seq || !surfaces.has(s.root) || s.root.get_mapped() || !stats) return
+    if (seq !== s.seq || !surfaces.has(s.root) || shown(s) || !stats) return
     s.lastProbeUs = GLib.get_monotonic_time()
     s.closedAtUs = s.lastProbeUs
     s.lastStats = stats
     const next = s.skinFromBackdrop
         ? decideGlassByBackdrop(stats, floorOf(roleOf(s)), s.decision ?? undefined)
-        : decideGlass(stats, Theme.chromeIsDark, floorOf(roleOf(s)), s.decision ?? undefined)
+        : decideGlass(stats, Theme.chromeIsDark, floorOf(roleOf(s)), s.decision ?? undefined, s.content)
     // Nothing on screen to animate: it simply opens like this.
     if (s.animId !== null) { GLib.source_remove(s.animId); s.animId = null }
     s.decision = next
@@ -279,8 +298,8 @@ async function measureClosed(s: Surface) {
 }
 
 async function measure(s: Surface) {
-    if (!s.root.get_mapped()) { await measureClosed(s); return }
-    if (s.settled && !s.settled()) return
+    if (!shown(s)) { await measureClosed(s); return }
+    if (s.settled && !s.settled()) { s.missed = true; return }
     // Our own tint mid-animation, or a change not yet on screen everywhere: the
     // capture and the render would describe different surfaces.
     if (s.animId !== null) { schedule(s); return }
@@ -300,6 +319,7 @@ async function measure(s: Surface) {
             widget: target,
             windowOrigin: s.windowOrigin?.(),
             exclude: s.exclude?.() ?? [],
+            area: s.probeArea?.() ?? undefined,
             tag: `${s.id}-${seq}`,
             onRegion: (r, m) => { s.lastRect = r; s.lastMonitor = m },
         })
@@ -307,7 +327,7 @@ async function measure(s: Surface) {
         console.warn(`[AdaptiveGlass] ${s.id}: probe failed: ${e}`)
     }
     // A newer measurement started, or the surface left, while this one was out.
-    if (seq !== s.seq || !surfaces.has(s.root) || !s.root.get_mapped()) return
+    if (seq !== s.seq || !surfaces.has(s.root) || !shown(s)) return
     s.lastProbeUs = GLib.get_monotonic_time()
     if (!stats) {
         // Nothing measurable YET is common right after a map (no frame painted) —
@@ -322,7 +342,7 @@ async function measure(s: Surface) {
     if (!group) {
         apply(s, s.skinFromBackdrop
             ? decideGlassByBackdrop(stats, floorOf(roleOf(s)), s.decision ?? undefined)
-            : decideGlass(stats, Theme.chromeIsDark, floorOf(roleOf(s)), s.decision ?? undefined))
+            : decideGlass(stats, Theme.chromeIsDark, floorOf(roleOf(s)), s.decision ?? undefined, s.content))
         return
     }
     // One decision for the whole group, from the worst of every member's backdrop.
@@ -332,7 +352,7 @@ async function measure(s: Surface) {
     const floor = Math.max(...members.map(m => floorOf(roleOf(m))))
     const next = members.some(m => m.skinFromBackdrop)
         ? decideGlassByBackdrop(merged, floor, s.decision ?? undefined)
-        : decideGlass(merged, Theme.chromeIsDark, floor, s.decision ?? undefined)
+        : decideGlass(merged, Theme.chromeIsDark, floor, s.decision ?? undefined, s.content)
     for (const m of members) apply(m, next)
 }
 
@@ -369,13 +389,16 @@ export interface GlassSurfaceHandle {
     /** Measure soon (debounced) — e.g. when the surface has just settled open. A
      *  delay for content that animates in without a revealer to say when it lands. */
     remeasure(delayMs?: number): void
+    /** The surface has just come to rest (the dock's springs stopped): measure now only
+     *  if something happened while it was moving. Cheap to call on every stop. */
+    settle(): void
     /** Stop adapting; the surface goes back to the user's glass. */
     dispose(): void
 }
 
 export function registerGlassSurface(opts: GlassSurfaceOpts): GlassSurfaceHandle {
     const s: Surface = {
-        ...opts, decision: null, shownAlpha: null, lastStats: null, lastProbeUs: 0, seq: 0, animId: null, retries: 0, quietUntilUs: 0, lastRect: null, lastMonitor: null, closedAtUs: 0,
+        ...opts, decision: null, shownAlpha: null, lastStats: null, lastProbeUs: 0, seq: 0, animId: null, retries: 0, quietUntilUs: 0, lastRect: null, lastMonitor: null, closedAtUs: 0, missed: false,
     }
     surfaces.set(opts.root, s)
     // A surface that is hidden keeps its last decision: the next time it opens over
@@ -384,6 +407,7 @@ export function registerGlassSurface(opts: GlassSurfaceOpts): GlassSurfaceHandle
     opts.root.connect("map", () => schedule(s, MAP_SETTLE_MS))
     return {
         remeasure: (delayMs = 0) => schedule(s, delayMs),
+        settle: () => { if (s.missed) { s.missed = false; schedule(s) } },
         dispose: () => {
             const p = pending.get(s)
             if (p !== undefined) { GLib.source_remove(p); pending.delete(s) }
@@ -412,6 +436,8 @@ export function adaptiveGlassState() {
         role: roleOf(s),
         group: s.group?.() ?? null,
         mapped: s.root.get_mapped(),
+        hidden: !!s.hidden?.(),
+        content: s.content ?? "text",
         floor: round(floorOf(roleOf(s))),
         alpha: s.shownAlpha === null ? null : round(s.shownAlpha),
         skin: s.decision ? (s.decision.isDark ? "dark" : "light") : null,

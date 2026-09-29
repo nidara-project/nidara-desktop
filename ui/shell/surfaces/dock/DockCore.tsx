@@ -37,6 +37,7 @@ import { iconAssetPath } from "../../core/Icons"
 import { safeDisconnect } from "../../core/signals"
 import inputYield from "../../core/InputYield"
 import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
+import { registerGlassSurface, type GlassSurfaceHandle } from "../../common/AdaptiveGlass"
 import type { AxisAdapter, RevealState } from "./DockAxis"
 
 export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
@@ -120,6 +121,9 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
     // Declared early so revealState() never hits a TDZ; assigned in its section.
     let fullscreenMode = false
+    // The adaptive glass (see its section near the end). Early for the same reason:
+    // the tick tells it when the dock comes to rest.
+    let glass: GlassSurfaceHandle | null = null
 
     const unpinnedOpenOrder = new Map<string, number>()
     let unpinnedSeq = 0
@@ -421,6 +425,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
             if (!active) {
                 tickId = null
+                glass?.settle()
                 return false
             }
             return true
@@ -1382,6 +1387,39 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         safeDisconnect(status, walkConn); safeDisconnect(inputYield, yieldConn)
         if (walkToken) { releaseFocusGrab(walkToken); walkToken = 0 }
     })
+
+    // ── Adaptive glass (#673) ─────────────────────────────────────────────────
+    // The dock keeps its running dot readable over whatever is behind it, as the bar
+    // and the panels keep their text: thicker glass, or the other skin. It carries
+    // MARKS, not text, so it is held to 3:1 (glass-legibility.ts → GlassContent), and
+    // its skin is the mode's, as macOS's Dock. The glass is the capsule, not the
+    // monitor-sized layout; the layout is what gets rendered over it, icons included.
+    const dockOrigin = () => {
+        // Every axis anchors BOTTOM (the vertical one also TOP, under the bar's zone);
+        // the slide is a negative margin on the edge the dock hides behind.
+        const g = gdkmonitor.get_geometry()
+        const off = Math.round(slideCurrent)
+        const y = g.height - win.get_height()
+        if (!axis.vertical) return { x: 0, y: y + off }
+        return dockSettings.position === 'right' ? { x: g.width - win.get_width() + off, y } : { x: -off, y }
+    }
+    glass = registerGlassSurface({
+        id: `dock-${gdkmonitor.get_connector() ?? "?"}`,
+        root: layout,
+        role: "dock",
+        content: "marks",
+        probeArea: () => axis.capsuleRect(),
+        windowOrigin: dockOrigin,
+        // At rest, in place, with nothing of ours over it: magnifying, sliding, a menu
+        // (its own surface, over the capsule) or a drag would each put a frame in the
+        // capture that the offscreen render does not have.
+        settled: () => tickId === null && isRevealed && slideCurrent === 0 && !cursorInDock
+            && !dndActive && menuState.openCount === 0,
+        // Slid away by auto-hide or a fullscreen window: measured where it last stood,
+        // so it slides back in already wearing the right glass.
+        hidden: () => !isRevealed && slideCurrent === slideTarget,
+    })
+    win.connect("destroy", () => { glass?.dispose(); glass = null })
 
     const fsConn = hs.connect("changed", checkFullscreen)
     // Own destroy hook (the main one above predates this section): the dock is

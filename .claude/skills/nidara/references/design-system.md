@@ -1478,11 +1478,17 @@ icons match every other bar icon. The click→window-focus wiring (PID-first mat
 
 Every shell surface with text on glass — the bar, each bar panel (CC, NC, system menu, search, bar
 expansion), the notification banners, the Activity Island, the app grid — measures what is behind
-it and adapts, by itself, on events. The dock is not in the list: it carries no text of its own.
+it and adapts, by itself, on events. So does the dock, held to its MARKS instead of text (below).
 
 **The rule** (owner's call: "A+B"), pure arithmetic in `ui/lib/nidara-kit/platform/glass-legibility.ts`:
 
-- Targets, per `TEXT_INK` tier: primary and secondary ≥ 4.5:1, dim ≥ 3:1, disabled exempt.
+- Targets, per `TEXT_INK` tier: primary and secondary ≥ 4.5:1, dim ≥ 3:1, disabled exempt — for a
+  surface whose `content` is `text` (the default). A `marks` surface — the dock, whose running dot
+  (`INK.solid`) is the only thing it draws, its icons being the apps' own artwork — is held to
+  `MARK_TARGET` 3:1 (WCAG 1.4.11, non-text contrast). Under the text rule the dock would thicken
+  for words it does not have. Measured consequence: the dot reads over ANY grey backdrop by
+  thickening alone (0.50 over pure white, dark skin), so the dock in practice never flips — it
+  keeps the mode's skin, as macOS's Dock.
 - **A.** Thicken the surface's tint from the user's slider up to `GLASS_ADAPT_CEILING` (0.60 —
   past ~0.59 it stops reading as glass, #82).
 - **B.** If the ceiling is not enough, flip the surface's SKIN (dark glass + white ink ↔ light glass
@@ -1506,6 +1512,27 @@ one GTK window. The island's capsule row sits in the bar's row, so it is in the 
 (`group: () => "bar-row"`): one decision from both backdrops together. Without that, a pale stretch
 under the bar's left end flipped the bar to light and left the island's capsule dark in the middle
 of it. Each island MODE is a panel of its own (below).
+
+**The dock** (2026-09-29, owner: "mide también el dock") is one surface per monitor,
+`dock-<connector>`, role `dock` (floor = `dockOpacity`), content `marks`, root = the axis's `layout`.
+Three things set it apart, each an option any surface can use:
+
+- **`probeArea`: the glass is not the widget's box.** The layout spans the monitor; the glass is the
+  capsule (`axis.capsuleRect()`, one geometry with the painter on the vertical axis). Capturing the
+  capsule's own widget would not do: the icons are its SIBLING, so they would be left
+  unsubtracted and read as backdrop. The probe captures the area and renders the WHOLE layout over
+  it (`ProbeRequest.area`). Verified with `NIDARA_BACKDROP_DEBUG`: capture and render line up to the
+  pixel, and the icons come out as holes in the recovered backdrop, not as backdrop.
+- **`hidden`: mapped but off screen.** Auto-hidden (or out of a fullscreen window's way), it is
+  measured like a closed panel, where it last stood, and slides back in already right.
+- **`settle()`: it moves on its own.** `settled` is false while it magnifies, slides, holds a menu
+  (its own surface, over the capsule), drags, or has the pointer on it; an event arriving then is
+  remembered (`missed`) and measured when the springs stop (DockCore's tick calls `settle()`).
+  A panel does not need this — its reveal's `onDone` already asks.
+
+The windowOrigin comes from the anchors (every axis anchors BOTTOM; the slide is a negative margin
+on the hiding edge). Cost, measured at 2560×1440, scale 1: a 1390×92 capture, 2.8–4.2 ms of main
+thread.
 
 **How a surface measures itself** — `common/BackdropProbe.ts`:
 
@@ -1585,8 +1612,10 @@ the widget (so a popover parented inside one follows it for free) and fall back 
 
 🔑 **A new Cairo painter on shell chrome MUST ask `chromeIsDarkFor(itsArea)` / `glassAlphaFor(itsArea,
 role)`**, not `Theme.chromeIsDark` / `Theme.overlayOpacity`. Reading the global is exactly the bug the
-flip exposes: a ring that stays white on a surface that went light. (The dock and the agent pointer
-still read the global: neither is a registered surface.)
+flip exposes: a ring that stays white on a surface that went light. (The agent pointer still reads
+the global: it is not a registered surface.) ⚠️ `redrawSubtree` repaints `Gtk.DrawingArea` AND
+`SlicedCairoArea` (the dock's horizontal capsule, which is not a DrawingArea); a painter of a third
+kind must be added there, or it keeps its old tint until something else redraws it.
 
 **When it measures — events only, never a timer** (the animation rule): a panel's reveal settling
 open (`popToggle`'s `onDone`), a banner stack settling, `map`, HyprlandState "changed" filtered to

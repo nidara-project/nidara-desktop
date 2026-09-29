@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // No GI imports, here or in `./tokens`: the probe runs this under plain node.
-import { GLASS_TINT } from "./tokens"
+import { GLASS_TINT, INK } from "./tokens"
 
 /**
  * NIDARA — is the text on a piece of glass legible, and what must the glass do if not
@@ -35,8 +35,12 @@ import { GLASS_TINT } from "./tokens"
  * B. If the ceiling is not enough, **flip the skin** (dark glass + white ink ↔
  *    light glass + black ink) for that surface.
  *
- * The unit is the SURFACE (the whole bar, the open panel, the island, the app grid),
- * never one capsule of it: capsules of one bar at different tints read as a bug.
+ * The unit is the SURFACE (the whole bar, the open panel, the island, the app grid,
+ * the dock), never one capsule of it: capsules of one bar at different tints read as
+ * a bug.
+ *
+ * What "legible" means depends on what the surface CARRIES (`GlassContent`): text is
+ * held to the text ramp's targets; the dock, which carries no text, to its marks'.
  */
 
 /** A colour as sRGB-encoded floats, 0..1. */
@@ -71,6 +75,23 @@ export const LEGIBILITY_TARGET: Record<TextTier, number> = {
     secondary: 4.5,
     dim: 3.0,
 }
+
+/**
+ * What a surface carries that has to stay readable on its glass.
+ *
+ * - `text` — the three tiers of `TEXT_INK`, at `LEGIBILITY_TARGET`. Every surface with
+ *   words on it.
+ * - `marks` — chrome ink (`INK.solid`) and no text: the dock, whose running dot is its
+ *   only drawn content (its icons are the apps' own artwork, and the adaptive glass
+ *   does not touch them). A mark is a non-text UI component, so WCAG 1.4.11's 3:1,
+ *   not the 4.5:1 of body text — holding the dock to the text rule would thicken it
+ *   for words it does not have. Its tooltips and menus are their own glass, and
+ *   follow its SKIN, not its alpha.
+ */
+export type GlassContent = "text" | "marks"
+
+/** The contrast a `marks` surface's ink must reach: WCAG 1.4.11 (non-text contrast). */
+export const MARK_TARGET = 3.0
 
 /**
  * How far A may thicken before B takes over. 0.60 because tech-debt #82 measured
@@ -126,12 +147,19 @@ export function tierContrast(backdrop: Rgb, isDark: boolean, alpha: number, tier
     return contrastRatio(ink, glass)
 }
 
+/** The contrast of chrome ink (`INK.solid`, the dock's running dot) on that glass. */
+export function markContrast(backdrop: Rgb, isDark: boolean, alpha: number): number {
+    const glass = glassOver(backdrop, isDark, alpha)
+    return contrastRatio(over(glass, isDark ? WHITE : BLACK, INK.solid), glass)
+}
+
 /**
  * The WORST tier's contrast as a fraction of its own target: ≥ 1 means every tier
  * passes. One number, so "does it pass" and "which choice passes better" are the
- * same comparison.
+ * same comparison. For `marks` there is one tier, the mark.
  */
-export function legibilityMargin(backdrop: Rgb, isDark: boolean, alpha: number): number {
+export function legibilityMargin(backdrop: Rgb, isDark: boolean, alpha: number, content: GlassContent = "text"): number {
+    if (content === "marks") return markContrast(backdrop, isDark, alpha) / MARK_TARGET
     let worst = Infinity
     for (const tier of Object.keys(LEGIBILITY_TARGET) as TextTier[])
         worst = Math.min(worst, tierContrast(backdrop, isDark, alpha, tier) / LEGIBILITY_TARGET[tier])
@@ -225,9 +253,9 @@ const ALPHA_STEP = 0.01
 
 /** The least alpha in [floor, top] at which `isDark` glass reaches `margin` over
  *  `backdrop`, or null if even `top` does not. */
-function leastAlpha(backdrop: Rgb, isDark: boolean, floor: number, top: number, margin: number): number | null {
+function leastAlpha(backdrop: Rgb, isDark: boolean, floor: number, top: number, margin: number, content: GlassContent): number | null {
     for (let a = floor; a <= top + 1e-9; a += ALPHA_STEP) {
-        if (legibilityMargin(backdrop, isDark, a) >= margin) return Math.round(a * 100) / 100
+        if (legibilityMargin(backdrop, isDark, a, content) >= margin) return Math.round(a * 100) / 100
     }
     return null
 }
@@ -235,13 +263,15 @@ function leastAlpha(backdrop: Rgb, isDark: boolean, floor: number, top: number, 
 /**
  * The rule. `preferDark` is the skin the user chose (the system mode, or the shell
  * pin); `floor` is their glass slider for this surface; `current` is what the surface
- * wears now, for hysteresis (omit for a surface with no history).
+ * wears now, for hysteresis (omit for a surface with no history); `content` is what
+ * has to stay readable on it.
  */
 export function decideGlass(
     stats: BackdropStats,
     preferDark: boolean,
     floor: number,
     current?: GlassDecision,
+    content: GlassContent = "text",
 ): GlassDecision {
     const top = Math.max(floor, GLASS_ADAPT_CEILING)
     const worst = (isDark: boolean) => isDark ? stats.brightest : stats.darkest
@@ -258,25 +288,25 @@ export function decideGlass(
 
     // A flipped surface goes home only with room to spare.
     if (flipped) {
-        const home = leastAlpha(worst(preferDark), preferDark, floor, top, FLIP_BACK_MARGIN)
+        const home = leastAlpha(worst(preferDark), preferDark, floor, top, FLIP_BACK_MARGIN, content)
         if (home !== null) {
-            return { isDark: preferDark, alpha: leastAlpha(worst(preferDark), preferDark, floor, top, 1) ?? home }
+            return { isDark: preferDark, alpha: leastAlpha(worst(preferDark), preferDark, floor, top, 1, content) ?? home }
         }
     } else {
         // A: thicken the user's own skin.
-        const a = leastAlpha(worst(preferDark), preferDark, floor, top, 1)
+        const a = leastAlpha(worst(preferDark), preferDark, floor, top, 1, content)
         if (a !== null) return settle({ isDark: preferDark, alpha: a })
     }
 
     // B: the other skin.
-    const b = leastAlpha(worst(!preferDark), !preferDark, floor, top, 1)
+    const b = leastAlpha(worst(!preferDark), !preferDark, floor, top, 1, content)
     if (b !== null) return settle({ isDark: !preferDark, alpha: b })
 
     // Neither reaches every target even at the ceiling (a backdrop that is bright
     // AND dark at once — a high-contrast photo under a tall panel). Take the skin
     // that comes closest, at full body.
-    const mine = legibilityMargin(worst(preferDark), preferDark, top)
-    const theirs = legibilityMargin(worst(!preferDark), !preferDark, top)
+    const mine = legibilityMargin(worst(preferDark), preferDark, top, content)
+    const theirs = legibilityMargin(worst(!preferDark), !preferDark, top, content)
     if (flipped && theirs >= mine / FLIP_BACK_MARGIN) return { isDark: !preferDark, alpha: top }
     return { isDark: mine >= theirs ? preferDark : !preferDark, alpha: top }
 }

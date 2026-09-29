@@ -315,7 +315,7 @@ jobs:
         run: |
           f=ui/lib/nidara-kit/platform/glass-legibility.ts
           cp "$f" /tmp/glass-legibility.bak
-          sed -i 's|    const b = leastAlpha(worst(!preferDark), !preferDark, floor, top, 1)|    const b = null as number \| null|' "$f"
+          sed -i 's|    const b = leastAlpha(worst(!preferDark), !preferDark, floor, top, 1, content)|    const b = null as number \| null|' "$f"
           if git diff --quiet "$f"; then
             echo "::error::the control patched nothing — rule B has moved or been reworded"
             exit 1
