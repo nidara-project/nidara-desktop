@@ -313,3 +313,82 @@ export function decideGlassByBackdrop(
     }
     return decideGlass(stats, isDark, floor, current && current.isDark === isDark ? current : undefined)
 }
+
+
+// ── What Hyprland does to a backdrop before our glass is laid on it ──────────
+
+/** The blur settings that change a backdrop's COLOUR (not its sharpness):
+ *  `decoration:blur:{contrast,brightness,vibrancy,vibrancy_darkness,passes}`. */
+export interface HyprlandBlurParams {
+    contrast: number
+    brightness: number
+    vibrancy: number
+    vibrancyDarkness: number
+    passes: number
+}
+
+/** Nidara's shipped values (config/hypr/hyprland.lua) — the fallback when the
+ *  compositor cannot be asked. */
+export const NIDARA_BLUR: HyprlandBlurParams = { contrast: 1.2, brightness: 1.0, vibrancy: 0.4, vibrancyDarkness: 0.1, passes: 2 }
+
+const gainCh = (x: number, k: number) => {
+    x = Math.min(1, Math.max(0, x))
+    const hi = x >= 0.5, y = hi ? 1 - x : x
+    const a = 0.5 * Math.pow(2 * y, k)
+    return hi ? 1 - a : a
+}
+
+/** `blurprepare.glsl`: contrast (`gain`) and brightness above 1, per pixel, BEFORE
+ *  the blur averages anything. */
+export function hyprlandPrepare(c: Rgb, p: HyprlandBlurParams): Rgb {
+    const k = Math.max(1, p.brightness)
+    const f = (v: number) => (p.contrast !== 1 ? gainCh(v, p.contrast) : v) * k
+    return { r: f(c.r), g: f(c.g), b: f(c.b) }
+}
+
+function rgb2hsl(c: Rgb): [number, number, number] {
+    const mn = Math.min(c.r, c.g, c.b), mx = Math.max(c.r, c.g, c.b), d = mx - mn, l = (mn + mx) / 2
+    let s = 0, h = 0
+    if (l > 0 && l < 1) s = d / ((l < 0.5 ? l : 1 - l) * 2)
+    if (d > 0) {
+        if (mx === c.r && mx !== c.g) h = (c.g - c.b) / d
+        else if (mx === c.g && mx !== c.b) h = 2 + (c.b - c.r) / d
+        else h = 4 + (c.r - c.g) / d
+        h /= 6; if (h < 0) h += 1
+    }
+    return [h, s, l]
+}
+
+function hsl2rgb(h: number, s: number, l: number): Rgb {
+    let xt: number[]
+    if (h < 1 / 3) xt = [6 * (1 / 3 - h), 6 * h, 0]
+    else if (h < 2 / 3) xt = [0, 6 * (2 / 3 - h), 6 * (h - 1 / 3)]
+    else xt = [6 * (h - 2 / 3), 0, 6 * (1 - h)]
+    const ct = xt.map(v => 2 * s * Math.min(v, 1) + (1 - s))
+    const out = l >= 0.5 ? ct.map(v => (1 - l) * v + (2 * l - 1)) : ct.map(v => l * v)
+    return { r: out[0], g: out[1], b: out[2] }
+}
+
+/**
+ * `blur1.glsl`'s vibrancy — applied to an already AVERAGED colour, once per pass, as the
+ * shader does. Transcribed from Hyprland v0.56.2; the forward model built from it
+ * reproduced a real screenshot of our glass to 1–2/255 (2026-09-29).
+ */
+export function hyprlandVibrancy(c: Rgb, p: HyprlandBlurParams): Rgb {
+    if (p.vibrancy === 0) return c
+    let col = c
+    for (let i = 0; i < p.passes; i++) {
+        const vd1 = 1 - p.vibrancyDarkness
+        const [h, s, l] = rgb2hsl(col)
+        const x = Math.sqrt(col.r * col.r * 0.299 + col.g * col.g * 0.587 + col.b * col.b * 0.114)
+        const a = Math.min(1, Math.max(0, 0.8 * vd1))
+        const pb = x <= a ? a - Math.sqrt(Math.max(0, a * a - x * x)) : a + Math.sqrt(Math.max(0, (1 - a) ** 2 - (x - 1) ** 2))
+        const b1 = 0.11 * vd1, A = 0.93, C = 0.66
+        const t = Math.min(1, Math.max(0, ((1 - ((1 - s * Math.cos(A)) ** 2 + (1 - pb * Math.sin(A)) ** 2)) - (b1 - C / 2)) / C))
+        const boost = s > 0 ? t * t * (3 - 2 * t) : 0
+        col = hsl2rgb(h, Math.min(1, Math.max(0, s + boost * p.vibrancy / p.passes)), l)
+    }
+    // `blurFinish.glsl`: brightness below 1, after the blur.
+    const k = Math.min(1, p.brightness)
+    return { r: col.r * k, g: col.g * k, b: col.b * k }
+}

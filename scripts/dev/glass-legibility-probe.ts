@@ -8,7 +8,7 @@
 // only ever printed "ok" has been run, not tested.
 
 import {
-    uncomposite, glassOver, tierContrast, legibilityMargin, decideGlass, decideGlassByBackdrop, mergeBackdropStats, backdropStats,
+    uncomposite, glassOver, tierContrast, legibilityMargin, decideGlass, decideGlassByBackdrop, mergeBackdropStats, backdropStats, hyprlandPrepare, hyprlandVibrancy, NIDARA_BLUR,
     GLASS_ADAPT_CEILING, TEXT_INK, type Rgb, type BackdropStats,
 } from "../../ui/lib/nidara-kit/platform/glass-legibility"
 import { GLASS_TINT } from "../../ui/lib/nidara-kit/platform/tokens"
@@ -168,7 +168,21 @@ const floor = 0.48
     check(decideGlassByBackdrop(m, floor).isDark, "merge: so the bar row over a mostly dark strip keeps white ink")
 }
 
-// ── 7. The ramp the token engine emits is the ramp checked here ──────────────
+// ── 7. Hyprland's colour pipeline, for a panel measured while CLOSED ─────────
+{
+    // The validation of 2026-09-29: the wallpaper under the bar's right capsule, blurred
+    // (220,151,164 at x=80 and 84,16,162 at x=2400), went through Hyprland to within 1–2
+    // levels of what `uncomposite` recovered live from the screen (253,134,153 / 76,7,168).
+    const at = (c: Rgb) => { const o = hyprlandVibrancy(hyprlandPrepare(c, NIDARA_BLUR), NIDARA_BLUR); return [o.r, o.g, o.b].map(v => Math.round(v * 255)) }
+    const pink = at({ r: 220 / 255, g: 151 / 255, b: 164 / 255 }), purple = at({ r: 84 / 255, g: 16 / 255, b: 162 / 255 })
+    const close = (a: number[], b: number[]) => a.every((v, i) => Math.abs(v - b[i]) <= 4)
+    check(close(pink, [252, 131, 156]) && close(purple, [77, 8, 170]),
+          `Hyprland's pipeline reproduces the validated backdrops (${pink} / ${purple})`)
+    const grey = at({ r: 0.5, g: 0.5, b: 0.5 })
+    check(grey.every(v => v === 128), "…and leaves a mid grey alone (gain(0.5) = 0.5, no saturation to boost)")
+}
+
+// ── 8. The ramp the token engine emits is the ramp checked here ──────────────
 check(TEXT_INK.dark.secondary === 0.8 && TEXT_INK.dark.dim === 0.6
       && TEXT_INK.light.secondary === 0.85 && TEXT_INK.light.dim === 0.72,
       "TEXT_INK holds the shipped ramp (a change here is a design change: re-measure #673)")

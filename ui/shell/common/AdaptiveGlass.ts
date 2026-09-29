@@ -3,9 +3,11 @@ import GLib from "gi://GLib"
 import Theme from "../core/ThemeManager"
 import hyprlandState from "../core/HyprlandState"
 import Wallpaper from "../core/WallpaperManager"
-import { probeBackdrop, type MonitorRect } from "./BackdropProbe"
+import Gdk from "gi://Gdk?version=4.0"
+import { probeBackdrop, probeClosedBackdrop, type MonitorRect } from "./BackdropProbe"
 import {
-    decideGlass, decideGlassByBackdrop, mergeBackdropStats, type GlassDecision, type BackdropStats,
+    decideGlass, decideGlassByBackdrop, mergeBackdropStats, NIDARA_BLUR,
+    type GlassDecision, type BackdropStats, type HyprlandBlurParams,
 } from "../../lib/nidara-kit/platform/glass-legibility"
 
 /**
@@ -118,6 +120,10 @@ interface Surface extends GlassSurfaceOpts {
     animId: number | null
     retries: number
     quietUntilUs: number
+    /** Where it was last measured OPEN, so it can be measured closed (see
+     *  `measureClosed`). Null until it has been open once. */
+    lastRect: MonitorRect | null
+    lastMonitor: Gdk.Monitor | null
 }
 
 const surfaces = new Map<Gtk.Widget, Surface>()
@@ -208,8 +214,69 @@ function reset(s: Surface) {
 
 // ── measuring ───────────────────────────────────────────────────────────────
 
+/** Hyprland's colour settings for its blur, read once and on every config reload
+ *  (`hyprctl getoption` is a synchronous spawn: never per measurement). */
+let blur: HyprlandBlurParams = NIDARA_BLUR
+function readBlur() {
+    blur = {
+        contrast: hyprlandState.getOptionFloat("decoration:blur:contrast", NIDARA_BLUR.contrast),
+        brightness: hyprlandState.getOptionFloat("decoration:blur:brightness", NIDARA_BLUR.brightness),
+        vibrancy: hyprlandState.getOptionFloat("decoration:blur:vibrancy", NIDARA_BLUR.vibrancy),
+        vibrancyDarkness: hyprlandState.getOptionFloat("decoration:blur:vibrancy_darkness", NIDARA_BLUR.vibrancyDarkness),
+        passes: Math.max(1, Math.round(hyprlandState.getOptionFloat("decoration:blur:passes", NIDARA_BLUR.passes))),
+    }
+}
+
+/** What a visible surface covers on its monitor now — to keep a CLOSED panel's
+ *  measurement from reading our own glass as its backdrop. */
+function boundsOf(s: Surface): MonitorRect | null {
+    const w = s.probe ? s.probe() : s.root
+    const native = w?.get_native()
+    if (!w || !native || !w.get_mapped()) return null
+    const [ok, b] = w.compute_bounds(native as unknown as Gtk.Widget)
+    if (!ok) return null
+    const o = s.windowOrigin?.() ?? { x: 0, y: 0 }
+    return { x: b.get_x() + o.x, y: b.get_y() + o.y, width: b.get_width(), height: b.get_height() }
+}
+
+/**
+ * A CLOSED panel, measured where it last opened, so it opens already wearing the right
+ * glass — owner-caught 2026-09-29: a panel appeared in one skin and switched a moment
+ * after, because only an open panel was measured and it opened with whatever it had
+ * decided last time. The open measurement still runs once it settles and has the last
+ * word (it sees the panel's real size and our real paint).
+ */
+async function measureClosed(s: Surface) {
+    if (!s.lastRect || !s.lastMonitor) return
+    const seq = ++s.seq
+    const exclude: MonitorRect[] = [...(s.exclude?.() ?? [])]
+    for (const other of surfaces.values()) {
+        if (other === s) continue
+        const r = boundsOf(other)
+        if (r) exclude.push(r)
+    }
+    let stats: BackdropStats | null = null
+    try {
+        stats = await probeClosedBackdrop({ monitor: s.lastMonitor, rect: s.lastRect, blur, exclude, tag: `${s.id}-${seq}` })
+    } catch (e) {
+        console.warn(`[AdaptiveGlass] ${s.id}: closed probe failed: ${e}`)
+    }
+    // Opened meanwhile: the open measurement owns it now.
+    if (seq !== s.seq || !surfaces.has(s.root) || s.root.get_mapped() || !stats) return
+    s.lastProbeUs = GLib.get_monotonic_time()
+    s.lastStats = stats
+    const next = s.skinFromBackdrop
+        ? decideGlassByBackdrop(stats, floorOf(roleOf(s)), s.decision ?? undefined)
+        : decideGlass(stats, Theme.chromeIsDark, floorOf(roleOf(s)), s.decision ?? undefined)
+    // Nothing on screen to animate: it simply opens like this.
+    if (s.animId !== null) { GLib.source_remove(s.animId); s.animId = null }
+    s.decision = next
+    s.shownAlpha = next.alpha
+    applySkinClass(s)
+}
+
 async function measure(s: Surface) {
-    if (!s.root.get_mapped()) return
+    if (!s.root.get_mapped()) { await measureClosed(s); return }
     if (s.settled && !s.settled()) return
     // Our own tint mid-animation, or a change not yet on screen everywhere: the
     // capture and the render would describe different surfaces.
@@ -226,6 +293,7 @@ async function measure(s: Surface) {
             windowOrigin: s.windowOrigin?.(),
             exclude: s.exclude?.() ?? [],
             tag: `${s.id}-${seq}`,
+            onRegion: (r, m) => { s.lastRect = r; s.lastMonitor = m },
         })
     } catch (e) {
         console.warn(`[AdaptiveGlass] ${s.id}: probe failed: ${e}`)
@@ -273,7 +341,8 @@ function schedule(s: Surface, delayMs = DEBOUNCE_MS) {
 }
 
 function scheduleAll(delayMs = DEBOUNCE_MS) {
-    for (const s of surfaces.values()) if (s.root.get_mapped()) schedule(s, delayMs)
+    // Closed panels too, where they last opened (`measureClosed`).
+    for (const s of surfaces.values()) if (s.root.get_mapped() || s.lastRect) schedule(s, delayMs)
 }
 
 // ── registry ────────────────────────────────────────────────────────────────
@@ -288,7 +357,7 @@ export interface GlassSurfaceHandle {
 
 export function registerGlassSurface(opts: GlassSurfaceOpts): GlassSurfaceHandle {
     const s: Surface = {
-        ...opts, decision: null, shownAlpha: null, lastStats: null, lastProbeUs: 0, seq: 0, animId: null, retries: 0, quietUntilUs: 0,
+        ...opts, decision: null, shownAlpha: null, lastStats: null, lastProbeUs: 0, seq: 0, animId: null, retries: 0, quietUntilUs: 0, lastRect: null, lastMonitor: null,
     }
     surfaces.set(opts.root, s)
     // A surface that is hidden keeps its last decision: the next time it opens over
@@ -310,7 +379,7 @@ export function registerGlassSurface(opts: GlassSurfaceOpts): GlassSurfaceHandle
  *  glassRemeasure`, for verifying and for an agent that just changed what is behind. */
 export function remeasureAllGlass(): number {
     let n = 0
-    for (const s of surfaces.values()) if (s.root.get_mapped()) { schedule(s, 0); n++ }
+    for (const s of surfaces.values()) if (s.root.get_mapped() || s.lastRect) { schedule(s, 0); n++ }
     return n
 }
 
@@ -341,6 +410,8 @@ let wired = false
 export function startAdaptiveGlass(): void {
     if (wired) return
     wired = true
+    readBlur()
+    hyprlandState.connect("config-reloaded", readBlur)
     // Only what can change the PIXELS behind a surface: geometry, workspace,
     // fullscreen — and focus only when it lands on a floating window, which raises
     // it over the others. A plain focus change between tiled windows moves nothing,

@@ -3,7 +3,8 @@ import Gdk from "gi://Gdk?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import Graphene from "gi://Graphene"
 import {
-    uncomposite, backdropStats, type BackdropStats, type Rgb,
+    uncomposite, backdropStats, hyprlandPrepare, hyprlandVibrancy,
+    type BackdropStats, type Rgb, type HyprlandBlurParams,
 } from "../../lib/nidara-kit/platform/glass-legibility"
 import { LAYER_IGNORE_ALPHA } from "../../lib/nidara-kit/platform/theme-tokens"
 
@@ -227,6 +228,10 @@ export interface ProbeRequest {
     exclude?: MonitorRect[]
     /** Names the images `NIDARA_BACKDROP_DEBUG` writes. */
     tag?: string
+    /** Told the rectangle that was measured, in monitor coordinates, and its monitor —
+     *  what `probeClosedBackdrop` needs to measure the same place while the surface is
+     *  closed. */
+    onRegion?: (region: MonitorRect, monitor: Gdk.Monitor) => void
 }
 
 /**
@@ -267,6 +272,7 @@ export async function probeBackdrop(req: ProbeRequest): Promise<BackdropStats | 
     const captured = await captureRegion(connector, region)
     const tCaptured = GLib.get_monotonic_time()
     if (!captured || !widget.get_mapped()) return why(`no capture of ${JSON.stringify(region)} on ${connector}`)
+    req.onRegion?.(region, monitor)
     const W = captured.get_width(), H = captured.get_height()
     // Rendered AFTER the capture lands, so the two describe the same moment as
     // closely as a frame allows. `get_scale()` is the fractional one; the capture is
@@ -310,9 +316,82 @@ export async function probeBackdrop(req: ProbeRequest): Promise<BackdropStats | 
     }
     const tLooped = GLib.get_monotonic_time()
     if (dbg) debugSave(req.tag ?? "probe", captured, ours, dbg, W, H)
-    const stats = backdropStats(out, 64, step * step)
+    const stats = backdropStats(out, 64, (step / scale) ** 2)   // logical px, like the closed probe
     if (TIMING) console.log(`[BackdropProbe] ${req.tag ?? "probe"}: ${W}x${H}, capture ${((tCaptured - t0) / 1000).toFixed(1)} ms (worker), `
         + `main thread ${((tLooped - tCaptured) / 1000).toFixed(1)} ms = render+readback ${((tRendered - tCaptured) / 1000).toFixed(1)} + ${out.length} samples ${((tLooped - tRendered) / 1000).toFixed(1)}`)
     if (!stats) return why(`${out.length} glass pixels in ${W}x${H} — too few`)
+    return stats
+}
+
+
+/** The side of the square a CLOSED probe averages into one sample, in logical pixels —
+ *  about what Hyprland's blur spreads over at `size 2, passes 2`. The statistics are
+ *  percentiles of the blurred backdrop, so the exact kernel does not matter; a square
+ *  far smaller than the blur would count sharp detail the text never sees. */
+const CLOSED_BLOCK = 12
+
+/**
+ * What a CLOSED panel would have behind it where it last opened — so it can open
+ * already wearing the right glass instead of correcting itself in front of the user
+ * (owner-caught 2026-09-29: a panel appeared in one skin and switched a moment later).
+ *
+ * With the panel closed there is nothing of ours in that rectangle, so the capture is
+ * the backdrop RAW, unblurred. Hyprland's colour pipeline is applied to it (the gain,
+ * then an average standing in for the blur, then the vibrancy — the order of its
+ * shaders; `glass-legibility.ts`), which gives what the panel's glass would sit on.
+ * No offscreen render: cheaper than the open measurement, which still runs once the
+ * panel has settled and corrects anything this got wrong.
+ *
+ * `exclude`: whatever of OURS is on screen there now (another panel, the bar): those
+ * pixels are our glass, not the backdrop.
+ */
+export async function probeClosedBackdrop(req: {
+    monitor: Gdk.Monitor
+    rect: MonitorRect
+    blur: HyprlandBlurParams
+    exclude?: MonitorRect[]
+    tag?: string
+}): Promise<BackdropStats | null> {
+    await load()
+    if (!shim) return null
+    const connector = req.monitor.get_connector()
+    if (!connector) return null
+    const t0 = GLib.get_monotonic_time()
+    const captured = await captureRegion(connector, req.rect)
+    if (!captured) return null
+    const tCaptured = GLib.get_monotonic_time()
+    const W = captured.get_width(), H = captured.get_height()
+    const scale = W / req.rect.width
+    const px = pixelsOf(captured)
+    const block = Math.max(2, Math.round(CLOSED_BLOCK * scale))
+    // A handful of taps per block is an average of a blurred field; every pixel of it
+    // was 17.5 ms on the main thread for a CC-sized panel (measured) — this is ~1/8 the work.
+    const inner = Math.max(1, Math.floor(block / 2))
+    // Hyprland's `blurprepare` is per channel and per 8-bit value: one table, not a
+    // pow() per pixel.
+    const prep = new Float64Array(256)
+    for (let v = 0; v < 256; v++) prep[v] = hyprlandPrepare({ r: v / 255, g: 0, b: 0 }, req.blur).r
+    const exclude = (req.exclude ?? []).map(e => ({
+        x0: (e.x - req.rect.x) * scale, y0: (e.y - req.rect.y) * scale,
+        x1: (e.x + e.width - req.rect.x) * scale, y1: (e.y + e.height - req.rect.y) * scale,
+    }))
+    const out: Rgb[] = []
+    for (let by = 0; by + block <= H; by += block) {
+        for (let bx = 0; bx + block <= W; bx += block) {
+            const cx = bx + block / 2, cy = by + block / 2
+            if (exclude.some(e => cx >= e.x0 && cx < e.x1 && cy >= e.y0 && cy < e.y1)) continue
+            let r = 0, g = 0, b = 0, n = 0
+            for (let y = by; y < by + block; y += inner) {
+                for (let x = bx; x < bx + block; x += inner) {
+                    const i = y * px.stride + x * 4
+                    r += prep[px.data[i]]; g += prep[px.data[i + 1]]; b += prep[px.data[i + 2]]; n++
+                }
+            }
+            out.push(hyprlandVibrancy({ r: r / n, g: g / n, b: b / n }, req.blur))
+        }
+    }
+    const stats = backdropStats(out, 16, (block / scale) ** 2)
+    if (TIMING) console.log(`[BackdropProbe] ${req.tag ?? "closed"} (closed): ${W}x${H}, capture ${((tCaptured - t0) / 1000).toFixed(1)} ms (worker), `
+        + `main thread ${((GLib.get_monotonic_time() - tCaptured) / 1000).toFixed(1)} ms, ${out.length} blocks`)
     return stats
 }

@@ -1546,6 +1546,23 @@ have to reimplement the blur.
   and the daemon runs its transition for its default 3 s after that: half old image, half new.
   `WALLPAPER_TRANSITION_MS` 3500.
 
+**A CLOSED panel is measured too, where it last opened** (`measureClosed` + `probeClosedBackdrop`,
+2026-09-29). Owner-caught: a panel appeared in one skin and switched a moment after, because only an
+OPEN panel could be measured (the method subtracts our own paint, and a closed panel has none). With
+the panel closed nothing of ours is in that rectangle, so the capture is the backdrop RAW; Hyprland's
+colour pipeline is applied to it — `hyprlandPrepare` (gain) per pixel, a 12 px block average standing
+in for the blur, `hyprlandVibrancy` per block, in its shaders' order, with the parameters read from
+`hyprctl getoption` at start and on every config reload — and the panel decides before it opens, on
+the same events as everything else. What is on screen of OURS in that rectangle (the bar, another
+panel) is excluded. The open measurement still runs once the panel settles and has the last word.
+Verified: an empty workspace, the CC measured once, closed, a white wallpaper set behind it — it
+decided light while closed and opened light, and its own measurement agreed. Cost, measured: the capture on
+the worker plus 0.8–3.2 ms of main thread for a CC-sized panel (12 px blocks; 8 px blocks were ~5 ms,
+and a per-pixel `pow` before the lookup table 17.5 ms) — cheaper than the open measurement, which
+needs the offscreen render. ⚠️ Island MODES are not pre-measured (the island's one decision
+switches between the bar-row group and the open mode, and a mode's rect is known only while open):
+they still settle after they open.
+
 **How a painter finds out** — it asks with its OWN widget: `glassAlphaFor(widget, role)` for the
 body, `chromeIsDarkFor(widget)` for the skin. Both walk up to the registered surface that contains
 the widget (so a popover parented inside one follows it for free) and fall back to the slider and
