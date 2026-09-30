@@ -29,8 +29,8 @@ export type IndicatorState = "hidden" | "armed" | "active"
 
 interface BarIndicator {
     id: string
-    label: () => string          // banner row title
-    detail: () => string         // banner row subtitle (state description)
+    label: () => string          // the pill's one line (what is on)
+    detail: () => string         // the pill's tooltip, after the label (what that means)
     state: () => IndicatorState
     // Register cb to run whenever state() may have changed. Shell-lifetime — the
     // banner lives as long as the CC, so subscriptions are never torn down.

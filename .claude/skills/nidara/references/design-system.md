@@ -3408,8 +3408,10 @@ NATURAL width, and a wrapping label only wraps when it is given less than it ask
 fixes a MINIMUM; it is not a maximum.
 
 **The ceiling is `NidaraClamp`** (GTK4 CSS has no `max-width`), with `min = max` when the box must be
-CONSTANT: the banner clamps its row list to `GRID_WIDTH − 2 × BANNER_PADDING`, which makes the card
-exactly the grid's width and finally makes the labels wrap. Any surface that must match a fixed
+CONSTANT: the banner clamped its row list to `GRID_WIDTH − 2 × BANNER_PADDING`, which made the card
+exactly the grid's width and finally made the labels wrap. (Since 2026-09-30 it is a one-line PILL
+as wide as its content: the clamp is a ceiling only, `GRID_WIDTH − 2 × PILL_PAD_X`, and the name
+ellipsizes instead of wrapping.) Any surface that must match a fixed
 sibling's width needs the same, and `text-budget.js --verify` is what checks it against a real
 window — the offline sweep cannot.
 

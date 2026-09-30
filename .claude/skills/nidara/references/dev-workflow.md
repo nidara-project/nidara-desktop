@@ -2048,8 +2048,16 @@ text box, add it here in the same change.
 | slot | box | metric | verdict |
 |---|---|---|---|
 | Settings sidebar label | 250px column → 174px | natural width | truncation FAILS |
-| Control Center tile title | 2×1 tile → **84px** | wrapped MINIMUM for a title that can lose its subtitle, natural otherwise | overflow FAILS, truncation reported |
-| Control Center status banner | 356px card − a Stop button whose label is translated | wrapped minimum | overflow FAILS |
+| Control Center tile title | 2×1 tile → **96px** (since 2026-09-30) | wrapped MINIMUM for a title that can lose its subtitle, natural otherwise | overflow FAILS, truncation reported |
+| Control Center status pill | 368px grid − the pill's ends, dot and gaps − a Stop button whose label is translated | natural width (one line) | truncation FAILS |
+
+⚠️ **The script READS those numbers out of the source with regexes**, so a refactor that only
+renames or restructures a constant breaks it without changing a pixel: it exits 2 ("could not read
+…"), and CI's smoke job goes red. That is how #675 sat red for nine commits on 2026-09-30 —
+`CAPSULE_CHROME` went from literals to `CAPSULE_ICON_SIZE + CAPSULE_ICON_GAP`, and the banner
+became a pill without `BANNER_PADDING`. When you touch `widget-kit/tile.ts`,
+`CCLayoutManager.ts`, `BaseIsland.tsx` or `StatusIndicators.tsx`, run
+`NIDARA_REPO=$PWD gjs -m scripts/dev/text-budget.js` before pushing.
 
 - **overflow** — the text sets a *minimum* wider than its box. A minimum cannot be squeezed: GTK
   grows the box and the surface clips it. A layout break, and no ellipsis can save it.
