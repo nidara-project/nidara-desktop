@@ -50,7 +50,7 @@ export type { AccentKey }
 // There is no shell-skin PIN any more (`shellAppearance`, removed 2026-09-29, #676).
 // It existed to keep the shell legible over any wallpaper; the adaptive glass (#673)
 // does that per surface, measuring what is really behind it, so the shell follows the
-// system mode and the bar row reads its skin from its backdrop, as macOS's menu bar.
+// system mode and the bar row reads its skin from its backdrop.
 
 export interface NidaraThemeConfig {
   accent: AccentKey

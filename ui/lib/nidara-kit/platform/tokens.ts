@@ -87,7 +87,7 @@ const cornerReach = (n: number) => Math.SQRT2 * (1 - Math.pow(2, -1 / n))
 /**
  * Canonical glass tint colors for all surfaces (Cairo painters & CSS token engine).
  *
- * Dark mode uses an Apple HIG / macOS Vibrancy-inspired Deep Slate (#161622 / RGB 22, 22, 34):
+ * Dark mode uses a vibrancy-style Deep Slate (#161622 / RGB 22, 22, 34):
  * a dark base with a subtle cool undertone that provides material body, avoids
  * muddy/dirty color degradation on warm or complex wallpapers, and unifies Cairo
  * surfaces (Bar/Dock/CC/Island) with CSS windows (Settings/About).
@@ -148,8 +148,8 @@ export const GLASS_SPECULAR = { r: 1, g: 1, b: 1 } as const
 /**
  * A clickable capsule while its panel is OPEN, and while the pointer is over it: a
  * veil laid OVER the glass, at these alphas — `GLASS_SPECULAR` on dark glass (it
- * lightens), `GLASS_TINT.dark` on light glass (it darkens). The gesture macOS makes
- * behind a menu bar item whose menu is down.
+ * lightens), `GLASS_TINT.dark` on light glass (it darkens) — the gesture a menu bar
+ * makes behind an item whose menu is down.
  *
  * It is a fixed ink, NOT a fraction of the pane, for the reason `INK` (chrome ink) gives:
  * the first version moved the glass tint by a fraction and nudged its alpha, and at
@@ -324,8 +324,8 @@ export const rowInsetFor = (surfaceRadius: number, n: number = 3.2, rowRadius: n
  * nothing to gain and a text column to lose. A constant instead buys the thing a
  * settings window actually needs — ONE width for the row contract to be correct
  * at, forever, instead of a range where "correct" has to hold at every point.
- * (Prior art for the shape: macOS System Settings has a hard minimum window and
- * never reflows its content pane.)
+ * (Prior art for the shape: settings apps with a hard minimum window that never
+ * reflow their content pane.)
  *
  * ## `contentFloor` — the distress width, and why the law needs a second number
  *

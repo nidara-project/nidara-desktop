@@ -1188,7 +1188,7 @@ window.nidara-alert-dialog {
 
     // The response row (nidara-kit/dialog-buttons.ts): NidaraButtons, equal widths,
     // inset from the glass edge. Replaced the flat full-bleed cells split by a
-    // hairline (2026-09-13) — a macOS-alert idiom nothing else in the desktop used.
+    // hairline (2026-09-13) — an alert idiom nothing else in the desktop used.
     .nidara-dialog-buttons {
         margin: $space-6 $space-6 $space-6;
     }

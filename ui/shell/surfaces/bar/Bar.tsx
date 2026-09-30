@@ -692,7 +692,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   keepFocusIn(cc); keepFocusIn(nc); keepFocusIn(systemMenu); keepFocusIn(expansionCapsule)
 
   // ── The keyboard walk of the bar (Super+Ctrl+B, Status.bar_keyboard) ───────────
-  // macOS's Ctrl+F2: the focus lands on the bar's first item, ←/→ and Tab move along
+  // The focus lands on the bar's first item, ←/→ and Tab move along
   // it (wrapping), Enter/Space/↓ open the item's panel (barItem), Esc closes that panel
   // and returns to the item, a second Esc leaves. The grab that carries the keys is
   // barModal's, which counts the walk. Not in edit mode: its ←/→ MOVE an item.
@@ -724,7 +724,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     || status.prism_open || status.bar_expanded_id !== ""
   // Only an Esc goes BACK to the walk. A panel that closed because something was
   // done in it (Prism launched an app, a CC row opened Settings) ends the walk, as a
-  // macOS menu does once an item is chosen: otherwise the grab stays on the bar and
+  // menu does once an item is chosen: otherwise the grab stays on the bar and
   // the window that just opened gets none of the keys. `escPending` is set in the
   // CAPTURE phase — before any Esc handler closes a panel, whichever panel's it is —
   // and cleared once the turn is over.
@@ -1112,7 +1112,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // only GUI path to log out / restart / shut down (SystemMenu.tsx), and the
   // exit-session keybind was deliberately not shipped, so hiding it leaves no
   // way to end the session. Every other DE that is not an explicit panel-builder
-  // makes the same call (macOS/GNOME/Windows never let you remove it). The
+  // makes the same call (GNOME and Windows never let you remove it). The
   // island's centre box below is permanent for the sibling reason — see barState.
   appTitleWidget.set_visible(barSettings.showAppTitle)
   leftGroup.box.append(sysMenuWidget)
@@ -1174,7 +1174,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
   glassHandles.set(barBox, registerGlassSurface({
     id: "bar", root: barBox, role: "bar", exclude: underIsland, group: () => "bar-row",
-    // As macOS's menu bar: the row's ink comes from what is behind it, not the mode (#676).
+    // The row's ink comes from what is behind it, not the mode (#676).
     skinFromBackdrop: true,
     // Hidden for a fullscreen window the bar stays MAPPED (opacity 0), so it looked
     // measurable — and what it found behind it was the fullscreen window: X's black page
@@ -1348,7 +1348,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const orderedItems = new Gtk.Box({ css_classes: ["bar-optional-widgets"] })
 
   // The overflow capsule: shown only while some item does not fit. It is not a
-  // menu — it unfolds the hidden items IN LINE, in the same bar (macOS 27's `»`):
+  // menu — it unfolds the hidden items IN LINE, in the same bar (the `»`):
   // the island rises out of the way and the row grows leftwards over the room it
   // leaves, the window title yielding if it has to (Status.bar_overflow_open).
   // Unfolded items are the same as the others, placed by the same loop.
@@ -1649,7 +1649,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   rightGroup.box.append(overflowItem)
   rightGroup.box.append(orderedItems)
   // The Control Centre's button is an ordinary icon item. Its drawing is two
-  // switches, like macOS's Control Centre (the freedesktop spec has no name for
+  // switches (the freedesktop spec has no name for
   // that; `preferences-system` is a gear or tools everywhere, #587), and the
   // switches FLIP while the CC is open — a state of the icon, played by GTK
   // (common/StatefulIcon.ts), not a CSS transform on a clickable.

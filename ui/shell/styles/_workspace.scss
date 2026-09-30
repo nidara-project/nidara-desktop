@@ -38,8 +38,8 @@
        capture leaves the tile exactly as it opened — nothing swaps, nothing jumps.
        Once a texture lands the icon does NOT disappear, it shrinks to a badge on the
        bottom edge (geometry in applyIconLayout): at this scale the content says which
-       DOCUMENT a tile is, and only the icon says which APP. Same call GNOME, macOS
-       Mission Control and KDE all make. */
+       DOCUMENT a tile is, and only the icon says which APP. Same call GNOME and KDE
+       both make. */
     .wo-schematic-icon.has-thumb image {
         /* The badge sits over arbitrary window content — light UIs, photos, video —
            so it needs its own contrast floor rather than trusting the backdrop. */

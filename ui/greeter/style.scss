@@ -170,7 +170,7 @@
 // (tech-debt #82's login half). The owner removed the mechanism — #613: a login
 // screen that analyses its backdrop to choose an ink is a decision nobody can
 // inspect (its log went to /dev/null, #614), it was already being overridden in
-// production (#612), and macOS, GNOME and Windows all draw this screen with fixed
+// production (#612), and GNOME and Windows both draw this screen with fixed
 // light ink over a veil instead. So this surface is what its comment above always
 // said it was: permanently dark glass over the user's wallpaper, white ink, and
 // the scrim below is what buys the hero its contrast.
@@ -282,9 +282,9 @@ window > contents {
 
 .greeter-date {
   // 13px under an 88px clock is a 1:6.8 ratio — outside every system that ships
-  // a lock screen (macOS 1:4.8, iOS 1:4.4, Win11 1:3.7, GNOME 1:3.4). At
+  // a lock screen (1:3.4 to 1:4.8 across the shipping systems we measured). At
   // $fs-title-3 it reads as the clock's label instead of a caption stranded
-  // above it, and lands at macOS's 1:5.2.
+  // above it, and lands at 1:5.2.
   //
   // The tracking stays an ABSOLUTE 2px on purpose: as the size grows the same
   // 2px is proportionally less (0.154em → 0.118em), which is the direction

@@ -234,8 +234,8 @@ export class UIStatus extends GObject.Object {
         this.notify("bar-overflow-open")
     }
 
-    // The bar's items walked with the KEYBOARD (Super+Ctrl+B — macOS's Ctrl+F2 with the
-    // desktop's modifier: in Linux Ctrl belongs to the apps). Not exclusive: the panel an
+    // The bar's items walked with the KEYBOARD (Super+Ctrl+B — on the desktop's modifier:
+    // in Linux Ctrl belongs to the apps). Not exclusive: the panel an
     // item opens is part of the walk, and closing it hands the focus back to its item.
     // Ends on Esc with no panel open, or when the bar loses its focus grab.
     public get bar_keyboard() { return this._bar_keyboard }
@@ -245,8 +245,8 @@ export class UIStatus extends GObject.Object {
         this.notify("bar-keyboard")
     }
 
-    // The dock's icons walked with the KEYBOARD (Super+Ctrl+D — macOS's Ctrl+F3, same
-    // reason for Super as bar_keyboard). The dock on the FOCUSED monitor answers it.
+    // The dock's icons walked with the KEYBOARD (Super+Ctrl+D — Super for the same
+    // reason as bar_keyboard). The dock on the FOCUSED monitor answers it.
     // Ends on Esc, on an icon's Enter (what it starts needs the keys), or when the
     // dock loses its focus grab.
     public get dock_keyboard() { return this._dock_keyboard }

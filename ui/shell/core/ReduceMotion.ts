@@ -23,7 +23,7 @@ import hs from "./HyprlandState"
  * ## The polarity
  *
  * The gsetting is `enable-animations` (true = animate). The UI is "Reduce
- * motion" (true = do not animate), because that is what GNOME, macOS and CSS
+ * motion" (true = do not animate), because that is what GNOME and CSS
  * (`prefers-reduced-motion`) all call it, and because an accessibility control
  * should be phrased as the accommodation it grants. Everything below is in
  * REDUCE terms; the inversion happens here, once.

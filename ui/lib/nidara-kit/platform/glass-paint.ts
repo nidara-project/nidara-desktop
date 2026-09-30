@@ -280,7 +280,7 @@ export const glassRimGradient = (
  *  delimiter. Its top and bottom stops are white, so against a white backdrop they
  *  vanish and all that survives is the dark flank — the surface reads as two vertical
  *  lines. That is the failure the owner reported over a white window, and it is the
- *  same failure macOS avoids by separating floating surfaces with a shadow rather
+ *  failure a floating surface avoids by being separated with a shadow rather
  *  than with their edge. A shadow also scales itself to the problem: over a busy
  *  colourful wallpaper it reads as depth and is nearly invisible, over flat white it
  *  becomes the only separator left.

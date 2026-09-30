@@ -53,7 +53,7 @@ export const BAR_MARGIN = 4
 // window title), the island (its own surface, its chips still apart), and the right
 // group (the `»`, the widgets, the tray, search, the CC, the clock). The group's glass
 // never changes; what marks hover and open is a pill INSIDE it, under the one item —
-// the way macOS's menu bar, GNOME's top bar and a segmented control all do it.
+// the way GNOME's top bar and a segmented control both do it.
 
 // From the group's allocation to its first/last item. The glass itself is painted
 // GLASS_INSET (2) in from the allocation, so the end items' pills sit 2px inside the

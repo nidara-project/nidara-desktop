@@ -54,7 +54,7 @@ export function NotificationPopupsWidget() {
 
     // Auto-dismiss countdown; restarted on hover-leave so a banner can't vanish
     // while the pointer is on it. freedesktop expiry semantics: CRITICAL never
-    // auto-expires (it stays until acted on — macOS alerts, GNOME does the same),
+    // auto-expires (it stays until acted on, as GNOME's do),
     // expire_timeout 0 = never, >0 = app-requested ms, -1 = our default.
     const startTimer = (id: number, n: Notification) => {
         clearTimer(id)

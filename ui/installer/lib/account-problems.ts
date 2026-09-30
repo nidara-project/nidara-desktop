@@ -45,7 +45,7 @@ const HOSTNAME_SUFFIX = "-nidara"
  * same name, so the second one on a network collides with the first in mDNS
  * (`nidara.local`), in the router's lease list, and in anybody's `ssh nidara` —
  * a default that breaks precisely by being used twice. Deriving it from the
- * username is what Ubuntu and macOS do, and this is why.
+ * username is what Ubuntu does, and this is why.
  *
  * A username is not a hostname: `useradd` allows `_` and a leading underscore,
  * RFC 1123 allows neither. Anything a hostname cannot carry becomes a dash,

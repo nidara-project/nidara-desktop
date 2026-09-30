@@ -82,7 +82,7 @@ export function createHeroWidget(n: Notification, size: number): Gtk.Widget | nu
 }
 
 // Expanded NC rows show the image at full card width (the iOS long-look / Android
-// BigPicture shape; the compact right thumb is the macOS shape). Small sources — chat
+// BigPicture shape; otherwise the compact right thumb). Small sources — chat
 // avatars are typically 64-160px — are excluded: cover-fitting one to ~320px is mush,
 // so they keep the thumbnail even when expanded. Banners never take this path.
 const HERO_BIG_MIN_SOURCE = 240
@@ -224,7 +224,7 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
     box.append(textStack)
 
     // Expanded + big source → full-width hero below the row (replaces the thumb);
-    // otherwise the compact right thumb, macOS-style.
+    // otherwise the compact right thumb.
     const bigHero = itemExpanded ? createExpandedHeroWidget(n, GRID_WIDTH - 32) : null
     let thumb: Gtk.Widget | null = null
     if (bigHero) outerV.append(bigHero)
@@ -237,7 +237,7 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
         else { actionRow.margin_top = 8; textStack.append(actionRow) }
     }
 
-    // Banner actions (macOS shape): glass capsules OVERLAID on the right edge, revealed
+    // Banner actions: glass capsules OVERLAID on the right edge, revealed
     // on hover — the banner never grows and the stack below it never shifts. Capped at 2
     // (the expanded NC row shows them all). The thumb fades via opacity, not `visible`,
     // so the text never rewraps under the pointer.
@@ -263,7 +263,7 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
     // Title line: title · time · badge/chevron — a dedicated right column reserved its
     // width across every text line, shortening the body too; only the title should cede
     // space. The close is NOT here: it floats over the card's top-left corner (overlay
-    // below), hover-only — the one macOS position, identical on banners and NC rows.
+    // below), hover-only — one position, identical on banners and NC rows.
     // The chevron is hover-only too, swapped in for the timestamp (line stays put); the
     // count badge is information, not a control — always visible.
     let chevBtn: Gtk.Widget | null = null
@@ -326,14 +326,14 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
     // swipe can be recognised. See attachSwipeDismiss.
     // Hover controls ride a Gtk.Overlay above the card content (they don't affect its
     // size — overlay children aren't measured): the close floats over the top-left
-    // corner on EVERY card (banner and NC row — one macOS position, no inconsistency),
+    // corner on EVERY card (banner and NC row — one position, no inconsistency),
     // banner action capsules take the right edge.
     const ov = new Gtk.Overlay({ child: outerV })
     clearBtn.halign = Gtk.Align.START; clearBtn.valign = Gtk.Align.START
     clearBtn.margin_start = 6; clearBtn.margin_top = 6
     ov.add_overlay(clearBtn)
     if (bannerActions) ov.add_overlay(bannerActions)
-    // CRITICAL urgency gets no visual decoration — macOS/GNOME don't mark it
+    // CRITICAL urgency gets no visual decoration — GNOME doesn't mark it
     // either: never auto-expiring IS the signal. The 1px inner edge is part of
     // the glass sheen, not an indicator channel.
     const capsule = SquircleContainer({ child: ov, radius: RADIUS.xl, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true, shadow: GLASS_SHADOW })

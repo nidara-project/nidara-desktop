@@ -13,8 +13,7 @@
 // The one deliberate deviation from the set: the ink spans the FULL 24 units
 // instead of Lucide's 22-unit content box, spending the side padding on body
 // width (and on the charge cavity, which is what actually has to stay legible
-// at 16px). macOS does the same — its menu-bar battery is wider than its
-// neighbours. The 1.5-unit gap before the nub is the floor: below it the two
+// at 16px); a battery glyph is allowed to be wider than its neighbours. The 1.5-unit gap before the nub is the floor: below it the two
 // shapes antialias into one smudge at bar size.
 // That is
 // why the size argument is the ICON BOX in px — the literal equivalent of

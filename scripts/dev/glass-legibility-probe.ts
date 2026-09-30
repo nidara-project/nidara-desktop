@@ -133,7 +133,7 @@ const floor = 0.48
           && markContrast(grey(g), true, d.alpha - 0.01) < MARK_TARGET,
           `marks A: grey ${g.toFixed(3)} thickens the dock to the least glass its dot reads on (${d.alpha})`)
     // Where text needs B, the dot does not: it reads on dark glass over pure white by
-    // thickening alone (0.50), so the dock keeps the mode's skin — as macOS's Dock.
+    // thickening alone (0.50), so the dock keeps the mode's skin.
     const white = decideGlass(flat(grey(1)), true, floor, undefined, "marks")
     check(!decideGlass(flat(grey(1)), true, floor).isDark && white.isDark && white.alpha <= GLASS_ADAPT_CEILING,
           `marks: pure white flips text to the light skin, but only thickens the dock (${white.alpha})`)
@@ -187,7 +187,7 @@ const floor = 0.48
 
 // ── 6. The bar row: its skin comes from the backdrop, not from the mode (#676) ─
 {
-    // As macOS's menu bar: dark backdrop → white ink, light backdrop → black ink.
+    // Dark backdrop → white ink, light backdrop → black ink, whatever the mode.
     check(decideGlassByBackdrop(flat(grey(0.1)), floor).isDark, "by backdrop: a dark backdrop gets dark glass + white ink")
     check(!decideGlassByBackdrop(flat(grey(0.95)), floor).isDark, "by backdrop: a light backdrop gets light glass + black ink")
     // …whatever skin it wore before, when the other is CLEARLY better.
@@ -207,7 +207,7 @@ const floor = 0.48
 
 {
     // The TYPICAL backdrop decides, not the extremes: a mostly dark bar with a pale
-    // stretch keeps dark glass (and thickens it), as macOS's menu bar keeps white ink.
+    // stretch keeps dark glass (and thickens it): white ink over a mostly dark top edge.
     const mixed: BackdropStats = { brightest: grey(0.8), darkest: grey(0.05), mean: grey(0.2), samples: 1000, area: 1000 }
     const d = decideGlassByBackdrop(mixed, floor)
     check(d.isDark && d.alpha > floor, `by backdrop: a mostly dark backdrop with a pale stretch keeps dark glass, thickened (${d.alpha})`)

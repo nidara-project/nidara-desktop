@@ -42,11 +42,11 @@ export const BAR_ITEM_PAD = 8
 
 /** The size of every icon IN THE BAR — the widgets' bar content, search, the CC,
  *  the `»`, the tray. 18, not the 16 it was until 2026-09-27: the owner found them
- *  slightly small, and the reference agreed on is macOS with our CAPSULE as
- *  its whole bar (the air above the capsule is ours alone). macOS draws 16 pt
- *  icons in a 24 pt bar; our visible glass is 28 px (BAR_CAPSULE_H 32 minus the
+ *  slightly small, and the reference agreed on is a 24 pt menu bar with 16 pt
+ *  icons, with our CAPSULE as its whole bar (the air above the capsule is ours
+ *  alone): our visible glass is 28 px (BAR_CAPSULE_H 32 minus the
  *  2 px edge each side), and 16 × 28/24 ≈ 18.7. Against the hover pill it comes
- *  out the same: Apple's 16 in ~22 is 73 %, and 73 % of our 24 px pill is 17.5.
+ *  out the same: 16 in a ~22 highlight is 73 %, and 73 % of our 24 px pill is 17.5.
  *  The bar's HEIGHT does not move with this — an 18 px icon sits in the 24 px pill
  *  with 3 px above and below; each icon item gets 2 px wider (PAD + 18 + PAD). */
 export const BAR_ICON_SIZE = 18

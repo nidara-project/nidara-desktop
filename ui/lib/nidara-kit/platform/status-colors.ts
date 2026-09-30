@@ -10,7 +10,7 @@
 
 export const DANGER_HEX = "#ff3b30"
 export const SUCCESS_HEX = "#30d158"
-/** A WARNING, as opposed to an error — orange, as GNOME's and macOS's (`systemOrange`,
+/** A WARNING, as opposed to an error — orange, as GNOME's (the platforms' `systemOrange`,
  *  the same light-appearance family as `DANGER_HEX`). Until 2026-09-29 there was no
  *  such colour and every symbolic icon's `warning` part was painted like its `error`
  *  part (#676 thread: a warning in red reads as a failure). */

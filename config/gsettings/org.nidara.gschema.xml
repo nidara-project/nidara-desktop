@@ -406,7 +406,7 @@
       </choices>
       <default>"short"</default>
       <summary>Date shown beside the clock in the bar</summary>
-      <description>The bar's only. The lock screen and the login screen show the long date whatever this says, as macOS's Lock Screen keeps its own clock.</description>
+      <description>The bar's only. The lock screen and the login screen show the long date whatever this says: a lock screen keeps its own clock.</description>
     </key>
     <key name="show-seconds" type="b">
       <default>false</default>

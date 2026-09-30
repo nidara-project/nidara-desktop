@@ -109,7 +109,7 @@ export const GLASS_ADAPT_CEILING = 0.60
  * and measuring it would mean changing it while it is being read. It carries only the
  * primary tier, so it never needs rule B, and both values sit under the ceiling. Held to
  * these numbers — they are the LEAST that passes — by `glass-legibility-probe.ts`.
- * More solid than the rest of the glass, on purpose: macOS's tooltips are near-opaque.
+ * More solid than the rest of the glass, on purpose: a tooltip is read at a glance.
  */
 export const TOOLTIP_GLASS_FLOOR = { dark: 0.59, light: 0.47 } as const
 
@@ -344,13 +344,13 @@ export function decideGlass(
 
 /**
  * The rule for a surface whose skin comes from its BACKDROP rather than from the mode
- * — the bar row (#676), as macOS's menu bar: white ink over a dark top edge, black
+ * — the bar row (#676): white ink over a dark top edge, black
  * over a light one, whatever the system mode.
  *
  * It takes the skin that reads BEST over the TYPICAL backdrop — the mean of the whole
  * row (`BackdropStats.mean`: why a mean, and why the whole row), not the
- * extremes: macOS picks the menu bar's ink from the brightness of the wallpaper up
- * there, which is why it reads "almost always white" over the usual dark-topped
+ * extremes: the ink follows the brightness of the wallpaper up there, which is
+ * why it reads "almost always white" over the usual dark-topped
  * wallpapers. Deciding from the worst cases instead turned a bar over a pink-to-purple
  * wallpaper light because of its pale left end (2026-09-29). Legibility at the
  * extremes is then `decideGlass`'s job: it thickens the chosen skin, and its B can

@@ -1312,7 +1312,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     }
 
     // ── The keyboard walk (Super+Ctrl+D, Status.dock_keyboard) ─────────────────
-    // macOS's Ctrl+F3. The dock on the FOCUSED monitor comes up (an auto-hidden one
+    // The dock on the FOCUSED monitor comes up (an auto-hidden one
     // slides in and stays while walked), takes the keyboard through a focus grab —
     // the surface stays KeyboardMode.NONE, see common/FocusGrab.ts — and puts the
     // focus on its first icon. Arrows along the dock and Tab move, wrapping; the icon
@@ -1392,7 +1392,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     // The dock keeps its running dot readable over whatever is behind it, as the bar
     // and the panels keep their text: thicker glass, or the other skin. It carries
     // MARKS, not text, so it is held to 3:1 (glass-legibility.ts → GlassContent), and
-    // its skin is the mode's, as macOS's Dock. The glass is the capsule, not the
+    // its skin is the mode's. The glass is the capsule, not the
     // monitor-sized layout; the layout is what gets rendered over it, icons included.
     const dockOrigin = (off = Math.round(slideCurrent)) => {
         // Every axis anchors BOTTOM (the vertical one also TOP, under the bar's zone);

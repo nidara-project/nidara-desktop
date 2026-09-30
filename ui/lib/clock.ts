@@ -19,8 +19,8 @@ import { playEntrance } from "./entrance"
 // was identical, and is now written once.
 //
 // The DATE is not read at all: both screens show the long one, whatever the bar's
-// date format says (owner, 2026-09-28). macOS's Lock Screen keeps its own clock —
-// its settings are a large clock and a 24-hour switch, never a date format — and a
+// date format says (owner, 2026-09-28). A lock screen keeps its own clock — a large
+// clock and a 24-hour switch at most, never a date format — and a
 // short bar date ("Mon, 28 Sep") is too small a line under the hero clock. The time
 // format still follows the person's choice.
 const DATE_FORMAT: DateFormat = "long"

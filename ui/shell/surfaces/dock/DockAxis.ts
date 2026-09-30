@@ -224,7 +224,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 capLength: (h) => DOCK_SHADOW_PAD + (h - DOCK_SHADOW_PAD * 2) / 2 + 1,
                 paint: (cr, w, _h) => {
                     if (w <= 0 || _h <= 0) return
-                    const dark = chromeIsDarkFor(gloss)   // the mode's skin, as macOS's Dock — unless its surface flipped
+                    const dark = chromeIsDarkFor(gloss)   // the mode's skin — unless its surface flipped
                     const dockAlpha = glassAlphaFor(gloss, "dock")
                     const dockColor = dark
                         ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
@@ -628,7 +628,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                         shim.margin_top = shimTop
                     }
                 }
-                const dark = chromeIsDarkFor(da)   // the mode's skin, as macOS's Dock — unless its surface flipped
+                const dark = chromeIsDarkFor(da)   // the mode's skin — unless its surface flipped
                 const dockAlpha = glassAlphaFor(da, "dock")
                 const dockColor = dark
                     ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }

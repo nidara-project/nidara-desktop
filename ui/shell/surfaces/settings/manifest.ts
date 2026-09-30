@@ -167,8 +167,7 @@ export const manifest = [
         label: "settings.bar.title",
         icon: "nd-bar",
         groups: [
-            // One list of what the bar holds, right to left, after macOS's Menu Bar pane
-            // (custom/bar.ts, 2026-09-27): checks, "Always / When active", the window title
+            // One list of what the bar holds, right to left (custom/bar.ts, 2026-09-27): checks, "Always / When active", the window title
             // and the system menu's icon all in the same row format — then the apps' icons.
             // The order itself is edited in the bar (Status.bar_edit_mode), not here.
             // `reaches`: the clock's Configure subpage (custom/clock.ts). A subpage is not

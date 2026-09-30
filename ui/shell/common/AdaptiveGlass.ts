@@ -55,7 +55,7 @@ export type GlassRole = "bar" | "overlay" | "dock"
  *  backdrop. Measured 2026-09-29: the bar's first probe, taken inside its own
  *  fade-in, recovered (+17, 0, +32) over the real backdrop and flipped it. */
 const DEBOUNCE_MS = 800
-/** How long a tint change takes. Apple animates the Liquid Glass flip; a jump of
+/** How long a tint change takes. The flip is animated: a jump of
  *  0.1 in alpha across a whole panel reads as a flash without this. */
 const TRANSITION_MS = 200
 const TRANSITION_STEP_MS = 16
@@ -125,8 +125,8 @@ export interface GlassSurfaceOpts {
     /** It carries a `GlassHalo` (the CC): a diffuse container under its pieces of glass,
      *  which is the FIRST step of thickening — see `haloAlphaFor`. */
     halo?: boolean
-    /** The skin comes from the BACKDROP, not from the mode — the bar row, as macOS's
-     *  menu bar (#676): white ink over a dark top edge, black over a light one. In a
+    /** The skin comes from the BACKDROP, not from the mode — the bar row
+     *  (#676): white ink over a dark top edge, black over a light one. In a
      *  group, one member saying so is enough (the bar speaks for the island's capsule).
      *  Such a surface reads its typical backdrop over its WHOLE box, the gaps it leaves
      *  see-through included (`ProbeRequest.seeThrough`): its skin must not depend on how

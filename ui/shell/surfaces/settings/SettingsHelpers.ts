@@ -54,7 +54,7 @@ export interface SearchItem {
      *  because the index only ever held rows — worst on Settings → Audio, whose
      *  rows are sound cards and playing apps and are deliberately NOT indexed
      *  (see `pages/Audio.tsx`: hardware state is not a setting). Indexing the page
-     *  as well is what macOS and GNOME do: you get the panel AND the preferences. */
+     *  as well is what GNOME does: you get the panel AND the preferences. */
     kind?: "page" | "row"
 }
 

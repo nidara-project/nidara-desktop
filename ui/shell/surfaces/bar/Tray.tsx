@@ -105,13 +105,13 @@ function appForProcess(proc: string): { id: string, name: string, icon: string }
 }
 
 /**
- * A TEMPLATE image, in macOS's sense: one colour on transparency, i.e. pure shape.
+ * A TEMPLATE image: one colour on transparency, i.e. pure shape.
  *
  * An app that sends only pixels picks their colour from the SYSTEM mode — Claude
  * Desktop sends white in dark mode and black in light — and cannot know that the bar
  * wears a different skin: since #676 the bar reads its skin from its backdrop, so a
- * white icon could sit on light glass. macOS solves exactly this by tinting template
- * images with the menu bar's own ink, and so do we: a pixmap whose every visible pixel
+ * white icon could sit on light glass. The answer is to tint template images with the
+ * bar's own ink: a pixmap whose every visible pixel
  * is the same colour is painted as a MASK in the bar's text colour. Anything with a
  * second colour (a red badge, a two-tone keyboard label, a logo) is shown untouched.
  *

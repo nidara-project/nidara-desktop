@@ -151,8 +151,8 @@ export default function AboutWindow(): Gtk.Window | null {
     // afford them, and Settings → About now holds a strict SUPERSET of this
     // window. That is the rule (owner's call, 2026-08-25, closing debt #94):
     // window = glanceable summary + a way through, page = the whole detail.
-    // macOS draws the same line — "About This Mac" is a card with More Info…
-    // under it, and the full list lives in System Settings.
+    // The card gives the summary and a "More info…" under it; the full list lives in
+    // Settings.
     //
     // Device (hostname) first, like GNOME/Windows About: it disambiguates the
     // machine's name from "Nidara" in the header, which is the desktop, not the box.
@@ -186,7 +186,7 @@ export default function AboutWindow(): Gtk.Window | null {
     // Without this the summary is a dead end and the rows it dropped are simply
     // gone as far as the person reading is concerned. `openSettingsPage` raises
     // Settings (creating it if needed) and navigates it; the About window stays
-    // open behind it, the same way macOS leaves the card up.
+    // open behind it.
     const moreBtn = NidaraButton({ label: t("settings.about.more-info"), halign: Gtk.Align.CENTER })
     moreBtn.margin_top = 16
     moreBtn.connect("clicked", () => { shellActions.openSettingsPage?.("about") })

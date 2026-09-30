@@ -16,7 +16,7 @@ import { t } from "../../core/i18n"
 // red dot sat in a lane of its own on the CC button, meaning "the Control Center
 // has something for you"; the owner took it out, and what the bar should show for
 // AI control is undecided — no platform has prior art for it. The CC button is to
-// gain a small second icon for PRIVACY (sensors in use, location), macOS-style:
+// gain a small second icon for PRIVACY (sensors in use, location):
 // one mark beside the Control Centre, the detail at the top of it.
 //
 // Three states per indicator:

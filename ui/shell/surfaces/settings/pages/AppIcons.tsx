@@ -167,7 +167,7 @@ export function buildAppIconDetailPage(app: AppData, syncRow: () => void): Gtk.W
 
     // Choose image — the single, primary way to set an icon. The user picks an
     // IMAGE FILE — never an icon-theme name (a prior free-text field was a
-    // confusing power-user trap; prior art macOS/Windows/GNOME = pick an image).
+    // confusing power-user trap; prior art Windows/GNOME = pick an image).
     // The row shape (preview leading, text, buttons trailing) and the dialog live
     // in `imagePickerRow`; only what the icon IS and what setting one does are here.
     listBox.append(imagePickerRow(

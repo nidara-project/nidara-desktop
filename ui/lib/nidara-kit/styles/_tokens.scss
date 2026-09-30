@@ -73,7 +73,7 @@ $fse-title-1:  2em;
 // ── The DISPLAY register — deliberately NOT a rung of the ramp above ─────────
 // One consumer in the whole DE: the hero clock of the lockscreen and the
 // greeter. It is not "the ramp continued"; it is a different register, the same
-// way macOS, GNOME and Windows all set their lock clock outside the UI type
+// way GNOME and Windows both set their lock clock outside the UI type
 // scale entirely. Naming it is the point — the number was freehand before, and
 // a freehand number is what stops a surface from moving with the system.
 //
