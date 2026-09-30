@@ -97,6 +97,7 @@ setKitAppearance({
     return () => safeDisconnect(Theme, id)
   },
   overlayOpacity: () => Theme.overlayOpacity,
+  reduceTransparency: () => Theme.reduceTransparency,
   chromeIsDark:   (widget) => widget ? chromeIsDarkFor(widget) : Theme.chromeIsDark,
 })
 

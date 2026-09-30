@@ -108,7 +108,10 @@ const NIDARA_NS = "org.nidara.appearance"
 const GNOME_NS = "org.gnome.desktop.interface"
 // `shell-appearance` is gone (#676): the shell pin it carried was replaced by the
 // adaptive glass (#673), and a key the schema no longer has cannot be read.
-const NIDARA_KEYS = ["window-opacity", "bar-opacity", "overlay-opacity", "dock-opacity"]
+// The glass is served as the CHOICE (#674), not as four opacities: what a material
+// means is a table in the kit (theme-tokens.ts GLASS_FLOORS), and each reader derives
+// the numbers from it, so this daemon never has to know them.
+const NIDARA_KEYS = ["glass-material", "reduce-transparency"]
 const BUS_NAME = "org.freedesktop.impl.portal.desktop.nidara"
 const OBJECT_PATH = "/org/freedesktop/portal/desktop"
 
@@ -326,10 +329,8 @@ try {
 }
 
 const NIDARA_DEFAULTS = {
-    "window-opacity": new GLib.Variant("d", 0.48),
-    "bar-opacity": new GLib.Variant("d", 0.48),
-    "overlay-opacity": new GLib.Variant("d", 0.48),
-    "dock-opacity": new GLib.Variant("d", 0.24),
+    "glass-material": new GLib.Variant("s", "regular"),
+    "reduce-transparency": new GLib.Variant("b", false),
 }
 
 /**

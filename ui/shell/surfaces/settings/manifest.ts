@@ -96,19 +96,9 @@ export const manifest = [
                 items: [
                     { custom: "accentPicker", i18n: "settings.appearance.accent", key: "appearance.accent" },
                     {
-                        custom: "glassMaster",
-                        i18n: "settings.appearance.glass",
-                        note: "Opacity model: ONE master 'Glass' slider governs bar + overlays + dock + window together; an 'Advanced' disclosure breaks them apart. All are plain opacities over ONE GLASS_RANGE, imported rather than retyped — the bounds used to be five literals here plus a sixth in clampOpacity, which is five chances to offer a value the clamp refuses.",
-                    },
-                    {
-                        disclosure: "settings.appearance.advanced",
-                        note: "Advanced — per-surface glass opacities. Header row toggles a Gtk.Revealer with the 4 surface opacity sliders.",
-                        items: [
-                            "appearance.barOpacity",
-                            "appearance.overlayOpacity",
-                            "appearance.dockOpacity",
-                            "appearance.windowOpacity",
-                        ],
+                        key: "appearance.glassMaterial",
+                        note: "Glass model (#674): ONE choice of three — clear / regular / frosted — each a table of per-surface floors plus the compositor blur (GLASS_FLOORS / GLASS_BLUR in the kit). It replaced a master opacity slider and four per-surface sliders under 'Advanced'. Greyed out while Accessibility → Reduce transparency is on, which makes every surface solid.",
+                        sensitiveWhen: { key: "accessibility.reduceTransparency", in: ["false"] },
                     },
                 ],
             },
@@ -311,6 +301,7 @@ export const manifest = [
                 items: [
                     "accessibility.textScale",
                     "accessibility.cursorSize",
+                    "accessibility.reduceTransparency",
                 ],
             },
             {

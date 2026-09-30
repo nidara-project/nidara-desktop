@@ -123,6 +123,7 @@ export function initAppearance(opts: InitAppearanceOpts = {}): AppearanceHandle 
     surfaceIsDark: () => opts.fixedDarkInk ? true : state.isDark,
     onChange: (cb) => { listeners.add(cb); return () => { listeners.delete(cb) } },
     overlayOpacity: () => state.overlayOpacity,
+    reduceTransparency: () => state.reduceTransparency,
     chromeIsDark: () => opts.fixedDarkInk ? true : state.isDark,
   })
 

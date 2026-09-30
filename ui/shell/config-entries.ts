@@ -12,7 +12,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import { registerConfig } from "./core/ConfigRegistry"
 import { AGENT_PROVIDERS } from "./core/AgentProviders"
 import Theme, { TEXT_SCALE_MIN, TEXT_SCALE_MAX } from "./core/ThemeManager"
-import { ACCENT_PALETTE, GLASS_RANGE, type AccentKey } from "./core/NidaraTheme"
+import { ACCENT_PALETTE, GLASS_MATERIALS, type AccentKey, type GlassMaterial } from "./core/NidaraTheme"
 import NightLight from "./core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, TRANSITIONS, type TransitionType } from "./core/WallpaperManager"
 import notifConfig from "./core/NotifConfig"
@@ -148,56 +148,19 @@ export function registerConfigEntries() {
         get: () => Theme.accentColor,
         set: v => void Theme.setAccentColor(v as AccentKey),
     })
-    registerConfig("appearance.barOpacity", {
-        desc: "Bar glass opacity (0.24 to 0.80).",
-        type: "number",
-        min: GLASS_RANGE.min,
-        max: GLASS_RANGE.max,
-        get: () => Theme.barOpacity,
-        set: v => void Theme.setBarOpacity(Number(v)),
-        subscribe: onThemeCfg(() => Theme.barOpacity),
+    // The glass (#674): ONE choice of three, in place of the five sliders it replaced.
+    // What each position means per surface is GLASS_FLOORS / GLASS_BLUR in the kit.
+    registerConfig("appearance.glassMaterial", {
+        desc: "Glass material of the whole desktop: clear (most see-through), regular, or frosted (least). Sets the minimum glass opacity per surface and the compositor blur; shell surfaces still thicken by themselves where text needs it. Ignored while accessibility.reduceTransparency is on.",
+        type: "enum",
+        enum: [...GLASS_MATERIALS],
+        get: () => Theme.glassMaterial,
+        set: v => void Theme.setGlassMaterial(v as GlassMaterial),
+        subscribe: onThemeCfg(() => Theme.glassMaterial),
         ui: {
-            i18n: "settings.appearance.bar-opacity",
-            slider: { pct: true },
-        },
-    })
-    registerConfig("appearance.overlayOpacity", {
-        desc: "Glass opacity for menus, the dock, popups, and the alert dialog (0.24 to 0.80).",
-        type: "number",
-        min: GLASS_RANGE.min,
-        max: GLASS_RANGE.max,
-        get: () => Theme.overlayOpacity,
-        set: v => void Theme.setOverlayOpacity(Number(v)),
-        subscribe: onThemeCfg(() => Theme.overlayOpacity),
-        ui: {
-            i18n: "settings.appearance.overlay-opacity",
-            slider: { pct: true },
-        },
-    })
-    registerConfig("appearance.dockOpacity", {
-        desc: "Dock glass opacity (0.24 to 0.80).",
-        type: "number",
-        min: GLASS_RANGE.min,
-        max: GLASS_RANGE.max,
-        get: () => Theme.dockOpacity,
-        set: v => void Theme.setDockOpacity(Number(v)),
-        subscribe: onThemeCfg(() => Theme.dockOpacity),
-        ui: {
-            i18n: "settings.appearance.dock-opacity",
-            slider: { pct: true },
-        },
-    })
-    registerConfig("appearance.windowOpacity", {
-        desc: "Window glass opacity (0.24 to 0.80).",
-        type: "number",
-        min: GLASS_RANGE.min,
-        max: GLASS_RANGE.max,
-        get: () => Theme.windowOpacity,
-        set: v => void Theme.setWindowOpacity(Number(v)),
-        subscribe: onThemeCfg(() => Theme.windowOpacity),
-        ui: {
-            i18n: "settings.appearance.window-glass",
-            slider: { pct: true, icons: [uiIcon("nd-value-decrease"), uiIcon("nd-value-increase")] },
+            i18n: "settings.appearance.glass",
+            control: "segmented",
+            optI18n: (v: string) => t(`settings.appearance.glass.${v}` as any),
         },
     })
     registerConfig("appearance.gtkTheme", {
@@ -666,6 +629,16 @@ export function registerConfigEntries() {
                 icons: [uiIcon("nd-preferences-desktop-peripherals"), uiIcon("nd-preferences-desktop-peripherals")],
                 commitOnRelease: true,
             },
+        },
+    })
+    registerConfig("accessibility.reduceTransparency", {
+        desc: "Reduce transparency: every glass surface — bar, panels, dock, menus, Nidara's windows, the lock screen and the login screen — becomes solid, whatever appearance.glassMaterial says.",
+        type: "boolean",
+        get: () => Theme.reduceTransparency,
+        set: v => void Theme.setReduceTransparency(v as boolean),
+        subscribe: onThemeCfg(() => Theme.reduceTransparency),
+        ui: {
+            i18n: "settings.accessibility.reduce-transparency",
         },
     })
     registerConfig("accessibility.reduceMotion", {

@@ -2,13 +2,12 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import Theme from "../../../core/ThemeManager"
-import { NidaraButton, NidaraFontButton, makeHSlider, NidaraRow } from "../../../../lib/nidara-kit"
+import { NidaraButton, NidaraFontButton, NidaraRow } from "../../../../lib/nidara-kit"
 import NightLight from "../../../core/NightLightManager"
 import Wallpaper from "../../../core/WallpaperManager"
 import { getBundledWallpapers } from "../../../../lib/wallpaper"
-import { ACCENT_PALETTE, GLASS_RANGE, type AccentKey } from "../../../core/NidaraTheme"
+import { ACCENT_PALETTE, type AccentKey } from "../../../core/NidaraTheme"
 import { t } from "../../../core/i18n"
-import { uiIcon } from "../../../core/Icons"
 import { createRow, bindWhileRealized } from "../SettingsHelpers"
 import { attachTooltip } from "../../../../lib/nidara-kit"
 import { safeDisconnect } from "../../../core/signals"
@@ -207,45 +206,6 @@ export const build = (ctx: PageCtx) => {
         return () => safeDisconnect(Theme, id)
     })
 
-    // ── Master Glass Opacity Slider ─────────────────────────────────────────
-    // Opacity model: ONE master "Glass" slider governs bar + overlays + dock + window
-    // together; an "Advanced" disclosure (below) breaks them apart. All are plain
-    // opacities (higher = more opaque) over ONE `GLASS_RANGE`, imported rather than
-    // retyped — the bounds used to be five literals here plus a sixth in
-    // `clampOpacity`, which is five chances to offer a value the clamp refuses.
-    const glassSurfaces = () => [Theme.barOpacity, Theme.overlayOpacity, Theme.dockOpacity, Theme.windowOpacity]
-    const glassUniform = () => { const s = glassSurfaces(); return s.every(v => Math.abs(v - s[0]) < 0.005) }
-    const glassRepr = () => Math.max(...glassSurfaces())   // thumb at the peak while mixed
-
-    const masterValue = new Gtk.Label({ css_classes: ["slider-value-label"], width_chars: 5, xalign: 1.0 })
-    const masterSlider = makeHSlider({
-        min: GLASS_RANGE.min, max: GLASS_RANGE.max, value: glassRepr(),
-        onChange: (v) => Theme.setGlassOpacity(v),
-        onValueChanged: (v) => { masterValue.label = `${Math.round(v * 100)}%` }, // drag unifies → show %
-        onExtChange: onTheme(glassRepr),
-        debounce: 32,
-        width_request: 140,
-    })
-    // Runs AFTER makeSlider's own %-label sync (connected earlier, during construction),
-    // so the "—" / mute wins whenever the surfaces disagree.
-    const syncMaster = () => {
-        const uni = glassUniform()
-        masterValue.label = uni ? `${Math.round(glassRepr() * 100)}%` : "—"
-        masterSlider.opacity = uni ? 1 : 0.55
-    }
-    bindWhileRealized(masterSlider, () => {
-        syncMaster()
-        const masterSyncId = Theme.connect("changed", syncMaster)
-        return () => safeDisconnect(Theme, masterSyncId)
-    })
-
-    const masterBox = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, hexpand: false })
-    const mkGlassEnd = (icon: Gio.FileIcon) => new Gtk.Image({ gicon: icon, pixel_size: 16, opacity: 0.5, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER })
-    masterBox.append(mkGlassEnd(uiIcon("nd-value-decrease")))
-    masterBox.append(masterSlider)
-    masterBox.append(mkGlassEnd(uiIcon("nd-value-increase")))
-    masterBox.append(masterValue)
-
     // ── Night Light Schedule Times ──────────────────────────────────────────
     const timePicker = (initial: string, onChange: (t: string) => void) => {
         const [ih, im] = initial.split(":").map(Number)
@@ -344,7 +304,6 @@ export const build = (ctx: PageCtx) => {
         wallpaperGallery: () => galleryRow,
         wallpaperPicker: (slot) => createRow(slot.title, slot.subtitle, changeBtn),
         accentPicker: (slot) => createRow(slot.title, slot.subtitle, accentPicker),
-        glassMaster: (slot) => createRow(slot.title, slot.subtitle, masterBox),
         nightScheduleTimes: () => schedTimeRow,
         interfaceFont: (slot) => createRow(slot.title, slot.subtitle, makeInterfaceFontBtn(slot.title)),
         monoFont: (slot) => createRow(slot.title, slot.subtitle, makeMonoFontBtn(slot.title)),

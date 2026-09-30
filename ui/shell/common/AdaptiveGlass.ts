@@ -1,6 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Theme from "../core/ThemeManager"
+import { glassBlurInForce } from "../core/GlassBlur"
 import hyprlandState from "../core/HyprlandState"
 import Wallpaper from "../core/WallpaperManager"
 import Gdk from "gi://Gdk?version=4.0"
@@ -311,7 +312,9 @@ function readBlur() {
         brightness: hyprlandState.getOptionFloat("decoration:blur:brightness", NIDARA_BLUR.brightness),
         vibrancy: hyprlandState.getOptionFloat("decoration:blur:vibrancy", NIDARA_BLUR.vibrancy),
         vibrancyDarkness: hyprlandState.getOptionFloat("decoration:blur:vibrancy_darkness", NIDARA_BLUR.vibrancyDarkness),
-        passes: Math.max(1, Math.round(hyprlandState.getOptionFloat("decoration:blur:passes", NIDARA_BLUR.passes))),
+        // Not asked of the compositor: the glass material moves it with `hl.config`, which
+        // raises no "config-reloaded" to re-read on (#674, core/GlassBlur.ts).
+        passes: Math.max(1, glassBlurInForce().passes),
     }
 }
 
@@ -370,6 +373,9 @@ async function measureClosed(s: Surface) {
 }
 
 async function measure(s: Surface) {
+    // Reduce transparency (#674): every surface is solid, and there is nothing behind it
+    // to read. No capture at all — and the neutral tint, not the backdrop's.
+    if (Theme.reduceTransparency) { reset(s); return }
     if (!shown(s)) {
         // A GROUP is measured only on screen. Its members decide together, from what is
         // behind each of them now; a closed measurement decides alone (there is no group
@@ -574,9 +580,16 @@ export function startAdaptiveGlass(): void {
     // and anything that asked in that second kept the wrong answer: the dock's tooltips
     // came up with black text on dark glass (2026-09-29). The measurement still follows.
     let lastMode = Theme.chromeIsDark
+    let lastPasses = blur.passes
     Theme.connect("changed", () => {
         const modeChanged = Theme.chromeIsDark !== lastMode
         lastMode = Theme.chromeIsDark
+        // Solid: nothing to adapt (`measure` resets each surface and captures nothing).
+        if (Theme.reduceTransparency) { for (const s of surfaces.values()) reset(s); return }
+        // A new material moved the blur: what each surface last measured went through
+        // the old one, so it is measured again rather than re-decided from stale stats.
+        readBlur()
+        if (blur.passes !== lastPasses) { lastPasses = blur.passes; scheduleAll(); return }
         for (const s of surfaces.values()) {
             // The bar row reads its skin from its backdrop, not the mode: its group
             // re-decides on the measurement, as before.

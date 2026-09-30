@@ -86,6 +86,8 @@
     "settings.accessibility.text-scale.desc": "299a2822",
     "settings.accessibility.cursor-size": "bc04f882",
     "settings.accessibility.cursor-size.desc": "7f25c946",
+    "settings.accessibility.reduce-transparency": "b0329eeb",
+    "settings.accessibility.reduce-transparency.desc": "7c6227b8",
     "settings.accessibility.reduce-motion": "25a5aef5",
     "settings.accessibility.reduce-motion.desc": "9a31664f",
     "settings.users.title": "57f2b181",
@@ -175,7 +177,6 @@
     "settings.appearance.group.resources": "2fa8c731",
     "settings.appearance.browse": "c1b20f52",
     "settings.appearance.title": "41def7a0",
-    "settings.appearance.window-glass.desc": "d37ea694",
     "settings.appearance.accent.desc": "f32ae27c",
     "settings.appearance.transition.desc": "1e13eab2",
     "settings.appearance.image.desc": "4e89ef7d",
@@ -195,16 +196,11 @@
     "settings.appearance.transition": "4ead496f",
     "settings.appearance.shell-opacity": "2532e87f",
     "settings.appearance.shell-opacity.desc": "65d97dbf",
-    "settings.appearance.dock-opacity": "4dd02399",
-    "settings.appearance.dock-opacity.desc": "ffe6ed1b",
     "settings.appearance.glass": "745b5a48",
-    "settings.appearance.glass.desc": "058fbacc",
-    "settings.appearance.advanced": "4d064726",
-    "settings.appearance.bar-opacity": "28be24d8",
-    "settings.appearance.bar-opacity.desc": "15f2870f",
-    "settings.appearance.overlay-opacity": "7ed4e4f9",
-    "settings.appearance.overlay-opacity.desc": "a0d6c415",
-    "settings.appearance.window-glass": "5ce4222a",
+    "settings.appearance.glass.desc": "278719be",
+    "settings.appearance.glass.clear": "719ea396",
+    "settings.appearance.glass.regular": "2dfa6607",
+    "settings.appearance.glass.frosted": "c10fb76e",
     "settings.appearance.dialog.wallpaper": "4842be93",
     "settings.appearance.filter.images": "09e871c9",
     "settings.appearance.interface-font": "30c49d75",
@@ -832,8 +828,8 @@
   },
   "locales": {
     "de": {
-      "translated": 724,
-      "of": 828,
+      "translated": 720,
+      "of": 824,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -940,19 +936,17 @@
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
-      "stale": [
-        "settings.region.time.format.desc"
-      ]
+      "stale": []
     },
     "es": {
-      "translated": 828,
-      "of": 828,
+      "translated": 824,
+      "of": 824,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 724,
-      "of": 828,
+      "translated": 720,
+      "of": 824,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1059,13 +1053,11 @@
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
-      "stale": [
-        "settings.region.time.format.desc"
-      ]
+      "stale": []
     },
     "it": {
-      "translated": 724,
-      "of": 828,
+      "translated": 720,
+      "of": 824,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1172,13 +1164,11 @@
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
-      "stale": [
-        "settings.region.time.format.desc"
-      ]
+      "stale": []
     },
     "ja": {
-      "translated": 724,
-      "of": 828,
+      "translated": 720,
+      "of": 824,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1285,13 +1275,11 @@
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
-      "stale": [
-        "settings.region.time.format.desc"
-      ]
+      "stale": []
     },
     "nl": {
-      "translated": 724,
-      "of": 828,
+      "translated": 720,
+      "of": 824,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1398,13 +1386,11 @@
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
-      "stale": [
-        "settings.region.time.format.desc"
-      ]
+      "stale": []
     },
     "pl": {
-      "translated": 724,
-      "of": 828,
+      "translated": 720,
+      "of": 824,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1511,13 +1497,11 @@
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
-      "stale": [
-        "settings.region.time.format.desc"
-      ]
+      "stale": []
     },
     "pt-BR": {
-      "translated": 724,
-      "of": 828,
+      "translated": 720,
+      "of": 824,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1624,13 +1608,11 @@
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
-      "stale": [
-        "settings.region.time.format.desc"
-      ]
+      "stale": []
     },
     "pt-PT": {
-      "translated": 724,
-      "of": 828,
+      "translated": 720,
+      "of": 824,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1737,13 +1719,11 @@
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
-      "stale": [
-        "settings.region.time.format.desc"
-      ]
+      "stale": []
     },
     "ru": {
-      "translated": 724,
-      "of": 828,
+      "translated": 720,
+      "of": 824,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1850,13 +1830,11 @@
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
-      "stale": [
-        "settings.region.time.format.desc"
-      ]
+      "stale": []
     },
     "zh-CN": {
-      "translated": 724,
-      "of": 828,
+      "translated": 720,
+      "of": 824,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1963,9 +1941,7 @@
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
-      "stale": [
-        "settings.region.time.format.desc"
-      ]
+      "stale": []
     }
   }
 }
