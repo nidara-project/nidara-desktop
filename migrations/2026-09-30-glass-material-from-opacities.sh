@@ -11,7 +11,7 @@
 # The rule: the mean of the BAR and the PANELS — the two surfaces that carry text,
 # and the two the old master slider was mostly moved for. The dock is not counted: it
 # sat at the floor by default. Nor are the windows: they left the material the same day
-# for a switch of their own (window-tinting, ON by default), and every stored window
+# for a switch of their own (window-transparency, ON by default), and every stored window
 # opacity was translucent — which is what "on" keeps. Thresholds are the midpoints between the table's
 # means (clear 0.24, regular 0.34, frosted 0.46):
 #     mean < 0.29 → clear · mean ≥ 0.40 → frosted · otherwise nothing (regular stays)

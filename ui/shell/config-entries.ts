@@ -151,7 +151,7 @@ export function registerConfigEntries() {
     // The glass (#674): ONE choice of three, in place of the five sliders it replaced.
     // What each position means per surface is GLASS_FLOORS / GLASS_BLUR in the kit.
     registerConfig("appearance.glassMaterial", {
-        desc: "Glass material of the interface — bar, panels, dock, menus: clear (most see-through), regular, or frosted (least). Sets the minimum glass opacity per surface and the compositor blur; shell surfaces still thicken by themselves where text needs it. Not Nidara's windows (appearance.windowTinting). Ignored while accessibility.reduceTransparency is on.",
+        desc: "Glass material of the interface — bar, panels, dock, menus: clear (most see-through), regular, or frosted (least). Sets the minimum glass opacity per surface and the compositor blur; shell surfaces still thicken by themselves where text needs it. Not Nidara's windows (appearance.windowTransparency). Ignored while accessibility.reduceTransparency is on.",
         type: "enum",
         enum: [...GLASS_MATERIALS],
         get: () => Theme.glassMaterial,
@@ -163,14 +163,14 @@ export function registerConfigEntries() {
             optI18n: (v: string) => t(`settings.appearance.glass.${v}` as any),
         },
     })
-    registerConfig("appearance.windowTinting", {
-        desc: "Let the wallpaper tint Nidara's own windows (Settings, About, the installer). Off: solid windows. Separate from the glass material — windows are not Liquid Glass. Ignored while accessibility.reduceTransparency is on.",
+    registerConfig("appearance.windowTransparency", {
+        desc: "Whether Nidara's own windows (Settings, About, the installer) are translucent, with the compositor's blur behind them; off, they are solid. Separate from the glass material — windows are not Liquid Glass — though the blur is the one the material sets (Hyprland has one). Ignored while accessibility.reduceTransparency is on.",
         type: "boolean",
-        get: () => Theme.windowTinting,
-        set: v => void Theme.setWindowTinting(v as boolean),
-        subscribe: onThemeCfg(() => Theme.windowTinting),
+        get: () => Theme.windowTransparency,
+        set: v => void Theme.setWindowTransparency(v as boolean),
+        subscribe: onThemeCfg(() => Theme.windowTransparency),
         ui: {
-            i18n: "settings.appearance.window-tinting",
+            i18n: "settings.appearance.window-transparency",
         },
     })
     registerConfig("appearance.gtkTheme", {

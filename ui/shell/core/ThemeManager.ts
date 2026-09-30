@@ -43,18 +43,18 @@ import { withKitSheet } from "../../lib/nidara-kit/platform/kit-css"
 interface NidaraAppearance {
     glassMaterial: GlassMaterial
     reduceTransparency: boolean
-    windowTinting: boolean
+    windowTransparency: boolean
 }
 
 const nidaraAppearance = defineSettings<NidaraAppearance>("appearance", {
     glassMaterial: DEFAULT_CONFIG.glassMaterial,
     reduceTransparency: DEFAULT_CONFIG.reduceTransparency,
-    windowTinting: DEFAULT_CONFIG.windowTinting,
+    windowTransparency: DEFAULT_CONFIG.windowTransparency,
 })
 
 /** The fields of `NidaraThemeConfig` that live in `org.nidara.appearance`. The four
  *  opacities are DERIVED from them (`withGlass`) and stored nowhere. */
-const NIDARA_KEYS = ["glassMaterial", "reduceTransparency", "windowTinting"] as const
+const NIDARA_KEYS = ["glassMaterial", "reduceTransparency", "windowTransparency"] as const
 
 // ── DARK/LIGHT in-process ────────────────────────────────────────────────────
 // Plain `Gtk.Settings`. This used to probe libadwaita first (loading its typelib
@@ -636,13 +636,13 @@ class ThemeManager extends GObject.Object {
         this.applyGlass()
     }
 
-    /** Settings → Appearance → Windows: let the wallpaper tint Nidara's windows. Not the
-     *  glass material — windows are not Liquid Glass (`WINDOW_TINT_OPACITY`). */
-    get windowTinting(): boolean { return this.fcConfig.windowTinting }
+    /** Settings → Appearance → Windows: Nidara's windows translucent or solid. Not the
+     *  glass material — windows are not Liquid Glass (`WINDOW_GLASS_OPACITY`). */
+    get windowTransparency(): boolean { return this.fcConfig.windowTransparency }
     /** The material's haze (derived; `GLASS_FROST`). */
     get glassFrost(): number { return this.fcConfig.glassFrost }
-    async setWindowTinting(on: boolean) {
-        this.fcConfig.windowTinting = on
+    async setWindowTransparency(on: boolean) {
+        this.fcConfig.windowTransparency = on
         this.applyGlass()
     }
 
@@ -720,13 +720,13 @@ class ThemeManager extends GObject.Object {
 
     /** What this process holds, for core/AppearanceSync.ts (settings.ini, the greeter's
      *  mirror). A copy: nothing outside writes Theme's state. */
-    snapshot(): ThemeState & Pick<NidaraThemeConfig, "accent" | "glassMaterial" | "reduceTransparency" | "windowTinting"> {
+    snapshot(): ThemeState & Pick<NidaraThemeConfig, "accent" | "glassMaterial" | "reduceTransparency" | "windowTransparency"> {
         return {
             ...this.state,
             accent: this.fcConfig.accent,
             glassMaterial: this.fcConfig.glassMaterial,
             reduceTransparency: this.fcConfig.reduceTransparency,
-            windowTinting: this.fcConfig.windowTinting,
+            windowTransparency: this.fcConfig.windowTransparency,
         }
     }
 
