@@ -22,7 +22,7 @@ import {
  *    names live where GNOME keeps them — `accent-color` and `color-scheme` in
  *    `org.gnome.desktop.interface`, `high-contrast` in `…a11y.interface`,
  *    `enable-animations` for reduced motion, and the GTK / icon / cursor theme. The
- *    keys only Nidara has (the glass material and reduce transparency) live in
+ *    keys only Nidara has (the glass material, reduce transparency, window tinting) live in
  *    GSettings `org.nidara.appearance` (#573). Anybody with `gsettings` can write
  *    either; `ThemeManager` (the shell) follows both live.
  *
@@ -118,6 +118,7 @@ function applyPortalKey(state: AppearanceState, ns: string, key: string, raw: un
     // disagree about what "frosted" means.
     if (key === "glass-material") withGlass(Object.assign(state, { glassMaterial: asGlassMaterial(v) }))
     else if (key === "reduce-transparency" && typeof v === "boolean") withGlass(Object.assign(state, { reduceTransparency: v }))
+    else if (key === "window-tinting" && typeof v === "boolean") withGlass(Object.assign(state, { windowTinting: v }))
   }
   return JSON.stringify(state) !== before
 }
@@ -176,6 +177,9 @@ function readMirrorState(): AppearanceState | null {
       isDark: raw.isDark === true,
       glassMaterial: asGlassMaterial(raw.glassMaterial),
       reduceTransparency: raw.reduceTransparency === true,
+      // `!== false`: tinting is ON by default, and a mirror written before the key
+      // existed must not turn it off.
+      windowTinting: raw.windowTinting !== false,
     })
   } catch (e) {
     // Not silent: an unreadable mirror is how #488 hid for a release (written 0600).

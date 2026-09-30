@@ -313,6 +313,11 @@
       <summary>Reduce transparency</summary>
       <description>Every glass surface becomes solid, whatever the glass material.</description>
     </key>
+    <key name="window-tinting" type="b">
+      <default>true</default>
+      <summary>Tint windows with the wallpaper</summary>
+      <description>Nidara's own windows let the wallpaper's colour through. Off, they are solid. Not part of the glass material: windows are not Liquid Glass.</description>
+    </key>
     <!--
       RETIRED 2026-09-30 (#674): the four glass opacities the sliders wrote. Nothing
       reads them but migrations/2026-09-30-glass-material-from-opacities.sh, which

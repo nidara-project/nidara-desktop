@@ -163,6 +163,7 @@
     "settings.about.update.available.desc": "368da6d5",
     "settings.appearance.group.base-style": "99978d31",
     "settings.appearance.group.theme": "a797e309",
+    "settings.appearance.group.windows": "26d9c28d",
     "settings.appearance.group.wallpaper": "466891e2",
     "settings.appearance.group.fonts": "ffe688a5",
     "settings.appearance.group.night-light": "6b20f548",
@@ -197,10 +198,12 @@
     "settings.appearance.shell-opacity": "2532e87f",
     "settings.appearance.shell-opacity.desc": "65d97dbf",
     "settings.appearance.glass": "745b5a48",
-    "settings.appearance.glass.desc": "278719be",
+    "settings.appearance.glass.desc": "6c5b5115",
     "settings.appearance.glass.clear": "719ea396",
     "settings.appearance.glass.regular": "2dfa6607",
     "settings.appearance.glass.frosted": "c10fb76e",
+    "settings.appearance.window-tinting": "1b778740",
+    "settings.appearance.window-tinting.desc": "2f51abe1",
     "settings.appearance.dialog.wallpaper": "4842be93",
     "settings.appearance.filter.images": "09e871c9",
     "settings.appearance.interface-font": "30c49d75",
@@ -828,8 +831,8 @@
   },
   "locales": {
     "de": {
-      "translated": 720,
-      "of": 824,
+      "translated": 723,
+      "of": 827,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -939,14 +942,14 @@
       "stale": []
     },
     "es": {
-      "translated": 824,
-      "of": 824,
+      "translated": 827,
+      "of": 827,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 720,
-      "of": 824,
+      "translated": 723,
+      "of": 827,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1056,8 +1059,8 @@
       "stale": []
     },
     "it": {
-      "translated": 720,
-      "of": 824,
+      "translated": 723,
+      "of": 827,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1167,8 +1170,8 @@
       "stale": []
     },
     "ja": {
-      "translated": 720,
-      "of": 824,
+      "translated": 723,
+      "of": 827,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1278,8 +1281,8 @@
       "stale": []
     },
     "nl": {
-      "translated": 720,
-      "of": 824,
+      "translated": 723,
+      "of": 827,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1389,8 +1392,8 @@
       "stale": []
     },
     "pl": {
-      "translated": 720,
-      "of": 824,
+      "translated": 723,
+      "of": 827,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1500,8 +1503,8 @@
       "stale": []
     },
     "pt-BR": {
-      "translated": 720,
-      "of": 824,
+      "translated": 723,
+      "of": 827,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1611,8 +1614,8 @@
       "stale": []
     },
     "pt-PT": {
-      "translated": 720,
-      "of": 824,
+      "translated": 723,
+      "of": 827,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1722,8 +1725,8 @@
       "stale": []
     },
     "ru": {
-      "translated": 720,
-      "of": 824,
+      "translated": 723,
+      "of": 827,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1833,8 +1836,8 @@
       "stale": []
     },
     "zh-CN": {
-      "translated": 720,
-      "of": 824,
+      "translated": 723,
+      "of": 827,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",

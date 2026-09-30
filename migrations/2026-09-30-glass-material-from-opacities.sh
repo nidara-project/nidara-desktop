@@ -9,9 +9,10 @@
 # and resets them.
 #
 # The rule: the mean of the BAR and the PANELS — the two surfaces that carry text,
-# and the two the old master slider was mostly moved for. The dock and the windows
-# are not counted: the dock sat at the floor by default, and the windows went their
-# own way (0.80 was common). Thresholds are the midpoints between the table's
+# and the two the old master slider was mostly moved for. The dock is not counted: it
+# sat at the floor by default. Nor are the windows: they left the material the same day
+# for a switch of their own (window-tinting, ON by default), and every stored window
+# opacity was translucent — which is what "on" keeps. Thresholds are the midpoints between the table's
 # means (clear 0.24, regular 0.34, frosted 0.46):
 #     mean < 0.29 → clear · mean ≥ 0.40 → frosted · otherwise nothing (regular stays)
 # A key never set counts as its old default (0.48), but only if at least one of the

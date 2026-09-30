@@ -43,16 +43,18 @@ import { withKitSheet } from "../../lib/nidara-kit/platform/kit-css"
 interface NidaraAppearance {
     glassMaterial: GlassMaterial
     reduceTransparency: boolean
+    windowTinting: boolean
 }
 
 const nidaraAppearance = defineSettings<NidaraAppearance>("appearance", {
     glassMaterial: DEFAULT_CONFIG.glassMaterial,
     reduceTransparency: DEFAULT_CONFIG.reduceTransparency,
+    windowTinting: DEFAULT_CONFIG.windowTinting,
 })
 
 /** The fields of `NidaraThemeConfig` that live in `org.nidara.appearance`. The four
  *  opacities are DERIVED from them (`withGlass`) and stored nowhere. */
-const NIDARA_KEYS = ["glassMaterial", "reduceTransparency"] as const
+const NIDARA_KEYS = ["glassMaterial", "reduceTransparency", "windowTinting"] as const
 
 // ── DARK/LIGHT in-process ────────────────────────────────────────────────────
 // Plain `Gtk.Settings`. This used to probe libadwaita first (loading its typelib
@@ -634,6 +636,14 @@ class ThemeManager extends GObject.Object {
         this.applyGlass()
     }
 
+    /** Settings → Appearance → Windows: let the wallpaper tint Nidara's windows. Not the
+     *  glass material — windows are not Liquid Glass (`WINDOW_TINT_OPACITY`). */
+    get windowTinting(): boolean { return this.fcConfig.windowTinting }
+    async setWindowTinting(on: boolean) {
+        this.fcConfig.windowTinting = on
+        this.applyGlass()
+    }
+
     private applyGlass() {
         withGlass(this.fcConfig)
         this.applyTokens()
@@ -708,12 +718,13 @@ class ThemeManager extends GObject.Object {
 
     /** What this process holds, for core/AppearanceSync.ts (settings.ini, the greeter's
      *  mirror). A copy: nothing outside writes Theme's state. */
-    snapshot(): ThemeState & Pick<NidaraThemeConfig, "accent" | "glassMaterial" | "reduceTransparency"> {
+    snapshot(): ThemeState & Pick<NidaraThemeConfig, "accent" | "glassMaterial" | "reduceTransparency" | "windowTinting"> {
         return {
             ...this.state,
             accent: this.fcConfig.accent,
             glassMaterial: this.fcConfig.glassMaterial,
             reduceTransparency: this.fcConfig.reduceTransparency,
+            windowTinting: this.fcConfig.windowTinting,
         }
     }
 
