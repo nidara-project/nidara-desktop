@@ -3366,7 +3366,8 @@ glass) — owner, 2026-09-30, over 12 px / 400 / dim, which read "very thin next
 information, not metadata, so it is not `dim`. `.nidara-atomic-label-dim` (12, 400, dim) is kept for
 real metadata — the CC context menu's "full row" note. The player's artist
 (`.nidara-media-artist`, the CC tile, its detail and the island's player) follows the same rule
-against ITS title, which is 13: 13 px, regular, secondary (was 12, dim). It shares the 96 px column: "NidaraTest" is
+against ITS title: 14 px, regular, secondary (was 12, dim) under a 14 px bold title (was 13 — the
+one title left behind when the tiles' went to 14). It shares the 96 px column: "NidaraTest" is
 71 px, so a network name of ~13 letters reads whole and a longer one ellipsizes.
 
 🔑 **A tile learns that number the only legal way — it is HANDED the `ContentBudget`.** The capsule

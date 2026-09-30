@@ -655,8 +655,10 @@
 .nidara-bar-window,
 #nidara-island,
 .nidara-island-window {
+    // The track's title: 14 bold, like every tile's title (`.nidara-atomic-label-bold`;
+    // owner, 2026-09-30 — it was 13, the one title left behind).
     .nidara-media-title {
-        font-size: $fs-small;
+        font-size: $fs-body;
         font-weight: $fw-bold;
         color: var(--nidara-text);
     }
@@ -666,7 +668,7 @@
     // SECONDARY ink (80 %, held to 4.5:1) — not 12 px in the dim tier, which read far
     // thinner than the title above it.
     .nidara-media-artist {
-        font-size: $fs-small;
+        font-size: $fs-body;
         font-weight: $fw-regular;
         color: var(--nidara-text-secondary);
     }
