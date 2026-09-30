@@ -1,6 +1,6 @@
 import GObject from "gi://GObject"
 import { defineSettings } from "../../core/configFile"
-import { WidgetSize } from "../../common/widget-kit"
+import { WidgetSize, PANEL_W } from "../../common/widget-kit"
 import { WIDGET_META, CC_DEFAULT_LAYOUT } from "../../widgets/index"
 
 // CC grid geometry — one cell is UNIT px, cells separated by GAP px. It lives HERE,
@@ -9,13 +9,28 @@ import { WIDGET_META, CC_DEFAULT_LAYOUT } from "../../widgets/index"
 // move without a widget noticing. They used to sit in the shared Types module purely
 // so widgets could reach them without closing an import cycle — which is exactly how
 // cpu-memory came to compute the host's cell pitch by hand.
+//
+// GAP is 16 since 2026-09-30 (12 before, with no reason on record since the first CC
+// of 2026-04-05). Checked against measured reference numbers rather than taste — floating
+// cards 16 apart and 16 from their panel's edge, ~17 between modules at our scale; the
+// tile (UNIT) was already proportional. The measurements and their sources are in
+// design-system.md, "The Control Center is a PANEL". It also equals the CC panel's margin (ControlCenter.tsx,
+// CC_PANEL_PAD): edge-to-tile reads like tile-to-tile.
 export const UNIT = 80
-export const GAP = 12
+export const GAP = 16
 
 export const GRID_COLS = 4
 export const GRID_ROWS = 8
-export const GRID_WIDTH  = GRID_COLS * UNIT + (GRID_COLS - 1) * GAP // 356
-export const GRID_HEIGHT = GRID_ROWS * (UNIT + GAP) - GAP            // 732
+export const GRID_WIDTH  = GRID_COLS * UNIT + (GRID_COLS - 1) * GAP // 368
+export const GRID_HEIGHT = GRID_ROWS * (UNIT + GAP) - GAP            // 752
+
+// PANEL_W.full (common/widget-kit/panel.ts) restates GRID_WIDTH: the kit is a leaf
+// and may not import this file (the boot-time cycle its header describes). Nothing
+// else holds the two together, and the gap moving on 2026-09-30 is exactly when they
+// would have drifted — so say it at boot, loudly, where DevLogWatch turns it into a
+// notification.
+if (PANEL_W.full !== GRID_WIDTH)
+    console.error(`[CCLayoutManager] PANEL_W.full is ${PANEL_W.full}, the CC grid is ${GRID_WIDTH} — update widget-kit/panel.ts`)
 
 export const SIZE_MAP: Record<WidgetSize, { w: number; h: number }> = {
     [WidgetSize.SINGLE]:     { w: 1, h: 1 },
@@ -85,7 +100,7 @@ type PosMap = Map<string, Cell>
 //     (it used to jump by itself to the first free cell — usually the bottom);
 //   · a tile that LEAVES or SHRINKS frees cells, and what sits below them in those
 //     columns falls up into them if it fits (`liftInto`) — nothing ever moves sideways,
-//     and a gap nothing fits in stays, as iOS's Control Center allows gaps.
+//     and a gap nothing fits in stays: the grid allows gaps.
 // Clearing `positions` goes back to DEFAULT.
 class CCLayoutManager extends GObject.Object {
     static {

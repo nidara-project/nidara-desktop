@@ -1,30 +1,33 @@
 #!/usr/bin/env node
-// chrome-scope-check — every shell-skin surface must be inside the appearance pin,
+// chrome-scope-check — every shell-skin surface must be inside the shell-skin scope,
 // and nothing notices when one is not.
 //
-// Settings → Appearance lets a user pin the shell skin to Dark or Light independently
-// of the system mode. That pin is one scoped CSS block, built from
-// `CHROME_SCOPE_WINDOWS` in `ui/shell/core/NidaraTheme.ts`, selecting each surface by
-// its GTK window name. A surface missing from that list keeps the SYSTEM mode while
-// its siblings obey — wrong tokens (text, borders, glass) and uninverted `.nd-icon`s.
+// The adaptive glass (#673) can flip ONE surface's skin (dark ↔ light) to keep its
+// text legible. The flipped token set is one scoped CSS block per skin, built from
+// `CHROME_SCOPE_WINDOWS` in `ui/shell/core/NidaraTheme.ts` (`generateSkinFlipScope`),
+// selecting each surface by its GTK window name; `Theme.isChromeSurface` resolves
+// Cairo painters and the kit against the same list. A surface missing from it keeps
+// the mode's tokens while its own glass flips — dark text on dark glass.
+// (Until 2026-09-29 the same list scoped the shell PIN, removed in #676; the history
+// below is from that era and is why the check exists.)
 //
 // 🔑 THIS HAS ALREADY HAPPENED TWICE, and both times for the same reason: a surface
 // MOVED OUT of the bar's window and silently left behind everything that was scoped to
 // the bar's window. The Activity Island moved on 2026-07-26 and the app grid on
-// 2026-08-09; neither was added to the pin, and the bug shipped until 2026-08-24. The
+// 2026-08-09; neither was added to the scope, and the bug shipped until 2026-08-24. The
 // same move also cost the island its `blur_popups` flag (see config/hypr/hyprland.lua),
 // which is the same failure in a different file.
 //
-// It fails silently in the worst way: only a user who has ACTUALLY pinned the shell
-// against their system mode ever sees it, so the default configuration — and every
-// screenshot, and the headless smoke — looks perfect.
+// It fails silently in the worst way: only a surface that ACTUALLY flips ever shows
+// it, over a backdrop the default configuration — and every screenshot, and the
+// headless smoke — never has.
 //
 // Two couplings are checked, because the second is the one a reader assumes:
 //   1. every layer-shell surface of the shell is in the list, or explicitly exempt;
 //   2. each such window's GTK `name:` EQUALS its Wayland namespace — the CSS selector
 //      is `window#<name>`, and the namespace is what everything else identifies a
 //      surface by. They are equal today by convention, not by construction, so a
-//      surface renamed on one side only would be in the list and still miss the pin.
+//      surface renamed on one side only would be in the list and still miss the scope.
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 
@@ -81,7 +84,7 @@ if (!found.length) {
     process.exit(1)
 }
 
-console.log("chrome-scope-check — shell-skin surfaces vs the appearance pin\n")
+console.log("chrome-scope-check — shell-skin surfaces vs the shell-skin scope\n")
 console.log(`  CHROME_SCOPE_WINDOWS = ${[...scoped].join(", ")}\n`)
 
 let bad = 0
@@ -102,7 +105,7 @@ for (const { ns, file, names } of found.sort((a, b) => a.ns.localeCompare(b.ns))
                     + `but the CSS selector is window#${ns}   (${file})`)
         continue
     }
-    console.log(`  ok    ${ns.padEnd(22)} in the pin, and window#${ns} matches`)
+    console.log(`  ok    ${ns.padEnd(22)} in the scope, and window#${ns} matches`)
 }
 
 // The reverse direction: a name in the list that no surface uses is dead selector
@@ -116,9 +119,9 @@ for (const w of scoped) {
 
 if (bad) {
     console.error(`\nchrome-scope-check: ${bad} problem(s).`)
-    console.error("A shell surface outside the pin keeps the SYSTEM mode while its siblings follow the")
-    console.error("user's Appearance setting. Add it to CHROME_SCOPE_WINDOWS in ui/shell/core/NidaraTheme.ts,")
+    console.error("A shell surface outside the scope keeps the MODE's tokens while its siblings follow the")
+    console.error("skin its surface was flipped to. Add it to CHROME_SCOPE_WINDOWS in ui/shell/core/NidaraTheme.ts,")
     console.error("or add it to EXEMPT here with the reason it needs no CSS tokens.")
     process.exit(1)
 }
-console.log("\nchrome-scope-check: every shell-skin surface is inside the appearance pin.")
+console.log("\nchrome-scope-check: every shell-skin surface is inside the shell-skin scope.")

@@ -277,7 +277,7 @@ export default function NetworkPage(nav?: SettingsNav) {
     // for its no-adapter banner. Do not put a device behind an `if` here again.
 
     // ── Ethernet ──────────────────────────────────────────────────────────────
-    // The switch (macOS's Make Inactive, GNOME's Wired toggle — it holds across a
+    // The switch (GNOME's Wired toggle — it holds across a
     // restart, see Net.setWiredEnabled), the state in words, and the details: the
     // adapter's facts and the IP/DNS form.
     const { box: ethBox, listBox: ethList } = listGroup(t("settings.network.group.ethernet"))

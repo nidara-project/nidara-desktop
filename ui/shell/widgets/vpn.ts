@@ -177,7 +177,7 @@ const vpnWidget: AtomicWidget = {
     buildCCDetail: buildBarExpanded,
     ccDetailRows: 3,
     getActive: () => !!vpnActiveName,
-    // A plain on/off control, as Apple's VPN item: shown or not, and the icon says
+    // A plain on/off control: shown or not, and the icon says
     // connected or not (contract.ts `barActive`). Off in the bar by default — most
     // machines have no VPN to show.
     defaultInBar: false,

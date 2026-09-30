@@ -165,7 +165,7 @@ function makeIslandWidget(
             click.connect("released", () => showDetail(id))
             overlay.add_controller(click)
 
-            // Press-and-hold reaches the same detail (iOS-controls parity; on 1×1
+            // Press-and-hold reaches the same detail (touch parity; on 1×1
             // the round toggle swallows every tap, so hold is the only on-tile
             // path there). CLAIMED at trigger time cancels the inner button's
             // sequence, so releasing does NOT also fire the toggle.
@@ -722,7 +722,10 @@ export default function IslandGrid() {
 
     const editLabel = new Gtk.Label({ label: t("cc.grid.edit"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 })
     const editBtn = SquircleContainer({ child: editLabel, shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, css_classes: ["cc-edit-pill"], shadow: GLASS_SHADOW, keyboardStop: true })
-    const editBtnWrapper = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, margin_top: 24, margin_bottom: 12 })
+    // 16 above it, and nothing below: the CC's panel margin (ControlCenter.tsx,
+    // CC_PANEL_PAD) closes the panel under it. It was 24 + 12 until 2026-09-30, when the
+    // CC became a panel (owner's call).
+    const editBtnWrapper = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, margin_top: 16, margin_bottom: 0 })
     editBtnWrapper.append(editBtn)
 
     overviewPage.append(gridOverlay)

@@ -164,8 +164,7 @@ const nightLightWidget: AtomicWidget = {
     getActive: () => nightLight.enabled,
     watchActive: subscribe,
     // Active = on (by hand or by its schedule). Default "always": the bar icon is also
-    // how it gets turned on. Fixed in the CC — Apple's Night Shift has its own control
-    // there too — which is what lets the bar offer "When active" (contract.ts).
+    // how it gets turned on. Fixed in the CC, which is what lets the bar offer "When active" (contract.ts).
     ccFixed: true,
     barActive: () => nightLight.enabled,
     watchBarActive: subscribe,

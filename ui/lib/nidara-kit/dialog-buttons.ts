@@ -23,7 +23,7 @@ export interface DialogResponse {
  * peers and the label length should not make one look more important.
  *
  * Until 2026-09-13 the dialogs had their own button: flat, full-bleed text cells
- * split by a hairline, the bottom corners rounded to the dialog — a macOS-alert idiom
+ * split by a hairline, the bottom corners rounded to the dialog — an alert idiom
  * no other surface used. Reported by the maintainer on the first live consent prompt:
  * "we are not using that format anywhere else".
  */

@@ -1237,26 +1237,47 @@ clocks are `--nidara-text`, and **Stop is `suggested-action`**: stopping a captu
 purpose is how the flow FINISHES (it writes the file), not something that destroys work. Reserve
 `destructive-action` for a click the user could regret.
 
-## Shell-skin appearance & opacity (`appearance.shellAppearance` + the glass sliders)
+## Shell skin & opacity (the mode, the adaptive glass, the glass sliders)
 
-### Appearance pin — the WHOLE shell skin, not just bar/dock
+### Which skin each shell surface wears (2026-09-30: DARK, whatever the mode)
 
-Text colour is mode-bound (`--nidara-text` = `#fff` dark / `#000` light) but shell glass is
-translucent over the wallpaper. In dark mode white text forgives almost any wallpaper; in
-**light mode black text fails on a dark wallpaper** when the glass is too transparent. The fix
-is the appearance pin (NOT an opacity floor — see below).
+**Every shell surface wears the dark skin — dark glass, white ink — whatever the system mode, and
+whatever is behind it** (owner, 2026-09-30). The bar, the island, the dock, the CC and the NC, the
+menus, the banners, the tooltips, the app grid: `Theme.chromeIsDark` is `SHELL_SKIN_IS_DARK`
+(`core/NidaraTheme.ts`), a constant. The system mode is the APPLICATIONS' — Settings and About
+included, which are app windows — and the "Appearance" tile still switches it, for them.
 
-**`appearance.shellAppearance`** (`system | dark | light`, default `system`) pins the **entire
-shell skin** — bar, dock, AND every overlay (CC/NC/Prism/system menu/overview/app grid) — to
-dark/light independent of the app/global mode, so the shell stays legible over any wallpaper
-while apps follow their own mode. **App-mode windows are EXCLUDED**: Settings
-(`nidara-settings-window`) and About (`nidara-about`) follow the system mode like any app. It
-flips the **whole token family** (text AND surfaces/edges/shadows), never just `--nidara-text`.
-`Theme.chromeIsDark` resolves it ("chrome" now means the whole shell skin).
+| surface | its skin |
+|---|---|
+| **every shell surface** | dark, fixed; the adaptive glass only THICKENS it (`SHELL_FLIPS = false`) |
+| **Settings, About** | the system mode, like any app (they are not shell skin) |
 
-How the flip works:
-- **CSS side:** `NidaraTheme.generateChromeTokenScope()` re-emits the full `--nidara-*` block
-  (factored into `nidaraVars()`) under a scoped selector when the shell differs from the system.
+🔑 **Why** (the owner, in his words: "we are not going to change the colour of the text every time
+the wallpaper changes a little"): the shell used to follow the mode, and from 2026-09-29 the bar
+row took its skin from its backdrop (#676) — so the bar's ink changed with the wallpaper, and every
+panel's with the mode, for no reason the person could see. The numbers say it is not needed: dark
+glass at the ceiling (0.60) keeps PRIMARY text at 4.69:1 over pure white; the secondary tier holds
+4.5:1 up to a grey of 0.84 and falls to 3.66:1 over pure white, the dim tier to 2.78. Over the
+default wallpaper, at the thinnest glass (0.24), primary is 6.3 and secondary 4.6.
+- **Tokens:** the global `*` block is the MODE's (Settings and About wear it); the shell's windows get
+  their own full set over it, `generateChromeTokenScope` — the pin's scope, brought back for this:
+  `window#<w>, window#<w> *` for every window in `CHROME_SCOPE_WINDOWS`, emitted only while the two
+  differ. Verified live 2026-09-30: system switched to light, bar, dock and CC stayed dark with white
+  ink (the Appearance tile read "Claro").
+- **Not decided yet, and deliberately not built:** a LIGHT skin as a Setting (the owner wants the
+  possibility, "as a separate setting", its form undefined), and the "extreme case" in which the
+  glass itself may flip (rule B stays in the kit, tested, switched off by `SHELL_FLIPS`). The
+  machinery for both is still here: the skin-flip classes (`generateSkinFlipScope`), `decideGlass`'s
+  B, and the bar row's backdrop skin (`skinFromBackdrop`, `decideGlassByBackdrop`, the whole-strip
+  mean — no surface uses it since 2026-09-30).
+- ⚠️ This reverses TWO recorded calls of 2026-09-29, both by the owner: #676 ("the bar reads its skin
+  from the wallpaper") and "no appearance pin — do not bring it back". The pin is not back: there is
+  still no setting. What came back is its token scope, for a skin that is now fixed.
+
+What the pin's machinery taught, and what still uses it:
+- **CSS side:** `NidaraTheme.generateSkinFlipScope()` re-emits the full `--nidara-*` block
+  (factored into `nidaraVars()`) under a scoped selector — per SKIN now, keyed by a class the
+  adaptive glass puts on a flipped surface's root. (`generateChromeTokenScope` — the pin's, back since 2026-09-30 for the fixed dark skin — does the same per WINDOW; the lessons below were learnt on it.)
   - **Scope = every toplevel in `CHROME_SCOPE_WINDOWS`** (each window + its descendants):
     `nidara-bar`, `nidara-dock`, `nidara-island`, `nidara-app-grid`. The bar window's
     `Gtk.Overlay` still hosts CC/NC/Prism/system menu/overview, so scoping that window covers
@@ -1280,7 +1301,10 @@ How the flip works:
     don't inherit reliably and the global `* { --nidara-* }` matches every node directly, so a
     bare `window#nidara-bar { --nidara-* }` only overrides the container. An id-qualified
     universal beats `*` on specificity. It mirrors the `.nd-icon` `-gtk-icon-filter` too.
-- **Cairo side:** shell painters read `Theme.chromeIsDark` (not `Theme.isDark`):
+- **Cairo side:** shell painters read the chrome skin — `chromeIsDarkFor(widget)` from
+  `common/AdaptiveGlass.ts`, asked with the painter's OWN widget, which is `Theme.chromeIsDark`
+  unless the surface it sits in has been flipped by the adaptive glass (see "Adaptive glass"
+  below). Never `Theme.isDark`:
   `SquircleContainer` (**`chrome` defaults to `true`** = shell skin; pass `chrome: false` ONLY
   for app-mode windows like About), the dock (`DockAxis`/`DockItem`), the bar CPU/RAM ring +
   battery glyph, and the CC/NC/app-grid Cairo. Non-shell (Settings/About) keep `Theme.isDark`.
@@ -1291,6 +1315,11 @@ How the flip works:
     disagree about which mode a surface is in. It used to hardcode `nidara-bar`/`nidara-dock`
     and went stale with the pin, for the same reason.
     The slider uses it for the neutral track colour. Use this for any future shared painter.
+    🔑 Since the adaptive glass (#673) the kit's hook is wired in `app.ts` as
+    `Theme.isChromeSurface(w) ? chromeIsDarkFor(w) : Theme.isDark` — a slider, tooltip or menu
+    inside a surface whose skin was flipped must follow that surface, which a per-WINDOW answer
+    cannot. The kit's `chromeIsDark(widget?)` takes the widget for the same reason (`paintGlassBubble`
+    passes it as `opts.widget`).
     ⚠️ Since the slider moved to the kit (2026-08-15) it reaches that method through
     **`kitAppearance().surfaceIsDark(widget)`**, not by importing `Theme` — a kit component may
     not import from `ui/shell/`. Same method, injected. A shared painter that stays in
@@ -1309,8 +1338,14 @@ How the flip works:
   won: it is what the CSS half had always shipped, and light vibrancy is off-white in the prior art
   we follow. Measure a retint with `scripts/dev/glass-probe.ts` rather than reasoning about it.
 - **Light-mode text ramp is nudged up:** `--nidara-text-secondary`/`-dim` are `rgba(fg, 0.85/0.72)`
-  in light vs `0.8/0.6` in dark (`nidaraVars`). Black ink over translucent light glass (on an
-  arbitrary wallpaper) reads washed-out at the dark-mode alphas; white-on-dark needs less ink.
+  in light vs `0.8/0.6` in dark. Black ink over translucent light glass (on an arbitrary
+  wallpaper) reads washed-out at the dark-mode alphas; white-on-dark needs less ink. The alphas
+  live in **`TEXT_INK`** (`ui/lib/nidara-kit/platform/glass-legibility.ts`), which `nidaraVars`
+  emits from — the adaptive glass holds exactly those tiers to a contrast target, so they are one
+  value, not two copies. The ramp is ALPHA on purpose, and that was measured, not assumed
+  (2026-09-29, #673): a solid grey equal to `dim` over black measures 1.19:1 over a white backdrop
+  against 2.13:1 for the alpha ink, because alpha ink always lands brighter than what it sits on
+  and a fixed grey sinks into a bright backdrop. Apple's `secondaryLabelColor` & co. are alpha too.
 
 **Adwaita colour leak (tech-debt #9):** libadwaita is force-loaded in-process and colours
 `button` / `calendar` labels by the PROCESS mode — wrong for a pinned shell. Fixed ONCE in
@@ -1327,8 +1362,9 @@ quantities that both get called "opacity": `SquircleContainer` fills a CC island
 `overlayOpacity * depth` — that is the material. The battery outline, the dock's running dot, a
 resource ring, the cover art's empty slot are drawn on top of it, and they must NOT scale with it:
 the two would compound, so the more transparent a user made a surface the harder its own contents
-would be to read. Three tones, all painted as `Theme.chromeIsDark ? 1 : 0` (a painter that hardcodes
-a colour is a painter that vanishes in one appearance):
+would be to read. Three tones, all painted as `chromeIsDarkFor(area) ? 1 : 0` (a painter that hardcodes
+a colour is a painter that vanishes in one appearance, and one that reads the global
+`Theme.chromeIsDark` is one that stays white on a surface the adaptive glass has flipped):
 
 | token | for |
 |---|---|
@@ -1345,8 +1381,12 @@ anywhere, and a single-use number in a shared file advertises a sharing that doe
 and both are already named where they are used.
 
 
-Glass opacity is **WYSIWYG with the slider** — what you set is what is painted, and no code pins it
-higher (an old light-mode 0.40 floor was removed for exactly that reason). But the RANGE itself now
+Glass opacity is **the slider, or more — never less** (since 2026-09-29, #673). Over a backdrop the
+slider's glass can carry, what you set is what is painted. Where it cannot — text on it would fall
+below its contrast target — the ADAPTIVE GLASS thickens that one surface (up to
+`GLASS_ADAPT_CEILING`) or flips its skin; see "Adaptive glass" below. So the slider is a floor, not
+the value. (What was removed for good is a FIXED floor: an old light-mode 0.40 pinned every
+surface over every wallpaper, which is the opposite trade.) But the RANGE itself now
 has a floor, and the range lives in ONE place: **`GLASS_RANGE` in `core/NidaraTheme.ts`**, imported
 by `clampOpacity` and by all five sliders. Do not retype the bounds; that was six literals until
 2026-08-23, i.e. five chances for a slider to offer a value the clamp then silently refuses.
@@ -1366,9 +1406,10 @@ answer. ⚠️ **The answer it turned out to have is not the one this paragraph 
 It said "give the TEXT its own contrast (vibrancy / shadow / a scrim)" — the login screens got the
 real one on 2026-08-25 and it is a step earlier than that: choose which SKIN the glass wears, from
 what is behind it, because no backdrop defeats both. See "The login screens choose their skin from
-the wallpaper" below for the sweep and the prior art. **For the SHELL this is still open**, and for
-a reason that does not apply to the login screens: a shell surface can have a window behind it, not
-only the wallpaper.
+the wallpaper" below for the sweep and the prior art. **For the SHELL it is answered by the adaptive
+glass (#673)**, which is the reason it had stayed open answered: a shell surface can have a window
+behind it, not only the wallpaper, so it MEASURES what is really behind it instead of reading the
+wallpaper file. See "Adaptive glass" below.
 
 ⚠️ **ONE floor for all four surfaces, and that is load-bearing** (see the master below): a
 per-surface floor makes the master go mixed — and grey itself out — across the whole part of its
@@ -1411,6 +1452,30 @@ A common misconception (it bit a past explanation): system-tray icons are NOT un
   app-specific code).
 - Otherwise → fall back to the app's composited `gicon` **pixmap**, which **can't** recolour.
 
+- **A one-colour pixmap is a TEMPLATE** (2026-09-29, macOS's term and its answer): an app that
+  sends only pixels picks their colour from the SYSTEM mode (Claude Desktop: white in dark, black in
+  light) and cannot know that the bar reads its skin from its backdrop (#676) — so a white icon sat
+  on light glass. `isTemplatePixbuf` (every visible pixel the same colour, ±24) routes it to
+  `templateIcon()`, a DrawingArea that paints the pixmap as a MASK in the bar's ink
+  (`chromeIsDarkFor`), repainted by the adaptive glass like every Cairo mark. A second colour
+  anywhere (a red badge, a two-tone keyboard label, a logo) → shown untouched, and that is the
+  decision, not a gap (owner, 2026-09-29): a two-colour icon carries its own contrast — ChatGPT's
+  black logo on a white tile, Fcitx's white label with a black outline — and reads on any bar, like
+  the dock's full-colour icons. Do not add an "invert grey icons" pass.
+  🔑 An SNI Id of `chrome_status_icon_N` is NOT Chrome: it is what Chromium names every tray
+  icon, so every Electron app has one (it was ChatGPT). Resolve the process before naming the app.
+  ⛔ "Make the APP believe it is in the other mode" does not work: the portal's colour scheme is
+  one answer per app, and Electron uses the same value for its windows.
+- **The symbolic palette keeps its meaning:** `-gtk-icon-palette: success var(--nidara-text),
+  warning var(--nidara-warning), error var(--nidara-danger)` on the bar's images and on
+  `.nidara-menu` — orange warning, red error, as GNOME and macOS (owner, 2026-09-29: a warning in
+  red reads as a failure); success follows the ink because the bar is monochrome and colour is for
+  what asks for attention. `--nidara-warning` = `WARNING_HEX` (status-colors.ts), new that day. It
+  was `… white` for all three from when the bar was always dark: Telegram's unread dot stayed white
+  on light glass. That dot is `warning` only because Papirus classed it so (`ColorScheme-Highlight
+  warning` — KDE's convention and GTK's in one element); Telegram itself asks for no colour, it
+  swaps its IconName to `…-attention-symbolic` rather than using SNI's NeedsAttention status.
+
 Consequence: a single bar can show some tray icons themed and others full-colour, depending
 purely on what the icon theme provides. That's inherent to SNI (apps supply what they
 supply); making it coherent is a policy decision, deferred — see tech-debt #24.
@@ -1419,6 +1484,298 @@ supply); making it coherent is a policy decision, deferred — see tech-debt #24
 `SquircleContainer` params to the search/CC/clock capsules), NOT one grouped pill — so tray
 icons match every other bar icon. The click→window-focus wiring (PID-first match, `is_menu`,
 `activate` fallback) lives in architecture.md under `bar/Tray.tsx`.
+
+## Adaptive glass — each surface keeps its own text legible (#673, 2026-09-29)
+
+Every shell surface with text on glass — the bar, each bar panel (CC, NC, system menu, search, bar
+expansion), the notification banners, the Activity Island, the app grid — measures what is behind
+it and adapts, by itself, on events. So does the dock, held to its MARKS instead of text (below).
+
+**The rule** (owner's call: "A+B"), pure arithmetic in `ui/lib/nidara-kit/platform/glass-legibility.ts`:
+
+- Targets, per `TEXT_INK` tier: primary and secondary ≥ 4.5:1, dim ≥ 3:1, disabled exempt — for a
+  surface whose `content` is `text` (the default). A `marks` surface — the dock, whose running dot
+  (`INK.solid`) is the only thing it draws, its icons being the apps' own artwork — is held to
+  `MARK_TARGET` 3:1 (WCAG 1.4.11, non-text contrast). Under the text rule the dock would thicken
+  for words it does not have. Measured consequence: the dot reads over ANY grey backdrop by
+  thickening alone (0.50 over pure white, dark skin), so the dock in practice never flips — it
+  keeps the mode's skin, as macOS's Dock.
+- **A.** Thicken the surface's tint from the user's slider up to `GLASS_ADAPT_CEILING` (0.60 —
+  past ~0.59 it stops reading as glass, #82).
+- **B.** If the ceiling is not enough, flip the surface's SKIN (dark glass + white ink ↔ light glass
+  + black ink), at the slider's own body. ⛔ **Switched off for the shell since 2026-09-30**
+  (`SHELL_FLIPS`, `decideGlass(…, flip: false)`): the shell's skin is fixed dark (see "Which skin
+  each shell surface wears"). B stays in the kit and in the probe for the extreme case still to be
+  defined.
+- Hysteresis: a flipped surface goes home only when its own skin clears every target by
+  `FLIP_BACK_MARGIN` (1.1); a thinning of less than `ALPHA_DEADBAND` is not worth a repaint.
+- Held to its numbers by `scripts/dev/glass-legibility-probe.ts` in the `styles` CI job, with a
+  control that deletes rule B and must be caught. ⚠️ The first control run was NOT caught: the
+  last-resort branch also flips pure white, so "did it flip" is not a test of B. The probe now also
+  checks that B arrives at the slider's body, not at the ceiling.
+
+**⏸️ Unused since 2026-09-30 — the bar row's skin is the shell's (dark).** What follows is how the
+row took its skin from its backdrop from 2026-09-29 (#676); the machinery is kept for the light
+skin still to be defined.
+**The bar row's SKIN comes from its backdrop, not from the mode** (#676, as macOS's menu bar):
+`decideGlassByBackdrop` takes the skin that reads best over the TYPICAL backdrop
+(`BackdropStats.mean`), not the extremes (deciding from the extremes turned a bar over a
+pink-to-purple wallpaper light because of its pale left end; macOS reads "almost always white"
+because most wallpapers are dark up there) — keeps it unless the other reads better by
+`FLIP_BACK_MARGIN`, and then lets `decideGlass` thicken it for the extremes. Everything else starts
+from the mode.
+🔑 **The typical backdrop is the MEAN of the WHOLE STRIP** — not the median, and not only what is
+under the capsules (owner-caught 2026-09-29: "same wallpaper, the bar changes colour on some
+workspaces, or when a new icon shows up"). Both halves were measured before they were changed:
+- *Only under the capsules* made the skin depend on how far the glass reaches, and the capsules
+  grow and shrink with their content — the window title on the left, the tray on the right. On the
+  default wallpaper (pale pink left, deep purple right) workspace 4's long YouTube title stretched
+  the left capsule over the pink and the row went light; workspaces 3 and 5, shorter titles, dark.
+  A surface with `skinFromBackdrop` now probes with `ProbeRequest.seeThrough`: where we paint
+  nothing (a whole blur-sized block at ≤ 2/255, clear of every excluded rect, clipped at the
+  capture's edge), the raw capture goes through Hyprland's colour pipeline like a closed probe and
+  counts toward the mean and the area — never toward the extremes, since no text sits there.
+- *The median* of a two-colour strip is whichever colour covers more than half, so it JUMPS when a
+  few percent of the samples change side. A mean moves by as much as they moved, and the hysteresis
+  absorbs that. `glass-legibility-probe.ts` holds it: 2 % of a two-colour strip changing side must
+  not flip the row (it fails with the median — checked).
+Verified live across five workspaces: glass samples 541–937, mean 175–185 red, one skin, one alpha.
+Consequence worth knowing: over the default wallpaper the full strip is ~60 % pink, so the row is
+LIGHT (black ink) everywhere — it used to be dark on most workspaces only because its capsules
+happened to sit mostly on the purple.
+
+**The unit is the SURFACE, never a capsule** — and "surface" is what reads as one piece, not what is
+one GTK window. The island's capsule row sits in the bar's row, so it is in the bar's GROUP
+(`group: () => "bar-row"`): one decision from both backdrops together. Without that, a pale stretch
+under the bar's left end flipped the bar to light and left the island's capsule dark in the middle
+of it. Each island MODE is a panel of its own (below).
+⚠️ **A group does not decide until the member that gives it its skin has been measured.** The
+bar's first probe at every shell start finds it not yet painted; when the island's succeeded
+first, the row decided from the island's capsule alone — a pinkish patch that reads LIGHT — and
+the whole bar went light until the bar's retry 1.6 s later (owner-caught 2026-09-29 as "the bar
+goes light on workspace 3 for nothing"; the order is a race, so it came and went). Every skin
+change — and a first decision against the mode — is logged as `[AdaptiveGlass] <id>: skin a → b
+(why, probe <tag>, ws N) mean … brightest … samples …`, the probe tag matching
+`NIDARA_BACKDROP_DEBUG`'s images: an intermittent flip is answered from the log, not re-staged.
+⚠️ **A group is measured only ON SCREEN, and never while hidden for a fullscreen window.** The
+bar hides for fullscreen with opacity 0 and stays MAPPED, so it looked measurable — and what it
+found behind it was the fullscreen window (X's black page, white text): the row flipped and came
+back from fullscreen in that skin (2026-09-29, in the log as `group bar-row [bar]` flips on ws 5).
+The bar's `settled` is false while hidden, and `setBarFullscreenMode`/`setBarOverlayMode` call
+`settle()` when it shows again. The island's capsule, UNmapped for fullscreen, took the closed-panel
+path and measured the same window; a surface with a `group` now skips `measureClosed` — a closed
+measurement decides alone and would leave a stale backdrop in `lastStats` for the group to merge,
+and a group member comes back where it was, over what it had. Verified live: X toggled fullscreen
+and back, no measurement while hidden, one on return, no skin change.
+
+**The Control Center is a PANEL, and wears a HALO under it** (`common/GlassHalo.ts`,
+`control-center/ControlCenter.tsx`; owner's calls of 2026-09-29/30, the second after macOS 27's
+Control Center). The CC has no painted panel — its tiles are the outer glass — so over a busy page
+each tile was a separate thin sheet with the page showing through and between them.
+- **The panel is geometry, drawn by nothing (yet).** The CC's content sits inside a margin,
+  `CC_PANEL_PAD` = 16 on every side (owner: "a panel cannot have its content stuck to its top
+  edge"), and the panel hangs `BAR_MARGIN` (= `gaps_out`, 4) below the bar and from the screen edge,
+  as a window does — so under Increase contrast (#674) it can be drawn and its spacing is already a
+  panel's. The gap between tiles is 16 too (`GAP`, 12 until 2026-09-30 — see below), so
+  edge-to-tile reads like tile-to-tile. Inside: the privacy notice 4 above the grid (it belongs to
+  the content, as macOS 27's does; was 24), the Edit pill 16 under the grid with only the panel's
+  margin below it (was 24 + 12). Measured live at GAP 12: panel 388×577 at (2168, 40), content at
+  y 56 and 20 px from the right edge. **The NC is the same panel** (same `CC_PANEL_PAD`, same place,
+  cards `GAP` apart, the clear-all pill 16 under the last card), so the two columns line up; its
+  scroll indicator's lane (`LANE`, 8) lives inside the panel's right margin rather than past it.
+  Measured live: NC panel 400 wide at (2156, 40), calendar 368×272 at y 56. The other bar panels
+  (system menu, bar expansion, search) keep `PANEL_TOP` (8 below the bar) until they get a margin
+  of their own. A tile's title is 14 (macOS's, scaled), which needed the 2×1 capsule's text column
+  widened first (88 → 96, icon circle 44 and gap 8): at 88 it cut "Luz nocturna".
+- **Why GAP is 16** (owner asked where 12 came from: nowhere on record, it arrived with the first CC
+  of 2026-04-05). Apple's official macOS 27 Figma kit has no Control Center, but its notification
+  stack is 16 from the panel's edge, 16 between cards and 16 from the screen's edge; a macOS 27 CC
+  screenshot scaled by its menu bar gives ~17 between modules at our scale, and the tile itself
+  (~79 against our `UNIT` 80) was already right. The same kit's menu-bar item highlight is 24 pt —
+  exactly our hover pill — so our bar is ~1:1 with macOS points; our tiles are therefore a little
+  larger than Apple's in absolute terms, deliberately, like our 18px bar icons. `PANEL_W.full`
+  restates the grid width (the widget kit is a leaf and may not import it); `CCLayoutManager`
+  logs a CRITICAL at boot if the two disagree.
+- **The halo is a cloud over the panel, and the panel's shape never shows.** Full alpha only under
+  the CONTENT (where the labels are), then a raised-cosine falloff ACROSS the margin and on past the
+  box by `CC_HALO_OUTSET` — up only to the bar (`BAR_MARGIN`: it must not darken the bar's capsules),
+  24 at the sides, 32 below. No plateau reaches the panel's edge, so no rectangle is drawn (the
+  first version was flat to the tiles' edge; owner: "the container's shape should not show"). In the
+  skin's own `GLASS_TINT`: a shadow on dark glass, a haze on light glass (a dark shadow under black
+  ink would LOWER its contrast).
+- **It is the surface's first step of A.** Same tint, same layer, so tile alpha `a` over halo `c`
+  is exactly one glass of `e = 1 − (1−a)(1−c)`. A surface registered with `halo: true` is decided
+  as that `e` (its floor is the slider over the halo at rest), and `AdaptiveGlass` splits it:
+  `haloAlphaFor` takes the first share, from `HALO_REST` (0.12, always) to `HALO_MAX`
+  (`LAYER_IGNORE_ALPHA − 0.01`), and `glassAlphaFor` gives the tiles the rest. `dumpState.glass`
+  shows `alpha` (effective), `halo` and `tiles`.
+- ⛔ **Never above the layer's `ignore_alpha`.** Under it Hyprland does not blur behind the halo,
+  so it reads as a shadow over the sharp backdrop. Over it, it would turn into a frosted PANEL with
+  a blur edge wherever the falloff crosses the threshold — a visible jump the owner declined; the
+  solid panel is Reduce transparency's (#674).
+- **It paints outside its box, which two things clip by default.** The revealer: `ScaleRevealer`
+  now clips only an UNROLLING reveal (`animateLayout`) — a scale-only pop cannot push its child
+  past the box, so the clip could only cut what paints outside on purpose (the halo appeared as a
+  second step, after the pop). And the bar's visible region, a hard GL scissor: `paintedRects`
+  pads the CC's rect by `CC_HALO_OUTSET` where that is wider than `PANEL_PAD`.
+- **Cost:** the shape is painted once per size and skin into a cached render node at full
+  strength; its alpha is an opacity node on top, so the adaptive animation and the reveal's fade
+  never repaint it (`redrawSubtree` only queues the draw that re-reads the alpha). Not a hit
+  target: the input region is still the panel's box.
+- Verified live over the wallpaper (dark skin, rest): the gap between tiles 2/255 darker than the
+  bare wallpaper at lum 40, a smooth falloff with no banding. ⚠️ NOT yet seen live: the light skin's
+  haze, and the halo thickening over a bright backdrop — needs a light window behind the CC.
+
+**The dock** (2026-09-29, owner: "mide también el dock") is one surface per monitor,
+`dock-<connector>`, role `dock` (floor = `dockOpacity`), content `marks`, root = the axis's `layout`.
+Three things set it apart, each an option any surface can use:
+
+- **`probeArea`: the glass is not the widget's box.** The layout spans the monitor; the glass is the
+  capsule (`axis.capsuleRect()`, one geometry with the painter on the vertical axis). Capturing the
+  capsule's own widget would not do: the icons are its SIBLING, so they would be left
+  unsubtracted and read as backdrop. The probe captures the area and renders the WHOLE layout over
+  it (`ProbeRequest.area`). Verified with `NIDARA_BACKDROP_DEBUG`: capture and render line up to the
+  pixel, and the icons come out as holes in the recovered backdrop, not as backdrop.
+- **`hidden` + `restsAt`: mapped but off screen.** Auto-hidden (or out of a fullscreen window's
+  way), it is measured like a closed panel at the rect it WILL stand at (`restsAt`: the capsule
+  with no slide) — not where it last stood, because auto-hidden it may never have been measured
+  shown.
+  ⚠️ **And without the tiled windows.** Revealing claims the exclusive zone, so tiled windows
+  shrink out of the way: hidden, its rest rect shows windows it will never sit on (measured
+  2026-09-29: a terminal and a browser, while shown it sat on the wallpaper). While hidden the
+  dock's `exclude` lists the tiled windows of its monitor's active workspace; what is left —
+  wallpaper, floating windows, layers — is its real backdrop. Covered entirely (7 blocks of 805
+  left, under two tiled windows) it measures nothing and keeps its last decision. Verified on an
+  empty workspace: predicted hidden (0,202,244 / 0,186,230), measured shown (1,202,244 /
+  1,186,233), same decision, and no second measurement on reveal.
+- **`settle()`: it moves on its own.** `settled` is false while it magnifies, slides, holds a menu
+  (its own surface, over the capsule) or drags; an event arriving then is remembered (`missed`)
+  and measured when the springs stop (DockCore's tick calls `settle()`). A panel does not need
+  this — its reveal's `onDone` already asks. The pointer RESTING on it does not unsettle it:
+  magnified icons at rest are rendered and subtracted like any others and the tooltip sits above
+  the capsule — and auto-hidden, the dock is shown ONLY under the pointer.
+
+The windowOrigin comes from the anchors (every axis anchors BOTTOM; the slide is a negative margin
+on the hiding edge). Cost, measured at 2560×1440, scale 1: a 1390×92 capture, 2.8–4.2 ms of main
+thread.
+
+**How a surface measures itself** — `common/BackdropProbe.ts`:
+
+1. `nidara_wl_capture_region` (zwlr_screencopy region) copies the rectangle the widget covers from
+   the compositor's FINAL frame: our layer over the backdrop Hyprland blurred.
+2. The same widget is rendered offscreen (`Gtk.WidgetPaintable` → the window's own renderer →
+   `render_texture`) at the surface's scale: exactly what we handed the compositor.
+3. `uncomposite()`: `screen = ours + backdrop·(1 − ours.a)` solved for `backdrop`, per pixel.
+   That is the backdrop AS THE TEXT SEES IT — wallpaper, a fullscreen video, another client's
+   layer, with Hyprland's blur, contrast and vibrancy already applied. Nothing to model.
+4. `backdropStats`: the 95th / 5th luminance percentiles — the brightest backdrop decides for dark
+   glass, the darkest for light.
+
+Verified live: the recovered backdrop matched the independently validated forward model (wallpaper →
+Hyprland's shaders, transcribed from v0.56.2 → tint) to a median of 2/255, p90 3.5.
+
+Why not the other ways (checked in Hyprland 0.56.2, `ScreenshareFrame.cpp`): there is no capture of
+the screen WITHOUT our layer — region/output capture copies the monitor's final texture, and the
+`no_screen_share` layer rule paints a BLACK BOX where the layer was instead of leaving it out. And
+rebuilding the backdrop from window captures + the wallpaper misses other clients' layers and would
+have to reimplement the blur.
+
+⚠️ **Four ways the measurement lied before it was right — each is a rule in the code now:**
+
+- **Only the glass BODY can be subtracted.** The offscreen render and the compositor do not
+  antialias a glyph's edge to the same byte, and dividing by `1 − alpha` amplifies the difference
+  (×10 at 0.9): every letter came back outlined in white. `isFlatGlass` keeps only pixels whose
+  paint is uniform 2 px around. The backdrop behind is blurred and smooth, so this costs nothing.
+- **Never measure a layer that is fading in.** Hyprland fades layers in (`layersIn`, ~300–400 ms)
+  and slides workspaces (600 ms); a surface composited THINNER than it is reads as a brighter
+  backdrop. The bar's first probe, taken inside its own fade, recovered +17/+32 per channel and
+  flipped a bar that needed nothing. Hence `MAP_SETTLE_MS` 1000 and `DEBOUNCE_MS` 800.
+- **Never measure right after a change of your own.** A flip restyles the CSS on the next frame
+  and repaints the Cairo on the next draw — not always the same one — and the offscreen render can
+  hand back a DrawingArea's previous node: a capture with light glass and white text against a
+  render with dark glass. `QUIET_AFTER_CHANGE_MS` after every change.
+- **The wallpaper's "changed" is its START.** `WallpaperManager` emits it when `awww img` returns,
+  and the daemon runs its transition for its default 3 s after that: half old image, half new.
+  `WALLPAPER_TRANSITION_MS` 3500.
+
+**A CLOSED panel is measured too, where it last opened** (`measureClosed` + `probeClosedBackdrop`,
+2026-09-29). Owner-caught: a panel appeared in one skin and switched a moment after, because only an
+OPEN panel could be measured (the method subtracts our own paint, and a closed panel has none). With
+the panel closed nothing of ours is in that rectangle, so the capture is the backdrop RAW; Hyprland's
+colour pipeline is applied to it — `hyprlandPrepare` (gain) per pixel, a 12 px block average standing
+in for the blur, `hyprlandVibrancy` per block, in its shaders' order, with the parameters read from
+`hyprctl getoption` at start and on every config reload — and the panel decides before it opens, on
+the same events as everything else. What is on screen of OURS in that rectangle (the bar, another
+panel) is excluded. The open measurement still runs once the panel settles and has the last word.
+Verified: an empty workspace, the CC measured once, closed, a white wallpaper set behind it — it
+decided light while closed and opened light, and its own measurement agreed. Cost, measured: the capture on
+the worker plus 1–3.5 ms of main thread for the CC and 5.7 ms for the full-width overview (12 px
+blocks, at most `CLOSED_MAX_BLOCKS` of them, an even subset beyond that — coarser blocks would smooth
+the percentiles; a per-pixel `pow` before the lookup table was 17.5 ms).
+
+🔑 **And then the open measurement is SKIPPED** when the closed one is newer than the last event
+that could change the backdrop and the panel opened where it was measured (`closedAtUs >
+lastEventUs`, `sameRect`). The open one is the expensive one — 12 ms for the overview, the
+offscreen render — and would only confirm the same model to 2/255. Anything that happens while the
+panel is open is measured the normal way. Verified: CC and overview, measured closed over a white
+wallpaper, opened light and did not measure again.
+
+**Island modes are panels of their own** for this: `island-<mode>` surfaces (root = each mode's
+MorphRevealer), measured closed where they last opened like the rest; the island's ROW (capsule +
+chips, root `islandHost`) is the `bar-row` member. A mode's morph goes from the capsule's glass to
+the mode's (`modeGlass` asks through the mode's own widget). The first version had ONE island
+surface switching between the two, which could not be measured in advance — a mode's rect is only
+known while it is open.
+
+**How a painter finds out** — it asks with its OWN widget: `glassAlphaFor(widget, role)` for the
+body, `chromeIsDarkFor(widget)` for the skin. Both walk up to the registered surface that contains
+the widget (so a popover parented inside one follows it for free) and fall back to the slider and
+`Theme.chromeIsDark` outside any surface. CSS follows through a class on the surface's root,
+`nidara-skin-dark` / `nidara-skin-light`, present only while flipped, which
+`generateSkinFlipScope` (NidaraTheme.ts) gives a full `--nidara-*` set at
+`window#<w> .nidara-skin-* *` — (1,1,1), so it beats the global `*` block everywhere inside it.
+
+🔑 **A new Cairo painter on shell chrome MUST ask `chromeIsDarkFor(itsArea)` / `glassAlphaFor(itsArea,
+role)`**, not `Theme.chromeIsDark` / `Theme.overlayOpacity`. Reading the global is exactly the bug the
+flip exposes: a ring that stays white on a surface that went light. (The agent pointer still reads
+the global: it is not a registered surface.) ⚠️ `redrawSubtree` repaints `Gtk.DrawingArea` AND
+`SlicedCairoArea` (the dock's horizontal capsule, which is not a DrawingArea); a painter of a third
+kind must be added there, or it keeps its old tint until something else redraws it.
+
+🔑 **A mode change re-decides at once, from the backdrop already measured** — the backdrop does not
+depend on our skin, so no capture is needed. Before, every mode-following surface kept the OLD
+skin for about a second (its stored decision read as "flipped" against the new mode), and whatever
+asked in that second kept the wrong answer: the dock's tooltips came up black-on-dark
+(owner-caught 2026-09-29). The bar row is skipped (its skin is the backdrop's), and the
+measurement still follows. ⚠️ And a consumer that CACHES the answer must re-ask when it shows:
+the adaptive glass re-decides on its own events and notifies nobody. The tooltip's `dark`/`light`
+label class is recomputed right before `popup()` for that reason.
+
+**When it measures — events only, never a timer** (the animation rule): a panel's reveal settling
+open (`popToggle`'s `onDone`), a banner stack settling, `map`, HyprlandState "changed" filtered to
+what can change the pixels behind (geometry, workspace, fullscreen, focus only onto a FLOATING
+window, which raises it), a wallpaper change, a theme change. What changes behind a surface without
+an event — a video, a scrolling page — is caught at the next event, not live. Cost, measured: the
+capture 3–8 ms on a worker thread. Main thread, measured 2026-09-29 with
+`NIDARA_BACKDROP_TIMING=1` (median / p95): the bar 1.9 / 2.4 ms, the island 1.9 / 2.5, the CC
+7.4 / 9.3 — almost all of it the offscreen render + read-back (the pixel loop is < 1 ms). The CC is
+the one over a 144 Hz frame (6.9 ms): it is measured once as it settles open, when nothing of ours
+is animating, so it can cost a frame only if something else animates in that instant. If that is
+ever seen, the fix is to reuse the render while the panel does not change (with a real
+invalidation — a stale render beside new text is the white-outline bug again). ⚠️ An earlier
+figure of "5–15 ms" timed the debug images' PNG writes too; time with `NIDARA_BACKDROP_TIMING`,
+never with `NIDARA_BACKDROP_DEBUG`. GPU, measured with `scripts/dev/blur-arm.sh` (idle desktop,
+CC open, arms A,B,B,A): one forced measurement per second of bar + island + CC costs ≈ +0.25 points
+(0.9/1.0 % → 1.2/1.2 %); real use measures far less often than that.
+
+Verify with `nidara-ipc dumpState` → `glass` (per surface: floor, alpha, skin, flipped, group, the
+two backdrops and how long ago), and `nidara-ipc glassRemeasure`. `NIDARA_BACKDROP_DEBUG=<dir>`
+writes each probe's capture, render and recovered backdrop as PNGs (dev-workflow.md), and
+`NIDARA_BACKDROP_PROBE=0` turns the whole thing off — the glass is then exactly the slider.
+
+Not done here, on purpose: the explicit accessibility modes (Reduce transparency, Increase
+contrast) are #674, and the CC's container/shadow is a visual element the owner reviews on screen
+first (#673 comment).
 
 ## Accent palette (9 colors)
 
@@ -2222,9 +2579,10 @@ surfaces now. `BACKDROP_TRIM` stays exported from `glass-capsule.ts`: whatever n
 needs to model what a viewer actually sees through the glass must read those numbers
 rather than copy them.
 
-⚠️ **The shell was never part of this and still is not.** Extending any wallpaper-based
-choice to `shellAppearance` was always a separate decision with a real blind spot in it
-— behind the bar there can be a window, which no wallpaper measurement can see.
+⚠️ **The shell was never part of this.** A wallpaper-based choice had a real blind spot there —
+behind the bar there can be a window, which no wallpaper measurement can see. The shell's answer
+came later and differently: the adaptive glass MEASURES the screen behind each surface (#673), and
+the bar row picks its skin from that (#676) — see "Adaptive glass".
 
 ### Looking at these two surfaces: `scripts/dev/lock-probe.js`
 
@@ -3012,10 +3370,22 @@ wide reads on one line and ellipsizes, the way every other desktop's quick toggl
 branch was written for ("Screen Recording" reading in full) is untouched: a name that breaks at a
 space still gets its two lines.
 
-The column is **84px** — the 2×1 span (2·UNIT + GAP = 172) minus the island's padding (2·12) minus
-the capsule's own chrome (`CAPSULE_CHROME` = margin 4 + icon circle 48 + spacing 12). Confirmed
-against a live session, not derived on paper: `queryUI` puts the island at x=2380 w=172, the icon at
-x=2396 w=48 and the label at x=2456.
+The column is **96px** — the 2×1 span (2·UNIT + GAP = 176) minus the island's padding (2·12) minus
+the capsule's own chrome (`CAPSULE_CHROME` = margin 4 + `CAPSULE_ICON_SIZE` 44 + `CAPSULE_ICON_GAP`
+8; macOS 27's proportions, 2026-09-30 — it was 48 + 12). It was 84 with the old 12px gap and 48/12
+chrome, confirmed then against a live session, not derived on paper: `queryUI` put the island at
+x=2380 w=172, the icon at x=2396 w=48 and the label at x=2456. The column is what the title's size
+is held to: 14px bold (since 2026-09-30) fits every title measured at 96 — "Luz nocturna" 91, "Luce
+notturna" 96 — but pl "Oszczędzanie" is 97, one pixel over.
+The SUBTITLE under it (a tile's state: "Activo", "Sin conexión") is `.nidara-atomic-label-sub`: the
+title's size (14), regular weight, and the SECONDARY ink tier (80 %, held to 4.5:1 by the adaptive
+glass) — owner, 2026-09-30, over 12 px / 400 / dim, which read "very thin next to the title". It is
+information, not metadata, so it is not `dim`. `.nidara-atomic-label-dim` (12, 400, dim) is kept for
+real metadata — the CC context menu's "full row" note. The player's artist
+(`.nidara-media-artist`, the CC tile, its detail and the island's player) follows the same rule
+against ITS title: 14 px, regular, secondary (was 12, dim) under a 14 px bold title (was 13 — the
+one title left behind when the tiles' went to 14). It shares the 96 px column: "NidaraTest" is
+71 px, so a network name of ~13 letters reads whole and a longer one ellipsizes.
 
 🔑 **A tile learns that number the only legal way — it is HANDED the `ContentBudget`.** The capsule
 makers take it as a trailing optional argument and the widget forwards what `buildContent(size,
@@ -3038,8 +3408,10 @@ NATURAL width, and a wrapping label only wraps when it is given less than it ask
 fixes a MINIMUM; it is not a maximum.
 
 **The ceiling is `NidaraClamp`** (GTK4 CSS has no `max-width`), with `min = max` when the box must be
-CONSTANT: the banner clamps its row list to `GRID_WIDTH − 2 × BANNER_PADDING`, which makes the card
-exactly the grid's width and finally makes the labels wrap. Any surface that must match a fixed
+CONSTANT: the banner clamped its row list to `GRID_WIDTH − 2 × BANNER_PADDING`, which made the card
+exactly the grid's width and finally made the labels wrap. (Since 2026-09-30 it is a one-line PILL
+as wide as its content: the clamp is a ceiling only, `GRID_WIDTH − 2 × PILL_PAD_X`, and the name
+ellipsizes instead of wrapping.) Any surface that must match a fixed
 sibling's width needs the same, and `text-budget.js --verify` is what checks it against a real
 window — the offline sweep cannot.
 
@@ -3417,6 +3789,17 @@ context menu paints the same shape (see "The glass bubble" below); the tooltip o
   This is the same reason `NidaraTheme` floors `--nidara-popover-bg` at `Math.max(bgAlpha, 0.38)` — any
   popup glass must clear the popup threshold. `chrome:false` (About) is a normal window with no blur →
   near-opaque fill. Rim is white on dark glass, a subtle dark line on light. Repaints on `Theme "changed"`.
+  🔑 **A TOOLTIP floors higher, at `TOOLTIP_GLASS_FLOOR` (0.59 dark / 0.47 light, owner 2026-09-29)**
+  — the least glass at which its one line of primary text reads 4.5:1 over pure white / pure black,
+  i.e. over any backdrop (at 0.38 it was 2.41:1 over white). A tooltip is NOT measured by the
+  adaptive glass: it is its own popup over whatever is below it (a bar tooltip hangs over the
+  windows, not over the bar's strip), and measuring it would mean changing it while it is read. The
+  constant lives in `glass-legibility.ts` and the probe holds it to "passes, and is the least that
+  does". The dock MENU still floors at 0.38 — only tooltips were decided.
+  ⚠️ The bubble's top bloom follows the SILHOUETTE (the shape minus itself moved down, in 4
+  stacked bands), not a rectangle along the body's top edge: that rectangle ran straight across the
+  base of a pointer on the "top" side and read as a line there (the bar's tooltips, owner-caught
+  2026-09-29).
   Geometry consts (`ARROW_W/H`, `PAD_*`, radius clamp so the arrow base fits the straight edge) are at the top.
 - **Text** is `string | (() => string)`. A getter is resolved **lazily, right before show** — so
   live values (a window title) stay fresh WITHOUT subscribing (a subscription forces a dock redraw +
@@ -3737,14 +4120,14 @@ Every number is on the design system's **4px scale** (`$space-*`), by the owner'
 | above a capsule (screen edge) | 4 | `.bar-centerbox` `margin-top` |
 | capsule height | 32 (28 of it visible glass) | `BAR_CAPSULE_H` (derived, see below) |
 | strip the bar reserves | 36 | `BAR_H` (exclusive zone) |
-| capsule → windows below | 8 | Hyprland `gaps_out` |
+| capsule → windows below | 4 | Hyprland `gaps_out` (8 until 2026-09-29) |
 | between two capsules (only the island and its chips, since the groups) | 4 | `BAR_GAP` |
 | group allocation → its first/last item | 4 | `BAR_GROUP_PAD` |
 | every icon in the bar | 18 | `BAR_ICON_SIZE` (the launcher's mark +2) |
 | each side of an item's content | 8 | `BAR_ITEM_PAD` → icon-only item 34 wide |
 | hover/open pill ↔ item top and bottom | 4 | `BAR_VEIL_INSET` → pill 24 tall, radius 12 |
 | each side of a STANDALONE capsule's content (the island's compact forms) | 16 | `BAR_PILL_PAD` |
-| the two ends (system menu, clock) | 8 | `BAR_MARGIN` / `SIDE_GAP` = `gaps_out` |
+| the two ends (system menu, clock) | 4 | `BAR_MARGIN` (`capsule.ts`) = `SIDE_GAP` = `gaps_out` (8 until 2026-09-29) |
 
 `BAR_H`, `BAR_CAPSULE_H`, `BAR_GAP`, `BAR_GROUP_PAD`, `BAR_VEIL_INSET` live in
 `surfaces/bar/capsule.ts`; `BAR_ITEM_PAD`, `BAR_ICON_SIZE` and `BAR_PILL_PAD` in
@@ -3799,8 +4182,12 @@ Cairo pill painted ONLY on hover or while its panel is open. The group's glass n
   makes them circles. Change `BAR_H`, the margin and it together, or the chips turn into pills.
 - `BAR_H` is also the side dock's window height (monitor − `BAR_H`, `DockAxis.ts`) and the base of
   `PANEL_TOP`: that is why it is exported and not local to `Bar.tsx`.
-- The ends stay at 8 because that is `gaps_out`: the system menu's left edge lines up with the
-  windows' and the dock's.
+- The ends are `gaps_out`, as ONE number in two files — `BAR_MARGIN` in `capsule.ts` and
+  `GAPS_OUT` in `hyprland.lua`, each naming the other: the system menu's left edge lines up with the
+  windows' and the dock's, and the panels hang at the same distance (`SIDE_GAP = BAR_MARGIN`). 8
+  until 2026-09-29, when the owner tried the whole desktop tighter: `gaps_out` 4, `gaps_in` 2 (was
+  4) — verified live: bar row at x 4, a tiled window at `[5,41]` (gap + border), 6 px between two
+  tiled windows (2 + 2 + their borders).
 - `BAR_GAP` was one constant for every row until the groups (2026-09-26); now only the island's
   capsule and chips stand side by side as separate glass, so it is theirs (`CHIP_GAP`).
 - `BAR_PILL_PAD` is the side air of a STANDALONE capsule — only the island's compact forms since

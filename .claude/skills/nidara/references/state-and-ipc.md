@@ -596,6 +596,18 @@ old exact-id-only version cost two steps and a 7 KB catalogue dump that then rod
 the rest of the turn — the model asked for `calculator`, was told "see listApps", and obeyed. Same
 lesson as `settingsPage` (#68): **a reply that points at the catalogue costs the catalogue.**
 
+### What each surface's glass is wearing: `dumpState.glass` + `glassRemeasure`
+
+The adaptive glass (#673, design-system.md → "Adaptive glass") decides per surface, on events,
+where no screenshot shows its reasoning. `dumpState.glass` is one entry per registered surface:
+`floor` (the slider), `alpha` (what it paints now; `null` = never measured, i.e. exactly the
+slider), `skin` + `flipped`, `group` (surfaces that decide together — the bar and the compact
+island are `bar-row`), `backdrop` (the brightest and darkest backdrop it measured, 0–255, and how
+many pixels) and `measuredMsAgo`. `nidara-ipc glassRemeasure` queues a measurement of every
+visible surface now; read the result about a second later. An agent that just changed what is
+behind the shell (opened a white window, switched workspace) can use the pair to confirm the text
+stayed legible instead of guessing from a screenshot.
+
 ### How to find out who holds the keyboard: `dumpState.keyboardFocus`
 
 Two of the obvious routes are dead ends (2026-07-26): `hyprctl activewindow` reports the focused
@@ -1769,7 +1781,7 @@ It joined the state machine on the way out: `status.app_grid_open` is a normal m
 - **Scoped CSS must name both windows.** `.agent-*` lives under `#nidara-bar, .nidara-bar-window, #nidara-island, .nidara-island-window` because the compact pill is in one surface and the expanded panel in the other.
 - **Layer-level ordering is re-asserted, not assumed.** Bar overlay mode moves the bar to OVERLAY too, which would append it above the island; `islandWin.raise()` puts the island back on top.
 
-**Bar.tsx owns ALL overlay geometry**, not the surfaces themselves. `syncPanelMargins` in `Bar.tsx` sets each overlay's `margin_top`/`margin_start`/`margin_end` (and re-runs on dock-side changes); the surface modules just build content and align to a corner. Because each overlay is wrapped in a `ScaleRevealer`, **the wrapper IS the `cc`/`nc`/`systemMenu`/... variable**, so margins/alignment/input-region all operate on the wrapper transparently. Conventions: panels sit `8px` from the screen edge (flush with the bar capsules, which is a stronger visual reference than the tiling `gaps_out` grid beneath). Gotcha: **the system menu must dodge a left-side dock** (`margin_start += dock.width`) and CC/NC/popups dodge a right-side dock — because the **dock is its own layer-shell window stacked ABOVE the bar window**, so an un-dodged overlay slides under it. Don't move positioning logic back into a surface module.
+**Bar.tsx owns ALL overlay geometry**, not the surfaces themselves. `syncPanelMargins` in `Bar.tsx` sets each overlay's `margin_top`/`margin_start`/`margin_end` (and re-runs on dock-side changes); the surface modules just build content and align to a corner. Because each overlay is wrapped in a `ScaleRevealer`, **the wrapper IS the `cc`/`nc`/`systemMenu`/... variable**, so margins/alignment/input-region all operate on the wrapper transparently. Conventions: panels sit `BAR_MARGIN` (4 px since 2026-09-29) from the screen edge — the CC is a panel whose CONTENT sits a further `CC_PANEL_PAD` in (design-system.md, "The Control Center is a PANEL") — (flush with the bar capsules, which is a stronger visual reference than the tiling `gaps_out` grid beneath). Gotcha: **the system menu must dodge a left-side dock** (`margin_start += dock.width`) and CC/NC/popups dodge a right-side dock — because the **dock is its own layer-shell window stacked ABOVE the bar window**, so an un-dodged overlay slides under it. Don't move positioning logic back into a surface module.
 
 **Panels are content-sized — never force a wrapper's height.** The layer-shell input region is unioned from these allocations, so any wrapper forced taller than its visible content (an old `height_request` on `nc`/`cc` did this) puts the empty remainder into the region — and the compositor then reads a press there as INSIDE the grab instead of dismissing. It bit identically in the catcher era for a different reason (GTK4 picking is geometric, so a transparent Box above the catcher still won the pick): one bug, both mechanisms. Also remember `height_request` can only RAISE a minimum — it never caps, so it's the wrong tool for a height budget anyway. The vertical budget (bar→dock gap, `applyPanelHeights`) is pushed into the surface and enforced by an internal `Gtk.ScrolledWindow` with `propagate_natural_height: true` + `max_content_height` (NC does this via a `setMaxHeight` function attached to its returned widget, the same pattern as WorkspaceOverview's `onOpen`): the panel hugs its content until the list overflows, then scrolls.
 

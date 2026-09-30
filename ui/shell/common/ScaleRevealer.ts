@@ -99,7 +99,11 @@ export class ScaleRevealer extends Gtk.Widget {
      *  and draws a focus ring there — GTK's ring is an outline OUTSIDE the widget,
      *  and the CC's edge tiles lost theirs to this clip (2026-09-27). The unroll
      *  still clips as designed; the band past the box is inside the bar's visible
-     *  region (PANEL_PAD), so what paints there is shown. */
+     *  region (PANEL_PAD), so what paints there is shown.
+     *  And a reveal that does not unroll (`animateLayout: false`) never clips at all: it
+     *  only scales the child about a pivot inside the box, so the clip could cut nothing
+     *  but what paints past the box ON PURPOSE — the CC's halo (`GlassHalo`), which
+     *  otherwise appeared only once the pop had finished, as a second step. */
     unclipAtRest: boolean
 
     constructor(child: Gtk.Widget, opts?: {
@@ -119,6 +123,7 @@ export class ScaleRevealer extends Gtk.Widget {
         this.child = child
         this.child.set_parent(this)
         this.opacity = 0
+        this.syncRestClip()
     }
 
     // Swap the child in place (banner replacement — same id, new content): the
@@ -169,6 +174,7 @@ export class ScaleRevealer extends Gtk.Widget {
     // See `unclipAtRest`. Called wherever an animation starts or ends.
     syncRestClip() {
         if (!this.unclipAtRest) return
+        if (!this.animateLayout) { this.overflow = Gtk.Overflow.VISIBLE; return }
         const atRest = this.progress === 1 && this.tickId === null && this.morphTickId === null && this.swipeX === 0
         this.overflow = atRest ? Gtk.Overflow.VISIBLE : Gtk.Overflow.HIDDEN
     }
@@ -319,7 +325,7 @@ export class ScaleRevealer extends Gtk.Widget {
             onDone?.()
             return
         }
-        if (this.unclipAtRest) this.overflow = Gtk.Overflow.HIDDEN
+        if (this.unclipAtRest && this.animateLayout) this.overflow = Gtk.Overflow.HIDDEN
         const duration = open ? this.durationIn : this.durationOut
         // Latched per reveal: the floor follows the glass slider, but not mid-flight.
         const floor = this.opacityFloor?.() ?? 0

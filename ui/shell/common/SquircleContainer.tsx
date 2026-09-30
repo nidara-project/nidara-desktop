@@ -1,6 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { drawGlassShadow, drawSquircle, hexToFloatRgb } from "./DrawingUtils"
 import Theme from "../core/ThemeManager"
+import { chromeIsDarkFor, glassAlphaFor } from "./AdaptiveGlass"
 import { RADIUS, GLASS_TINT, GLASS_SPECULAR, GLASS_STATE_MIX } from "../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 
@@ -61,7 +62,7 @@ interface SquircleContainerProps {
     padding?: number
     useShellOpacity?: boolean
     /** This capsule belongs to the shell skin: its glass tint follows
-     *  Theme.chromeIsDark (pinned by appearance.shellAppearance, legible over any
+     *  the shell's skin (`chromeIsDarkFor`: the mode, or its surface's adaptive skin, legible over any
      *  wallpaper) instead of the system mode. DEFAULT true — every bar/dock/overlay
      *  capsule is shell skin. Pass `chrome: false` ONLY for app-mode windows
      *  (About) that should follow the system mode like a third-party app. */
@@ -194,9 +195,11 @@ export default function SquircleContainer({
 
     da.set_draw_func(cairoDraw((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
-        // Shell-skin capsules (default) follow the pinned shell appearance;
+        // Shell-skin capsules (default) follow the shell's skin;
         // app-mode surfaces (chrome:false, e.g. About) follow the system mode.
-        const dark = chrome ? Theme.chromeIsDark : Theme.isDark
+        // …and a shell-skin capsule inside a surface the adaptive glass has flipped
+        // (#673) wears that surface's skin: `chromeIsDarkFor` walks up to it.
+        const dark = chrome ? chromeIsDarkFor(da) : Theme.isDark
         const themeColor = dark
             ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
             : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
@@ -205,7 +208,9 @@ export default function SquircleContainer({
         // Explicit alpha always wins (even with useShellOpacity, so a surface can
         // stay theme-coloured + redraw-on-toggle yet be near-opaque — e.g. the CC
         // context menu, which floats over content with no real internal blur).
-        const baseAlpha = alpha !== undefined ? alpha : (useShellOpacity ? (opacityRole === "bar" ? Theme.barOpacity : Theme.overlayOpacity) : 0.05)
+        // The slider for its role — or more, while the surface it sits in has thickened
+        // its glass to keep text legible over a bright backdrop (`glassAlphaFor`).
+        const baseAlpha = alpha !== undefined ? alpha : (useShellOpacity ? glassAlphaFor(da, opacityRole) : 0.05)
         let shareColor = baseColor
         let shareAlpha = baseAlpha
         let shareBorder = borderColor

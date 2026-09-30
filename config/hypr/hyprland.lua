@@ -102,13 +102,13 @@ hl.monitor({ output = "Virtual1",  mode = "1920x1080@60", position = "auto", sca
 -- its own copy of the gap or forgets the border: the border is reserved OUTSIDE
 -- the geometry Hyprland reports, so a clamp that ignores it sits one pixel into
 -- the margin on every side and the window reads as 2px wider than its tiled self.
-local GAPS_OUT    = 8
+local GAPS_OUT    = 4   -- = BAR_MARGIN (ui/shell/surfaces/bar/capsule.ts): the bar's ends line up with the windows. 8 until 2026-09-29.
 local BORDER_SIZE = 1
 local ROUNDING    = 24
 
 hl.config({
     general = {
-        gaps_in  = 4,
+        gaps_in  = 2,   -- 4 until 2026-09-29 (owner: the whole desktop tighter)
         gaps_out = GAPS_OUT,
         -- 🔑 The gap for FLOATING windows, and it defaults to 0 — which is how the
         -- same Super+M produced two different windows: `calculateFullscreenBox`
@@ -427,11 +427,11 @@ hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("nidara-ipc togglePrism"))
 -- arrows move, Enter/Space activate, Esc closes.
 hl.bind(mainMod .. " + C",     hl.dsp.exec_cmd("nidara-ipc toggleCC keyboard"))
 hl.bind(mainMod .. " + N",     hl.dsp.exec_cmd("nidara-ipc toggleNC keyboard"))
--- The bar's items, by keyboard: macOS's Ctrl+F2 with the desktop's modifier (in Linux
+-- The bar's items, by keyboard, on the desktop's modifier rather than Ctrl (in Linux
 -- Ctrl is the APPS' modifier — VS Code, JetBrains, LibreOffice all bind Ctrl+F2).
 -- ←/→ move, Enter/Space/↓ open, Esc goes back, a second Esc leaves.
 hl.bind(mainMod .. " + CTRL + B", hl.dsp.exec_cmd("nidara-ipc focusBar"))
--- The dock's icons, by keyboard: macOS's Ctrl+F3, same reason for Super. Arrows move,
+-- The dock's icons, by keyboard, on Super for the same reason. Arrows move,
 -- Enter/Space open, ↑ (the arrow away from the screen edge) or Menu the app menu, Esc leaves.
 hl.bind(mainMod .. " + CTRL + D", hl.dsp.exec_cmd("nidara-ipc focusDock"))
 hl.bind(mainMod .. " + W",     hl.dsp.exec_cmd("nidara-ipc toggleOverview")) -- Workspace Overview (keyboard-navigable: ←/→ move, Enter switch, Esc close)

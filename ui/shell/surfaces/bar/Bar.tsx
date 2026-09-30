@@ -13,7 +13,7 @@ import Gio from "gi://Gio"
 
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
-import { BAR_GROUP_PAD, BAR_H, CUSTOM_EXPANSION_ID, barEditSelected, barGroup, barItem, barOpen, barTooltip, setBarCustomAnchor, setBarEditSelected } from "./capsule"
+import { BAR_GROUP_PAD, BAR_H, BAR_MARGIN, CUSTOM_EXPANSION_ID, barEditSelected, barGroup, barItem, barOpen, barTooltip, setBarCustomAnchor, setBarEditSelected } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import { blurSafeOpacity } from "../../core/NidaraTheme"
 import appService from "../../core/AppService"
@@ -30,7 +30,7 @@ import { AppTitle } from "./AppTitle"
 import { statefulIcon } from "../../common/StatefulIcon"
 
 // Overlay panels mounted on the bar window (avoids separate layer-shell surfaces)
-import { ControlCenterWidget } from "../control-center/ControlCenter"
+import { ControlCenterWidget, CC_HALO_OUTSET } from "../control-center/ControlCenter"
 import NotificationCenter from "../control-center/NotificationCenter"
 import Prism from "../prism/Prism"
 import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
@@ -46,6 +46,7 @@ import shellActions from "../../core/ShellActions"
 import hs from "../../core/HyprlandState"
 import { safeDisconnect } from "../../core/signals"
 import { BAR_ICON_SIZE, BAR_ITEM_PAD } from "../../common/widget-kit"
+import { registerGlassSurface, type GlassSurfaceHandle } from "../../common/AdaptiveGlass"
 
 function SystemMenuIcon(): Gtk.Widget {
   const img = new Gtk.Image({ pixel_size: BAR_ICON_SIZE + 2, css_classes: ["bar-distro-icon"], margin_start: BAR_ITEM_PAD - 1, margin_end: BAR_ITEM_PAD - 1 })   // the mark 2px larger than the other icons: 1px less air a side keeps the item as wide as theirs
@@ -93,7 +94,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   win.set_opacity(0)
 
   const masterOverlay = new Gtk.Overlay({ valign: Gtk.Align.FILL, vexpand: true })
-  const barBox = new Gtk.CenterBox({ css_classes: ["bar-centerbox"], height_request: BAR_H, valign: Gtk.Align.START, margin_start: 8, margin_end: 8 })
+  const barBox = new Gtk.CenterBox({ css_classes: ["bar-centerbox"], height_request: BAR_H, valign: Gtk.Align.START, margin_start: BAR_MARGIN, margin_end: BAR_MARGIN })
 
   // ── Inline expansion panel ─────────────────────────────────────────────────
   const OVERFLOW_ID = "__overflow"
@@ -139,7 +140,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }), { ...OVERLAY_POP, pivot: "top-center" })   // grows down from its bar capsule
   expansionCapsule.valign = Gtk.Align.START
   expansionCapsule.halign = Gtk.Align.END
-  // margin_top set below to PANEL_TOP so the gap matches CC/NC exactly.
+  // margin_top set below to PANEL_TOP.
   expansionCapsule.visible = false
 
   // unclipAtRest: the CC's tiles reach its edges, and their keyboard ring (GTK's,
@@ -289,24 +290,27 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       ? dockSettings.iconSize + dockSettings.screenGap + DOCK_VPAD
       : 0
 
-  // 8px side gap: panels sit flush with the bar capsules (which live 8px from
-  // the screen edge) instead of the old 16 — the capsule alignment is a stronger
-  // visual reference than the tiling gaps_out grid underneath.
-  const SIDE_GAP = 8
-  const NC_LANE = 8   // must match LANE in NotificationCenter.tsx
+  // Side gap: panels sit flush with the bar capsules (BAR_MARGIN from the screen
+  // edge) instead of the old 16 — the capsule alignment is a stronger visual
+  // reference than the tiling grid underneath (which is the same number anyway).
+  const SIDE_GAP = BAR_MARGIN
 
-  cc.margin_top = PANEL_TOP
-  nc.margin_top = PANEL_TOP
-  expansionCapsule.margin_top = PANEL_TOP   // same gap below the bar as CC/NC
+  // The CC and the NC are panels with their own margin (ControlCenter.tsx, CC_PANEL_PAD):
+  // the PANEL hangs `BAR_MARGIN` below the bar, as a window does, and its content lands
+  // where the margin puts it. The other panels have no margin of their own yet, so
+  // they keep 8.
+  cc.margin_top = BAR_H + BAR_MARGIN
+  nc.margin_top = BAR_H + BAR_MARGIN
+  expansionCapsule.margin_top = PANEL_TOP   // 8 below the bar: its glass starts there, it has no panel margin
   systemMenu.margin_top = PANEL_TOP         // Bar owns the menu geometry (see syncPanelMargins)
   const syncPanelMargins = () => {
     const end = SIDE_GAP + (dockSideState.position === 'right' ? dockSideState.width : 0)
     cc.margin_end = end
     popups.margin_end = end
-    // NC reserves a scrollbar lane on its right (LANE in NotificationCenter).
-    // Pull the panel right by that much so its CONTENT edge still aligns with the
-    // CC/clock capsule, with the lane living in the gap toward the screen edge.
-    nc.margin_end = Math.max(0, end - NC_LANE)
+    // The NC's scrollbar lane lives inside its own right margin now (NotificationCenter,
+    // LANE), so it hangs where the CC does and their cards line up. (Until 2026-09-30 it
+    // was pulled right by the lane to reach the capsule's edge.)
+    nc.margin_end = end
     // Mirror on the left for the system menu: the dock window stacks ABOVE the
     // bar window, so without this shift a left dock covers the menu.
     systemMenu.margin_start = SIDE_GAP + (dockSideState.position === 'left' ? dockSideState.width : 0)
@@ -486,6 +490,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // it). False between a banner being appended and the deferred stamp that
   // follows its grow-in — the window in which the box's bounds are a lie.
   let popupsSettled = true
+  // Adaptive glass (#673): one handle per registered surface, filled once they all
+  // exist (below the island's mount); read by the reveal and settle hooks here.
+  const glassHandles = new Map<Gtk.Widget, GlassSurfaceHandle>()
 
   type BlurRect = { x: number, y: number, width: number, height: number }
 
@@ -558,10 +565,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               const [, natH] = cc.measure(Gtk.Orientation.VERTICAL, Math.round(b.get_width()))
               height = Math.max(height, natH)
           }
+          // The CC's halo paints past its box (`CC_HALO_OUTSET`): outside this rect the
+          // compositor does not draw at all, so its pad is the halo's where that is wider.
+          const o = c === cc ? CC_HALO_OUTSET : null
+          const pl = Math.max(PANEL_PAD, o?.left ?? 0), pr = Math.max(PANEL_PAD, o?.right ?? 0)
+          const pt = Math.max(PANEL_PAD, o?.top ?? 0), pb = Math.max(PANEL_PAD, o?.bottom ?? 0)
           rects.push(fullWidth
               ? { x: 0, y: Math.round(b.get_y()) - PANEL_PAD, width: box.width, height: Math.round(height) + PANEL_PAD * 2 }
-              : { x: Math.round(b.get_x()) - PANEL_PAD, y: Math.round(b.get_y()) - PANEL_PAD,
-                  width: Math.round(b.get_width()) + PANEL_PAD * 2, height: Math.round(height) + PANEL_PAD * 2 })
+              : { x: Math.round(b.get_x()) - pl, y: Math.round(b.get_y()) - pt,
+                  width: Math.round(b.get_width()) + pl + pr, height: Math.round(height) + pt + pb })
       }
       return rects
   }
@@ -578,7 +590,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // stack settles (banner grown in, or dismissed) to re-stamp the region. It is
   // also what re-arms the blur region: settled means the box's bounds finally
   // describe every banner in it.
-  ;(popups as any).onStackChanged = () => { popupsSettled = true; updateInputRegion() }
+  // Settled is also when a banner can be measured for the adaptive glass (#673).
+  ;(popups as any).onStackChanged = () => {
+    popupsSettled = true; updateInputRegion()
+    glassHandles.get(popups)?.remeasure()
+  }
   // Every panel re-stamps from the layout pass that gave it an allocation. The
   // synchronous stamp in syncOverlays() cannot see a panel that was revealed in
   // the same turn — get_allocation() is a layout pass behind, and for a panel
@@ -608,8 +624,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Unified overlay pop (ScaleRevealer: subtle grow + fade, GTK-side). On close
   // the wrapper hides itself when the animation completes and THEN refreshes the
   // layer-shell input region, so the panel never keeps catching clicks.
+  //
+  // Once OPEN and still, the panel is measured for the adaptive glass (#673): only
+  // then do the capture and the offscreen render describe the same frame.
   const popToggle = (pop: ScaleRevealer | MorphRevealer) => (open: boolean) =>
-      pop.reveal(open, () => { if (!open) updateInputRegion() })
+      pop.reveal(open, () => { if (!open) updateInputRegion(); else glassHandles.get(pop)?.remeasure() })
   const setCCVisible = popToggle(cc)
   const setNCVisible = popToggle(nc)
   const setSystemMenuVisible = popToggle(systemMenu)
@@ -673,7 +692,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   keepFocusIn(cc); keepFocusIn(nc); keepFocusIn(systemMenu); keepFocusIn(expansionCapsule)
 
   // ── The keyboard walk of the bar (Super+Ctrl+B, Status.bar_keyboard) ───────────
-  // macOS's Ctrl+F2: the focus lands on the bar's first item, ←/→ and Tab move along
+  // The focus lands on the bar's first item, ←/→ and Tab move along
   // it (wrapping), Enter/Space/↓ open the item's panel (barItem), Esc closes that panel
   // and returns to the item, a second Esc leaves. The grab that carries the keys is
   // barModal's, which counts the walk. Not in edit mode: its ←/→ MOVE an item.
@@ -705,7 +724,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     || status.prism_open || status.bar_expanded_id !== ""
   // Only an Esc goes BACK to the walk. A panel that closed because something was
   // done in it (Prism launched an app, a CC row opened Settings) ends the walk, as a
-  // macOS menu does once an item is chosen: otherwise the grab stays on the bar and
+  // menu does once an item is chosen: otherwise the grab stays on the bar and
   // the window that just opened gets none of the keys. `escPending` is set in the
   // CAPTURE phase — before any Esc handler closes a panel, whichever panel's it is —
   // and cleared once the turn is over.
@@ -785,7 +804,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // belongs to that window. The surface stays MAPPED — the capsule lives on it,
   // so there is no "closed" state to unmap into.
   const syncIslandModes = () => {
-    island.sync((r, open) => r.reveal(open, () => { if (!open) islandWin.updateInputRegion() }))
+    island.sync((r, open) => r.reveal(open, () => {
+      if (!open) islandWin.updateInputRegion()
+      // The mode that just landed is measured on its own; a closing mode hands the
+      // capsule back, and the bar row re-decides with it.
+      glassHandles.get(open ? r : islandHost)?.remeasure()
+    }))
     islandWin.updateInputRegion()
   }
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
@@ -1088,7 +1112,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // only GUI path to log out / restart / shut down (SystemMenu.tsx), and the
   // exit-session keybind was deliberately not shipped, so hiding it leaves no
   // way to end the session. Every other DE that is not an explicit panel-builder
-  // makes the same call (macOS/GNOME/Windows never let you remove it). The
+  // makes the same call (GNOME and Windows never let you remove it). The
   // island's centre box below is permanent for the sibling reason — see barState.
   appTitleWidget.set_visible(barSettings.showAppTitle)
   leftGroup.box.append(sysMenuWidget)
@@ -1099,7 +1123,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // hold a permanent 8px to the right of the capsule and leave it off-centre in
   // an idle session — the one state that must look exactly as it always has.
   // The GROUP is what centres: a chip appearing shifts the capsule off the
-  // monitor's axis, which is the cost of the iOS split and is only ever paid
+  // monitor's axis, which is the cost of splitting the activities and is only ever paid
   // while something is actually running.
   const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER })
   center.append(island.capsule)      // the island's compact state
@@ -1129,8 +1153,66 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   islandHost.showInstant()
   islandWin.mount(islandHost, island.hitTargets, island.revealers)
 
+  // ── Adaptive glass (#673) ─────────────────────────────────────────────────
+  // Each surface keeps its text legible over whatever is behind it: thicker glass,
+  // or the other skin (common/AdaptiveGlass.ts). One registration per SURFACE — the
+  // bar strip is one decision, each panel another — never per capsule.
+  const atRest = (r: ScaleRevealer | MorphRevealer) => () => r.tickId === null && r.progress >= 1
+  // The island is a layer ABOVE this window: where it paints, the screen is not our
+  // paint over a backdrop. (Its own measurement is of itself, so it takes no such rect.)
+  const underIsland = () => {
+    const r = (islandWin.win as any).occupiedRect?.()
+    return r ? [{ x: r.x, y: r.y, width: r.w, height: r.h }] : []
+  }
+  for (const [id, pop] of [
+    ["control-center", cc], ["notification-center", nc], ["system-menu", systemMenu],
+    ["search", prism], ["bar-expansion", expansionCapsule],
+  ] as const) {
+    // The CC carries a halo (`common/GlassHalo.ts`): its tiles are the outer glass, with
+    // nothing between them, so its first step of thickening is the container under them.
+    glassHandles.set(pop, registerGlassSurface({ id, root: pop, role: "overlay", settled: atRest(pop), exclude: underIsland, halo: pop === cc }))
+  }
+  glassHandles.set(barBox, registerGlassSurface({
+    id: "bar", root: barBox, role: "bar", exclude: underIsland, group: () => "bar-row",
+    // No `skinFromBackdrop` since 2026-09-30 (owner): the row's ink is the shell's —
+    // white — and does not change with the wallpaper; the glass only thickens.
+    // Hidden for a fullscreen window the bar stays MAPPED (opacity 0), so it looked
+    // measurable — and what it found behind it was the fullscreen window: X's black page
+    // and white text, which flipped the row and brought it back from fullscreen in that
+    // skin (2026-09-29). Not settled while hidden; an event missed then is measured when
+    // it shows again (`settle()` in setBarFullscreenMode / setBarOverlayMode).
+    settled: () => !barFullscreenMode || barOverlayActive,
+  }))
+  glassHandles.set(popups, registerGlassSurface({ id: "notification-banners", root: popups, role: "overlay", exclude: underIsland }))
+  // The island is TWO kinds of surface for the glass. Its row (the capsule and the
+  // indicator chips) is part of the bar's row and decides with it. Each MODE is a panel
+  // of its own — measured where it last opened, also while closed, so it opens already
+  // right; the morph travels from the capsule's glass to the mode's. (One decision for
+  // the whole island, switching between the two, could not be measured in advance: a
+  // mode's rect is only known while it is open.)
+  const islandOrigin = () => ({ x: 0, y: islandWin.topOffset() })
+  glassHandles.set(islandHost, registerGlassSurface({
+    id: "island",
+    root: islandHost,
+    role: "bar",
+    probe: () => island.capsule,
+    windowOrigin: islandOrigin,
+    // While a mode is open the capsule is switched off (opacity 0): nothing to measure.
+    settled: () => !status.island_mode && islandHost.tickId === null,
+    group: () => "bar-row",
+  }))
+  for (const { id, revealer } of island.modeRevealers) {
+    glassHandles.set(revealer, registerGlassSurface({
+      id: `island-${id}`,
+      root: revealer,
+      role: "overlay",
+      windowOrigin: islandOrigin,
+      settled: atRest(revealer),
+    }))
+  }
+  win.connect("destroy", () => { for (const h of glassHandles.values()) h.dispose(); glassHandles.clear() })
+
   const ISLAND_GAP = 16
-  const BAR_MARGIN = 8
 
   // Forward declaration for layout sync across the left/right flanks and Activity Island
   let scheduleBarLayoutSync: (delayMs?: number) => void = () => {}
@@ -1266,7 +1348,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const orderedItems = new Gtk.Box({ css_classes: ["bar-optional-widgets"] })
 
   // The overflow capsule: shown only while some item does not fit. It is not a
-  // menu — it unfolds the hidden items IN LINE, in the same bar (macOS 27's `»`):
+  // menu — it unfolds the hidden items IN LINE, in the same bar (the `»`):
   // the island rises out of the way and the row grows leftwards over the room it
   // leaves, the window title yielding if it has to (Status.bar_overflow_open).
   // Unfolded items are the same as the others, placed by the same loop.
@@ -1567,7 +1649,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   rightGroup.box.append(overflowItem)
   rightGroup.box.append(orderedItems)
   // The Control Centre's button is an ordinary icon item. Its drawing is two
-  // switches, like macOS's Control Centre (the freedesktop spec has no name for
+  // switches (the freedesktop spec has no name for
   // that; `preferences-system` is a gear or tools everywhere, #587), and the
   // switches FLIP while the CC is open — a state of the icon, played by GTK
   // (common/StatefulIcon.ts), not a CSS transform on a clickable.
@@ -1852,6 +1934,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               }
               Gtk4LayerShell.set_exclusive_zone(win, BAR_H) // restore top reservation
               win.set_opacity(1)
+              glassHandles.get(barBox)?.settle()
               // Bring the capsule back with the bar, and re-assert our level:
               // present() re-adds the surface to Hyprland's overlay list, and the
               // bar may have moved layers in between.
@@ -1879,6 +1962,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               Gtk4LayerShell.set_exclusive_zone(win, 0) // release top reservation
               win.set_opacity(1)
               win.present()
+              glassHandles.get(barBox)?.settle()
               // The capsule comes back with the bar (fullscreen may have unmapped
               // it). Then re-assert our level: the bar just joined OVERLAY, which
               // appends it AFTER the island in Hyprland's list for that level, so

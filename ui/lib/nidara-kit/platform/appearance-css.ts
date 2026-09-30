@@ -116,15 +116,14 @@ export function initAppearance(opts: InitAppearanceOpts = {}): AppearanceHandle 
   // ── The Cairo half ─────────────────────────────────────────────────────────
   // Cairo cannot read a CSS token, so the kit is handed the accent as a value and
   // told what its surface is. `surfaceIsDark` answers for the whole process here:
-  // a second window in a running Nidara has one mode, unlike the shell, where a
-  // pinned skin and the system mode can disagree on the same screen.
+  // a second window in a running Nidara has one mode, unlike the shell, where the
+  // adaptive glass can flip one surface's skin on the same screen.
   setKitAppearance({
     accent: () => ACCENT_HEX[state.accent],
     surfaceIsDark: () => opts.fixedDarkInk ? true : state.isDark,
     onChange: (cb) => { listeners.add(cb); return () => { listeners.delete(cb) } },
     overlayOpacity: () => state.overlayOpacity,
-    chromeIsDark: () => opts.fixedDarkInk ? true
-      : state.shellAppearance === "dark" ? true : state.shellAppearance === "light" ? false : state.isDark,
+    chromeIsDark: () => opts.fixedDarkInk ? true : state.isDark,
   })
 
   apply()

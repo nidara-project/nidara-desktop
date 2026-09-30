@@ -37,6 +37,7 @@ import { iconAssetPath } from "../../core/Icons"
 import { safeDisconnect } from "../../core/signals"
 import inputYield from "../../core/InputYield"
 import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
+import { registerGlassSurface, type GlassSurfaceHandle } from "../../common/AdaptiveGlass"
 import type { AxisAdapter, RevealState } from "./DockAxis"
 
 export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
@@ -120,6 +121,9 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
     // Declared early so revealState() never hits a TDZ; assigned in its section.
     let fullscreenMode = false
+    // The adaptive glass (see its section near the end). Early for the same reason:
+    // the tick tells it when the dock comes to rest.
+    let glass: GlassSurfaceHandle | null = null
 
     const unpinnedOpenOrder = new Map<string, number>()
     let unpinnedSeq = 0
@@ -421,6 +425,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
             if (!active) {
                 tickId = null
+                glass?.settle()
                 return false
             }
             return true
@@ -1307,7 +1312,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     }
 
     // ── The keyboard walk (Super+Ctrl+D, Status.dock_keyboard) ─────────────────
-    // macOS's Ctrl+F3. The dock on the FOCUSED monitor comes up (an auto-hidden one
+    // The dock on the FOCUSED monitor comes up (an auto-hidden one
     // slides in and stays while walked), takes the keyboard through a focus grab —
     // the surface stays KeyboardMode.NONE, see common/FocusGrab.ts — and puts the
     // focus on its first icon. Arrows along the dock and Tab move, wrapping; the icon
@@ -1382,6 +1387,69 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         safeDisconnect(status, walkConn); safeDisconnect(inputYield, yieldConn)
         if (walkToken) { releaseFocusGrab(walkToken); walkToken = 0 }
     })
+
+    // ── Adaptive glass (#673) ─────────────────────────────────────────────────
+    // The dock keeps its running dot readable over whatever is behind it, as the bar
+    // and the panels keep their text: thicker glass, or the other skin. It carries
+    // MARKS, not text, so it is held to 3:1 (glass-legibility.ts → GlassContent), and
+    // its skin is the mode's. The glass is the capsule, not the
+    // monitor-sized layout; the layout is what gets rendered over it, icons included.
+    const dockOrigin = (off = Math.round(slideCurrent)) => {
+        // Every axis anchors BOTTOM (the vertical one also TOP, under the bar's zone);
+        // the slide is a negative margin on the edge the dock hides behind.
+        const g = gdkmonitor.get_geometry()
+        const y = g.height - win.get_height()
+        if (!axis.vertical) return { x: 0, y: y + off }
+        return dockSettings.position === 'right' ? { x: g.width - win.get_width() + off, y } : { x: -off, y }
+    }
+    glass = registerGlassSurface({
+        id: `dock-${gdkmonitor.get_connector() ?? "?"}`,
+        root: layout,
+        role: "dock",
+        content: "marks",
+        probeArea: () => axis.capsuleRect(),
+        windowOrigin: dockOrigin,
+        // At rest, in place, with nothing of ours over it: magnifying, sliding, a menu
+        // (its own surface, over the capsule) or a drag would each put a frame in the
+        // capture that the offscreen render does not have. The pointer resting on it is
+        // fine — magnified icons at rest are rendered and subtracted like any others, and
+        // the tooltip sits above the capsule — and it has to be: auto-hidden, the dock is
+        // on screen ONLY under the pointer, and would never be measured shown otherwise.
+        settled: () => tickId === null && isRevealed && slideCurrent === 0
+            && !dndActive && menuState.openCount === 0,
+        // Slid away by auto-hide or a fullscreen window: measured where it last stood,
+        // so it slides back in already wearing the right glass.
+        hidden: () => !isRevealed && slideCurrent === slideTarget,
+        // ⚠️ Hidden, its rest rect shows the TILED windows — and they will not be there
+        // when it shows: revealing claims the exclusive zone, and they shrink out of the
+        // way (setRevealed). Measured 2026-09-29: hidden, it read a terminal and a browser
+        // it never sits on. So those windows are left out; what is left — wallpaper,
+        // floating windows, other layers — is what it will have behind it. Covered
+        // entirely, nothing is measured and it keeps its last decision.
+        exclude: () => {
+            if (isRevealed) return []
+            const mon = hs.monitors.find(m => m.name === gdkmonitor.get_connector())
+            if (!mon) return []
+            return hs.clients
+                .filter(c => c.workspace?.id === mon.activeWorkspace?.id && !c.floating && !c.hidden && c.mapped !== false)
+                .map(c => ({ x: c.x - mon.x, y: c.y - mon.y, width: c.width, height: c.height }))
+        },
+        // Where it will stand: the capsule with no slide. Auto-hidden, the dock is on
+        // screen only under the pointer — never `settled` — so it is measured here.
+        restsAt: () => {
+            const c = axis.capsuleRect()
+            const [ok, b] = layout.compute_bounds(win)
+            if (!c || !ok) return null
+            const o = dockOrigin(0)
+            const x = b.get_x() + o.x + c.x, y = b.get_y() + o.y + c.y
+            const rect = {
+                x: Math.floor(x), y: Math.floor(y),
+                width: Math.ceil(x + c.width) - Math.floor(x), height: Math.ceil(y + c.height) - Math.floor(y),
+            }
+            return { monitor: gdkmonitor, rect }
+        },
+    })
+    win.connect("destroy", () => { glass?.dispose(); glass = null })
 
     const fsConn = hs.connect("changed", checkFullscreen)
     // Own destroy hook (the main one above predates this section): the dock is

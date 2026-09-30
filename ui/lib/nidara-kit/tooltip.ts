@@ -5,6 +5,7 @@ import GLib from "gi://GLib"
 import { ARROW_H, BUF, sideFor, paintGlassBubble, type ArrowSide } from "./glass-bubble"
 import { kitAppearance } from "./appearance"
 import { cairoDraw } from "./platform/cairo-draw"
+import { TOOLTIP_GLASS_FLOOR } from "./platform/glass-legibility"
 
 export type NidaraTooltipText = string | (() => string)
 
@@ -25,7 +26,7 @@ export interface NidaraTooltipOpts {
     markup?: boolean
     /** Return true to suppress showing it (e.g. while a context menu is open). */
     suppress?: () => boolean
-    /** Shell skin (glass follows the pinned appearance — legible over any wallpaper)
+    /** Shell skin (glass follows the shell's skin — the mode, or its surface's if the adaptive glass flipped it)
      *  vs app-mode (follows the system mode, e.g. the About window). Default true. */
     chrome?: boolean
 }
@@ -82,11 +83,17 @@ export function attachTooltip(
         hexpand: true, vexpand: true,
         halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
     })
+    // The skin: the widget's surface's (shell chrome) or the system mode (app windows).
+    // ONE answer for the glass and the label's class, so the two cannot disagree.
+    const isDark = () => opts.chrome === false
+        ? kitAppearance().surfaceIsDark(widget)
+        : (kitAppearance().chromeIsDark?.(widget) ?? kitAppearance().surfaceIsDark(widget))
     da.set_draw_func(cairoDraw((_da, cr, w, h) => {
-        const dark = opts.chrome === false
-            ? kitAppearance().surfaceIsDark(widget)
-            : undefined
-        paintGlassBubble(cr, w, h, side, { chrome, arrowOffset, dark })
+        const dark = isDark()
+        // The panel slider, but never under what its text needs over ANY backdrop
+        // (TOOLTIP_GLASS_FLOOR): a tooltip is not measured.
+        const alpha = Math.max(kitAppearance().overlayOpacity?.() ?? 0.55, TOOLTIP_GLASS_FLOOR[dark ? "dark" : "light"])
+        paintGlassBubble(cr, w, h, side, { chrome, arrowOffset, dark, alpha, widget })
     }))
     grid.attach(da, 0, 0, 1, 1)
 
@@ -101,10 +108,7 @@ export function attachTooltip(
     grid.attach(label, 0, 0, 1, 1)
 
     const syncDarkClass = () => {
-        const dark = opts.chrome === false
-            ? kitAppearance().surfaceIsDark(widget)
-            : (kitAppearance().chromeIsDark?.() ?? kitAppearance().surfaceIsDark(widget))
-        if (dark) {
+        if (isDark()) {
             popover.remove_css_class("light")
             popover.add_css_class("dark")
         } else {
@@ -201,6 +205,12 @@ export function attachTooltip(
             // already said yes.
             if (suppress?.()) return GLib.SOURCE_REMOVE
             refresh()
+            // Asked again NOW, not only on a theme change: in the shell the answer comes
+            // from the adaptive glass, which re-decides a surface on its own events and
+            // tells nobody. A class computed at the last theme change was the black text
+            // on dark glass in the dock (2026-09-29): stale from the moment the mode
+            // switched until the next one.
+            syncDarkClass()
             popover.popup()
             return GLib.SOURCE_REMOVE
         })

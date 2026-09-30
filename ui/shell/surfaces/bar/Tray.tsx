@@ -12,6 +12,9 @@ import hs from "../../core/HyprlandState"
 import { BAR_ICON_SIZE, BAR_ITEM_PAD } from "../../common/widget-kit"
 import { rememberTrayItem, trayKey } from "../../core/BarOrder"
 import appService from "../../core/AppService"
+import Theme from "../../core/ThemeManager"
+import { chromeIsDarkFor } from "../../common/AdaptiveGlass"
+import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 
 // ── Which APP owns a tray icon ────────────────────────────────────────────────
 // An SNI item names itself with `Id` and `Title`, and Electron apps do it badly:
@@ -101,6 +104,72 @@ function appForProcess(proc: string): { id: string, name: string, icon: string }
     return null
 }
 
+/**
+ * A TEMPLATE image: one colour on transparency, i.e. pure shape.
+ *
+ * An app that sends only pixels picks their colour from the SYSTEM mode — Claude
+ * Desktop sends white in dark mode and black in light — and cannot know that the bar
+ * wears a different skin: since #676 the bar reads its skin from its backdrop, so a
+ * white icon could sit on light glass. The answer is to tint template images with the
+ * bar's own ink: a pixmap whose every visible pixel
+ * is the same colour is painted as a MASK in the bar's text colour. Anything with a
+ * second colour (a red badge, a two-tone keyboard label, a logo) is shown untouched.
+ *
+ * (Making the APP believe in another mode is not an option: the portal's colour scheme
+ * is one answer per app, and Electron uses the same value for its windows.)
+ */
+function isTemplatePixbuf(pb: any): boolean {
+    try {
+        if (!pb || typeof pb.get_pixels !== "function" || !pb.get_has_alpha() || pb.get_n_channels() !== 4) return false
+        const px: Uint8Array = pb.get_pixels()
+        const w = pb.get_width(), h = pb.get_height(), stride = pb.get_rowstride()
+        let r0 = -1, g0 = 0, b0 = 0, seen = 0
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const i = y * stride + x * 4
+                // Antialiased edges carry the same colour at a lower alpha (GdkPixbuf is
+                // NOT premultiplied); faint ones are too imprecise to judge by.
+                if (px[i + 3] < 64) continue
+                if (r0 < 0) { r0 = px[i]; g0 = px[i + 1]; b0 = px[i + 2] }
+                else if (Math.abs(px[i] - r0) > 24 || Math.abs(px[i + 1] - g0) > 24 || Math.abs(px[i + 2] - b0) > 24) return false
+                seen++
+            }
+        }
+        return seen >= 16
+    } catch (_) { return false }
+}
+
+/** The image a template pixmap becomes on the bar: its shape, in the bar's ink. A
+ *  DrawingArea, so the adaptive glass's repaint of the bar (and a mode change) reaches
+ *  it like every other Cairo mark on the glass. */
+function templateIcon(): { widget: Gtk.DrawingArea, set(pb: any): void, dispose(): void } {
+    let pixbuf: any = null
+    const da = new Gtk.DrawingArea({
+        content_width: BAR_ICON_SIZE, content_height: BAR_ICON_SIZE,
+        valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
+        css_classes: ["bar-tray-icon"], margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD,
+    } as any)
+    da.set_draw_func(cairoDraw((area, cr, w, h) => {
+        if (!pixbuf || w <= 0 || h <= 0) return
+        const pw = pixbuf.get_width(), ph = pixbuf.get_height()
+        const k = Math.min(w / pw, h / ph)
+        cr.translate((w - pw * k) / 2, (h - ph * k) / 2)
+        cr.scale(k, k)
+        Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
+        const shape = cr.getSource()
+        shape.setFilter(1)   // CAIRO_FILTER_GOOD: a 64px pixmap drawn at 18px
+        const c = chromeIsDarkFor(area) ? 1 : 0   // the bar's ink: --nidara-text, at full strength
+        cr.setSourceRGBA(c, c, c, 1)
+        cr.mask(shape)
+    }))
+    const themeId = Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
+    return {
+        widget: da,
+        set: (pb) => { pixbuf = pb; da.queue_draw() },
+        dispose: () => safeDisconnect(Theme, themeId),
+    }
+}
+
 // openMenu: opens arbitrary content in the bar's shared expansion capsule, anchored
 // under the given widget (same system as the bar widget popovers). Injected by Bar.
 type OpenMenu = (anchor: Gtk.Widget, build: (onClose: () => void) => Gtk.Widget, align?: "center" | "start") => void
@@ -153,6 +222,12 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void): 
         // BAR_ITEM_PAD each side of a BAR_ICON_SIZE icon → the button (and thus its
         // item) is exactly as wide as the search / widget icon items.
         const img = new Gtk.Image({ pixel_size: BAR_ICON_SIZE, css_classes: ["bar-tray-icon"], margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD })
+        // A one-colour pixmap is painted as a template in the bar's ink instead (see
+        // isTemplatePixbuf); the stack shows whichever of the two the icon is now.
+        const template = templateIcon()
+        const icon = new Gtk.Stack({ hhomogeneous: false, vhomogeneous: false })
+        icon.add_named(img, "image")
+        icon.add_named(template.widget, "template")
 
         // Use icon_name when the active icon theme knows the icon (or its -symbolic
         // variant). CSS `-gtk-icon-style: symbolic` then makes GTK prefer the
@@ -173,20 +248,28 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void): 
             if (name && displayTheme) {
                 const sym = name.endsWith("-symbolic") ? name : name + "-symbolic"
                 if (displayTheme.has_icon(sym)) {
+                    icon.set_visible_child_name("image")
                     img.set_from_icon_name(sym)
                     return
                 }
             }
+            if (item.gicon && isTemplatePixbuf(item.gicon)) {
+                template.set(item.gicon)
+                icon.set_visible_child_name("template")
+                return
+            }
+            icon.set_visible_child_name("image")
             if (item.gicon) { img.set_from_gicon(item.gicon); return }
             if (name)        { img.set_from_icon_name(name) }
         }
         syncIcon()
         const unsubs: Array<() => void> = []
         unsubs.push(item.onIconChanged(syncIcon))
+        unsubs.push(() => template.dispose())
 
         const btn = new Gtk.Button({
             css_classes: ["bar-tray-btn"],
-            child: img
+            child: icon
         })
         // Glass tooltip (markup — SNI items expose tooltip_markup); read lazily so
         // it tracks the item's live title/tooltip without a subscription. Position

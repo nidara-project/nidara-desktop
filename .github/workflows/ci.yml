@@ -297,6 +297,39 @@ jobs:
       - name: Settings rows contract (declarative rows match config registry)
         run: node --experimental-strip-types scripts/ci/settings-config-contract.mjs
 
+      # The adaptive glass's rule (#673): whether text on a piece of glass is legible
+      # over a backdrop, and what the glass does if not — thicken (A), then flip the
+      # skin (B). Pure arithmetic in the kit, so it is checked here with the rest of
+      # the design system rather than on a live screen, where it cannot be.
+      - name: The adaptive glass rule holds its numbers
+        run: |
+          npx --yes esbuild@0.28.2 scripts/dev/glass-legibility-probe.ts --bundle \
+            --platform=node --format=esm --log-level=warning --outfile=/tmp/glass-probe.mjs
+          node /tmp/glass-probe.mjs
+
+      # ⚠️ And the control. B deleted: the last-resort branch still flips pure white
+      # to the light skin, so a probe that only asked "did it flip" went on passing
+      # (it did, the first time this was run). It must also notice the flipped skin
+      # arriving at FULL body instead of the slider's.
+      - name: The adaptive glass probe can fail (control, must be caught)
+        run: |
+          f=ui/lib/nidara-kit/platform/glass-legibility.ts
+          cp "$f" /tmp/glass-legibility.bak
+          sed -i 's|    const b = leastAlpha(worst(!preferDark), !preferDark, floor, top, 1, content)|    const b = null as number \| null|' "$f"
+          if git diff --quiet "$f"; then
+            echo "::error::the control patched nothing — rule B has moved or been reworded"
+            exit 1
+          fi
+          npx --yes esbuild@0.28.2 scripts/dev/glass-legibility-probe.ts --bundle \
+            --platform=node --format=esm --log-level=warning --outfile=/tmp/glass-probe-defect.mjs
+          if node /tmp/glass-probe-defect.mjs; then
+            echo "::error::the probe passed with rule B deleted — it is not checking what it prints"
+            cp /tmp/glass-legibility.bak "$f"
+            exit 1
+          fi
+          cp /tmp/glass-legibility.bak "$f"
+          git diff --quiet "$f"
+
   pkgbuild:
     name: PKGBUILD parses
     runs-on: ubuntu-latest

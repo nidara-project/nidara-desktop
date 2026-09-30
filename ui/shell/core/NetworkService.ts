@@ -545,8 +545,8 @@ export function disconnectWifi(): Promise<void> {
     })
 }
 
-/** What the Wi-Fi panel shows under the network the adapter is on (Apple's Option-click
- *  details, shown behind a visible chevron instead). Null unless connected. The IP and
+/** What the Wi-Fi panel shows under the network the adapter is on (its details, behind a
+ *  visible chevron). Null unless connected. The IP and
  *  gateway arrive with DHCP, after the SSID — watch `watchWifi`, not `watchWifiLink`. */
 export interface WifiConnectionDetails { ip: string; gateway: string; band: string; channel: number; security: string }
 
@@ -714,7 +714,7 @@ function activate(rc: NM.Connection | null, dev: NM.Device): Promise<void> {
 
 // ── Ethernet: the switch ────────────────────────────────────────────────────
 //
-// macOS's "Make Inactive", GNOME's Wired toggle (owner, 2026-09-28: a switch, as
+// A wired connection's on/off, GNOME's Wired toggle (owner, 2026-09-28: a switch, as
 // GNOME). GNOME's is `nm_device_disconnect` alone, and NM keeps that block in /run:
 // a cable switched off came back on at the next boot. Ours holds, like the Wi-Fi
 // radio: switching off also clears `autoconnect` on each profile that had it and
@@ -851,7 +851,7 @@ export function linkSpeed(mbps: number): string {
 
 // ── IP and DNS of a profile (Ethernet, and every saved Wi-Fi network) ───────
 //
-// macOS's TCP/IP and DNS tabs, which Apple gives Ethernet and Wi-Fi alike (owner,
+// TCP/IP and DNS settings, the same for Ethernet and Wi-Fi (owner,
 // 2026-09-28: complete, and our own form — not nm-connection-editor). What a surface
 // edits is an `IpTarget`: the profile, and the device it is live on right now, if any.
 // NM does the work; this is the vocabulary between it and the form.
@@ -1021,7 +1021,7 @@ export async function applyIp(target: IpTarget, form: IpForm): Promise<void> {
         for (const [s, isFamily] of [[s4, isIPv4], [s6, isIPv6]] as const) {
             s.clear_dns()
             dns.filter(isFamily).forEach(d => s.add_dns(d))
-            // Servers of your own REPLACE the network's, as on macOS — not add to them.
+            // Servers of your own REPLACE the network's — not add to them.
             s.ignore_auto_dns = dns.length > 0
             s.clear_dns_searches()
         }
@@ -1067,7 +1067,7 @@ export async function applyIp(target: IpTarget, form: IpForm): Promise<void> {
     }
 }
 
-/** macOS's "Renew DHCP Lease". NM has no call for it: bringing the profile up again asks anew. */
+/** "Renew DHCP lease". NM has no call for it: bringing the profile up again asks anew. */
 export function renewDhcp(target: IpTarget): Promise<void> {
     const dev = target.liveDevice()
     const rc = target.profile()

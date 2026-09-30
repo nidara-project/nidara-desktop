@@ -209,7 +209,7 @@ export function createSchematicMap(wsId: number, initialWidth: number, options: 
      *
      * With no thumbnail it is the placeholder: big and centred, carrying the whole
      * tile. Once real content arrives it becomes a badge parked on the bottom edge
-     * — which is what GNOME, macOS Mission Control and KDE all do, and for the same
+     * — which is what GNOME and KDE both do, and for the same
      * reason: at this scale the content identifies the DOCUMENT, not the app. Two
      * Chrome windows are indistinguishable at 150px; the icon is what tells them
      * apart. Removing it entirely (the first cut of this) loses that.

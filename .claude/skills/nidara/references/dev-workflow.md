@@ -491,8 +491,9 @@ keeps the original placement rather than walking the window off the area; we do 
 
 The step is `max(rounding + gaps_out, min(availW, availH) / 48)` — KWin scales its offset with the
 area (`area.width()/48`), mutter uses a flat 50 (`CASCADE_INTERVAL`), and the floor is ours: below
-`rounding` (24) plus `gaps_out` (8) the covered window's corner stops reading as a corner. On a
-2560x1440 monitor with our bar and dock that is 32.
+`rounding` (24) plus `gaps_out` (8 when this was written, 4 since 2026-09-29) the covered window's
+corner stops reading as a corner. On a 2560x1440 monitor with our bar and dock that was 32; it is 28
+now.
 
 ⚠️ **One divergence, deliberate**: KWin walks the stacking order and skips a window already buried
 under others. Lua gets no z-order, so every mapped window on the workspace is tested. The cost is a
@@ -2047,8 +2048,16 @@ text box, add it here in the same change.
 | slot | box | metric | verdict |
 |---|---|---|---|
 | Settings sidebar label | 250px column → 174px | natural width | truncation FAILS |
-| Control Center tile title | 2×1 tile → **84px** | wrapped MINIMUM for a title that can lose its subtitle, natural otherwise | overflow FAILS, truncation reported |
-| Control Center status banner | 356px card − a Stop button whose label is translated | wrapped minimum | overflow FAILS |
+| Control Center tile title | 2×1 tile → **96px** (since 2026-09-30) | wrapped MINIMUM for a title that can lose its subtitle, natural otherwise | overflow FAILS, truncation reported |
+| Control Center status pill | 368px grid − the pill's ends, dot and gaps − a Stop button whose label is translated | natural width (one line) | truncation FAILS |
+
+⚠️ **The script READS those numbers out of the source with regexes**, so a refactor that only
+renames or restructures a constant breaks it without changing a pixel: it exits 2 ("could not read
+…"), and CI's smoke job goes red. That is how #675 sat red for nine commits on 2026-09-30 —
+`CAPSULE_CHROME` went from literals to `CAPSULE_ICON_SIZE + CAPSULE_ICON_GAP`, and the banner
+became a pill without `BANNER_PADDING`. When you touch `widget-kit/tile.ts`,
+`CCLayoutManager.ts`, `BaseIsland.tsx` or `StatusIndicators.tsx`, run
+`NIDARA_REPO=$PWD gjs -m scripts/dev/text-budget.js` before pushing.
 
 - **overflow** — the text sets a *minimum* wider than its box. A minimum cannot be squeezed: GTK
   grows the box and the surface clips it. A layout break, and no ellipsis can save it.
@@ -2231,6 +2240,31 @@ instrument you have never seen react is not evidence.
   angle spreads its coverage over several pixels, so each one is a blend of stroke, body and
   backdrop: the same rim measures ~97 on a straight run and ~126 on the corner. That is dilution,
   not a lighter rim. On curves, trust the render (and the eye) over a point sample.
+
+### Verifying the adaptive glass (`NIDARA_BACKDROP_DEBUG`, `glassRemeasure`)
+
+The rule is checked without a screen (`scripts/dev/glass-legibility-probe.ts`, CI `styles` job).
+The MEASUREMENT can only be checked on a live session, and a wrong one is silent — it just picks
+the wrong glass. Three tools:
+
+- `nidara-ipc dumpState` → `glass`, and `nidara-ipc glassRemeasure` (state-and-ipc.md).
+- `systemctl --user set-environment NIDARA_BACKDROP_DEBUG=<dir>` + restart the shell: every probe
+  writes `<surface>-<n>-screen.png` (the capture), `-ours.png` (our offscreen render) and
+  `-backdrop.png` (what was recovered; transparent = pixels not used), and logs why a probe gave
+  nothing and what it cost. **Look at the backdrop image first**: text or icon outlines in it mean
+  the capture and the render did not describe the same frame. `unset-environment` it afterwards.
+- `NIDARA_BACKDROP_TIMING=1`: log each probe's cost (capture on the worker; render + read-back and
+  the pixel loop on the main thread), nothing else. Time with THIS — the debug images are written on
+  the main thread and inflated the first figure quoted to 5–15 ms.
+- To judge the recovered numbers rather than eyeball them, compare them with the forward model
+  (wallpaper → Hyprland's `gain`/`blur1` shaders → tint) at the same pixels; the 2026-09-29 check
+  agreed to a median of 2/255. A systematic offset (all channels brighter) is a layer caught
+  mid-fade, not a model error.
+
+To force a bright backdrop, set a white wallpaper with `nidara-ipc setWallpaper <white.png> simple`,
+wait out awww's transition (~3 s), `glassRemeasure`, and restore the old path — then restore
+`~/.config/nidara/wallpaper` from a copy too, because `setWallpaper` writes the transition you
+passed into it.
 
 ### What the icon theme SAYS vs what it PAINTS (`scripts/dev/icon-theme-probe.js`)
 
@@ -2544,7 +2578,7 @@ install.sh>/lib/<lib>/src/…`.
 **`nidara-portal`** (installed to `/usr/bin`, D-Bus-activated as
 `org.freedesktop.impl.portal.desktop.nidara`) is Nidara's xdg-desktop-portal **Settings, Wallpaper, DynamicLauncher, Account, and Background
 backend**:
-1. **Settings**: serves the complete `org.freedesktop.appearance` namespace (`accent-color` as `(ddd)` RGB tuple, `color-scheme` as uint32 0=none/1=dark/2=light, `contrast` and `reduced-motion` as uint32) from gsettings, and `org.nidara.appearance` (the four opacities + `shell-appearance`, and NOTHING that already has a standard name) from `~/.config/nidara/appearance.json` — so GTK4, libadwaita/GNOME apps, Qt apps AND our own installer/lock screen follow the desktop under Hyprland. It is the application half of the appearance contract (architecture.md, "The appearance contract"); test changes with `scripts/dev/appearance-contract-probe.sh`. Other namespaces (font-name, cursor-theme) fall through to the gtk backend (`org.freedesktop.impl.portal.Settings=nidara;gtk` in `/etc/xdg-desktop-portal/hyprland-portals.conf`). Live updates: the daemon watches gsettings `accent-color` and `color-scheme` and emits `SettingChanged`. Its accent table is a deliberate copy of `ui/lib/nidara-kit/platform/accent.ts` `ACCENT_HEX` — keep them in sync.
+1. **Settings**: serves the complete `org.freedesktop.appearance` namespace (`accent-color` as `(ddd)` RGB tuple, `color-scheme` as uint32 0=none/1=dark/2=light, `contrast` and `reduced-motion` as uint32) from gsettings, and `org.nidara.appearance` (the four opacities — `shell-appearance` went with the shell pin, #676 — and NOTHING that already has a standard name) from `~/.config/nidara/appearance.json` — so GTK4, libadwaita/GNOME apps, Qt apps AND our own installer/lock screen follow the desktop under Hyprland. It is the application half of the appearance contract (architecture.md, "The appearance contract"); test changes with `scripts/dev/appearance-contract-probe.sh`. Other namespaces (font-name, cursor-theme) fall through to the gtk backend (`org.freedesktop.impl.portal.Settings=nidara;gtk` in `/etc/xdg-desktop-portal/hyprland-portals.conf`). Live updates: the daemon watches gsettings `accent-color` and `color-scheme` and emits `SettingChanged`. Its accent table is a deliberate copy of `ui/lib/nidara-kit/platform/accent.ts` `ACCENT_HEX` — keep them in sync.
 1b. **Access** (routed since 2026-09-13, #535): consent prompts — camera, microphone, location… — forwarded to the shell's `org.nidara.Shell.Consent`, which draws them (architecture.md, "Consent prompts: the portal asks, the shell draws"). Never grants by default. Probes: `scripts/dev/consent-portal-probe.sh`, `scripts/dev/consent-dialog-probe.sh`.
 2. **Wallpaper**: implements `org.freedesktop.impl.portal.Wallpaper.SetWallpaperURI` — so "Set as Desktop Background" in browsers (Firefox, Chrome, Brave) and image viewers (Loupe, Eye of GNOME) automatically applies and persists the wallpaper via `nidara-ipc setWallpaper` (with automatic caching of temporary/sandboxed images to `~/.local/share/nidara/wallpapers/`).
 3. **DynamicLauncher**: implements `org.freedesktop.impl.portal.DynamicLauncher` (`PrepareInstall` and `RequestInstallToken`) — so web browsers (Google Chrome, Chromium, Brave, Edge, Firefox) and sandboxed apps can seamlessly install Progressive Web Apps (PWAs) and desktop shortcuts into `~/.local/share/applications/` and `~/.local/share/icons/`, automatically indexed live by Nidara's `AppService`.

@@ -299,6 +299,17 @@ class HyprlandStateClass extends GObject.Object {
      *  want that. A caller that PERSISTS what it reads must pass its current
      *  value: `misc:vrr` reads 0 both for "off" and for "could not tell", and
      *  `MonitorConfig` writes whatever it got back into nidara-monitor.lua. */
+    /** Read an effective FLOAT option (`hyprctl getoption -j` → `.float`). Synchronous
+     *  (one `hyprctl` spawn): read it once and on "config-reloaded", never per frame. */
+    getOptionFloat(name: string, fallback: number): number {
+        try {
+            const opt = JSON.parse(exec(["hyprctl", "getoption", name, "-j"]))
+            return typeof opt.float === "number" ? opt.float
+                : typeof opt.int === "number" ? opt.int : fallback
+        }
+        catch (e) { console.error("[HyprlandState] getOptionFloat", name, e); return fallback }
+    }
+
     getOptionInt(name: string, fallback = 0): number {
         try {
             const opt = JSON.parse(exec(["hyprctl", "getoption", name, "-j"]))

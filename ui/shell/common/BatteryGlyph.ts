@@ -13,8 +13,7 @@
 // The one deliberate deviation from the set: the ink spans the FULL 24 units
 // instead of Lucide's 22-unit content box, spending the side padding on body
 // width (and on the charge cavity, which is what actually has to stay legible
-// at 16px). macOS does the same — its menu-bar battery is wider than its
-// neighbours. The 1.5-unit gap before the nub is the floor: below it the two
+// at 16px); a battery glyph is allowed to be wider than its neighbours. The 1.5-unit gap before the nub is the floor: below it the two
 // shapes antialias into one smudge at bar size.
 // That is
 // why the size argument is the ICON BOX in px — the literal equivalent of
@@ -23,15 +22,15 @@
 //
 // Fill ∝ exact charge; green while charging, danger-red at/below the low
 // threshold (semantic status colors, NOT the theme accent — accent is
-// reserved for selection). Chrome color follows the shell appearance pin.
+// reserved for selection). Chrome color follows its surface's skin (AdaptiveGlass).
 
 import Gtk from "gi://Gtk?version=4.0"
-import Theme from "../core/ThemeManager"
 import * as Battery from "../core/BatteryService"
 import { hexToFloatRgb } from "./DrawingUtils"
 import { DANGER_HEX, SUCCESS_HEX } from "../../lib/nidara-kit/platform/status-colors"
 import { INK } from "../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
+import { chromeIsDarkFor } from "./AdaptiveGlass"
 
 /** A real battery device is present (false on desktops, where the display
  *  device exists but reports is_present = false). */
@@ -61,7 +60,7 @@ function roundRect(cr: any, x: number, y: number, w: number, h: number, r: numbe
  *  and the capsule around it comes out the same width. The drawing is scaled
  *  from battery.svg's 24-unit grid (ink = 24×14 of those units, already centred
  *  in the viewBox), never stretched to the allocation.
- *  fill=true lets the DrawingArea fill its parent (e.g. the 48px icon circle) so the
+ *  fill=true lets the DrawingArea fill its parent (e.g. the capsule's icon circle) so the
  *  glyph is centred by the draw_func in the full allocation — robust against box quirks. */
 export function makeBatteryGlyph(box: number, fill = false): Gtk.DrawingArea {
     const da = new Gtk.DrawingArea(fill
@@ -75,7 +74,7 @@ export function makeBatteryGlyph(box: number, fill = false): Gtk.DrawingArea {
         // and the glyph is the one place that conflation was the RIGHT reading, so
         // it is spelled out here instead of inherited.
         const charging = batteryPresent() && (Battery.charging() || Battery.charged())
-        const c = Theme.chromeIsDark ? 1 : 0   // shell skin (bar + CC) — follows appearance pin
+        const c = chromeIsDarkFor(da) ? 1 : 0   // shell skin (bar + CC) — its surface's, see AdaptiveGlass
 
         // SVG units → px. The 24-unit box is centred in the allocation; every
         // coordinate below is read straight off battery.svg.

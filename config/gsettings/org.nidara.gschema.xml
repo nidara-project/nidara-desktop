@@ -317,15 +317,9 @@
       <default>0.48</default>
       <summary>Glass opacity of Nidara's own windows</summary>
     </key>
-    <key name="shell-appearance" type="s">
-      <choices>
-        <choice value="system"/>
-        <choice value="dark"/>
-        <choice value="light"/>
-      </choices>
-      <default>"system"</default>
-      <summary>The shell's own skin: follow the system mode, or pin it dark or light</summary>
-    </key>
+    <!-- `shell-appearance` (the shell pin) was here until 2026-09-29. Removed (#676):
+         the adaptive glass (#673) keeps every surface legible by itself, and the bar
+         reads its skin from its backdrop. A value left in dconf is simply unread. -->
     <!--
       The icon theme Nidara's OWN surfaces draw from (#587) — a different thing
       from org.gnome.desktop.interface icon-theme, which is the theme for
@@ -412,7 +406,7 @@
       </choices>
       <default>"short"</default>
       <summary>Date shown beside the clock in the bar</summary>
-      <description>The bar's only. The lock screen and the login screen show the long date whatever this says, as macOS's Lock Screen keeps its own clock.</description>
+      <description>The bar's only. The lock screen and the login screen show the long date whatever this says: a lock screen keeps its own clock.</description>
     </key>
     <key name="show-seconds" type="b">
       <default>false</default>

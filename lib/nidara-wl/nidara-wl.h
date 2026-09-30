@@ -44,12 +44,14 @@ G_BEGIN_DECLS
  * @NIDARA_WL_ERROR_NO_WINDOW: no toplevel with the requested Hyprland address
  * @NIDARA_WL_ERROR_CAPTURE_FAILED: the compositor refused or aborted the capture
  * @NIDARA_WL_ERROR_TIMEOUT: the compositor never answered
+ * @NIDARA_WL_ERROR_NO_OUTPUT: no output with the requested connector name
  */
 typedef enum {
   NIDARA_WL_ERROR_UNAVAILABLE,
   NIDARA_WL_ERROR_NO_WINDOW,
   NIDARA_WL_ERROR_CAPTURE_FAILED,
   NIDARA_WL_ERROR_TIMEOUT,
+  NIDARA_WL_ERROR_NO_OUTPUT,
 } NidaraWlError;
 
 GQuark nidara_wl_error_quark (void);
@@ -129,6 +131,55 @@ void nidara_wl_capture_window (guint64              address,
  * Returns: (transfer full) (nullable): the captured frame, or %NULL on error
  */
 GdkTexture *nidara_wl_capture_window_finish (GAsyncResult  *result,
+                                             GError       **error);
+
+/**
+ * nidara_wl_capture_region:
+ * @connector: the output's connector name, as `Gdk.Monitor.get_connector()` and
+ *   `hyprctl monitors` report it (e.g. "DP-1")
+ * @x: left edge, in the output's LOGICAL coordinates
+ * @y: top edge, in the output's LOGICAL coordinates
+ * @width: width, in logical pixels
+ * @height: height, in logical pixels
+ * @cancellable: (nullable): a #GCancellable
+ * @callback: (scope async): called when the capture finishes
+ * @user_data: data for @callback
+ *
+ * Captures a rectangle of what the output shows — the compositor's FINAL frame,
+ * every layer included, ours too — at BUFFER resolution (logical × the output's
+ * scale). Not scaled down: a region is meant to be small, and the caller reads
+ * the pixels, so resampling here would only blur what it came for.
+ *
+ * `zwlr_screencopy_v1.capture_output_region`. Hyprland copies its last rendered
+ * frame of the monitor (`ScreenshareFrame.cpp`, `SHARE_REGION`), so this costs a
+ * blit and a read-back, not a render of anything.
+ *
+ * ⚠️ Every capture starts and stops a Hyprland "screencast" session, and its
+ * `screencast`/`screencastv2` IPC events do NOT say which client asked (for a
+ * region the name is the monitor's). A privacy indicator built on those events has
+ * to discount the ones the shell caused itself.
+ *
+ * Runs on a worker thread with its own Wayland connection, like
+ * nidara_wl_capture_window().
+ */
+void nidara_wl_capture_region (const char          *connector,
+                               int                  x,
+                               int                  y,
+                               int                  width,
+                               int                  height,
+                               GCancellable        *cancellable,
+                               GAsyncReadyCallback  callback,
+                               gpointer             user_data);
+
+/**
+ * nidara_wl_capture_region_finish:
+ * @result: the #GAsyncResult handed to the callback
+ * @error: (nullable): return location for an error
+ *
+ * Returns: (transfer full) (nullable): the captured region, top row first, or
+ *   %NULL on error
+ */
+GdkTexture *nidara_wl_capture_region_finish (GAsyncResult  *result,
                                              GError       **error);
 
 /* --------------------------------------------------------- visible region */

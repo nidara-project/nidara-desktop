@@ -3252,12 +3252,20 @@ the per-wallpaper table are in `design-system.md` → "The login screens choose 
 wallpaper". `wallpaper-chroma.jpg` — shipped, in the box — measured **2.50:1** and now measures
 13.71:1.
 
-⚠️ **STILL OPEN FOR THE SHELL, and not as a follow-up chore.** The mechanism is honest on the login
-screens because nothing but the wallpaper can be behind them. A shell surface can have a FULLSCREEN
-OR FLOATING WINDOW behind it, which no wallpaper measurement can see — so `shellAppearance: auto`
-would be right about the wallpaper case and blind about the other. Deciding that is a design call
-with a real blind spot in it; the owner deferred it on 2026-08-25 after seeing the numbers. Until
-then the shell's answer remains the appearance PIN, chosen by hand.
+✅ **THE SHELL HALF IS ANSWERED — the adaptive glass, #673 (2026-09-29).** It had stayed open for a
+reason that did not apply to the login screens: a shell surface can have a FULLSCREEN OR FLOATING
+WINDOW behind it, which no wallpaper measurement can see. The answer does not read the wallpaper at
+all: each surface captures the region it covers, subtracts its OWN paint (rendered offscreen) and
+is left with the backdrop exactly as its text sees it — windows, video, other clients' layers,
+Hyprland's blur included. Then, per surface: thicken up to 0.60, and past that flip the skin. The
+mechanism, its four measured traps and the rule's CI probe are in design-system.md → "Adaptive
+glass". The appearance PIN stays what it was — a preference — and a flipped surface overrides it,
+on purpose. What is left of this item is the login half (the veil, #613), which is the owner's.
+
+*(History — the paragraph this replaced:)* "STILL OPEN FOR THE SHELL, and not as a follow-up chore
+… `shellAppearance: auto` would be right about the wallpaper case and blind about the other …
+the owner deferred it on 2026-08-25 after seeing the numbers. Until then the shell's answer remains
+the appearance PIN, chosen by hand."
 
 Do NOT "fix" the remaining half by raising the floor; that trades the whole aesthetic for a
 wallpaper most users do not have, and the sweep above shows it cannot even work (0.55 still fails

@@ -299,7 +299,7 @@ phase_run() {
     # ── 6. Do the shipped locales still FIT? ─────────────────────────────────
     # scripts/dev/text-budget.js measures every string of THREE fixed-width boxes in
     # all 12 locales — the Settings sidebar, the CC's 2×1 tile title and the CC's
-    # status banner — against each box's real budget, with the shipped font pinned. It
+    # status pill — against each box's real budget, with the shipped font pinned. It
     # runs HERE rather than in its own job for one reason: it needs a GDK display and
     # the `inter-font` package, and this is the only job that has both. It exits 2 (not
     # 1) if the font is missing, so a container that stops shipping Inter reports

@@ -13,17 +13,17 @@ import { CATEGORY_ORDER, type WidgetCategory } from "../common/widget-kit/contra
  *   `widget:<id>` · `tray:<StatusNotifierItem Id>` · `shell:search`
  *
  * The Control Centre and the clock are not in it: they stay at the right end, because the
- * CC and notification panels hang from that edge (and macOS pins the same two).
+ * CC and notification panels hang from that edge.
  *
  * The rules, each an owner's decision of 2026-09-26:
  *  - **Not personalised = derived.** An empty `bar-order` means the default order: tray
  *    icons in the order they arrived, then widgets by category (`sortWidgetsForBar`), then
- *    search (tray first since 2026-09-28: apps left of the system's controls, as macOS).
+ *    search (tray first since 2026-09-28: apps left of the system's controls).
  *    Nothing is written until the person reorders, so a default can still improve with an
  *    update.
  *  - **Personalised, an item the list does not name goes to the LEFT end** — a new tray
  *    app, a widget just switched on. It is the first to fold behind the `»` and it never
- *    pushes aside what the person arranged (macOS does the same).
+ *    pushes aside what the person arranged.
  *  - **The `»` folds from the left**, whatever the item is: the order IS the priority.
  *  - A tray icon, or search, can be kept out of the bar (`bar-hidden`), the way a
  *    widget can (through its placement).
@@ -75,7 +75,7 @@ export function sortWidgetsForBar<T extends { category: WidgetCategory, barOrder
 }
 
 /** The default order of a set of items, each list already in its own default order:
- *  the apps' icons first, left of the system's controls, as macOS has them — and the
+ *  the apps' icons first, left of the system's controls — and the
  *  same side a new icon arrives on once the order is personalised (`resolveOrder`). */
 export function defaultOrder(widgetKeys: string[], trayKeys: string[]): string[] {
     return [...trayKeys, ...widgetKeys, SEARCH_KEY]

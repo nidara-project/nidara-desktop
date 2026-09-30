@@ -132,7 +132,7 @@ const BUDGET = sidebarWidth - (CSS_CHROME + itemMargins + itemSpacing + iconSize
 // ── The Control Centre's two fixed-width text boxes ───────────────────────────
 // Same discipline as above: every number below is READ from the file that owns it.
 // These two surfaces were outside this gate until 2026-09-07, and both were already
-// broken in shipped locales — the tile title in six languages, the status banner in
+// broken in shipped locales — the tile title in six languages, the status banner (a pill since 2026-09-30) in
 // seven. The instrument existed and measured one column.
 
 const ccSrc     = read(`${REPO}/ui/shell/surfaces/control-center/CCLayoutManager.ts`)
@@ -151,9 +151,15 @@ const GAP       = Number(from(ccSrc, /export const GAP\s*=\s*(\d+)/, "GAP from C
 const GRID_COLS = Number(from(ccSrc, /export const GRID_COLS\s*=\s*(\d+)/, "GRID_COLS from CCLayoutManager.ts")[1])
 /** The island's padding for every size but TALL — the branch a capsule takes. */
 const ISLAND_PAD = Number(from(islandSrc, /return size === WidgetSize\.TALL \? \d+ : (\d+)/, "islandPadding from BaseIsland.tsx")[1])
-/** margin_start + icon circle + spacing, summed in the kit itself. */
-const CAPSULE_CHROME = from(tileSrc, /const CAPSULE_CHROME = ([\d\s+]+)\n/, "CAPSULE_CHROME from widget-kit/tile.ts")[1]
-    .split("+").map(n => Number(n.trim())).reduce((a, b) => a + b, 0)
+/** margin_start + icon circle + spacing, summed in the kit itself. A term is a number
+ *  or a name the same file exports as one (CAPSULE_ICON_SIZE, CAPSULE_ICON_GAP): the
+ *  sum went from literals to names on 2026-09-30 and this parse exited 2 until it
+ *  followed them. */
+const CAPSULE_CHROME = from(tileSrc, /const CAPSULE_CHROME = ([\w\s+]+)\n/, "CAPSULE_CHROME from widget-kit/tile.ts")[1]
+    .split("+").map(n => n.trim()).map(term => /^\d+$/.test(term)
+        ? Number(term)
+        : Number(from(tileSrc, new RegExp(`export const ${term} = (\\d+)`), `${term} from widget-kit/tile.ts`)[1]))
+    .reduce((a, b) => a + b, 0)
 
 /** A 2×1 tile's title column: the tile span, minus the island's padding, minus the
  *  capsule's own chrome. Confirmed against a live session on 2026-09-07 (queryUI:
@@ -161,11 +167,12 @@ const CAPSULE_CHROME = from(tileSrc, /const CAPSULE_CHROME = ([\d\s+]+)\n/, "CAP
 const TILE_COLUMN = (2 * UNIT + GAP) - 2 * ISLAND_PAD - CAPSULE_CHROME
 
 const GRID_WIDTH   = GRID_COLS * UNIT + (GRID_COLS - 1) * GAP
-const BANNER_PAD   = Number(from(statusSrc, /const BANNER_PADDING = (\d+)/, "BANNER_PADDING from StatusIndicators.tsx")[1])
+const BANNER_PAD   = Number(from(statusSrc, /const PILL_PAD_X = (\d+)/, "PILL_PAD_X from StatusIndicators.tsx")[1])
 const BANNER_DOT   = Number(from(statusSrc, /css_classes: s === "active".*?\n\s*width_request:\s*(\d+)/s, "the banner dot width")[1])
 const BANNER_SPACE = Number(from(statusSrc, /const row = new Gtk\.Box\(\{ spacing:\s*(\d+)/, "the banner row spacing")[1])
-/** Everything in the row that is NOT the text column and NOT the button: the
- *  painter's padding both sides, the dot, and the two gaps around the text. */
+/** Everything in the pill that is NOT the name and NOT the button: the pill's air at
+ *  both ends, the dot, and the two gaps around the name. The pill is capped at the
+ *  grid's width (its NidaraClamp), so that is the room it shares out. */
 const BANNER_CHROME = 2 * BANNER_PAD + BANNER_DOT + 2 * BANNER_SPACE
 
 /**
@@ -348,15 +355,18 @@ if (TILE_TITLES.length < 10 || TILE_TITLES.filter(t => t.canWrap).length < 4) {
     system.exit(2)
 }
 
-// ── The Control Centre's status banner ───────────────────────────────────────
-// One row per indicator: dot + label/detail + a Stop button. The strings come from
-// the registry in StatusIndicators.tsx, and the BUDGET is per-locale, because the
+// ── The Control Centre's status pill ─────────────────────────────────────────
+// One pill per indicator: dot + name + a Stop button, on ONE line. The strings come
+// from the registry in StatusIndicators.tsx, and the BUDGET is per-locale, because the
 // button's own label is translated — which is exactly why this row was never a
 // constant anyone could gate by hand.
-const BANNER_KEYS = [...statusSrc.matchAll(/\b(?:label|detail):\s*\(\)\s*=>([^\n]+)/g)]
+//
+// Only the `label` is measured since 2026-09-30: the pill replaced a two-line card,
+// and the `detail` moved to its tooltip, where it has no width to fit.
+const BANNER_KEYS = [...statusSrc.matchAll(/\blabel:\s*\(\)\s*=>([^\n]+)/g)]
     .flatMap(m => keysIn(m[1]))
 const BANNER_BTN_KEY = statusSrc.match(/NidaraButton\(\{ label: t\("([^"]+)"\)/)?.[1]
-if (BANNER_KEYS.length < 3 || !BANNER_BTN_KEY) {
+if (BANNER_KEYS.length < 1 || !BANNER_BTN_KEY) {
     printerr(`parsed ${BANNER_KEYS.length} banner strings and ${BANNER_BTN_KEY ? "a" : "no"} button key from StatusIndicators.tsx — fix the parse`)
     system.exit(2)
 }
@@ -495,7 +505,7 @@ const buttonWidth = (text) => {
     const win = new Gtk.Window({ name: "nidara-bar", css_classes: ["nidara-bar-window"] })
     const row = new Gtk.Box({ css_classes: ["cc-status-row"] })
     win.set_child(row)
-    const btn = new Gtk.Button({ label: text, css_classes: ["nidara-btn", "nidara-btn--secondary"] })
+    const btn = new Gtk.Button({ label: text, css_classes: ["nidara-btn", "nidara-btn--secondary", "nidara-btn--compact", "nidara-btn--pill"] })
     row.append(btn)
     const [, nat] = btn.measure(Gtk.Orientation.HORIZONTAL, -1)
     return nat
@@ -535,14 +545,15 @@ const SLOTS = [
         why: `2×1 tile ${2 * UNIT + GAP}px − ${2 * ISLAND_PAD} island padding − ${CAPSULE_CHROME} capsule chrome`,
     },
     {
-        name: "Control Center status banner",
+        name: "Control Center status pill",
         scope: "nidara-bar",
-        classes: ["nidara-row-subtitle"],
-        // Per-locale: what the row has left after a Stop button whose label is
-        // translated. ru pays 106px for its button where ja pays 56.
+        classes: ["nidara-row-title"],
+        // Per-locale: what the pill has left after a Stop button whose label is
+        // translated. One line that ellipsizes, so the failure is truncation — and it
+        // FAILS: the name is the only thing the pill says about what is on.
         budget: (locale) => GRID_WIDTH - BANNER_CHROME - buttonWidth(stringFor(locale, BANNER_BTN_KEY)),
-        items: BANNER_KEYS.map(key => ({ key, metric: "min-wrapped", verdict: "overflow", fails: true })),
-        why: `${GRID_WIDTH}px card − ${BANNER_CHROME} chrome − the Stop button (per locale)`,
+        items: BANNER_KEYS.map(key => ({ key, metric: "natural", verdict: "truncation", fails: true })),
+        why: `${GRID_WIDTH}px grid − ${BANNER_CHROME} chrome − the Stop button (per locale)`,
     },
 ]
 
@@ -655,10 +666,12 @@ if (VERIFY) {
             hint: "open it with `nidara-ipc toggleCC`",
         },
         {
-            name: "CC status banner card", selector: ".cc-status-banner",
+            // A pill as wide as its content since 2026-09-30, no longer a card the
+            // grid's width: what must hold is that it never passes the grid's edge.
+            name: "CC status pill", selector: ".cc-status-banner",
             expect: GRID_WIDTH,
-            read: (ns) => Math.max(...ns.map(n => n.bounds.w)), cmp: "equals",
-            hint: "open the CC with AI control granted — the banner is hidden otherwise",
+            read: (ns) => Math.max(...ns.map(n => n.bounds.w)), cmp: "atMost",
+            hint: "open the CC with AI control granted — the pill is hidden otherwise",
         },
     ]
     for (const box of boxes) {

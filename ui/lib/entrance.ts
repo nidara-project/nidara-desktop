@@ -194,7 +194,7 @@ export function playEntrance(widget: Gtk.Widget, opts: EntranceOpts): void {
  * There is no moment in which a "real" unlock transition could be seen. The
  * instant `Gtk4SessionLock.unlock()` is called the compositor tears our surface
  * down and the session is simply there — so an exit animation is not a transition,
- * it is a DELAY deliberately inserted before unlocking. macOS, iOS and GNOME all
+ * it is a DELAY deliberately inserted before unlocking. GNOME and the others
  * cross-fade lock→desktop because they ARE the compositor; under
  * `ext-session-lock-v1` we are a client and only own the half that leaves.
  *

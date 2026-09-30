@@ -1,7 +1,7 @@
 // The IP and DNS form of one network profile — the cable's, or a saved Wi-Fi network's.
 //
-// macOS gives Ethernet and Wi-Fi the same TCP/IP and DNS tabs, and so do we (owner,
-// 2026-09-28: complete, our own form, not nm-connection-editor). Apple's shape, kept:
+// Ethernet and Wi-Fi get the same TCP/IP and DNS settings (owner, 2026-09-28:
+// complete, our own form, not nm-connection-editor). The shape:
 //   · in an automatic mode the fields show what the network handed out, read-only;
 //   · switching to Manual turns the same fields into entries, filled with those values,
 //     so a fixed address starts from the one that works;

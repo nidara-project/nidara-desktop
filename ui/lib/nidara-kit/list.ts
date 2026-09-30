@@ -78,7 +78,7 @@ export interface NidaraListResult {
  *
  * An optional `footer` prints small dimmed prose UNDER the card. It is for the
  * scope a title cannot carry — who a group applies to, what it deliberately does
- * NOT cover — which is the macOS/iOS group-footer idiom. Use it when a user could
+ * NOT cover — the group-footer idiom. Use it when a user could
  * reasonably misread the group's reach; do not use it for per-row explanation,
  * which belongs in the row's own subtitle.
  *
@@ -95,7 +95,7 @@ export function NidaraList(
     // margin-bottom (design-system.md), so the header binds to the card BELOW it.
     // Group↔group separation is the page-level spacing (settings-page, 24px); the
     // header must sit clearly closer to its own card than to the previous group
-    // (macOS/Adwaita section-header convention), not float halfway between them.
+    // (the usual section-header convention), not float halfway between them.
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL, spacing: 0,
         css_classes: ["nidara-list-group"],
@@ -147,7 +147,7 @@ export function NidaraList(
  * Why the kit has it (owner, 2026-09-27): the first version put that button under the
  * card, loose on the page, because there was no other place to put it — and a control
  * outside a card reads as the page's, not the list's. A list whose rows are acted on as
- * a whole ends with its actions in the same card, the way macOS's grouped lists do.
+ * a whole ends with its actions in the same card.
  *
  * The row is inert (not activatable, not selectable, no hover fill): only its buttons
  * take input. A caller that rebuilds its rows re-appends this same row last.

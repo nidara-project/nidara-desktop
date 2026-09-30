@@ -162,6 +162,7 @@ is why one library carries all of them — the packaging cost is paid once:
 | Capability | Protocol | What it unlocks |
 |---|---|---|
 | `capture_window()` → `GdkTexture` | `ext-image-copy-capture` + `ext-foreign-toplevel-image-capture-source` + `hyprland-toplevel-mapping` | Real window thumbnails (Overview, window switcher) |
+| `capture_region()` → `GdkTexture` | `zwlr_screencopy_v1` v3 (`capture_output_region`) | What the screen shows behind a surface — the adaptive glass (#673) |
 | `visible_region_*()` | `hyprland-surface-v1` **v2** | The layer-blur cost in `tech-debt.md` §46 |
 | `focus_grab_*()` | `hyprland-focus-grab-v1` | Keyboard without layer-shell EXCLUSIVE + compositor-side outside-click dismissal |
 
@@ -200,6 +201,32 @@ the typelib on the **default** girepository path, so all three bundles just `imp
   `Gdk.Surface.get_scale()` (fractional), rounded outward, re-sent on `notify::scale`. Callers keep
   speaking logical coordinates — never pre-multiply. The INPUT region stays logical (wl_surface
   semantics).
+
+- **A region capture is the compositor's FINAL frame, our own layers included** (Hyprland
+  0.56.2, `ScreenshareFrame.cpp`, `SHARE_REGION`: a blit of the monitor's mirror texture). There
+  is no way to capture the screen WITHOUT a layer: the `no_screen_share` layer rule paints a black
+  box over it instead. The adaptive glass does not need one — it subtracts its own paint
+  (`common/BackdropProbe.ts`, design-system.md → "Adaptive glass"). The region is in LOGICAL
+  coordinates and comes back at buffer resolution; the output is named by its connector (a
+  `wl_output` v4 `name`, the same string `Gdk.Monitor.get_connector()` gives). ~3–20 ms, most of
+  it waiting for the next frame, on a worker thread with its own connection like
+  `capture_window()`.
+- 🔑 **A region capture and the visible region (`visible_region_*`) are opposite directions over
+  the same geometry**: the region tells Hyprland which parts of our surface it may draw and blur,
+  the capture reads back what it drew. They meet in one invariant — **only pixels INSIDE the
+  declared visible region can be subtracted**: outside it Hyprland draws nothing of ours, so an
+  offscreen render that paints there (a shadow's halo, a panel spilling past its stamped rect)
+  would recover a false backdrop. `BackdropProbe` holds this by using only the flat BODY of the
+  glass (`isFlatGlass`), which is always declared; halos sit under `ignore_alpha` and are excluded
+  by alpha. A surface that starts measuring something that can leave its stamped rect has to
+  re-check this. Merging the two buys nothing: the region costs ~0, the capture runs off the main
+  thread, and the only main-thread cost is the offscreen render (≈2 ms for the bar, ≈7 ms for the CC;
+  design-system.md → "Adaptive glass" has the measurements).
+- ⚠️ **Every capture of either kind starts and stops a Hyprland screencast session**, and its
+  `screencast` / `screencastv2` IPC events do NOT name the client that asked (for a region the
+  name is the monitor's; for a window, its title). A privacy indicator built on those events (#646)
+  must discount the captures the shell itself makes — the overview's thumbnails and the adaptive
+  glass — or it lights up for them.
 
 **From the shell, do not import the shim directly** — go through `common/VisibleRegion.ts`, which
 owns three decisions:
@@ -787,7 +814,7 @@ interval is how long a dismissal can lag; it is not a polling loop for state.
    - **Dev mode:** if `~/.config/nidara/.dev` exists, `cd` to its path and run `scripts/run.sh app.ts`.
    - **Prod mode:** exec the bundle at `/usr/share/nidara/ui/shell/build/nidara`.
    - Log: `${XDG_RUNTIME_DIR:-/tmp}/nidara-ui.log` (per-user — see tech-debt "Resolved" rule on log paths).
-5. **`app.ts`** (`ui/shell/app.ts`): sets dark/light via `Gtk.Settings.gtk_application_prefer_dark_theme` (pure GTK4 — no `Adw.init()`); registers the `nd-*-symbolic` icon search path; `app.start({ applicationId: "org.nidara.desktop", main, requestHandler })`. In `main()`: iterates monitors → `createUI(monitor)` (Bar + Dock per monitor), wires the dock-rebuild debounce, and populates `core/ShellActions` + the IPC registry (the bar/dock blur layer rules live in `hyprland.lua` as `hl.layer_rule` — the old `hyprctl keyword layerrule` calls were dead under the Lua parser and were removed).
+5. **`app.ts`** (`ui/shell/app.ts`): sets dark/light via `Gtk.Settings.gtk_application_prefer_dark_theme` (pure GTK4 — no `Adw.init()`); registers the `nd-*-symbolic` icon search path; `app.start({ applicationId: "org.nidara.desktop", main, requestHandler })`. In `main()`: iterates monitors → `createUI(monitor)` (Bar + Dock per monitor), wires the dock-rebuild debounce (⚠️ the old dock is `close()`d AND `run_dispose()`d: in GTK4 `close()` only drops GTK's own reference, and `"destroy"` — which is where the dock releases its HyprlandState/Theme/glass subscriptions — comes at dispose, which those very subscriptions prevented. Until 2026-09-29 every position/auto-hide change left the old dock alive, unmapped and still listening), and populates `core/ShellActions` + the IPC registry (the bar/dock blur layer rules live in `hyprland.lua` as `hl.layer_rule` — the old `hyprctl keyword layerrule` calls were dead under the Lua parser and were removed).
 6. Reload in dev: **`Super+Shift+R`** re-runs `nidara-ui` (the old `start_ui.sh`/`reload_ui.sh` no longer exist).
 
 ### The greeter's entry waits for a GPU, and the wait has a ceiling
@@ -1222,7 +1249,7 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     `CCLayoutManager` now and are unreachable from `widgets/`; a widget's own
     intrinsic sizes (icon circles, buttons, its caption height) are fine. Panel
     widths (bar expansions / CC details) come from the **`PANEL_W` tier
-    vocabulary** (sm 200 / md 220 / lg 240 / xl 280 / full 356), never hardcoded px,
+    vocabulary** (sm 200 / md 220 / lg 240 / xl 280 / full 368), never hardcoded px,
     and the rows inside them from the three words beside it in `widget-kit/panel.ts`:
     **`panelRow`** (label + a control — a switch, a button; was written out five times
     across bluetooth, wifi, focus and night light twice), **`panelInfoRow`** (label +
@@ -1813,7 +1840,7 @@ channel, and the second channel is where the bugs lived.
 | high contrast | gsettings `org.gnome.desktop.a11y.interface high-contrast` | `org.freedesktop.appearance contrast` |
 | reduced motion | gsettings `…interface enable-animations` (inverted) | `org.freedesktop.appearance reduced-motion` |
 | fonts, icon theme, cursor | gsettings `…interface` | `org.gnome.desktop.interface` (served by the gtk backend) |
-| window / bar / overlay / dock opacity, shell-appearance | gsettings `org.nidara.appearance` (#573) | `org.nidara.appearance` (same kebab-case names), served ONLY there |
+| window / bar / overlay / dock opacity | gsettings `org.nidara.appearance` (#573) | `org.nidara.appearance` (same kebab-case names), served ONLY there |
 
 Every key in this table is read by `ThemeManager` FROM its home and followed through `changed::`, so
 `gsettings set … accent-color pink`, `… icon-theme Adwaita` or `org.nidara.appearance bar-opacity
@@ -2261,7 +2288,7 @@ them on every push.
 decides whether coming back re-reads: one that connects and returns a disposer is armed and blind — it
 learns nothing that happened while the widget was away, which is exactly the interval it exists to
 cover. **Prime it: `apply(read())` BEFORE connecting.** Settings → Appearance had five controls on this
-shape (measured 2026-08-16: `setConfig appearance.shellAppearance dark` moved the bar and the dock
+shape (measured 2026-08-16: `setConfig appearance.shellAppearance dark` — the shell pin, removed since, #676 — moved the bar and the dock
 while the dropdown two inches away still read "Follow system", for the rest of the session; the four
 advanced glass sliders live in a Revealer that starts closed, so they are unrealized until it opens and
 came back showing the value they were BUILT with, contradicting the master right above them). The

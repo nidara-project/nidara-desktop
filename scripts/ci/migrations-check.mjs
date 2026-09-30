@@ -182,7 +182,9 @@ try {
         ["a current-model opacity is imported as is",            /bar-opacity=0\.(6\b|59999)/, true],
         ["an opacity under the floor is clamped (= default, not stored)", /dock-opacity=/, false],
         ["an opacity equal to the default is not stored",        /overlay-opacity=/, false],
-        ["the shell's pinned skin is imported",                   /shell-appearance='dark'/, true],
+        // The pin was removed with its schema key (#676): importing it would write a
+        // key that no longer exists, i.e. fail the whole migration on an old install.
+        ["the removed shell pin is NOT imported",                 /shell-appearance/, false],
     ]
     for (const [label, re, present] of expect) {
         if (re.test(kf) === present) ok(`appearance import: ${label}`)

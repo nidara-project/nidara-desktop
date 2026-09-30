@@ -153,7 +153,7 @@ export function makeCoverFit() {
 import { RADIUS } from "../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 
-/** Canonical squircle thumbnail corner ratio (25%, matching macOS icon proportion). */
+/** Canonical squircle thumbnail corner ratio (25%, the usual app-icon proportion). */
 export const THUMB_RADIUS_RATIO = 0.25
 
 /** A squircle-clipped, cover-fit thumbnail of `pixbuf`, as a `Gtk.DrawingArea`.

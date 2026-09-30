@@ -44,8 +44,10 @@ export interface KitAppearance {
     onChange(cb: () => void): () => void
     /** Overlay opacity for glass elements (default: 0.55). */
     overlayOpacity?: () => number
-    /** Whether shell chrome (pinned appearance) is dark (default: follows surfaceIsDark). */
-    chromeIsDark?: () => boolean
+    /** Whether shell chrome is dark (default: follows surfaceIsDark). Given the widget
+     *  being painted, the shell answers for the SURFACE it sits in — the adaptive glass
+     *  can flip one surface's skin (#673) — so pass it whenever there is one. */
+    chromeIsDark?: (widget?: Gtk.Widget | null) => boolean
 }
 
 let warned = false

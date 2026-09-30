@@ -79,18 +79,17 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
 
 // ── The Wi-Fi panel: ONE, for the bar and the CC ──────────────────────────────
 //
-// Apple's Wi-Fi status menu, read in its user guide (owner's reference, 2026-09-28):
-// the menu bar and Control Center open the SAME menu — the radio, the network you are
+// The reference the owner chose (2026-09-28): the bar and the Control Center open the
+// SAME menu — the radio, the network you are
 // on, Known Networks, Other Networks folded with "Other…" at its end for a hidden one.
 // Clicking a network joins it; clicking the Wi-Fi ICON left of the connected network
 // leaves it (the icon, not the row: a mis-tap in a list that reorders by strength must
-// not drop the connection). Its details — IP, router, band, security — are Apple's
-// Option-click, a gesture nothing on screen announces; here they sit behind a visible
-// chevron on that row instead (owner). Until then the bar showed three read-only lines.
+// not drop the connection). Its details — IP, router, band, security — sit behind a
+// visible chevron on that row, not behind a gesture nothing on screen announces (owner). Until then the bar showed three read-only lines.
 //
 // Joining goes through the SAME path as Settings (common/WifiSecretsDialog.joinNetwork),
 // so a password, an enterprise form or a refused key look identical from everywhere.
-// Forgetting a network stays in Settings, as in Apple's.
+// Forgetting a network stays in Settings.
 
 const MAX_KNOWN = 5
 const MAX_OTHERS = 8
@@ -110,7 +109,7 @@ function disclosure(isOpen: () => boolean, closedIcon: "nd-pan-down" | "nd-pan-e
 // ── A network row: fixed columns, so nothing moves from one row to the next ──
 //   [badge] name ……… status [lock] [chevron]
 // The badge is the network's signal in a circle, filled with the accent on the network
-// you are on (that IS the "connected" mark — no tick, Apple's menu has none). The lock
+// you are on (that IS the "connected" mark — no tick). The lock
 // and chevron columns are reserved on every row, empty or not: the owner's review of
 // the first version, 2026-09-28 — "the lock, the arrow and the tick look thrown there".
 
@@ -187,8 +186,8 @@ function buildWifiPanel(opts: { withSwitch: boolean }): Gtk.Widget {
     }
 
     /** The network the adapter is on or joining. ONE row to the eye (the hover is the
-     *  row's), two targets: the badge leaves the network, as Apple's icon does; the rest
-     *  opens the details — Apple's Option-click, behind a visible chevron here (owner). */
+     *  row's), two targets: the badge leaves the network; the rest opens the details,
+     *  behind a visible chevron (owner). */
     const currentRow = (ap: NM.AccessPoint, link: "connected" | "connecting"): Gtk.Widget => {
         const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
         // 6, not 10: the main button carries 4px of its own on the left, so its focus
@@ -197,7 +196,7 @@ function buildWifiPanel(opts: { withSwitch: boolean }): Gtk.Widget {
 
         // Not a Tab stop: opened by keyboard, a detail focuses its first stop, and Enter
         // there would have disconnected on arrival (measured 2026-09-28). The pointer gets
-        // Apple's badge; the keyboard gets "Disconnect" inside the details.
+        // the badge; the keyboard gets "Disconnect" inside the details.
         const leave = new Gtk.Button({ child: apBadge(ap, link === "connected"), css_classes: ["wifi-leave"], valign: Gtk.Align.CENTER, focusable: false })
         attachTooltip(leave, t("settings.network.ap.disconnect"))
         leave.update_property([Gtk.AccessibleProperty.LABEL], [t("settings.network.ap.disconnect")])
@@ -272,7 +271,7 @@ function buildWifiPanel(opts: { withSwitch: boolean }): Gtk.Widget {
                 halign: Gtk.Align.START, margin_top: 8, margin_bottom: 8, margin_start: 12, margin_end: 12,
             }))
         }
-        // Other Networks: folded, as Apple's; "Other network…" (a hidden SSID) at its end.
+        // Other Networks: folded; "Other network…" (a hidden SSID) at its end.
         const othersBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, visible: othersOpen })
         const arrow = disclosure(() => othersOpen, "nd-pan-end")
         body.append(keep("others", menuRow({

@@ -17,30 +17,24 @@
        Enter/Space, Esc). Every ring here is GTK's own `:focus-visible` outline —
        the tiles' and their buttons', in `.cc-island` below. */
 
-    /* --- Status banner (AI control) above the widgets --- */
-    /* One .cc-status-row per active indicator (dot + text + a Stop button).
-       Collapsed to nothing by the widget when no indicator is active.
+    /* --- Status notices (AI control) above the widgets --- */
+    /* One PILL per active indicator (dot + name + a compact Stop button), centred,
+       as wide as its content (StatusIndicators.tsx; owner, 2026-09-30). Collapsed to nothing by the widget when no indicator is active.
 
-       The CARD ITSELF IS CAIRO — a SquircleContainer built in StatusIndicators.tsx,
-       exactly like the tiles below it. No border and no padding here: both belong to
-       the painter (glass fill, 1.5px inner rim, 12px inset), and the background must
-       stay transparent so nothing paints a rectangle behind the squircle. It is
+       THE PILL ITSELF IS CAIRO — a SquircleContainer, exactly like the tiles below it.
+       No border and no padding here: both belong to the painter, and the background
+       must stay transparent so nothing paints a rectangle behind the capsule. It is
        deliberately NOT given `.cc-island` (that class resets Adwaita defaults on any
-       descendant button and would flatten the NidaraButton — see the note there). It
-       used to be a CSS
-       `material-card` tinted danger-red on background AND border, under a red dot
-       and a red button — four reds on one small row, and a flat CSS box pasted over
-       a grid of Cairo glass. It read as "something has gone wrong, turn this off
-       NOW"; it is a notice (2026-08-02, user call).
+       descendant button and would flatten the NidaraButton — see the note there).
 
-       MARGIN = the CC's block rhythm: 24px, the same air the Edit pill gets below
-       the grid (`editBtnWrapper.margin_top` in IslandGrid.tsx). 12px is the gap
-       BETWEEN TILES (GAP) — using it here made the card look stuck to the grid,
-       tighter than the panel's own internal spacing. Two scales, on purpose:
-       12 inside a block, 24 between blocks. */
+       MARGIN 4: the notice sits right on the content it belongs to (owner, 2026-09-30). 24 until then ("12 inside a block, 24 between blocks"). The
+       Edit pill below the grid is 16 away (IslandGrid.tsx), and the panel's own margin
+       is 16 (ControlCenter.tsx, CC_PANEL_PAD). */
+    .cc-status-notices {
+        margin-bottom: 4px;
+    }
     .cc-status-banner {
         background-color: transparent;
-        margin-bottom: 24px;
     }
     /* The last pulsing dot in the shell, and deliberately so: it marks the agent
        having JUST acted (a few seconds, ~pulseComputerAction) inside a surface that
@@ -118,11 +112,19 @@
         .cc-split-icon-btn {
             border-radius: var(--nidara-radius-pill);
             color: var(--nidara-text);
+            // No box of its own: it FILLS the circle it sits in. With the base layer's
+            // button padding (9px a side) a 28px icon asked for 46px, which was hidden
+            // while the circle was 48 and widened it to 46×44 — an oval — the moment the
+            // circle went to 44 (2026-09-30, CAPSULE_ICON_SIZE).
+            padding: 0;
+            min-width: 0;
+            min-height: 0;
             @include nidara-tile-states;
         }
     }
 
-    /* 48x48 Circular Badge inside capsules (no override needed, is a box not a button) */
+    /* The circular badge inside capsules (CAPSULE_ICON_SIZE, widget-kit/tile.ts; no
+       override needed, it is a box not a button) */
     .nidara-atomic-icon-circle-bg {
         background-color: var(--nidara-surface);
         border-radius: var(--nidara-radius-pill);
@@ -130,12 +132,28 @@
     }
 
     /* --- Typographical Utilities for Toggles --- */
+    // A tile's title — 14 since 2026-09-30 (13 before), the reference proportions at our
+    // scale (design-system.md, "The Control Center is a PANEL"). ⚠️ Only because the 2×1 capsule's text column went
+    // 88 → 96 in the same change (widget-kit/tile.ts, CAPSULE_ICON_SIZE/GAP): at 88,
+    // "Luz nocturna" (91px at 14 bold) was cut to "Luz noctur…". The NC's card summaries
+    // share the class.
     .nidara-atomic-label-bold {
-        font-size: $fs-small;
+        font-size: $fs-body;
         font-weight: $fw-bold;
         color: var(--nidara-text);
     }
 
+    // A tile's SUBTITLE — its state ("Activo", "Sin conexión"): information, so the
+    // SECONDARY ink tier (80 %, held to 4.5:1 by the adaptive glass), not the dim one.
+    // Same size as the title and only lighter in weight and ink (owner, 2026-09-30, over 12px / 400 / dim, which read "very thin next to the
+    // title"). It shares the title's 96px column (widget-kit/tile.ts), so a long
+    // network name ellipsizes sooner than it did at 12.
+    .nidara-atomic-label-sub {
+        font-size: $fs-body;
+        font-weight: $fw-regular;   // pinned, like the one below and for the same reason
+        color: var(--nidara-text-secondary);
+    }
+    // Metadata beside a control (the CC context menu's "full row" note).
     .nidara-atomic-label-dim {
         font-size: $fs-caption;
         // Pin the weight: without it the label inherits its parent's, so capsules
@@ -637,16 +655,22 @@
 .nidara-bar-window,
 #nidara-island,
 .nidara-island-window {
+    // The track's title: 14 bold, like every tile's title (`.nidara-atomic-label-bold`;
+    // owner, 2026-09-30 — it was 13, the one title left behind).
     .nidara-media-title {
-        font-size: $fs-small;
+        font-size: $fs-body;
         font-weight: $fw-bold;
         color: var(--nidara-text);
     }
 
+    // The artist is the track title's subtitle, and follows the tiles' rule
+    // (`.nidara-atomic-label-sub`, owner 2026-09-30): the title's size, regular weight,
+    // SECONDARY ink (80 %, held to 4.5:1) — not 12 px in the dim tier, which read far
+    // thinner than the title above it.
     .nidara-media-artist {
-        font-size: $fs-caption;
+        font-size: $fs-body;
         font-weight: $fw-regular;
-        color: var(--nidara-text-dim);
+        color: var(--nidara-text-secondary);
     }
 
     .nidara-media-btn {

@@ -8,6 +8,7 @@ import { attachTooltip, type NidaraTooltipHandle, type NidaraTooltipOpts, type N
 import { GLASS_SPECULAR, GLASS_TINT, GLASS_STATE_MIX } from "../../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 import { barKeyAction } from "../../common/widget-kit"
+import { chromeIsDarkFor } from "../../common/AdaptiveGlass"
 
 // Shared bar-capsule edge: a faint white inner border. It no longer changes on
 // hover: the capsules pass `hoverLift` (the glass lifts a little) and `barOpen`
@@ -16,8 +17,8 @@ import { barKeyAction } from "../../common/widget-kit"
 export const CAPSULE_BORDER = { r: 1, g: 1, b: 1, a: 0.2 }
 
 // The bar's geometry, on the design system's 4px scale (owner, 2026-09-25):
-//   4 above a capsule · 32 capsule (8 + a 16px icon + 8) · 8 to the windows below
-//   (Hyprland's gaps_out) · 4 between capsules · 8 at the two ends (Bar.tsx BAR_MARGIN).
+//   4 above a capsule · 32 capsule (8 + a 16px icon + 8) · 4 to the windows below
+//   (Hyprland's gaps_out) · 4 between capsules · 4 at the two ends (BAR_MARGIN).
 // Inside a GROUP (barGroup below, 2026-09-26): 4 from the glass allocation to the
 // first item · each item its content + 8 a side (BAR_ITEM_PAD, common/widget-kit/bar.ts),
 // items touching · the hover pill 4 in from the top and bottom (BAR_VEIL_INSET).
@@ -36,17 +37,23 @@ export const BAR_CAPSULE_H = 32
 
 // The gap between two pieces of bar glass that sit side by side — since the groups
 // (2026-09-26) that is only the island's row: its capsule and its chips. Inside a
-// group items touch, and nothing else stands next to another capsule. The two
-// ENDS stay at 8 (Bar.tsx BAR_MARGIN): that is Hyprland's gaps_out, so the system
-// menu lines up with the windows' left edge. (8 until 2026-09-25.)
+// group items touch, and nothing else stands next to another capsule. (8 until
+// 2026-09-25.)
 export const BAR_GAP = 4
+
+// From the screen's left and right edges to the bar's two ends. It IS Hyprland's
+// `gaps_out` (config/hypr/hyprland.lua, GAPS_OUT), so the system menu lines up with the
+// windows' left edge and the clock with their right one: change both together. The
+// panels hanging from the bar keep the same distance (Bar.tsx SIDE_GAP). 8 until
+// 2026-09-29, when the owner tried the whole desktop tighter: gaps_out 4, gaps_in 2.
+export const BAR_MARGIN = 4
 
 // ── Groups and items (owner, 2026-09-26) ────────────────────────────────────
 // The bar is THREE pieces of glass, not one per icon: the left group (system menu +
 // window title), the island (its own surface, its chips still apart), and the right
 // group (the `»`, the widgets, the tray, search, the CC, the clock). The group's glass
 // never changes; what marks hover and open is a pill INSIDE it, under the one item —
-// the way macOS's menu bar, GNOME's top bar and a segmented control all do it.
+// the way GNOME's top bar and a segmented control both do it.
 
 // From the group's allocation to its first/last item. The glass itself is painted
 // GLASS_INSET (2) in from the allocation, so the end items' pills sit 2px inside the
@@ -136,7 +143,7 @@ export function barItem({ child, onClick, getOpen, watchOpen, onKey }: BarItemOp
             : getOpen?.() ? GLASS_STATE_MIX.open : hovered ? GLASS_STATE_MIX.hover : null
         const vh = h
         if (!mix || w <= 0 || vh <= 0) return
-        const dark = Theme.chromeIsDark
+        const dark = chromeIsDarkFor(veil)
         const ink = dark ? GLASS_SPECULAR : GLASS_TINT.dark
         const r = Math.min(vh, w) / 2
         const top = 0, bottom = vh

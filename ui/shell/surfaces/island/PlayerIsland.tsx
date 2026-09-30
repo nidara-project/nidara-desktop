@@ -9,6 +9,7 @@ import * as media from "../../core/MediaService"
 import Theme from "../../core/ThemeManager"
 import { safeDisconnect } from "../../core/signals"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
+import { chromeIsDarkFor } from "../../common/AdaptiveGlass"
 
 // The Activity Island's PLAYER mode — both halves of the media activity:
 //
@@ -123,7 +124,7 @@ export function PlayerCompact(opts: {
     const EQ_SPEED = [1.0, 1.35, 0.8]
     eq.set_draw_func(cairoDraw((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
-        const c = Theme.chromeIsDark ? 1 : 0
+        const c = chromeIsDarkFor(eq) ? 1 : 0
         const bw = 3
         const gap = (w - EQ_BARS * bw) / (EQ_BARS - 1)
         // The EQ bars ARE the mark, the same kind of thing as a resource ring's filled

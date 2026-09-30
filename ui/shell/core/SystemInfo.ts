@@ -78,8 +78,8 @@ export function cpuModel(): string {
  * firmware and the kernel reserve a slice before userspace ever sees it (this
  * host: 32778376 kB = 31.26 GiB of 32 GiB installed). Printed as-is it makes the
  * desktop claim the person has less RAM than they bought, which is the one thing
- * this row must not do; every consumer OS reports the installed size (macOS "32
- * GB", Windows "32.0 GB (31.3 GB usable)").
+ * this row must not do; consumer systems report the installed size (Windows
+ * "32.0 GB (31.3 GB usable)").
  *
  * Ceiling to the whole GiB restores it, because the reserved slice is a few
  * percent — well under the 1 GiB it would take to round to the wrong number — and

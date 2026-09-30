@@ -16,9 +16,8 @@ import type { PageCtx, ItemBuilder } from "../PreferencePage"
 import { buildClockOptions } from "./clock"
 
 // ── Settings → Top bar (owner, 2026-09-27) ────────────────────────────────────
-// After macOS's Menu Bar pane. ONE list of the bar's CONTROLS (macOS's word, and the
-// right one: a volume slider is not a "widget"), read RIGHT TO LEFT the way macOS lists
-// them — Clock, Control Center, then the right group's items in the bar's current order,
+// ONE list of the bar's CONTROLS (the right word: a volume slider is not a "widget"),
+// read RIGHT TO LEFT, the order they stand in from the screen's edge — Clock, Control Center, then the right group's items in the bar's current order,
 // then the window title and the system menu. Each row: a check on the left (none for the
 // fixed ones), the icon, the name, and at most ONE control on the right — "Change icon"
 // for the system menu, "Configure" for the clock and for a control with settings, else "Always / When
@@ -140,8 +139,8 @@ export const build = (ctx: PageCtx) => {
             const add = (row: Gtk.Widget) => listBox.append(row)
             const byId = new Map(entries.map(w => [w.id, w]))
 
-            // Fixed at the right end: no check. The clock's Configure is macOS's "Clock
-            // Options" — the date and the seconds (custom/clock.ts).
+            // Fixed at the right end: no check. The clock's Configure opens its options —
+            // the date and the seconds (custom/clock.ts).
             const clockTrailing = new Gtk.Box({ valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
             if (ctx.nav) {
                 const nav = ctx.nav

@@ -98,7 +98,7 @@ export const BAR_ORDER: string[] = sortWidgetsForBar(ALL_WIDGETS.filter(w => w.l
     .map(w => w.id)
 
 // The CC's default layout, in reading order, each tile at its default footprint here
-// (owner, 2026-09-28: his own arrangement, with Display above Sound as macOS has them).
+// (owner, 2026-09-28: his own arrangement, with Display above Sound).
 // Until the person moves or resizes a tile, the grid is PACKED from this list at every
 // change (CCLayoutManager's default mode): a tile whose hardware is missing is simply
 // skipped and the ones after it move up, so a desktop without Wi-Fi, Bluetooth or a

@@ -84,8 +84,8 @@ export interface AuthCard {
  *   • TYPING clears it immediately — "I know, I am already fixing it." This is
  *     the one that matters, and it is what GNOME's lock screen does.
  *   • The TIMER covers the other case, a wrong password left untouched on a
- *     screen nobody is at. macOS/iOS keep the message indefinitely there, which is
- *     defensible, but their message is also the only thing on the screen; ours
+ *     screen nobody is at. Keeping the message indefinitely there would be
+ *     defensible if it were the only thing on the screen; ours
  *     sits under a live clock and a card that has already shaken.
  *
  * 8s: long enough to read a wrapped two-line message without hurrying, short
@@ -117,7 +117,7 @@ export function buildAuthCard(opts: AuthCardOpts): AuthCard {
     // builds one — an `image.caps-lock-indicator` inside the field — so the greeter
     // used to show TWO warnings for one state while the lockscreen, which never had
     // ours, showed one. The field's is the one that survives: it is where the cursor
-    // is, it is what macOS and iOS do, and it makes the two screens identical for
+    // is, it is the convention, and it makes the two screens identical for
     // free. Styled in ui/greeter/style.scss; there is no property to turn it off, so
     // adding a second one is the only mistake available here.
     //

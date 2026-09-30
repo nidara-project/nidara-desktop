@@ -36,7 +36,7 @@ const REGIONAL_LC_VARS = [
 //
 // `dateFormat` defaults to "short" (owner, 2026-09-28; it was "long", what nidara-setup
 // used to seed). It is the BAR's date only: the lock screen and the greeter always
-// show the long one (ui/lib/clock.ts), as macOS's Lock Screen keeps its own clock.
+// show the long one (ui/lib/clock.ts): a lock screen keeps its own clock.
 const DATE_FORMATS: readonly DateFormat[] = ["none", "short", "short-year", "long", "numeric", "iso"]
 const clock = defineSettings<{ timeFormat: TimeFormat; dateFormat: DateFormat; showSeconds: boolean }>("region", {
     timeFormat: "24h",

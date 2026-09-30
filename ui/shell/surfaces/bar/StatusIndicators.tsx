@@ -16,7 +16,7 @@ import { t } from "../../core/i18n"
 // red dot sat in a lane of its own on the CC button, meaning "the Control Center
 // has something for you"; the owner took it out, and what the bar should show for
 // AI control is undecided — no platform has prior art for it. The CC button is to
-// gain a small second icon for PRIVACY (sensors in use, location), macOS-style:
+// gain a small second icon for PRIVACY (sensors in use, location):
 // one mark beside the Control Centre, the detail at the top of it.
 //
 // Three states per indicator:
@@ -29,8 +29,8 @@ export type IndicatorState = "hidden" | "armed" | "active"
 
 interface BarIndicator {
     id: string
-    label: () => string          // banner row title
-    detail: () => string         // banner row subtitle (state description)
+    label: () => string          // the pill's one line (what is on)
+    detail: () => string         // the pill's tooltip, after the label (what that means)
     state: () => IndicatorState
     // Register cb to run whenever state() may have changed. Shell-lifetime — the
     // banner lives as long as the CC, so subscriptions are never torn down.
@@ -72,10 +72,17 @@ function subscribeAll(cb: () => void) {
     for (const ind of INDICATORS) ind.subscribe(cb)
 }
 
-// ── Control-Center banner ─────────────────────────────────────────────────────
-// A card above the CC widgets, one row per non-hidden indicator: dot +
-// label/detail + a Stop/Revoke button. The kill switch lives HERE. Hidden (no
-// space at all) when nothing is active.
+// ── Control-Center notice ─────────────────────────────────────────────────────
+// A PILL at the top of the CC, inside its panel, one per non-hidden indicator:
+// dot + name + a Stop button. The kill switch lives HERE. Nothing at all when no
+// indicator is active.
+//
+// ⚠️ A pill, not the full-width card it was until 2026-09-30 (owner's call: a centred
+// capsule as wide as its content, sitting on the tiles). What changed with it: the second line ("With permission to
+// control your applications") is gone from the pill — it is the tooltip now; the pill
+// says WHAT is on, the tooltip what that means. And the Stop button stays INSIDE it
+// rather than behind a detail page (owner's call): this is the kill switch, and it
+// stays one click away.
 //
 // It is a real CC island — a Cairo-painted capsule from SquircleContainer, the
 // same material/gloss/border every tile below it is made of — not a CSS card.
@@ -84,103 +91,60 @@ function subscribeAll(cb: () => void) {
 // panel, however close the colours get: it misses the inner specular rim, the
 // squircle profile and the shell-opacity tracking (user call 2026-08-02, and the
 // same reason the CC's own tiles stopped being CSS boxes long ago).
-function buildBannerRow(ind: BarIndicator, s: IndicatorState): Gtk.Widget {
+function buildNoticePill(ind: BarIndicator, s: IndicatorState): Gtk.Widget {
     const dot = new Gtk.Box({
         css_classes: s === "active" ? ["cc-status-dot", "is-active"] : ["cc-status-dot"],
-        width_request: 10, height_request: 10, valign: Gtk.Align.CENTER,
+        width_request: 8, height_request: 8, valign: Gtk.Align.CENTER,
     })
-    const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
-
-    // Both labels WRAP and fill the column, and that is load-bearing rather than
-    // tidy. The card is a fixed GRID_WIDTH (it shares the grid's right edge) while
-    // its height is free, so a label that neither wraps nor ellipsizes makes its
-    // whole natural width the row's MINIMUM and pushes the card past the edge it is
-    // aligned to — where the CC's visible region clips it. Measured over the twelve
-    // shipped locales at the default text size: the detail line overflows in SEVEN
-    // of them (ru +104px, pt-PT +73, pl +66, es +54, it +35, pt-BR +19, fr +1) and
-    // only English, German, Dutch, Japanese and Chinese ever fit. Wrapped, the worst
-    // minimum in any locale is 78px against 192px of column — every one fits, and the
-    // card grows by a line instead. `lines: 2` + ellipsis is the backstop for a
-    // string longer than this row is ever meant to carry.
-    const line = (label: string, cls: string) => new Gtk.Label({
-        label, css_classes: [cls],
-        halign: Gtk.Align.FILL, hexpand: true, xalign: 0,
-        wrap: true, lines: 2, ellipsize: 3,
+    // One line, and it may ellipsize: the pill is as wide as its content up to the
+    // grid's width (the clamp below), and a name longer than that is cut rather than
+    // pushing the pill past the edge the tiles are aligned to. The whole name and what
+    // it means are the tooltip.
+    const name = new Gtk.Label({
+        label: ind.label(), css_classes: ["nidara-row-title"],
+        valign: Gtk.Align.CENTER, xalign: 0, ellipsize: 3, single_line_mode: true,
     })
-    text.append(line(ind.label(), "nidara-row-title"))
-    text.append(line(ind.detail(), "nidara-row-subtitle"))
-
-    // NidaraButton, `secondary` — NOT Adwaita's `destructive-action`, which is
-    // both off-system (raw GTK red: this row is outside the `.nidara-detail-panel`
-    // scope that restyles Adwaita button classes, so it rendered as pure Adwaita)
-    // and wrong: revoking a permission is reversible, and the shell's own rule is
-    // that danger means destructive. See nidara-kit/button.ts — page code never
-    // uses Adwaita button classes.
-    const btn = NidaraButton({ label: t("cc.status.stop"), variant: "secondary", valign: Gtk.Align.CENTER })
+    // NidaraButton, `secondary` + compact — NOT Adwaita's `destructive-action`:
+    // revoking a permission is reversible, and the shell's own rule is that danger
+    // means destructive (nidara-kit/button.ts). Compact: it sits in a one-line pill and
+    // must not out-weigh the name beside it.
+    const btn = NidaraButton({ label: t("cc.status.stop"), variant: "secondary", size: "compact", pill: true, valign: Gtk.Align.CENTER })
     btn.connect("clicked", () => ind.onClick())
-
-    const row = new Gtk.Box({ spacing: 12, css_classes: ["cc-status-row"], valign: Gtk.Align.CENTER })
+    const row = new Gtk.Box({ spacing: 8, css_classes: ["cc-status-row"], valign: Gtk.Align.CENTER })
     row.append(dot)
-    row.append(text)
+    row.append(name)
     row.append(btn)
-    return row
-}
-
-/** The painter's inset, and the number the card's width is derived from. Named
- *  because two things now read it: SquircleContainer below, and the clamp that
- *  gives the rows a ceiling. */
-const BANNER_PADDING = 12
-
-export function ccStatusBanner(): Gtk.Widget {
-    const list = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
-
-    // ⚠️ The rows need a CEILING, and `set_size_request(GRID_WIDTH)` below is not one
-    // — it is a FLOOR. Nothing above this card constrains it (`cc-window-root` is
-    // `hexpand: false, halign: END`), so the card is allocated its NATURAL width, and
-    // a row's natural width is its longest label at full length. Wrapping the labels
-    // fixes their MINIMUM and changes nothing here: a label only wraps when it is
-    // given less than it asked for, and it was being given everything it asked for.
-    // Measured live on 2026-09-07, with the wrapped labels already in: the card came
-    // out 412px against the grid's 356 — the Spanish "Con permiso para controlar tus
-    // aplicaciones" at its full 272px, one line, sticking 56px past the edge every
-    // tile below is aligned to.
-    //
-    // NidaraClamp is the kit's max-width (GTK4 CSS has none). min = max, so the card
-    // is CONSTANT: the grid's width minus the painter's own inset, which makes the
-    // card exactly GRID_WIDTH — and now the labels are given less than they asked for,
-    // and wrap.
-    const rows = NidaraClamp(list, GRID_WIDTH - 2 * BANNER_PADDING, false, GRID_WIDTH - 2 * BANNER_PADDING)
-
-    // CAPSULE, not a fixed radius: it collapses to a perfect arc on the short
-    // side whatever the row count works out to (resolveDrawParams), which is the
-    // silhouette the CC's own WIDE and 4×1 tiles have. Padding, border width and
-    // inset are BaseIsland's numbers so the glass reads as one family; the size
-    // request goes on the CAPSULE (like BaseIsland's set_size_request), never on
-    // the inner box — padding is drawn INSIDE the requested width, so requesting
-    // GRID_WIDTH on the child would make the card 24px wider than the grid and
-    // break the right edge every tile below is aligned to.
-    const banner = SquircleContainer({
-        child: rows,
+    // The content's cap: the grid's width minus the glass's own padding, so a long
+    // translation ellipsizes the name instead of widening the pill past the grid.
+    const clamped = NidaraClamp(row, GRID_WIDTH - PILL_PAD_X * 2, false)
+    clamped.halign = Gtk.Align.CENTER
+    const pill = SquircleContainer({
+        child: clamped,
         shape: Shape.CAPSULE,
         gloss: true,
         useShellOpacity: true,
         borderWidth: 1.5,
         inset: 2.0,
-        padding: BANNER_PADDING,
-        // NOT `.cc-island`, tempting as it is: that class carries
-        // `.cc-island button { @include nidara-reset }` to strip Adwaita defaults
-        // out of tile content, and `.cc-island button` matches `button.nidara-btn`
-        // at EQUAL specificity — with _control-center imported after _components,
-        // the reset wins and the Stop button loses its background and border
-        // entirely. `.cc-status-banner` carries the transparent background itself.
         css_classes: ["cc-status-banner"],
-        // BaseIsland's numbers include its shadow: this banner sits in the CC's grid
-        // with no panel behind it, so it is outer glass exactly like the tiles it
-        // shares an edge with.
+        // Outer glass, like the tiles it sits above.
         shadow: GLASS_SHADOW,
     })
-    banner.set_size_request(GRID_WIDTH, -1)
-    banner.halign = Gtk.Align.END      // the grid is END-aligned; share its right edge
+    // Asymmetric: a capsule's ends want more air than its top and bottom.
+    clamped.margin_top = clamped.margin_bottom = PILL_PAD_Y
+    clamped.margin_start = clamped.margin_end = PILL_PAD_X
+    pill.halign = Gtk.Align.CENTER
+    pill.set_tooltip_text(`${ind.label()} — ${ind.detail()}`)
+    return pill
+}
+
+/** The pill's air: 6 above and below its content (a compact button is ~24 tall, so
+ *  the pill is ~36 visible), 12 at its ends. */
+const PILL_PAD_Y = 6
+const PILL_PAD_X = 12
+
+export function ccStatusBanner(): Gtk.Widget {
+    // Hidden entirely when nothing is on: an empty box would still hold the gap open.
+    const list = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, halign: Gtk.Align.FILL, css_classes: ["cc-status-notices"] })
 
     const rebuild = () => {
         let c = list.get_first_child()
@@ -190,13 +154,11 @@ export function ccStatusBanner(): Gtk.Widget {
             const s = ind.state()
             if (s === "hidden") continue
             any = true
-            list.append(buildBannerRow(ind, s))
+            list.append(buildNoticePill(ind, s))
         }
-        // Hide the CAPSULE, not the list: an empty squircle would still paint
-        // its glass and hold the block gap open.
-        banner.set_visible(any)
+        list.set_visible(any)
     }
     subscribeAll(rebuild)
     rebuild()
-    return banner
+    return list
 }

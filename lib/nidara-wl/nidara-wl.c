@@ -20,6 +20,7 @@
 #include "hyprland-focus-grab-v1-client-protocol.h"
 #include "hyprland-surface-v1-client-protocol.h"
 #include "hyprland-toplevel-mapping-v1-client-protocol.h"
+#include "wlr-screencopy-unstable-v1-client-protocol.h"
 
 /* A capture that has not answered in this long is not coming. Generous on
  * purpose: the compositor schedules the copy on its own frame clock, and a
@@ -1015,6 +1016,361 @@ nidara_wl_capture_window (guint64              address,
 
 GdkTexture *
 nidara_wl_capture_window_finish (GAsyncResult *result, GError **error)
+{
+  g_return_val_if_fail (g_task_is_valid (result, NULL), NULL);
+
+  return g_task_propagate_pointer (G_TASK (result), error);
+}
+
+/* ======================================================= region capture ===
+ *
+ * What the output SHOWS in a rectangle — every layer, ours included — for the
+ * adaptive glass (`ui/shell/core/BackdropProbe.ts`): the shell subtracts its own
+ * paint from this to learn what its text actually sits on. A separate context from
+ * the window capture above on purpose: different globals, and zwlr_screencopy is a
+ * one-frame protocol (no session object), so sharing the struct would mean half of
+ * each one's fields are dead in the other. */
+
+#define MAX_OUTPUTS 16
+
+typedef struct
+{
+  struct wl_output *output;
+  char             *name;
+} RegOutput;
+
+typedef struct
+{
+  struct wl_display *display;
+  struct wl_shm *shm;
+  struct zwlr_screencopy_manager_v1 *screencopy;
+
+  RegOutput outputs[MAX_OUTPUTS];
+  int       n_outputs;
+
+  /* frame */
+  guint32  shm_format, buf_width, buf_height, buf_stride;
+  gboolean have_shm_buffer, buffer_done;
+  guint32  flags;
+  gboolean frame_ready, frame_failed;
+} RegCtx;
+
+static void reg_out_geometry (void *d, struct wl_output *o, int32_t x, int32_t y,
+                              int32_t pw, int32_t ph, int32_t sp, const char *mk,
+                              const char *md, int32_t t)
+{ (void) d; (void) o; (void) x; (void) y; (void) pw; (void) ph; (void) sp; (void) mk; (void) md; (void) t; }
+static void reg_out_mode (void *d, struct wl_output *o, uint32_t f, int32_t w, int32_t h, int32_t r)
+{ (void) d; (void) o; (void) f; (void) w; (void) h; (void) r; }
+static void reg_out_done (void *d, struct wl_output *o) { (void) d; (void) o; }
+static void reg_out_scale (void *d, struct wl_output *o, int32_t f) { (void) d; (void) o; (void) f; }
+static void reg_out_description (void *d, struct wl_output *o, const char *s)
+{ (void) d; (void) o; (void) s; }
+
+static void
+reg_out_name (void *data, struct wl_output *o, const char *name)
+{
+  (void) o;
+  RegOutput *out = data;
+  g_free (out->name);
+  out->name = g_strdup (name);
+}
+
+static const struct wl_output_listener reg_output_listener = {
+  .geometry = reg_out_geometry, .mode = reg_out_mode, .done = reg_out_done,
+  .scale = reg_out_scale, .name = reg_out_name, .description = reg_out_description,
+};
+
+static void
+reg_registry_global (void *data, struct wl_registry *reg, uint32_t name,
+                     const char *iface, uint32_t version)
+{
+  RegCtx *ctx = data;
+
+  if (g_strcmp0 (iface, wl_shm_interface.name) == 0)
+    ctx->shm = wl_registry_bind (reg, name, &wl_shm_interface, 1);
+  else if (g_strcmp0 (iface, zwlr_screencopy_manager_v1_interface.name) == 0 && version >= 3)
+    /* v3 for `buffer_done`: without it there is no moment at which "every buffer
+     * type has been offered" is known, and the copy is a guess. */
+    ctx->screencopy = wl_registry_bind (reg, name, &zwlr_screencopy_manager_v1_interface, 3);
+  else if (g_strcmp0 (iface, wl_output_interface.name) == 0 && version >= 4
+           && ctx->n_outputs < MAX_OUTPUTS)
+    {
+      /* v4 for `name`: the connector string is the only identity GDK and Hyprland
+       * both report, so it is what the caller passes. */
+      RegOutput *out = &ctx->outputs[ctx->n_outputs++];
+      out->output = wl_registry_bind (reg, name, &wl_output_interface, 4);
+      wl_output_add_listener (out->output, &reg_output_listener, out);
+    }
+}
+
+static const struct wl_registry_listener reg_registry_listener = {
+  .global = reg_registry_global, .global_remove = cap_registry_global_remove,
+};
+
+static void
+reg_frame_buffer (void *d, struct zwlr_screencopy_frame_v1 *f, uint32_t format,
+                  uint32_t w, uint32_t h, uint32_t stride)
+{
+  (void) f;
+  RegCtx *ctx = d;
+
+  /* Same two formats as the window capture, same reason: BGRA in memory, which
+   * Gdk has a memory format for without a conversion pass. */
+  if (!ctx->have_shm_buffer &&
+      (format == WL_SHM_FORMAT_ARGB8888 || format == WL_SHM_FORMAT_XRGB8888))
+    {
+      ctx->have_shm_buffer = TRUE;
+      ctx->shm_format = format;
+      ctx->buf_width = w;
+      ctx->buf_height = h;
+      ctx->buf_stride = stride;
+    }
+}
+
+static void
+reg_frame_flags (void *d, struct zwlr_screencopy_frame_v1 *f, uint32_t flags)
+{ (void) f; ((RegCtx *) d)->flags = flags; }
+
+static void
+reg_frame_ready (void *d, struct zwlr_screencopy_frame_v1 *f,
+                 uint32_t hi, uint32_t lo, uint32_t ns)
+{ (void) f; (void) hi; (void) lo; (void) ns; ((RegCtx *) d)->frame_ready = TRUE; }
+
+static void
+reg_frame_failed (void *d, struct zwlr_screencopy_frame_v1 *f)
+{ (void) f; ((RegCtx *) d)->frame_failed = TRUE; }
+
+static void
+reg_frame_damage (void *d, struct zwlr_screencopy_frame_v1 *f,
+                  uint32_t x, uint32_t y, uint32_t w, uint32_t h)
+{ (void) d; (void) f; (void) x; (void) y; (void) w; (void) h; }
+
+static void
+reg_frame_linux_dmabuf (void *d, struct zwlr_screencopy_frame_v1 *f,
+                        uint32_t fmt, uint32_t w, uint32_t h)
+{ (void) d; (void) f; (void) fmt; (void) w; (void) h; }
+
+static void
+reg_frame_buffer_done (void *d, struct zwlr_screencopy_frame_v1 *f)
+{ (void) f; ((RegCtx *) d)->buffer_done = TRUE; }
+
+static const struct zwlr_screencopy_frame_v1_listener reg_frame_listener = {
+  .buffer = reg_frame_buffer,
+  .flags = reg_frame_flags,
+  .ready = reg_frame_ready,
+  .failed = reg_frame_failed,
+  .damage = reg_frame_damage,
+  .linux_dmabuf = reg_frame_linux_dmabuf,
+  .buffer_done = reg_frame_buffer_done,
+};
+
+typedef struct
+{
+  char *connector;
+  int   x, y, width, height;
+} RegionRequest;
+
+static void
+region_request_free (gpointer p)
+{
+  RegionRequest *req = p;
+  g_free (req->connector);
+  g_free (req);
+}
+
+static void
+region_thread (GTask *task, gpointer source_object, gpointer task_data,
+               GCancellable *cancellable)
+{
+  (void) source_object;
+
+  RegionRequest *req = task_data;
+  RegCtx ctx = { 0 };
+  GError *error = NULL;
+  GdkTexture *texture = NULL;
+  gint64 deadline = g_get_monotonic_time () + CAPTURE_TIMEOUT_MS * 1000;
+
+  struct zwlr_screencopy_frame_v1 *frame = NULL;
+  struct wl_shm_pool              *pool = NULL;
+  struct wl_buffer                *buffer = NULL;
+  guint8                          *pixels = MAP_FAILED;
+  gsize                            pixels_size = 0;
+  int                              fd = -1;
+
+  ctx.display = wl_display_connect (NULL);
+  if (!ctx.display)
+    {
+      g_set_error_literal (&error, NIDARA_WL_ERROR, NIDARA_WL_ERROR_UNAVAILABLE,
+                           "could not connect to the Wayland display");
+      goto out;
+    }
+
+  struct wl_registry *registry = wl_display_get_registry (ctx.display);
+  wl_registry_add_listener (registry, &reg_registry_listener, &ctx);
+  wl_display_roundtrip (ctx.display);    /* globals */
+  wl_display_roundtrip (ctx.display);    /* each wl_output's name */
+  wl_registry_destroy (registry);
+
+  if (!ctx.shm || !ctx.screencopy)
+    {
+      g_set_error_literal (&error, NIDARA_WL_ERROR, NIDARA_WL_ERROR_UNAVAILABLE,
+                           "compositor does not offer zwlr_screencopy_manager_v1 v3");
+      goto out;
+    }
+
+  struct wl_output *target = NULL;
+  for (int i = 0; i < ctx.n_outputs; i++)
+    if (g_strcmp0 (ctx.outputs[i].name, req->connector) == 0)
+      target = ctx.outputs[i].output;
+
+  if (!target)
+    {
+      g_set_error (&error, NIDARA_WL_ERROR, NIDARA_WL_ERROR_NO_OUTPUT,
+                   "no output named \"%s\"", req->connector);
+      goto out;
+    }
+
+  if (g_cancellable_set_error_if_cancelled (cancellable, &error))
+    goto out;
+
+  frame = zwlr_screencopy_manager_v1_capture_output_region (
+    ctx.screencopy, 0, target, req->x, req->y, req->width, req->height);
+  zwlr_screencopy_frame_v1_add_listener (frame, &reg_frame_listener, &ctx);
+
+  while (!ctx.buffer_done && !ctx.frame_failed)
+    {
+      if (!cap_pump (ctx.display, deadline))
+        {
+          g_set_error_literal (&error, NIDARA_WL_ERROR, NIDARA_WL_ERROR_TIMEOUT,
+                               "compositor never described the frame");
+          goto out;
+        }
+    }
+
+  if (ctx.frame_failed || !ctx.have_shm_buffer || ctx.buf_width == 0 || ctx.buf_height == 0)
+    {
+      g_set_error_literal (&error, NIDARA_WL_ERROR, NIDARA_WL_ERROR_CAPTURE_FAILED,
+                           "compositor offered no usable shm buffer for the region");
+      goto out;
+    }
+
+  pixels_size = (gsize) ctx.buf_stride * ctx.buf_height;
+  fd = anon_shm_fd (pixels_size);
+  if (fd < 0)
+    {
+      g_set_error (&error, NIDARA_WL_ERROR, NIDARA_WL_ERROR_CAPTURE_FAILED,
+                   "could not allocate %" G_GSIZE_FORMAT " bytes of shared memory: %s",
+                   pixels_size, g_strerror (errno));
+      goto out;
+    }
+
+  pixels = mmap (NULL, pixels_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (pixels == MAP_FAILED)
+    {
+      g_set_error (&error, NIDARA_WL_ERROR, NIDARA_WL_ERROR_CAPTURE_FAILED,
+                   "could not map the capture buffer: %s", g_strerror (errno));
+      goto out;
+    }
+
+  pool = wl_shm_create_pool (ctx.shm, fd, (int32_t) pixels_size);
+  buffer = wl_shm_pool_create_buffer (pool, 0, (int32_t) ctx.buf_width,
+                                      (int32_t) ctx.buf_height,
+                                      (int32_t) ctx.buf_stride, ctx.shm_format);
+  zwlr_screencopy_frame_v1_copy (frame, buffer);
+
+  while (!ctx.frame_ready && !ctx.frame_failed)
+    {
+      if (!cap_pump (ctx.display, deadline))
+        {
+          g_set_error_literal (&error, NIDARA_WL_ERROR, NIDARA_WL_ERROR_TIMEOUT,
+                               "compositor never delivered the frame");
+          goto out;
+        }
+    }
+
+  if (ctx.frame_failed)
+    {
+      g_set_error_literal (&error, NIDARA_WL_ERROR, NIDARA_WL_ERROR_CAPTURE_FAILED,
+                           "region capture failed");
+      goto out;
+    }
+
+  /* Copy out of the shm mapping into bytes the texture owns, flipping if the
+   * compositor says the rows came bottom-up — the caller reads pixels by
+   * coordinate and must not have to know. */
+  {
+    gsize   row = (gsize) ctx.buf_stride;
+    guint8 *copy = g_malloc (pixels_size);
+    gboolean invert = (ctx.flags & ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT) != 0;
+    for (guint32 r = 0; r < ctx.buf_height; r++)
+      memcpy (copy + r * row,
+              pixels + (invert ? (ctx.buf_height - 1 - r) : r) * row, row);
+
+    GBytes *bytes = g_bytes_new_take (copy, pixels_size);
+    texture = gdk_memory_texture_new (
+      (int) ctx.buf_width, (int) ctx.buf_height,
+      ctx.shm_format == WL_SHM_FORMAT_XRGB8888 ? GDK_MEMORY_B8G8R8X8
+                                               : GDK_MEMORY_B8G8R8A8_PREMULTIPLIED,
+      bytes, row);
+    g_bytes_unref (bytes);
+  }
+
+out:
+  if (frame)
+    zwlr_screencopy_frame_v1_destroy (frame);
+  if (buffer)
+    wl_buffer_destroy (buffer);
+  if (pool)
+    wl_shm_pool_destroy (pool);
+  if (pixels != MAP_FAILED)
+    munmap (pixels, pixels_size);
+  if (fd >= 0)
+    close (fd);
+  for (int i = 0; i < ctx.n_outputs; i++)
+    {
+      wl_output_release (ctx.outputs[i].output);
+      g_free (ctx.outputs[i].name);
+    }
+  if (ctx.screencopy)
+    zwlr_screencopy_manager_v1_destroy (ctx.screencopy);
+  if (ctx.shm)
+    wl_shm_destroy (ctx.shm);
+  if (ctx.display)
+    wl_display_disconnect (ctx.display);
+
+  if (texture)
+    g_task_return_pointer (task, texture, g_object_unref);
+  else
+    g_task_return_error (task, error);
+}
+
+void
+nidara_wl_capture_region (const char          *connector,
+                          int                  x,
+                          int                  y,
+                          int                  width,
+                          int                  height,
+                          GCancellable        *cancellable,
+                          GAsyncReadyCallback  callback,
+                          gpointer             user_data)
+{
+  GTask *task = g_task_new (NULL, cancellable, callback, user_data);
+  g_task_set_source_tag (task, nidara_wl_capture_region);
+
+  RegionRequest *req = g_new0 (RegionRequest, 1);
+  req->connector = g_strdup (connector);
+  req->x = x;
+  req->y = y;
+  req->width = width;
+  req->height = height;
+  g_task_set_task_data (task, req, region_request_free);
+
+  g_task_run_in_thread (task, region_thread);
+  g_object_unref (task);
+}
+
+GdkTexture *
+nidara_wl_capture_region_finish (GAsyncResult *result, GError **error)
 {
   g_return_val_if_fail (g_task_is_valid (result, NULL), NULL);
 

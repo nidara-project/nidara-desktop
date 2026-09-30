@@ -106,7 +106,7 @@ export const build = (ctx: PageCtx) => {
     // Apply called `inputConfig.setKbLayout(kb)` with ONE argument, so `variant`
     // defaulted back to "" and silently dropped a Dvorak/Colemak choice made in
     // Devices. Settings → Devices is the single owner now (its dropdown carries the
-    // variant), which is also where macOS and GNOME put it.
+    // variant), which is also where GNOME puts it.
 
     // --- 2. Regional Format (LC_TIME, LC_NUMERIC, etc.) ---
     // A single locale choice that sets all "format" LC_* variables at once.

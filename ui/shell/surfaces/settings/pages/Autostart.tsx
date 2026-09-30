@@ -135,7 +135,7 @@ const resolveEntryApp = (command: string): AppData | null => {
 const isSafeCommand = (cmd: string) => !cmd.includes('"') && !cmd.includes("\\")
 
 // ── App picker subpage ────────────────────────────────────────────────────────
-// Windows (Apps → Startup) / macOS (Login Items) pick from installed apps; the
+// Windows (Apps → Startup) picks from installed apps, and so do we; the
 // raw-command field remains below as the advanced path. Pure subpage flow — no
 // popovers/menus (design-system).
 

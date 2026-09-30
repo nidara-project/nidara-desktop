@@ -9,13 +9,14 @@ import { applyCrispFontRendering } from "../../lib/nidara-kit/platform/font-rend
 import {
     type NidaraThemeConfig,
     type AccentKey,
-    type ShellAppearance,
     DEFAULT_CONFIG,
     clampGlass,
     ACCENT_PALETTE,
     generateTokensCss,
+    generateSkinFlipScope,
     generateChromeTokenScope,
     CHROME_SCOPE_WINDOWS,
+    SHELL_SKIN_IS_DARK,
 } from "./NidaraTheme"
 import { SHELL_ROOT } from "./Paths"
 import { defineSettings } from "./configFile"
@@ -43,7 +44,6 @@ interface NidaraAppearance {
     overlayOpacity: number
     dockOpacity: number
     windowOpacity: number
-    shellAppearance: ShellAppearance
 }
 
 const nidaraAppearance = defineSettings<NidaraAppearance>("appearance", {
@@ -51,13 +51,10 @@ const nidaraAppearance = defineSettings<NidaraAppearance>("appearance", {
     overlayOpacity: DEFAULT_CONFIG.overlayOpacity,
     dockOpacity: DEFAULT_CONFIG.dockOpacity,
     windowOpacity: DEFAULT_CONFIG.windowOpacity,
-    shellAppearance: DEFAULT_CONFIG.shellAppearance,
-}, {
-    shellAppearance: v => v === "system" || v === "dark" || v === "light",
 })
 
 /** The fields of `NidaraThemeConfig` that live in `org.nidara.appearance`. */
-const NIDARA_KEYS = ["barOpacity", "overlayOpacity", "dockOpacity", "windowOpacity", "shellAppearance"] as const
+const NIDARA_KEYS = ["barOpacity", "overlayOpacity", "dockOpacity", "windowOpacity"] as const
 
 // ── DARK/LIGHT in-process ────────────────────────────────────────────────────
 // Plain `Gtk.Settings`. This used to probe libadwaita first (loading its typelib
@@ -400,22 +397,23 @@ class ThemeManager extends GObject.Object {
     get overlayOpacity() { return this.fcConfig.overlayOpacity }
     get dockOpacity()    { return this.fcConfig.dockOpacity }
     get windowOpacity()  { return this.fcConfig.windowOpacity }
-    get shellAppearance(): ShellAppearance { return this.fcConfig.shellAppearance }
-
-    /** Effective dark/light for the WHOLE shell skin (bar, dock, overlays),
-     *  honouring shellAppearance ("system" = the app/global mode). Shell painters
-     *  (SquircleContainer, dock + CC + NC + app-grid Cairo) read this instead of
-     *  `isDark` so a pinned shell flips text AND glass together. App-mode windows
-     *  (Settings, About) keep `isDark`. Opacity stays WYSIWYG with the slider. */
+    /** The skin the WHOLE shell wears (bar, dock, island, panels, banners, app grid):
+     *  DARK — dark glass, white ink — whatever the system mode (owner, 2026-09-30). The
+     *  mode is the applications' (Settings and About included), not the shell's: a
+     *  shell that changed its ink with the mode, or with the wallpaper, was changing it
+     *  for no reason the person could see. Legibility is the adaptive glass's job, by
+     *  thickening only (`AdaptiveGlass.ts`). A light skin is to come back as a SETTING,
+     *  not decided yet — which is why this is still a getter and not a literal at every
+     *  call site. (Until 2026-09-29 it followed the mode unless pinned; until today it
+     *  followed the mode, and the bar row followed its backdrop, #676.) */
     get chromeIsDark(): boolean {
-        const a = this.fcConfig.shellAppearance
-        return a === "dark" ? true : a === "light" ? false : this.state.isDark
+        return SHELL_SKIN_IS_DARK
     }
 
     /** Effective dark/light for the SURFACE a widget is painted on. Cairo widgets
      *  shared between the shell skin and app-mode windows (the slider, drawn into
      *  both the CC/system-menu AND Settings) can't use one global flag: a slider in
-     *  a shell overlay must follow the shell pin (chromeIsDark), while the same
+     *  a shell overlay must follow the shell's skin (chromeIsDark), while the same
      *  component in Settings/About follows the app/system mode (isDark). Resolved by
      *  the widget's ROOT window name against `CHROME_SCOPE_WINDOWS` — the same list
      *  the CSS pin uses, so a Cairo widget and the tokens around it can never
@@ -425,13 +423,22 @@ class ThemeManager extends GObject.Object {
      *  ⚠️ This used to hardcode `nidara-bar || nidara-dock` and its comment said the
      *  app grid was a child of the dock. Both stopped being true when the island and
      *  the app grid moved to their own surfaces; see the note on
-     *  `generateChromeTokenScope`. */
+     *  `CHROME_SCOPE_WINDOWS` (theme-tokens.ts).
+     *
+     *  ⚠️ The kit is NOT wired to this any more but to `isChromeSurface` + the adaptive
+     *  glass's `chromeIsDarkFor` (app.ts): a widget inside a surface whose skin was
+     *  flipped (#673) must follow that surface, which this global answer cannot. */
     surfaceIsDark(widget: Gtk.Widget): boolean {
+        return this.isChromeSurface(widget) ? this.chromeIsDark : this.state.isDark
+    }
+
+    /** Whether `widget` is painted on a shell-skin window (`CHROME_SCOPE_WINDOWS`),
+     *  as opposed to an app-mode one (Settings, About) or an unrealized widget. */
+    isChromeSurface(widget: Gtk.Widget | null): boolean {
         try {
-            const name = (widget.get_root() as Gtk.Window | null)?.get_name?.() ?? ""
-            if ((CHROME_SCOPE_WINDOWS as readonly string[]).includes(name)) return this.chromeIsDark
-        } catch (_) { /* not realized yet → fall through to the app/system mode */ }
-        return this.state.isDark
+            const name = (widget?.get_root() as Gtk.Window | null)?.get_name?.() ?? ""
+            return (CHROME_SCOPE_WINDOWS as readonly string[]).includes(name)
+        } catch (_) { return false /* not realized yet → the app/system mode */ }
     }
     get accentPalette() { return ACCENT_PALETTE }
     /** The interface font as stored: family + POINT size, unscaled. The
@@ -659,15 +666,6 @@ class ThemeManager extends GObject.Object {
         this.emit("changed")
     }
 
-    async setShellAppearance(value: ShellAppearance) {
-        this.fcConfig.shellAppearance = value
-        // Regenerates the scoped chrome override; "changed" repaints the bar/dock
-        // Cairo (capsule glass + dock plates + running dots read chromeIsDark live).
-        this.applyTokens()
-        this.schedulePersistence()
-        this.emit("changed")
-    }
-
     // ── Internal Logic ───────────────────────────────────────────────
 
     private ensureProvidersLinked() {
@@ -701,8 +699,12 @@ class ThemeManager extends GObject.Object {
     /** Regenerate + apply the Nidara token CSS (accent / opacities), deduped. */
     private applyTokens() {
         this.ensureProvidersLinked()
+        // The global block is the MODE's (Settings, About); the shell's windows wear
+        // their own skin over it (`generateChromeTokenScope`), and a surface flipped by
+        // the adaptive glass wears the other over that (`generateSkinFlipScope`).
         const tokens = generateTokensCss(this.fcConfig, this.state.isDark)
             + "\n" + generateChromeTokenScope(this.fcConfig, this.chromeIsDark, this.state.isDark)
+            + "\n" + generateSkinFlipScope(this.fcConfig)
         if (this._lastTokensCss !== tokens) {
             this.themeProvider.load_from_string(tokens)
             this._lastTokensCss = tokens
@@ -731,7 +733,7 @@ class ThemeManager extends GObject.Object {
 
     /** What this process holds, for core/AppearanceSync.ts (settings.ini, the greeter's
      *  mirror). A copy: nothing outside writes Theme's state. */
-    snapshot(): ThemeState & Pick<NidaraThemeConfig, "accent" | "barOpacity" | "overlayOpacity" | "dockOpacity" | "windowOpacity" | "shellAppearance"> {
+    snapshot(): ThemeState & Pick<NidaraThemeConfig, "accent" | "barOpacity" | "overlayOpacity" | "dockOpacity" | "windowOpacity"> {
         return {
             ...this.state,
             accent: this.fcConfig.accent,
@@ -739,7 +741,6 @@ class ThemeManager extends GObject.Object {
             overlayOpacity: this.fcConfig.overlayOpacity,
             dockOpacity: this.fcConfig.dockOpacity,
             windowOpacity: this.fcConfig.windowOpacity,
-            shellAppearance: this.fcConfig.shellAppearance,
         }
     }
 

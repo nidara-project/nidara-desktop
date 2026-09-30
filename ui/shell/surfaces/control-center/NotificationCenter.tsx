@@ -16,11 +16,13 @@ import appService from "../../core/AppService"
 import status from "../../core/Status"
 import { dockSideState } from "../dock/state"
 import { UNIT, GAP, GRID_WIDTH } from "./CCLayoutManager"
+import { CC_PANEL_PAD } from "./ControlCenter"
 import { t } from "../../core/i18n"
 import { uiIcon } from "../../core/Icons"
 import { safeDisconnect } from "../../core/signals"
 import { type Notification, notifications as allNotifications, watchNotified, watchResolved } from "../../core/NotifService"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
+import { chromeIsDarkFor, glassAlphaFor } from "../../common/AdaptiveGlass"
 
 export function createIconWidget(n: Notification, size: number) {
     const entry = n.desktop_entry || n.app_name || ""
@@ -79,8 +81,8 @@ export function createHeroWidget(n: Notification, size: number): Gtk.Widget | nu
     return da
 }
 
-// Expanded NC rows show the image at full card width (the iOS long-look / Android
-// BigPicture shape; the compact right thumb is the macOS shape). Small sources — chat
+// Expanded NC rows show the image at full card width (the Android BigPicture
+// shape; otherwise the compact right thumb). Small sources — chat
 // avatars are typically 64-160px — are excluded: cover-fitting one to ~320px is mush,
 // so they keep the thumbnail even when expanded. Banners never take this path.
 const HERO_BIG_MIN_SOURCE = 240
@@ -222,7 +224,7 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
     box.append(textStack)
 
     // Expanded + big source → full-width hero below the row (replaces the thumb);
-    // otherwise the compact right thumb, macOS-style.
+    // otherwise the compact right thumb.
     const bigHero = itemExpanded ? createExpandedHeroWidget(n, GRID_WIDTH - 32) : null
     let thumb: Gtk.Widget | null = null
     if (bigHero) outerV.append(bigHero)
@@ -235,7 +237,7 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
         else { actionRow.margin_top = 8; textStack.append(actionRow) }
     }
 
-    // Banner actions (macOS shape): glass capsules OVERLAID on the right edge, revealed
+    // Banner actions: glass capsules OVERLAID on the right edge, revealed
     // on hover — the banner never grows and the stack below it never shifts. Capped at 2
     // (the expanded NC row shows them all). The thumb fades via opacity, not `visible`,
     // so the text never rewraps under the pointer.
@@ -261,7 +263,7 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
     // Title line: title · time · badge/chevron — a dedicated right column reserved its
     // width across every text line, shortening the body too; only the title should cede
     // space. The close is NOT here: it floats over the card's top-left corner (overlay
-    // below), hover-only — the one macOS position, identical on banners and NC rows.
+    // below), hover-only — one position, identical on banners and NC rows.
     // The chevron is hover-only too, swapped in for the timestamp (line stays put); the
     // count badge is information, not a control — always visible.
     let chevBtn: Gtk.Widget | null = null
@@ -324,14 +326,14 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
     // swipe can be recognised. See attachSwipeDismiss.
     // Hover controls ride a Gtk.Overlay above the card content (they don't affect its
     // size — overlay children aren't measured): the close floats over the top-left
-    // corner on EVERY card (banner and NC row — one macOS position, no inconsistency),
+    // corner on EVERY card (banner and NC row — one position, no inconsistency),
     // banner action capsules take the right edge.
     const ov = new Gtk.Overlay({ child: outerV })
     clearBtn.halign = Gtk.Align.START; clearBtn.valign = Gtk.Align.START
     clearBtn.margin_start = 6; clearBtn.margin_top = 6
     ov.add_overlay(clearBtn)
     if (bannerActions) ov.add_overlay(bannerActions)
-    // CRITICAL urgency gets no visual decoration — macOS/GNOME don't mark it
+    // CRITICAL urgency gets no visual decoration — GNOME doesn't mark it
     // either: never auto-expiring IS the signal. The 1px inner edge is part of
     // the glass sheen, not an indicator channel.
     const capsule = SquircleContainer({ child: ov, radius: RADIUS.xl, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true, shadow: GLASS_SHADOW })
@@ -395,7 +397,7 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
     const da = new Gtk.DrawingArea({ height_request: stripH })
     da.set_draw_func(cairoDraw((_da: any, cr: any, w: number, _h: number) => {
         if (w <= 0 || _h <= 0) return
-        const color = Theme.chromeIsDark
+        const color = chromeIsDarkFor(da)
             ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
             : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }   // shell skin — follows appearance pin
         for (let i = layers - 1; i >= 0; i--) {
@@ -413,7 +415,7 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
             cr.clip()
             cr.translate(inset, bottomY - CARD_H)
             // inset 0 so the squircle's bottom edge lands exactly at bottomY (no gap between bands).
-            drawSquircle(cr, w - inset * 2, CARD_H, undefined, Theme.overlayOpacity * depth, false, color, CARD_R, false, { r: 1, g: 1, b: 1, a: 0.07 * depth }, 3.2, 1.0, 0)
+            drawSquircle(cr, w - inset * 2, CARD_H, undefined, glassAlphaFor(da, "overlay") * depth, false, color, CARD_R, false, { r: 1, g: 1, b: 1, a: 0.07 * depth }, 3.2, 1.0, 0)
             cr.restore()
         }
     }))
@@ -433,13 +435,20 @@ export default function NotificationCenter() {
     const toggleItem = (nid: number) => { if (expandedItems.has(nid)) expandedItems.delete(nid); else expandedItems.add(nid); hoverSeed = nid; updateNotifs(); hoverSeed = null }
     const groupCache = new Map<string, { container: Gtk.Box, headerBox: Gtk.Box, revealer: any, subBox: Gtk.Box, sig: string, timeLabels: { label: Gtk.Label, time: number }[], expanded: boolean, subClearTimer: number | null }>()
 
+    // The NC is a PANEL like the CC (ControlCenter.tsx, CC_PANEL_PAD — the same margin, so
+    // the two columns line up): its cards sit 16 in from every edge and 16 apart (owner,
+    // 2026-09-30; 12 apart and flush with an 8px side gap until then).
     // The content keeps its full width (GRID_WIDTH); LANE is extra space ADDED on the right
-    // to host the scrollbar. The overlay scrollbar floats in that lane only when there's
-    // overflow — so it never reflows the cards. 8 (not 14) so the cards can sit flush at
-    // the 8px side gap (Bar pulls the panel right by LANE; must match NC_LANE in Bar.tsx
-    // and the .nc-content-box padding-right).
+    // to host the scrollbar, and it lives INSIDE the panel's right margin (so that margin
+    // is PAD − LANE of box + the lane). The overlay scrollbar floats in that lane only when
+    // there's overflow — so it never reflows the cards. Must match the .nc-content-box
+    // padding-right.
     const LANE = 8
-    const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, width_request: GRID_WIDTH + LANE, css_classes: ["nc-outer"] })
+    const PAD = CC_PANEL_PAD
+    const outer = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL, spacing: GAP, width_request: GRID_WIDTH + LANE, css_classes: ["nc-outer"],
+        margin_top: PAD, margin_bottom: PAD, margin_start: PAD, margin_end: PAD - LANE,
+    })
 
     // propagate_natural_height: the panel hugs its visible content (calendar +
     // cards) instead of filling the bar→dock gap — empty column space would go
@@ -450,7 +459,7 @@ export default function NotificationCenter() {
     // The scroll forces its child to the full viewport width (GRID_WIDTH + LANE). A
     // padding-right of LANE (in .nc-content-box) keeps the cards at GRID_WIDTH and leaves
     // the lane free on the right for the indicator — no reflow, no overlap.
-    const listContainer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["nc-content-box"], margin_top: 0, margin_bottom: 0 })
+    const listContainer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: GAP, css_classes: ["nc-content-box"], margin_top: 0, margin_bottom: 0 })
     // NidaraScrolled retires tech-debt #15: GTK's overlay slider grew on pointer
     // PROXIMITY (it sets .hovering itself, Adwaita's rule beat every override) and ate
     // the right edge of each card's close ✕. The replacement indicator is can_target
@@ -479,13 +488,14 @@ export default function NotificationCenter() {
     calendarIsland.set_halign(Gtk.Align.START)
     // The empty state rides the same glass capsule as the clear-all pill — bare text sat
     // straight on the wallpaper and washed out on light backgrounds.
-    const emptyBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 24, margin_bottom: 12, visible: false })
+    // 16 above, like the CC's Edit pill, and nothing below: the panel's margin closes it.
+    const emptyBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 16, margin_bottom: 0, visible: false })
     emptyBox.append(SquircleContainer({ child: new Gtk.Label({ label: t("nc.empty"), css_classes: ["nc-empty"], margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, shadow: GLASS_SHADOW }))
-    const pillBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 24, margin_bottom: 12, visible: false })
+    const pillBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 16, margin_bottom: 0, visible: false })
     const clearAllBtn = SquircleContainer({ child: new Gtk.Label({ label: t("nc.clear-all"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, onClick: () => clearAllAnimated(), css_classes: ["nc-clear-all-pill"], shadow: GLASS_SHADOW })
     pillBox.append(clearAllBtn)
 
-    const notificationItemsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, hexpand: true })
+    const notificationItemsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: GAP, hexpand: true })
     listContainer.append(emptyBox)
     listContainer.append(notificationItemsBox)
     listContainer.append(pillBox)
@@ -615,7 +625,7 @@ export default function NotificationCenter() {
     }
 
     // "Clear notifications" replays the swipe-dismiss fling on every row, top to bottom
-    // with a small stagger (the iOS clear cascade) instead of vaporizing the list. The
+    // with a small stagger (a clear cascade) instead of vaporizing the list. The
     // real dismissals run once the last row lands — `resolved`/`notified` are suppressed
     // meanwhile so the tree isn't rebuilt mid-flight (notifications arriving during the
     // cascade survive: only the snapshot taken at click time is dismissed). Rows clip at
@@ -697,7 +707,8 @@ export default function NotificationCenter() {
     // here; the scroller absorbs it as its cap — see the note on `scroll`.
     // Attached to the returned widget like WorkspaceOverview's onOpen.
     ;(outer as any).setMaxHeight = (px: number) => {
-        scroll.max_content_height = Math.max(UNIT, Math.round(px - CAL_H - 12))   // 12 = outer spacing
+        // Minus the calendar, the gap under it and the panel's own margin above and below.
+        scroll.max_content_height = Math.max(UNIT, Math.round(px - CAL_H - GAP - PAD * 2))
     }
     return outer
 }

@@ -5,7 +5,7 @@
 // installed locale is localized for free, with NO per-language tables to maintain.
 // Order (day-first vs month-first) is derived once from the locale's own numeric
 // format (%x): does it place the day before the month? This tracks the "Regional
-// Format" setting (Settings → Language & Region), like Gtk.Calendar and macOS/GNOME.
+// Format" setting (Settings → Language & Region), like Gtk.Calendar and GNOME.
 //
 // ── ONE FILE, THREE BUNDLES (since 2026-08-10) ──────────────────────────────
 // This lived three times — `ui/shell/core/i18n/`, `ui/greeter/lib/`,

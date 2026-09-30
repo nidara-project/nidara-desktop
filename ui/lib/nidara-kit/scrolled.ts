@@ -281,7 +281,7 @@ export function attachScrollBar(
         if (!t) return
         const col = da.get_style_context().get_color()
         const expand = (thumbW - THUMB_REST) / (THUMB_HOVER - THUMB_REST)
-        // Faint full-height track, only while expanded — the macOS shape. Derived from
+        // Faint full-height track, only while expanded. Derived from
         // the same CSS colour, so it follows the theme without a second token.
         if (expand > 0.01) {
             cr.setSourceRGBA(col.red, col.green, col.blue, col.alpha * 0.18 * expand)
