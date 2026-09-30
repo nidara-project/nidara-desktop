@@ -4,6 +4,7 @@ import Cairo from "gi://cairo"
 import { GLASS_TINT, GLASS_SPECULAR } from "./platform/tokens"
 import { glassRimGradient, squircleCorner, drawShadowFromPath, GLASS_SHADOW } from "./platform/glass-paint"
 import { kitAppearance } from "./appearance"
+import { frostedFill } from "./platform/glass-legibility"
 
 // The Nidara glass bubble: a rounded body with a pointer spliced into one side,
 // painted in Cairo as a SINGLE continuous shape (one glass fill, one 1px inner
@@ -168,12 +169,13 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
 
     const app = kitAppearance()
     const dark = opts.dark ?? (chrome ? (app.chromeIsDark?.(opts.widget) ?? app.surfaceIsDark(null as any)) : app.surfaceIsDark(null as any))
-    const tint = dark
+    const baseTint = dark
         ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
         : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
 
-    // Glass alpha tracks the overlay slider, but FLOORED at 0.38 for popups with blur.
-    const alpha = opts.alpha ?? Math.max(app.overlayOpacity?.() ?? 0.55, 0.38)
+    // Glass alpha tracks the overlay slider, but FLOORED at 0.38 for popups with blur —
+    // and the material's haze over it, folded into the one fill (`frostedFill`).
+    const { tint, alpha } = frostedFill(baseTint, opts.alpha ?? Math.max(app.overlayOpacity?.() ?? 0.55, 0.38), app.glassFrost?.() ?? 0)
 
     // Body rect: inset by BUF all round, plus arrowH on the arrow side.
     const bx = BUF + (side === "left" ? arrowH : 0)

@@ -9,6 +9,7 @@ import { probeBackdrop, probeClosedBackdrop, type MonitorRect } from "./Backdrop
 import { SlicedCairoArea } from "../../lib/sliced-cairo"
 import {
     decideGlass, decideGlassByBackdrop, mergeBackdropStats, NIDARA_BLUR, tintFromBackdrop,
+    frostedFill, setGlassFrost,
     type GlassDecision, type BackdropStats, type HyprlandBlurParams, type GlassContent, type Rgb,
 } from "../../lib/nidara-kit/platform/glass-legibility"
 import { GLASS_TINT } from "../../lib/nidara-kit/platform/tokens"
@@ -208,6 +209,12 @@ const roleOf = (s: Surface): GlassRole => typeof s.role === "function" ? s.role(
  * surface: the slider, exactly as before.
  */
 export function glassAlphaFor(widget: Gtk.Widget | null, role: GlassRole): number {
+    // With the material's haze folded in (`frostedFill`): pair it with `glassTintFor`.
+    return frostedFill(NEUTRAL_TINT, tintAlphaFor(widget, role)).alpha
+}
+
+/** The TINT's alpha — the adaptive decision, before the haze. */
+function tintAlphaFor(widget: Gtk.Widget | null, role: GlassRole): number {
     const floor = floorOf(role)
     const s = surfaceOf(widget)
     return s?.shownAlpha != null ? Math.max(floor, s.shownAlpha) : floor
@@ -225,8 +232,11 @@ export function chromeIsDarkFor(widget: Gtk.Widget | null): boolean {
  *  outside a surface, before a measurement, or over a colourless backdrop; on the light
  *  skin, `GLASS_TINT.light`. Pair it with `chromeIsDarkFor` and `glassAlphaFor`. */
 export function glassTintFor(widget: Gtk.Widget | null): Rgb {
-    if (!chromeIsDarkFor(widget)) return LIGHT_TINT
-    return surfaceOf(widget)?.shownTint ?? NEUTRAL_TINT
+    const s = surfaceOf(widget)
+    const base = !chromeIsDarkFor(widget) ? LIGHT_TINT : s?.shownTint ?? NEUTRAL_TINT
+    // The haze depends on the alpha it lies over, asked for the surface's own role —
+    // the role its painters pass to `glassAlphaFor`.
+    return frostedFill(base, tintAlphaFor(widget, s ? roleOf(s) : "overlay")).tint
 }
 
 // ── applying a decision ─────────────────────────────────────────────────────
@@ -554,6 +564,7 @@ export function startAdaptiveGlass(): void {
     wired = true
     readBlur()
     hyprlandState.connect("config-reloaded", readBlur)
+    setGlassFrost(Theme.glassFrost)
     // Only what can change the PIXELS behind a surface: geometry, workspace,
     // fullscreen — and focus only when it lands on a floating window, which raises
     // it over the others. A plain focus change between tiled windows moves nothing,
@@ -581,6 +592,7 @@ export function startAdaptiveGlass(): void {
     // came up with black text on dark glass (2026-09-29). The measurement still follows.
     let lastMode = Theme.chromeIsDark
     let lastPasses = blur.passes
+    let glassFrostBefore = Theme.glassFrost
     Theme.connect("changed", () => {
         const modeChanged = Theme.chromeIsDark !== lastMode
         lastMode = Theme.chromeIsDark
@@ -589,7 +601,11 @@ export function startAdaptiveGlass(): void {
         // A new material moved the blur: what each surface last measured went through
         // the old one, so it is measured again rather than re-decided from stale stats.
         readBlur()
-        if (blur.passes !== lastPasses) { lastPasses = blur.passes; scheduleAll(); return }
+        // …and a new haze changes what every decision was computed against.
+        const frostChanged = Theme.glassFrost !== glassFrostBefore
+        glassFrostBefore = Theme.glassFrost
+        setGlassFrost(Theme.glassFrost)
+        if (blur.passes !== lastPasses || frostChanged) { lastPasses = blur.passes; scheduleAll(); return }
         for (const s of surfaces.values()) {
             // The bar row reads its skin from its backdrop, not the mode: its group
             // re-decides on the measurement, as before.

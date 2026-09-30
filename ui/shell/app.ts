@@ -98,6 +98,7 @@ setKitAppearance({
   },
   overlayOpacity: () => Theme.overlayOpacity,
   reduceTransparency: () => Theme.reduceTransparency,
+  glassFrost: () => Theme.glassFrost,
   chromeIsDark:   (widget) => widget ? chromeIsDarkFor(widget) : Theme.chromeIsDark,
 })
 

@@ -124,6 +124,7 @@ export function initAppearance(opts: InitAppearanceOpts = {}): AppearanceHandle 
     onChange: (cb) => { listeners.add(cb); return () => { listeners.delete(cb) } },
     overlayOpacity: () => state.overlayOpacity,
     reduceTransparency: () => state.reduceTransparency,
+    glassFrost: () => state.glassFrost,
     chromeIsDark: () => opts.fixedDarkInk ? true : state.isDark,
   })
 

@@ -62,6 +62,7 @@ export interface NidaraThemeConfig {
   // ⚠️ DERIVED, never stored: the glass opacity per surface (higher = more opaque) that
   // the two above give, through `glassOpacities`. Whoever changes either of them calls
   // `withGlass` — the painters read these four and nothing else.
+  glassFrost: number      // The material's haze over the tint (`frostedFill`)
   barOpacity: number      // Bar capsules (Cairo)
   overlayOpacity: number  // Overlays CC/NC/Prism/… (Cairo)
   dockOpacity: number     // Dock (Cairo)
@@ -160,6 +161,15 @@ export const GLASS_FLOORS: Record<GlassMaterial, GlassFloors> = {
  */
 export const WINDOW_TINT_OPACITY = 0.80
 
+/** The white haze each material lays over its tint (`frostAt` in glass-legibility.ts):
+ *  what tells the three apart over a DARK wallpaper, where more of a dark tint shows
+ *  nothing. It gives way by itself as the adaptive glass thickens. Provisional. */
+export const GLASS_FROST: Record<GlassMaterial, number> = {
+  clear: 0,
+  regular: 0.04,
+  frosted: 0.10,
+}
+
 /** Hyprland's `decoration:blur` per material. ONE blur for the whole compositor —
  *  Hyprland has no per-layer size — so it reaches every translucent window too, the same
  *  scope as macOS's control. `regular` is what `config/hypr/hyprland.lua` ships, so the
@@ -182,12 +192,12 @@ export const SOLID_GLASS = 1
 
 /** The four opacities the three choices give. The ONE place the table is read. */
 export function glassOpacities(material: GlassMaterial, reduceTransparency: boolean, windowTinting: boolean):
-  Pick<NidaraThemeConfig, "barOpacity" | "overlayOpacity" | "dockOpacity" | "windowOpacity"> {
+  Pick<NidaraThemeConfig, "glassFrost" | "barOpacity" | "overlayOpacity" | "dockOpacity" | "windowOpacity"> {
   if (reduceTransparency) {
-    return { barOpacity: SOLID_GLASS, overlayOpacity: SOLID_GLASS, dockOpacity: SOLID_GLASS, windowOpacity: SOLID_GLASS }
+    return { glassFrost: 0, barOpacity: SOLID_GLASS, overlayOpacity: SOLID_GLASS, dockOpacity: SOLID_GLASS, windowOpacity: SOLID_GLASS }
   }
   const f = GLASS_FLOORS[material] ?? GLASS_FLOORS[GLASS_MATERIAL_DEFAULT]
-  return { barOpacity: f.bar, overlayOpacity: f.overlay, dockOpacity: f.dock,
+  return { glassFrost: GLASS_FROST[material] ?? 0, barOpacity: f.bar, overlayOpacity: f.overlay, dockOpacity: f.dock,
            windowOpacity: windowTinting ? WINDOW_TINT_OPACITY : SOLID_GLASS }
 }
 
@@ -206,6 +216,7 @@ export const DEFAULT_CONFIG: NidaraThemeConfig = withGlass({
   glassMaterial: GLASS_MATERIAL_DEFAULT,
   reduceTransparency: false,
   windowTinting: true,
+  glassFrost: 0,
   barOpacity: 0, overlayOpacity: 0, dockOpacity: 0, windowOpacity: 0,
 })
 

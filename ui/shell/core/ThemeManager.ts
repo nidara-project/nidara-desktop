@@ -639,6 +639,8 @@ class ThemeManager extends GObject.Object {
     /** Settings → Appearance → Windows: let the wallpaper tint Nidara's windows. Not the
      *  glass material — windows are not Liquid Glass (`WINDOW_TINT_OPACITY`). */
     get windowTinting(): boolean { return this.fcConfig.windowTinting }
+    /** The material's haze (derived; `GLASS_FROST`). */
+    get glassFrost(): number { return this.fcConfig.glassFrost }
     async setWindowTinting(on: boolean) {
         this.fcConfig.windowTinting = on
         this.applyGlass()

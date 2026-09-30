@@ -147,11 +147,59 @@ export function contrastRatio(a: Rgb, b: Rgb): number {
     return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
 }
 
-/** The glass as it reaches the eye: its tint at `alpha` over the (blurred) backdrop.
+// ── The material's FROST (#674) ──────────────────────────────────────────────
+
+/**
+ * A white haze over the tint — what makes frosted glass read as frosted. Our tint only
+ * DARKENS, so over a near-black wallpaper more of it changes nothing you can see: the
+ * three glass materials came out identical there (owner-caught 2026-09-30, measured
+ * behind the bar: 19,1,61). A haze LIGHTENS, which is what macOS's glass does (its dark
+ * material lightens the backdrop too: `reference_macos27_glass_recipe`).
+ *
+ * It costs white text contrast, so it gives way as the adaptive glass thickens: full up
+ * to `FROST_FULL_UNTIL` (the thickest floor any material sets), none from
+ * `FROST_GONE_AT` on — under the tooltips' floor (0.59) and the ceiling (0.60), so
+ * every guarantee measured without a haze still holds where it was measured. Over a
+ * bright backdrop, where the glass has thickened, the backdrop is the light anyway.
+ *
+ * A property of the whole MATERIAL, like the ceiling, so it is set once per process by
+ * whoever owns the material (the shell, from `Theme.glassFrost`) rather than threaded
+ * through every call. 0 — no haze, the model as it was — until then.
+ */
+export const FROST_FULL_UNTIL = 0.48
+export const FROST_GONE_AT = 0.58
+let materialFrost = 0
+export function setGlassFrost(frost: number): void { materialFrost = Math.max(0, Math.min(1, frost)) }
+export function glassFrost(): number { return materialFrost }
+
+/** The haze actually laid over glass at `alpha`. */
+export function frostAt(alpha: number, frost: number = materialFrost): number {
+    if (frost <= 0 || alpha >= FROST_GONE_AT) return 0
+    return frost * Math.min(1, (FROST_GONE_AT - alpha) / (FROST_GONE_AT - FROST_FULL_UNTIL))
+}
+
+/**
+ * The ONE fill that paints exactly the tint at `alpha` with the haze over it — so every
+ * painter gets the frost by painting what it always painted, with this colour and alpha
+ * (`over(over(B, T, a), W, f) ≡ over(B, T', a')`, a' = 1 − (1 − a)(1 − f),
+ * T' = (T·a·(1 − f) + f) / a').
+ */
+export function frostedFill(tint: Rgb, alpha: number, frost: number = materialFrost): { tint: Rgb; alpha: number } {
+    const f = frostAt(alpha, frost)
+    if (f <= 0) return { tint, alpha }
+    const a = 1 - (1 - alpha) * (1 - f)
+    const k = alpha * (1 - f) / a, w = f / a
+    return { alpha: a, tint: { r: tint.r * k + w, g: tint.g * k + w, b: tint.b * k + w } }
+}
+
+/** The glass as it reaches the eye: its tint at `alpha` over the (blurred) backdrop, and
+ *  the material's haze over that (`frostAt`).
  *  `tint` is the DARK skin's tint when it is not the neutral one (`tintFromBackdrop`);
  *  the light skin always wears `GLASS_TINT.light`. */
 export function glassOver(backdrop: Rgb, isDark: boolean, alpha: number, tint?: Rgb): Rgb {
-    return over(backdrop, isDark ? (tint ?? DARK_TINT) : LIGHT_TINT, alpha)
+    const g = over(backdrop, isDark ? (tint ?? DARK_TINT) : LIGHT_TINT, alpha)
+    const f = frostAt(alpha)
+    return f > 0 ? over(g, WHITE, f) : g
 }
 
 /** The contrast of one tier of text on that glass. */
