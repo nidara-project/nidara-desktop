@@ -208,8 +208,8 @@ window > contents {
 //
 // The gradient is stronger at the ends (date/clock at the top, power bar at the
 // bottom) and lighter through the middle, so the wallpaper survives where
-// nothing has to be read over it. GNOME, Windows 11 and iOS all scrim their lock
-// wallpaper; none of the four systems leaves the text bare.
+// nothing has to be read over it. GNOME and Windows 11 both scrim their lock
+// wallpaper; neither leaves the text bare.
 //
 // 🔑 THE CEILING IS NOT A STYLE CHOICE, IT IS THE BLUR THRESHOLD. The greeter is a
 // transparent layer over awww's wallpaper with `blur = true, ignore_alpha = 0.23`

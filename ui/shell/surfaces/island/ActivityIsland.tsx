@@ -23,7 +23,7 @@ import { chromeIsDarkFor, glassAlphaFor } from "../../common/AdaptiveGlass"
 // (status.island_mode, mutually exclusive with the other overlays).
 //
 // Design rules (agreed 2026-07-19):
-// - COMPACT MUTATES BY ACTIVITY (full replacement, not an iOS-style split):
+// - COMPACT MUTATES BY ACTIVITY (full replacement, not a split capsule):
 //   when a live activity exists, the capsule's compact content transforms into
 //   that activity's compact form.
 // - EXPANSION IS EXPLICIT (click/keybind), except HIGH-PRIORITY events
@@ -45,8 +45,7 @@ import { chromeIsDarkFor, glassAlphaFor } from "../../common/AdaptiveGlass"
 // needs a confirmation).
 //
 // The live activities that DON'T front are published as `background` for the
-// indicator row (iOS-style: the front is the capsule, the rest are icons beside
-// it). Nothing paints them yet — that's the next step.
+// indicator row (the front is the capsule, the rest are icons beside it). Nothing paints them yet — that's the next step.
 
 export interface IslandMode {
     id: string

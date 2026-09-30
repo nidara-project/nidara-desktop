@@ -81,8 +81,8 @@ export function createHeroWidget(n: Notification, size: number): Gtk.Widget | nu
     return da
 }
 
-// Expanded NC rows show the image at full card width (the iOS long-look / Android
-// BigPicture shape; otherwise the compact right thumb). Small sources — chat
+// Expanded NC rows show the image at full card width (the Android BigPicture
+// shape; otherwise the compact right thumb). Small sources — chat
 // avatars are typically 64-160px — are excluded: cover-fitting one to ~320px is mush,
 // so they keep the thumbnail even when expanded. Banners never take this path.
 const HERO_BIG_MIN_SOURCE = 240
@@ -625,7 +625,7 @@ export default function NotificationCenter() {
     }
 
     // "Clear notifications" replays the swipe-dismiss fling on every row, top to bottom
-    // with a small stagger (the iOS clear cascade) instead of vaporizing the list. The
+    // with a small stagger (a clear cascade) instead of vaporizing the list. The
     // real dismissals run once the last row lands — `resolved`/`notified` are suppressed
     // meanwhile so the tree isn't rebuilt mid-flight (notifications arriving during the
     // cascade survive: only the snapshot taken at click time is dismissed). Rows clip at

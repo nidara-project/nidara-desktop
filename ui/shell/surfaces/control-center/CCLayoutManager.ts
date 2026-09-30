@@ -100,7 +100,7 @@ type PosMap = Map<string, Cell>
 //     (it used to jump by itself to the first free cell — usually the bottom);
 //   · a tile that LEAVES or SHRINKS frees cells, and what sits below them in those
 //     columns falls up into them if it fits (`liftInto`) — nothing ever moves sideways,
-//     and a gap nothing fits in stays, as iOS's Control Center allows gaps.
+//     and a gap nothing fits in stays: the grid allows gaps.
 // Clearing `positions` goes back to DEFAULT.
 class CCLayoutManager extends GObject.Object {
     static {

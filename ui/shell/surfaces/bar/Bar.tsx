@@ -1123,7 +1123,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // hold a permanent 8px to the right of the capsule and leave it off-centre in
   // an idle session — the one state that must look exactly as it always has.
   // The GROUP is what centres: a chip appearing shifts the capsule off the
-  // monitor's axis, which is the cost of the iOS split and is only ever paid
+  // monitor's axis, which is the cost of splitting the activities and is only ever paid
   // while something is actually running.
   const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER })
   center.append(island.capsule)      // the island's compact state

@@ -165,7 +165,7 @@ function makeIslandWidget(
             click.connect("released", () => showDetail(id))
             overlay.add_controller(click)
 
-            // Press-and-hold reaches the same detail (iOS-controls parity; on 1×1
+            // Press-and-hold reaches the same detail (touch parity; on 1×1
             // the round toggle swallows every tap, so hold is the only on-tile
             // path there). CLAIMED at trigger time cancels the inner button's
             // sequence, so releasing does NOT also fire the toggle.
