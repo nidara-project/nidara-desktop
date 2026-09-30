@@ -7,7 +7,7 @@ and leave its line in the index at the bottom of this file. It must match realit
 
 **This file is what is still OWED.** It holds three genres, and they are not the same thing:
 
-- **Open debt** — work still to do (#2, #62, #63, #80, #82, #83, #85…).
+- **Open debt** — work still to do (#2, #62, #63, #80, #82, #85…).
 - **Partial** — one half shipped, the other did not; the heading says which (#43, #64, #68).
 - **Standing decisions** — *not* debt: things that are deliberately this way, or upstream bugs
   we will not chase. #3 ("NOT a bug"), #13, #17, #34, #38 (retracted — a measurement error),
@@ -3271,27 +3271,6 @@ Do NOT "fix" the remaining half by raising the floor; that trades the whole aest
 wallpaper most users do not have, and the sweep above shows it cannot even work (0.55 still fails
 1.2 % of backdrops, and 0.59 has stopped being glass).
 
-### 83. ⚠️ OPEN — the glass mixer cannot express per-surface floors (2026-08-23)
-
-> **Queue entry: #317.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
-
-The owner asked the right question while #81 was landing: should the Settings window get a higher
-floor than the shell? It should — it is a document surface and carries far more text — but it
-**cannot**, and the reason is mechanical rather than aesthetic.
-
-`ThemeManager.setGlassOpacity` writes ONE value to all four axes through ONE clamp, and the master
-slider (`settings/pages/Appearance.tsx`) is an indeterminate control: it renders `—` and drops to
-opacity 0.55 whenever `glassUniform()` is false. Give the window a floor of, say, 0.46 while the
-shell sits at 0.24 and dragging the master anywhere below 46% clamps the window differently from
-its three siblings — so the four never agree, and the master goes mixed and greys itself out across
-the whole lower half of its travel, immediately after the user let go of it. The control would read
-as broken because it would BE broken.
-
-So the floor is uniform today (`GLASS_RANGE`, one range), and per-surface floors are blocked on
-redesigning the mixer: either the master stops claiming uniformity (per-axis normalised position
-rather than a shared value), or the floors become a display concern and the stored value stays raw.
-The owner wants the mixers reviewed regardless.
-
 ### 85. ⚠️ OPEN — the shadow meeting the rim reads as a BEVEL, and nobody decided that (2026-08-23)
 
 > **Queue entry: #318.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
@@ -4201,7 +4180,7 @@ them.
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
-number is never accidentally reused. 57 items; the split itself was 2026-08-23.
+number is never accidentally reused. 58 items; the split itself was 2026-08-23.
 
 - **#7** — `pageHeader()` removed — RESOLVED → `tech-debt-resolved.md`
 - **#102** — ✅ RESOLVED 2026-08-31 — the shell's one door raises as well as focuses; the bench is a nested Hyprland → `tech-debt-resolved.md`
@@ -4253,6 +4232,7 @@ number is never accidentally reused. 57 items; the split itself was 2026-08-23.
 - **#78** — RESOLVED — GTK4 Height-for-Width Layout Safety & BlueZ Pairing Resilience (2026-08-21) → `tech-debt-resolved.md`
 - **#79** — RESOLVED — one rim ramp, and `GLASS_TINT.light` stopped disagreeing with itself (2026-08-23) → `tech-debt-resolved.md`
 - **#81** — RESOLVED — a dark step traced every curved edge, and it was `blur:brightness` (2026-08-23) → `tech-debt-resolved.md`
+- **#83** — ✅ RESOLVED 2026-09-30 — the glass mixer is gone: one material of three, each a table of per-surface floors (#674) → `tech-debt-resolved.md`
 - **#84** — RESOLVED — one silhouette and one rim idiom for capsule and bubble, and "weaker" was an inference the pixels do not support (2026-08-23) → `tech-debt-resolved.md`
 - **#92** — RESOLVED — the login screens' selected row follows the user's accent, in both skins (2026-08-25 → 2026-09-07) → `tech-debt-resolved.md`
 - **#93** — FIXED same day — About's key column was a constant, and a constant is a locale bug with a delay on it (2026-08-25) → `tech-debt-resolved.md`

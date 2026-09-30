@@ -1622,7 +1622,7 @@ predecessor failed to produce.
 the raw `1 - t` and deliberately does not touch `glassModel`, because a file predating the glass
 rescale still has to be rescaled by the reader — stamping the model in the migration would silently
 skip a conversion the old code performed. The bench caught exactly that, and only on a mid-range
-value: `clampGlass` hides the error at both ends of the slider.
+value: the clamp (`clampGlass`, gone with the glass sliders in #674) hid the error at both ends of the range.
 
 `scripts/ci/migrations-check.mjs` (a step in the `pkgbuild` job) holds the properties that make a
 unit survivable: valid bash, a no-op on a fresh install, and idempotent **with the marker deleted
@@ -1840,11 +1840,11 @@ channel, and the second channel is where the bugs lived.
 | high contrast | gsettings `org.gnome.desktop.a11y.interface high-contrast` | `org.freedesktop.appearance contrast` |
 | reduced motion | gsettings `…interface enable-animations` (inverted) | `org.freedesktop.appearance reduced-motion` |
 | fonts, icon theme, cursor | gsettings `…interface` | `org.gnome.desktop.interface` (served by the gtk backend) |
-| window / bar / overlay / dock opacity | gsettings `org.nidara.appearance` (#573) | `org.nidara.appearance` (same kebab-case names), served ONLY there |
+| glass material / reduce transparency / window transparency (#674) | gsettings `org.nidara.appearance` (#573) | `org.nidara.appearance` (same kebab-case names), served ONLY there — the four glass opacities are DERIVED by each reader from the kit's tables, never served |
 
 Every key in this table is read by `ThemeManager` FROM its home and followed through `changed::`, so
-`gsettings set … accent-color pink`, `… icon-theme Adwaita` or `org.nidara.appearance bar-opacity
-0.6` from a terminal or an agent changes the whole desktop live — as in GNOME. There is no
+`gsettings set … accent-color pink`, `… icon-theme Adwaita` or `org.nidara.appearance glass-material
+frosted` from a terminal or an agent changes the whole desktop live — as in GNOME. There is no
 `appearance.json` any more: until #534 (accent, mode) and #536 (icon / cursor / GTK theme) every
 start copied that file OVER gsettings, which made the file the real home and silently reverted such
 a change at the next login; its Nidara-only keys were imported into `org.nidara.appearance` once
@@ -2290,7 +2290,7 @@ learns nothing that happened while the widget was away, which is exactly the int
 cover. **Prime it: `apply(read())` BEFORE connecting.** Settings → Appearance had five controls on this
 shape (measured 2026-08-16: `setConfig appearance.shellAppearance dark` — the shell pin, removed since, #676 — moved the bar and the dock
 while the dropdown two inches away still read "Follow system", for the rest of the session; the four
-advanced glass sliders live in a Revealer that starts closed, so they are unrealized until it opens and
+advanced glass sliders — gone since #674 — lived in a Revealer that started closed, so they are unrealized until it opens and
 came back showing the value they were BUILT with, contradicting the master right above them). The
 question that finds it is not *does this control have an external-sync hook?* but *does that hook
 answer the question, or only promise to?*
