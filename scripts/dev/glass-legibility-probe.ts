@@ -9,7 +9,7 @@
 
 import {
     uncomposite, glassOver, tierContrast, markContrast, legibilityMargin, MARK_TARGET, decideGlass, decideGlassByBackdrop, mergeBackdropStats, backdropStats, hyprlandPrepare, hyprlandVibrancy, NIDARA_BLUR,
-    GLASS_ADAPT_CEILING, TEXT_INK, TOOLTIP_GLASS_FLOOR, type Rgb, type BackdropStats,
+    GLASS_ADAPT_CEILING, TEXT_INK, TOOLTIP_GLASS_FLOOR, tintFromBackdrop, luminance, type Rgb, type BackdropStats,
 } from "../../ui/lib/nidara-kit/platform/glass-legibility"
 import { GLASS_TINT } from "../../ui/lib/nidara-kit/platform/tokens"
 
@@ -276,6 +276,28 @@ const floor = 0.48
 check(TEXT_INK.dark.secondary === 0.8 && TEXT_INK.dark.dim === 0.6
       && TEXT_INK.light.secondary === 0.85 && TEXT_INK.light.dim === 0.72,
       "TEXT_INK holds the shipped ramp (a change here is a design change: re-measure #673)")
+
+// ── 9. The dark glass's tint follows the backdrop's colour, never its grey ───
+// Owner's call (2026-09-30): a colourless backdrop keeps the neutral tint — forcing a
+// hue onto cream or grey-blue came out khaki and green-grey. A coloured one lends its
+// hue at the neutral tint's lightness, and the decision is computed against it.
+{
+    const neutral = { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
+    const same = (a: Rgb, b: Rgb) => Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b)) < 1e-9
+    check(same(tintFromBackdrop({ r: 0.96, g: 0.95, b: 0.92 }), neutral) && same(tintFromBackdrop(grey(0.5)), neutral),
+          "tint: a colourless backdrop (cream, mid grey) keeps the neutral tint")
+    const yellowGreen = { r: 208 / 255, g: 233 / 255, b: 188 / 255 }   // the dock's live backdrop, 2026-09-30
+    check(same(tintFromBackdrop(yellowGreen), neutral) && same(tintFromBackdrop({ r: 0.94, g: 0.86, b: 0.47 }), neutral),
+          "tint: a yellow or yellow-green backdrop keeps the neutral tint (dark, those hues are olive)")
+    const blue = { r: 0.63, g: 0.75, b: 0.88 }   // pale blue, as under the 2026-09-30 sheet
+    const t = tintFromBackdrop(blue)
+    check(t.b > t.r + 0.02 && Math.abs(luminance(t) - luminance(neutral)) < 0.01,
+          `tint: a pale blue backdrop gives a blue tint at the neutral one's luminance (${[t.r, t.g, t.b].map(v => Math.round(v * 255))})`)
+    const st = { brightest: blue, darkest: blue, mean: blue, samples: 100, area: 100 }
+    const d = decideGlass(st, true, 0.24, undefined, "text", false, t)
+    check(d.tint === t && tierContrast(blue, true, d.alpha, "primary", t) >= 4.5,
+          `tint: the decision carries it and holds primary 4.5:1 against it (alpha ${d.alpha})`)
+}
 
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nall ok")
 if (failures) process.exit(1)

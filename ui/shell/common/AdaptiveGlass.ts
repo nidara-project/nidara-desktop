@@ -6,11 +6,11 @@ import Wallpaper from "../core/WallpaperManager"
 import Gdk from "gi://Gdk?version=4.0"
 import { probeBackdrop, probeClosedBackdrop, type MonitorRect } from "./BackdropProbe"
 import { SlicedCairoArea } from "../../lib/sliced-cairo"
-import { LAYER_IGNORE_ALPHA } from "../../lib/nidara-kit/platform/theme-tokens"
 import {
-    decideGlass, decideGlassByBackdrop, mergeBackdropStats, NIDARA_BLUR,
-    type GlassDecision, type BackdropStats, type HyprlandBlurParams, type GlassContent,
+    decideGlass, decideGlassByBackdrop, mergeBackdropStats, NIDARA_BLUR, tintFromBackdrop,
+    type GlassDecision, type BackdropStats, type HyprlandBlurParams, type GlassContent, type Rgb,
 } from "../../lib/nidara-kit/platform/glass-legibility"
+import { GLASS_TINT } from "../../lib/nidara-kit/platform/tokens"
 
 /**
  * ADAPTIVE GLASS (#673) — each shell surface keeps its text legible over whatever is
@@ -111,6 +111,11 @@ export interface GlassSurfaceOpts {
     /** What has to stay readable on it (`GlassContent`). Default `text`; the dock
      *  carries only marks. */
     content?: GlassContent
+    /** False: the surface never thickens past its slider — it only takes its tint from
+     *  the backdrop. The dock (owner, 2026-09-30): "there is no text to read on it, and
+     *  so dark it loses the liquid-glass look; its white dots show even over a light
+     *  backdrop". Default true. */
+    thickens?: boolean
     /** Areas another layer covers ABOVE this surface (the Activity Island over the
      *  bar and its panels), in monitor coordinates: subtracting our paint there
      *  would read the other layer as backdrop. */
@@ -122,9 +127,6 @@ export interface GlassSurfaceOpts {
      *  wallpaper under the bar's left end flipped the bar to light and left the
      *  island's capsule dark in the middle of it (2026-09-29). */
     group?: () => string | null
-    /** It carries a `GlassHalo` (the CC): a diffuse container under its pieces of glass,
-     *  which is the FIRST step of thickening — see `haloAlphaFor`. */
-    halo?: boolean
     /** The skin comes from the BACKDROP, not from the mode — the bar row
      *  (#676): white ink over a dark top edge, black over a light one. In a
      *  group, one member saying so is enough (the bar speaks for the island's capsule).
@@ -137,6 +139,8 @@ export interface GlassSurfaceOpts {
 interface Surface extends GlassSurfaceOpts {
     decision: GlassDecision | null
     shownAlpha: number | null
+    /** The dark tint on screen now — it travels with `shownAlpha` (null = neutral). */
+    shownTint: Rgb | null
     lastStats: BackdropStats | null
     lastProbeUs: number
     seq: number
@@ -162,6 +166,21 @@ const surfaces = new Map<Gtk.Widget, Surface>()
  *  defined yet; this is where it would be switched back on. */
 const SHELL_FLIPS = false
 
+const NEUTRAL_TINT: Rgb = { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
+const LIGHT_TINT: Rgb = { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
+
+/** The shell's rule, in one place: the mode's skin, thicken only (`SHELL_FLIPS`), and
+ *  the dark glass tinted in the backdrop's own colour (`tintFromBackdrop`, 2026-09-30),
+ *  the contrast computed against that tint. */
+const decide = (stats: BackdropStats, floor: number, current: GlassDecision | undefined, s: Surface): GlassDecision => {
+    const tint = tintFromBackdrop(stats.mean)
+    if (s.thickens === false) return Theme.chromeIsDark ? { isDark: true, alpha: floor, tint } : { isDark: false, alpha: floor }
+    return decideGlass(stats, Theme.chromeIsDark, floor, current, s.content, SHELL_FLIPS, tint)
+}
+
+const tintDiffers = (a: Rgb, b: Rgb) => Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b)) > 0.5 / 255
+const lerpRgb = (a: Rgb, b: Rgb, t: number): Rgb => ({ r: a.r + (b.r - a.r) * t, g: a.g + (b.g - a.g) * t, b: a.b + (b.b - a.b) * t })
+
 // ── lookup, for painters ────────────────────────────────────────────────────
 
 function surfaceOf(widget: Gtk.Widget | null): Surface | null {
@@ -175,31 +194,9 @@ function surfaceOf(widget: Gtk.Widget | null): Surface | null {
 const floorOf = (role: GlassRole) =>
     role === "bar" ? Theme.barOpacity : role === "dock" ? Theme.dockOpacity : Theme.overlayOpacity
 
-// ── the halo (`GlassHalo`, the CC's container) ──────────────────────────────
-//
-// A surface with a halo is decided as ONE glass of effective alpha `e`, and `e` is
-// split between the halo (`c`, under everything) and its pieces (`a`, each tile):
-// `e = 1 − (1−a)(1−c)` — same tint, so that is exact. The halo takes the first share
-// (owner, 2026-09-29): it is always there at `HALO_REST`, it is what thickens first, up
-// to `HALO_MAX`, and only past that do the tiles gain body.
+/** The least a surface can wear: its slider. */
+const floorFor = (s: Surface): number => floorOf(roleOf(s))
 
-/** The halo at rest — always there: the panel opens with its shadow, whatever is behind. */
-export const HALO_REST = 0.12
-/** …and at most: under the layer's `ignore_alpha`, so Hyprland never blurs behind it
- *  and it stays a shadow, not a panel. */
-export const HALO_MAX = LAYER_IGNORE_ALPHA - 0.01
-
-/** The least a surface can wear: its slider, or — with a halo — the slider over the
- *  halo at rest. */
-function floorFor(s: Surface): number {
-    const floor = floorOf(roleOf(s))
-    return s.halo ? 1 - (1 - floor) * (1 - HALO_REST) : floor
-}
-
-/** The halo's share of an effective alpha: all of it the tiles do not need to add,
- *  between rest and max. */
-const haloShare = (e: number, floor: number) =>
-    Math.min(HALO_MAX, Math.max(HALO_REST, 1 - (1 - e) / (1 - floor)))
 /** On screen: mapped, and not slid away. */
 const shown = (s: Surface) => s.root.get_mapped() && !s.hidden?.()
 const roleOf = (s: Surface): GlassRole => typeof s.role === "function" ? s.role() : s.role
@@ -212,20 +209,7 @@ const roleOf = (s: Surface): GlassRole => typeof s.role === "function" ? s.role(
 export function glassAlphaFor(widget: Gtk.Widget | null, role: GlassRole): number {
     const floor = floorOf(role)
     const s = surfaceOf(widget)
-    if (s?.halo) {
-        // The tiles' share: what is left of the effective alpha once the halo has its own.
-        const e = s.shownAlpha ?? floorFor(s)
-        return Math.max(floor, 1 - (1 - e) / (1 - haloShare(e, floor)))
-    }
     return s?.shownAlpha != null ? Math.max(floor, s.shownAlpha) : floor
-}
-
-/** The alpha of the `GlassHalo` inside `widget`'s surface: `HALO_REST` until the
- *  backdrop asks for more, `HALO_MAX` at most. 0 outside a surface with a halo. */
-export function haloAlphaFor(widget: Gtk.Widget | null): number {
-    const s = surfaceOf(widget)
-    if (!s?.halo) return 0
-    return haloShare(s.shownAlpha ?? floorFor(s), floorOf(roleOf(s)))
 }
 
 /** The skin a shell-chrome painter inside `widget` should paint: the shell's own
@@ -235,6 +219,15 @@ export function chromeIsDarkFor(widget: Gtk.Widget | null): boolean {
     return s?.decision ? s.decision.isDark : Theme.chromeIsDark
 }
 
+/** The TINT a glass painter inside `widget` should fill with: on the dark skin, the one
+ *  its surface took from its backdrop (`tintFromBackdrop`) — the neutral `GLASS_TINT.dark`
+ *  outside a surface, before a measurement, or over a colourless backdrop; on the light
+ *  skin, `GLASS_TINT.light`. Pair it with `chromeIsDarkFor` and `glassAlphaFor`. */
+export function glassTintFor(widget: Gtk.Widget | null): Rgb {
+    if (!chromeIsDarkFor(widget)) return LIGHT_TINT
+    return surfaceOf(widget)?.shownTint ?? NEUTRAL_TINT
+}
+
 // ── applying a decision ─────────────────────────────────────────────────────
 
 /** Cairo painters do not repaint when an ancestor is queued — each DrawingArea
@@ -242,8 +235,7 @@ export function chromeIsDarkFor(widget: Gtk.Widget | null): boolean {
 function redrawSubtree(w: Gtk.Widget) {
     // A SlicedCairoArea (the dock's capsule) is no DrawingArea, and re-checks its
     // cached textures on queue_draw the same way.
-    // A GlassHalo repaints nothing on its own either (duck-typed: GlassHalo imports this file).
-    if (w instanceof Gtk.DrawingArea || w instanceof SlicedCairoArea || (w as any).isGlassHalo) w.queue_draw()
+    if (w instanceof Gtk.DrawingArea || w instanceof SlicedCairoArea) w.queue_draw()
     for (let c = w.get_first_child(); c; c = c.get_next_sibling()) redrawSubtree(c)
 }
 
@@ -270,24 +262,27 @@ function apply(s: Surface, next: GlassDecision, why = "measured", stats: Backdro
     const prev = s.decision
     logFlip(s, prev, next, why, stats)
     s.decision = next
-    if (!prev || prev.isDark !== next.isDark || Math.abs((s.shownAlpha ?? 0) - next.alpha) >= 0.005)
+    const fromTint = s.shownTint ?? NEUTRAL_TINT, toTint = next.tint ?? NEUTRAL_TINT
+    if (!prev || prev.isDark !== next.isDark || Math.abs((s.shownAlpha ?? 0) - next.alpha) >= 0.005 || tintDiffers(fromTint, toTint))
         s.quietUntilUs = GLib.get_monotonic_time() + (TRANSITION_MS + QUIET_AFTER_CHANGE_MS) * 1000
     if (!prev || prev.isDark !== next.isDark) {
         // A flip is not animated in alpha: the surface wears a different material.
         if (s.animId !== null) { GLib.source_remove(s.animId); s.animId = null }
         s.shownAlpha = next.alpha
+        s.shownTint = next.tint ?? null
         applySkinClass(s)
         redrawSubtree(s.root)
         return
     }
     const from = s.shownAlpha ?? floorFor(s)
-    if (Math.abs(from - next.alpha) < 0.005) return
+    if (Math.abs(from - next.alpha) < 0.005 && !tintDiffers(fromTint, toTint)) return
     if (s.animId !== null) GLib.source_remove(s.animId)
     const t0 = GLib.get_monotonic_time()
     s.animId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, TRANSITION_STEP_MS, () => {
         const t = Math.min(1, (GLib.get_monotonic_time() - t0) / (TRANSITION_MS * 1000))
         const eased = 1 - Math.pow(1 - t, 3)
         s.shownAlpha = from + (next.alpha - from) * eased
+        s.shownTint = t >= 1 ? next.tint ?? null : lerpRgb(fromTint, toTint, eased)
         redrawSubtree(s.root)
         if (t >= 1) { s.animId = null; return GLib.SOURCE_REMOVE }
         return GLib.SOURCE_CONTINUE
@@ -300,6 +295,7 @@ function reset(s: Surface) {
     const had = s.decision !== null
     s.decision = null
     s.shownAlpha = null
+    s.shownTint = null
     applySkinClass(s)
     if (had) redrawSubtree(s.root)
 }
@@ -363,12 +359,13 @@ async function measureClosed(s: Surface) {
     s.lastStats = stats
     const next = s.skinFromBackdrop
         ? decideGlassByBackdrop(stats, floorFor(s), s.decision ?? undefined)
-        : decideGlass(stats, Theme.chromeIsDark, floorFor(s), s.decision ?? undefined, s.content, SHELL_FLIPS)
+        : decide(stats, floorFor(s), s.decision ?? undefined, s)
     // Nothing on screen to animate: it simply opens like this.
     if (s.animId !== null) { GLib.source_remove(s.animId); s.animId = null }
     logFlip(s, s.decision, next, "measured closed", stats)
     s.decision = next
     s.shownAlpha = next.alpha
+    s.shownTint = next.tint ?? null
     applySkinClass(s)
 }
 
@@ -427,7 +424,7 @@ async function measure(s: Surface) {
     if (!group) {
         apply(s, s.skinFromBackdrop
             ? decideGlassByBackdrop(stats, floorFor(s), s.decision ?? undefined)
-            : decideGlass(stats, Theme.chromeIsDark, floorFor(s), s.decision ?? undefined, s.content, SHELL_FLIPS))
+            : decide(stats, floorFor(s), s.decision ?? undefined, s))
         return
     }
     // One decision for the whole group: its skin from the mean of everything its members
@@ -445,7 +442,7 @@ async function measure(s: Surface) {
     const floor = Math.max(...members.map(m => floorFor(m)))
     const next = members.some(m => m.skinFromBackdrop)
         ? decideGlassByBackdrop(merged, floor, s.decision ?? undefined)
-        : decideGlass(merged, Theme.chromeIsDark, floor, s.decision ?? undefined, s.content, SHELL_FLIPS)
+        : decide(merged, floor, s.decision ?? undefined, s)
     for (const m of members) apply(m, next, `group ${group} [${members.map(m => m.id).join("+")}]`, merged)
 }
 
@@ -491,7 +488,7 @@ export interface GlassSurfaceHandle {
 
 export function registerGlassSurface(opts: GlassSurfaceOpts): GlassSurfaceHandle {
     const s: Surface = {
-        ...opts, decision: null, shownAlpha: null, lastStats: null, lastProbeUs: 0, seq: 0, animId: null, retries: 0, quietUntilUs: 0, lastRect: null, lastMonitor: null, closedAtUs: 0, missed: false,
+        ...opts, decision: null, shownAlpha: null, shownTint: null, lastStats: null, lastProbeUs: 0, seq: 0, animId: null, retries: 0, quietUntilUs: 0, lastRect: null, lastMonitor: null, closedAtUs: 0, missed: false,
     }
     surfaces.set(opts.root, s)
     // A surface that is hidden keeps its last decision: the next time it opens over
@@ -533,9 +530,8 @@ export function adaptiveGlassState() {
         content: s.content ?? "text",
         floor: round(floorOf(roleOf(s))),
         alpha: s.shownAlpha === null ? null : round(s.shownAlpha),
-        // With a halo, `alpha` is the effective one; these are its two shares.
-        ...(s.halo ? { halo: round(haloAlphaFor(s.root)), tiles: round(glassAlphaFor(s.root, roleOf(s))) } : {}),
         skin: s.decision ? (s.decision.isDark ? "dark" : "light") : null,
+        tint: s.shownTint ? rgb(s.shownTint) : "neutral",
         flipped: s.decision ? s.decision.isDark !== Theme.chromeIsDark : false,
         skinFrom: s.skinFromBackdrop ? "backdrop" : "mode",
         backdrop: s.lastStats ? { brightest: rgb(s.lastStats.brightest), mean: rgb(s.lastStats.mean), darkest: rgb(s.lastStats.darkest), samples: s.lastStats.samples, area: s.lastStats.area } : null,
@@ -587,8 +583,8 @@ export function startAdaptiveGlass(): void {
             if (s.lastStats && !s.skinFromBackdrop && !s.group?.()) {
                 // A fresh decision across a mode change: the old one's skin was chosen
                 // against the OTHER mode, and passing it would read as a flip to keep.
-                apply(s, decideGlass(s.lastStats, Theme.chromeIsDark, floorFor(s),
-                    modeChanged ? undefined : s.decision ?? undefined, s.content, SHELL_FLIPS), "theme changed")
+                apply(s, decide(s.lastStats, floorFor(s),
+                    modeChanged ? undefined : s.decision ?? undefined, s), "theme changed")
             } else applySkinClass(s)
         }
         scheduleAll()

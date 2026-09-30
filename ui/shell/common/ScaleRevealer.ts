@@ -102,8 +102,8 @@ export class ScaleRevealer extends Gtk.Widget {
      *  region (PANEL_PAD), so what paints there is shown.
      *  And a reveal that does not unroll (`animateLayout: false`) never clips at all: it
      *  only scales the child about a pivot inside the box, so the clip could cut nothing
-     *  but what paints past the box ON PURPOSE — the CC's halo (`GlassHalo`), which
-     *  otherwise appeared only once the pop had finished, as a second step. */
+     *  but what paints past the box on purpose (the CC's halo did, 2026-09-29/30: it
+     *  appeared only once the pop had finished, as a second step). */
     unclipAtRest: boolean
 
     constructor(child: Gtk.Widget, opts?: {

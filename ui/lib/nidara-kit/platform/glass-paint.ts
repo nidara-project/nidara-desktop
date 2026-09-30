@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 import Cairo from "gi://cairo"
 import { GLASS_TINT, GLASS_SPECULAR } from "./tokens"
+import { LAYER_IGNORE_ALPHA } from "./theme-tokens"
 
 /**
  * The Cairo primitives that DEFINE what Nidara glass looks like: the silhouette,
@@ -268,6 +269,91 @@ export const glassRimGradient = (
     if (bot2 < 0.94) g.addColorStopRGBA(bot2 + (1 - bot2) * 0.45, lr, lg, lb, a(0.14))
     g.addColorStopRGBA(1.0, lr, lg, lb, a(0.24))           // bottom rim: ground bounce
     return g
+}
+
+/** The glass's edge (`drawGlassEdgeLight`): how far it reaches INTO the glass (px), how
+ *  bright its light is at the silhouette (white alpha, before the vertical profile), and
+ *  how much of the body's tint it takes away there (`clear`, falling to none at `width`).
+ *  Chosen by the owner (2026-09-30) among four variants over four backdrops
+ *  (`scripts/dev/edge-light-probe.ts`): the "transparent edge". */
+export const EDGE_LIGHT = { width: 10, alpha: 0.12, clear: 0.7 }
+
+/** The least alpha the edge may clear the body DOWN to: just above the layers'
+ *  `ignore_alpha`. Below it Hyprland stops blurring behind the pixel and shows the
+ *  backdrop RAW, so a clear edge would end in a sharp, unblurred ring with a visible
+ *  seam where the alpha crosses the threshold. On a surface at its floor (0.24) that
+ *  leaves nothing to clear — the edge is then light only — and over a pale backdrop,
+ *  where the glass has thickened and grey is the problem, it clears the most. */
+export const EDGE_MIN_ALPHA = LAYER_IGNORE_ALPHA + 0.01
+
+/** A band of LIGHT along the inside of a glass silhouette, fading to nothing `width` px
+ *  in — what a lens does at its edge, where it bends the backdrop's light towards you.
+ *  It is what makes a glass surface read as CLEAR from across the room while the body
+ *  behind the text keeps its tint: the light is at the edge, the contrast in the middle.
+ *
+ *  Why it exists (owner, 2026-09-30, from macOS 27's "Glass" capsule): that capsule
+ *  looks like light glass with white text on it, and it is not — measured, the body
+ *  behind the letters is the wallpaper's own saturated blue at ~4.6:1, and what reads as
+ *  "light" is the edge, where the lens shows a brighter, displaced piece of the backdrop.
+ *  Hyprland cannot refract, so the edge's light is painted; the body is untouched.
+ *
+ *  Built as NESTED, NON-OVERLAPPING RINGS (EVEN_ODD between two offsets of the same
+ *  silhouette), never as concentric strokes: strokes overlap and their alphas
+ *  accumulate out of order — the lesson of `drawShadowFromPath`. Each ring takes the
+ *  vertical profile of the light (key light on top, ground bounce below, least on the
+ *  flanks), scaled by a quadratic fall-off with depth.
+ *
+ *  ⚠️ It must stay OUT of the text's way: keep `width` below the smallest distance from
+ *  any silhouette to its text (a bar capsule's label sits 9 px from its top edge). */
+export const drawGlassEdgeLight = (
+    cr: any, x: number, y: number, w: number, h: number, r: number,
+    n: number = 3.2, perfect: boolean = false,
+    width: number = EDGE_LIGHT.width, alpha: number = EDGE_LIGHT.alpha,
+    /** 0..1 — how much of the body's TINT is taken away at the very edge, falling to
+     *  none `width` px in, so the backdrop itself shows through brighter and in its own
+     *  colour (DEST_OUT over what is already painted: call it right after the body). */
+    clear: number = 0,
+    /** The body's alpha where the edge is: caps `clear` so the edge never falls below
+     *  `EDGE_MIN_ALPHA`. Omit for a layer with no blur threshold (an offscreen sheet). */
+    bodyAlpha?: number,
+) => {
+    if (bodyAlpha !== undefined) clear = Math.min(clear, Math.max(0, 1 - EDGE_MIN_ALPHA / Math.max(bodyAlpha, 1e-6)))
+    if (width <= 0 || (alpha <= 0 && clear <= 0)) return
+    const reach = Math.min(width, Math.min(w, h) / 2 - 1)
+    if (reach <= 0) return
+    const steps = Math.max(2, Math.round(reach * 2))   // half-pixel rings
+    const step = reach / steps
+    const cx = x + w / 2
+    const { r: lr, g: lg, b: lb } = GLASS_SPECULAR
+    cr.save()
+    cr.setFillRule(1) // EVEN_ODD: the ring between two offsets, nothing inside it
+    if (clear > 0) {
+        cr.setOperator(Cairo.Operator.DEST_OUT)
+        for (let i = 0; i < steps; i++) {
+            const f = 1 - (i + 0.5) / steps
+            cr.newPath()
+            createSquirclePath(cr, x, y, w, h, r, n, perfect, -i * step)
+            createSquirclePath(cr, x, y, w, h, r, n, perfect, -(i + 1) * step)
+            cr.setSourceRGBA(0, 0, 0, clear * f * f)
+            cr.fill()
+        }
+        cr.setOperator(Cairo.Operator.OVER)
+    }
+    for (let i = 0; i < steps && alpha > 0; i++) {
+        const f = 1 - (i + 0.5) / steps
+        const a = alpha * f * f
+        cr.newPath()
+        createSquirclePath(cr, x, y, w, h, r, n, perfect, -i * step)
+        createSquirclePath(cr, x, y, w, h, r, n, perfect, -(i + 1) * step)
+        const g = new Cairo.LinearGradient(cx, y, cx, y + h)
+        g.addColorStopRGBA(0.0, lr, lg, lb, a)          // key light
+        g.addColorStopRGBA(0.5, lr, lg, lb, a * 0.55)   // flank: looking through, not at
+        g.addColorStopRGBA(1.0, lr, lg, lb, a * 0.8)    // ground bounce
+        cr.setSource(g)
+        cr.fill()
+    }
+    cr.setFillRule(0)
+    cr.restore()
 }
 
 /** A soft outer shadow for a SQUIRCLE glass surface: six nested fills of the same

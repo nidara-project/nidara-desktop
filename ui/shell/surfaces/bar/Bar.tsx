@@ -30,7 +30,7 @@ import { AppTitle } from "./AppTitle"
 import { statefulIcon } from "../../common/StatefulIcon"
 
 // Overlay panels mounted on the bar window (avoids separate layer-shell surfaces)
-import { ControlCenterWidget, CC_HALO_OUTSET } from "../control-center/ControlCenter"
+import { ControlCenterWidget } from "../control-center/ControlCenter"
 import NotificationCenter from "../control-center/NotificationCenter"
 import Prism from "../prism/Prism"
 import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
@@ -565,15 +565,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               const [, natH] = cc.measure(Gtk.Orientation.VERTICAL, Math.round(b.get_width()))
               height = Math.max(height, natH)
           }
-          // The CC's halo paints past its box (`CC_HALO_OUTSET`): outside this rect the
-          // compositor does not draw at all, so its pad is the halo's where that is wider.
-          const o = c === cc ? CC_HALO_OUTSET : null
-          const pl = Math.max(PANEL_PAD, o?.left ?? 0), pr = Math.max(PANEL_PAD, o?.right ?? 0)
-          const pt = Math.max(PANEL_PAD, o?.top ?? 0), pb = Math.max(PANEL_PAD, o?.bottom ?? 0)
           rects.push(fullWidth
               ? { x: 0, y: Math.round(b.get_y()) - PANEL_PAD, width: box.width, height: Math.round(height) + PANEL_PAD * 2 }
-              : { x: Math.round(b.get_x()) - pl, y: Math.round(b.get_y()) - pt,
-                  width: Math.round(b.get_width()) + pl + pr, height: Math.round(height) + pt + pb })
+              : { x: Math.round(b.get_x()) - PANEL_PAD, y: Math.round(b.get_y()) - PANEL_PAD,
+                  width: Math.round(b.get_width()) + PANEL_PAD * 2, height: Math.round(height) + PANEL_PAD * 2 })
       }
       return rects
   }
@@ -1168,9 +1163,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     ["control-center", cc], ["notification-center", nc], ["system-menu", systemMenu],
     ["search", prism], ["bar-expansion", expansionCapsule],
   ] as const) {
-    // The CC carries a halo (`common/GlassHalo.ts`): its tiles are the outer glass, with
-    // nothing between them, so its first step of thickening is the container under them.
-    glassHandles.set(pop, registerGlassSurface({ id, root: pop, role: "overlay", settled: atRest(pop), exclude: underIsland, halo: pop === cc }))
+    glassHandles.set(pop, registerGlassSurface({ id, root: pop, role: "overlay", settled: atRest(pop), exclude: underIsland }))
   }
   glassHandles.set(barBox, registerGlassSurface({
     id: "bar", root: barBox, role: "bar", exclude: underIsland, group: () => "bar-row",

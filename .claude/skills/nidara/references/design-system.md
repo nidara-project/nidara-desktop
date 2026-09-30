@@ -1568,10 +1568,8 @@ measurement decides alone and would leave a stale backdrop in `lastStats` for th
 and a group member comes back where it was, over what it had. Verified live: X toggled fullscreen
 and back, no measurement while hidden, one on return, no skin change.
 
-**The Control Center is a PANEL, and wears a HALO under it** (`common/GlassHalo.ts`,
-`control-center/ControlCenter.tsx`; owner's calls of 2026-09-29/30, the second after macOS 27's
-Control Center). The CC has no painted panel — its tiles are the outer glass — so over a busy page
-each tile was a separate thin sheet with the page showing through and between them.
+**The Control Center is a PANEL** (`control-center/ControlCenter.tsx`; owner's calls of 2026-09-29/30, the second after macOS 27's
+Control Center). The CC has no painted panel — its tiles are the outer glass.
 - **The panel is geometry, drawn by nothing (yet).** The CC's content sits inside a margin,
   `CC_PANEL_PAD` = 16 on every side (owner: "a panel cannot have its content stuck to its top
   edge"), and the panel hangs `BAR_MARGIN` (= `gaps_out`, 4) below the bar and from the screen edge,
@@ -1596,35 +1594,14 @@ each tile was a separate thin sheet with the page showing through and between th
   larger than Apple's in absolute terms, deliberately, like our 18px bar icons. `PANEL_W.full`
   restates the grid width (the widget kit is a leaf and may not import it); `CCLayoutManager`
   logs a CRITICAL at boot if the two disagree.
-- **The halo is a cloud over the panel, and the panel's shape never shows.** Full alpha only under
-  the CONTENT (where the labels are), then a raised-cosine falloff ACROSS the margin and on past the
-  box by `CC_HALO_OUTSET` — up only to the bar (`BAR_MARGIN`: it must not darken the bar's capsules),
-  24 at the sides, 32 below. No plateau reaches the panel's edge, so no rectangle is drawn (the
-  first version was flat to the tiles' edge; owner: "the container's shape should not show"). In the
-  skin's own `GLASS_TINT`: a shadow on dark glass, a haze on light glass (a dark shadow under black
-  ink would LOWER its contrast).
-- **It is the surface's first step of A.** Same tint, same layer, so tile alpha `a` over halo `c`
-  is exactly one glass of `e = 1 − (1−a)(1−c)`. A surface registered with `halo: true` is decided
-  as that `e` (its floor is the slider over the halo at rest), and `AdaptiveGlass` splits it:
-  `haloAlphaFor` takes the first share, from `HALO_REST` (0.12, always) to `HALO_MAX`
-  (`LAYER_IGNORE_ALPHA − 0.01`), and `glassAlphaFor` gives the tiles the rest. `dumpState.glass`
-  shows `alpha` (effective), `halo` and `tiles`.
-- ⛔ **Never above the layer's `ignore_alpha`.** Under it Hyprland does not blur behind the halo,
-  so it reads as a shadow over the sharp backdrop. Over it, it would turn into a frosted PANEL with
-  a blur edge wherever the falloff crosses the threshold — a visible jump the owner declined; the
-  solid panel is Reduce transparency's (#674).
-- **It paints outside its box, which two things clip by default.** The revealer: `ScaleRevealer`
-  now clips only an UNROLLING reveal (`animateLayout`) — a scale-only pop cannot push its child
-  past the box, so the clip could only cut what paints outside on purpose (the halo appeared as a
-  second step, after the pop). And the bar's visible region, a hard GL scissor: `paintedRects`
-  pads the CC's rect by `CC_HALO_OUTSET` where that is wider than `PANEL_PAD`.
-- **Cost:** the shape is painted once per size and skin into a cached render node at full
-  strength; its alpha is an opacity node on top, so the adaptive animation and the reveal's fade
-  never repaint it (`redrawSubtree` only queues the draw that re-reads the alpha). Not a hit
-  target: the input region is still the panel's box.
-- Verified live over the wallpaper (dark skin, rest): the gap between tiles 2/255 darker than the
-  bare wallpaper at lum 40, a smooth falloff with no banding. ⚠️ NOT yet seen live: the light skin's
-  haze, and the halo thickening over a bright backdrop — needs a light window behind the CC.
+- ⛔ **No halo under the tiles — tried and REMOVED (owner, 2026-09-30): "it looks like a ghost
+  panel".** From 2026-09-29 a soft cloud of the skin's tint sat under the CC's content
+  (`common/GlassHalo.ts`), always visible at 0.12 and the surface's first step of thickening up to
+  0.22 (just under `ignore_alpha`), after Apple's container behind the Control Center's modules.
+  Over our glass it read as a panel that was not quite there. What it left: `ScaleRevealer` clips
+  only an unrolling reveal (harmless, kept). Do not bring a container back as a softer shadow; the
+  only panel the CC gets is the solid one of Increase contrast (#674), which is a different thing —
+  opaque, above `ignore_alpha`, drawn edge to edge.
 
 **The dock** (2026-09-29, owner: "mide también el dock") is one surface per monitor,
 `dock-<connector>`, role `dock` (floor = `dockOpacity`), content `marks`, root = the axis's `layout`.
@@ -1768,14 +1745,56 @@ never with `NIDARA_BACKDROP_DEBUG`. GPU, measured with `scripts/dev/blur-arm.sh`
 CC open, arms A,B,B,A): one forced measurement per second of bar + island + CC costs ≈ +0.25 points
 (0.9/1.0 % → 1.2/1.2 %); real use measures far less often than that.
 
-Verify with `nidara-ipc dumpState` → `glass` (per surface: floor, alpha, skin, flipped, group, the
-two backdrops and how long ago), and `nidara-ipc glassRemeasure`. `NIDARA_BACKDROP_DEBUG=<dir>`
+### The glass's edge and its tint (2026-09-30)
+
+The owner asked how macOS 27's "Glass" capsule gets its look — light glass with white text on it.
+Measured on its image: it does not. The body behind the letters is the wallpaper's own saturated
+blue at ~4.6:1; what reads as "light" is the EDGE, where the lens shows a brighter, displaced piece
+of the backdrop. Apple's kit (Figma, `reference_macos27_glass_recipe` in the owner's memory) makes
+dark glass by LIGHTENING the backdrop (a lighten fill + plus-lighter), so white text on it is 2.3:1
+over mid grey and 1:1 over white — Apple does not solve bright backdrops; we must, since our ink is
+fixed white. So we split the two: the look at the edge, the contrast in the middle. Chosen on a
+side-by-side sheet (`scripts/dev/edge-light-probe.ts`: variants × real backdrops, printing the
+contrast behind each label, which must not move) and then live.
+
+- **The transparent edge** (`drawGlassEdgeLight` + `EDGE_LIGHT` in `glass-paint.ts`, called by
+  `drawSquircle` for glossed glass): within 10 px of the silhouette the body's tint is taken away
+  (up to 70 % at the edge, DEST_OUT, quadratic fall-off) so the backdrop shows through in its own
+  colour, plus a white light band (0.12, key light on top, least on the flanks). Nested
+  NON-OVERLAPPING rings, like the shadow (`drawShadowFromPath`), never concentric strokes.
+  ⛔ **It never clears below `EDGE_MIN_ALPHA` (= `LAYER_IGNORE_ALPHA` + 0.01, 0.24).** Below the
+  layer's `ignore_alpha` Hyprland stops blurring behind the pixel and shows the backdrop raw — a
+  sharp ring with a seam where the alpha crosses the threshold, which an offscreen sheet cannot
+  show. Consequence, intended: a surface at its 0.24 floor gets the light only; a thickened one
+  (a bright backdrop, where grey was the complaint) clears the most. The greeter (its own
+  threshold, 0.3) and the lock (no compositor blur: it blurs its own copy) are not wired yet.
+- **The dark tint takes the backdrop's colour** (`tintFromBackdrop` in `glass-legibility.ts`;
+  `AdaptiveGlass` puts it in the decision, animates it with the alpha, and painters ask
+  `glassTintFor(widget)` beside `glassAlphaFor`/`chromeIsDarkFor`). The backdrop's OKLab hue at
+  the neutral tint's lightness, chroma ×1.4 capped at 0.05, and `decideGlass` computes contrast
+  against THAT tint (probe-checked). Dark glass over a pale backdrop has to be a mid-tone for
+  white text; a mid-tone in the backdrop's colour reads as tinted glass, the neutral one as grey.
+  ⛔ **Neutral where the colour would be mud** — both seen live, both the owner's calls: a
+  near-colourless backdrop (chroma < 0.025, full at 0.045: cream, grey-blue) came out khaki and
+  green-grey when a hue was forced on it; and hues 65°–140° (dark orange = brown, dark yellow and
+  yellow-green = olive: the dock over a pale lime wallpaper, mean hue 131°) fade to neutral over
+  20° each side (`TINT_MUD_HUES`). Honest limit: ANY darkening glass turns a yellow backdrop
+  olive, neutral tint included — only not darkening avoids it.
+- **The dock does not thicken** (`thickens: false`, owner: "there is no text to read on it, and
+  so dark it loses the liquid-glass look; its white dots show even over a light backdrop"). It is
+  measured for its tint only and stays at `dockOpacity`. Measured: its running dot is ~2:1 over a
+  pale yellow-green wallpaper at 0.24 (1.6:1 over pure white, >10:1 over the default one) — below
+  WCAG 1.4.11's 3:1 on pale backdrops, accepted on sight. `content: "marks"` stays for the day it
+  thickens again.
+
+Verify with `nidara-ipc dumpState` → `glass` (per surface: floor, alpha, tint, skin, flipped, group,
+the two backdrops and how long ago), and `nidara-ipc glassRemeasure`. `NIDARA_BACKDROP_DEBUG=<dir>`
 writes each probe's capture, render and recovered backdrop as PNGs (dev-workflow.md), and
 `NIDARA_BACKDROP_PROBE=0` turns the whole thing off — the glass is then exactly the slider.
 
 Not done here, on purpose: the explicit accessibility modes (Reduce transparency, Increase
-contrast) are #674, and the CC's container/shadow is a visual element the owner reviews on screen
-first (#673 comment).
+contrast) are #674 — including the CC's solid panel, the only container it gets (the halo was
+tried and removed, see "The Control Center is a PANEL").
 
 ## Accent palette (9 colors)
 

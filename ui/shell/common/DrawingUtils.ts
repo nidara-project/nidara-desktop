@@ -22,7 +22,7 @@ export {
 } from "../../lib/nidara-kit/platform/glass-paint"
 // `export … from` re-exports without binding locally, and `drawSquircle` /
 // `squircleThumb` below still CALL two of these — hence the second line.
-import { createSquirclePath, glassRimGradient } from "../../lib/nidara-kit/platform/glass-paint"
+import { createSquirclePath, glassRimGradient, drawGlassEdgeLight, EDGE_LIGHT } from "../../lib/nidara-kit/platform/glass-paint"
 
 // Shared drawSquircle utility for consistent visual approach across Dock and CC
 export const drawSquircle = (
@@ -46,6 +46,7 @@ export const drawSquircle = (
                         // undefined/omitted = fully filled with `color`, i.e. today's behavior.
     emptyColor?: { r: number, g: number, b: number },
     emptyAlpha?: number,
+    edgeLight: { width: number, alpha: number, clear?: number } = EDGE_LIGHT, // glossed glass only; see drawGlassEdgeLight
 ) => {
     if (width <= 0 || height <= 0) return
 
@@ -91,6 +92,17 @@ export const drawSquircle = (
         cr.fill()
     }
     cr.restore()
+
+    // 1b. EDGE LIGHT — the lens's bright band inside the silhouette, on glossed glass
+    // only (a flat control inside a panel is not a lens). Under the rim, over the body.
+    if (enableGloss && !dash) {
+        cr.save()
+        cr.setAntialias(AA_QUALITY)
+        // The thinnest body the edge crosses: with a gauge fill, the emptier portion.
+        const bodyAlpha = fillFrac !== undefined && fillFrac < 1 ? Math.min(alpha, emptyAlpha ?? alpha) : alpha
+        drawGlassEdgeLight(cr, x, y, drawW, drawH, r, n, perfect, edgeLight.width, edgeLight.alpha, edgeLight.clear ?? 0, bodyAlpha)
+        cr.restore()
+    }
 
     // 2. 1PX BORDER & SPECULAR CONTOUR (Clean modern glass rim — single-pass unclipped evaluation)
     cr.save()

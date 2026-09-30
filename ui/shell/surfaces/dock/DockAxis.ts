@@ -18,9 +18,8 @@ import Cairo from "gi://cairo"
 import { DOCK_CONSTANTS, calculateDockItemMetrics } from "./DockPhysics"
 import { drawSquircle, drawGlassShadow } from "../../common/DrawingUtils"
 import { setVisibleRect } from "../../common/VisibleRegion"
-import { GLASS_TINT } from "../../../lib/nidara-kit/platform/tokens"
 import { GLASS_SHADOW } from "../../common/SquircleContainer"
-import { chromeIsDarkFor, glassAlphaFor } from "../../common/AdaptiveGlass"
+import { chromeIsDarkFor, glassAlphaFor, glassTintFor } from "../../common/AdaptiveGlass"
 import inputYield from "../../core/InputYield"
 import { dockSettings, dockSideState } from "./state"
 import type { AnimState } from "./state"
@@ -226,9 +225,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                     if (w <= 0 || _h <= 0) return
                     const dark = chromeIsDarkFor(gloss)   // the mode's skin — unless its surface flipped
                     const dockAlpha = glassAlphaFor(gloss, "dock")
-                    const dockColor = dark
-                        ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
-                        : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
+                    const dockColor = glassTintFor(gloss)
                     const borderCol = dark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
                     // The pad is the `inset`, so the capsule lands where it always did; the
                     // shadow gets the ring the widget grew to hold it.
@@ -630,9 +627,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 }
                 const dark = chromeIsDarkFor(da)   // the mode's skin — unless its surface flipped
                 const dockAlpha = glassAlphaFor(da, "dock")
-                const dockColor = dark
-                    ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
-                    : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
+                const dockColor = glassTintFor(da)
                 const borderCol = dark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
                 const { x: px, y: py, width: pw, height: ph } = capsuleIn(_w, _h)
                 // No layout change on this axis: `da` spans the surface and the capsule is

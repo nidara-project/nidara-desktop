@@ -4,8 +4,6 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import status from "../../core/Status"
 import IslandGrid from "./IslandGrid"
 import { ccStatusBanner } from "../bar/StatusIndicators"
-import { GlassHalo } from "../../common/GlassHalo"
-import { BAR_MARGIN } from "../bar/capsule"
 
 /**
  * The CC is a PANEL (owner, 2026-09-30): its content sits inside a
@@ -19,11 +17,6 @@ import { BAR_MARGIN } from "../bar/capsule"
  * screen's edge, as a window would (Bar.tsx places it).
  */
 export const CC_PANEL_PAD = 16
-
-/** How far the CC's halo reaches past the panel: only down to the bar above (it
- *  must not darken the bar's capsules), 24 at the sides, 32 below — light from above.
- *  Bar.tsx widens the visible region by it: outside that the compositor draws nothing. */
-export const CC_HALO_OUTSET = { top: BAR_MARGIN, right: 24, bottom: 32, left: 24 } as const
 
 export function ControlCenterWidget(monitor: Gdk.Monitor) {
     const layout = new Gtk.Box({
@@ -45,7 +38,8 @@ export function ControlCenterWidget(monitor: Gdk.Monitor) {
     layout.append(ccStatusBanner())
     layout.append(IslandGrid())
 
-    // The container under the tiles (#673): a soft shadow that is also the surface's
-    // first step of thickening — `common/GlassHalo.ts`.
-    return new GlassHalo(layout, { inset: CC_PANEL_PAD, outset: CC_HALO_OUTSET })
+    // No container under the tiles: the halo that stood there (2026-09-29/30) read as a
+    // ghost panel and was removed by the owner. The panel itself is for Increase
+    // contrast (#674).
+    return layout
 }
