@@ -1353,10 +1353,10 @@ What the pin's machinery taught, and what still uses it:
 priority → beats Adwaita, loses to our classes). **Don't** patch `color` per menu/button — new
 shell text follows the pin automatically.
 
-### Opacity — one master + Advanced, four surfaces, WYSIWYG
+### Opacity — one glass material of three, a window switch, reduce transparency (#674)
 
-⚠️ **The glass sliders are the PANE. A neutral mark painted ON the glass takes its alpha from
-`INK` in `ui/lib/nidara-kit/platform/tokens.ts`, never from a slider and never from a literal.** Two different
+⚠️ **The glass opacities are the PANE. A neutral mark painted ON the glass takes its alpha from
+`INK` in `ui/lib/nidara-kit/platform/tokens.ts`, never from a glass opacity and never from a literal.** Two different
 quantities that both get called "opacity": `SquircleContainer` fills a CC island at
 `Theme.overlayOpacity`, `GlassBubble` at `max(overlayOpacity, 0.38)`, the notification cards at
 `overlayOpacity * depth` — that is the material. The battery outline, the dock's running dot, a
@@ -1381,65 +1381,94 @@ anywhere, and a single-use number in a shared file advertises a sharing that doe
 and both are already named where they are used.
 
 
-Glass opacity is **the slider, or more — never less** (since 2026-09-29, #673). Over a backdrop the
-slider's glass can carry, what you set is what is painted. Where it cannot — text on it would fall
-below its contrast target — the ADAPTIVE GLASS thickens that one surface (up to
-`GLASS_ADAPT_CEILING`) or flips its skin; see "Adaptive glass" below. So the slider is a floor, not
-the value. (What was removed for good is a FIXED floor: an old light-mode 0.40 pinned every
-surface over every wallpaper, which is the opposite trade.) But the RANGE itself now
-has a floor, and the range lives in ONE place: **`GLASS_RANGE` in `core/NidaraTheme.ts`**, imported
-by `clampOpacity` and by all five sliders. Do not retype the bounds; that was six literals until
-2026-08-23, i.e. five chances for a slider to offer a value the clamp then silently refuses.
+**What the user picks is a CHOICE, not a number** (owner's decision, 2026-09-30, #674). Five
+opacity sliders — a master and four per surface under "Advanced" — became three controls:
 
-⚠️ **The floor is `0.24`, and it was `0.05` with "no floor" until 2026-08-23.** That is not a
+| control | key (`org.nidara.appearance`) | what it sets |
+|---|---|---|
+| Appearance → Glass: **Clear / Standard / Frosted** | `glass-material` (`clear`/`regular`/`frosted`) | per-surface floors (`GLASS_FLOORS`), a white haze (`GLASS_FROST`) and Hyprland's blur (`GLASS_BLUR`) |
+| Appearance → Windows: **Transparent windows** | `window-transparency` (on) | Nidara's WINDOWS: `WINDOW_GLASS_OPACITY` (0.80) or solid |
+| Accessibility → Vision: **Reduce transparency** | `reduce-transparency` (off) | every glass surface SOLID (`SOLID_GLASS`), no haze; greys out both controls above |
+
+All three tables live in `ui/lib/nidara-kit/platform/theme-tokens.ts`, and **the four opacities
+every painter reads — `barOpacity` / `overlayOpacity` / `dockOpacity` / `windowOpacity` — are
+DERIVED, stored nowhere**: `glassOpacities()` is the one place the tables are read, and `withGlass()`
+re-derives them on a config after any of the three keys moves. The portal serves the three KEYS, not
+the numbers, and every process (the shell, Settings, the installer, the lock screen, the greeter
+through the mirror) derives the numbers itself with the same table — so no two processes can
+disagree about what "frosted" means. The numbers per position are PROVISIONAL until calibrated on
+screen with the owner.
+
+⚠️ **Windows are NOT Liquid Glass** (owner, 2026-09-30). The material is for the interface's surfaces
+and controls — bar, panels, dock, menus, tooltips. Nidara's windows are only translucent or solid.
+And the switch says TRANSPARENCY, deliberately not macOS's "wallpaper tinting": what shows through a
+window is shaped by the compositor's blur, and **Hyprland has ONE blur for everything** (no
+per-layer or per-window size), which the material sets. A tint of our own would be a promise we
+cannot keep; a compositor of our own could (`project_own_compositor_vision` in the owner's notes,
+and the inventory issue it leads to).
+
+**The blur is the compositor half** (`ui/shell/core/GlassBlur.ts`): `hl.config` pushes `GLASS_BLUR`
+for a non-default material. `regular` is exactly what `config/hypr/hyprland.lua` ships, so at the
+default the shell pushes NOTHING and a `hyprland-user.lua` override stands; leaving another material
+for the default restores the baseline read from the compositor BEFORE the shell touched it (the
+same discipline as `ReduceMotion.ts`, including re-reading it on `config-reloaded`). Reduce
+transparency leaves the blur on: switching it off would reach every other app's translucent window.
+
+**The haze — why the materials need more than opacity.** Our dark tint only DARKENS, so over a
+near-black wallpaper more of it shows nothing: measured 2026-09-30 behind the bar (19,1,61), clear
+and frosted were identical. Each material lays a white haze over its tint (clear 0, regular 0.04,
+frosted 0.10) — macOS's dark glass lightens too. The haze costs white text contrast, so it is IN
+the legibility model (`glassOver` → `frostAt`) and it gives way as the adaptive glass thickens: full
+up to `FROST_FULL_UNTIL` (0.48, the thickest floor), none from `FROST_GONE_AT` (0.58) — under the
+tooltips' floor and the ceiling, so every guarantee measured without a haze still holds. Painters do
+not paint a second layer: `frostedFill(tint, alpha)` gives the ONE fill equivalent to tint + haze
+(`over(over(B,T,a),W,f) ≡ over(B,T′,a′)`), and `glassAlphaFor`/`glassTintFor` already return it — so
+a shell painter gets the frost by asking what it always asked. The kit's `GlassBubble` (menus,
+tooltips) folds it through the `glassFrost` seam. `setGlassFrost()` is process-global like the
+ceiling: the shell sets it from `Theme.glassFrost`; 0 (no haze) anywhere else, which is why the pure
+probes are unchanged. `scripts/dev/glass-legibility-probe.ts` §10 holds it.
+
+**Reduce transparency reaches everything that paints glass**: the four derived opacities go to 1,
+the edge light stops clearing a solid body (`drawGlassEdgeLight`: `bodyAlpha >= 1` → no clear), the
+notification stack's ghost cards stop fading (fainter would be see-through again), the login/lock
+capsules paint their fill solid and the lock skips its own blur pass (`glass-capsule.ts`, through the
+kit seam's `reduceTransparency`), and the adaptive glass stops capturing altogether — nothing behind
+a solid surface is worth reading (`measure` → `reset`).
+
+Glass opacity is **the floor, or more — never less** (since 2026-09-29, #673). Over a backdrop the
+floor's glass can carry, it is what is painted. Where it cannot — text on it would fall below its
+contrast target — the ADAPTIVE GLASS thickens that one surface (up to `GLASS_ADAPT_CEILING`); see
+"Adaptive glass" below. The range every floor lies in lives in ONE place: **`GLASS_RANGE`** in the
+kit's `theme-tokens.ts` (`scripts/ci/blur-threshold-check.mjs` reads its `min`).
+
+⚠️ **The lowest floor is `0.24`, and it was `0.05` with "no floor" until 2026-08-23.** That is not a
 reversal of WYSIWYG: 5% glass was never 5% of anything. Hyprland's `decoration:blur:brightness`
 was `0.8`, so the blurred backdrop under every surface was being dimmed 20% — body the material
 had and no token accounted for. That brightness had to go (it draws a hard dark step along every
 antialiased edge — resolved debt #81), and `0.2 + 0.8·α` is the arithmetic of what it was worth, so
-`0.2 + 0.8 × 0.05 = 0.24` **is the old default, honestly named**. Stored values migrate through the
-same expression (`readGlass`, gated by `GLASS_MODEL`).
+`0.2 + 0.8 × 0.05 = 0.24` **is the old default, honestly named**.
 
 ⚠️ **A floor is not a legibility guarantee — never document it as one.** White text on 24% glass
-over a pure-white wallpaper measures 1.69:1; nothing under **0.59** clears 4.5:1 there, and 0.59
-does not read as glass. Legibility over thin glass is debt #82, and raising the floor is not its
-answer. ⚠️ **The answer it turned out to have is not the one this paragraph used to name either.**
-It said "give the TEXT its own contrast (vibrancy / shadow / a scrim)" — the login screens got the
-real one on 2026-08-25 and it is a step earlier than that: choose which SKIN the glass wears, from
-what is behind it, because no backdrop defeats both. See "The login screens choose their skin from
-the wallpaper" below for the sweep and the prior art. **For the SHELL it is answered by the adaptive
-glass (#673)**, which is the reason it had stayed open answered: a shell surface can have a window
-behind it, not only the wallpaper, so it MEASURES what is really behind it instead of reading the
-wallpaper file. See "Adaptive glass" below.
+over a pure-white wallpaper measures 1.69:1; nothing under **0.59** clears 4.5:1 there. For the
+SHELL, legibility is the adaptive glass's job (#673), which MEASURES what is really behind each
+surface — a window, not only the wallpaper. See "Adaptive glass" below.
 
-⚠️ **ONE floor for all four surfaces, and that is load-bearing** (see the master below): a
-per-surface floor makes the master go mixed — and grey itself out — across the whole part of its
-travel below the highest floor. Per-surface floors need the mixer redesigned first: open debt #83.
-
-Four independent opacities, all plain "opacity" (higher = more opaque), over that one range:
+The four derived opacities, and who paints with each:
 - `barOpacity` → bar capsules (Cairo) — `SquircleContainer({ opacityRole: "bar" })`.
 - `overlayOpacity` → overlays CC/NC/Prism/app-grid (Cairo) — `opacityRole: "overlay"` (default).
 - `dockOpacity` → dock (Cairo, `DockAxis`).
 - `windowOpacity` → Settings/About windows = the **CSS token path** (`--nidara-bg`/materials/
-  popovers in `nidaraVars`). Those windows are CSS-painted, not Cairo — hence a separate axis.
+  popovers in `nidaraVars`). Those windows are CSS-painted, not Cairo — hence a separate axis, and
+  the one the Windows switch sets.
 
-All four **default to `GLASS_RANGE.min`** (the glassiest end of the range) — uniform, so a fresh
-boot reads a clean number on the master rather than the mixed state below. The default is written
-as `GLASS_RANGE.min`, not as a repeated literal, because "the default is the floor" is the intent
-and it survived the floor moving.
+When adding a shell capsule, `SquircleContainer` already defaults to shell skin — pass
+`opacityRole: "bar"` if it's a bar capsule (else it tracks overlay).
 
-`Theme.setGlassOpacity()` is the **master** — it *writes* all four, so it must also *read* all four.
-The master slider in `pages/Appearance.tsx` is therefore an **indeterminate control** (Figma "Mixed"
-/ macOS dash): when the four agree it shows that %; when they diverge it reads **"—"** and mutes, and
-dragging it re-unifies them. It's built **inline with `makeHSlider`** (not `sliderRow`) for that
-mixed-aware label — don't "simplify" it back to a `sliderRow` bound to one axis (that let *only* the
-overlay slider move the master; a mean would be a number nobody set that also implies uniformity).
-The **"Advanced"** disclosure (Bar/Overlays/Dock/Window, per-surface setters) lives **inside the same
-"Theme" card** as rows of the shared `Gtk.ListBox`: the toggle is a `nidara-row`, and the four
-sliders reveal via a `Gtk.Revealer` wrapped in a passive row (`.settings-adv-revealer-row`), driven
-by the ListBox's `row-activated` — not a detached block below the card. (The Settings section itself
-is titled **"Theme"** — `settings.appearance.group.theme` — not "Nidara".) When adding a shell
-capsule, `SquircleContainer` already defaults to shell skin — pass `opacityRole: "bar"` if it's a bar
-capsule (else it tracks overlay).
+⚠️ **The old keys** (`bar-opacity`, `overlay-opacity`, `dock-opacity`, `window-opacity`) stay in the
+schema, marked retired, only so `migrations/2026-09-30-glass-material-from-opacities.sh` (and
+2026-09-14c before it, on an install upgrading from before then) can read and write them: the mean
+of the bar and the panels picks the nearest material once, then the four are reset. Nothing else
+reads them.
 
 ### Tray icons recolour conditionally (not "never", not "always")
 
@@ -3801,7 +3830,7 @@ context menu paints the same shape (see "The glass bubble" below); the tooltip o
 - **Lives in `common/`, not `lib/nidara-kit`** — it reads `Theme` (chrome pin + opacity), like the
   other shared Cairo widgets (`SquircleContainer`, `Slider`, `ScaleRevealer`). `nidara-kit` stays
   Theme-free / portable, so a Theme-coupled widget can't live there.
-- **Glass:** fill tint follows `Theme.chromeIsDark` (shell skin) and alpha is `Math.max(Theme.overlayOpacity, 0.38)`.
+- **Glass:** fill tint follows `Theme.chromeIsDark` (shell skin) and alpha is `Math.max(Theme.overlayOpacity, 0.38)`, with the glass material's haze folded into that one fill (`frostedFill`, via the kit seam's `glassFrost`).
   **The 0.38 floor is load-bearing:** a tooltip is a *popup*, and Hyprland blurs popups with
   `popups_ignorealpha = 0.30` (NOT the bar/dock layer's `ignore_alpha` 0.01/0.04). Track the raw
   overlay slider and at a low setting the bubble drops below 0.30 and **stops blurring** (reads flat).

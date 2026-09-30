@@ -48,6 +48,13 @@ execFileSync("glib-compile-schemas", ["--strict", SCHEMA_DIR])
 const units = readdirSync(UNITS_DIR).filter(f => f.endsWith(".sh")).sort()
 console.log(`migrations-check: ${units.length} unit(s)`)
 
+// The chain as it stood BEFORE the glass material (#674): 2026-09-30 turns the four
+// opacities that 2026-09-14c imports into one material and resets them, so what 14c
+// imported can only be seen in a chain that stops before it.
+const GLASS_UNIT = "2026-09-30-glass-material-from-opacities.sh"
+const BEFORE_GLASS = mkdtempSync(join(tmpdir(), "nidara-mig-before-glass-"))
+for (const u of units) if (u < GLASS_UNIT) writeFileSync(join(BEFORE_GLASS, u), readFileSync(join(UNITS_DIR, u)))
+
 // ── 1. syntax ────────────────────────────────────────────────────────────────
 for (const u of units) {
     const r = spawnSync("bash", ["-n", join(UNITS_DIR, u)], { encoding: "utf8" })
@@ -164,9 +171,11 @@ try {
         else fail(`settings import: ${label}`, `keyfile:\n${kf}`)
     }
     // appearance: the fixture's `transparency: 0.15` becomes windowOpacity 0.85
-    // (2026-09-02), has no glassModel, so it is rescaled to 0.88 and clamped to 0.8.
-    if (/\[org\/nidara\/appearance\][^[]*window-opacity=0\.(8\b|80000)/.test(kf)) ok("settings import: a pre-rescale opacity is rescaled and clamped")
-    else fail("settings import: a pre-rescale opacity is rescaled and clamped", `keyfile:\n${kf}`)
+    // (2026-09-02), has no glassModel, so it is rescaled to 0.88 and clamped to 0.8 —
+    // and then retired by the glass material (2026-09-30): the window alone picks no
+    // material, and the key is reset. (The 0.8 itself is checked in 4b', below.)
+    if (/opacity=|glass-material=/.test(kf)) fail("settings import: a window opacity alone is retired, and picks no material", `keyfile:\n${kf}`)
+    else ok("settings import: a window opacity alone is retired, and picks no material")
     if (/accent|icon-theme|isDark/i.test(kf.slice(kf.indexOf("[org/nidara/appearance]")))) fail("settings import: GNOME-homed appearance keys are not imported", kf)
     else ok("settings import: GNOME-homed appearance keys are not imported")
     for (const f of ["appearance.json", "dock_settings.json", "workspaces.json", "bar-settings.json", "night-light.json", "recording.json", "ai.json", "gaming.json"]) {
@@ -174,9 +183,16 @@ try {
     }
 } catch (e) { fail("settings import", e.message) }
 
+// ── 4b'. the same import, in the chain before the glass material ─────────────
+try {
+    const kf = run(LEGACY_FIXTURE, { times: 1, unitsDir: BEFORE_GLASS }).out["<gsettings keyfile>"] ?? ""
+    if (/\[org\/nidara\/appearance\][^[]*window-opacity=0\.(8\b|80000)/.test(kf)) ok("settings import: a pre-rescale opacity is rescaled and clamped")
+    else fail("settings import: a pre-rescale opacity is rescaled and clamped", `keyfile:\n${kf}`)
+} catch (e) { fail("settings import (before glass)", e.message) }
+
 // ── 4c. appearance: a CURRENT-model file, not rescaled ───────────────────────
 try {
-    const { out } = run({ "appearance.json": { glassModel: 2, barOpacity: 0.6, dockOpacity: 0.1, overlayOpacity: 0.48, shellAppearance: "dark", accent: "red" } })
+    const { out } = run({ "appearance.json": { glassModel: 2, barOpacity: 0.6, dockOpacity: 0.1, overlayOpacity: 0.48, shellAppearance: "dark", accent: "red" } }, { unitsDir: BEFORE_GLASS })
     const kf = out["<gsettings keyfile>"] ?? ""
     const expect = [
         ["a current-model opacity is imported as is",            /bar-opacity=0\.(6\b|59999)/, true],
@@ -238,13 +254,32 @@ try {
 // The fixture in 4b cannot tell a missing rescale apart — its value clamps to 0.8
 // either way.
 try {
-    const { out } = run({ "appearance.json": { barOpacity: 0.3, shellOpacity: 0.5 } })
+    const { out } = run({ "appearance.json": { barOpacity: 0.3, shellOpacity: 0.5 } }, { unitsDir: BEFORE_GLASS })
     const kf = out["<gsettings keyfile>"] ?? ""
     if (/bar-opacity=0\.(44\b|44000|43999)/.test(kf)) ok("appearance import: a pre-rescale opacity becomes 0.2 + 0.8·α")
     else fail("appearance import: a pre-rescale opacity becomes 0.2 + 0.8·α", `keyfile:\n${kf}`)
     if (/overlay-opacity=0\.(6\b|60000|59999)/.test(kf)) ok("appearance import: the legacy shellOpacity seeds a missing overlay opacity")
     else fail("appearance import: the legacy shellOpacity seeds a missing overlay opacity", `keyfile:\n${kf}`)
 } catch (e) { fail("appearance rescale", e.message) }
+
+// ── 4g. the four opacities become ONE glass material (#674) ──────────────────
+// Through the whole chain: 14c imports the file, 09-30 reads the bar and the panels.
+// The mean decides: < 0.29 clear, ≥ 0.40 frosted, otherwise the default stays.
+try {
+    const cases = [
+        ["hand-thinned glass becomes clear",  { barOpacity: 0.24, overlayOpacity: 0.24, dockOpacity: 0.24, windowOpacity: 0.8 }, "clear"],
+        ["thick glass becomes frosted",       { barOpacity: 0.6, overlayOpacity: 0.6 }, "frosted"],
+        ["one surface set: the other counts at its old default", { barOpacity: 0.36 }, "frosted"],   // (0.36 + 0.48) / 2
+        ["the middle keeps the default",      { barOpacity: 0.36, overlayOpacity: 0.32 }, null],
+    ]
+    for (const [label, file, want] of cases) {
+        const kf = run({ "appearance.json": { glassModel: 2, ...file } }).out["<gsettings keyfile>"] ?? ""
+        const got = kf.match(/glass-material='(\w+)'/)?.[1] ?? null
+        if (got !== want) fail(`glass material: ${label}`, `want ${want}, got ${got}\nkeyfile:\n${kf}`)
+        else if (/opacity=/.test(kf)) fail(`glass material: ${label} — the four keys are reset`, `keyfile:\n${kf}`)
+        else ok(`glass material: ${label}`)
+    }
+} catch (e) { fail("glass material", e.message) }
 
 // ── 5. POSITIVE CONTROL ──────────────────────────────────────────────────────
 // A unit that appends on every run. Check 3 MUST catch it; if it does not, the
@@ -261,6 +296,7 @@ try {
     } else ok("[control] a non-idempotent unit IS caught")
 } catch (e) { fail("[control] a non-idempotent unit is caught", e.message) }
 rmSync(controlDir, { recursive: true, force: true })
+rmSync(BEFORE_GLASS, { recursive: true, force: true })
 
 if (failures > 0) { console.error(`\nmigrations-check: ${failures} failure(s)`); process.exit(1) }
 console.log("migrations-check: every unit is valid, no-ops on a fresh install, and idempotent.")

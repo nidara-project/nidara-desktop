@@ -3,7 +3,7 @@
  * NIDARA TOKEN ENGINE — the whole `--nidara-*` ramp, for EVERY bundle
  * ==================================================================
  *
- * One config (accent, four glass opacities, shell-skin pin) plus one boolean
+ * One config (accent, glass material, reduce transparency) plus one boolean
  * (is this surface dark?) produce the ~60 custom properties that every Nidara
  * surface is painted from. The tokens are scoped to the GJS process — external
  * GTK apps are not affected; they get the accent through the portal instead.
@@ -54,21 +54,23 @@ export type { AccentKey }
 
 export interface NidaraThemeConfig {
   accent: AccentKey
-  // Glass opacity per surface (higher = more opaque). The "Glass" master slider in
-  // Settings moves all four together; "Advanced" exposes them individually.
-  barOpacity: number      // Bar capsules (Cairo)                     — range [0.05, 0.80]
-  overlayOpacity: number  // Overlays CC/NC/Prism/… (Cairo)           — range [0.05, 0.80]
-  dockOpacity: number     // Dock (Cairo)                             — range [0.05, 0.80]
-  windowOpacity: number   // Settings + About windows (CSS tokens)    — range [0.05, 0.80]
+  // What the user picks (#674): a MATERIAL and, from Accessibility, reduce transparency.
+  glassMaterial: GlassMaterial
+  reduceTransparency: boolean
+  /** Settings → Appearance → Windows: Nidara's windows translucent (on) or solid. */
+  windowTransparency: boolean
+  // ⚠️ DERIVED, never stored: the glass opacity per surface (higher = more opaque) that
+  // the two above give, through `glassOpacities`. Whoever changes either of them calls
+  // `withGlass` — the painters read these four and nothing else.
+  glassFrost: number      // The material's haze over the tint (`frostedFill`)
+  barOpacity: number      // Bar capsules (Cairo)
+  overlayOpacity: number  // Overlays CC/NC/Prism/… (Cairo)
+  dockOpacity: number     // Dock (Cairo)
+  windowOpacity: number   // Settings + About windows (CSS tokens)
 }
 
 /**
- * The glass opacity range, for every surface and every slider that sets one.
- *
- * ⚠️ ONE definition. It used to be six literals — `clampOpacity` plus the master
- * and the four per-surface sliders in `settings/pages/Appearance.tsx` — which is
- * five chances for a slider to offer a value the clamp then silently refuses, a
- * control that lies about its own range.
+ * The range every glass FLOOR lies in — every entry of `GLASS_FLOORS` below.
  *
  * **Why the floor is 0.24 and not 0.05** (2026-08-23). Until then the floor was
  * 0.05 and the range was documented as "WYSIWYG — no floor": you could drag the
@@ -84,26 +86,14 @@ export interface NidaraThemeConfig {
  * 0.24 is the arithmetic of what was removed, not a taste: compositing at alpha α
  * over a backdrop dimmed to 80% is the same coverage as compositing at
  * `0.2 + 0.8·α` over an undimmed one, and `0.2 + 0.8 × 0.05 = 0.24`. So the new
- * floor IS the old default, honestly named — which is also why stored values are
- * migrated through that exact expression (`ThemeManager.loadSettings`).
+ * floor IS the old default, honestly named.
  *
- * ⚠️ It is a floor, NOT a legibility guarantee, and do not describe it as one. On
- * a pure-white wallpaper white text on 24% glass is 1.69:1; nothing below **0.59**
- * clears 4.5:1 there, and at 0.59 the material stops reading as glass at all. The
- * real fix is to give the TEXT its own legibility (vibrancy / shadow / a scrim
- * under labels) so the glass can go thin again — `tech-debt.md` #82.
- *
- * ⚠️ ONE floor for all four surfaces, and that is load-bearing.
- * `ThemeManager.setGlassOpacity` writes one value to all four through one clamp,
- * and the master slider renders "—" and mutes itself whenever they disagree
- * (`glassUniform`). Give the window a different floor and the master goes mixed —
- * and greys out — the moment you drag it below that floor, i.e. across the whole
- * lower half of its travel. Per-surface floors need the mixer redesigned first: `tech-debt.md` #83.
+ * ⚠️ It is a floor, NOT a legibility guarantee. Legibility is the adaptive glass's
+ * job (#673, `glass-legibility.ts`): each shell surface thickens itself over a pale
+ * backdrop, up to `GLASS_ADAPT_CEILING`. `scripts/ci/blur-threshold-check.mjs` reads
+ * `min` from this line: it must stay above every layer's `ignore_alpha`.
  */
 export const GLASS_RANGE = { min: 0.24, max: 0.80 } as const
-
-/** The one clamp. Every setter and every slider bound goes through it. */
-export const clampGlass = (v: number) => Math.max(GLASS_RANGE.min, Math.min(GLASS_RANGE.max, v))
 
 /**
  * The `ignore_alpha` every shell layer runs under (`nidara-bar`, `nidara-island`,
@@ -126,42 +116,112 @@ export const LAYER_IGNORE_ALPHA = 0.23
 export const blurSafeOpacity = (glassAlpha: number) =>
     glassAlpha > 0 ? Math.min(1, LAYER_IGNORE_ALPHA / glassAlpha + 0.02) : 0
 
-// A stored opacity from before the glass rescale (2026-08-23) is `0.2 + 0.8·α` in
-// today's model: glass at α over a backdrop the compositor dimmed to 80% covers as
-// much as `0.2 + 0.8·α` over an undimmed one. That conversion used to run in the
-// reader on every load (`readGlass`, keyed on appearance.json's `glassModel`); it
-// is applied once by migrations/2026-09-14c-appearance-to-gsettings.sh now, and
-// the stored values are always in this model.
-
-/** The out-of-the-box glass for everything except the dock (2026-08-24, owner's call).
+/**
+ * The glass MATERIAL (#674, owner's decision 2026-09-30): the one choice Settings →
+ * Appearance offers, in place of the five opacity sliders it had (a master and four
+ * per surface). Three positions, like the single Liquid Glass control of macOS 27 —
+ * `clear` shows the most backdrop, `frosted` the least.
  *
- *  Chosen for LEGIBILITY first: at `GLASS_RANGE.min` the glass is thin enough that white
- *  text over a bright backdrop lands near 3:1 (measured on the login screen, which had been
- *  put on the same floor — see tech-debt #82), and a first boot should not ship a contrast
- *  problem. 0.48 is a little under the middle of the range: enough body to carry text over
- *  any wallpaper, still visibly glass rather than a painted panel.
+ * A position is a TABLE, not a number: a floor per surface (`GLASS_FLOORS`) and a
+ * compositor blur (`GLASS_BLUR`). That is what one master slider could not say — the
+ * dock, which carries no text, wants thinner glass than a panel full of it
+ * (tech-debt #83).
  *
- *  ⚠️ It is a DEFAULT, not a floor. Existing installs keep whatever they stored — only a
- *  config with no value for a surface takes this. */
-export const GLASS_DEFAULT = 0.48
+ * Every value is a FLOOR since the adaptive glass (#673): a shell surface thickens
+ * itself over a pale backdrop until its text is legible, whatever the material.
+ *
+ * ⚠️ PROVISIONAL numbers, to be calibrated on screen with the owner, position by
+ * position (the decision in #674 says so). `clear` is where the owner had put the bar,
+ * the panels and the dock by hand with the sliders (0.24). The windows are not in it:
+ * `WINDOW_GLASS_OPACITY`.
+ */
+export const GLASS_MATERIALS = ["clear", "regular", "frosted"] as const
+export type GlassMaterial = (typeof GLASS_MATERIALS)[number]
+export const GLASS_MATERIAL_DEFAULT: GlassMaterial = "regular"
 
-export const DEFAULT_CONFIG: NidaraThemeConfig = {
-  accent: "blue",
-  // ⚠️ NOT UNIFORM ANY MORE, deliberately, and that has a visible consequence: the master
-  // "Glass" slider in Settings → Appearance is an INDETERMINATE control, so out of the box
-  // it reads "—" and mutes to 0.55 opacity instead of showing a number (`glassUniform` in
-  // Appearance.tsx). That is the control being honest — the surfaces really do differ — and
-  // it was accepted rather than overlooked. The four per-surface sliders under "Advanced"
-  // are where the difference is legible, and dragging the master re-unifies everything.
-  //
-  // The dock stays at the floor because it is the one surface that sits over the WALLPAPER
-  // with nothing behind it and never carries body text — its icons are opaque. Thin glass
-  // costs it nothing and buys the most backdrop.
-  barOpacity: GLASS_DEFAULT,
-  overlayOpacity: GLASS_DEFAULT,
-  dockOpacity: GLASS_RANGE.min,
-  windowOpacity: GLASS_DEFAULT,
+export interface GlassFloors { bar: number; overlay: number; dock: number }
+
+/** Per material, per surface. Every entry lies in `GLASS_RANGE`. The WINDOWS are not
+ *  here: they are not Liquid Glass (`WINDOW_GLASS_OPACITY`). */
+export const GLASS_FLOORS: Record<GlassMaterial, GlassFloors> = {
+  clear:   { bar: GLASS_RANGE.min, overlay: GLASS_RANGE.min, dock: GLASS_RANGE.min },
+  regular: { bar: 0.32,            overlay: 0.36,            dock: GLASS_RANGE.min },
+  frosted: { bar: 0.44,            overlay: 0.48,            dock: 0.32 },
 }
+
+/**
+ * Nidara's WINDOWS (Settings, About, the installer, their dialogs) are not Liquid Glass
+ * and do not follow the material (owner's decision, 2026-09-30). The glass material is
+ * for the interface's surfaces and controls; a window is only translucent or not — one
+ * switch (`windowTransparency`), on by default, and one opacity: this, or solid. 0.80 is
+ * the value the owner had set by hand.
+ *
+ * ⚠️ Named TRANSPARENCY, not "tinting" (macOS's "Allow wallpaper tinting in windows"),
+ * on purpose: what shows through a window is shaped by the compositor's blur, and
+ * Hyprland has ONE for everything — the glass material sets it. A "tint" of our own
+ * would be a promise we cannot keep (owner, 2026-09-30). A compositor of our own would
+ * lift that: `project_own_compositor_vision`.
+ */
+export const WINDOW_GLASS_OPACITY = 0.80
+
+/** The white haze each material lays over its tint (`frostAt` in glass-legibility.ts):
+ *  what tells the three apart over a DARK wallpaper, where more of a dark tint shows
+ *  nothing. It gives way by itself as the adaptive glass thickens. Provisional. */
+export const GLASS_FROST: Record<GlassMaterial, number> = {
+  clear: 0,
+  regular: 0.04,
+  frosted: 0.10,
+}
+
+/** Hyprland's `decoration:blur` per material. ONE blur for the whole compositor —
+ *  Hyprland has no per-layer size — so it reaches every translucent window too, the same
+ *  scope as macOS's control. `regular` is what `config/hypr/hyprland.lua` ships, so the
+ *  shell pushes nothing at that position and a `hyprland-user.lua` override stands
+ *  (`ui/shell/core/GlassBlur.ts`). */
+export const GLASS_BLUR: Record<GlassMaterial, { size: number; passes: number }> = {
+  clear:   { size: 1, passes: 2 },
+  regular: { size: 2, passes: 2 },
+  frosted: { size: 4, passes: 3 },
+}
+
+/**
+ * Reduce transparency (Settings → Accessibility → Vision, #674): every glass surface
+ * at this opacity — the tint, solid — whatever the material, and the material's control
+ * greyed out. Hyprland still blurs behind it — nothing of that blur shows — and the
+ * blur is left on deliberately: it is ONE compositor option, and switching it off would
+ * reach every other app's translucent window, which is not what the switch says.
+ */
+export const SOLID_GLASS = 1
+
+/** The four opacities the three choices give. The ONE place the table is read. */
+export function glassOpacities(material: GlassMaterial, reduceTransparency: boolean, windowTransparency: boolean):
+  Pick<NidaraThemeConfig, "glassFrost" | "barOpacity" | "overlayOpacity" | "dockOpacity" | "windowOpacity"> {
+  if (reduceTransparency) {
+    return { glassFrost: 0, barOpacity: SOLID_GLASS, overlayOpacity: SOLID_GLASS, dockOpacity: SOLID_GLASS, windowOpacity: SOLID_GLASS }
+  }
+  const f = GLASS_FLOORS[material] ?? GLASS_FLOORS[GLASS_MATERIAL_DEFAULT]
+  return { glassFrost: GLASS_FROST[material] ?? 0, barOpacity: f.bar, overlayOpacity: f.overlay, dockOpacity: f.dock,
+           windowOpacity: windowTransparency ? WINDOW_GLASS_OPACITY : SOLID_GLASS }
+}
+
+/** `c` with its four opacities re-derived from its material, reduce transparency and
+ *  window transparency. Call it after changing any of them. */
+export function withGlass<T extends NidaraThemeConfig>(c: T): T {
+  return Object.assign(c, glassOpacities(c.glassMaterial, c.reduceTransparency, c.windowTransparency))
+}
+
+/** A value read from outside (the portal, the mirror, gsettings) as a material. */
+export const asGlassMaterial = (v: unknown): GlassMaterial =>
+  (GLASS_MATERIALS as readonly unknown[]).includes(v) ? (v as GlassMaterial) : GLASS_MATERIAL_DEFAULT
+
+export const DEFAULT_CONFIG: NidaraThemeConfig = withGlass({
+  accent: "blue",
+  glassMaterial: GLASS_MATERIAL_DEFAULT,
+  reduceTransparency: false,
+  windowTransparency: true,
+  glassFrost: 0,
+  barOpacity: 0, overlayOpacity: 0, dockOpacity: 0, windowOpacity: 0,
+})
 
 // ── LOGIC ────────────────────────────────────────────────────────────
 

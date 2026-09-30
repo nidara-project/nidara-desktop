@@ -424,7 +424,9 @@ export async function probeBackdrop(req: ProbeRequest): Promise<BackdropStats | 
 /** The side of the square a CLOSED probe averages into one sample, in logical pixels —
  *  about what Hyprland's blur spreads over at `size 2, passes 2`. The statistics are
  *  percentiles of the blurred backdrop, so the exact kernel does not matter; a square
- *  far smaller than the blur would count sharp detail the text never sees. */
+ *  far smaller than the blur would count sharp detail the text never sees. Kept fixed
+ *  across the glass materials (#674): the frosted blur spreads further, and a block that
+ *  grew with it would outgrow the bar's 32 px strip in the see-through sampler. */
 const CLOSED_BLOCK = 12
 
 /** Blocks a closed probe averages, at most. A full-width island mode is ~6700 blocks of

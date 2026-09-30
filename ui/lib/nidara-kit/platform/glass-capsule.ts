@@ -7,6 +7,7 @@ import Gsk from "gi://Gsk"
 import cairo from "gi://cairo"
 import { GLASS_TINT, LOCK_GLASS } from "./tokens"
 import { glassRimGradient, drawShadowFromPath, GLASS_SHADOW } from "./glass-paint"
+import { kitAppearance } from "../appearance"
 
 // The glass capsule of the greeter and the lockscreen — painted, not CSS-drawn.
 //
@@ -360,7 +361,10 @@ export class GlassCapsule extends Gtk.Box {
       const [ok, bounds] = this.compute_bounds(root)
       // Everything that can throw happens BEFORE the first push, so a failure
       // costs the capsule, never a half-pushed snapshot.
-      const texture = ok ? backdropTexture(this, root.get_width(), root.get_height()) : null
+      // Reduce transparency (#674): the body is the tint, solid, and there is no backdrop
+      // to blur under it — the lock skips its own blur pass entirely.
+      const solid = kitAppearance().reduceTransparency?.() === true
+      const texture = ok && !solid ? backdropTexture(this, root.get_width(), root.get_height()) : null
 
       if (ok) {
         // A TRUE pill: our own path, so the radius can be exactly half the
@@ -426,7 +430,7 @@ export class GlassCapsule extends Gtk.Box {
           src.init(-bounds.get_x(), -bounds.get_y(), texture.get_width(), texture.get_height())
           snapshot.append_texture(texture, src)
         }
-        snapshot.append_color(rgba(glassFill), outerBox)
+        snapshot.append_color(rgba(solid ? { ...glassFill, a: 1 } : glassFill), outerBox)
         snapshot.pop()
 
         // 2) The RIM, on top: a 1px ring, filled through an even-odd Cairo path

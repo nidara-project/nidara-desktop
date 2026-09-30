@@ -10,7 +10,8 @@ import {
     type NidaraThemeConfig,
     type AccentKey,
     DEFAULT_CONFIG,
-    clampGlass,
+    withGlass,
+    type GlassMaterial,
     ACCENT_PALETTE,
     generateTokensCss,
     generateSkinFlipScope,
@@ -27,7 +28,7 @@ import { withKitSheet } from "../../lib/nidara-kit/platform/kit-css"
 // Two homes, no file:
 //  - what the desktop standard already names — accent, colour scheme, GTK / icon /
 //    cursor theme, fonts — in `org.gnome.desktop.interface`, where every app reads it;
-//  - what only Nidara has — the four glass opacities and the shell's own skin — in
+//  - what only Nidara has — the glass material and reduce transparency (#674) — in
 //    `org.nidara.appearance`, below. bin/nidara-portal serves it to applications.
 // A change made by `gsettings set`, an agent or another process reaches this class
 // through `changed`, exactly like one made from Settings.
@@ -40,21 +41,20 @@ import { withKitSheet } from "../../lib/nidara-kit/platform/kit-css"
 // compositor call here: in a second process it runs a second time.
 // (appearance.json was imported once by migrations/2026-09-14c-appearance-to-gsettings.sh.)
 interface NidaraAppearance {
-    barOpacity: number
-    overlayOpacity: number
-    dockOpacity: number
-    windowOpacity: number
+    glassMaterial: GlassMaterial
+    reduceTransparency: boolean
+    windowTransparency: boolean
 }
 
 const nidaraAppearance = defineSettings<NidaraAppearance>("appearance", {
-    barOpacity: DEFAULT_CONFIG.barOpacity,
-    overlayOpacity: DEFAULT_CONFIG.overlayOpacity,
-    dockOpacity: DEFAULT_CONFIG.dockOpacity,
-    windowOpacity: DEFAULT_CONFIG.windowOpacity,
+    glassMaterial: DEFAULT_CONFIG.glassMaterial,
+    reduceTransparency: DEFAULT_CONFIG.reduceTransparency,
+    windowTransparency: DEFAULT_CONFIG.windowTransparency,
 })
 
-/** The fields of `NidaraThemeConfig` that live in `org.nidara.appearance`. */
-const NIDARA_KEYS = ["barOpacity", "overlayOpacity", "dockOpacity", "windowOpacity"] as const
+/** The fields of `NidaraThemeConfig` that live in `org.nidara.appearance`. The four
+ *  opacities are DERIVED from them (`withGlass`) and stored nowhere. */
+const NIDARA_KEYS = ["glassMaterial", "reduceTransparency", "windowTransparency"] as const
 
 // ── DARK/LIGHT in-process ────────────────────────────────────────────────────
 // Plain `Gtk.Settings`. This used to probe libadwaita first (loading its typelib
@@ -176,6 +176,7 @@ class ThemeManager extends GObject.Object {
             const value = nidaraAppearance.get(key)
             if (this.fcConfig[key] === value) return
             ;(this.fcConfig as unknown as Record<string, unknown>)[key] = value
+            withGlass(this.fcConfig)
             this.applyTokens()
             this.emit("changed")
         })
@@ -593,11 +594,9 @@ class ThemeManager extends GObject.Object {
 
     /**
      * Store Nidara's appearance keys (the shell's AppearanceSync refreshes the greeter's
-     * mirror from the change), 500 ms after
-     * the last call. A glass slider calls this on every frame of a drag: the tokens
-     * are applied immediately (the caller does that), what waits is the WRITE, so
-     * dconf and every portal listener see one change per gesture instead of sixty
-     * per second.
+     * mirror from the change), 500 ms after the last call. The tokens are applied
+     * immediately (the caller does that); what waits is the WRITE, so a burst of clicks
+     * reaches dconf and every portal listener as one change.
      */
     private persistenceDebounceId = 0
     private schedulePersistence() {
@@ -622,45 +621,33 @@ class ThemeManager extends GObject.Object {
         // core/AppearanceHooks.ts, and see setDarkMode.
     }
 
-    // One opacity range for every shell surface. The bounds and the reason the
-    // floor is what it is live in ONE place — `GLASS_RANGE` in NidaraTheme.ts.
-    private clampOpacity(v: number) { return clampGlass(v) }
-
-    async setBarOpacity(value: number) {
-        this.fcConfig.barOpacity = this.clampOpacity(value)
-        this.applyTokens()
-        this.schedulePersistence()
-        this.emit("changed")
+    /** The glass material (#674): Settings → Appearance's selector. */
+    get glassMaterial(): GlassMaterial { return this.fcConfig.glassMaterial }
+    async setGlassMaterial(material: GlassMaterial) {
+        this.fcConfig.glassMaterial = material
+        this.applyGlass()
     }
 
-    async setOverlayOpacity(value: number) {
-        this.fcConfig.overlayOpacity = this.clampOpacity(value)
-        this.applyTokens()
-        this.schedulePersistence()
-        this.emit("changed")
+    /** Reduce transparency (#674): Settings → Accessibility → Vision. Every glass
+     *  surface solid, whatever the material. */
+    get reduceTransparency(): boolean { return this.fcConfig.reduceTransparency }
+    async setReduceTransparency(on: boolean) {
+        this.fcConfig.reduceTransparency = on
+        this.applyGlass()
     }
 
-    async setDockOpacity(value: number) {
-        this.fcConfig.dockOpacity = this.clampOpacity(value)
-        this.applyTokens()
-        this.schedulePersistence()
-        this.emit("changed")
+    /** Settings → Appearance → Windows: Nidara's windows translucent or solid. Not the
+     *  glass material — windows are not Liquid Glass (`WINDOW_GLASS_OPACITY`). */
+    get windowTransparency(): boolean { return this.fcConfig.windowTransparency }
+    /** The material's haze (derived; `GLASS_FROST`). */
+    get glassFrost(): number { return this.fcConfig.glassFrost }
+    async setWindowTransparency(on: boolean) {
+        this.fcConfig.windowTransparency = on
+        this.applyGlass()
     }
 
-    async setWindowOpacity(value: number) {
-        this.fcConfig.windowOpacity = this.clampOpacity(value)
-        this.applyTokens()
-        this.schedulePersistence()
-        this.emit("changed")
-    }
-
-    /** Master "Glass" control: set every surface (bar + overlays + dock + window). */
-    async setGlassOpacity(value: number) {
-        const v = this.clampOpacity(value)
-        this.fcConfig.barOpacity = v
-        this.fcConfig.overlayOpacity = v
-        this.fcConfig.dockOpacity = v
-        this.fcConfig.windowOpacity = v
+    private applyGlass() {
+        withGlass(this.fcConfig)
         this.applyTokens()
         this.schedulePersistence()
         this.emit("changed")
@@ -733,14 +720,13 @@ class ThemeManager extends GObject.Object {
 
     /** What this process holds, for core/AppearanceSync.ts (settings.ini, the greeter's
      *  mirror). A copy: nothing outside writes Theme's state. */
-    snapshot(): ThemeState & Pick<NidaraThemeConfig, "accent" | "barOpacity" | "overlayOpacity" | "dockOpacity" | "windowOpacity"> {
+    snapshot(): ThemeState & Pick<NidaraThemeConfig, "accent" | "glassMaterial" | "reduceTransparency" | "windowTransparency"> {
         return {
             ...this.state,
             accent: this.fcConfig.accent,
-            barOpacity: this.fcConfig.barOpacity,
-            overlayOpacity: this.fcConfig.overlayOpacity,
-            dockOpacity: this.fcConfig.dockOpacity,
-            windowOpacity: this.fcConfig.windowOpacity,
+            glassMaterial: this.fcConfig.glassMaterial,
+            reduceTransparency: this.fcConfig.reduceTransparency,
+            windowTransparency: this.fcConfig.windowTransparency,
         }
     }
 
@@ -783,6 +769,7 @@ class ThemeManager extends GObject.Object {
             this.state.themeFamily = this.state.themeFamily || GTK_BUILTIN_THEME
         }
         for (const key of NIDARA_KEYS) (this.fcConfig as unknown as Record<string, unknown>)[key] = nidaraAppearance.get(key)
+        withGlass(this.fcConfig)
     }
 }
 

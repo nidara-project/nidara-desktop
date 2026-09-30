@@ -314,10 +314,14 @@ export const drawGlassEdgeLight = (
      *  colour (DEST_OUT over what is already painted: call it right after the body). */
     clear: number = 0,
     /** The body's alpha where the edge is: caps `clear` so the edge never falls below
-     *  `EDGE_MIN_ALPHA`. Omit for a layer with no blur threshold (an offscreen sheet). */
+     *  `EDGE_MIN_ALPHA`, and a solid body (1) clears nothing. Omit for a layer with no
+     *  blur threshold (an offscreen sheet). */
     bodyAlpha?: number,
 ) => {
     if (bodyAlpha !== undefined) clear = Math.min(clear, Math.max(0, 1 - EDGE_MIN_ALPHA / Math.max(bodyAlpha, 1e-6)))
+    // A SOLID body (reduce transparency, #674) has nothing to see through: clearing its
+    // edge would put back, as a translucent ring, exactly what the person turned off.
+    if (bodyAlpha !== undefined && bodyAlpha >= 1) clear = 0
     if (width <= 0 || (alpha <= 0 && clear <= 0)) return
     const reach = Math.min(width, Math.min(w, h) / 2 - 1)
     if (reach <= 0) return

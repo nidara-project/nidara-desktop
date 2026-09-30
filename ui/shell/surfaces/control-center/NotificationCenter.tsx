@@ -407,13 +407,16 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
             // card→ghost1 seam overlaps 4px but the card's inner inset (~2.5) eats most of it,
             // leaving ~1.5px of body; ghosts draw with inset 0, so 2px matches that seam weight.
             const bandTop = i === 0 ? 0 : PEEK + (i - 1) * STEP - 2
-            const depth = 1 - i * 0.12   // body stays nearly as solid as the front; just a hair fainter
+            // Body stays nearly as solid as the front; just a hair fainter — except on SOLID
+            // glass (reduce transparency, #674), where fainter would mean see-through again.
+            const alpha = glassAlphaFor(da, "overlay")
+            const depth = alpha >= 1 ? 1 : 1 - i * 0.12
             cr.save()
             cr.rectangle(0, bandTop, w, bottomY - bandTop)
             cr.clip()
             cr.translate(inset, bottomY - CARD_H)
             // inset 0 so the squircle's bottom edge lands exactly at bottomY (no gap between bands).
-            drawSquircle(cr, w - inset * 2, CARD_H, undefined, glassAlphaFor(da, "overlay") * depth, false, color, CARD_R, false, { r: 1, g: 1, b: 1, a: 0.07 * depth }, 3.2, 1.0, 0)
+            drawSquircle(cr, w - inset * 2, CARD_H, undefined, alpha * depth, false, color, CARD_R, false, { r: 1, g: 1, b: 1, a: 0.07 * depth }, 3.2, 1.0, 0)
             cr.restore()
         }
     }))

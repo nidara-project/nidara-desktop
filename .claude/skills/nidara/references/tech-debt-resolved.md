@@ -1750,6 +1750,35 @@ keep the artefact fix free of shape changes.
 
 ---
 
+### 83. ✅ RESOLVED — the glass mixer could not express per-surface floors (2026-08-23 → 2026-09-30)
+
+> **Queue entry: #317.** Reorder it, schedule it and close it there; what stays here is the rule and the measurements.
+
+The owner asked the right question while #81 was landing: should the Settings window get a higher
+floor than the shell? It should — it is a document surface and carries far more text — but it
+**cannot**, and the reason is mechanical rather than aesthetic.
+
+`ThemeManager.setGlassOpacity` writes ONE value to all four axes through ONE clamp, and the master
+slider (`settings/pages/Appearance.tsx`) is an indeterminate control: it renders `—` and drops to
+opacity 0.55 whenever `glassUniform()` is false. Give the window a floor of, say, 0.46 while the
+shell sits at 0.24 and dragging the master anywhere below 46% clamps the window differently from
+its three siblings — so the four never agree, and the master goes mixed and greys itself out across
+the whole lower half of its travel, immediately after the user let go of it. The control would read
+as broken because it would BE broken.
+
+So the floor is uniform today (`GLASS_RANGE`, one range), and per-surface floors are blocked on
+redesigning the mixer: either the master stops claiming uniformity (per-axis normalised position
+rather than a shared value), or the floors become a display concern and the stored value stays raw.
+The owner wants the mixers reviewed regardless.
+
+✅ **Resolved 2026-09-30 (#674) by removing the mixer, not by redesigning it.** The five sliders
+became ONE choice of three — `glass-material` = clear / regular / frosted — and a position is a
+TABLE (`GLASS_FLOORS` in the kit's `theme-tokens.ts`), so the dock can sit thinner than a panel
+full of text and nothing claims a uniformity it does not have. The windows the question began with
+left the material altogether: they are not Liquid Glass, and have their own switch
+(`window-transparency`). The four opacities are derived, stored nowhere. `design-system.md` →
+"Opacity — one glass material of three…" has the model.
+
 ### 84. ✅ RESOLVED — the bubble spoke a second dialect of the same curve, and of the same rim (2026-08-23)
 
 Found by measurement while auditing Cairo after the artefact hunt (#81), not by looking. This file

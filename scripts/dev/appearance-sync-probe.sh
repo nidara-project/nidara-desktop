@@ -81,7 +81,7 @@ find "$work/settings/home" "$work/settings/config" "$work/settings/mirror" -type
 out=shell; [ -n "$SOLO" ] && out=settings
 grep -h "prefer-dark" "$work/$out/config/gtk-3.0/settings.ini"
 grep -h "Inherits" "$work/$out/home/.local/share/icons/default/index.theme"
-grep -hE "\"(isDark|accent|cursorTheme|barOpacity)\"" "$work/$out/mirror/appearance.json" | tr -d " \n"; echo
+grep -hE "\"(isDark|accent|cursorTheme|glassMaterial)\"" "$work/$out/mirror/appearance.json" | tr -d " \n"; echo
 grep -iE "error|critical" "$work/shell.log" "$work/settings.log" | grep -v "HyprIPC\|atspi" | head -5
 [ "$shell" != none ] && { kill $shell 2>/dev/null; wait $shell 2>/dev/null; }
 '

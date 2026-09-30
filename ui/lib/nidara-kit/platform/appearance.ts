@@ -4,7 +4,8 @@ import GLib from "gi://GLib"
 import { ACCENT_HEX, rgbToClosestAccent, type AccentKey } from "./accent"
 import {
   DEFAULT_CONFIG,
-  clampGlass,
+  asGlassMaterial,
+  withGlass,
   type NidaraThemeConfig,
 } from "./theme-tokens"
 
@@ -21,7 +22,7 @@ import {
  *    names live where GNOME keeps them — `accent-color` and `color-scheme` in
  *    `org.gnome.desktop.interface`, `high-contrast` in `…a11y.interface`,
  *    `enable-animations` for reduced motion, and the GTK / icon / cursor theme. The
- *    keys only Nidara has (the four glass opacities) live in
+ *    keys only Nidara has (the glass material, reduce transparency, window transparency) live in
  *    GSettings `org.nidara.appearance` (#573). Anybody with `gsettings` can write
  *    either; `ThemeManager` (the shell) follows both live.
  *
@@ -85,9 +86,6 @@ function asAccent(v: unknown): AccentKey {
   return typeof v === "string" && v in ACCENT_HEX ? (v as AccentKey) : FALLBACK.accent
 }
 
-function asGlass(v: unknown, dflt: number): number {
-  return typeof v === "number" && isFinite(v) ? clampGlass(v) : dflt
-}
 
 /** A portal value, whether it arrives boxed (`GLib.Variant`) or already unpacked. */
 function unbox(v: unknown): unknown {
@@ -115,10 +113,12 @@ function applyPortalKey(state: AppearanceState, ns: string, key: string, raw: un
       state.isDark = v === 1
     }
   } else if (ns === NIDARA_NS) {
-    if (key === "window-opacity") state.windowOpacity = asGlass(v, FALLBACK.windowOpacity)
-    else if (key === "bar-opacity") state.barOpacity = asGlass(v, FALLBACK.barOpacity)
-    else if (key === "overlay-opacity") state.overlayOpacity = asGlass(v, FALLBACK.overlayOpacity)
-    else if (key === "dock-opacity") state.dockOpacity = asGlass(v, FALLBACK.dockOpacity)
+    // The two keys are the choice; the four opacities every painter reads are derived
+    // from them HERE, with the table in theme-tokens.ts, so an app and the shell cannot
+    // disagree about what "frosted" means.
+    if (key === "glass-material") withGlass(Object.assign(state, { glassMaterial: asGlassMaterial(v) }))
+    else if (key === "reduce-transparency" && typeof v === "boolean") withGlass(Object.assign(state, { reduceTransparency: v }))
+    else if (key === "window-transparency" && typeof v === "boolean") withGlass(Object.assign(state, { windowTransparency: v }))
   }
   return JSON.stringify(state) !== before
 }
@@ -168,17 +168,19 @@ function readMirrorState(): AppearanceState | null {
     const [ok, data] = GLib.file_get_contents(APPEARANCE_MIRROR_PATH)
     if (!ok) return null
     const raw = JSON.parse(new TextDecoder().decode(data as Uint8Array)) as Record<string, unknown>
-    return {
+    return withGlass({
+      ...FALLBACK,
       accent: asAccent(raw.accent),
       // `=== true`, never `!== false`: a missing key means LIGHT, which is what
       // DEFAULT_CONFIG ships. Defaulting the other way makes an unreadable file
       // look like a deliberate dark session.
       isDark: raw.isDark === true,
-      windowOpacity: asGlass(raw.windowOpacity, FALLBACK.windowOpacity),
-      barOpacity: asGlass(raw.barOpacity, FALLBACK.barOpacity),
-      overlayOpacity: asGlass(raw.overlayOpacity, FALLBACK.overlayOpacity),
-      dockOpacity: asGlass(raw.dockOpacity, FALLBACK.dockOpacity),
-    }
+      glassMaterial: asGlassMaterial(raw.glassMaterial),
+      reduceTransparency: raw.reduceTransparency === true,
+      // `!== false`: window transparency is ON by default, and a mirror written before the key
+      // existed must not turn it off.
+      windowTransparency: raw.windowTransparency !== false,
+    })
   } catch (e) {
     // Not silent: an unreadable mirror is how #488 hid for a release (written 0600).
     console.warn(`[appearance] cannot read ${APPEARANCE_MIRROR_PATH} — painting the defaults: ${e}`)

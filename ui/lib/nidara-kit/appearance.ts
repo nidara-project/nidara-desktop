@@ -44,6 +44,12 @@ export interface KitAppearance {
     onChange(cb: () => void): () => void
     /** Overlay opacity for glass elements (default: 0.55). */
     overlayOpacity?: () => number
+    /** Reduce transparency (#674): paint every glass body solid. For glass whose alpha
+     *  is not one of the four opacities — the login and lock capsules (default: false). */
+    reduceTransparency?: () => boolean
+    /** The glass material's haze (#674, `frostedFill`), for glass the kit paints itself —
+     *  tooltips and menus (default: 0, none). */
+    glassFrost?: () => number
     /** Whether shell chrome is dark (default: follows surfaceIsDark). Given the widget
      *  being painted, the shell answers for the SURFACE it sits in — the adaptive glass
      *  can flip one surface's skin (#673) — so pass it whenever there is one. */
@@ -64,6 +70,8 @@ const FALLBACK: KitAppearance = {
     surfaceIsDark: () => false,
     onChange: () => () => {},
     overlayOpacity: () => 0.55,
+    reduceTransparency: () => false,
+    glassFrost: () => 0,
     chromeIsDark: () => false,
 }
 

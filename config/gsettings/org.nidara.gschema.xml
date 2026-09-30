@@ -293,29 +293,57 @@
     org.gnome.desktop.interface, where every app reads them. Applications (and our
     own installer and lock screen) never read THIS schema: bin/nidara-portal serves
     it as the org.nidara.appearance portal namespace, under these same key names,
-    and the shell writes the greeter's mirror from it. Ranges = GLASS_RANGE
-    (ui/lib/nidara-kit/platform/theme-tokens.ts).
+    and the shell writes the greeter's mirror from it. What a material MEANS — the
+    opacity per surface and the compositor blur — is GLASS_FLOORS / GLASS_BLUR
+    (ui/lib/nidara-kit/platform/theme-tokens.ts), read by every process the same.
   -->
   <schema id="org.nidara.appearance" path="/org/nidara/appearance/">
+    <key name="glass-material" type="s">
+      <choices>
+        <choice value="clear"/>
+        <choice value="regular"/>
+        <choice value="frosted"/>
+      </choices>
+      <default>'regular'</default>
+      <summary>Glass material of the desktop</summary>
+      <description>Clear shows the most of what is behind the glass, frosted the least. Each shell surface still thickens its glass by itself when its text needs it.</description>
+    </key>
+    <key name="reduce-transparency" type="b">
+      <default>false</default>
+      <summary>Reduce transparency</summary>
+      <description>Every glass surface becomes solid, whatever the glass material.</description>
+    </key>
+    <key name="window-transparency" type="b">
+      <default>true</default>
+      <summary>Transparent windows</summary>
+      <description>Nidara's own windows let what is behind them show through, with the compositor's blur (one for the whole desktop). Off, they are solid. Not part of the glass material: windows are not Liquid Glass.</description>
+    </key>
+    <!--
+      RETIRED 2026-09-30 (#674): the four glass opacities the sliders wrote. Nothing
+      reads them but migrations/2026-09-30-glass-material-from-opacities.sh, which
+      turns them into a glass-material once and resets them; they stay in the schema
+      so that migration (and 2026-09-14c before it, on an install upgrading from
+      before then) can still read and write them.
+    -->
     <key name="bar-opacity" type="d">
       <range min="0.24" max="0.8"/>
       <default>0.48</default>
-      <summary>Glass opacity of the bar</summary>
+      <summary>Retired: glass opacity of the bar</summary>
     </key>
     <key name="overlay-opacity" type="d">
       <range min="0.24" max="0.8"/>
       <default>0.48</default>
-      <summary>Glass opacity of the panels that open from the bar</summary>
+      <summary>Retired: glass opacity of the panels that open from the bar</summary>
     </key>
     <key name="dock-opacity" type="d">
       <range min="0.24" max="0.8"/>
       <default>0.24</default>
-      <summary>Glass opacity of the dock</summary>
+      <summary>Retired: glass opacity of the dock</summary>
     </key>
     <key name="window-opacity" type="d">
       <range min="0.24" max="0.8"/>
       <default>0.48</default>
-      <summary>Glass opacity of Nidara's own windows</summary>
+      <summary>Retired: glass opacity of Nidara's own windows</summary>
     </key>
     <!-- `shell-appearance` (the shell pin) was here until 2026-09-29. Removed (#676):
          the adaptive glass (#673) keeps every surface legible by itself, and the bar

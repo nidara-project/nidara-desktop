@@ -10,6 +10,7 @@
 import {
     uncomposite, glassOver, tierContrast, markContrast, legibilityMargin, MARK_TARGET, decideGlass, decideGlassByBackdrop, mergeBackdropStats, backdropStats, hyprlandPrepare, hyprlandVibrancy, NIDARA_BLUR,
     GLASS_ADAPT_CEILING, TEXT_INK, TOOLTIP_GLASS_FLOOR, tintFromBackdrop, luminance, type Rgb, type BackdropStats,
+    setGlassFrost, frostAt, frostedFill, contrastRatio,
 } from "../../ui/lib/nidara-kit/platform/glass-legibility"
 import { GLASS_TINT } from "../../ui/lib/nidara-kit/platform/tokens"
 
@@ -297,6 +298,34 @@ check(TEXT_INK.dark.secondary === 0.8 && TEXT_INK.dark.dim === 0.6
     const d = decideGlass(st, true, 0.24, undefined, "text", false, t)
     check(d.tint === t && tierContrast(blue, true, d.alpha, "primary", t) >= 4.5,
           `tint: the decision carries it and holds primary 4.5:1 against it (alpha ${d.alpha})`)
+}
+
+// ── 10. The frosted material's haze (#674) ──────────────────────────────────
+// It exists to tell the materials apart over a DARK wallpaper, where more of a dark
+// tint shows nothing; and it must not cost any guarantee measured without it.
+{
+    const dark = { r: 19 / 255, g: 1 / 255, b: 61 / 255 }   // behind the bar, 2026-09-30
+    const white = grey(1)
+    const plain = frostedFill({ r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }, 0.44, 0)
+    setGlassFrost(0)
+    const bare = glassOver(dark, true, 0.44)
+    setGlassFrost(0.10)
+    const hazed = glassOver(dark, true, 0.44)
+    check(luminance(hazed) > 1.5 * luminance(bare),
+          `frost: over the dark wallpaper the haze is SEEN (luminance ${luminance(bare).toFixed(4)} → ${luminance(hazed).toFixed(4)})`)
+    const fill = frostedFill(plain.tint, 0.44)
+    const byTwo = { r: (dark.r * 0.56 + plain.tint.r * 0.44) * 0.9 + 0.1, g: (dark.g * 0.56 + plain.tint.g * 0.44) * 0.9 + 0.1, b: (dark.b * 0.56 + plain.tint.b * 0.44) * 0.9 + 0.1 }
+    const byOne = { r: dark.r * (1 - fill.alpha) + fill.tint.r * fill.alpha, g: dark.g * (1 - fill.alpha) + fill.tint.g * fill.alpha, b: dark.b * (1 - fill.alpha) + fill.tint.b * fill.alpha }
+    check(near(byTwo.r, byOne.r, 1e-9) && near(byTwo.g, byOne.g, 1e-9) && near(byTwo.b, byOne.b, 1e-9),
+          "frost: the one folded fill paints exactly the tint and the haze over it")
+    check(frostAt(GLASS_ADAPT_CEILING) === 0 && frostAt(TOOLTIP_GLASS_FLOOR.dark) === 0,
+          "frost: gone at the ceiling and at the tooltips' floor")
+    check(tierContrast(white, true, GLASS_ADAPT_CEILING, "primary") >= 4.5,
+          `frost: primary text still clears 4.5:1 over pure white at the ceiling (${tierContrast(white, true, GLASS_ADAPT_CEILING, "primary").toFixed(2)})`)
+    const d = decideGlass(flat(white), true, 0.44, undefined, "text", false)
+    check(tierContrast(white, true, d.alpha, "primary") >= 4.5,
+          `frost: the rule accounts for it — over white it thickens to ${d.alpha} and primary clears 4.5:1`)
+    setGlassFrost(0)
 }
 
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nall ok")
