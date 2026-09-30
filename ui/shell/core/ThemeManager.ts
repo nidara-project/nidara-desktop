@@ -14,7 +14,9 @@ import {
     ACCENT_PALETTE,
     generateTokensCss,
     generateSkinFlipScope,
+    generateChromeTokenScope,
     CHROME_SCOPE_WINDOWS,
+    SHELL_SKIN_IS_DARK,
 } from "./NidaraTheme"
 import { SHELL_ROOT } from "./Paths"
 import { defineSettings } from "./configFile"
@@ -395,15 +397,17 @@ class ThemeManager extends GObject.Object {
     get overlayOpacity() { return this.fcConfig.overlayOpacity }
     get dockOpacity()    { return this.fcConfig.dockOpacity }
     get windowOpacity()  { return this.fcConfig.windowOpacity }
-    /** The skin the WHOLE shell prefers (bar, dock, overlays): the system mode.
-     *  It could be pinned against the mode until 2026-09-29 (`shellAppearance`); the
-     *  pin existed for legibility, which the adaptive glass (#673) now guarantees per
-     *  surface, so it went (#676). Kept as its own name because it still means "the
-     *  shell's skin" at every call site — and a painter INSIDE a registered surface
-     *  asks `chromeIsDarkFor(widget)` (common/AdaptiveGlass.ts), which is this unless
-     *  that surface has flipped or reads its skin from its backdrop (the bar row). */
+    /** The skin the WHOLE shell wears (bar, dock, island, panels, banners, app grid):
+     *  DARK — dark glass, white ink — whatever the system mode (owner, 2026-09-30). The
+     *  mode is the applications' (Settings and About included), not the shell's: a
+     *  shell that changed its ink with the mode, or with the wallpaper, was changing it
+     *  for no reason the person could see. Legibility is the adaptive glass's job, by
+     *  thickening only (`AdaptiveGlass.ts`). A light skin is to come back as a SETTING,
+     *  not decided yet — which is why this is still a getter and not a literal at every
+     *  call site. (Until 2026-09-29 it followed the mode unless pinned; until today it
+     *  followed the mode, and the bar row followed its backdrop, #676.) */
     get chromeIsDark(): boolean {
-        return this.state.isDark
+        return SHELL_SKIN_IS_DARK
     }
 
     /** Effective dark/light for the SURFACE a widget is painted on. Cairo widgets
@@ -695,7 +699,11 @@ class ThemeManager extends GObject.Object {
     /** Regenerate + apply the Nidara token CSS (accent / opacities), deduped. */
     private applyTokens() {
         this.ensureProvidersLinked()
+        // The global block is the MODE's (Settings, About); the shell's windows wear
+        // their own skin over it (`generateChromeTokenScope`), and a surface flipped by
+        // the adaptive glass wears the other over that (`generateSkinFlipScope`).
         const tokens = generateTokensCss(this.fcConfig, this.state.isDark)
+            + "\n" + generateChromeTokenScope(this.fcConfig, this.chromeIsDark, this.state.isDark)
             + "\n" + generateSkinFlipScope(this.fcConfig)
         if (this._lastTokensCss !== tokens) {
             this.themeProvider.load_from_string(tokens)

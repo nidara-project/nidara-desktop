@@ -292,10 +292,16 @@ function leastAlpha(backdrop: Rgb, isDark: boolean, floor: number, top: number, 
 }
 
 /**
- * The rule. `preferDark` is the skin the user chose (the system mode, or the shell
- * pin); `floor` is their glass slider for this surface; `current` is what the surface
- * wears now, for hysteresis (omit for a surface with no history); `content` is what
- * has to stay readable on it.
+ * The rule. `preferDark` is the skin the surface wears; `floor` is the user's glass
+ * slider for it; `current` is what the surface wears now, for hysteresis (omit for a
+ * surface with no history); `content` is what has to stay readable on it.
+ *
+ * `flip: false` is A alone: the surface keeps `preferDark` whatever is behind it and
+ * only thickens, up to the ceiling. That is how the SHELL decides since 2026-09-30
+ * (owner: its skin no longer changes with the wallpaper, or with the system mode —
+ * `AdaptiveGlass.ts`); B stays here, held to its numbers, for the extreme case the
+ * owner has yet to define. Measured: dark glass at the ceiling keeps primary text at
+ * 4.69:1 over pure white, so A alone never leaves the primary tier below its target.
  */
 export function decideGlass(
     stats: BackdropStats,
@@ -303,6 +309,7 @@ export function decideGlass(
     floor: number,
     current?: GlassDecision,
     content: GlassContent = "text",
+    flip = true,
 ): GlassDecision {
     const top = Math.max(floor, GLASS_ADAPT_CEILING)
     const worst = (isDark: boolean) => isDark ? stats.brightest : stats.darkest
@@ -316,6 +323,12 @@ export function decideGlass(
     }
 
     const flipped = current !== undefined && current.isDark !== preferDark
+
+    if (!flip) {
+        // A alone: as much body as it takes, up to the ceiling, and never the other skin.
+        const a = leastAlpha(worst(preferDark), preferDark, floor, top, 1, content)
+        return flipped ? { isDark: preferDark, alpha: a ?? top } : settle({ isDark: preferDark, alpha: a ?? top })
+    }
 
     // A flipped surface goes home only with room to spare.
     if (flipped) {

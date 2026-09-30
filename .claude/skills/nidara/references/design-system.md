@@ -1239,34 +1239,45 @@ purpose is how the flow FINISHES (it writes the file), not something that destro
 
 ## Shell skin & opacity (the mode, the adaptive glass, the glass sliders)
 
-### Which skin each shell surface wears (2026-09-29 — the pin is gone, #676)
+### Which skin each shell surface wears (2026-09-30: DARK, whatever the mode)
 
-The shell follows the model macOS settled on:
+**Every shell surface wears the dark skin — dark glass, white ink — whatever the system mode, and
+whatever is behind it** (owner, 2026-09-30). The bar, the island, the dock, the CC and the NC, the
+menus, the banners, the tooltips, the app grid: `Theme.chromeIsDark` is `SHELL_SKIN_IS_DARK`
+(`core/NidaraTheme.ts`), a constant. The system mode is the APPLICATIONS' — Settings and About
+included, which are app windows — and the "Appearance" tile still switches it, for them.
 
-| surface | its skin comes from |
+| surface | its skin |
 |---|---|
-| **the bar row** (bar + the island's compact capsule, one decision) | its **backdrop**, as macOS's menu bar: white ink over a dark top edge, black over a light one, whatever the mode (`skinFromBackdrop`, `decideGlassByBackdrop`) |
-| **the dock, every panel, the banners, the island's modes, the app grid** | the **system mode**, as macOS's Dock, Control Center and menus |
+| **every shell surface** | dark, fixed; the adaptive glass only THICKENS it (`SHELL_FLIPS = false`) |
 | **Settings, About** | the system mode, like any app (they are not shell skin) |
 
-Every shell surface also has the adaptive glass as its safety net: thicken, then flip, when its text
-would fall below its target (see "Adaptive glass" below). `Theme.chromeIsDark` is now simply the mode;
-a painter asks `chromeIsDarkFor(widget)` to get its surface's skin.
-
-⛔ **There is no appearance PIN any more — do not bring it back as a legibility fix.**
-`appearance.shellAppearance` (`system | dark | light`) pinned the whole shell skin against the mode
-from 2026-06 to 2026-09-29. It existed for LEGIBILITY: black text of the light skin failed over dark
-wallpapers. The adaptive glass guarantees legibility per surface by measuring what is really behind
-it, and the bar reads its skin from its backdrop, so the pin had nothing left to do but disagree
-with both. Removed: the Settings row, the config key, the `org.nidara.appearance shell-appearance`
-schema key (a stored value is simply unread; the 2026-09-14c migration no longer imports it — it
-would now fail on the missing key), the portal's copy, and `generateChromeTokenScope`.
+🔑 **Why** (the owner, in his words: "we are not going to change the colour of the text every time
+the wallpaper changes a little"): the shell used to follow the mode, and from 2026-09-29 the bar
+row took its skin from its backdrop (#676) — so the bar's ink changed with the wallpaper, and every
+panel's with the mode, for no reason the person could see. The numbers say it is not needed: dark
+glass at the ceiling (0.60) keeps PRIMARY text at 4.69:1 over pure white; the secondary tier holds
+4.5:1 up to a grey of 0.84 and falls to 3.66:1 over pure white, the dim tier to 2.78. Over the
+default wallpaper, at the thinnest glass (0.24), primary is 6.3 and secondary 4.6.
+- **Tokens:** the global `*` block is the MODE's (Settings and About wear it); the shell's windows get
+  their own full set over it, `generateChromeTokenScope` — the pin's scope, brought back for this:
+  `window#<w>, window#<w> *` for every window in `CHROME_SCOPE_WINDOWS`, emitted only while the two
+  differ. Verified live 2026-09-30: system switched to light, bar, dock and CC stayed dark with white
+  ink (the Appearance tile read "Claro").
+- **Not decided yet, and deliberately not built:** a LIGHT skin as a Setting (the owner wants the
+  possibility, "as a separate setting", its form undefined), and the "extreme case" in which the
+  glass itself may flip (rule B stays in the kit, tested, switched off by `SHELL_FLIPS`). The
+  machinery for both is still here: the skin-flip classes (`generateSkinFlipScope`), `decideGlass`'s
+  B, and the bar row's backdrop skin (`skinFromBackdrop`, `decideGlassByBackdrop`, the whole-strip
+  mean — no surface uses it since 2026-09-30).
+- ⚠️ This reverses TWO recorded calls of 2026-09-29, both by the owner: #676 ("the bar reads its skin
+  from the wallpaper") and "no appearance pin — do not bring it back". The pin is not back: there is
+  still no setting. What came back is its token scope, for a skin that is now fixed.
 
 What the pin's machinery taught, and what still uses it:
 - **CSS side:** `NidaraTheme.generateSkinFlipScope()` re-emits the full `--nidara-*` block
   (factored into `nidaraVars()`) under a scoped selector — per SKIN now, keyed by a class the
-  adaptive glass puts on a flipped surface's root. (The pin's `generateChromeTokenScope` did the
-  same per WINDOW; the lessons below were learnt on it.)
+  adaptive glass puts on a flipped surface's root. (`generateChromeTokenScope` — the pin's, back since 2026-09-30 for the fixed dark skin — does the same per WINDOW; the lessons below were learnt on it.)
   - **Scope = every toplevel in `CHROME_SCOPE_WINDOWS`** (each window + its descendants):
     `nidara-bar`, `nidara-dock`, `nidara-island`, `nidara-app-grid`. The bar window's
     `Gtk.Overlay` still hosts CC/NC/Prism/system menu/overview, so scoping that window covers
@@ -1492,7 +1503,10 @@ it and adapts, by itself, on events. So does the dock, held to its MARKS instead
 - **A.** Thicken the surface's tint from the user's slider up to `GLASS_ADAPT_CEILING` (0.60 —
   past ~0.59 it stops reading as glass, #82).
 - **B.** If the ceiling is not enough, flip the surface's SKIN (dark glass + white ink ↔ light glass
-  + black ink), at the slider's own body.
+  + black ink), at the slider's own body. ⛔ **Switched off for the shell since 2026-09-30**
+  (`SHELL_FLIPS`, `decideGlass(…, flip: false)`): the shell's skin is fixed dark (see "Which skin
+  each shell surface wears"). B stays in the kit and in the probe for the extreme case still to be
+  defined.
 - Hysteresis: a flipped surface goes home only when its own skin clears every target by
   `FLIP_BACK_MARGIN` (1.1); a thinning of less than `ALPHA_DEADBAND` is not worth a repaint.
 - Held to its numbers by `scripts/dev/glass-legibility-probe.ts` in the `styles` CI job, with a
@@ -1500,6 +1514,9 @@ it and adapts, by itself, on events. So does the dock, held to its MARKS instead
   last-resort branch also flips pure white, so "did it flip" is not a test of B. The probe now also
   checks that B arrives at the slider's body, not at the ceiling.
 
+**⏸️ Unused since 2026-09-30 — the bar row's skin is the shell's (dark).** What follows is how the
+row took its skin from its backdrop from 2026-09-29 (#676); the machinery is kept for the light
+skin still to be defined.
 **The bar row's SKIN comes from its backdrop, not from the mode** (#676, as macOS's menu bar):
 `decideGlassByBackdrop` takes the skin that reads best over the TYPICAL backdrop
 (`BackdropStats.mean`), not the extremes (deciding from the extremes turned a bar over a

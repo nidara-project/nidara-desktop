@@ -1174,8 +1174,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
   glassHandles.set(barBox, registerGlassSurface({
     id: "bar", root: barBox, role: "bar", exclude: underIsland, group: () => "bar-row",
-    // The row's ink comes from what is behind it, not the mode (#676).
-    skinFromBackdrop: true,
+    // No `skinFromBackdrop` since 2026-09-30 (owner): the row's ink is the shell's —
+    // white — and does not change with the wallpaper; the glass only thickens.
     // Hidden for a fullscreen window the bar stays MAPPED (opacity 0), so it looked
     // measurable — and what it found behind it was the fullscreen window: X's black page
     // and white text, which flipped the row and brought it back from fullscreen in that

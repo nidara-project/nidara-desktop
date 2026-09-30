@@ -185,6 +185,20 @@ const floor = 0.48
     check(shed.alpha === need, "deadband: 0.05 of spare body is shed")
 }
 
+// ── 5b. A alone (`flip: false`) — how the shell decides since 2026-09-30 ─────
+{
+    const white = decideGlass(flat(grey(1)), true, floor, undefined, "text", false)
+    check(white.isDark && white.alpha === GLASS_ADAPT_CEILING,
+          `no flip: over pure white, dark glass stays dark and goes to the ceiling (${white.alpha})`)
+    check(tierContrast(grey(1), true, GLASS_ADAPT_CEILING, "primary") >= 4.5,
+          "no flip: at the ceiling, primary text still reads over pure white (A alone is enough for it)")
+    const mid = decideGlass(flat(grey(0.5)), true, floor, undefined, "text", false)
+    check(mid.isDark && mid.alpha === floor, "no flip: over mid grey nothing changes")
+    // A surface that wore the other skin comes home at once, however bright the backdrop.
+    check(decideGlass(flat(grey(1)), true, floor, { isDark: false, alpha: floor }, "text", false).isDark,
+          "no flip: a surface in the other skin comes back to the one it is told to wear")
+}
+
 // ── 6. The bar row: its skin comes from the backdrop, not from the mode (#676) ─
 {
     // Dark backdrop → white ink, light backdrop → black ink, whatever the mode.

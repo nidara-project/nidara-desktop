@@ -155,6 +155,13 @@ interface Surface extends GlassSurfaceOpts {
 
 const surfaces = new Map<Gtk.Widget, Surface>()
 
+/** Whether the adaptive glass may put a surface in the other skin (rule B). NO since
+ *  2026-09-30 (owner): the shell's ink does not change with the wallpaper — it only
+ *  thickens its glass, which keeps primary text at 4.5:1 over any backdrop, pure white
+ *  included (`decideGlass`, `flip`). The "extreme case" that would allow a flip is not
+ *  defined yet; this is where it would be switched back on. */
+const SHELL_FLIPS = false
+
 // ── lookup, for painters ────────────────────────────────────────────────────
 
 function surfaceOf(widget: Gtk.Widget | null): Surface | null {
@@ -356,7 +363,7 @@ async function measureClosed(s: Surface) {
     s.lastStats = stats
     const next = s.skinFromBackdrop
         ? decideGlassByBackdrop(stats, floorFor(s), s.decision ?? undefined)
-        : decideGlass(stats, Theme.chromeIsDark, floorFor(s), s.decision ?? undefined, s.content)
+        : decideGlass(stats, Theme.chromeIsDark, floorFor(s), s.decision ?? undefined, s.content, SHELL_FLIPS)
     // Nothing on screen to animate: it simply opens like this.
     if (s.animId !== null) { GLib.source_remove(s.animId); s.animId = null }
     logFlip(s, s.decision, next, "measured closed", stats)
@@ -420,7 +427,7 @@ async function measure(s: Surface) {
     if (!group) {
         apply(s, s.skinFromBackdrop
             ? decideGlassByBackdrop(stats, floorFor(s), s.decision ?? undefined)
-            : decideGlass(stats, Theme.chromeIsDark, floorFor(s), s.decision ?? undefined, s.content))
+            : decideGlass(stats, Theme.chromeIsDark, floorFor(s), s.decision ?? undefined, s.content, SHELL_FLIPS))
         return
     }
     // One decision for the whole group: its skin from the mean of everything its members
@@ -438,7 +445,7 @@ async function measure(s: Surface) {
     const floor = Math.max(...members.map(m => floorFor(m)))
     const next = members.some(m => m.skinFromBackdrop)
         ? decideGlassByBackdrop(merged, floor, s.decision ?? undefined)
-        : decideGlass(merged, Theme.chromeIsDark, floor, s.decision ?? undefined, s.content)
+        : decideGlass(merged, Theme.chromeIsDark, floor, s.decision ?? undefined, s.content, SHELL_FLIPS)
     for (const m of members) apply(m, next, `group ${group} [${members.map(m => m.id).join("+")}]`, merged)
 }
 
@@ -581,7 +588,7 @@ export function startAdaptiveGlass(): void {
                 // A fresh decision across a mode change: the old one's skin was chosen
                 // against the OTHER mode, and passing it would read as a flip to keep.
                 apply(s, decideGlass(s.lastStats, Theme.chromeIsDark, floorFor(s),
-                    modeChanged ? undefined : s.decision ?? undefined, s.content), "theme changed")
+                    modeChanged ? undefined : s.decision ?? undefined, s.content, SHELL_FLIPS), "theme changed")
             } else applySkinClass(s)
         }
         scheduleAll()
