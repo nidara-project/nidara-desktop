@@ -661,10 +661,14 @@
         color: var(--nidara-text);
     }
 
+    // The artist is the track title's subtitle, and follows the tiles' rule
+    // (`.nidara-atomic-label-sub`, owner 2026-09-30): the title's size, regular weight,
+    // SECONDARY ink (80 %, held to 4.5:1) — not 12 px in the dim tier, which read far
+    // thinner than the title above it.
     .nidara-media-artist {
-        font-size: $fs-caption;
+        font-size: $fs-small;
         font-weight: $fw-regular;
-        color: var(--nidara-text-dim);
+        color: var(--nidara-text-secondary);
     }
 
     .nidara-media-btn {
