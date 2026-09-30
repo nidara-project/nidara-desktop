@@ -147,21 +147,23 @@ export function contrastRatio(a: Rgb, b: Rgb): number {
     return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
 }
 
-/** The glass as it reaches the eye: its tint at `alpha` over the (blurred) backdrop. */
-export function glassOver(backdrop: Rgb, isDark: boolean, alpha: number): Rgb {
-    return over(backdrop, isDark ? DARK_TINT : LIGHT_TINT, alpha)
+/** The glass as it reaches the eye: its tint at `alpha` over the (blurred) backdrop.
+ *  `tint` is the DARK skin's tint when it is not the neutral one (`tintFromBackdrop`);
+ *  the light skin always wears `GLASS_TINT.light`. */
+export function glassOver(backdrop: Rgb, isDark: boolean, alpha: number, tint?: Rgb): Rgb {
+    return over(backdrop, isDark ? (tint ?? DARK_TINT) : LIGHT_TINT, alpha)
 }
 
 /** The contrast of one tier of text on that glass. */
-export function tierContrast(backdrop: Rgb, isDark: boolean, alpha: number, tier: TextTier): number {
-    const glass = glassOver(backdrop, isDark, alpha)
+export function tierContrast(backdrop: Rgb, isDark: boolean, alpha: number, tier: TextTier, tint?: Rgb): number {
+    const glass = glassOver(backdrop, isDark, alpha, tint)
     const ink = over(glass, isDark ? WHITE : BLACK, TEXT_INK[isDark ? "dark" : "light"][tier])
     return contrastRatio(ink, glass)
 }
 
 /** The contrast of chrome ink (`INK.solid`, the dock's running dot) on that glass. */
-export function markContrast(backdrop: Rgb, isDark: boolean, alpha: number): number {
-    const glass = glassOver(backdrop, isDark, alpha)
+export function markContrast(backdrop: Rgb, isDark: boolean, alpha: number, tint?: Rgb): number {
+    const glass = glassOver(backdrop, isDark, alpha, tint)
     return contrastRatio(over(glass, isDark ? WHITE : BLACK, INK.solid), glass)
 }
 
@@ -170,11 +172,11 @@ export function markContrast(backdrop: Rgb, isDark: boolean, alpha: number): num
  * passes. One number, so "does it pass" and "which choice passes better" are the
  * same comparison. For `marks` there is one tier, the mark.
  */
-export function legibilityMargin(backdrop: Rgb, isDark: boolean, alpha: number, content: GlassContent = "text"): number {
-    if (content === "marks") return markContrast(backdrop, isDark, alpha) / MARK_TARGET
+export function legibilityMargin(backdrop: Rgb, isDark: boolean, alpha: number, content: GlassContent = "text", tint?: Rgb): number {
+    if (content === "marks") return markContrast(backdrop, isDark, alpha, tint) / MARK_TARGET
     let worst = Infinity
     for (const tier of Object.keys(LEGIBILITY_TARGET) as TextTier[])
-        worst = Math.min(worst, tierContrast(backdrop, isDark, alpha, tier) / LEGIBILITY_TARGET[tier])
+        worst = Math.min(worst, tierContrast(backdrop, isDark, alpha, tier, tint) / LEGIBILITY_TARGET[tier])
     return worst
 }
 
@@ -274,19 +276,21 @@ export function mergeBackdropStats(all: BackdropStats[]): BackdropStats {
     return { brightest, darkest, mean, samples, area }
 }
 
-/** What a surface wears: its tint's opacity and its skin. */
+/** What a surface wears: its tint's opacity, its skin, and — on the dark skin — the
+ *  tint itself when it is taken from the backdrop (`tintFromBackdrop`). */
 export interface GlassDecision {
     alpha: number
     isDark: boolean
+    tint?: Rgb
 }
 
 const ALPHA_STEP = 0.01
 
 /** The least alpha in [floor, top] at which `isDark` glass reaches `margin` over
  *  `backdrop`, or null if even `top` does not. */
-function leastAlpha(backdrop: Rgb, isDark: boolean, floor: number, top: number, margin: number, content: GlassContent): number | null {
+function leastAlpha(backdrop: Rgb, isDark: boolean, floor: number, top: number, margin: number, content: GlassContent, tint?: Rgb): number | null {
     for (let a = floor; a <= top + 1e-9; a += ALPHA_STEP) {
-        if (legibilityMargin(backdrop, isDark, a, content) >= margin) return Math.round(a * 100) / 100
+        if (legibilityMargin(backdrop, isDark, a, content, isDark ? tint : undefined) >= margin) return Math.round(a * 100) / 100
     }
     return null
 }
@@ -310,7 +314,11 @@ export function decideGlass(
     current?: GlassDecision,
     content: GlassContent = "text",
     flip = true,
+    /** The dark skin's tint, when it comes from the backdrop (`tintFromBackdrop`): the
+     *  contrast is computed against the glass the surface will really wear. */
+    tint?: Rgb,
 ): GlassDecision {
+    const withTint = (d: GlassDecision): GlassDecision => d.isDark && tint ? { ...d, tint } : d
     const top = Math.max(floor, GLASS_ADAPT_CEILING)
     const worst = (isDark: boolean) => isDark ? stats.brightest : stats.darkest
     const settle = (d: GlassDecision): GlassDecision => {
@@ -326,33 +334,115 @@ export function decideGlass(
 
     if (!flip) {
         // A alone: as much body as it takes, up to the ceiling, and never the other skin.
-        const a = leastAlpha(worst(preferDark), preferDark, floor, top, 1, content)
-        return flipped ? { isDark: preferDark, alpha: a ?? top } : settle({ isDark: preferDark, alpha: a ?? top })
+        const a = leastAlpha(worst(preferDark), preferDark, floor, top, 1, content, tint)
+        return withTint(flipped ? { isDark: preferDark, alpha: a ?? top } : settle({ isDark: preferDark, alpha: a ?? top }))
     }
 
     // A flipped surface goes home only with room to spare.
     if (flipped) {
-        const home = leastAlpha(worst(preferDark), preferDark, floor, top, FLIP_BACK_MARGIN, content)
+        const home = leastAlpha(worst(preferDark), preferDark, floor, top, FLIP_BACK_MARGIN, content, tint)
         if (home !== null) {
-            return { isDark: preferDark, alpha: leastAlpha(worst(preferDark), preferDark, floor, top, 1, content) ?? home }
+            return withTint({ isDark: preferDark, alpha: leastAlpha(worst(preferDark), preferDark, floor, top, 1, content, tint) ?? home })
         }
     } else {
         // A: thicken the user's own skin.
-        const a = leastAlpha(worst(preferDark), preferDark, floor, top, 1, content)
-        if (a !== null) return settle({ isDark: preferDark, alpha: a })
+        const a = leastAlpha(worst(preferDark), preferDark, floor, top, 1, content, tint)
+        if (a !== null) return withTint(settle({ isDark: preferDark, alpha: a }))
     }
 
     // B: the other skin.
-    const b = leastAlpha(worst(!preferDark), !preferDark, floor, top, 1, content)
-    if (b !== null) return settle({ isDark: !preferDark, alpha: b })
+    const b = leastAlpha(worst(!preferDark), !preferDark, floor, top, 1, content, tint)
+    if (b !== null) return withTint(settle({ isDark: !preferDark, alpha: b }))
 
     // Neither reaches every target even at the ceiling (a backdrop that is bright
     // AND dark at once — a high-contrast photo under a tall panel). Take the skin
     // that comes closest, at full body.
-    const mine = legibilityMargin(worst(preferDark), preferDark, top, content)
-    const theirs = legibilityMargin(worst(!preferDark), !preferDark, top, content)
-    if (flipped && theirs >= mine / FLIP_BACK_MARGIN) return { isDark: !preferDark, alpha: top }
-    return { isDark: mine >= theirs ? preferDark : !preferDark, alpha: top }
+    const mine = legibilityMargin(worst(preferDark), preferDark, top, content, tint)
+    const theirs = legibilityMargin(worst(!preferDark), !preferDark, top, content, tint)
+    if (flipped && theirs >= mine / FLIP_BACK_MARGIN) return withTint({ isDark: !preferDark, alpha: top })
+    return withTint({ isDark: mine >= theirs ? preferDark : !preferDark, alpha: top })
+}
+
+// ── The dark glass's tint, taken from what is behind it ──────────────────────
+
+const toLinearC = toLinear
+const toSrgbC = (v: number) => v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055
+
+/** sRGB → OKLab (Björn Ottosson's matrices). */
+export function toOklab(c: Rgb): [number, number, number] {
+    const R = toLinearC(c.r), G = toLinearC(c.g), B = toLinearC(c.b)
+    const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B)
+    const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B)
+    const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B)
+    return [0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+            1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+            0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s]
+}
+
+/** OKLab → sRGB, clamped into the gamut. */
+export function fromOklab(L: number, a: number, b: number): Rgb {
+    const l = Math.pow(L + 0.3963377774 * a + 0.2158037573 * b, 3)
+    const m = Math.pow(L - 0.1055613458 * a - 0.0638541728 * b, 3)
+    const s = Math.pow(L - 0.0894841775 * a - 1.2914855480 * b, 3)
+    const c = (v: number) => Math.min(1, Math.max(0, toSrgbC(v)))
+    return { r: c(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+             g: c(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+             b: c(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s) }
+}
+
+/** Below this OKLab chroma a backdrop has no colour worth taking: the tint stays the
+ *  neutral one. Between the two it blends, so a backdrop drifting across the line does
+ *  not snap the glass from grey to coloured. Owner's call (2026-09-30), after seeing it:
+ *  forcing a colour onto a near-neutral backdrop (cream to grey-blue) came out khaki and
+ *  green-grey — mud, not tinted glass. */
+export const TINT_CHROMA_NEUTRAL = 0.025
+export const TINT_CHROMA_FULL = 0.045
+/** The tint takes the backdrop's hue at this much more chroma than the backdrop has,
+ *  up to `TINT_CHROMA_MAX`: at the neutral tint's lightness the same chroma reads
+ *  weaker, and a blurred backdrop has already lost some. */
+export const TINT_CHROMA_GAIN = 1.4
+/** 0.05 since 2026-09-30 (was 0.09): the glass follows the backdrop's colour, quietly —
+ *  at 0.09 a mis-hued tint over a wide surface was the first thing the eye found. */
+export const TINT_CHROMA_MAX = 0.05
+
+/** OKLab hues (degrees) whose DARK versions are mud, not colour: dark orange is brown,
+ *  dark yellow and yellow-green are olive and khaki (measured live, 2026-09-30: the dock
+ *  over a pale yellow-green wallpaper, mean hue 131°, came out olive). Inside the band
+ *  the tint stays neutral; it fades in over `TINT_HUE_FADE` degrees on each side, so
+ *  reds, pinks, purples, blues, cyans and greens keep their tint. */
+export const TINT_MUD_HUES: [number, number] = [65, 140]
+export const TINT_HUE_FADE = 20
+
+/** 1 outside the mud band, 0 inside it, a linear fade between. */
+function hueWeight(hueDeg: number): number {
+    const [lo, hi] = TINT_MUD_HUES
+    const h = ((hueDeg % 360) + 360) % 360
+    if (h >= lo && h <= hi) return 0
+    const d = h < lo ? lo - h : h - hi
+    return Math.min(1, d / TINT_HUE_FADE)
+}
+
+/**
+ * The dark glass's tint over `mean`, the backdrop's mean colour: the backdrop's HUE, at
+ * the neutral tint's LIGHTNESS (so text keeps, to within a few hundredths, the contrast
+ * it had — the decision computes it against this tint anyway), with a little more
+ * chroma than the backdrop has. Over a near-neutral backdrop, or one whose hue would
+ * darken into mud (`TINT_MUD_HUES`), the neutral tint.
+ *
+ * What it is for (owner, 2026-09-30): dark glass over a pale backdrop has to come out a
+ * mid-tone for white text to read — that is fixed — but a mid-tone in the backdrop's own
+ * colour reads as tinted glass, where the neutral tint reads as grey.
+ */
+export function tintFromBackdrop(mean: Rgb): Rgb {
+    const [L0, na, nb] = toOklab(DARK_TINT)
+    const [, a, b] = toOklab(mean)
+    const c = Math.hypot(a, b)
+    const h = Math.atan2(b, a)
+    const k = Math.min(1, Math.max(0, (c - TINT_CHROMA_NEUTRAL) / (TINT_CHROMA_FULL - TINT_CHROMA_NEUTRAL)))
+        * hueWeight(h * 180 / Math.PI)
+    if (k <= 0) return DARK_TINT
+    const c1 = Math.min(TINT_CHROMA_MAX, c * TINT_CHROMA_GAIN)
+    return fromOklab(L0, na + (c1 * Math.cos(h) - na) * k, nb + (c1 * Math.sin(h) - nb) * k)
 }
 
 /**

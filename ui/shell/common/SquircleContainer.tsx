@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { drawGlassShadow, drawSquircle, hexToFloatRgb } from "./DrawingUtils"
 import Theme from "../core/ThemeManager"
-import { chromeIsDarkFor, glassAlphaFor } from "./AdaptiveGlass"
+import { chromeIsDarkFor, glassAlphaFor, glassTintFor } from "./AdaptiveGlass"
 import { RADIUS, GLASS_TINT, GLASS_SPECULAR, GLASS_STATE_MIX } from "../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 
@@ -200,9 +200,12 @@ export default function SquircleContainer({
         // …and a shell-skin capsule inside a surface the adaptive glass has flipped
         // (#673) wears that surface's skin: `chromeIsDarkFor` walks up to it.
         const dark = chrome ? chromeIsDarkFor(da) : Theme.isDark
-        const themeColor = dark
-            ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
-            : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
+        // The tint: on the shell's skin, the one its surface took from its backdrop.
+        const themeColor = chrome
+            ? glassTintFor(da)
+            : dark
+                ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
+                : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
         const defaultLight = { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
         const baseColor = color || (useShellOpacity ? themeColor : defaultLight)
         // Explicit alpha always wins (even with useShellOpacity, so a surface can

@@ -1389,10 +1389,12 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     })
 
     // ── Adaptive glass (#673) ─────────────────────────────────────────────────
-    // The dock keeps its running dot readable over whatever is behind it, as the bar
-    // and the panels keep their text: thicker glass, or the other skin. It carries
-    // MARKS, not text, so it is held to 3:1 (glass-legibility.ts → GlassContent), and
-    // its skin is the mode's. The glass is the capsule, not the
+    // The dock is measured for its TINT only (`tintFromBackdrop`): it never thickens
+    // past its slider (`thickens: false`, owner 2026-09-30 — no text on it, and a dark
+    // dock loses the liquid-glass look). Measured: at the 0.24 floor its white running
+    // dot is ~2:1 over a pale yellow-green wallpaper, 1.6:1 over pure white, >10:1 over
+    // the default one — below WCAG 1.4.11's 3:1 on pale backdrops, accepted on sight.
+    // `content: "marks"` stays, for the day it thickens again. Its skin is the mode's. The glass is the capsule, not the
     // monitor-sized layout; the layout is what gets rendered over it, icons included.
     const dockOrigin = (off = Math.round(slideCurrent)) => {
         // Every axis anchors BOTTOM (the vertical one also TOP, under the bar's zone);
@@ -1407,6 +1409,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         root: layout,
         role: "dock",
         content: "marks",
+        thickens: false,
         probeArea: () => axis.capsuleRect(),
         windowOrigin: dockOrigin,
         // At rest, in place, with nothing of ours over it: magnifying, sliding, a menu

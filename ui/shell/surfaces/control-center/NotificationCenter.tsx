@@ -7,7 +7,7 @@ import hs from "../../core/HyprlandState"
 import { drawSquircle, squircleThumb } from "../../common/DrawingUtils"
 import { NidaraScrolled } from "../../../lib/nidara-kit"
 import SquircleContainer, { Shape, GLASS_SHADOW } from "../../common/SquircleContainer"
-import { RADIUS, GLASS_TINT } from "../../../lib/nidara-kit/platform/tokens"
+import { RADIUS } from "../../../lib/nidara-kit/platform/tokens"
 import { ScaleRevealer, attachGhostSwipeDismiss } from "../../common/ScaleRevealer"
 import IconButton from "../../common/IconButton"
 import Theme from "../../core/ThemeManager"
@@ -22,7 +22,7 @@ import { uiIcon } from "../../core/Icons"
 import { safeDisconnect } from "../../core/signals"
 import { type Notification, notifications as allNotifications, watchNotified, watchResolved } from "../../core/NotifService"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
-import { chromeIsDarkFor, glassAlphaFor } from "../../common/AdaptiveGlass"
+import { glassAlphaFor, glassTintFor } from "../../common/AdaptiveGlass"
 
 export function createIconWidget(n: Notification, size: number) {
     const entry = n.desktop_entry || n.app_name || ""
@@ -397,9 +397,7 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
     const da = new Gtk.DrawingArea({ height_request: stripH })
     da.set_draw_func(cairoDraw((_da: any, cr: any, w: number, _h: number) => {
         if (w <= 0 || _h <= 0) return
-        const color = chromeIsDarkFor(da)
-            ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
-            : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }   // shell skin — follows appearance pin
+        const color = glassTintFor(da)   // the shell's skin, in its surface's tint
         for (let i = layers - 1; i >= 0; i--) {
             // Inset >= the card's corner radius so each ghost's straight top edge sits under the
             // STRAIGHT part of the card's bottom (clear of the rounded corners) — no corner gap.

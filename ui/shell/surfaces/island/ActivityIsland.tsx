@@ -5,7 +5,6 @@ import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { MorphRevealer, MorphGlass, MorphPair } from "../../common/MorphRevealer"
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
 import { BAR_CAPSULE_H, BAR_GAP, CAPSULE_BORDER } from "../bar/capsule"
-import { GLASS_TINT } from "../../../lib/nidara-kit/platform/tokens"
 import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT, ISLAND_RECORDING } from "../../core/Status"
 import WorkspaceOverview, { WO_GLASS } from "../overview/WorkspaceOverview"
 import PlayerIsland, { PLAYER_GLASS } from "./PlayerIsland"
@@ -13,7 +12,7 @@ import BatteryIsland, { BATTERY_GLASS } from "./BatteryIsland"
 import RecordingIsland, { RECORDING_GLASS } from "./RecordingIsland"
 import AgentIsland, { AGENT_GLASS } from "./AgentIsland"
 import { buildActivities, DOTS_ID } from "./IslandActivities"
-import { chromeIsDarkFor, glassAlphaFor } from "../../common/AdaptiveGlass"
+import { glassAlphaFor, glassTintFor } from "../../common/AdaptiveGlass"
 
 // The Activity Island — the bar-center capsule as a MULTI-PURPOSE morphing
 // surface. The capsule is the island's COMPACT state; each thing it can host
@@ -389,9 +388,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     // tint from the island's skin, alpha from the bar/overlay opacity axes.
     // Asked through the capsule: it is inside the island's surface, so these follow
     // the adaptive glass (#673) when it thickens or flips the island.
-    const chromeGlassColor = () => chromeIsDarkFor(capsule)
-        ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
-        : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
+    const chromeGlassColor = () => glassTintFor(capsule)
     // Pill of the compact capsule (perfect pill ≡ n=2, radius null = h/2).
     const compactGlass = (): MorphGlass => ({ alpha: glassAlphaFor(capsule, "bar"), color: chromeGlassColor(), border: CAPSULE_BORDER, n: 2.0, radius: null })
     // A mode's end of the morph is asked through the MODE's own widget: each mode is a
@@ -400,9 +397,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     // can open already wearing the skin its backdrop needs.
     const modeGlass = (w: Gtk.Widget, g: { border: MorphGlass["border"], n: number, radius: MorphGlass["radius"] }) => (): MorphGlass => ({
         alpha: glassAlphaFor(w, "overlay"),
-        color: chromeIsDarkFor(w)
-            ? { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
-            : { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b },
+        color: glassTintFor(w),
         border: g.border, n: g.n, radius: g.radius,
     })
 
