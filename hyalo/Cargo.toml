@@ -1,0 +1,42 @@
+# Hyalo — Nidara's compositor, on Smithay (#680).
+#
+# A Cargo workspace so the compositor and what talks to it can grow apart; today it is one
+# crate, the compositor, whose binary is also the CLI (`nidara-hyalo msg …`).
+[workspace]
+resolver = "3"
+members = ["compositor"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+rust-version = "1.90"
+
+# Smithay is PINNED by revision and used as a library, never patched (#679's hard criterion:
+# its AI.md discourages LLM-written contributions, so a change we would need there is a
+# no-go, not a PR). How to move the pin is in README.md → "Bumping Smithay".
+[workspace.dependencies.smithay]
+git = "https://github.com/Smithay/smithay.git"
+rev = "118e34f"
+default-features = false
+features = [
+    "backend_winit",
+    "backend_drm",
+    "backend_gbm",
+    "backend_egl",
+    "backend_libinput",
+    "backend_udev",
+    "backend_session_libseat",
+    "renderer_gl",
+    "renderer_multi",
+    "wayland_frontend",
+    "desktop",
+]
+
+[workspace.dependencies.smithay-drm-extras]
+git = "https://github.com/Smithay/smithay.git"
+rev = "118e34f"
+
+[profile.release]
+debug = "line-tables-only"

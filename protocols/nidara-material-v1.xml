@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="nidara_material_v1">
+  <copyright>
+    SPDX-License-Identifier: GPL-3.0-or-later
+  </copyright>
+  <description summary="compositor-side materials for Nidara's glass">
+    A surface declares the shapes of its glass and how the compositor resolves
+    them against what lies behind: the blur's size and passes, per surface.
+    The shapes are exact (rounded rectangles whose corners are superellipse
+    quadrants, the shell's squircle), so the blur never depends on the alpha
+    of the surface's own pixels: a low-alpha shadow next to the glass is not
+    blurred because it is not in a shape.
+  </description>
+
+  <interface name="nidara_material_manager_v1" version="1">
+    <request name="destroy" type="destructor"/>
+    <request name="get_material">
+      <description summary="the material object of a surface">
+        One per wl_surface; the state is double-buffered on wl_surface.commit.
+      </description>
+      <arg name="id" type="new_id" interface="nidara_material_v1"/>
+      <arg name="surface" type="object" interface="wl_surface"/>
+    </request>
+  </interface>
+
+  <interface name="nidara_material_v1" version="1">
+    <request name="destroy" type="destructor">
+      <description summary="remove the material on the next commit"/>
+    </request>
+    <request name="clear_shapes">
+      <description summary="pending: no shapes (no material)"/>
+    </request>
+    <request name="add_shape">
+      <description summary="pending: add one glass shape">
+        Surface-local, logical coordinates. corner_radius and exponent
+        describe each corner: a superellipse quadrant of that radius
+        (exponent 2 is a circular arc). Fixed-point values.
+      </description>
+      <arg name="x" type="fixed"/>
+      <arg name="y" type="fixed"/>
+      <arg name="width" type="fixed"/>
+      <arg name="height" type="fixed"/>
+      <arg name="corner_radius" type="fixed"/>
+      <arg name="exponent" type="fixed"/>
+    </request>
+    <request name="set_blur">
+      <description summary="pending: blur size and passes for this surface">
+        size is the kawase offset in logical pixels, passes the number of
+        downsampling levels. passes 0 = no blur.
+      </description>
+      <arg name="size" type="fixed"/>
+      <arg name="passes" type="uint"/>
+    </request>
+    <request name="set_glass">
+      <description summary="pending: the compositor paints the glass itself">
+        The compositor resolves the whole glass against the real backdrop,
+        per pixel: the blurred backdrop, refracted near the edge; its
+        saturation; a tint whose opacity rises where the backdrop is bright
+        so that content of target_luminance contrast stays legible, between
+        alpha_min and alpha_max; and a specular rim. The client then paints
+        only its content and state (active fills, hover), not the glass.
+      </description>
+      <arg name="tint_r" type="fixed"/>
+      <arg name="tint_g" type="fixed"/>
+      <arg name="tint_b" type="fixed"/>
+      <arg name="alpha_min" type="fixed"/>
+      <arg name="alpha_max" type="fixed"/>
+      <arg name="target_luminance" type="fixed" summary="the backdrop luminance, after tint, not to exceed"/>
+      <arg name="refraction" type="fixed" summary="edge displacement, logical px"/>
+      <arg name="rim" type="fixed" summary="specular rim strength, 0..1"/>
+      <arg name="saturation" type="fixed" summary="1 = unchanged"/>
+    </request>
+    <request name="clear_glass">
+      <description summary="pending: back to blur only; the client paints its glass"/>
+    </request>
+  </interface>
+</protocol>

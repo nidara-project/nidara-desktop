@@ -21,6 +21,7 @@
 #include "hyprland-surface-v1-client-protocol.h"
 #include "hyprland-toplevel-mapping-v1-client-protocol.h"
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
+#include "nidara-material-v1-client-protocol.h"
 
 /* A capture that has not answered in this long is not coming. Generous on
  * purpose: the compositor schedules the copy on its own frame clock, and a
@@ -52,6 +53,7 @@ static struct wl_event_queue          *shim_queue = NULL;
 static struct hyprland_surface_manager_v1 *surface_mgr = NULL;
 static struct hyprland_focus_grab_manager_v1 *focus_grab_mgr = NULL;
 static gboolean                        capture_supported = FALSE;
+static struct nidara_material_manager_v1 *material_mgr = NULL;
 
 static void
 init_registry_global (void *data, struct wl_registry *registry, uint32_t name,
@@ -74,6 +76,9 @@ init_registry_global (void *data, struct wl_registry *registry, uint32_t name,
   else if (g_strcmp0 (interface,
                       ext_image_copy_capture_manager_v1_interface.name) == 0)
     capture_supported = TRUE;
+  else if (g_strcmp0 (interface, nidara_material_manager_v1_interface.name) == 0)
+    material_mgr = wl_registry_bind (registry, name,
+                                     &nidara_material_manager_v1_interface, 1);
 }
 
 static void
@@ -271,6 +276,107 @@ nidara_wl_visible_region_clear (GdkSurface *surface)
 
   hyprland_surface_v1_set_visible_region (st->hypr_surface, NULL);
   wl_display_flush (gdk_wl_display);
+}
+
+/* ======================================================================
+ * Material (nidara-material-v1 — protocols/ at the repository root)
+ *
+ * The glass's shapes and its blur, told to Hyalo, the compositor of our own (#680). Every request
+ * is double-buffered by the protocol itself, so nothing is held here: the shapes
+ * land with the surface's next wl_surface.commit, i.e. with the frame GTK is about
+ * to paint when the caller runs in the frame clock's layout phase.
+ * ====================================================================== */
+
+gboolean
+nidara_wl_has_material (void)
+{
+  return wl_ok && material_mgr != NULL;
+}
+
+static struct nidara_material_v1 *
+material_get (GdkSurface *surface)
+{
+  if (!nidara_wl_has_material () || !GDK_IS_WAYLAND_SURFACE (surface))
+    return NULL;
+
+  struct nidara_material_v1 *m = g_object_get_data (G_OBJECT (surface), "nidara-wl-material");
+  if (m)
+    return m;
+
+  struct wl_surface *wls = gdk_wayland_surface_get_wl_surface (surface);
+  if (!wls)
+    return NULL;
+
+  m = nidara_material_manager_v1_get_material (material_mgr, wls);
+  wl_proxy_set_queue ((struct wl_proxy *) m, shim_queue);
+  g_object_set_data_full (G_OBJECT (surface), "nidara-wl-material", m,
+                          (GDestroyNotify) nidara_material_v1_destroy);
+  return m;
+}
+
+void
+nidara_wl_material_begin (GdkSurface *surface)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (m)
+    nidara_material_v1_clear_shapes (m);
+}
+
+void
+nidara_wl_material_add_shape (GdkSurface *surface,
+                              double x, double y, double width, double height,
+                              double corner_radius, double exponent)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (!m || width <= 0 || height <= 0)
+    return;
+  nidara_material_v1_add_shape (m,
+                                wl_fixed_from_double (x), wl_fixed_from_double (y),
+                                wl_fixed_from_double (width), wl_fixed_from_double (height),
+                                wl_fixed_from_double (corner_radius),
+                                wl_fixed_from_double (exponent));
+}
+
+void
+nidara_wl_material_set_glass (GdkSurface *surface,
+                              double tint_r, double tint_g, double tint_b,
+                              double alpha_min, double alpha_max, double target_luminance,
+                              double refraction, double rim, double saturation)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (!m)
+    return;
+  nidara_material_v1_set_glass (m,
+                                wl_fixed_from_double (tint_r), wl_fixed_from_double (tint_g),
+                                wl_fixed_from_double (tint_b), wl_fixed_from_double (alpha_min),
+                                wl_fixed_from_double (alpha_max),
+                                wl_fixed_from_double (target_luminance),
+                                wl_fixed_from_double (refraction), wl_fixed_from_double (rim),
+                                wl_fixed_from_double (saturation));
+}
+
+void
+nidara_wl_material_clear_glass (GdkSurface *surface)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (m)
+    nidara_material_v1_clear_glass (m);
+}
+
+gboolean
+nidara_wl_material_commit (GdkSurface *surface, double blur_size, guint blur_passes)
+{
+  g_return_val_if_fail (GDK_IS_SURFACE (surface), FALSE);
+  struct nidara_material_v1 *m = material_get (surface);
+  if (!m)
+    return FALSE;
+  nidara_material_v1_set_blur (m, wl_fixed_from_double (blur_size), blur_passes);
+  wl_display_flush (gdk_wl_display);
+  return TRUE;
 }
 
 /* ======================================================================

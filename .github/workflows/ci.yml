@@ -50,6 +50,10 @@
 #     (listActions/dumpState), no JS errors in the boot log. Screenshots are
 #     uploaded as artifacts for HUMAN review — deliberately not a pixel diff.
 #     All logic lives in scripts/ci/headless-smoke.sh.
+#   - hyalo: Hyalo, the compositor of our own (#681) — cargo build --locked, clippy -D
+#     warnings, unit tests, then a boot on vkms through its tty backend with the real
+#     shell on it; screenshots via Hyalo's IPC. Not required while Hyalo is a preview.
+#     All logic lives in scripts/ci/hyalo-smoke.sh.
 #   - agent-loop: drive the real Assistant daemon (bin/nidara-agent) through one
 #     tool-use turn against a mock OpenAI-compatible provider — asserts the stream
 #     parsing (tool call, split args, final text) AND both halves of the 5xx retry
@@ -481,6 +485,37 @@ jobs:
         with:
           name: smoke-artifacts
           path: smoke-out/
+          if-no-files-found: ignore
+
+  # Hyalo, the compositor of our own (hyalo/, #681): build with the committed lock file,
+  # clippy with warnings as errors, unit tests, and a boot on the SAME vkms the smoke uses —
+  # through the tty backend a real session takes (libseat, udev, DRM/KMS), with the real
+  # shell on it. Screenshots come from Hyalo's own IPC (no capture protocol yet for grim).
+  # NOT a required check while Hyalo is a preview (#680): it must never hold the merge queue
+  # for the desktop that ships. All logic in scripts/ci/hyalo-smoke.sh.
+  hyalo:
+    name: Hyalo (build, clippy, tests, boot on vkms)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Load vkms (virtual KMS device)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "linux-modules-extra-$(uname -r)"
+          sudo modprobe vkms
+          ls -l /dev/dri
+      - name: Build + boot (Arch container on vkms)
+        run: |
+          docker run --rm --privileged \
+            -v "$PWD:/repo" \
+            archlinux:latest bash /repo/scripts/ci/hyalo-smoke.sh
+      - name: Upload screenshots + logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyalo-artifacts
+          path: hyalo-out/
           if-no-files-found: ignore
 
   widgets-gen:

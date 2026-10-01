@@ -1,0 +1,29 @@
+[package]
+name = "nidara-hyalo"
+description = "Hyalo, the Nidara desktop's Wayland compositor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "nidara-hyalo"
+path = "src/main.rs"
+
+[dependencies]
+smithay.workspace = true
+smithay-drm-extras.workspace = true
+bitflags = "2.2.1"
+png = "0.18"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+toml = "0.9"
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+xcursor = "0.3.3"
+# Protocols Smithay does not ship are generated from their XML in ../../protocols.
+wayland-server = "0.31"
+wayland-backend = "0.3"
+wayland-scanner = "0.31"

@@ -1,0 +1,51 @@
+# Hyalo's shipped configuration — installed as /usr/share/nidara/hyalo/hyalo.toml.
+#
+# Your own settings go in ~/.config/nidara/hyalo.toml: it is read on top of this file, key
+# by key, so you only write what you change. Both are watched; an edit applies at once.
+# `nidara-hyalo msg` changes things for the running session without touching either file.
+#
+# Every key, with its meaning: hyalo/compositor/src/config.rs.
+
+# Run once the compositor is up, in order, through `sh -c` — only in a real session
+# (`nidara-hyalo --session`, which is how the greeter's session entry starts it), never in
+# a development window.
+autostart = [
+  # Tell uwsm the compositor is ready: it exports WAYLAND_DISPLAY (and the IPC socket) to the
+  # session's services and activates graphical-session.target. Must come first — uwsm ends
+  # the session if this does not arrive.
+  "uwsm finalize HYALO_SOCKET",
+  # The shell, as a systemd user unit, so a crash restarts it rather than leaving a bare
+  # compositor (bin/nidara.service).
+  "systemctl --user start nidara.service",
+  # The wallpaper: awww draws it; the user's choice is in ~/.config/nidara/wallpaper.
+  "uwsm app -s b -- awww-daemon",
+  "/usr/lib/nidara-hyalo/restore-wallpaper",
+  "uwsm app -s b -- /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1",
+  # Completes the keyring PAM unlocked at login (see config/hypr/hyprland.lua for why this
+  # line is not a formality).
+  "uwsm app -s b -- gnome-keyring-daemon --start --components=secrets",
+]
+
+# The keyboard follows the system's (localectl set-x11-keymap) unless set here.
+[input.keyboard]
+repeat_delay = 600
+repeat_rate = 25
+
+[input.touchpad]
+tap = true
+natural_scroll = true
+disable_while_typing = true
+
+# Virtual machines: QEMU advertises a small or high-refresh preferred mode; the same default
+# the Hyprland session uses (config/hypr/hyprland.lua).
+[outputs.Virtual-1]
+mode = "1920x1080@60"
+
+# Outputs, by connector name (`nidara-hyalo msg outputs` lists them):
+#
+# [outputs.DP-1]
+# mode = "2560x1440@144"
+# scale = 1.25
+# position = [0, 0]
+# transform = "normal"
+# vrr = false
