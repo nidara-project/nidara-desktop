@@ -722,7 +722,20 @@ fn connector_disconnected(state: &mut Hyalo, node: DrmNode, connector: connector
         if let Redraw::WaitingForEstimatedVBlank { token, .. } = surface.redraw {
             state.loop_handle.remove(token);
         }
+        // Its layer surfaces are closed, as wlr-layer-shell asks when their output goes: the
+        // client decides where its bar or dock goes next (gtk4-layer-shell recreates it).
+        {
+            let map = smithay::desktop::layer_map_for_output(&surface.output);
+            for layer in map.layers() {
+                layer.layer_surface().send_close();
+            }
+        }
         state.space.unmap_output(&surface.output);
+        // Every surface leaves the output BEFORE its global goes: a client that sees the
+        // global removed destroys its wl_output, and a leave naming it afterwards arrives
+        // as leave(nil) — which killed kitty outright (measured, VM, two outputs).
+        state.space.refresh();
+        surface.output.leave_all();
         if let Some(global) = surface.global.take() {
             state.display_handle.disable_global::<Hyalo>(global.clone());
             let dh = state.display_handle.clone();

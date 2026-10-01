@@ -142,13 +142,15 @@ pub fn apply(state: &mut Hyalo, name: &str, cfg: &OutputConfig) -> Result<(), St
                     }
                 }
             output.change_current_state(None, Some(transform), Some(Scale::Fractional(cfg.scale)), None);
+            arrange(state);
             if let Backend::Tty(tty) = &mut state.backend {
-                let (supported, enabled) = tty.vrr_state(&output);
-                if cfg.vrr != enabled && (supported || !cfg.vrr) {
+                let (_, enabled) = tty.vrr_state(&output);
+                if cfg.vrr != enabled {
+                    // Refused on a monitor without VRR: said, never silently ignored. Last, so
+                    // the rest of the settings apply either way.
                     tty.set_vrr(&output, cfg.vrr)?;
                 }
             }
-            arrange(state);
             Ok(())
         }
     }
