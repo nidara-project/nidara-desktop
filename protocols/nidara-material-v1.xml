@@ -65,7 +65,7 @@
       <arg name="tint_b" type="fixed"/>
       <arg name="alpha_min" type="fixed"/>
       <arg name="alpha_max" type="fixed"/>
-      <arg name="target_luminance" type="fixed" summary="the backdrop luminance, after tint, not to exceed"/>
+      <arg name="target_luminance" type="fixed" summary="the backdrop's WCAG relative (linear) luminance, after tint, not to exceed"/>
       <arg name="refraction" type="fixed" summary="edge displacement, logical px"/>
       <arg name="rim" type="fixed" summary="specular rim strength, 0..1"/>
       <arg name="saturation" type="fixed" summary="1 = unchanged"/>

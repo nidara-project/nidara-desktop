@@ -89,7 +89,12 @@ What is sent is what the toolkit SHOWS (protocol v2, `add_shape_clipped`):
 `NIDARA_MATERIAL_DEBUG=1` logs every surface's shapes as they change. On a dev install,
 `~/.config/nidara/glass-tuning.conf` (`key = value`: `alphaMin alphaMax target refraction rim
 saturation`, `blur = SIZE:PASSES`, `glass = off` for the A/B) is re-read as it is saved — it is
-how the numbers are tuned with the owner on screen. `nidara-hyalo msg layers` shows what each
+how the numbers are tuned with the owner on screen.
+⚠️ `target` is a WCAG relative luminance — LINEAR light, the adaptive glass's own number (primary
+text at 4.5:1 → 0.183), and `alphaMax` is its ceiling (`GLASS_ADAPT_CEILING`). The shader mixes
+the tint into the ENCODED colour, so it searches for the least alpha that meets it (8 bisection
+steps) rather than solving in encoded luma: compared against encoded luma, a white backdrop came
+out at 10:1 under a near-black glass where 4.5:1 was asked (owner-caught 2026-10-01). `nidara-hyalo msg layers` shows what each
 layer declared (`glass.shapes`, `glass.compositor_paints`), and the smoke requires the bar, the
 dock and the island to declare theirs.
 

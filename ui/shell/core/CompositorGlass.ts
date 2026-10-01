@@ -6,6 +6,7 @@ import { safeDisconnect } from "./signals"
 import { glassBlurInForce } from "./GlassBlur"
 import { GLASS_TINT } from "../../lib/nidara-kit/platform/tokens"
 import { SOLID_GLASS } from "../../lib/nidara-kit/platform/theme-tokens"
+import { GLASS_ADAPT_CEILING, LEGIBILITY_TARGET } from "../../lib/nidara-kit/platform/glass-legibility"
 import { setMaterialSource, type GlassParams } from "../../lib/nidara-kit/platform/material"
 
 /**
@@ -20,7 +21,10 @@ import { setMaterialSource, type GlassParams } from "../../lib/nidara-kit/platfo
  * Reduce transparency makes every pane solid, as it does on Hyprland. The blur is the glass
  * material's (`GlassBlur.ts`).
  *
- * ⚠️ The numbers are the prototype's (#679), not calibrated: #684 tunes them with the owner
+ * The tint's rule is the adaptive glass's on Hyprland, held by the same two numbers: primary
+ * text at 4.5:1, and no thicker than its ceiling. Over pure white that is the tint at ≈0.59.
+ *
+ * ⚠️ The other numbers are the prototype's (#679), not calibrated: #684 tunes them with the owner
  * on screen. For that, a dev install (`~/.config/nidara/.dev`) reads
  * `~/.config/nidara/glass-tuning.conf` — `key = value` lines, applied as the file is saved:
  *   alphaMin alphaMax target refraction rim saturation   the glass (see GlassParams)
@@ -31,8 +35,9 @@ import { setMaterialSource, type GlassParams } from "../../lib/nidara-kit/platfo
 
 const DEFAULTS = {
     alphaMin: 0.12,       // the least tint, over a dark backdrop
-    alphaMax: 0.82,       // the most, over the brightest
-    target: 0.2,          // backdrop luminance after tint ≤ this: white text ≥ ~4:1
+    alphaMax: GLASS_ADAPT_CEILING,   // the most, over the brightest
+    // The backdrop's WCAG luminance (linear) after tint ≤ this: white text at 4.5:1.
+    target: 1.05 / LEGIBILITY_TARGET.primary - 0.05,
     refraction: 10,       // logical px of edge displacement
     rim: 0.7,
     saturation: 1.35,

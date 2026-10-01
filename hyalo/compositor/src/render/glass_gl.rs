@@ -138,6 +138,12 @@ float sdf(vec2 px) {
     return max(q.x - half_size.x, q.y - half_size.y);
 }
 
+// WCAG relative luminance of an sRGB-encoded colour (glass-legibility.ts's `luminance`).
+float to_linear(float v) { return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4); }
+float luminance(vec3 c) {
+    return 0.2126 * to_linear(c.r) + 0.7152 * to_linear(c.g) + 0.0722 * to_linear(c.b);
+}
+
 // Framebuffer pixels → the blurred copy (level 1, half size).
 vec2 to_src(vec2 fb_px) { return (fb_px - region_fb.xy) * 0.5; }
 vec4 backdrop(vec2 out_offset) { return up(to_src(v_fb + out_to_fb * out_offset)); }
@@ -175,8 +181,20 @@ void main() {
     l = dot(bg, vec3(0.2126, 0.7152, 0.0722));
     // The tint thickens exactly where the backdrop is too bright for white content:
     // after tinting, the luminance does not exceed target (per pixel; #673's rule, on the GPU).
-    float tl = dot(tint, vec3(0.2126, 0.7152, 0.0722));
-    float a = l > target ? (l - target) / max(l - tl, 0.001) : 0.0;
+    // target is a WCAG relative luminance — LINEAR light — while the tint is mixed into the
+    // encoded colour, so the least alpha is searched for, not solved for. Comparing the
+    // ENCODED luma with it darkened a white backdrop to 10:1 where 4.5:1 was asked (owner-
+    // caught 2026-10-01: "with a white background everything looks dark").
+    float a = 0.0;
+    if (luminance(bg) > target) {
+        float lo = 0.0;
+        float hi = alpha_max;
+        for (int i = 0; i < 8; i++) {
+            float m = 0.5 * (lo + hi);
+            if (luminance(mix(bg, tint, m)) > target) lo = m; else hi = m;
+        }
+        a = hi;
+    }
     a = clamp(a, alpha_min, alpha_max);
     vec3 c = mix(bg, tint, a);
     // Specular rim: a thin line of light along the edge, brightest where the edge faces the
