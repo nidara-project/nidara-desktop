@@ -110,6 +110,16 @@ out at 10:1 under a near-black glass where 4.5:1 was asked (owner-caught 2026-10
 layer declared (`glass.shapes`, `glass.compositor_paints`), and the smoke requires the bar, the
 dock and the island to declare theirs.
 
+🔴 **The material rides on a commit GTK may never make.** It is double-buffered surface state,
+and GTK commits only a frame that DREW something (it diffs render nodes; no damage, no commit).
+A change that moves none of the client's pixels — every `glass-tuning.conf` value, the glass's
+parameters — therefore waited for the next unrelated redraw: the bar picked it up within a second
+(its clock), the dock, which repaints only when touched, never did (2026-10-02, seen in
+`WAYLAND_DEBUG=client`: no `wl_surface.commit` after the `set_glass`). `nidara_wl_material_commit`
+now marks the surface and commits it once more from the frame clock's `after-paint` — AFTER
+GTK's present, so where GTK drew that extra commit is empty, and never BEFORE it, which would show
+the new shapes over the old buffer for a frame.
+
 🔴 **Cargo does not see the protocol XML.** The scanner macros read `protocols/*.xml` at compile
 time without telling cargo, so an edited protocol left Hyalo built from the OLD file while
 `lib/nidara-wl` was built from the new one; the two ends numbered the requests differently, a

@@ -461,7 +461,9 @@ void nidara_wl_material_add_shape_pointed (GdkSurface *surface,
  * @blur_size: the blur's kawase offset, logical pixels
  * @blur_passes: downsampling levels; 0 = no blur
  *
- * Sends the shapes and the blur; they take effect with @surface's next commit.
+ * Sends the shapes and the blur; they take effect with @surface's next commit, which
+ * is made at the end of the current frame if GTK draws nothing in it. Call it from a
+ * frame-clock phase before PAINT (the shell's material client calls it from LAYOUT).
  *
  * Returns: %FALSE if the compositor has no nidara-material-v1
  */

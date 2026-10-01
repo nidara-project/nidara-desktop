@@ -512,6 +512,31 @@ nidara_wl_material_clear_ink (GdkSurface *surface)
     nidara_material_v1_clear_ink (m);
 }
 
+/* The material is double-buffered state: it takes effect with the surface's next
+ * commit, and GTK commits only a frame that drew something. A change that moves no
+ * pixel of the client's own — a tuning value, the glass's parameters — would wait
+ * for the next unrelated redraw: the dock, which repaints only when touched, kept its
+ * old glass indefinitely (2026-10-02). So at the end of the frame the material was
+ * sent in, the surface is committed once more. Where GTK drew, it has committed
+ * already and this commit carries nothing; where it did not, this is the commit. It
+ * comes AFTER GTK's, never before: an early one would show the new shapes over the
+ * old buffer for a frame. */
+static void
+material_after_paint (GdkFrameClock *clock, GdkSurface *surface)
+{
+  (void) clock;
+  if (!g_object_get_data (G_OBJECT (surface), "nidara-wl-material-dirty"))
+    return;
+  g_object_set_data (G_OBJECT (surface), "nidara-wl-material-dirty", NULL);
+  /* A surface hidden in the meantime has no role to commit for. */
+  struct wl_surface *wls = gdk_wayland_surface_get_wl_surface (surface);
+  if (wls && gdk_surface_get_mapped (surface))
+    {
+      wl_surface_commit (wls);
+      wl_display_flush (gdk_wl_display);
+    }
+}
+
 gboolean
 nidara_wl_material_commit (GdkSurface *surface, double blur_size, guint blur_passes)
 {
@@ -521,6 +546,17 @@ nidara_wl_material_commit (GdkSurface *surface, double blur_size, guint blur_pas
     return FALSE;
   nidara_material_v1_set_blur (m, wl_fixed_from_double (blur_size), blur_passes);
   wl_display_flush (gdk_wl_display);
+  GdkFrameClock *clock = gdk_surface_get_frame_clock (surface);
+  if (clock)
+    {
+      if (!g_object_get_data (G_OBJECT (surface), "nidara-wl-material-hooked"))
+        {
+          g_signal_connect_object (clock, "after-paint", G_CALLBACK (material_after_paint),
+                                   surface, G_CONNECT_AFTER);
+          g_object_set_data (G_OBJECT (surface), "nidara-wl-material-hooked", GINT_TO_POINTER (1));
+        }
+      g_object_set_data (G_OBJECT (surface), "nidara-wl-material-dirty", GINT_TO_POINTER (1));
+    }
   return TRUE;
 }
 
