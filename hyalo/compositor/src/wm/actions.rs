@@ -37,6 +37,8 @@ pub enum Action {
     Workspace(WorkspaceTarget),
     MoveToWorkspace { target: WorkspaceTarget, window: Option<WindowId>, follow: bool },
     ToggleSpecial(String),
+    /// The focused app gives the keyboard shortcuts back, or takes them again (shortcuts.rs).
+    ToggleShortcutsInhibit,
     MoveToSpecial { name: String, window: Option<WindowId> },
     ToggleFloating(Option<WindowId>),
     Float(Option<WindowId>),
@@ -157,6 +159,10 @@ impl std::str::FromStr for Action {
                     window: window_arg(a(1))?,
                     follow: verb == "move-to-workspace",
                 }
+            }
+            "toggle-shortcuts-inhibit" => {
+                none_after(0)?;
+                Action::ToggleShortcutsInhibit
             }
             "toggle-special" => {
                 none_after(1)?;
@@ -296,6 +302,7 @@ impl Hyalo {
                 }
             }
             Action::ToggleSpecial(name) => self.toggle_special(&name),
+            Action::ToggleShortcutsInhibit => self.toggle_shortcuts_inhibit()?,
             Action::MoveToSpecial { name, window } => {
                 let id = self.target(window)?;
                 let output = self.focused_output().map(|o| o.name()).unwrap_or_default();

@@ -165,6 +165,7 @@ impl Hyalo {
         let serial = SERIAL_COUNTER.next_serial();
         let keyboard = self.seat.get_keyboard().unwrap();
         let raw = code.raw();
+        let inhibited = self.shortcuts_inhibited();
         let action = keyboard.input::<KeyAction, _>(self, code, state, serial, time, |data, mods, handle| {
             let sym = handle.raw_latin_sym_or_raw_current_sym().unwrap_or_else(|| handle.modified_sym());
             if state == KeyState::Released {
@@ -176,7 +177,7 @@ impl Hyalo {
                     }
                 }
                 if data.keys.release_candidate.take() == Some(raw)
-                    && let Some(b) = binds::release_binding(&data.binds, sym)
+                    && let Some(b) = binds::release_binding(&data.binds, sym).filter(|b| !inhibited || b.dont_inhibit)
                 {
                     return FilterResult::Intercept(KeyAction::Run { action: b.action.clone(), repeat: false });
                 }
@@ -192,11 +193,12 @@ impl Hyalo {
                 data.keys.swallowed.push(raw);
                 return FilterResult::Intercept(a);
             }
-            if let Some(b) = binds::find_key(&data.binds, Mods::from(mods), sym) {
+            // The focused app holds the shortcuts (shortcuts.rs): only `dont_inhibit` bindings run.
+            if let Some(b) = binds::find_key(&data.binds, Mods::from(mods), sym).filter(|b| !inhibited || b.dont_inhibit) {
                 data.keys.swallowed.push(raw);
                 return FilterResult::Intercept(KeyAction::Run { action: b.action.clone(), repeat: b.repeat });
             }
-            if binds::release_binding(&data.binds, sym).is_some() {
+            if binds::release_binding(&data.binds, sym).is_some_and(|b| !inhibited || b.dont_inhibit) {
                 data.keys.release_candidate = Some(raw);
             }
             FilterResult::Forward

@@ -18,7 +18,11 @@
 //! - `repeat`: runs again while held, at the keyboard's repeat delay and rate;
 //! - `release`: runs when the key is let go, and only if nothing else was pressed meanwhile
 //!   (Super alone opens the app grid; Super+T does not);
-//! - `locked`: also runs while the session is locked (volume, brightness).
+//! - `locked`: also runs while the session is locked (volume, brightness);
+//! - `dont_inhibit`: also runs while the focused app holds the shortcuts (a virtual machine, a
+//!   remote desktop — keyboard-shortcuts-inhibit, shortcuts.rs). Hyprland's option of the same
+//!   name. Keep it for the way back (`toggle-shortcuts-inhibit`) and the computer-control kill
+//!   switch: nothing an app does may take those away.
 
 use std::collections::BTreeMap;
 
@@ -44,6 +48,8 @@ pub struct BindSpec {
     pub release: bool,
     #[serde(default)]
     pub locked: bool,
+    #[serde(default)]
+    pub dont_inhibit: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -76,6 +82,7 @@ pub struct Binding {
     pub repeat: bool,
     pub release: bool,
     pub locked: bool,
+    pub dont_inhibit: bool,
 }
 
 pub const BTN_LEFT: u32 = 0x110;
@@ -118,9 +125,9 @@ pub fn parse_binds(table: &BTreeMap<String, BindConfig>) -> Result<Vec<Binding>,
     let mut out = Vec::new();
     for (keys, cfg) in table {
         let (mods, trigger) = parse_keys(keys)?;
-        let (command, repeat, release, locked) = match cfg {
-            BindConfig::Command(c) => (c.as_str(), false, false, false),
-            BindConfig::Full(s) => (s.action.as_str(), s.repeat, s.release, s.locked),
+        let (command, repeat, release, locked, dont_inhibit) = match cfg {
+            BindConfig::Command(c) => (c.as_str(), false, false, false, false),
+            BindConfig::Full(s) => (s.action.as_str(), s.repeat, s.release, s.locked, s.dont_inhibit),
         };
         let action: Action = command.parse().map_err(|e| format!("binds.{keys:?}: {e}"))?;
         let pointer_only = matches!(action, Action::MoveWithPointer | Action::ResizeWithPointer);
@@ -130,7 +137,10 @@ pub fn parse_binds(table: &BTreeMap<String, BindConfig>) -> Result<Vec<Binding>,
         if release && !matches!(trigger, Trigger::Key(_)) {
             return Err(format!("binds.{keys:?}: only a key can run on release"));
         }
-        out.push(Binding { mods, trigger, action, repeat, release, locked });
+        if dont_inhibit && !matches!(trigger, Trigger::Key(_)) {
+            return Err(format!("binds.{keys:?}: dont_inhibit is for keys (an app holds the keyboard's shortcuts only)"));
+        }
+        out.push(Binding { mods, trigger, action, repeat, release, locked, dont_inhibit });
     }
     Ok(out)
 }
@@ -200,7 +210,10 @@ mod tests {
     fn bindings_that_cannot_work_are_refused() {
         assert!(bind("Super+Q", cmd("move-with-pointer")).is_err());
         assert!(bind("Super+MouseLeft", cmd("close-window")).is_err());
-        assert!(bind("Super+WheelUp", BindConfig::Full(BindSpec { action: "workspace e+1".into(), repeat: false, release: true, locked: false })).is_err());
+        assert!(bind("Super+WheelUp", BindConfig::Full(BindSpec { action: "workspace e+1".into(), repeat: false, release: true, locked: false, dont_inhibit: false })).is_err());
+        assert!(bind("Super+MouseLeft", BindConfig::Full(BindSpec { action: "move-with-pointer".into(), repeat: false, release: false, locked: false, dont_inhibit: true })).is_err(), "dont_inhibit on a button");
+        let b = bind("Super+Escape", BindConfig::Full(BindSpec { action: "toggle-shortcuts-inhibit".into(), repeat: false, release: false, locked: false, dont_inhibit: true })).unwrap();
+        assert!(b[0].dont_inhibit);
         assert!(bind("Super+Q", cmd("close-everything")).is_err());
     }
 }
