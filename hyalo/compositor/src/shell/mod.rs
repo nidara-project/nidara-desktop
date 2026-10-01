@@ -119,14 +119,20 @@ impl XdgShellHandler for Hyalo {
         }
     }
 
-    fn app_id_changed(&mut self, _surface: ToplevelSurface) {
+    fn app_id_changed(&mut self, surface: ToplevelSurface) {
         self.wm.dirty_windows = true;
+        // A GTK window takes its real app id when it is mapped: a rule naming it applies now.
+        if let Some(id) = self.wm.by_surface(surface.wl_surface()).map(|m| m.id) {
+            self.apply_late_rules(id);
+        }
     }
 
     fn title_changed(&mut self, surface: ToplevelSurface) {
         if let Some(m) = self.wm.by_surface(surface.wl_surface()) {
-            let event = crate::ipc::Event::WindowTitleChanged { id: m.id, title: crate::wm::title(&m.window) };
+            let id = m.id;
+            let event = crate::ipc::Event::WindowTitleChanged { id, title: crate::wm::title(&m.window) };
             crate::ipc::server::broadcast(self, &event);
+            self.apply_late_rules(id);
         }
     }
 

@@ -90,6 +90,21 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   `Super+1` works with Shift held and on any layout. `release = true` fires only if nothing else
   was pressed while the key was held (Super alone opens the app grid; Super+T does not).
   Ctrl+Alt+F1…F12 and Ctrl+Alt+Backspace are built in and cannot be bound over.
+- **Window rules** (`wm/rules.rs`, `[rules.NAME]` in hyalo.toml): regexes searched in
+  `app_id` / `title` / `initial_app_id` / `initial_title`, effects `float`, `center`,
+  `workspace` (`"3"`, `"special:NAME"`) and `silent`. 🔑 **A rule applies to a window ONCE, the
+  first time it matches** — at the first configure (so a floated window's first frame is
+  already its own size), when it is shown, or later when its app id or title changes. That is
+  #679 item 13 solved rather than worked around: on Hyprland a static effect is matched once
+  against the BIRTH class, so a rule naming a stamped app id never fired and About had to be
+  matched by title. Here it is matched by `nidara-about` — measured, the stamp already lands
+  before the first buffer, so it applies at map with no jump. A rule that stops matching
+  undoes nothing, and one that applied never applies again (a window the user re-tiles stays
+  tiled through any number of renames). Rules are a table by name, not a list, so the user's
+  hyalo.toml adds, replaces or switches one off (`enabled = false`) instead of replacing them
+  all — the layers merge tables and replace arrays. Name order decides conflicts (later
+  wins). `hypr-rule-check.mjs` reads them too: every app id or title they name must be one a
+  window in ui/ declares (with a CI control that misspells one).
 - **Border and rounding are not drawn yet**: the geometry reserves `layout.border` (1 px) so
   windows line up with the bar exactly as on Hyprland; the border is drawn with the rounding and
   shadows in #684.
