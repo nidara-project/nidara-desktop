@@ -7,6 +7,7 @@ import {
     type BackdropStats, type Rgb, type HyprlandBlurParams,
 } from "../../lib/nidara-kit/platform/glass-legibility"
 import { LAYER_IGNORE_ALPHA } from "../../lib/nidara-kit/platform/theme-tokens"
+import compositor from "../core/CompositorState"
 
 /**
  * What a piece of OUR UI really has behind it — the backdrop its text is read
@@ -91,6 +92,13 @@ function load(): Promise<void> {
     if (ready) return ready
     if (DISABLED) {
         console.log("[BackdropProbe] disabled by NIDARA_BACKDROP_PROBE=0 — the glass stays as set")
+        ready = Promise.resolve()
+        return ready
+    }
+    // Asked, not attempted: every measurement failing on its own was a warning per event
+    // (34 in a Hyalo session's first minutes, 2026-10-01).
+    if (!compositor.caps.backdropCapture) {
+        console.log(`[BackdropProbe] ${compositor.kind} measures under the glass itself — the glass stays as set`)
         ready = Promise.resolve()
         return ready
     }

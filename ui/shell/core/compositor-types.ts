@@ -101,6 +101,10 @@ export interface CompositorCaps {
     layouts: boolean
     /** The inner glow the Assistant lights on the window it works in (Hyprland ≥ 0.56). */
     glow: boolean
+    /** The shell may capture what lies behind its glass (zwlr_screencopy) to adapt it
+     *  (common/BackdropProbe.ts). Not on Hyalo: there the compositor measures under the glass
+     *  itself, while drawing it (#684), and has no screencopy for the shell to poll. */
+    backdropCapture: boolean
 }
 
 export type CompositorKind = "hyprland" | "hyalo"

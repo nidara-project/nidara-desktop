@@ -568,6 +568,8 @@ typedef struct
   struct ext_foreign_toplevel_handle_v1 *handle;
   guint64  address;
   gboolean address_known;
+  /* The list's own identifier: on Hyalo, the window id in hex — the address. */
+  gchar   *identifier;
 } CapToplevel;
 
 typedef struct
@@ -604,7 +606,12 @@ static void cap_tl_title (void *d, struct ext_foreign_toplevel_handle_v1 *h, con
 static void cap_tl_app_id (void *d, struct ext_foreign_toplevel_handle_v1 *h, const char *a)
 { (void) d; (void) h; (void) a; }
 static void cap_tl_identifier (void *d, struct ext_foreign_toplevel_handle_v1 *h, const char *i)
-{ (void) d; (void) h; (void) i; }
+{
+  (void) h;
+  CapToplevel *t = d;
+  g_free (t->identifier);
+  t->identifier = g_strdup (i);
+}
 
 static const struct ext_foreign_toplevel_handle_v1_listener cap_tl_listener = {
   .closed = cap_tl_closed, .done = cap_tl_done, .title = cap_tl_title,
@@ -628,6 +635,7 @@ cap_list_toplevel (void *data, struct ext_foreign_toplevel_list_v1 *list,
   t->handle = handle;
   t->address = 0;
   t->address_known = FALSE;
+  t->identifier = NULL;
   ext_foreign_toplevel_handle_v1_add_listener (handle, &cap_tl_listener, t);
 }
 
@@ -900,8 +908,11 @@ static void
 cap_ctx_teardown (CapCtx *ctx)
 {
   for (int i = 0; i < ctx->n_toplevels; i++)
-    if (ctx->toplevels[i].handle)
-      ext_foreign_toplevel_handle_v1_destroy (ctx->toplevels[i].handle);
+    {
+      if (ctx->toplevels[i].handle)
+        ext_foreign_toplevel_handle_v1_destroy (ctx->toplevels[i].handle);
+      g_clear_pointer (&ctx->toplevels[i].identifier, g_free);
+    }
 
   if (ctx->mapping_mgr)
     hyprland_toplevel_mapping_manager_v1_destroy (ctx->mapping_mgr);
@@ -960,7 +971,7 @@ capture_thread (GTask *task, gpointer source_object, gpointer task_data,
   wl_display_roundtrip (ctx.display);
   wl_registry_destroy (registry);
 
-  if (!ctx.shm || !ctx.list || !ctx.source_mgr || !ctx.capture_mgr || !ctx.mapping_mgr)
+  if (!ctx.shm || !ctx.list || !ctx.source_mgr || !ctx.capture_mgr)
     {
       g_set_error_literal (&error, NIDARA_WL_ERROR, NIDARA_WL_ERROR_UNAVAILABLE,
                            "compositor does not offer window capture");
@@ -974,15 +985,37 @@ capture_thread (GTask *task, gpointer source_object, gpointer task_data,
   wl_display_roundtrip (ctx.display);
   wl_display_roundtrip (ctx.display);
 
-  for (int i = 0; i < ctx.n_toplevels; i++)
+  if (ctx.mapping_mgr)
     {
-      struct hyprland_toplevel_window_mapping_handle_v1 *mh =
-        hyprland_toplevel_mapping_manager_v1_get_window_for_toplevel (
-          ctx.mapping_mgr, ctx.toplevels[i].handle);
-      hyprland_toplevel_window_mapping_handle_v1_add_listener (
-        mh, &cap_map_listener, &ctx.toplevels[i]);
+      for (int i = 0; i < ctx.n_toplevels; i++)
+        {
+          struct hyprland_toplevel_window_mapping_handle_v1 *mh =
+            hyprland_toplevel_mapping_manager_v1_get_window_for_toplevel (
+              ctx.mapping_mgr, ctx.toplevels[i].handle);
+          hyprland_toplevel_window_mapping_handle_v1_add_listener (
+            mh, &cap_map_listener, &ctx.toplevels[i]);
+        }
+      wl_display_roundtrip (ctx.display);
     }
-  wl_display_roundtrip (ctx.display);
+  else
+    {
+      /* No Hyprland mapping: Hyalo lists each window under its id in hex, which is
+       * the address the shell holds for it (hyalo/compositor/src/capture.rs). */
+      for (int i = 0; i < ctx.n_toplevels; i++)
+        {
+          CapToplevel *t = &ctx.toplevels[i];
+          gchar *end = NULL;
+          if (t->identifier && *t->identifier)
+            {
+              guint64 v = g_ascii_strtoull (t->identifier, &end, 16);
+              if (end && *end == '\0')
+                {
+                  t->address = v;
+                  t->address_known = TRUE;
+                }
+            }
+        }
+    }
 
   if (g_cancellable_set_error_if_cancelled (cancellable, &error))
     goto out;

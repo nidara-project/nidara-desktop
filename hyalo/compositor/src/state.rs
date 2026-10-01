@@ -73,6 +73,12 @@ pub struct Hyalo {
     /// Workspaces and windows (wm/).
     pub wm: crate::wm::Wm,
     pub binds: Vec<crate::binds::Binding>,
+    /// Window capture for thumbnails (capture.rs).
+    pub foreign_toplevel_list: smithay::wayland::foreign_toplevel_list::ForeignToplevelListState,
+    pub toplevel_capture_source: smithay::wayland::image_capture_source::ToplevelCaptureSourceState,
+    pub image_copy_capture: smithay::wayland::image_copy_capture::ImageCopyCaptureState,
+    /// Capture sessions a client holds open (capture.rs: dropping one stops it).
+    pub capture_sessions: Vec<smithay::wayland::image_copy_capture::Session>,
     /// The window rules in force (wm/rules.rs).
     pub rules: Vec<crate::wm::rules::Rule>,
     pub keys: crate::input::KeyTracking,
@@ -107,6 +113,10 @@ impl Hyalo {
         PointerConstraintsState::new::<Self>(&dh);
         // Ours (protocols/ at the repo root).
         focus_grab::init(&dh);
+        // Window capture for the shell's thumbnails (capture.rs).
+        let foreign_toplevel_list = smithay::wayland::foreign_toplevel_list::ForeignToplevelListState::new::<Self>(&dh);
+        let toplevel_capture_source = smithay::wayland::image_capture_source::ToplevelCaptureSourceState::new::<Self>(&dh);
+        let image_copy_capture = smithay::wayland::image_copy_capture::ImageCopyCaptureState::new::<Self>(&dh);
         material::init(&dh);
 
         let mut seat_state = SeatState::new();
@@ -167,6 +177,10 @@ impl Hyalo {
             ipc: IpcState::default(),
             wm: crate::wm::Wm::default(),
             binds,
+            foreign_toplevel_list,
+            toplevel_capture_source,
+            image_copy_capture,
+            capture_sessions: Vec::new(),
             rules: crate::wm::rules::compile(&rules_config).unwrap_or_else(|err| {
                 tracing::error!("window rules not loaded: {err}");
                 Vec::new()

@@ -2,7 +2,10 @@ import GLib from "gi://GLib"
 import type Gdk from "gi://Gdk?version=4.0"
 
 /**
- * Thin wrapper over libnidara-wl's window capture (ext-image-copy-capture).
+ * Thin wrapper over libnidara-wl's window capture (ext-image-copy-capture), on both
+ * compositors: Hyprland maps a listed window to its address with its own protocol, Hyalo
+ * lists each window under that address (hyalo/compositor/src/capture.rs). What follows
+ * describes Hyprland; Hyalo likewise draws the window alone, hidden workspace or not.
  *
  * Hyprland RE-RENDERS the window into an export framebuffer on demand
  * (`ScreenshareFrame.cpp` → `RPT_EXPORT`), so this does NOT read the client's

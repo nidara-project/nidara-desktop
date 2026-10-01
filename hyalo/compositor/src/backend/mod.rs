@@ -141,6 +141,17 @@ pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Pat
     crate::screenshot::write_png(path, w, h, &rgba)
 }
 
+/// One window alone, as RGBA rows (capture.rs).
+pub fn capture_window(state: &mut Hyalo, window: &smithay::desktop::Window, scale: f64) -> Result<(u32, u32, Vec<u8>), String> {
+    match &mut state.backend {
+        Backend::Winit(w) => crate::capture::draw_window(w.renderer(), window, scale),
+        Backend::Tty(t) => {
+            let mut renderer = t.primary_renderer()?;
+            crate::capture::draw_window(renderer.as_mut(), window, scale)
+        }
+    }
+}
+
 /// Draws every output with a redraw queued (`Hyalo::queue_redraw`).
 pub fn redraw_queued(state: &mut Hyalo) {
     match &state.backend {
