@@ -49,7 +49,7 @@ refraction at the edge, a tint that adapts pixel by pixel so text stays legible,
 — and lets every surface have its own material, cut to its exact shape.
 
 A prototype has already run the real shell, unmodified. Its blur per surface cost less than
-Hyprland's on the same scene, measured on real hardware, and a first liquid glass followed. The
+Hyprland's on the same scene, measured on real hardware, and a first refractive glass followed. The
 study is [#679](https://github.com/nidara-project/nidara-desktop/issues/679); the plan, with
 everything Hyprland does for us today and where each piece goes, is
 [#680](https://github.com/nidara-project/nidara-desktop/issues/680).
