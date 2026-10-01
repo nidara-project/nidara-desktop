@@ -164,7 +164,7 @@ export function registerConfigEntries() {
         },
     })
     registerConfig("appearance.windowTransparency", {
-        desc: "Whether Nidara's own windows (Settings, About, the installer) are translucent, with the compositor's blur behind them; off, they are solid. Separate from the glass material — windows are not Liquid Glass — though the blur is the one the material sets (Hyprland has one). Ignored while accessibility.reduceTransparency is on.",
+        desc: "Whether Nidara's own windows (Settings, About, the installer) are translucent, with the compositor's blur behind them; off, they are solid. Separate from the glass material, which is for the interface's surfaces — though the blur is the one the material sets (Hyprland has one). Ignored while accessibility.reduceTransparency is on.",
         type: "boolean",
         get: () => Theme.windowTransparency,
         set: v => void Theme.setWindowTransparency(v as boolean),

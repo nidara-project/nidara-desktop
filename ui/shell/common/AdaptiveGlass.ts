@@ -115,7 +115,7 @@ export interface GlassSurfaceOpts {
     content?: GlassContent
     /** False: the surface never thickens past its slider — it only takes its tint from
      *  the backdrop. The dock (owner, 2026-09-30): "there is no text to read on it, and
-     *  so dark it loses the liquid-glass look; its white dots show even over a light
+     *  so dark it loses the glass look; its white dots show even over a light
      *  backdrop". Default true. */
     thickens?: boolean
     /** Areas another layer covers ABOVE this surface (the Activity Island over the

@@ -316,7 +316,7 @@
     <key name="window-transparency" type="b">
       <default>true</default>
       <summary>Transparent windows</summary>
-      <description>Nidara's own windows let what is behind them show through, with the compositor's blur (one for the whole desktop). Off, they are solid. Not part of the glass material: windows are not Liquid Glass.</description>
+      <description>Nidara's own windows let what is behind them show through, with the compositor's blur (one for the whole desktop). Off, they are solid. Not part of the glass material, which is for the interface's surfaces.</description>
     </key>
     <!--
       RETIRED 2026-09-30 (#674): the four glass opacities the sliders wrote. Nothing

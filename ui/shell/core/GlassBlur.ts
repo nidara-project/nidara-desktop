@@ -8,7 +8,7 @@ import { GLASS_BLUR, GLASS_MATERIAL_DEFAULT, type GlassMaterial } from "./Nidara
  *
  * ONE blur for the whole compositor — Hyprland has no per-layer size — so a material
  * reaches every translucent window as well as our layers. That is the scope the owner
- * chose (the same as macOS 27's single Liquid Glass control).
+ * chose: one control for all of it.
  *
  * ## The baseline, as in ReduceMotion.ts
  *

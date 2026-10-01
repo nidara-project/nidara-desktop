@@ -1399,7 +1399,7 @@ through the mirror) derives the numbers itself with the same table — so no two
 disagree about what "frosted" means. The numbers per position are PROVISIONAL until calibrated on
 screen with the owner.
 
-⚠️ **Windows are NOT Liquid Glass** (owner, 2026-09-30). The material is for the interface's surfaces
+⚠️ **Windows are NOT part of the glass material** (owner, 2026-09-30). The material is for the interface's surfaces
 and controls — bar, panels, dock, menus, tooltips. Nidara's windows are only translucent or solid.
 And the switch says TRANSPARENCY, deliberately not macOS's "wallpaper tinting": what shows through a
 window is shaped by the compositor's blur, and **Hyprland has ONE blur for everything** (no
@@ -1810,7 +1810,7 @@ contrast behind each label, which must not move) and then live.
   20° each side (`TINT_MUD_HUES`). Honest limit: ANY darkening glass turns a yellow backdrop
   olive, neutral tint included — only not darkening avoids it.
 - **The dock does not thicken** (`thickens: false`, owner: "there is no text to read on it, and
-  so dark it loses the liquid-glass look; its white dots show even over a light backdrop"). It is
+  so dark it loses the glass look; its white dots show even over a light backdrop"). It is
   measured for its tint only and stays at `dockOpacity`. Measured: its running dot is ~2:1 over a
   pale yellow-green wallpaper at 0.24 (1.6:1 over pure white, >10:1 over the default one) — below
   WCAG 1.4.11's 3:1 on pale backdrops, accepted on sight. `content: "marks"` stays for the day it
@@ -2595,8 +2595,8 @@ is the right answer.
    someone reports the login screen changed colour"* — never reached any machine:
    `nidara-greeter-session` sends the greeter's whole output to `/dev/null` (#614).
 3. **No comparable system ships one.** macOS, GNOME and Windows all draw this screen
-   with fixed light ink over a veil. Apple's Liquid Glass does flip material and
-   glyphs by backdrop, but that is in-app material, not the login screen. ⚠️ This file
+   with fixed light ink over a veil. Systems that flip material and glyphs by
+   backdrop do it for in-app material, not for the login screen. ⚠️ This file
    used to cite that prior art as support for the mechanism — read it as what it is:
    support for *adaptive material*, not for a login screen that analyses a photograph.
 

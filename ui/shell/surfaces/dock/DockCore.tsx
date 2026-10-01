@@ -1391,7 +1391,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     // ── Adaptive glass (#673) ─────────────────────────────────────────────────
     // The dock is measured for its TINT only (`tintFromBackdrop`): it never thickens
     // past its slider (`thickens: false`, owner 2026-09-30 — no text on it, and a dark
-    // dock loses the liquid-glass look). Measured: at the 0.24 floor its white running
+    // dock loses the glass look). Measured: at the 0.24 floor its white running
     // dot is ~2:1 over a pale yellow-green wallpaper, 1.6:1 over pure white, >10:1 over
     // the default one — below WCAG 1.4.11's 3:1 on pale backdrops, accepted on sight.
     // `content: "marks"` stays, for the day it thickens again. Its skin is the mode's. The glass is the capsule, not the
