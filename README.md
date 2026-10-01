@@ -1,7 +1,9 @@
 # Nidara Desktop
 
-Nidara Desktop is a full **Wayland desktop environment** built on **Hyprland**, **GTK4** and
-**GJS**, designed to be fast, visually premium, and tightly optimized for **Arch Linux**.
+Nidara Desktop is a full **Wayland desktop environment** built on **GTK4** and **GJS**, running
+today on the **Hyprland** compositor and moving to **Hyalo**, a compositor of its own (see
+[Where it is going](#where-it-is-going-hyalo)). It is designed to be fast, visually premium, and
+tightly optimized for **Arch Linux**.
 
 > **Nidara Desktop** is the desktop environment — this repository, and what you install on an
 > Arch system you already have. **Nidara** is the operating system built around it: a live image
@@ -34,9 +36,33 @@ so every clone is ready to be worked on by an agent out of the box.
 
 ---
 
+## Where it is going: Hyalo
+
+Nidara is building its own Wayland compositor, **Hyalo** (from the Greek *hyalos*, "glass"), on
+[Smithay](https://github.com/Smithay/smithay), and will leave Hyprland for it.
+
+Hyprland has carried Nidara a long way, but it is a compositor made for everybody, and the desktop
+kept running into what it allows: one blur for every surface, decided by alpha thresholds; no way
+for a surface to see what lies behind it; window animations that cannot start from a point we
+choose. A compositor of our own lets the glass **modify the backdrop** instead of painting over it —
+refraction at the edge, a tint that adapts pixel by pixel so text stays legible, a light on the rim
+— and lets every surface have its own material, cut to its exact shape.
+
+A prototype has already run the real shell, unmodified. Its blur per surface cost less than
+Hyprland's on the same scene, measured on real hardware, and a first liquid glass followed. The
+study is [#679](https://github.com/nidara-project/nidara-desktop/issues/679); the plan, with
+everything Hyprland does for us today and where each piece goes, is
+[#680](https://github.com/nidara-project/nidara-desktop/issues/680).
+
+**Until Hyalo replaces it, Hyprland is the compositor** — everything below describes the desktop
+as it runs today. While Hyalo is built, a preview session will sit next to the regular one at
+login; the switch happens in a single release, when nothing is missing.
+
+---
+
 ## Features
 
-- **Compositor**: Hyprland (Wayland) — smooth animations, tiling + floating window management.
+- **Compositor**: Hyprland (Wayland) — smooth animations, tiling + floating window management. Moving to Hyalo, Nidara's own ([see above](#where-it-is-going-hyalo)).
 - **Shell**: TypeScript on GTK4, bundled with esbuild — modular UI, custom-painted with Cairo.
 - **Bar**: Live clock, workspaces, system tray, resource indicators, system menu with inline power actions.
 - **Activity Island**: A capsule at the center of the bar that morphs into whatever is happening — workspace dots at rest, then media playback, screen recording, a low-battery warning, or the built-in Assistant — and expands into a panel for it.

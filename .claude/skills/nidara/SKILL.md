@@ -11,6 +11,13 @@ description: "Authoritative reference for working on the Nidara desktop environm
 
 Nidara is a **full Wayland desktop environment** for Arch Linux — not a theme, not a set of scripts. It registers as a proper Wayland session (like GNOME/KDE) and is launched by the display manager. The compositor is **Hyprland**; the UI is **TypeScript → GJS** on **GTK4 + gtk4-layer-shell** (libadwaita fully removed), hosted by **our own `Gtk.Application` in `ui/lib/nidara-kit/platform/host.ts`** and bundled by **our own `scripts/bundle.sh`** (esbuild), styled with **SCSS** and painted with **Cairo** where shapes get custom (dock squircles, workspace dots, resource rings, schematic).
 
+⚠️ **The compositor is changing: Hyprland → Hyalo** (owner's decision, 2026-10-01). Hyalo is
+Nidara's own Wayland compositor, on Smithay (Rust), in this repo once block #681 lands. The plan,
+with the parity table and five blocks, is issue #680; the evidence, #679. **Until the switch
+(#685) Hyprland is the compositor and everything in this skill describes it.** Work for Hyalo
+follows #680's blocks. Do not add new Hyprland-only mechanisms where a compositor-neutral one will
+do; anything that must talk to the compositor goes through the interface block #682 introduces.
+
 ⚠️ **AGS is GONE, entirely, since 2026-08-18** — runtime first (`ui/lib/{host,process,file,app-id}.ts` replaced its four modules), toolchain the same day:
 
 | was | is | what it actually was |
