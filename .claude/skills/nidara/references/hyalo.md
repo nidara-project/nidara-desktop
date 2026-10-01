@@ -104,6 +104,10 @@ list, `hyprctl` options): the shell logs it as CRITICALs and carries on. That is
   pictures.
 - The tty backend — the one that matters — is tested in the VM (maintainer harness), as a session
   from the greeter or from a VT; QEMU's `virtio-gpu,max_outputs=2` gives two outputs.
+- On real hardware: `hyalo/scripts/install-preview.sh` installs the session on a dev install
+  (the package cannot go there), and `measure-session.sh`, run once per session, gives the
+  like-for-like numbers #681 asks for. Running Hyalo on the maintainer's own GPU is the owner's
+  step: it needs sudo, and the first boot on new hardware is the one most likely to fail.
 - CI's `hyalo` job (`scripts/ci/hyalo-smoke.sh`) builds with the lock file, clippy `-D warnings`,
   unit tests, then boots the tty backend on vkms with the real shell on it. NOT a required check
   while Hyalo is a preview: it must never hold the merge queue for the desktop that ships.

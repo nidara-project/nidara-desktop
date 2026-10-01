@@ -49,6 +49,21 @@ real GPU, and screenshot it.
 `HYALO_CONTROL` (a FIFO) feeds pointer and key events straight to the seat — synthetic motion
 through a headless host never reaches a nested window. Verbs in `compositor/src/control.rs`.
 
+## On your own machine (a dev install)
+
+    hyalo/scripts/install-preview.sh              # build, then install the session (sudo)
+    hyalo/scripts/install-preview.sh --uninstall
+
+The `nidara-hyalo` package needs the `nidara-desktop` package, which a dev install removes, so
+this script puts the same files where the package would and touches nothing else. The greeter
+lists "Nidara — Hyalo preview" from its next start.
+
+    hyalo/scripts/measure-session.sh [seconds]    # run once on Hyprland, once on Hyalo
+
+The same scene in either session — the shell with the Control Center open, blur off, your
+wallpaper still and then an animated one — with mean `gpu_busy_percent` and the compositor's
+CPU; everything it touches is restored. Results land in `~/.local/state/nidara/hyalo/`.
+
 ## Bumping Smithay
 
 Smithay is pinned by revision in `Cargo.toml` (`[workspace.dependencies]`) and **never
