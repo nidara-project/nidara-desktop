@@ -218,7 +218,12 @@ one with a `timeout-minutes`):
 | `installer-logic` | the installer's rules as pure functions — no disk, no window, no GTK. The `disk_config` it emits and the layouts `manualProblems` must REFUSE (`disk-config-probe.ts`); what the account form accepts and refuses (`account-rules-probe.ts`), whose rules are all that stand between a capitalised username and a `useradd` failure inside the chroot; and what we may touch on an EFI partition that is **not only ours** (`bootloader-rules-probe.ts`) — a shared ESP is the one case whose damage lands on somebody else's operating system, and it is unreachable from this repo. And what the run page COUNTS (`run-progress-probe.ts`), fed lines from a real install — a bar that fell back to the start would read as the install starting over. ⚠️ Each probe is preceded by a step that deletes one of its rules and requires the probe to CATCH it — a probe that has only ever printed "ok" has been run, not tested, and both of these exited 0 while printing `N FAILURE(S)` until 2026-09-05 |
 
 ⚠️ A REQUIRED check skipped by a path filter never reports, and that **stalls the merge queue** —
-skip the *work* inside a job, never the job. Details in `references/dev-workflow.md`.
+skip the *work* inside a job, never the job.
+
+⚠️ **`apt-get` in CI only through `scripts/ci/apt.sh install …`.** A bare `apt-get update` waits
+forever on a stalled Ubuntu mirror: twice on 2026-10-01 a job sat silent for 45 minutes until
+Actions cancelled it, and the merge queue threw the entry out. The script sets apt's network
+timeouts, caps each attempt and tries three times. Details in `references/dev-workflow.md`.
 
 ## When in doubt
 
