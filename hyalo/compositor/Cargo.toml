@@ -23,6 +23,9 @@ toml = "0.9"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 xcursor = "0.3.3"
+# Window rules match app ids and titles by regex. The `regex` crate is a thin wrapper over
+# this one, which the tree already has (tracing-subscriber).
+regex-automata = { version = "0.4", default-features = false, features = ["std", "syntax", "meta", "nfa-pikevm", "nfa-backtrack", "hybrid", "unicode"] }
 # Protocols Smithay does not ship are generated from their XML in ../../protocols.
 wayland-server = "0.31"
 wayland-backend = "0.3"

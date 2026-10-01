@@ -380,7 +380,7 @@ impl Hyalo {
         Ok(())
     }
 
-    fn center(&mut self, id: WindowId) -> Result<(), String> {
+    pub(super) fn center(&mut self, id: WindowId) -> Result<(), String> {
         let m = self.wm.get(id).ok_or("no such window")?;
         if !m.floating {
             return Err("only a floating window can be centred".into());

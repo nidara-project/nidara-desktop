@@ -39,6 +39,45 @@ pub struct Config {
     pub workspaces: WorkspacesConfig,
     /// Key and pointer bindings: `"Super+Q" = "close-window"` (binds.rs).
     pub binds: BTreeMap<String, crate::binds::BindConfig>,
+    /// Window rules by name, applied in name order (wm/rules.rs). By name rather than a list
+    /// so a layer adds, overrides or switches off (`enabled = false`) one rule: the layers
+    /// merge tables, and a list in the user's file would replace the shipped ones whole.
+    pub rules: BTreeMap<String, RuleConfig>,
+}
+
+/// One window rule: what it matches and what it does.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct RuleConfig {
+    pub enabled: bool,
+    #[serde(rename = "match")]
+    pub matching: RuleMatch,
+    /// Float (true) or tile (false), whatever the workspace's mode.
+    pub float: Option<bool>,
+    /// Centred in the usable area — not over its parent, not stepped off another window.
+    pub center: bool,
+    /// `"3"`, or `"special:NAME"`.
+    pub workspace: Option<String>,
+    /// With `workspace`: the window goes there without taking the user with it.
+    pub silent: bool,
+}
+
+impl Default for RuleConfig {
+    fn default() -> Self {
+        Self { enabled: true, matching: RuleMatch::default(), float: None, center: false, workspace: None, silent: false }
+    }
+}
+
+/// Regular expressions, each searched in its field (anchor with `^…$` for the whole string).
+/// Every one given must match.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct RuleMatch {
+    pub app_id: Option<String>,
+    pub title: Option<String>,
+    /// What the window was called when it was first shown.
+    pub initial_app_id: Option<String>,
+    pub initial_title: Option<String>,
 }
 
 /// How windows are laid out. The defaults are the Hyprland session's (`config/hypr/
@@ -402,6 +441,7 @@ fn from_layers(layers: Vec<toml::Table>) -> Result<Config, ConfigError> {
         return Err(ConfigError::Invalid(format!("workspaces.modes: {k:?} is not a workspace number")));
     }
     crate::binds::parse_binds(&config.binds).map_err(ConfigError::Invalid)?;
+    crate::wm::rules::compile(&config.rules).map_err(ConfigError::Invalid)?;
     for (name, o) in &config.outputs {
         if !o.mode.is_empty() && o.parsed_mode().is_none() {
             return Err(ConfigError::Invalid(format!("outputs.{name}.mode: cannot read {:?}", o.mode)));
@@ -473,6 +513,11 @@ pub fn reload(state: &mut crate::Hyalo) -> Result<(), String> {
     if old.binds != new.binds {
         // Validated by `load`, so this cannot fail here.
         state.binds = crate::binds::parse_binds(&new.binds).unwrap_or_default();
+    }
+    if old.rules != new.rules {
+        // Validated by `load`. Applies to windows opened from now on, and to a window whose
+        // app id or title changes: a rule never re-arranges what is already open.
+        state.rules = crate::wm::rules::compile(&new.rules).unwrap_or_default();
     }
     if old.layout.tiling != new.layout.tiling {
         state.change_tiling_layout();
@@ -674,6 +719,8 @@ mod tests {
         let binds = crate::binds::parse_binds(&c.binds).unwrap();
         assert!(binds.len() >= 54, "the Hyprland session's bindings are all there");
         assert_eq!(c.workspaces.default_mode, crate::wm::WorkspaceMode::Floating);
+        let rules = crate::wm::rules::compile(&c.rules).unwrap();
+        assert!(rules.iter().any(|r| r.name == "about"), "the shipped rules load");
     }
 
     #[test]

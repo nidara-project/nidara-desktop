@@ -277,6 +277,48 @@ for (const r of rules) {
     for (const n of notes) console.log(`  ${"".padEnd(26)}   ↳ ${n}`)
 }
 
+// ── Hyalo's rules (config/hyalo/hyalo.toml, `[rules.NAME]`) ─────────────────────
+// Hyalo applies a rule the first time it matches — at open OR when the window renames
+// itself (hyalo/compositor/src/wm/rules.rs) — so the birth/stamp timing trap above does not
+// exist there and a rule names a window by its real, stamped app id. What still holds is the
+// seam itself: the name in the TOML must be one a window in ui/ declares, and a matched title
+// a literal we set. (Hyalo checks the regexes compile when it loads the file; its unit tests
+// cover that.)
+const HYALO_CONFIG = "config/hyalo/hyalo.toml"
+if (existsSync(HYALO_CONFIG)) {
+    const toml = readFileSync(HYALO_CONFIG, "utf8")
+    // A basic-string TOML literal, unescaped once: "^org\\.nidara" → ^org\.nidara.
+    const tomlStr = (s) => s.replace(/\\(.)/g, "$1")
+    const hyalo = []
+    for (const m of toml.matchAll(/^\[rules\.([\w-]+)\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/gm)) {
+        const body = m[2]
+        const line = toml.slice(0, m.index).split("\n").length
+        const field = (k) => { const f = body.match(new RegExp(`\\b${k}\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)"`)); return f && tomlStr(f[1]) }
+        hyalo.push({ name: m[1], line, app_id: field("app_id"), initial_app_id: field("initial_app_id"), title: field("title"), initial_title: field("initial_title") })
+    }
+    console.log(`\n${hyalo.length} Hyalo rule(s) (${HYALO_CONFIG}):`)
+    const known = new Set([...BIRTH.keys(), ...STAMPED.keys()])
+    for (const r of hyalo) {
+        const where = `${HYALO_CONFIG}:${r.line}`
+        for (const key of ["app_id", "initial_app_id"]) {
+            if (r[key] === null) continue
+            for (const a of alternatives(r[key]))
+                if (/^(org\.nidara\.|nidara-)/.test(a) && !known.has(a))
+                    fail(`Hyalo rule ${r.name} (${where}) names \`${a}\` in ${key}, which no window in ui/ declares.\n` +
+                         `        The app ids that exist: ${[...known].join(", ")}`)
+        }
+        for (const key of ["title", "initial_title"]) {
+            if (r[key] === null) continue
+            let re = null
+            try { re = new RegExp(r[key]) } catch { fail(`Hyalo rule ${r.name} (${where}): ${key} is not a regex`) }
+            if (re && ![...TITLES.keys()].some(t => re.test(t)))
+                fail(`Hyalo rule ${r.name} (${where}) matches ${key} ${JSON.stringify(r[key])}, which no window in ui/ sets.`)
+        }
+        console.log(`  ${r.name.padEnd(26)} ${["app_id", "initial_app_id", "title", "initial_title"].filter(k => r[k] !== null).map(k => `${k}=${JSON.stringify(r[k])}`).join(" ")}`)
+    }
+    if (!hyalo.length) fail(`${HYALO_CONFIG}: no [rules.NAME] read — the parser here and the file disagree`)
+}
+
 if (bad) {
     console.error(`\nhypr-rule-check: ${bad} problem(s).`)
     console.error("A window rule and the window it matches are one decision written in two languages,")

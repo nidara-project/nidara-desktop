@@ -968,6 +968,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "png",
+ "regex-automata",
  "serde",
  "serde_json",
  "smithay",

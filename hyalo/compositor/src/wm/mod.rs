@@ -18,6 +18,7 @@
 pub mod actions;
 pub mod grabs;
 pub mod layout;
+pub mod rules;
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -101,6 +102,8 @@ pub struct Managed {
     /// runs once, at open, matches against (Hyprland's `initialClass`/`initialTitle`).
     pub initial_app_id: String,
     pub initial_title: String,
+    /// The rules that have applied to it, by name: a rule applies once (wm/rules.rs).
+    pub rules_applied: Vec<String>,
 }
 
 pub struct Workspace {
@@ -422,6 +425,7 @@ impl Hyalo {
             clamp_ask: None,
             initial_app_id: String::new(),
             initial_title: String::new(),
+            rules_applied: Vec::new(),
         });
     }
 
@@ -429,9 +433,17 @@ impl Hyalo {
     /// it draws its first frame at the size it will have.
     pub fn initial_configure(&mut self, window: &Window) {
         let Some(m) = self.wm.by_window(window) else { return };
-        let (id, ws) = (m.id, m.workspace);
+        let (id, mut ws) = (m.id, m.workspace);
         let Some(t) = window.toplevel() else { return };
-        if self.workspace_mode(ws) == WorkspaceMode::Tiling && !wants_floating(window)
+        // What the rules will want when it is shown, so its first frame is already right.
+        let fx = self.new_rule_effects(id, false);
+        if let Some(w) = &fx.workspace {
+            let output = self.wm.workspaces.get(&ws).map(|w| w.output.clone()).unwrap_or_default();
+            ws = self.rule_workspace(w, &output);
+            self.wm.get_mut(id).unwrap().workspace = ws;
+        }
+        let tiled = fx.float.map_or(self.workspace_mode(ws) == WorkspaceMode::Tiling && !wants_floating(window), |f| !f);
+        if tiled
             && let Some(rect) = self.predicted_tile(ws, id)
         {
             t.with_pending_state(|s| {
@@ -468,9 +480,15 @@ impl Hyalo {
     /// The window's first buffer: it is placed — tiled or floating — and takes the focus.
     pub fn window_mapped(&mut self, window: &Window) {
         let Some(m) = self.wm.by_window(window) else { return };
-        let (id, ws) = (m.id, m.workspace);
+        let (id, mut ws) = (m.id, m.workspace);
+        let fx = self.new_rule_effects(id, true);
+        if let Some(w) = &fx.workspace {
+            let output = self.wm.workspaces.get(&ws).map(|w| w.output.clone()).unwrap_or_default();
+            ws = self.rule_workspace(w, &output);
+            self.wm.get_mut(id).unwrap().workspace = ws;
+        }
         let Some(output) = self.wm.workspaces.get(&ws).and_then(|w| self.output_named(&w.output)) else { return };
-        let tiled = self.workspace_mode(ws) == WorkspaceMode::Tiling && !wants_floating(window);
+        let tiled = fx.float.map_or(self.workspace_mode(ws) == WorkspaceMode::Tiling && !wants_floating(window), |f| !f);
         let size = window.geometry().size;
         let og = self.space.output_geometry(&output).unwrap_or_default();
         // A dialog opens over its parent; anything else in the middle of the usable area.
@@ -487,8 +505,13 @@ impl Hyalo {
             .filter(|o| o.id != id && o.fullscreen == Fullscreen::None)
             .map(|o| o.rect)
             .collect();
-        let float = clamp_floating(centered(size, parent_rect.unwrap_or(area)), area);
-        let float = cascade(float, &others, area, self.config.layout.gaps_out);
+        let float = if fx.center {
+            // A rule's `center`: the middle of the usable area, nothing else considered.
+            clamp_floating(centered(size, area), area)
+        } else {
+            let float = clamp_floating(centered(size, parent_rect.unwrap_or(area)), area);
+            cascade(float, &others, area, self.config.layout.gaps_out)
+        };
         let near = self.wm.focused.filter(|f| self.wm.get(*f).is_some_and(|m| m.workspace == ws));
         let cursor = self.seat.get_pointer().map(|p| p.current_location());
         let tiled_area = inset(self.work_area(&output), self.config.layout.gaps_out);
@@ -509,7 +532,11 @@ impl Hyalo {
             m.clamp_ask = Some((float.size, size));
         }
         self.wm.dirty_windows = true;
-        self.focus_window(Some(id));
+        self.wm.dirty_workspaces = true;
+        // Sent elsewhere `silent`ly: it opens there without taking the user — or the focus.
+        if !(fx.workspace.is_some() && fx.silent) {
+            self.focus_window(Some(id));
+        }
         self.arrange_workspace(ws);
         self.sync_space();
     }

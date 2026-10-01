@@ -73,6 +73,8 @@ pub struct Hyalo {
     /// Workspaces and windows (wm/).
     pub wm: crate::wm::Wm,
     pub binds: Vec<crate::binds::Binding>,
+    /// The window rules in force (wm/rules.rs).
+    pub rules: Vec<crate::wm::rules::Rule>,
     pub keys: crate::input::KeyTracking,
 }
 
@@ -131,6 +133,7 @@ impl Hyalo {
         seat.add_pointer();
 
         let socket_name = Self::init_wayland_listener(display, &loop_handle);
+        let rules_config = config.rules.clone();
         let binds = crate::binds::parse_binds(&config.binds).unwrap_or_else(|err| {
             tracing::error!("key bindings not loaded: {err}");
             Vec::new()
@@ -164,6 +167,10 @@ impl Hyalo {
             ipc: IpcState::default(),
             wm: crate::wm::Wm::default(),
             binds,
+            rules: crate::wm::rules::compile(&rules_config).unwrap_or_else(|err| {
+                tracing::error!("window rules not loaded: {err}");
+                Vec::new()
+            }),
             keys: Default::default(),
         }
     }

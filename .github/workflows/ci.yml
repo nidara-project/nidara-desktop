@@ -637,6 +637,21 @@ jobs:
       # and the prose still had the shell's birth class wrong.
       - name: Window rules match identifiers the source declares (must succeed)
         run: node scripts/ci/hypr-rule-check.mjs
+      # Hyalo's rules (config/hyalo/hyalo.toml) go through a TOML reader of its own in
+      # that script; a reader that finds nothing would pass every rule, so: a misspelt
+      # app id must be caught.
+      - name: The Hyalo rule check can fail (control, must be caught)
+        run: |
+          cp config/hyalo/hyalo.toml /tmp/hyalo.toml.bak
+          sed -i 's/app_id = "^nidara-about\$"/app_id = "^nidara-abuot$"/' config/hyalo/hyalo.toml
+          grep -q 'nidara-abuot' config/hyalo/hyalo.toml || { echo "::error::the control's edit did not apply"; exit 1; }
+          if node scripts/ci/hypr-rule-check.mjs; then
+            echo "::error::a Hyalo rule naming an app id nothing declares passed the check"
+            cp /tmp/hyalo.toml.bak config/hyalo/hyalo.toml
+            exit 1
+          fi
+          cp /tmp/hyalo.toml.bak config/hyalo/hyalo.toml
+          git diff --quiet config/hyalo/hyalo.toml
       # The shell GENERATES Lua too — nidara-settings.lua and nidara-monitor.lua,
       # both required by hyprland.lua at every login. `tsc` sees the generator's
       # strings and luac never sees what they produced, so this renders the real

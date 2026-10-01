@@ -38,6 +38,24 @@ border = 1
 [workspaces]
 default_mode = "floating"
 
+# Window rules, by name (hyalo/compositor/src/wm/rules.rs). A rule applies to a window ONCE,
+# the first time it matches: when it opens, or later when it renames itself — so our windows
+# are matched by the app id they stamp when shown, which Hyprland's rules never see (#679,
+# item 13; config/hypr/hyprland.lua matches About by its title for that reason). `match` is
+# regexes searched in app_id / title / initial_app_id / initial_title; effects: float,
+# center, workspace ("3" or "special:NAME") with silent. Your hyalo.toml can add a rule,
+# replace one by its name, or switch one off with `enabled = false`.
+# (The other rules of hyprland.lua have nothing to act on yet: no XWayland, no rounding or
+# animations (#684), and game mode's are its own item in #682.)
+[rules.about]
+match = { app_id = "^nidara-about$" }
+float = true
+center = true
+
+[rules.installer]
+match = { app_id = "^(org\\.nidara\\.installer|nidara-installer)$" }
+center = true
+
 # Key and pointer bindings: modifiers + key = a command (hyalo/compositor/src/binds.rs for
 # the syntax, wm/actions.rs for the commands). The same set as the Hyprland session
 # (config/hypr/hyprland.lua). No binding ends the session on purpose — one stray chord must
