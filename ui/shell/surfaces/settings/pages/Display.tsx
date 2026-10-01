@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { listGroup, createRow, pageBox, staticLabel, bindWhileRealized, onPageShown } from "../SettingsHelpers"
 import { showNidaraAlert, NidaraDropDown } from "../../../../lib/nidara-kit"
-import hs from "../../../core/HyprlandState"
+import displays from "../../../core/Displays"
 import { t } from "../../../core/i18n"
 import { uiIcon } from "../../../core/Icons"
 import monitorConfig from "../../../core/MonitorConfig"
@@ -265,11 +265,13 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
 function buildGlobalSection(): Gtk.Widget {
     const { box, listBox } = listGroup(t("settings.display.group.all"))
 
-    // Index == value applied: 0=off, 1=always, 2=fullscreen-only.
+    // Index == value applied: 0=off, 1=always, 2=fullscreen-only. Hyalo has no
+    // fullscreen-only yet — it needs fullscreen windows (#682) — so it is not offered
+    // there rather than offered and ignored.
     const VRR_OPTS = [
         t("settings.display.vrr.off"),
         t("settings.display.vrr.always"),
-        t("settings.display.vrr.fullscreen"),
+        ...(displays.onHyalo ? [] : [t("settings.display.vrr.fullscreen")]),
     ]
     const vrrDrp = NidaraDropDown({
         model: new Gtk.StringList({ strings: VRR_OPTS }), valign: Gtk.Align.CENTER,
@@ -328,16 +330,16 @@ export default function DisplayPage() {
 
     const render = () => {
         clearPage()
-        // Monitors come from HyprlandState's cache (the facade), not a direct
-        // AstalHyprland read. Empty also covers Hyprland being unavailable.
-        const monitors: any[] = hs.monitors
+        // Monitors come from the Displays facade — HyprlandState's cache on Hyprland,
+        // Hyalo's IPC on Hyalo. Empty also covers the compositor being unreachable.
+        const monitors = displays.monitors
         if (monitors.length === 0) { placeholder(t("settings.display.error.no-monitors")); return }
 
         monitorConfig.init(monitors)
-        // Available modes come from HyprlandState's cache (read from hyprctl there,
-        // since AstalHyprland doesn't expose them) — no per-render re-shell.
+        // Mode lists come with the monitors, from either compositor — no per-render
+        // re-read.
         monitors.forEach(mon => {
-            page.append(buildMonitorSection(mon, hs.getAvailableModes(mon.name)))
+            page.append(buildMonitorSection(mon, mon.availableModes))
         })
         page.append(globalBox)
     }
@@ -345,25 +347,25 @@ export default function DisplayPage() {
     // The Settings page is built once and cached for the window's lifetime (it hides,
     // not destroys), so a monitor hot-plugged later would never appear. Rebuild the
     // sections when the monitor TOPOLOGY changes (the set of connected outputs).
-    // Deliberately keyed on names only — not geometry/scale — because hs."changed"
-    // fires on every window/workspace event, and a resolution/rotation change is
+    // Deliberately keyed on names only — not geometry/scale — because "changed" fires
+    // on every window/workspace event on Hyprland, and a resolution/rotation change is
     // user-driven through these very dropdowns: rebuilding mid-interaction would
     // clobber the in-flight revert dialog's closure state.
     const topology = (): string =>
-        hs.monitors.map(m => m.name).sort().join("|")
+        displays.monitors.map(m => m.name).sort().join("|")
 
     let lastTopology = topology()
     // Re-rendered and re-watched per visit: monitors can be plugged, unplugged or
     // rearranged while the user is on another page, and this page is cached.
     bindWhileRealized(page, () => {
         render()
-        const sigId = hs.connect("changed", () => {
+        const sigId = displays.connect("changed", () => {
             const next = topology()
             if (next === lastTopology) return
             lastTopology = next
             render()
         })
-        return () => safeDisconnect(hs, sigId)
+        return () => safeDisconnect(displays, sigId)
     })
 
     return page

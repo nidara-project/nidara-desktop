@@ -1,8 +1,14 @@
 //! Hyalo's configuration: ONE file of ours, TOML.
 //!
-//! Two layers, read in order and merged table by table: the defaults the package ships in
-//! `/usr/share/nidara/hyalo/hyalo.toml`, then the user's `~/.config/nidara/hyalo.toml` on top.
-//! A key the user does not set keeps the shipped value, so a new default reaches everybody
+//! Three layers, read in order and merged table by table:
+//!
+//! 1. the defaults the package ships, `/usr/share/nidara/hyalo/hyalo.toml`;
+//! 2. what Settings chose, `~/.config/nidara/hyalo-settings.toml` — written by the shell
+//!    (core/MonitorConfig.ts), never by hand: the counterpart of `nidara-monitor.lua`;
+//! 3. the user's own `~/.config/nidara/hyalo.toml`, last, so a hand edit wins — the same
+//!    order as Hyprland's `nidara-*.lua` then `hyprland-user.lua`.
+//!
+//! A key a layer does not set keeps the value below it, so a new default reaches everybody
 //! who has not overridden it.
 //!
 //! The file is watched (a cheap mtime poll) and a change re-applies only what changed. Live
@@ -107,6 +113,8 @@ pub struct OutputConfig {
     pub enabled: bool,
     /// `WIDTHxHEIGHT` or `WIDTHxHEIGHT@HZ` (Hz may have decimals); empty = the preferred mode.
     pub mode: String,
+    /// `1` and `1.0` alike: TOML tells them apart, a person does not.
+    #[serde(deserialize_with = "number")]
     pub scale: f64,
     /// Logical pixels; `None` = to the right of the outputs already placed.
     pub position: Option<(i32, i32)>,
@@ -126,6 +134,19 @@ impl Default for OutputConfig {
             vrr: false,
         }
     }
+}
+
+fn number<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum N {
+        I(i64),
+        F(f64),
+    }
+    Ok(match N::deserialize(d)? {
+        N::I(i) => i as f64,
+        N::F(f) => f,
+    })
 }
 
 impl OutputConfig {
@@ -220,12 +241,17 @@ pub fn user_config_path() -> PathBuf {
     base.join("nidara").join("hyalo.toml")
 }
 
-/// The layers in the order they apply. `HYALO_CONFIG` replaces both (tests, CI).
+/// The file Settings writes: `$XDG_CONFIG_HOME/nidara/hyalo-settings.toml`.
+pub fn settings_config_path() -> PathBuf {
+    user_config_path().with_file_name("hyalo-settings.toml")
+}
+
+/// The layers in the order they apply. `HYALO_CONFIG` replaces them all (tests, CI).
 pub fn layer_paths() -> Vec<PathBuf> {
     if let Some(p) = std::env::var_os("HYALO_CONFIG") {
         return vec![PathBuf::from(p)];
     }
-    vec![PathBuf::from(SYSTEM_CONFIG), user_config_path()]
+    vec![PathBuf::from(SYSTEM_CONFIG), settings_config_path(), user_config_path()]
 }
 
 fn read_layer(path: &Path) -> Result<Option<toml::Table>, ConfigError> {
@@ -382,6 +408,18 @@ mod tests {
         let o = &c.outputs["DP-1"];
         assert_eq!(o.scale, 1.5);
         assert_eq!(o.parsed_mode(), Some((2560, 1440, Some(143912))));
+    }
+
+    #[test]
+    fn three_layers_the_last_wins() {
+        let d = tmpdir("three");
+        let sys = write(&d, "sys.toml", "[outputs.DP-1]\nscale = 1\nvrr = true\n");
+        let settings = write(&d, "settings.toml", "[outputs.DP-1]\nscale = 1.25\nmode = \"2560x1440@144\"\n");
+        let user = write(&d, "user.toml", "[outputs.DP-1]\nscale = 1.5\n");
+        let o = load_from(&[sys, settings, user]).unwrap().outputs["DP-1"].clone();
+        assert_eq!(o.scale, 1.5, "the user's hand edit wins over Settings");
+        assert_eq!(o.mode, "2560x1440@144", "Settings' value where the user set nothing");
+        assert!(o.vrr, "the shipped value where neither did");
     }
 
     #[test]
