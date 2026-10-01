@@ -111,6 +111,8 @@ impl Hyalo {
         CursorShapeManagerState::new::<Self>(&dh);
         RelativePointerManagerState::new::<Self>(&dh);
         PointerConstraintsState::new::<Self>(&dh);
+        // A surface may say its content is a game: one of game mode's signs (wm/games.rs).
+        smithay::wayland::content_type::ContentTypeState::new::<Self>(&dh);
         // Ours (protocols/ at the repo root).
         focus_grab::init(&dh);
         // The Assistant's computer use: synthetic pointer (nidara-input) and keyboard (wtype).

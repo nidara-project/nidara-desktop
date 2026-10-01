@@ -33,7 +33,7 @@ import compositor, { settings as compositorSettings } from "./core/CompositorSta
 import queryUI from "./core/UITree"
 import Wallpaper from "./core/WallpaperManager"
 import workspaceModes, { type WorkspaceMode } from "./core/WorkspaceModes"
-import { startGamingSync } from "./core/GamingSync"
+import { startGameSession } from "./core/GameSession"
 import { startDevLogWatch } from "./core/DevLogWatch"
 import { startNightLightSync } from "./core/NightLightSync"
 import { startAppearanceHooks } from "./core/AppearanceHooks"
@@ -1013,9 +1013,9 @@ app.start({
     // notification (the server above has to exist first). See core/DevLogWatch.ts.
     startDevLogWatch()
 
-    // Game mode's settings, handed to the compositor (hyprland.lua cannot read
-    // GSettings). Here and nowhere else — see core/GamingSync.ts.
-    startGamingSync()
+    // Game mode around a game (wallpaper, power profile, notifications, the way back),
+    // on both compositors. Here and nowhere else — see core/GameSession.ts.
+    startGameSession()
     // hyprsunset and the schedule, from org.nidara.night-light — here and nowhere else,
     // so a change from any process applies once. See core/NightLightSync.ts.
     startNightLightSync()

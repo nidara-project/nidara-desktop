@@ -1047,24 +1047,16 @@ hl.window_rule({
 })
 
 
--- ── Game mode — workspace, window rules & auto-return ────────────────────────
-local lastNonGameWs    = nil
-local inGameSession    = false
-local prevWallpaper    = nil
-local prevTransition   = "fade"
-local prevProfile      = nil
-local gameMonitor      = ""
-local activeGames      = {}   -- address → appid; tracks all Steam-launched game windows
+-- ── Game mode — the game's own workspace ──────────────────────────────────────
+-- The compositor's part of game mode is to recognise a game and put it on `gamespace`,
+-- presented immediately and with no effects. Everything AROUND the game — the wallpaper,
+-- the power profile, holding notifications back, the way back when the last game closes —
+-- is the shell's, on Hyprland and Hyalo alike (ui/shell/core/GameSession.ts), from
+-- Settings → Gaming. Hyalo recognises games the same way (hyalo/compositor/src/wm/games.rs).
 
--- Reads the active power profile. Empty string when power-profiles-daemon is not
--- installed, which is the same as "nothing to put back".
-local function currentProfile()
-    local p = io.popen("powerprofilesctl get 2>/dev/null")
-    if not p then return "" end
-    local out = p:read("*l"); p:close()
-    return out and out:match("^%s*(.-)%s*$") or ""
-end
-
+-- A Steam app id in the environment of the window's process or one of its parents: what a
+-- game Steam launched carries, whatever its class (Steam starts it through a reaper and a
+-- launcher or two).
 local function getSteamAppId(pid)
     local p = tonumber(pid)
     for _ = 1, 8 do
@@ -1085,122 +1077,14 @@ local function getSteamAppId(pid)
     return nil
 end
 
--- Game mode's settings live in GSettings (org.nidara.gaming, #573), which Lua in
--- here cannot read. The shell hands them over as the NIDARA_GAMING table — in
--- nidara-gaming.lua, required at the bottom of this file, and pushed live with
--- `hyprctl eval` on every change (ui/shell/core/GamingSync.ts). Read at the moment
--- a game opens, so a change made mid-session applies to the next game. No table
--- (a shell that has never run) = the schema's defaults.
-local function readGamingCfg()
-    local g = NIDARA_GAMING or {}
-    return g.wallpaperMode or "artwork", g.customWallpaper, g.transition or "grow",
-        g.performanceProfile == true
-end
-
-local function findSteamHero(appid)
-    local base = os.getenv("HOME") .. "/.steam/steam/appcache/librarycache/" .. appid
-    local flat = base .. "/library_hero.jpg"
-    local f = io.open(flat, "r")
-    if f then f:close(); return flat end
-    local iter = io.popen('find "' .. base .. '" -maxdepth 2 -name "library_hero.jpg" 2>/dev/null | grep -v blur | head -1')
-    if iter then
-        local path = iter:read("*l"); iter:close()
-        if path then path = path:match("^%s*(.-)%s*$") end
-        if path and path ~= "" then return path end
-    end
-    return nil
-end
-
-hl.on("workspace.active", function(ws)
-    if ws.name ~= "gamespace" then
-        lastNonGameWs = ws.id
-    end
-end)
-
+-- The rules below catch `steam_app_*` and self-declared games; this catches a game launched
+-- by Steam under any other class.
 hl.on("window.open", function(w)
     local cls = w.class or ""
-    local pid = w.pid or 0
-    local appid = cls:match("^steam_app_(%d+)$") or getSteamAppId(pid)
-    if not appid then return end
-
-    activeGames[w.address] = appid
+    if not (cls:match("^steam_app_%d+$") or getSteamAppId(w.pid or 0)) then return end
     hl.dispatch(hl.dsp.window.move({ workspace = "name:gamespace" }))
     hl.dispatch(hl.dsp.focus({ workspace = "name:gamespace" }))
     hl.exec_cmd("hyprctl setprop address:" .. w.address .. " immediate 1 lock:0")
-
-    -- "Already in a game session" — one flag, not `prevWallpaper`. That variable is
-    -- only set when a wallpaper was actually swapped, so with mode = none (or
-    -- artwork with no hero art found) a second game window re-ran this whole block.
-    -- Harmless while the only thing it repeated was setting the profile to
-    -- performance; not harmless now that entering CAPTURES the profile to put back,
-    -- since the second pass would capture "performance" and restore that on exit.
-    if inGameSession then return end
-    inGameSession = true
-
-    local ws = hl.get_active_workspace()
-    local mon = ws and ws.monitor
-    gameMonitor = (type(mon) == "string" and mon ~= "") and mon or ""
-
-    local mode, custom, transition, perfOn = readGamingCfg()
-    if perfOn then
-        -- Remember what to go back to, exactly like the wallpaper below. Exit used
-        -- to hard-code `balanced`, so a session started from Power saver ended in
-        -- Balanced and the Settings choice was simply gone, silently.
-        prevProfile = currentProfile()
-        hl.exec_cmd("powerprofilesctl set performance")
-    end
-
-    local wallpaperPath = nil
-    if mode == "artwork" then
-        wallpaperPath = findSteamHero(appid)
-    elseif mode == "custom" and custom and custom ~= "" then
-        wallpaperPath = custom
-    end
-
-    if wallpaperPath then
-        prevWallpaper, prevTransition = readWallpaperCfg()
-        local outputFlag = (gameMonitor ~= "") and (" --outputs " .. gameMonitor) or ""
-        -- No transition on entry: game covers the wallpaper immediately anyway,
-        -- animating it causes awww to freeze mid-transition until the game closes.
-        os.execute("awww img " .. wallpaperPath .. " --transition-type none" .. outputFlag)
-    end
-end)
-
-hl.on("window.destroy", function(w)
-    if not activeGames[w.address] then return end
-    activeGames[w.address] = nil
-
-    hl.timer(function()
-        local hasMore = false
-        for _ in pairs(activeGames) do hasMore = true; break end
-        if hasMore then return end
-
-        -- UNDOING THE SESSION and PUTTING THE USER BACK are two different jobs, and
-        -- they used to share one condition. Everything below hung off "the user is
-        -- standing on gamespace right now" — so quitting a game after wandering to
-        -- another workspace left the game wallpaper up and the machine on
-        -- performance, with the session flags still set, so the NEXT game got no
-        -- entry either. Undoing is unconditional; only the focus return depends on
-        -- where the user happens to be.
-        inGameSession = false
-        -- Put back what we found, not a guess. Only when the profile is STILL the
-        -- one we set: if the user picked something else while the game ran, that is
-        -- a newer decision than ours and restoring would undo it.
-        if prevProfile and prevProfile ~= "" and currentProfile() == "performance" then
-            hl.exec_cmd("powerprofilesctl set " .. prevProfile)
-        end
-        prevProfile = nil
-        if prevWallpaper then
-            local outputFlag = (gameMonitor ~= "") and (" --outputs " .. gameMonitor) or ""
-            os.execute("awww img " .. prevWallpaper .. " --transition-type " .. prevTransition .. outputFlag)
-            prevWallpaper = nil
-        end
-
-        local activeWs = hl.get_active_workspace()
-        if lastNonGameWs ~= nil and activeWs and activeWs.name == "gamespace" then
-            hl.dispatch(hl.dsp.focus({ workspace = lastNonGameWs }))
-        end
-    end, { timeout = 3000, type = "oneshot" })
 end)
 
 
@@ -1385,13 +1269,9 @@ end)
 safe_require("nidara-settings")
 safe_require("nidara-monitor")
 safe_require("nidara-workspaces")
--- nidara-workspaces.lua (core/WorkspaceModes.ts) and nidara-gaming.lua
--- (core/GamingSync.ts) are both written by the shell as it starts, i.e. after
--- this file has been read. safe_require knows that absent ≠ broken, so neither
--- needs a guard of its own any more — this used to be an io.open() check that
--- covered gaming and not workspaces, which is why only one of the two ever
--- shouted at anybody.
-safe_require("nidara-gaming")
+-- nidara-workspaces.lua (core/WorkspaceModes.ts) is written by the shell as it
+-- starts, i.e. after this file has been read. safe_require knows that absent ≠
+-- broken, so it needs no guard of its own.
 
 -- ── User overrides ────────────────────────────────────────────────────────────
 -- Your personal config: keyboard layout, monitors, startup apps, keybinds, etc.

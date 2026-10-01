@@ -215,7 +215,7 @@ export type CompositorObject = Compositor & {
 
 // ── Settings the compositor owns ─────────────────────────────────────────────
 //
-// What Settings chooses for the compositor — input, displays, workspace modes, game mode,
+// What Settings chooses for the compositor — input, displays, workspace modes,
 // motion, the blur — goes through `CompositorSettings` (`settings` in CompositorState.ts).
 // Each backend applies it live AND persists it in the compositor's own layer: Hyprland's
 // `nidara-*.lua` files (core/hyprland-settings.ts), Hyalo's `hyalo-settings.toml`, which
@@ -250,14 +250,6 @@ export interface MonitorSetting {
     mode?: string
 }
 
-/** What game mode asks of the compositor when a game opens (#573). */
-export interface GamingPolicy {
-    wallpaperMode: string
-    customWallpaper: string
-    transition: string
-    performanceProfile: boolean
-}
-
 /** A blur, as the glass material sets it (#674). */
 export interface BlurStrength { size: number; passes: number }
 
@@ -273,8 +265,6 @@ export interface SettingsCaps {
     animations: boolean
     /** One blur for every surface, set by the glass material. Hyalo's is per surface (#684). */
     sharedBlur: boolean
-    /** Game mode's compositor half (#573). Hyalo's is #682's game-mode item. */
-    gameMode: boolean
     /** VRR "fullscreen only" (Hyprland's `misc:vrr = 2`); Hyalo has on and off, per output. */
     vrrFullscreenOnly: boolean
 }
@@ -297,10 +287,6 @@ export interface CompositorSettings {
 
     /** Persists the workspace modes; `Compositor.applyWorkspaceModes` applies them live. */
     saveWorkspaceModes(defaultMode: "floating" | "tiling", overrides: Record<string, "floating" | "tiling">): void
-
-    /** `reassert`: the compositor re-read its config — put back what it does not carry and
-     *  write no file (a write there could trigger the reload that called it). */
-    setGamingPolicy(p: GamingPolicy, reassert: boolean): void
 
     /** Reduce motion. The compositor's own animation setting is the baseline: turning it
      *  off restores that, never a hard-coded "on", and the backend re-asserts it on reload. */

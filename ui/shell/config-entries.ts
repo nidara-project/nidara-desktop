@@ -794,21 +794,6 @@ export function registerConfigEntries() {
     })
 
     // ── Gaming ────────────────────────────────────────────────────────────
-    registerConfig("gaming.transition", {
-        desc: "Wallpaper transition animation style when launching a game.",
-        type: "enum",
-        enum: TRANSITIONS,
-        get: () => Gaming.transition,
-        set: v => Gaming.setTransition(v as TransitionType),
-        subscribe: (apply) => {
-            apply(Gaming.transition)
-            return Gaming.subscribe("transition", apply)
-        },
-        ui: {
-            i18n: "settings.gaming.transition",
-            optI18n: k => TRANSITION_LABELS[k as TransitionType] ?? k,
-        },
-    })
     registerConfig("gaming.performanceProfile", {
         desc: "Switch the power profile to performance while a game runs.",
         type: "boolean",
@@ -820,6 +805,19 @@ export function registerConfigEntries() {
         },
         ui: {
             i18n: "settings.gaming.performance-profile",
+        },
+    })
+    registerConfig("gaming.silenceNotifications", {
+        desc: "Hold notification banners back while a game runs (critical ones still show; all of them wait in the notification center).",
+        type: "boolean",
+        get: () => Gaming.silenceNotifications,
+        set: v => Gaming.setSilenceNotifications(v as boolean),
+        subscribe: (apply) => {
+            apply(Gaming.silenceNotifications)
+            return Gaming.subscribe("silenceNotifications", apply)
+        },
+        ui: {
+            i18n: "settings.gaming.silence-notifications",
         },
     })
     // Mode selector — the shared segmented control. It used to be a hand-rolled

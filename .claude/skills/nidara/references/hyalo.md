@@ -16,7 +16,7 @@ is the WHY and the traps.
 | `hyalo/compositor/src/render/` | the scene as render elements, front to back; the glass (`glass.rs`, `glass_gl.rs`) |
 | `hyalo/compositor/src/outputs.rs` | outputs as configured: arrange, apply, power, the windows' way home (#594) |
 | `hyalo/compositor/src/config.rs` | the TOML layers and the watcher |
-| `hyalo/compositor/src/wm/` | the window manager: workspaces, focus, floating/tiling, fullscreen (`mod.rs`), the commands (`actions.rs`), pointer move/resize (`grabs.rs`), tiling layouts (`layout/`) |
+| `hyalo/compositor/src/wm/` | the window manager: workspaces, focus, floating/tiling, fullscreen (`mod.rs`), the commands (`actions.rs`), pointer move/resize (`grabs.rs`), tiling layouts (`layout/`), window rules (`rules.rs`), which windows are games (`games.rs`) |
 | `hyalo/compositor/src/binds.rs` | key and pointer bindings from the config's `[binds]` |
 | `hyalo/compositor/src/ipc/` | the JSON socket and `nidara-hyalo msg` |
 | `hyalo/compositor/src/capture.rs` | window capture for the shell's thumbnails (ext-foreign-toplevel-list + ext-image-copy-capture) |
@@ -106,6 +106,21 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   all — the layers merge tables and replace arrays. Name order decides conflicts (later
   wins). `hypr-rule-check.mjs` reads them too: every app id or title they name must be one a
   window in ui/ declares (with a CI control that misspells one).
+- **Named workspaces** (`name:gamespace`): a whole workspace like a numbered one, shown in its
+  output's place, but outside the numbered row (`e+1` skips it) and made only by a rule. Ids from
+  -1337 down, as Hyprland numbers them, so the shell reads one the same way from both: negative,
+  NOT special. ⚠️ Special now means the NAME (`special:…`), not a negative id — `Workspace::is_special`
+  and the shell's `HyaloState` both test the name, as HyprlandState always did; `is_numbered` (id >
+  0) is the row. `workspace name:X` and `workspace <negative id>` show one that exists and are
+  REFUSED (said, not ignored) for one that does not.
+- **Games** (`games.rs`): a rule's `match = { game = true }` matches a window whose app id is
+  `steam_app_<id>`, whose process or a parent carries a Steam app id in its environment, or whose
+  surface says its content is a game (wp-content-type-v1, Smithay's `ContentTypeState`). The
+  environment is read ONCE, when the window is created (`Managed::steam_app`): rules are asked again
+  on every rename. The shipped `[rules.games]` sends games to `name:gamespace`, and the user goes
+  with them; everything else about game mode is the shell's (architecture.md → "Game mode").
+  Immediate presentation and tearing need async page flips, which Smithay's DRM backend does not
+  have — that, VRR for a fullscreen game and idle inhibition are #683, not a rule.
 - **Border and rounding are not drawn yet**: the geometry reserves `layout.border` (1 px) so
   windows line up with the bar exactly as on Hyprland; the border is drawn with the rounding and
   shadows in #684.
@@ -193,16 +208,15 @@ is in `caps` (Hyalo: no tab groups, dwindle only, no glow yet), and the shell hi
 than failing.
 
 **Since #682's third part, settings too.** What Settings chooses for the compositor — input,
-displays, workspace modes, game mode, reduce motion, the glass's blur, the groupbar accent —
+displays, workspace modes, reduce motion, the glass's blur, the groupbar accent —
 goes through `settings` (`CompositorSettings`, exported by CompositorState.ts), and the modules
-that own those settings (InputConfig, MonitorConfig, WorkspaceModes, GamingSync, ReduceMotion,
+that own those settings (InputConfig, MonitorConfig, WorkspaceModes, ReduceMotion,
 GlassBlur, AdaptiveGlass, AppearanceSync) name no compositor. Each backend applies live AND
 persists in its own layer: `core/hyprland-settings.ts` (the `nidara-*.lua` files, `hl.config`
 evals, the baselines below) and `core/hyalo-settings.ts` (`settings` patches). Hyprland's
 sensitivity and acceleration profile reach every pointing device; Hyalo has them per kind, so
 both kinds get them. What Hyalo does not have yet is a no-op there and false in
-`settings.caps`: its own animations and per-surface blur (#684), game mode (#682), VRR
-"fullscreen only". `scripts/ci/compositor-boundary-check.mjs` has no allowlist any more: no
+`settings.caps`: its own animations and per-surface blur (#684), VRR "fullscreen only". `scripts/ci/compositor-boundary-check.mjs` has no allowlist any more: no
 file outside the compositor modules may import a backend or spawn `hyprctl`.
 
 Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell relies on:

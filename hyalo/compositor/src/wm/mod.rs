@@ -16,6 +16,7 @@
 //! it was.
 
 pub mod actions;
+pub mod games;
 pub mod grabs;
 pub mod layout;
 pub mod rules;
@@ -104,13 +105,16 @@ pub struct Managed {
     pub initial_title: String,
     /// The rules that have applied to it, by name: a rule applies once (wm/rules.rs).
     pub rules_applied: Vec<String>,
+    /// The Steam app id its process (or a parent) carries, read when it was created
+    /// (games.rs).
+    pub steam_app: Option<u32>,
     /// Its entry in ext-foreign-toplevel-list, once shown (capture.rs).
     pub listed: Option<smithay::wayland::foreign_toplevel_list::ForeignToplevelHandle>,
 }
 
 pub struct Workspace {
     pub id: i32,
-    /// `"3"`, or `"special:magic"` for a special one.
+    /// `"3"`; `"special:magic"` for a special one; a name for a named one (`gamespace`).
     pub name: String,
     /// The output it is on now, and the one it belongs to.
     pub output: String,
@@ -124,9 +128,20 @@ impl std::fmt::Debug for Workspace {
     }
 }
 
+/// Where the ids of named workspaces start, going down — Hyprland's numbering, so the shell
+/// reads a named workspace the same way from both compositors (negative, not special).
+const FIRST_NAMED_ID: i32 = -1337;
+
 impl Workspace {
+    /// Shown OVER an output's workspace, toggled (a scratchpad). Named `special:NAME`.
     pub fn is_special(&self) -> bool {
-        self.id < 0
+        self.name.starts_with("special:")
+    }
+
+    /// One of the numbered workspaces the user moves between (1, 2…). Named and special
+    /// workspaces have negative ids, as on Hyprland.
+    pub fn is_numbered(&self) -> bool {
+        self.id > 0
     }
 }
 
@@ -199,6 +214,14 @@ impl Wm {
 
     pub fn special_id(&self, name: &str) -> Option<i32> {
         self.workspaces.values().find(|w| w.is_special() && w.name == format!("special:{name}")).map(|w| w.id)
+    }
+
+    pub fn named_id(&self, name: &str) -> Option<i32> {
+        self.workspaces.values().find(|w| !w.is_numbered() && !w.is_special() && w.name == name).map(|w| w.id)
+    }
+
+    pub fn is_special(&self, ws: i32) -> bool {
+        self.workspaces.get(&ws).is_some_and(|w| w.is_special())
     }
 }
 
@@ -345,7 +368,7 @@ impl Hyalo {
             .wm
             .workspaces
             .values()
-            .find(|w| !w.is_special() && w.home == output && !shown.contains(&w.id))
+            .find(|w| w.is_numbered() && w.home == output && !shown.contains(&w.id))
             .map(|w| w.id)
             .unwrap_or_else(|| (1..).find(|i| !self.wm.workspaces.contains_key(i)).unwrap());
         self.ensure_workspace(id, output);
@@ -357,8 +380,10 @@ impl Hyalo {
         id
     }
 
+    /// A numbered workspace, created if it does not exist. (A named or special one is made
+    /// by name: `ensure_named`, `ensure_special`.)
     fn ensure_workspace(&mut self, id: i32, output: &str) {
-        if self.wm.workspaces.contains_key(&id) {
+        if id <= 0 || self.wm.workspaces.contains_key(&id) {
             return;
         }
         let layout = layout::new(&self.config.layout.tiling).unwrap_or_else(|| layout::new("dwindle").unwrap());
@@ -367,6 +392,19 @@ impl Hyalo {
             Workspace { id, name: id.to_string(), output: output.into(), home: output.into(), layout },
         );
         self.wm.dirty_workspaces = true;
+    }
+
+    /// A named workspace (`gamespace`): a whole workspace like a numbered one, shown in its
+    /// output's place, but outside the numbered row the user cycles through.
+    fn ensure_named(&mut self, name: &str, output: &str) -> i32 {
+        if let Some(id) = self.wm.named_id(name) {
+            return id;
+        }
+        let id = (0..).map(|i: i32| FIRST_NAMED_ID - i).find(|i| !self.wm.workspaces.contains_key(i)).unwrap();
+        let layout = layout::new(&self.config.layout.tiling).unwrap_or_else(|| layout::new("dwindle").unwrap());
+        self.wm.workspaces.insert(id, Workspace { id, name: name.into(), output: output.into(), home: output.into(), layout });
+        self.wm.dirty_workspaces = true;
+        id
     }
 
     fn ensure_special(&mut self, name: &str, output: &str) -> i32 {
@@ -410,6 +448,12 @@ impl Hyalo {
             Some(s) => s,
             None => self.active_workspace(&output),
         };
+        let dh = &self.display_handle;
+        let steam_app = window
+            .toplevel()
+            .and_then(|t| t.wl_surface().client())
+            .and_then(|c| c.get_credentials(dh).ok())
+            .and_then(|c| games::steam_app_of(c.pid));
         self.wm.next_id += 1;
         let id = self.wm.next_id;
         self.wm.windows.push(Managed {
@@ -428,6 +472,7 @@ impl Hyalo {
             initial_app_id: String::new(),
             initial_title: String::new(),
             rules_applied: Vec::new(),
+            steam_app,
             listed: None,
         });
     }
@@ -750,7 +795,7 @@ impl Hyalo {
         let Some(m) = self.wm.get(id) else { return };
         let ws = m.workspace;
         if !self.wm.is_visible(ws) {
-            if ws < 0 {
+            if self.wm.is_special(ws) {
                 let output = self.wm.workspaces.get(&ws).map(|w| w.output.clone()).unwrap_or_default();
                 self.wm.special_shown.insert(output, ws);
                 self.wm.dirty_workspaces = true;
@@ -806,7 +851,8 @@ impl Hyalo {
     pub fn show_workspace(&mut self, id: i32, here: bool) {
         let focused_out = self.focused_output().map(|o| o.name()).unwrap_or_default();
         self.ensure_workspace(id, &focused_out);
-        let mut output = self.wm.workspaces[&id].output.clone();
+        let Some(w) = self.wm.workspaces.get(&id) else { return };
+        let mut output = w.output.clone();
         if here && output != focused_out {
             output = focused_out.clone();
             self.wm.workspaces.get_mut(&id).unwrap().output = output.clone();
@@ -879,7 +925,7 @@ impl Hyalo {
             return;
         }
         let focused_out = self.focused_output().map(|o| o.name()).unwrap_or_default();
-        if target >= 0 {
+        if target > 0 {
             self.ensure_workspace(target, &focused_out);
         }
         let to_output = self.wm.workspaces.get(&target).and_then(|w| self.output_named(&w.output));
@@ -918,7 +964,7 @@ impl Hyalo {
         self.arrange_workspace(from);
         self.arrange_workspace(target);
         if follow {
-            if target < 0 {
+            if self.wm.is_special(target) {
                 if let Some(name) = self.wm.workspaces.get(&target).map(|w| w.name.trim_start_matches("special:").to_string())
                     && !self.wm.is_visible(target)
                 {
@@ -1050,7 +1096,7 @@ impl Hyalo {
                 self.wm.workspaces.get_mut(&id).unwrap().output = target.clone();
                 self.wm.active.retain(|_, a| *a != id);
                 // Home again: shown where it was shown before it left, if nothing better is.
-                if back_home && id > 0 && !self.wm.active.contains_key(&target) {
+                if back_home && !self.wm.workspaces[&id].is_special() && !self.wm.active.contains_key(&target) {
                     self.wm.active.insert(target.clone(), id);
                 }
                 self.wm.dirty_workspaces = true;

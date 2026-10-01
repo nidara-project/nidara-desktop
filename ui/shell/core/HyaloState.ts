@@ -244,7 +244,9 @@ export class HyaloStateClass extends GObject.Object implements Compositor {
         this.occupiedWorkspaces.clear()
         this.specialWorkspaces = []
         for (const ws of this.workspaces) {
-            if (ws.id < 0) this.specialWorkspaces.push(ws)
+            // By name, as on Hyprland: a NAMED workspace (`gamespace`) has a negative id too,
+            // and is a whole workspace, not a scratchpad.
+            if (ws.name.startsWith("special:")) this.specialWorkspaces.push(ws)
             else this.occupiedWorkspaces.add(ws.id)
         }
         for (const c of this.clients) {

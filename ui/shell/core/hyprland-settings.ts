@@ -19,11 +19,11 @@ import GLib from "gi://GLib"
 import { writeFile } from "../../lib/nidara-kit/platform/file"
 import type { HyprlandStateClass } from "./HyprlandState"
 import {
-    luaConfigBlock, luaConfigExpr, luaGamingBlock, luaLiteral, luaWorkspaceModesBlock, type LuaValue,
+    luaConfigBlock, luaConfigExpr, luaLiteral, luaWorkspaceModesBlock, type LuaValue,
 } from "./hyprland-lua"
 import { GLASS_BLUR } from "./NidaraTheme"
 import type {
-    BlurColour, BlurStrength, CompositorSettings, GamingPolicy, InputKey, InputSettings, MonitorSetting,
+    BlurColour, BlurStrength, CompositorSettings, InputKey, InputSettings, MonitorSetting,
 } from "./compositor-types"
 
 const nidaraFile = (name: string) => GLib.build_filenamev([GLib.get_home_dir(), ".config", "nidara", name])
@@ -168,7 +168,7 @@ export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettin
     })
 
     return {
-        caps: { animations: true, sharedBlur: true, gameMode: true, vrrFullscreenOnly: true },
+        caps: { animations: true, sharedBlur: true, vrrFullscreenOnly: true },
 
         async readInput(current) {
             const next = { ...current }
@@ -216,16 +216,6 @@ export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettin
 
         saveWorkspaceModes(defaultMode, overrides) {
             save("nidara-workspaces.lua", luaWorkspaceModesBlock(defaultMode, overrides))
-        },
-
-        // `hyprland.lua` decides, when a game window opens, whether to swap the wallpaper
-        // and the power profile — and Lua inside Hyprland cannot read GSettings. The file is
-        // required at login, so a game opened before the shell is up still gets the choice;
-        // the eval applies a change without a reload.
-        setGamingPolicy(p: GamingPolicy, reassert: boolean) {
-            const lua = luaGamingBlock(p)
-            if (!reassert) save("nidara-gaming.lua", lua)
-            hs.evalLua(lua)
         },
 
         setReduceMotion(reduce) {

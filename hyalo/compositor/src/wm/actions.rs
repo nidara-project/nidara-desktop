@@ -13,6 +13,8 @@ pub enum WorkspaceTarget {
     /// `e+1` / `e-1`: the next or previous workspace that exists, round the end.
     Relative(i32),
     Previous,
+    /// `name:gamespace` — a named workspace; it must exist (a rule makes it).
+    Named(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,11 +77,23 @@ fn workspace_target(arg: Option<&&str>) -> Result<WorkspaceTarget, String> {
         "previous" => WorkspaceTarget::Previous,
         "e+1" | "next" => WorkspaceTarget::Relative(1),
         "e-1" | "prev" => WorkspaceTarget::Relative(-1),
+        n if n.starts_with("name:") && n.len() > 5 => WorkspaceTarget::Named(n[5..].into()),
         n => WorkspaceTarget::Number(match n.parse::<i32>() {
-            Ok(i) if i > 0 => i,
-            _ => return Err(format!("{n:?} is not a workspace (1, 2…, e+1, e-1, previous)")),
+            // A negative number is a named workspace's id, as the shell lists it.
+            Ok(i) if i != 0 => i,
+            _ => return Err(format!("{n:?} is not a workspace (1, 2…, e+1, e-1, previous, name:NAME)")),
         }),
     })
+}
+
+/// A workspace that resolved to none: a name or an id that does not exist is said; there
+/// being no `previous` yet is not an error.
+fn missing_workspace(t: &WorkspaceTarget) -> Result<(), String> {
+    match t {
+        WorkspaceTarget::Named(n) => Err(format!("no workspace named {n:?}")),
+        WorkspaceTarget::Number(n) => Err(format!("no workspace {n}")),
+        _ => Ok(()),
+    }
 }
 
 fn int(arg: Option<&&str>, what: &str) -> Result<i32, String> {
@@ -235,7 +249,10 @@ impl Hyalo {
     fn resolve_workspace(&mut self, t: &WorkspaceTarget) -> Option<i32> {
         let current = self.workspace_of_focus();
         match t {
-            WorkspaceTarget::Number(n) => Some(*n),
+            // A numbered one is made when asked for; a named one only by its rule.
+            WorkspaceTarget::Number(n) if *n > 0 => Some(*n),
+            WorkspaceTarget::Number(n) => self.wm.workspaces.get(n).filter(|w| !w.is_special()).map(|w| w.id),
+            WorkspaceTarget::Named(name) => self.wm.named_id(name),
             WorkspaceTarget::Relative(step) => Some(self.relative_workspace(current, *step)),
             WorkspaceTarget::Previous => self.wm.previous_workspace.filter(|p| *p != current),
         }
@@ -267,15 +284,15 @@ impl Hyalo {
                 self.focus_window(next);
             }
             Action::Cycle { forward } => self.cycle(forward),
-            Action::Workspace(t) => {
-                if let Some(ws) = self.resolve_workspace(&t) {
-                    self.show_workspace(ws, false);
-                }
-            }
+            Action::Workspace(t) => match self.resolve_workspace(&t) {
+                Some(ws) => self.show_workspace(ws, false),
+                None => missing_workspace(&t)?,
+            },
             Action::MoveToWorkspace { target, window, follow } => {
                 let id = self.target(window)?;
-                if let Some(ws) = self.resolve_workspace(&target) {
-                    self.move_to_workspace(id, ws, follow);
+                match self.resolve_workspace(&target) {
+                    Some(ws) => self.move_to_workspace(id, ws, follow),
+                    None => missing_workspace(&target)?,
                 }
             }
             Action::ToggleSpecial(name) => self.toggle_special(&name),
@@ -491,6 +508,8 @@ mod tests {
     fn commands_read_the_way_they_are_written() {
         assert_eq!(p("workspace 3"), Ok(Action::Workspace(WorkspaceTarget::Number(3))));
         assert_eq!(p("workspace e-1"), Ok(Action::Workspace(WorkspaceTarget::Relative(-1))));
+        assert_eq!(p("workspace name:gamespace"), Ok(Action::Workspace(WorkspaceTarget::Named("gamespace".into()))));
+        assert_eq!(p("workspace -1337"), Ok(Action::Workspace(WorkspaceTarget::Number(-1337))));
         assert_eq!(
             p("move-to-workspace-silent 2 17"),
             Ok(Action::MoveToWorkspace { target: WorkspaceTarget::Number(2), window: Some(17), follow: false })
@@ -508,7 +527,7 @@ mod tests {
 
     #[test]
     fn mistakes_are_refused_with_a_reason() {
-        for bad in ["", "frobnicate", "workspace 0", "workspace", "focus sideways", "close-window abc", "spawn", "resize 10", "fullscreen 1 2", "set-workspace-mode 3 stacked", "cursor-visible maybe", "set-cursor X 2"] {
+        for bad in ["", "frobnicate", "workspace 0", "workspace name:", "workspace", "focus sideways", "close-window abc", "spawn", "resize 10", "fullscreen 1 2", "set-workspace-mode 3 stacked", "cursor-visible maybe", "set-cursor X 2"] {
             assert!(p(bad).is_err(), "{bad:?} should be refused");
         }
     }

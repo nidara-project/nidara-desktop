@@ -14,7 +14,7 @@
 // in silence — the window menu hides its group rows on Hyalo, which has no tab groups by
 // the owner's decision (2026-10-01).
 //
-// What Settings chooses for the compositor — input, displays, workspace modes, game mode,
+// What Settings chooses for the compositor — input, displays, workspace modes,
 // reduce motion, the glass's blur — goes through `settings` (`CompositorSettings`): applied
 // live and persisted in the compositor's own layer, Hyprland's `nidara-*.lua`
 // (`core/hyprland-settings.ts`) or Hyalo's `hyalo-settings.toml` (`core/hyalo-settings.ts`).

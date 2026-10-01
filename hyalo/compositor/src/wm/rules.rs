@@ -13,7 +13,7 @@
 //!
 //! Matching is a regex SEARCH in each field given (`^…$` for the whole string), every field
 //! given must match, and the rules are applied in name order: where two set the same thing,
-//! the later name wins.
+//! the later name wins. `game = true` matches a window games.rs recognises as a game.
 
 use std::collections::BTreeMap;
 
@@ -26,6 +26,8 @@ use crate::{Hyalo, config::RuleConfig};
 pub enum RuleWorkspace {
     Number(i32),
     Special(String),
+    /// `name:gamespace`.
+    Named(String),
 }
 
 /// What the rules that matched ask for, merged.
@@ -62,6 +64,7 @@ pub struct Rule {
     title: Option<Regex>,
     initial_app_id: Option<Regex>,
     initial_title: Option<Regex>,
+    game: Option<bool>,
     pub effects: Effects,
 }
 
@@ -71,6 +74,7 @@ pub struct Subject<'a> {
     pub title: &'a str,
     pub initial_app_id: &'a str,
     pub initial_title: &'a str,
+    pub game: bool,
 }
 
 impl Rule {
@@ -80,6 +84,7 @@ impl Rule {
             && ok(&self.title, s.title)
             && ok(&self.initial_app_id, s.initial_app_id)
             && ok(&self.initial_title, s.initial_title)
+            && self.game.is_none_or(|g| g == s.game)
     }
 }
 
@@ -102,6 +107,7 @@ pub fn compile(cfg: &BTreeMap<String, RuleConfig>) -> Result<Vec<Rule>, String> 
             title: re("title", &m.title)?,
             initial_app_id: re("initial_app_id", &m.initial_app_id)?,
             initial_title: re("initial_title", &m.initial_title)?,
+            game: m.game,
             effects: Effects {
                 float: r.float,
                 center: r.center,
@@ -109,8 +115,13 @@ pub fn compile(cfg: &BTreeMap<String, RuleConfig>) -> Result<Vec<Rule>, String> 
                 silent: r.silent,
             },
         };
-        if rule.app_id.is_none() && rule.title.is_none() && rule.initial_app_id.is_none() && rule.initial_title.is_none() {
-            return Err(format!("rules.{name}: matches nothing (give match.app_id, title, initial_app_id or initial_title)"));
+        if rule.app_id.is_none()
+            && rule.title.is_none()
+            && rule.initial_app_id.is_none()
+            && rule.initial_title.is_none()
+            && rule.game.is_none()
+        {
+            return Err(format!("rules.{name}: matches nothing (give match.app_id, title, initial_app_id, initial_title or game)"));
         }
         if rule.effects.is_empty() {
             return Err(format!("rules.{name}: does nothing (give float, center or workspace)"));
@@ -130,9 +141,17 @@ fn parse_workspace(rule: &str, w: &str) -> Result<RuleWorkspace, String> {
         }
         return Ok(RuleWorkspace::Special(name.into()));
     }
+    if let Some(name) = w.strip_prefix("name:") {
+        // A name that reads as a number, or as a special one, would be a second spelling of
+        // a workspace that already has one.
+        if name.is_empty() || name.parse::<i32>().is_ok() || name.starts_with("special:") {
+            return Err(format!("rules.{rule}.workspace: {w:?} — name: needs a name that is not a number"));
+        }
+        return Ok(RuleWorkspace::Named(name.into()));
+    }
     match w.parse::<i32>() {
         Ok(n) if n > 0 => Ok(RuleWorkspace::Number(n)),
-        _ => Err(format!("rules.{rule}.workspace: {w:?} is not a workspace (1, 2… or special:NAME)")),
+        _ => Err(format!("rules.{rule}.workspace: {w:?} is not a workspace (1, 2…, special:NAME or name:NAME)")),
     }
 }
 
@@ -146,7 +165,8 @@ impl Hyalo {
         // Before it is shown, what it is called now is what it was first called.
         let (initial_app_id, initial_title) =
             if m.mapped { (m.initial_app_id.as_str(), m.initial_title.as_str()) } else { (app_id.as_str(), title.as_str()) };
-        let subject = Subject { app_id: &app_id, title: &title, initial_app_id, initial_title };
+        let game = super::games::is_game(m);
+        let subject = Subject { app_id: &app_id, title: &title, initial_app_id, initial_title, game };
         let mut fx = Effects::default();
         let mut names = Vec::new();
         for rule in &self.rules {
@@ -170,6 +190,7 @@ impl Hyalo {
                 *n
             }
             RuleWorkspace::Special(name) => self.ensure_special(name, output),
+            RuleWorkspace::Named(name) => self.ensure_named(name, output),
         }
     }
 
@@ -210,7 +231,7 @@ mod tests {
     }
 
     fn subject<'a>(app_id: &'a str, title: &'a str) -> Subject<'a> {
-        Subject { app_id, title, initial_app_id: "org.nidara.desktop", initial_title: title }
+        Subject { app_id, title, initial_app_id: "org.nidara.desktop", initial_title: title, game: false }
     }
 
     #[test]
@@ -231,6 +252,23 @@ mod tests {
         assert!(r[1].matches(&subject("anything", "About Nidara")));
         assert!(!r[1].matches(&subject("anything", "Settings")), "every field given must match");
         assert_eq!(r[1].effects.workspace, Some(RuleWorkspace::Special("about".into())));
+    }
+
+    #[test]
+    fn a_game_rule_matches_games_only_and_names_its_workspace() {
+        let r = rules(r#"
+            [rules.games]
+            match = { game = true }
+            workspace = "name:gamespace"
+        "#)
+        .unwrap();
+        let game = Subject { game: true, ..subject("anything", "") };
+        assert!(r[0].matches(&game));
+        assert!(!r[0].matches(&subject("anything", "")), "a window that is not a game");
+        assert_eq!(r[0].effects.workspace, Some(RuleWorkspace::Named("gamespace".into())));
+        // `game = false` is a condition too: everything that is NOT a game.
+        let r = rules("[rules.a]\nmatch = { game = false }\nfloat = true\n").unwrap();
+        assert!(r[0].matches(&subject("x", "")) && !r[0].matches(&game));
     }
 
     #[test]
@@ -259,6 +297,9 @@ mod tests {
         assert!(rules("[rules.a]\nmatch = { app_id = \"x\" }\n").is_err(), "does nothing");
         assert!(rules("[rules.a]\nmatch = { app_id = \"(\" }\nfloat = true\n").is_err(), "bad regex");
         assert!(rules("[rules.a]\nmatch = { app_id = \"x\" }\nworkspace = \"0\"\n").is_err());
+        for bad in ["name:", "name:3", "name:special:x"] {
+            assert!(rules(&format!("[rules.a]\nmatch = {{ app_id = \"x\" }}\nworkspace = \"{bad}\"\n")).is_err(), "{bad}");
+        }
         assert!(rules("[rules.a]\nmatch = { app_id = \"x\" }\nfloat = true\nsilent = true\n").is_err());
         assert!(rules("[rules.a]\nmatch = { app_id = \"x\" }\nfloat = true\nbogus = 1\n").is_err(), "unknown key");
         let r = rules("[rules.a]\nenabled = false\nmatch = { app_id = \"x\" }\nfloat = true\n").unwrap();

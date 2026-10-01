@@ -1,6 +1,6 @@
 // Runs night light: hyprsunset and the schedule (#571).
 //
-// ⚠️ SHELL ONLY — started from app.ts, like GamingSync and AppearanceHooks. It reacts to
+// ⚠️ SHELL ONLY — started from app.ts, like GameSession and AppearanceHooks. It reacts to
 // org.nidara.night-light, so a change from any writer applies exactly once: the Settings
 // window, the CC tile, an agent's setConfig, or `gsettings set` in a terminal (which,
 // before this module, flipped the switch and left the screen as it was).

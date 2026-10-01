@@ -226,6 +226,48 @@ phase_run() {
         || { log "FAIL: the window capture did not come back as #2471a3 (36,113,163)"; cat /tmp/hyalo/capture-probe.log; exit 1; }
     log "window capture OK"
 
+    # Game mode (#682): Hyalo recognises a game (wm/games.rs) — here by the Steam app id in its
+    # process's environment — and its shipped [rules.games] puts it on the named workspace
+    # `gamespace` and takes the user there. The control is the same window WITHOUT the id: it
+    # must stay where it opened, or the check is not telling games apart. When the game closes,
+    # the SHELL (core/GameSession.ts) takes the user back to where they were, after its grace.
+    nidara-hyalo msg do workspace 1 >/dev/null
+    window_id() {
+        local id=""
+        for i in $(seq 1 20); do
+            id="$(nidara-hyalo msg windows | jq -r --arg c "$1" '.ok.windows[] | select(.app_id == "org.nidara.captureprobe" and .width > 0 and (.id | tostring) != $c) | .id' | head -1)"
+            [ -n "$id" ] && break
+            sleep 0.5
+        done
+        echo "$id"
+    }
+    gjs -m "$REPO/scripts/ci/hyalo-capture-probe.js" window '#555555' >/tmp/hyalo/not-a-game.log 2>&1 &
+    local plain_pid=$! plain
+    plain="$(window_id "$cid")"
+    [ -n "$plain" ] || { log "FAIL: the plain window never appeared"; exit 1; }
+    nidara-hyalo msg windows | jq -e --argjson id "$plain" '.ok.windows[] | select(.id == $id) | .workspace == 1' >/dev/null \
+        || { log "FAIL (control): a window that is not a game left workspace 1"; nidara-hyalo msg windows; exit 1; }
+    kill "$plain_pid" 2>/dev/null || true
+    sleep 0.5
+    SteamAppId=440 gjs -m "$REPO/scripts/ci/hyalo-capture-probe.js" window '#555555' >/tmp/hyalo/game.log 2>&1 &
+    local game_pid=$! game
+    game="$(window_id "$cid")"
+    [ -n "$game" ] || { log "FAIL: the game's window never appeared"; exit 1; }
+    nidara-hyalo msg workspaces | jq -e '
+        .ok.workspaces | map(select(.name == "gamespace" and .id < 0 and (.special | not) and .active and .focused)) | length == 1' >/dev/null \
+        || { log "FAIL: no active, focused, named gamespace after a game opened"; nidara-hyalo msg workspaces; exit 1; }
+    nidara-hyalo msg windows | jq -e --argjson id "$game" '.ok.windows[] | select(.id == $id) | .workspace < 0' >/dev/null \
+        || { log "FAIL: the game is not on gamespace"; nidara-hyalo msg windows; exit 1; }
+    kill "$game_pid" 2>/dev/null || true
+    local back=""
+    for i in $(seq 1 20); do
+        back="$(nidara-hyalo msg workspaces | jq -r '.ok.workspaces[] | select(.focused) | .name')"
+        [ "$back" = "1" ] && break
+        sleep 0.5
+    done
+    [ "$back" = "1" ] || { log "FAIL: the shell did not take the user back to workspace 1 after the game (on '$back')"; exit 1; }
+    log "game mode OK (a game to gamespace, a plain window left alone, back to workspace 1)"
+
     # Computer use (#682): the compositor's state through bin/nidara-wm (Hyprland's shapes,
     # built from Hyalo's IPC) and the virtual pointer nidara-input speaks: a move to a point
     # must leave the cursor exactly there.

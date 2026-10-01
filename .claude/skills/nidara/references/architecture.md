@@ -485,8 +485,9 @@ grid strip:
   a separate signal from `"changed"` precisely because the decode lands long after the wallpaper did.
 - `warmPreview()` **re-resolves the path from disk** (`resolveWallpaper("shell")`) on every call and
   no-ops when path and cache agree, so it is safe to call anywhere. It has to work that way: the
-  wallpaper also changes behind this manager's back — gaming hero-art swaps it through
-  `hyprland.lua`, and `_current` is only a hint (awww owns the live one). Called at schematic build
+  wallpaper also changes behind this manager's back — anyone can run `awww` — and `_current` is
+  only a hint (awww owns the live one). Game mode does NOT change it behind its back: it goes
+  through `showForGame`/`restoreAfterGame`, which save nothing and announce nothing. Called at schematic build
   time, from `SchematicHandle.refresh()` (surface opening), and by `WallpaperManager` itself after it
   emits `"changed"`.
 - Cover-fit scaling goes through **`makeCoverFit()` in `common/DrawingUtils.ts`** — a closure holding
@@ -881,8 +882,8 @@ the fresh-install case where the cache is empty and no restore is ever coming (`
 covers that window), **then apply the resolved path from the config file over it** — one
 authoritative apply, no conditional, `--transition-type none`. The Lua side owns this (helpers
 `readWallpaperCfg`/`resolveWallpaper`/`shquote` near the top of `hyprland.lua`), **not** the shell:
-the shell restarts mid-session (`Restart=on-failure`, `Super+Shift+R`) and would stomp the gaming
-hero-art swap, whose "previous wallpaper" state lives in the compositor process.
+the shell restarts mid-session (`Restart=on-failure`, `Super+Shift+R`), and a shell that painted the
+wallpaper as it started would stomp a running game's artwork (`core/GameSession.ts`).
 
 Do **not** "simplify" this by passing `--no-cache` to the daemon: the cache is also what paints a
 monitor hot-plugged mid-session, which nothing else currently handles.
@@ -1436,7 +1437,7 @@ that can eat somebody's work. The reasoning sits in the file where the function 
 | `RegionConfig.ts` | ~200 | Clock format (GSettings `org.nidara.region`, mirrored to `/var/tmp/nidara/region.json` for the greeter). The timezone is READ from the system and set with timedatectl; the regional format is `~/.config/environment.d/nidara-locale.conf` — neither is stored, each already had a home. |
 | `configFile.ts` | ~340 | `defineSettings(name, DEFAULTS, validators?, {computed?})` — every plain Nidara preference, stored in GSettings `org.nidara.<name>` (#573): per-key validation on every read, equality guard, per-key subscription, drift report against the installed schema. `loadKnown` survives for the stores still on JSON by hand. See "Where a setting lives" below. |
 | `InputConfig.ts` | ~110 | Keyboard/mouse/touchpad: the Input page's cache of the compositor's EFFECTIVE values and its door to change them, through `settings` (CompositorState). Where each option lives, how it applies and the file it is kept in are the backend's: one `INPUT` table in `hyprland-settings.ts` (re-sync, live apply and `nidara-settings.lua` all derive from it — it used to be three hand-maintained lists), one in `hyalo-settings.ts` (paths in Hyalo's config). |
-| `hyprland-settings.ts` / `hyalo-settings.ts` | ~260 / ~150 | **The two sides of `CompositorSettings`** (#682): input, displays, workspace modes, game mode, reduce motion, the glass's blur, the groupbar accent, the effective layout for `dumpState`. Hyprland: live `hl.config`/`hl.monitor` evals + the `nidara-*.lua` files `hyprland.lua` requires + the baselines (state-and-ipc.md). Hyalo: `settings` patches that Hyalo writes into `hyalo-settings.toml` itself, `config` to read back (hyalo.md). `settings.caps` says what Hyalo lacks yet. |
+| `hyprland-settings.ts` / `hyalo-settings.ts` | ~260 / ~150 | **The two sides of `CompositorSettings`** (#682): input, displays, workspace modes, reduce motion, the glass's blur, the groupbar accent, the effective layout for `dumpState`. Hyprland: live `hl.config`/`hl.monitor` evals + the `nidara-*.lua` files `hyprland.lua` requires + the baselines (state-and-ipc.md). Hyalo: `settings` patches that Hyalo writes into `hyalo-settings.toml` itself, `config` to read back (hyalo.md). `settings.caps` says what Hyalo lacks yet. |
 | `CompositorState.ts` + `compositor-types.ts` | ~50 + ~210 | **The ONLY door to the compositor, since #682** — Hyprland and Hyalo alike. `Compositor` is the interface (state: `clients`/`workspaces`/`monitors`/`focusedClient`…; fresh reads: `readWindows`/`readWindow`/`readWorkspaces`/`readGeometry`/`layerTop`/`isLayerAbove`/`cursorPosition`; every window-manager verb; `applyWorkspaceModes`; `screenshot`), `caps` says what one compositor has and the other does not (`groups`, `layouts`, `glow`) so a surface ASKS before it offers, and the default export is the backend for this session (`HYALO_SOCKET` in the environment → Hyalo). The shapes are the ones the shell was written against (bare hex addresses, `fullscreen` as a mode number), so no surface changed what it reads. The named export `settings` (`CompositorSettings`) is the same door for what Settings chooses for the compositor (row below). `scripts/ci/compositor-boundary-check.mjs` (with a control) fails any file outside the compositor modules that imports a backend, its settings side or spawns `hyprctl` — no allowlist since #682 emptied it. |
 | `HyaloState.ts` | ~400 | **Hyalo's backend** of `CompositorState`, over its IPC (`hyalo-ipc.ts`): the state comes whole in Hyalo's `windows_changed`/`workspaces_changed`/`focus_changed`/`outputs_changed` events (nothing to re-read, no focus to reconcile — Hyalo's answer is the truth), titles on their own event, commands sent as `{"request":"do","command":…}` in the language of Hyalo's key bindings (`hyalo/compositor/src/wm/actions.rs`). A window's address is Hyalo's numeric id in bare hex. `restoreFocusAfterGrab` is a no-op: Hyalo hands the keyboard back itself. |
 | `HyprlandState.ts` | ~290 | **Hyprland's backend** of `CompositorState` (clients/workspaces/monitors + dispatch helpers) **and the ONLY door to hyprctl**. `focusedClient` is a **reconciled** accessor, not a proxy — it enforces one invariant, *the focused window is always on the focused workspace*. It was built against two opposite EXCLUSIVE-era lies (the null Hyprland announced when a layer surface released an EXCLUSIVE grab, and the stale non-null it kept returning while one was HELD, which left the app grid's workspace strip naming the workspace you had just left) — **both causes are gone with the focus-grab migration, and the accessor stays anyway, because it is now the INPUT to the root fix rather than a patch over it**: the remembered window is who `restoreFocusAfterGrab` hands the keyboard back TO, and validating the live answer is that repair's correctness guard (focusing a window on another workspace DRAGS THAT WORKSPACE over the user). Audited 2026-08-07; don't simplify it back. Fallback chain and the scratchpad exception in `state-and-ipc.md`; read it, never `hl.focused_client` — services/widgets never shell out to hyprctl directly; they call (or add) a method here. Vocabulary: dispatch helpers (`focusWindow`/`closeWindow`/`floatWindow`/`togglePseudo`/`togglePin`/`toggleFullscreen`/`centerWindow`/`sendToWorkspace`/`toggleGroup`/…, all `hl.dsp.*` Lua via a private `_dispatch` that logs the offending call), `readWindow(addr)` (one-shot raw `clients -j` read for fields the cached client lacks: `pinned`, `grouped` — on demand only, never in `_refresh`), `evalLua(call)` (live config changes — the Lua parser rejects `keyword`), `getOptionInt(name)` / `getOptionBool(name, fallback)` (sync) and `getOptionIntAsync` / `getOptionBoolAsync` / `getOptionFloatAsync` / `getOptionStrAsync` (async batch re-syncs) — one reader per option TYPE, because a `getoption -j` payload carries only its own type's field and naming the wrong one is a silent `undefined` (#338); raw `getOptionJson(name)` stays for anything they don't cover, `setCursor(theme, size)`, `setRealCursorVisible(visible)` (`cursor:invisible`; rendering only, input unaffected — sole caller is the agent-pointer overlay, which hides the real pointer for the length of an AI action because the hardware cursor plane paints above every layer surface; **whoever hides it owns restoring it on every exit path**), `setGlow(enabled)` + `supportsGlow()` (`decoration:glow`, driven only by `AgentGlow.ts`), `version()`. **`focusWorkspaceFromShell(id)` is the single door for a workspace switch driven by one of OUR surfaces** (the app grid's strip, the island's overview) — it forwards to `focusWorkspace` today, and exists so those two cannot drift apart; its predecessor `focusWorkspaceOnGrabRelease` is DELETED, along with the EXCLUSIVE-era grab-lending it did (`tech-debt.md` §53). `restoreFocusAfterGrab()` is the one that still does real work: after our machinery lets go of a focus grab, the compositor refocuses by POINTER, so a dismissal with the cursor over the wallpaper leaves the session with no active window — it hands the keyboard back, guarded to fire only when nothing is focused and only on the workspace being looked at. Caches **effective** config AstalHyprland doesn't expose (`availableModesByName` — `Monitor.available_modes` is always null) and emits `config-reloaded` on Hyprland's `configreloaded` IPC event (effective-config consumers re-sync on it). Exempt from the single-door rule: config text *written for other daemons* (the hypridle config generated by Power.tsx — those lines execute outside the shell; the before/after-sleep hooks themselves are static scripts in `bin/`). |
@@ -1447,8 +1448,8 @@ that can eat somebody's work. The reasoning sits in the file where the function 
 | `Icons.ts` | 92 | `nd-*-symbolic` icon catalog. |
 | `WidgetConfig.ts` | ~100 | Which widgets show in the bar / CC (GSettings `org.nidara.widgets placement`, id → (bar, cc), merged OVER the registry's first-run placement). |
 | `BarOrder.ts` | ~140 | The ORDER of the bar's right group — widgets, tray icons and search as one list (`org.nidara.widgets bar-order`, plus `bar-hidden` and `tray-known`) — and its rules (`resolveOrder`: empty = derived; what the list does not name goes to the LEFT end). A leaf: the bar and Settings → Top bar both call it, which is what keeps the page showing the bar's own order. design-system.md → "The right group's order". |
-| `GamingManager.ts` | 79 | Game-mode preferences (GSettings `org.nidara.gaming`). The compositor gets them from `GamingSync.ts`. |
-| `GamingSync.ts` | ~55 | SHELL-ONLY: hands game mode's settings to Hyprland as `NIDARA_GAMING` — `~/.config/nidara/nidara-gaming.lua` (required at login) plus a live `hyprctl eval` on every change and after every reload (the block opens with a Lua comment, which is why `evalLua` passes `--`: without it hyprctl took `-- NIDARA…` for its own flag and refused every push from #576 until 2026-09-27). `hyprland.lua` cannot read GSettings. Started from `app.ts`, never from the store, so a Settings process cannot write the compositor's file. |
+| `GamingManager.ts` | ~55 | Game-mode preferences (GSettings `org.nidara.gaming`): wallpaper, power profile, silencing notifications. Read by `GameSession.ts`. |
+| `GameSession.ts` + `game-session-logic.ts` | ~160 + ~170 | SHELL-ONLY: game mode around a game, on both compositors (#682) — the artwork or an image as the wallpaper, the performance profile, notifications held back, the way back. The logic file is pure (no GTK, no compositor) so the CI probe drives it; `GameSession.ts` is the world it acts on. Started from `app.ts`. See "Game mode". |
 | `DevLogWatch.ts` | ~120 | SHELL-ONLY, DEVELOPMENT MODE ONLY (`.dev` marker present AND stderr is a regular file, i.e. nidara-ui is writing `nidara-ui.log`): a CRITICAL in the shell's own log becomes ONE critical notification per run (never expires, cuts through DND), replaced in place when a new KIND appears — never one per line. Monitors the file, scans only appended bytes, and asks the checkout's `bin/nidara-doctor --log` for the grouping (one implementation of "which kinds"). Its own failures are `console.warn`, never `console.error` — an error there is a CRITICAL in the file it watches and would wake it forever. It also hooks GLib's log handler for the toolkit domains (Gtk/Gdk/Gsk/GLib/GLib-GObject/GLib-GIO/Pango) so every CRITICAL is followed by `[DevLogWatch] <message> ← <JS frame>` plus the stack — a toolkit CRITICAL names only the C function that refused; "no JS on the stack" means GTK raised it from its own event/frame processing. GLib's own line is written unchanged first. The handler never throws (an exception inside a log handler is reported as recursion). Started from `app.ts` right after the notification server. |
 | `NotifConfig.ts` | ~90 | Popup auto-dismiss timeout **and Do Not Disturb** (GSettings `org.nidara.notifications`). DnD moved here on 2026-08-18 with `core/notifd.ts`: it was never daemon behaviour — AstalNotifd's own docs say the property "does not have any effect on its own; it is merely a value shared between the daemon process and proxies", and it sat in GSettings so several Astal processes could read one bit. Nidara is one process, and what consults the flag is the BANNER layer, which is UI policy. 🔑 Listeners are told WHICH key moved (`onChange(key => …)`): DnD has four faces watching it and the timeout slider one, so an untyped callback made every face repaint on the other's change. `setDoNotDisturb` is guarded on equality — the Settings switch and the CC tile both write on every interaction. What must NOT come back is a SECOND copy of the flag (the retired `dndDefault` was one). |
 | `RecordingConfig.ts` | ~250 | Screen-recording preferences (GSettings `org.nidara.recording`) **and the wf-recorder command they build** — `buildCaptureCommand({region, audio})` returns `{argv, outFile, audioDevice}` so the widget owns only screen-or-region and audio-on-or-off. Everything here was measured against wf-recorder 0.6.0, not assumed, because each one silently produces a plausible file instead of an error: **(1)** `--audio` with no device records the default PulseAudio **source** — a microphone, never the desktop — which is why `audioSource` exists and defaults to the `@system` sentinel (resolved at capture time to `<default sink>.monitor`). This was the "recording has no sound" bug: on a machine whose default source was a webcam's unconnected S/PDIF port, "include audio" meant "record silence". **(2)** The long option's argument is *optional* (getopt), so it only binds as `--audio=NAME`; `["--audio", name]` as two argv entries drops the device and falls back to the default source. **(3)** An unknown device name does **not** fail — pipewire-pulse substitutes the default source — so `resolveAudioDevice()` verifies a saved name is still on the bus before using it. **(4)** VAAPI encodes H.264 fine, but `vp9_vaapi` returns "Function not implemented" on Navi 10, so hardware encoding is offered for the H.264 containers only (`CODECS` table; webm is always software VP9). Quality presets are spelled out per encoder (x264/VP9 take `crf`, VAAPI takes `qp` — same polarity, different scales), and libvpx-vp9 needs `b=0` alongside `crf` or it ignores the crf entirely. Surfaced in Settings via `widgets/screenrecord.ts` `buildSettings`, and to agents as `recording.*` in `config-entries.ts`. |
@@ -1535,13 +1536,13 @@ the key the store answers with the TypeScript value. `gsettings reset` brings it
 ⚠️ **A subscriber runs in EVERY process that built the store.** Updating a widget from it is right.
 A side effect that must happen once for the desktop — writing a Lua file Hyprland reads, restarting
 a daemon, pushing to the compositor, firing a user hook — must only be wired in the shell, in a
-`core/*Sync.ts` module started from `app.ts` that reacts to the keys: `GamingSync`, `NightLightSync`,
-`AppearanceSync`, `RegionSync` (plus `AppearanceHooks` for user hooks). The store's setters only
+`core/*Sync.ts` module started from `app.ts` that reacts to the keys: `NightLightSync`,
+`AppearanceSync`, `RegionSync` (plus `AppearanceHooks` for user hooks, and `GameSession`, which acts
+on game mode's keys when a game runs). The store's setters only
 write. The closure check forbids Settings from importing any of them. **Not split, on purpose:**
 `WallpaperManager.setWallpaper` and `MonitorConfig` are ACTIONS (`awww img`, a monitor mode) run
 once by whoever calls them; with one process there is no double, and splitting the wallpaper along
-the key would break re-picking the key's own path after game mode's hero art swapped `awww` behind
-it. When Settings leaves the shell, it asks the shell for those over `org.nidara.Shell` instead
+the key would break re-picking the key's own path after something swapped `awww` behind it. When Settings leaves the shell, it asks the shell for those over `org.nidara.Shell` instead
 (its `WallpaperManager` must then not start the `picture-uri` listener, which calls `setWallpaper`).
 `WorkspaceModes` is no longer reached from Settings at all.
 
@@ -1641,17 +1642,11 @@ tree: they build `{ ...current, [provider]: value }` rather than assigning into 
 ⚠️ **A file migration writes the DECLARED SHAPE, not a byte copy.** The dock's settings file moved
 out of the bare `~/.config/` root, and copying it across carries retired keys to the new path, where
 they sit until the user happens to change a dock setting — the one-way ratchet again, just relocated.
-⚠️ **Game mode's settings have a SECOND reader, and it cannot read GSettings.** `readGamingCfg()` in
-`config/hypr/hyprland.lua` runs inside the compositor when a game window opens. It used to
-pattern-match `gaming.json`'s raw text (a renamed key compiled, passed every check and silently dropped
-game mode to its defaults). Since #573 the shell HANDS the values over as the `NIDARA_GAMING` table —
-`core/GamingSync.ts` writes `nidara-gaming.lua` and pushes the same chunk with `hyprctl eval` (an
-assignment executes under eval; a dispatcher would only be constructed). The field names in
-`luaGamingBlock` (`core/hyprland-lua.ts`) and in `readGamingCfg` are the contract, and
-`scripts/ci/hypr-lua-check.mjs` RUNS the generated chunk and reads every field back — a custom
-wallpaper path with quotes and a backslash included. ⚠️ Behaviour that changed with it: with no file,
-the old reader applied NO wallpaper, while Settings showed "artwork"; the table always exists once the
-shell has run, so the compositor now does what Settings says.
+Game mode's settings have ONE reader since #682, the shell (`core/GameSession.ts`). Until then
+`readGamingCfg()` in `hyprland.lua` read them inside the compositor when a game opened, first by
+pattern-matching `gaming.json`'s raw text and then from a `NIDARA_GAMING` table the shell generated —
+a second reader that could not read GSettings, and a contract `hypr-lua-check.mjs` had to run end to
+end. The session moved to the shell and the table went with it.
 
 ⚠️ **`WidgetConfig`'s merge must stay a spread**: its keys ARE the data (widget ids), so the registry's
 `DEFAULT_PLACEMENT` SEEDS them rather than enumerating the valid ones — the stored `placement` map is
@@ -2315,7 +2310,7 @@ This distinction is the whole of a bug family found by the 2026-08-16 sweep, and
 finds it is *what did this page have to GO AND ASK for?* An `execAsync`, a file read, a one-shot
 `powerprofilesctl get`: answered once, then frozen for the life of the shell, and a frozen value looks
 exactly like a correct one. Three were live — Power's profile selection (which game mode swaps behind
-its back), About's uptime (a clock, wrong within the minute), and About's update check (lost to a
+its back, today from the shell), About's uptime (a clock, wrong within the minute), and About's update check (lost to a
 network that wasn't up yet at login, then silent about an available update all day). Note the update
 check's shape: a re-read that APPENDS must be idempotent, so it retries only until it answers.
 
@@ -2335,16 +2330,58 @@ This is the right place for new shared, Adwaita-free primitives.
 
 ## Game mode
 
-- **`hyprland.lua` (compositor side):** on `window.open`, detects Steam windows (`class = steam_app_<id>` or by reading `SteamAppId` from `/proc/<pid>/environ`, walking parent PIDs). Moves them to the special `gamespace` workspace (no blur/anim/shadow, `immediate`, `opaque`, `idle_inhibit`). Optionally swaps wallpaper to Steam library hero-art (`awww`) and sets power profile to `performance`. On last-game close: **restores the wallpaper and the profile that were in effect before the game**, then returns to the previous workspace.
+Two halves, split by who owns what (#682, the owner's decision of 2026-10-01):
 
-  🔑 **Entering a session is a thing that has to be UNDONE, so it is a capture, not a constant.** Exit used to hard-code `powerprofilesctl set balanced`, which is right for exactly one of the three profiles: a session started from Power saver ended in Balanced and the Settings choice was silently gone (2026-08-16). The wallpaper two lines below always did this correctly (`prevWallpaper`), which is the shape to copy. Three consequences worth keeping straight, each of which was a bug:
-  - **The "already in a session" guard needs its own flag** (`inGameSession`), not `prevWallpaper` — that one is only set when a wallpaper was actually swapped, so with `wallpaperMode = none` a second game window re-ran the entry block and would re-capture the profile it had itself just changed.
-  - **Restore only if the profile is still the one we set.** A profile the user picked mid-game is a newer decision than ours.
-  - **Undoing the session and putting the user back are different jobs.** They used to share one condition (`the user is standing on gamespace right now`), so quitting a game after wandering to another workspace left the game wallpaper up, the machine on performance, and the session flags set — which meant the NEXT game got no entry either. Undoing is unconditional; only the focus return is conditional.
+- **The compositor recognises a game and gives it a workspace of its own, `gamespace`** (a NAMED
+  workspace: negative id, not special, outside the numbered row). The signs, the same in both: the
+  class `steam_app_<id>`; a Steam app id (`SteamAppId`, `SteamGameId`, `STEAM_APP_ID`) in the
+  environment of the window's process or one of its parents (Steam starts a game through a reaper
+  and a launcher or two); a surface whose content type is "game" (wp-content-type-v1). Hyprland:
+  `hyprland.lua` (a `window.open` handler + two rules), plus `gamespace-perf` — immediate, no
+  blur/animation/shadow, `idle_inhibit`. Hyalo: the `[rules.games]` rule, `match = { game = true }`
+  (`wm/games.rs`, hyalo.md); immediate presentation, VRR and idle inhibition there are #683.
+- **The shell does everything around it, once for both** (`core/GameSession.ts`, decisions in
+  `core/game-session-logic.ts`), from Settings → Gaming (`org.nidara.gaming`): the game's Steam
+  library hero image (or a chosen image) as the wallpaper of the game's output, the performance
+  power profile, notification banners held back (`silence-notifications`, on by default; a critical
+  one still shows, all of them wait in the notification centre), and, when the last game window has
+  been gone for 3 s, the session undone and the user taken back. A game is "a window on `gamespace`"
+  — the shell reads it from `CompositorState`, so it needs no event of its own from either
+  compositor; a window the user moves onto `gamespace` counts, a game moved off it does not.
 
-  These handlers have a **test harness** that needs neither Hyprland nor Steam — `scripts/dev/hypr-game-mode-test.lua`, a CI gate; see `dev-workflow.md`.
-- **`nidara-game-mode` script (`Super+Shift+G`)** + **`GamingManager.ts` + Settings → Gaming (GSettings `org.nidara.gaming``):** `wallpaperMode` (artwork/custom/none), transition, `performanceProfile`.
-- **`Super+B` → `toggleBarOverlay`** (alias `toggleGameOverlay`): promotes **only the Bar** to OVERLAY layer over any fullscreen window (requires an active fullscreen window to activate; deactivation always allowed). Not game-specific — it lives here because games are the main fullscreen use case.
+🔑 **Entering a session is a thing that has to be UNDONE, so it is a capture, not a constant.** Exit
+used to hard-code `powerprofilesctl set balanced`, which is right for exactly one of the three
+profiles: a session started from Power saver ended in Balanced and the Settings choice was silently
+gone (2026-08-16). Each of these was a bug in the Lua the shell's logic replaced, and the probe holds
+all of them:
+- **The "already in a session" guard is its own state**, not "did we swap a wallpaper" — with
+  `wallpaperMode = none` a second game window re-ran the entry and re-captured the profile it had
+  itself just changed.
+- **Restore only if the profile is still the one we set.** A profile the user picked mid-game is a
+  newer decision than ours.
+- **Undoing the session and putting the user back are different jobs.** They used to share one
+  condition (`the user is standing on gamespace right now`), so quitting a game after wandering to
+  another workspace left the game wallpaper up and the machine on performance. Undoing is
+  unconditional; only the focus return is conditional.
+- **What a session changed is recorded as it goes** (`$XDG_RUNTIME_DIR/nidara-game-session.json`),
+  so a shell that restarts mid-game (`Super+Shift+R`, a crash) ADOPTS the session — it does not
+  capture "performance" as the profile to go back to, and it undoes the session if the game closed
+  while no shell was running.
+
+The wallpaper goes through `WallpaperManager.showForGame`/`restoreAfterGame`: per output, never
+saved or announced, no transition on the way in (the game covers it at once, and an awww transition
+running under a fullscreen game froze halfway until the game closed), the user's transition on the
+way back to the wallpaper as it is on disk NOW.
+
+The test: `scripts/dev/game-session-probe.ts`, a CI gate with a control (dev-workflow.md). Measured
+end to end on Hyalo nested (2026-10-01): a window carrying `SteamAppId=440` lands on `gamespace` and
+takes the user there; the fake artwork shows, a notification is held back, the profile goes
+power-saver → performance → power-saver (a fake `powerprofilesctl`), and after the window closes the
+user is back on workspace 1 with their wallpaper.
+
+- **`nidara-game-mode` script (`Super+Shift+G`)**: a manual toggle of the performance profile, apart
+  from all of the above.
+- **`Super+B` → `toggleBarOverlay`** (alias `toggleGameOverlay`): promotes **only the Bar** to OVERLAY layer over any fullscreen window (requires an active fullscreen window to activate; deactivation always allowed). Not game-specific — it lives here because games are the main fullscreen use case. Banners live in the bar's window, so this is also the one way a notification shows over a fullscreen window — and a game's silence still holds it back.
 
 ## Planned Enhancements & Roadmap
 
