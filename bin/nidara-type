@@ -38,6 +38,19 @@
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 
+// The compositor's state — Hyprland's or Hyalo's — in Hyprland's JSON shapes, through ONE
+// CLI (bin/nidara-wm, #682): PATH first, then a sibling of this script (dev checkout).
+// Never `hyprctl` directly: on Hyalo there is none.
+const WM = (() => {
+    const inPath = GLib.find_program_in_path("nidara-wm")
+    if (inPath) return inPath
+    try {
+        const sib = `${GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0])}/nidara-wm`
+        if (GLib.file_test(sib, GLib.FileTest.IS_EXECUTABLE)) return sib
+    } catch {}
+    return "nidara-wm"
+})()
+
 // The Assistant's gates live in GSettings, `org.nidara.ai` (#573) — the same keys
 // Settings → AI writes. No schema installed reads as `undefined`, which every gate
 // below treats exactly as it treated a missing ai.json. Each read is a fresh
@@ -105,7 +118,7 @@ function yieldInput(verb) {
 // Hyprland's focused window class (lowercased), e.g. "telegramdesktop".
 function hyprActiveClass() {
     try {
-        const [ok, out] = GLib.spawn_command_line_sync("hyprctl activewindow -j")
+        const [ok, out] = GLib.spawn_command_line_sync(`${WM} activewindow`)
         if (!ok) return null
         const cls = (JSON.parse(new TextDecoder().decode(out)).class || "").toLowerCase()
         return cls || null
@@ -161,10 +174,10 @@ function focusMatches(activeClass, app) {
 // refusal that only says "not focused" costs three steps to recover from — measured
 // 2026-07-28 in a live run: type_text refused, then list_windows, then focus_window,
 // then the retry. We already know which app was named, so the lookup belongs here.
-// Runs ONLY on the refusal path: the happy path must not pay for a second hyprctl.
+// Runs ONLY on the refusal path: the happy path must not pay for a second nidara-wm call.
 function focusHint(app) {
     try {
-        const [ok, out] = GLib.spawn_command_line_sync("hyprctl clients -j")
+        const [ok, out] = GLib.spawn_command_line_sync(`${WM} clients`)
         if (!ok) return null
         const wins = JSON.parse(new TextDecoder().decode(out))
         const hit = wins.find(w => focusMatches((w.class || "").toLowerCase(), app))

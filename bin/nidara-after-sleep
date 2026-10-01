@@ -21,8 +21,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 sleep 0.5
-# Lua-parser syntax: the legacy `hyprctl dispatch dpms on` is a Lua error on
-# Nidara's Hyprland. If this line breaks, the screen stays black after every
-# wake with no recovery path beyond a blind TTY login — treat it as critical.
-hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })'
+# If this line breaks, the screen stays black after every wake with no recovery
+# path beyond a blind TTY login — treat it as critical. On Hyprland it is a Lua
+# dispatch (the legacy `dpms on` is a Lua error there); nidara-wm says it right
+# for whichever compositor runs (#682).
+nidara-wm dpms on
 exit 0

@@ -42,7 +42,7 @@ fi
 # Hide bar and dock, disable all keybinds
 # (workspace switch not needed — ext-session-lock-v1 covers all monitors at compositor level)
 nidara-ipc hideForLock >> "$LOG" 2>&1 || true
-hyprctl dispatch 'hl.dsp.submap("lock")' >> "$LOG" 2>&1 || true
+nidara-wm lock-binds on >> "$LOG" 2>&1 || true
 
 # Run lockscreen — blocks until app.quit() on successful auth.
 # Watchdog: if the bundle dies abnormally (e.g. GTK4 segfault when a wl_output
@@ -71,5 +71,5 @@ while true; do
 done
 
 # Restore everything after unlock
-hyprctl dispatch 'hl.dsp.submap("reset")' >> "$LOG" 2>&1 || true
+nidara-wm lock-binds off >> "$LOG" 2>&1 || true
 nidara-ipc showAfterLock >> "$LOG" 2>&1 || true

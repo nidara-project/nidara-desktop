@@ -1373,6 +1373,16 @@ external agents and the built-in Assistant (above) — both spawn the same helpe
 verbs, and the helpers are where every gate, focus check and kill-switch re-check lives. Add a verb
 here and it is one wrapper mode + one tool in each consumer. Phase 1 — perception, read-only:
 
+> 🔑 **The helpers ask the compositor through `bin/nidara-wm`, never `hyprctl`** (#682, since
+> 2026-10-01): `nidara-wm activewindow|clients|monitors|cursorpos` answers in Hyprland's JSON
+> shapes from whichever compositor runs — on Hyalo, built from its IPC — so the helpers did not
+> change what they read. Where the text below says `hyprctl activewindow` (most of it was
+> measured on Hyprland), read `nidara-wm activewindow`. The injectors are protocol clients and
+> work on both: `nidara-input` (zwlr_virtual_pointer_v1, implemented by Hyalo in
+> `protocols/virtual_pointer.rs`) and `wtype` (zwp_virtual_keyboard_v1, Smithay's). CI's
+> compositor-boundary check fails any script in bin/ that runs `hyprctl` (only nidara-wm, and
+> nidara-doctor's version line, may).
+
 - **`bin/nidara-a11y`** (standalone GJS, `gi://Atspi`; same no-Node pattern as
   `nidara-mcp`/`nidara-portal`) reads an app's **AT-SPI2 accessibility tree** and prints
   it in the **same flat `UINode` shape as `queryUI`** (additive a11y fields: `role`, `states[]`,

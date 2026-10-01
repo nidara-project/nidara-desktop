@@ -34,6 +34,19 @@ import Atspi from "gi://Atspi"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 
+// The compositor's state — Hyprland's or Hyalo's — in Hyprland's JSON shapes, through ONE
+// CLI (bin/nidara-wm, #682): PATH first, then a sibling of this script (dev checkout).
+// Never `hyprctl` directly: on Hyalo there is none.
+const WM = (() => {
+    const inPath = GLib.find_program_in_path("nidara-wm")
+    if (inPath) return inPath
+    try {
+        const sib = `${GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0])}/nidara-wm`
+        if (GLib.file_test(sib, GLib.FileTest.IS_EXECUTABLE)) return sib
+    } catch {}
+    return "nidara-wm"
+})()
+
 // The Assistant's gates live in GSettings, `org.nidara.ai` (#573) — the same keys
 // Settings → AI writes. No schema installed reads as `undefined`, which every gate
 // below treats exactly as it treated a missing ai.json. Each read is a fresh
@@ -180,7 +193,7 @@ const isLabelish = nm => nm.length <= MAX_SUGGESTION_LEN && !nm.includes("\n")
 // execution isolation in GJS.
 function getHyprWindows() {
     try {
-        const [ok, out] = GLib.spawn_command_line_sync("hyprctl clients -j")
+        const [ok, out] = GLib.spawn_command_line_sync(`${WM} clients`)
         if (!ok) return new Map()
         const list = JSON.parse(new TextDecoder().decode(out))
         const map = new Map()
@@ -516,7 +529,7 @@ function main() {
     // NO `focus` VERB — do not add one back. `Atspi.Component.grab_focus` is the
     // obvious companion to set-value, and it does not work: measured 2026-07-28
     // against a live GtkSpinButton, it returns FALSE even with its own window
-    // already focused (`hyprctl activewindow` = the probe). GTK4 dropped ATK and
+    // already focused (`nidara-wm activewindow` = the probe). GTK4 dropped ATK and
     // its own AT-SPI backend does not implement Component.GrabFocus, so on the
     // toolkit this desktop is built from the verb would fail every time — a tool
     // that always returns false is worse than no tool, and it would cost prompt

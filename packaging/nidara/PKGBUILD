@@ -329,7 +329,7 @@ package_nidara-desktop() {
   local b
   for b in nidara nidara-ui nidara-greeter nidara-greeter-session nidara-lock nidara-before-sleep \
            nidara-after-sleep nidara-game-mode nidara-doctor nidara-portal \
-           nidara-mcp nidara-agent nidara-a11y nidara-act nidara-type nidara-click \
+           nidara-mcp nidara-agent nidara-a11y nidara-act nidara-type nidara-click nidara-wm \
            nidara-hook nidara-update nidara-setup nidara-migrate; do
     install -Dm755 "bin/$b" "$pkgdir/usr/bin/$b"
   done

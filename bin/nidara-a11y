@@ -32,6 +32,19 @@ import Atspi from "gi://Atspi"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 
+// The compositor's state — Hyprland's or Hyalo's — in Hyprland's JSON shapes, through ONE
+// CLI (bin/nidara-wm, #682): PATH first, then a sibling of this script (dev checkout).
+// Never `hyprctl` directly: on Hyalo there is none.
+const WM = (() => {
+    const inPath = GLib.find_program_in_path("nidara-wm")
+    if (inPath) return inPath
+    try {
+        const sib = `${GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0])}/nidara-wm`
+        if (GLib.file_test(sib, GLib.FileTest.IS_EXECUTABLE)) return sib
+    } catch {}
+    return "nidara-wm"
+})()
+
 // The Assistant's gates live in GSettings, `org.nidara.ai` (#573) — the same keys
 // Settings → AI writes. No schema installed reads as `undefined`, which every gate
 // below treats exactly as it treated a missing ai.json. Each read is a fresh
@@ -353,7 +366,7 @@ function walk(acc, windowLabel, path, depth, out, startTime) {
 // every window of apps whose name matches the substring. Without: the focused
 // window — resolved by correlating with Hyprland's active window (the reliable
 // signal; AT-SPI's own STATE_ACTIVE is absent for apps that don't participate),
-// falling back to STATE_ACTIVE if hyprctl is unavailable.
+// falling back to STATE_ACTIVE if nidara-wm is unavailable.
 
 function children(acc) {
     const count = safe(() => acc.get_child_count(), 0)
@@ -368,7 +381,7 @@ function children(acc) {
 // Hyprland's focused window class (lowercased), e.g. "org.gnome.nautilus".
 function hyprActiveWindow() {
     try {
-        const [ok, out] = GLib.spawn_command_line_sync("hyprctl activewindow -j")
+        const [ok, out] = GLib.spawn_command_line_sync(`${WM} activewindow`)
         if (!ok) return null
         const j = JSON.parse(new TextDecoder().decode(out))
         return {
@@ -382,7 +395,7 @@ function hyprActiveWindow() {
 
 function getHyprWindows() {
     try {
-        const [ok, out] = GLib.spawn_command_line_sync("hyprctl clients -j")
+        const [ok, out] = GLib.spawn_command_line_sync(`${WM} clients`)
         if (!ok) return new Map()
         const list = JSON.parse(new TextDecoder().decode(out))
         const map = new Map()

@@ -36,12 +36,25 @@
 // COORDINATE MAPPING (the fragile part — measure, don't trust):
 //   global_logical = window.at + node_or_point (AT-SPI window coords are logical)
 //   output_rel     = global_logical − monitor.xy
-//   extent_logical = monitor.{w,h} / monitor.scale   (hyprctl w/h are physical)
+//   extent_logical = monitor.{w,h} / monitor.scale   (monitor w/h are physical)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import Atspi from "gi://Atspi"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+
+// The compositor's state — Hyprland's or Hyalo's — in Hyprland's JSON shapes, through ONE
+// CLI (bin/nidara-wm, #682): PATH first, then a sibling of this script (dev checkout).
+// Never `hyprctl` directly: on Hyalo there is none.
+const WM = (() => {
+    const inPath = GLib.find_program_in_path("nidara-wm")
+    if (inPath) return inPath
+    try {
+        const sib = `${GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0])}/nidara-wm`
+        if (GLib.file_test(sib, GLib.FileTest.IS_EXECUTABLE)) return sib
+    } catch {}
+    return "nidara-wm"
+})()
 
 // The Assistant's gates live in GSettings, `org.nidara.ai` (#573) — the same keys
 // Settings → AI writes. No schema installed reads as `undefined`, which every gate
@@ -88,15 +101,13 @@ function runJson(cmd) {
     } catch { return null }
 }
 
-// Physical cursor position (global logical px) via `hyprctl cursorpos` — the
+// Physical cursor position (global logical px) via `nidara-wm cursorpos` — the
 // baseline for the user-wins check AND the fake cursor's travel origin. null on
 // any failure (the caller then skips the check rather than break the action).
 function cursorPos() {
     try {
-        const [ok, out] = GLib.spawn_command_line_sync("hyprctl cursorpos")
-        if (!ok) return null
-        const m = new TextDecoder().decode(out).match(/(-?\d+),\s*(-?\d+)/)
-        return m ? { x: parseInt(m[1], 10), y: parseInt(m[2], 10) } : null
+        const p = runJson(`${WM} cursorpos`)
+        return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? { x: Math.round(p.x), y: Math.round(p.y) } : null
     } catch { return null }
 }
 
@@ -346,7 +357,7 @@ function findNodeCentres(appFilter, nodeName, roleFilter, targetPid) {
     }
 
     // Fast path: resolve ONLY the focused window's application via its PID.
-    // nidara-click already ran `hyprctl activewindow -j` to verify focus, so targetPid
+    // nidara-click already ran `nidara-wm activewindow` to verify focus, so targetPid
     // is known. We query the registry for its child index via D-Bus (zero fds) and
     // only resolve that single child in AT-SPI.
     //
@@ -489,15 +500,15 @@ function act(mode, app, spec, islandBounds) {
     const isDrag = spec.action === "drag"
 
     // Fresh geometry + focus check, immediately before acting.
-    const aw = runJson("hyprctl activewindow -j")
+    const aw = runJson(`${WM} activewindow`)
     const activeClass = (aw?.class ?? "").toLowerCase()
     const focused = sameApp(activeClass, app)
     if (!focused) {
         // Hand back the address of the window that WAS meant, so recovery is one
         // step instead of three (list_windows → focus_window → retry, measured in a
         // live run 2026-07-28). Only on this path — the happy path must not pay for
-        // a second hyprctl call. Kept identical in nidara-type.
-        const clients = runJson("hyprctl clients -j") || []
+        // a second nidara-wm call. Kept identical in nidara-type.
+        const clients = runJson(`${WM} clients`) || []
         const hit = clients.find(w => sameApp(w.class, app))
         emit({
             error: `refused: "${app}" is not the focused window (active: ${activeClass || "unknown"}) — focus the WINDOW first with focus_window`
@@ -573,7 +584,7 @@ function act(mode, app, spec, islandBounds) {
     // included. Kept in sync here because this helper is a separate process and can't
     // import the shell's modules.
     const at = aw.at || [0, 0], monName = aw.monitor
-    const mons = runJson("hyprctl monitors -j") || []
+    const mons = runJson(`${WM} monitors`) || []
     // aw.monitor is an index; match by id, else fall back to the focused monitor.
     const mon = mons.find(m => m.id === monName) || mons.find(m => m.focused) || mons[0]
     if (!mon) { emit({ error: "could not resolve the active monitor geometry" }); return }
