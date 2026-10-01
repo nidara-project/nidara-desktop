@@ -26,6 +26,93 @@ autostart = [
   "uwsm app -s b -- gnome-keyring-daemon --start --components=secrets",
 ]
 
+# How windows are laid out — the Hyprland session's numbers, so the bar's ends line up with
+# the windows the same way in both sessions.
+[layout]
+tiling = "dwindle"   # the only tiling layout for now (#682)
+gaps_in = 2          # each side, so 4 between two windows
+gaps_out = 4         # = the bar's margin (ui/shell/surfaces/bar/capsule.ts BAR_MARGIN)
+border = 1
+
+# Floating or tiling, per workspace; Settings writes `modes` in hyalo-settings.toml.
+[workspaces]
+default_mode = "floating"
+
+# Key and pointer bindings: modifiers + key = a command (hyalo/compositor/src/binds.rs for
+# the syntax, wm/actions.rs for the commands). The same set as the Hyprland session
+# (config/hypr/hyprland.lua). No binding ends the session on purpose — one stray chord must
+# never lose everything; log out from the system menu. (Ctrl+Alt+Backspace, built in, is
+# the preview's way out until it is not a preview.)
+[binds]
+# The shell.
+"Super+Shift+R" = "spawn systemctl --user restart nidara.service"
+"Super+L" = "spawn nidara-lock"
+"Super+S" = "spawn nidara-ipc openSettings"
+"Super_L" = { action = "spawn nidara-ipc toggleAppGrid", release = true }
+"Super+A" = "spawn nidara-ipc toggleAgent"
+"Super+B" = "spawn nidara-ipc toggleBarOverlay"
+"Super+Shift+G" = "spawn nidara-game-mode toggle"
+"Super+Shift+Escape" = "spawn nidara-ipc disableComputerControl"
+"Super+Space" = "spawn nidara-ipc togglePrism"
+"Super+C" = "spawn nidara-ipc toggleCC keyboard"
+"Super+N" = "spawn nidara-ipc toggleNC keyboard"
+"Super+Ctrl+B" = "spawn nidara-ipc focusBar"
+"Super+Ctrl+D" = "spawn nidara-ipc focusDock"
+"Super+W" = "spawn nidara-ipc toggleOverview"
+# Apps, launched as the shell launches them (uwsm app -t service: the session's
+# environment, and a unit name the portal can identify the app by).
+"Super+E" = "spawn uwsm app -t service -- org.gnome.Nautilus.desktop"
+"Super+T" = "spawn uwsm app -t service -- kitty.desktop"
+# Windows.
+"Super+Q" = "close-window"
+"Super+Left" = "focus left"
+"Super+Right" = "focus right"
+"Super+Up" = "focus up"
+"Super+Down" = "focus down"
+"Alt+Tab" = "cycle next"
+"Alt+Shift+Tab" = "cycle prev"
+"Super+MouseLeft" = "move-with-pointer"
+"Super+MouseRight" = "resize-with-pointer"
+"Super+Shift+Right" = { action = "resize 30 0", repeat = true }
+"Super+Shift+Left" = { action = "resize -30 0", repeat = true }
+"Super+Shift+Up" = { action = "resize 0 -30", repeat = true }
+"Super+Shift+Down" = { action = "resize 0 30", repeat = true }
+"Super+P" = "pseudo"
+"Super+F" = "toggle-floating"
+"Super+Shift+F" = "fullscreen"
+"Super+M" = "maximize"
+# Workspaces.
+"Super+1" = "workspace 1"
+"Super+2" = "workspace 2"
+"Super+3" = "workspace 3"
+"Super+4" = "workspace 4"
+"Super+5" = "workspace 5"
+"Super+Shift+1" = "move-to-workspace 1"
+"Super+Shift+2" = "move-to-workspace 2"
+"Super+Shift+3" = "move-to-workspace 3"
+"Super+Shift+4" = "move-to-workspace 4"
+"Super+Shift+5" = "move-to-workspace 5"
+"Super+WheelDown" = "workspace e+1"
+"Super+WheelUp" = "workspace e-1"
+"Super+Ctrl+Right" = "workspace e+1"
+"Super+Ctrl+Left" = "workspace e-1"
+"Super+Ctrl+Shift+Right" = "move-to-workspace e+1"
+"Super+Ctrl+Shift+Left" = "move-to-workspace e-1"
+# Screenshots.
+"Print" = "spawn grim -g \"$(slurp -d)\" - | wl-copy"
+"Shift+Print" = "spawn grim -g \"$(slurp -d)\" ~/Pictures/Screenshot_$(date +'%Y-%m-%d_%H-%M-%S').png && notify-send \"Captura\" \"Guardada en Imágenes\""
+# Hardware and media keys; `locked` = they keep working on the lock screen.
+"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+", locked = true, repeat = true }
+"XF86AudioLowerVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-", locked = true, repeat = true }
+"XF86AudioMute" = { action = "spawn wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle", locked = true }
+"XF86AudioMicMute" = { action = "spawn wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle", locked = true }
+"XF86MonBrightnessUp" = { action = "spawn brightnessctl -n s 5%+", locked = true, repeat = true }
+"XF86MonBrightnessDown" = { action = "spawn brightnessctl -n s 5%-", locked = true, repeat = true }
+"XF86AudioPlay" = { action = "spawn playerctl play-pause", locked = true }
+"XF86AudioPause" = { action = "spawn playerctl play-pause", locked = true }
+"XF86AudioNext" = { action = "spawn playerctl next", locked = true }
+"XF86AudioPrev" = { action = "spawn playerctl previous", locked = true }
+
 # The keyboard follows the system's (localectl set-x11-keymap) unless set here.
 [input.keyboard]
 repeat_delay = 600

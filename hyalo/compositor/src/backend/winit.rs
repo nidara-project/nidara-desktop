@@ -127,14 +127,14 @@ pub fn redraw_queued(state: &mut Hyalo) {
 }
 
 fn render(state: &mut Hyalo) {
-    let Hyalo { backend, space, seat, cursor_status, .. } = state;
+    let Hyalo { backend, space, seat, cursor_status, wm, .. } = state;
     let Backend::Winit(w) = backend else { return };
     if !w.queued {
         return;
     }
     w.queued = false;
     let output = w.output.clone();
-    let scene = render::Scene::new(space, seat, cursor_status);
+    let scene = render::Scene::new(space, wm, seat, cursor_status);
     let age = w.graphics.buffer_age().unwrap_or(0);
     let result = {
         let (renderer, mut framebuffer) = match w.graphics.bind() {

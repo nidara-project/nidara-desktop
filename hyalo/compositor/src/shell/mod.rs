@@ -1,12 +1,12 @@
 //! Windows (xdg-shell) and their popups. Layer surfaces — the shell's bar, dock and panels —
 //! are in `layer.rs`.
 
-pub mod grabs;
 pub mod layer;
 
 use smithay::{
     desktop::{
-        PopupKind, Window, WindowSurfaceType, find_popup_root_surface, get_popup_toplevel_coords,
+        PopupKeyboardGrab, PopupKind, PopupPointerGrab, PopupUngrabStrategy, Window, WindowSurfaceType,
+        find_popup_root_surface, get_popup_toplevel_coords,
         layer_map_for_output,
     },
     input::{
@@ -20,7 +20,7 @@ use smithay::{
             protocol::{wl_seat, wl_surface::WlSurface},
         },
     },
-    utils::{Logical, Point, Rectangle, Serial},
+    utils::Serial,
     wayland::{
         compositor::{get_parent, with_states},
         shell::xdg::{
@@ -32,7 +32,7 @@ use smithay::{
 
 use crate::{
     Hyalo,
-    shell::grabs::{MoveSurfaceGrab, ResizeSurfaceGrab},
+    wm::{Fullscreen, grabs::Kind},
 };
 
 impl XdgShellHandler for Hyalo {
@@ -41,27 +41,14 @@ impl XdgShellHandler for Hyalo {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        let window = Window::new_wayland_window(surface);
-        // Placed for real on its first commit, once its size is known (`place_new_window`).
-        self.space.map_element(window, (0, 0), true);
+        // Known from now on; placed on its first buffer (`window_mapped`).
+        self.window_created(Window::new_wayland_window(surface));
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         if let Some(window) = self.window_for_surface(surface.wl_surface()) {
-            let outputs = self.space.outputs_for_element(&window);
-            self.space.unmap_elem(&window);
-            for o in &outputs {
-                self.queue_redraw(Some(o));
-            }
+            self.window_destroyed(&window);
         }
-        // The keyboard goes to whatever window is now on top.
-        let next = self.space.elements().last().cloned();
-        let serial = smithay::utils::SERIAL_COUNTER.next_serial();
-        if let (Some(window), Some(keyboard)) = (next, self.seat.get_keyboard())
-            && keyboard.current_focus().is_none_or(|f| !f.is_alive())
-                && let Some(t) = window.toplevel() {
-                    keyboard.set_focus(self, Some(t.wl_surface().clone()), serial);
-                }
     }
 
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
@@ -84,12 +71,10 @@ impl XdgShellHandler for Hyalo {
 
     fn move_request(&mut self, surface: ToplevelSurface, seat: wl_seat::WlSeat, serial: Serial) {
         let seat = Seat::from_resource(&seat).unwrap();
-        let wl_surface = surface.wl_surface();
-        let Some(start_data) = check_grab(&seat, wl_surface, serial) else { return };
-        let Some(window) = self.window_for_surface(wl_surface) else { return };
-        let initial_window_location = self.space.element_location(&window).unwrap();
-        let grab = MoveSurfaceGrab { start_data, window, initial_window_location };
-        seat.get_pointer().unwrap().set_grab(self, grab, serial, Focus::Clear);
+        let Some(start_data) = check_grab(&seat, surface.wl_surface(), serial) else { return };
+        let Some(id) = self.wm.by_surface(surface.wl_surface()).map(|m| m.id) else { return };
+        let button = start_data.button;
+        self.start_window_grab(id, Kind::Move, start_data, button);
     }
 
     fn resize_request(
@@ -100,27 +85,79 @@ impl XdgShellHandler for Hyalo {
         edges: xdg_toplevel::ResizeEdge,
     ) {
         let seat = Seat::from_resource(&seat).unwrap();
-        let wl_surface = surface.wl_surface();
-        let Some(start_data) = check_grab(&seat, wl_surface, serial) else { return };
-        let Some(window) = self.window_for_surface(wl_surface) else { return };
-        let initial_window_location = self.space.element_location(&window).unwrap();
-        let initial_window_size = window.geometry().size;
-        surface.with_pending_state(|state| {
-            state.states.set(xdg_toplevel::State::Resizing);
-        });
-        surface.send_pending_configure();
-        let grab = ResizeSurfaceGrab::start(
-            start_data,
-            window,
-            edges.into(),
-            Rectangle::new(initial_window_location, initial_window_size),
-        );
-        seat.get_pointer().unwrap().set_grab(self, grab, serial, Focus::Clear);
+        let Some(start_data) = check_grab(&seat, surface.wl_surface(), serial) else { return };
+        let Some(id) = self.wm.by_surface(surface.wl_surface()).map(|m| m.id) else { return };
+        let button = start_data.button;
+        self.start_window_grab(id, Kind::Resize(edges.into()), start_data, button);
     }
 
-    fn grab(&mut self, _surface: PopupSurface, _seat: wl_seat::WlSeat, _serial: Serial) {
-        // Popup grabs (menus that close on an outside click) are #682's; the shell's own
-        // panels close through hyprland-focus-grab-v1, which is ours already.
+    fn maximize_request(&mut self, surface: ToplevelSurface) {
+        // Refused, as on the Hyprland session (`suppress_event = "maximize"`): a double click
+        // on a header would otherwise maximize behind the user's back; Super+M maximizes. The
+        // client still gets its configure, as the protocol asks.
+        if surface.is_initial_configure_sent() {
+            surface.send_configure();
+        }
+    }
+
+    fn fullscreen_request(&mut self, surface: ToplevelSurface, _output: Option<smithay::reexports::wayland_server::protocol::wl_output::WlOutput>) {
+        // A video player or a game asking for the whole screen: granted, on the output its
+        // workspace is on.
+        match self.wm.by_surface(surface.wl_surface()).map(|m| (m.id, m.mapped)) {
+            Some((id, true)) => self.set_fullscreen(id, Fullscreen::Fullscreen),
+            _ => {
+                if surface.is_initial_configure_sent() {
+                    surface.send_configure();
+                }
+            }
+        }
+    }
+
+    fn unfullscreen_request(&mut self, surface: ToplevelSurface) {
+        if let Some(id) = self.wm.by_surface(surface.wl_surface()).map(|m| m.id) {
+            self.set_fullscreen(id, Fullscreen::None);
+        }
+    }
+
+    fn app_id_changed(&mut self, _surface: ToplevelSurface) {
+        self.wm.dirty_windows = true;
+    }
+
+    fn title_changed(&mut self, surface: ToplevelSurface) {
+        if let Some(m) = self.wm.by_surface(surface.wl_surface()) {
+            let event = crate::ipc::Event::WindowTitleChanged { id: m.id, title: crate::wm::title(&m.window) };
+            crate::ipc::server::broadcast(self, &event);
+        }
+    }
+
+    /// A menu that closes when the user clicks or types outside it: the popup gets the
+    /// keyboard and the pointer until it is dismissed. (The shell's own panels close through
+    /// hyprland-focus-grab-v1, a different mechanism — protocols/focus_grab.rs.)
+    fn grab(&mut self, surface: PopupSurface, seat: wl_seat::WlSeat, serial: Serial) {
+        let seat: Seat<Hyalo> = Seat::from_resource(&seat).unwrap();
+        let kind = PopupKind::Xdg(surface);
+        let Ok(root) = find_popup_root_surface(&kind) else { return };
+        let Ok(mut grab) = self.popups.grab_popup(root, kind, &seat, serial) else { return };
+        if let Some(keyboard) = seat.get_keyboard() {
+            // A grab already held by something else (a window being dragged) is not taken over.
+            if keyboard.is_grabbed()
+                && !(keyboard.has_grab(serial) || keyboard.has_grab(grab.previous_serial().unwrap_or(serial)))
+            {
+                grab.ungrab(PopupUngrabStrategy::All);
+                return;
+            }
+            keyboard.set_focus(self, grab.current_grab(), serial);
+            keyboard.set_grab(self, PopupKeyboardGrab::new(&grab), serial);
+        }
+        if let Some(pointer) = seat.get_pointer() {
+            if pointer.is_grabbed()
+                && !(pointer.has_grab(serial) || pointer.has_grab(grab.previous_serial().unwrap_or_else(|| grab.serial())))
+            {
+                grab.ungrab(PopupUngrabStrategy::All);
+                return;
+            }
+            pointer.set_grab(self, PopupPointerGrab::new(&grab), serial, Focus::Keep);
+        }
     }
 }
 
@@ -156,21 +193,22 @@ impl Hyalo {
     /// Called on every commit: first configures, popups, the first placement of a window.
     pub fn xdg_commit(&mut self, surface: &WlSurface) {
         if let Some(window) = self.window_for_surface(surface) {
-            let (initial_configure_sent, placed) = with_states(surface, |states| {
-                let sent = states
+            let initial_configure_sent = with_states(surface, |states| {
+                states
                     .data_map
                     .get::<XdgToplevelSurfaceData>()
                     .unwrap()
                     .lock()
                     .unwrap()
-                    .initial_configure_sent;
-                (sent, states.data_map.get::<Placed>().is_some())
+                    .initial_configure_sent
             });
+            let mapped = self.wm.by_window(&window).is_some_and(|m| m.mapped);
             if !initial_configure_sent {
-                window.toplevel().unwrap().send_configure();
-            } else if !placed && window.geometry().size.w > 0 {
-                with_states(surface, |states| states.data_map.insert_if_missing(|| Placed));
-                self.place_new_window(&window);
+                self.initial_configure(&window);
+            } else if !mapped && window.geometry().size.w > 0 {
+                self.window_mapped(&window);
+            } else if mapped {
+                self.window_committed(&window);
             }
         }
 
@@ -182,48 +220,15 @@ impl Hyalo {
             }
     }
 
-    /// A new window goes to the middle of the usable area (outside the bar and dock's
-    /// exclusive zones) of the output under the pointer, and takes the keyboard.
-    fn place_new_window(&mut self, window: &Window) {
-        let pointer = self.seat.get_pointer().unwrap().current_location();
-        let output = self
-            .space
-            .output_under(pointer)
-            .next()
-            .or_else(|| self.space.outputs().next())
-            .cloned();
-        let Some(output) = output else { return };
-        let Some(out_geo) = self.space.output_geometry(&output) else { return };
-        let zone = layer_map_for_output(&output).non_exclusive_zone();
-        let area = Rectangle::new(out_geo.loc + zone.loc, zone.size);
-        let size = window.geometry().size;
-        let loc: Point<i32, Logical> = (
-            area.loc.x + ((area.size.w - size.w) / 2).max(0),
-            area.loc.y + ((area.size.h - size.h) / 2).max(0),
-        )
-            .into();
-        self.space.map_element(window.clone(), loc - window.geometry().loc, true);
-        if let (Some(keyboard), Some(t)) = (self.seat.get_keyboard(), window.toplevel()) {
-            keyboard.set_focus(self, Some(t.wl_surface().clone()), smithay::utils::SERIAL_COUNTER.next_serial());
-        }
-        self.space.elements().for_each(|w| {
-            w.set_activated(w == window);
-            if let Some(t) = w.toplevel() {
-                t.send_pending_configure();
-            }
-        });
-    }
-
     pub(crate) fn unconstrain_popup(&self, popup: &PopupSurface) {
         let Ok(root) = find_popup_root_surface(&PopupKind::Xdg(popup.clone())) else {
             return;
         };
         // The popup's parent is a window or a layer surface; either way it must stay on the
         // output its root is on.
-        let (root_loc, output) = if let Some(window) = self.window_for_surface(&root) {
-            let Some(geo) = self.space.element_geometry(&window) else { return };
-            let output = self.space.outputs_for_element(&window).into_iter().next();
-            (geo.loc, output)
+        let (root_loc, output) = if let Some(m) = self.wm.by_surface(&root) {
+            let output = self.wm.workspaces.get(&m.workspace).and_then(|w| self.output_named(&w.output));
+            (m.rect.loc, output)
         } else {
             let found = self.space.outputs().find_map(|o| {
                 let map = layer_map_for_output(o);
@@ -246,6 +251,3 @@ impl Hyalo {
         });
     }
 }
-
-/// Marks a window that has had its first placement.
-struct Placed;

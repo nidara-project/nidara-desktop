@@ -32,7 +32,6 @@ use smithay::{
 
 use crate::{
     protocols::material,
-    shell::grabs::resize_grab,
     state::{ClientState, Hyalo},
 };
 
@@ -59,7 +58,6 @@ impl CompositorHandler for Hyalo {
         }
         material::on_commit(surface);
         self.xdg_commit(surface);
-        resize_grab::handle_commit(&mut self.space, surface);
         self.layer_commit(surface);
 
         let outputs = self.outputs_for_surface(surface);

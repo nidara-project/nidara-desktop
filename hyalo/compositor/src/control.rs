@@ -4,14 +4,15 @@
 //! headless host compositor never delivers motion to a nested window (found in #679).
 //! Off unless the variable is set; the session never sets it.
 //!
-//!   move X Y · click X Y · rclick X Y · key KEYCODE
+//!   move X Y · click X Y · rclick X Y · press X Y BUTTON · release BUTTON
+//!   key KEYCODE · keydown KEYCODE · keyup KEYCODE      (evdev codes: 125 = Super, 42 = Shift)
+//!
+//! Keys go through the same path as a keyboard's, bindings included.
 use std::io::BufRead;
 
 use smithay::{
     backend::input::{ButtonState, InputTime, KeyState},
-    input::keyboard::FilterResult,
     reexports::calloop::{EventLoop, channel},
-    utils::SERIAL_COUNTER,
 };
 
 use crate::state::Hyalo;
@@ -51,13 +52,18 @@ impl Hyalo {
                     self.pointer_button(button, state, time);
                 }
             }
-            Some("key") => {
-                let code = num(1) as u32 + 8;
-                let kb = self.seat.get_keyboard().unwrap();
-                for state in [KeyState::Pressed, KeyState::Released] {
-                    kb.input::<(), _>(self, code.into(), state, SERIAL_COUNTER.next_serial(), time, |_, _, _| {
-                        FilterResult::Forward
-                    });
+            Some("press") => {
+                self.control_move(num(1), num(2), time);
+                self.pointer_button(num(3) as u32, ButtonState::Pressed, time);
+            }
+            Some("release") => self.pointer_button(num(1) as u32, ButtonState::Released, time),
+            Some(verb @ ("key" | "keydown" | "keyup")) => {
+                let code = (num(1) as u32 + 8).into();
+                if verb != "keyup" {
+                    self.on_key(code, KeyState::Pressed, time);
+                }
+                if verb != "keydown" {
+                    self.on_key(code, KeyState::Released, time);
                 }
             }
             _ => eprintln!("[hyalo] control: unknown {line:?}"),

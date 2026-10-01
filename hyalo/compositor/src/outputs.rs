@@ -4,15 +4,16 @@
 //!
 //! #594, by construction: a monitor that is switched off keeps its place and its windows.
 //! Off through DPMS it simply stops drawing. And when switching it off makes it disappear
-//! (many DisplayPort monitors do), each of its windows remembers where it was on it and goes
-//! back there when the monitor returns under the same connector name.
+//! (many DisplayPort monitors do), its workspaces are shown elsewhere and go back to it when
+//! it returns under the same connector name (`wm::outputs_changed`), each floating window
+//! where it was — their boxes are kept relative to their output.
 
 use serde::Serialize;
 use smithay::{
-    desktop::{Window, layer_map_for_output},
+    desktop::layer_map_for_output,
     output::{Output, Scale},
     reexports::input as libinput,
-    utils::{Logical, Point, Rectangle},
+    utils::{Logical, Rectangle},
 };
 
 use crate::{
@@ -21,15 +22,8 @@ use crate::{
     state::Hyalo,
 };
 
-/// Where a window was, relative to its output, when that output went away.
-#[derive(Debug, Clone)]
-struct Home {
-    output: String,
-    offset: Point<i32, Logical>,
-}
-
 /// Places every output: configured positions first, the rest in a row to their right.
-/// Then puts back windows whose output returned, and moves in windows left outside.
+/// Then every workspace goes to its output (`wm::outputs_changed`).
 pub fn arrange(state: &mut Hyalo) {
     let outputs: Vec<Output> = state.space.outputs().cloned().collect();
     let mut placed: Vec<Rectangle<i32, Logical>> = Vec::new();
@@ -56,58 +50,8 @@ pub fn arrange(state: &mut Hyalo) {
     for o in &outputs {
         layer_map_for_output(o).arrange();
     }
-    restore_and_rescue_windows(state);
+    state.outputs_changed();
     state.queue_redraw(None);
-}
-
-fn restore_and_rescue_windows(state: &mut Hyalo) {
-    let windows: Vec<Window> = state.space.elements().cloned().collect();
-    for window in windows {
-        let Some(loc) = state.space.element_location(&window) else { continue };
-        // Back home?
-        let home = window.user_data().get::<std::sync::Mutex<Option<Home>>>().and_then(|h| h.lock().unwrap().clone());
-        if let Some(home) = home {
-            let back = state.space.outputs().find(|o| o.name() == home.output).cloned();
-            if let Some(o) = back {
-                let geo = state.space.output_geometry(&o);
-                if let Some(g) = geo {
-                    state.space.map_element(window.clone(), g.loc + home.offset, false);
-                    *window.user_data().get::<std::sync::Mutex<Option<Home>>>().unwrap().lock().unwrap() = None;
-                    continue;
-                }
-            }
-        }
-        // Still on some output?
-        let geo = Rectangle::new(loc, window.geometry().size);
-        if state.space.outputs().any(|o| state.space.output_geometry(o).is_some_and(|g| g.overlaps(geo))) {
-            continue;
-        }
-        // Its output is gone: remember where it was, show it on the first output.
-        let Some(target) = state.space.outputs().next().cloned() else { continue };
-        let Some(tg) = state.space.output_geometry(&target) else { continue };
-        let zone = layer_map_for_output(&target).non_exclusive_zone();
-        let area = Rectangle::new(tg.loc + zone.loc, zone.size);
-        let size = window.geometry().size;
-        let new_loc = Point::from((
-            area.loc.x + ((area.size.w - size.w) / 2).max(0),
-            area.loc.y + ((area.size.h - size.h) / 2).max(0),
-        ));
-        state.space.map_element(window.clone(), new_loc, false);
-    }
-}
-
-/// An output is about to go away: each of its windows remembers where it was on it.
-pub fn remember_windows_of(state: &Hyalo, output: &Output) {
-    let Some(og) = state.space.output_geometry(output) else { return };
-    for window in state.space.elements() {
-        let Some(loc) = state.space.element_location(window) else { continue };
-        if !og.contains(loc) {
-            continue;
-        }
-        let home = Home { output: output.name(), offset: loc - og.loc };
-        window.user_data().insert_if_missing_threadsafe(|| std::sync::Mutex::new(None::<Home>));
-        *window.user_data().get::<std::sync::Mutex<Option<Home>>>().unwrap().lock().unwrap() = Some(home);
-    }
 }
 
 /// Applies `config` to a running output. Returns what could not be applied.
@@ -126,10 +70,7 @@ pub fn apply(state: &mut Hyalo, name: &str, cfg: &OutputConfig) -> Result<(), St
             Ok(())
         }
         (Backend::Winit(_), None) => Err(format!("no output named {name}")),
-        (_, Some(output)) if !cfg.enabled => {
-            remember_windows_of(state, &output);
-            crate::backend::tty_disable_output(state, &output)
-        }
+        (_, Some(output)) if !cfg.enabled => crate::backend::tty_disable_output(state, &output),
         (_, Some(output)) => {
             if let Some(m) = cfg.parsed_mode()
                 && matches!(state.backend, Backend::Tty(_)) {

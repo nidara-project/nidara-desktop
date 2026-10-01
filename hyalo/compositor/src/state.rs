@@ -67,6 +67,10 @@ pub struct Hyalo {
     /// Set when a frame has to be drawn on some output soon (see `queue_redraw`).
     pub redraw_idle_queued: bool,
     pub ipc: IpcState,
+    /// Workspaces and windows (wm/).
+    pub wm: crate::wm::Wm,
+    pub binds: Vec<crate::binds::Binding>,
+    pub keys: crate::input::KeyTracking,
 }
 
 impl Hyalo {
@@ -118,6 +122,10 @@ impl Hyalo {
         seat.add_pointer();
 
         let socket_name = Self::init_wayland_listener(display, &loop_handle);
+        let binds = crate::binds::parse_binds(&config.binds).unwrap_or_else(|err| {
+            tracing::error!("key bindings not loaded: {err}");
+            Vec::new()
+        });
 
         Self {
             start_time: Instant::now(),
@@ -144,6 +152,9 @@ impl Hyalo {
             focus_grab: None,
             redraw_idle_queued: false,
             ipc: IpcState::default(),
+            wm: crate::wm::Wm::default(),
+            binds,
+            keys: Default::default(),
         }
     }
 
@@ -209,26 +220,41 @@ impl Hyalo {
         Vec::new()
     }
 
+    /// A window known to the window manager, shown or not.
     pub fn window_for_surface(&self, surface: &WlSurface) -> Option<Window> {
-        self.space
-            .elements()
-            .find(|w| w.toplevel().is_some_and(|t| t.wl_surface() == surface))
-            .cloned()
+        self.wm.by_surface(surface).map(|m| m.window.clone())
     }
 
-    /// What the pointer is over: overlay and top layers, then windows, then bottom and
-    /// background layers.
+    /// What the pointer is over, in the order things are drawn: overlay layers, a fullscreen
+    /// window (and whatever is shown above it), top layers, the other windows, then bottom
+    /// and background layers.
     pub fn surface_under(&self, pos: Point<f64, Logical>) -> Option<(WlSurface, Point<f64, Logical>)> {
         use smithay::wayland::shell::wlr_layer::Layer;
-        if let Some((_, s, p)) = self.layer_under(&[Layer::Overlay, Layer::Top], pos) {
+        if let Some((_, s, p)) = self.layer_under(&[Layer::Overlay], pos) {
             return Some((s, p));
         }
-        if let Some(hit) = self.space.element_under(pos).and_then(|(window, location)| {
-            window
-                .surface_under(pos - location.to_f64(), WindowSurfaceType::ALL)
-                .map(|(s, p)| (s, (p + location).to_f64()))
-        }) {
-            return Some(hit);
+        let output = self.space.output_under(pos).next().cloned();
+        let (above, below) = match &output {
+            Some(o) => crate::render::windows_front_to_back(&self.space, &self.wm, o),
+            None => (Vec::new(), Vec::new()),
+        };
+        let hit = |windows: &[Window]| {
+            windows.iter().find_map(|window| {
+                // Where the surface is drawn: the geometry's origin less the decorations.
+                let location = self.space.element_location(window)? - window.geometry().loc;
+                window
+                    .surface_under(pos - location.to_f64(), WindowSurfaceType::ALL)
+                    .map(|(s, p)| (s, (p + location).to_f64()))
+            })
+        };
+        if let Some(h) = hit(&above) {
+            return Some(h);
+        }
+        if let Some((_, s, p)) = self.layer_under(&[Layer::Top], pos) {
+            return Some((s, p));
+        }
+        if let Some(h) = hit(&below) {
+            return Some(h);
         }
         self.layer_under(&[Layer::Bottom, Layer::Background], pos)
             .map(|(_, s, p)| (s, p))

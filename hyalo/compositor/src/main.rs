@@ -7,6 +7,7 @@
 //!     nidara-hyalo msg …           talk to the running compositor (see `msg --help`)
 
 mod backend;
+mod binds;
 mod config;
 mod control;
 mod crash;
@@ -20,6 +21,7 @@ mod render;
 mod screenshot;
 mod shell;
 mod state;
+mod wm;
 
 use smithay::reexports::{calloop::EventLoop, wayland_server::Display};
 
@@ -162,6 +164,8 @@ fn init_logging() {
 impl Hyalo {
     /// After each round of the event loop: tidy up and send what clients are owed.
     fn after_dispatch(&mut self) {
+        self.restore_keyboard_focus();
+        self.broadcast_wm_changes();
         self.space.refresh();
         self.popups.cleanup();
         let _ = self.display_handle.flush_clients();
