@@ -235,9 +235,19 @@ pub fn configure_input_device(device: &mut libinput::Device, input: &Input) {
         let _ = device.config_dwt_set_enabled(t.disable_while_typing);
         let _ = device.config_scroll_set_natural_scroll_enabled(t.natural_scroll);
         let _ = device.config_accel_set_speed(t.accel_speed);
+        let _ = device.config_accel_set_profile(accel_profile(&t.accel_profile));
     } else if device.has_capability(libinput::DeviceCapability::Pointer) {
         let p = &input.pointer;
         let _ = device.config_scroll_set_natural_scroll_enabled(p.natural_scroll);
         let _ = device.config_accel_set_speed(p.accel_speed);
+        let _ = device.config_accel_set_profile(accel_profile(&p.accel_profile));
+    }
+}
+
+/// The config's name for a profile (checked when loaded: `adaptive` or `flat`).
+fn accel_profile(name: &str) -> libinput::AccelProfile {
+    match name {
+        "flat" => libinput::AccelProfile::Flat,
+        _ => libinput::AccelProfile::Adaptive,
     }
 }

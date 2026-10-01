@@ -1,0 +1,282 @@
+// hyprland-settings.ts — `CompositorSettings` on Hyprland (#682).
+//
+// Every setting the shell gives Hyprland, in one place: applied live with `hl.config` /
+// `hl.monitor` through `hyprctl eval`, persisted as the `~/.config/nidara/nidara-*.lua`
+// files `hyprland.lua` requires at login, and read back with `hyprctl getoption` — the
+// effective value, `hyprland-user.lua` included. Until #682 this lived in each module that
+// owned a setting (InputConfig, MonitorConfig, WorkspaceModes, GamingSync, ReduceMotion,
+// GlassBlur, AdaptiveGlass, AppearanceSync); they now ask `settings` in CompositorState.ts
+// and know no compositor.
+//
+// ⚠️ `hl.config`, NOT `hyprctl keyword`: the Lua config answers `keyword` with "Use eval."
+// and changes nothing — a refusal that costs nothing and looks like success.
+//
+// ⚠️ Nothing here writes a file in answer to "config-reloaded". `hyprland.lua` requires
+// these files, and a write on reload is a reload loop: the 09-12 freeze was Hyprland's
+// config rewritten twice in a second (project memory `project_freeze_after_533_checkout`).
+
+import GLib from "gi://GLib"
+import { writeFile } from "../../lib/nidara-kit/platform/file"
+import type { HyprlandStateClass } from "./HyprlandState"
+import {
+    luaConfigBlock, luaConfigExpr, luaGamingBlock, luaLiteral, luaWorkspaceModesBlock, type LuaValue,
+} from "./hyprland-lua"
+import { GLASS_BLUR } from "./NidaraTheme"
+import type {
+    BlurColour, BlurStrength, CompositorSettings, GamingPolicy, InputKey, InputSettings, MonitorSetting,
+} from "./compositor-types"
+
+const nidaraFile = (name: string) => GLib.build_filenamev([GLib.get_home_dir(), ".config", "nidara", name])
+
+/** `writeFile` rather than `GLib.file_set_contents`: both rename a temporary into place,
+ *  so neither can be caught half-written, but only this one fsyncs — and `hyprland.lua`
+ *  requires these files at every login, where a truncated require is the session with no
+ *  Nidara config at all. */
+function save(name: string, text: string) {
+    try { writeFile(nidaraFile(name), text) }
+    catch (e) { console.error(`[HyprlandSettings] Failed to write ${name}:`, e) }
+}
+
+// ── Options ──────────────────────────────────────────────────────────────────
+
+type OptionKind = "bool" | "int" | "float" | "str"
+
+/**
+ * One Hyprland option, named ONCE, with both halves of what it takes to own it.
+ *
+ * The effective value is our file + `hyprland-user.lua` + defaults merged, and only
+ * Hyprland computes that sum — so reading asks the compositor. Writing is TWO steps and
+ * both are required: `apply` changes the running session and does not survive a restart,
+ * while the `.lua` file survives a restart and does not apply.
+ *
+ * 🔑 What this pairing prevents is the two halves drifting. They used to be written
+ * separately — the reader naming `input:touchpad:tap_to_click` and typing it, the writer
+ * naming it again as a bare string and spelling its boolean `1` — with nothing checking
+ * that the two agreed about where the option lives or what its values look like.
+ *
+ * ⚠️ The typed readers are not a style preference. A bool option's `getoption -j` has no
+ * `int` field, so reading it as `.int === 1` is false for every boolean, silently (#338).
+ */
+interface Option {
+    readonly name: string
+    /** `fallback` is what you ALREADY believe: a read that cannot reach the compositor
+     *  leaves your state as it was, because the whole file is rewritten from that state. */
+    read(fallback: any): Promise<any>
+    apply(value: LuaValue): void
+}
+
+function option(hs: HyprlandStateClass, name: string, kind: OptionKind): Option {
+    return {
+        name,
+        read(fallback: any): Promise<any> {
+            switch (kind) {
+                case "bool":  return hs.getOptionBoolAsync(name, fallback)
+                case "int":   return hs.getOptionIntAsync(name, fallback)
+                case "float": return hs.getOptionFloatAsync(name, fallback)
+                case "str":   return hs.getOptionStrAsync(name, fallback)
+            }
+        },
+        apply(value: LuaValue) {
+            hs.evalLua(luaConfigExpr(name, value))
+        },
+    }
+}
+
+/**
+ * The input options, the WHOLE declaration. It used to be three hand-maintained lists of
+ * the same ten options — the re-sync, the generated file's template and the setters —
+ * with nothing checking that they agreed; `kb_variant` had a place in two of them and had
+ * to be smuggled through a second eval in the third.
+ *
+ * Order is the order of the generated file — `touchpad` last, so its nested table closes
+ * the block.
+ */
+const INPUT: readonly [InputKey, string, OptionKind, ((v: any) => string)?][] = [
+    // Two decimals so the file does not churn between `0` and `0.00`.
+    ["pointerSpeed",          "input:sensitivity", "float", (v: number) => v.toFixed(2)],
+    ["accelProfile",          "input:accel_profile", "str"],
+    ["mouseNaturalScroll",    "input:natural_scroll", "bool"],
+    ["numlockOnBoot",         "input:numlock_by_default", "bool"],
+    ["kbLayout",              "input:kb_layout", "str"],
+    ["kbVariant",             "input:kb_variant", "str"],
+    ["kbRepeatDelay",         "input:repeat_delay", "int"],
+    ["kbRepeatRate",          "input:repeat_rate", "int"],
+    ["touchpadNaturalScroll", "input:touchpad:natural_scroll", "bool"],
+    ["touchpadTap",           "input:touchpad:tap_to_click", "bool"],
+]
+
+const SETTINGS_HEADER = [
+    "-- NIDARA SHELL SETTINGS",
+    "-- Auto-generated by the Nidara Settings UI. Do not edit manually.",
+].join("\n")
+
+export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettings {
+    const input = INPUT.map(([key, name, kind, literal]) => ({ key, opt: option(hs, name, kind), literal }))
+
+    /** `misc:vrr`, a GLOBAL int (0 off, 1 always, 2 fullscreen only). */
+    const VRR = option(hs, "misc:vrr", "int")
+
+    // ── Reduce motion: `animations:enabled`, against the user's own value.
+    //
+    // 🔑 Turning reduce motion OFF restores what `animations:enabled` was BEFORE the shell
+    // touched it — never a hard-coded `true`, which would overrule someone who turned
+    // animations off in `hyprland-user.lua` from a page that does not own that file.
+    let animBaseline = true
+    /** null until the shell has said anything. */
+    let reduced: boolean | null = null
+    const pushMotion = (reduce: boolean) =>
+        hs.evalLua(`hl.config({ animations = { enabled = ${reduce ? false : animBaseline} } })`)
+
+    // ── The glass material's blur (#674): `decoration:blur` size and passes, ONE blur for
+    // the whole compositor. Same baseline rule: the default material shows what the config
+    // asks for, and leaving another one restores that.
+    const shipped: BlurStrength = { size: GLASS_BLUR.regular.size, passes: GLASS_BLUR.regular.passes }
+    let blurBase: BlurStrength = shipped
+    let blurPushed: BlurStrength | null = null
+    let blurSaid = false
+    const readBlur = (): BlurStrength => ({
+        size: hs.getOptionInt("decoration:blur:size", shipped.size),
+        passes: hs.getOptionInt("decoration:blur:passes", shipped.passes),
+    })
+    const pushBlur = (b: BlurStrength) =>
+        hs.evalLua(`hl.config({ decoration = { blur = { size = ${b.size}, passes = ${b.passes} } } })`)
+
+    /** Read once and on every reload (`getoption` is a synchronous spawn: never per measurement). */
+    let colour: BlurColour | null = null
+    const readColour = (): BlurColour => ({
+        contrast: hs.getOptionFloat("decoration:blur:contrast", 1.2),
+        brightness: hs.getOptionFloat("decoration:blur:brightness", 1.0),
+        vibrancy: hs.getOptionFloat("decoration:blur:vibrancy", 0.4),
+        vibrancyDarkness: hs.getOptionFloat("decoration:blur:vibrancy_darkness", 0.1),
+    })
+
+    // A `hyprctl reload` (or an edit to hyprland-user.lua) re-reads the config and silently
+    // discards what was pushed with `hl.config`. Re-read the baselines from the config that
+    // just loaded — it is the user's last word — and re-assert what the shell chose.
+    // Connected here, at construction, so it runs before any module's own reload handler
+    // reads `blurColour()`.
+    hs.connect("config-reloaded", () => {
+        colour = null
+        if (reduced !== null) {
+            animBaseline = hs.getOptionBool("animations:enabled", true)
+            if (reduced) pushMotion(true)
+        }
+        if (blurSaid) {
+            blurBase = readBlur()
+            if (blurPushed) pushBlur(blurPushed)
+        }
+    })
+
+    return {
+        caps: { animations: true, sharedBlur: true, gameMode: true, vrrFullscreenOnly: true },
+
+        async readInput(current) {
+            const next = { ...current }
+            for (const { key, opt } of input) (next as any)[key] = await opt.read(current[key])
+            return next
+        },
+
+        setInput(next, changed) {
+            for (const { key, opt } of input) if (changed.includes(key)) opt.apply(next[key])
+            const entries = input.map(({ key, opt, literal }) =>
+                [opt.name, literal ? literal(next[key]) : luaLiteral(next[key])] as const)
+            save("nidara-settings.lua", `${SETTINGS_HEADER}\n${luaConfigBlock(entries)}\n`)
+        },
+
+        readVrr(current) {
+            return hs.getOptionInt(VRR.name, current)
+        },
+
+        applyMonitor(name, m) {
+            hs.evalLua(`hl.monitor({ output = '${name}', mode = '${m.mode ?? "preferred"}', position = 'auto', scale = ${m.scale}, transform = ${m.transform} })`)
+        },
+
+        applyVrr(vrr) {
+            VRR.apply(vrr)
+        },
+
+        saveMonitors(monitors: ReadonlyMap<string, MonitorSetting>, vrr: number) {
+            const lines = [
+                "-- NIDARA SHELL MONITOR SETTINGS",
+                "-- Auto-generated by Nidara Settings UI. Do not edit manually.",
+                "",
+            ]
+            for (const [name, m] of monitors) {
+                const mode = m.mode ?? "preferred"
+                lines.push(m.transform !== 0
+                    ? `hl.monitor({ output = "${name}", mode = "${mode}", position = "auto", scale = ${m.scale}, transform = ${m.transform} })`
+                    : `hl.monitor({ output = "${name}", mode = "${mode}", position = "auto", scale = ${m.scale} })`)
+            }
+            if (vrr !== 0) {
+                // The SAME expression `applyVrr` sends live: two halves of one change, one spelling.
+                lines.push("", luaConfigExpr(VRR.name, vrr))
+            }
+            save("nidara-monitor.lua", lines.join("\n") + "\n")
+        },
+
+        saveWorkspaceModes(defaultMode, overrides) {
+            save("nidara-workspaces.lua", luaWorkspaceModesBlock(defaultMode, overrides))
+        },
+
+        // `hyprland.lua` decides, when a game window opens, whether to swap the wallpaper
+        // and the power profile — and Lua inside Hyprland cannot read GSettings. The file is
+        // required at login, so a game opened before the shell is up still gets the choice;
+        // the eval applies a change without a reload.
+        setGamingPolicy(p: GamingPolicy, reassert: boolean) {
+            const lua = luaGamingBlock(p)
+            if (!reassert) save("nidara-gaming.lua", lua)
+            hs.evalLua(lua)
+        },
+
+        setReduceMotion(reduce) {
+            if (reduced === null) {
+                // Only trust the LIVE option as the baseline when not reducing: a shell
+                // reloaded (Super+Shift+R) with reduce motion on finds the compositor holding
+                // the previous instance's `false`, and must not take it for the user's wish.
+                animBaseline = reduce ? true : hs.getOptionBool("animations:enabled", true)
+                reduced = reduce
+                // Not reducing at start: the compositor already shows what its config asks.
+                if (reduce) pushMotion(true)
+                return
+            }
+            if (reduce === reduced) return
+            reduced = reduce
+            pushMotion(reduce)
+        },
+
+        setBlur(b) {
+            if (!blurSaid) {
+                blurSaid = true
+                // Same rule as motion: the live value is the baseline only at the default.
+                if (b === null) { blurBase = readBlur(); return }
+            } else if (b === null && blurPushed === null) {
+                return
+            }
+            pushBlur(b ?? blurBase)
+            blurPushed = b
+        },
+
+        blurBaseline: () => blurBase,
+
+        blurColour() {
+            return colour ??= readColour()
+        },
+
+        // The active tab of a group — the one place accent enters Hyprland's chrome (borders
+        // stay neutral glass on purpose). A groupbar bakes its colours when the group is
+        // made, so this colours FUTURE groups.
+        setAccent(rgbaHex) {
+            const col = `rgba(${rgbaHex})`
+            hs.evalLua(`hl.config({ group = { groupbar = { col = { active = '${col}', locked_active = '${col}' } } } })`)
+        },
+
+        effectiveLayout() {
+            return {
+                gapsIn: hs.getOptionInt("general:gaps_in"),
+                gapsOut: hs.getOptionInt("general:gaps_out"),
+                rounding: hs.getOptionInt("decoration:rounding"),
+                borderSize: hs.getOptionInt("general:border_size"),
+            }
+        },
+    }
+}

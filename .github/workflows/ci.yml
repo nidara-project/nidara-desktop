@@ -549,8 +549,8 @@ jobs:
         run: node scripts/ci/settings-closure-check.mjs
       # The shell runs on Hyprland and on Hyalo through ONE interface (#682): a surface
       # that imports HyprlandState or spawns hyprctl compiles, and does nothing on the
-      # other session. A ratchet, like the Settings closure.
-      - name: Compositor boundary (one interface for Hyprland and Hyalo, ratcheted)
+      # other session. No exceptions since #682 emptied its allowlist.
+      - name: Compositor boundary (one interface for Hyprland and Hyalo)
         run: node scripts/ci/compositor-boundary-check.mjs
       - name: The compositor boundary check can fail (control, must be caught)
         run: |

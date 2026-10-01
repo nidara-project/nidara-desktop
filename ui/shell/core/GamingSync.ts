@@ -1,46 +1,29 @@
 // Hands game mode's settings to the compositor (#573).
 //
-// `config/hypr/hyprland.lua` decides, when a game window opens, whether to swap the
-// wallpaper and the power profile — and Lua inside Hyprland cannot read GSettings.
-// It used to pattern-match gaming.json's raw text. Now the shell is the one process
-// that tells it, twice over:
-//   - ~/.config/nidara/nidara-gaming.lua, `safe_require`d at login, so a game
-//     opened before the shell is up (or while it restarts) still gets the choice;
-//   - the same `NIDARA_GAMING = { … }` pushed with `hyprctl eval` on every change
-//     and after every config reload, so no reload is needed to apply one.
+// When a game window opens, the compositor's side of game mode decides whether to swap the
+// wallpaper and the power profile — on Hyprland that is `config/hypr/hyprland.lua`, and Lua
+// inside Hyprland cannot read GSettings. The shell is the one process that tells it, through
+// `settings.setGamingPolicy` (CompositorState.ts): persisted where the compositor reads it at
+// login, so a game opened before the shell is up (or while it restarts) still gets the
+// choice, and applied live on every change and after every config reload. Hyalo has no game
+// mode yet (`settings.caps.gameMode`, #682).
 //
-// ⚠️ SHELL ONLY. This is the side-effect half that must happen once for the
-// desktop, which is why it is a separate module started from app.ts instead of
-// living in GamingManager: a Settings process (#571) imports the store and must
-// not also write the compositor's file.
+// ⚠️ SHELL ONLY. This is the side-effect half that must happen once for the desktop, which
+// is why it is a separate module started from app.ts instead of living in GamingManager: a
+// Settings process (#571) imports the store and must not also write the compositor's file.
 
-import GLib from "gi://GLib"
-import { writeFile } from "../../lib/nidara-kit/platform/file"
 import Gaming from "./GamingManager"
-import compositor, { hyprlandOnly } from "./CompositorState"
-import { luaGamingBlock } from "./hyprland-lua"
-
-const LUA_PATH = GLib.build_filenamev([GLib.get_home_dir(), ".config", "nidara", "nidara-gaming.lua"])
+import compositor, { settings, type GamingPolicy } from "./CompositorState"
 
 let started = false
 
-function block(): string {
-    return luaGamingBlock({
+function policy(): GamingPolicy {
+    return {
         wallpaperMode: Gaming.wallpaperMode,
         customWallpaper: Gaming.customWallpaper,
         transition: Gaming.transition,
         performanceProfile: Gaming.performanceProfile,
-    })
-}
-
-function sync(): void {
-    const lua = block()
-    try {
-        writeFile(LUA_PATH, lua)
-    } catch (e) {
-        console.error("[GamingSync] Failed to write nidara-gaming.lua:", e)
     }
-    hyprlandOnly()?.evalLua(lua)
 }
 
 /** Idempotent: a second call does nothing. */
@@ -48,8 +31,8 @@ export function startGamingSync(): void {
     if (started) return
     started = true
     for (const key of ["wallpaperMode", "customWallpaper", "transition", "performanceProfile"] as const) {
-        Gaming.subscribe(key, sync)
+        Gaming.subscribe(key, () => settings.setGamingPolicy(policy(), false))
     }
-    compositor.connect("config-reloaded", () => hyprlandOnly()?.evalLua(block()))
-    sync()
+    compositor.connect("config-reloaded", () => settings.setGamingPolicy(policy(), true))
+    settings.setGamingPolicy(policy(), false)
 }

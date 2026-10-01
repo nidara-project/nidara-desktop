@@ -1,6 +1,5 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
-import { luaConfigExpr, type LuaValue } from "./hyprland-lua"
 import { execAsync, exec } from "../../lib/process"
 import { safeDisconnect } from "./signals"
 import * as Hypr from "./hypr-ipc"
@@ -12,10 +11,9 @@ import {
 
 // HyprlandState — Hyprland's side of `core/CompositorState.ts` (read its header): the
 // shell's windows, workspaces and monitors from Hyprland's sockets, and every hyprctl
-// dispatch. Nothing outside the compositor modules imports this file, except what is
-// still Hyprland's alone — its config options (`compositorOption`, `getOption*`,
-// `evalLua`), reached through `hyprlandOnly()` until #682 moves them behind requests
-// both compositors answer.
+// dispatch. Nothing outside the compositor modules imports this file. Its config options
+// (`getOption*`, `evalLua`) are for `core/hyprland-settings.ts`, Hyprland's side of the
+// settings interface.
 
 // Tracked IPC event names that require a full state refresh
 const TRACKED_EVENTS = [
@@ -1076,63 +1074,4 @@ let instance: HyprlandStateClass | null = null
 /** The one HyprlandState, created on first call. Only `core/CompositorState.ts` calls it. */
 export function createHyprlandState(): HyprlandStateClass {
     return instance ??= new HyprlandStateClass()
-}
-
-/** HyprlandState when the session is Hyprland's, else null — so `compositorOption` does
- *  nothing on Hyalo instead of creating a Hyprland client there. */
-function live(): HyprlandStateClass | null {
-    return GLib.getenv("HYALO_SOCKET") ? null : createHyprlandState()
-}
-
-// ── Compositor-backed options ────────────────────────────────────────────────
-
-export type OptionKind = "bool" | "int" | "float" | "str"
-
-/**
- * One Hyprland option, named ONCE, with both halves of what it takes to own it.
- *
- * A setting the compositor owns is not read and written the way a JSON setting
- * is. The effective value is our file + `hyprland-user.lua` + defaults merged,
- * and only Hyprland computes that sum — so reading asks the compositor. Writing
- * is TWO steps and both are required: `apply` changes the running session and
- * does not survive a restart, while the owner's `.lua` file survives a restart
- * and does not apply. In-memory state is a CACHE of the compositor, not the
- * source.
- *
- * 🔑 What this pairing exists to prevent is the two halves drifting. They used
- * to be written separately — the reader naming `input:touchpad:tap_to_click`
- * and typing it, the writer naming the same option again as a bare string and
- * spelling its boolean `1` — and nothing anywhere checked that the two agreed
- * about where the option lives or what its values look like. Now the name and
- * the type are given once and both halves come out of them.
- */
-export interface CompositorOption<T extends LuaValue> {
-    readonly name: string
-    /** Effective value from the compositor. `fallback` is what you ALREADY
-     *  BELIEVE — see the note on the typed readers: a re-sync that cannot reach
-     *  the compositor must leave your state as it found it, because the owner
-     *  rewrites its whole file from that state. */
-    read(fallback: T): Promise<T>
-    /** Apply to the RUNNING session. Does not persist — that is the owner's file. */
-    apply(value: T): void
-}
-
-export function compositorOption(name: string, kind: "bool"): CompositorOption<boolean>
-export function compositorOption(name: string, kind: "int" | "float"): CompositorOption<number>
-export function compositorOption(name: string, kind: "str"): CompositorOption<string>
-export function compositorOption(name: string, kind: OptionKind): CompositorOption<any> {
-    return {
-        name,
-        read(fallback: any): Promise<any> {
-            switch (kind) {
-                case "bool":  return live()?.getOptionBoolAsync(name, fallback) ?? Promise.resolve(fallback)
-                case "int":   return live()?.getOptionIntAsync(name, fallback) ?? Promise.resolve(fallback)
-                case "float": return live()?.getOptionFloatAsync(name, fallback) ?? Promise.resolve(fallback)
-                case "str":   return live()?.getOptionStrAsync(name, fallback) ?? Promise.resolve(fallback)
-            }
-        },
-        apply(value: any) {
-            live()?.evalLua(luaConfigExpr(name, value))
-        },
-    }
 }

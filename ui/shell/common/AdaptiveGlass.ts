@@ -2,7 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Theme from "../core/ThemeManager"
 import { glassBlurInForce } from "../core/GlassBlur"
-import compositor, { hyprlandOnly } from "../core/CompositorState"
+import compositor, { settings } from "../core/CompositorState"
 import Wallpaper from "../core/WallpaperManager"
 import Gdk from "gi://Gdk?version=4.0"
 import { probeBackdrop, probeClosedBackdrop, type MonitorRect } from "./BackdropProbe"
@@ -313,15 +313,15 @@ function reset(s: Surface) {
 
 // ── measuring ───────────────────────────────────────────────────────────────
 
-/** Hyprland's colour settings for its blur, read once and on every config reload
- *  (`hyprctl getoption` is a synchronous spawn: never per measurement). */
+/** What the compositor's blur does to a backdrop's colour, read once and on every config
+ *  reload (on Hyprland a read is a synchronous `hyprctl getoption`: never per measurement).
+ *  A compositor that does nothing to it (Hyalo, until #684) is the identity: no gain, no
+ *  vibrancy. */
+const UNPROCESSED = { contrast: 1, brightness: 1, vibrancy: 0, vibrancyDarkness: 0 }
 let blur: HyprlandBlurParams = NIDARA_BLUR
 function readBlur() {
     blur = {
-        contrast: hyprlandOnly()?.getOptionFloat("decoration:blur:contrast", NIDARA_BLUR.contrast) ?? NIDARA_BLUR.contrast,
-        brightness: hyprlandOnly()?.getOptionFloat("decoration:blur:brightness", NIDARA_BLUR.brightness) ?? NIDARA_BLUR.brightness,
-        vibrancy: hyprlandOnly()?.getOptionFloat("decoration:blur:vibrancy", NIDARA_BLUR.vibrancy) ?? NIDARA_BLUR.vibrancy,
-        vibrancyDarkness: hyprlandOnly()?.getOptionFloat("decoration:blur:vibrancy_darkness", NIDARA_BLUR.vibrancyDarkness) ?? NIDARA_BLUR.vibrancyDarkness,
+        ...(settings.blurColour() ?? UNPROCESSED),
         // Not asked of the compositor: the glass material moves it with `hl.config`, which
         // raises no "config-reloaded" to re-read on (#674, core/GlassBlur.ts).
         passes: Math.max(1, glassBlurInForce().passes),

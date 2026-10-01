@@ -9,17 +9,15 @@
  *
  * Outside the compositor modules (COMPOSITOR below), a file under ui/shell or ui/lib may
  * not:
- *   - import a backend or its IPC (HyprlandState, HyaloState, hypr-ipc, hyalo-ipc) or the
- *     Lua generator (hyprland-lua);
- *   - call `hyprlandOnly()` — the door to what only Hyprland has (its options, Lua);
+ *   - import a backend, its IPC or its settings side (HyprlandState, HyaloState, hypr-ipc,
+ *     hyalo-ipc, hyprland-settings, hyalo-settings) or the Lua generator (hyprland-lua);
  *   - spawn `hyprctl` (a "hyprctl" string literal in code).
  *
- * Files that still do are listed in `compositor-boundary-allowlist.txt`, and the list may
- * only SHRINK: a violation in an unlisted file fails, and so does a listed file that no
- * longer violates (delete its line). #682 empties it.
+ * No exceptions. Until #682's third part this had a shrink-only allowlist of the files
+ * that wrote Hyprland options as Lua; they now go through `settings` (CompositorSettings),
+ * and the list went with its last line.
  *
- * Usage:  node scripts/ci/compositor-boundary-check.mjs [--print]
- *   --print  every violation, file by file.
+ * Usage:  node scripts/ci/compositor-boundary-check.mjs
  */
 
 import { readFileSync, readdirSync, statSync } from "fs"
@@ -35,10 +33,13 @@ const COMPOSITOR = new Set([
     "ui/shell/core/hypr-ipc.ts",
     "ui/shell/core/hyalo-ipc.ts",
     "ui/shell/core/hyprland-lua.ts",
+    // The settings interface's two sides (CompositorSettings).
+    "ui/shell/core/hyprland-settings.ts",
+    "ui/shell/core/hyalo-settings.ts",
     // The monitors facade: Hyalo's outputs say more than the neutral monitor shape.
     "ui/shell/core/Displays.ts",
 ])
-const BACKENDS = /from\s+"[^"]*\/(HyprlandState|HyaloState|hypr-ipc|hyalo-ipc|hyprland-lua)"/g
+const BACKENDS = /from\s+"[^"]*\/(HyprlandState|HyaloState|hypr-ipc|hyalo-ipc|hyprland-lua|hyprland-settings|hyalo-settings)"/g
 
 function walk(dir, out) {
     for (const name of readdirSync(dir)) {
@@ -61,16 +62,9 @@ function violations(file, text) {
     const found = []
     const c = code(text)
     for (const m of c.matchAll(BACKENDS)) found.push(`imports ${m[1]}`)
-    if (/\bhyprlandOnly\s*\(/.test(c)) found.push("calls hyprlandOnly()")
     if (/["'`]hyprctl["'`\s]/.test(c)) found.push("spawns hyprctl")
     return found
 }
-
-const listPath = join(ROOT, "scripts/ci/compositor-boundary-allowlist.txt")
-const listed = new Set(
-    readFileSync(listPath, "utf8").split("\n").map(l => l.replace(/#.*/, "").trim()).filter(Boolean),
-)
-const print = process.argv.includes("--print")
 
 const offenders = new Map()
 for (const base of SCAN) {
@@ -82,20 +76,9 @@ for (const base of SCAN) {
     }
 }
 
-let failed = false
 for (const [file, v] of [...offenders].sort()) {
-    if (print) console.log(`${listed.has(file) ? "listed " : "NEW    "} ${file}: ${[...new Set(v)].join(", ")}`)
-    if (!listed.has(file)) {
-        console.error(`✗ ${file} reaches past the compositor interface (${[...new Set(v)].join(", ")}).`)
-        console.error("  Ask core/CompositorState.ts instead; if the interface lacks it, add it to both backends.")
-        failed = true
-    }
+    console.error(`✗ ${file} reaches past the compositor interface (${[...new Set(v)].join(", ")}).`)
+    console.error("  Ask core/CompositorState.ts (`compositor`, `settings`) instead; if the interface lacks it, add it to both backends.")
 }
-for (const file of [...listed].sort()) {
-    if (!offenders.has(file)) {
-        console.error(`✗ ${file} is listed in compositor-boundary-allowlist.txt but no longer reaches past the interface — delete its line.`)
-        failed = true
-    }
-}
-if (failed) process.exit(1)
-console.log(`compositor-boundary-check: ok — ${offenders.size} file(s) still Hyprland-only, all listed (#682)`)
+if (offenders.size) process.exit(1)
+console.log(`compositor-boundary-check: ok — nothing outside the ${COMPOSITOR.size} compositor modules names a compositor (#682)`)

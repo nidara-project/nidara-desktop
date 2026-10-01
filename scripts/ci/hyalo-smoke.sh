@@ -127,6 +127,10 @@ phase_run() {
 
     # ── 1. Hyalo on the hardware path, with the SHIPPED config (no autostart: no --session).
     log "booting Hyalo (tty backend on vkms)…"
+    # HYALO_CONFIG replaces the layers; HYALO_SETTINGS gives it a settings layer of its own,
+    # so the `settings` request has somewhere to write that is not a real ~/.config.
+    export HYALO_SETTINGS=/tmp/hyalo/hyalo-settings.toml
+    rm -f "$HYALO_SETTINGS"
     HYALO_CONFIG="$REPO/config/hyalo/hyalo.toml" RUST_LOG=info nidara-hyalo --tty >"$hyalo_log" 2>&1 &
     hyalo_pid=$!
     local sock="" i
@@ -174,6 +178,24 @@ phase_run() {
     [ -n "$ok" ] || { log "FAIL: the shell never answered nidara-ipc"; exit 1; }
     log "shell IPC OK"
 
+    # Settings reach Hyalo through the compositor interface (#682): the shell states its
+    # workspace modes at boot, which lands in the settings layer Hyalo writes; a patch is
+    # applied, and re-stating it changes nothing (or the shell's reload handlers would loop).
+    for i in $(seq 1 10); do grep -q '^\[workspaces\]' "$HYALO_SETTINGS" 2>/dev/null && break; sleep 1; done
+    grep -q '^\[workspaces\]' "$HYALO_SETTINGS" \
+        || { log "FAIL: the shell's workspace modes never reached the settings layer"; cat "$HYALO_SETTINGS" 2>/dev/null; exit 1; }
+    local patch='{"input":{"keyboard":{"numlock":true},"pointer":{"accel_profile":"flat"}}}'
+    nidara-hyalo msg settings "$patch" | jq -e '.ok.changed == true' >/dev/null \
+        || { log "FAIL: a settings patch was not applied"; exit 1; }
+    nidara-hyalo msg config | jq -e '.ok.config.input.keyboard.numlock and .ok.config.input.pointer.accel_profile == "flat"' >/dev/null \
+        || { log "FAIL: the config in force does not show the patch"; exit 1; }
+    nidara-hyalo msg settings "$patch" | jq -e '.ok.changed == false' >/dev/null \
+        || { log "FAIL: re-stating a setting changed something"; exit 1; }
+    if nidara-hyalo msg settings '{"input":{"pointer":{"accel_profile":"bouncy"}}}' >/dev/null; then
+        log "FAIL: an invalid setting was accepted"; exit 1
+    fi
+    log "settings OK"
+
     # ── 3. Pictures for a person.
     sleep 4
     nidara-hyalo msg screenshot /tmp/hyalo/desktop.png >/dev/null \
@@ -193,6 +215,11 @@ phase_run() {
     if grep -nE "(Gtk|Gdk|Gsk|GLib|GLib-GObject|GLib-GIO|Gjs|Pango)-CRITICAL" "$shell_log" \
         | grep -v "accessibility bus\|org.a11y.atspi" > /tmp/hyalo/toolkit-criticals.txt; then
         log "FAIL: toolkit CRITICALs:"; cat /tmp/hyalo/toolkit-criticals.txt; exit 1
+    fi
+    # A setting the shell asked for and Hyalo refused is said with this tag
+    # (core/HyaloState.ts), in a console.error the toolkit grep above does not see.
+    if grep -n "Hyalo refused" "$shell_log"; then
+        log "FAIL: Hyalo refused a setting the shell sent"; exit 1
     fi
     if grep -n "panicked" "$hyalo_log"; then
         log "FAIL: Hyalo panicked"; exit 1

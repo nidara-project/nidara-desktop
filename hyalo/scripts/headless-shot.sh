@@ -18,8 +18,11 @@ fifo=$(mktemp -u); mkfifo "$fifo"
 cat > "$inner" <<INNER
 #!/bin/sh
 export HYALO_CONTROL="$fifo"
-# A config of its own, so a user's ~/.config/nidara/hyalo.toml does not leak into a test.
+# A config of its own, so a user's ~/.config/nidara/hyalo.toml does not leak into a test —
+# and a settings layer of its own, so what the shell sets in a test never reaches the real
+# ~/.config/nidara/hyalo-settings.toml (the preview session's).
 export HYALO_CONFIG="\${HYALO_CONFIG:-/dev/null}"
+export HYALO_SETTINGS="\${HYALO_SETTINGS:-\$(mktemp -u /tmp/hyalo-settings.XXXXXX.toml)}"
 "$bin" --winit -c "$*" >"$log" 2>&1 &
 pid=\$!
 sleep $secs

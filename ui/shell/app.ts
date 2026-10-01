@@ -29,7 +29,7 @@ import { initReduceMotion } from "./core/ReduceMotion"
 import { fireSessionStartedOnce, initBatteryLowHook } from "./core/Hooks"
 import { bindCursorThemeRefresh } from "./common/CursorRefresh"
 import { bindInterfaceIconRefresh } from "./common/IconThemeRefresh"
-import compositor, { hyprlandOnly } from "./core/CompositorState"
+import compositor, { settings as compositorSettings } from "./core/CompositorState"
 import queryUI from "./core/UITree"
 import Wallpaper from "./core/WallpaperManager"
 import workspaceModes, { type WorkspaceMode } from "./core/WorkspaceModes"
@@ -777,15 +777,10 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             monitorCount: display ? display.get_monitors().get_n_items() : 0,
           },
           compositor: compositor.kind,
-          // EFFECTIVE compositor config (includes hyprland-user.lua overrides) —
-          // what the system actually runs, not our shipped defaults. Hyprland's options;
-          // on Hyalo they read null until Hyalo answers the same questions (#682).
-          hyprland: {
-            gapsIn: hyprlandOnly()?.getOptionInt("general:gaps_in"),
-            gapsOut: hyprlandOnly()?.getOptionInt("general:gaps_out"),
-            rounding: hyprlandOnly()?.getOptionInt("decoration:rounding"),
-            borderSize: hyprlandOnly()?.getOptionInt("general:border_size"),
-          },
+          // EFFECTIVE compositor layout (the user's own config file included) —
+          // what the system actually runs, not our shipped defaults; null where this
+          // compositor has no such number (Hyalo draws no rounding yet, #684).
+          compositorLayout: compositorSettings.effectiveLayout(),
           ai: {
             allowConfigWrite: agentConfig.allowConfigWrite,
             allowScreenshot: agentConfig.allowScreenshot,

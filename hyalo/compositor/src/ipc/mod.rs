@@ -120,6 +120,13 @@ pub enum Request {
     /// (wm/actions.rs).
     Do { command: String },
     ReloadConfig,
+    /// The configuration in force: the three layers merged.
+    Config,
+    /// Settings' choices, persisted and applied: a JSON merge patch (a `null` removes a key)
+    /// in the configuration's own shape — `{"input": {"keyboard": {"layout": "es"}}}` — that
+    /// Hyalo writes into the settings layer, `hyalo-settings.toml`, and reloads once
+    /// (config::apply_settings). Answers whether anything changed.
+    Settings { patch: serde_json::Value },
     Quit,
     EventStream,
 }
@@ -142,6 +149,8 @@ pub enum Response {
     Workspaces { workspaces: Vec<WorkspaceInfo> },
     Layers { layers: Vec<LayerInfo> },
     CursorPosition { x: f64, y: f64 },
+    Config { config: Box<crate::config::Config> },
+    Settings { changed: bool },
 }
 
 #[derive(Debug, Clone, Serialize)]
