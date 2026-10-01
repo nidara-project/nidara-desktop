@@ -6,7 +6,7 @@ import GLib from "gi://GLib"
 // @ts-ignore
 import Pango from "gi://Pango"
 import Gio from "gi://Gio"
-import hs from "../../core/HyprlandState"
+import compositor from "../../core/CompositorState"
 import appService, { type AppData } from "../../core/AppService"
 import { pinnedState, savePinned } from "../dock/state"
 import { t } from "../../core/i18n"
@@ -47,7 +47,7 @@ export default function AppGridPanel(
     onClose: () => void,
     /** Switch workspace WITHOUT this surface's focus grab undoing it — the dock owns
      *  the grab, `HyprlandState.focusWorkspaceFromShell` owns the order. Never call
-     *  `hs.focusWorkspace` directly from here. */
+     *  `compositor.focusWorkspace` directly from here. */
     switchWorkspace: (id: number) => void,
 ): AppGridPanelHandle {
     // ── Search bar ─────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ export default function AppGridPanel(
 
     const syncWsStrip = () => {
         try {
-            const focusedId = hs.focusedWorkspaceId || 1
+            const focusedId = compositor.focusedWorkspaceId || 1
             wsSlots.forEach(({ itemBox, label, sync }, i) => {
                 const isActive = focusedId === i
                 const isNav    = wsNav === i
@@ -182,11 +182,11 @@ export default function AppGridPanel(
         wsStrip.append(itemBox)
     }
 
-    const stripChangedId = hs.connect("changed", () => {
-        if (wsNav > 0) wsNav = hs.focusedWorkspaceId || 1
+    const stripChangedId = compositor.connect("changed", () => {
+        if (wsNav > 0) wsNav = compositor.focusedWorkspaceId || 1
         syncWsStrip()
     })
-    wsStrip.connect("unrealize", () => safeDisconnect(hs, stripChangedId))
+    wsStrip.connect("unrealize", () => safeDisconnect(compositor, stripChangedId))
     // hs emits "changed" in its constructor before AppGrid connects — do an
     // initial sync on the next idle tick so schematics are populated immediately.
     GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { syncWsStrip(); return GLib.SOURCE_REMOVE })
@@ -685,7 +685,7 @@ export default function AppGridPanel(
             searchEntry.set_position(-1)   // same reason as searchInsert: the buffer has no caret
             filterApps()
             searchBox.remove_css_class("search-active")
-            focusWsSlot(hs.focusedWorkspaceId || 1)
+            focusWsSlot(compositor.focusedWorkspaceId || 1)
         },
 
         handleKey(keyval: number): boolean {
@@ -734,10 +734,10 @@ export default function AppGridPanel(
             }
             if (keyval === Gdk.KEY_Up) {
                 if (navIdx < 0) {
-                    focusWsSlot(hs.focusedWorkspaceId || 1)
+                    focusWsSlot(compositor.focusedWorkspaceId || 1)
                     return true
                 }
-                if (navIdx < GRID_COLS) { focusWsSlot(hs.focusedWorkspaceId || 1) }
+                if (navIdx < GRID_COLS) { focusWsSlot(compositor.focusedWorkspaceId || 1) }
                 else { focusAt(navIdx - GRID_COLS) }
                 return true
             }

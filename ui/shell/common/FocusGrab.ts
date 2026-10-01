@@ -1,6 +1,6 @@
 import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
-import hs from "../core/HyprlandState"
+import compositor from "../core/CompositorState"
 import type Gdk from "gi://Gdk?version=4.0"
 
 /**
@@ -217,7 +217,7 @@ function openPopupIn(wins: Gtk.Window[]): Gtk.Popover | null {
  */
 function repairFocusIfUnheld() {
     if (held || suspended) return   // somebody still owns input; nothing was handed back
-    hs.restoreFocusAfterGrab()
+    compositor.restoreFocusAfterGrab()
 }
 
 function onShimCleared(lease: Lease) {

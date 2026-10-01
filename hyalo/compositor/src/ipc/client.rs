@@ -17,6 +17,8 @@ nidara-hyalo msg <request>        talk to the running Hyalo (prints JSON)
   screenshot PATH [NAME]          a PNG of one output (no NAME = the first)
   windows                         every window: id, app id, title, workspace, state, box
   workspaces                      every workspace: id, output, mode, shown
+  layers                          the layer surfaces (bar, dock, panels), bottom first
+  cursor                          where the pointer is
   do <command…>                   a window-manager command, as in a binding:
                                     workspace 3 · focus-window ID · move-to-workspace 2 [ID]
                                     toggle-floating [ID] · fullscreen [ID] · close-window [ID]
@@ -99,6 +101,8 @@ fn parse(args: &[String]) -> Result<Option<String>, String> {
         "outputs" => Request::Outputs,
         "windows" => Request::Windows,
         "workspaces" => Request::Workspaces,
+        "layers" => Request::Layers,
+        "cursor" => Request::CursorPosition,
         "do" => {
             let command = args[1..].join(" ");
             // Checked here too, so a typo is said before anything is sent.

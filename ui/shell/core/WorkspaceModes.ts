@@ -2,7 +2,7 @@ import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import { writeFile } from "../../lib/nidara-kit/platform/file"
 import { defineSettings } from "./configFile"
-import hs from "./HyprlandState"
+import compositor from "./CompositorState"
 import { luaWorkspaceModesBlock } from "./hyprland-lua"
 
 export type WorkspaceMode = "floating" | "tiling"
@@ -50,13 +50,13 @@ class WorkspaceModeManager extends GObject.Object {
         config.subscribeAll(() => this.emit("changed"))
 
         // When Hyprland reloads its config externally, re-push the live table
-        hs.connect("config-reloaded", () => {
-            this.pushAllToHyprland()
+        compositor.connect("config-reloaded", () => {
+            this.pushAll()
         })
 
         // On boot: write nidara-workspaces.lua and push the full table to Hyprland
         this._saveLua()
-        this.pushAllToHyprland()
+        this.pushAll()
     }
 
     get defaultMode(): WorkspaceMode {
@@ -90,15 +90,15 @@ class WorkspaceModeManager extends GObject.Object {
 
         config.set("defaultMode", mode)
         this._saveLua()
-        await hs.evalLua(`if NIDARA_WS_MODES then NIDARA_WS_MODES.default = '${mode}' else NIDARA_WS_MODES = { default = '${mode}' } end`)
+        await this.pushAll()
 
         // Reorganize windows on workspaces inheriting defaultMode
         for (const wsId of [1, 2, 3, 4, 5]) {
             if (!this.getExplicitMode(wsId)) {
                 if (mode === "tiling") {
-                    await hs.tileAllInWorkspace(wsId)
+                    await compositor.tileAllInWorkspace(wsId)
                 } else {
-                    await hs.floatAllInWorkspace(wsId)
+                    await compositor.floatAllInWorkspace(wsId)
                 }
             }
         }
@@ -116,20 +116,20 @@ class WorkspaceModeManager extends GObject.Object {
             delete currentModes[String(wsId)]
             config.set("workspaces", currentModes)
             this._saveLua()
-            await hs.evalLua(`if NIDARA_WS_MODES then NIDARA_WS_MODES[${wsId}] = nil end`)
+            await this.pushAll()
         } else {
             currentModes[String(wsId)] = mode
             config.set("workspaces", currentModes)
             this._saveLua()
-            await hs.evalLua(`if NIDARA_WS_MODES then NIDARA_WS_MODES[${wsId}] = '${mode}' else NIDARA_WS_MODES = { [${wsId}] = '${mode}' } end`)
+            await this.pushAll()
         }
 
         // Reorganize existing windows on workspace wsId according to effective mode
         const effective = this.getEffectiveMode(wsId)
         if (effective === "tiling") {
-            await hs.tileAllInWorkspace(wsId)
+            await compositor.tileAllInWorkspace(wsId)
         } else {
-            await hs.floatAllInWorkspace(wsId)
+            await compositor.floatAllInWorkspace(wsId)
         }
 
         this.emit("changed")
@@ -137,7 +137,7 @@ class WorkspaceModeManager extends GObject.Object {
 
     /** Toggle mode for workspace wsId (or focused workspace if omitted). Reorganizes existing windows! */
     async toggleWorkspaceMode(wsId?: number): Promise<WorkspaceMode> {
-        const id = wsId ?? hs.focusedWorkspaceId
+        const id = wsId ?? compositor.focusedWorkspaceId
         if (id < 1 || id > 5) {
             throw new Error(`Cannot toggle workspace mode on special or invalid workspace ${id}`)
         }
@@ -159,19 +159,10 @@ class WorkspaceModeManager extends GObject.Object {
         }
     }
 
-    /** Push full table to Hyprland runtime */
-    pushAllToHyprland(): void {
-        const def = this.defaultMode
-        const overrides = config.get("workspaces")
-        const entries: string[] = [`default = '${def}'`]
-        for (const [k, v] of Object.entries(overrides)) {
-            const num = Number(k)
-            if (Number.isInteger(num) && num > 0) {
-                entries.push(`[${num}] = '${v}'`)
-            }
-        }
-        const lua = `NIDARA_WS_MODES = { ${entries.join(", ")} }`
-        hs.evalLua(lua)
+    /** The whole table to the running compositor (Hyprland's `NIDARA_WS_MODES`, Hyalo's
+     *  per-workspace modes). */
+    pushAll(): Promise<unknown> {
+        return compositor.applyWorkspaceModes(this.defaultMode, config.get("workspaces"))
     }
 
     subscribe = config.subscribe

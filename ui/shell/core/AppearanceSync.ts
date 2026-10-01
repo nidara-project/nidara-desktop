@@ -30,7 +30,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { writeFile } from "../../lib/nidara-kit/platform/file"
 import Theme, { TEXT_SCALE_MAX } from "./ThemeManager"
-import hs from "./HyprlandState"
+import compositor, { hyprlandOnly } from "./CompositorState"
 import { initGlassBlur } from "./GlassBlur"
 import { ACCENT_PALETTE, type AccentKey } from "./NidaraTheme"
 import { GREETER_MIRROR_DIR } from "./Paths"
@@ -121,7 +121,7 @@ function applyCursor(): void {
     }
     lastRefusedCursor = ""   // an installed theme clears the silence, so a later bad pick warns
     writeXcursorDefault(cursor)
-    hs.setCursor(cursor, size).then(() => Theme.emit("cursor-applied"))
+    compositor.setCursor(cursor, size).then(() => Theme.emit("cursor-applied"))
 }
 
 /**
@@ -170,7 +170,7 @@ function syncGroupbarAccent(): void {
     if (!(accent in ACCENT_PALETTE)) return
     const hex = ACCENT_PALETTE[accent as AccentKey].color.slice(1)
     const col = `rgba(${hex}99)`
-    hs.evalLua(`hl.config({ group = { groupbar = { col = { active = '${col}', locked_active = '${col}' } } } })`)
+    hyprlandOnly()?.evalLua(`hl.config({ group = { groupbar = { col = { active = '${col}', locked_active = '${col}' } } } })`)
 }
 
 /**

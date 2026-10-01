@@ -1,14 +1,13 @@
 // Displays.ts — the monitors, from whichever compositor the shell is running on.
 //
-// On Hyprland they come from HyprlandState's cache (`hyprctl monitors`); on Hyalo, the
+// On Hyprland they come from the compositor's cache (`hyprctl monitors`); on Hyalo, the
 // compositor of our own (#680), from its IPC (`core/hyalo-ipc.ts`), kept fresh by its
-// `outputs_changed` events. Both are handed out in ONE shape, so the Display page and
-// MonitorConfig do not care which. The rest of the shell's Hyprland dependency moves
-// behind a facade like this one in #682; this is the part #681 asks for — the Display
-// page drives Hyalo's outputs through IPC.
+// `outputs_changed` events — Hyalo's outputs say more than the compositor-neutral
+// `CompositorMonitor` (VRR per output, the off ones). Both are handed out in ONE shape,
+// so the Display page and MonitorConfig do not care which.
 
 import GObject from "gi://GObject"
-import hs from "./HyprlandState"
+import compositor, { TRANSFORM_NAMES } from "./CompositorState"
 import * as hyalo from "./hyalo-ipc"
 
 export interface DisplayMonitor {
@@ -29,10 +28,7 @@ export interface DisplayMonitor {
     vrrEnabled: boolean
 }
 
-/** Hyalo's transform names, in wl_output order — Hyprland's ints index this. */
-export const TRANSFORM_NAMES = [
-    "normal", "90", "180", "270", "flipped", "flipped-90", "flipped-180", "flipped-270",
-]
+export { TRANSFORM_NAMES }
 
 function fromHyalo(o: hyalo.HyaloOutput): DisplayMonitor {
     const m = o.current_mode
@@ -76,7 +72,7 @@ class DisplaysClass extends GObject.Object {
                 this.emit("changed")
             })
         } else {
-            hs.connect("changed", () => this.emit("changed"))
+            compositor.connect("changed", () => this.emit("changed"))
         }
     }
 
@@ -87,7 +83,7 @@ class DisplaysClass extends GObject.Object {
     /** The monitors that are on. */
     get monitors(): DisplayMonitor[] {
         if (this.onHyalo) return this._hyaloOutputs
-        return hs.monitors.map(m => ({
+        return compositor.monitors.map(m => ({
             name: m.name,
             make: m.make ?? "",
             model: m.model ?? "",

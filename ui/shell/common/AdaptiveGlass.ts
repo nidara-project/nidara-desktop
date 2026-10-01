@@ -2,7 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Theme from "../core/ThemeManager"
 import { glassBlurInForce } from "../core/GlassBlur"
-import hyprlandState from "../core/HyprlandState"
+import compositor, { hyprlandOnly } from "../core/CompositorState"
 import Wallpaper from "../core/WallpaperManager"
 import Gdk from "gi://Gdk?version=4.0"
 import { probeBackdrop, probeClosedBackdrop, type MonitorRect } from "./BackdropProbe"
@@ -266,7 +266,7 @@ function logFlip(s: Surface, prev: GlassDecision | null, next: GlassDecision, wh
     if (prev ? prev.isDark === next.isDark : next.isDark === Theme.chromeIsDark) return
     const rgb = (c: { r: number; g: number; b: number }) => [c.r, c.g, c.b].map(v => Math.round(v * 255)).join(",")
     const st = stats ? ` mean ${rgb(stats.mean)} brightest ${rgb(stats.brightest)} darkest ${rgb(stats.darkest)} samples ${stats.samples}` : ""
-    console.log(`[AdaptiveGlass] ${s.id}: skin ${prev ? (prev.isDark ? "dark" : "light") : "(none)"} → ${next.isDark ? "dark" : "light"} (${why}, probe ${s.id}-${s.seq}, ws ${hyprlandState.focusedWorkspaceId})${st}`)
+    console.log(`[AdaptiveGlass] ${s.id}: skin ${prev ? (prev.isDark ? "dark" : "light") : "(none)"} → ${next.isDark ? "dark" : "light"} (${why}, probe ${s.id}-${s.seq}, ws ${compositor.focusedWorkspaceId})${st}`)
 }
 
 function apply(s: Surface, next: GlassDecision, why = "measured", stats: BackdropStats | null = s.lastStats) {
@@ -318,10 +318,10 @@ function reset(s: Surface) {
 let blur: HyprlandBlurParams = NIDARA_BLUR
 function readBlur() {
     blur = {
-        contrast: hyprlandState.getOptionFloat("decoration:blur:contrast", NIDARA_BLUR.contrast),
-        brightness: hyprlandState.getOptionFloat("decoration:blur:brightness", NIDARA_BLUR.brightness),
-        vibrancy: hyprlandState.getOptionFloat("decoration:blur:vibrancy", NIDARA_BLUR.vibrancy),
-        vibrancyDarkness: hyprlandState.getOptionFloat("decoration:blur:vibrancy_darkness", NIDARA_BLUR.vibrancyDarkness),
+        contrast: hyprlandOnly()?.getOptionFloat("decoration:blur:contrast", NIDARA_BLUR.contrast) ?? NIDARA_BLUR.contrast,
+        brightness: hyprlandOnly()?.getOptionFloat("decoration:blur:brightness", NIDARA_BLUR.brightness) ?? NIDARA_BLUR.brightness,
+        vibrancy: hyprlandOnly()?.getOptionFloat("decoration:blur:vibrancy", NIDARA_BLUR.vibrancy) ?? NIDARA_BLUR.vibrancy,
+        vibrancyDarkness: hyprlandOnly()?.getOptionFloat("decoration:blur:vibrancy_darkness", NIDARA_BLUR.vibrancyDarkness) ?? NIDARA_BLUR.vibrancyDarkness,
         // Not asked of the compositor: the glass material moves it with `hl.config`, which
         // raises no "config-reloaded" to re-read on (#674, core/GlassBlur.ts).
         passes: Math.max(1, glassBlurInForce().passes),
@@ -563,17 +563,17 @@ export function startAdaptiveGlass(): void {
     if (wired) return
     wired = true
     readBlur()
-    hyprlandState.connect("config-reloaded", readBlur)
+    compositor.connect("config-reloaded", readBlur)
     setGlassFrost(Theme.glassFrost)
     // Only what can change the PIXELS behind a surface: geometry, workspace,
     // fullscreen — and focus only when it lands on a floating window, which raises
     // it over the others. A plain focus change between tiled windows moves nothing,
     // and HyprlandState reports every one of them.
     let lastSig = ""
-    hyprlandState.connect("changed", () => {
-        const focused = hyprlandState.focusedClient as any
-        let sig = `${hyprlandState.focusedWorkspaceId}|${focused?.floating ? focused.address : ""}`
-        for (const c of hyprlandState.clients as any[])
+    compositor.connect("changed", () => {
+        const focused = compositor.focusedClient as any
+        let sig = `${compositor.focusedWorkspaceId}|${focused?.floating ? focused.address : ""}`
+        for (const c of compositor.clients as any[])
             if (c) sig += `;${c.address},${c.x},${c.y},${c.width},${c.height},${c.fullscreen},${c.floating},${c.workspace?.id ?? ""}`
         if (sig === lastSig) return
         lastSig = sig

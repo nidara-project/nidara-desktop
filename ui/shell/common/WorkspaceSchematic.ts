@@ -2,7 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import Gio from "gi://Gio"
 import appService from "../core/AppService"
-import hs, { bareAddr, type ClientGeometry } from "../core/HyprlandState"
+import compositor, { bareAddr, type ClientGeometry } from "../core/CompositorState"
 import { captureWindow } from "../core/WindowCapture"
 import Wallpaper from "../core/WallpaperManager"
 import { makeCoverFit } from "./DrawingUtils"
@@ -16,7 +16,7 @@ export interface SchematicHandle {
     /**
      * Lay the workspace out again.
      *
-     * `geom` is an optional FRESH geometry snapshot (`hs.readGeometry()`), used in
+     * `geom` is an optional FRESH geometry snapshot (`compositor.readGeometry()`), used in
      * preference to the cached client objects for position and size only. Without
      * it the layout is as good as the last event that re-synced the client list —
      * which is NOT good enough for a surface that paints real window content into
@@ -286,16 +286,16 @@ export function createSchematicMap(wsId: number, initialWidth: number, options: 
         // so this is a straight swap — it is just older, by however long it has been
         // since an event last re-synced the list (a resize is not one, ever).
         const rectOf = (c: any) => geom?.get(bareAddr(c.address)) ?? c
-        const workspaces = hs.workspaces
-        const monitors   = hs.monitors
-        const clients    = hs.clients
+        const workspaces = compositor.workspaces
+        const monitors   = compositor.monitors
+        const clients    = compositor.clients
 
         const ws = workspaces.find((w: any) => w.id === wsId)
 
         let hMonitor: any = monitors.find((m: any) => m.name === (ws?.monitor || ""))
         // monitor_id is a loose runtime fallback not in the Workspace typings.
         if (!hMonitor) hMonitor = monitors.find((m: any) => m.id === ((ws as any)?.monitor_id ?? -1))
-        if (!hMonitor && wsId === hs.focusedWorkspaceId) hMonitor = hs.focusedMonitor
+        if (!hMonitor && wsId === compositor.focusedWorkspaceId) hMonitor = compositor.focusedMonitor
         if (!hMonitor) hMonitor = monitors.find((m: any) => m.active_workspace?.id === wsId) ?? monitors[0]
         if (!hMonitor?.width) return
 

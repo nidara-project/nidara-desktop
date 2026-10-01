@@ -54,6 +54,13 @@ pub enum Action {
     /// held.
     MoveWithPointer,
     ResizeWithPointer,
+    /// Draw the real pointer or not (`cursor-visible off` while the agent pointer acts).
+    CursorVisible(bool),
+    /// The cursor theme and size, for this session (Settings persists them).
+    SetCursor { theme: String, size: u32 },
+    /// Re-decide which surface is under the pointer without moving it: after the surface
+    /// that had it went away (a closed popover), nothing holds the pointer until it moves.
+    RefocusPointer,
     ReloadConfig,
     Quit,
 }
@@ -182,6 +189,24 @@ impl std::str::FromStr for Action {
                     _ => Action::TileAll(ws),
                 }
             }
+            "cursor-visible" => {
+                none_after(1)?;
+                Action::CursorVisible(match a(0).copied() {
+                    Some("on") => true,
+                    Some("off") => false,
+                    _ => return Err("cursor-visible: on or off".into()),
+                })
+            }
+            "set-cursor" => {
+                none_after(2)?;
+                let theme = a(0).ok_or("set-cursor: theme and size")?.to_string();
+                let size = int(a(1), "set-cursor: size")?;
+                if !(8..=256).contains(&size) {
+                    return Err(format!("set-cursor: size {size} is outside 8..256"));
+                }
+                Action::SetCursor { theme, size: size as u32 }
+            }
+            "refocus-pointer" => Action::RefocusPointer,
             "move-with-pointer" => Action::MoveWithPointer,
             "resize-with-pointer" => Action::ResizeWithPointer,
             "reload-config" => Action::ReloadConfig,
@@ -334,6 +359,21 @@ impl Hyalo {
             Action::MoveWithPointer | Action::ResizeWithPointer => {
                 return Err("a pointer binding only (Super+drag)".into());
             }
+            Action::CursorVisible(on) => {
+                self.wm.cursor_hidden = !on;
+                self.queue_redraw(None);
+            }
+            Action::SetCursor { theme, size } => {
+                self.config.cursor.theme = theme;
+                self.config.cursor.size = size;
+                let cfg = self.config.cursor.clone();
+                self.backend.reload_cursors(&cfg);
+                self.queue_redraw(None);
+            }
+            Action::RefocusPointer => {
+                let pos = self.seat.get_pointer().unwrap().current_location();
+                self.pointer_moved_to(pos, smithay::backend::input::InputTime::now());
+            }
             Action::ReloadConfig => crate::config::reload(self)?,
             Action::Quit => self.loop_signal.stop(),
         }
@@ -462,11 +502,13 @@ mod tests {
         assert_eq!(p("set-workspace-mode 4 default"), Ok(Action::SetWorkspaceMode { workspace: Some(4), mode: None }));
         assert_eq!(p("cycle prev"), Ok(Action::Cycle { forward: false }));
         assert_eq!(p("focus-output DP-2"), Ok(Action::FocusOutput("DP-2".into())));
+        assert_eq!(p("cursor-visible off"), Ok(Action::CursorVisible(false)));
+        assert_eq!(p("set-cursor Adwaita 32"), Ok(Action::SetCursor { theme: "Adwaita".into(), size: 32 }));
     }
 
     #[test]
     fn mistakes_are_refused_with_a_reason() {
-        for bad in ["", "frobnicate", "workspace 0", "workspace", "focus sideways", "close-window abc", "spawn", "resize 10", "fullscreen 1 2", "set-workspace-mode 3 stacked"] {
+        for bad in ["", "frobnicate", "workspace 0", "workspace", "focus sideways", "close-window abc", "spawn", "resize 10", "fullscreen 1 2", "set-workspace-mode 3 stacked", "cursor-visible maybe", "set-cursor X 2"] {
             assert!(p(bad).is_err(), "{bad:?} should be refused");
         }
     }

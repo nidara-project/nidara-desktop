@@ -6,7 +6,7 @@ import { execAsync } from "../../lib/process"
 
 import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
-import hs from "../core/HyprlandState"
+import compositor from "../core/CompositorState"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ function buildCommand(mode: CaptureMode, action: CaptureAction): string {
     // Window geometry comes from HyprlandState at this point — capture() calls
     // this AFTER the close-delay, so the focused client is current (this used to
     // be a `hyprctl | jq` pipeline evaluated inside bash; same moment, no jq).
-    const focused = hs.focusedClient
+    const focused = compositor.focusedClient
     const geometry = mode === "area"
         ? '$(slurp -d)'
         : mode === "window" && focused

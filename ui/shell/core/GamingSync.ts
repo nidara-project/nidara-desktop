@@ -17,7 +17,7 @@
 import GLib from "gi://GLib"
 import { writeFile } from "../../lib/nidara-kit/platform/file"
 import Gaming from "./GamingManager"
-import hs from "./HyprlandState"
+import compositor, { hyprlandOnly } from "./CompositorState"
 import { luaGamingBlock } from "./hyprland-lua"
 
 const LUA_PATH = GLib.build_filenamev([GLib.get_home_dir(), ".config", "nidara", "nidara-gaming.lua"])
@@ -40,7 +40,7 @@ function sync(): void {
     } catch (e) {
         console.error("[GamingSync] Failed to write nidara-gaming.lua:", e)
     }
-    hs.evalLua(lua)
+    hyprlandOnly()?.evalLua(lua)
 }
 
 /** Idempotent: a second call does nothing. */
@@ -50,6 +50,6 @@ export function startGamingSync(): void {
     for (const key of ["wallpaperMode", "customWallpaper", "transition", "performanceProfile"] as const) {
         Gaming.subscribe(key, sync)
     }
-    hs.connect("config-reloaded", () => hs.evalLua(block()))
+    compositor.connect("config-reloaded", () => hyprlandOnly()?.evalLua(block()))
     sync()
 }

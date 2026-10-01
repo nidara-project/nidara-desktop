@@ -8,7 +8,7 @@ import { renderMenuModel } from "../../common/NidaraMenu"
 import status from "../../core/Status"
 import { safeDisconnect } from "../../core/signals"
 import { barItem, barOpen, barTooltip, isBarCustomAnchor } from "./capsule"
-import hs from "../../core/HyprlandState"
+import compositor from "../../core/CompositorState"
 import { BAR_ICON_SIZE, BAR_ITEM_PAD } from "../../common/widget-kit"
 import { rememberTrayItem, trayKey } from "../../core/BarOrder"
 import appService from "../../core/AppService"
@@ -357,16 +357,16 @@ export default function Tray(openMenu?: OpenMenu, onItemsChanged?: () => void): 
         const norm = (s: any) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "")
         const focusAppWindow = (): boolean => {
             if (itemPid > 0) {
-                const byPid = hs.clients.find(c => c.pid === itemPid)
-                if (byPid) { hs.focusWindow(byPid.address); return true }
+                const byPid = compositor.clients.find(c => c.pid === itemPid)
+                if (byPid) { compositor.focusWindow(byPid.address); return true }
             }
             const cands = [item.id, item.icon_name, item.title].map(norm).filter(c => c.length >= 3)
             if (cands.length === 0) return false
-            for (const c of hs.clients) {
+            for (const c of compositor.clients) {
                 const w = norm(c.class)
                 if (w.length < 3) continue
                 if (cands.some(cand => cand.includes(w) || w.includes(cand))) {
-                    hs.focusWindow(c.address)
+                    compositor.focusWindow(c.address)
                     return true
                 }
             }

@@ -39,17 +39,15 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
-import Gio from "gi://Gio"
 import Cairo from "gi://cairo"
 import Pango from "gi://Pango"
 import PangoCairo from "gi://PangoCairo"
 import Theme from "../../core/ThemeManager"
-import hs from "../../core/HyprlandState"
+import compositor from "../../core/CompositorState"
 import agentConfig from "../../core/AgentConfig"
 import { t } from "../../core/i18n"
 import { hexToFloatRgb } from "../../common/DrawingUtils"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
-import { spawn } from "../../../lib/process"
 
 type Kind = "click" | "rightclick" | "move" | "scroll" | "drag"
 type Phase = "hidden" | "materialize" | "travel" | "landed" | "effect" | "dragGlide" | "idle" | "fadeout"
@@ -114,7 +112,7 @@ function syncRealCursor() {
     const hide = isAgentPointerActive()
     if (hide === cursorHidden) return
     cursorHidden = hide
-    hs.setRealCursorVisible(!hide)
+    compositor.setRealCursorVisible(!hide)
 }
 
 // Unconditional insurance, once per shell start: if a previous shell died mid-action
@@ -125,7 +123,7 @@ let restoredOnStart = false
 function restoreCursorOnce() {
     if (restoredOnStart) return
     restoredOnStart = true
-    hs.setRealCursorVisible(true)
+    compositor.setRealCursorVisible(true)
 }
 
 export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
@@ -208,24 +206,14 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
     // The user always wins, also during the linger: if the REAL cursor strays
     // from the landing point while we idle, fade out early instead of leaving a
     // stale accent arrow next to the user's departing cursor. Best-effort — any
-    // failure (no hyprctl, parse miss) just skips the check, never breaks the visual.
+    // failure (the compositor not answering) just skips the check, never breaks the visual.
     const checkStray = () => {
-        try {
-            const proc = spawn(["hyprctl", "cursorpos"],
-                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE)
-            proc.communicate_utf8_async(null, null, (_p, res) => {
-                strayBusy = false
-                try {
-                    const [, out] = proc.communicate_utf8_finish(res)
-                    const m = String(out ?? "").match(/(-?\d+),\s*(-?\d+)/)
-                    if (!m || phase !== "idle") return
-                    const geo = gdkmonitor.get_geometry()
-                    const cx = parseInt(m[1], 10) - geo.x
-                    const cy = parseInt(m[2], 10) - geo.y
-                    if (Math.hypot(cx - x, cy - y) > IDLE_STRAY_PX) phase = "fadeout"
-                } catch { /* best-effort */ }
-            })
-        } catch { strayBusy = false }
+        compositor.cursorPosition().then(pos => {
+            strayBusy = false
+            if (!pos || phase !== "idle") return
+            const geo = gdkmonitor.get_geometry()
+            if (Math.hypot(pos[0] - geo.x - x, pos[1] - geo.y - y) > IDLE_STRAY_PX) phase = "fadeout"
+        }).catch(() => { strayBusy = false })
     }
 
     const resolvePending = (v: string) => { if (pending) { const r = pending; pending = null; r(v) } }

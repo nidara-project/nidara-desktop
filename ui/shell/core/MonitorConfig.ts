@@ -1,7 +1,8 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import { writeFile } from "../../lib/nidara-kit/platform/file"
-import hs, { compositorOption } from "./HyprlandState"
+import compositor, { hyprlandOnly } from "./CompositorState"
+import { compositorOption } from "./HyprlandState"
 import { luaConfigExpr } from "./hyprland-lua"
 import displays, { TRANSFORM_NAMES } from "./Displays"
 import * as hyalo from "./hyalo-ipc"
@@ -45,7 +46,7 @@ class MonitorConfig extends GObject.Object {
         // Re-read the effective vrr if Hyprland reloads its config (e.g. the user
         // edits hyprland-user.lua). Otherwise the next _save() would persist our
         // stale _vrr back into nidara-monitor.lua, clobbering the external change.
-        hs.connect("config-reloaded", () => { this._vrr = hs.getOptionInt(VRR.name, this._vrr) })
+        compositor.connect("config-reloaded", () => { this._vrr = hyprlandOnly()?.getOptionInt(VRR.name, this._vrr) ?? this._vrr })
     }
 
     /** Call once with the monitor list from AstalHyprland.get_monitors() */
@@ -66,7 +67,7 @@ class MonitorConfig extends GObject.Object {
         // misc:vrr is a GLOBAL int (0=off, 1=always, 2=fullscreen-only). AstalHyprland's
         // Monitor.vrr is just a per-monitor bool and doesn't reflect it, so read the real
         // effective value via HyprlandState (otherwise it resets to off on UI reload).
-        this._vrr = hs.getOptionInt(VRR.name, this._vrr)
+        this._vrr = hyprlandOnly()?.getOptionInt(VRR.name, this._vrr) ?? this._vrr
     }
 
     getScale(name: string) { return this.state.get(name)?.scale ?? 1.0 }
@@ -88,7 +89,7 @@ class MonitorConfig extends GObject.Object {
         // ("can't work with non-legacy parsers. Use eval."). Apply via eval
         // running the same hl.monitor() call the persisted .lua uses.
         const mode = cfg.mode ?? "preferred"
-        hs.evalLua(`hl.monitor({ output = '${name}', mode = '${mode}', position = 'auto', scale = ${cfg.scale}, transform = ${cfg.transform} })`)
+        hyprlandOnly()?.evalLua(`hl.monitor({ output = '${name}', mode = '${mode}', position = 'auto', scale = ${cfg.scale}, transform = ${cfg.transform} })`)
     }
 
     setScale(name: string, scale: number) {
