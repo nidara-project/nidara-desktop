@@ -79,6 +79,12 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   `clamp_floating`), and stepped off a window it would cover entirely (`cascade`, KWin's
   `cascadeIfCovering`). A dialog, or a window whose min size equals its max, floats even on a
   tiling workspace (`wants_floating`).
+- **A modal dialog keeps the focus from its parent** (xdg-dialog-v1; GTK marks a `modal` transient
+  window with it). `focus_window` is the one door to the focus — a click, the keyboard, the IPC,
+  the overview — and it hands the focus meant for a window to its open modal dialog
+  (`modal_target`, down a chain of modals). CI: `scripts/ci/hyalo-dialog-check.sh` (modal: the
+  parent gives way; a plain dialog: it does not — the control). Without the redirect the first
+  half fails (checked, 2026-10-01).
 - **Client maximize requests are refused** (the Hyprland session's `suppress_event = "maximize"`):
   Super+M maximizes. Fullscreen requests are granted.
 - **One command language** for bindings and IPC (`wm/actions.rs`): `workspace 3`,

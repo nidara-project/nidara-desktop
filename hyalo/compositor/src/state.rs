@@ -120,6 +120,8 @@ impl Hyalo {
         // Touchpad pinch, swipe and hold, for the apps (input.rs already hands them to the seat):
         // pinch-to-zoom in a browser or an image viewer.
         smithay::wayland::pointer_gestures::PointerGesturesState::new::<Self>(&dh);
+        // Which dialogs are modal: their parent gives way to them (wm::focus_window).
+        smithay::wayland::shell::xdg::dialog::XdgDialogState::new::<Self>(&dh);
         // A surface may say its content is a game: one of game mode's signs (wm/games.rs).
         smithay::wayland::content_type::ContentTypeState::new::<Self>(&dh);
         // Ours (protocols/ at the repo root).

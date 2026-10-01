@@ -155,6 +155,8 @@ impl WaylandDndGrabHandler for Hyalo {
 }
 
 impl OutputHandler for Hyalo {}
+// The hint itself is all wm::focus_window reads; nothing to do when it changes.
+impl smithay::wayland::shell::xdg::dialog::XdgDialogHandler for Hyalo {}
 impl FractionalScaleHandler for Hyalo {}
 
 impl PointerConstraintsHandler for Hyalo {
