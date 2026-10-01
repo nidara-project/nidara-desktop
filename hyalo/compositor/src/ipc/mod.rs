@@ -24,6 +24,9 @@ pub struct WindowInfo {
     pub id: WindowId,
     pub app_id: String,
     pub title: String,
+    /// What it was called when it was first shown.
+    pub initial_app_id: String,
+    pub initial_title: String,
     pub pid: Option<i32>,
     /// The window it is a dialog of.
     pub parent: Option<WindowId>,
@@ -39,6 +42,19 @@ pub struct WindowInfo {
     /// Higher = focused more recently; 0 = never focused.
     pub focus_order: u64,
     /// The window's own box (no border), global logical pixels.
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LayerInfo {
+    pub output: String,
+    /// background, bottom, top or overlay.
+    pub layer: &'static str,
+    pub namespace: String,
+    /// Global logical pixels.
     pub x: i32,
     pub y: i32,
     pub width: i32,
@@ -96,6 +112,10 @@ pub enum Request {
     /// Every window the window manager knows, shown or not.
     Windows,
     Workspaces,
+    /// The layer surfaces (the shell's bar, dock, panels), per output and level, bottom first.
+    Layers,
+    /// Where the pointer is, global logical pixels.
+    CursorPosition,
     /// A window-manager command, written as in a binding: `workspace 3`, `focus-window 12`
     /// (wm/actions.rs).
     Do { command: String },
@@ -120,6 +140,8 @@ pub enum Response {
     Outputs { outputs: Vec<OutputInfo> },
     Windows { windows: Vec<WindowInfo> },
     Workspaces { workspaces: Vec<WorkspaceInfo> },
+    Layers { layers: Vec<LayerInfo> },
+    CursorPosition { x: f64, y: f64 },
 }
 
 #[derive(Debug, Clone, Serialize)]

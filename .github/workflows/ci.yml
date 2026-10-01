@@ -547,6 +547,22 @@ jobs:
       # allowlist fails, and so does a listed one that is no longer reached.
       - name: Settings import closure (no shell surfaces, ratcheted)
         run: node scripts/ci/settings-closure-check.mjs
+      # The shell runs on Hyprland and on Hyalo through ONE interface (#682): a surface
+      # that imports HyprlandState or spawns hyprctl compiles, and does nothing on the
+      # other session. A ratchet, like the Settings closure.
+      - name: Compositor boundary (one interface for Hyprland and Hyalo, ratcheted)
+        run: node scripts/ci/compositor-boundary-check.mjs
+      - name: The compositor boundary check can fail (control, must be caught)
+        run: |
+          cp ui/shell/surfaces/bar/Bar.tsx /tmp/Bar.bak
+          sed -i '1i import hs from "../../core/HyprlandState"' ui/shell/surfaces/bar/Bar.tsx
+          if node scripts/ci/compositor-boundary-check.mjs; then
+            echo "::error::the check passed with the bar importing HyprlandState — it is not checking what it prints"
+            cp /tmp/Bar.bak ui/shell/surfaces/bar/Bar.tsx
+            exit 1
+          fi
+          cp /tmp/Bar.bak ui/shell/surfaces/bar/Bar.tsx
+          git diff --quiet ui/shell/surfaces/bar/Bar.tsx
       # The kit is a package (tech-debt #108): an app outside this repo has
       # nidara-kit and nothing else of this tree, while the four bundles here can
       # always resolve a path the kit should not have reached for.

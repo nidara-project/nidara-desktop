@@ -9,7 +9,7 @@ import { createRegionStamper, type VisibleRect } from "../../common/VisibleRegio
 import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import status from "../../core/Status"
 import inputYield from "../../core/InputYield"
-import hs from "../../core/HyprlandState"
+import compositor from "../../core/CompositorState"
 import { registerGlassSurface } from "../../common/AdaptiveGlass"
 
 // The app grid's OWN layer surface — the SECOND exception to "overlays live
@@ -131,11 +131,11 @@ export function AppGridWindow(
     win.set_focusable(true)
     win.set_focus_visible(true)
 
-    // Through HyprlandState, never `hs.focusWorkspace` directly — the switch has to
+    // Through HyprlandState, never `compositor.focusWorkspace` directly — the switch has to
     // happen with the grab already handed over, and `focusWorkspaceFromShell` owns
     // that order.
     const panel = AppGridPanel(gdkmonitor, () => { status.app_grid_open = false },
-                               (id) => hs.focusWorkspaceFromShell(id))
+                               (id) => compositor.focusWorkspaceFromShell(id))
     panel.widget.visible = false
     panel.widget.halign = Gtk.Align.CENTER
     panel.widget.valign = Gtk.Align.CENTER

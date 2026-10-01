@@ -43,7 +43,7 @@ import { barSettings, onBarSettingsChanged, resolveLauncherIcon, LAUNCHER_ICON_P
 import { dockSideState, dockSettings, onDockSettingsChanged } from "../dock/state"
 import { uiIcon } from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
-import hs from "../../core/HyprlandState"
+import compositor from "../../core/CompositorState"
 import { safeDisconnect } from "../../core/signals"
 import { BAR_ICON_SIZE, BAR_ITEM_PAD } from "../../common/widget-kit"
 import { registerGlassSurface, type GlassSurfaceHandle } from "../../common/AdaptiveGlass"
@@ -1237,7 +1237,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const monName = gdkmonitor.get_connector() ?? undefined
   let islandWatch = 0
   const syncIslandToBar = () =>
-    hs.layerTop("nidara-bar", monName).then(y => {
+    compositor.layerTop("nidara-bar", monName).then(y => {
       if (y === null) return
       // layerTop is global; the island's margin is monitor-local
       const offset = Math.max(0, y - geo().y)
@@ -1257,7 +1257,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Two reads per reload, not one: the overlay is created from `draw()`, i.e. a
   // frame AFTER the event, so the immediate read can legitimately still see the
   // old position. The second one starts the watch, and from there the watch owns it.
-  hs.connect("config-reloaded", () => {
+  compositor.connect("config-reloaded", () => {
     syncIslandToBar()
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => { syncIslandToBar(); return GLib.SOURCE_REMOVE })
   })
@@ -1711,8 +1711,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     appTitle.setMaxWidth(appTitleBudget, immediate)
   }
 
-  hs.connect("changed", () => syncLeftBudget())
-  hs.connect("title-changed", () => syncLeftBudget())
+  compositor.connect("changed", () => syncLeftBudget())
+  compositor.connect("title-changed", () => syncLeftBudget())
   syncLeftBudget()
 
   // How many ordered items (widgets, tray icons, search) fit, counted from the clock
@@ -1941,10 +1941,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // structural signature, so "changed" fires for a window that toggles FSMODE
   // without moving (maximized → fullscreen keeps the same rect).
   const checkBarFullscreen = () => {
-      setBarFullscreenMode(hs.isRealFullscreen(hs.focusedClient ?? null))
+      setBarFullscreenMode(compositor.isRealFullscreen(compositor.focusedClient ?? null))
   }
 
-  hs.connect("changed", checkBarFullscreen)
+  compositor.connect("changed", checkBarFullscreen)
   GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { checkBarFullscreen(); return GLib.SOURCE_REMOVE })
 
   ;(win as any).setBarOverlayMode = (active: boolean) => {

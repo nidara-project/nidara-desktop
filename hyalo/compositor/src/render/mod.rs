@@ -178,7 +178,7 @@ pub fn output_elements<R: HyaloRenderer>(
     let scale = Scale::from(output.current_scale().fractional_scale());
     let output_size = output_geo.size.to_f64().to_physical_precise_round(scale);
 
-    if let Some(image) = cursor {
+    if let Some(image) = cursor.filter(|_| !state.wm.cursor_hidden) {
         push_cursor(&mut out, state, renderer, output_geo.loc, scale, image);
     }
 

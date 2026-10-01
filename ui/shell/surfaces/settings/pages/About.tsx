@@ -2,7 +2,7 @@ import { execAsync } from "../../../../lib/process"
 import { listGroup, createRow, pageBox, staticLabel, onPageShown } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import { readShellVersion } from "../../../core/Paths"
-import hs from "../../../core/HyprlandState"
+import compositor from "../../../core/CompositorState"
 import * as sys from "../../../core/SystemInfo"
 
 /**
@@ -127,8 +127,11 @@ export default function AboutPage() {
     // X11, and we do not).
     const { box: envBox, listBox: envList } = listGroup(t("settings.about.group.environment"))
 
-    envList.append(asyncRow(t("settings.about.hyprland"), t("settings.about.hyprland.desc"),
-        hs.version().then(v => v || "").catch(() => "")))
+    // The row names the compositor this session runs on; "Hyalo" is a proper name, not
+    // text to translate (the description, "Compositor version", is).
+    const compositorName = compositor.kind === "hyalo" ? "Hyalo" : t("settings.about.hyprland")
+    envList.append(asyncRow(compositorName, t("settings.about.hyprland.desc"),
+        compositor.version().then(v => v || "").catch(() => "")))
     envList.append(createRow("GTK", t("settings.about.gtk.desc"), staticLabel(sys.gtkVersion())))
     envList.append(createRow("GJS", t("settings.about.gjs.desc"), staticLabel(sys.gjsVersion())))
 

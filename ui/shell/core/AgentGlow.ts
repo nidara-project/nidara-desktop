@@ -1,4 +1,4 @@
-import hyprlandState from "./HyprlandState"
+import compositor from "./CompositorState"
 import agentService from "./AgentService"
 import agentConfig from "./AgentConfig"
 
@@ -40,14 +40,14 @@ function sync(force = false) {
     const want = desired()
     if (!force && want === applied) return
     applied = want
-    hyprlandState.setGlow(want)
+    compositor.setGlow(want)
 }
 
 export function initAgentGlow() {
     if (started) return
     started = true
 
-    hyprlandState.supportsGlow().then(ok => {
+    compositor.supportsGlow().then(ok => {
         supported = ok
         if (!ok) {
             console.log("[AgentGlow] no decoration:glow — Hyprland < 0.56, staying out of the way")
@@ -64,7 +64,7 @@ export function initAgentGlow() {
         // `hyprctl reload` (or an edit to hyprland-user.lua) re-reads the config,
         // which sets glow.enabled = false — mid-turn that would silently drop the
         // signal. Re-assert whatever we currently want.
-        hyprlandState.connect("config-reloaded", () => sync(true))
+        compositor.connect("config-reloaded", () => sync(true))
     })
 }
 

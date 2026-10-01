@@ -1,7 +1,7 @@
 import Gdk from "gi://Gdk?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
-import hs from "../core/HyprlandState"
+import compositor from "../core/CompositorState"
 import { safeDisconnect } from "../core/signals"
 
 /**
@@ -108,7 +108,7 @@ export function refreshShellCursor(): boolean {
 const SETTLE_MS = 120
 
 async function refreshAfterRefocus() {
-    await hs.reevaluatePointerFocus()
+    await compositor.reevaluatePointerFocus()
     // The `enter` is on the wire by now; give the main loop one turn to read it before
     // asking GDK where the pointer is.
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, SETTLE_MS, () => {

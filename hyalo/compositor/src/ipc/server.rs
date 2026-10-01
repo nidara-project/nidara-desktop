@@ -145,6 +145,11 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
         }
         Request::Windows => Reply::Ok(Response::Windows { windows: state.window_infos() }),
         Request::Workspaces => Reply::Ok(Response::Workspaces { workspaces: state.workspace_infos() }),
+        Request::Layers => Reply::Ok(Response::Layers { layers: state.layer_infos() }),
+        Request::CursorPosition => {
+            let p = state.seat.get_pointer().unwrap().current_location();
+            Reply::Ok(Response::CursorPosition { x: p.x, y: p.y })
+        }
         Request::Do { command } => match command.parse::<crate::wm::actions::Action>() {
             Ok(action) => match state.run_action(action) {
                 Ok(()) => Reply::Ok(Response::Handled),
@@ -202,6 +207,8 @@ impl Hyalo {
                     id: m.id,
                     app_id: crate::wm::app_id(&m.window),
                     title: crate::wm::title(&m.window),
+                    initial_app_id: m.initial_app_id.clone(),
+                    initial_title: m.initial_title.clone(),
                     pid,
                     parent,
                     workspace: m.workspace,
@@ -220,6 +227,31 @@ impl Hyalo {
                 }
             })
             .collect()
+    }
+
+    pub fn layer_infos(&self) -> Vec<super::LayerInfo> {
+        use smithay::wayland::shell::wlr_layer::Layer;
+        let mut out = Vec::new();
+        for output in self.space.outputs() {
+            let Some(og) = self.space.output_geometry(output) else { continue };
+            let map = smithay::desktop::layer_map_for_output(output);
+            for (level, name) in [(Layer::Background, "background"), (Layer::Bottom, "bottom"), (Layer::Top, "top"), (Layer::Overlay, "overlay")] {
+                // `layers_on` is bottom first: the order they are drawn in.
+                for l in map.layers_on(level) {
+                    let g = map.layer_geometry(l).unwrap_or_default();
+                    out.push(super::LayerInfo {
+                        output: output.name(),
+                        layer: name,
+                        namespace: l.namespace().to_string(),
+                        x: og.loc.x + g.loc.x,
+                        y: og.loc.y + g.loc.y,
+                        width: g.size.w,
+                        height: g.size.h,
+                    });
+                }
+            }
+        }
+        out
     }
 
     pub fn workspace_infos(&self) -> Vec<super::WorkspaceInfo> {

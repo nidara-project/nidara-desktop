@@ -10,7 +10,7 @@ import Cairo from "gi://cairo"
 import appService from "../../core/AppService"
 import trashService from "../../core/TrashService"
 import { DOCK_CONSTANTS } from "./DockPhysics"
-import hs from "../../core/HyprlandState"
+import compositor from "../../core/CompositorState"
 
 import { dragBus, pointerBus, dockSettings, changeMenuCount, menuState } from "./state"
 import status from "../../core/Status"
@@ -29,8 +29,8 @@ import { chromeIsDarkFor } from "../../common/AdaptiveGlass"
 /** A `*-symbolic` icon is a mask meant to take the text colour (see DockIcon). */
 const isSymbolicFile = (path: string | null | undefined) => !!path && /-symbolic\.(svg|png)$/.test(path)
 
-// hypr kept as alias for hs to minimise diff surface in this file
-const hypr = hs
+// `hypr` kept as this file's name for the compositor, to keep its diff small.
+const hypr = compositor
 
 // Module-level tracker so Dock.tsx can dismiss the active popover when clicking dock background
 let _activeDockMenu: Gtk.Popover | null = null
@@ -605,7 +605,7 @@ export function DockItem(
                     let winTitle = hyprClient?.title || `${t("dock.menu.window-of")} ${appItem.name || "App"}`
                     if (winTitle.length > 35) winTitle = winTitle.substring(0, 32) + "..."
                     windowsSection.append(winTitle, addAction(() => {
-                        hs.focusWindow(cleanAddr)
+                        compositor.focusWindow(cleanAddr)
                     }))
                 })
             }
@@ -614,7 +614,7 @@ export function DockItem(
                 winCount > 1 ? `${t("settings.dock.dockitem.close-all")} (${winCount})` : t("settings.dock.dockitem.quit"),
                 addAction(() => {
                     state.addresses.forEach(addr => {
-                        hs.closeWindow(addr)
+                        compositor.closeWindow(addr)
                     })
                 })
             )
@@ -692,7 +692,7 @@ export function DockItem(
             const nextIdx = (idx + 1) % addresses.length
             const target = addresses[nextIdx]
             if (target) {
-                hs.focusWindow(target)
+                compositor.focusWindow(target)
             }
         } else if (appId === "launcher" || appId === "special:launcher") {
             // A toggle, not a launch: no bounce (nothing is starting), no frequency
@@ -817,16 +817,16 @@ export function DockItem(
         // surface commits on every sync).
     }
 
-    const hsChangedId = hs.connect("changed", sync)
+    const hsChangedId = compositor.connect("changed", sync)
     const themeChangedId = Theme.connect("changed", () => { if (dot.get_mapped()) dot.queue_draw() })
 
     // Note: notify::title per-client connections removed — they caused a dock surface
     // commit (and Hyprland blur pass) on every window title update from running apps
-    // (e.g. YouTube tab progress, Discord unread count). hs.changed fires on actual
+    // (e.g. YouTube tab progress, Discord unread count). compositor.changed fires on actual
     // structural changes (focus, workspace, open/close) which is sufficient.
 
     itemBox.connect("destroy", () => {
-        safeDisconnect(hs, hsChangedId)
+        safeDisconnect(compositor, hsChangedId)
         safeDisconnect(Theme, themeChangedId)
         // Pending timers would otherwise keep firing against destroyed widgets
         // (the dock is rebuilt in-process on position/autoHide/geometry changes).

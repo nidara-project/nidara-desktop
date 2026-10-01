@@ -25,7 +25,7 @@ import {
     menuState, onMenuCountChanged, dockSideState, onPinnedChanged,
 } from "./state"
 import status from "../../core/Status"
-import hs from "../../core/HyprlandState"
+import compositor from "../../core/CompositorState"
 // No focus grab here any more: the dock holds no modality at all. The app grid was
 // the only thing on this window that ever grabbed, and it has its own surface now
 // (surfaces/app-grid/AppGridWindow.ts) — which is also why core/InputYield no
@@ -55,7 +55,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     // drag-lock origin. Identical math for both axes (slots accumulate the same).
     const calculateStableMain = (effectivePinned: string[]) => {
         const groupedClients: { [key: string]: any } = {}
-        hs.clients.forEach(c => {
+        compositor.clients.forEach(c => {
             if (!c.class) return
             // (No "hide our own windows" filter here. There used to be
             // `if (class.includes("ags")) return`, the twin of the one AppService
@@ -591,7 +591,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
             needsUpdate = false
             const groupedClients: { [key: string]: { addresses: string[], displayClass: string, title: string } } = {}
-            const sortedClients = [...hs.clients].sort((a, b) => a.address.localeCompare(b.address))
+            const sortedClients = [...compositor.clients].sort((a, b) => a.address.localeCompare(b.address))
             sortedClients.forEach(c => {
                 const rawClass = c.class || ""
                 const key = appService.resolveHyprlandClass(rawClass)
@@ -1129,7 +1129,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         if (pinnedState.list.length < before) savePinned()
     }
 
-    const cConn = hs.connect("changed", throttledUpdate)
+    const cConn = compositor.connect("changed", throttledUpdate)
     const aConn = appService.connect(throttledUpdate)
     const appStructConn = appService.connectStructural(pruneOrphanedPins)
     const pinnedConn = onPinnedChanged(throttledUpdate)
@@ -1253,7 +1253,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         if (updateTimer) { GLib.source_remove(updateTimer); updateTimer = null }
         if (leaveTimeout) { GLib.source_remove(leaveTimeout); leaveTimeout = null }
         clearPendingDragTimers()
-        if (cConn) safeDisconnect(hs, cConn)
+        if (cConn) safeDisconnect(compositor, cConn)
         safeDisconnect(Theme, themeConn)
         try { if (aConn) aConn() } catch (e) {}
         try { if (pConn) pConn() } catch (e) {}
@@ -1308,7 +1308,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     // No per-client signal to rewire — see the same note in Bar.tsx: `fullscreen`
     // is part of HyprlandState's structural signature now.
     const checkFullscreen = () => {
-        setFullscreenMode(hs.isRealFullscreen(hs.focusedClient ?? null))
+        setFullscreenMode(compositor.isRealFullscreen(compositor.focusedClient ?? null))
     }
 
     // ── The keyboard walk (Super+Ctrl+D, Status.dock_keyboard) ─────────────────
@@ -1331,7 +1331,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     }
     const startWalk = () => {
         if (walking || fullscreenMode) { if (fullscreenMode) status.dock_keyboard = false; return }
-        const mon = hs.focusedMonitor?.name
+        const mon = compositor.focusedMonitor?.name
         if (mon && mon !== gdkmonitor.get_connector()) return   // another monitor's dock
         walking = true
         if (dockSettings.autoHide && !isRevealed) {
@@ -1431,9 +1431,9 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         // entirely, nothing is measured and it keeps its last decision.
         exclude: () => {
             if (isRevealed) return []
-            const mon = hs.monitors.find(m => m.name === gdkmonitor.get_connector())
+            const mon = compositor.monitors.find(m => m.name === gdkmonitor.get_connector())
             if (!mon) return []
-            return hs.clients
+            return compositor.clients
                 .filter(c => c.workspace?.id === mon.activeWorkspace?.id && !c.floating && !c.hidden && c.mapped !== false)
                 .map(c => ({ x: c.x - mon.x, y: c.y - mon.y, width: c.width, height: c.height }))
         },
@@ -1454,12 +1454,12 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     })
     win.connect("destroy", () => { glass?.dispose(); glass = null })
 
-    const fsConn = hs.connect("changed", checkFullscreen)
+    const fsConn = compositor.connect("changed", checkFullscreen)
     // Own destroy hook (the main one above predates this section): the dock is
     // rebuilt in-process on position/autoHide/geometry changes, and this handler
     // used to leak — every rebuild left a live "changed" subscription driving
     // fullscreen state into a destroyed window.
-    win.connect("destroy", () => { safeDisconnect(hs, fsConn) })
+    win.connect("destroy", () => { safeDisconnect(compositor, fsConn) })
     checkFullscreen()
 
     update()

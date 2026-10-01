@@ -1,7 +1,8 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import { writeFile } from "../../lib/nidara-kit/platform/file"
-import hs, { compositorOption, type CompositorOption } from "./HyprlandState"
+import compositor from "./CompositorState"
+import { compositorOption, type CompositorOption } from "./HyprlandState"
 import { luaConfigBlock, luaLiteral, type LuaValue } from "./hyprland-lua"
 
 /**
@@ -81,7 +82,7 @@ class InputConfig extends GObject.Object {
         // (e.g. the user edits hyprland-user.lua and runs `hyprctl reload`). Without
         // this, the next setX() would rewrite nidara-settings.lua from our stale
         // in-memory state and clobber the user's external change.
-        hs.connect("config-reloaded", () => {
+        compositor.connect("config-reloaded", () => {
             this._initPromise = this.syncFromHyprland()
         })
     }

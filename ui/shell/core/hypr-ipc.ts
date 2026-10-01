@@ -25,62 +25,13 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 
-/** A window. Field names match what AstalHyprland exposed, not raw hyprctl JSON:
- *  `at`/`size` are unpacked into x/y/width/height and the address is bare. */
-export interface HyprClient {
-    address: string
-    class: string
-    title: string
-    initialClass: string
-    initialTitle: string
-    pid: number
-    x: number
-    y: number
-    width: number
-    height: number
-    workspace: { id: number; name: string }
-    monitor: number
-    floating: boolean
-    pinned: boolean
-    mapped: boolean
-    hidden: boolean
-    xwayland: boolean
-    /** Hyprland's FSMODE int — 0 none, 1 maximized, 2 fullscreen. NOT a boolean. */
-    fullscreen: number
-}
-
-export interface HyprWorkspace {
-    id: number
-    name: string
-    monitor: string
-    monitorID: number
-    windows: number
-    hasfullscreen: boolean
-    /** Bare address of the window this workspace would focus, "" if none. */
-    lastwindow: string
-    lastwindowtitle: string
-}
-
-export interface HyprMonitor {
-    id: number
-    name: string
-    description: string
-    make: string
-    model: string
-    serial: string
-    width: number
-    height: number
-    refreshRate: number
-    x: number
-    y: number
-    scale: number
-    transform: number
-    focused: boolean
-    disabled: boolean
-    activeWorkspace: { id: number; name: string }
-    specialWorkspace: { id: number; name: string }
-    availableModes: string[]
-}
+// The shapes are the shell's, not Hyprland's: `core/compositor-types.ts` defines them for
+// both compositors. Field names match what AstalHyprland exposed, not raw hyprctl JSON —
+// `at`/`size` are unpacked into x/y/width/height and the address is bare.
+import type { CompositorWindow, CompositorWorkspace, CompositorMonitor } from "./compositor-types"
+export type HyprClient = CompositorWindow
+export type HyprWorkspace = CompositorWorkspace
+export type HyprMonitor = CompositorMonitor
 
 /** Hyprland's FSMODE for real fullscreen (`isRealFullscreen` is the reader). */
 export const FSMODE_FULLSCREEN = 2

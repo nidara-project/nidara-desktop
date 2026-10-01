@@ -97,6 +97,26 @@ impl Hyalo {
         });
         let mut map = layer_map_for_output(&output);
         let zone_before = map.non_exclusive_zone();
+        // A surface that moved to another level goes to the TOP of it, as on Hyprland: a
+        // client has no "raise" in layer-shell, so leaving the level and coming back is how
+        // it gets above a sibling (the shell's island over the bar, IslandWindow.raise).
+        // Smithay keeps the order surfaces were mapped in, so it is re-mapped at the end.
+        if let Some(layer) = map.layer_for_surface(surface, WindowSurfaceType::TOPLEVEL).cloned() {
+            let now = layer.layer();
+            let moved = with_states(surface, |states| {
+                let last = states.data_map.get_or_insert_threadsafe(|| std::sync::Mutex::new(now));
+                let mut last = last.lock().unwrap();
+                let moved = *last != now;
+                *last = now;
+                moved
+            });
+            if moved {
+                map.unmap_layer(&layer);
+                if let Err(err) = map.map_layer(&layer) {
+                    tracing::warn!(?err, "a layer surface that changed level could not be re-mapped");
+                }
+            }
+        }
         map.arrange();
         let zone_changed = map.non_exclusive_zone() != zone_before;
         if !initial_configure_sent {
@@ -111,6 +131,8 @@ impl Hyalo {
             let name = output.name();
             let on: Vec<i32> = self.wm.workspaces.values().filter(|w| w.output == name).map(|w| w.id).collect();
             for ws in on {
+                // Floating windows that the bar or dock now covers come out from under it.
+                self.reclamp_floating(ws);
                 self.arrange_workspace(ws);
             }
             self.sync_space();

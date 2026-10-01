@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import hs from "../core/HyprlandState"
+import compositor from "../core/CompositorState"
 
 // Canonical workspace count (bar capsule dots, overview cards, morph ghosts).
 export const WS_COUNT = 5
@@ -27,11 +27,11 @@ export function makeActiveDotGlyph(): Gtk.Widget {
 export function makeWorkspaceDot(i: number): Gtk.Widget {
     const dot = new Gtk.Box({ css_classes: ["workspace-dot"], valign: Gtk.Align.CENTER })
     const update = () => {
-        const active = hs.focusedWorkspaceId === i
-        const occupied = hs.occupiedWorkspaces.has(i)
+        const active = compositor.focusedWorkspaceId === i
+        const occupied = compositor.occupiedWorkspaces.has(i)
         dot.set_css_classes(["workspace-dot", active ? "active" : occupied ? "occupied" : "empty"])
     }
-    hs.connect("changed", update)
+    compositor.connect("changed", update)
     update()
     return dot
 }

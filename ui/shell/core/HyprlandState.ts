@@ -5,10 +5,17 @@ import { execAsync, exec } from "../../lib/process"
 import { safeDisconnect } from "./signals"
 import * as Hypr from "./hypr-ipc"
 import type { HyprClient, HyprWorkspace, HyprMonitor } from "./hypr-ipc"
+import {
+    bareAddr, type ClientGeometry, type Compositor, type CompositorCaps,
+    type WindowSnapshot, type WorkspaceSnapshot,
+} from "./compositor-types"
 
-// Re-exported so consumers annotate against the shell's own vocabulary rather
-// than reaching into the IPC module (same rule as every other core/ facade).
-export type { HyprClient, HyprWorkspace, HyprMonitor } from "./hypr-ipc"
+// HyprlandState — Hyprland's side of `core/CompositorState.ts` (read its header): the
+// shell's windows, workspaces and monitors from Hyprland's sockets, and every hyprctl
+// dispatch. Nothing outside the compositor modules imports this file, except what is
+// still Hyprland's alone — its config options (`compositorOption`, `getOption*`,
+// `evalLua`), reached through `hyprlandOnly()` until #682 moves them behind requests
+// both compositors answer.
 
 // Tracked IPC event names that require a full state refresh
 const TRACKED_EVENTS = [
@@ -29,15 +36,10 @@ const REFRESH_MIN_INTERVAL_MS = 60
 
 // Window addresses reach us both with and without the "0x" prefix depending on
 // where they came from (the IPC layer strips it, Hyprland's own event data and
-// `hyprctl -j` do not) — always compare bare, same convention as resolveWindow.
-export const bareAddr = (s?: string) => (s ?? "").toLowerCase().replace(/^0x/, "")
+// `hyprctl -j` do not) — always compare bare (`bareAddr`), same convention as
+// resolveWindow.
 
-/** One window's live rect, in Hyprland (logical, monitor-absolute) coordinates. */
-export interface ClientGeom { x: number; y: number; width: number; height: number }
-/** readGeometry()'s snapshot: BARE address → rect. See readGeometry for why it exists. */
-export type ClientGeometry = Map<string, ClientGeom>
-
-class HyprlandStateClass extends GObject.Object {
+export class HyprlandStateClass extends GObject.Object implements Compositor {
     static {
         GObject.registerClass({
             GTypeName: "NidaraHyprlandState",
@@ -56,6 +58,9 @@ class HyprlandStateClass extends GObject.Object {
             },
         }, this)
     }
+
+    readonly kind = "hyprland" as const
+    readonly caps: CompositorCaps = { groups: true, layouts: true, glow: true }
 
     private _refreshPending = false
     private _lastRefreshUs = 0
@@ -515,6 +520,14 @@ class HyprlandStateClass extends GObject.Object {
         }
     }
 
+    /** `hyprctl cursorpos`: "X, Y". */
+    async cursorPosition(): Promise<[number, number] | null> {
+        try {
+            const m = (await execAsync(["hyprctl", "cursorpos"])).match(/(-?\d+),\s*(-?\d+)/)
+            return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : null
+        } catch { return null }
+    }
+
     /** Set the compositor cursor theme + size (`hyprctl setcursor`). */
     setCursor(theme: string, size: number) {
         return execAsync(["hyprctl", "setcursor", theme, String(size)]).catch(() => {})
@@ -939,14 +952,14 @@ class HyprlandStateClass extends GObject.Object {
         // and a tiled window could read floating=true, so this skipped windows and
         // the menu drew wrong checks, 2026-06-11); it stays because the cache is a
         // snapshot taken at the last event and a bulk op must not act on one.
-        const arr = await this.getClientsJson()
+        const arr = await this.readWindows()
         for (const c of arr) {
             if (c.workspace?.id === wsId && !c.floating) await this.enableFloatWindow(c.address)
         }
     }
 
     async tileAllInWorkspace(wsId: number) {
-        const arr = await this.getClientsJson()
+        const arr = await this.readWindows()
         for (const c of arr) {
             if (c.workspace?.id === wsId && c.floating) await this.tileWindow(c.address)
         }
@@ -982,15 +995,15 @@ class HyprlandStateClass extends GObject.Object {
      *  The window menu must always read its checkmarks from HERE. Called on demand
      *  (menu open, bulk ops) — deliberately NOT part of _refresh, which runs on
      *  every IPC event. Returns [] on failure. */
-    async getClientsJson(): Promise<any[]> {
+    async readWindows(): Promise<WindowSnapshot[]> {
         try { return JSON.parse(await execAsync(["hyprctl", "clients", "-j"])) }
-        catch (e) { console.error("[HyprlandState] getClientsJson:", e); return [] }
+        catch (e) { console.error("[HyprlandState] readWindows:", e); return [] }
     }
 
-    /** getClientsJson narrowed to one window (null if gone). */
-    async getClientJson(address: string): Promise<any | null> {
+    /** readWindows narrowed to one window (null if gone). */
+    async readWindow(address: string): Promise<WindowSnapshot | null> {
         const addr = address.startsWith("0x") ? address : "0x" + address
-        return (await this.getClientsJson()).find((c: any) => c.address === addr) ?? null
+        return (await this.readWindows()).find((c: any) => c.address === addr) ?? null
     }
 
     /** Window position and size as of NOW, keyed by BARE address.
@@ -1015,7 +1028,7 @@ class HyprlandStateClass extends GObject.Object {
      *  cached geometry, which is the best that is left). */
     async readGeometry(): Promise<ClientGeometry> {
         if (this._geomInFlight) return this._geomInFlight
-        const p = this.getClientsJson().then(list => {
+        const p = this.readWindows().then(list => {
             if (this._geomInFlight === p) this._geomInFlight = null
             const map: ClientGeometry = new Map()
             for (const c of list) {
@@ -1032,9 +1045,25 @@ class HyprlandStateClass extends GObject.Object {
     /** One-shot raw read of ALL workspaces from hyprctl (authoritative: carries the
      *  window count, monitor and fullscreen flag the cached AstalHyprland objects
      *  don't reliably expose). On-demand only — not part of _refresh. [] on failure. */
-    async getWorkspacesJson(): Promise<any[]> {
+    async readWorkspaces(): Promise<WorkspaceSnapshot[]> {
         try { return JSON.parse(await execAsync(["hyprctl", "workspaces", "-j"])) }
-        catch (e) { console.error("[HyprlandState] getWorkspacesJson:", e); return [] }
+        catch (e) { console.error("[HyprlandState] readWorkspaces:", e); return [] }
+    }
+
+    /** A PNG of one monitor (the focused one when unnamed), with grim. */
+    async screenshot(path: string, monitor?: string): Promise<void> {
+        const mon = monitor ?? this.focusedMonitor?.name
+        await execAsync(mon ? ["grim", "-o", mon, path] : ["grim", path])
+    }
+
+    /** `NIDARA_WS_MODES`, the table hyprland.lua's window.open handler reads (#513). */
+    applyWorkspaceModes(defaultMode: "floating" | "tiling", overrides: Record<string, "floating" | "tiling">) {
+        const entries: string[] = [`default = '${defaultMode}'`]
+        for (const [k, v] of Object.entries(overrides)) {
+            const num = Number(k)
+            if (Number.isInteger(num) && num > 0) entries.push(`[${num}] = '${v}'`)
+        }
+        return this.evalLua(`NIDARA_WS_MODES = { ${entries.join(", ")} }`)
     }
 
     setLayout(layout: "dwindle" | "master") {
@@ -1042,8 +1071,18 @@ class HyprlandStateClass extends GObject.Object {
     }
 }
 
-const hs = new HyprlandStateClass()
-export default hs
+let instance: HyprlandStateClass | null = null
+
+/** The one HyprlandState, created on first call. Only `core/CompositorState.ts` calls it. */
+export function createHyprlandState(): HyprlandStateClass {
+    return instance ??= new HyprlandStateClass()
+}
+
+/** HyprlandState when the session is Hyprland's, else null — so `compositorOption` does
+ *  nothing on Hyalo instead of creating a Hyprland client there. */
+function live(): HyprlandStateClass | null {
+    return GLib.getenv("HYALO_SOCKET") ? null : createHyprlandState()
+}
 
 // ── Compositor-backed options ────────────────────────────────────────────────
 
@@ -1086,14 +1125,14 @@ export function compositorOption(name: string, kind: OptionKind): CompositorOpti
         name,
         read(fallback: any): Promise<any> {
             switch (kind) {
-                case "bool":  return hs.getOptionBoolAsync(name, fallback)
-                case "int":   return hs.getOptionIntAsync(name, fallback)
-                case "float": return hs.getOptionFloatAsync(name, fallback)
-                case "str":   return hs.getOptionStrAsync(name, fallback)
+                case "bool":  return live()?.getOptionBoolAsync(name, fallback) ?? Promise.resolve(fallback)
+                case "int":   return live()?.getOptionIntAsync(name, fallback) ?? Promise.resolve(fallback)
+                case "float": return live()?.getOptionFloatAsync(name, fallback) ?? Promise.resolve(fallback)
+                case "str":   return live()?.getOptionStrAsync(name, fallback) ?? Promise.resolve(fallback)
             }
         },
         apply(value: any) {
-            hs.evalLua(luaConfigExpr(name, value))
+            live()?.evalLua(luaConfigExpr(name, value))
         },
     }
 }

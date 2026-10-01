@@ -3,7 +3,7 @@ import Pango from "gi://Pango"
 import GLib from "gi://GLib"
 import { getWordmark } from "../../utils"
 import { barItem, barOpen, barTooltip, isBarCustomAnchor, setBarItemKey } from "./capsule"
-import hs from "../../core/HyprlandState"
+import compositor from "../../core/CompositorState"
 import status from "../../core/Status"
 import shellActions from "../../core/ShellActions"
 import buildWindowMenu from "./WindowMenu"
@@ -84,7 +84,7 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
   // Tooltip: the window's WHOLE title — the label is a wordmark (an app name, or a
   // title cut to fit the flank), so this is the one place the full title can be read.
   // No window focused: the workspace name the label already shows.
-  barTooltip(capsule, () => hs.focusedClient?.title || rawTitle)
+  barTooltip(capsule, () => compositor.focusedClient?.title || rawTitle)
 
   const startBudgetAnimation = (targetPx: number) => {
     targetBudgetPx = targetPx
@@ -123,7 +123,7 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
 
   GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
     const sync = () => {
-      const label = getWordmark(hs.focusedClient, hs.focusedWorkspace) || "—"
+      const label = getWordmark(compositor.focusedClient, compositor.focusedWorkspace) || "—"
       if (label !== rawTitle) {
         rawTitle = label
         updateLabel()
@@ -138,8 +138,8 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
     // handler on the AstalHyprland GObject, rewired on every focus change; the
     // compositor announces it as `windowtitlev2` and HyprlandState forwards it,
     // so there is nothing to rewire and nothing to disconnect.
-    hs.connect("changed", sync)
-    hs.connect("title-changed", sync)
+    compositor.connect("changed", sync)
+    compositor.connect("title-changed", sync)
     sync()
     return GLib.SOURCE_REMOVE
   })

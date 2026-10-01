@@ -3,7 +3,7 @@ import GLib from "gi://GLib"
 import * as Battery from "../../core/BatteryService"
 import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT, ISLAND_RECORDING, recordingElapsed } from "../../core/Status"
 import * as media from "../../core/MediaService"
-import HyprlandState from "../../core/HyprlandState"
+import compositor from "../../core/CompositorState"
 import { sameApp } from "../../core/app-search"
 import { safeDisconnect } from "../../core/signals"
 import { PlayerCompact, makeArtGhost } from "./PlayerIsland"
@@ -32,7 +32,7 @@ function isBrowserClass(cls?: string): boolean {
 /** Check if the currently focused window / tab is directly showing this player. */
 function isPlayerForeground(player: any): boolean {
     if (!player) return false
-    const focused = HyprlandState.focusedClient
+    const focused = compositor.focusedClient
     if (!focused) return false
 
     const playerEntry = player.entry || player.identity || player.bus_name || ""
@@ -171,8 +171,8 @@ function mediaActivity(): IslandActivity {
             changed = cb
             media.subscribe(rewire)
             rewire()
-            HyprlandState.connect("changed", () => changed())
-            HyprlandState.connect("title-changed", () => changed())
+            compositor.connect("changed", () => changed())
+            compositor.connect("title-changed", () => changed())
         },
         // Front the capsule only when media is active AND running in the background.
         isLive: () => {

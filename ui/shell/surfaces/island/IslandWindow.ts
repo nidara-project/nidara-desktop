@@ -9,7 +9,7 @@ import { createRegionStamper, type VisibleRect } from "../../common/VisibleRegio
 import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import status from "../../core/Status"
 import inputYield from "../../core/InputYield"
-import hyprlandState from "../../core/HyprlandState"
+import compositor from "../../core/CompositorState"
 
 // The Activity Island's OWN layer surface — the one documented exception to
 // "overlays live inside the Bar's window" (skill commandment #5).
@@ -671,7 +671,7 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         // Ask the compositor whether it actually worked rather than assuming. This is
         // ordering we do not control, and a silent failure here is invisible until a
         // user reports dead controls — which is exactly how it was found.
-        hyprlandState.isLayerAbove(NAMESPACE, "nidara-bar").then((above) => {
+        compositor.isLayerAbove(NAMESPACE, "nidara-bar").then((above) => {
             if (above === false)
                 console.error("[IslandWindow] raise: still under nidara-bar after the bounce —"
                     + " the capsule will take no input while the bar is on OVERLAY")

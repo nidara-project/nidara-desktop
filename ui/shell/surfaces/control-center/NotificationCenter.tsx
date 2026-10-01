@@ -3,7 +3,7 @@ import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "../../../lib/process"
-import hs from "../../core/HyprlandState"
+import compositor from "../../core/CompositorState"
 import { drawSquircle, squircleThumb } from "../../common/DrawingUtils"
 import { NidaraScrolled } from "../../../lib/nidara-kit"
 import SquircleContainer, { Shape, GLASS_SHADOW } from "../../common/SquircleContainer"
@@ -289,15 +289,15 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
             const appData = resolvedId ? appService.getAppData(resolvedId) : null
             const classCandidates = new Set([lowerApp, resolvedId, appData?.wmClass, appData?.exec].filter(Boolean) as string[])
             try {
-                // hs.clients is the cached, always-current client list — no per-open
-                // `hyprctl -j clients` re-shell — and hs.focusWindow centralizes the
+                // compositor.clients is the cached, always-current client list — no per-open
+                // `hyprctl -j clients` re-shell — and compositor.focusWindow centralizes the
                 // focus dispatch (same Lua dispatch string the dock uses).
-                const target = hs.clients.find((c: any) => {
+                const target = compositor.clients.find((c: any) => {
                     const cls = c.class?.toLowerCase()
                     return !!cls && (classCandidates.has(cls) || cls.includes(lowerApp))
                 })
                 if (target) {
-                    await hs.focusWindow(target.address)
+                    await compositor.focusWindow(target.address)
                     if (hasAction("default")) n.invoke("default")
                 } else {
                     if (hasAction("default")) n.invoke("default")

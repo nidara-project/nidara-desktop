@@ -6,7 +6,7 @@ import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/nidara-kit/platform/tokens"
 import { t } from "../../core/i18n"
 import { createSchematicMap } from "../../common/WorkspaceSchematic"
-import hs, { type ClientGeometry } from "../../core/HyprlandState"
+import compositor, { type ClientGeometry } from "../../core/CompositorState"
 import { safeDisconnect } from "../../core/signals"
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
 import { makeWorkspaceModeBadge } from "../../common/WorkspaceModeControl"
@@ -144,7 +144,7 @@ export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
     // Hyprland refuse to move window focus, so there is nothing to wait for here.
     const switchToWorkspace = (id: number) => {
         status.island_mode = ""
-        hs.focusWorkspaceFromShell(id)
+        compositor.focusWorkspaceFromShell(id)
     }
 
     // Each card carries the SAME state dot as the bar capsule (shared
@@ -214,10 +214,10 @@ export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
 
     const syncAll = (geom?: ClientGeometry) => {
         try {
-            const focusedId = hs.focusedWorkspace?.id || 1
+            const focusedId = compositor.focusedWorkspace?.id || 1
             // One pass over the client list instead of a filter per slot.
             const countByWs = new Map<number, number>()
-            for (const c of hs.clients) {
+            for (const c of compositor.clients) {
                 const id = c?.workspace?.id
                 if (typeof id === "number") countByWs.set(id, (countByWs.get(id) ?? 0) + 1)
             }
@@ -242,7 +242,7 @@ export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
      * by geometry that is a few events old — and, since the tiles now hold real
      * captures, the one where being caught out means a squashed picture rather than
      * a rectangle nobody could measure by eye. Hyprland announces no resize and no
-     * in-workspace move (`hs.readGeometry` has the full reasoning), so the layout is
+     * in-workspace move (`compositor.readGeometry` has the full reasoning), so the layout is
      * re-asked for here, on every pass, instead of trusted from the cached list.
      *
      * It has to land BEFORE the captures are requested, not alongside them: the tile
@@ -250,7 +250,7 @@ export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
      * One hyprctl per pass, only while the overview is open.
      */
     const syncAllFresh = () => {
-        hs.readGeometry().then(geom => { if (isOpen()) syncAll(geom) })
+        compositor.readGeometry().then(geom => { if (isOpen()) syncAll(geom) })
     }
 
 
@@ -260,7 +260,7 @@ export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
     // window each event (a real cost when "changed" storms — see tech-debt #11). The
     // overview is re-synced on open via notify::island-mode below.
     const isOpen = () => status.island_mode === ISLAND_OVERVIEW
-    const changedId = hs.connect("changed", () => { if (isOpen()) syncAllFresh() })
+    const changedId = compositor.connect("changed", () => { if (isOpen()) syncAllFresh() })
 
     status.connect("notify::island-mode", () => {
         if (!isOpen()) return
@@ -272,7 +272,7 @@ export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
     })
 
     windowContent.connect("unrealize", () => {
-        safeDisconnect(hs, changedId)
+        safeDisconnect(compositor, changedId)
     })
 
     overview.append(list)
@@ -289,7 +289,7 @@ export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
     // Nav API consumed by the bar's key controller (see Bar.tsx). onOpen seeds the
     // cursor on the active workspace each time the overview is shown.
     ;(windowContent as any).onOpen = () => {
-        navIdx = hs.focusedWorkspace?.id || 1
+        navIdx = compositor.focusedWorkspace?.id || 1
         refreshKbFocus()
     }
     // The monitor changed shape, so the equation `previewWidthFor` solved has a

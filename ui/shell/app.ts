@@ -29,7 +29,7 @@ import { initReduceMotion } from "./core/ReduceMotion"
 import { fireSessionStartedOnce, initBatteryLowHook } from "./core/Hooks"
 import { bindCursorThemeRefresh } from "./common/CursorRefresh"
 import { bindInterfaceIconRefresh } from "./common/IconThemeRefresh"
-import hyprlandState from "./core/HyprlandState"
+import compositor, { hyprlandOnly } from "./core/CompositorState"
 import queryUI from "./core/UITree"
 import Wallpaper from "./core/WallpaperManager"
 import workspaceModes, { type WorkspaceMode } from "./core/WorkspaceModes"
@@ -166,7 +166,7 @@ interface IpcCommand {
 function resolveWindow(arg?: string): any | null {
   const q = (arg ?? "").trim()
   if (!q) return null
-  const clients = (hyprlandState.clients ?? []) as any[]
+  const clients = (compositor.clients ?? []) as any[]
   const norm = (s?: string) => (s ?? "").toLowerCase()
   if (q.startsWith("0x")) {
     // listWindows reports hyprctl addresses (with "0x"); AstalHyprland.Client.address
@@ -234,16 +234,16 @@ async function focusLaunched(target: AppData, before: Set<string>): Promise<stri
   let win: any = null
   while (!win && GLib.get_monotonic_time() < deadline) {
     await new Promise<void>(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { r(); return GLib.SOURCE_REMOVE }))
-    win = ((hyprlandState.clients ?? []) as any[])
+    win = ((compositor.clients ?? []) as any[])
       .find(c => !before.has(bare(c.address)) && clientIsApp(c.class, target)) ?? null
   }
   if (!win) return " — no window within 5s (it may still be starting, or be a background app)"
 
   await inputYield.begin()
   try {
-    await hyprlandState.focusWindow(win.address)
+    await compositor.focusWindow(win.address)
     await new Promise<void>(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => { r(); return GLib.SOURCE_REMOVE }))
-    const now = hyprlandState.focusedClient as any
+    const now = compositor.focusedClient as any
     return bare(now?.address) === bare(win.address)
       ? `, window ready and focused: ${win.class}`
       : `, window ready but focus refused by the compositor (still on ${now?.class ?? "nothing"})`
@@ -408,8 +408,8 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       // AstalHyprland's focusedClient.address can lack the "0x" prefix that
       // `hyprctl clients -j` reports — compare bare, like resolveWindow does.
       const bare = (s?: string) => (s ?? "").toLowerCase().replace(/^0x/, "")
-      const focused = bare((hyprlandState.focusedClient as any)?.address)
-      const arr = await hyprlandState.getClientsJson()
+      const focused = bare((compositor.focusedClient as any)?.address)
+      const arr = await compositor.readWindows()
       return JSON.stringify(
         arr.map((c: any) => ({
           address: c.address,
@@ -432,8 +432,8 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
   listWorkspaces: {
     desc: "List workspaces as JSON [{id, name, monitor, windows, active, special}] — `active` is the focused one. Use `id` as the target for focusWorkspace / moveWindowToWorkspace.",
     run: async () => {
-      const focusedId = hyprlandState.focusedWorkspaceId
-      const arr = await hyprlandState.getWorkspacesJson()
+      const focusedId = compositor.focusedWorkspaceId
+      const arr = await compositor.readWorkspaces()
       return JSON.stringify(
         arr.map((w: any) => ({
           id: w.id,
@@ -448,11 +448,12 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       )
     },
   },
-  reloadHyprland: {
-    desc: "Make Hyprland re-read its config, applying edits to hyprland-user.lua (keybinds, window rules). Ungated, like the other compositor ops: it re-runs the config the user already has. Call it after editing that file, then verify with dumpState.",
+  reloadCompositor: {
+    desc: "Make the compositor re-read its config, applying edits to the user's file (Hyprland: hyprland-user.lua; Hyalo: ~/.config/nidara/hyalo.toml) — keybinds, window rules. Ungated, like the other compositor ops: it re-runs the config the user already has. Call it after editing that file, then verify with dumpState.",
+    aliases: ["reloadHyprland"],
     run: () => {
-      hyprlandState.reloadConfig()
-      return "hyprland config reloaded"
+      compositor.reloadConfig()
+      return `${compositor.kind} config reloaded`
     },
   },
   focusWorkspace: {
@@ -462,13 +463,13 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       if (!a) return "usage: focusWorkspace <id | +1 | -1 | previous | name:foo>"
       if (/^\d+$/.test(a)) {
         const id = parseInt(a, 10)
-        hyprlandState.focusWorkspace(id)
+        compositor.focusWorkspace(id)
         return `switched to workspace ${id}`
       }
       // Relative shorthand +N/-N → the cycle-incl-empty form the wheel binds use.
       const rel = a.match(/^([+-])(\d+)$/)
       const arg = rel ? `e${rel[1]}${rel[2]}` : a
-      hyprlandState.focusWorkspaceArg(arg)
+      compositor.focusWorkspaceArg(arg)
       return `switched workspace (${arg})`
     },
   },
@@ -503,7 +504,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
         id = parseInt(args[0].trim(), 10)
         if (isNaN(id) || id < 1 || id > 5) return `invalid workspace id: "${args[0]}" (must be 1..5)`
       } else {
-        id = hyprlandState.focusedWorkspaceId
+        id = compositor.focusedWorkspaceId
         if (id < 1 || id > 5) return `cannot toggle workspace mode on special or invalid workspace ${id}`
       }
       const next = await workspaceModes.toggleWorkspaceMode(id)
@@ -519,7 +520,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       }
       const dir = map[(args[0] ?? "").toLowerCase().trim()]
       if (!dir) return "usage: focusDirection <left|right|up|down>"
-      hyprlandState.focusDirection(dir)
+      compositor.focusDirection(dir)
       return `moved focus ${dir}`
     },
   },
@@ -534,11 +535,11 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       // made every "focused X" here a lie the model then acted on (core/InputYield).
       await inputYield.begin()
       try {
-        await hyprlandState.focusWindow(w.address)
+        await compositor.focusWindow(w.address)
         // Settle: the dispatch is a subprocess and the answer arrives by event.
         await new Promise<void>(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => { r(); return GLib.SOURCE_REMOVE }))
         const bare = (s?: string) => (s ?? "").toLowerCase().replace(/^0x/, "")
-        const now = hyprlandState.focusedClient as any
+        const now = compositor.focusedClient as any
         if (bare(now?.address) !== bare(w.address))
           return `focus refused by the compositor — still on ${now?.class ?? "nothing"}; asked for ${w.class}: ${w.title}`
         return `focused ${w.class}: ${w.title}`
@@ -559,7 +560,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
         return "closing windows is disabled — enable it in Settings → AI"
       const w = resolveWindow(args[0])
       if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
-      hyprlandState.closeWindow(w.address)
+      compositor.closeWindow(w.address)
       return `closed ${w.class}`
     },
   },
@@ -570,7 +571,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
       const id = parseInt(args[1] ?? "", 10)
       if (isNaN(id)) return "usage: moveWindowToWorkspace <window> <workspaceId>"
-      hyprlandState.sendToWorkspace(w.address, id)
+      compositor.sendToWorkspace(w.address, id)
       return `moved ${w.class} → workspace ${id}`
     },
   },
@@ -579,7 +580,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: args => {
       const w = resolveWindow(args[0])
       if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
-      hyprlandState.floatWindow(w.address)
+      compositor.floatWindow(w.address)
       return `toggled float on ${w.class}`
     },
   },
@@ -588,7 +589,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: args => {
       const w = resolveWindow(args[0])
       if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
-      hyprlandState.toggleFullscreen(w.address)
+      compositor.toggleFullscreen(w.address)
       return `toggled fullscreen on ${w.class}`
     },
   },
@@ -597,7 +598,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: args => {
       const w = resolveWindow(args[0])
       if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
-      hyprlandState.centerWindow(w.address)
+      compositor.centerWindow(w.address)
       return `centered ${w.class}`
     },
   },
@@ -606,7 +607,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: args => {
       const w = resolveWindow(args[0])
       if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
-      hyprlandState.togglePin(w.address)
+      compositor.togglePin(w.address)
       return `toggled pin on ${w.class}`
     },
   },
@@ -615,29 +616,31 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: args => {
       const w = resolveWindow(args[0])
       if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
-      hyprlandState.togglePseudo(w.address)
+      compositor.togglePseudo(w.address)
       return `toggled pseudo on ${w.class}`
     },
   },
   toggleGroup: {
     desc: "Toggle a tab-group on a window — creates a lone group or dissolves the whole group (`toggleGroup [window]`; omit the window to act on the focused one).",
     run: args => {
+      if (!compositor.caps.groups) return `tab groups are not available on ${compositor.kind}`
       if (!args[0]) {
-        hyprlandState.toggleGroup()
+        compositor.toggleGroup()
         return "toggled group on the focused window"
       }
       const w = resolveWindow(args[0])
       if (!w) return `no window matching "${args[0]}" — see listWindows`
-      hyprlandState.toggleGroup(w.address)
+      compositor.toggleGroup(w.address)
       return `toggled group on ${w.class}`
     },
   },
   moveWindowOutOfGroup: {
     desc: "Pull a window out of its tab-group (`moveWindowOutOfGroup <window>`).",
     run: args => {
+      if (!compositor.caps.groups) return `tab groups are not available on ${compositor.kind}`
       const w = resolveWindow(args[0])
       if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
-      hyprlandState.moveOutOfGroup(w.address)
+      compositor.moveOutOfGroup(w.address)
       return `pulled ${w.class} out of its group`
     },
   },
@@ -647,16 +650,17 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       const name = (args[0] || "magic").replace(/^special:/, "")
       const w = args[1] ? resolveWindow(args[1]) : null
       if (args[1] && !w) return `no window matching "${args[1]}" — see listWindows`
-      hyprlandState.sendToSpecial(name, w?.address)
+      compositor.sendToSpecial(name, w?.address)
       return `sent ${w ? w.class : "the focused window"} → special:${name}`
     },
   },
   setLayout: {
-    desc: "Set the Hyprland tiling layout: `setLayout dwindle` or `setLayout master`.",
+    desc: "Set the tiling layout: `setLayout dwindle` or `setLayout master` (Hyprland only; Hyalo tiles with dwindle).",
     run: args => {
+      if (!compositor.caps.layouts) return `${compositor.kind} has one tiling layout (dwindle)`
       const l = (args[0] ?? "").trim()
       if (l !== "dwindle" && l !== "master") return "usage: setLayout <dwindle|master>"
-      hyprlandState.setLayout(l)
+      compositor.setLayout(l)
       return `layout → ${l}`
     },
   },
@@ -685,13 +689,12 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
   },
   screenshot: {
     desc: "Capture the focused monitor to a PNG and return its path (`screenshot [path]`) — agent visual verification; gated by Settings → AI",
-    run: args => {
+    run: async args => {
       if (!agentConfig.allowScreenshot)
         return "screenshots are disabled — enable them in Settings → AI"
       const path = args[0] || `/tmp/nidara-shot-${Date.now()}.png`
       try {
-        const mon = hyprlandState.focusedMonitor?.name
-        exec(mon ? ["grim", "-o", mon, path] : ["grim", path])
+        await compositor.screenshot(path)
         return path
       } catch (e) {
         console.error("[IPC] screenshot failed:", e)
@@ -717,7 +720,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       appService.recordLaunch(target.id)
       const cmd = appService.getLaunchCommand(target.id)
       const before = new Set(
-        ((hyprlandState.clients ?? []) as any[]).map(c => (c.address ?? "").toLowerCase().replace(/^0x/, "")),
+        ((compositor.clients ?? []) as any[]).map(c => (c.address ?? "").toLowerCase().replace(/^0x/, "")),
       )
       // Same launch path as a dock click (DockItem.tsx): uwsm-scoped, cd $HOME so
       // children don't inherit the shell's CWD. Fire-and-forget.
@@ -759,7 +762,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             // for the Display page, so this is the authoritative answer for free.
             // Kept as `monitors` (an array now): every consumer of the old number
             // wanted "how many", and .length still gives it.
-            monitors: hyprlandState.monitors.map((m: any) => ({
+            monitors: compositor.monitors.map((m: any) => ({
               name: m.name,
               description: m.description || m.model || "",
               width: m.width,
@@ -773,13 +776,15 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             })),
             monitorCount: display ? display.get_monitors().get_n_items() : 0,
           },
+          compositor: compositor.kind,
           // EFFECTIVE compositor config (includes hyprland-user.lua overrides) —
-          // what the system actually runs, not our shipped defaults.
+          // what the system actually runs, not our shipped defaults. Hyprland's options;
+          // on Hyalo they read null until Hyalo answers the same questions (#682).
           hyprland: {
-            gapsIn: hyprlandState.getOptionInt("general:gaps_in"),
-            gapsOut: hyprlandState.getOptionInt("general:gaps_out"),
-            rounding: hyprlandState.getOptionInt("decoration:rounding"),
-            borderSize: hyprlandState.getOptionInt("general:border_size"),
+            gapsIn: hyprlandOnly()?.getOptionInt("general:gaps_in"),
+            gapsOut: hyprlandOnly()?.getOptionInt("general:gaps_out"),
+            rounding: hyprlandOnly()?.getOptionInt("decoration:rounding"),
+            borderSize: hyprlandOnly()?.getOptionInt("general:border_size"),
           },
           ai: {
             allowConfigWrite: agentConfig.allowConfigWrite,
@@ -820,7 +825,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             // client, and once it lives in its own process (#571) nothing it does can
             // reach the shell's Status. A hidden Settings window is unmapped, so it is
             // not a client — same answer notify::visible used to give.
-            settings: hyprlandState.clients.some(isSettingsClient),
+            settings: compositor.clients.some(isSettingsClient),
             about: status.about_open,
           },
           // The adaptive glass (#673), per surface: the slider (floor), what it wears
@@ -1220,8 +1225,8 @@ app.start({
     // deliberately shares the class so both carry Settings' registry icon.
     const raiseSettings = () => {
       settingsWindows.forEach(s => { try { s.present() } catch (e) { console.error(e) } })
-      const c = hyprlandState.clients.find(isSettingsClient)
-      if (c?.address) hyprlandState.focusWindow(c.address)
+      const c = compositor.clients.find(isSettingsClient)
+      if (c?.address) compositor.focusWindow(c.address)
     }
     // Open/raise Settings — a normal window (NOT a toggle: re-invoking just
     // raises it; it closes via its own close button). IPC alias: toggleSettings.

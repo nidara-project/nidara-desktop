@@ -97,6 +97,10 @@ pub struct Managed {
     /// A size we asked a floating window to shrink to, and the size it had then: a client
     /// whose minimum is larger than the usable area refuses, and must not be asked forever.
     pub clamp_ask: Option<(Size<i32, Logical>, Size<i32, Logical>)>,
+    /// The app id and title the window had when it was first shown — what a rule that
+    /// runs once, at open, matches against (Hyprland's `initialClass`/`initialTitle`).
+    pub initial_app_id: String,
+    pub initial_title: String,
 }
 
 pub struct Workspace {
@@ -145,6 +149,9 @@ pub struct Wm {
     pub announced_focus: Option<Option<WindowId>>,
     /// A window being moved or resized with the pointer.
     pub grab: Option<grabs::Active>,
+    /// The real pointer is not drawn (input is unaffected): the shell's agent pointer draws
+    /// its own, and a hardware cursor plane would always be on top of it.
+    pub cursor_hidden: bool,
 }
 
 impl Wm {
@@ -413,6 +420,8 @@ impl Hyalo {
             rect: Rect::default(),
             focus_serial: 0,
             clamp_ask: None,
+            initial_app_id: String::new(),
+            initial_title: String::new(),
         });
     }
 
@@ -483,7 +492,10 @@ impl Hyalo {
         let near = self.wm.focused.filter(|f| self.wm.get(*f).is_some_and(|m| m.workspace == ws));
         let cursor = self.seat.get_pointer().map(|p| p.current_location());
         let tiled_area = inset(self.work_area(&output), self.config.layout.gaps_out);
+        let (initial_app_id, initial_title) = (app_id(window), title(window));
         if let Some(m) = self.wm.get_mut(id) {
+            m.initial_app_id = initial_app_id;
+            m.initial_title = initial_title;
             m.mapped = true;
             m.floating = !tiled;
             m.float_rect = Some(Rectangle::new(float.loc - og.loc, float.size));
@@ -905,12 +917,17 @@ impl Hyalo {
     /// The runtime mode of a workspace changed: its windows follow — all tiled, or all
     /// floating where they were.
     pub fn set_workspace_mode(&mut self, ws: i32, mode: Option<WorkspaceMode>) {
+        let before = self.workspace_mode(ws);
         match mode {
             Some(m) => self.wm.mode_overrides.insert(ws, m),
             None => self.wm.mode_overrides.remove(&ws),
         };
-        let mode = self.workspace_mode(ws);
-        self.set_all_floating(ws, mode == WorkspaceMode::Floating);
+        let after = self.workspace_mode(ws);
+        // Only a CHANGE reorganizes: the shell re-states every workspace's mode when it
+        // starts, and a window floated by hand on a tiling workspace must stay floating.
+        if after != before {
+            self.set_all_floating(ws, after == WorkspaceMode::Floating);
+        }
         self.wm.dirty_workspaces = true;
     }
 
@@ -1021,6 +1038,29 @@ impl Hyalo {
         if self.wm.focused_output.as_deref() != Some(&name) {
             self.wm.focused_output = Some(name);
             self.wm.dirty_workspaces = true;
+        }
+    }
+
+    /// Every floating window of `ws` held inside the usable area again (#11) — after the
+    /// area itself changed (a bar or a dock appeared), not after the user dragged one.
+    pub fn reclamp_floating(&mut self, ws: i32) {
+        let Some(output) = self.wm.workspaces.get(&ws).and_then(|w| self.output_named(&w.output)) else { return };
+        let og = self.space.output_geometry(&output).unwrap_or_default();
+        let area = self.floating_area(&output);
+        let mut moved = false;
+        for m in self.wm.windows.iter_mut().filter(|m| m.workspace == ws && m.mapped && m.floating) {
+            let Some(fr) = m.float_rect else { continue };
+            let global = Rectangle::new(fr.loc + og.loc, fr.size);
+            let inside = clamp_floating(global, area);
+            // Moved only: a window larger than the area keeps its size until it asks again.
+            let r = Rectangle::new(inside.loc, fr.size);
+            if r.loc != global.loc {
+                m.float_rect = Some(Rectangle::new(r.loc - og.loc, r.size));
+                moved = true;
+            }
+        }
+        if moved {
+            self.wm.dirty_windows = true;
         }
     }
 

@@ -1,4 +1,4 @@
-import hs from "./HyprlandState"
+import compositor, { hyprlandOnly } from "./CompositorState"
 import Theme from "./ThemeManager"
 import { GLASS_BLUR, GLASS_MATERIAL_DEFAULT, type GlassMaterial } from "./NidaraTheme"
 
@@ -31,14 +31,14 @@ let pushed: GlassMaterial = GLASS_MATERIAL_DEFAULT
 
 function readLive() {
     return {
-        size: hs.getOptionInt("decoration:blur:size", GLASS_BLUR.regular.size),
-        passes: hs.getOptionInt("decoration:blur:passes", GLASS_BLUR.regular.passes),
+        size: hyprlandOnly()?.getOptionInt("decoration:blur:size", GLASS_BLUR.regular.size) ?? GLASS_BLUR.regular.size,
+        passes: hyprlandOnly()?.getOptionInt("decoration:blur:passes", GLASS_BLUR.regular.passes) ?? GLASS_BLUR.regular.passes,
     }
 }
 
 function push(material: GlassMaterial) {
     const b = material === GLASS_MATERIAL_DEFAULT ? baseline : GLASS_BLUR[material]
-    hs.evalLua(`hl.config({ decoration = { blur = { size = ${b.size}, passes = ${b.passes} } } })`)
+    hyprlandOnly()?.evalLua(`hl.config({ decoration = { blur = { size = ${b.size}, passes = ${b.passes} } } })`)
     pushed = material
 }
 
@@ -68,7 +68,7 @@ export function initGlassBlur() {
     // A `hyprctl reload` (or an edit to hyprland-user.lua) re-reads the config and
     // silently discards what we pushed. Re-read the baseline from the config that just
     // loaded — it is the user's last word — and re-assert a non-default material.
-    hs.connect("config-reloaded", () => {
+    compositor.connect("config-reloaded", () => {
         baseline = readLive()
         if (Theme.glassMaterial !== GLASS_MATERIAL_DEFAULT) push(Theme.glassMaterial)
     })

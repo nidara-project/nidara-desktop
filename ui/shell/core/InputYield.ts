@@ -1,6 +1,6 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
-import hyprlandState from "./HyprlandState"
+import compositor from "./CompositorState"
 
 /**
  * INPUT YIELD — the shell stepping out of the way so computer-use can reach a
@@ -98,11 +98,11 @@ class InputYieldClass extends GObject.Object {
 
         // Read BEFORE the notify: this is the last moment the answer is still the
         // caller's. See `_restoreFocus` for what happens to it a few milliseconds later.
-        const keep = (hyprlandState.focusedClient as any)?.address ?? ""
+        const keep = (compositor.focusedClient as any)?.address ?? ""
 
         this._active = true
         this.notify("active")   // surfaces release their grab + stamp an empty region here
-        return new Promise<void>(resolve => hyprlandState.afterGrabRelease(() =>
+        return new Promise<void>(resolve => compositor.afterGrabRelease(() =>
             this._restoreFocus(keep).then(() => resolve())))
     }
 
@@ -139,7 +139,7 @@ class InputYieldClass extends GObject.Object {
      */
     private _restoreFocus(keep: string): Promise<unknown> {
         if (!keep) return Promise.resolve()   // nothing was focused; nothing to give back
-        return Promise.resolve(hyprlandState.focusWindow(keep))
+        return Promise.resolve(compositor.focusWindow(keep))
     }
 
     /** Take the keyboard back. Safe to call when not yielded (a helper that refused

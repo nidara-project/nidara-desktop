@@ -118,10 +118,25 @@ Display page and `core/MonitorConfig.ts` read only that. **This is the pattern #
 the rest of the shell** (workspaces, windows, rules): a facade per concern, Hyprland behind one
 side, Hyalo's IPC behind the other — not `if (hyalo)` sprinkled through surfaces.
 
-Hyalo has workspaces, windows and focus of its own (above) and says so over IPC, but the
-shell does not ask it yet: everything behind `HyprlandState` still looks for Hyprland, logs
-CRITICALs and carries on. Moving the shell onto a compositor interface (`CompositorState`, one
-backend per compositor) is the next part of #682.
+**Since #682's second part the whole shell talks to ONE interface**, `core/CompositorState.ts`,
+whose backend is `HyprlandState` on Hyprland and `HyaloState` on Hyalo (architecture.md has
+both rows). The bar's title, the window menu, the dock, the island and its overview, the app
+grid, the agent pointer and the IPC verbs (`listWindows`, `focusWorkspace`, `screenshot`…)
+work on Hyalo; the CRITICAL flood the shell logged there is gone. What only one compositor has
+is in `caps` (Hyalo: no tab groups, dwindle only, no glow yet), and the shell hides it rather
+than failing. Still Hyprland-only — their config options and the Lua the shell writes for
+them — are the files in `scripts/ci/compositor-boundary-allowlist.txt` (Input, Display, gaming,
+reduce motion, blur…): they do nothing on Hyalo until they become requests both compositors
+answer.
+
+Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell relies on:
+- **A layer surface that changes level goes to the TOP of its new level** (`layer_commit`).
+  Layer-shell has no "raise", so the island gets above the bar by leaving OVERLAY and coming
+  back (`IslandWindow.raise`), and asks the compositor whether it worked (`isLayerAbove`,
+  answered from the `layers` request). Smithay keeps surfaces in the order they were mapped,
+  so Hyalo re-maps a surface whose level changed.
+- **When the bar or the dock takes room, floating windows under it move out** (`reclamp_floating`):
+  a window opened before the shell started would otherwise sit under the bar.
 
 ## Traps found running Hyalo for real
 

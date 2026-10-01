@@ -1,5 +1,5 @@
 import Gio from "gi://Gio"
-import hs from "./HyprlandState"
+import compositor, { hyprlandOnly } from "./CompositorState"
 
 /**
  * Reduce motion — the desktop-wide "stop moving things" switch.
@@ -91,7 +91,7 @@ let _hyprBaseline = true
  */
 function pushToHyprland(reduce: boolean) {
     const on = reduce ? false : _hyprBaseline
-    hs.evalLua(`hl.config({ animations = { enabled = ${on} } })`)
+    hyprlandOnly()?.evalLua(`hl.config({ animations = { enabled = ${on} } })`)
 }
 
 /**
@@ -108,7 +108,7 @@ export function initReduceMotion() {
     // default instead, and the reload handler below corrects it the moment
     // Hyprland actually re-reads its config (which discards our eval, making the
     // live value the config's value again).
-    _hyprBaseline = _reduce ? true : hs.getOptionBool("animations:enabled", true)
+    _hyprBaseline = _reduce ? true : hyprlandOnly()?.getOptionBool("animations:enabled", true) ?? true
     // Nothing to say to the compositor when we are not reducing: it is already
     // showing whatever its own config asked for, and the point of the baseline is
     // to not overwrite that with our idea of the default.
@@ -124,8 +124,8 @@ export function initReduceMotion() {
     // file, where `animations` is enabled — so the compositor silently forgets we
     // asked. Re-assert, and re-read the baseline from the config that just loaded
     // so an edit to hyprland-user.lua is still the user's last word.
-    hs.connect("config-reloaded", () => {
-        _hyprBaseline = hs.getOptionBool("animations:enabled", true)
+    compositor.connect("config-reloaded", () => {
+        _hyprBaseline = hyprlandOnly()?.getOptionBool("animations:enabled", true) ?? true
         if (_reduce) pushToHyprland(true)
     })
 }
