@@ -22,6 +22,10 @@
 # A THIRD since 2026-09-23: `nidara-kit`, the platform library (tech-debt #108) —
 # the desktop depends on it, and so can an app that is not in this repo.
 #
+# A FOURTH since 2026-10-01: `nidara-hyalo`, the compositor of our own (hyalo/, #680). A
+# preview session next to the Hyprland one until it reaches parity; nothing depends on it
+# and install.sh does not install it.
+#
 # ⚠️ Anything that picks "the package makepkg just built" must now say WHICH:
 # install.sh installs `nidara-desktop` + `nidara-kit` by name (it installs the
 # desktop on an Arch somebody already runs, and must never hand them an installer),
@@ -42,7 +46,7 @@
 # `gnome` is in Arch. ⚠️ Do NOT create it while the `replaces=(nidara)` below is
 # still doing its job: a package named `nidara` and a package replacing `nidara`
 # in the same repository is a resolution somebody's `-Syu` has to guess at.
-pkgname=(nidara-desktop nidara-kit nidara-installer)
+pkgname=(nidara-desktop nidara-kit nidara-installer nidara-hyalo)
 pkgver=0.12.1
 pkgrel=1
 # The kit's API version (tech-debt #108) — NOT the release's. It must equal
@@ -182,9 +186,18 @@ depends=(
 # Closes on its own line, like depends=() above: install.sh derives both arrays
 # with `sed -n '/^NAME=(/,/^)/p'` (the idiom the pkgbuild CI job already uses),
 # and a `)` anywhere but column 1 makes that range end in the wrong place.
+#
+# Hyalo's (Rust) build deps are their own array, spliced in at the end. makepkg and
+# nidara-repo's build-deps.sh source the whole file and see them; install.sh sources the
+# makedepends block ALONE, where the splice expands to nothing — deliberately: a dev install
+# runs the shell on Hyprland and never compiles Hyalo (hyalo/README.md builds it by hand).
+_hyalo_makedepends=(
+  rust libinput seatd libdisplay-info libxkbcommon mesa systemd-libs
+)
 makedepends=(
   nodejs npm esbuild wlr-protocols wayland-protocols hyprland-protocols
   wayland gtk4 gobject-introspection pkgconf
+  "${_hyalo_makedepends[@]}"
 )
 # etc/pam.d/nidara-lock is tracked so a local customization survives an upgrade —
 # this is where someone adds fprintd or a hardware key to the unlock stack.
@@ -195,6 +208,15 @@ source=("nidara-desktop-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 # + repo db are GPG-signed by nidara-repo's CI — same trust model as the other
 # [nidara] packages (their git sources also pin by ref with SKIP sums).
 sha256sums=('SKIP')
+
+# Hyalo's crates are fetched here, against the committed Cargo.lock, so build() needs no
+# network (Arch's Rust packaging guidelines). Smithay is a git dependency pinned by
+# revision in hyalo/Cargo.toml; `--locked` refuses a lock file that disagrees with it.
+prepare() {
+  cd "$srcdir/nidara-desktop-$pkgver/hyalo"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
 
 build() {
   cd "$srcdir/nidara-desktop-$pkgver"
@@ -262,6 +284,11 @@ build() {
   # libnidara-auth: PAM authentication for the lockscreen, reachable
   # from GJS via introspection (mirrors install.sh §5)
   lib/nidara-auth/build.sh "$srcdir/nidara-desktop-$pkgver/build/nidara-auth"
+
+  # Hyalo (package nidara-hyalo). Offline: prepare() fetched everything.
+  cd "$srcdir/nidara-desktop-$pkgver/hyalo"
+  export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
+  cargo build --frozen --release
 }
 
 package_nidara-desktop() {
@@ -519,4 +546,28 @@ package_nidara-installer() {
   install -Dm644 ui/installer/style.css "$pkgdir/usr/share/nidara/ui/installer/style.css"
   install -Dm644 packaging/nidara-installer/nidara-installer.desktop \
     "$pkgdir/usr/share/applications/nidara-installer.desktop"
+}
+
+# ── nidara-hyalo — the compositor of our own, as a preview session ────────────
+#
+# Hyalo (hyalo/, #680) on Smithay. It adds a second session to the greeter, "Nidara —
+# Hyalo preview", next to Nidara on Hyprland, which stays the default; nothing switches
+# until Hyalo reaches parity (#685). Pinned to this build's desktop: the session starts
+# the same shell, and the shell and Hyalo speak protocols from the same tree (protocols/).
+package_nidara-hyalo() {
+  pkgdesc="Hyalo, Nidara's own Wayland compositor (preview session)"
+  # Ours, plus what Smithay's examples brought (MIT) and Hyprland's focus-grab protocol
+  # (BSD-3-Clause, in protocols/hyprland-focus-grab-v1.xml).
+  license=(GPL-3.0-or-later MIT BSD-3-Clause)
+  depends=("nidara-desktop=$pkgver-$pkgrel" uwsm libinput seatd libdisplay-info libxkbcommon mesa
+           systemd-libs awww)
+
+  cd "$srcdir/nidara-desktop-$pkgver"
+  install -Dm755 hyalo/target/release/nidara-hyalo "$pkgdir/usr/bin/nidara-hyalo"
+  install -Dm755 bin/nidara-hyalo-session "$pkgdir/usr/bin/nidara-hyalo-session"
+  install -Dm755 hyalo/session/restore-wallpaper "$pkgdir/usr/lib/nidara-hyalo/restore-wallpaper"
+  install -Dm644 config/hyalo/hyalo.toml "$pkgdir/usr/share/nidara/hyalo/hyalo.toml"
+  install -Dm644 config/wayland-sessions/nidara-hyalo.desktop \
+    "$pkgdir/usr/share/wayland-sessions/nidara-hyalo.desktop"
+  install -Dm644 hyalo/LICENSE-smithay-MIT.txt "$pkgdir/usr/share/licenses/nidara-hyalo/LICENSE-smithay-MIT.txt"
 }

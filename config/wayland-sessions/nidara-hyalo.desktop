@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Nidara — Hyalo preview
+Comment=Nidara on Hyalo, its own compositor — a preview while it reaches parity with Hyprland
+Exec=/usr/bin/nidara-hyalo-session
+Type=Application
+DesktopNames=Nidara

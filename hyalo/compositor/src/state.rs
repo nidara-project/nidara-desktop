@@ -102,7 +102,7 @@ impl Hyalo {
 
         let mut seat_state = SeatState::new();
         let mut seat: Seat<Self> = seat_state.new_wl_seat(&dh, backend.seat_name());
-        let kb = &config.input.keyboard;
+        let kb = &config.input.keyboard.with_system_defaults();
         let xkb = XkbConfig {
             rules: &kb.rules,
             model: &kb.model,

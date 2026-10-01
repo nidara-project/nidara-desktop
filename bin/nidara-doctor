@@ -86,6 +86,7 @@ section "Versions"
     echo '```'
     echo "nidara: $ver"
     echo "hyprland:      $(hyprctl version 2>/dev/null | head -1 || echo n/a)"
+    echo "hyalo:         $(nidara-hyalo --version 2>/dev/null || echo n/a)"
     echo "gjs:           $(gjs --version 2>/dev/null || echo n/a)"
     echo "esbuild:       $(esbuild --version 2>/dev/null || echo n/a)"
     echo "gtk4:          $(pacman -Q gtk4 2>/dev/null || echo n/a)"
@@ -99,6 +100,22 @@ codeblock sh -c "lspci -nn 2>/dev/null | grep -Ei 'vga|3d|display|network|wirele
 
 section "Monitors (hyprctl)"
 codeblock sh -c "hyprctl monitors -j 2>/dev/null | head -100"
+
+# Hyalo (#680), only when it is installed: its outputs when it is the running compositor,
+# and the newest crash report it left. A compositor crash ends the session, so the report
+# is all that is left of it by the time anybody runs this — from the next session.
+if command -v nidara-hyalo >/dev/null 2>&1; then
+    if [ -n "${HYALO_SOCKET:-}" ]; then
+        section "Monitors (Hyalo)"
+        codeblock nidara-hyalo msg outputs
+    fi
+    hyalo_crashes="${XDG_STATE_HOME:-$HOME/.local/state}/nidara/hyalo"
+    hyalo_last="$(ls -1 "$hyalo_crashes"/crash-*.txt 2>/dev/null | sort | tail -1)"
+    if [ -n "$hyalo_last" ]; then
+        section "Hyalo: latest crash report ($(ls -1 "$hyalo_crashes"/crash-*.txt | wc -l) kept, $hyalo_last)"
+        codeblock head -60 "$hyalo_last"
+    fi
+fi
 
 section "Shell service (systemd --user)"
 codeblock systemctl --user --no-pager status nidara

@@ -2,6 +2,7 @@
 //!
 //!     nidara-hyalo                 a session: DRM/KMS on the current seat (from a VT / greetd)
 //!     nidara-hyalo --winit         a window inside the current compositor (development)
+//!     nidara-hyalo --session       the session entry's way: also runs the config's autostart
 //!     nidara-hyalo -c CMD          also run CMD once the socket is up
 //!     nidara-hyalo msg …           talk to the running compositor (see `msg --help`)
 
@@ -50,8 +51,9 @@ fn main() {
         .iter()
         .position(|a| a == "-c" || a == "--command")
         .and_then(|i| args.get(i + 1).cloned());
+    let session = args.iter().any(|a| a == "--session");
 
-    if let Err(err) = run(winit, command) {
+    if let Err(err) = run(winit, session, command) {
         tracing::error!("{err}");
         crash::write_report(&format!("startup failed: {err}"));
         std::process::exit(1);
@@ -61,17 +63,18 @@ fn main() {
 const USAGE: &str = r#"
 nidara-hyalo — the Nidara desktop's compositor
 
-  nidara-hyalo [--tty | --winit] [-c COMMAND]
+  nidara-hyalo [--tty | --winit] [--session] [-c COMMAND]
   nidara-hyalo msg <request> [args]     (nidara-hyalo msg --help)
 
   --tty      run on the hardware: DRM/KMS, libinput, libseat (what the session does)
   --winit    run in a window of the current compositor (development)
+  --session  a real session: run the config's autostart (uwsm finalize, the shell…)
   -c CMD     run CMD once Hyalo is up
 
 Configuration: /usr/share/nidara/hyalo/hyalo.toml, then ~/.config/nidara/hyalo.toml on top.
 "#;
 
-fn run(winit: bool, command: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+fn run(winit: bool, session: bool, command: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
     let mut event_loop: EventLoop<Hyalo> = EventLoop::try_new()?;
     let display: Display<Hyalo> = Display::new()?;
     let loop_handle = event_loop.handle();
@@ -96,7 +99,7 @@ fn run(winit: bool, command: Option<String>) -> Result<(), Box<dyn std::error::E
         );
         backend::winit::init(&mut state, &loop_handle, source)?;
         control::init(&mut event_loop);
-        start(&mut state, command);
+        start(&mut state, session, command);
         event_loop.run(None, &mut state, |state| state.after_dispatch())?;
     } else {
         let backend = backend::tty::TtyBackend::new()?;
@@ -109,7 +112,7 @@ fn run(winit: bool, command: Option<String>) -> Result<(), Box<dyn std::error::E
         );
         backend::tty::init(&mut state)?;
         control::init(&mut event_loop);
-        start(&mut state, command);
+        start(&mut state, session, command);
         event_loop.run(None, &mut state, |state| state.after_dispatch())?;
     }
     tracing::info!("Hyalo stopped");
@@ -118,7 +121,7 @@ fn run(winit: bool, command: Option<String>) -> Result<(), Box<dyn std::error::E
 
 /// Once the backend is up: the environment children inherit, IPC, the config watcher, and
 /// the commands that start the desktop.
-fn start(state: &mut Hyalo, command: Option<String>) {
+fn start(state: &mut Hyalo, session: bool, command: Option<String>) {
     // Safety: still single-threaded here; nothing else reads the environment concurrently.
     unsafe {
         std::env::set_var("WAYLAND_DISPLAY", &state.socket_name);
@@ -128,8 +131,14 @@ fn start(state: &mut Hyalo, command: Option<String>) {
     tracing::info!(socket = ?state.socket_name, "listening");
     ipc::server::start(state);
     config::watch(state);
-    for cmd in state.config.autostart.clone() {
-        spawn(&cmd);
+    // Only a session runs the autostart: `uwsm finalize` from a development window would
+    // export this compositor's socket into the live session's services.
+    if session {
+        for cmd in state.config.autostart.clone() {
+            spawn(&cmd);
+        }
+    } else if !state.config.autostart.is_empty() {
+        tracing::info!("not a session (--session): autostart skipped");
     }
     if let Some(cmd) = command {
         spawn(&cmd);

@@ -187,6 +187,30 @@ pub enum ConfigError {
     Invalid(String),
 }
 
+impl Keyboard {
+    /// This keyboard with the system's layout filled in where none is configured: what
+    /// `localectl set-x11-keymap` wrote (the installer sets it), as GNOME and KDE read it.
+    pub fn with_system_defaults(&self) -> Keyboard {
+        let mut k = self.clone();
+        if !k.layout.is_empty() {
+            return k;
+        }
+        let Ok(text) = std::fs::read_to_string("/etc/X11/xorg.conf.d/00-keyboard.conf") else { return k };
+        for line in text.lines() {
+            let mut parts = line.split('"').skip(1).step_by(2);
+            let (Some(key), Some(value)) = (parts.next(), parts.next()) else { continue };
+            match key {
+                "XkbLayout" => k.layout = value.into(),
+                "XkbVariant" if k.variant.is_empty() => k.variant = value.into(),
+                "XkbModel" if k.model.is_empty() => k.model = value.into(),
+                "XkbOptions" if k.options.is_empty() => k.options = value.into(),
+                _ => {}
+            }
+        }
+        k
+    }
+}
+
 /// The user's file: `$XDG_CONFIG_HOME/nidara/hyalo.toml`.
 pub fn user_config_path() -> PathBuf {
     let base = std::env::var_os("XDG_CONFIG_HOME")
@@ -277,7 +301,7 @@ pub fn reload(state: &mut crate::Hyalo) -> Result<(), String> {
     };
     let old = std::mem::replace(&mut state.config, new.clone());
     if old.input.keyboard != new.input.keyboard {
-        let kb = &new.input.keyboard;
+        let kb = &new.input.keyboard.with_system_defaults();
         let xkb = smithay::input::keyboard::XkbConfig {
             rules: &kb.rules,
             model: &kb.model,

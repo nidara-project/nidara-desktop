@@ -1,0 +1,18 @@
+#!/bin/sh
+# The user's wallpaper on a Hyalo session — /usr/lib/nidara-hyalo/restore-wallpaper, run from
+# Hyalo's autostart once awww-daemon is starting.
+#
+# The same resolution as resolveWallpaper() in config/hypr/hyprland.lua and
+# ui/lib/wallpaper.ts: the path saved in ~/.config/nidara/wallpaper if that file still
+# exists, else the shipped default. awww's own cache is not authoritative (see the Hyprland
+# startup block), so the choice is asserted here, once the daemon answers.
+default=/usr/share/nidara/wallpaper.jpg
+saved=$(sed -n 's/.*"path" *: *"\([^"]*\)".*/\1/p' "${XDG_CONFIG_HOME:-$HOME/.config}/nidara/wallpaper" 2>/dev/null)
+wp=$default
+[ -n "$saved" ] && [ -f "$saved" ] && wp=$saved
+i=0
+while [ $i -lt 30 ]; do
+  awww query >/dev/null 2>&1 && break
+  i=$((i + 1)); sleep 0.1
+done
+awww img "$wp" --transition-type none || awww img "$default" --transition-type none
