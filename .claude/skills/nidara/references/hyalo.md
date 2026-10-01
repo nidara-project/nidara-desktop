@@ -93,6 +93,17 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   `Super+1` works with Shift held and on any layout. `release = true` fires only if nothing else
   was pressed while the key was held (Super alone opens the app grid; Super+T does not).
   Ctrl+Alt+F1…F12 and Ctrl+Alt+Backspace are built in and cannot be bound over.
+- **An app may hold the keyboard's shortcuts** (keyboard-shortcuts-inhibit-v1, `shortcuts.rs`): a
+  virtual machine, a remote desktop, Chrome's keyboard lock in fullscreen. Granted at once while
+  it has the keyboard (sway/KDE/niri; GNOME asks). Then only `dont_inhibit = true` bindings run —
+  Hyprland's option of the same name: **Super+Escape → `toggle-shortcuts-inhibit`** (gives them
+  back, GNOME's and niri's key) and the computer-control kill switch Super+Shift+Escape, which the
+  Hyprland session marks the same way. The built-ins above are not bindings and always work;
+  pointer bindings are not shortcuts and are not held. CI: `scripts/ci/hyalo-inhibit-check.sh`
+  presses keys through `HYALO_CONTROL` (held → given back → control: Super+2 switches); a Hyalo
+  that ignored inhibitors fails the first step (checked, 2026-10-01). ⚠️ Write each chord to the
+  control FIFO in ONE write: Hyalo reads to EOF and reopens, and separate writes race the reopen
+  (the shell dies of SIGPIPE, exit 141).
 - **Window rules** (`wm/rules.rs`, `[rules.NAME]` in hyalo.toml): regexes searched in
   `app_id` / `title` / `initial_app_id` / `initial_title`, effects `float`, `center`,
   `workspace` (`"3"`, `"special:NAME"`) and `silent`. 🔑 **A rule applies to a window ONCE, the

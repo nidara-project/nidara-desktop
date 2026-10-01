@@ -317,6 +317,13 @@ phase_run() {
         || { log "FAIL: xdg-activation"; cat /tmp/hyalo/activation.log /tmp/hyalo/activation-clients.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
     log "xdg-activation OK (honoured from the user's app, refused from another)"
+    # keyboard-shortcuts-inhibit (#682): a focused window that holds the shortcuts (a VM, a
+    # remote desktop) gets Super+2 instead of the desktop; Super+Escape (`dont_inhibit`) gives
+    # them back anyway; then Super+2 switches — the control, so the first step proved the hold
+    # and not a dead key. Keys through HYALO_CONTROL.
+    INHIBIT_LOG=/tmp/hyalo/inhibit-client.log "$REPO/scripts/ci/hyalo-inhibit-check.sh" >/tmp/hyalo/inhibit.log 2>&1 \
+        || { log "FAIL: keyboard-shortcuts-inhibit"; cat /tmp/hyalo/inhibit.log; exit 1; }
+    log "keyboard-shortcuts-inhibit OK (held, given back with Super+Escape, then the desktop's again)"
 
     # ── 3. Pictures for a person.
     sleep 4

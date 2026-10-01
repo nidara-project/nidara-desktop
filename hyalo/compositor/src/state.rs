@@ -81,6 +81,8 @@ pub struct Hyalo {
     pub capture_sessions: Vec<smithay::wayland::image_copy_capture::Session>,
     /// xdg-activation (activation.rs).
     pub activation_state: smithay::wayland::xdg_activation::XdgActivationState,
+    /// keyboard-shortcuts-inhibit (shortcuts.rs).
+    pub shortcuts_inhibit_state: smithay::wayland::keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitState,
     /// The window rules in force (wm/rules.rs).
     pub rules: Vec<crate::wm::rules::Rule>,
     pub keys: crate::input::KeyTracking,
@@ -137,6 +139,9 @@ impl Hyalo {
         smithay::wayland::security_context::SecurityContextState::new::<Self, _>(&dh, unrestricted);
         // An app asking for its window to come to the front (activation.rs).
         let activation_state = smithay::wayland::xdg_activation::XdgActivationState::new::<Self>(&dh);
+        // An app holding the keyboard's shortcuts while focused (shortcuts.rs).
+        let shortcuts_inhibit_state =
+            smithay::wayland::keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitState::new::<Self>(&dh);
 
         let mut seat_state = SeatState::new();
         let mut seat: Seat<Self> = seat_state.new_wl_seat(&dh, backend.seat_name());
@@ -201,6 +206,7 @@ impl Hyalo {
             image_copy_capture,
             capture_sessions: Vec::new(),
             activation_state,
+            shortcuts_inhibit_state,
             rules: crate::wm::rules::compile(&rules_config).unwrap_or_else(|err| {
                 tracing::error!("window rules not loaded: {err}");
                 Vec::new()

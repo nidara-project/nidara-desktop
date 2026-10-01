@@ -23,6 +23,7 @@ mod render;
 mod sandbox;
 mod screenshot;
 mod shell;
+mod shortcuts;
 mod state;
 mod wm;
 

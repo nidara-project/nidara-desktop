@@ -417,7 +417,9 @@ hl.bind("SUPER + SUPER_L",   hl.dsp.exec_cmd("nidara-ipc toggleAppGrid"), { rele
 hl.bind(mainMod .. " + A",   hl.dsp.exec_cmd("nidara-ipc toggleAgent"))
 hl.bind(mainMod .. " + B",          hl.dsp.exec_cmd("nidara-ipc toggleBarOverlay"))
 hl.bind(mainMod .. " + SHIFT + G", hl.dsp.exec_cmd("nidara-game-mode toggle"))
-hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd("nidara-ipc disableComputerControl")) -- kill switch: revoke AI computer-control instantly
+-- Kill switch: revoke AI computer-control instantly. `dont_inhibit`: it works even while the
+-- focused app holds the shortcuts (keyboard-shortcuts-inhibit — a VM, Chrome in fullscreen).
+hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd("nidara-ipc disableComputerControl"), { dont_inhibit = true })
 hl.bind(mainMod .. " + E",   hl.dsp.exec_cmd("uwsm app -t service -- " .. fileManager))
 hl.bind(mainMod .. " + T",   hl.dsp.exec_cmd("uwsm app -t service -- " .. terminal))
 hl.bind(mainMod .. " + Q",   hl.dsp.window.close())

@@ -78,7 +78,10 @@ workspace = "name:gamespace"
 "Super+A" = "spawn nidara-ipc toggleAgent"
 "Super+B" = "spawn nidara-ipc toggleBarOverlay"
 "Super+Shift+G" = "spawn nidara-game-mode toggle"
-"Super+Shift+Escape" = "spawn nidara-ipc disableComputerControl"
+# The kill switch and the way back from an app that holds the shortcuts (a VM, a remote
+# desktop) work even then: `dont_inhibit` (hyalo/compositor/src/shortcuts.rs).
+"Super+Shift+Escape" = { action = "spawn nidara-ipc disableComputerControl", dont_inhibit = true }
+"Super+Escape" = { action = "toggle-shortcuts-inhibit", dont_inhibit = true }
 "Super+Space" = "spawn nidara-ipc togglePrism"
 "Super+C" = "spawn nidara-ipc toggleCC keyboard"
 "Super+N" = "spawn nidara-ipc toggleNC keyboard"
